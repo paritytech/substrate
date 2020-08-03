@@ -26,7 +26,7 @@ pub mod system;
 use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use sp_core::{OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
+use sp_core::{offchain::KeyTypeId, ChangesTrieConfiguration, OpaqueMetadata, RuntimeDebug};
 use sp_application_crypto::{ed25519, sr25519, ecdsa, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
 use sp_trie::PrefixedMemoryDB;
@@ -49,7 +49,11 @@ use sp_version::RuntimeVersion;
 pub use sp_core::hash::H256;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
-use frame_support::{impl_outer_origin, parameter_types, weights::{Weight, RuntimeDbWeight}};
+use frame_support::{
+	impl_outer_origin, parameter_types,
+	traits::KeyOwnerProofSystem,
+	weights::{RuntimeDbWeight, Weight},
+};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 
@@ -60,6 +64,13 @@ pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 // Include the WASM binary
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+
+#[cfg(feature = "std")]
+/// Wasm binary unwrapped. If built with `BUILD_DUMMY_WASM_BINARY`, the function panics.
+pub fn wasm_binary_unwrap() -> &'static [u8] {
+	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
+						supported with the flag disabled.")
+}
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -194,10 +205,20 @@ impl sp_runtime::traits::Dispatchable for Extrinsic {
 }
 
 impl Extrinsic {
+	/// Convert `&self` into `&Transfer`.
+	///
+	/// Panics if this is no `Transfer` extrinsic.
 	pub fn transfer(&self) -> &Transfer {
+		self.try_transfer().expect("cannot convert to transfer ref")
+	}
+
+	/// Try to convert `&self` into `&Transfer`.
+	///
+	/// Returns `None` if this is no `Transfer` extrinsic.
+	pub fn try_transfer(&self) -> Option<&Transfer> {
 		match self {
-			Extrinsic::Transfer { ref transfer, .. } => transfer,
-			_ => panic!("cannot convert to transfer ref"),
+			Extrinsic::Transfer { ref transfer, .. } => Some(transfer),
+			_ => None,
 		}
 	}
 }
@@ -431,6 +452,7 @@ impl frame_system::Trait for Runtime {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 impl pallet_timestamp::Trait for Runtime {
@@ -438,6 +460,7 @@ impl pallet_timestamp::Trait for Runtime {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -452,6 +475,18 @@ impl pallet_babe::Trait for Runtime {
 	// are manually adding the digests. normally in this situation you'd use
 	// pallet_babe::SameAuthoritiesForever.
 	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
+
+	type KeyOwnerProofSystem = ();
+
+	type KeyOwnerProof =
+		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
+
+	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+		KeyTypeId,
+		AuthorityId,
+	)>>::IdentificationTuple;
+
+	type HandleEquivocation = ();
 }
 
 /// Adds one to the given input and returns the final result.
@@ -680,6 +715,22 @@ cfg_if! {
 				fn current_epoch_start() -> SlotNumber {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
 				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: sp_consensus_babe::EquivocationProof<
+						<Block as BlockT>::Header,
+					>,
+					_key_owner_proof: sp_consensus_babe::OpaqueKeyOwnershipProof,
+				) -> Option<()> {
+					None
+				}
+
+				fn generate_key_ownership_proof(
+					_slot_number: sp_consensus_babe::SlotNumber,
+					_authority_id: sp_consensus_babe::AuthorityId,
+				) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
+					None
+				}
 			}
 
 			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
@@ -706,7 +757,7 @@ cfg_if! {
 					Vec::new()
 				}
 
-				fn submit_report_equivocation_extrinsic(
+				fn submit_report_equivocation_unsigned_extrinsic(
 					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
 						<Block as BlockT>::Hash,
 						NumberFor<Block>,
@@ -905,6 +956,22 @@ cfg_if! {
 
 				fn current_epoch_start() -> SlotNumber {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: sp_consensus_babe::EquivocationProof<
+						<Block as BlockT>::Header,
+					>,
+					_key_owner_proof: sp_consensus_babe::OpaqueKeyOwnershipProof,
+				) -> Option<()> {
+					None
+				}
+
+				fn generate_key_ownership_proof(
+					_slot_number: sp_consensus_babe::SlotNumber,
+					_authority_id: sp_consensus_babe::AuthorityId,
+				) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
+					None
 				}
 			}
 

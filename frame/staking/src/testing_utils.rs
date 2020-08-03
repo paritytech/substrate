@@ -158,7 +158,7 @@ pub fn get_weak_solution<T: Trait>(
 
 	// self stake
 	<Validators<T>>::iter().for_each(|(who, _p)| {
-		*backing_stake_of.entry(who.clone()).or_insert(Zero::zero()) +=
+		*backing_stake_of.entry(who.clone()).or_insert_with(|| Zero::zero()) +=
 			<Module<T>>::slashable_balance_of(&who)
 	});
 

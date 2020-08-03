@@ -108,7 +108,7 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 	) {
 		let _ = self.sender
 			.unbounded_send(
-				ToWorkerMsg::ImportJustification(who.clone(), hash, number, justification)
+				ToWorkerMsg::ImportJustification(who, hash, number, justification)
 			);
 	}
 

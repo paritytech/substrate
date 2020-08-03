@@ -163,7 +163,7 @@ use frame_support::{
 	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
-		OnUnbalanced, BalanceStatus, schedule::Named as ScheduleNamed, EnsureOrigin
+		OnUnbalanced, BalanceStatus, schedule::{Named as ScheduleNamed, DispatchTime}, EnsureOrigin
 	},
 	dispatch::DispatchResultWithPostInfo,
 };
@@ -200,6 +200,66 @@ pub type ReferendumIndex = u32;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+
+pub trait WeightInfo {
+	fn propose(p: u32, ) -> Weight;
+	fn second(s: u32, ) -> Weight;
+	fn vote_new(r: u32, ) -> Weight;
+	fn vote_existing(r: u32, ) -> Weight;
+	fn emergency_cancel(r: u32, ) -> Weight;
+	fn external_propose(p: u32, v: u32, ) -> Weight;
+	fn external_propose_majority(p: u32, ) -> Weight;
+	fn external_propose_default(p: u32, ) -> Weight;
+	fn fast_track(p: u32, ) -> Weight;
+	fn veto_external(v: u32, ) -> Weight;
+	fn cancel_referendum(r: u32, ) -> Weight;
+	fn cancel_queued(r: u32, ) -> Weight;
+	fn on_initialize_external(r: u32, ) -> Weight;
+	fn on_initialize_public(r: u32, ) -> Weight;
+	fn on_initialize_no_launch_no_maturing(r: u32, ) -> Weight;
+	fn delegate(r: u32, ) -> Weight;
+	fn undelegate(r: u32, ) -> Weight;
+	fn clear_public_proposals(p: u32, ) -> Weight;
+	fn note_preimage(b: u32, ) -> Weight;
+	fn note_imminent_preimage(b: u32, ) -> Weight;
+	fn reap_preimage(b: u32, ) -> Weight;
+	fn unlock_remove(r: u32, ) -> Weight;
+	fn unlock_set(r: u32, ) -> Weight;
+	fn remove_vote(r: u32, ) -> Weight;
+	fn remove_other_vote(r: u32, ) -> Weight;
+	fn enact_proposal_execute(b: u32, ) -> Weight;
+	fn enact_proposal_slash(b: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn propose(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn second(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn vote_new(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn vote_existing(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn emergency_cancel(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn external_propose(_p: u32, _v: u32, ) -> Weight { 1_000_000_000 }
+	fn external_propose_majority(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn external_propose_default(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn fast_track(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn veto_external(_v: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_referendum(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_queued(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize_external(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize_public(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize_no_launch_no_maturing(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn delegate(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn undelegate(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn clear_public_proposals(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn note_preimage(_b: u32, ) -> Weight { 1_000_000_000 }
+	fn note_imminent_preimage(_b: u32, ) -> Weight { 1_000_000_000 }
+	fn reap_preimage(_b: u32, ) -> Weight { 1_000_000_000 }
+	fn unlock_remove(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn unlock_set(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_vote(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_other_vote(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn enact_proposal_execute(_b: u32, ) -> Weight { 1_000_000_000 }
+	fn enact_proposal_slash(_b: u32, ) -> Weight { 1_000_000_000 }
+}
 
 pub trait Trait: frame_system::Trait + Sized {
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + From<Call<Self>>;
@@ -279,13 +339,19 @@ pub trait Trait: frame_system::Trait + Sized {
 	type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// The Scheduler.
-	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Proposal>;
+	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Proposal, Self::PalletsOrigin>;
+
+	/// Overarching type of all pallets origins.
+	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>>;
 
 	/// The maximum number of votes for an account.
 	///
 	/// Also used to compute weight, an overly big value can
 	/// lead to extrinsic with very big weight: see `delegate` for instance.
 	type MaxVotes: Get<u32>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 #[derive(Clone, Encode, Decode, RuntimeDebug)]
@@ -401,39 +467,41 @@ decl_event! {
 		<T as frame_system::Trait>::Hash,
 		<T as frame_system::Trait>::BlockNumber,
 	{
-		/// A motion has been proposed by a public account.
+		/// A motion has been proposed by a public account. [proposal_index, deposit]
 		Proposed(PropIndex, Balance),
-		/// A public proposal has been tabled for referendum vote.
+		/// A public proposal has been tabled for referendum vote. [proposal_index, deposit, depositors]
 		Tabled(PropIndex, Balance, Vec<AccountId>),
 		/// An external proposal has been tabled.
 		ExternalTabled,
-		/// A referendum has begun.
+		/// A referendum has begun. [ref_index, threshold]
 		Started(ReferendumIndex, VoteThreshold),
-		/// A proposal has been approved by referendum.
+		/// A proposal has been approved by referendum. [ref_index]
 		Passed(ReferendumIndex),
-		/// A proposal has been rejected by referendum.
+		/// A proposal has been rejected by referendum. [ref_index]
 		NotPassed(ReferendumIndex),
-		/// A referendum has been cancelled.
+		/// A referendum has been cancelled. [ref_index]
 		Cancelled(ReferendumIndex),
-		/// A proposal has been enacted.
+		/// A proposal has been enacted. [ref_index, is_ok]
 		Executed(ReferendumIndex, bool),
-		/// An account has delegated their vote to another account.
+		/// An account has delegated their vote to another account. [who, target]
 		Delegated(AccountId, AccountId),
-		/// An account has cancelled a previous delegation operation.
+		/// An [account] has cancelled a previous delegation operation.
 		Undelegated(AccountId),
-		/// An external proposal has been vetoed.
+		/// An external proposal has been vetoed. [who, proposal_hash, until]
 		Vetoed(AccountId, Hash, BlockNumber),
-		/// A proposal's preimage was noted, and the deposit taken.
+		/// A proposal's preimage was noted, and the deposit taken. [proposal_hash, who, deposit]
 		PreimageNoted(Hash, AccountId, Balance),
-		/// A proposal preimage was removed and used (the deposit was returned).
+		/// A proposal preimage was removed and used (the deposit was returned). 
+		/// [proposal_hash, provider, deposit]
 		PreimageUsed(Hash, AccountId, Balance),
-		/// A proposal could not be executed because its preimage was invalid.
+		/// A proposal could not be executed because its preimage was invalid. [proposal_hash, ref_index]
 		PreimageInvalid(Hash, ReferendumIndex),
-		/// A proposal could not be executed because its preimage was missing.
+		/// A proposal could not be executed because its preimage was missing. [proposal_hash, ref_index]
 		PreimageMissing(Hash, ReferendumIndex),
-		/// A registered preimage was removed and the deposit collected by the reaper (last item).
+		/// A registered preimage was removed and the deposit collected by the reaper. 
+		/// [proposal_hash, provider, deposit, reaper]
 		PreimageReaped(Hash, AccountId, Balance, AccountId),
-		/// An account has been unlocked successfully.
+		/// An [account] has been unlocked successfully.
 		Unlocked(AccountId),
 	}
 }
@@ -1622,9 +1690,10 @@ impl<T: Trait> Module<T> {
 
 				if T::Scheduler::schedule_named(
 					(DEMOCRACY_ID, index).encode(),
-					when,
+					DispatchTime::At(when),
 					None,
 					63,
+					system::RawOrigin::Root.into(),
 					Call::enact_proposal(status.proposal_hash, index).into(),
 				).is_err() {
 					frame_support::print("LOGIC ERROR: bake_referendum/schedule_named failed");

@@ -175,6 +175,77 @@ fn doesnt_deposit_event_for_dups() {
 }
 
 #[test]
+fn reports_if_an_offence_is_dup() {
+	type TestOffence = Offence<u64>;
+
+	new_test_ext().execute_with(|| {
+		let time_slot = 42;
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+
+		let offence = |time_slot, offenders| TestOffence {
+			validator_set_count: 5,
+			time_slot,
+			offenders,
+		};
+
+		let mut test_offence = offence(time_slot, vec![0]);
+
+		// the report for authority 0 at time slot 42 should not be a known
+		// offence
+		assert!(
+			!<Offences as ReportOffence<_, _, TestOffence>>::is_known_offence(
+				&test_offence.offenders,
+				&test_offence.time_slot
+			)
+		);
+
+		// we report an offence for authority 0 at time slot 42
+		Offences::report_offence(vec![], test_offence.clone()).unwrap();
+
+		// the same report should be a known offence now
+		assert!(
+			<Offences as ReportOffence<_, _, TestOffence>>::is_known_offence(
+				&test_offence.offenders,
+				&test_offence.time_slot
+			)
+		);
+
+		// and reporting it again should yield a duplicate report error
+		assert_eq!(
+			Offences::report_offence(vec![], test_offence.clone()),
+			Err(OffenceError::DuplicateReport)
+		);
+
+		// after adding a new offender to the offence report
+		test_offence.offenders.push(1);
+
+		// it should not be a known offence anymore
+		assert!(
+			!<Offences as ReportOffence<_, _, TestOffence>>::is_known_offence(
+				&test_offence.offenders,
+				&test_offence.time_slot
+			)
+		);
+
+		// and reporting it again should work without any error
+		assert_eq!(
+			Offences::report_offence(vec![], test_offence.clone()),
+			Ok(())
+		);
+
+		// creating a new offence for the same authorities on the next slot
+		// should be considered a new offence and thefore not known
+		let test_offence_next_slot = offence(time_slot + 1, vec![0, 1]);
+		assert!(
+			!<Offences as ReportOffence<_, _, TestOffence>>::is_known_offence(
+				&test_offence_next_slot.offenders,
+				&test_offence_next_slot.time_slot
+			)
+		);
+	});
+}
+
+#[test]
 fn should_properly_count_offences() {
 	// We report two different authorities for the same issue. Ultimately, the 1st authority
 	// should have `count` equal 2 and the count of the 2nd one should be equal to 1.

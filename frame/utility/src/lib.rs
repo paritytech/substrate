@@ -64,11 +64,21 @@ use frame_support::{
 	traits::{OriginTrait, UnfilteredDispatchable},
 	weights::{Weight, GetDispatchInfo, DispatchClass}, dispatch::PostDispatchInfo,
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
 
 mod tests;
 mod benchmarking;
+
+pub trait WeightInfo {
+	fn batch(c: u32, ) -> Weight;
+	fn as_derivative(u: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn batch(_c: u32, ) -> Weight { 1_000_000_000 }
+	fn as_derivative(_u: u32, ) -> Weight { 1_000_000_000 }
+}
 
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
@@ -79,6 +89,9 @@ pub trait Trait: frame_system::Trait {
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
 		+ GetDispatchInfo + From<frame_system::Call<Self>>
 		+ UnfilteredDispatchable<Origin=Self::Origin>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -89,7 +102,7 @@ decl_event! {
 	/// Events type.
 	pub enum Event {
 		/// Batch of dispatches did not complete fully. Index of first failing dispatch given, as
-		/// well as the error.
+		/// well as the error. [index, error]
 		BatchInterrupted(u32, DispatchError),
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,

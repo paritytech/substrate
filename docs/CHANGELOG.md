@@ -6,6 +6,54 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+## 2.0.0-rc4 -> 2.0.0-rc5 – River Dolphin
+
+Runtime
+-------
+
+* Support using system storage directly for EVM balance and nonce (#6659)
+* Properly filter out duplicate voters in elections. (#6693)
+* Treasury burning can be directed (#6671)
+* identity: Don't let subs be re-registered (#6667)
+* Regression test to ensure we don't break deterministic builds in wasm (#6597)
+* allow to specify schedule time as a relative value (#6578)
+* Make signature batching use specialized methods (#6616)
+* Rename `CheckEra` to `CheckMortality` (#6619)
+* Add `WeightInfo` to all pallets with benchmarks. (#6575)
+* Don't require module name in inherents (#6576)
+* pallet-evm: return Ok(()) when EVM execution fails (#6493)
+* Make the encoded-Call Vec<u8> explicitly so in metadata (#6566)
+* Allow specify schedule dispatch origin (#6387)
+* pallet-evm: customizable chain id (#6537)
+* Refactor as_sub to make things clearer. (#6503)
+
+Client
+------
+
+* Update wasmtime to (almost) lastest master (#6662)
+* Update to latest sysinfo prevents leaking fd-handlers (#6708)
+* Tracing values (#6679)
+* Graceful shutdown for the task manager (#6654)
+* Update substrate-networking Grafana dashboard (#6649)
+* *: Update to libp2p v0.21.1 (#6559)
+* Send Status message on all newly-opened legacy substreams (#6593)
+* babe: report equivocations (#6362)
+* Support synching of blocks that are not `new_best` (#6508)
+* Remove the service, replacing it with a struct of individual chain components (#6352)
+* Fix tx-pool returning the same transaction multiple times (#6535)
+
+API
+---
+
+* Better handling of stable-only build (#6569)
+* Remove the service builder (#6557)
+* seal: Prevent contracts from going below subsistence (#6623)
+* seal: Rework contracts API (#6573)
+* Make evm errors public (#6598)
+* Add log rotation (#6564)
+* decl_module! macro: use 'frame_system' instead of `system` as default ident (#6500)
+* Restrict `Protected` to some heap types. (#6471)
+
 ## 2.0.0-rc3 -> 2.0.0-rc4 (Rhinoceros)
 
 Runtime

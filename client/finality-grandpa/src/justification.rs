@@ -133,14 +133,14 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 		let mut buf = Vec::new();
 		let mut visited_hashes = HashSet::new();
 		for signed in self.commit.precommits.iter() {
-			if sp_finality_grandpa::check_message_signature_with_buffer(
+			if !sp_finality_grandpa::check_message_signature_with_buffer(
 				&finality_grandpa::Message::Precommit(signed.precommit.clone()),
 				&signed.id,
 				&signed.signature,
 				self.round,
 				set_id,
 				&mut buf,
-			).is_err() {
+			) {
 				return Err(ClientError::BadJustification(
 					"invalid signature for precommit in grandpa justification".to_string()));
 			}

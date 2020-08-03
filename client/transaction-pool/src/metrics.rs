@@ -45,8 +45,7 @@ impl MetricsLink {
 
 /// Transaction pool Prometheus metrics.
 pub struct Metrics {
-	pub validations_scheduled: Counter<U64>,
-	pub validations_finished: Counter<U64>,
+	pub submitted_transactions: Counter<U64>,
 	pub validations_invalid: Counter<U64>,
 	pub block_transactions_pruned: Counter<U64>,
 	pub block_transactions_resubmitted: Counter<U64>,
@@ -55,17 +54,10 @@ pub struct Metrics {
 impl Metrics {
 	pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
-			validations_scheduled: register(
+			submitted_transactions: register(
 				Counter::new(
-					"sub_txpool_validations_scheduled",
-					"Total number of transactions scheduled for validation",
-				)?,
-				registry,
-			)?,
-			validations_finished: register(
-				Counter::new(
-					"sub_txpool_validations_finished",
-					"Total number of transactions that finished validation",
+					"sub_txpool_submitted_transactions",
+					"Total number of transactions submitted",
 				)?,
 				registry,
 			)?,
@@ -91,5 +83,47 @@ impl Metrics {
 				registry,
 			)?,
 		})
+	}
+}
+
+/// Transaction pool api Prometheus metrics.
+pub struct ApiMetrics {
+	pub validations_scheduled: Counter<U64>,
+	pub validations_finished: Counter<U64>,
+}
+
+impl ApiMetrics {
+	/// Register the metrics at the given Prometheus registry.
+	pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			validations_scheduled: register(
+				Counter::new(
+					"sub_txpool_validations_scheduled",
+					"Total number of transactions scheduled for validation",
+				)?,
+				registry,
+			)?,
+			validations_finished: register(
+				Counter::new(
+					"sub_txpool_validations_finished",
+					"Total number of transactions that finished validation",
+				)?,
+				registry,
+			)?,
+		})
+	}
+}
+
+/// An extension trait for [`ApiMetrics`].
+pub trait ApiMetricsExt {
+	/// Report an event to the metrics.
+	fn report(&self, report: impl FnOnce(&ApiMetrics));
+}
+
+impl ApiMetricsExt for Option<Arc<ApiMetrics>> {
+	fn report(&self, report: impl FnOnce(&ApiMetrics)) {
+		if let Some(metrics) = self.as_ref() {
+			report(metrics)
+		}
 	}
 }

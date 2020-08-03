@@ -897,6 +897,14 @@ pub trait Currency<AccountId> {
 	/// in the case of overflow.
 	fn issue(amount: Self::Balance) -> Self::NegativeImbalance;
 
+	/// Produce a pair of imbalances that cancel each other out exactly.
+	///
+	/// This is just the same as burning and issuing the same amount and has no effect on the
+	/// total issuance.
+	fn pair(amount: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
+		(Self::burn(amount.clone()), Self::issue(amount))
+	}
+
 	/// The 'free' balance of a given account.
 	///
 	/// This is the only balance that matters in terms of most operations on tokens. It alone
@@ -1230,7 +1238,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 	///
 	/// This resets any previous value of prime.
 	fn change_members(incoming: &[AccountId], outgoing: &[AccountId], mut new: Vec<AccountId>) {
-		new.sort_unstable();
+		new.sort();
 		Self::change_members_sorted(incoming, outgoing, &new[..]);
 	}
 
@@ -1431,10 +1439,18 @@ impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 	}
 }
 
-/// The runtime upgrade trait. Implementing this lets you express what should happen
-/// when the runtime upgrades, and changes may need to occur to your module.
+/// The runtime upgrade trait.
+///
+/// Implementing this lets you express what should happen when the runtime upgrades,
+/// and changes may need to occur to your module.
 pub trait OnRuntimeUpgrade {
 	/// Perform a module upgrade.
+	///
+	/// # Warning
+	///
+	/// This function will be called before we initialized any runtime state, aka `on_initialize`
+	/// wasn't called yet. So, information like the block number and any other
+	/// block local data are not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
@@ -1482,6 +1498,15 @@ pub mod schedule {
 	/// higher priority.
 	pub type Priority = u8;
 
+	/// The dispatch time of a scheduled task.
+	#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+	pub enum DispatchTime<BlockNumber> {
+		/// At specified block.
+		At(BlockNumber),
+		/// After specified number of blocks.
+		After(BlockNumber),
+	}
+
 	/// The highest priority. We invert the value so that normal sorting will place the highest
 	/// priority at the beginning of the list.
 	pub const HIGHEST_PRIORITY: Priority = 0;
@@ -1492,7 +1517,7 @@ pub mod schedule {
 	pub const LOWEST_PRIORITY: Priority = 255;
 
 	/// A type that can be used as a scheduler.
-	pub trait Anon<BlockNumber, Call> {
+	pub trait Anon<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + Debug;
 
@@ -1502,9 +1527,10 @@ pub mod schedule {
 		///
 		/// Infallible.
 		fn schedule(
-			when: BlockNumber,
+			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
+			origin: Origin,
 			call: Call
 		) -> Result<Self::Address, DispatchError>;
 
@@ -1522,7 +1548,7 @@ pub mod schedule {
 	}
 
 	/// A type that can be used as a scheduler.
-	pub trait Named<BlockNumber, Call> {
+	pub trait Named<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
 
@@ -1531,9 +1557,10 @@ pub mod schedule {
 		/// - `id`: The identity of the task. This must be unique and will return an error if not.
 		fn schedule_named(
 			id: Vec<u8>,
-			when: BlockNumber,
+			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
+			origin: Origin,
 			call: Call
 		) -> Result<Self::Address, ()>;
 
@@ -1597,6 +1624,9 @@ pub trait OriginTrait: Sized {
 
 	/// Filter the call, if false then call is filtered out.
 	fn filter_call(&self, call: &Self::Call) -> bool;
+
+	/// Get the caller.
+	fn caller(&self) -> &Self::PalletsOrigin;
 }
 
 /// Trait to be used when types are exactly same.

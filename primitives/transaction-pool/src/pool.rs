@@ -23,9 +23,8 @@ use std::{
 	sync::Arc,
 	pin::Pin,
 };
-use futures::{Future, Stream,};
+use futures::{Future, Stream};
 use serde::{Deserialize, Serialize};
-use sp_utils::mpsc;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
@@ -131,7 +130,7 @@ pub enum TransactionStatus<Hash, BlockHash> {
 pub type TransactionStatusStream<Hash, BlockHash> = dyn Stream<Item=TransactionStatus<Hash, BlockHash>> + Send + Unpin;
 
 /// The import notification event stream.
-pub type ImportNotificationStream<H> = mpsc::TracingUnboundedReceiver<H>;
+pub type ImportNotificationStream<H> = futures::channel::mpsc::Receiver<H>;
 
 /// Transaction hash type for a pool.
 pub type TxHash<P> = <P as TransactionPool>::Hash;
@@ -164,7 +163,7 @@ pub trait InPoolTransaction {
 	/// Get priority of the transaction.
 	fn priority(&self) -> &TransactionPriority;
 	/// Get longevity of the transaction.
-	fn longevity(&self) ->&TransactionLongevity;
+	fn longevity(&self) -> &TransactionLongevity;
 	/// Get transaction dependencies.
 	fn requires(&self) -> &[TransactionTag];
 	/// Get tags that transaction provides.

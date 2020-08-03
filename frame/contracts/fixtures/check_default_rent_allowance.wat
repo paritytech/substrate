@@ -1,8 +1,13 @@
 (module
-	(import "env" "ext_rent_allowance" (func $ext_rent_allowance))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_rent_allowance" (func $ext_rent_allowance (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; [0, 8) reserved for $ext_rent_allowance output
+
+	;; [8, 16) length of the buffer
+	(data (i32.const 8) "\08")
+
+	;; [16, inf) zero initialized
 
 	(func $assert (param i32)
 		(block $ok
@@ -16,30 +21,21 @@
 	(func (export "call"))
 
 	(func (export "deploy")
-		;; fill the scratch buffer with the rent allowance.
-		(call $ext_rent_allowance)
+		;; fill the buffer with the rent allowance.
+		(call $ext_rent_allowance (i32.const 0) (i32.const 8))
 
-		;; assert $ext_scratch_size == 8
+		;; assert len == 8
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 8))
 				(i32.const 8)
 			)
-		)
-
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 8)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
 		)
 
 		;; assert that contents of the buffer is equal to <BalanceOf<T>>::max_value().
 		(call $assert
 			(i64.eq
-				(i64.load
-					(i32.const 8)
-				)
+				(i64.load (i32.const 0))
 				(i64.const 0xFFFFFFFFFFFFFFFF)
 			)
 		)

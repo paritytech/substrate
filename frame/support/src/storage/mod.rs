@@ -21,6 +21,7 @@ use sp_std::{prelude::*, marker::PhantomData};
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::hash::{Twox128, StorageHasher};
 use sp_runtime::generic::{Digest, DigestItem};
+pub use sp_runtime::TransactionOutcome;
 
 pub mod unhashed;
 pub mod hashed;
@@ -28,14 +29,6 @@ pub mod child;
 #[doc(hidden)]
 pub mod generator;
 pub mod migration;
-
-/// Describes whether a storage transaction should be committed or rolled back.
-pub enum TransactionOutcome<T> {
-	/// Transaction should be committed.
-	Commit(T),
-	/// Transaction should be rolled back.
-	Rollback(T),
-}
 
 /// Execute the supplied function in a new storage transaction.
 ///
@@ -372,6 +365,13 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		F: FnOnce(&mut Self::Query) -> Result<R, E>;
+
+	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	fn try_mutate_exists<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		F: FnOnce(&mut Option<V>) -> Result<R, E>;
 
 	/// Append the given item to the value in the storage.
 	///

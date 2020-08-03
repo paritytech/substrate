@@ -114,7 +114,7 @@ fn main() {
 				*stake_of_tree.get(who).unwrap()
 			};
 
-			let mut staked = assignment_ratio_to_staked(assignments.clone(), &stake_of);
+			let mut staked = assignment_ratio_to_staked(assignments, &stake_of);
 			let winners = to_without_backing(winners);
 			let mut support = build_support_map(winners.as_ref(), staked.as_ref()).0;
 

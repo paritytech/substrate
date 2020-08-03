@@ -38,9 +38,8 @@ const CACHE_EXPIRE: Duration = Duration::from_secs(10 * 60);
 /// Interval at which we perform garbage collection on the node info.
 const GARBAGE_COLLECT_INTERVAL: Duration = Duration::from_secs(2 * 60);
 
-/// Implementation of `NetworkBehaviour` that holds information about nodes in cache for diagnostic
-/// purposes.
-pub struct DebugInfoBehaviour {
+/// Implementation of `NetworkBehaviour` that holds information about peers in cache.
+pub struct PeerInfoBehaviour {
 	/// Periodically ping nodes, and close the connection if it's unresponsive.
 	ping: Ping,
 	/// Periodically identifies the remote and responds to incoming requests.
@@ -78,8 +77,8 @@ impl NodeInfo {
 	}
 }
 
-impl DebugInfoBehaviour {
-	/// Builds a new `DebugInfoBehaviour`.
+impl PeerInfoBehaviour {
+	/// Builds a new `PeerInfoBehaviour`.
 	pub fn new(
 		user_agent: String,
 		local_public_key: PublicKey,
@@ -89,7 +88,7 @@ impl DebugInfoBehaviour {
 			Identify::new(proto_version, user_agent, local_public_key)
 		};
 
-		DebugInfoBehaviour {
+		PeerInfoBehaviour {
 			ping: Ping::new(PingConfig::new()),
 			identify,
 			nodes_info: FnvHashMap::default(),
@@ -154,8 +153,8 @@ impl<'a> Node<'a> {
 
 /// Event that can be emitted by the behaviour.
 #[derive(Debug)]
-pub enum DebugInfoEvent {
-	/// We have obtained debug information from a peer, including the addresses it is listening
+pub enum PeerInfoEvent {
+	/// We have obtained identity information from a peer, including the addresses it is listening
 	/// on.
 	Identified {
 		/// Id of the peer that has been identified.
@@ -165,12 +164,12 @@ pub enum DebugInfoEvent {
 	},
 }
 
-impl NetworkBehaviour for DebugInfoBehaviour {
+impl NetworkBehaviour for PeerInfoBehaviour {
 	type ProtocolsHandler = IntoProtocolsHandlerSelect<
 		<Ping as NetworkBehaviour>::ProtocolsHandler,
 		<Identify as NetworkBehaviour>::ProtocolsHandler
 	>;
-	type OutEvent = DebugInfoEvent;
+	type OutEvent = PeerInfoEvent;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		IntoProtocolsHandler::select(self.ping.new_handler(), self.identify.new_handler())
@@ -317,7 +316,7 @@ impl NetworkBehaviour for DebugInfoBehaviour {
 					match event {
 						IdentifyEvent::Received { peer_id, info, .. } => {
 							self.handle_identify_report(&peer_id, &info);
-							let event = DebugInfoEvent::Identified { peer_id, info };
+							let event = PeerInfoEvent::Identified { peer_id, info };
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
 						}
 						IdentifyEvent::Error { peer_id, error } =>

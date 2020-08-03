@@ -36,7 +36,10 @@ impl<T: Chain<B>, B: Block> Chain<B> for Arc<T> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Validation {
 	/// Valid block announcement.
-	Success,
+	Success {
+		/// Is this the new best block of the node?
+		is_new_best: bool,
+	},
 	/// Invalid block announcement.
 	Failure,
 }
@@ -49,18 +52,10 @@ pub trait BlockAnnounceValidator<B: Block> {
 
 /// Default implementation of `BlockAnnounceValidator`.
 #[derive(Debug)]
-pub struct DefaultBlockAnnounceValidator<C> {
-	chain: C
-}
+pub struct DefaultBlockAnnounceValidator;
 
-impl<C> DefaultBlockAnnounceValidator<C> {
-	pub fn new(chain: C) -> Self {
-		Self { chain }
-	}
-}
-
-impl<B: Block, C: Chain<B>> BlockAnnounceValidator<B> for DefaultBlockAnnounceValidator<C> {
+impl<B: Block> BlockAnnounceValidator<B> for DefaultBlockAnnounceValidator {
 	fn validate(&mut self, _h: &B::Header, _d: &[u8]) -> Result<Validation, Box<dyn Error + Send>> {
-		Ok(Validation::Success)
+		Ok(Validation::Success { is_new_best: false })
 	}
 }

@@ -19,18 +19,19 @@
 
 #![cfg(test)]
 
-use super::*;
+use super::{Call, *};
 use crate::mock::*;
 use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_ok,
-	traits::{Currency, OnFinalize, UnfilteredDispatchable},
+	traits::{Currency, OnFinalize},
 };
 use frame_system::{EventRecord, Phase};
+use pallet_session::OneSessionHandler;
 use sp_core::H256;
 use sp_keyring::Ed25519Keyring;
-use sp_runtime::{testing::Digest, traits::Header};
+use sp_runtime::testing::Digest;
 
 #[test]
 fn authorities_change_logged() {
@@ -316,7 +317,9 @@ fn time_slot_have_sane_ord() {
 	assert!(FIXTURE.windows(2).all(|f| f[0] < f[1]));
 }
 
-fn test_authorities() -> AuthorityList {
+/// Returns a list with 3 authorities with known keys:
+/// Alice, Bob and Charlie.
+pub fn test_authorities() -> AuthorityList {
 	let authorities = vec![
 		Ed25519Keyring::Alice,
 		Ed25519Keyring::Bob,
@@ -340,14 +343,15 @@ fn report_equivocation_current_set_works() {
 		start_era(1);
 
 		let authorities = Grandpa::grandpa_authorities();
+		let validators = Session::validators();
 
-		// make sure that all authorities have the same balance
-		for i in 0..authorities.len() {
-			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
-			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+		// make sure that all validators have the same balance
+		for validator in &validators {
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(1, i as u64),
+				Staking::eras_stakers(1, validator),
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
@@ -375,17 +379,23 @@ fn report_equivocation_current_set_works() {
 			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		// report the equivocation and the tx should be dispatched successfully
-		let inner = report_equivocation(equivocation_proof, key_owner_proof).unwrap();
-		assert_ok!(inner.dispatch_bypass_filter(Origin::signed(1)));
+		assert_ok!(
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				key_owner_proof,
+			),
+		);
 
 		start_era(2);
 
 		// check that the balance of 0-th validator is slashed 100%.
-		assert_eq!(Balances::total_balance(&0), 10_000_000 - 10_000);
-		assert_eq!(Staking::slashable_balance_of(&0), 0);
+		let equivocation_validator_id = validators[equivocation_authority_index];
 
+		assert_eq!(Balances::total_balance(&equivocation_validator_id), 10_000_000 - 10_000);
+		assert_eq!(Staking::slashable_balance_of(&equivocation_validator_id), 0);
 		assert_eq!(
-			Staking::eras_stakers(2, 0),
+			Staking::eras_stakers(2, equivocation_validator_id),
 			pallet_staking::Exposure {
 				total: 0,
 				own: 0,
@@ -394,12 +404,16 @@ fn report_equivocation_current_set_works() {
 		);
 
 		// check that the balances of all other validators are left intact.
-		for i in 1..authorities.len() {
-			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
-			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+		for validator in &validators {
+			if *validator == equivocation_validator_id {
+				continue;
+			}
+
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(2, i as u64),
+				Staking::eras_stakers(2, validator),
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
@@ -418,6 +432,7 @@ fn report_equivocation_old_set_works() {
 		start_era(1);
 
 		let authorities = Grandpa::grandpa_authorities();
+		let validators = Session::validators();
 
 		let equivocation_authority_index = 0;
 		let equivocation_key = &authorities[equivocation_authority_index].0;
@@ -429,12 +444,12 @@ fn report_equivocation_old_set_works() {
 		start_era(2);
 
 		// make sure that all authorities have the same balance
-		for i in 0..authorities.len() {
-			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
-			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+		for validator in &validators {
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(2, i as u64),
+				Staking::eras_stakers(2, validator),
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
@@ -456,17 +471,24 @@ fn report_equivocation_old_set_works() {
 
 		// report the equivocation using the key ownership proof generated on
 		// the old set, the tx should be dispatched successfully
-		let inner = report_equivocation(equivocation_proof, key_owner_proof).unwrap();
-		assert_ok!(inner.dispatch_bypass_filter(Origin::signed(1)));
+		assert_ok!(
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				key_owner_proof,
+			),
+		);
 
 		start_era(3);
 
 		// check that the balance of 0-th validator is slashed 100%.
-		assert_eq!(Balances::total_balance(&0), 10_000_000 - 10_000);
-		assert_eq!(Staking::slashable_balance_of(&0), 0);
+		let equivocation_validator_id = validators[equivocation_authority_index];
+
+		assert_eq!(Balances::total_balance(&equivocation_validator_id), 10_000_000 - 10_000);
+		assert_eq!(Staking::slashable_balance_of(&equivocation_validator_id), 0);
 
 		assert_eq!(
-			Staking::eras_stakers(3, 0),
+			Staking::eras_stakers(3, equivocation_validator_id),
 			pallet_staking::Exposure {
 				total: 0,
 				own: 0,
@@ -475,12 +497,16 @@ fn report_equivocation_old_set_works() {
 		);
 
 		// check that the balances of all other validators are left intact.
-		for i in 1..authorities.len() {
-			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
-			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+		for validator in &validators {
+			if *validator == equivocation_validator_id {
+				continue;
+			}
+
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(3, i as u64),
+				Staking::eras_stakers(3, validator),
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
@@ -516,10 +542,14 @@ fn report_equivocation_invalid_set_id() {
 			(1, H256::random(), 10, &equivocation_keyring),
 		);
 
-		// it should be filtered by the signed extension validation
+		// the call for reporting the equivocation should error
 		assert_err!(
-			report_equivocation(equivocation_proof, key_owner_proof),
-			equivocation::ReportEquivocationValidityError::InvalidSetId,
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				key_owner_proof,
+			),
+			Error::<Test>::InvalidEquivocationProof,
 		);
 	});
 }
@@ -555,8 +585,12 @@ fn report_equivocation_invalid_session() {
 		// report an equivocation for the current set using an key ownership
 		// proof from the previous set, the session should be invalid.
 		assert_err!(
-			report_equivocation(equivocation_proof, key_owner_proof),
-			equivocation::ReportEquivocationValidityError::InvalidSession,
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				key_owner_proof,
+			),
+			Error::<Test>::InvalidEquivocationProof,
 		);
 	});
 }
@@ -596,8 +630,12 @@ fn report_equivocation_invalid_key_owner_proof() {
 		// report an equivocation for the current set using a key ownership
 		// proof for a different key than the one in the equivocation proof.
 		assert_err!(
-			report_equivocation(equivocation_proof, invalid_key_owner_proof),
-			equivocation::ReportEquivocationValidityError::InvalidKeyOwnershipProof,
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				invalid_key_owner_proof,
+			),
+			Error::<Test>::InvalidKeyOwnershipProof,
 		);
 	});
 }
@@ -623,8 +661,12 @@ fn report_equivocation_invalid_equivocation_proof() {
 
 		let assert_invalid_equivocation_proof = |equivocation_proof| {
 			assert_err!(
-				report_equivocation(equivocation_proof, key_owner_proof.clone()),
-				equivocation::ReportEquivocationValidityError::InvalidEquivocationProof,
+				Grandpa::report_equivocation_unsigned(
+					Origin::none(),
+					equivocation_proof,
+					key_owner_proof.clone(),
+				),
+				Error::<Test>::InvalidEquivocationProof,
 			);
 		};
 
@@ -658,5 +700,145 @@ fn report_equivocation_invalid_equivocation_proof() {
 			(1, H256::random(), 10, &equivocation_keyring),
 			(1, H256::random(), 10, &Ed25519Keyring::Dave),
 		));
+	});
+}
+
+#[test]
+fn report_equivocation_validate_unsigned_prevents_duplicates() {
+	use sp_runtime::transaction_validity::{
+		InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
+		TransactionValidity, ValidTransaction,
+	};
+
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let authorities = Grandpa::grandpa_authorities();
+
+		// generate and report an equivocation for the validator at index 0
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index].0;
+		let equivocation_keyring = extract_keyring(equivocation_key);
+		let set_id = Grandpa::current_set_id();
+
+		let equivocation_proof = generate_equivocation_proof(
+			set_id,
+			(1, H256::random(), 10, &equivocation_keyring),
+			(1, H256::random(), 10, &equivocation_keyring),
+		);
+
+		let key_owner_proof =
+			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+
+		let call = Call::report_equivocation_unsigned(
+			equivocation_proof.clone(),
+			key_owner_proof.clone(),
+		);
+
+		// only local/inblock reports are allowed
+		assert_eq!(
+			<Grandpa as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::External,
+				&call,
+			),
+			InvalidTransaction::Call.into(),
+		);
+
+		// the transaction is valid when passed as local
+		let tx_tag = (
+			equivocation_key,
+			set_id,
+			1u64,
+		);
+
+		assert_eq!(
+			<Grandpa as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::Local,
+				&call,
+			),
+			TransactionValidity::Ok(ValidTransaction {
+				priority: TransactionPriority::max_value(),
+				requires: vec![],
+				provides: vec![("GrandpaEquivocation", tx_tag).encode()],
+				longevity: TransactionLongevity::max_value(),
+				propagate: false,
+			})
+		);
+
+		// the pre dispatch checks should also pass
+		assert_ok!(<Grandpa as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call));
+
+		// we submit the report
+		Grandpa::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
+			.unwrap();
+
+		// the report should now be considered stale and the transaction is invalid
+		assert_err!(
+			<Grandpa as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call),
+			InvalidTransaction::Stale,
+		);
+	});
+}
+
+#[test]
+fn on_new_session_doesnt_start_new_set_if_schedule_change_failed() {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
+		assert_eq!(Grandpa::current_set_id(), 0);
+
+		// starting a new era should lead to a change in the session
+		// validators and trigger a new set
+		start_era(1);
+		assert_eq!(Grandpa::current_set_id(), 1);
+
+		// we schedule a change delayed by 2 blocks, this should make it so that
+		// when we try to rotate the session at the beginning of the era we will
+		// fail to schedule a change (there's already one pending), so we should
+		// not increment the set id.
+		Grandpa::schedule_change(to_authorities(vec![(1, 1)]), 2, None).unwrap();
+		start_era(2);
+		assert_eq!(Grandpa::current_set_id(), 1);
+
+		// everything should go back to normal after.
+		start_era(3);
+		assert_eq!(Grandpa::current_set_id(), 2);
+
+		// session rotation might also fail to schedule a change if it's for a
+		// forced change (i.e. grandpa is stalled) and it is too soon.
+		<NextForced<Test>>::put(1000);
+		<Stalled<Test>>::put((30, 1));
+
+		// NOTE: we cannot go through normal era rotation since having `Stalled`
+		// defined will also trigger a new set (regardless of whether the
+		// session validators changed)
+		Grandpa::on_new_session(true, std::iter::empty(), std::iter::empty());
+		assert_eq!(Grandpa::current_set_id(), 2);
+	});
+}
+
+#[test]
+fn always_schedules_a_change_on_new_session_when_stalled() {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
+		start_era(1);
+
+		assert!(Grandpa::pending_change().is_none());
+		assert_eq!(Grandpa::current_set_id(), 1);
+
+		// if the session handler reports no change then we should not schedule
+		// any pending change
+		Grandpa::on_new_session(false, std::iter::empty(), std::iter::empty());
+
+		assert!(Grandpa::pending_change().is_none());
+		assert_eq!(Grandpa::current_set_id(), 1);
+
+		// if grandpa is stalled then we should **always** schedule a forced
+		// change on a new session
+		<Stalled<Test>>::put((10, 1));
+		Grandpa::on_new_session(false, std::iter::empty(), std::iter::empty());
+
+		assert!(Grandpa::pending_change().is_some());
+		assert!(Grandpa::pending_change().unwrap().forced.is_some());
+		assert_eq!(Grandpa::current_set_id(), 2);
 	});
 }

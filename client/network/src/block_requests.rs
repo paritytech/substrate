@@ -409,7 +409,7 @@ where
 				},
 				body: if get_body {
 					self.chain.block_body(&BlockId::Hash(hash))?
-						.unwrap_or(Vec::new())
+						.unwrap_or_default()
 						.iter_mut()
 						.map(|extrinsic| extrinsic.encode())
 						.collect()
@@ -418,7 +418,7 @@ where
 				},
 				receipt: Vec::new(),
 				message_queue: Vec::new(),
-				justification: justification.unwrap_or(Vec::new()),
+				justification: justification.unwrap_or_default(),
 				is_empty_justification,
 			};
 
@@ -455,8 +455,8 @@ where
 			marker: PhantomData,
 		};
 		let mut cfg = OneShotHandlerConfig::default();
-		cfg.inactive_timeout = self.config.inactivity_timeout;
-		cfg.substream_timeout = self.config.request_timeout;
+		cfg.keep_alive_timeout = self.config.inactivity_timeout;
+		cfg.outbound_substream_timeout = self.config.request_timeout;
 		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
 	}
 

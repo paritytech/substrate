@@ -197,13 +197,14 @@
 //! handshake message can be of length 0, in which case the sender has to send a single `0`.
 //! - The receiver then either immediately closes the substream, or answers with its own
 //! LEB128-prefixed protocol-specific handshake response. The message can be of length 0, in which
-//! case a single `0` has to be sent back. The receiver is then encouraged to close its sending
-//! side.
+//! case a single `0` has to be sent back.
 //! - Once the handshake has completed, the notifications protocol is unidirectional. Only the
 //! node which initiated the substream can push notifications. If the remote wants to send
 //! notifications as well, it has to open its own undirectional substream.
 //! - Each notification must be prefixed with an LEB128-encoded length. The encoding of the
 //! messages is specific to each protocol.
+//! - Either party can signal that it doesn't want a notifications substream anymore by closing
+//! its writing side. The other party should respond by closing its own writing side soon after.
 //!
 //! The API of `sc-network` allows one to register user-defined notification protocols.
 //! `sc-network` automatically tries to open a substream towards each node for which the legacy
@@ -245,7 +246,7 @@
 mod behaviour;
 mod block_requests;
 mod chain;
-mod debug_info;
+mod peer_info;
 mod discovery;
 mod finality_requests;
 mod light_client_handler;

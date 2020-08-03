@@ -141,14 +141,14 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 		// which they got into the pool
 		while left > 0 {
 			let first_block = match self.block_ordered.keys().next().cloned() {
-			  Some(bn) => bn,
-			  None => break,
+				Some(bn) => bn,
+				None => break,
 			};
 			let mut block_drained = false;
 			if let Some(extrinsics) = self.block_ordered.get_mut(&first_block) {
 				let to_queue = extrinsics.iter().take(left).cloned().collect::<Vec<_>>();
 				if to_queue.len() == extrinsics.len() {
-				   block_drained = true;
+					block_drained = true;
 				} else {
 					for xt in &to_queue {
 						extrinsics.remove(xt);
@@ -159,7 +159,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 			}
 
 			if block_drained {
-			  self.block_ordered.remove(&first_block);
+				self.block_ordered.remove(&first_block);
 			}
 		}
 

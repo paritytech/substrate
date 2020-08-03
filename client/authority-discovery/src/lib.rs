@@ -481,6 +481,11 @@ where
 
 		if !remote_addresses.is_empty() {
 			self.addr_cache.insert(authority_id.clone(), remote_addresses);
+			if let Some(metrics) = &self.metrics {
+				metrics.known_authorities_count.set(
+					self.addr_cache.num_ids().try_into().unwrap_or(std::u64::MAX)
+				);
+			}
 			self.update_peer_set_priority_group()?;
 		}
 
@@ -651,6 +656,7 @@ pub(crate) struct Metrics {
 	request: Counter<U64>,
 	dht_event_received: CounterVec<U64>,
 	handle_value_found_event_failure: Counter<U64>,
+	known_authorities_count: Gauge<U64>,
 	priority_group_size: Gauge<U64>,
 }
 
@@ -694,6 +700,13 @@ impl Metrics {
 				Counter::new(
 					"authority_discovery_handle_value_found_event_failure",
 					"Number of times handling a dht value found event failed."
+				)?,
+				registry,
+			)?,
+			known_authorities_count: register(
+				Gauge::new(
+					"authority_discovery_known_authorities_count",
+					"Number of authorities known by authority discovery."
 				)?,
 				registry,
 			)?,

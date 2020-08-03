@@ -22,7 +22,7 @@ use super::*;
 use frame_benchmarking::{benchmarks, account};
 use frame_support::{
 	IterableStorageMap,
-	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable},
+	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable, schedule::DispatchTime},
 };
 use frame_system::{RawOrigin, Module as System, self, EventRecord};
 use sp_runtime::traits::{Bounded, One};
@@ -76,9 +76,10 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 	let referendum_index: ReferendumIndex = ReferendumCount::get() - 1;
 	T::Scheduler::schedule_named(
 		(DEMOCRACY_ID, referendum_index).encode(),
-		1.into(),
+		DispatchTime::At(1.into()),
 		None,
 		63,
+		system::RawOrigin::Root.into(),
 		Call::enact_proposal(proposal_hash, referendum_index).into(),
 	).map_err(|_| "failed to schedule named")?;
 	Ok(referendum_index)
