@@ -80,8 +80,8 @@ impl<M> DirectedGossip<M> {
 		H: ExHashT,
 		F: Fn(M) -> Vec<u8> + Send + 'static,
 	{
-		DirectedGossipPrototype::new(service, peer_id, protocol)
-			.build(queue_size_limit, messages_encode)
+		DirectedGossipPrototype::new(service, peer_id)
+			.build(protocol, queue_size_limit, messages_encode)
 	}
 
 	/// Locks the queue of messages towards this peer.
@@ -118,13 +118,11 @@ impl<M> Drop for DirectedGossip<M> {
 	}
 }
 
-/// Utility. Generic over the type of the messages. Holds a [`NetworkService`], a [`PeerId`],
-/// and a [`ConsensusEngineId`]. Provides a [`DirectedGossipPrototype::build`] function that
-/// builds a [`DirectedGossip`].
+/// Utility. Generic over the type of the messages. Holds a [`NetworkService`] and a [`PeerId`].
+/// Provides a [`DirectedGossipPrototype::build`] function that builds a [`DirectedGossip`].
 pub struct DirectedGossipPrototype {
 	service: Arc<dyn AbstractNotificationSender + Send + Sync + 'static>,
 	peer_id: PeerId,
-	protocol: ConsensusEngineId,
 }
 
 impl DirectedGossipPrototype {
@@ -132,7 +130,6 @@ impl DirectedGossipPrototype {
 	pub fn new<B, H>(
 		service: Arc<NetworkService<B, H>>,
 		peer_id: PeerId,
-		protocol: ConsensusEngineId,
 	) -> Self
 	where
 		B: BlockT + 'static,
@@ -141,7 +138,6 @@ impl DirectedGossipPrototype {
 		DirectedGossipPrototype {
 			service,
 			peer_id,
-			protocol,
 		}
 	}
 
@@ -150,6 +146,7 @@ impl DirectedGossipPrototype {
 	/// See [`DirectGossip::new`] for details.
 	pub fn build<M, F>(
 		self,
+		protocol: ConsensusEngineId,
 		queue_size_limit: usize,
 		messages_encode: F
 	) -> (DirectedGossip<M>, impl Future<Output = ()> + Send + 'static)
@@ -169,7 +166,7 @@ impl DirectedGossipPrototype {
 		let task = spawn_task(
 			self.service,
 			self.peer_id,
-			self.protocol,
+			protocol,
 			shared.clone(),
 			messages_encode
 		);
