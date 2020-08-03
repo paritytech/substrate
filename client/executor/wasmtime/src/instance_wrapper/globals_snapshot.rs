@@ -63,13 +63,13 @@ impl GlobalsSnapshot {
 			else if index > current_saved.index { current += 1; continue; }
 			else {
 				export.into_global()
-					.ok_or_else(
-						|| Error::Other("Wrong instance in GlobalsSnapshot::apply: what should be global is not global.".to_string())
-					)?
+					.ok_or_else(|| Error::Other(
+						"Wrong instance in GlobalsSnapshot::apply: what should be global is not global.".to_string()
+					))?
 					.set(into_wasmtime_val(current_saved.value))
-					.map_err(
-						|_e| Error::Other("Wrong instance in GlobalsSnapshot::apply: global saved type does not matched applied.".to_string())
-					)?;
+					.map_err(|_e| Error::Other(
+						"Wrong instance in GlobalsSnapshot::apply: global saved type does not matched applied.".to_string()
+					))?;
 			}
 		}
 
