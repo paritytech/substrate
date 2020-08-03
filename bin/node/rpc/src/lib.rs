@@ -33,7 +33,6 @@
 use std::sync::Arc;
 
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
-use node_runtime::UncheckedExtrinsic;
 use sp_api::ProvideRuntimeApi;
 use sp_transaction_pool::TransactionPool;
 use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
@@ -106,7 +105,7 @@ pub fn create_full<C, P, M, SC>(
 	C: Send + Sync + 'static,
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber>,
-	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
+	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
 	C::Api: BabeApi<Block>,
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
