@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 futures = "0.3.4"
 futures-timer = "3.0.1"
 libp2p = { version = "0.22.0", default-features = false }
-log = "0.4.8"
+tracing = "0.1"
 lru = "0.4.3"
 sc-network = { version = "0.8.0-rc5", path = "../network" }
 sp-runtime = { version = "2.0.0-rc5", path = "../../primitives/runtime" }

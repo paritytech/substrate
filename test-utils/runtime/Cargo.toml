@@ -45,7 +45,7 @@ sc-service = { version = "0.8.0-rc5", default-features = false, optional = true,
 
 # 3rd party
 cfg-if = "0.1.10"
-log = { version = "0.4.8", optional = true }
+tracing = { version = "0.1.0", optional = true }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 
 [dev-dependencies]
@@ -70,7 +70,7 @@ std = [
 	"frame-executive/std",
 	"sp-inherents/std",
 	"sp-keyring",
-	"log",
+	"tracing",
 	"memory-db/std",
 	"sp-offchain/std",
 	"sp-core/std",

@@ -18,7 +18,7 @@ sp-api = { version = "2.0.0-rc5", path = "../../primitives/api" }
 fnv = "1.0.6"
 futures = "0.3.4"
 futures-timer = "3.0.1"
-log = "0.4.8"
+tracing = "0.1"
 threadpool = "1.7"
 num_cpus = "1.10"
 sp-offchain = { version = "2.0.0-rc5", path = "../../primitives/offchain" }

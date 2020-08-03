@@ -43,7 +43,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 futures = "0.3.4"
 futures-timer = "3.0.1"
 parking_lot = "0.10.0"
-log = "0.4.8"
+tracing = "0.1"
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
 rand = "0.7.2"
 merlin = "2.0"

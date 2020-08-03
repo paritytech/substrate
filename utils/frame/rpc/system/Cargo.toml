@@ -18,7 +18,7 @@ futures = { version = "0.3.4", features = ["compat"] }
 jsonrpc-core = "14.2.0"
 jsonrpc-core-client = "14.2.0"
 jsonrpc-derive = "14.2.1"
-log = "0.4.8"
+tracing = "0.1"
 serde = { version = "1.0.101", features = ["derive"] }
 sp-runtime = { version = "2.0.0-rc5", path = "../../../../primitives/runtime" }
 sp-api = { version = "2.0.0-rc5", path = "../../../../primitives/api" }

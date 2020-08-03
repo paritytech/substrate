@@ -24,7 +24,7 @@ futures = "0.3.4"
 futures-timer = "3.0.1"
 sp-inherents = { version = "2.0.0-rc5", path = "../../../primitives/inherents" }
 sc-keystore = { version = "2.0.0-rc5", path = "../../keystore" }
-log = "0.4.8"
+tracing = "0.1"
 parking_lot = "0.10.0"
 sp-core = { version = "2.0.0-rc5", path = "../../../primitives/core" }
 sp-blockchain = { version = "2.0.0-rc5", path = "../../../primitives/blockchain" }

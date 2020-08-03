@@ -13,7 +13,7 @@ documentation = "https://docs.rs/sc-executor-common/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-log = "0.4.8"
+tracing = "0.1"
 derive_more = "0.99.2"
 parity-wasm = "0.41.0"
 codec = { package = "parity-scale-codec", version = "1.3.4" }

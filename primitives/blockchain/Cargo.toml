@@ -13,7 +13,7 @@ documentation = "https://docs.rs/sp-blockchain"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-log = "0.4.8"
+tracing = "0.1"
 lru = "0.4.0"
 parking_lot = "0.10.0"
 derive_more = "0.99.2"

@@ -32,7 +32,7 @@ sc-executor-common = { version = "0.8.0-rc5", path = "common" }
 sc-executor-wasmi = { version = "0.8.0-rc5", path = "wasmi" }
 sc-executor-wasmtime = { version = "0.8.0-rc5", path = "wasmtime", optional = true }
 parking_lot = "0.10.0"
-log = "0.4.8"
+tracing = "0.1"
 libsecp256k1 = "0.3.4"
 
 [dev-dependencies]

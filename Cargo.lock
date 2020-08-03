@@ -1624,7 +1624,6 @@ dependencies = [
  "frame-support-procedural",
  "frame-system",
  "impl-trait-for-tuples",
- "log",
  "once_cell",
  "parity-scale-codec",
  "parity-util-mem 0.7.0",
@@ -1640,6 +1639,7 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-tracing",
+ "tracing",
 ]
 
 [[package]]
@@ -3531,7 +3531,6 @@ dependencies = [
  "kvdb 0.7.0",
  "kvdb-rocksdb",
  "lazy_static",
- "log",
  "node-primitives",
  "node-runtime",
  "node-testing",
@@ -3555,6 +3554,7 @@ dependencies = [
  "sp-trie",
  "structopt",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -3585,7 +3585,6 @@ dependencies = [
  "futures 0.3.5",
  "hex-literal",
  "jsonrpc-core",
- "log",
  "nix",
  "node-executor",
  "node-inspect",
@@ -3688,7 +3687,6 @@ name = "node-inspect"
 version = "0.8.0-rc5"
 dependencies = [
  "derive_more",
- "log",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",
@@ -3697,6 +3695,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "structopt",
+ "tracing",
 ]
 
 [[package]]
@@ -3748,9 +3747,9 @@ dependencies = [
  "futures 0.1.29",
  "hyper 0.12.35",
  "jsonrpc-core-client",
- "log",
  "node-primitives",
  "sc-rpc",
+ "tracing",
 ]
 
 [[package]]
@@ -3887,7 +3886,6 @@ dependencies = [
  "frame-system",
  "fs_extra",
  "futures 0.3.5",
- "log",
  "node-executor",
  "node-primitives",
  "node-runtime",
@@ -3921,6 +3919,7 @@ dependencies = [
  "sp-timestamp",
  "substrate-test-client",
  "tempfile",
+ "tracing",
  "wabt",
 ]
 
@@ -6120,7 +6119,6 @@ dependencies = [
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",
- "log",
  "parity-scale-codec",
  "prost",
  "prost-build",
@@ -6138,6 +6136,7 @@ dependencies = [
  "sp-runtime",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
+ "tracing",
 ]
 
 [[package]]
@@ -6146,7 +6145,6 @@ version = "0.8.0-rc5"
 dependencies = [
  "futures 0.3.5",
  "futures-timer 3.0.2",
- "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sc-block-builder",
@@ -6164,6 +6162,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tokio-executor 0.2.0-alpha.6",
+ "tracing",
 ]
 
 [[package]]
@@ -6221,7 +6220,6 @@ dependencies = [
  "fdlimit",
  "futures 0.3.5",
  "lazy_static",
- "log",
  "names",
  "nix",
  "parity-util-mem 0.7.0",
@@ -6248,6 +6246,7 @@ dependencies = [
  "tempfile",
  "time",
  "tokio 0.2.21",
+ "tracing",
 ]
 
 [[package]]
@@ -6262,7 +6261,6 @@ dependencies = [
  "kvdb 0.7.0",
  "kvdb-memorydb 0.6.0",
  "lazy_static",
- "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sc-executor",
@@ -6286,6 +6284,7 @@ dependencies = [
  "sp-version",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime",
+ "tracing",
 ]
 
 [[package]]
@@ -6299,7 +6298,6 @@ dependencies = [
  "kvdb-memorydb 0.7.0",
  "kvdb-rocksdb",
  "linked-hash-map",
- "log",
  "parity-db",
  "parity-scale-codec",
  "parity-util-mem 0.7.0",
@@ -6320,6 +6318,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -6340,7 +6339,6 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.3.5",
  "futures-timer 3.0.2",
- "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sc-block-builder",
@@ -6368,6 +6366,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -6379,7 +6378,6 @@ dependencies = [
  "fork-tree",
  "futures 0.3.5",
  "futures-timer 3.0.2",
- "log",
  "merlin",
  "num-bigint",
  "num-rational",
@@ -6421,6 +6419,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -6474,7 +6473,6 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
- "log",
  "parking_lot 0.10.2",
  "sc-basic-authorship",
  "sc-client-api",
@@ -6491,6 +6489,7 @@ dependencies = [
  "substrate-test-runtime-transaction-pool",
  "tempfile",
  "tokio 0.2.21",
+ "tracing",
 ]
 
 [[package]]
@@ -6499,7 +6498,6 @@ version = "0.8.0-rc5"
 dependencies = [
  "derive_more",
  "futures 0.3.5",
- "log",
  "parity-scale-codec",
  "sc-client-api",
  "sp-api",
@@ -6512,6 +6510,7 @@ dependencies = [
  "sp-runtime",
  "sp-timestamp",
  "substrate-prometheus-endpoint",
+ "tracing",
 ]
 
 [[package]]
@@ -6520,7 +6519,6 @@ version = "0.8.0-rc5"
 dependencies = [
  "futures 0.3.5",
  "futures-timer 3.0.2",
- "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sc-client-api",
@@ -6535,19 +6533,20 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "substrate-test-runtime-client",
+ "tracing",
 ]
 
 [[package]]
 name = "sc-consensus-uncles"
 version = "0.8.0-rc5"
 dependencies = [
- "log",
  "sc-client-api",
  "sp-authorship",
  "sp-consensus",
  "sp-core",
  "sp-inherents",
  "sp-runtime",
+ "tracing",
 ]
 
 [[package]]
@@ -6559,7 +6558,6 @@ dependencies = [
  "hex-literal",
  "lazy_static",
  "libsecp256k1",
- "log",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "parking_lot 0.10.2",
@@ -6593,7 +6591,6 @@ name = "sc-executor-common"
 version = "0.8.0-rc5"
 dependencies = [
  "derive_more",
- "log",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "sp-allocator",
@@ -6601,6 +6598,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-serializer",
  "sp-wasm-interface",
+ "tracing",
  "wasmi",
 ]
 
@@ -6608,13 +6606,13 @@ dependencies = [
 name = "sc-executor-wasmi"
 version = "0.8.0-rc5"
 dependencies = [
- "log",
  "parity-scale-codec",
  "sc-executor-common",
  "sp-allocator",
  "sp-core",
  "sp-runtime-interface",
  "sp-wasm-interface",
+ "tracing",
  "wasmi",
 ]
 
@@ -6625,7 +6623,6 @@ dependencies = [
  "assert_matches",
  "cranelift-codegen",
  "cranelift-wasm",
- "log",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "sc-executor-common",
@@ -6635,6 +6632,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-wasm-interface",
  "substrate-wasmtime",
+ "tracing",
  "wasmtime-environ",
  "wasmtime-runtime",
 ]
@@ -6650,7 +6648,6 @@ dependencies = [
  "fork-tree",
  "futures 0.3.5",
  "futures-timer 3.0.2",
- "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "pin-project",
@@ -6682,6 +6679,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.2.21",
+ "tracing",
 ]
 
 [[package]]
@@ -6694,11 +6692,11 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
- "log",
  "sc-finality-grandpa",
  "serde",
  "serde_json",
  "sp-core",
+ "tracing",
 ]
 
 [[package]]
@@ -6707,7 +6705,6 @@ version = "0.8.0-rc5"
 dependencies = [
  "ansi_term 0.12.1",
  "futures 0.3.5",
- "log",
  "parity-util-mem 0.7.0",
  "sc-client-api",
  "sc-network",
@@ -6715,6 +6712,7 @@ dependencies = [
  "sp-runtime",
  "sp-transaction-pool",
  "sp-utils",
+ "tracing",
  "wasm-timer",
 ]
 
@@ -6775,7 +6773,6 @@ dependencies = [
  "libp2p",
  "linked-hash-map",
  "linked_hash_set",
- "log",
  "lru 0.4.3",
  "nohash-hasher",
  "parity-scale-codec",
@@ -6806,6 +6803,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "thiserror",
+ "tracing",
  "unsigned-varint 0.4.0",
  "void",
  "wasm-timer",
@@ -6820,13 +6818,13 @@ dependencies = [
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",
- "log",
  "lru 0.4.3",
  "quickcheck",
  "rand 0.7.3",
  "sc-network",
  "sp-runtime",
  "substrate-test-runtime-client",
+ "tracing",
  "wasm-timer",
 ]
 
@@ -6838,7 +6836,6 @@ dependencies = [
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",
- "log",
  "parking_lot 0.10.2",
  "rand 0.7.3",
  "sc-block-builder",
@@ -6854,6 +6851,7 @@ dependencies = [
  "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -6868,7 +6866,6 @@ dependencies = [
  "hyper 0.13.4",
  "hyper-rustls",
  "lazy_static",
- "log",
  "num_cpus",
  "parity-scale-codec",
  "parking_lot 0.10.2",
@@ -6887,6 +6884,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "threadpool",
  "tokio 0.2.21",
+ "tracing",
 ]
 
 [[package]]
@@ -6895,10 +6893,10 @@ version = "2.0.0-rc5"
 dependencies = [
  "futures 0.3.5",
  "libp2p",
- "log",
  "rand 0.7.3",
  "serde_json",
  "sp-utils",
+ "tracing",
  "wasm-timer",
 ]
 
@@ -6906,8 +6904,8 @@ dependencies = [
 name = "sc-proposer-metrics"
 version = "0.8.0-rc5"
 dependencies = [
- "log",
  "substrate-prometheus-endpoint",
+ "tracing",
 ]
 
 [[package]]
@@ -6921,7 +6919,6 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-pubsub",
  "lazy_static",
- "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sc-block-builder",
@@ -6947,6 +6944,7 @@ dependencies = [
  "sp-version",
  "substrate-test-runtime-client",
  "tokio 0.1.22",
+ "tracing",
 ]
 
 [[package]]
@@ -6959,7 +6957,6 @@ dependencies = [
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "jsonrpc-pubsub",
- "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "serde",
@@ -6970,6 +6967,7 @@ dependencies = [
  "sp-runtime",
  "sp-transaction-pool",
  "sp-version",
+ "tracing",
 ]
 
 [[package]]
@@ -6981,10 +6979,10 @@ dependencies = [
  "jsonrpc-ipc-server",
  "jsonrpc-pubsub",
  "jsonrpc-ws-server",
- "log",
  "serde",
  "serde_json",
  "sp-runtime",
+ "tracing",
 ]
 
 [[package]]
@@ -7014,7 +7012,6 @@ dependencies = [
  "hash-db",
  "jsonrpc-pubsub",
  "lazy_static",
- "log",
  "netstat2",
  "parity-scale-codec",
  "parity-util-mem 0.7.0",
@@ -7077,7 +7074,6 @@ dependencies = [
  "futures 0.1.29",
  "futures 0.3.5",
  "hex-literal",
- "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sc-block-builder",
@@ -7102,6 +7098,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.1.22",
+ "tracing",
 ]
 
 [[package]]
@@ -7109,13 +7106,13 @@ name = "sc-state-db"
 version = "0.8.0-rc5"
 dependencies = [
  "env_logger 0.7.1",
- "log",
  "parity-scale-codec",
  "parity-util-mem 0.7.0",
  "parity-util-mem-derive",
  "parking_lot 0.10.2",
  "sc-client-api",
  "sp-core",
+ "tracing",
 ]
 
 [[package]]
@@ -7125,7 +7122,6 @@ dependencies = [
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",
- "log",
  "parking_lot 0.10.2",
  "pin-project",
  "rand 0.7.3",
@@ -7134,6 +7130,7 @@ dependencies = [
  "slog-json",
  "slog-scope",
  "take_mut",
+ "tracing",
  "void",
  "wasm-timer",
 ]
@@ -7143,7 +7140,6 @@ name = "sc-tracing"
 version = "2.0.0-rc5"
 dependencies = [
  "erased-serde",
- "log",
  "parking_lot 0.10.2",
  "rustc-hash",
  "sc-telemetry",
@@ -7164,7 +7160,6 @@ dependencies = [
  "derive_more",
  "futures 0.3.5",
  "linked-hash-map",
- "log",
  "parity-scale-codec",
  "parity-util-mem 0.7.0",
  "parking_lot 0.10.2",
@@ -7176,6 +7171,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-utils",
  "substrate-test-runtime",
+ "tracing",
  "wasm-timer",
 ]
 
@@ -7189,7 +7185,6 @@ dependencies = [
  "futures-diagnose",
  "hex",
  "intervalier",
- "log",
  "parity-scale-codec",
  "parity-util-mem 0.7.0",
  "parking_lot 0.10.2",
@@ -7208,6 +7203,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
+ "tracing",
  "wasm-timer",
 ]
 
@@ -7596,10 +7592,10 @@ name = "sp-allocator"
 version = "2.0.0-rc5"
 dependencies = [
  "derive_more",
- "log",
  "sp-core",
  "sp-std",
  "sp-wasm-interface",
+ "tracing",
 ]
 
 [[package]]
@@ -7733,7 +7729,6 @@ name = "sp-blockchain"
 version = "2.0.0-rc5"
 dependencies = [
  "derive_more",
- "log",
  "lru 0.4.3",
  "parity-scale-codec",
  "parking_lot 0.10.2",
@@ -7742,6 +7737,7 @@ dependencies = [
  "sp-database",
  "sp-runtime",
  "sp-state-machine",
+ "tracing",
 ]
 
 [[package]]
@@ -7760,7 +7756,6 @@ dependencies = [
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",
- "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "serde",
@@ -7775,6 +7770,7 @@ dependencies = [
  "sp-utils",
  "sp-version",
  "substrate-prometheus-endpoint",
+ "tracing",
  "wasm-timer",
 ]
 
@@ -7858,7 +7854,6 @@ dependencies = [
  "impl-serde 0.3.0",
  "lazy_static",
  "libsecp256k1",
- "log",
  "merlin",
  "num-traits 0.2.11",
  "parity-scale-codec",
@@ -7883,6 +7878,7 @@ dependencies = [
  "substrate-bip39",
  "tiny-bip39",
  "tiny-keccak 2.0.2",
+ "tracing",
  "twox-hash",
  "wasmi",
  "zeroize",
@@ -7920,7 +7916,6 @@ name = "sp-finality-grandpa"
 version = "2.0.0-rc5"
 dependencies = [
  "finality-grandpa",
- "log",
  "parity-scale-codec",
  "serde",
  "sp-api",
@@ -7928,6 +7923,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-std",
+ "tracing",
 ]
 
 [[package]]
@@ -7957,7 +7953,6 @@ dependencies = [
  "futures 0.3.5",
  "hash-db",
  "libsecp256k1",
- "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sp-core",
@@ -7968,6 +7963,7 @@ dependencies = [
  "sp-tracing",
  "sp-trie",
  "sp-wasm-interface",
+ "tracing",
 ]
 
 [[package]]
@@ -8030,7 +8026,7 @@ name = "sp-panic-handler"
 version = "2.0.0-rc5"
 dependencies = [
  "backtrace",
- "log",
+ "tracing",
 ]
 
 [[package]]
@@ -8049,7 +8045,6 @@ dependencies = [
  "either",
  "hash256-std-hasher",
  "impl-trait-for-tuples",
- "log",
  "parity-scale-codec",
  "parity-util-mem 0.7.0",
  "paste",
@@ -8063,6 +8058,7 @@ dependencies = [
  "sp-io",
  "sp-state-machine",
  "sp-std",
+ "tracing",
 ]
 
 [[package]]
@@ -8183,7 +8179,6 @@ dependencies = [
  "hash-db",
  "hex-literal",
  "itertools 0.9.0",
- "log",
  "num-traits 0.2.11",
  "parity-scale-codec",
  "parking_lot 0.10.2",
@@ -8195,6 +8190,7 @@ dependencies = [
  "sp-panic-handler",
  "sp-runtime",
  "sp-trie",
+ "tracing",
  "trie-db",
  "trie-root",
 ]
@@ -8243,7 +8239,6 @@ dependencies = [
 name = "sp-tracing"
 version = "2.0.0-rc5"
 dependencies = [
- "log",
  "rental",
  "tracing",
 ]
@@ -8254,12 +8249,12 @@ version = "2.0.0-rc5"
 dependencies = [
  "derive_more",
  "futures 0.3.5",
- "log",
  "parity-scale-codec",
  "serde",
  "sp-api",
  "sp-blockchain",
  "sp-runtime",
+ "tracing",
 ]
 
 [[package]]
@@ -8472,7 +8467,6 @@ dependencies = [
  "js-sys",
  "kvdb-web",
  "libp2p-wasm-ext",
- "log",
  "rand 0.6.5",
  "rand 0.7.3",
  "sc-chain-spec",
@@ -8480,6 +8474,7 @@ dependencies = [
  "sc-network",
  "sc-service",
  "sp-database",
+ "tracing",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -8517,7 +8512,6 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
- "log",
  "parity-scale-codec",
  "sc-client-api",
  "sc-rpc-api",
@@ -8530,6 +8524,7 @@ dependencies = [
  "sp-runtime",
  "sp-transaction-pool",
  "substrate-test-runtime-client",
+ "tracing",
 ]
 
 [[package]]
@@ -8540,9 +8535,9 @@ dependencies = [
  "derive_more",
  "futures-util",
  "hyper 0.13.4",
- "log",
  "prometheus",
  "tokio 0.2.21",
+ "tracing",
 ]
 
 [[package]]
@@ -8579,7 +8574,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
- "log",
  "memory-db",
  "pallet-babe",
  "pallet-timestamp",
@@ -8610,6 +8604,7 @@ dependencies = [
  "sp-version",
  "substrate-test-runtime-client",
  "substrate-wasm-builder-runner",
+ "tracing",
  "trie-db",
 ]
 

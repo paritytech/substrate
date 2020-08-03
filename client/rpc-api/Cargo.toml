@@ -19,7 +19,7 @@ jsonrpc-core = "14.2.0"
 jsonrpc-core-client = "14.2.0"
 jsonrpc-derive = "14.2.1"
 jsonrpc-pubsub = "14.2.0"
-log = "0.4.8"
+tracing = "0.1"
 parking_lot = "0.10.0"
 sp-core = { version = "2.0.0-rc5", path = "../../primitives/core" }
 sp-version = { version = "2.0.0-rc5", path = "../../primitives/version" }

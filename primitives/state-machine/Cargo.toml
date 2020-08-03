@@ -13,7 +13,7 @@ documentation = "https://docs.rs/sp-state-machine"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-log = "0.4.8"
+tracing = "0.1"
 parking_lot = "0.10.0"
 hash-db = "0.15.2"
 trie-db = "0.22.0"
