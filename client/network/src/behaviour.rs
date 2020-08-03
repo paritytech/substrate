@@ -161,7 +161,7 @@ pub enum BitswapEvent {
 	/// A block was received.
 	ReceivedBlock(PeerId, cid::Cid, Box<[u8]>),
 	/// A WANT request was received.
-    ReceivedWant(PeerId, cid::Cid, i32),
+	ReceivedWant(PeerId, cid::Cid, i32),
 }
 
 /// An opaque API used to interact with bitswap.
