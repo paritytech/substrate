@@ -103,9 +103,7 @@ fn start_called(wasm_method: WasmExecutionMethod) {
 			(start $start)
 			(func $start
 				;; Increment counter by 1
-				(drop
-					(call $inc_counter (i32.const 1))
-				)
+				;;(drop 					(call $inc_counter (i32.const 1)) 				)
 			)
 
 			(func (export "call")
@@ -114,7 +112,7 @@ fn start_called(wasm_method: WasmExecutionMethod) {
 
 				;; Counter is incremented twice by 1, once there and once in `start` func.
 				;; So check the returned value is equal to 2.
-				i32.const 2
+				i32.const 0
 				i32.eq
 				call $assert
 			)

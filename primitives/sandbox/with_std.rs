@@ -324,6 +324,9 @@ mod tests {
 			if args.len() != 1 {
 				return Err(HostError);
 			}
+
+			println!("inc called! {}", e.counter);
+
 			let inc_by = args[0].as_i32().ok_or_else(|| HostError)?;
 			e.counter += inc_by as u32;
 			Ok(ReturnValue::Value(Value::I32(e.counter as i32)))

@@ -323,6 +323,8 @@ impl Sandbox for HostState {
 			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
 		};
 
+		dbg!();
+
 		let instance_idx_or_err_code =
 			match sandbox::instantiate::<_, _, Holder>(dispatch_thunk, wasm, guest_env, state)
 				.map(|i| i.register(&mut *self.inner.sandbox_store.borrow_mut()))
@@ -331,6 +333,8 @@ impl Sandbox for HostState {
 				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
 				Err(_) => sandbox_primitives::ERR_MODULE,
 			};
+
+		dbg!();
 
 		Ok(instance_idx_or_err_code as u32)
 	}

@@ -592,25 +592,39 @@ where
 		.map_err(|_| InstantiationError::Instantiation)?;
 
 	let mut config = wasmtime::Config::new();
-	config.cranelift_opt_level(wasmtime::OptLevel::Speed);
+	config.cranelift_opt_level(wasmtime::OptLevel::None);
 	// config.strategy(wasmtime::Strategy::Cranelift).map_err(|_| InstantiationError::ModuleDecoding)?;
 
 	let wasmtime_engine = wasmtime::Engine::new(&config);
 	let wasmtime_store = wasmtime::Store::new(&wasmtime_engine);
 
-	let wasmtime_module = wasmtime::Module::new(&wasmtime_engine, wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
+	let wasmtime_module = wasmtime::Module::new(&wasmtime_engine, wasm)
+		.map_err(|e| {
+			dbg!(e);
+
+			InstantiationError::ModuleDecoding
+		})?;
+
+	// println!("(1)");
 
 	let module_imports: Vec<_> = wasmtime_module
 		.imports()
 		.filter_map(|import| {
+			// dbg!(&import);
+
 			if let wasmtime::ExternType::Func(func_ty) = import.ty() {
 				let guest_func_index = guest_env.imports
 					.func_by_name(import.module(), import.name()).expect("missing import");
+				
+				// dbg!(import.module(), import.name(), &guest_func_index);
 
 				let supervisor_func_index = guest_env.guest_to_supervisor_mapping
 					.func_by_guest_index(guest_func_index).expect("missing guest to host mapping");
 
+				// dbg!(&supervisor_func_index);
+
 				let dispatch_thunk = dispatch_thunk.clone();
+				let import_name = import.name().to_string();
 				Some(wasmtime::Extern::Func(wasmtime::Func::new(&wasmtime_store, func_ty,
 					move |_caller, params, result| {
 						SCH::with_sandbox_capabilities(|supervisor_externals| {
@@ -648,6 +662,9 @@ where
 								return Err(wasmtime::Trap::new("Can't write invoke args into memory"));
 							}
 
+							let import_name = import_name.clone();
+							dbg!(import_name, usize::from(supervisor_func_index));
+
 							let serialized_result = supervisor_externals.invoke(
 								&dispatch_thunk,
 								invoke_args_ptr,
@@ -656,6 +673,10 @@ where
 								supervisor_func_index,
 							)
 								.map_err(|e| wasmtime::Trap::new(e.to_string()))?;
+
+							dbg!();
+
+							// dbg!(serialized_result);
 
 							// dispatch_thunk returns pointer to serialized arguments.
 							// Unpack pointer and len of the serialized result data.
@@ -699,6 +720,8 @@ where
 
 	let wasmtime_instance = wasmtime::Instance::new(&wasmtime_store, &wasmtime_module, &module_imports).map_err(|_| InstantiationError::Instantiation)?;
 
+	dbg!(wasmtime_instance.handle().module().start_func);
+
 	let sandbox_instance = Rc::new(SandboxInstance {
 		// In general, it's not a very good idea to use `.not_started_instance()` for anything
 		// but for extracting memory and tables. But in this particular case, we are extracting
@@ -710,16 +733,27 @@ where
 	});
 
 	SCH::with_sandbox_capabilities( |supervisor_externals| {
+		// dbg!("about to call wasmi start");
+
 		with_guest_externals(
 			supervisor_externals,
 			&sandbox_instance,
 			state,
 			|guest_externals| {
-				wasmi_instance
+				let result = wasmi_instance
 					.run_start(guest_externals)
-					.map_err(|_| InstantiationError::StartTrapped)
+					.map_err(|e| {
+						print!("Start error: {}", e.to_string());
+
+						InstantiationError::StartTrapped
+					});
+
+				if let Ok(_m) = result.as_ref() {
+					// println!("module was initialized successfully");
+				}
 
 				// Note: no need to run start on wasmtime instance, since it's done automatically
+				result
 			},
 		)
 	})?;
