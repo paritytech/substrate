@@ -24,11 +24,8 @@ use sc_executor::NativeExecutor;
 use sp_state_machine::StateMachine;
 use sp_externalities::Extensions;
 use sc_service::{Configuration, NativeExecutionDispatch};
-use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
-};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_core::{
-	tasks,
 	testing::KeyStore,
 	traits::KeystoreExt,
 	offchain::{OffchainExt, testing::TestOffchainExt},
@@ -78,10 +75,11 @@ impl BenchmarkCmd {
 				self.highest_range_values.clone(),
 				self.steps.clone(),
 				self.repeat,
+				self.extra,
 			).encode(),
 			extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
-			tasks::executor(),
+			sp_core::testing::TaskExecutor::new(),
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;

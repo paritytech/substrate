@@ -46,3 +46,4 @@ std = [
 	"sp-core/std",
 	"sp-storage/std",
 ]
+memory-tracker = []

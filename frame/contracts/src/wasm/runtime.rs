@@ -617,10 +617,12 @@ define_env!(Env, <E: Ext>,
 	// This function creates an account and executes the constructor defined in the code specified
 	// by the code hash. The address of this new account is copied to `address_ptr` and its length
 	// to `address_len_ptr`. The constructors output buffer is copied to `output_ptr` and its
-	// length to `output_len_ptr`.
+	// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
+	// supplying the sentinel value of `u32::max_value()` to `output_ptr` or `address_ptr`.
 	//
-	// The copy of the output buffer and address can be skipped by supplying the sentinel value
-	// of `u32::max_value()` to `output_ptr` or `address_ptr`.
+	// After running the constructor it is verfied that the contract account holds at
+	// least the subsistence threshold. If that is not the case the instantion fails and
+	// the contract is not created.
 	//
 	// # Parameters
 	//
@@ -1209,7 +1211,7 @@ where
 /// the order of items is not preserved.
 fn has_duplicates<T: PartialEq + AsRef<[u8]>>(items: &mut Vec<T>) -> bool {
 	// Sort the vector
-	items.sort_unstable_by(|a, b| {
+	items.sort_by(|a, b| {
 		Ord::cmp(a.as_ref(), b.as_ref())
 	});
 	// And then find any two consecutive equal elements.

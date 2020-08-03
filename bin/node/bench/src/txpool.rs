@@ -21,11 +21,11 @@
 //! The goal of this benchmark is to figure out time needed to fill
 //! the transaction pool for the next block.
 
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use node_testing::bench::{BenchDb, Profile, BlockType, KeyTypes, DatabaseType};
 
-use sc_transaction_pool::{BasicPool, FullChainApi};
+use sc_transaction_pool::BasicPool;
 use sp_runtime::generic::BlockId;
 use sp_transaction_pool::{TransactionPool, TransactionSource};
 
@@ -71,10 +71,9 @@ impl core::Benchmark for PoolBenchmark {
 			std::thread::park_timeout(std::time::Duration::from_secs(3));
 		}
 
-		let executor = sp_core::testing::SpawnBlockingExecutor::new();
+		let executor = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(context.client.clone(), None)),
 			None,
 			executor,
 			context.client.clone(),

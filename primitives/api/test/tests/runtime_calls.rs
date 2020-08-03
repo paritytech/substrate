@@ -197,11 +197,11 @@ fn record_proof_works() {
 		None,
 		8,
 	);
-	execution_proof_check_on_proof_backend::<_, _, u64, _>(
+	execution_proof_check_on_proof_backend::<_, _, u64, _, _>(
 		&backend,
 		&mut overlay,
 		&executor,
-		sp_core::tasks::executor(),
+		sp_core::testing::TaskExecutor::new(),
 		"Core_execute_block",
 		&block.encode(),
 		&runtime_code,
