@@ -51,6 +51,7 @@ use libp2p::PeerId;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{
 	collections::VecDeque,
+	fmt,
 	sync::{atomic, Arc},
 	time::Duration,
 };
@@ -106,6 +107,12 @@ impl<M> DirectedGossip<M> {
 	}
 }
 
+impl<M> fmt::Debug for DirectedGossip<M> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		f.debug_struct("DirectedGossip").finish()
+	}
+}
+
 impl<M> Drop for DirectedGossip<M> {
 	fn drop(&mut self) {
 		// The "clean" way to notify the `Condvar` here is normally to first lock the `Mutex`,
@@ -120,6 +127,7 @@ impl<M> Drop for DirectedGossip<M> {
 
 /// Utility. Generic over the type of the messages. Holds a [`NetworkService`] and a [`PeerId`].
 /// Provides a [`DirectedGossipPrototype::build`] function that builds a [`DirectedGossip`].
+#[derive(Clone)]
 pub struct DirectedGossipPrototype {
 	service: Arc<dyn AbstractNotificationSender + Send + Sync + 'static>,
 	peer_id: PeerId,
@@ -172,6 +180,14 @@ impl DirectedGossipPrototype {
 		);
 
 		(DirectedGossip { shared }, task)
+	}
+}
+
+impl fmt::Debug for DirectedGossipPrototype {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		f.debug_struct("DirectedGossipPrototype")
+			.field("peer_id", &self.peer_id)
+			.finish()
 	}
 }
 
