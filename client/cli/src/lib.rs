@@ -236,6 +236,7 @@ pub fn init_logger(pattern: &str) {
 	// Disable info logging by default for some modules:
 	builder.filter(Some("ws"), log::LevelFilter::Off);
 	builder.filter(Some("yamux"), log::LevelFilter::Off);
+	builder.filter(Some("cranelift_codegen"), log::LevelFilter::Off);
 	builder.filter(Some("hyper"), log::LevelFilter::Warn);
 	builder.filter(Some("cranelift_wasm"), log::LevelFilter::Warn);
 	// Always log the special target `sc_tracing`, overrides global level

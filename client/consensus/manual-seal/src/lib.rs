@@ -220,7 +220,7 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(), api(), None, RevalidationType::Full, spawner,
 		));
@@ -288,7 +288,7 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(), api(), None, RevalidationType::Full, spawner,
 		));
@@ -360,7 +360,7 @@ mod tests {
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
 		let pool_api = api();
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(), pool_api.clone(), None, RevalidationType::Full, spawner,
 		));
