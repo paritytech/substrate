@@ -173,6 +173,7 @@ mod vote_threshold;
 mod vote;
 mod conviction;
 mod types;
+mod default_weight;
 pub use vote_threshold::{Approved, VoteThreshold};
 pub use vote::{Vote, AccountVote, Voting};
 pub use conviction::Conviction;
@@ -227,30 +228,38 @@ pub trait WeightInfo {
 	fn remove_other_vote(r: u32, ) -> Weight;
 }
 
+/// Default implementation of weight, this is just from an example return, values may change
+/// depending on the runtime. This is not meant to be used in production.
 impl WeightInfo for () {
-	fn propose() -> Weight { 1_000_000_000 }
-	fn second(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn vote_new(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn vote_existing(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn emergency_cancel() -> Weight { 1_000_000_000 }
-	fn external_propose(_v: u32, ) -> Weight { 1_000_000_000 }
-	fn external_propose_majority() -> Weight { 1_000_000_000 }
-	fn external_propose_default() -> Weight { 1_000_000_000 }
-	fn fast_track() -> Weight { 1_000_000_000 }
-	fn veto_external(_v: u32, ) -> Weight { 1_000_000_000 }
-	fn cancel_referendum() -> Weight { 1_000_000_000 }
-	fn cancel_queued(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn on_initialize_base(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn delegate(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn undelegate(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn clear_public_proposals() -> Weight { 1_000_000_000 }
-	fn note_preimage(_b: u32, ) -> Weight { 1_000_000_000 }
-	fn note_imminent_preimage(_b: u32, ) -> Weight { 1_000_000_000 }
-	fn reap_preimage(_b: u32, ) -> Weight { 1_000_000_000 }
-	fn unlock_remove(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn unlock_set(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_vote(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_other_vote(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn propose() -> Weight { default_weight::WeightInfo::propose() }
+	fn second(s: u32, ) -> Weight { default_weight::WeightInfo::second(s) }
+	fn vote_new(r: u32, ) -> Weight { default_weight::WeightInfo::vote_new(r) }
+	fn vote_existing(r: u32, ) -> Weight { default_weight::WeightInfo::vote_existing(r) }
+	fn emergency_cancel() -> Weight { default_weight::WeightInfo::emergency_cancel() }
+	fn external_propose(v: u32, ) -> Weight { default_weight::WeightInfo::external_propose(v) }
+	fn external_propose_majority() -> Weight {
+		default_weight::WeightInfo::external_propose_majority()
+	}
+	fn external_propose_default() -> Weight {
+		default_weight::WeightInfo::external_propose_default()
+	}
+	fn fast_track() -> Weight { default_weight::WeightInfo::fast_track() }
+	fn veto_external(v: u32, ) -> Weight { default_weight::WeightInfo::veto_external(v) }
+	fn cancel_referendum() -> Weight { default_weight::WeightInfo::cancel_referendum() }
+	fn cancel_queued(r: u32, ) -> Weight { default_weight::WeightInfo::cancel_queued(r) }
+	fn on_initialize_base(r: u32, ) -> Weight { default_weight::WeightInfo::on_initialize_base(r) }
+	fn delegate(r: u32, ) -> Weight { default_weight::WeightInfo::delegate(r) }
+	fn undelegate(r: u32, ) -> Weight { default_weight::WeightInfo::undelegate(r) }
+	fn clear_public_proposals() -> Weight { default_weight::WeightInfo::clear_public_proposals() }
+	fn note_preimage(b: u32, ) -> Weight { default_weight::WeightInfo::note_preimage(b) }
+	fn note_imminent_preimage(b: u32, ) -> Weight {
+		default_weight::WeightInfo::note_imminent_preimage(b)
+	}
+	fn reap_preimage(b: u32, ) -> Weight { default_weight::WeightInfo::reap_preimage(b) }
+	fn unlock_remove(r: u32, ) -> Weight { default_weight::WeightInfo::unlock_remove(r) }
+	fn unlock_set(r: u32, ) -> Weight { default_weight::WeightInfo::unlock_set(r) }
+	fn remove_vote(r: u32, ) -> Weight { default_weight::WeightInfo::remove_vote(r) }
+	fn remove_other_vote(r: u32, ) -> Weight { default_weight::WeightInfo::remove_other_vote(r) }
 }
 
 pub trait Trait: frame_system::Trait + Sized {
