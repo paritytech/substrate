@@ -100,12 +100,25 @@ pub trait Storage {
 
 	/// Set `key` to `value` in the storage.
 	fn set(&mut self, key: &[u8], value: &[u8]) {
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			?key,
+			?value,
+			"set"
+		);
 		self.set_storage(key.to_vec(), value.to_vec());
 	}
 
 	/// Clear the storage of the given `key` and its value.
 	fn clear(&mut self, key: &[u8]) {
-		self.clear_storage(key)
+		self.clear_storage(key);
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			?key,
+			"clear"
+		);
 	}
 
 	/// Check whether the given `key` exists in storage.
@@ -115,7 +128,13 @@ pub trait Storage {
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		Externalities::clear_prefix(*self, prefix)
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			?prefix,
+			"clear_prefix"
+		);
+		Externalities::clear_prefix(*self, prefix);
 	}
 
 	/// Append the encoded `value` to the storage item at `key`.
@@ -127,6 +146,13 @@ pub trait Storage {
 	/// If the storage item does not support [`EncodeAppend`](codec::EncodeAppend) or
 	/// something else fails at appending, the storage item will be set to `[value]`.
 	fn append(&mut self, key: &[u8], value: Vec<u8>) {
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			?key,
+			?value,
+			"append"
+		);
 		self.storage_append(key.to_vec(), value);
 	}
 
@@ -136,6 +162,11 @@ pub trait Storage {
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			"root"
+		);
 		self.storage_root()
 	}
 
@@ -147,6 +178,12 @@ pub trait Storage {
 	/// Returns `Some(Vec<u8>)` which holds the SCALE encoded hash or `None` when
 	/// changes trie is disabled.
 	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			?parent_hash,
+			"changes_root"
+		);
 		self.storage_changes_root(parent_hash)
 			.expect("Invalid `parent_hash` given to `changes_root`.")
 	}
@@ -169,6 +206,11 @@ pub trait Storage {
 	/// in unbalanced transactions. For example, FRAME users should use high level storage
 	/// abstractions.
 	fn start_transaction(&mut self) {
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			"start_transaction"
+		);
 		self.storage_start_transaction();
 	}
 
@@ -180,6 +222,11 @@ pub trait Storage {
 	///
 	/// Will panic if there is no open transaction.
 	fn rollback_transaction(&mut self) {
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			"rollback_transaction"
+		);
 		self.storage_rollback_transaction()
 			.expect("No open transaction that can be rolled back.");
 	}
@@ -192,6 +239,11 @@ pub trait Storage {
 	///
 	/// Will panic if there is no open transaction.
 	fn commit_transaction(&mut self) {
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			"commit_transaction"
+		);
 		self.storage_commit_transaction()
 			.expect("No open transaction that can be committed.");
 	}

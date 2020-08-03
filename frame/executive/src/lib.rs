@@ -207,6 +207,11 @@ where
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("initialize_block");
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
+
 		let digests = Self::extract_pre_digest(&header);
 		Self::initialize_block_impl(
 			header.number(),
@@ -217,6 +222,11 @@ where
 	}
 
 	fn extract_pre_digest(header: &System::Header) -> DigestOf<System> {
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("extract_pre_digest");
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
+
 		let mut digest = <DigestOf<System>>::default();
 		header.digest().logs()
 			.iter()
@@ -232,6 +242,11 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("initialize_block_impl", ?block_number);
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
+
 		if Self::runtime_upgraded() {
 			// System is not part of `AllModules`, so we need to call this manually.
 			let mut weight = <frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
@@ -256,6 +271,11 @@ where
 
 	/// Returns if the runtime was upgraded since the last time this function was called.
 	fn runtime_upgraded() -> bool {
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("runtime_upgraded");
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
+
 		let last = frame_system::LastRuntimeUpgrade::get();
 		let current = <System::Version as frame_support::traits::Get<_>>::get();
 
@@ -270,6 +290,11 @@ where
 	}
 
 	fn initial_checks(block: &Block) {
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("initial_checks", ?block);
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
+
 		let header = block.header();
 
 		// Check that `parent_hash` is correct.
@@ -288,6 +313,11 @@ where
 
 	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("execute_block", ?block);
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
+
 		Self::initialize_block(block.header());
 
 		// any initial checks
@@ -309,6 +339,11 @@ where
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("execute_extrinsics_with_book_keeping", block_number = tracing::field::Empty);
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
+
 		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
 
 		// post-extrinsics book-keeping
@@ -320,8 +355,15 @@ where
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
 	pub fn finalize_block() -> System::Header {
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("finalize_block", block_number = tracing::field::Empty);
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
+
 		<frame_system::Module<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Module<System>>::block_number();
+		#[cfg(feature = "std")]
+		span.record("block_number", &format!("{:?}", block_number).as_str());
 		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 
@@ -335,13 +377,27 @@ where
 	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
 	/// hashes.
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("apply_extrinsic", encoded = tracing::field::Empty);
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
 		let encoded = uxt.encode();
+		#[cfg(feature = "std")]
+		span.record("encoded", &format!("{:?}", encoded).as_str());
+
 		let encoded_len = encoded.len();
 		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded))
 	}
 
 	/// Apply an extrinsic inside the block execution function.
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
+		#[cfg(feature = "std")]
+		let encoded = uxt.encode();
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("apply_extrinsic_no_note", ?encoded);
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
+
 		let l = uxt.encode().len();
 		match Self::apply_extrinsic_with_len(uxt, l, None) {
 			Ok(_) => (),
@@ -355,6 +411,13 @@ where
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
 	) -> ApplyExtrinsicResult {
+		#[cfg(feature = "std")]
+		let encoded = uxt.encode();
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("apply_extrinsic_with_len", ?encoded);
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
+
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 
@@ -377,6 +440,11 @@ where
 	}
 
 	fn final_checks(header: &System::Header) {
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("apply_extrinsic_with_len");
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
+
 		// remove temporaries
 		let new_header = <frame_system::Module<System>>::finalize();
 
@@ -406,6 +474,13 @@ where
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
 	) -> TransactionValidity {
+		#[cfg(feature = "std")]
+		let encoded = uxt.encode();
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("validate_transaction", ?encoded);
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
+
 		use sp_tracing::tracing_span;
 
 		sp_tracing::enter_span!("validate_transaction");
@@ -424,6 +499,10 @@ where
 
 	/// Start an offchain worker and generate extrinsics.
 	pub fn offchain_worker(header: &System::Header) {
+		#[cfg(feature = "std")]
+		let span = tracing::info_span!("offchain_worker");
+		#[cfg(feature = "std")]
+		let _guard = span.enter();
 		// We need to keep events available for offchain workers,
 		// hence we initialize the block manually.
 		// OffchainWorker RuntimeApi should skip initialization.
