@@ -151,14 +151,14 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 			}
 		});
 
-		let mut all_components = batch.results[0].components
+		let all_components = batch.results[0].components
 			.iter()
 			.map(|(name, _)| -> String { return name.to_string() })
 			.collect::<Vec<String>>();
 		if all_components.len() != used_components.len() {
-			// `all_components` becomes the components that were not used.
-			all_components.retain(|x| !used_components.contains(&x));
-			write!(file, "\t// WARNING! Some components were not used: {:?}\n", all_components)?;
+			let mut unused_components = all_components;
+			unused_components.retain(|x| !used_components.contains(&x));
+			write!(file, "\t// WARNING! Some components were not used: {:?}\n", unused_components)?;
 		}
 
 		// function name
