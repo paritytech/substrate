@@ -1207,7 +1207,7 @@ impl Metrics {
 				HistogramOpts {
 					common_opts: Opts::new(
 						"sub_libp2p_kademlia_query_duration",
-						"Duration of Kademlia queries per protocol and query type"
+						"Duration of Kademlia queries per query type"
 					),
 					buckets: prometheus_endpoint::exponential_buckets(0.5, 2.0, 10)
 						.expect("parameters are always valid values; qed"),
