@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Weights for the Balances Pallet
+//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 2.0.0-rc5
 
 use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 
