@@ -53,6 +53,7 @@ use frame_support::dispatch::DispatchError;
 
 mod tests;
 mod benchmarking;
+mod default_weight;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
@@ -67,19 +68,6 @@ pub trait WeightInfo {
 	fn remove_proxies(p: u32, ) -> Weight;
 	fn anonymous(p: u32, ) -> Weight;
 	fn kill_anonymous(p: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn proxy_announced(_p: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_announcement(_p: u32, ) -> Weight { 1_000_000_000 }
-	fn reject_announcement(_p: u32, ) -> Weight { 1_000_000_000 }
-	fn announce(_p: u32, ) -> Weight { 1_000_000_000 }
-	fn proxy(_p: u32, ) -> Weight { 1_000_000_000 }
-	fn add_proxy(_p: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_proxy(_p: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_proxies(_p: u32, ) -> Weight { 1_000_000_000 }
-	fn anonymous(_p: u32, ) -> Weight { 1_000_000_000 }
-	fn kill_anonymous(_p: u32, ) -> Weight { 1_000_000_000 }
 }
 
 /// Configuration trait.
