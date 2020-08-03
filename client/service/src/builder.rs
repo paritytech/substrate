@@ -834,7 +834,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl, TBackend>(
 		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
-		TBackend: Send + Sync + sc_client_api::AuxStore + 'static,
+		TBackend: Send + Sync + sc_client_api::Backend<TBl> + 'static,
 {
 	let BuildNetworkParams {
 		config, client, backend, transaction_pool, spawn_handle, import_queue, on_demand,

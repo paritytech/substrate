@@ -182,7 +182,7 @@ async fn build_network_future<
 	B: BlockT,
 	C: BlockchainEvents<B>,
 	H: sc_network::ExHashT,
-	BE: sc_client_api::AuxStore,
+	BE: sc_client_api::Backend<B>,
 > (
 	role: Role,
 	mut network: sc_network::NetworkWorker<B, H>,
@@ -340,26 +340,8 @@ async fn build_network_future<
 			}
 
 			event = bitswap_events.select_next_some() => {
-				match event {
-					sc_network::BitswapEvent::ReceivedBlock(_, cid, data) => {
-						let cid_bytes = &cid.to_bytes()[..];
-						let res = backend.insert_aux(std::iter::once(&(cid_bytes, &data[..])), std::iter::empty());
-
-						if let Err(e) = res {
-							warn!("{:?}", e);
-						}
-					},
-					sc_network::BitswapEvent::ReceivedWant(peer_id, cid, _) => {
-						match backend.get_aux(&cid.to_bytes()[..]) {
-							Ok(Some(data)) => {
-								network.bitswap().send_block(&peer_id, cid, data.into_boxed_slice());
-							},
-							Ok(None) => warn!("No data for {:?}", cid),
-							Err(e) => warn!("{:?}", e)
-						}
-					}
-					sc_network::BitswapEvent::ReceivedCancel(_, _) => {},
-					_ => {}
+				if let Some(offchain) = backend.offchain_storage() {
+					network.handle_bitswap_event(event, offchain);
 				}
 			}
 		}

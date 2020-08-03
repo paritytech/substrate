@@ -27,7 +27,7 @@ mod bitswap;
 use std::{collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData, task::{Poll, Context as FutureContext}};
 
 use libp2p::build_multiaddr;
-use log::{trace, warn};
+use log::trace;
 use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
 	HeaderBackend, Result as ClientResult,
@@ -164,14 +164,10 @@ impl PeersClient {
 		}
 	}
 
-	fn insert_aux(&self, key: &[u8], value: &[u8]) -> ClientResult<()> {
+	fn offchain_storage(&self) -> Option<PeerOffchainStorage> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => {
-				client.insert_aux(std::iter::once(&(key, value)), std::iter::empty())
-			},
-			PeersClient::Light(ref client, ref _backend) => {
-				client.insert_aux(std::iter::once(&(key, value)), std::iter::empty())
-			}
+			PeersClient::Full(ref _client, ref backend) => backend.offchain_storage().map(PeerOffchainStorage::Full),
+			PeersClient::Light(ref _client, ref backend) => backend.offchain_storage().map(PeerOffchainStorage::Light),
 		}
 	}
 
@@ -219,6 +215,48 @@ impl PeersClient {
 		match *self {
 			PeersClient::Full(ref client, ref _backend) => client.finalize_block(id, justification, notify),
 			PeersClient::Light(ref client, ref _backend) => client.finalize_block(id, justification, notify),
+		}
+	}
+}
+
+#[derive(Clone)]
+enum PeerOffchainStorage {
+	Full(sc_client_db::offchain::LocalStorage),
+	Light(sp_core::offchain::storage::InMemOffchainStorage),
+}
+
+impl sp_core::offchain::OffchainStorage for PeerOffchainStorage {
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
+		match self {
+			Self::Full(storage) => storage.set(prefix, key, value),
+			Self::Light(storage) => storage.set(prefix, key, value),
+		}
+	}
+
+	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
+		match self {
+			Self::Full(storage) => storage.remove(prefix, key),
+			Self::Light(storage) => storage.remove(prefix, key),
+		}
+	}
+
+	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+		match self {
+			Self::Full(storage) => storage.get(prefix, key),
+			Self::Light(storage) => storage.get(prefix, key),
+		}
+	}
+
+	fn compare_and_set(
+		&mut self,
+		prefix: &[u8],
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8]
+	) -> bool {
+		match self {
+			Self::Full(storage) => storage.compare_and_set(prefix, key, old_value, new_value),
+			Self::Light(storage) => storage.compare_and_set(prefix, key, old_value, new_value),
 		}
 	}
 }
@@ -918,25 +956,8 @@ pub trait TestNetFactory: Sized {
 				}
 
 				while let Poll::Ready(Some(event)) = peer.bitswap_stream.as_mut().poll_next(cx) {
-					match event {
-						sc_network::BitswapEvent::ReceivedBlock(_, cid, data) => {
-							let cid_bytes = &cid.to_bytes()[..];
-							let res = peer.client.insert_aux(cid_bytes, &data[..]);
-			
-							if let Err(e) = res {
-								warn!("{:?}", e);
-							}
-						},
-						sc_network::BitswapEvent::ReceivedWant(peer_id, cid, _) => {
-							match peer.client.get_aux(&cid.to_bytes()[..]) {
-								Ok(Some(data)) => {
-									peer.network.bitswap().send_block(&peer_id, cid, data.into_boxed_slice());
-								},
-								Ok(None) => warn!("No data for {:?}", cid),
-								Err(e) => warn!("{:?}", e)
-							}
-						}
-						sc_network::BitswapEvent::ReceivedCancel(_, _) => {},
+					if let Some(offchain) = peer.client.offchain_storage() {
+						peer.network.handle_bitswap_event(event, offchain);
 					}
 				}
 			}
