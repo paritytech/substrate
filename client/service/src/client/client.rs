@@ -1054,20 +1054,31 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// reverted past the last finalized block. Returns the number of blocks
 	/// that were successfully reverted.
 	pub fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n, false)?)
+		let (number, _) = self.backend.revert(n, false)?;
+		Ok(number)
 	}
 
-	/// Attempts to revert the chain by `n` blocks disregarding finality. This
-	/// method will revert any finalized blocks as requested and can potentially
-	/// leave the node in an inconsistent state. Other modules in the system that
-	/// persist data and that rely on finality (e.g. consensus parts) will be
-	/// unaffected by the revert. Use this method with caution and making sure
-	/// that no other data needs to be reverted for consistency aside from the
-	/// block data.
+	/// Attempts to revert the chain by `n` blocks disregarding finality. This method will revert
+	/// any finalized blocks as requested and can potentially leave the node in an inconsistent
+	/// state. Other modules in the system that persist data and that rely on finality
+	/// (e.g. consensus parts) will be unaffected by the revert. Use this method with caution and
+	/// making sure that no other data needs to be reverted for consistency aside from the block
+	/// data. If `blacklist` is set to true, will also blacklist reverted blocks from finalizing
+	/// again. The blacklist is reset upon client restart.
 	///
 	/// Returns the number of blocks that were successfully reverted.
-	pub fn unsafe_revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n, true)?)
+	pub fn unsafe_revert(
+		&mut self,
+		n: NumberFor<Block>,
+		blacklist: bool,
+	) -> sp_blockchain::Result<NumberFor<Block>> {
+		let (number, reverted) = self.backend.revert(n, true)?;
+		if blacklist {
+			for b in reverted {
+				self.block_rules.mark_bad(b);
+			}
+		}
+		Ok(number)
 	}
 
 	/// Get blockchain info.
@@ -1921,7 +1932,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
-	}	
+	}
 }
 
 impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>

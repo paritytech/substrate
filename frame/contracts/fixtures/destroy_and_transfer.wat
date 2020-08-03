@@ -3,6 +3,7 @@
 	(import "env" "ext_get_storage" (func $ext_get_storage (param i32 i32 i32) (result i32)))
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -139,16 +140,11 @@
 		;; does not keep the contract alive.
 		(call $assert
 			(i32.eq
-				(call $ext_call
+				(call $ext_transfer
 					(i32.const 80)	;; Pointer to destination address
 					(i32.const 8)	;; Length of destination address
-					(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
 					(i32.const 0)	;; Pointer to the buffer with value to transfer
 					(i32.const 8)	;; Length of the buffer with value to transfer
-					(i32.const 0)	;; Pointer to input data buffer address
-					(i32.const 1)	;; Length of input data buffer
-					(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
-					(i32.const 0) ;; Length is ignored in this case
 				)
 				(i32.const 0)
 			)
