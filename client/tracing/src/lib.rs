@@ -313,9 +313,10 @@ impl Subscriber for ProfilingSubscriber {
 			let mut span_data = self.span_data.lock();
 			if span_data.len() > SPAN_LIMIT {
 				log::warn!("Accumulated too many spans, discarding oldest");
-				let keys = span_data.keys().collect::<Vec<_>>().sort();
-				for key in keys[0.. SPAN_LIMIT / 10] {
-					span_data.remove(&key);
+				let mut keys = span_data.keys().map(|id| id.into_u64()).collect::<Vec<_>>();
+				keys.sort();
+				for key in keys[0.. SPAN_LIMIT / 10].iter() {
+					span_data.remove(&Id::from_u64(*key));
 				}
 			}
 			span_data.insert(id.clone(), span_datum);
@@ -430,8 +431,8 @@ impl TraceHandler for LogTraceHandler {
 	fn handle_event(&self, event: TraceEvent) {
 		log::log!(
 			log_level(event.level),
-			"{}: {}, parent_id: {:?}, values: {}",
-			event.name,
+			"{}, parent_id: {:?}, {}",
+			// event.name,
 			event.target,
 			event.parent_id.map(|s| s.into_u64()),
 			event.values
