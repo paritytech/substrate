@@ -225,7 +225,7 @@ pub trait WeightInfo {
 	fn unlock_remove(r: u32, ) -> Weight;
 	fn unlock_set(r: u32, ) -> Weight;
 	fn remove_vote(r: u32, ) -> Weight;
-	fn remove_other_vote_different(r: u32, ) -> Weight;
+	fn remove_other_vote(r: u32, ) -> Weight;
 }
 
 pub trait Trait: frame_system::Trait + Sized {
@@ -1148,8 +1148,7 @@ decl_module! {
 		/// - Db reads: `ReferendumInfoOf`, `VotingOf`
 		/// - Db writes: `ReferendumInfoOf`, `VotingOf`
 		/// # </weight>
-		#[weight = T::WeightInfo::remove_other_vote_different(T::MaxVotes::get())
-			.max(T::WeightInfo::remove_vote(T::MaxVotes::get()))]
+		#[weight = T::WeightInfo::remove_other_vote(T::MaxVotes::get())]
 		fn remove_other_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };

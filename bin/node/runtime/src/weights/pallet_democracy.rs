@@ -146,10 +146,10 @@ impl pallet_democracy::WeightInfo for WeightInfo {
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
-	fn remove_other_vote_different(r: u32, ) -> Weight {
-		(26897000 as Weight)
-			.saturating_add((281000 as Weight).saturating_mul(r as Weight))
+	fn remove_other_vote(r: u32, ) -> Weight {
+		(28250000 as Weight)
+			.saturating_add((283000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
-			.saturating_add(DbWeight::get().writes(1 as Weight))
+			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 }

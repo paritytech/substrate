@@ -655,38 +655,29 @@ benchmarks! {
 		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
 	}
 
-	// If target is caller then logic is same as remove_vote
-	// If it is different then logic is slightly different.
-	// Worst case must be the max of both.
-	remove_other_vote_different {
+	// Worst case is when target == caller and referendum is ongoing
+	remove_other_vote {
 		let r in 1 .. MAX_REFERENDUMS;
 
-		let other = funded_account::<T>("other", r);
+		let caller = funded_account::<T>("caller", r);
 		let account_vote = account_vote::<T>(100.into());
 
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(other.clone()).into(), ref_idx, account_vote.clone())?;
+			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
 		}
 
-		let votes = match VotingOf::<T>::get(&other) {
+		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
 			_ => return Err("Votes are not direct"),
 		};
 		assert_eq!(votes.len(), r as usize, "Votes not created");
 
 		let referendum_index = r - 1;
-		ReferendumInfoOf::<T>::insert(
-			referendum_index,
-			ReferendumInfo::Finished { end: T::BlockNumber::zero(), approved: true }
-		);
-		let caller = funded_account::<T>("caller", 0);
 
-		System::<T>::set_block_number(T::EnactmentPeriod::get() * 10u32.into());
-
-	}: _(RawOrigin::Signed(caller), other.clone(), referendum_index)
+	}: _(RawOrigin::Signed(caller.clone()), caller.clone(), referendum_index)
 	verify {
-		let votes = match VotingOf::<T>::get(&other) {
+		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
 			_ => return Err("Votes are not direct"),
 		};
@@ -771,7 +762,7 @@ mod tests {
 			assert_ok!(test_benchmark_unlock_remove::<Test>());
 			assert_ok!(test_benchmark_unlock_set::<Test>());
 			assert_ok!(test_benchmark_remove_vote::<Test>());
-			assert_ok!(test_benchmark_remove_other_vote_different::<Test>());
+			assert_ok!(test_benchmark_remove_other_vote::<Test>());
 			assert_ok!(test_benchmark_enact_proposal_execute::<Test>());
 			assert_ok!(test_benchmark_enact_proposal_slash::<Test>());
 		});
