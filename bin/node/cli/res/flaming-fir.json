@@ -3,14 +3,14 @@
   "id": "flamingfir8",
   "chainType": "Live",
   "bootNodes": [
-    "/ip4/35.246.224.91/tcp/30333/p2p/12D3KooWLK2gMLhWsYJzjW3q35zAs9FDDVqfqVfVuskiGZGRSMvR",
-    "/ip4/35.246.224.91/tcp/30334/ws/p2p/12D3KooWLK2gMLhWsYJzjW3q35zAs9FDDVqfqVfVuskiGZGRSMvR",
-    "/ip4/35.246.210.11/tcp/30333/p2p/12D3KooWHyUSQkoL1WtnhLUYHuKbowZEZW1NNJe7TePKYZf9ucBY",
-    "/ip4/35.246.210.11/tcp/30334/ws/p2p/12D3KooWHyUSQkoL1WtnhLUYHuKbowZEZW1NNJe7TePKYZf9ucBY",
-    "/ip4/35.198.110.45/tcp/30333/p2p/12D3KooWFcry65ShtPT6roTTEPXD9H89A1iA2wPKgJCgXW1yZwyy",
-    "/ip4/35.198.110.45/tcp/30334/ws/p2p/12D3KooWFcry65ShtPT6roTTEPXD9H89A1iA2wPKgJCgXW1yZwyy",
-    "/ip4/35.198.114.154/tcp/30333/p2p/12D3KooWDfFapccu3KgvWyVMdXhMGPPpKiJ1yEhSMEupBZppfi9U",
-    "/ip4/35.198.114.154/tcp/30334/ws/p2p/12D3KooWDfFapccu3KgvWyVMdXhMGPPpKiJ1yEhSMEupBZppfi9U"
+    "/dns/0.flamingfir.paritytech.net/tcp/30333/p2p/12D3KooWLK2gMLhWsYJzjW3q35zAs9FDDVqfqVfVuskiGZGRSMvR",
+    "/dns/0.flamingfir.paritytech.net/tcp/30334/ws/p2p/12D3KooWLK2gMLhWsYJzjW3q35zAs9FDDVqfqVfVuskiGZGRSMvR",
+    "/dns/1.flamingfir.paritytech.net/tcp/30333/p2p/12D3KooWHyUSQkoL1WtnhLUYHuKbowZEZW1NNJe7TePKYZf9ucBY",
+    "/dns/1.flamingfir.paritytech.net/tcp/30334/ws/p2p/12D3KooWHyUSQkoL1WtnhLUYHuKbowZEZW1NNJe7TePKYZf9ucBY",
+    "/dns/2.flamingfir.paritytech.net/tcp/30333/p2p/12D3KooWFcry65ShtPT6roTTEPXD9H89A1iA2wPKgJCgXW1yZwyy",
+    "/dns/2.flamingfir.paritytech.net/tcp/30334/ws/p2p/12D3KooWFcry65ShtPT6roTTEPXD9H89A1iA2wPKgJCgXW1yZwyy",
+    "/dns/3.flamingfir.paritytech.net/tcp/30333/p2p/12D3KooWDfFapccu3KgvWyVMdXhMGPPpKiJ1yEhSMEupBZppfi9U",
+    "/dns/3.flamingfir.paritytech.net/tcp/30334/ws/p2p/12D3KooWDfFapccu3KgvWyVMdXhMGPPpKiJ1yEhSMEupBZppfi9U"
   ],
   "telemetryEndpoints": [
     [
