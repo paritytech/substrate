@@ -161,11 +161,11 @@ pub(crate) fn assignment(
 	weight_type: syn::Type,
 	count: usize,
 ) -> TokenStream2 {
-
 	let from_impl = from_impl(count);
 	let into_impl = into_impl(count, weight_type.clone());
 
 	quote!(
+		use _phragmen::__OrInvalidIndex;
 		impl #ident {
 			pub fn from_assignment<FV, FT, A>(
 				assignments: Vec<_phragmen::Assignment<A, #weight_type>>,

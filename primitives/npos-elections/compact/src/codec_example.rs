@@ -1,4 +1,4 @@
-//! A simpler example of hop compact encoding works. Not to be merged, just for review assistance.
+//! A simpler example of how compact encoding works. Not to be merged, just for review assistance.
 //! Run with `cargo play codec_example.rs`
 
 //# parity-scale-codec = { version = "*", features = ["derive"] }
@@ -92,6 +92,5 @@ fn main() {
 
 	let e = s.encode();
 	let d = <BareSolution as Decode>::decode(&mut &*e).unwrap();
-	dbg!(&e);
 	assert_eq!(d, s);
 }

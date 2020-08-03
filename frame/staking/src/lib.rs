@@ -326,7 +326,7 @@ use frame_system::{
 };
 use sp_npos_elections::{
 	ExtendedBalance, Assignment, ElectionScore, ElectionResult as PrimitiveElectionResult,
-	build_support_map, evaluate_support, seq_phragmen, generate_compact_solution_type,
+	build_support_map, evaluate_support, seq_phragmen, generate_solution_type,
 	is_score_better, VotingLimit, SupportMap, VoteWeight,
 };
 
@@ -369,7 +369,8 @@ pub type EraIndex = u32;
 pub type RewardPoint = u32;
 
 // Note: Maximum nomination limit is set here -- 16.
-generate_compact_solution_type!(
+generate_solution_type!(
+	#[compact]
 	pub struct CompactAssignments::<NominatorIndex, ValidatorIndex, OffchainAccuracy>(16)
 );
 

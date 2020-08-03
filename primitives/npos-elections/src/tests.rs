@@ -920,12 +920,12 @@ mod score {
 	}
 }
 
-mod compact {
+mod solution_type {
 	use codec::{Decode, Encode};
 	use super::AccountId;
 	// these need to come from the same dev-dependency `sp-npos-elections`, not from the crate.
 	use crate::{
-		generate_compact_solution_type, Assignment,
+		generate_solution_type, Assignment,
 		Error as PhragmenError,
 	};
 	use sp_std::{convert::TryInto, fmt::Debug};
@@ -933,20 +933,59 @@ mod compact {
 
 	type TestAccuracy = Percent;
 
-	generate_compact_solution_type!(pub struct TestCompact::<u32, u8, TestAccuracy>(16));
+	generate_solution_type!(pub struct TestSolutionCompact::<u32, u8, TestAccuracy>(16));
 
 	#[allow(dead_code)]
 	mod __private {
 		// This is just to make sure that that the compact can be generated in a scope without any
 		// imports.
-		use crate::generate_compact_solution_type;
+		use crate::generate_solution_type;
 		use sp_arithmetic::Percent;
-		generate_compact_solution_type!(struct InnerTestCompact::<u32, u8, Percent>(12));
+		generate_solution_type!(
+			#[compact]
+			struct InnerTestSolutionCompact::<u32, u8, Percent>(12)
+		);
+
 	}
 
 	#[test]
-	fn compact_struct_is_codec() {
-		let compact = TestCompact {
+	fn solution_struct_works_with_and_without_compact() {
+		// we use u32 size to make sure compact is smaller.
+		let without_compact = {
+			generate_solution_type!(pub struct InnerTestSolution::<u32, u32, Percent>(16));
+			let compact = InnerTestSolution {
+				votes1: vec![(2, 20), (4, 40)],
+				votes2: vec![
+					(1, (10, TestAccuracy::from_percent(80)), 11),
+					(5, (50, TestAccuracy::from_percent(85)), 51),
+				],
+				..Default::default()
+			};
+
+			compact.encode().len()
+		};
+
+		let with_compact = {
+			generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<u32, u32, Percent>(16));
+			let compact = InnerTestSolutionCompact {
+				votes1: vec![(2, 20), (4, 40)],
+				votes2: vec![
+					(1, (10, TestAccuracy::from_percent(80)), 11),
+					(5, (50, TestAccuracy::from_percent(85)), 51),
+				],
+				..Default::default()
+			};
+
+			compact.encode().len()
+		};
+
+		dbg!(with_compact, without_compact);
+		assert!(with_compact < without_compact);
+	}
+
+	#[test]
+	fn solution_struct_is_codec() {
+		let compact = TestSolutionCompact {
 			votes1: vec![(2, 20), (4, 40)],
 			votes2: vec![
 				(1, (10, TestAccuracy::from_percent(80)), 11),
@@ -1026,7 +1065,7 @@ mod compact {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted = TestCompact::from_assignment(
+		let compacted = TestSolutionCompact::from_assignment(
 			assignments.clone(),
 			voter_index,
 			target_index,
@@ -1041,7 +1080,7 @@ mod compact {
 
 		assert_eq!(
 			compacted,
-			TestCompact {
+			TestSolutionCompact {
 				votes1: vec![(0, 2), (1, 6)],
 				votes2: vec![
 					(2, (0, TestAccuracy::from_percent(80)), 1),
@@ -1074,7 +1113,7 @@ mod compact {
 	#[test]
 	fn compact_into_assignment_must_report_overflow() {
 		// in votes2
-		let compact = TestCompact {
+		let compact = TestSolutionCompact {
 			votes1: Default::default(),
 			votes2: vec![(0, (1, TestAccuracy::from_percent(100)), 2)],
 			..Default::default()
@@ -1090,7 +1129,7 @@ mod compact {
 		);
 
 		// in votes3 onwards
-		let compact = TestCompact {
+		let compact = TestSolutionCompact {
 			votes1: Default::default(),
 			votes2: Default::default(),
 			votes3: vec![(0, [(1, TestAccuracy::from_percent(70)), (2, TestAccuracy::from_percent(80))], 3)],
@@ -1118,7 +1157,7 @@ mod compact {
 			},
 		];
 
-		let compacted = TestCompact::from_assignment(
+		let compacted = TestSolutionCompact::from_assignment(
 			assignments.clone(),
 			voter_index,
 			target_index,
@@ -1149,7 +1188,7 @@ mod compact {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted = TestCompact::from_assignment(
+		let compacted = TestSolutionCompact::from_assignment(
 			assignments.clone(),
 			voter_index,
 			target_index,
@@ -1157,7 +1196,7 @@ mod compact {
 
 		assert_eq!(
 			compacted,
-			TestCompact {
+			TestSolutionCompact {
 				votes1: Default::default(),
 				votes2: vec![(0, (0, Percent::from_percent(50)), 1)],
 				..Default::default()

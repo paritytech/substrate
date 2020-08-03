@@ -56,7 +56,6 @@ fn decode_impl(
 			let #name = #name
 				.into_iter()
 				.map(|(v, t)| (v.0, t.0))
-				// .map(|(v, t) (v.0, t.0)|) // Will crash the compiler in a weird way. Report
 				.collect::<Vec<_>>();
 		}
 	};
@@ -93,7 +92,7 @@ fn decode_impl(
 			<
 				Vec<(
 					_phragmen::codec::Compact<#voter_type>,
-					[(_phragmen::codec::Compact<#target_type>, _phragmen::codec::Compact<#weight_type>); #c],
+					[(_phragmen::codec::Compact<#target_type>, _phragmen::codec::Compact<#weight_type>); #c-1],
 					_phragmen::codec::Compact<#target_type>,
 				)>
 				as _phragmen::codec::Decode
