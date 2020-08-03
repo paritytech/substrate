@@ -24,7 +24,7 @@ use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
 use finality_grandpa::round::State as RoundState;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use log::{info, warn};
+use tracing::{info, warn};
 use sp_finality_grandpa::{AuthorityList, SetId, RoundNumber};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};

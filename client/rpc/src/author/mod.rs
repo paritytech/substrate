@@ -22,7 +22,7 @@
 mod tests;
 
 use std::{sync::Arc, convert::TryInto};
-use log::warn;
+use tracing::warn;
 
 use sp_blockchain::{Error as ClientError, HeaderBackend};
 

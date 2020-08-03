@@ -22,7 +22,7 @@ use super::{StorageKey, StorageValue};
 use itertools::Itertools;
 use std::collections::{HashSet, BTreeMap, BTreeSet};
 use smallvec::SmallVec;
-use log::warn;
+use tracing::warn;
 
 const PROOF_OVERLAY_NON_EMPTY: &str = "\
 	An OverlayValue is always created with at least one transaction and dropped as soon

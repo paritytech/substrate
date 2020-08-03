@@ -60,7 +60,7 @@ use futures::{
 	prelude::*,
 	StreamExt,
 };
-use log::{debug, info};
+use tracing::{debug, info};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
 	LockImportRun, BlockchainEvents, CallExecutor,

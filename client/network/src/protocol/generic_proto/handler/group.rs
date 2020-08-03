@@ -68,7 +68,7 @@ use futures::{
 	lock::{Mutex as FuturesMutex, MutexGuard as FuturesMutexGuard},
 	prelude::*
 };
-use log::{debug, error};
+use tracing::{debug, error};
 use parking_lot::{Mutex, RwLock};
 use std::{borrow::Cow, error, io, str, sync::Arc, task::{Context, Poll}};
 

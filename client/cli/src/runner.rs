@@ -24,7 +24,7 @@ use chrono::prelude::*;
 use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
-use log::info;
+use tracing::info;
 use sc_service::{Configuration, TaskType, TaskManager};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};

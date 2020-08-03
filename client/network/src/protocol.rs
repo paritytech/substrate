@@ -55,7 +55,7 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque, hash_map::Entry};
 use std::sync::Arc;
 use std::fmt::Write;
 use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
-use log::{log, Level, trace, debug, warn, error};
+use tracing::{log, Level, trace, debug, warn, error};
 use sc_client_api::{ChangesProof, StorageProof};
 use util::LruHashSet;
 use wasm_timer::Instant;

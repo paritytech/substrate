@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::error::Error;
-use log::info;
+use tracing::info;
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use sc_client_api::{Backend, UsageProvider};
 use std::sync::Arc;

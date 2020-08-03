@@ -19,7 +19,7 @@
 use crate::error;
 use crate::params::{BlockNumber, DatabaseParams, PruningParams, SharedParams};
 use crate::CliConfiguration;
-use log::info;
+use tracing::info;
 use sc_service::{
 	config::DatabaseConfig, chain_ops::export_blocks,
 };

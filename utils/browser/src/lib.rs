@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use futures01::sync::mpsc as mpsc01;
-use log::{debug, info};
+use tracing::{debug, info};
 use sc_network::config::TransportConfig;
 use sc_service::{
 	RpcSession, Role, Configuration, TaskManager, RpcHandlers,

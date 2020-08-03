@@ -39,7 +39,7 @@ use sc_network_test::{Block as TestBlock, PeersClient};
 use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use sc_client_api::{BlockchainEvents, backend::TransactionFor};
-use log::debug;
+use tracing::debug;
 use std::{time::Duration, cell::RefCell, task::Poll};
 use rand::RngCore;
 use rand_chacha::{

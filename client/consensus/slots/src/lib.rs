@@ -34,7 +34,7 @@ use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith
 use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
 use sp_inherents::{InherentData, InherentDataProviders};
-use log::{debug, error, info, warn};
+use tracing::{debug, error, info, warn};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
 use sp_api::{ProvideRuntimeApi, ApiRef};

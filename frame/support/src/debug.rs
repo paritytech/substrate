@@ -90,7 +90,7 @@
 use sp_std::vec::Vec;
 use sp_std::fmt::{self, Debug};
 
-pub use log::{info, debug, error, trace, warn};
+pub use tracing::{info, debug, error, trace, warn};
 pub use crate::runtime_print as print;
 
 /// Native-only logging.

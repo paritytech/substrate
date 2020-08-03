@@ -42,7 +42,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFo
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, DatabaseType, Meta, read_db, block_id_to_lookup_key, read_meta};
 use crate::{DatabaseSettings, FrozenForDuration, DbHash};
-use log::{trace, warn, debug};
+use tracing::{trace, warn, debug};
 
 pub(crate) mod columns {
 	pub const META: u32 = crate::utils::COLUMN_META;

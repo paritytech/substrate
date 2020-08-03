@@ -33,7 +33,7 @@ pub use commands::*;
 pub use config::*;
 pub use error::*;
 use lazy_static::lazy_static;
-use log::info;
+use tracing::info;
 pub use params::*;
 use regex::Regex;
 pub use runner::*;

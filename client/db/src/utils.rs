@@ -22,7 +22,7 @@
 use std::sync::Arc;
 use std::convert::TryInto;
 
-use log::debug;
+use tracing::debug;
 
 use codec::Decode;
 use sp_trie::DBValue;

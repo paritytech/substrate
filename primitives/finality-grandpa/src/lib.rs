@@ -33,7 +33,7 @@ use sp_std::vec::Vec;
 use sp_core::traits::BareCryptoStorePtr;
 
 #[cfg(feature = "std")]
-use log::debug;
+use tracing::debug;
 
 /// Key type for GRANDPA module.
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::GRANDPA;

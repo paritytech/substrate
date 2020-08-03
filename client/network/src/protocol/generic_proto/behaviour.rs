@@ -31,7 +31,7 @@ use libp2p::swarm::{
 	NotifyHandler,
 	PollParameters
 };
-use log::{debug, error, trace, warn};
+use tracing::{debug, error, trace, warn};
 use parking_lot::RwLock;
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;

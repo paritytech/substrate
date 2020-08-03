@@ -19,7 +19,7 @@
 use crate::{
 	CliConfiguration, error, params::{PruningParams, SharedParams, BlockNumberOrHash},
 };
-use log::info;
+use tracing::info;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, str::FromStr, io::Write, sync::Arc};
 use structopt::StructOpt;

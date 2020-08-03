@@ -22,7 +22,7 @@
 
 use std::io;
 use jsonrpc_core::IoHandlerExtension;
-use log::error;
+use tracing::error;
 use pubsub::PubSubMetadata;
 
 /// Maximal payload accepted by RPC servers.

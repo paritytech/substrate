@@ -285,7 +285,7 @@ impl From<u32> for LogLevel {
 
 impl From<log::Level> for LogLevel {
 	fn from(l: log::Level) -> Self {
-		use log::Level::*;
+		use tracing::Level::*;
 		match l {
 			Error => Self::Error,
 			Warn => Self::Warn,

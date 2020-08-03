@@ -25,7 +25,7 @@ use futures::prelude::*;
 use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
 };
-use log::{debug, info, warn};
+use tracing::{debug, info, warn};
 use sp_core::traits::BareCryptoStorePtr;
 use sp_consensus::SelectChain;
 use sc_client_api::backend::Backend;

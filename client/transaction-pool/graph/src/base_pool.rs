@@ -27,7 +27,7 @@ use std::{
 	sync::Arc,
 };
 
-use log::{trace, debug, warn};
+use tracing::{trace, debug, warn};
 use serde::Serialize;
 use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::traits::Member;

@@ -22,7 +22,7 @@ use sc_network::{Event, ReputationChange};
 use futures::prelude::*;
 use futures::channel::mpsc::{channel, Sender, Receiver};
 use libp2p::PeerId;
-use log::trace;
+use tracing::trace;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{
 	borrow::Cow,

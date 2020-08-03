@@ -36,7 +36,7 @@ use sp_consensus::{
 use futures::{FutureExt, StreamExt, future::ready};
 use jsonrpc_pubsub::manager::SubscriptionManager;
 use sc_keystore::Store as Keystore;
-use log::{info, warn, error};
+use tracing::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 use sc_network::NetworkService;
 use parking_lot::RwLock;
@@ -668,7 +668,7 @@ fn build_telemetry<TBl: BlockT>(
 	let startup_time = SystemTime::UNIX_EPOCH.elapsed()
 		.map(|dur| dur.as_millis())
 		.unwrap_or(0);
-	
+
 	spawn_handle.spawn(
 		"telemetry-worker",
 		telemetry.clone()

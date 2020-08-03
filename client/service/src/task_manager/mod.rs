@@ -15,7 +15,7 @@
 
 use std::{panic, result::Result, pin::Pin};
 use exit_future::Signal;
-use log::{debug, error};
+use tracing::{debug, error};
 use futures::{
 	Future, FutureExt, StreamExt,
 	future::{select, Either, BoxFuture},

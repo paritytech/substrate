@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::error::Error;
-use log::info;
+use tracing::info;
 use futures::{future, prelude::*};
 use sp_runtime::traits::{
 	Block as BlockT, NumberFor, One, Zero, SaturatedConversion

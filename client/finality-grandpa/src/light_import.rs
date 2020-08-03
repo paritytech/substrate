@@ -16,7 +16,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use log::{info, trace, warn};
+use tracing::{info, trace, warn};
 use parking_lot::RwLock;
 use sc_client_api::backend::{AuxStore, Backend, Finalizer, TransactionFor};
 use sp_blockchain::{HeaderBackend, Error as ClientError, well_known_cache_keys};
@@ -834,7 +834,7 @@ pub mod tests {
 		let initial_set = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
 		let updated_set = vec![(AuthorityId::from_slice(&[2; 32]), 2)];
 		let babe_set_signal = vec![AuthorityId::from_slice(&[42; 32])].encode();
-		
+
 		// import block #1 without justification
 		let mut cache = HashMap::new();
 		cache.insert(well_known_cache_keys::AUTHORITIES, babe_set_signal);

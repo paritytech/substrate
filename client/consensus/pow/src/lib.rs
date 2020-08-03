@@ -57,7 +57,7 @@ use sp_consensus::import_queue::{
 use codec::{Encode, Decode};
 use prometheus_endpoint::Registry;
 use sc_client_api;
-use log::*;
+use tracing::*;
 use sp_timestamp::{InherentError as TIError, TimestampInherentData};
 
 #[derive(derive_more::Display, Debug)]
@@ -649,7 +649,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 		};
 
 		log::info!("✅ Successfully mined block: {}", best_hash);
-		
+
 		let (hash, seal) = {
 			let seal = DigestItem::Seal(POW_ENGINE_ID, seal);
 			let mut header = header.clone();

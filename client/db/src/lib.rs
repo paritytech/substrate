@@ -85,7 +85,7 @@ use sc_state_db::StateDb;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SyncingCachingState, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
-use log::{trace, debug, warn};
+use tracing::{trace, debug, warn};
 
 // Re-export the Database trait so that one can pass an implementation of it.
 pub use sp_database::Database;

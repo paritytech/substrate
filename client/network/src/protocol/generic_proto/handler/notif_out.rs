@@ -33,7 +33,7 @@ use libp2p::swarm::{
 	SubstreamProtocol,
 	NegotiatedSubstream,
 };
-use log::{debug, warn, error};
+use tracing::{debug, warn, error};
 use std::{
 	borrow::Cow, collections::VecDeque, fmt, mem, pin::Pin, task::{Context, Poll, Waker},
 	time::Duration

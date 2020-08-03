@@ -23,7 +23,7 @@ use std::{
 
 use sp_core::offchain::OffchainStorage;
 use futures::Future;
-use log::error;
+use tracing::error;
 use sc_network::{PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};
 use sp_core::offchain::{

@@ -26,7 +26,7 @@
 //! >       module, rather than inside.
 
 use libp2p::PeerId;
-use log::error;
+use tracing::error;
 use std::{borrow::Cow, collections::{HashSet, HashMap}};
 use wasm_timer::Instant;
 

@@ -24,7 +24,7 @@ use wasmi::{
 };
 use codec::{Encode, Decode};
 use sp_core::sandbox as sandbox_primitives;
-use log::{error, trace, debug};
+use tracing::{error, trace, debug};
 use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };

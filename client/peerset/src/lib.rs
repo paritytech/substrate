@@ -23,7 +23,7 @@ mod peersstate;
 
 use std::{collections::{HashSet, HashMap}, collections::VecDeque};
 use futures::prelude::*;
-use log::{debug, error, trace};
+use tracing::{debug, error, trace};
 use serde_json::json;
 use std::{pin::Pin, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;

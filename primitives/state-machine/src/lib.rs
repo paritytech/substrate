@@ -20,7 +20,7 @@
 #![warn(missing_docs)]
 
 use std::{fmt, result, collections::HashMap, panic::UnwindSafe};
-use log::{warn, trace};
+use tracing::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
 use sp_core::{

@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::net::Ipv4Addr;
 use std::pin::Pin;
 use std::time::Duration;
-use log::{info, debug};
+use tracing::{info, debug};
 use futures01::{Future, Stream, Poll};
 use futures::{FutureExt as _, TryFutureExt as _};
 use tempfile::TempDir;

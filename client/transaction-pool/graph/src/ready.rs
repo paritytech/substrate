@@ -24,7 +24,7 @@ use std::{
 };
 
 use serde::Serialize;
-use log::trace;
+use tracing::trace;
 use sp_runtime::traits::Member;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,

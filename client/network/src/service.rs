@@ -48,7 +48,7 @@ use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, Pendi
 use libp2p::kad::record;
 use libp2p::ping::handler::PingFailure;
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent, protocols_handler::NodeHandlerWrapperError};
-use log::{error, info, trace, warn};
+use tracing::{error, info, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::{
 	register, Counter, CounterVec, Gauge, GaugeVec, Histogram, HistogramOpts, HistogramVec, Opts,

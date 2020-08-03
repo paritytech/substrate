@@ -19,7 +19,7 @@
 
 use sp_consensus::SelectChain;
 use sp_inherents::{InherentDataProviders};
-use log::warn;
+use tracing::warn;
 use sc_client_api::ProvideUncles;
 use sp_runtime::traits::{Block as BlockT, Header};
 use std::sync::Arc;
@@ -62,4 +62,3 @@ pub fn register_uncles_inherent_data_provider<B, C, SC>(
 	}
 	Ok(())
 }
-

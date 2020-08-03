@@ -20,7 +20,7 @@ use sp_blockchain::Error as ClientError;
 use crate::protocol::sync::{PeerSync, PeerSyncState};
 use fork_tree::ForkTree;
 use libp2p::PeerId;
-use log::{debug, trace, warn};
+use tracing::{debug, trace, warn};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Duration;

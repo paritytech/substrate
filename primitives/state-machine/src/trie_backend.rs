@@ -17,7 +17,7 @@
 
 //! Trie-based state machine backend.
 
-use log::{warn, debug};
+use tracing::{warn, debug};
 use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};

@@ -25,7 +25,7 @@ mod sync;
 use std::{collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData, task::{Poll, Context as FutureContext}};
 
 use libp2p::build_multiaddr;
-use log::trace;
+use tracing::trace;
 use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
 	HeaderBackend, Result as ClientResult,

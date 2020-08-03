@@ -23,7 +23,7 @@ use sp_consensus_babe::digests::{
 	CompatibleDigestItem
 };
 use sc_consensus_slots::CheckedHeader;
-use log::{debug, trace};
+use tracing::{debug, trace};
 use super::{find_pre_digest, babe_err, Epoch, BlockT, Error};
 use super::authorship::{calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
 

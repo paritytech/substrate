@@ -26,7 +26,7 @@ mod tests;
 
 use std::sync::Arc;
 use futures::{future, StreamExt, TryStreamExt};
-use log::warn;
+use tracing::warn;
 use rpc::{
 	Result as RpcResult,
 	futures::{stream, Future, Sink, Stream},

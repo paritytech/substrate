@@ -37,7 +37,7 @@ use std::{
 
 use futures::prelude::*;
 use parking_lot::Mutex;
-use log::{debug, info, trace};
+use tracing::{debug, info, trace};
 use prometheus_endpoint::Registry;
 
 use codec::{Encode, Decode, Codec};

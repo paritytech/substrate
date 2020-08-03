@@ -23,7 +23,7 @@ use std::{
 use linked_hash_map::LinkedHashMap;
 use serde::Serialize;
 use crate::{watcher, ChainApi, ExtrinsicHash, BlockHash};
-use log::{debug, trace, warn};
+use tracing::{debug, trace, warn};
 use sp_runtime::traits;
 
 /// Extrinsic pool default listener.

@@ -43,7 +43,7 @@
 
 use std::collections::{BTreeSet, BTreeMap};
 
-use log::warn;
+use tracing::warn;
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_runtime::traits::{

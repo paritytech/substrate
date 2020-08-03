@@ -20,7 +20,7 @@
 
 use ansi_term::Colour;
 use futures::prelude::*;
-use log::{info, trace, warn};
+use tracing::{info, trace, warn};
 use parity_util_mem::MallocSizeOf;
 use sc_client_api::{BlockchainEvents, UsageProvider};
 use sc_network::{network_state::NetworkState, NetworkStatus};

@@ -42,7 +42,7 @@ use codec::Codec;
 use std::collections::{HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
-use log::trace;
+use tracing::trace;
 use parity_util_mem::{MallocSizeOf, malloc_size};
 use sc_client_api::{StateDbMemoryInfo, MemorySize};
 

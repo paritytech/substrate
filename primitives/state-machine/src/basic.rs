@@ -31,7 +31,7 @@ use sp_core::{
 	},
 	traits::Externalities, Blake2Hasher,
 };
-use log::warn;
+use tracing::warn;
 use codec::Encode;
 use sp_externalities::{Extensions, Extension};
 

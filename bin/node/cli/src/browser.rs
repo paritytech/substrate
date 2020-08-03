@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::chain_spec::ChainSpec;
-use log::info;
+use tracing::info;
 use wasm_bindgen::prelude::*;
 use browser_utils::{
 	Client,

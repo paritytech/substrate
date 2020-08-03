@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use sp_core::{
 	NativeOrEncoded, traits::{CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions},
 };
-use log::trace;
+use tracing::trace;
 use std::{result, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc};
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::WasmInstance;

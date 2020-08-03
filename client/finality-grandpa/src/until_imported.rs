@@ -30,7 +30,7 @@ use super::{
 	SignedMessage,
 };
 
-use log::{debug, warn};
+use tracing::{debug, warn};
 use sp_utils::mpsc::TracingUnboundedReceiver;
 use futures::prelude::*;
 use futures::stream::{Fuse, StreamExt};

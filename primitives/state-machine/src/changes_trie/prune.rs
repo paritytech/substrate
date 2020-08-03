@@ -19,7 +19,7 @@
 
 use hash_db::Hasher;
 use sp_trie::Recorder;
-use log::warn;
+use tracing::warn;
 use num_traits::One;
 use crate::proving_backend::ProvingBackendRecorder;
 use crate::trie_backend_essence::TrieBackendEssence;

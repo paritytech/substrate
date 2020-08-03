@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 use parking_lot::Mutex;
-use log::info;
+use tracing::info;
 use codec::{Decode, Encode};
 
 use sc_client_api::backend::AuxStore;

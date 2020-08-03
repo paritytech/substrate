@@ -62,7 +62,7 @@ use addr_cache::AddrCache;
 use codec::Decode;
 use error::{Error, Result};
 use libp2p::core::multiaddr;
-use log::{debug, error, log_enabled};
+use tracing::{debug, error, log_enabled};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
 use prost::Message;
 use sc_client_api::blockchain::HeaderBackend;

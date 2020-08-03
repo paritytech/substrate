@@ -22,7 +22,7 @@ use std::sync::Arc;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::generic::BlockId;
 use sp_runtime::Justification;
-use log::warn;
+use tracing::warn;
 use parking_lot::RwLock;
 
 use crate::header_metadata::HeaderMetadata;

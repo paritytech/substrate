@@ -110,7 +110,7 @@ use futures::channel::mpsc::{channel, Sender, Receiver};
 use retain_mut::RetainMut;
 
 use futures::prelude::*;
-use log::{debug, info, log, trace, warn};
+use tracing::{debug, info, log, trace, warn};
 use prometheus_endpoint::Registry;
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,

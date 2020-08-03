@@ -25,7 +25,7 @@ use std::{
 
 use crate::{columns, Database, DbHash, Transaction};
 use parking_lot::Mutex;
-use log::error;
+use tracing::error;
 
 /// Offchain local storage
 #[derive(Clone)]

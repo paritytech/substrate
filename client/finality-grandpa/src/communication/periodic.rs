@@ -18,7 +18,7 @@
 
 use futures_timer::Delay;
 use futures::{future::{FutureExt as _}, prelude::*, ready, stream::Stream};
-use log::debug;
+use tracing::debug;
 use std::{pin::Pin, task::{Context, Poll}, time::Duration};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 

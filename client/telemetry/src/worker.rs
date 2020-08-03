@@ -30,7 +30,7 @@
 
 use futures::{prelude::*, ready};
 use libp2p::{core::transport::OptionalTransport, Multiaddr, Transport, wasm_ext};
-use log::{trace, warn, error};
+use tracing::{trace, warn, error};
 use slog::Drain;
 use std::{io, pin::Pin, task::Context, task::Poll, time};
 

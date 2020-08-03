@@ -37,7 +37,7 @@
 //! of the U) could be returned.
 
 use std::sync::Arc;
-use log::{trace, warn};
+use tracing::{trace, warn};
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use sc_client_api::{

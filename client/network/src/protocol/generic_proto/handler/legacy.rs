@@ -28,7 +28,7 @@ use libp2p::swarm::{
 	SubstreamProtocol,
 	NegotiatedSubstream,
 };
-use log::{debug, error};
+use tracing::{debug, error};
 use smallvec::{smallvec, SmallVec};
 use std::{borrow::Cow, collections::VecDeque, error, fmt, io, mem, time::Duration};
 use std::{pin::Pin, task::{Context, Poll}};

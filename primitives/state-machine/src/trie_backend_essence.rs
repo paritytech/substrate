@@ -20,7 +20,7 @@
 
 use std::ops::Deref;
 use std::sync::Arc;
-use log::{debug, warn};
+use tracing::{debug, warn};
 use hash_db::{self, Hasher, Prefix};
 use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	empty_child_trie_root, read_trie_value, read_child_trie_value,

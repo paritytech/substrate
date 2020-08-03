@@ -29,7 +29,7 @@ use sp_state_machine::{
 	backend::Backend as StateBackend, TrieBackend, StorageKey, StorageValue,
 	StorageCollection, ChildStorageCollection,
 };
-use log::trace;
+use tracing::trace;
 use crate::{utils::Meta, stats::StateUsageStats};
 
 const STATE_CACHE_BLOCKS: usize = 12;

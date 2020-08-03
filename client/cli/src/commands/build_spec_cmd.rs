@@ -20,7 +20,7 @@ use crate::error;
 use crate::params::NodeKeyParams;
 use crate::params::SharedParams;
 use crate::CliConfiguration;
-use log::info;
+use tracing::info;
 use sc_network::config::build_multiaddr;
 use sc_service::{config::{MultiaddrWithPeerId, NetworkConfiguration}, ChainSpec};
 use structopt::StructOpt;

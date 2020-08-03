@@ -30,7 +30,7 @@
 //! under certain conditions that are used to un-stick the protocol.
 
 use futures::{prelude::*, channel::mpsc};
-use log::{debug, trace};
+use tracing::{debug, trace};
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}};

@@ -34,7 +34,7 @@ use sp_externalities::{Extensions, Extension};
 use codec::{Decode, Encode, EncodeAppend};
 
 use std::{error, fmt, any::{Any, TypeId}};
-use log::{warn, trace};
+use tracing::{warn, trace};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 const BENCHMARKING_FN: &str = "\

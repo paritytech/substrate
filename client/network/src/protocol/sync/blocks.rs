@@ -19,7 +19,7 @@
 use std::cmp;
 use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
-use log::trace;
+use tracing::trace;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, NumberFor, One};
 use crate::protocol::message;

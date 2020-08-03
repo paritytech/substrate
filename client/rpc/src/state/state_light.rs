@@ -29,7 +29,7 @@ use futures::{
 };
 use hash_db::Hasher;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
-use log::warn;
+use tracing::warn;
 use parking_lot::Mutex;
 use rpc::{
 	Result as RpcResult,

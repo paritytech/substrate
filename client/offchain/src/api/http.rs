@@ -29,7 +29,7 @@ use crate::api::timestamp;
 use bytes::buf::ext::{Reader, BufExt};
 use fnv::FnvHashMap;
 use futures::{prelude::*, future, channel::mpsc};
-use log::error;
+use tracing::error;
 use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
 use std::{convert::TryFrom, fmt, io::Read as _, pin::Pin, task::{Context, Poll}};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
@@ -702,7 +702,7 @@ mod tests {
 	use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Duration};
 	use futures::future;
 	use lazy_static::lazy_static;
-	
+
 	// Using lazy_static to avoid spawning lots of different SharedClients,
 	// as spawning a SharedClient is CPU-intensive and opens lots of fds.
 	lazy_static! {

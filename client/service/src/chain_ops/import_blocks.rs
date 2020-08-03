@@ -19,7 +19,7 @@
 use crate::error;
 use crate::error::Error;
 use sc_chain_spec::ChainSpec;
-use log::{warn, info};
+use tracing::{warn, info};
 use futures::{future, prelude::*};
 use sp_runtime::traits::{
 	Block as BlockT, NumberFor, Zero, Header, MaybeSerializeDeserialize,
@@ -206,7 +206,7 @@ impl<B: BlockT> Speedometer<B> {
 		}
 	}
 
-	/// Calculates `(best_number - last_number) / (now - last_update)` and 
+	/// Calculates `(best_number - last_number) / (now - last_update)` and
 	/// logs the speed of import.
 	fn display_speed(&self) {
 		// Number of milliseconds elapsed since last time.
@@ -262,7 +262,7 @@ impl<B: BlockT> Speedometer<B> {
 }
 
 /// Different State that the `import_blocks` future could be in.
-enum ImportState<R, B> where 
+enum ImportState<R, B> where
 	R: Read + Seek + 'static,
 	B: BlockT + MaybeSerializeDeserialize,
 {
@@ -277,7 +277,7 @@ enum ImportState<R, B> where
 	},
 	// We have added all the blocks to the queue but they are still being processed.
 	WaitingForImportQueueToFinish{
-		num_expected_blocks: Option<u64>, 
+		num_expected_blocks: Option<u64>,
 		read_block_count: u64,
 		delay: Delay,
 	},
@@ -335,7 +335,7 @@ where
 	let block_iter = match block_iter_res {
 		Ok(block_iter) => block_iter,
 		Err(e) => {
-			// We've encountered an error while creating the block iterator 
+			// We've encountered an error while creating the block iterator
 			// so we can just return a future that returns an error.
 			return future::ready(Err(Error::Other(e))).boxed()
 		}
@@ -421,7 +421,7 @@ where
 			ImportState::WaitingForImportQueueToFinish {
 				num_expected_blocks, read_block_count, mut delay
 			} => {
-				// All the blocks have been added to the queue, which doesn't mean they 
+				// All the blocks have been added to the queue, which doesn't mean they
 				// have all been properly imported.
 				if importing_is_done(num_expected_blocks, read_block_count, link.imported_blocks) {
 					// Importing is done, we can log the result and return.

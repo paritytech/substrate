@@ -23,7 +23,7 @@ use libp2p::swarm::{IntoProtocolsHandler, IntoProtocolsHandlerSelect, ProtocolsH
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
 use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
-use log::{debug, trace, error};
+use tracing::{debug, trace, error};
 use smallvec::SmallVec;
 use std::{error, io};
 use std::collections::hash_map::Entry;

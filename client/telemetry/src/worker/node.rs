@@ -22,7 +22,7 @@ use futures::prelude::*;
 use futures_timer::Delay;
 use libp2p::Multiaddr;
 use libp2p::core::transport::Transport;
-use log::{trace, debug, warn, error};
+use tracing::{trace, debug, warn, error};
 use rand::Rng as _;
 use std::{collections::VecDeque, fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
 

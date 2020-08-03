@@ -36,7 +36,7 @@ use libp2p::swarm::{
 	SubstreamProtocol,
 	NegotiatedSubstream,
 };
-use log::{error, warn};
+use tracing::{error, warn};
 use std::{borrow::Cow, collections::VecDeque, fmt, pin::Pin, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.

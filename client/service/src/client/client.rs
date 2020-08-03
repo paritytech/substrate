@@ -23,7 +23,7 @@ use std::{
 	collections::{HashSet, BTreeMap, HashMap},
 	sync::Arc, panic::UnwindSafe, result,
 };
-use log::{info, trace, warn};
+use tracing::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::Prefix;

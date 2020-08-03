@@ -42,7 +42,7 @@ use crate::{
 use either::Either;
 use extra_requests::ExtraRequests;
 use libp2p::PeerId;
-use log::{debug, trace, warn, info, error};
+use tracing::{debug, trace, warn, info, error};
 use sp_runtime::{
 	Justification,
 	generic::BlockId,
