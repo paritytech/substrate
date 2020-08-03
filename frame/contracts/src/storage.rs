@@ -149,6 +149,7 @@ pub fn set_rent_allowance<T: Trait>(
 }
 
 /// Returns the code hash of the contract specified by `account` ID.
+#[cfg(test)]
 pub fn code_hash<T: Trait>(account: &AccountIdOf<T>) -> Result<CodeHash<T>, ContractAbsentError> {
 	<ContractInfoOf<T>>::get(account)
 		.and_then(|i| i.as_alive().map(|i| i.code_hash))
