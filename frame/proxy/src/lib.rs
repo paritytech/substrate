@@ -45,7 +45,7 @@ use sp_runtime::{DispatchResult, traits::{Dispatchable, Zero, Hash, Member, Satu
 use frame_support::{
 	decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug, traits::{
 		Get, ReservableCurrency, Currency, InstanceFilter, OriginTrait, IsType,
-	}, weights::{Weight, GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
+	}, weights::{Weight, GetDispatchInfo},
 	dispatch::{PostDispatchInfo, IsSubType}, storage::IterableStorageMap,
 };
 use frame_system::{self as system, ensure_signed};
@@ -272,12 +272,11 @@ decl_module! {
 		/// Parameters:
 		/// - `real`: The account that the proxy will make a call on behalf of.
 		/// - `call_hash`: The hash of the call to be made by the `real` account.
-		#[weight = {
-			T::DbWeight::get().reads_writes(1, 1)
-			.saturating_add(18 * WEIGHT_PER_MICROS)
-			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
-			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxPending::get().into()))
-		}]
+		///
+		/// # <weight>
+		/// Weight is a function of the number of proxies the user has (P).
+		/// # </weight>
+		#[weight = T::WeightInfo::announce(T::MaxProxies::get().into())]
 		fn announce(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::get(&real).0.into_iter()
@@ -315,12 +314,7 @@ decl_module! {
 		/// Parameters:
 		/// - `real`: The account that the proxy will make a call on behalf of.
 		/// - `call_hash`: The hash of the call to be made by the `real` account.
-		#[weight = {
-			T::DbWeight::get().reads_writes(1, 1)
-			.saturating_add(18 * WEIGHT_PER_MICROS)
-			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
-			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxPending::get().into()))
-		}]
+		#[weight = T::WeightInfo::remove_announcement(T::MaxProxies::get().into())]
 		fn remove_announcement(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
 			Announcements::<T>::try_mutate_exists(&who, |x| -> DispatchResult {
@@ -349,12 +343,7 @@ decl_module! {
 		/// Parameters:
 		/// - `delagte`: The account that previously announced the call.
 		/// - `call_hash`: The hash of the call to be made.
-		#[weight = {
-			T::DbWeight::get().reads_writes(1, 1)
-			.saturating_add(18 * WEIGHT_PER_MICROS)
-			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
-			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxPending::get().into()))
-		}]
+		#[weight = T::WeightInfo::reject_announcement(T::MaxProxies::get().into())]
 		fn reject_announcement(origin, delegate: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
 
@@ -387,24 +376,17 @@ decl_module! {
 		/// - `call`: The call to be made by the `real` account.
 		///
 		/// # <weight>
-		/// P is the number of proxies the user has
-		/// - Base weight: 19.87 + .141 * P µs
-		/// - DB weight: 1 storage read.
-		/// - Plus the weight of the `call`
+		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
 		#[weight = {
 			let di = call.get_dispatch_info();
 			if *announced {
-				(T::DbWeight::get().reads_writes(3, 2)
-					.saturating_add(di.weight)
-					.saturating_add(80 * WEIGHT_PER_MICROS)
-					.saturating_add((140 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into())),
+				(T::WeightInfo::proxy_announced(T::MaxProxies::get().into())
+					.saturating_add(di.weight),
 				di.class)
 			} else {
-				(T::DbWeight::get().reads_writes(1, 0)
-					.saturating_add(di.weight)
-					.saturating_add(20 * WEIGHT_PER_MICROS)
-					.saturating_add((140 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into())),
+				(T::WeightInfo::proxy(T::MaxProxies::get().into())
+					.saturating_add(di.weight),
 				di.class)
 			}
 		}]
@@ -474,14 +456,9 @@ decl_module! {
 		/// - `proxy_type`: The permissions allowed for this proxy account.
 		///
 		/// # <weight>
-		/// P is the number of proxies the user has
-		/// - Base weight: 17.48 + .176 * P µs
-		/// - DB weight: 1 storage read and write.
+		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			.saturating_add(18 * WEIGHT_PER_MICROS)
-			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
-		]
+		#[weight = T::WeightInfo::add_proxy(T::MaxProxies::get().into())]
 		fn add_proxy(origin,
 			delegate: T::AccountId,
 			proxy_type: T::ProxyType,
@@ -514,14 +491,9 @@ decl_module! {
 		/// - `proxy_type`: The permissions currently enabled for the removed proxy account.
 		///
 		/// # <weight>
-		/// P is the number of proxies the user has
-		/// - Base weight: 14.37 + .164 * P µs
-		/// - DB weight: 1 storage read and write.
+		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			.saturating_add(14 * WEIGHT_PER_MICROS)
-			.saturating_add((160 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
-		]
+		#[weight = T::WeightInfo::remove_proxy(T::MaxProxies::get().into())]
 		fn remove_proxy(origin,
 			delegate: T::AccountId,
 			proxy_type: T::ProxyType,
@@ -558,14 +530,9 @@ decl_module! {
 		/// the unreserved fees will be inaccessible. **All access to this account will be lost.**
 		///
 		/// # <weight>
-		/// P is the number of proxies the user has
-		/// - Base weight: 13.73 + .129 * P µs
-		/// - DB weight: 1 storage read and write.
+		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			.saturating_add(14 * WEIGHT_PER_MICROS)
-			.saturating_add((130 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
-		]
+		#[weight = T::WeightInfo::remove_proxies(T::MaxProxies::get().into())]
 		fn remove_proxies(origin) {
 			let who = ensure_signed(origin)?;
 			let (_, old_deposit) = Proxies::<T>::take(&who);
@@ -592,14 +559,10 @@ decl_module! {
 		/// Fails if there are insufficient funds to pay for deposit.
 		///
 		/// # <weight>
-		/// P is the number of proxies the user has
-		/// - Base weight: 36.48 + .039 * P µs
-		/// - DB weight: 1 storage read and write.
+		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			.saturating_add(36 * WEIGHT_PER_MICROS)
-			.saturating_add((40 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
-		]
+		/// TODO: Might be over counting 1 read
+		#[weight = T::WeightInfo::anonymous(T::MaxProxies::get().into())]
 		fn anonymous(origin, proxy_type: T::ProxyType, delay: T::BlockNumber, index: u16) {
 			let who = ensure_signed(origin)?;
 
@@ -638,10 +601,7 @@ decl_module! {
 		/// - Base weight: 15.65 + .137 * P µs
 		/// - DB weight: 1 storage read and write.
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			.saturating_add(15 * WEIGHT_PER_MICROS)
-			.saturating_add((140 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
-		]
+		#[weight = T::WeightInfo::kill_anonymous(T::MaxProxies::get().into())]
 		fn kill_anonymous(origin,
 			spawner: T::AccountId,
 			proxy_type: T::ProxyType,
