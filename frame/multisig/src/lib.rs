@@ -295,12 +295,12 @@ decl_module! {
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 			let other_signatories_len = other_signatories.len();
 			ensure!(other_signatories_len < max_sigs, Error::<T>::TooManySignatories);
-			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
+			let signatories = Self::ensure_sorted_and_insert(other_signatories, who)?;
 
 			let id = Self::multi_account_id(&signatories, 1);
 
 			let call_len = call.using_encoded(|c| c.len());
-			let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
+			let result = call.dispatch(RawOrigin::Signed(id).into());
 
 			result.map(|post_dispatch_info| post_dispatch_info.actual_weight
 				.map(|actual_weight| weight_of::as_multi_threshold_1::<T>(

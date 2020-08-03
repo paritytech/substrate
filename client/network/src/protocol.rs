@@ -47,8 +47,8 @@ use sp_runtime::traits::{
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, Message};
-use message::generic::{Message as GenericMessage, ConsensusMessage, Roles};
-use prometheus_endpoint::{Registry, Gauge, Counter, GaugeVec, HistogramVec, PrometheusError, Opts, register, U64};
+use message::generic::{Message as GenericMessage, Roles};
+use prometheus_endpoint::{Registry, Gauge, Counter, GaugeVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque, hash_map::Entry};
@@ -67,7 +67,7 @@ pub mod message;
 pub mod event;
 pub mod sync;
 
-pub use generic_proto::LegacyConnectionKillError;
+pub use generic_proto::{NotificationsSink, Ready, NotifsHandlerError, LegacyConnectionKillError};
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 /// Interval at which we perform time based maintenance
@@ -142,6 +142,7 @@ struct Metrics {
 	finality_proofs: GaugeVec<U64>,
 	justifications: GaugeVec<U64>,
 	propagated_transactions: Counter<U64>,
+	legacy_requests_received: Counter<U64>,
 }
 
 impl Metrics {
@@ -186,6 +187,10 @@ impl Metrics {
 			propagated_transactions: register(Counter::new(
 				"sync_propagated_transactions",
 				"Number of transactions propagated to at least one peer",
+			)?, r)?,
+			legacy_requests_received: register(Counter::new(
+				"sync_legacy_requests_received",
+				"Number of block/finality/light-client requests received on the legacy substream",
 			)?, r)?,
 		})
 	}
@@ -383,7 +388,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		metrics_registry: Option<&Registry>,
 		boot_node_ids: Arc<HashSet<PeerId>>,
-		queue_size_report: Option<HistogramVec>,
 	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
@@ -412,7 +416,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			versions,
 			build_status_message(&config, &chain),
 			peerset,
-			queue_size_report,
 		);
 
 		let mut legacy_equiv_by_name = HashMap::new();
@@ -715,6 +718,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	fn on_block_request(&mut self, peer: PeerId, request: message::BlockRequest<B>) {
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?} for {:?}",
 			request.id,
 			peer,
@@ -939,7 +946,12 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	/// Called on receipt of a status message via the legacy protocol on the first connection between two peers.
-	pub fn on_peer_connected(&mut self, who: PeerId, status: message::Status<B>) -> CustomMessageOutcome<B> {
+	pub fn on_peer_connected(
+		&mut self,
+		who: PeerId,
+		status: message::Status<B>,
+		notifications_sink: NotificationsSink,
+	) -> CustomMessageOutcome<B> {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
 		let _protocol_version = {
 			if self.context_data.peers.contains_key(&who) {
@@ -1051,32 +1063,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			remote: who,
 			protocols: self.protocol_name_by_engine.keys().cloned().collect(),
 			roles: info.roles,
-		}
-	}
-
-	/// Send a notification to the given peer we're connected to.
-	///
-	/// Doesn't do anything if we don't have a notifications substream for that protocol with that
-	/// peer.
-	pub fn write_notification(
-		&mut self,
-		target: PeerId,
-		engine_id: ConsensusEngineId,
-		message: impl Into<Vec<u8>>,
-	) {
-		if let Some(protocol_name) = self.protocol_name_by_engine.get(&engine_id) {
-			let message = message.into();
-			let fallback = GenericMessage::<(), (), (), ()>::Consensus(ConsensusMessage {
-				engine_id,
-				data: message.clone(),
-			}).encode();
-			self.behaviour.write_notification(&target, protocol_name.clone(), message, fallback);
-		} else {
-			error!(
-				target: "sub-libp2p",
-				"Sending a notification with a protocol that wasn't registered: {:?}",
-				engine_id
-			);
+			notifications_sink,
 		}
 	}
 
@@ -1090,7 +1077,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		engine_id: ConsensusEngineId,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
 		handshake_message: Vec<u8>,
-	) -> impl ExactSizeIterator<Item = (&'a PeerId, Roles)> + 'a {
+	) -> impl Iterator<Item = (&'a PeerId, Roles, &'a NotificationsSink)> + 'a {
 		let protocol_name = protocol_name.into();
 		if self.protocol_name_by_engine.insert(engine_id, protocol_name.clone()).is_some() {
 			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol_name);
@@ -1099,8 +1086,15 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			self.legacy_equiv_by_name.insert(protocol_name, Fallback::Consensus(engine_id));
 		}
 
-		self.context_data.peers.iter()
-			.map(|(peer_id, peer)| (peer_id, peer.info.roles))
+		let behaviour = &self.behaviour;
+		self.context_data.peers.iter().filter_map(move |(peer_id, peer)| {
+			if let Some(notifications_sink) = behaviour.notifications_sink(peer_id) {
+				Some((peer_id, peer.info.roles, notifications_sink))
+			} else {
+				log::error!("State mismatch: no notifications sink for opened peer {:?}", peer_id);
+				None
+			}
+		})
 	}
 
 	/// Called when peer sends us new transactions
@@ -1399,6 +1393,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.method,
 			request.block
 		);
+
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		let proof = match self.context_data.chain.execution_proof(
 			&BlockId::Hash(request.block),
 			&request.method,
@@ -1519,6 +1518,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		who: PeerId,
 		request: message::RemoteReadRequest<B::Hash>,
 	) {
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		if request.keys.is_empty() {
 			debug!(target: "sync", "Invalid remote read request sent by {}", who);
 			self.behaviour.disconnect_peer(&who);
@@ -1568,6 +1571,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		who: PeerId,
 		request: message::RemoteReadChildRequest<B::Hash>,
 	) {
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		if request.keys.is_empty() {
 			debug!(target: "sync", "Invalid remote child read request sent by {}", who);
 			self.behaviour.disconnect_peer(&who);
@@ -1624,6 +1631,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		who: PeerId,
 		request: message::RemoteHeaderRequest<NumberFor<B>>,
 	) {
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		trace!(target: "sync", "Remote header proof request {} from {} ({})",
 			request.id, who, request.block);
 		let (header, proof) = match self.context_data.chain.header_proof(&BlockId::Number(request.block)) {
@@ -1654,6 +1665,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		who: PeerId,
 		request: message::RemoteChangesRequest<B::Hash>,
 	) {
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{})",
 			request.id,
 			who,
@@ -1717,6 +1732,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		who: PeerId,
 		request: message::FinalityProofRequest<B::Hash>,
 	) {
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		trace!(target: "sync", "Finality proof request from {} for {}", who, request.block);
 		let finality_proof = self.finality_proof_provider.as_ref()
 			.ok_or_else(|| String::from("Finality provider is not configured"))
@@ -1829,7 +1848,18 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
 	/// Notification protocols have been opened with a remote.
-	NotificationStreamOpened { remote: PeerId, protocols: Vec<ConsensusEngineId>, roles: Roles },
+	NotificationStreamOpened {
+		remote: PeerId,
+		protocols: Vec<ConsensusEngineId>,
+		roles: Roles,
+		notifications_sink: NotificationsSink
+	},
+	/// The [`NotificationsSink`] of some notification protocols need an update.
+	NotificationStreamReplaced {
+		remote: PeerId,
+		protocols: Vec<ConsensusEngineId>,
+		notifications_sink: NotificationsSink,
+	},
 	/// Notification protocols have been closed with a remote.
 	NotificationStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
 	/// Messages have been received on one or more notifications protocols.
@@ -1994,9 +2024,10 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		};
 
 		let outcome = match event {
-			GenericProtoOut::CustomProtocolOpen { peer_id, received_handshake, .. } => {
+			GenericProtoOut::CustomProtocolOpen { peer_id, received_handshake, notifications_sink, .. } => {
 				match <Message<B> as Decode>::decode(&mut &received_handshake[..]) {
-					Ok(GenericMessage::Status(handshake)) => self.on_peer_connected(peer_id, handshake),
+					Ok(GenericMessage::Status(handshake)) =>
+						self.on_peer_connected(peer_id, handshake, notifications_sink),
 					Ok(msg) => {
 						debug!(
 							target: "sync",
@@ -2020,6 +2051,13 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					}
 				}
 			}
+			GenericProtoOut::CustomProtocolReplaced { peer_id, notifications_sink, .. } => {
+				CustomMessageOutcome::NotificationStreamReplaced {
+					remote: peer_id,
+					protocols: self.protocol_name_by_engine.keys().cloned().collect(),
+					notifications_sink,
+				}
+			},
 			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
 				self.on_peer_disconnected(peer_id)
 			},

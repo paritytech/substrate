@@ -417,7 +417,7 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 	};
 
 	let pos = trait_.segments.len() - 1;
-	trait_.segments.insert(pos, runtime.clone().into());
+	trait_.segments.insert(pos, runtime.into());
 	trait_
 }
 

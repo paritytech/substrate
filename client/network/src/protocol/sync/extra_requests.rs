@@ -141,7 +141,7 @@ impl<B: BlockT> ExtraRequests<B> {
 					request,
 				);
 			}
-			self.failed_requests.entry(request).or_insert(Vec::new()).push((who, Instant::now()));
+			self.failed_requests.entry(request).or_default().push((who, Instant::now()));
 			self.pending_requests.push_front(request);
 		} else {
 			trace!(target: "sync", "No active {} request to {:?}",

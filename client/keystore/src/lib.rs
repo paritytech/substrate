@@ -310,7 +310,7 @@ impl BareCryptoStore for Store {
 			.fold(Vec::new(), |mut v, k| {
 				v.push(CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()));
 				v.push(CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone()));
-				v.push(CryptoTypePublicPair(ecdsa::CRYPTO_ID, k.clone()));
+				v.push(CryptoTypePublicPair(ecdsa::CRYPTO_ID, k));
 				v
 			}))
 	}

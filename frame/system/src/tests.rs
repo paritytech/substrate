@@ -368,7 +368,7 @@ fn set_code_with_real_wasm_blob() {
 		System::set_block_number(1);
 		System::set_code(
 			RawOrigin::Root.into(),
-			substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
+			substrate_test_runtime_client::runtime::wasm_binary_unwrap().to_vec(),
 		).unwrap();
 
 		assert_eq!(
@@ -392,7 +392,7 @@ fn runtime_upgraded_with_set_storage() {
 			RawOrigin::Root.into(),
 			vec![(
 				well_known_keys::CODE.to_vec(),
-				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec()
+				substrate_test_runtime_client::runtime::wasm_binary_unwrap().to_vec()
 			)],
 		).unwrap();
 	});

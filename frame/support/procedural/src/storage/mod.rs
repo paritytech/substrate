@@ -249,7 +249,7 @@ impl StorageLineDefExt {
 			StorageLineTypeDef::DoubleMap(map) => map.value.clone(),
 		};
 		let is_option = ext::extract_type_option(&query_type).is_some();
-		let value_type = ext::extract_type_option(&query_type).unwrap_or(query_type.clone());
+		let value_type = ext::extract_type_option(&query_type).unwrap_or_else(|| query_type.clone());
 
 		let module_runtime_generic = &def.module_runtime_generic;
 		let module_runtime_trait = &def.module_runtime_trait;
@@ -328,7 +328,7 @@ impl StorageLineDefExt {
 
 pub enum StorageLineTypeDef {
 	Map(MapDef),
-	DoubleMap(DoubleMapDef),
+	DoubleMap(Box<DoubleMapDef>),
 	Simple(syn::Type),
 }
 

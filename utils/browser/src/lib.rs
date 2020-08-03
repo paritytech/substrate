@@ -64,7 +64,10 @@ where
 		network,
 		telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
 		chain_spec: Box::new(chain_spec),
-		task_executor: (|fut, _| wasm_bindgen_futures::spawn_local(fut)).into(),
+		task_executor: (|fut, _| {
+			wasm_bindgen_futures::spawn_local(fut);
+			async {}
+		}).into(),
 		telemetry_external_transport: Some(transport),
 		role: Role::Light,
 		database: {

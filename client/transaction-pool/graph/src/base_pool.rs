@@ -278,7 +278,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 		tx: Transaction<Hash, Ex>,
 	) -> error::Result<Imported<Hash, Ex>> {
 		if self.is_imported(&tx.hash) {
-			return Err(error::Error::AlreadyImported(Box::new(tx.hash.clone())))
+			return Err(error::Error::AlreadyImported(Box::new(tx.hash)))
 		}
 
 		let tx = WaitingTransaction::new(

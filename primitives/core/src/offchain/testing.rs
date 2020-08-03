@@ -359,7 +359,7 @@ impl offchain::Externalities for TestOffchainExt {
 		if let Some(req) = state.requests.get_mut(&request_id) {
 			let response = req.response
 				.as_mut()
-				.expect(&format!("No response provided for request: {:?}", request_id));
+				.unwrap_or_else(|| panic!("No response provided for request: {:?}", request_id));
 
 			if req.read >= response.len() {
 				// Remove the pending request as per spec.

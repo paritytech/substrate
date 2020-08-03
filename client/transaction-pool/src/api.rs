@@ -305,7 +305,7 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for
 
 	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
 		let header = self.client.header(*id)
-			.and_then(|h| h.ok_or(sp_blockchain::Error::UnknownBlock(format!("{}", id))));
+			.and_then(|h| h.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", id))));
 		let header = match header {
 			Ok(header) => header,
 			Err(err) => {

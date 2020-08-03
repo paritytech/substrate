@@ -181,8 +181,8 @@ pub fn insert_hash_to_key_mapping<N: TryInto<u32>, H: AsRef<[u8]> + Clone>(
 ) -> sp_blockchain::Result<()> {
 	transaction.set_from_vec(
 		key_lookup_col,
-		hash.clone().as_ref(),
-		number_and_hash_to_lookup_key(number, hash)?,
+		hash.as_ref(),
+		number_and_hash_to_lookup_key(number, hash.clone())?,
 	);
 	Ok(())
 }

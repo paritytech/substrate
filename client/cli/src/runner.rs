@@ -94,8 +94,8 @@ pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::
 }
 
 fn run_until_exit<FUT, ERR>(
-	mut tokio_runtime: tokio::runtime::Runtime, 
-	future: FUT, 
+	mut tokio_runtime: tokio::runtime::Runtime,
+	future: FUT,
 	mut task_manager: TaskManager,
 ) -> Result<()>
 where
@@ -128,14 +128,10 @@ impl<C: SubstrateCli> Runner<C> {
 
 		let task_executor = move |fut, task_type| {
 			match task_type {
-				TaskType::Async => { runtime_handle.spawn(fut); }
-				TaskType::Blocking => {
-					runtime_handle.spawn(async move {
-						// `spawn_blocking` is looking for the current runtime, and as such has to
-						// be called from within `spawn`.
-						tokio::task::spawn_blocking(move || futures::executor::block_on(fut))
-					});
-				}
+				TaskType::Async => runtime_handle.spawn(fut).map(drop),
+				TaskType::Blocking =>
+					runtime_handle.spawn_blocking(move || futures::executor::block_on(fut))
+						.map(drop),
 			}
 		};
 
@@ -233,11 +229,9 @@ impl<C: SubstrateCli> Runner<C> {
 	) -> Result<()> {
 		self.print_node_infos();
 		let mut task_manager = initialise(self.config)?;
-		self.tokio_runtime.block_on(main(task_manager.future().fuse()))
-			.map_err(|e| e.to_string())?;
-		task_manager.terminate();
-		drop(self.tokio_runtime);
-		Ok(())
+		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
+		self.tokio_runtime.block_on(task_manager.clean_shutdown());
+		res.map_err(|e| e.to_string().into())
 	}
 
 	/// A helper function that runs a command with the configuration of this node

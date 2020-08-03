@@ -94,7 +94,7 @@ impl KeystoreParams {
 		let path = self
 			.keystore_path
 			.clone()
-			.unwrap_or(base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH));
+			.unwrap_or_else(|| base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH));
 
 		Ok(KeystoreConfig::Path { path, password })
 	}

@@ -355,7 +355,7 @@ decl_module! {
 			// if there is already an element with `score`, we insert
 			// right before that. if not, the search returns a location
 			// where we can insert while maintaining order.
-			let item = (who.clone(), Some(score.clone()));
+			let item = (who, Some(score.clone()));
 			let location = pool
 				.binary_search_by_key(
 					&Reverse(score),

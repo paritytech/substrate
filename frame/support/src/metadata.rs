@@ -413,7 +413,7 @@ mod tests {
 	}
 
 	impl_outer_origin! {
-		pub enum Origin for TestRuntime {}
+		pub enum Origin for TestRuntime where system = system {}
 	}
 
 	impl_outer_dispatch! {

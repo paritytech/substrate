@@ -588,6 +588,66 @@ fn self_votes_should_be_kept() {
 	);
 }
 
+#[test]
+fn duplicate_target_is_ignored() {
+	let candidates = vec![1, 2, 3];
+	let voters = vec![
+		(10, 100, vec![1, 1, 2, 3]),
+		(20, 100, vec![2, 3]),
+		(30, 50, vec![1, 1, 2]),
+	];
+
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
+		2,
+		2,
+		candidates,
+		voters,
+	).unwrap();
+	let winners = to_without_backing(winners);
+
+	assert_eq!(winners, vec![(2), (3)]);
+	assert_eq!(
+		assignments
+			.into_iter()
+			.map(|x| (x.who, x.distribution.into_iter().map(|(w, _)| w).collect::<Vec<_>>()))
+			.collect::<Vec<_>>(),
+		vec![
+			(10, vec![2, 3]),
+			(20, vec![2, 3]),
+			(30, vec![2]),
+		],
+	);
+}
+
+#[test]
+fn duplicate_target_is_ignored_when_winner() {
+	let candidates = vec![1, 2, 3];
+	let voters = vec![
+		(10, 100, vec![1, 1, 2, 3]),
+		(20, 100, vec![1, 2]),
+	];
+
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
+		2,
+		2,
+		candidates,
+		voters,
+	).unwrap();
+	let winners = to_without_backing(winners);
+
+	assert_eq!(winners, vec![1, 2]);
+	assert_eq!(
+		assignments
+			.into_iter()
+			.map(|x| (x.who, x.distribution.into_iter().map(|(w, _)| w).collect::<Vec<_>>()))
+			.collect::<Vec<_>>(),
+		vec![
+			(10, vec![1, 2]),
+			(20, vec![1, 2]),
+		],
+	);
+}
+
 mod assignment_convert_normalize {
 	use super::*;
 	#[test]

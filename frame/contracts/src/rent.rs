@@ -104,7 +104,7 @@ fn compute_fee_per_block<T: Trait>(
 
 	effective_storage_size
 		.checked_mul(&T::RentByteFee::get())
-		.unwrap_or(<BalanceOf<T>>::max_value())
+		.unwrap_or_else(|| <BalanceOf<T>>::max_value())
 }
 
 /// Returns amount of funds available to consume by rent mechanism.
@@ -179,7 +179,7 @@ fn consider_case<T: Trait>(
 
 	let dues = fee_per_block
 		.checked_mul(&blocks_passed.saturated_into::<u32>().into())
-		.unwrap_or(<BalanceOf<T>>::max_value());
+		.unwrap_or_else(|| <BalanceOf<T>>::max_value());
 	let insufficient_rent = rent_budget < dues;
 
 	// If the rent payment cannot be withdrawn due to locks on the account balance, then evict the

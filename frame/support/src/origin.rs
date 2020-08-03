@@ -33,7 +33,7 @@ macro_rules! impl_outer_origin {
 	) => {
 		$crate::impl_outer_origin! {
 			$(#[$attr])*
-			pub enum $name for $runtime where system = system {
+			pub enum $name for $runtime where system = frame_system {
 				$( $rest_without_system )*
 			}
 		}
@@ -350,7 +350,7 @@ macro_rules! impl_outer_origin {
 mod tests {
 	use codec::{Encode, Decode};
 	use crate::traits::{Filter, OriginTrait};
-	mod system {
+	mod frame_system {
 		use super::*;
 
 		pub trait Trait {
@@ -404,7 +404,7 @@ mod tests {
 		}
 	}
 
-	impl system::Trait for TestRuntime {
+	impl frame_system::Trait for TestRuntime {
 		type AccountId = u32;
 		type Call = u32;
 		type BaseCallFilter = BaseCallFilter;
@@ -425,21 +425,21 @@ mod tests {
 	);
 
 	impl_outer_origin!(
-		pub enum OriginWithSystem for TestRuntime where system = system {
+		pub enum OriginWithSystem for TestRuntime where system = frame_system {
 			origin_without_generic,
 			origin_with_generic<T>
 		}
 	);
 
 	impl_outer_origin!(
-		pub enum OriginWithSystem2 for TestRuntime where system = system {
+		pub enum OriginWithSystem2 for TestRuntime where system = frame_system {
 			origin_with_generic<T>,
 			origin_without_generic,
 		}
 	);
 
 	impl_outer_origin!(
-		pub enum OriginEmpty for TestRuntime where system = system {}
+		pub enum OriginEmpty for TestRuntime where system = frame_system {}
 	);
 
 	#[test]
@@ -464,7 +464,7 @@ mod tests {
 		assert_eq!(origin.filter_call(&1), false);
 
 		origin.set_caller_from(OriginWithSystem::root());
-		assert!(matches!(origin.caller, OriginWithSystemCaller::system(system::RawOrigin::Root)));
+		assert!(matches!(origin.caller, OriginWithSystemCaller::system(frame_system::RawOrigin::Root)));
 		assert_eq!(origin.filter_call(&0), false);
 		assert_eq!(origin.filter_call(&1), false);
 

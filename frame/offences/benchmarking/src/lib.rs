@@ -257,7 +257,7 @@ benchmarks! {
 			.flat_map(|reporter| vec![
 				frame_system::Event::<T>::NewAccount(reporter.clone()).into(),
 				<T as BalancesTrait>::Event::from(
-					pallet_balances::Event::<T>::Endowed(reporter.clone(), (reward_amount / r).into())
+					pallet_balances::Event::<T>::Endowed(reporter, (reward_amount / r).into())
 				).into()
 			]);
 

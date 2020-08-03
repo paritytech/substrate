@@ -158,7 +158,7 @@ pub trait CliConfiguration: Sized {
 	fn database_cache_size(&self) -> Result<Option<usize>> {
 		Ok(self.database_params()
 			.map(|x| x.database_cache_size())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the database backend variant.
@@ -195,7 +195,7 @@ pub trait CliConfiguration: Sized {
 	fn state_cache_size(&self) -> Result<usize> {
 		Ok(self.import_params()
 			.map(|x| x.state_cache_size())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the state cache child ratio (if any).
@@ -212,7 +212,7 @@ pub trait CliConfiguration: Sized {
 	fn pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
 		self.pruning_params()
 			.map(|x| x.pruning(unsafe_pruning, role))
-			.unwrap_or(Ok(Default::default()))
+			.unwrap_or_else(|| Ok(Default::default()))
 	}
 
 	/// Get the chain ID (string).
@@ -236,7 +236,7 @@ pub trait CliConfiguration: Sized {
 	fn wasm_method(&self) -> Result<WasmExecutionMethod> {
 		Ok(self.import_params()
 			.map(|x| x.wasm_method())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the execution strategies.
@@ -251,7 +251,7 @@ pub trait CliConfiguration: Sized {
 		Ok(self
 			.import_params()
 			.map(|x| x.execution_strategies(is_dev, is_validator))
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the RPC HTTP address (`None` if disabled).
@@ -365,7 +365,7 @@ pub trait CliConfiguration: Sized {
 	fn tracing_targets(&self) -> Result<Option<String>> {
 		Ok(self.import_params()
 			.map(|x| x.tracing_targets())
-			.unwrap_or(Default::default()))
+			.unwrap_or_else(|| Default::default()))
 	}
 
 	/// Get the TracingReceiver value from the current object
@@ -375,7 +375,7 @@ pub trait CliConfiguration: Sized {
 	fn tracing_receiver(&self) -> Result<TracingReceiver> {
 		Ok(self.import_params()
 			.map(|x| x.tracing_receiver())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the node key from the current object
@@ -385,7 +385,7 @@ pub trait CliConfiguration: Sized {
 	fn node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> {
 		self.node_key_params()
 			.map(|x| x.node_key(net_config_dir))
-			.unwrap_or(Ok(Default::default()))
+			.unwrap_or_else(|| Ok(Default::default()))
 	}
 
 	/// Get maximum runtime instances

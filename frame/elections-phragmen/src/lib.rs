@@ -607,7 +607,7 @@ decl_module! {
 					// returns NoMember error in case of error.
 					let _ = Self::remove_and_replace_member(&who)?;
 					T::Currency::unreserve(&who, T::CandidacyBond::get());
-					Self::deposit_event(RawEvent::MemberRenounced(who.clone()));
+					Self::deposit_event(RawEvent::MemberRenounced(who));
 				},
 				Renouncing::RunnerUp => {
 					let mut runners_up_with_stake = Self::runners_up();
@@ -1002,7 +1002,7 @@ impl<T: Trait> Module<T> {
 			);
 			T::ChangeMembers::change_members_sorted(
 				&incoming,
-				&outgoing.clone(),
+				&outgoing,
 				&new_members_ids,
 			);
 			T::ChangeMembers::set_prime(prime);

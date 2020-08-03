@@ -1716,6 +1716,101 @@ fn bond_with_little_staked_value_bounded() {
 }
 
 #[test]
+fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
+	ExtBuilder::default()
+		.validator_count(2)
+		.nominate(false)
+		.minimum_validator_count(1)
+		.build()
+		.execute_with(|| {
+			// disable the nominator
+			assert_ok!(Staking::chill(Origin::signed(100)));
+			// make stakes equal.
+			assert_ok!(Staking::bond_extra(Origin::signed(31), 999));
+
+			assert_eq!(
+				<Validators<Test>>::iter()
+					.map(|(v, _)| (v, Staking::ledger(v - 1).unwrap().total))
+					.collect::<Vec<_>>(),
+				vec![(31, 1000), (21, 1000), (11, 1000)],
+			);
+			assert_eq!(<Nominators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>(), vec![]);
+
+			// give the man some money
+			let initial_balance = 1000;
+			for i in [1, 2, 3, 4,].iter() {
+				let _ = Balances::make_free_balance_be(i, initial_balance);
+			}
+
+			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21, 31,]));
+
+			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
+
+			// winners should be 21 and 31. Otherwise this election is taking duplicates into account.
+
+			let sp_npos_elections::ElectionResult {
+				winners,
+				assignments,
+			} = Staking::do_phragmen::<Perbill>().unwrap();
+			let winners = sp_npos_elections::to_without_backing(winners);
+
+			assert_eq!(winners, vec![31, 21]);
+			// only distribution to 21 and 31.
+			assert_eq!(assignments.iter().find(|a| a.who == 1).unwrap().distribution.len(), 2);
+		});
+}
+
+#[test]
+fn bond_with_duplicate_vote_should_be_ignored_by_npos_election_elected() {
+	// same as above but ensures that even when the duple is being elected, everything is sane.
+	ExtBuilder::default()
+		.validator_count(2)
+		.nominate(false)
+		.minimum_validator_count(1)
+		.build()
+		.execute_with(|| {
+			// disable the nominator
+			assert_ok!(Staking::chill(Origin::signed(100)));
+			// make stakes equal.
+			assert_ok!(Staking::bond_extra(Origin::signed(31), 99));
+
+			assert_eq!(
+				<Validators<Test>>::iter()
+					.map(|(v, _)| (v, Staking::ledger(v - 1).unwrap().total))
+					.collect::<Vec<_>>(),
+				vec![(31, 100), (21, 1000), (11, 1000)],
+			);
+			assert_eq!(<Nominators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>(), vec![]);
+
+			// give the man some money
+			let initial_balance = 1000;
+			for i in [1, 2, 3, 4,].iter() {
+				let _ = Balances::make_free_balance_be(i, initial_balance);
+			}
+
+			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21, 31,]));
+
+			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
+
+			// winners should be 21 and 31. Otherwise this election is taking duplicates into account.
+
+			let sp_npos_elections::ElectionResult {
+				winners,
+				assignments,
+			} = Staking::do_phragmen::<Perbill>().unwrap();
+
+			let winners = sp_npos_elections::to_without_backing(winners);
+			assert_eq!(winners, vec![21, 11]);
+			// only distribution to 21 and 31.
+			assert_eq!(assignments.iter().find(|a| a.who == 1).unwrap().distribution.len(), 2);
+		});
+}
+
+#[test]
 fn new_era_elects_correct_number_of_validators() {
 	ExtBuilder::default()
 		.nominate(true)
