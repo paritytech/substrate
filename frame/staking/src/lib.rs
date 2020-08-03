@@ -1466,7 +1466,6 @@ decl_module! {
 					"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
 					T::SlashDeferDuration::get(),
 					T::BondingDuration::get(),
-
 				)
 			);
 		}
