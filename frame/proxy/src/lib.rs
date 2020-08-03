@@ -57,6 +57,10 @@ mod benchmarking;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 pub trait WeightInfo {
+	fn proxy_announced(p: u32, ) -> Weight;
+	fn remove_announcement(p: u32, ) -> Weight;
+	fn reject_announcement(p: u32, ) -> Weight;
+	fn announce(p: u32, ) -> Weight;
 	fn proxy(p: u32, ) -> Weight;
 	fn add_proxy(p: u32, ) -> Weight;
 	fn remove_proxy(p: u32, ) -> Weight;
@@ -66,6 +70,10 @@ pub trait WeightInfo {
 }
 
 impl WeightInfo for () {
+	fn proxy_announced(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_announcement(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn reject_announcement(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn announce(_p: u32, ) -> Weight { 1_000_000_000 }
 	fn proxy(_p: u32, ) -> Weight { 1_000_000_000 }
 	fn add_proxy(_p: u32, ) -> Weight { 1_000_000_000 }
 	fn remove_proxy(_p: u32, ) -> Weight { 1_000_000_000 }
