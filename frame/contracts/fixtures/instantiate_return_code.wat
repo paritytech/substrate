@@ -3,9 +3,9 @@
 ;; The first 32 byte of input is the code hash to instantiate
 ;; The rest of the input is forwarded to the constructor of the callee
 (module
-	(import "env" "ext_input" (func $ext_input (param i32 i32)))
-	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
+	(import "env" "seal_input" (func $seal_input (param i32 i32)))
+	(import "env" "seal_instantiate" (func $seal_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "env" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 8) address of django
@@ -24,10 +24,10 @@
 	(func (export "deploy"))
 
 	(func (export "call")
-		(call $ext_input (i32.const 24) (i32.const 20))
+		(call $seal_input (i32.const 24) (i32.const 20))
 		(i32.store
 			(i32.const 16)
-			(call $ext_instantiate
+			(call $seal_instantiate
 				(i32.const 24) ;; Pointer to the code hash.
 				(i32.const 32) ;; Length of the code hash.
 				(i64.const 0) ;; How much gas to devote for the execution. 0 = all.
@@ -42,6 +42,6 @@
 			)
 		)
 		;; exit with success and take transfer return code to the output buffer
-		(call $ext_return (i32.const 0) (i32.const 16) (i32.const 4))
+		(call $seal_return (i32.const 0) (i32.const 16) (i32.const 4))
 	)
 )

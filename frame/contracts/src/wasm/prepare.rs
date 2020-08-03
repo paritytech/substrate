@@ -296,10 +296,10 @@ impl<'a> ContractModule<'a> {
 				.get(*type_idx as usize)
 				.ok_or_else(|| "validation: import entry points to a non-existent type")?;
 
-			// We disallow importing `ext_println` unless debug features are enabled,
+			// We disallow importing `seal_println` unless debug features are enabled,
 			// which should only be allowed on a dev chain
-			if !self.schedule.enable_println && import.field().as_bytes() == b"ext_println" {
-				return Err("module imports `ext_println` but debug features disabled");
+			if !self.schedule.enable_println && import.field().as_bytes() == b"seal_println" {
+				return Err("module imports `seal_println` but debug features disabled");
 			}
 
 			// We disallow importing `gas` function here since it is treated as implementation detail.
@@ -409,7 +409,7 @@ mod tests {
 
 		nop(_ctx, _unused: u64) => { unreachable!(); },
 
-		ext_println(_ctx, _ptr: u32, _len: u32) => { unreachable!(); },
+		seal_println(_ctx, _ptr: u32, _len: u32) => { unreachable!(); },
 	);
 
 	macro_rules! prepare_test {
@@ -679,24 +679,24 @@ mod tests {
 			Err("module imports a non-existent function")
 		);
 
-		prepare_test!(ext_println_debug_disabled,
+		prepare_test!(seal_println_debug_disabled,
 			r#"
 			(module
-				(import "env" "ext_println" (func $ext_println (param i32 i32)))
+				(import "env" "seal_println" (func $seal_println (param i32 i32)))
 
 				(func (export "call"))
 				(func (export "deploy"))
 			)
 			"#,
-			Err("module imports `ext_println` but debug features disabled")
+			Err("module imports `seal_println` but debug features disabled")
 		);
 
 		#[test]
-		fn ext_println_debug_enabled() {
+		fn seal_println_debug_enabled() {
 			let wasm = wat::parse_str(
 				r#"
 				(module
-					(import "env" "ext_println" (func $ext_println (param i32 i32)))
+					(import "env" "seal_println" (func $seal_println (param i32 i32)))
 
 					(func (export "call"))
 					(func (export "deploy"))

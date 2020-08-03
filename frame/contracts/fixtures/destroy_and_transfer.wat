@@ -1,10 +1,10 @@
 (module
-	(import "env" "ext_input" (func $ext_input (param i32 i32)))
-	(import "env" "ext_get_storage" (func $ext_get_storage (param i32 i32 i32) (result i32)))
-	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "env" "seal_input" (func $seal_input (param i32 i32)))
+	(import "env" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32) (result i32)))
+	(import "env" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32)))
+	(import "env" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "env" "seal_transfer" (func $seal_transfer (param i32 i32 i32 i32) (result i32)))
+	(import "env" "seal_instantiate" (func $seal_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 8) Endowment to send when creating contract.
@@ -35,7 +35,7 @@
 
 	(func (export "deploy")
 		;; Input data is the code hash of the contract to be deployed.
-		(call $ext_input (i32.const 48) (i32.const 96))
+		(call $seal_input (i32.const 48) (i32.const 96))
 		(call $assert
 			(i32.eq
 				(i32.load (i32.const 96))
@@ -46,7 +46,7 @@
 		;; Deploy the contract with the provided code hash.
 		(call $assert
 			(i32.eq
-				(call $ext_instantiate
+				(call $seal_instantiate
 					(i32.const 48)	;; Pointer to the code hash.
 					(i32.const 32)	;; Length of the code hash.
 					(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
@@ -72,7 +72,7 @@
 		)
 
 		;; Store the return address.
-		(call $ext_set_storage
+		(call $seal_set_storage
 			(i32.const 16)	;; Pointer to the key
 			(i32.const 80)	;; Pointer to the value
 			(i32.const 8)	;; Length of the value
@@ -83,7 +83,7 @@
 		;; Read address of destination contract from storage.
 		(call $assert
 			(i32.eq
-				(call $ext_get_storage
+				(call $seal_get_storage
 					(i32.const 16)	;; Pointer to the key
 					(i32.const 80)	;; Pointer to the value
 					(i32.const 88)	;; Pointer to the len of the value
@@ -101,7 +101,7 @@
 		;; Calling the destination contract with non-empty input data should fail.
 		(call $assert
 			(i32.eq
-				(call $ext_call
+				(call $seal_call
 					(i32.const 80)	;; Pointer to destination address
 					(i32.const 8)	;; Length of destination address
 					(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
@@ -120,7 +120,7 @@
 		;; Call the destination contract regularly, forcing it to self-destruct.
 		(call $assert
 			(i32.eq
-				(call $ext_call
+				(call $seal_call
 					(i32.const 80)	;; Pointer to destination address
 					(i32.const 8)	;; Length of destination address
 					(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
@@ -140,7 +140,7 @@
 		;; does not keep the contract alive.
 		(call $assert
 			(i32.eq
-				(call $ext_transfer
+				(call $seal_transfer
 					(i32.const 80)	;; Pointer to destination address
 					(i32.const 8)	;; Length of destination address
 					(i32.const 0)	;; Pointer to the buffer with value to transfer

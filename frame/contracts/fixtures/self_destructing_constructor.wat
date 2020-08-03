@@ -1,5 +1,5 @@
 (module
-	(import "env" "ext_terminate" (func $ext_terminate (param i32 i32)))
+	(import "env" "seal_terminate" (func $seal_terminate (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -13,7 +13,7 @@
 
 	(func (export "deploy")
 		;; Self-destruct by sending full balance to the 0 address.
-		(call $ext_terminate
+		(call $seal_terminate
 			(i32.const 0)	;; Pointer to destination address
 			(i32.const 8)	;; Length of destination address
 		)
