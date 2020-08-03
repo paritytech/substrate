@@ -560,34 +560,34 @@ mod tests {
 			offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(200)));
 
 			// the lock is still active, extend it successfully
-            assert_eq!(guard.extend_lock().is_ok(), true);
+			assert_eq!(guard.extend_lock().is_ok(), true);
 
-            // sleep_until < deadline
-            offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(200)));
+			// sleep_until < deadline
+			offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(200)));
 
-            // the lock is still active, try_lock will fail
-            let mut lock = StorageLock::<'_, Time>::with_deadline(b"lock_4", lock_expiration);
-            let res = lock.try_lock();
-            assert_eq!(res.is_ok(), false);
+			// the lock is still active, try_lock will fail
+			let mut lock = StorageLock::<'_, Time>::with_deadline(b"lock_4", lock_expiration);
+			let res = lock.try_lock();
+			assert_eq!(res.is_ok(), false);
 
-            // sleep again untill sleep_until > deadline
-            offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(200)));
+			// sleep again untill sleep_until > deadline
+			offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(200)));
 
-            // the lock has expired, failed to extend it
-            assert_eq!(guard.extend_lock().is_ok(), false);
-            guard.forget();
+			// the lock has expired, failed to extend it
+			assert_eq!(guard.extend_lock().is_ok(), false);
+			guard.forget();
 
-            // try_lock will succeed
-            let mut lock = StorageLock::<'_, Time>::with_deadline(b"lock_4", lock_expiration);
-            let res = lock.try_lock();
-            assert!(res.is_ok());
-            let guard = res.unwrap();
+			// try_lock will succeed
+			let mut lock = StorageLock::<'_, Time>::with_deadline(b"lock_4", lock_expiration);
+			let res = lock.try_lock();
+			assert!(res.is_ok());
+			let guard = res.unwrap();
 
-            guard.forget();
-        });
+			guard.forget();
+		});
 
-        // lock must have been cleared at this point
-        let opt = state.read().persistent_storage.get(b"", b"lock_4");
-        assert_eq!(opt.unwrap(), vec![132_u8, 3u8, 0, 0, 0, 0, 0, 0]); // 132 + 256 * 3 = 900
+		// lock must have been cleared at this point
+		let opt = state.read().persistent_storage.get(b"", b"lock_4");
+		assert_eq!(opt.unwrap(), vec![132_u8, 3u8, 0, 0, 0, 0, 0, 0]); // 132 + 256 * 3 = 900
 	}
 }
