@@ -1572,7 +1572,6 @@ dependencies = [
 name = "frame-benchmarking-cli"
 version = "2.0.0-rc5"
 dependencies = [
- "Inflector",
  "frame-benchmarking",
  "parity-scale-codec",
  "sc-cli",
@@ -6309,6 +6308,7 @@ dependencies = [
  "sc-client-api",
  "sc-executor",
  "sc-state-db",
+ "sp-arithmetic",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
