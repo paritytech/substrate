@@ -41,6 +41,7 @@ pub use sc_rpc_api::DenyUnsafe;
 use sp_transaction_pool::TransactionPool;
 
 /// Light client extra dependencies.
+#[allow(dead_code)]
 pub struct LightDeps<C, F, P> {
 	/// The client instance to use.
 	pub client: Arc<C>,
@@ -96,6 +97,7 @@ pub fn create_full<C, P, SC>(
 }
 
 /// Instantiate all Light RPC extensions.
+#[allow(dead_code)]
 pub fn create_light<C, P, M, F>(
 	deps: LightDeps<C, F, P>,
 ) -> jsonrpc_core::IoHandler<M> where
