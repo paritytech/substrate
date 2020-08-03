@@ -18,6 +18,11 @@ native_executor_instance!(
 	node_template_runtime::native_version,
 );
 
+
+// TODO:: Please change this to crate, lrpc=localrpc
+#[path = "rpc.rs"]
+mod lrpc;
+
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
 type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
@@ -109,6 +114,24 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let prometheus_registry = config.prometheus_registry().cloned();
 	let telemetry_connection_sinks = sc_service::TelemetryConnectionSinks::default();
 
+
+        let rpc_extensions_builder = {
+            let client = client.clone();
+            let pool = transaction_pool.clone();
+            let select_chain = select_chain.clone();
+
+            Box::new(move |deny_unsafe| {
+                let deps = lrpc::FullDeps {
+                    client: client.clone(),
+                    pool: pool.clone(),
+                    select_chain: select_chain.clone(),
+                    deny_unsafe,
+                };
+
+                lrpc::create_full(deps)
+            })
+        };
+
 	sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		network: network.clone(),
 		client: client.clone(),
@@ -116,7 +139,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		task_manager: &mut task_manager,
 		transaction_pool: transaction_pool.clone(),
 		telemetry_connection_sinks: telemetry_connection_sinks.clone(),
-		rpc_extensions_builder: Box::new(|_| ()),
+		rpc_extensions_builder: rpc_extensions_builder,
 		on_demand: None,
 		remote_blockchain: None,
 		backend, network_status_sinks, system_rpc_tx, config,

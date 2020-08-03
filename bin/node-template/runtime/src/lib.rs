@@ -417,4 +417,10 @@ impl_runtime_apis! {
 			None
 		}
 	}
+
+        impl system_runtime_rpi::AccountNonceApi<Block, AccountId, Index> for Runtime {
+            fn account_nonce(account: AccountId) -> Index {
+                System::account_nonce(account)
+            }
+        }
 }
