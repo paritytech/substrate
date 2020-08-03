@@ -71,7 +71,10 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	where
 		I: Iterator<Item = (&'a T::AccountId, Self::Key)>,
 	{
-		let keys = authorities.map(|x| x.1).collect::<Vec<_>>();
+		let mut keys = authorities.map(|x| x.1).collect::<Vec<_>>();
+		keys.sort();
+		keys.dedup();
+
 		Self::initialize_keys(&keys);
 	}
 
@@ -81,7 +84,11 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	{
 		// Remember who the authorities are for the new and next session.
 		if changed {
-			Keys::put(validators.chain(queued_validators).map(|x| x.1).collect::<Vec<_>>());
+			let mut keys = validators.chain(queued_validators).map(|x| x.1).collect::<Vec<_>>();
+			keys.sort();
+			keys.dedup();
+
+			Keys::put(keys);
 		}
 	}
 
@@ -193,12 +200,12 @@ mod tests {
 
 	#[test]
 	fn authorities_returns_current_and_next_authority_set() {
-		// The whole authority discovery module ignores account ids, but we still need it for
+		// The whole authority discovery module ignores account ids, but we still need them for
 		// `pallet_session::OneSessionHandler::on_new_session`, thus its safe to use the same value
 		// everywhere.
 		let account_id = AuthorityPair::from_seed_slice(vec![10; 32].as_ref()).unwrap().public();
 
-		let first_authorities: Vec<AuthorityId> = vec![0, 1].into_iter()
+		let mut first_authorities: Vec<AuthorityId> = vec![0, 1].into_iter()
 			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
 			.map(AuthorityId::from)
 			.collect();
@@ -213,7 +220,7 @@ mod tests {
 			.map(|id| (&account_id, id))
 			.collect::<Vec<(&AuthorityId, AuthorityId)> >();
 
-		let third_authorities: Vec<AuthorityId> = vec![4, 5].into_iter()
+		let mut third_authorities: Vec<AuthorityId> = vec![4, 5].into_iter()
 			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
 			.map(AuthorityId::from)
 			.collect();
@@ -243,9 +250,10 @@ mod tests {
 			AuthorityDiscovery::on_genesis_session(
 				first_authorities.iter().map(|id| (id, id.clone()))
 			);
+			first_authorities.sort();
 			assert_eq!(first_authorities, AuthorityDiscovery::authorities());
 
-			// .
+			// When `changed` set to false, the authority set should not be updated.
 			AuthorityDiscovery::on_new_session(
 				false,
 				second_authorities_and_account_ids.clone().into_iter(),
@@ -263,15 +271,29 @@ mod tests {
 				second_authorities_and_account_ids.into_iter(),
 				third_authorities_and_account_ids.clone().into_iter(),
 			);
-			let second_and_third_authorities = second_authorities.iter()
+			let mut second_and_third_authorities = second_authorities.iter()
 				.chain(third_authorities.iter())
 				.cloned()
 				.collect::<Vec<AuthorityId>>();
+			second_and_third_authorities.sort();
 			assert_eq!(
 				second_and_third_authorities,
 				AuthorityDiscovery::authorities(),
 				"Expected authority set to contain both the authorities of the new as well as the \
 				 next session."
+			);
+
+			// With overlapping authority sets, `authorities()` should return a deduplicated set.
+			AuthorityDiscovery::on_new_session(
+				true,
+				third_authorities_and_account_ids.clone().into_iter(),
+				third_authorities_and_account_ids.clone().into_iter(),
+			);
+			third_authorities.sort();
+			assert_eq!(
+				third_authorities,
+				AuthorityDiscovery::authorities(),
+				"Expected authority set to be deduplicated."
 			);
 		});
 	}
