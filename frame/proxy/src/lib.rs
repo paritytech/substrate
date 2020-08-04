@@ -639,10 +639,10 @@ impl<T: Trait> Module<T> {
 		delegate: &T::AccountId,
 		force_proxy_type: Option<T::ProxyType>,
 	) -> Result<ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>, DispatchError> {
-		Ok(Proxies::<T>::get(real).0.into_iter()
-			.find(|x| &x.delegate == delegate
-				&& force_proxy_type.as_ref().map_or(true, |y| &x.proxy_type == y)
-			).ok_or(Error::<T>::NotProxy)?)
+		let f = |x: &ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>| -> bool {
+			&x.delegate == delegate && force_proxy_type.as_ref().map_or(true, |y| &x.proxy_type == y)
+		};
+		Ok(Proxies::<T>::get(real).0.into_iter().find(f).ok_or(Error::<T>::NotProxy)?)
 	}
 
 	fn do_proxy(
