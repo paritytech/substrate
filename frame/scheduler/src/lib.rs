@@ -190,8 +190,8 @@ decl_error! {
 	pub enum Error for Module<T: Trait> {
 		/// Failed to schedule a call
 		FailedToSchedule,
-		/// Failed to cancel a scheduled call
-		FailedToCancel,
+		/// Cannot found the scheduled call.
+		NotFound,
 		/// Given target block number is in the past.
 		TargetBlockNumberInPast,
 	}
@@ -438,13 +438,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn do_schedule(
-		when: DispatchTime<T::BlockNumber>,
-		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
-		priority: schedule::Priority,
-		origin: T::PalletsOrigin,
-		call: <T as Trait>::Call
-	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
+	fn resolve_time(when: DispatchTime<T::BlockNumber>) -> Result<T::BlockNumber, DispatchError> {
 		let now = frame_system::Module::<T>::block_number();
 
 		let when = match when {
@@ -455,6 +449,18 @@ impl<T: Trait> Module<T> {
 		if when <= now {
 			return Err(Error::<T>::TargetBlockNumberInPast.into())
 		}
+
+		Ok(when)
+	}
+
+	fn do_schedule(
+		when: DispatchTime<T::BlockNumber>,
+		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
+		priority: schedule::Priority,
+		origin: T::PalletsOrigin,
+		call: <T as Trait>::Call
+	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
+		let when = Self::resolve_time(when)?;
 
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
@@ -496,8 +502,28 @@ impl<T: Trait> Module<T> {
 			Self::deposit_event(RawEvent::Canceled(when, index));
 			Ok(())
 		} else {
-			Err(Error::<T>::FailedToCancel)?
+			Err(Error::<T>::NotFound)?
 		}
+	}
+
+	fn do_reschedule(
+		(when, index): TaskAddress<T::BlockNumber>,
+		new_time: DispatchTime<T::BlockNumber>,
+	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
+		let new_time = Self::resolve_time(new_time)?;
+
+		Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
+			let task = agenda.get_mut(index as usize).ok_or(Error::<T>::NotFound)?;
+			let task = task.take().ok_or(Error::<T>::NotFound)?;
+			Agenda::<T>::append(new_time, Some(task));
+			Ok(())
+		})?;
+
+		let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
+		Self::deposit_event(RawEvent::Canceled(when, index));
+		Self::deposit_event(RawEvent::Scheduled(new_time, new_index));
+
+		Ok((new_time, new_index))
 	}
 
 	fn do_schedule_named(
@@ -513,16 +539,7 @@ impl<T: Trait> Module<T> {
 			return Err(Error::<T>::FailedToSchedule)?
 		}
 
-		let now = frame_system::Module::<T>::block_number();
-
-		let when = match when {
-			DispatchTime::At(x) => x,
-			DispatchTime::After(x) => now.saturating_add(x)
-		};
-
-		if when <= now {
-			return Err(Error::<T>::TargetBlockNumberInPast.into())
-		}
+		let when = Self::resolve_time(when)?;
 
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
@@ -560,8 +577,34 @@ impl<T: Trait> Module<T> {
 				Self::deposit_event(RawEvent::Canceled(when, index));
 				Ok(())
 			} else {
-				Err(Error::<T>::FailedToCancel)?
+				Err(Error::<T>::NotFound)?
 			}
+		})
+	}
+
+	fn do_reschedule_named(
+		id: Vec<u8>,
+		new_time: DispatchTime<T::BlockNumber>,
+	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
+		let new_time = Self::resolve_time(new_time)?;
+
+		Lookup::<T>::try_mutate_exists(id, |lookup| -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
+			let (when, index) = lookup.ok_or(Error::<T>::NotFound)?;
+			Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
+				let task = agenda.get_mut(index as usize).ok_or(Error::<T>::NotFound)?;
+				let task = task.take().ok_or(Error::<T>::NotFound)?;
+				Agenda::<T>::append(new_time, Some(task));
+
+				Ok(())
+			})?;
+
+			let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
+			Self::deposit_event(RawEvent::Canceled(when, index));
+			Self::deposit_event(RawEvent::Scheduled(new_time, new_index));
+
+			*lookup = Some((new_time, new_index));
+
+			Ok((new_time, new_index))
 		})
 	}
 }
@@ -582,6 +625,17 @@ impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call, T::PalletsOrig
 	fn cancel((when, index): Self::Address) -> Result<(), ()> {
 		Self::do_cancel(None, (when, index)).map_err(|_| ())
 	}
+
+	fn reschedule(
+		address: Self::Address,
+		when: DispatchTime<T::BlockNumber>,
+	) -> Result<Self::Address, DispatchError> {
+		Self::do_reschedule(address, when)
+	}
+
+	fn next_dispatch_time((when, index): Self::Address) -> Result<T::BlockNumber, ()> {
+		Agenda::<T>::get(when).get(index as usize).ok_or(()).map(|_| when)
+	}
 }
 
 impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T> {
@@ -600,6 +654,17 @@ impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call, T::PalletsOri
 
 	fn cancel_named(id: Vec<u8>) -> Result<(), ()> {
 		Self::do_cancel_named(None, id).map_err(|_| ())
+	}
+
+	fn reschedule_named(
+		id: Vec<u8>,
+		when: DispatchTime<T::BlockNumber>,
+	) -> Result<Self::Address, DispatchError> {
+		Self::do_reschedule_named(id, when)
+	}
+
+	fn next_dispatch_time(id: Vec<u8>) -> Result<T::BlockNumber, ()> {
+		Lookup::<T>::get(id).and_then(|(when, index)| Agenda::<T>::get(when).get(index as usize).map(|_| when)).ok_or(())
 	}
 }
 
