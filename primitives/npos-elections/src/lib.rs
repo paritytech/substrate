@@ -1,19 +1,16 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd. SPDX-License-Identifier: Apache-2.0
 
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License. You may obtain a copy of the License at
 //
-// 	http://www.apache.org/licenses/LICENSE-2.0
+//  http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Unless required by applicable law or agreed to in writing, software distributed under the License
+// is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+// or implied. See the License for the specific language governing permissions and limitations under
+// the License.
 
 //! A set of election algorithms to be used with a substrate runtime, typically within the staking
 //! sub-system. Notable implementation include:
@@ -24,8 +21,8 @@
 //! - [`phragmms`]: Implements a hybrid approach inspired by Phragmén which is executed faster but
 //!   it can achieve a constant factor approximation of the maximin problem, similar to that of the
 //!   MMS algorithm.
-//! - [`balance_solution`]: Implements the star balancing algorithm. This iterative process can
-//!   push a solution toward being more `balances`, which in turn can increase its score.
+//! - [`balance_solution`]: Implements the star balancing algorithm. This iterative process can push
+//!   a solution toward being more `balances`, which in turn can increase its score.
 //!
 //! ### Terminology
 //!
@@ -34,10 +31,8 @@
 //! well.
 //!
 //! `Voter`: The entity casting some votes to a number of `Targets`. This is the same as `Nominator`
-//! in the context of staking.
-//! `Target`: The entities eligible to be voted upon. This is the same as `Validator` in the context
-//! of staking.
-//! `Edge`: A mapping from a `Voter` to a `Target`.
+//! in the context of staking. `Target`: The entities eligible to be voted upon. This is the same as
+//! `Validator` in the context of staking. `Edge`: A mapping from a `Voter` to a `Target`.
 //!
 //! The goal of an election algorithm is to provide an `ElectionResult`. A data composed of:
 //! - `winners`: A flat list of identifiers belonging to those who have won the election, usually
@@ -51,9 +46,12 @@
 //! // the winners.
 //! let winners = vec![(1, 100), (2, 50)];
 //! let assignments = vec![
-//! 	// A voter, giving equal backing to both 1 and 2.
-//!     Assignment { who: 10, distribution: vec![(1, Perbill::from_percent(50)), (2, Perbill::from_percent(50))] },
-//! 	// A voter, Only backing 1.
+//!     // A voter, giving equal backing to both 1 and 2.
+//!     Assignment {
+//! 		who: 10,
+//! 		distribution: vec![(1, Perbill::from_percent(50)), (2, Perbill::from_percent(50))],
+//! 	},
+//!     // A voter, Only backing 1.
 //!     Assignment { who: 20, distribution: vec![(1, Perbill::from_percent(100))] },
 //! ];
 //!
@@ -128,8 +126,8 @@ impl<T: Clone + Eq + Default + Ord + Debug + codec::Codec> IdentifierT for T {}
 /// The errors that might occur in the this crate and compact.
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
-	/// While going from compact to staked, the stake of all the edges has gone above the
-	/// total and the last stake cannot be assigned.
+	/// While going from compact to staked, the stake of all the edges has gone above the total and
+	/// the last stake cannot be assigned.
 	CompactStakeOverflow,
 	/// The compact type has a voter who's number of targets is out of bound.
 	CompactTargetOverflow,
@@ -273,8 +271,8 @@ pub struct ElectionResult<AccountId, P: PerThing> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
 	pub winners: Vec<WithApprovalOf<AccountId>>,
-	/// Individual assignments. for each tuple, the first elements is a voter and the second
-	/// is the list of candidates that it supports.
+	/// Individual assignments. for each tuple, the first elements is a voter and the second is the
+	/// list of candidates that it supports.
 	pub assignments: Vec<Assignment<AccountId, P>>,
 }
 
@@ -294,8 +292,8 @@ where
 {
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
-	/// It needs `stake` which is the total budget of the voter. If `fill` is set to true,
-	/// it _tries_ to ensure that all the potential rounding errors are compensated and the
+	/// It needs `stake` which is the total budget of the voter. If `fill` is set to true, it
+	/// _tries_ to ensure that all the potential rounding errors are compensated and the
 	/// distribution's sum is exactly equal to the total budget, by adding or subtracting the
 	/// remainder from the last distribution.
 	///
@@ -406,9 +404,9 @@ impl<AccountId> StakedAssignment<AccountId> {
 	///
 	/// NOTE: current implementation of `.normalize` is almost safe to `expect()` upon. The only
 	/// error case is when the input cannot fit in `T`, or the sum of input cannot fit in `T`.
-	/// Sadly, both of these are dependent upon the implementation of `VoteLimit`, i.e. the limit
-	/// of edges per voter which is enforced from upstream. Hence, at this crate, we prefer
-	/// returning a result and a use the name prefix `try_`.
+	/// Sadly, both of these are dependent upon the implementation of `VoteLimit`, i.e. the limit of
+	/// edges per voter which is enforced from upstream. Hence, at this crate, we prefer returning a
+	/// result and a use the name prefix `try_`.
 	pub fn try_normalize(&mut self, stake: ExtendedBalance) -> Result<(), &'static str> {
 		self.distribution
 			.iter()
@@ -434,8 +432,8 @@ impl<AccountId> StakedAssignment<AccountId> {
 ///
 /// This complements the [`ElectionResult`] and is needed to run the balancing post-processing.
 ///
-/// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet
-/// they do not necessarily have to be the same.
+/// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet they
+/// do not necessarily have to be the same.
 #[derive(Default, Debug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Eq, PartialEq))]
 pub struct Support<AccountId> {
@@ -452,8 +450,8 @@ pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 ///
 /// ```nocompile
 /// assignments: vec![
-/// 	voter1, vec![(candidate1, w11), (candidate2, w12)],
-/// 	voter2, vec![(candidate1, w21), (candidate2, w22)]
+///     voter1, vec![(candidate1, w11), (candidate2, w12)],
+///     voter2, vec![(candidate1, w21), (candidate2, w22)]
 /// ]
 /// ```
 ///
@@ -461,16 +459,16 @@ pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 ///
 /// ```nocompile
 ///  SupportMap {
-/// 	candidate1: Support {
-/// 		own:0,
-/// 		total: w11 + w21,
-/// 		others: vec![(candidate1, w11), (candidate2, w21)]
-///		},
-/// 	candidate2: Support {
-/// 		own:0,
-/// 		total: w12 + w22,
-/// 		others: vec![(candidate1, w12), (candidate2, w22)]
-///		},
+///     candidate1: Support {
+///         own:0,
+///         total: w11 + w21,
+///         others: vec![(candidate1, w11), (candidate2, w21)]
+///     },
+///     candidate2: Support {
+///         own:0,
+///         total: w12 + w22,
+///         others: vec![(candidate1, w12), (candidate2, w22)]
+///     },
 /// }
 /// ```
 ///
@@ -532,8 +530,8 @@ pub fn evaluate_support<AccountId>(
 	[min_support, sum, sum_squared]
 }
 
-/// Compares two sets of election scores based on desirability and returns true if `this` is
-/// better than `that`.
+/// Compares two sets of election scores based on desirability and returns true if `this` is better
+/// than `that`.
 ///
 /// Evaluation is done in a lexicographic manner, and if each element of `this` is `that * epsilon`
 /// greater or less than `that`.
@@ -569,8 +567,8 @@ pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, ep
 /// Converts raw inputs to types used in this crate.
 ///
 /// This will perform some cleanup that are most often important:
-/// - It drop any votes that are pointing to non-candidates.
-/// - Duplicate targets within a voter are also ignored.
+/// - It drops any votes that are pointing to non-candidates.
+/// - It drops duplicate targets within a voter.
 pub(crate) fn setup_inputs<AccountId: IdentifierT>(
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,

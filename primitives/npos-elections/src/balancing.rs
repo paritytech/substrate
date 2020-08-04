@@ -29,7 +29,6 @@
 use crate::{IdentifierT, Voter, ExtendedBalance, Edge};
 use sp_arithmetic::traits::Zero;
 use sp_std::prelude::*;
-use sp_std::{cell::RefCell, rc::Rc};
 
 /// Balance the weight distribution of a given `voters` at most `iterations` times, or up until the
 /// point where the biggest difference created per iteration of all stakes is `tolerance`. If this
@@ -51,7 +50,8 @@ use sp_std::{cell::RefCell, rc::Rc};
 /// ### References
 ///
 /// - [A new approach to the maximum flow problem](https://dl.acm.org/doi/10.1145/48014.61051).
-/// - [Validator election in nominated proof-of-stake](https://arxiv.org/abs/2004.12990)
+/// - [Validator election in nominated proof-of-stake](https://arxiv.org/abs/2004.12990) (Appendix
+///   A.)
 pub fn balance<AccountId: IdentifierT>(
 	voters: &mut Vec<Voter<AccountId>>,
 	iterations: usize,

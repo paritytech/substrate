@@ -40,7 +40,7 @@ fn force_unstake_works() {
 		// Cant transfer
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 1, 10),
-			BalancesError::<Test, _>::LiquidityRestrictions
+			BalancesError::<Test, _>::LiquidityRestrictions,
 		);
 		// Force unstake requires root.
 		assert_noop!(Staking::force_unstake(Origin::signed(11), 11, 2), BadOrigin);
@@ -2860,9 +2860,9 @@ mod offchain_phragmen {
 		let (offchain, offchain_state) = TestOffchainExt::new();
 		let (pool, pool_state) = TestTransactionPoolExt::new();
 
-	    let mut seed = [0_u8; 32];
-	    seed[0..4].copy_from_slice(&iterations.to_le_bytes());
-	    offchain_state.write().seed = seed;
+		let mut seed = [0_u8; 32];
+		seed[0..4].copy_from_slice(&iterations.to_le_bytes());
+		offchain_state.write().seed = seed;
 
 		ext.register_extension(OffchainExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
@@ -2891,6 +2891,11 @@ mod offchain_phragmen {
 			current_era(),
 			election_size(),
 		)
+	}
+
+	#[test]
+	fn offchain_phragmen_with_less_than_minimum_candidates() {
+		todo!()
 	}
 
 	#[test]

@@ -109,7 +109,7 @@ impl<SC> Slots<SC> {
 	}
 }
 
-impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
+impl<SC: SlotCompatible> Stream for Slots<SC> {
 	type Item = Result<SlotInfo, Error>;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -164,4 +164,7 @@ impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
 			}
 		}
 	}
+}
+
+impl<SC> Unpin for Slots<SC> {
 }

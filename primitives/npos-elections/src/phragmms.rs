@@ -1,4 +1,4 @@
-// This file is part of Substrate.
+ // This file is part of Substrate.
 
 // Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
@@ -34,6 +34,8 @@ use sp_std::{prelude::*, rc::Rc};
 ///
 /// - The resulting edge weight distribution is normalized (thus, safe to use for submission).
 /// - The accuracy can be configured via the generic type `P`.
+/// - The algorithm is a _best-effort_ to elect `to_elect`. If less candidates are provided, less
+///   winners are returned, without an error.
 ///
 /// This can only fail of the normalization fails.
 pub fn phragmms<AccountId: IdentifierT, P: PerThing>(
@@ -47,14 +49,17 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing>(
 
 	let mut winners = vec![];
 	for round in 0..to_elect {
-		let round_winner = calculate_max_score::<AccountId, P>(&candidates, &voters);
-		apply_elected::<AccountId>(&mut voters, Rc::clone(&round_winner));
+		if let Some(round_winner) = calculate_max_score::<AccountId, P>(&candidates, &voters) {
+			apply_elected::<AccountId>(&mut voters, Rc::clone(&round_winner));
 
-		round_winner.borrow_mut().round = round;
-		round_winner.borrow_mut().elected = true;
-		winners.push(round_winner);
+			round_winner.borrow_mut().round = round;
+			round_winner.borrow_mut().elected = true;
+			winners.push(round_winner);
 
-		balance(&mut voters, 2, 0);
+			balance(&mut voters, 2, 0);
+		} else {
+			break;
+		}
 	}
 
 	let mut assignments = voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
@@ -68,14 +73,16 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing>(
 
 /// Find the candidate that can yield the maximum score for this round.
 ///
-/// Returns a new `CandidatePtr` to the winner candidate. The score of the candidate is updated and
-/// can be read from the returned pointer.
+/// Returns a new `Some(CandidatePtr)` to the winner candidate. The score of the candidate is
+/// updated and can be read from the returned pointer.
+///
+/// If no winner can be determined (i.e. everyone is already elected), then `None` is returned.
 ///
 /// This is an internal part of the [`balanced_heuristic`].
 pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 	candidates: &[CandidatePtr<AccountId>],
 	voters: &[Voter<AccountId>],
-) -> CandidatePtr<AccountId> where ExtendedBalance: From<InnerOf<P>> {
+) -> Option<CandidatePtr<AccountId>> where ExtendedBalance: From<InnerOf<P>> {
 	for c_ptr in candidates.iter() {
 		let mut candidate = c_ptr.borrow_mut();
 		if !candidate.elected {
@@ -110,8 +117,8 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 
 	// finalise the score value, and find the best.
 	let mut best_score = Rational128::zero();
-	// TODO: this function should be able to return Option.
-	let mut best_candidate = Rc::clone(&candidates[0]);
+	let mut best_candidate = None;
+
 	for c_ptr in candidates.iter() {
 		let mut candidate = c_ptr.borrow_mut();
 		if candidate.approval_stake > 0  {
@@ -125,7 +132,7 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 			// check if we have a new winner.
 			if !candidate.elected && candidate.score > best_score {
 				best_score = candidate.score;
-				best_candidate = Rc::clone(&c_ptr);
+				best_candidate = Some(Rc::clone(&c_ptr));
 			}
 		} else {
 			candidate.score = Rational128::zero();
@@ -226,7 +233,7 @@ mod tests {
 		let (candidates, mut voters) = setup_inputs(candidates, voters);
 
 		// Round 1
-		let winner = calculate_max_score::<u32, Percent>(candidates.as_ref(), voters.as_ref());
+		let winner = calculate_max_score::<u32, Percent>(candidates.as_ref(), voters.as_ref()).unwrap();
 		assert_eq!(winner.borrow().who, 3);
 		assert_eq!(winner.borrow().score, 50u32.into());
 
@@ -255,7 +262,7 @@ mod tests {
 		balance(&mut voters, 10, 0);
 
 		// round 2
-		let winner = calculate_max_score::<u32, Percent>(candidates.as_ref(), voters.as_ref());
+		let winner = calculate_max_score::<u32, Percent>(candidates.as_ref(), voters.as_ref()).unwrap();
 		assert_eq!(winner.borrow().who, 2);
 		assert_eq!(winner.borrow().score, 25u32.into());
 

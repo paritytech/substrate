@@ -1234,12 +1234,12 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Trait>::AccountId {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
-		/// the remainder from the maximum amount of reward. 
+		/// the remainder from the maximum amount of reward.
 		/// [era_index, validator_payout, remainder]
 		EraPayout(EraIndex, Balance, Balance),
 		/// The staker has been rewarded by this amount. [stash, amount]
 		Reward(AccountId, Balance),
-		/// One validator (and its nominators) has been slashed by the given amount. 
+		/// One validator (and its nominators) has been slashed by the given amount.
 		/// [validator, amount]
 		Slash(AccountId, Balance),
 		/// An old slashing report from a prior era was discarded because it could
@@ -1453,6 +1453,33 @@ decl_module! {
 				}
 			}
 			// `on_finalize` weight is tracked in `on_initialize`
+		}
+
+		fn integrity_test() {
+			sp_io::TestExternalities::new_empty().execute_with(||
+				assert!(
+					T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
+					"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
+					T::SlashDeferDuration::get(),
+					T::BondingDuration::get(),
+				)
+			);
+
+			use sp_runtime::UpperOf;
+			// see the documentation of `Assignment::try_normalize`. Now we can ensure that this
+			// will always return `Ok`.
+			assert!(
+				<usize as TryInto<UpperOf<ChainAccuracy>>>::try_into(MAX_NOMINATIONS)
+				.unwrap()
+				.checked_mul(<ChainAccuracy>::one().deconstruct().try_into().unwrap())
+				.is_some()
+			);
+			assert!(
+				<usize as TryInto<UpperOf<OffchainAccuracy>>>::try_into(MAX_NOMINATIONS)
+				.unwrap()
+				.checked_mul(<OffchainAccuracy>::one().deconstruct().try_into().unwrap())
+				.is_some()
+			);
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
@@ -2274,24 +2301,6 @@ decl_module! {
 			);
 			Ok(adjustments)
 		}
-
-		fn integrity_test() {
-			use sp_runtime::UpperOf;
-			// see the documentation of `Assignment::try_normalize`. Now we can ensure that this
-			// will always return `Ok`.
-			assert!(
-				<usize as TryInto<UpperOf<ChainAccuracy>>>::try_into(MAX_NOMINATIONS)
-				.unwrap()
-				.checked_mul(<ChainAccuracy>::one().deconstruct().try_into().unwrap())
-				.is_some()
-			);
-			assert!(
-				<usize as TryInto<UpperOf<OffchainAccuracy>>>::try_into(MAX_NOMINATIONS)
-				.unwrap()
-				.checked_mul(<OffchainAccuracy>::one().deconstruct().try_into().unwrap())
-				.is_some()
-			);
-		}
 	}
 }
 
@@ -2303,7 +2312,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// internal impl of [`slashable_balance_of`] that returns [`VoteWeight`].
-	fn slashable_balance_of_vote_weight(stash: &T::AccountId) -> VoteWeight {
+	pub fn slashable_balance_of_vote_weight(stash: &T::AccountId) -> VoteWeight {
 		<T::CurrencyToVote as Convert<BalanceOf<T>, VoteWeight>>::convert(
 			Self::slashable_balance_of(stash)
 		)
@@ -2903,7 +2912,7 @@ impl<T: Trait> Module<T> {
 				let mut exposure_clipped = exposure;
 				let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
 				if exposure_clipped.others.len() > clipped_max_len {
-					exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value).reverse());
+					exposure_clipped.others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
 					exposure_clipped.others.truncate(clipped_max_len);
 				}
 				<ErasStakersClipped<T>>::insert(&current_era, &stash, exposure_clipped);

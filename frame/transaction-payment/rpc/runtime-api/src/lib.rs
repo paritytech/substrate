@@ -56,11 +56,10 @@ fn deserialize_from_string<'de, D: Deserializer<'de>, T: std::str::FromStr>(dese
 }
 
 sp_api::decl_runtime_apis! {
-	pub trait TransactionPaymentApi<Balance, Extrinsic> where
+	pub trait TransactionPaymentApi<Balance> where
 		Balance: Codec + MaybeDisplay + MaybeFromStr,
-		Extrinsic: Codec,
 	{
-		fn query_info(uxt: Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance>;
+		fn query_info(uxt: Block::Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance>;
 	}
 }
 

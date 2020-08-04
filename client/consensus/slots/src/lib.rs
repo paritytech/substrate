@@ -104,6 +104,15 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim>;
 
+	/// Notifies the given slot. Similar to `claim_slot`, but will be called no matter whether we
+	/// need to author blocks or not.
+	fn notify_slot(
+		&self,
+		_header: &B::Header,
+		_slot_number: u64,
+		_epoch_data: &Self::EpochData,
+	) { }
+
 	/// Return the pre digest data to include in a block authored with the given claim.
 	fn pre_digest_data(
 		&self,
@@ -190,6 +199,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				return Box::pin(future::ready(Ok(())));
 			}
 		};
+
+		self.notify_slot(&chain_head, slot_number, &epoch_data);
 
 		let authorities_len = self.authorities_len(&epoch_data);
 
