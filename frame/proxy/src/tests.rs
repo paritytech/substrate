@@ -284,7 +284,7 @@ fn delayed_requires_pre_announcement() {
 		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
 		let e = Error::<Test>::Unannounced;
 		assert_noop!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()), e);
-		let e = Error::<Test>::NotFound;
+		let e = Error::<Test>::Unannounced;
 		assert_noop!(Proxy::proxy_announced(Origin::signed(0), 2, 1, None, call.clone()), e);
 		let call_hash = BlakeTwo256::hash_of(&call);
 		assert_ok!(Proxy::announce(Origin::signed(2), 1, call_hash));
@@ -303,7 +303,8 @@ fn proxy_announced_removes_announcement_and_returns_deposit() {
 		assert_ok!(Proxy::announce(Origin::signed(3), 1, call_hash));
 		assert_ok!(Proxy::announce(Origin::signed(3), 2, call_hash));
 		// Too early to execute announced call
-		assert_noop!(Proxy::proxy_announced(Origin::signed(0), 3, 1, None, call.clone()), Error::<Test>::NotFound);
+		let e = Error::<Test>::Unannounced;
+		assert_noop!(Proxy::proxy_announced(Origin::signed(0), 3, 1, None, call.clone()), e);
 
 		system::Module::<Test>::set_block_number(2);
 		assert_ok!(Proxy::proxy_announced(Origin::signed(0), 3, 1, None, call.clone()));
