@@ -33,7 +33,6 @@ sp-core = { version = "2.0.0-rc5", path = "../../primitives/core" }
 sp-api = { version = "2.0.0-rc5", path = "../../primitives/api" }
 sc-telemetry = { version = "2.0.0-rc5", path = "../telemetry" }
 sc-keystore = { version = "2.0.0-rc5", path = "../keystore" }
-serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.41"
 sc-client-api = { version = "2.0.0-rc5", path = "../api" }
 sp-inherents = { version = "2.0.0-rc5", path = "../../primitives/inherents" }
