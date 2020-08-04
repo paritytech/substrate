@@ -101,18 +101,19 @@ benchmarks! {
 	announced_proxy {
 		let p in ...;
 		// In this case the caller is the "target" proxy
-		let caller: T::AccountId = account("target", p - 1, SEED);
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		let caller: T::AccountId = account("anonymous", 0, SEED);
+		let delegate: T::AccountId = account("target", p - 1, SEED);
+		T::Currency::make_free_balance_be(&delegate, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = account("caller", 0, SEED);
 		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		Proxy::<T>::announce(
-			RawOrigin::Signed(caller.clone()).into(),
+			RawOrigin::Signed(delegate.clone()).into(),
 			real.clone(),
 			T::CallHasher::hash_of(&call),
 		)?;
-		add_announcements::<T>(T::MaxPending::get() - 1, Some(caller.clone()), None)?;
-	}: _(RawOrigin::Signed(caller), caller, real, Some(T::ProxyType::default()), Box::new(call))
+		add_announcements::<T>(T::MaxPending::get() - 1, Some(delegate.clone()), None)?;
+	}: _(RawOrigin::Signed(caller), delegate, real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
 		assert_last_event::<T>(RawEvent::ProxyExecuted(Ok(())).into())
 	}
