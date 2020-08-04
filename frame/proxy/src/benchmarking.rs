@@ -85,6 +85,7 @@ benchmarks! {
 	}
 
 	proxy {
+		let a in 0 .. T::MaxPending::get();
 		let p in ...;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
@@ -92,13 +93,14 @@ benchmarks! {
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = account("caller", 0, SEED);
 		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
-		add_announcements::<T>(T::MaxPending::get(), Some(caller.clone()), None)?;
+		add_announcements::<T>(a, Some(caller.clone()), None)?;
 	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
 		assert_last_event::<T>(RawEvent::ProxyExecuted(Ok(())).into())
 	}
 
 	proxy_announced {
+		let a in 0 .. T::MaxPending::get() - 1;
 		let p in ...;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("anonymous", 0, SEED);
@@ -112,13 +114,14 @@ benchmarks! {
 			real.clone(),
 			T::CallHasher::hash_of(&call),
 		)?;
-		add_announcements::<T>(T::MaxPending::get() - 1, Some(delegate.clone()), None)?;
+		add_announcements::<T>(a, Some(delegate.clone()), None)?;
 	}: _(RawOrigin::Signed(caller), delegate, real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
 		assert_last_event::<T>(RawEvent::ProxyExecuted(Ok(())).into())
 	}
 
 	remove_announcement {
+		let a in 0 .. T::MaxPending::get() - 1;
 		let p in ...;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
@@ -131,14 +134,15 @@ benchmarks! {
 			real.clone(),
 			T::CallHasher::hash_of(&call),
 		)?;
-		add_announcements::<T>(T::MaxPending::get() - 1, Some(caller.clone()), None)?;
+		add_announcements::<T>(a, Some(caller.clone()), None)?;
 	}: _(RawOrigin::Signed(caller.clone()), real, T::CallHasher::hash_of(&call))
 	verify {
 		let (announcements, _) = Announcements::<T>::get(&caller);
-		assert_eq!(announcements.len() as u32, T::MaxPending::get() - 1);
+		assert_eq!(announcements.len() as u32, a);
 	}
 
 	reject_announcement {
+		let a in 0 .. T::MaxPending::get() - 1;
 		let p in ...;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
@@ -151,21 +155,22 @@ benchmarks! {
 			real.clone(),
 			T::CallHasher::hash_of(&call),
 		)?;
-		add_announcements::<T>(T::MaxPending::get() - 1, Some(caller.clone()), None)?;
+		add_announcements::<T>(a, Some(caller.clone()), None)?;
 	}: _(RawOrigin::Signed(real), caller.clone(), T::CallHasher::hash_of(&call))
 	verify {
 		let (announcements, _) = Announcements::<T>::get(&caller);
-		assert_eq!(announcements.len() as u32, T::MaxPending::get() - 1);
+		assert_eq!(announcements.len() as u32, a);
 	}
 
 	announce {
+		let a in 0 .. T::MaxPending::get() - 1;
 		let p in ...;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = account("caller", 0, SEED);
-		add_announcements::<T>(T::MaxPending::get() - 1, Some(caller.clone()), None)?;
+		add_announcements::<T>(a, Some(caller.clone()), None)?;
 		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		let call_hash = T::CallHasher::hash_of(&call);
 	}: _(RawOrigin::Signed(caller.clone()), real.clone(), call_hash)
