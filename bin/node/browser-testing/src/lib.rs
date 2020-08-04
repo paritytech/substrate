@@ -37,34 +37,34 @@ use serde::de::DeserializeOwned;
 wasm_bindgen_test_configure!(run_in_browser);
 
 fn rpc_call(method: &str) -> String {
-    serde_json::to_string(&MethodCall {
-        jsonrpc: Some(Version::V2),
-        method: method.into(),
-        params: Params::None,
-        id: Id::Num(1)
-    }).unwrap()
+	serde_json::to_string(&MethodCall {
+		jsonrpc: Some(Version::V2),
+		method: method.into(),
+		params: Params::None,
+		id: Id::Num(1)
+	}).unwrap()
 }
 
 fn deserialize_rpc_result<T: DeserializeOwned>(js_value: JsValue) -> T {
-    let string = js_value.as_string().unwrap();
-    let value = serde_json::from_str::<Success>(&string).unwrap().result;
-    // We need to convert a `Value::Object` into a proper type.
-    let value_string = serde_json::to_string(&value).unwrap();
-    serde_json::from_str(&value_string).unwrap()
+	let string = js_value.as_string().unwrap();
+	let value = serde_json::from_str::<Success>(&string).unwrap().result;
+	// We need to convert a `Value::Object` into a proper type.
+	let value_string = serde_json::to_string(&value).unwrap();
+	serde_json::from_str(&value_string).unwrap()
 }
 
 #[wasm_bindgen_test]
 async fn runs() {
-    let mut client = node_cli::start_client(None, "info".into())
-            .await
-            .unwrap();
+	let mut client = node_cli::start_client(None, "info".into())
+			.await
+			.unwrap();
 
-    // Check that the node handles rpc calls.
-    // TODO: Re-add the code that checks if the node is syncing.
-    let chain_name: String = deserialize_rpc_result(
-        JsFuture::from(client.rpc_send(&rpc_call("system_chain")))
-            .await
-            .unwrap()
-    );
-    assert_eq!(chain_name, "Development");
+	// Check that the node handles rpc calls.
+	// TODO: Re-add the code that checks if the node is syncing.
+	let chain_name: String = deserialize_rpc_result(
+		JsFuture::from(client.rpc_send(&rpc_call("system_chain")))
+			.await
+			.unwrap()
+	);
+	assert_eq!(chain_name, "Development");
 }
