@@ -93,12 +93,12 @@ benchmarks! {
 		let real: T::AccountId = account("caller", 0, SEED);
 		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		add_announcements::<T>(T::MaxPending::get(), Some(caller.clone()), None)?;
-	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call), false)
+	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
 		assert_last_event::<T>(RawEvent::ProxyExecuted(Ok(())).into())
 	}
 
-	proxy_announced {
+	announced_proxy {
 		let p in ...;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
@@ -112,7 +112,7 @@ benchmarks! {
 			T::CallHasher::hash_of(&call),
 		)?;
 		add_announcements::<T>(T::MaxPending::get() - 1, Some(caller.clone()), None)?;
-	}: proxy(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call), true)
+	}: _(RawOrigin::Signed(caller), caller, real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
 		assert_last_event::<T>(RawEvent::ProxyExecuted(Ok(())).into())
 	}
@@ -261,7 +261,7 @@ mod tests {
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_proxy::<Test>());
-			assert_ok!(test_benchmark_proxy_announced::<Test>());
+			assert_ok!(test_benchmark_announced_proxy::<Test>());
 			assert_ok!(test_benchmark_remove_announcement::<Test>());
 			assert_ok!(test_benchmark_reject_announcement::<Test>());
 			assert_ok!(test_benchmark_announce::<Test>());

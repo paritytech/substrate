@@ -23,7 +23,7 @@ impl crate::WeightInfo for () {
 			.saturating_add((196000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 	}
-	fn proxy_announced(p: u32, ) -> Weight {
+	fn announced_proxy(p: u32, ) -> Weight {
 		(78353000 as Weight)
 			.saturating_add((201000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))

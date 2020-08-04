@@ -58,7 +58,7 @@ mod default_weight;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 pub trait WeightInfo {
-	fn proxy_announced(p: u32, ) -> Weight;
+	fn announced_proxy(p: u32, ) -> Weight;
 	fn remove_announcement(p: u32, ) -> Weight;
 	fn reject_announcement(p: u32, ) -> Weight;
 	fn announce(p: u32, ) -> Weight;
@@ -305,20 +305,7 @@ decl_module! {
 		#[weight = T::WeightInfo::remove_announcement(T::MaxProxies::get().into())]
 		fn remove_announcement(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
-			Announcements::<T>::try_mutate_exists(&who, |x| -> DispatchResult {
-				let (mut pending, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
-				let orig_pending_len = pending.len();
-				pending.retain(|ann| ann.real != real || ann.call_hash != call_hash);
-				ensure!(orig_pending_len > pending.len(), Error::<T>::NotFound);
-				*x = Self::rejig_deposit(
-					&who,
-					old_deposit,
-					T::AnnouncementDepositBase::get(),
-					T::AnnouncementDepositFactor::get(),
-					pending.len(),
-				)?.map(|deposit| (pending, deposit));
-				Ok(())
-			})?;
+			Self::edit_announcements(&who, |ann| ann.real != real || ann.call_hash != call_hash)?;
 		}
 
 		/// Remove the given announcement of a delegate.
@@ -334,21 +321,54 @@ decl_module! {
 		#[weight = T::WeightInfo::reject_announcement(T::MaxProxies::get().into())]
 		fn reject_announcement(origin, delegate: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
+			Self::edit_announcements(&delegate, |ann| ann.real != who || ann.call_hash != call_hash)?;
+		}
 
-			Announcements::<T>::try_mutate_exists(&delegate, |x| -> DispatchResult {
-				let (mut pending, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
-				let orig_pending_len = pending.len();
-				pending.retain(|ann| ann.real != who || ann.call_hash != call_hash);
-				ensure!(orig_pending_len > pending.len(), Error::<T>::NotFound);
-				*x = Self::rejig_deposit(
-					&delegate,
-					old_deposit,
-					T::AnnouncementDepositBase::get(),
-					T::AnnouncementDepositFactor::get(),
-					pending.len(),
-				)?.map(|deposit| (pending, deposit));
-				Ok(())
-			})?;
+
+		/// Dispatch the given `call` from an account that the sender is authorised for through
+		/// `add_proxy`.
+		///
+		/// Removes any corresponding announcement(s).
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		/// - `real`: The account that the proxy will make a call on behalf of.
+		/// - `force_proxy_type`: Specify the exact proxy type to be used and checked for this call.
+		/// - `call`: The call to be made by the `real` account.
+		///
+		/// # <weight>
+		/// Weight is a function of the number of proxies the user has (P).
+		/// # </weight>
+		#[weight = {
+			let di = call.get_dispatch_info();
+			(T::WeightInfo::announced_proxy(T::MaxProxies::get().into())
+				.saturating_add(di.weight),
+			di.class)
+		}]
+		fn announced_proxy(origin,
+			delegate: T::AccountId,
+			real: T::AccountId,
+			force_proxy_type: Option<T::ProxyType>,
+			call: Box<<T as Trait>::Call>,
+		) {
+			ensure_signed(origin)?;
+			let def = Self::find_proxy(&real, &delegate, force_proxy_type)?;
+
+			let call_hash = T::CallHasher::hash_of(&call);
+			let now = system::Module::<T>::block_number();
+			let mut announcement_period = T::BlockNumber::zero();
+			Self::edit_announcements(&delegate, |ann|
+				if ann.real == real && ann.call_hash == call_hash {
+					announcement_period = announcement_period.max(now.saturating_sub(ann.height));
+					false
+				} else {
+					true
+				}
+			)?;
+			ensure!(announcement_period >= def.delay, Error::<T>::Unannounced);
+
+			Self::do_proxy(def, real, *call);
 		}
 
 		/// Dispatch the given `call` from an account that the sender is authorised for through
@@ -368,72 +388,21 @@ decl_module! {
 		/// # </weight>
 		#[weight = {
 			let di = call.get_dispatch_info();
-			if *announced {
-				(T::WeightInfo::proxy_announced(T::MaxProxies::get().into())
-					.saturating_add(di.weight),
-				di.class)
-			} else {
-				(T::WeightInfo::proxy(T::MaxProxies::get().into())
-					.saturating_add(di.weight),
-				di.class)
-			}
+			(T::WeightInfo::proxy(T::MaxProxies::get().into())
+				.saturating_add(di.weight),
+			di.class)
 		}]
 		fn proxy(origin,
 			real: T::AccountId,
 			force_proxy_type: Option<T::ProxyType>,
 			call: Box<<T as Trait>::Call>,
-			announced: bool,
 		) {
 			let who = ensure_signed(origin)?;
-			let def = Proxies::<T>::get(&real).0.into_iter()
-				.find(|x| &x.delegate == &who
-					&& force_proxy_type.as_ref().map_or(true, |y| &x.proxy_type == y)
-				).ok_or(Error::<T>::NotProxy)?;
+			let def = Self::find_proxy(&real, &who, force_proxy_type)?;
+			ensure!(def.delay.is_zero(), Error::<T>::Unannounced);
 
-			let mut announcement_period = T::BlockNumber::zero();
-			if announced {
-				Announcements::<T>::try_mutate_exists(&who, |x| -> DispatchResult {
-					if let Some((mut pending, old_deposit)) = x.take() {
-						let call_hash = T::CallHasher::hash_of(&call);
-						let now = system::Module::<T>::block_number();
-						pending.retain(|ann|
-							if ann.real == real && ann.call_hash == call_hash {
-								announcement_period = announcement_period.max(now.saturating_sub(ann.height));
-								false
-							} else {
-								true
-							}
-						);
-						*x = Self::rejig_deposit(
-							&who,
-							old_deposit,
-							T::AnnouncementDepositBase::get(),
-							T::AnnouncementDepositFactor::get(),
-							pending.len(),
-						)?.map(|deposit| (pending, deposit));
-					}
-					Ok(())
-				})?;
-			}
-			ensure!(announcement_period >= def.delay, Error::<T>::Unannounced);
-
-			// This is a freshly authenticated new account, the origin restrictions doesn't apply.
-			let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
-			origin.add_filter(move |c: &<T as frame_system::Trait>::Call| {
-				let c = <T as Trait>::Call::from_ref(c);
-				match c.is_sub_type() {
-					Some(Call::add_proxy(_, ref pt, _)) | Some(Call::remove_proxy(_, ref pt, _))
-						if !def.proxy_type.is_superset(&pt) => false,
-					Some(Call::remove_proxies(..)) | Some(Call::kill_anonymous(..))
-					    if def.proxy_type != T::ProxyType::default() => false,
-					_ => def.proxy_type.filter(c)
-				}
-			});
-			let e = call.dispatch(origin);
-			Self::deposit_event(RawEvent::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
+			Self::do_proxy(def, real, *call);
 		}
-
-		// TODO: Increment tx_version.
 
 		/// Register a proxy account for the sender that is able to make calls on its behalf.
 		///
@@ -647,5 +616,56 @@ impl<T: Trait> Module<T> {
 		} else {
 			Some(new_deposit)
 		})
+	}
+
+	fn edit_announcements<
+		F: FnMut(&Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>) -> bool
+	>(delegate: &T::AccountId, f: F) -> DispatchResult {
+		Announcements::<T>::try_mutate_exists(delegate, |x| {
+			let (mut pending, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
+			let orig_pending_len = pending.len();
+			pending.retain(f);
+			ensure!(orig_pending_len > pending.len(), Error::<T>::NotFound);
+			*x = Self::rejig_deposit(
+				delegate,
+				old_deposit,
+				T::AnnouncementDepositBase::get(),
+				T::AnnouncementDepositFactor::get(),
+				pending.len(),
+			)?.map(|deposit| (pending, deposit));
+			Ok(())
+		})
+	}
+
+	fn find_proxy(
+		real: &T::AccountId,
+		delegate: &T::AccountId,
+		force_proxy_type: Option<T::ProxyType>,
+	) -> Result<ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>, DispatchError> {
+		Ok(Proxies::<T>::get(real).0.into_iter()
+			.find(|x| &x.delegate == delegate
+				&& force_proxy_type.as_ref().map_or(true, |y| &x.proxy_type == y)
+			).ok_or(Error::<T>::NotProxy)?)
+	}
+
+	fn do_proxy(
+		def: ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>,
+		real: T::AccountId,
+		call: <T as Trait>::Call,
+	) {
+		// This is a freshly authenticated new account, the origin restrictions doesn't apply.
+		let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
+		origin.add_filter(move |c: &<T as frame_system::Trait>::Call| {
+			let c = <T as Trait>::Call::from_ref(c);
+			match c.is_sub_type() {
+				Some(Call::add_proxy(_, ref pt, _)) | Some(Call::remove_proxy(_, ref pt, _))
+				if !def.proxy_type.is_superset(&pt) => false,
+				Some(Call::remove_proxies(..)) | Some(Call::kill_anonymous(..))
+				if def.proxy_type != T::ProxyType::default() => false,
+				_ => def.proxy_type.filter(c)
+			}
+		});
+		let e = call.dispatch(origin);
+		Self::deposit_event(RawEvent::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
 	}
 }
