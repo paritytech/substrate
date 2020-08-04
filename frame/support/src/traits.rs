@@ -1653,6 +1653,16 @@ impl<T> IsType<T> for T {
 	fn into_mut(&mut self) -> &mut T { self }
 }
 
+/// A type that holds an instance, it is used to defines the module prefix to be used by storages,
+/// thus it must unique for each module.
+///
+/// E.g. for module MyModule default instance will have prefix "MyModule" and other instances
+/// "InstanceNMyModule".
+pub trait Instance: 'static {
+    /// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
+    const PREFIX: &'static str ;
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
