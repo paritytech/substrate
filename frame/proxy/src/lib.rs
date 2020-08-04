@@ -242,134 +242,6 @@ decl_module! {
 			T::MaximumBlockWeight::get()
 		}
 
-		/// Publish the hash of a proxy-call that will be made in the future.
-		///
-		/// This must be called some number of blocks before the corresponding `proxy` is attempted
-		/// if the delay associated with the proxy relationship is greater than zero.
-		///
-		/// No more than `MaxPending` announcements may be made at any one time.
-		///
-		/// This will take a deposit of `AnnouncementDepositFactor` as well as
-		/// `AnnouncementDepositBase` if there are no other pending announcements.
-		///
-		/// The dispatch origin for this call must be _Signed_ and a proxy of `real`.
-		///
-		/// Parameters:
-		/// - `real`: The account that the proxy will make a call on behalf of.
-		/// - `call_hash`: The hash of the call to be made by the `real` account.
-		///
-		/// # <weight>
-		/// Weight is a function of the number of proxies the user has (P).
-		/// # </weight>
-		#[weight = T::WeightInfo::announce(T::MaxProxies::get().into())]
-		fn announce(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
-			let who = ensure_signed(origin)?;
-			Proxies::<T>::get(&real).0.into_iter()
-				.find(|x| &x.delegate == &who)
-				.ok_or(Error::<T>::NotProxy)?;
-
-			let announcement = Announcement {
-				real: real.clone(),
-				call_hash: call_hash.clone(),
-				height: system::Module::<T>::block_number(),
-			};
-
-			Announcements::<T>::try_mutate(&who, |(ref mut pending, ref mut deposit)| {
-				ensure!(pending.len() < T::MaxPending::get() as usize, Error::<T>::TooMany);
-				pending.push(announcement);
-				Self::rejig_deposit(
-					&who,
-					*deposit,
-					T::AnnouncementDepositBase::get(),
-					T::AnnouncementDepositFactor::get(),
-					pending.len(),
-				).map(|d| d.expect("Just pushed; pending.len() > 0; rejig_deposit returns Some; qed"))
-				.map(|d| *deposit = d)
-			})?;
-			Self::deposit_event(RawEvent::Announced(real, who, call_hash));
-		}
-
-		/// Remove a given announcement.
-		///
-		/// May be called by a proxy account to remove a call they previously announced and return
-		/// the deposit.
-		///
-		/// The dispatch origin for this call must be _Signed_.
-		///
-		/// Parameters:
-		/// - `real`: The account that the proxy will make a call on behalf of.
-		/// - `call_hash`: The hash of the call to be made by the `real` account.
-		#[weight = T::WeightInfo::remove_announcement(T::MaxProxies::get().into())]
-		fn remove_announcement(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
-			let who = ensure_signed(origin)?;
-			Self::edit_announcements(&who, |ann| ann.real != real || ann.call_hash != call_hash)?;
-		}
-
-		/// Remove the given announcement of a delegate.
-		///
-		/// May be called by a target (proxied) account to remove a call that one of their delegates
-		/// (`delegate`) has announced they want to execute. The deposit is returned.
-		///
-		/// The dispatch origin for this call must be _Signed_.
-		///
-		/// Parameters:
-		/// - `delegate`: The account that previously announced the call.
-		/// - `call_hash`: The hash of the call to be made.
-		#[weight = T::WeightInfo::reject_announcement(T::MaxProxies::get().into())]
-		fn reject_announcement(origin, delegate: T::AccountId, call_hash: CallHashOf<T>) {
-			let who = ensure_signed(origin)?;
-			Self::edit_announcements(&delegate, |ann| ann.real != who || ann.call_hash != call_hash)?;
-		}
-
-
-		/// Dispatch the given `call` from an account that the sender is authorised for through
-		/// `add_proxy`.
-		///
-		/// Removes any corresponding announcement(s).
-		///
-		/// The dispatch origin for this call must be _Signed_.
-		///
-		/// Parameters:
-		/// - `real`: The account that the proxy will make a call on behalf of.
-		/// - `force_proxy_type`: Specify the exact proxy type to be used and checked for this call.
-		/// - `call`: The call to be made by the `real` account.
-		///
-		/// # <weight>
-		/// Weight is a function of the number of proxies the user has (P).
-		/// # </weight>
-		#[weight = {
-			let di = call.get_dispatch_info();
-			(T::WeightInfo::proxy_announced(T::MaxProxies::get().into())
-				.saturating_add(di.weight),
-			di.class)
-		}]
-		fn proxy_announced(origin,
-			delegate: T::AccountId,
-			real: T::AccountId,
-			force_proxy_type: Option<T::ProxyType>,
-			call: Box<<T as Trait>::Call>,
-		) {
-			ensure_signed(origin)?;
-			let def = Self::find_proxy(&real, &delegate, force_proxy_type)?;
-
-			let call_hash = T::CallHasher::hash_of(&call);
-			let now = system::Module::<T>::block_number();
-			let mut execute = false;
-			Self::edit_announcements(&delegate, |ann| {
-				if ann.real == real && ann.call_hash == call_hash {
-					// If delay has passed, we remove the announcement and note to execute the call.
-					if now.saturating_sub(ann.height) >= def.delay {
-						execute = true;
-						return false
-					}
-				}
-				true
-			})?;
-			ensure!(execute, Error::<T>::Unannounced);
-
-			Self::do_proxy(def, real, *call);
-		}
-
 		/// Dispatch the given `call` from an account that the sender is authorised for through
 		/// `add_proxy`.
 		///
@@ -573,6 +445,134 @@ decl_module! {
 
 			let (_, deposit) = Proxies::<T>::take(&who);
 			T::Currency::unreserve(&spawner, deposit);
+		}
+
+		/// Publish the hash of a proxy-call that will be made in the future.
+		///
+		/// This must be called some number of blocks before the corresponding `proxy` is attempted
+		/// if the delay associated with the proxy relationship is greater than zero.
+		///
+		/// No more than `MaxPending` announcements may be made at any one time.
+		///
+		/// This will take a deposit of `AnnouncementDepositFactor` as well as
+		/// `AnnouncementDepositBase` if there are no other pending announcements.
+		///
+		/// The dispatch origin for this call must be _Signed_ and a proxy of `real`.
+		///
+		/// Parameters:
+		/// - `real`: The account that the proxy will make a call on behalf of.
+		/// - `call_hash`: The hash of the call to be made by the `real` account.
+		///
+		/// # <weight>
+		/// Weight is a function of the number of proxies the user has (P).
+		/// # </weight>
+		#[weight = T::WeightInfo::announce(T::MaxProxies::get().into())]
+		fn announce(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
+			let who = ensure_signed(origin)?;
+			Proxies::<T>::get(&real).0.into_iter()
+				.find(|x| &x.delegate == &who)
+				.ok_or(Error::<T>::NotProxy)?;
+
+			let announcement = Announcement {
+				real: real.clone(),
+				call_hash: call_hash.clone(),
+				height: system::Module::<T>::block_number(),
+			};
+
+			Announcements::<T>::try_mutate(&who, |(ref mut pending, ref mut deposit)| {
+				ensure!(pending.len() < T::MaxPending::get() as usize, Error::<T>::TooMany);
+				pending.push(announcement);
+				Self::rejig_deposit(
+					&who,
+					*deposit,
+					T::AnnouncementDepositBase::get(),
+					T::AnnouncementDepositFactor::get(),
+					pending.len(),
+				).map(|d| d.expect("Just pushed; pending.len() > 0; rejig_deposit returns Some; qed"))
+				.map(|d| *deposit = d)
+			})?;
+			Self::deposit_event(RawEvent::Announced(real, who, call_hash));
+		}
+
+		/// Remove a given announcement.
+		///
+		/// May be called by a proxy account to remove a call they previously announced and return
+		/// the deposit.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		/// - `real`: The account that the proxy will make a call on behalf of.
+		/// - `call_hash`: The hash of the call to be made by the `real` account.
+		#[weight = T::WeightInfo::remove_announcement(T::MaxProxies::get().into())]
+		fn remove_announcement(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
+			let who = ensure_signed(origin)?;
+			Self::edit_announcements(&who, |ann| ann.real != real || ann.call_hash != call_hash)?;
+		}
+
+		/// Remove the given announcement of a delegate.
+		///
+		/// May be called by a target (proxied) account to remove a call that one of their delegates
+		/// (`delegate`) has announced they want to execute. The deposit is returned.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		/// - `delegate`: The account that previously announced the call.
+		/// - `call_hash`: The hash of the call to be made.
+		#[weight = T::WeightInfo::reject_announcement(T::MaxProxies::get().into())]
+		fn reject_announcement(origin, delegate: T::AccountId, call_hash: CallHashOf<T>) {
+			let who = ensure_signed(origin)?;
+			Self::edit_announcements(&delegate, |ann| ann.real != who || ann.call_hash != call_hash)?;
+		}
+
+
+		/// Dispatch the given `call` from an account that the sender is authorised for through
+		/// `add_proxy`.
+		///
+		/// Removes any corresponding announcement(s).
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		/// - `real`: The account that the proxy will make a call on behalf of.
+		/// - `force_proxy_type`: Specify the exact proxy type to be used and checked for this call.
+		/// - `call`: The call to be made by the `real` account.
+		///
+		/// # <weight>
+		/// Weight is a function of the number of proxies the user has (P).
+		/// # </weight>
+		#[weight = {
+			let di = call.get_dispatch_info();
+			(T::WeightInfo::proxy_announced(T::MaxProxies::get().into())
+				.saturating_add(di.weight),
+			di.class)
+		}]
+		fn proxy_announced(origin,
+			delegate: T::AccountId,
+			real: T::AccountId,
+			force_proxy_type: Option<T::ProxyType>,
+			call: Box<<T as Trait>::Call>,
+		) {
+			ensure_signed(origin)?;
+			let def = Self::find_proxy(&real, &delegate, force_proxy_type)?;
+
+			let call_hash = T::CallHasher::hash_of(&call);
+			let now = system::Module::<T>::block_number();
+			let mut execute = false;
+			Self::edit_announcements(&delegate, |ann| {
+				if ann.real == real && ann.call_hash == call_hash {
+					// If delay has passed, we remove the announcement and note to execute the call.
+					if now.saturating_sub(ann.height) >= def.delay {
+						execute = true;
+						return false
+					}
+				}
+				true
+			})?;
+			ensure!(execute, Error::<T>::Unannounced);
+
+			Self::do_proxy(def, real, *call);
 		}
 	}
 }
