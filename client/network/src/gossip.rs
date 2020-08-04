@@ -94,7 +94,7 @@ impl<M> DirectedGossip<M> {
 	/// The returned `Future` is expected to be ready quite quickly.
 	pub async fn lock_queue<'a>(&'a self) -> QueueLock<'a, M> {
 		QueueLock {
-			lock: self.shared.locked.lock().await,
+			messages_queue: self.shared.messages_queue.lock().await,
 			condvar: &self.shared.condvar,
 			queue_size_limit: self.shared.queue_size_limit,
 		}
@@ -170,9 +170,7 @@ impl DirectedGossipPrototype {
 			stop_task: atomic::AtomicBool::new(false),
 			condvar: Condvar::new(),
 			queue_size_limit,
-			locked: Mutex::new(SharedLock {
-				messages_queue: VecDeque::with_capacity(queue_size_limit),
-			}),
+			messages_queue: Mutex::new(VecDeque::with_capacity(queue_size_limit)),
 		});
 
 		let task = spawn_task(
@@ -201,7 +199,7 @@ impl fmt::Debug for DirectedGossipPrototype {
 /// is in total control of the buffer.
 #[must_use]
 pub struct QueueLock<'a, M> {
-	lock: MutexGuard<'a, SharedLock<M>>,
+	messages_queue: MutexGuard<'a, VecDeque<M>>,
 	condvar: &'a Condvar,
 	/// Same as [`Shared::queue_size_limit`].
 	queue_size_limit: usize,
@@ -210,15 +208,9 @@ pub struct QueueLock<'a, M> {
 impl<'a, M: Send + 'static> QueueLock<'a, M> {
 	/// Pushes a message to the queue, or discards it if the queue is full.
 	pub fn push_or_discard(&mut self, message: M) {
-		if self.lock.messages_queue.len() < self.queue_size_limit {
-			self.lock.messages_queue.push_back(message);
+		if self.messages_queue.len() < self.queue_size_limit {
+			self.messages_queue.push_back(message);
 		}
-	}
-
-	/// Pushes a message to the queue. Does not enforce any limit to the size of the queue.
-	/// Use this method only if the message is extremely important.
-	pub fn push_unbounded(&mut self, message: M) {
-		self.lock.messages_queue.push_back(message);
 	}
 
 	/// Calls `filter` for each message in the queue, and removes the ones for which `false` is
@@ -227,7 +219,7 @@ impl<'a, M: Send + 'static> QueueLock<'a, M> {
 	/// > **Note**: The parameter of `filter` is a `&M` and not a `&mut M` (which would be
 	/// >           better) because the underlying implementation relies on `VecDeque::retain`.
 	pub fn retain(&mut self, filter: impl FnMut(&M) -> bool) {
-		self.lock.messages_queue.retain(filter);
+		self.messages_queue.retain(filter);
 	}
 }
 
@@ -243,17 +235,12 @@ impl<'a, M> Drop for QueueLock<'a, M> {
 struct Shared<M> {
 	/// Read by the background task after locking `locked`. If true, the task stops.
 	stop_task: atomic::AtomicBool,
-	locked: Mutex<SharedLock<M>>,
+	/// Queue of messages waiting to be sent out.
+	messages_queue: Mutex<VecDeque<M>>,
 	/// Must be notified every time the content of `locked` changes.
 	condvar: Condvar,
 	/// Maximum number of elements in `messages_queue`.
 	queue_size_limit: usize,
-}
-
-#[derive(Debug)]
-struct SharedLock<M> {
-	/// Queue of messages waiting to be sent out.
-	messages_queue: VecDeque<M>,
 }
 
 async fn spawn_task<M, F: Fn(M) -> Vec<u8>>(
@@ -265,14 +252,14 @@ async fn spawn_task<M, F: Fn(M) -> Vec<u8>>(
 ) {
 	loop {
 		let next_message = 'next_msg: loop {
-			let mut locked = shared.locked.lock().await;
+			let mut lock = shared.messages_queue.lock().await;
 
 			loop {
 				if shared.stop_task.load(atomic::Ordering::Acquire) {
 					return;
 				}
 
-				if let Some(msg) = locked.messages_queue.pop_front() {
+				if let Some(msg) = lock.pop_front() {
 					break 'next_msg msg;
 				}
 
@@ -282,7 +269,7 @@ async fn spawn_task<M, F: Fn(M) -> Vec<u8>>(
 				// See also the corresponding comment in `DirectedGossip::drop`.
 				// For this reason, we use `wait_timeout`. In the worst case scenario,
 				// `stop_task` will always be checked again after the timeout is reached.
-				locked = shared.condvar.wait_timeout(locked, Duration::from_secs(10)).await.0;
+				lock = shared.condvar.wait_timeout(lock, Duration::from_secs(10)).await.0;
 			}
 		};
 
