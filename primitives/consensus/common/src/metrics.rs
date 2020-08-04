@@ -48,7 +48,7 @@ impl Metrics {
 					&["result"],
 				)?,
 				registry,
-            )?,
+			)?,
 		})
 	}
 

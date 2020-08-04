@@ -31,6 +31,7 @@ use crate::{
 	ExHashT, NetworkStateInfo,
 	behaviour::{Behaviour, BehaviourOut},
 	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
+	DhtEvent,
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -1133,6 +1134,7 @@ struct Metrics {
 	incoming_connections_total: Counter<U64>,
 	is_major_syncing: Gauge<U64>,
 	issued_light_requests: Counter<U64>,
+	kademlia_query_duration: HistogramVec,
 	kademlia_random_queries_total: CounterVec<U64>,
 	kademlia_records_count: GaugeVec<U64>,
 	kademlia_records_sizes_total: GaugeVec<U64>,
@@ -1209,6 +1211,17 @@ impl Metrics {
 			issued_light_requests: register(Counter::new(
 				"issued_light_requests",
 				"Number of light client requests that our node has issued.",
+			)?, registry)?,
+			kademlia_query_duration: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"sub_libp2p_kademlia_query_duration",
+						"Duration of Kademlia queries per query type"
+					),
+					buckets: prometheus_endpoint::exponential_buckets(0.5, 2.0, 10)
+						.expect("parameters are always valid values; qed"),
+				},
+				&["type"]
 			)?, registry)?,
 			kademlia_random_queries_total: register(CounterVec::new(
 				Opts::new(
@@ -1522,8 +1535,19 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						messages,
 					});
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Dht(ev))) => {
-					this.event_streams.send(Event::Dht(ev));
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Dht(event, duration))) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						let query_type = match event {
+							DhtEvent::ValueFound(_) => "value-found",
+							DhtEvent::ValueNotFound(_) => "value-not-found",
+							DhtEvent::ValuePut(_) => "value-put",
+							DhtEvent::ValuePutFailed(_) => "value-put-failed",
+						};
+						metrics.kademlia_query_duration.with_label_values(&[query_type])
+							.observe(duration.as_secs_f64());
+					}
+
+					this.event_streams.send(Event::Dht(event));
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
