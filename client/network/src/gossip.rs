@@ -124,7 +124,7 @@ impl<M> Drop for DirectedGossip<M> {
 		// being asynchronous, it can't reasonably be locked from within a destructor.
 		// For this reason, this destructor is a "best effort" destructor.
 		// See also the corresponding code in the background task.
-		self.shared.stop_task.store(true, atomic::Ordering::Acquire);
+		self.shared.stop_task.store(true, atomic::Ordering::Release);
 		self.shared.condvar.notify_all();
 	}
 }
@@ -234,7 +234,7 @@ impl<'a, M: Send + 'static> QueueLock<'a, M> {
 impl<'a, M> Drop for QueueLock<'a, M> {
 	fn drop(&mut self) {
 		// We notify the `Condvar` in the destructor in order to be able to push multiple
-		// messages and wake up the background task only one afterwards.
+		// messages and wake up the background task only once afterwards.
 		self.condvar.notify_one();
 	}
 }
