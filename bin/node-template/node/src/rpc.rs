@@ -57,7 +57,11 @@ pub fn create_full<C, P>(
 		SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe))
 	);
 
-        //io.extend_with(NodeTemplateApi::to_delegate(....
+        // To expand upon the current RPC set using a custom written API, extend using the syntaxt
+        // listed below. YourRpcStruct is the struct with a reference to a client, which is needed
+        // to call into the runtime. More information on this can be found in the "Custom RPCs"
+        // recipe.
+        //io.extend_with(YourRpcTrait::to_delegate(YourRpcStruct::new(ReferenceToClient, ...)));
 
         io
 }
