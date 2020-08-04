@@ -383,9 +383,9 @@ mod sysinfo {
 	}
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
+#[cfg(not(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios"))))]
 mod noop {
-	use super::ProcessInfo;
+	use super::{LoadAverage, ProcessInfo};
 
 	pub(crate) struct System;
 
@@ -413,7 +413,7 @@ type System = linux::System;
 	not(target_os = "linux")
 ))]
 type System = sysinfo::System;
-#[cfg(any(target_os = "android", target_os = "ios"))]
+#[cfg(not(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios"))))]
 type System = noop::System;
 
 pub struct MetricsService {
