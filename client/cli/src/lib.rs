@@ -43,6 +43,7 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
+use tracing_subscriber::layer::SubscriberExt;
 
 /// Substrate client CLI
 ///
@@ -226,7 +227,11 @@ pub trait SubstrateCli: Sized {
 }
 
 /// Initialize the logger
-pub fn init_logger(pattern: &str) {
+pub fn init_logger(
+	pattern: &str,
+	tracing_receiver: sc_tracing::TracingReceiver,
+	tracing_targets: Option<String>
+) {
 	match tracing_log::LogTracer::init() {
 		Ok(_) => (),
 		Err(_) => log::info!("💬 Not registering Substrate logger, as there is already a global logger registered!"),
@@ -279,8 +284,15 @@ pub fn init_logger(pattern: &str) {
 		.compact()
 		.finish();
 
-	match tracing::subscriber::set_global_default(subscriber) {
-		Ok(_) => (),
-		Err(_) => tracing::info!("💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"),
+	if let Some(tracing_targets) = tracing_targets {
+		match tracing::subscriber::set_global_default(subscriber) {
+			Ok(_) => (),
+			Err(_) => tracing::info!("💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"),
+		}
+	} else {
+		match tracing::subscriber::set_global_default(subscriber) {
+			Ok(_) => (),
+			Err(_) => tracing::info!("💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"),
+		}
 	}
 }

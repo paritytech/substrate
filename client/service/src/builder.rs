@@ -560,17 +560,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		))
 	});
 
-	// Instrumentation
-	if let Some(tracing_targets) = config.tracing_targets.as_ref() {
-		let subscriber = sc_tracing::ProfilingSubscriber::new(
-			config.tracing_receiver, tracing_targets
-		);
-		match tracing::subscriber::set_global_default(subscriber) {
-			Ok(_) => (),
-			Err(e) => error!(target: "tracing", "Unable to set global default subscriber {}", e),
-		}
-	}
-
 	// Spawn informant task
 	spawn_handle.spawn("informant", sc_informant::build(
 		client.clone(),
@@ -668,7 +657,7 @@ fn build_telemetry<TBl: BlockT>(
 	let startup_time = SystemTime::UNIX_EPOCH.elapsed()
 		.map(|dur| dur.as_millis())
 		.unwrap_or(0);
-	
+
 	spawn_handle.spawn(
 		"telemetry-worker",
 		telemetry.clone()

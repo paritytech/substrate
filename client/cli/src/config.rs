@@ -497,11 +497,13 @@ pub trait CliConfiguration: Sized {
 	/// 3. Initialize the logger
 	fn init<C: SubstrateCli>(&self) -> Result<()> {
 		let logger_pattern = self.log_filters()?;
+		let tracing_receiver = self.tracing_receiver()?;
+		let tracing_targets = self.tracing_targets()?;
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
 		fdlimit::raise_fd_limit();
-		init_logger(&logger_pattern);
+		init_logger(&logger_pattern, tracing_receiver, tracing_targets);
 
 		Ok(())
 	}
