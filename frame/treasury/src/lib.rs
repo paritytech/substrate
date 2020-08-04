@@ -302,12 +302,12 @@ pub type BountyIndex = u32;
 pub struct Bounty<AccountId, Balance, BlockNumber> {
 	/// The account proposing it.
 	proposer: AccountId,
-	/// The account manages this bounty.
-	curator: AccountId,
 	/// The (total) amount that should be paid if the bounty is rewarded.
 	value: Balance,
 	/// The curator fee. Included in value.
 	fee: Balance,
+	/// The deposit of curator.
+	curator_deposit: Balance,
 	/// The amount held on deposit (reserved) for making this proposal.
 	bond: Balance,
 	/// The status of this bounty.
@@ -321,26 +321,29 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 	Proposed,
 	/// The bounty is approved and waiting to become active at next spend period.
 	Approved,
+	/// The bounty is funded and waiting for curator assignment.
+	Funded,
+	/// A curator is assigned. Waiting for acceptance from curator.
+	CuratorAssigned {
+		/// The assigned curator of this bounty.
+		curator: AccountId,
+	},
 	/// The bounty is active and waiting to be awarded.
 	Active {
+		/// The curator of this bounty.
+		curator: AccountId,
+		/// Expiry block
 		expires: BlockNumber,
 	},
 	/// The bounty is awarded and waiting to released after a delay.
 	PendingPayout {
+		/// The curator of this bounty.
+		curator: AccountId,
 		/// The beneficiary of the bounty.
 		beneficiary: AccountId,
 		/// When the bounty can be claimed.
 		unlock_at: BlockNumber,
 	},
-}
-
-impl<AccountId, BlockNumber> BountyStatus<AccountId, BlockNumber> {
-	pub fn is_active(&self) -> bool {
-		match self {
-			BountyStatus::Active { .. } => true,
-			_ => false,
-		}
-	}
 }
 
 decl_storage! {
@@ -794,15 +797,12 @@ decl_module! {
 		#[weight = T::WeightInfo::propose_bounty(description.len() as u32)]
 		fn propose_bounty(
 			origin,
-			curator: <T::Lookup as StaticLookup>::Source,
-			#[compact] fee: BalanceOf<T>,
 			#[compact] value: BalanceOf<T>,
 			description: Vec<u8>,
 		) {
 			let proposer = ensure_signed(origin)?;
-			let curator = T::Lookup::lookup(curator)?;
 
-			Self::create_bounty(proposer, curator, description, fee, value)?;
+			Self::create_bounty(proposer, description, value)?;
 		}
 
 		/// Reject a bounty proposal. The original deposit will be slashed.
@@ -866,14 +866,22 @@ decl_module! {
 		/// - `beneficiary`: The beneficiary account whom will receive the payout.
 		#[weight = T::WeightInfo::award_bounty()]
 		fn award_bounty(origin, #[compact] bounty_id: ProposalIndex, beneficiary: <T::Lookup as StaticLookup>::Source) {
-			let curator = ensure_signed(origin)?;
+			let signer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
-				ensure!(bounty.status.is_active(), Error::<T>::UnexpectedStatus);
-				ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
+				match &bounty.status {
+					BountyStatus::Active {
+						curator,
+						..
+					} => {
+						ensure!(*curator == signer, Error::<T>::RequireCurator);
+					},
+					_ => return Err(Error::<T>::UnexpectedStatus.into()),
+				}
 				bounty.status = BountyStatus::PendingPayout {
+					curator: signer,
 					beneficiary: beneficiary.clone(),
 					unlock_at: system::Module::<T>::block_number() + T::BountyDepositPayoutDelay::get(),
 				};
@@ -895,13 +903,13 @@ decl_module! {
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.take().ok_or(Error::<T>::InvalidIndex)?;
-				if let BountyStatus::PendingPayout { beneficiary, unlock_at } = bounty.status {
+				if let BountyStatus::PendingPayout { curator, beneficiary, unlock_at } = bounty.status {
 					ensure!(system::Module::<T>::block_number() >= unlock_at, Error::<T>::Premature);
 					let bounty_account = Self::bounty_account_id(bounty_id);
 					let balance = T::Currency::free_balance(&bounty_account);
 					let fee = bounty.fee;
 					let payout = balance.saturating_sub(fee);
-					let _ = T::Currency::transfer(&bounty_account, &bounty.curator, fee, AllowDeath); // should not fail
+					let _ = T::Currency::transfer(&bounty_account, &curator, fee, AllowDeath); // should not fail
 					let _ = T::Currency::transfer(&bounty_account, &beneficiary, payout, AllowDeath); // should not fail
 					*maybe_bounty = None;
 
@@ -929,12 +937,12 @@ decl_module! {
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
 
-				match bounty.status {
-					BountyStatus::Active { expires } => {
+				match &bounty.status {
+					BountyStatus::Active { curator, expires } => {
 						let now = system::Module::<T>::block_number();
-						if expires > now {
+						if *expires > now {
 							// only curator can cancel unexpired bounty
-							ensure!(maybe_curator.map_or(false, |curator| curator == bounty.curator), Error::<T>::RequireCurator);
+							ensure!(maybe_curator.map_or(false, |c| c == *curator), Error::<T>::RequireCurator);
 						}
 					},
 					BountyStatus::PendingPayout { .. } => {
@@ -964,18 +972,15 @@ decl_module! {
 		/// - `bounty_id`: Bounty ID to extend.
 		#[weight = T::WeightInfo::extend_bounty_expiry()]
 		fn extend_bounty_expiry(origin, #[compact] bounty_id: BountyIndex) {
-			let curator = ensure_signed(origin)?;
+			let signer = ensure_signed(origin)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
-
-				ensure!(bounty.status.is_active(), Error::<T>::UnexpectedStatus);
-				ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
+				let bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 
 				match bounty.status {
-					BountyStatus::Active { expires } => {
-						let expires = expires.max(system::Module::<T>::block_number() + T::BountyDuration::get());
-						bounty.status = BountyStatus::Active { expires };
+					BountyStatus::Active { ref curator, ref mut expires } => {
+						ensure!(*curator == signer, Error::<T>::RequireCurator);
+						*expires = (system::Module::<T>::block_number() + T::BountyDuration::get()).max(*expires);
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}
@@ -1163,9 +1168,7 @@ impl<T: Trait> Module<T> {
 						if bounty.value <= budget_remaining {
 							budget_remaining -= bounty.value;
 
-							// we trust bounty duration is configured with a sane value
-							let expires = system::Module::<T>::block_number() + T::BountyDuration::get();
-							bounty.status = BountyStatus::Active { expires };
+							bounty.status = BountyStatus::Funded;
 
 							// return their deposit.
 							let _ = T::Currency::unreserve(&bounty.proposer, bounty.bond);
@@ -1230,14 +1233,11 @@ impl<T: Trait> Module<T> {
 
 	fn create_bounty(
 		proposer: T::AccountId,
-		curator: T::AccountId,
 		description: Vec<u8>,
-		fee: BalanceOf<T>,
 		value: BalanceOf<T>,
 	) -> DispatchResult {
 		ensure!(description.len() <= T::MaximumReasonLength::get() as usize, Error::<T>::ReasonTooBig);
 		ensure!(value >= Self::bounty_value_minimum(), Error::<T>::InvalidValue);
-		ensure!(fee < value, Error::<T>::InvalidFee);
 
 		let index = Self::bounty_count();
 
@@ -1250,7 +1250,7 @@ impl<T: Trait> Module<T> {
 		BountyCount::put(index + 1);
 
 		let bounty = Bounty {
-			proposer, curator, value, fee, bond, status: BountyStatus::Proposed,
+			proposer, value, fee: 0.into(), curator_deposit: 0.into(), bond, status: BountyStatus::Proposed,
 		};
 
 		Bounties::<T>::insert(index, &bounty);
