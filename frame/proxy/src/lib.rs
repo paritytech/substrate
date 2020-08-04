@@ -181,9 +181,6 @@ decl_error! {
 		NoPermission,
 		/// Announcement, if made at all, was made too recently.
 		Unannounced,
-		/// Unexpected decode error of storage item. Should never happen, but if it does then it'll
-		/// need governance intervention.
-		Corrupted,
 	}
 }
 
