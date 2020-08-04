@@ -58,7 +58,7 @@ mod default_weight;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 pub trait WeightInfo {
-	fn proxy_announced(p: u32, ) -> Weight;
+	fn announced_proxy(p: u32, ) -> Weight;
 	fn remove_announcement(p: u32, ) -> Weight;
 	fn reject_announcement(p: u32, ) -> Weight;
 	fn announce(p: u32, ) -> Weight;
@@ -339,7 +339,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = {
 			let di = call.get_dispatch_info();
-			(T::WeightInfo::proxy_announced(T::MaxProxies::get().into())
+			(T::WeightInfo::announced_proxy(T::MaxProxies::get().into())
 				.saturating_add(di.weight),
 			di.class)
 		}]
