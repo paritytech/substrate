@@ -58,9 +58,9 @@ impl GlobalsSnapshot {
 	///
 	/// This instance must be the same that was used for creation of this snapshot.
 	pub fn apply(&self, instance_wrapper: &InstanceWrapper) -> Result<()> {
-		/// This is a pointer over saved items, it moves forward when the loop value below takes over it's current value.
-		/// Since both pointers (`current` and `index` below) are over ordered lists, they eventually hit all
-		/// equal referenced values.
+		// This is a pointer over saved items, it moves forward when the loop value below takes over it's current value.
+		// Since both pointers (`current` and `index` below) are over ordered lists, they eventually hit all
+		// equal referenced values.
 		let mut current = 0;
 		for (index, export) in instance_wrapper.instance.exports().enumerate() {
 			if current >= self.0.len() { break; }
