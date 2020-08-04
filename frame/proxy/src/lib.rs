@@ -58,10 +58,10 @@ mod default_weight;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 pub trait WeightInfo {
-	fn proxy_announced(p: u32, ) -> Weight;
-	fn remove_announcement(p: u32, ) -> Weight;
-	fn reject_announcement(p: u32, ) -> Weight;
-	fn announce(p: u32, ) -> Weight;
+	fn proxy_announced(a: u32, p: u32, ) -> Weight;
+	fn remove_announcement(a: u32, p: u32, ) -> Weight;
+	fn reject_announcement(a: u32, p: u32, ) -> Weight;
+	fn announce(a: u32, p: u32, ) -> Weight;
 	fn proxy(p: u32, ) -> Weight;
 	fn add_proxy(p: u32, ) -> Weight;
 	fn remove_proxy(p: u32, ) -> Weight;
@@ -466,7 +466,7 @@ decl_module! {
 		/// # <weight>
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
-		#[weight = T::WeightInfo::announce(T::MaxProxies::get().into())]
+		#[weight = T::WeightInfo::announce(T::MaxPending::get(), T::MaxProxies::get().into())]
 		fn announce(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::get(&real).0.into_iter()
@@ -504,7 +504,7 @@ decl_module! {
 		/// Parameters:
 		/// - `real`: The account that the proxy will make a call on behalf of.
 		/// - `call_hash`: The hash of the call to be made by the `real` account.
-		#[weight = T::WeightInfo::remove_announcement(T::MaxProxies::get().into())]
+		#[weight = T::WeightInfo::remove_announcement(T::MaxPending::get(), T::MaxProxies::get().into())]
 		fn remove_announcement(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
 			Self::edit_announcements(&who, |ann| ann.real != real || ann.call_hash != call_hash)?;
@@ -520,12 +520,11 @@ decl_module! {
 		/// Parameters:
 		/// - `delegate`: The account that previously announced the call.
 		/// - `call_hash`: The hash of the call to be made.
-		#[weight = T::WeightInfo::reject_announcement(T::MaxProxies::get().into())]
+		#[weight = T::WeightInfo::reject_announcement(T::MaxPending::get(), T::MaxProxies::get().into())]
 		fn reject_announcement(origin, delegate: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
 			Self::edit_announcements(&delegate, |ann| ann.real != who || ann.call_hash != call_hash)?;
 		}
-
 
 		/// Dispatch the given `call` from an account that the sender is authorised for through
 		/// `add_proxy`.
@@ -544,7 +543,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = {
 			let di = call.get_dispatch_info();
-			(T::WeightInfo::proxy_announced(T::MaxProxies::get().into())
+			(T::WeightInfo::proxy_announced(T::MaxPending::get(), T::MaxProxies::get().into())
 				.saturating_add(di.weight),
 			di.class)
 		}]

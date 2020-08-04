@@ -85,7 +85,6 @@ benchmarks! {
 	}
 
 	proxy {
-		let a in 0 .. T::MaxPending::get();
 		let p in ...;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
@@ -93,7 +92,6 @@ benchmarks! {
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = account("caller", 0, SEED);
 		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
-		add_announcements::<T>(a, Some(caller.clone()), None)?;
 	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
 		assert_last_event::<T>(RawEvent::ProxyExecuted(Ok(())).into())
