@@ -60,6 +60,9 @@ use std::{
 	time::Duration,
 };
 
+#[cfg(test)]
+mod tests;
+
 /// Notifications sender for a specific combination of network service, peer, and protocol.
 pub struct DirectedGossip<M> {
 	/// Shared between the front and the back task.
