@@ -35,7 +35,7 @@ struct InstanceDef {
 pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
 	let mut impls = TokenStream::new();
 
-	impls.extend(reexport_rename_instance_trait(scrate, def));
+	impls.extend(reexport_instance_trait(scrate, def));
 
 	// Implementation of instances.
 	if let Some(module_instance) = &def.module_instance {
@@ -90,7 +90,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 	impls
 }
 
-fn reexport_rename_instance_trait(
+fn reexport_instance_trait(
 	scrate: &TokenStream,
 	def: &DeclStorageDefExt,
 ) -> TokenStream {

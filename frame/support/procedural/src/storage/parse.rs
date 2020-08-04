@@ -329,7 +329,7 @@ fn get_module_instance(
 	if instantiable.as_ref().map_or(false, |i| i != "Instance") {
 		let msg = format!(
 			"Instance trait must be named `Instance`, other names are no longer supported, because \
-			it is now defines in traits::support. Expect `Instance` found `{}`",
+			it is now defined in traits::support. Expect `Instance` found `{}`",
 			instantiable.as_ref().unwrap(),
 		);
 		return Err(syn::Error::new(instantiable.span(), msg));
