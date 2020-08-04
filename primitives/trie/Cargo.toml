@@ -43,3 +43,4 @@ std = [
 	"trie-root/std",
 	"sp-core/std",
 ]
+memory-tracker = []
