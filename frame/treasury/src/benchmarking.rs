@@ -156,28 +156,6 @@ fn setup_pod_account<T: Trait>() {
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
-fn setup_sub_bounty<T: Trait>(r: u32) -> Result<(
-	T::AccountId,
-	<T::Lookup as StaticLookup>::Source,
-	BalanceOf<T>,
-	BalanceOf<T>,
-	Vec<u8>,
-), &'static str> {
-	create_bounty::<T>()?;
-	setup_pod_account::<T>();
-	Treasury::<T>::on_initialize(T::BlockNumber::zero());
-
-	let caller = account("curator", 0, SEED);
-	let value: BalanceOf<T> = T::Currency::minimum_balance().saturating_mul(50.into());
-	let fee = T::Currency::minimum_balance();
-	let deposit = T::BountyDepositBase::get() + T::DataDepositPerByte::get() * MAX_BYTES.into();
-	let _ = T::Currency::make_free_balance_be(&caller, deposit);
-	let curator = account("curator2", 0, SEED);
-	let curator_lookup = T::Lookup::unlookup(curator);
-	let reason = vec![0; r as usize];
-	Ok((caller, curator_lookup, fee, value, reason))
-}
-
 const MAX_BYTES: u32 = 16384;
 const MAX_TIPPERS: u32 = 100;
 
@@ -280,14 +258,6 @@ benchmarks! {
 		let (caller, curator_lookup, fee, value, description) = setup_bounty::<T>(d);
 	}: _(RawOrigin::Signed(caller), curator_lookup, fee, value, description)
 
-	create_sub_bounty {
-		let d in 0 .. MAX_BYTES;
-
-		let (caller, curator_lookup, fee, value, description) = setup_sub_bounty::<T>(d)?;
-		let bounty_id = BountyCount::get() - 1;
-
-	}: _(RawOrigin::Signed(caller), bounty_id, curator_lookup, fee, value, description)
-
 	reject_bounty {
 		let (caller, curator_lookup, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
 		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), curator_lookup, fee, value, reason)?;
@@ -381,7 +351,6 @@ mod tests {
 			assert_ok!(test_benchmark_tip::<Test>());
 			assert_ok!(test_benchmark_close_tip::<Test>());
 			assert_ok!(test_benchmark_propose_bounty::<Test>());
-			assert_ok!(test_benchmark_create_sub_bounty::<Test>());
 			assert_ok!(test_benchmark_approve_bounty::<Test>());
 			assert_ok!(test_benchmark_reject_bounty::<Test>());
 			assert_ok!(test_benchmark_award_bounty::<Test>());

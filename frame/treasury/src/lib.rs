@@ -83,7 +83,6 @@
 //! - **Bounty value:** The total amount that should be paid to the Payout Address if the bounty is rewarded.
 //! - **Payout address:** The account to which the total or part of the bounty is assigned to.
 //! - **Payout Delay:** The delay period for which a bounty beneficiary needs to wait before claiming.
-//! - **Sub-bounty:** A portion of the total Bounty value assigned to the completion of a specified body of work in the bounty.
 //!
 //! ## Interface
 //!
@@ -105,7 +104,6 @@
 //!
 //! Bounty protocol:
 //! - `propose_bounty` - Propose a specific treasury amount to be earmarked for a predefined set of tasks and stake the required deposit.
-//! - `create_sub_bounty` - Allocate a portion of the earmarked treasury amount for a parent_bounty_id to a new curator.
 //! - `reject_bounty` - Reject a specific treasury amount to be earmarked for a predefined body of work.
 //! - `approve_bounty` - Accept a specific treasury amount to be earmarked for a predefined body of work.
 //! - `award_bounty` - Close and pay out the specified amount for the completed work.
@@ -152,7 +150,6 @@ pub trait WeightInfo {
 	fn tip(t: u32, ) -> Weight;
 	fn close_tip(t: u32, ) -> Weight;
 	fn propose_bounty(r: u32, ) -> Weight;
-	fn create_sub_bounty(r: u32, ) -> Weight;
 	fn approve_bounty() -> Weight;
 	fn reject_bounty() -> Weight;
 	fn award_bounty() -> Weight;
@@ -174,7 +171,6 @@ impl WeightInfo for () {
 	fn tip(_t: u32, ) -> Weight { 1_000_000_000 }
 	fn close_tip(_t: u32, ) -> Weight { 1_000_000_000 }
 	fn propose_bounty(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn create_sub_bounty(_r: u32, ) -> Weight { 1_000_000_000 }
 	fn approve_bounty() -> Weight { 1_000_000_000 }
 	fn reject_bounty() -> Weight { 1_000_000_000 }
 	fn award_bounty() -> Weight { 1_000_000_000 }
@@ -247,10 +243,6 @@ pub trait Trait: frame_system::Trait {
 	/// Maximum acceptable reason length.
 	type MaximumReasonLength: Get<u32>;
 
-	/// Maximum number of sub-bounty creation recursion limit. Cannot be 255 to prevent overflow.
-	/// e.g. 0 means no sub-bounty, 1 means sub-bounty cannot create sub-bounty.
-	type MaximumSubBountyDepth: Get<u8>;
-
 	/// Handler for the unbalanced decrease when treasury funds are burned.
 	type BurnDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
@@ -320,8 +312,6 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	bond: Balance,
 	/// The status of this bounty.
 	status: BountyStatus<AccountId, BlockNumber>,
-	/// The parent bounty id. None if this is top level bounty.
-	parent: Option<BountyIndex>,
 }
 
 /// The status of a bounty proposal.
@@ -391,7 +381,7 @@ decl_storage! {
 		/// Bounty indices that have been approved but not yet funded.
 		pub BountyApprovals get(fn bounty_approvals): Vec<BountyIndex>;
 
-		/// Minimum value for a bounty or sub-bounty.
+		/// Minimum value for a bounty.
 		pub BountyValueMinimum get(fn bounty_value_minimum) config(): BalanceOf<T>;
 	}
 	add_extra_genesis {
@@ -482,8 +472,6 @@ decl_error! {
 		InvalidValue,
 		/// Invalid bounty fee.
 		InvalidFee,
-		/// Sub-bounty cannot be created due to MaximumSubBountyDepth limit.
-		ExceedDepthLimit,
 	}
 }
 
@@ -525,10 +513,6 @@ decl_module! {
 
 		/// Maximum acceptable reason length.
 		const MaximumReasonLength: u32 = T::MaximumReasonLength::get();
-
-		/// Maximum number of sub-bounty creation recursion limit. Cannot be 255 to prevent overflow.
-		/// e.g. 0 means no sub-bounty, 1 means sub-bounty cannot create sub-bounty.
-		const MaximumSubBountyDepth: u8 = T::MaximumSubBountyDepth::get();
 
 		type Error = Error<T>;
 
@@ -818,33 +802,7 @@ decl_module! {
 			let proposer = ensure_signed(origin)?;
 			let curator = T::Lookup::lookup(curator)?;
 
-			Self::create_bounty(proposer, curator, description, fee, value, None)?;
-		}
-
-		/// Create a sub-bounty from an approved bounty.
-		///
-		/// The dispatch origin for this call must be the curator of the parent bounty.
-		///
-		/// Payment: No additional payment.
-		///
-		/// - `parent_bounty_id`: The parent bounty ID that will fund for this sub-bounty.
-		/// - `curator`: Curator of the new sub-bounty.
-		/// - `fee`: The curator fee for the new sub-bounty. It will be deduced from the parent bounty curator fee.
-		/// - `value`: The total payment amount of this sub-bounty, curator fee included.
-		/// - `description`: The description of this bounty.
-		#[weight = T::WeightInfo::create_sub_bounty(description.len() as u32)]
-		fn create_sub_bounty(
-			origin,
-			#[compact] parent_bounty_id: BountyIndex,
-			curator: <T::Lookup as StaticLookup>::Source,
-			#[compact] fee: BalanceOf<T>,
-			#[compact] value: BalanceOf<T>,
-			description: Vec<u8>,
-		) {
-			let proposer = ensure_signed(origin)?;
-			let curator = T::Lookup::lookup(curator)?;
-
-			Self::create_bounty(proposer, curator, description, fee, value, Some(parent_bounty_id))?;
+			Self::create_bounty(proposer, curator, description, fee, value)?;
 		}
 
 		/// Reject a bounty proposal. The original deposit will be slashed.
@@ -1270,24 +1228,12 @@ impl<T: Trait> Module<T> {
 			.saturating_sub(T::Currency::minimum_balance())
 	}
 
-	fn check_bounty_depth(parent_bounty_id: Option<BountyIndex>, depth: u8) -> bool {
-		if let Some(id) = parent_bounty_id {
-			if depth == 0 {
-				return false
-			}
-			Self::check_bounty_depth(Self::bounties(id).and_then(|b| b.parent), depth - 1)
-		} else {
-			true
-		}
-	}
-
 	fn create_bounty(
 		proposer: T::AccountId,
 		curator: T::AccountId,
 		description: Vec<u8>,
 		fee: BalanceOf<T>,
 		value: BalanceOf<T>,
-		parent_bounty_id: Option<BountyIndex>,
 	) -> DispatchResult {
 		ensure!(description.len() <= T::MaximumReasonLength::get() as usize, Error::<T>::ReasonTooBig);
 		ensure!(value >= Self::bounty_value_minimum(), Error::<T>::InvalidValue);
@@ -1295,61 +1241,22 @@ impl<T: Trait> Module<T> {
 
 		let index = Self::bounty_count();
 
-		let (bond, status, is_sub) = if let Some(parent_bounty_id) = parent_bounty_id {
-			// this is a sub bounty
-			Bounties::<T>::try_mutate_exists(
-				parent_bounty_id,
-				|bounty| -> DispatchResult {
-					let parent = bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
-					ensure!(parent.status.is_active(), Error::<T>::UnexpectedStatus);
-					ensure!(proposer == parent.curator, Error::<T>::RequireCurator);
-					ensure!(fee < parent.fee, Error::<T>::InvalidFee);
-					ensure!(value < parent.value, Error::<T>::InvalidValue);
-					ensure!(
-						Self::check_bounty_depth(Some(parent_bounty_id), T::MaximumSubBountyDepth::get()),
-						Error::<T>::ExceedDepthLimit
-					);
-
-					let bounty_acc = Self::bounty_account_id(index);
-					let parent_acc = Self::bounty_account_id(parent_bounty_id);
-
-					// fund sub bounty from parent bounty
-					T::Currency::transfer(&parent_acc, &bounty_acc, value, KeepAlive)?;
-
-					// Already checked cannot underflow.
-					parent.fee -= fee;
-					parent.value -= value;
-
-					Ok(())
-				}
-			)?;
-
-			// we trust bounty duration is configured with a sane value
-			let expires = system::Module::<T>::block_number() + T::BountyDuration::get();
-			(0.into(), BountyStatus::Active { expires }, true)
-		} else {
-			// reserve deposit for new bounty
-			let bond = T::BountyDepositBase::get()
-				+ T::DataDepositPerByte::get() * (description.len() as u32).into();
-			T::Currency::reserve(&proposer, bond)
-				.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
-
-			(bond, BountyStatus::Proposed, false)
-		};
+		// reserve deposit for new bounty
+		let bond = T::BountyDepositBase::get()
+			+ T::DataDepositPerByte::get() * (description.len() as u32).into();
+		T::Currency::reserve(&proposer, bond)
+			.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
 
 		BountyCount::put(index + 1);
 
 		let bounty = Bounty {
-			proposer, curator, value, fee, bond, status, parent: parent_bounty_id,
+			proposer, curator, value, fee, bond, status: BountyStatus::Proposed,
 		};
 
 		Bounties::<T>::insert(index, &bounty);
 		BountyDescriptions::insert(index, description);
 
 		Self::deposit_event(RawEvent::BountyProposed(index));
-		if is_sub {
-			Self::deposit_event(RawEvent::BountyBecameActive(index));
-		}
 
 		Ok(())
 	}

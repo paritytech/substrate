@@ -136,7 +136,6 @@ parameter_types! {
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 	pub const BountyDuration: u32 = 20;
 	pub const MaximumReasonLength: u32 = 16384;
-	pub const MaximumSubBountyDepth: u8 = 2;
 }
 impl Trait for Test {
 	type ModuleId = TreasuryModuleId;
@@ -158,7 +157,6 @@ impl Trait for Test {
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
 	type BountyDuration = BountyDuration;
 	type MaximumReasonLength = MaximumReasonLength;
-	type MaximumSubBountyDepth = MaximumSubBountyDepth;
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
 }
@@ -172,7 +170,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100), (1, 98), (2, 1)],
 	}.assimilate_storage(&mut t).unwrap();
-	GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
+
+	GenesisConfig::<Test>{
+		bounty_value_minimum: 1,
+	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 
@@ -579,7 +580,6 @@ fn propose_bounty_works() {
 			value: 10,
 			bond: deposit,
 			status: BountyStatus::Proposed,
-			parent: None,
 		});
 
 		assert_eq!(Treasury::bounty_descriptions(0).unwrap(), b"1234567890".to_vec());
@@ -654,7 +654,6 @@ fn approve_bounty_works() {
 			value: 50,
 			bond: deposit,
 			status: BountyStatus::Approved,
-			parent: None,
 		});
 		assert_eq!(Treasury::bounty_approvals(), vec![0]);
 
@@ -677,7 +676,6 @@ fn approve_bounty_works() {
 			value: 50,
 			bond: deposit,
 			status: BountyStatus::Active { expires: 21 },
-			parent: None,
 		});
 		assert_eq!(Treasury::pot(), 100 - 50 - 25); // burn 25
 		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 50);
@@ -712,7 +710,6 @@ fn award_and_claim_bounty_works() {
 				beneficiary: 3,
 				unlock_at: 5
 			},
-			parent: None,
 		});
 
 		assert_noop!(Treasury::claim_bounty(Origin::signed(1), 0), Error::<Test>::Premature);
@@ -736,105 +733,6 @@ fn award_and_claim_bounty_works() {
 }
 
 #[test]
-fn create_sub_bounty() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-
-		assert_ok!(Treasury::update_bounty_value_minimum(Origin::root(), 5));
-
-		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 10, 50, b"12345".to_vec()));
-
-		assert_noop!(
-			Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 5, 40, b"123".to_vec()),
-			Error::<Test>::UnexpectedStatus
-		);
-
-		assert_ok!(Treasury::approve_bounty(Origin::root(), 0));
-
-		assert_noop!(
-			Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 5, 40, b"123".to_vec()),
-			Error::<Test>::UnexpectedStatus
-		);
-
-		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
-
-		assert_noop!(
-			Treasury::create_sub_bounty(Origin::signed(1), 10, 5, 5, 40, b"123".to_vec()),
-			Error::<Test>::InvalidIndex
-		);
-		assert_noop!(
-			Treasury::create_sub_bounty(Origin::signed(2), 0, 5, 5, 40, b"123".to_vec()),
-			Error::<Test>::RequireCurator
-		);
-		assert_noop!(
-			Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 10, 40, b"123".to_vec()),
-			Error::<Test>::InvalidFee
-		);
-		assert_noop!(
-			Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 5, 50, b"123".to_vec()),
-			Error::<Test>::InvalidValue
-		);
-		assert_noop!(
-			Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 0, 1, b"123".to_vec()),
-			Error::<Test>::InvalidValue
-		);
-
-		System::set_block_number(3);
-		<Treasury as OnInitialize<u64>>::on_initialize(3);
-
-		assert_ok!(Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 4, 20, b"123".to_vec()));
-
-		assert_ok!(Treasury::create_sub_bounty(Origin::signed(5), 1, 6, 1, 6, b"456".to_vec()));
-
-		assert_noop!(
-			Treasury::create_sub_bounty(Origin::signed(6), 2, 6, 0, 5, b"123".to_vec()),
-			Error::<Test>::ExceedDepthLimit
-		);
-
-		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
-			proposer: 0,
-			curator: 1,
-			fee: 6,
-			value: 30,
-			bond: 85,
-			status: BountyStatus::Active { expires: 22 },
-			parent: None,
-		});
-
-		assert_eq!(Treasury::bounties(1).unwrap(), Bounty {
-			proposer: 1,
-			curator: 5,
-			fee: 3,
-			value: 14,
-			bond: 0,
-			status: BountyStatus::Active { expires: 23 },
-			parent: Some(0),
-		});
-
-		assert_eq!(Treasury::bounties(2).unwrap(), Bounty {
-			proposer: 5,
-			curator: 6,
-			fee: 1,
-			value: 6,
-			bond: 0,
-			status: BountyStatus::Active { expires: 23 },
-			parent: Some(1),
-		});
-
-		assert_eq!(Treasury::bounty_descriptions(0).unwrap(), b"12345");
-		assert_eq!(Treasury::bounty_descriptions(1).unwrap(), b"123");
-		assert_eq!(Treasury::bounty_descriptions(2).unwrap(), b"456");
-
-		assert_eq!(Treasury::pot(), 100 - 50 - 25); // burn 25
-		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 30);
-		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(1)), 14);
-		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(2)), 6);
-	});
-}
-
-#[test]
 fn cancel_and_refund() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
@@ -848,40 +746,24 @@ fn cancel_and_refund() {
 		System::set_block_number(2);
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
-		assert_ok!(Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 4, 20, b"123".to_vec()));
-
 		assert_ok!(Balances::transfer(Origin::signed(0), Treasury::bounty_account_id(0), 10));
-		assert_ok!(Balances::transfer(Origin::signed(0), Treasury::bounty_account_id(1), 5));
 
 		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
 			proposer: 0,
 			curator: 1,
-			fee: 6,
-			value: 30,
+			fee: 10,
+			value: 50,
 			bond: 85,
 			status: BountyStatus::Active { expires: 22 },
-			parent: None,
 		});
 
-		assert_eq!(Treasury::bounties(1).unwrap(), Bounty {
-			proposer: 1,
-			curator: 5,
-			fee: 4,
-			value: 20,
-			bond: 0,
-			status: BountyStatus::Active { expires: 22 },
-			parent: Some(0),
-		});
-
-		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 40);
-		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(1)), 25);
+		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 60);
 
 		assert_noop!(Treasury::cancel_bounty(Origin::signed(0), 0), Error::<Test>::RequireCurator);
 
 		assert_ok!(Treasury::cancel_bounty(Origin::signed(1), 0));
-		assert_ok!(Treasury::cancel_bounty(Origin::signed(5), 1));
 
-		assert_eq!(Treasury::pot(), 90); // - 25 + 10 + 5
+		assert_eq!(Treasury::pot(), 85); // - 25 + 10
 	});
 }
 
@@ -967,7 +849,6 @@ fn extend_expiry() {
 			value: 50,
 			bond: 85,
 			status: BountyStatus::Active { expires: 30 },
-			parent: None,
 		});
 
 		assert_ok!(Treasury::extend_bounty_expiry(Origin::signed(1), 0));
@@ -979,7 +860,6 @@ fn extend_expiry() {
 			value: 50,
 			bond: 85,
 			status: BountyStatus::Active { expires: 30 }, // still the same
-			parent: None,
 		});
 
 		System::set_block_number(25);

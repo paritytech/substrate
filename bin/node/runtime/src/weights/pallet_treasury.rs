@@ -54,12 +54,6 @@ impl pallet_treasury::WeightInfo for WeightInfo {
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
-	fn create_sub_bounty(d: u32, ) -> Weight {
-		(87229000 as Weight)
-			.saturating_add((1000 as Weight).saturating_mul(d as Weight))
-			.saturating_add(DbWeight::get().reads(5 as Weight))
-			.saturating_add(DbWeight::get().writes(6 as Weight))
-	}
 	fn reject_bounty() -> Weight {
 		(43420000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))
