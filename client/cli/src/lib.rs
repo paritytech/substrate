@@ -32,10 +32,7 @@ pub use arg_enums::*;
 pub use commands::*;
 pub use config::*;
 pub use error::*;
-use lazy_static::lazy_static;
-use log::info;
 pub use params::*;
-use regex::Regex;
 pub use runner::*;
 use sc_service::{Configuration, TaskExecutor};
 pub use sc_service::{ChainSpec, Role};
@@ -230,77 +227,60 @@ pub trait SubstrateCli: Sized {
 
 /// Initialize the logger
 pub fn init_logger(pattern: &str) {
-	use ansi_term::Colour;
-
-	let mut builder = env_logger::Builder::new();
-	// Disable info logging by default for some modules:
-	builder.filter(Some("ws"), log::LevelFilter::Off);
-	builder.filter(Some("yamux"), log::LevelFilter::Off);
-	builder.filter(Some("cranelift_codegen"), log::LevelFilter::Off);
-	builder.filter(Some("hyper"), log::LevelFilter::Warn);
-	builder.filter(Some("cranelift_wasm"), log::LevelFilter::Warn);
-	// Always log the special target `sc_tracing`, overrides global level
-	builder.filter(Some("sc_tracing"), log::LevelFilter::Info);
-	// Enable info for others.
-	builder.filter(None, log::LevelFilter::Info);
-
-	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		builder.parse_filters(&lvl);
+	match tracing_log::LogTracer::init() {
+		Ok(_) => (),
+		Err(_) => log::info!("💬 Not registering Substrate logger, as there is already a global logger registered!"),
 	}
 
-	builder.parse_filters(pattern);
+	let mut env_filter = tracing_subscriber::EnvFilter::default()
+		// Disable info logging by default for some modules.
+		.add_directive("ws=off".parse().expect("provided directive is valid"))
+		.add_directive("yamux=off".parse().expect("provided directive is valid"))
+		.add_directive("cranelift_codegen=off".parse().expect("provided directive is valid"))
+		// Set warn logging by default for some modules.
+		.add_directive("cranelife_wasm=warn".parse().expect("provided directive is valid"))
+		.add_directive("hyper=warn".parse().expect("provided directive is valid"))
+		// Always log the special target `sc_tracing`, overrides global level.
+		.add_directive("sc_tracing=info".parse().expect("provided directive is valid"))
+		// Enable info for others.
+		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
+
+	if let Ok(lvl) = std::env::var("RUST_LOG") {
+		if lvl != "" {
+			match lvl.parse() {
+				Ok(directive) => {
+					env_filter = env_filter.add_directive(directive);
+				}
+				// We're not sure if log or tracing is available at this moment, so silently ignore the
+				// parse error.
+				Err(_) => (),
+			}
+		}
+	}
+
+	if pattern != "" {
+		match pattern.parse() {
+			Ok(directive) => {
+				env_filter = env_filter.add_directive(directive);
+			}
+			// We're not sure if log or tracing is available at this moment, so silently ignore the
+			// parse error.
+			Err(_) => (),
+		}
+	}
+
 	let isatty = atty::is(atty::Stream::Stderr);
 	let enable_color = isatty;
 
-	builder.format(move |buf, record| {
-		let now = time::now();
-		let timestamp =
-			time::strftime("%Y-%m-%d %H:%M:%S", &now).expect("Error formatting log timestamp");
+	let subscriber = tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(env_filter)
+		.with_target(false)
+		.with_ansi(enable_color)
+		.compact()
+		.finish();
 
-		let mut output = if log::max_level() <= log::LevelFilter::Info {
-			format!(
-				"{} {}",
-				Colour::Black.bold().paint(timestamp),
-				record.args(),
-			)
-		} else {
-			let name = ::std::thread::current()
-				.name()
-				.map_or_else(Default::default, |x| {
-					format!("{}", Colour::Blue.bold().paint(x))
-				});
-			let millis = (now.tm_nsec as f32 / 1000000.0).floor() as usize;
-			let timestamp = format!("{}.{:03}", timestamp, millis);
-			format!(
-				"{} {} {} {}  {}",
-				Colour::Black.bold().paint(timestamp),
-				name,
-				record.level(),
-				record.target(),
-				record.args()
-			)
-		};
-
-		if !isatty && record.level() <= log::Level::Info && atty::is(atty::Stream::Stdout) {
-			// duplicate INFO/WARN output to console
-			println!("{}", output);
-		}
-
-		if !enable_color {
-			output = kill_color(output.as_ref());
-		}
-
-		writeln!(buf, "{}", output)
-	});
-
-	if builder.try_init().is_err() {
-		info!("💬 Not registering Substrate logger, as there is already a global logger registered!");
+	match tracing::subscriber::set_global_default(subscriber) {
+		Ok(_) => (),
+		Err(_) => tracing::info!("💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"),
 	}
-}
-
-fn kill_color(s: &str) -> String {
-	lazy_static! {
-		static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
-	}
-	RE.replace_all(s, "").to_string()
 }
