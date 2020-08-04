@@ -654,11 +654,14 @@ impl<T: Trait> Module<T> {
 		let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
 		origin.add_filter(move |c: &<T as frame_system::Trait>::Call| {
 			let c = <T as Trait>::Call::from_ref(c);
+			// We make sure the proxy call does access this pallet to change modify proxies.
 			match c.is_sub_type() {
+				// Proxy call cannot add or remove a proxy with more permissions than it already has.
 				Some(Call::add_proxy(_, ref pt, _)) | Some(Call::remove_proxy(_, ref pt, _))
-				if !def.proxy_type.is_superset(&pt) => false,
+					if !def.proxy_type.is_superset(&pt) => false,
+				// Proxy call cannot remove all proxies or kill anonymous proxies unless it has full permissions.
 				Some(Call::remove_proxies(..)) | Some(Call::kill_anonymous(..))
-				if def.proxy_type != T::ProxyType::default() => false,
+					if def.proxy_type != T::ProxyType::default() => false,
 				_ => def.proxy_type.filter(c)
 			}
 		});
