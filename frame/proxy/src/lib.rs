@@ -559,18 +559,9 @@ decl_module! {
 
 			let call_hash = T::CallHasher::hash_of(&call);
 			let now = system::Module::<T>::block_number();
-			let mut execute = false;
-			Self::edit_announcements(&delegate, |ann| {
-				if ann.real == real && ann.call_hash == call_hash {
-					// If delay has passed, we remove the announcement and note to execute the call.
-					if now.saturating_sub(ann.height) >= def.delay {
-						execute = true;
-						return false
-					}
-				}
-				true
-			})?;
-			ensure!(execute, Error::<T>::Unannounced);
+			Self::edit_announcements(&delegate, |ann|
+				ann.real != real || ann.call_hash != call_hash || now.saturating_sub(ann.height) < def.delay
+			).map_err(|_| Error::<T>::Unannounced)?;
 
 			Self::do_proxy(def, real, *call);
 		}
