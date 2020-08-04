@@ -7011,6 +7011,7 @@ dependencies = [
  "sp-finality-grandpa",
  "sp-inherents",
  "sp-io",
+ "sp-node-permission",
  "sp-runtime",
  "sp-session",
  "sp-state-machine",

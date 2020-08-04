@@ -45,6 +45,9 @@ use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
+use sc_client_api::blockchain::HeaderBackend;
+use sp_api::ProvideRuntimeApi;
+use sp_node_permission::NodePermissionApi;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
@@ -180,7 +183,7 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 async fn build_network_future<
 	B: BlockT,
-	C: BlockchainEvents<B>,
+	C: BlockchainEvents<B> + ProvideRuntimeApi<B> + HeaderBackend<B>,
 	H: sc_network::ExHashT
 > (
 	role: Role,
@@ -191,7 +194,10 @@ async fn build_network_future<
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
 	refresh_node_allowlist: bool,
-) {
+)
+where
+	<C as ProvideRuntimeApi<B>>::Api: NodePermissionApi<B>
+{
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
 	// Stream of finalized blocks reported by the client.
@@ -235,8 +241,14 @@ async fn build_network_future<
 					);
 				}
 				if refresh_node_allowlist {
-					let peer_ids = Vec![];
-					ntework.service().refresh_node_allowlist(peer_ids);
+					let id = BlockId::hash(client.info().best_hash);
+					let node_allowlist = match client.runtime_api().nodes(&id) {
+							Ok(r) => r,
+							Err(_) => return, // TODO log error
+						};
+					// Transform to PeerId
+					let peer_ids = node_allowlist.iter().map(|pubkey| pubkey.into_peer_id());
+					network.service().refresh_node_allowlist(peer_ids);
 				}
 			}
 

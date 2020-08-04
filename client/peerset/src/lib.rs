@@ -229,7 +229,7 @@ impl Peerset {
 			message_queue: VecDeque::new(),
 			created: now,
 			latest_time_update: now,
-			None,
+			node_allowlist: None,
 		};
 
 		for node in config.priority_groups.into_iter().flat_map(|(_, l)| l) {
@@ -679,7 +679,7 @@ impl Stream for Peerset {
 					self.on_add_to_priority_group(&group_id, peer_id),
 				Action::RemoveFromPriorityGroup(group_id, peer_id) =>
 					self.on_remove_from_priority_group(&group_id, peer_id),
-				Action::SetNodeAllowList(peers_ids) =>
+				Action::SetNodeAllowList(peer_ids) =>
 					self.on_set_node_allowlist(peer_ids),
 			}
 		}
