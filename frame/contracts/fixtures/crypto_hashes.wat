@@ -1,11 +1,11 @@
 (module
-	(import "env" "seal_input" (func $seal_input (param i32 i32)))
-	(import "env" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 
-	(import "env" "seal_hash_sha2_256" (func $seal_hash_sha2_256 (param i32 i32 i32)))
-	(import "env" "seal_hash_keccak_256" (func $seal_hash_keccak_256 (param i32 i32 i32)))
-	(import "env" "seal_hash_blake2_256" (func $seal_hash_blake2_256 (param i32 i32 i32)))
-	(import "env" "seal_hash_blake2_128" (func $seal_hash_blake2_128 (param i32 i32 i32)))
+	(import "seal0" "seal_hash_sha2_256" (func $seal_hash_sha2_256 (param i32 i32 i32)))
+	(import "seal0" "seal_hash_keccak_256" (func $seal_hash_keccak_256 (param i32 i32 i32)))
+	(import "seal0" "seal_hash_blake2_256" (func $seal_hash_blake2_256 (param i32 i32 i32)))
+	(import "seal0" "seal_hash_blake2_128" (func $seal_hash_blake2_128 (param i32 i32 i32)))
 
 	(import "env" "memory" (memory 1 1))
 

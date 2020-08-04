@@ -1,5 +1,5 @@
 (module
-	(import "env" "seal_rent_allowance" (func $seal_rent_allowance (param i32 i32)))
+	(import "seal0" "seal_rent_allowance" (func $seal_rent_allowance (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 8) reserved for $seal_rent_allowance output

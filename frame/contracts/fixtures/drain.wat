@@ -1,6 +1,6 @@
 (module
-	(import "env" "seal_balance" (func $seal_balance (param i32 i32)))
-	(import "env" "seal_transfer" (func $seal_transfer (param i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_balance" (func $seal_balance (param i32 i32)))
+	(import "seal0" "seal_transfer" (func $seal_transfer (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 8) reserved for $seal_balance output

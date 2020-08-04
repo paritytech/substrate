@@ -1,6 +1,6 @@
 (module
-	(import "env" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "env" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(start $start)

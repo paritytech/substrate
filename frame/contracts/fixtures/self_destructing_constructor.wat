@@ -1,5 +1,5 @@
 (module
-	(import "env" "seal_terminate" (func $seal_terminate (param i32 i32)))
+	(import "seal0" "seal_terminate" (func $seal_terminate (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)

@@ -1,6 +1,6 @@
 ;; This module stores a KV pair into the storage
 (module
-	(import "env" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32)))
+	(import "seal0" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32)))
 	(import "env" "memory" (memory 16 16))
 
 	(func (export "call")

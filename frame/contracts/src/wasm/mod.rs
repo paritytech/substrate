@@ -127,9 +127,9 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 				});
 
 		let mut imports = sp_sandbox::EnvironmentDefinitionBuilder::new();
-		imports.add_memory("env", "memory", memory.clone());
+		imports.add_memory(self::prepare::IMPORT_MODULE_MEMORY, "memory", memory.clone());
 		runtime::Env::impls(&mut |name, func_ptr| {
-			imports.add_host_func("env", name, func_ptr);
+			imports.add_host_func(self::prepare::IMPORT_MODULE_FN, name, func_ptr);
 		});
 
 		let mut runtime = Runtime::new(
@@ -483,7 +483,7 @@ mod tests {
 	;;    value_ptr: u32,
 	;;    value_len: u32,
 	;;) -> u32
-	(import "env" "seal_transfer" (func $seal_transfer (param i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_transfer" (func $seal_transfer (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
@@ -541,7 +541,7 @@ mod tests {
 	;;    output_ptr: u32,
 	;;    output_len_ptr: u32
 	;;) -> u32
-	(import "env" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
@@ -608,7 +608,7 @@ mod tests {
 	;;     output_ptr: u32,
 	;;     output_len_ptr: u32
 	;; ) -> u32
-	(import "env" "seal_instantiate" (func $seal_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_instantiate" (func $seal_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
@@ -669,7 +669,7 @@ mod tests {
 	;;     beneficiary_ptr: u32,
 	;;     beneficiary_len: u32,
 	;; )
-	(import "env" "seal_terminate" (func $seal_terminate (param i32 i32)))
+	(import "seal0" "seal_terminate" (func $seal_terminate (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(call $seal_terminate
@@ -717,7 +717,7 @@ mod tests {
 	;;    output_ptr: u32,
 	;;    output_len_ptr: u32
 	;;) -> u32
-	(import "env" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
@@ -770,8 +770,8 @@ mod tests {
 
 	const CODE_GET_STORAGE: &str = r#"
 (module
-	(import "env" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32) (result i32)))
-	(import "env" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "seal0" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32) (result i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 32) key for get storage
@@ -852,7 +852,7 @@ mod tests {
 	/// calls `seal_caller` and compares the result with the constant 42.
 	const CODE_CALLER: &str = r#"
 (module
-	(import "env" "seal_caller" (func $seal_caller (param i32 i32)))
+	(import "seal0" "seal_caller" (func $seal_caller (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -905,7 +905,7 @@ mod tests {
 	/// calls `seal_address` and compares the result with the constant 69.
 	const CODE_ADDRESS: &str = r#"
 (module
-	(import "env" "seal_address" (func $seal_address (param i32 i32)))
+	(import "seal0" "seal_address" (func $seal_address (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -957,7 +957,7 @@ mod tests {
 
 	const CODE_BALANCE: &str = r#"
 (module
-	(import "env" "seal_balance" (func $seal_balance (param i32 i32)))
+	(import "seal0" "seal_balance" (func $seal_balance (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1009,7 +1009,7 @@ mod tests {
 
 	const CODE_GAS_PRICE: &str = r#"
 (module
-	(import "env" "seal_weight_to_fee" (func $seal_weight_to_fee (param i64 i32 i32)))
+	(import "seal0" "seal_weight_to_fee" (func $seal_weight_to_fee (param i64 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1061,8 +1061,8 @@ mod tests {
 
 	const CODE_GAS_LEFT: &str = r#"
 (module
-	(import "env" "seal_gas_left" (func $seal_gas_left (param i32 i32)))
-	(import "env" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "seal0" "seal_gas_left" (func $seal_gas_left (param i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1116,7 +1116,7 @@ mod tests {
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
 (module
-	(import "env" "seal_value_transferred" (func $seal_value_transferred (param i32 i32)))
+	(import "seal0" "seal_value_transferred" (func $seal_value_transferred (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1168,7 +1168,7 @@ mod tests {
 
 	const CODE_RETURN_FROM_START_FN: &str = r#"
 (module
-	(import "env" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(start $start)
@@ -1204,7 +1204,7 @@ mod tests {
 
 	const CODE_TIMESTAMP_NOW: &str = r#"
 (module
-	(import "env" "seal_now" (func $seal_now (param i32 i32)))
+	(import "seal0" "seal_now" (func $seal_now (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1256,7 +1256,7 @@ mod tests {
 
 	const CODE_MINIMUM_BALANCE: &str = r#"
 (module
-	(import "env" "seal_minimum_balance" (func $seal_minimum_balance (param i32 i32)))
+	(import "seal0" "seal_minimum_balance" (func $seal_minimum_balance (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1307,7 +1307,7 @@ mod tests {
 
 	const CODE_TOMBSTONE_DEPOSIT: &str = r#"
 (module
-	(import "env" "seal_tombstone_deposit" (func $seal_tombstone_deposit (param i32 i32)))
+	(import "seal0" "seal_tombstone_deposit" (func $seal_tombstone_deposit (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1358,8 +1358,8 @@ mod tests {
 
 	const CODE_RANDOM: &str = r#"
 (module
-	(import "env" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
-	(import "env" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "seal0" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0,128) is reserved for the result of PRNG.
@@ -1433,7 +1433,7 @@ mod tests {
 
 	const CODE_DEPOSIT_EVENT: &str = r#"
 (module
-	(import "env" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
+	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "call")
@@ -1475,7 +1475,7 @@ mod tests {
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
 (module
-	(import "env" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
+	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "call")
@@ -1521,7 +1521,7 @@ mod tests {
 
 	const CODE_DEPOSIT_EVENT_DUPLICATES: &str = r#"
 (module
-	(import "env" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
+	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "call")
@@ -1567,7 +1567,7 @@ mod tests {
 	/// calls `seal_block_number` compares the result with the constant 121.
 	const CODE_BLOCK_NUMBER: &str = r#"
 (module
-	(import "env" "seal_block_number" (func $seal_block_number (param i32 i32)))
+	(import "seal0" "seal_block_number" (func $seal_block_number (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1619,8 +1619,8 @@ mod tests {
 
 	const CODE_RETURN_WITH_DATA: &str = r#"
 (module
-	(import "env" "seal_input" (func $seal_input (param i32 i32)))
-	(import "env" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(data (i32.const 32) "\20")
@@ -1677,7 +1677,7 @@ mod tests {
 
 	const CODE_OUT_OF_BOUNDS_ACCESS: &str = r#"
 (module
-	(import "env" "seal_terminate" (func $seal_terminate (param i32 i32)))
+	(import "seal0" "seal_terminate" (func $seal_terminate (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "deploy"))
@@ -1712,7 +1712,7 @@ mod tests {
 
 	const CODE_DECODE_FAILURE: &str = r#"
 (module
-	(import "env" "seal_terminate" (func $seal_terminate (param i32 i32)))
+	(import "seal0" "seal_terminate" (func $seal_terminate (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "deploy"))

@@ -28,6 +28,14 @@ use pwasm_utils::rules;
 use sp_std::prelude::*;
 use sp_runtime::traits::{SaturatedConversion};
 
+/// Currently, all imported functions must be located inside this module. We might support
+/// additional modules for versioning later.
+pub const IMPORT_MODULE_FN: &str = "seal0";
+
+/// Imported memory must be located inside this module. The reason for that is that current
+/// compiler toolchains might not support specifying other modules than "env" for memory imports.
+pub const IMPORT_MODULE_MEMORY: &str = "env";
+
 struct ContractModule<'a> {
 	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).
 	module: elements::Module,
@@ -146,8 +154,11 @@ impl<'a> ContractModule<'a> {
 			.with_grow_cost(self.schedule.grow_mem_cost.clone().saturated_into())
 			.with_forbidden_floats();
 
-		let contract_module = pwasm_utils::inject_gas_counter(self.module, &gas_rules)
-			.map_err(|_| "gas instrumentation failed")?;
+		let contract_module = pwasm_utils::inject_gas_counter(
+			self.module,
+			&gas_rules,
+			IMPORT_MODULE_FN
+		).map_err(|_| "gas instrumentation failed")?;
 		Ok(ContractModule {
 			module: contract_module,
 			schedule: self.schedule,
@@ -270,17 +281,19 @@ impl<'a> ContractModule<'a> {
 		let mut imported_mem_type = None;
 
 		for import in import_entries {
-			if import.module() != "env" {
-				// This import tries to import something from non-"env" module,
-				// but all imports are located in "env" at the moment.
-				return Err("module has imports from a non-'env' namespace");
-			}
-
 			let type_idx = match import.external() {
 				&External::Table(_) => return Err("Cannot import tables"),
 				&External::Global(_) => return Err("Cannot import globals"),
-				&External::Function(ref type_idx) => type_idx,
+				&External::Function(ref type_idx) => {
+					if import.module() != IMPORT_MODULE_FN {
+						return Err("Invalid module for imported function");
+					}
+					type_idx
+				},
 				&External::Memory(ref memory_type) => {
+					if import.module() != IMPORT_MODULE_MEMORY {
+						return Err("Invalid module for imported memory");
+					}
 					if import.field() != "memory" {
 						return Err("Memory import must have the field name 'memory'")
 					}
@@ -548,7 +561,7 @@ mod tests {
 		prepare_test!(table_import,
 			r#"
 			(module
-				(import "env" "table" (table 1 anyfunc))
+				(import "seal0" "table" (table 1 anyfunc))
 
 				(func (export "call"))
 				(func (export "deploy"))
@@ -560,7 +573,7 @@ mod tests {
 		prepare_test!(global_import,
 			r#"
 			(module
-				(global $g (import "env" "global") i32)
+				(global $g (import "seal0" "global") i32)
 				(func (export "call"))
 				(func (export "deploy"))
 			)
@@ -618,7 +631,7 @@ mod tests {
 		prepare_test!(can_import_legit_function,
 			r#"
 			(module
-				(import "env" "nop" (func (param i64)))
+				(import "seal0" "nop" (func (param i64)))
 
 				(func (export "call"))
 				(func (export "deploy"))
@@ -632,7 +645,7 @@ mod tests {
 		prepare_test!(can_not_import_gas_function,
 			r#"
 			(module
-				(import "env" "gas" (func (param i32)))
+				(import "seal0" "gas" (func (param i32)))
 
 				(func (export "call"))
 				(func (export "deploy"))
@@ -641,24 +654,24 @@ mod tests {
 			Err("module imports a non-existent function")
 		);
 
-		// nothing can be imported from non-"env" module for now.
-		prepare_test!(non_env_import,
+		// nothing can be imported from arbitrary modules
+		prepare_test!(memory_not_in_seal0,
 			r#"
 			(module
-				(import "another_module" "memory" (memory 1 1))
+				(import "seal0" "memory" (memory 1 1))
 
 				(func (export "call"))
 				(func (export "deploy"))
 			)
 			"#,
-			Err("module has imports from a non-'env' namespace")
+			Err("Invalid module for imported memory")
 		);
 
 		// wrong signature
 		prepare_test!(wrong_signature,
 			r#"
 			(module
-				(import "env" "gas" (func (param i64)))
+				(import "seal0" "gas" (func (param i64)))
 
 				(func (export "call"))
 				(func (export "deploy"))
@@ -670,7 +683,7 @@ mod tests {
 		prepare_test!(unknown_func_name,
 			r#"
 			(module
-				(import "env" "unknown_func" (func))
+				(import "seal0" "unknown_func" (func))
 
 				(func (export "call"))
 				(func (export "deploy"))
@@ -682,7 +695,7 @@ mod tests {
 		prepare_test!(seal_println_debug_disabled,
 			r#"
 			(module
-				(import "env" "seal_println" (func $seal_println (param i32 i32)))
+				(import "seal0" "seal_println" (func $seal_println (param i32 i32)))
 
 				(func (export "call"))
 				(func (export "deploy"))
@@ -696,7 +709,7 @@ mod tests {
 			let wasm = wat::parse_str(
 				r#"
 				(module
-					(import "env" "seal_println" (func $seal_println (param i32 i32)))
+					(import "seal0" "seal_println" (func $seal_println (param i32 i32)))
 
 					(func (export "call"))
 					(func (export "deploy"))
@@ -745,7 +758,7 @@ mod tests {
 		prepare_test!(try_sneak_export_as_entrypoint,
 			r#"
 			(module
-				(import "env" "panic" (func))
+				(import "seal0" "panic" (func))
 
 				(func (export "deploy"))
 

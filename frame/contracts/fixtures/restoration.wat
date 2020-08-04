@@ -1,7 +1,7 @@
 (module
-	(import "env" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32)))
-	(import "env" "seal_input" (func $seal_input (param i32 i32)))
-	(import "env" "seal_restore_to"
+	(import "seal0" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32)))
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "seal0" "seal_restore_to"
 		(func $seal_restore_to
 			(param i32 i32 i32 i32 i32 i32 i32 i32)
 		)

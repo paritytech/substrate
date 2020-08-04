@@ -1,10 +1,10 @@
 (module
-	(import "env" "seal_input" (func $seal_input (param i32 i32)))
-	(import "env" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32) (result i32)))
-	(import "env" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32)))
-	(import "env" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
-	(import "env" "seal_transfer" (func $seal_transfer (param i32 i32 i32 i32) (result i32)))
-	(import "env" "seal_instantiate" (func $seal_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "seal0" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32) (result i32)))
+	(import "seal0" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32)))
+	(import "seal0" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_transfer" (func $seal_transfer (param i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_instantiate" (func $seal_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 8) Endowment to send when creating contract.
