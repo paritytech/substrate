@@ -18,20 +18,18 @@
 
 use std::{convert::TryFrom, time::SystemTime};
 
-use crate::{NetworkStatus, config::Configuration};
-use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
-use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
-use sp_transaction_pool::PoolStatus;
-use sp_utils::metrics::register_globals;
+use crate::{config::Configuration, NetworkStatus};
+use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, F64, U64};
 use sc_client_api::ClientInfo;
 use sc_network::config::Role;
-
-use sysinfo::{self, ProcessExt, SystemExt};
+use sc_telemetry::{telemetry, SUBSTRATE_INFO};
+use sp_runtime::traits::{Block, NumberFor, SaturatedConversion, UniqueSaturatedInto};
+use sp_transaction_pool::PoolStatus;
+use sp_utils::metrics::register_globals;
 
 #[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 use netstat2::{
-	TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags,
+	iterate_sockets_info, AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo, TcpState,
 };
 
 struct PrometheusMetrics {
@@ -177,43 +175,64 @@ struct FdCounter {
 }
 
 #[derive(Default)]
-struct ProcessInfo {
+pub(crate) struct ProcessInfo {
 	cpu_usage: f64,
 	memory: u64,
 	threads: Option<u64>,
 	open_fd: Option<FdCounter>,
 }
 
-pub struct MetricsService {
-	metrics: Option<PrometheusMetrics>,
-	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
-	system: sysinfo::System,
-	pid: Option<sysinfo::Pid>,
+#[derive(Default)]
+pub(crate) struct LoadAverage {
+	one: f64,
+	five: f64,
+	fifteen: f64,
 }
 
 #[cfg(target_os = "linux")]
-impl MetricsService {
-	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
-		let process = procfs::process::Process::myself()
-			.expect("Procfs doesn't fail on unix. qed");
+mod linux {
+	use super::{FdCounter, LoadAverage, ProcessInfo};
+	use std::convert::TryFrom;
 
-		Self {
-			metrics,
-			system: sysinfo::System::new(),
-			pid: Some(process.pid),
-		}
+	pub(crate) struct System {
+		pub pid: i32,
+		cpu_load: LinuxCpuLoad,
 	}
 
-	fn process_info(&mut self) -> ProcessInfo {
-		let pid = self.pid.clone().expect("unix always has a pid. qed");
-		let mut info = self.process_info_for(&pid);
-		let process = procfs::process::Process::new(pid).expect("Our process exists. qed.");
-		info.threads = process.stat().ok().map(|s|
-			u64::try_from(s.num_threads).expect("There are no negative thread counts. qed"),
-		);
-		info.open_fd = process.fd().ok().map(|i|
-			i.into_iter().fold(FdCounter::default(), |mut f, info| {
-				match info.target {
+	impl System {
+		pub(crate) fn new() -> System {
+			let process =
+				procfs::process::Process::myself().expect("procfs doesn't fail on linux. qed");
+
+			System {
+				pid: process.pid,
+				cpu_load: LinuxCpuLoad::new(),
+			}
+		}
+
+		pub(crate) fn process_info(&mut self) -> ProcessInfo {
+			let mut info = ProcessInfo::default();
+
+			let process =
+				procfs::process::Process::new(self.pid).expect("our process exists. qed.");
+
+			if let Ok(stat) = process.stat() {
+				info.memory = stat.rss_bytes() as u64 / 1024; // we report in kb
+				info.threads = u64::try_from(stat.num_threads).ok();
+
+				if let Ok(kstats) = procfs::KernelStats::new() {
+					if let Some(avg) =
+						self.cpu_load
+							.compute(kstats.cpu_time.len(), kstats.total, stat)
+					{
+						info.cpu_usage = avg;
+					}
+				}
+			}
+
+			info.open_fd = process.fd().ok().map(|i| {
+				i.into_iter().fold(FdCounter::default(), |mut f, info| {
+					match info.target {
 					procfs::process::FDTarget::Path(_) => f.paths += 1,
 					procfs::process::FDTarget::Socket(_) => f.sockets += 1,
 					procfs::process::FDTarget::Net(_) => f.net += 1,
@@ -222,48 +241,195 @@ impl MetricsService {
 					procfs::process::FDTarget::MemFD(_) => f.mem += 1,
 					procfs::process::FDTarget::Other(_,_) => f.other += 1,
 				};
-				f
-			})
-		);
-		info
-	}
-}
+					f
+				})
+			});
 
-#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios"), not(target_os = "linux")))]
-impl MetricsService {
-	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
-		Self {
-			metrics,
-			system: sysinfo::System::new(),
-			pid: sysinfo::get_current_pid().ok(),
+			info
+		}
+
+		pub(crate) fn load_average(&self) -> LoadAverage {
+			let mut load_avg = LoadAverage::default();
+
+			if let Some(avg) = procfs::LoadAverage::new().ok() {
+				load_avg.one = avg.one as f64;
+				load_avg.five = avg.five as f64;
+				load_avg.fifteen = avg.fifteen as f64;
+			}
+
+			load_avg
 		}
 	}
 
-	fn process_info(&mut self) -> ProcessInfo {
-		self.pid.map(|pid| self.process_info_for(&pid)).unwrap_or_default()
+	struct LinuxCpuLoad {
+		last_cpu_time: Option<procfs::CpuTime>,
+		last_process_stat: Option<procfs::process::Stat>,
 	}
-}
 
+	impl LinuxCpuLoad {
+		fn new() -> LinuxCpuLoad {
+			LinuxCpuLoad {
+				last_cpu_time: None,
+				last_process_stat: None,
+			}
+		}
 
-#[cfg(not(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios"))))]
-impl MetricsService {
-	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
-		Self {
-			metrics,
-			pid: None,
+		fn compute(
+			&mut self,
+			n_cpus: usize,
+			current_cpu_time: procfs::CpuTime,
+			current_process_stat: procfs::process::Stat,
+		) -> Option<f64> {
+			// returns the total cpu time since start in ticks
+			let total_cpu_time = |cpu_time: &procfs::CpuTime| {
+				let work_time = cpu_time.user +
+					cpu_time.nice + cpu_time.system +
+					cpu_time.irq.unwrap_or_default() +
+					cpu_time.softirq.unwrap_or_default() +
+					cpu_time.steal.unwrap_or_default();
+
+				let total_time = work_time + cpu_time.idle + cpu_time.iowait.unwrap_or_default();
+				let total_time_ticks = total_time * procfs::ticks_per_second().ok()? as f32;
+
+				Some(total_time_ticks as u64)
+			};
+
+			let last_cpu_time = match self.last_cpu_time.as_ref() {
+				Some(t) => t,
+				None => {
+					self.last_cpu_time = Some(current_cpu_time);
+					return None;
+				}
+			};
+
+			let last_process_stat = match self.last_process_stat.as_ref() {
+				Some(t) => t,
+				None => {
+					self.last_process_stat = Some(current_process_stat);
+					return None;
+				}
+			};
+
+			let total_last_cpu_time = total_cpu_time(last_cpu_time)?;
+			let total_current_cpu_time = total_cpu_time(&current_cpu_time)?;
+
+			let total_cpu_time_delta = total_current_cpu_time.saturating_sub(total_last_cpu_time);
+
+			// these are expressed in ticks
+			let last_process_utime = last_process_stat.utime;
+			let last_process_stime = last_process_stat.stime;
+			let current_process_utime = current_process_stat.utime;
+			let current_process_stime = current_process_stat.stime;
+
+			let process_time_delta = current_process_utime.saturating_sub(last_process_utime) +
+				current_process_stime.saturating_sub(last_process_stime);
+
+			// save the current stats
+			self.last_cpu_time = Some(current_cpu_time);
+			self.last_process_stat = Some(current_process_stat);
+
+			let n_cpus = n_cpus as u64;
+			Some((process_time_delta * n_cpus * 100) as f64 / total_cpu_time_delta as f64)
 		}
 	}
+}
 
-	fn process_info(&mut self) -> ProcessInfo {
-		ProcessInfo::default()
+#[cfg(all(
+	any(unix, windows),
+	not(target_os = "android"),
+	not(target_os = "ios"),
+	not(target_os = "linux")
+))]
+mod sysinfo {
+	use super::{LoadAverage, ProcessInfo};
+	use sysinfo::{ProcessExt, SystemExt};
+
+	pub(crate) struct System {
+		pub pid: sysinfo::Pid,
+		system: sysinfo::System,
+	}
+
+	impl System {
+		pub(crate) fn new() -> System {
+			let pid = sysinfo::get_current_pid().expect("current process must have pid. qed.");
+
+			System {
+				pid,
+				system: sysinfo::System::new(),
+			}
+		}
+
+		pub(crate) fn process_info(&mut self) -> ProcessInfo {
+			let mut info = ProcessInfo::default();
+
+			self.system.refresh_process(self.pid);
+			if let Some(proc) = self.system.get_process(self.pid) {
+				info.cpu_usage = proc.cpu_usage().into();
+				info.memory = proc.memory();
+			}
+
+			info
+		}
+
+		pub(crate) fn load_average(&self) -> LoadAverage {
+			let load_avg = self.system.get_load_average();
+
+			LoadAverage {
+				one: load_avg.one,
+				five: load_avg.five,
+				fifteen: load_avg.fifteen,
+			}
+		}
 	}
 }
 
+#[cfg(any(target_os = "android", target_os = "ios"))]
+mod noop {
+	use super::ProcessInfo;
+
+	pub(crate) struct System;
+
+	impl System {
+		pub(crate) fn new() -> System {
+			System
+		}
+
+		pub(crate) fn process_info(&self) -> ProcessInfo {
+			ProcessInfo::default()
+		}
+
+		pub(crate) fn load_average(&self) -> LoadAverage {
+			LoadAverage::default()
+		}
+	}
+}
+
+#[cfg(target_os = "linux")]
+type System = linux::System;
+#[cfg(all(
+	any(unix, windows),
+	not(target_os = "android"),
+	not(target_os = "ios"),
+	not(target_os = "linux")
+))]
+type System = sysinfo::System;
+#[cfg(any(target_os = "android", target_os = "ios"))]
+type System = noop::System;
+
+pub struct MetricsService {
+	metrics: Option<PrometheusMetrics>,
+	system: System,
+}
 
 impl MetricsService {
-	pub fn with_prometheus(registry: &Registry, config: &Configuration)
-		-> Result<Self, PrometheusError>
-	{
+	pub fn new() -> Self {
+		Self::inner_new(None)
+	}
+
+	pub fn with_prometheus(
+		registry: &Registry,
+		config: &Configuration,
+	) -> Result<Self, PrometheusError> {
 		let role_bits = match config.role {
 			Role::Full => 1u64,
 			Role::Light => 2u64,
@@ -276,52 +442,49 @@ impl MetricsService {
 		})
 	}
 
-	pub fn new() -> Self {
-		Self::inner_new(None)
-	}
-
-	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
-	fn process_info_for(&mut self, pid: &sysinfo::Pid) -> ProcessInfo {
-		let mut info = ProcessInfo::default();
-		self.system.refresh_process(*pid);
-		self.system.get_process(*pid).map(|prc| {
-			info.cpu_usage = prc.cpu_usage().into();
-			info.memory = prc.memory();
-		});
-		info
+	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
+		Self {
+			metrics,
+			system: System::new(),
+		}
 	}
 
 	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 	fn connections_info(&self) -> Option<ConnectionsCount> {
-		self.pid.as_ref().and_then(|pid| {
-			let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
-			let proto_flags = ProtocolFlags::TCP;
-			let netstat_pid = *pid as u32;
+		let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
+		let proto_flags = ProtocolFlags::TCP;
+		let netstat_pid = self.system.pid as u32;
 
-			iterate_sockets_info(af_flags, proto_flags).ok().map(|iter|
-				iter.filter_map(|r|
-					r.ok().and_then(|s| {
-						match s.protocol_socket_info {
-							ProtocolSocketInfo::Tcp(info)
-								if s.associated_pids.contains(&netstat_pid) => Some(info.state),
-							_ => None
+		iterate_sockets_info(af_flags, proto_flags)
+			.ok()
+			.map(|iter| {
+				iter.filter_map(|r| {
+					r.ok().and_then(|s| match s.protocol_socket_info {
+						ProtocolSocketInfo::Tcp(info)
+							if s.associated_pids.contains(&netstat_pid) =>
+						{
+							Some(info.state)
 						}
+						_ => None,
 					})
-				).fold(ConnectionsCount::default(), |mut counter, socket_state| {
+				})
+				.fold(ConnectionsCount::default(), |mut counter, socket_state| {
 					match socket_state {
 						TcpState::Listen => counter.listen += 1,
 						TcpState::Established => counter.established += 1,
 						TcpState::Closed => counter.closed += 1,
 						TcpState::SynSent | TcpState::SynReceived => counter.starting += 1,
-						TcpState::FinWait1 | TcpState::FinWait2 | TcpState::CloseWait
-						| TcpState::Closing | TcpState::LastAck => counter.closing += 1,
-						_ => counter.other += 1
+						TcpState::FinWait1 |
+						TcpState::FinWait2 |
+						TcpState::CloseWait |
+						TcpState::Closing |
+						TcpState::LastAck => counter.closing += 1,
+						_ => counter.other += 1,
 					}
 
 					counter
 				})
-			)
-		})
+			})
 	}
 
 	pub fn tick<T: Block>(
@@ -330,16 +493,16 @@ impl MetricsService {
 		txpool_status: &PoolStatus,
 		net_status: &NetworkStatus<T>,
 	) {
-
 		let best_number = info.chain.best_number.saturated_into::<u64>();
 		let best_hash = info.chain.best_hash;
 		let num_peers = net_status.num_connected_peers;
 		let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
 		let bandwidth_download = net_status.average_download_per_sec;
 		let bandwidth_upload = net_status.average_upload_per_sec;
-		let best_seen_block = net_status.best_seen_block
+		let best_seen_block = net_status
+			.best_seen_block
 			.map(|num: NumberFor<T>| num.unique_saturated_into() as u64);
-		let process_info = self.process_info();
+		let process_info = self.system.process_info();
 
 		telemetry!(
 			SUBSTRATE_INFO;
@@ -424,7 +587,7 @@ impl MetricsService {
 
 			#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 			{
-				let load = self.system.get_load_average();
+				let load = self.system.load_average();
 				metrics.load_avg.with_label_values(&["1min"]).set(load.one);
 				metrics.load_avg.with_label_values(&["5min"]).set(load.five);
 				metrics.load_avg.with_label_values(&["15min"]).set(load.fifteen);
