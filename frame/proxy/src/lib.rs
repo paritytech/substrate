@@ -245,12 +245,12 @@ decl_module! {
 		/// Publish the hash of a proxy-call that will be made in the future.
 		///
 		/// This must be called some number of blocks before the corresponding `proxy` is attempted
-		/// if the delay associated with the peoxy relatioship is greater than zero.
+		/// if the delay associated with the proxy relationship is greater than zero.
 		///
 		/// No more than `MaxPending` announcements may be made at any one time.
 		///
 		/// This will take a deposit of `AnnouncementDepositFactor` as well as
-		/// `AnnoucementDepositBase` if there are no other pending announcements.
+		/// `AnnouncementDepositBase` if there are no other pending announcements.
 		///
 		/// The dispatch origin for this call must be _Signed_ and a proxy of `real`.
 		///
