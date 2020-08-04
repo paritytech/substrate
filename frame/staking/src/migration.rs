@@ -4,13 +4,13 @@ use frame_support::weights::Weight;
 
 /// Deprecated storages used for migration only.
 mod deprecated {
-    use crate::{Trait, BalanceOf, SessionIndex, Exposure};
-    use codec::{Encode, Decode};
+    use crate::{BalanceOf, Exposure, SessionIndex, Trait};
+    use codec::{Decode, Encode};
     use frame_support::{decl_module, decl_storage};
     use sp_std::prelude::*;
 
     // edgeware uses `u64` for `Moment`
-    type Moment = u64;
+    pub type Moment = u64;
 
     /// Reward points of an era. Used to split era total payout between validators.
     #[derive(Encode, Decode, Default)]
@@ -47,6 +47,8 @@ mod deprecated {
             ///
             /// This is keyed by the stash account.
             pub Stakers: map hasher(opaque_blake2_256) T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
+
+            pub StorageVersion: u32;
         }
     }
 }
@@ -88,6 +90,11 @@ struct OldStakingLedger<AccountId, Balance: HasCompact> {
 //
 // The edgeware migration is so big we just assume it consumes the whole block.
 pub fn migrate_to_simple_payouts<T: Trait>() -> Weight {
+    let version = deprecated::StorageVersion::take();
+    if version != 2 {
+        frame_support::runtime_print!("🕊️  Unexpected Staking StorageVersion: {}", version);
+        return 0;
+    }
     sp_runtime::print("🕊️  Migrating Staking...");
     let current_era_start_index = deprecated::CurrentEraStartSessionIndex::get();
     let current_era = <Module<T> as Store>::CurrentEra::get().unwrap_or(0);
@@ -108,7 +115,9 @@ pub fn migrate_to_simple_payouts<T: Trait>() -> Weight {
         let mut exposure_clipped = exposure;
         let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
         if exposure_clipped.others.len() > clipped_max_len {
-            exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value).reverse());
+            exposure_clipped
+                .others
+                .sort_unstable_by(|a, b| a.value.cmp(&b.value).reverse());
             exposure_clipped.others.truncate(clipped_max_len);
         }
         <Module<T> as Store>::ErasStakersClipped::insert(current_era, validator, exposure_clipped);
@@ -119,10 +128,17 @@ pub fn migrate_to_simple_payouts<T: Trait>() -> Weight {
     <Module<T> as Store>::ErasTotalStake::insert(current_era, current_total_stake);
 
     let points = deprecated::CurrentEraPointsEarned::get();
-    <Module<T> as Store>::ErasRewardPoints::insert(current_era, EraRewardPoints {
-        total: points.total,
-        individual: current_elected.iter().cloned().zip(points.individual.iter().cloned()).collect(),
-    });
+    <Module<T> as Store>::ErasRewardPoints::insert(
+        current_era,
+        EraRewardPoints {
+            total: points.total,
+            individual: current_elected
+                .iter()
+                .cloned()
+                .zip(points.individual.iter().cloned())
+                .collect(),
+        },
+    );
 
     let res = <Module<T> as Store>::Ledger::translate_values(
         |old: OldStakingLedger<T::AccountId, BalanceOf<T>>| StakingLedger {
@@ -131,7 +147,7 @@ pub fn migrate_to_simple_payouts<T: Trait>() -> Weight {
             active: old.active,
             unlocking: old.unlocking,
             claimed_rewards: vec![],
-        }
+        },
     );
     if let Err(e) = res {
         frame_support::print("Encountered error in migration of Staking::Ledger map.");
@@ -146,6 +162,8 @@ pub fn migrate_to_simple_payouts<T: Trait>() -> Weight {
     deprecated::CurrentEraStart::kill();
     deprecated::CurrentEraStartSessionIndex::kill();
     deprecated::CurrentEraPointsEarned::kill();
+
+    StorageVersion::put(Releases::V4_0_0);
 
     sp_runtime::print("🕊️  Done Staking.");
     T::MaximumBlockWeight::get()
