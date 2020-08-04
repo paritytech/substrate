@@ -204,15 +204,15 @@ fn announcement_works() {
 		assert_eq!(Balances::reserved_balance(3), 0);
 
 		assert_ok!(Proxy::announce(Origin::signed(3), 1, [1; 32].into()));
-		assert_eq!(Announcements::<Test>::get(3), (2, vec![Announcement {
+		assert_eq!(Announcements::<Test>::get(3), (vec![Announcement {
 			real: 1,
 			call_hash: [1; 32].into(),
 			height: 1,
-		}]));
+		}], 2));
 		assert_eq!(Balances::reserved_balance(3), 2);
 
 		assert_ok!(Proxy::announce(Origin::signed(3), 2, [2; 32].into()));
-		assert_eq!(Announcements::<Test>::get(3), (3, vec![
+		assert_eq!(Announcements::<Test>::get(3), (vec![
 			Announcement {
 				real: 1,
 				call_hash: [1; 32].into(),
@@ -223,7 +223,7 @@ fn announcement_works() {
 				call_hash: [2; 32].into(),
 				height: 1,
 			},
-		]));
+		], 3));
 		assert_eq!(Balances::reserved_balance(3), 3);
 
 		assert_noop!(Proxy::announce(Origin::signed(3), 2, [3; 32].into()), Error::<Test>::TooMany);
@@ -240,11 +240,11 @@ fn remove_announcement_works() {
 		let e = Error::<Test>::NotFound;
 		assert_noop!(Proxy::remove_announcement(Origin::signed(3), 1, [0; 32].into()), e);
 		assert_ok!(Proxy::remove_announcement(Origin::signed(3), 1, [1; 32].into()));
-		assert_eq!(Announcements::<Test>::get(3), (2, vec![Announcement {
+		assert_eq!(Announcements::<Test>::get(3), (vec![Announcement {
 			real: 2,
 			call_hash: [2; 32].into(),
 			height: 1,
-		}]));
+		}], 2));
 		assert_eq!(Balances::reserved_balance(3), 2);
 	});
 }
@@ -261,11 +261,11 @@ fn reject_announcement_works() {
 		let e = Error::<Test>::NotFound;
 		assert_noop!(Proxy::reject_announcement(Origin::signed(4), 3, [1; 32].into()), e);
 		assert_ok!(Proxy::reject_announcement(Origin::signed(1), 3, [1; 32].into()));
-		assert_eq!(Announcements::<Test>::get(3), (2, vec![Announcement {
+		assert_eq!(Announcements::<Test>::get(3), (vec![Announcement {
 			real: 2,
 			call_hash: [2; 32].into(),
 			height: 1,
-		}]));
+		}], 2));
 		assert_eq!(Balances::reserved_balance(3), 2);
 	});
 }
@@ -302,11 +302,11 @@ fn proxy_removes_announcement_and_returns_deposit() {
 
 		system::Module::<Test>::set_block_number(2);
 		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone(), true));
-		assert_eq!(Announcements::<Test>::get(3), (2, vec![Announcement {
+		assert_eq!(Announcements::<Test>::get(3), (vec![Announcement {
 			real: 2,
 			call_hash,
 			height: 1,
-		}]));
+		}], 2));
 		assert_eq!(Balances::reserved_balance(3), 2);
 	});
 }

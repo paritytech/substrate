@@ -161,7 +161,7 @@ decl_storage! {
 
 		/// The announcements made by the proxy (key).
 		pub Announcements: map hasher(twox_64_concat) T::AccountId
-			=> (BalanceOf<T>, Vec<Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>>);
+			=> (Vec<Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>>, BalanceOf<T>);
 	}
 }
 
@@ -277,7 +277,7 @@ decl_module! {
 				height: system::Module::<T>::block_number(),
 			};
 
-			Announcements::<T>::try_mutate(&who, |(ref mut deposit, ref mut pending)| {
+			Announcements::<T>::try_mutate(&who, |(ref mut pending, ref mut deposit)| {
 				ensure!(pending.len() < T::MaxPending::get() as usize, Error::<T>::TooMany);
 				pending.push(announcement);
 				Self::rejig_deposit(
@@ -306,7 +306,7 @@ decl_module! {
 		fn remove_announcement(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
 			Announcements::<T>::try_mutate_exists(&who, |x| -> DispatchResult {
-				let (old_deposit, mut pending) = x.take().ok_or(Error::<T>::NotFound)?;
+				let (mut pending, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
 				let orig_pending_len = pending.len();
 				pending.retain(|ann| ann.real != real || ann.call_hash != call_hash);
 				ensure!(orig_pending_len > pending.len(), Error::<T>::NotFound);
@@ -316,7 +316,7 @@ decl_module! {
 					T::AnnouncementDepositBase::get(),
 					T::AnnouncementDepositFactor::get(),
 					pending.len(),
-				)?.map(|deposit| (deposit, pending));
+				)?.map(|deposit| (pending, deposit));
 				Ok(())
 			})?;
 		}
@@ -336,7 +336,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			Announcements::<T>::try_mutate_exists(&delegate, |x| -> DispatchResult {
-				let (old_deposit, mut pending) = x.take().ok_or(Error::<T>::NotFound)?;
+				let (mut pending, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
 				let orig_pending_len = pending.len();
 				pending.retain(|ann| ann.real != who || ann.call_hash != call_hash);
 				ensure!(orig_pending_len > pending.len(), Error::<T>::NotFound);
@@ -346,7 +346,7 @@ decl_module! {
 					T::AnnouncementDepositBase::get(),
 					T::AnnouncementDepositFactor::get(),
 					pending.len(),
-				)?.map(|deposit| (deposit, pending));
+				)?.map(|deposit| (pending, deposit));
 				Ok(())
 			})?;
 		}
@@ -393,7 +393,7 @@ decl_module! {
 			let mut announcement_period = T::BlockNumber::zero();
 			if announced {
 				Announcements::<T>::try_mutate_exists(&who, |x| -> DispatchResult {
-					if let Some((old_deposit, mut pending)) = x.take() {
+					if let Some((mut pending, old_deposit)) = x.take() {
 						let call_hash = T::CallHasher::hash_of(&call);
 						let now = system::Module::<T>::block_number();
 						pending.retain(|ann|
@@ -410,7 +410,7 @@ decl_module! {
 							T::AnnouncementDepositBase::get(),
 							T::AnnouncementDepositFactor::get(),
 							pending.len(),
-						)?.map(|deposit| (deposit, pending));
+						)?.map(|deposit| (pending, deposit));
 					}
 					Ok(())
 				})?;
