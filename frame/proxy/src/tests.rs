@@ -302,6 +302,8 @@ fn proxy_announced_removes_announcement_and_returns_deposit() {
 		let call_hash = BlakeTwo256::hash_of(&call);
 		assert_ok!(Proxy::announce(Origin::signed(3), 1, call_hash));
 		assert_ok!(Proxy::announce(Origin::signed(3), 2, call_hash));
+		// Too early to execute announced call
+		assert_noop!(Proxy::proxy_announced(Origin::signed(0), 3, 1, None, call.clone()), Error::<Test>::NotFound);
 
 		system::Module::<Test>::set_block_number(2);
 		assert_ok!(Proxy::proxy_announced(Origin::signed(0), 3, 1, None, call.clone()));

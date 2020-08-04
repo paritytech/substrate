@@ -313,7 +313,7 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// Parameters:
-		/// - `delagte`: The account that previously announced the call.
+		/// - `delegate`: The account that previously announced the call.
 		/// - `call_hash`: The hash of the call to be made.
 		#[weight = T::WeightInfo::reject_announcement(T::MaxProxies::get().into())]
 		fn reject_announcement(origin, delegate: T::AccountId, call_hash: CallHashOf<T>) {
@@ -354,16 +354,18 @@ decl_module! {
 
 			let call_hash = T::CallHasher::hash_of(&call);
 			let now = system::Module::<T>::block_number();
-			let mut announcement_period = T::BlockNumber::zero();
-			Self::edit_announcements(&delegate, |ann|
+			let mut execute = false;
+			Self::edit_announcements(&delegate, |ann| {
 				if ann.real == real && ann.call_hash == call_hash {
-					announcement_period = announcement_period.max(now.saturating_sub(ann.height));
-					false
-				} else {
-					true
+					// If delay has passed, we remove the announcement and note to execute the call.
+					if now.saturating_sub(ann.height) >= def.delay {
+						execute = true;
+						return false
+					}
 				}
-			)?;
-			ensure!(announcement_period >= def.delay, Error::<T>::Unannounced);
+				true
+			})?;
+			ensure!(execute, Error::<T>::Unannounced);
 
 			Self::do_proxy(def, real, *call);
 		}
