@@ -98,7 +98,7 @@ benchmarks! {
 		assert_last_event::<T>(RawEvent::ProxyExecuted(Ok(())).into())
 	}
 
-	announced_proxy {
+	proxy_announced {
 		let p in ...;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("anonymous", 0, SEED);
@@ -262,7 +262,7 @@ mod tests {
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_proxy::<Test>());
-			assert_ok!(test_benchmark_announced_proxy::<Test>());
+			assert_ok!(test_benchmark_proxy_announced::<Test>());
 			assert_ok!(test_benchmark_remove_announcement::<Test>());
 			assert_ok!(test_benchmark_reject_announcement::<Test>());
 			assert_ok!(test_benchmark_announce::<Test>());
