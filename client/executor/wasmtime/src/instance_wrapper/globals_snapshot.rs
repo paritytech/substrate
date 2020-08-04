@@ -21,8 +21,11 @@ use sc_executor_common::error::{Result, Error};
 use sp_wasm_interface::Value;
 use crate::imports::{into_value, into_wasmtime_val};
 
+/// Saved value of particular exported global.
 struct SavedValue {
+	/// Index of the export.
 	index: usize,
+	/// Global value.
 	value: Value,
 }
 
