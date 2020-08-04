@@ -190,6 +190,7 @@ async fn build_network_future<
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
+	refresh_node_allowlist: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
@@ -232,6 +233,10 @@ async fn build_network_future<
 						notification.hash,
 						notification.header.number().clone(),
 					);
+				}
+				if refresh_node_allowlist {
+					let peer_ids = Vec![];
+					ntework.service().refresh_node_allowlist(peer_ids);
 				}
 			}
 

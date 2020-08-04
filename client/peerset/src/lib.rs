@@ -50,6 +50,7 @@ enum Action {
 	SetPriorityGroup(String, HashSet<PeerId>),
 	AddToPriorityGroup(String, PeerId),
 	RemoveFromPriorityGroup(String, PeerId),
+	SetNodeAllowList(Vec<PeerId>),
 }
 
 /// Description of a reputation adjustment for a node.
@@ -121,6 +122,11 @@ impl PeersetHandle {
 	/// Remove a peer from a priority group.
 	pub fn remove_from_priority_group(&self, group_id: String, peer_id: PeerId) {
 		let _ = self.tx.unbounded_send(Action::RemoveFromPriorityGroup(group_id, peer_id));
+	}
+
+	/// Refresh node allowlist
+	pub fn set_node_allowlist(&self, peer_ids: Vec<PeerId>) {
+		let _ = self.tx.unbounded_send(Action::SetNodeAllowList(peer_ids));
 	}
 }
 
@@ -199,6 +205,8 @@ pub struct Peerset {
 	created: Instant,
 	/// Last time when we updated the reputations of connected nodes.
 	latest_time_update: Instant,
+	/// List of nodes that are permissioned to connect.
+	node_allowlist: Option<Vec<PeerId>>,
 }
 
 impl Peerset {
@@ -221,6 +229,7 @@ impl Peerset {
 			message_queue: VecDeque::new(),
 			created: now,
 			latest_time_update: now,
+			None,
 		};
 
 		for node in config.priority_groups.into_iter().flat_map(|(_, l)| l) {
@@ -350,6 +359,11 @@ impl Peerset {
 			peersstate::Peer::NotConnected(mut peer) => peer.add_reputation(change.value),
 			peersstate::Peer::Unknown(peer) => peer.discover().add_reputation(change.value),
 		}
+	}
+
+	fn on_set_node_allowlist(&mut self, peer_ids: Vec<PeerId>) {
+		self.node_allowlist = Some(peer_ids);
+		self.alloc_slots(); // TODO only disconnect if it's not empty
 	}
 
 	/// Updates the value of `self.latest_time_update` and performs all the updates that happen
@@ -665,6 +679,8 @@ impl Stream for Peerset {
 					self.on_add_to_priority_group(&group_id, peer_id),
 				Action::RemoveFromPriorityGroup(group_id, peer_id) =>
 					self.on_remove_from_priority_group(&group_id, peer_id),
+				Action::SetNodeAllowList(peers_ids) =>
+					self.on_set_node_allowlist(peer_ids),
 			}
 		}
 	}

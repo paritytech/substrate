@@ -951,6 +951,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
 	}
+
+	/// Inform the network service about refresh node allowlist.
+	pub fn refresh_node_allowlist(&self, peer_ids: Vec<PeerId>) {
+		self.peerset.set_node_allowlist(peer_ids);
+	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
