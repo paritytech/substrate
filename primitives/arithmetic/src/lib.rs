@@ -36,13 +36,13 @@ macro_rules! assert_eq_error_rate {
 pub mod biguint;
 pub mod helpers_128bit;
 pub mod traits;
-mod per_things;
-mod fixed_point;
-mod rational128;
+pub mod per_things;
+pub mod fixed_point;
+pub mod rational;
 
 pub use fixed_point::{FixedPointNumber, FixedPointOperand, FixedI64, FixedI128, FixedU128};
 pub use per_things::{PerThing, InnerOf, UpperOf, Percent, PerU16, Permill, Perbill, Perquintill};
-pub use rational128::Rational128;
+pub use rational::{Rational128, RationalInfinite};
 
 use sp_std::{prelude::*, cmp::Ordering, fmt::Debug, convert::TryInto};
 use traits::{BaseArithmetic, One, Zero, SaturatedConversion, Unsigned};

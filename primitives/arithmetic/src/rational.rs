@@ -17,7 +17,76 @@
 
 use sp_std::{cmp::Ordering, prelude::*};
 use crate::helpers_128bit;
-use num_traits::Zero;
+use num_traits::{Zero, One};
+use crate::biguint::BigUint;
+
+/// A wrapper for any rational number with infinitely large numerator and denominator.
+///
+/// This type does not provide much functionality and is only created to facilitate `cmp` operation
+/// on values like `a/b < c/d` where `a, b, c, d` are all `BigUint`.
+#[derive(Clone, Default, Eq)]
+pub struct RationalInfinite(BigUint, BigUint);
+
+impl RationalInfinite {
+	/// Return the numerator reference.
+	pub fn n(&self) -> &BigUint {
+		&self.0
+	}
+
+	/// Return the denominator reference.
+	pub fn d(&self) -> &BigUint {
+		&self.1
+	}
+
+	/// Build from a raw `n/d`.
+	pub fn from(n: BigUint, d: BigUint) -> Self {
+		Self(n, d.max(BigUint::one()))
+	}
+
+	/// Zero.
+	pub fn zero() -> Self {
+		Self(BigUint::zero(), BigUint::one())
+	}
+
+	/// One.
+	pub fn one() -> Self {
+		Self(BigUint::one(), BigUint::one())
+	}
+}
+
+impl PartialOrd for RationalInfinite {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl Ord for RationalInfinite {
+	fn cmp(&self, other: &Self) -> Ordering {
+		// handle some edge cases.
+		if self.d() == other.d() {
+			self.n().cmp(&other.n())
+		} else if self.d().is_zero() {
+			Ordering::Greater
+		} else if other.d().is_zero() {
+			Ordering::Less
+		} else {
+			// (a/b) cmp (c/d) => (a*d) cmp (c*b)
+			self.n().clone().mul(&other.d()).cmp(&other.n().clone().mul(&self.d()))
+		}
+	}
+}
+
+impl PartialEq for RationalInfinite {
+	fn eq(&self, other: &Self) -> bool {
+		self.cmp(other) == Ordering::Equal
+	}
+}
+
+impl From<Rational128> for RationalInfinite {
+	fn from(t: Rational128) -> Self {
+		Self(t.0.into(), t.1.into())
+	}
+}
 
 /// A wrapper for any rational number with a 128 bit numerator and denominator.
 #[derive(Clone, Copy, Default, Eq)]

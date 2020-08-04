@@ -17,7 +17,7 @@
 
 //! Implementation of the PhragMMS method.
 //!
-//! The naming comes from the fact that this method is highly inspired by phragmen's method, yet it
+//! The naming comes from the fact that this method is highly inspired by Phragmen's method, yet it
 //! _also_ provides a constant factor approximation of the Maximin problem, similar to that of the
 //! MMS algorithm.
 
@@ -37,7 +37,10 @@ use sp_std::{prelude::*, rc::Rc};
 /// - The algorithm is a _best-effort_ to elect `to_elect`. If less candidates are provided, less
 ///   winners are returned, without an error.
 ///
-/// This can only fail of the normalization fails.
+/// This can only fail of the normalization fails. This can happen if for any of the resulting
+/// assignments, `assignment.distribution.map(|p| p.deconstruct()).sum()` fails to fit inside
+/// `UpperOf<P>`. A user of this crate may statically assert that this can never happen and safely
+/// `expect` this to return `Ok`.
 pub fn phragmms<AccountId: IdentifierT, P: PerThing>(
 	to_elect: usize,
 	initial_candidates: Vec<AccountId>,
@@ -125,8 +128,34 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 			// finalise the score value.
 			let score_d = candidate.score.d();
 			let one: ExtendedBalance = P::ACCURACY.into();
-			// TODO: the accuracy here is questionable.
-			let score_n = candidate.approval_stake.checked_mul(one).unwrap_or_else(|| Bounded::max_value());
+			// Note: the accuracy here is questionable.
+			// First, let's consider what will happen if this saturates. In this case, two very
+			// whale-like validators will be effectively the same and their score will be equal.
+			// This is, more or less fine if the threshold of saturation is high and only a small
+			// subset or ever likely to become saturated. Once saturated, the score of these whales
+			// are effectively the same.
+			// Let's consider when this will happen. The approval stake of a target is the sum of
+			// stake of all the voter who have backed this target. Given the fact that the total
+			// issuance of a sane chain will fit in u128, it is safe to also assume that the
+			// approval stake will, since it is a subset of the total issuance at most.
+			// Finally, the only chance of overflow is multiplication by `one`. This highly depends
+			// on the `P` generic argument. With a PerBill and a 12 decimal token the maximum value
+			// that `candidate.approval_stake` can have is:
+			// (2 ** 128 - 1) / 10**9 / 10**12  = 340,282,366,920,938,463
+			// Assuming that each target will have 200,000 voters, then each voter's stake can be
+			// roughly:
+			// (2 ** 128 - 1) / 10**9 / 10**12 / 200000 = 1,701,411,834,604
+			//
+			// It is worth noting that these value would be _very_ different if one were to use
+			// `PerQuintill` as `P`. For now, we prefer the performance of using `Rational128` here.
+			// For the future, a properly benchmarked pull request can prove that using
+			// `RationalInfinite` as the score type does not introduce significant overhead. Then we
+			// can switch the score type to `RationalInfinite` and ensure compatibility with any
+			// crazy token scale.
+			let score_n = candidate.approval_stake.checked_mul(one).unwrap_or_else(|| {
+				println!("## Overflow: {} * {}", candidate.approval_stake, one);
+				Bounded::max_value()
+			});
 			candidate.score = Rational128::from(score_n, score_d);
 
 			// check if we have a new winner.
