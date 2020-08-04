@@ -425,9 +425,7 @@ decl_module! {
 		/// account whose `anonymous` call has corresponding parameters.
 		///
 		/// # <weight>
-		/// P is the number of proxies the user has
-		/// - Base weight: 15.65 + .137 * P µs
-		/// - DB weight: 1 storage read and write.
+		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
 		#[weight = T::WeightInfo::kill_anonymous(T::MaxProxies::get().into())]
 		fn kill_anonymous(origin,
@@ -464,7 +462,9 @@ decl_module! {
 		/// - `call_hash`: The hash of the call to be made by the `real` account.
 		///
 		/// # <weight>
-		/// Weight is a function of the number of proxies the user has (P).
+		/// Weight is a function of:
+		/// - A: the number of announcements made.
+		/// - P: the number of proxies the user has.
 		/// # </weight>
 		#[weight = T::WeightInfo::announce(T::MaxPending::get(), T::MaxProxies::get().into())]
 		fn announce(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
@@ -504,6 +504,12 @@ decl_module! {
 		/// Parameters:
 		/// - `real`: The account that the proxy will make a call on behalf of.
 		/// - `call_hash`: The hash of the call to be made by the `real` account.
+		///
+		/// # <weight>
+		/// Weight is a function of:
+		/// - A: the number of announcements made.
+		/// - P: the number of proxies the user has.
+		/// # </weight>
 		#[weight = T::WeightInfo::remove_announcement(T::MaxPending::get(), T::MaxProxies::get().into())]
 		fn remove_announcement(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
@@ -520,6 +526,12 @@ decl_module! {
 		/// Parameters:
 		/// - `delegate`: The account that previously announced the call.
 		/// - `call_hash`: The hash of the call to be made.
+		///
+		/// # <weight>
+		/// Weight is a function of:
+		/// - A: the number of announcements made.
+		/// - P: the number of proxies the user has.
+		/// # </weight>
 		#[weight = T::WeightInfo::reject_announcement(T::MaxPending::get(), T::MaxProxies::get().into())]
 		fn reject_announcement(origin, delegate: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
@@ -539,7 +551,9 @@ decl_module! {
 		/// - `call`: The call to be made by the `real` account.
 		///
 		/// # <weight>
-		/// Weight is a function of the number of proxies the user has (P).
+		/// Weight is a function of:
+		/// - A: the number of announcements made.
+		/// - P: the number of proxies the user has.
 		/// # </weight>
 		#[weight = {
 			let di = call.get_dispatch_info();
