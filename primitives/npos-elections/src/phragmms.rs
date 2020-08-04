@@ -181,17 +181,56 @@ pub(crate) fn apply_elected<AccountId: IdentifierT>(
 	voters: &mut Vec<Voter<AccountId>>,
 	elected_ptr: CandidatePtr<AccountId>,
 ) {
+	// let elected_who = elected_ptr.borrow().who.clone();
+	// let cutoff = elected_ptr.borrow().score.to_den(1)
+	// 	.expect("(n / d) < u128::max() and (n' / 1) == (n / d), thus n' < u128::max()'; qed.")
+	// 	.n();
+
+	// let mut elected_backed_stake = elected_ptr.borrow().backed_stake;
+	// for voter in voters {
+	// 	if let Some(new_edge_index) = voter.edges.iter().position(|e| e.who == elected_who) {
+	// 		let used_budget: ExtendedBalance = voter.edges.iter().map(|e| e.weight).sum();
+	// 		// we will add this to the edge and the corresponding candidate at the end.
+	// 		let mut new_edge_weight = voter.budget.saturating_sub(used_budget);
+
+	// 		// Iterate over all other edges.
+	// 		for (_, edge) in voter.edges
+	// 			.iter_mut()
+	// 			.enumerate()
+	// 			.filter(|(edge_index, edge_inner)| *edge_index != new_edge_index && edge_inner.weight > 0)
+	// 		{
+	// 			let mut edge_candidate = edge.candidate.borrow_mut();
+	// 			if edge_candidate.backed_stake > cutoff {
+	// 				let stake_to_take = edge.weight.saturating_mul(cutoff) / edge_candidate.backed_stake.max(1);
+
+	// 				// subtract this amount from this edge.
+	// 				edge.weight = edge.weight.saturating_sub(stake_to_take);
+	// 				edge_candidate.backed_stake = edge_candidate.backed_stake.saturating_sub(stake_to_take);
+
+	// 				// inject it into the outer loop's edge.
+	// 				elected_backed_stake = elected_backed_stake.saturating_add(stake_to_take);
+	// 				new_edge_weight = new_edge_weight.saturating_add(stake_to_take);
+	// 			}
+	// 		}
+
+	// 		// do the deferred update.
+	// 		voter.edges[new_edge_index].weight = new_edge_weight;
+	// 		elected_backed_stake = elected_backed_stake.saturating_add(new_edge_weight);
+	// 	}
+	// }
+
+	// // final update.
+	// elected_ptr.borrow_mut().backed_stake = elected_backed_stake;
+
 	let mut elected = elected_ptr.borrow_mut();
 	let cutoff = elected.score.to_den(1)
 		.expect("(n / d) < u128::max() and (n' / 1) == (n / d), thus n' < u128::max()'; qed.")
 		.n();
-
 	for voter_index in 0..voters.len() {
 		let voter = &mut voters[voter_index];
 
 		for new_edge_index in 0..voter.edges.len() {
 			let new_edge_immutable = &voter.edges[new_edge_index];
-
 
 			// ideally, we'd have to do:
 			// new_edge_immutable.candidate.borrow().who == elected.who

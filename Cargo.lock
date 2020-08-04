@@ -6872,6 +6872,7 @@ dependencies = [
  "env_logger 0.7.1",
  "frame-support 2.0.0-rc5",
  "frame-system 2.0.0-rc5",
+ "hex-literal",
  "log 0.4.11",
  "logging_timer",
  "pallet-balances 2.0.0-rc5",
