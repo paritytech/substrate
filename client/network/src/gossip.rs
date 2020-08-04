@@ -38,9 +38,13 @@
 //! of peer and protocol is closed, the queue is silently discarded. It is the role of the user
 //! to track which peers we are connected to.
 //!
-//! If multiple instances of [`DirectedGossip`] exist for the same peer and protocol, or if some
-//! other code uses the [`NetworkService`] to send notifications to this peer and protocol, then
-//! the notifications will be interleaved in an unpredictable way.
+//! In normal situations, messages sent through a [`DirectedGossip`] will arrive in the same
+//! order as they have been sent.
+//! It is possible, in the situation of disconnects and reconnects, that messages arrive in a
+//! different order. See also https://github.com/paritytech/substrate/issues/6756.
+//! However, if multiple instances of [`DirectedGossip`] exist for the same peer and protocol, or
+//! if some other code uses the [`NetworkService`] to send notifications to this combination or
+//! peer and protocol, then the notifications will be interleaved in an unpredictable way.
 //!
 
 use crate::{ExHashT, NetworkService, service::{NotificationSender, NotificationSenderError}};
