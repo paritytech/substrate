@@ -133,7 +133,7 @@ benchmarks! {
 		add_announcements::<T>(T::MaxPending::get() - 1, Some(caller.clone()), None)?;
 	}: _(RawOrigin::Signed(caller.clone()), real, T::CallHasher::hash_of(&call))
 	verify {
-		let (_, announcements) = Announcements::<T>::get(&caller);
+		let (announcements, _) = Announcements::<T>::get(&caller);
 		assert_eq!(announcements.len() as u32, T::MaxPending::get() - 1);
 	}
 
@@ -153,7 +153,7 @@ benchmarks! {
 		add_announcements::<T>(T::MaxPending::get() - 1, Some(caller.clone()), None)?;
 	}: _(RawOrigin::Signed(real), caller.clone(), T::CallHasher::hash_of(&call))
 	verify {
-		let (_, announcements) = Announcements::<T>::get(&caller);
+		let (announcements, _) = Announcements::<T>::get(&caller);
 		assert_eq!(announcements.len() as u32, T::MaxPending::get() - 1);
 	}
 
