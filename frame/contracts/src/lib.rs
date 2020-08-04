@@ -85,6 +85,7 @@ mod storage;
 mod exec;
 mod wasm;
 mod rent;
+mod benchmarking;
 
 #[cfg(test)]
 mod tests;
@@ -94,6 +95,7 @@ use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
 pub use crate::exec::{ExecResult, ExecReturnValue};
+pub use crate::wasm::ReturnCode as RuntimeReturnCode;
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
@@ -107,7 +109,7 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 use frame_support::{
-	decl_module, decl_event, decl_storage, decl_error,
+	decl_module, decl_event, decl_storage, decl_error, ensure,
 	parameter_types, storage::child::ChildInfo,
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
@@ -419,7 +421,30 @@ decl_error! {
 		/// the subsistence threshold. No transfer is allowed to do this in order to allow
 		/// for a tombstone to be created. Use `ext_terminate` to remove a contract without
 		/// leaving a tombstone behind.
-		InsufficientBalance,
+		BelowSubsistenceThreshold,
+		/// The newly created contract is below the subsistence threshold after executing
+		/// its contructor. No contracts are allowed to exist below that threshold.
+		NewContractNotFunded,
+		/// Performing the requested transfer failed for a reason originating in the
+		/// chosen currency implementation of the runtime. Most probably the balance is
+		/// too low or locks are placed on it.
+		TransferFailed,
+		/// Performing a call was denied because the calling depth reached the limit
+		/// of what is specified in the schedule.
+		MaxCallDepthReached,
+		/// The contract that was called is either no contract at all (a plain account)
+		/// or is a tombstone.
+		NotCallable,
+		/// The code supplied to `put_code` exceeds the limit specified in the current schedule.
+		CodeTooLarge,
+		/// No code could be found at the supplied code hash.
+		CodeNotFound,
+		/// A buffer outside of sandbox memory was passed to a contract API function.
+		OutOfBounds,
+		/// Input passed to a contract API function failed to decode as expected type.
+		DecodingFailed,
+		/// Contract trapped during execution.
+		ContractTrapped,
 	}
 }
 
@@ -495,6 +520,7 @@ decl_module! {
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 			let schedule = <Module<T>>::current_schedule();
+			ensure!(code.len() as u32 <= schedule.max_code_size, Error::<T>::CodeTooLarge);
 			let result = wasm::save_code::<T>(code, &schedule);
 			if let Ok(code_hash) = result {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
@@ -619,7 +645,7 @@ impl<T: Trait> Module<T> {
 		address: T::AccountId,
 		key: [u8; 32],
 	) -> sp_std::result::Result<Option<Vec<u8>>, ContractAccessError> {
-		let contract_info = <ContractInfoOf<T>>::get(&address)
+		let contract_info = ContractInfoOf::<T>::get(&address)
 			.ok_or(ContractAccessError::DoesntExist)?
 			.get_alive()
 			.ok_or(ContractAccessError::IsTombstone)?;
@@ -826,6 +852,10 @@ pub struct Schedule {
 
 	/// The maximum length of a subject used for PRNG generation.
 	pub max_subject_len: u32,
+
+	/// The maximum length of a contract code in bytes. This limit applies to the uninstrumented
+	// and pristine form of the code as supplied to `put_code`.
+	pub max_code_size: u32,
 }
 
 // 500 (2 instructions per nano second on 2GHZ) * 1000x slowdown through wasmi
@@ -857,6 +887,7 @@ impl Default for Schedule {
 			max_table_size: 16 * 1024,
 			enable_println: false,
 			max_subject_len: 32,
+			max_code_size: 512 * 1024,
 		}
 	}
 }

@@ -749,7 +749,7 @@ fn do_balancing<AccountId>(
 		e.1 = 0;
 	});
 
-	elected_edges.sort_unstable_by_key(|e|
+	elected_edges.sort_by_key(|e|
 		if let Some(e) = support_map.get(&e.0) { e.total } else { Zero::zero() }
 	);
 

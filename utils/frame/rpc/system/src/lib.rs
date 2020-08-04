@@ -289,7 +289,7 @@ mod tests {
 
 	use futures::executor::block_on;
 	use substrate_test_runtime_client::{runtime::Transfer, AccountKeyring};
-	use sc_transaction_pool::{BasicPool, FullChainApi};
+	use sc_transaction_pool::BasicPool;
 	use sp_runtime::{ApplyExtrinsicResult, transaction_validity::{TransactionValidityError, InvalidTransaction}};
 
 	#[test]
@@ -301,7 +301,6 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
 			spawner,
 			client.clone(),
@@ -341,7 +340,6 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
 			spawner,
 			client.clone(),
@@ -365,7 +363,6 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
 			spawner,
 			client.clone(),
@@ -398,7 +395,6 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
 			spawner,
 			client.clone(),

@@ -36,6 +36,7 @@ use self::runtime::{to_execution_result, Runtime};
 use self::code_cache::load as load_code;
 
 pub use self::code_cache::save as save_code;
+pub use self::runtime::ReturnCode;
 
 /// A prepared wasm module ready for execution.
 #[derive(Clone, Encode, Decode)]
@@ -152,14 +153,12 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use sp_core::H256;
-	use crate::exec::{Ext, StorageKey, ExecReturnValue, ReturnFlags};
+	use crate::exec::{Ext, StorageKey, ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
-	use crate::{CodeHash, BalanceOf};
-	use wabt;
+	use crate::{CodeHash, BalanceOf, Error};
 	use hex_literal::hex;
-	use assert_matches::assert_matches;
 	use sp_runtime::DispatchError;
 	use frame_support::weights::Weight;
 
@@ -226,7 +225,7 @@ mod tests {
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> Result<(u64, ExecReturnValue), DispatchError> {
+		) -> Result<(u64, ExecReturnValue), ExecError> {
 			self.instantiates.push(InstantiateEntry {
 				code_hash: code_hash.clone(),
 				endowment,
@@ -366,7 +365,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
-		) -> Result<(u64, ExecReturnValue), DispatchError> {
+		) -> Result<(u64, ExecReturnValue), ExecError> {
 			(**self).instantiate(code, value, gas_meter, input_data)
 		}
 		fn transfer(
@@ -459,7 +458,7 @@ mod tests {
 	) -> ExecResult {
 		use crate::exec::Vm;
 
-		let wasm = wabt::wat2wasm(wat).unwrap();
+		let wasm = wat::parse_str(wat).unwrap();
 		let schedule = crate::Schedule::default();
 		let prefab_module =
 			prepare_contract::<super::runtime::Env>(&wasm, &schedule).unwrap();
@@ -484,14 +483,16 @@ mod tests {
 	;;    value_ptr: u32,
 	;;    value_len: u32,
 	;;) -> u32
-	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
+	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
-		(call $ext_transfer
-			(i32.const 4)  ;; Pointer to "account" address.
-			(i32.const 8)  ;; Length of "account" address.
-			(i32.const 12) ;; Pointer to the buffer with value to transfer
-			(i32.const 8)  ;; Length of the buffer with value to transfer.
+		(drop
+			(call $ext_transfer
+				(i32.const 4)  ;; Pointer to "account" address.
+				(i32.const 8)  ;; Length of "account" address.
+				(i32.const 12) ;; Pointer to the buffer with value to transfer
+				(i32.const 8)  ;; Length of the buffer with value to transfer.
+			)
 		)
 	)
 	(func (export "deploy"))
@@ -522,7 +523,7 @@ mod tests {
 				to: 7,
 				value: 153,
 				data: Vec::new(),
-				gas_left: 9989500000,
+				gas_left: 9989000000,
 			}]
 		);
 	}
@@ -1504,14 +1505,17 @@ mod tests {
 		// Checks that the runtime traps if there are more than `max_topic_events` topics.
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 
-		assert_matches!(
+		assert_eq!(
 			execute(
 				CODE_DEPOSIT_EVENT_MAX_TOPICS,
 				vec![],
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(DispatchError::Other("contract trapped during execution"))
+			Err(ExecError {
+				error: Error::<Test>::ContractTrapped.into(),
+				origin: ErrorOrigin::Caller,
+			})
 		);
 	}
 
@@ -1546,14 +1550,17 @@ mod tests {
 		// Checks that the runtime traps if there are duplicates.
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 
-		assert_matches!(
+		assert_eq!(
 			execute(
 				CODE_DEPOSIT_EVENT_DUPLICATES,
 				vec![],
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(DispatchError::Other("contract trapped during execution"))
+			Err(ExecError {
+				error: Error::<Test>::ContractTrapped.into(),
+				origin: ErrorOrigin::Caller,
+			})
 		);
 	}
 
@@ -1667,4 +1674,75 @@ mod tests {
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::REVERT, data: hex!("5566778899").to_vec() });
 		assert!(!output.is_success());
 	}
+
+	const CODE_OUT_OF_BOUNDS_ACCESS: &str = r#"
+(module
+	(import "env" "ext_terminate" (func $ext_terminate (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		(call $ext_terminate
+			(i32.const 65536)  ;; Pointer to "account" address (out of bound).
+			(i32.const 8)  ;; Length of "account" address.
+		)
+	)
+)
+"#;
+
+	#[test]
+	fn contract_out_of_bounds_access() {
+		let mut mock_ext = MockExt::default();
+		let result = execute(
+			CODE_OUT_OF_BOUNDS_ACCESS,
+			vec![],
+			&mut mock_ext,
+			&mut GasMeter::new(GAS_LIMIT),
+		);
+
+		assert_eq!(
+			result,
+			Err(ExecError {
+				error: Error::<Test>::OutOfBounds.into(),
+				origin: ErrorOrigin::Caller,
+			})
+		);
+	}
+
+	const CODE_DECODE_FAILURE: &str = r#"
+(module
+	(import "env" "ext_terminate" (func $ext_terminate (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		(call $ext_terminate
+			(i32.const 0)  ;; Pointer to "account" address.
+			(i32.const 4)  ;; Length of "account" address (too small -> decode fail).
+		)
+	)
+)
+"#;
+
+	#[test]
+	fn contract_decode_failure() {
+		let mut mock_ext = MockExt::default();
+		let result = execute(
+			CODE_DECODE_FAILURE,
+			vec![],
+			&mut mock_ext,
+			&mut GasMeter::new(GAS_LIMIT),
+		);
+
+		assert_eq!(
+			result,
+			Err(ExecError {
+				error: Error::<Test>::DecodingFailed.into(),
+				origin: ErrorOrigin::Caller,
+			})
+		);
+	}
+
 }
