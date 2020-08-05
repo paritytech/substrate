@@ -56,12 +56,11 @@ use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_runtime::BuildStorage;
 use sc_client_api::{
 	BlockBackend, BlockchainEvents,
-	backend::StorageProvider,
+	backend::{StorageProvider, Backend as BackendT},
 	proof_provider::ProofProvider,
 	execution_extensions::ExecutionExtensions
 };
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
-use sp_node_permission::NodePermissionApi;
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
@@ -816,7 +815,7 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
-pub fn build_network<TBl, TExPool, TImpQu, TCl>(
+pub fn build_network<TBl, TBE, TExPool, TImpQu, TCl>(
 	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>
 ) -> Result<
 	(
@@ -829,10 +828,10 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 >
 	where
 		TBl: BlockT,
+		TBE: BackendT<TBl> + 'static,
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
-		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
-		<TCl as ProvideRuntimeApi<TBl>>::Api: NodePermissionApi<TBl>,
+		HeaderBackend<TBl> + BlockchainEvents<TBl> + StorageProvider<TBl, TBE> + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
 {

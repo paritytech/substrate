@@ -48,12 +48,13 @@ use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
 use sc_client_api::blockchain::HeaderBackend;
-use sp_api::ProvideRuntimeApi;
-use sp_node_permission::NodePermissionApi;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
+use sp_core::storage::well_known_keys;
+use sp_core::storage::StorageKey;
+use sc_client_api::backend::{Backend as BackendT, StorageProvider};
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -185,7 +186,8 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 async fn build_network_future<
 	B: BlockT,
-	C: BlockchainEvents<B> + ProvideRuntimeApi<B> + HeaderBackend<B>,
+	BE: BackendT<B>,
+	C: BlockchainEvents<B> + StorageProvider<B, BE> + HeaderBackend<B>,
 	H: sc_network::ExHashT
 > (
 	role: Role,
@@ -196,10 +198,7 @@ async fn build_network_future<
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
 	refresh_node_allowlist: bool,
-)
-where
-	<C as ProvideRuntimeApi<B>>::Api: NodePermissionApi<B>
-{
+) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
 	// Stream of finalized blocks reported by the client.
@@ -245,7 +244,7 @@ where
 				
 				if refresh_node_allowlist {
 					let id = BlockId::hash(client.info().best_hash);
-					let node_allowlist = match client.runtime_api().nodes(&id) {
+					let node_allowlist = match client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec())) {
 							Ok(r) => r,
 							Err(_) => return, // TODO log error
 						};

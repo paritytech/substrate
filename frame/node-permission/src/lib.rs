@@ -25,9 +25,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use frame_support::{decl_module, decl_storage, dispatch::DispatchResult};
+use frame_support::{
+    decl_module, decl_storage, dispatch::DispatchResult,
+    storage,
+};
 use frame_system::ensure_signed;
 use sp_core::ed25519::Public;
+use sp_core::storage::well_known_keys;
 
 type NodeId = Public;
 
@@ -54,8 +58,9 @@ decl_module! {
             // TODO ensure to be coucil/root
             let _who = ensure_signed(origin)?;
 
-            NodePublicKeys::mutate(|old| old.push(node_public_key));
-
+            let mut nodes: Vec<NodeId> = storage::unhashed::get(well_known_keys::NODE_ALLOWLIST).unwrap();
+            nodes.push(node_public_key);
+            storage::unhashed::put(well_known_keys::NODE_ALLOWLIST, &nodes);
             Ok(())
         }
     }
