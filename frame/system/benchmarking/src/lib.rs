@@ -25,6 +25,7 @@ use sp_std::prelude::*;
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use sp_runtime::traits::Hash;
 use frame_benchmarking::{benchmarks, account};
+use frame_support::traits::Get;
 use frame_support::storage::{self, StorageMap};
 use frame_system::{Module as System, Call, RawOrigin, DigestItemOf, AccountInfo};
 
@@ -39,7 +40,8 @@ benchmarks! {
 	_ { }
 
 	remark {
-		let remark_message = vec![1; 16_384 as usize];
+		let b in 0 .. T::MaximumBlockLength::get();
+		let remark_message = vec![1; b as usize];
 		let caller = account("caller", 0, SEED);
 	}: _(RawOrigin::Signed(caller), remark_message)
 
@@ -50,6 +52,7 @@ benchmarks! {
 	// Wasm runtime to test the upgrade with. But this is okay because we will make
 	// `set_code` take a full block anyway.
 
+	#[extra]
 	set_code_without_checks {
 		// Assume Wasm ~4MB
 		let code = vec![1; 4_000_000 as usize];

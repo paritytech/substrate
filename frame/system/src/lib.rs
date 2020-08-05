@@ -162,7 +162,6 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 pub trait WeightInfo {
 	fn remark() -> Weight;
 	fn set_heap_pages() -> Weight;
-	fn set_code_without_checks() -> Weight;
 	fn set_changes_trie_config() -> Weight;
 	fn set_storage(i: u32, ) -> Weight;
 	fn kill_storage(i: u32, ) -> Weight;
@@ -554,7 +553,7 @@ decl_module! {
 		/// - Base Weight: 0.665 µs, independent of remark length.
 		/// - No DB operations.
 		/// # </weight>
-		#[weight = 700_000]
+		#[weight = T::SystemWeightInfo::remark()]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
@@ -567,7 +566,7 @@ decl_module! {
 		/// - Base Weight: 1.405 µs
 		/// - 1 write to HEAP_PAGES
 		/// # </weight>
-		#[weight = (T::DbWeight::get().writes(1) + 1_500_000, DispatchClass::Operational)]
+		#[weight = (T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational)]
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
@@ -616,7 +615,7 @@ decl_module! {
 		/// - DB Weight:
 		///     - Writes: Changes Trie, System Digest
 		/// # </weight>
-		#[weight = (T::DbWeight::get().writes(2) + 10_000_000, DispatchClass::Operational)]
+		#[weight = (T::SystemWeightInfo::set_changes_trie_config(), DispatchClass::Operational)]
 		pub fn set_changes_trie_config(origin, changes_trie_config: Option<ChangesTrieConfiguration>) {
 			ensure_root(origin)?;
 			match changes_trie_config.clone() {
@@ -642,8 +641,7 @@ decl_module! {
 		/// - Writes: Number of items
 		/// # </weight>
 		#[weight = (
-			T::DbWeight::get().writes(items.len() as Weight)
-				.saturating_add((items.len() as Weight).saturating_mul(600_000)),
+			T::SystemWeightInfo::set_storage(items.len() as u32),
 			DispatchClass::Operational,
 		)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
@@ -662,8 +660,7 @@ decl_module! {
 		/// - Writes: Number of items
 		/// # </weight>
 		#[weight = (
-			T::DbWeight::get().writes(keys.len() as Weight)
-				.saturating_add((keys.len() as Weight).saturating_mul(400_000)),
+			T::SystemWeightInfo::kill_storage(keys.len() as u32),
 			DispatchClass::Operational,
 		)]
 		fn kill_storage(origin, keys: Vec<Key>) {
@@ -685,8 +682,7 @@ decl_module! {
 		/// - Writes: Number of subkeys + 1
 		/// # </weight>
 		#[weight = (
-			T::DbWeight::get().writes(Weight::from(*_subkeys) + 1)
-				.saturating_add((Weight::from(*_subkeys) + 1).saturating_mul(850_000)),
+			T::SystemWeightInfo::kill_prefix(*_subkeys + 1),
 			DispatchClass::Operational,
 		)]
 		fn kill_prefix(origin, prefix: Key, _subkeys: u32) {
@@ -704,7 +700,7 @@ decl_module! {
 		/// Base Weight: 8.626 µs
 		/// No DB Read or Write operations because caller is already in overlay
 		/// # </weight>
-		#[weight = (10_000_000, DispatchClass::Operational)]
+		#[weight = (T::SystemWeightInfo::suicide(), DispatchClass::Operational)]
 		pub fn suicide(origin) {
 			let who = ensure_signed(origin)?;
 			let account = Account::<T>::get(&who);

@@ -22,43 +22,35 @@
 use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 
 impl crate::WeightInfo for () {
-	// WARNING! Some components were not used: ["b"]
 	fn remark() -> Weight {
-		(1385000 as Weight)
+		(1411000 as Weight)
 	}
-	// WARNING! Some components were not used: ["i"]
 	fn set_heap_pages() -> Weight {
-		(2098000 as Weight)
-			.saturating_add(DbWeight::get().writes(1 as Weight))
-	}
-	// WARNING! Some components were not used: ["b"]
-	fn set_code_without_checks() -> Weight {
-		(21572000 as Weight)
+		(1947000 as Weight)
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	// WARNING! Some components were not used: ["d"]
 	fn set_changes_trie_config() -> Weight {
-		(10546000 as Weight)
+		(9804000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
-			.saturating_add((654000 as Weight).saturating_mul(i as Weight))
+			.saturating_add((655000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	fn kill_storage(i: u32, ) -> Weight {
-		(4210000 as Weight)
-			.saturating_add((490000 as Weight).saturating_mul(i as Weight))
+		(1630000 as Weight)
+			.saturating_add((476000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	fn kill_prefix(p: u32, ) -> Weight {
-		(11452000 as Weight)
-			.saturating_add((831000 as Weight).saturating_mul(p as Weight))
+		(9295000 as Weight)
+			.saturating_add((845000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
 	}
-	// WARNING! Some components were not used: ["n"]
 	fn suicide() -> Weight {
-		(30017000 as Weight)
+		(29068000 as Weight)
 	}
 }
