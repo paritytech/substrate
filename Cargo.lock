@@ -7166,6 +7166,7 @@ dependencies = [
  "sp-tracing",
  "tracing",
  "tracing-core",
+ "tracing-subscriber",
 ]
 
 [[package]]
