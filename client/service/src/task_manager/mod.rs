@@ -309,17 +309,27 @@ impl TaskManager {
 		Box::pin(async move {
 			let mut t1 = self.essential_failed_rx.next().fuse();
 			let mut t2 = self.on_exit.clone().fuse();
-			let mut t3 = select_all(self.children.iter_mut().map(|x| x.future())).fuse();
 
-			loop {
-				futures::select! {
-					_ = t1 => break Err(Error::Other("Essential task failed.".into())),
-					_ = t2 => break Ok(()),
-					(res, _, _) = t3 => if res.is_err() {
-						break res;
-					} else {
-						continue;
-					},
+			if self.children.is_empty() {
+				loop {
+					futures::select! {
+						_ = t1 => break Err(Error::Other("Essential task failed.".into())),
+						_ = t2 => break Ok(()),
+					}
+				}
+			} else {
+				let mut t3 = select_all(self.children.iter_mut().map(|x| x.future())).fuse();
+
+				loop {
+					futures::select! {
+						_ = t1 => break Err(Error::Other("Essential task failed.".into())),
+						_ = t2 => break Ok(()),
+						(res, _, _) = t3 => if res.is_err() {
+							break res;
+						} else {
+							continue;
+						},
+					}
 				}
 			}
 		})
