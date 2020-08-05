@@ -930,7 +930,10 @@ where
 			// remove the round from live rounds and start tracking the next round
 			let mut current_rounds = current_rounds.clone();
 			current_rounds.remove(&round);
-			current_rounds.insert(round + 1, HasVoted::No);
+
+			if !current_rounds.contains_key(&(round + 1)) {
+				current_rounds.insert(round + 1, HasVoted::No);
+			}
 
 			let set_state = VoterSetState::<Block>::Live {
 				completed_rounds,
