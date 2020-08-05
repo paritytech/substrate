@@ -1,15 +1,7 @@
 //! A collection of node-specific RPC methods.
-//!
-//! Since `substrate` core functionality makes no assumptions
-//! about the modules used inside the runtime, so do
-//! RPC methods defined in `sc-rpc` crate.
-//! It means that `client/rpc` can't have any methods that
-//! need some strong assumptions about the particular runtime.
-//!
-//! The RPCs available in this crate however can make some assumptions
-//! about how the runtime is constructed and what FRAME pallets
-//! are part of it. Therefore all node-runtime-specific RPCs can
-//! be placed here or imported from corresponding FRAME RPC definitions.
+//! Substrate provides the `sc-rpc` crate, which defines the core RPC layer
+//! used by Substrate nodes. This file extends those RPC definitions with
+//! capabilities that are specific to this project's runtime configuration.
 
 #![warn(missing_docs)]
 
