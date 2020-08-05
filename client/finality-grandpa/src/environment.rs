@@ -931,6 +931,8 @@ where
 			let mut current_rounds = current_rounds.clone();
 			current_rounds.remove(&round);
 
+			// NOTE: this condition should always hold as GRANDPA rounds are always
+			// started in increasing order, still it's better to play it safe.
 			if !current_rounds.contains_key(&(round + 1)) {
 				current_rounds.insert(round + 1, HasVoted::No);
 			}
