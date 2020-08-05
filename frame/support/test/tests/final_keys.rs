@@ -53,12 +53,12 @@ mod instance {
 	pub trait Trait<I = DefaultInstance>: super::no_instance::Trait {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait<I>, I: Instantiable = DefaultInstance>
+		pub struct Module<T: Trait<I>, I: Instance = DefaultInstance>
 			for enum Call where origin: T::Origin {}
 	}
 
 	frame_support::decl_storage!{
-		trait Store for Module<T: Trait<I>, I: Instantiable = DefaultInstance>
+		trait Store for Module<T: Trait<I>, I: Instance = DefaultInstance>
 			as FinalKeysSome
 		{
 			pub Value config(value): u32;
