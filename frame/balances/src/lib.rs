@@ -154,6 +154,7 @@ mod tests;
 mod tests_local;
 mod tests_composite;
 mod benchmarking;
+mod default_weight;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
@@ -185,14 +186,6 @@ pub trait WeightInfo {
 	fn set_balance_creating() -> Weight;
 	fn set_balance_killing() -> Weight;
 	fn force_transfer() -> Weight;
-}
-
-impl WeightInfo for () {
-	fn transfer() -> Weight { 1_000_000_000 }
-	fn transfer_keep_alive() -> Weight { 1_000_000_000 }
-	fn set_balance_creating() -> Weight { 1_000_000_000 }
-	fn set_balance_killing() -> Weight { 1_000_000_000 }
-	fn force_transfer() -> Weight { 1_000_000_000 }
 }
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
