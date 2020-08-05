@@ -347,14 +347,14 @@ impl TaskManager {
 		}
 	}
 
-	/// Set what the task manager should keep alivei
+	/// Set what the task manager should keep alive.
 	pub(super) fn keep_alive<T: 'static + Send + Sync>(&mut self, to_keep_alive: T) {
 		self.keep_alive = Box::new(to_keep_alive);
 	}
 
 	/// Register another TaskManager to terminate and gracefully shutdown when the parent
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
-	/// task fails. (But don't end the parent if a child terminates without failure.)
+	/// task fails. (But don't end the parent if a child's normal task fails.)
 	pub fn add_children(&mut self, child: TaskManager) {
 		self.children.push(Box::new(child));
 	}
