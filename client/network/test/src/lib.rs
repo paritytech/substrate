@@ -27,7 +27,7 @@ mod bitswap;
 use std::{collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData, task::{Poll, Context as FutureContext}};
 
 use libp2p::build_multiaddr;
-use log::trace;
+use log::{trace, warn};
 use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
 	HeaderBackend, Result as ClientResult,
@@ -169,6 +169,11 @@ impl PeersClient {
 			PeersClient::Full(ref _client, ref backend) => backend.offchain_storage().map(PeerOffchainStorage::Full),
 			PeersClient::Light(ref _client, ref backend) => backend.offchain_storage().map(PeerOffchainStorage::Light),
 		}
+	}
+
+	#[cfg(test)]
+	fn bitswap_storage(&self) -> Option<sc_service::BitswapStorage<PeerOffchainStorage>> {
+		self.offchain_storage().map(sc_service::BitswapStorage::new)
 	}
 
 	pub fn info(&self) -> BlockchainInfo<Block> {
@@ -957,7 +962,11 @@ pub trait TestNetFactory: Sized {
 
 				while let Poll::Ready(Some(event)) = peer.bitswap_stream.as_mut().poll_next(cx) {
 					if let Some(offchain) = peer.client.offchain_storage() {
-						sc_service::handle_bitswap_event(&mut peer.network, event, offchain);
+						if let Err(err) =
+							sc_service::handle_bitswap_event(&mut peer.network, event, offchain)
+						{
+							warn!("{}", err);
+						}
 					}
 				}
 			}

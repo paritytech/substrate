@@ -18,7 +18,6 @@
 
 use futures::executor::block_on;
 use super::*;
-use sp_core::offchain::OffchainStorage;
 
 #[test]
 fn test_bitswap_peers_connect() {
@@ -89,17 +88,17 @@ fn test_bitswap_sending_blocks_works() {
 	wait_until_x_peers_want_cid(&mut net, 0, 0..3, &cid);
 
 	assert_eq!(
-		net.peer(0).client.offchain_storage().unwrap().get(b"bitswap", &cid.to_bytes()),
+		net.peer(0).client.bitswap_storage().unwrap().get(&cid).ok(),
 		Some(block.to_vec())
 	);
 
 	assert_eq!(
-		net.peer(1).client.offchain_storage().unwrap().get(b"bitswap", &cid.to_bytes()),
+		net.peer(1).client.bitswap_storage().unwrap().get(&cid).ok(),
 		None
 	);
 
 	assert_eq!(
-		net.peer(2).client.offchain_storage().unwrap().get(b"bitswap", &cid.to_bytes()),
+		net.peer(2).client.bitswap_storage().unwrap().get(&cid).ok(),
 		None
 	);
 }
@@ -114,7 +113,7 @@ fn test_bitswap_sending_blocks_from_store_works() {
 	let hash = multihash::Code::Sha2_256.digest(block);
 	let cid = cid::Cid::new_v1(cid::Codec::Raw, hash);
 
-	net.peer(2).client.offchain_storage().unwrap().set(b"bitswap", &cid.to_bytes(), block);
+	net.peer(2).client.bitswap_storage().unwrap().insert(&cid, block.into()).unwrap();
 
 	net.block_until_connected();
 
@@ -125,17 +124,17 @@ fn test_bitswap_sending_blocks_from_store_works() {
 	wait_until_x_peers_want_cid(&mut net, 0, 0..3, &cid);
 
 	assert_eq!(
-		net.peer(0).client.offchain_storage().unwrap().get(b"bitswap", &cid.to_bytes()),
+		net.peer(0).client.bitswap_storage().unwrap().get(&cid).ok(),
 		Some(block.to_vec())
 	);
 
 	assert_eq!(
-		net.peer(1).client.offchain_storage().unwrap().get(b"bitswap", &cid.to_bytes()),
+		net.peer(1).client.bitswap_storage().unwrap().get(&cid).ok(),
 		None
 	);
 
 	assert_eq!(
-		net.peer(2).client.offchain_storage().unwrap().get(b"bitswap", &cid.to_bytes()),
+		net.peer(2).client.bitswap_storage().unwrap().get(&cid).ok(),
 		Some(block.to_vec())
 	);
 }

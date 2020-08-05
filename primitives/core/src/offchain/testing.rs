@@ -86,6 +86,11 @@ impl TestPersistentOffchainDB {
 			}
 		}
 	}
+
+	/// Get whether the DB is empty.
+	pub fn is_empty(&self) -> bool {
+		self.persistent.read().storage.is_empty()
+	}
 }
 
 impl OffchainStorage for TestPersistentOffchainDB {

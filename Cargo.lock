@@ -2847,6 +2847,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "libipld"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "378647e4d5658b199cf651d52cc6a1fb454d161759141fb15679eb99ab19b934"
+dependencies = [
+ "async-std",
+ "libipld-cbor",
+ "libipld-cbor-derive",
+ "libipld-core",
+ "libipld-macro",
+ "thiserror",
+]
+
+[[package]]
+name = "libipld-cbor"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d243510ff13f7155c2d5a5ef4609ca37c67729b5c4a4d5b628ea40bcc1a5d1a8"
+dependencies = [
+ "byteorder",
+ "libipld-core",
+ "thiserror",
+]
+
+[[package]]
+name = "libipld-cbor-derive"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ebad2c94813ea57b19acf05135674caf44650b94f6a897c376da9670af32e90"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.6",
+ "syn 1.0.33",
+ "synstructure",
+]
+
+[[package]]
 name = "libipld-core"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2856,6 +2893,15 @@ dependencies = [
  "multibase",
  "multihash",
  "thiserror",
+]
+
+[[package]]
+name = "libipld-macro"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34e065cbbf044ae30ff3bb84f91a94089f797521270d22db2e147511d5f2ac73"
+dependencies = [
+ "libipld-core",
 ]
 
 [[package]]
@@ -7104,6 +7150,7 @@ dependencies = [
  "cid",
  "derive_more",
  "directories",
+ "env_logger 0.7.1",
  "exit-future",
  "futures 0.1.29",
  "futures 0.3.5",
@@ -7111,6 +7158,7 @@ dependencies = [
  "hash-db",
  "jsonrpc-pubsub",
  "lazy_static",
+ "libipld",
  "log",
  "multihash",
  "netstat2",

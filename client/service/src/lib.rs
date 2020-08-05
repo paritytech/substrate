@@ -33,6 +33,7 @@ pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
 mod task_manager;
+mod bitswap;
 
 use std::{io, pin::Pin};
 use std::net::SocketAddr;
@@ -83,6 +84,7 @@ pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
 use sc_client_api::BlockchainEvents;
 pub use sc_keystore::KeyStorePtr as KeyStore;
+pub use bitswap::{BitswapStorage, StoreError as BitswapStorageError};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -342,7 +344,9 @@ async fn build_network_future<
 
 			event = bitswap_events.select_next_some() => {
 				if let Some(offchain) = backend.offchain_storage() {
-					handle_bitswap_event(&mut network, event, offchain);
+					if let Err(err) = handle_bitswap_event(&mut network, event, offchain) {
+						warn!("{}", err);
+					}
 				}
 			}
 		}
@@ -353,21 +357,25 @@ async fn build_network_future<
 pub fn handle_bitswap_event<B: BlockT, H: sc_network::ExHashT, S: OffchainStorage>(
 	network: &mut sc_network::NetworkWorker<B, H>,
 	event: sc_network::BitswapEvent,
-	mut storage: S,
-) {
+	storage: S,
+) -> Result<(), BitswapStorageError> {
+	let mut storage = BitswapStorage::new(storage);
+
 	match event {
 		sc_network::BitswapEvent::ReceivedBlock(_, cid, data) => {
-			let cid_bytes = &cid.to_bytes()[..];
-			storage.set(b"bitswap", cid_bytes, &data[..]);
+			storage.insert(&cid, data)
 		},
 		sc_network::BitswapEvent::ReceivedWant(peer_id, cid, _) => {
-			if let Some(data) = storage.get(b"bitswap", &cid.to_bytes()[..]) {
-				network.bitswap_api().send_block(&peer_id, cid, data.into_boxed_slice());
+			match storage.get(&cid) {
+				Ok(data) => {
+					network.bitswap_api().send_block(&peer_id, cid, data.into_boxed_slice());
+					Ok(())
+				},
+				Err(error) => Err(error)
 			}
 		}
 	}
 }
-
 
 #[cfg(not(target_os = "unknown"))]
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
