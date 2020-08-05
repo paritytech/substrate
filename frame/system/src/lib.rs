@@ -139,6 +139,7 @@ mod extensions;
 mod weights;
 #[cfg(test)]
 mod tests;
+mod default_weights;
 
 pub use extensions::{
 	check_mortality::CheckMortality, check_genesis::CheckGenesis, check_nonce::CheckNonce,
@@ -159,25 +160,14 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 pub trait WeightInfo {
-	fn remark(b: u32, ) -> Weight;
-	fn set_heap_pages(i: u32, ) -> Weight;
-	fn set_code_without_checks(b: u32, ) -> Weight;
-	fn set_changes_trie_config(d: u32, ) -> Weight;
+	fn remark() -> Weight;
+	fn set_heap_pages() -> Weight;
+	fn set_code_without_checks() -> Weight;
+	fn set_changes_trie_config() -> Weight;
 	fn set_storage(i: u32, ) -> Weight;
 	fn kill_storage(i: u32, ) -> Weight;
 	fn kill_prefix(p: u32, ) -> Weight;
-	fn suicide(n: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn remark(_b: u32, ) -> Weight { 1_000_000_000 }
-	fn set_heap_pages(_i: u32, ) -> Weight { 1_000_000_000 }
-	fn set_code_without_checks(_b: u32, ) -> Weight { 1_000_000_000 }
-	fn set_changes_trie_config(_d: u32, ) -> Weight { 1_000_000_000 }
-	fn set_storage(_i: u32, ) -> Weight { 1_000_000_000 }
-	fn kill_storage(_i: u32, ) -> Weight { 1_000_000_000 }
-	fn kill_prefix(_p: u32, ) -> Weight { 1_000_000_000 }
-	fn suicide(_n: u32, ) -> Weight { 1_000_000_000 }
+	fn suicide() -> Weight;
 }
 
 pub trait Trait: 'static + Eq + Clone {

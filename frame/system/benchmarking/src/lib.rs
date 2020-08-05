@@ -39,29 +39,24 @@ benchmarks! {
 	_ { }
 
 	remark {
-		// # of Bytes
-		let b in 0 .. 16_384;
-		let remark_message = vec![1; b as usize];
+		let remark_message = vec![1; 16_384 as usize];
 		let caller = account("caller", 0, SEED);
 	}: _(RawOrigin::Signed(caller), remark_message)
 
 	set_heap_pages {
-		// Heap page size
-		let i in 0 .. u32::max_value();
-	}: _(RawOrigin::Root, i.into())
+	}: _(RawOrigin::Root, Default::default())
 
 	// `set_code` was not benchmarked because it is pretty hard to come up with a real
 	// Wasm runtime to test the upgrade with. But this is okay because we will make
 	// `set_code` take a full block anyway.
 
 	set_code_without_checks {
-		// Version number
-		let b in 0 .. 16_384;
-		let code = vec![1; b as usize];
+		// Assume Wasm ~4MB
+		let code = vec![1; 4_000_000 as usize];
 	}: _(RawOrigin::Root, code)
 	verify {
 		let current_code = storage::unhashed::get_raw(well_known_keys::CODE).ok_or("Code not stored.")?;
-		assert_eq!(current_code.len(), b as usize);
+		assert_eq!(current_code.len(), 4_000_000 as usize);
 	}
 
 	set_changes_trie_config {
@@ -141,10 +136,9 @@ benchmarks! {
 	}
 
 	suicide {
-		let n in 1 .. 1000;
 		let caller: T::AccountId = account("caller", 0, SEED);
 		let account_info = AccountInfo::<T::Index, T::AccountData> {
-			nonce: n.into(),
+			nonce: 1337,
 			refcount: 0,
 			data: T::AccountData::default()
 		};

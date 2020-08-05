@@ -107,6 +107,13 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 				 VERSION,
 			)?;
 
+			// allow statements
+			write!(
+				file,
+				"#![allow(unused_parens)]\n\n",
+				 VERSION,
+			)?;
+
 			// general imports
 			write!(
 				file,
