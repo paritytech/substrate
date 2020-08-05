@@ -3785,7 +3785,6 @@ dependencies = [
  "sp-inherents",
  "sp-io",
  "sp-keyring",
- "sp-node-permission",
  "sp-offchain",
  "sp-runtime",
  "sp-session",
@@ -4564,7 +4563,6 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "sp-core",
- "sp-node-permission",
  "sp-std",
 ]
 
@@ -7014,7 +7012,6 @@ dependencies = [
  "sp-finality-grandpa",
  "sp-inherents",
  "sp-io",
- "sp-node-permission",
  "sp-runtime",
  "sp-session",
  "sp-state-machine",
@@ -7949,18 +7946,6 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "strum",
-]
-
-[[package]]
-name = "sp-node-permission"
-version = "2.0.0-rc5"
-dependencies = [
- "parity-scale-codec",
- "sp-api",
- "sp-application-crypto",
- "sp-core",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]

@@ -139,7 +139,6 @@ members = [
 	"primitives/finality-grandpa",
 	"primitives/inherents",
 	"primitives/keyring",
-	"primitives/node-permission",
 	"primitives/offchain",
 	"primitives/panic-handler",
 	"primitives/npos-elections",

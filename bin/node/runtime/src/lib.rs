@@ -1112,12 +1112,6 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sp_node_permission::NodePermissionApi<Block> for Runtime {
-		fn nodes() -> Vec<NodeId> {
-			NodePermission::nodes()
-		}
-	}
-
 	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			SessionKeys::generate(seed)
