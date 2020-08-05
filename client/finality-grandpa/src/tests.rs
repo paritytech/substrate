@@ -414,7 +414,7 @@ fn add_forced_change(
 
 #[test]
 fn finalize_3_voters_no_observers() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
@@ -519,7 +519,7 @@ fn finalize_3_voters_1_full_observer() {
 
 #[test]
 fn transition_3_voters_twice_1_full_observer() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let peers_a = &[
 		Ed25519Keyring::Alice,
 		Ed25519Keyring::Bob,
@@ -789,7 +789,7 @@ fn sync_justifications_on_change_blocks() {
 
 #[test]
 fn finalizes_multiple_pending_changes_in_order() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 
 	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
@@ -849,7 +849,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 
 #[test]
 fn force_change_to_new_set() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 	// two of these guys are offline.
 	let genesis_authorities = &[
@@ -1011,7 +1011,7 @@ fn voter_persists_its_votes() {
 	use futures::future;
 	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 
 	// we have two authorities but we'll only be running the voter for alice
@@ -1267,7 +1267,7 @@ fn voter_persists_its_votes() {
 
 #[test]
 fn finalize_3_voters_1_light_observer() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 	let authorities = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(authorities);
@@ -1312,7 +1312,7 @@ fn finalize_3_voters_1_light_observer() {
 
 #[test]
 fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 
 	let peers = &[Ed25519Keyring::Alice];
@@ -1342,7 +1342,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	// for debug: to ensure that without forced change light client will sync finality proof
 	const FORCE_CHANGE: bool = true;
 
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 
 	// two of these guys are offline.
@@ -1406,7 +1406,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 
 #[test]
 fn voter_catches_up_to_latest_round_when_behind() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];

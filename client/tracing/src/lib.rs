@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use serde::ser::{Serialize, Serializer, SerializeMap};
-use tracing_core::{
+use tracing::{
 	field::{Visit, Field},
 	Level,
 	metadata::Metadata,
@@ -385,6 +385,7 @@ impl TraceHandler for TelemetryTraceHandler {
 mod tests {
 	use super::*;
 	use std::sync::Arc;
+	use tracing_subscriber::layer::SubscriberExt;
 
 	struct TestTraceHandler {
 		spans: Arc<Mutex<Vec<SpanDatum>>>,
@@ -396,16 +397,17 @@ mod tests {
 		}
 	}
 
-	fn setup_subscriber() -> (ProfilingSubscriber, Arc<Mutex<Vec<SpanDatum>>>) {
+	fn setup_subscriber() -> (tracing_subscriber::layer::Layered<ProfilingLayer, tracing_subscriber::fmt::Subscriber>, Arc<Mutex<Vec<SpanDatum>>>) {
 		let spans = Arc::new(Mutex::new(Vec::new()));
 		let handler = TestTraceHandler {
 			spans: spans.clone(),
 		};
-		let test_subscriber = ProfilingSubscriber::new_with_handler(
+		let layer = ProfilingLayer::new_with_handler(
 			Box::new(handler),
 			"test_target"
 		);
-		(test_subscriber, spans)
+		let subscriber = tracing_subscriber::fmt().finish().with(layer);
+		(subscriber, spans)
 	}
 
 	#[test]

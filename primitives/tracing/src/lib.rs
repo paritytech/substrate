@@ -44,6 +44,15 @@ pub mod proxy;
 #[cfg(feature = "std")]
 use std::sync::atomic::{AtomicBool, Ordering};
 
+#[cfg(feature = "std")]
+/// Try to init a simple tracing subscriber with log compatibility layer.
+/// Ignores any error. Useful for testing.
+pub fn try_init_simple() {
+	let _ = tracing_log::LogTracer::init();
+	let subscriber = tracing_subscriber::fmt().finish();
+	let _ = tracing::subscriber::set_global_default(subscriber);
+}
+
 /// Flag to signal whether to run wasm tracing
 #[cfg(feature = "std")]
 static WASM_TRACING_ENABLED: AtomicBool = AtomicBool::new(false);
