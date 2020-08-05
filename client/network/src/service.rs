@@ -30,7 +30,8 @@
 use crate::{
 	ExHashT, NetworkStateInfo,
 	behaviour::{Behaviour, BehaviourOut},
-	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
+	config::{parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
+	DhtEvent,
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -42,7 +43,7 @@ use crate::{
 	transport, ReputationChange,
 };
 use futures::prelude::*;
-use libp2p::{PeerId, Multiaddr};
+use libp2p::{PeerId, multiaddr, Multiaddr};
 use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}, either::EitherError};
 use libp2p::kad::record;
 use libp2p::ping::handler::PingFailure;
@@ -878,21 +879,27 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Modify a peerset priority group.
 	///
-	/// Returns an `Err` if one of the given addresses contains an invalid
-	/// peer ID (which includes the local peer ID).
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
 	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = peers.into_iter()
-			.map(|p| match parse_addr(p) {
-				Err(e) => Err(format!("{:?}", e)),
-				Ok((peer, addr)) =>
-					// Make sure the local peer ID is never added to the PSM
-					// or added as a "known address", even if given.
-					if peer == self.local_peer_id {
-						Err("Local peer ID in priority group.".to_string())
-					} else {
-						Ok((peer, addr))
-					}
-				})
+			.map(|mut addr| {
+				let peer = match addr.pop() {
+					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
+						.map_err(|_| "Invalid PeerId format".to_string())?,
+					_ => return Err("Missing PeerId from address".to_string()),
+				};
+
+				// Make sure the local peer ID is never added to the PSM
+				// or added as a "known address", even if given.
+				if peer == self.local_peer_id {
+					Err("Local peer ID in priority group.".to_string())
+				} else {
+					Ok((peer, addr))
+				}
+			})
 			.collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()?;
 
 		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
@@ -1119,6 +1126,7 @@ struct Metrics {
 	incoming_connections_total: Counter<U64>,
 	is_major_syncing: Gauge<U64>,
 	issued_light_requests: Counter<U64>,
+	kademlia_query_duration: HistogramVec,
 	kademlia_random_queries_total: CounterVec<U64>,
 	kademlia_records_count: GaugeVec<U64>,
 	kademlia_records_sizes_total: GaugeVec<U64>,
@@ -1195,6 +1203,17 @@ impl Metrics {
 			issued_light_requests: register(Counter::new(
 				"issued_light_requests",
 				"Number of light client requests that our node has issued.",
+			)?, registry)?,
+			kademlia_query_duration: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"sub_libp2p_kademlia_query_duration",
+						"Duration of Kademlia queries per query type"
+					),
+					buckets: prometheus_endpoint::exponential_buckets(0.5, 2.0, 10)
+						.expect("parameters are always valid values; qed"),
+				},
+				&["type"]
 			)?, registry)?,
 			kademlia_random_queries_total: register(CounterVec::new(
 				Opts::new(
@@ -1508,8 +1527,19 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						messages,
 					});
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Dht(ev))) => {
-					this.event_streams.send(Event::Dht(ev));
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Dht(event, duration))) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						let query_type = match event {
+							DhtEvent::ValueFound(_) => "value-found",
+							DhtEvent::ValueNotFound(_) => "value-not-found",
+							DhtEvent::ValuePut(_) => "value-put",
+							DhtEvent::ValuePutFailed(_) => "value-put-failed",
+						};
+						metrics.kademlia_query_duration.with_label_values(&[query_type])
+							.observe(duration.as_secs_f64());
+					}
+
+					this.event_streams.send(Event::Dht(event));
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);

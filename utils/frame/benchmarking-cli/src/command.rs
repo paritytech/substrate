@@ -95,8 +95,7 @@ impl BenchmarkCmd {
 						let mut file = crate::writer::open_file("traits.rs")?;
 						crate::writer::write_trait(&mut file, batches.clone())?;
 					} else {
-						let mut file = crate::writer::open_file("benchmarks.rs")?;
-						crate::writer::write_results(&mut file, batches.clone())?;
+						crate::writer::write_results(&batches)?;
 					}
 				}
 

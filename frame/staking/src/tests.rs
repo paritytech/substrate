@@ -2861,9 +2861,9 @@ mod offchain_phragmen {
 		let (offchain, offchain_state) = TestOffchainExt::new();
 		let (pool, pool_state) = TestTransactionPoolExt::new();
 
-	    let mut seed = [0_u8; 32];
-	    seed[0..4].copy_from_slice(&iterations.to_le_bytes());
-	    offchain_state.write().seed = seed;
+		let mut seed = [0_u8; 32];
+		seed[0..4].copy_from_slice(&iterations.to_le_bytes());
+		offchain_state.write().seed = seed;
 
 		ext.register_extension(OffchainExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
