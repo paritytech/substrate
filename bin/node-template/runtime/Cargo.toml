@@ -35,7 +35,7 @@ sp-std = { version = "2.0.0-rc5", default-features = false, path = "../../../pri
 sp-transaction-pool = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/version" }
 
-# The dependency listed below is used for node-template's RPCs
+# Used for the node template's RPCs
 frame-system-rpc-runtime-api = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 
 template = { version = "2.0.0-rc5", default-features = false, path = "../pallets/template", package = "pallet-template" }
