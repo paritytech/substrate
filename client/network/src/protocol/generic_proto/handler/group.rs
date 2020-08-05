@@ -600,11 +600,7 @@ impl ProtocolsHandler for NotifsHandler {
 						message
 					} => {
 						for (handler, _) in &mut self.out_handlers {
-							if handler.protocol_name() != &protocol_name[..] {
-								continue;
-							}
-
-							if handler.is_open() {
+							if handler.protocol_name() == &protocol_name[..] && handler.is_open() {
 								handler.send_or_discard(message);
 								continue 'poll_notifs_sink;
 							}
