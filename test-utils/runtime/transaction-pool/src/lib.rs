@@ -245,7 +245,7 @@ impl sc_transaction_graph::ChainApi for TestApi {
 
 				// If there is no best block, we don't know based on which block we should validate
 				// the transaction. (This is not required for this test function, but in real
-				// environemnt it would fail because of this).
+				// environment it would fail because of this).
 				if !found_best {
 					return ready(Ok(
 						Err(TransactionValidityError::Invalid(InvalidTransaction::Custom(1)).into())
@@ -381,4 +381,3 @@ pub fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
 	let signature = transfer.using_encoded(|e| who.sign(e)).into();
 	Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: false }
 }
-
