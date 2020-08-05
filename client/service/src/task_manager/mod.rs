@@ -221,7 +221,7 @@ pub struct TaskManager {
 	/// A list of other `TaskManager`'s to terminate and gracefully shutdown when the parent
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
 	/// task fails.
-	children: Vec<Box<TaskManager>>,
+	children: Vec<TaskManager>,
 }
 
 impl TaskManager {
@@ -356,7 +356,7 @@ impl TaskManager {
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
 	/// task fails. (But don't end the parent if a child's normal task fails.)
 	pub fn add_children(&mut self, child: TaskManager) {
-		self.children.push(Box::new(child));
+		self.children.push(child);
 	}
 }
 
