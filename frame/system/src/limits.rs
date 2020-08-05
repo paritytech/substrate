@@ -165,7 +165,8 @@ pub struct WeightsPerClass {
 /// It should be obvious now that it's possible for one class to reach it's limit (say `Normal`),
 /// while the block has still capacity to process more transactions (`max_block` not reached,
 /// `Operational` transactions can still go in). Setting `max_total` to `None` disables the
-/// per-class limit. This is generally highly recommended for `Mandatory` dispatch class.
+/// per-class limit. This is generally highly recommended for `Mandatory` dispatch class, while it 
+/// can be dangerous for `Normal` class and should only be done with extra care and consideration.
 ///
 /// Often it's desirable for some class of transactions to be added to the block despite it being
 /// full. For instance one might want to prevent high-priority `Normal` transactions from pushing
