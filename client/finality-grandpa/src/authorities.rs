@@ -1014,10 +1014,12 @@ mod tests {
 			.unwrap();
 
 		// it should be enacted at the same block that signaled it
-		assert!(authorities
-			.apply_forced_changes("hash_a", 5, &static_is_descendent_of(false), false)
-			.unwrap()
-			.is_some());
+		assert!(
+			authorities
+				.apply_forced_changes("hash_a", 5, &static_is_descendent_of(false), false)
+				.unwrap()
+				.is_some()
+		);
 	}
 
 	#[test]
