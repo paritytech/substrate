@@ -3753,7 +3753,6 @@ dependencies = [
 name = "node-rpc-client"
 version = "2.0.0-rc5"
 dependencies = [
- "env_logger 0.7.1",
  "futures 0.1.29",
  "hyper 0.12.35",
  "jsonrpc-core-client",
@@ -4780,7 +4779,6 @@ dependencies = [
 name = "pallet-staking"
 version = "2.0.0-rc5"
 dependencies = [
- "env_logger 0.7.1",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -6126,7 +6124,6 @@ version = "0.8.0-rc5"
 dependencies = [
  "bytes 0.5.4",
  "derive_more",
- "env_logger 0.7.1",
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",
@@ -6227,7 +6224,6 @@ dependencies = [
  "atty",
  "chrono",
  "derive_more",
- "env_logger 0.7.1",
  "fdlimit",
  "futures 0.3.5",
  "lazy_static",
@@ -6306,7 +6302,6 @@ name = "sc-client-db"
 version = "0.8.0-rc5"
 dependencies = [
  "blake2-rfc",
- "env_logger 0.7.1",
  "hash-db",
  "kvdb 0.7.0",
  "kvdb-memorydb 0.7.0",
@@ -6350,7 +6345,6 @@ name = "sc-consensus-aura"
 version = "0.8.0-rc5"
 dependencies = [
  "derive_more",
- "env_logger 0.7.1",
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "log",
@@ -6388,7 +6382,6 @@ name = "sc-consensus-babe"
 version = "0.8.0-rc5"
 dependencies = [
  "derive_more",
- "env_logger 0.7.1",
  "fork-tree",
  "futures 0.3.5",
  "futures-timer 3.0.2",
@@ -6482,7 +6475,6 @@ version = "0.8.0-rc5"
 dependencies = [
  "assert_matches",
  "derive_more",
- "env_logger 0.7.1",
  "futures 0.3.5",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -6658,7 +6650,6 @@ version = "0.8.0-rc5"
 dependencies = [
  "assert_matches",
  "derive_more",
- "env_logger 0.7.1",
  "finality-grandpa",
  "fork-tree",
  "futures 0.3.5",
@@ -6776,7 +6767,6 @@ dependencies = [
  "bytes 0.5.4",
  "derive_more",
  "either",
- "env_logger 0.7.1",
  "erased-serde",
  "fnv",
  "fork-tree",
@@ -6847,7 +6837,6 @@ dependencies = [
 name = "sc-network-test"
 version = "0.8.0-rc5"
 dependencies = [
- "env_logger 0.7.1",
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",
@@ -6874,7 +6863,6 @@ name = "sc-offchain"
 version = "2.0.0-rc5"
 dependencies = [
  "bytes 0.5.4",
- "env_logger 0.7.1",
  "fnv",
  "futures 0.3.5",
  "futures-timer 3.0.2",
@@ -7085,7 +7073,6 @@ dependencies = [
 name = "sc-service-test"
 version = "2.0.0-rc5"
 dependencies = [
- "env_logger 0.7.1",
  "fdlimit",
  "futures 0.1.29",
  "futures 0.3.5",
@@ -7121,7 +7108,6 @@ dependencies = [
 name = "sc-state-db"
 version = "0.8.0-rc5"
 dependencies = [
- "env_logger 0.7.1",
  "log",
  "parity-scale-codec",
  "parity-util-mem 0.7.0",
@@ -8534,7 +8520,6 @@ dependencies = [
 name = "substrate-frame-rpc-system"
 version = "2.0.0-rc5"
 dependencies = [
- "env_logger 0.7.1",
  "frame-system-rpc-runtime-api",
  "futures 0.3.5",
  "jsonrpc-core",

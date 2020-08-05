@@ -31,5 +31,4 @@ sc-rpc-api = { version = "0.8.0-rc5", path = "../../../../client/rpc-api" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0-rc5", path = "../../../../test-utils/runtime/client" }
-env_logger = "0.7.0"
 sc-transaction-pool = { version = "2.0.0-rc5", path = "../../../../client/transaction-pool" }

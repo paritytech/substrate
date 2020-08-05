@@ -36,7 +36,6 @@ hyper = "0.13.2"
 hyper-rustls = "0.21.0"
 
 [dev-dependencies]
-env_logger = "0.7.0"
 sc-client-db = { version = "0.8.0-rc5", default-features = true, path = "../db/" }
 sc-transaction-pool = { version = "2.0.0-rc5", path = "../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0-rc5", path = "../../primitives/transaction-pool" }
