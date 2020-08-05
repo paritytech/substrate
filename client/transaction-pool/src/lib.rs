@@ -465,10 +465,11 @@ impl<N: Clone + Copy + AtLeast32Bit> RevalidationStrategy<N> {
 		block: N,
 		revalidate_time_period: Option<std::time::Duration>,
 		revalidate_block_period: Option<N>,
+		is_best_block: bool,
 	) -> RevalidationAction {
 		match self {
 			Self::Light(status) => RevalidationAction {
-				revalidate: status.next_required(
+				revalidate: is_best_block && status.next_required(
 					block,
 					revalidate_time_period,
 					revalidate_block_period,
@@ -570,11 +571,17 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 					block_number,
 					Some(std::time::Duration::from_secs(60)),
 					Some(20.into()),
+					is_new_best,
 				);
 				let revalidation_strategy = self.revalidation_strategy.clone();
 				let revalidation_queue = self.revalidation_queue.clone();
 				let ready_poll = self.ready_poll.clone();
 				let metrics = self.metrics.clone();
+				let best_block = if is_new_best {
+					Some(id)
+				} else {
+					None
+				};
 
 				async move {
 					// We keep track of everything we prune so that later we won't add
@@ -689,10 +696,10 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 							.ready()
 							.map(|tx| tx.hash.clone())
 							.collect();
-						revalidation_queue.revalidate_later(block_number, hashes).await;
-					}
+						revalidation_queue.revalidate_later(block_number, best_block, hashes).await;
 
-					revalidation_strategy.lock().clear();
+						revalidation_strategy.lock().clear();
+					}
 				}.boxed()
 			}
 			ChainEvent::Finalized { hash } => {
