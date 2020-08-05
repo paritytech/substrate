@@ -1,4 +1,22 @@
 
+// This file is part of Substrate.
+
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use libipld::store::{StoreResult, Visibility, Store, ReadonlyStore};
 pub use libipld::error::StoreError;
 use sp_core::offchain::OffchainStorage;
@@ -13,12 +31,14 @@ const REFS: &'static [u8] = b"bitswap_refs";
 
 /// A wrapper around an `OffchainStorage` for the purpose of storing bitswap blocks.
 ///
+/// This is based on the implementation of the `libipld` [`MemStore`](https://github.com/ipfs-rust/rust-ipld/blob/604fa5782479f322faa17d17ef3cbbb7f6e88aee/src/mem.rs#L13).
+///
 /// Mappings:
 ///
-/// `bitswap_block`: Cid -> Block bytes (`Vec<u8>`).
-/// `bitswap_pins`: Cid -> Number of pins a block has (`u64`).
-/// `bitswap_referrers`: Cid -> Number of blocks that we know refers to a block (`i64`, may be negative).
-/// `bitswap_refs`: Cid -> List of Cids a block refers to (`Vec<Cid>`)
+/// * `bitswap_block`: Cid -> Block bytes (`Vec<u8>`).
+/// * `bitswap_pins`: Cid -> Number of pins a block has (`u64`).
+/// * `bitswap_referrers`: Cid -> Number of blocks that we know refers to a block (`i64`, may be negative).
+/// * `bitswap_refs`: Cid -> List of Cids a block refers to (`Vec<Cid>`)
 #[derive(Clone, Debug)]
 pub struct BitswapStorage<S> {
 	storage: S,
@@ -212,6 +232,7 @@ impl<T: OffchainStorage> Store for BitswapStorage<T> {
 	}
 }
 
+// These tests are copied from https://github.com/ipfs-rust/rust-ipld/blob/604fa5782479f322faa17d17ef3cbbb7f6e88aee/src/mem.rs#L221.
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -240,7 +261,7 @@ mod tests {
 	}
 
 	#[async_std::test]
-	async fn test_gc() {
+	async fn bitswap_garbage_collection() {
 		let _ = env_logger::try_init();
 
 		let store = BitswapStorage::new(TestPersistentOffchainDB::default());
@@ -263,7 +284,7 @@ mod tests {
 	}
 
 	#[async_std::test]
-	async fn test_gc_2() {
+	async fn bitswap_garbage_collection_2() {
 		let _ = env_logger::try_init();
 
 		let store = BitswapStorage::new(TestPersistentOffchainDB::default());
