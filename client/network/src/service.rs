@@ -953,8 +953,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 
 	/// Inform the network service about refresh node allowlist.
-	pub fn refresh_node_allowlist(&self, peer_ids: Vec<PeerId>) {
-		self.peerset.set_node_allowlist(peer_ids);
+	pub fn set_peer_allowlist(&self, peer_ids: Vec<PeerId>) {
+		self.peerset.set_allowlist(peer_ids);
 	}
 }
 

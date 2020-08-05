@@ -900,7 +900,7 @@ pub fn build_network<TBl, TBE, TExPool, TImpQu, TCl>(
 		system_rpc_rx,
 		has_bootnodes,
 		config.announce_block,
-		config.refresh_node_allowlist,
+		config.update_allowlist,
 	);
 
 	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the

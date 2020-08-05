@@ -60,7 +60,6 @@ use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthority
 use pallet_grandpa::fg_primitives;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
-use sp_core::ed25519::Public as NodeId;
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 pub use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
 use pallet_contracts_rpc_runtime_api::ContractExecResult;

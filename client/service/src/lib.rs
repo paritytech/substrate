@@ -197,7 +197,7 @@ async fn build_network_future<
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
-	refresh_node_allowlist: bool,
+	update_allowlist: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
@@ -242,7 +242,7 @@ async fn build_network_future<
 					);
 				}
 				
-				if refresh_node_allowlist {
+				if update_allowlist {
 					let id = BlockId::hash(client.info().best_hash);
 					let node_allowlist = match client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec())) {
 							Ok(r) => r,
@@ -258,7 +258,7 @@ async fn build_network_future<
 							.into_peer_id()
 						})
 						.collect();
-					network.service().refresh_node_allowlist(peer_ids);
+					network.service().set_peer_allowlist(peer_ids);
 				}
 			}
 

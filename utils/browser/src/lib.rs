@@ -106,7 +106,7 @@ where
 			enable_color: false,
 			prefix: String::new(),
 		},
-		refresh_node_allowlist: true,
+		update_allowlist: true,
 	};
 
 	Ok(config)

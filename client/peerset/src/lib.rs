@@ -50,7 +50,7 @@ enum Action {
 	SetPriorityGroup(String, HashSet<PeerId>),
 	AddToPriorityGroup(String, PeerId),
 	RemoveFromPriorityGroup(String, PeerId),
-	SetNodeAllowList(Vec<PeerId>),
+	SetAllowList(Vec<PeerId>),
 }
 
 /// Description of a reputation adjustment for a node.
@@ -125,8 +125,8 @@ impl PeersetHandle {
 	}
 
 	/// Refresh node allowlist
-	pub fn set_node_allowlist(&self, peer_ids: Vec<PeerId>) {
-		let _ = self.tx.unbounded_send(Action::SetNodeAllowList(peer_ids));
+	pub fn set_allowlist(&self, peer_ids: Vec<PeerId>) {
+		let _ = self.tx.unbounded_send(Action::SetAllowList(peer_ids));
 	}
 }
 
@@ -361,7 +361,7 @@ impl Peerset {
 		}
 	}
 
-	fn on_set_node_allowlist(&mut self, peer_ids: Vec<PeerId>) {
+	fn on_set_allowlist(&mut self, peer_ids: Vec<PeerId>) {
 		self.node_allowlist = Some(peer_ids);
 		self.alloc_slots(); // TODO only disconnect if it's not empty
 	}
@@ -679,8 +679,8 @@ impl Stream for Peerset {
 					self.on_add_to_priority_group(&group_id, peer_id),
 				Action::RemoveFromPriorityGroup(group_id, peer_id) =>
 					self.on_remove_from_priority_group(&group_id, peer_id),
-				Action::SetNodeAllowList(peer_ids) =>
-					self.on_set_node_allowlist(peer_ids),
+				Action::SetAllowList(peer_ids) =>
+					self.on_set_allowlist(peer_ids),
 			}
 		}
 	}
