@@ -30,7 +30,7 @@
 use crate::{
 	ExHashT, NetworkStateInfo,
 	behaviour::{Behaviour, BehaviourOut},
-	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
+	config::{parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
 	DhtEvent,
 	discovery::DiscoveryConfig,
 	error::Error,
@@ -43,7 +43,7 @@ use crate::{
 	transport, ReputationChange,
 };
 use futures::prelude::*;
-use libp2p::{PeerId, Multiaddr};
+use libp2p::{PeerId, multiaddr, Multiaddr};
 use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}, either::EitherError};
 use libp2p::kad::record;
 use libp2p::ping::handler::PingFailure;
@@ -893,21 +893,27 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Modify a peerset priority group.
 	///
-	/// Returns an `Err` if one of the given addresses contains an invalid
-	/// peer ID (which includes the local peer ID).
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
 	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = peers.into_iter()
-			.map(|p| match parse_addr(p) {
-				Err(e) => Err(format!("{:?}", e)),
-				Ok((peer, addr)) =>
-					// Make sure the local peer ID is never added to the PSM
-					// or added as a "known address", even if given.
-					if peer == self.local_peer_id {
-						Err("Local peer ID in priority group.".to_string())
-					} else {
-						Ok((peer, addr))
-					}
-				})
+			.map(|mut addr| {
+				let peer = match addr.pop() {
+					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
+						.map_err(|_| "Invalid PeerId format".to_string())?,
+					_ => return Err("Missing PeerId from address".to_string()),
+				};
+
+				// Make sure the local peer ID is never added to the PSM
+				// or added as a "known address", even if given.
+				if peer == self.local_peer_id {
+					Err("Local peer ID in priority group.".to_string())
+				} else {
+					Ok((peer, addr))
+				}
+			})
 			.collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()?;
 
 		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
