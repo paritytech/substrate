@@ -97,9 +97,9 @@ fn reexport_instance_trait(
 	if let Some(i) = def.module_instance.as_ref() {
 		let instance_trait = &i.instance_trait;
 		quote!(
-			/// Reexport from support::traits.
-			// This reexport is not strictly needed but used in order not to have breaking change.
-			pub use #scrate::traits::Instance as #instance_trait;
+			/// Local import of frame_support::traits::Instance
+			// This import is not strictly needed but made in order not to have breaking change.
+			use #scrate::traits::Instance as #instance_trait;
 		)
 	} else {
 		quote!()
