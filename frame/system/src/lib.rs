@@ -937,7 +937,13 @@ impl<T: Trait> Module<T> {
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
-		if block_number.is_zero() { return }
+		if block_number.is_zero() {
+			// Print a message only in tests warning users about this behavior.
+			#[cfg(test)]
+			println!("The block number is zero, so events are not being deposited.")
+
+			return
+		}
 
 		let phase = ExecutionPhase::get().unwrap_or_default();
 		let event = EventRecord {
