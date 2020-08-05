@@ -940,7 +940,7 @@ impl<T: Trait> Module<T> {
 		if block_number.is_zero() {
 			// Print a message only in tests warning users about this behavior.
 			#[cfg(test)]
-			println!("The block number is zero, so events are not being deposited.")
+			println!("The block number is zero, so events are not being deposited.");
 
 			return
 		}
