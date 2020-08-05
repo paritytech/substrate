@@ -313,7 +313,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// will generate:
 ///
 /// ```nocompile
-///     Some content with { at some point something or else } other match pattern are ignored
+///     Some content with { at some point match pattern expansion tokens } other match pattern are
+///     ignored
 /// ```
 #[proc_macro]
 pub fn expand_after(input: TokenStream) -> TokenStream {
