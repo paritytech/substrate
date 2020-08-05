@@ -39,6 +39,8 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
 use std::task::Poll;
+use libp2p::identity::PublicKey;
+use libp2p::identity::ed25519::PublicKey as Ed25519PublicKey;
 use parking_lot::Mutex;
 
 use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
@@ -240,6 +242,7 @@ where
 						notification.header.number().clone(),
 					);
 				}
+				
 				if refresh_node_allowlist {
 					let id = BlockId::hash(client.info().best_hash);
 					let node_allowlist = match client.runtime_api().nodes(&id) {
@@ -247,7 +250,15 @@ where
 							Err(_) => return, // TODO log error
 						};
 					// Transform to PeerId
-					let peer_ids = node_allowlist.iter().map(|pubkey| pubkey.into_peer_id());
+					let peer_ids = node_allowlist.iter()
+						.map(|pubkey| {
+							PublicKey::Ed25519(
+								Ed25519PublicKey::decode(&pubkey.0)
+									.unwrap()
+							) // TODO error handling
+							.into_peer_id()
+						})
+						.collect();
 					network.service().refresh_node_allowlist(peer_ids);
 				}
 			}

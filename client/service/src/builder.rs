@@ -61,6 +61,7 @@ use sc_client_api::{
 	execution_extensions::ExecutionExtensions
 };
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
+use sp_node_permission::NodePermissionApi;
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
@@ -831,6 +832,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
 		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
+		<TCl as ProvideRuntimeApi<TBl>>::Api: NodePermissionApi<TBl>,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
 {

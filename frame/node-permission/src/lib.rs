@@ -27,7 +27,9 @@
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, dispatch::DispatchResult};
 use frame_system::ensure_signed;
-use sp_node_permission::NodeId;
+use sp_core::ed25519::Public;
+
+type NodeId = Public;
 
 /// The module's config trait.
 pub trait Trait: frame_system::Trait {}

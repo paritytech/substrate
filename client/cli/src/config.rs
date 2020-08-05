@@ -475,6 +475,7 @@ pub trait CliConfiguration: Sized {
 			role,
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
+			refresh_node_allowlist: true,
 		})
 	}
 

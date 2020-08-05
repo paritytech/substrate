@@ -4563,6 +4563,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "parity-scale-codec",
+ "sp-core",
  "sp-node-permission",
  "sp-std",
 ]
@@ -6968,6 +6969,7 @@ dependencies = [
  "async-std",
  "derive_more",
  "directories",
+ "ed25519-dalek",
  "exit-future",
  "futures 0.1.29",
  "futures 0.3.5",
@@ -6975,6 +6977,7 @@ dependencies = [
  "hash-db",
  "jsonrpc-pubsub",
  "lazy_static",
+ "libp2p",
  "log",
  "parity-scale-codec",
  "parity-util-mem 0.7.0",
@@ -7955,6 +7958,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-api",
  "sp-application-crypto",
+ "sp-core",
  "sp-runtime",
  "sp-std",
 ]

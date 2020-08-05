@@ -19,6 +19,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use sp_core::ed25519::Public;
 use sp_std::vec::Vec;
 
 mod app {
@@ -36,7 +37,8 @@ mod app {
 // }
 
 /// A node identifier.
-pub type NodeId = app::Public;
+// pub type NodeId = app::Public;
+pub type NodeId = Public;
 
 sp_api::decl_runtime_apis! {
     /// The node permission api
