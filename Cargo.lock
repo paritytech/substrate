@@ -7151,6 +7151,7 @@ dependencies = [
  "slog",
  "sp-tracing",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
