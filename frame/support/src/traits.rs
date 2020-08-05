@@ -1653,8 +1653,9 @@ impl<T> IsType<T> for T {
 	fn into_mut(&mut self) -> &mut T { self }
 }
 
-/// A type that holds an instance, it is used to defines the module prefix to be used by storages,
-/// thus it must unique for each module.
+/// An instance of a pallet in the storage.
+///
+/// It is required that these instances are unique, to support multiple instances per pallet in the same runtime!
 ///
 /// E.g. for module MyModule default instance will have prefix "MyModule" and other instances
 /// "InstanceNMyModule".
