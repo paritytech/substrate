@@ -73,7 +73,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {	
+pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
 		client, backend, mut task_manager, import_queue, keystore, select_chain, transaction_pool,
 		inherent_data_providers,
@@ -93,7 +93,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			on_demand: None,
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: None,
-			finality_proof_provider: Some(finality_proof_provider.clone()), 
+			finality_proof_provider: Some(finality_proof_provider.clone()),
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -109,20 +109,20 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let prometheus_registry = config.prometheus_registry().cloned();
 	let telemetry_connection_sinks = sc_service::TelemetryConnectionSinks::default();
 
-        let rpc_extensions_builder = {
-            let client = client.clone();
-            let pool = transaction_pool.clone();
+	let rpc_extensions_builder = {
+		let client = client.clone();
+		let pool = transaction_pool.clone();
 
-            Box::new(move |deny_unsafe| {
-                let deps = crate::rpc::FullDeps {
-                    client: client.clone(),
-                    pool: pool.clone(),
-                    deny_unsafe,
-                };
+		Box::new(move |deny_unsafe| {
+			let deps = crate::rpc::FullDeps {
+				client: client.clone(),
+				pool: pool.clone(),
+				deny_unsafe,
+			};
 
-                crate::rpc::create_full(deps)
-            })
-        };
+			crate::rpc::create_full(deps)
+		})
+	};
 
 	sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		network: network.clone(),
@@ -271,7 +271,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 			&config, backend.clone(), task_manager.spawn_handle(), client.clone(), network.clone(),
 		);
 	}
-	
+
 	sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		remote_blockchain: Some(backend.remote_blockchain()),
 		transaction_pool,
@@ -279,12 +279,12 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		on_demand: Some(on_demand),
 		rpc_extensions_builder: Box::new(|_| ()),
 		telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
-		config, 
-		client, 
-		keystore, 
-		backend, 
-		network, 
-		network_status_sinks, 
+		config,
+		client,
+		keystore,
+		backend,
+		network,
+		network_status_sinks,
 		system_rpc_tx,
 	 })?;
 
