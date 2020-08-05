@@ -138,13 +138,13 @@ benchmarks! {
 	suicide {
 		let caller: T::AccountId = account("caller", 0, SEED);
 		let account_info = AccountInfo::<T::Index, T::AccountData> {
-			nonce: 1337,
+			nonce: 1337.into(),
 			refcount: 0,
 			data: T::AccountData::default()
 		};
 		frame_system::Account::<T>::insert(&caller, account_info);
 		let new_account_info = System::<T>::account(caller.clone());
-		assert_eq!(new_account_info.nonce, n.into());
+		assert_eq!(new_account_info.nonce, 1337.into());
 	}: _(RawOrigin::Signed(caller.clone()))
 	verify {
 		let account_info = System::<T>::account(&caller);
