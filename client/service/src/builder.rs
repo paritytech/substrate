@@ -36,7 +36,7 @@ use sp_consensus::{
 use futures::{FutureExt, StreamExt, future::ready};
 use jsonrpc_pubsub::manager::SubscriptionManager;
 use sc_keystore::Store as Keystore;
-use log::{info, warn, error};
+use log::{info, warn};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 use sc_network::NetworkService;
 use parking_lot::RwLock;

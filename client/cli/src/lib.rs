@@ -285,7 +285,9 @@ pub fn init_logger(
 		.finish();
 
 	if let Some(tracing_targets) = tracing_targets {
-		match tracing::subscriber::set_global_default(subscriber) {
+		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &tracing_targets);
+
+		match tracing::subscriber::set_global_default(subscriber.with(profiling)) {
 			Ok(_) => (),
 			Err(_) => tracing::info!("💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"),
 		}
