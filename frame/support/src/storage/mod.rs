@@ -634,7 +634,7 @@ mod test {
 			assert_eq!(MyStorage::final_prefix().to_vec(), k);
 
 			// test iteration
-			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![]);
+			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u64);
 			unhashed::put(&[&k[..], &vec![1, 1][..]].concat(), &2u64);
@@ -645,13 +645,13 @@ mod test {
 
 			// test removal
 			MyStorage::remove_all();
-			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![]);
+			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 
 			// test migration
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u32);
 			unhashed::put(&[&k[..], &vec![8][..]].concat(), &2u32);
 
-			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![]);
+			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 			MyStorage::translate_values(|v: u32| v as u64).unwrap();
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2]);
 			MyStorage::remove_all();
