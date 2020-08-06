@@ -150,13 +150,12 @@ impl TestApi {
 		xts: Vec<Extrinsic>,
 		is_best_block: bool,
 	) -> Header {
-		let mut chain = self.chain.write();
-
 		// `Hash::default()` is the genesis parent hash
 		let block_number = if parent == Hash::default() {
 			0
 		} else {
-			*chain.block_by_hash
+			*self.chain.read()
+				.block_by_hash
 				.get(&parent)
 				.expect("`parent` exists")
 				.header()
@@ -171,12 +170,19 @@ impl TestApi {
 			state_root: Default::default(),
 		};
 
-		let hash = header.hash();
-		let block = Block::new(header.clone(), xts);
-		chain.block_by_hash.insert(hash, block.clone());
-		chain.block_by_number.entry(block_number).or_default().push((block, is_best_block.into()));
+		self.add_block(Block::new(header.clone(), xts), is_best_block);
 
 		header
+	}
+
+	/// Add a block to the internal state.
+	pub fn add_block(&self, block: Block, is_best_block: bool) {
+		let hash = block.header.hash();
+		let block_number = block.header.number().clone();
+
+		let mut chain = self.chain.write();
+		chain.block_by_hash.insert(hash, block.clone());
+		chain.block_by_number.entry(block_number).or_default().push((block, is_best_block.into()));
 	}
 
 	fn hash_and_length_inner(ex: &Extrinsic) -> (Hash, usize) {
