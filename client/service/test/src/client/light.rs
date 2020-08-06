@@ -686,7 +686,7 @@ fn changes_proof_is_generated_and_checked_when_headers_are_not_pruned() {
 		match local_result == expected_result {
 			true => (),
 			false => panic!(format!("Failed test {}: local = {:?}, expected = {:?}",
-			                        index, local_result, expected_result)),
+									index, local_result, expected_result)),
 		}
 	}
 }
@@ -843,7 +843,7 @@ fn check_changes_tries_proof_fails_if_proof_is_wrong() {
 		Box::new(TaskExecutor::new()),
 	);
 	assert!(local_checker.check_changes_tries_proof(4, &remote_proof.roots,
-	                                                remote_proof.roots_proof.clone()).is_err());
+													remote_proof.roots_proof.clone()).is_err());
 
 	// fails when proof is broken
 	let mut local_storage = DummyStorage::new();
