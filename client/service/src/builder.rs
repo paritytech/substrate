@@ -948,7 +948,7 @@ pub struct NetworkStarter(oneshot::Sender<()>);
 impl NetworkStarter {
 	/// Start the network. Call this after all sub-components have been initialized.
 	///
-	/// > **Note**: If you don't call this function, the networking will stay inhert.
+	/// > **Note**: If you don't call this function, the networking will not work.
 	pub fn start_network(self) {
 		let _ = self.0.send(());
 	}
