@@ -309,9 +309,12 @@ impl TaskManager {
 		Box::pin(async move {
 			let mut t1 = self.essential_failed_rx.next().fuse();
 			let mut t2 = self.on_exit.clone().fuse();
-			let mut t3 = try_join_all(self.children.iter_mut().map(|x| x.future()))
-				// Never end this future if there is no error
-				.then(|res| async { Ok(res.map(|_| pending::<()>())?.await) }).boxed().fuse();
+			let mut t3 = try_join_all(
+				self.children.iter_mut().map(|x| x.future())
+					// Never end this future if there is no error because if there is no children,
+					// it must not stop
+					.chain(std::iter::once(pending().boxed()))
+			).fuse();
 
 			futures::select! {
 				_ = t1 => Err(Error::Other("Essential task failed.".into())),

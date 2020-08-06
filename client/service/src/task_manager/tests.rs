@@ -300,7 +300,7 @@ fn ensure_task_manager_future_continues_when_childs_not_essential_task_fails() {
 		pin_mut!(t1, t2);
 
 		select! {
-			_ = t1 => panic!("task should not have stopped"),
+			res = t1 => panic!("task should not have stopped: {:?}", res),
 			_ = t2 => {},
 		}
 	});
