@@ -842,7 +842,7 @@ mod tests {
 				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 150)
 					.unwrap()
 					.priority,
-				Bounded::max_value(),
+				u64::max_value(),
 			);
 			assert_eq!(
 				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 250),

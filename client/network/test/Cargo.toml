@@ -19,7 +19,7 @@ parking_lot = "0.10.0"
 futures = "0.3.4"
 futures-timer = "3.0.1"
 rand = "0.7.2"
-libp2p = { version = "0.22.0", default-features = false }
+libp2p = "0.22.0"
 sp-consensus = { version = "0.8.0-rc5", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.8.0-rc5", path = "../../../client/consensus/common" }
 sc-client-api = { version = "2.0.0-rc5", path = "../../api" }
@@ -31,4 +31,5 @@ sp-consensus-babe = { version = "0.8.0-rc5", path = "../../../primitives/consens
 substrate-test-runtime-client = { version = "2.0.0-rc5", path = "../../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0-rc5", path = "../../../test-utils/runtime" }
 tempfile = "3.1.0"
-sc-service = { version = "0.8.0-rc5", default-features = false, features = ["test-helpers"],  path = "../../service" }
+sp-tracing = { version = "2.0.0-rc5", path = "../../../primitives/tracing" }
+sc-service = { version = "0.8.0-rc5", features = ["test-helpers"], path = "../../service" }

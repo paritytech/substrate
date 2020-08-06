@@ -520,7 +520,7 @@ mod test_append_and_len {
 	fn default_for_option() {
 		TestExternalities::default().execute_with(|| {
 			assert_eq!(OptionVec::get(), None);
-			assert_eq!(JustVec::get(), vec![]);
+			assert!(JustVec::get().is_empty());
 		});
 	}
 
@@ -553,7 +553,7 @@ mod test_append_and_len {
 			let key = JustVec::hashed_key();
 			// Set it to some invalid value.
 			frame_support::storage::unhashed::put_raw(&key, &*b"1");
-			assert_eq!(JustVec::get(), Vec::new());
+			assert!(JustVec::get().is_empty());
 			assert_eq!(frame_support::storage::unhashed::get_raw(&key), Some(b"1".to_vec()));
 
 			JustVec::append(1);
@@ -600,7 +600,7 @@ mod test_append_and_len {
 	fn len_works_ignores_default_assignment() {
 		TestExternalities::default().execute_with(|| {
 			// vec
-			assert_eq!(JustVec::get(), vec![]);
+			assert!(JustVec::get().is_empty());
 			assert_eq!(JustVec::decode_len(), None);
 
 			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
@@ -610,7 +610,7 @@ mod test_append_and_len {
 			assert_eq!(OptionVec::decode_len(), None);
 
 			// map
-			assert_eq!(MapVec::get(0), vec![]);
+			assert!(MapVec::get(0).is_empty());
 			assert_eq!(MapVec::decode_len(0), None);
 
 			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
@@ -620,7 +620,7 @@ mod test_append_and_len {
 			assert_eq!(OptionMapVec::decode_len(0), None);
 
 			// Double map
-			assert_eq!(DoubleMapVec::get(0, 0), vec![]);
+			assert!(DoubleMapVec::get(0, 0).is_empty());
 			assert_eq!(DoubleMapVec::decode_len(0, 1), None);
 
 			assert_eq!(DoubleMapVecWithDefault::get(0, 0), vec![6, 9]);
