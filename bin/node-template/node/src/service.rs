@@ -83,7 +83,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let finality_proof_provider =
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
-	let (network, network_status_sinks, system_rpc_tx) =
+	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
@@ -200,6 +200,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		)?;
 	}
 
+	network_starter.start_network();
 	Ok(task_manager)
 }
 
@@ -238,7 +239,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let finality_proof_provider =
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
-	let (network, network_status_sinks, system_rpc_tx) =
+	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
@@ -272,6 +273,8 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		network_status_sinks, 
 		system_rpc_tx,
 	 })?;
+
+	 network_starter.start_network();
 
 	 Ok(task_manager)
 }
