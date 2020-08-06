@@ -250,13 +250,8 @@ async fn build_network_future<
 						};
 					// Transform to PeerId
 					let peer_ids = node_allowlist.iter()
-						.map(|pubkey| {
-							PublicKey::Ed25519(
-								Ed25519PublicKey::decode(&pubkey.0)
-									.unwrap()
-							) // TODO error handling
-							.into_peer_id()
-						})
+						.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok())
+						.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
 						.collect();
 					network.service().set_peer_allowlist(peer_ids);
 				}

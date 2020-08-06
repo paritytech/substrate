@@ -426,6 +426,41 @@ impl Peerset {
 	fn alloc_slots(&mut self) {
 		self.update_time();
 
+		// Try to connnect to permissioned nodes
+		if let Some(peer_ids) = &self.allowlist {
+			loop {
+				let next = {
+					let data = &mut self.data;
+					peer_ids.iter()
+						.filter(move |n| {
+							data.peer(n).into_connected().is_none()
+						})
+						.next()
+						.cloned()
+				};
+
+				let next = match next {
+					Some(n) => n,
+					None => break,
+				};
+
+				let next = match self.data.peer(&next) {
+					peersstate::Peer::Unknown(n) => n.discover(),
+					peersstate::Peer::NotConnected(n) => n,
+					peersstate::Peer::Connected(_) => {
+						debug_assert!(false, "State inconsistency: not connected state");
+						break;
+					}
+				};
+
+				match next.try_outgoing() {
+					Ok(conn) => self.message_queue.push_back(Message::Connect(conn.into_peer_id())),
+					Err(_) => break,	// No more slots available.
+				}
+			}
+			return;
+		}
+
 		// Try to connect to all the reserved nodes that we are not connected to.
 		loop {
 			let next = {
