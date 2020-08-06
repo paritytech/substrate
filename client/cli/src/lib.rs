@@ -234,7 +234,9 @@ pub fn init_logger(
 ) {
 	match tracing_log::LogTracer::init() {
 		Ok(_) => (),
-		Err(_) => log::info!("💬 Not registering Substrate logger, as there is already a global logger registered!"),
+		Err(_) => log::info!(
+			"💬 Not registering Substrate logger, as there is already a global logger registered!"
+		),
 	}
 
 	let mut env_filter = tracing_subscriber::EnvFilter::default()
@@ -290,12 +292,16 @@ pub fn init_logger(
 
 		match tracing::subscriber::set_global_default(subscriber.with(profiling)) {
 			Ok(_) => (),
-			Err(_) => tracing::info!("💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"),
+			Err(_) => tracing::info!(
+				"💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"
+			),
 		}
 	} else {
 		match tracing::subscriber::set_global_default(subscriber) {
 			Ok(_) => (),
-			Err(_) => tracing::info!("💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"),
+			Err(_) => tracing::info!(
+				"💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"
+			),
 		}
 	}
 }

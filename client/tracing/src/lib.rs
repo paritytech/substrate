@@ -397,7 +397,12 @@ mod tests {
 		}
 	}
 
-	fn setup_subscriber() -> (tracing_subscriber::layer::Layered<ProfilingLayer, tracing_subscriber::fmt::Subscriber>, Arc<Mutex<Vec<SpanDatum>>>) {
+	type TestSubscriber = tracing_subscriber::layer::Layered<
+		ProfilingLayer,
+		tracing_subscriber::fmt::Subscriber
+	>;
+
+	fn setup_subscriber() -> (TestSubscriber, Arc<Mutex<Vec<SpanDatum>>>) {
 		let spans = Arc::new(Mutex::new(Vec::new()));
 		let handler = TestTraceHandler {
 			spans: spans.clone(),
