@@ -18,7 +18,7 @@ frame-support = { version = "2.0.0-rc5", default-features = false, path = "../..
 grandpa = { version = "2.0.0-rc5", default-features = false, package = "pallet-grandpa", path = "../../../frame/grandpa" }
 randomness-collective-flip = { version = "2.0.0-rc5", default-features = false, package = "pallet-randomness-collective-flip", path = "../../../frame/randomness-collective-flip" }
 sudo = { version = "2.0.0-rc5", default-features = false, package = "pallet-sudo", path = "../../../frame/sudo" }
-system = { version = "2.0.0-rc5", default-features = false, package = "frame-system", path = "../../../frame/system" }
+frame-system = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/system" }
 timestamp = { version = "2.0.0-rc5", default-features = false, package = "pallet-timestamp", path = "../../../frame/timestamp" }
 transaction-payment = { version = "2.0.0-rc5", default-features = false, package = "pallet-transaction-payment", path = "../../../frame/transaction-payment" }
 frame-executive = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/executive" }
@@ -67,7 +67,7 @@ std = [
 	"sp-transaction-pool/std",
 	"sp-version/std",
 	"sudo/std",
-	"system/std",
+	"frame-system/std",
 	"timestamp/std",
 	"transaction-payment/std",
   "frame-system-rpc-runtime-api/std",
