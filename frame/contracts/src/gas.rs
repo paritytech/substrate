@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::Trait;
+use crate::{Trait, exec::ExecError};
 use sp_std::marker::PhantomData;
 use sp_runtime::traits::Zero;
 use frame_support::dispatch::{
-	DispatchError, DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo,
+	DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo,
 };
 
 #[cfg(test)]
@@ -178,8 +178,8 @@ impl<T: Trait> GasMeter<T> {
 		}
 	}
 
-	/// Returns how much gas left from the initial budget.
-	fn gas_spent(&self) -> Gas {
+	/// Returns how much gas was used.
+	pub fn gas_spent(&self) -> Gas {
 		self.gas_limit - self.gas_left
 	}
 
@@ -189,16 +189,18 @@ impl<T: Trait> GasMeter<T> {
 	}
 
 	/// Turn this GasMeter into a DispatchResult that contains the actually used gas.
-	pub fn into_dispatch_result<R, E>(self, result: Result<R, E>) -> DispatchResultWithPostInfo where
-		E: Into<DispatchError>,
+	pub fn into_dispatch_result<R, E>(self, result: Result<R, E>) -> DispatchResultWithPostInfo
+	where
+		E: Into<ExecError>,
 	{
 		let post_info = PostDispatchInfo {
 			actual_weight: Some(self.gas_spent()),
+			pays_fee: Default::default(),
 		};
 
 		result
 			.map(|_| post_info)
-			.map_err(|e| DispatchErrorWithPostInfo { post_info, error: e.into() })
+			.map_err(|e| DispatchErrorWithPostInfo { post_info, error: e.into().error })
 	}
 
 	#[cfg(test)]

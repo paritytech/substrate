@@ -197,24 +197,6 @@ impl<BlockNumber, Hash, Balance: Default> ReferendumInfo<BlockNumber, Hash, Bala
 	}
 }
 
-/// State of a proxy voting account.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-pub enum ProxyState<AccountId> {
-	/// Account is open to becoming a proxy but is not yet assigned.
-	Open(AccountId),
-	/// Account is actively being a proxy.
-	Active(AccountId),
-}
-
-impl<AccountId> ProxyState<AccountId> {
-	pub (crate) fn as_active(self) -> Option<AccountId> {
-		match self {
-			ProxyState::Active(a) => Some(a),
-			ProxyState::Open(_) => None,
-		}
-	}
-}
-
 /// Whether an `unvote` operation is able to make actions that are not strictly always in the
 /// interest of an account.
 pub enum UnvoteScope {

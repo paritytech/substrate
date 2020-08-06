@@ -102,18 +102,14 @@ use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	RuntimeDebug, Perbill, DispatchError, DispatchResult,
-	generic::{self, Era},
-	transaction_validity::{
-		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
-		InvalidTransaction, TransactionValidity,
-	},
+	RuntimeDebug, Perbill, DispatchError, Either, generic,
 	traits::{
-		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
-		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin, SaturatedConversion,
+		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
+		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
+		Dispatchable, AtLeast32BitUnsigned
 	},
+	offchain::storage_lock::BlockNumberProvider,
 };
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
@@ -122,11 +118,11 @@ use frame_support::{
 	storage,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
-		StoredMap, EnsureOrigin,
+		StoredMap, EnsureOrigin, OriginTrait, Filter,
 	},
 	weights::{
-		Weight, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass,
-		FunctionOf, Pays, extract_actual_weight,
+		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
+		extract_actual_weight,
 	},
 	dispatch::DispatchResultWithPostInfo,
 };
@@ -136,6 +132,21 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 use sp_io::TestExternalities;
 
 pub mod offchain;
+#[cfg(test)]
+pub(crate) mod mock;
+
+mod extensions;
+mod weights;
+#[cfg(test)]
+mod tests;
+
+pub use extensions::{
+	check_mortality::CheckMortality, check_genesis::CheckGenesis, check_nonce::CheckNonce,
+	check_spec_version::CheckSpecVersion, check_tx_version::CheckTxVersion,
+	check_weight::CheckWeight,
+};
+// Backward compatible re-export.
+pub use extensions::check_mortality::CheckMortality as CheckEra;
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -147,12 +158,39 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::ordered_trie_root(xts)
 }
 
+pub trait WeightInfo {
+	fn remark(b: u32, ) -> Weight;
+	fn set_heap_pages(i: u32, ) -> Weight;
+	fn set_code_without_checks(b: u32, ) -> Weight;
+	fn set_changes_trie_config(d: u32, ) -> Weight;
+	fn set_storage(i: u32, ) -> Weight;
+	fn kill_storage(i: u32, ) -> Weight;
+	fn kill_prefix(p: u32, ) -> Weight;
+	fn suicide(n: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn remark(_b: u32, ) -> Weight { 1_000_000_000 }
+	fn set_heap_pages(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn set_code_without_checks(_b: u32, ) -> Weight { 1_000_000_000 }
+	fn set_changes_trie_config(_d: u32, ) -> Weight { 1_000_000_000 }
+	fn set_storage(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn kill_storage(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn kill_prefix(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn suicide(_n: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: 'static + Eq + Clone {
-	/// The aggregated `Origin` type used by dispatchable calls.
+	/// The basic call filter to use in Origin. All origins are built with this filter as base,
+	/// except Root.
+	type BaseCallFilter: Filter<Self::Call>;
+
+	/// The `Origin` type used by dispatchable calls.
 	type Origin:
 		Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 		+ From<RawOrigin<Self::AccountId>>
-		+ Clone;
+		+ Clone
+		+ OriginTrait<Call = Self::Call>;
 
 	/// The aggregated `Call` type.
 	type Call: Dispatchable + Debug;
@@ -165,8 +203,9 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The block number type used by the runtime.
 	type BlockNumber:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + AtLeast32Bit
-		+ Default + Bounded + Copy + sp_std::hash::Hash + sp_std::str::FromStr + MaybeMallocSizeOf;
+		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay +
+		AtLeast32BitUnsigned + Default + Bounded + Copy + sp_std::hash::Hash +
+		sp_std::str::FromStr + MaybeMallocSizeOf;
 
 	/// The output of the `Hashing` function.
 	type Hash:
@@ -245,6 +284,8 @@ pub trait Trait: 'static + Eq + Clone {
 	///
 	/// All resources should be cleaned up associated with the given account.
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
+
+	type SystemWeightInfo: WeightInfo;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -284,7 +325,7 @@ pub struct EventRecord<E: Parameter + Member, T> {
 }
 
 /// Origin for the System module.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
 	Root,
@@ -366,60 +407,6 @@ impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
 	}
 }
 
-/// An object to track the currently used extrinsic weight in a block.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
-pub struct ExtrinsicsWeight {
-	normal: Weight,
-	operational: Weight,
-}
-
-impl ExtrinsicsWeight {
-	/// Returns the total weight consumed by all extrinsics in the block.
-	pub fn total(&self) -> Weight {
-		self.normal.saturating_add(self.operational)
-	}
-
-	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
-	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
-		let value = self.get_mut(class);
-		*value = value.saturating_add(weight);
-	}
-
-	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would occur.
-	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
-		let value = self.get_mut(class);
-		*value = value.checked_add(weight).ok_or(())?;
-		Ok(())
-	}
-
-	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
-	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
-		let value = self.get_mut(class);
-		*value = value.saturating_sub(weight);
-	}
-
-	/// Get the current weight of a specific dispatch class.
-	pub fn get(&self, class: DispatchClass) -> Weight {
-		match class {
-			DispatchClass::Operational => self.operational,
-			DispatchClass::Normal | DispatchClass::Mandatory => self.normal,
-		}
-	}
-
-	/// Get a mutable reference to the current weight of a specific dispatch class.
-	fn get_mut(&mut self, class: DispatchClass) -> &mut Weight {
-		match class {
-			DispatchClass::Operational => &mut self.operational,
-			DispatchClass::Normal | DispatchClass::Mandatory => &mut self.normal,
-		}
-	}
-
-	/// Set the weight of a specific dispatch class.
-	pub fn put(&mut self, new: Weight, class: DispatchClass) {
-		*self.get_mut(class) = new;
-	}
-}
-
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
@@ -430,7 +417,7 @@ decl_storage! {
 		ExtrinsicCount: Option<u32>;
 
 		/// The current weight for the block.
-		BlockWeight get(fn block_weight): ExtrinsicsWeight;
+		BlockWeight get(fn block_weight): weights::ExtrinsicsWeight;
 
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
@@ -507,15 +494,15 @@ decl_storage! {
 decl_event!(
 	/// Event for the System module.
 	pub enum Event<T> where AccountId = <T as Trait>::AccountId {
-		/// An extrinsic completed successfully.
+		/// An extrinsic completed successfully. [info]
 		ExtrinsicSuccess(DispatchInfo),
-		/// An extrinsic failed.
+		/// An extrinsic failed. [error, info]
 		ExtrinsicFailed(DispatchError, DispatchInfo),
 		/// `:code` was updated.
 		CodeUpdated,
-		/// A new account was created.
+		/// A new [account] was created.
 		NewAccount(AccountId),
-		/// An account was reaped.
+		/// An [account] was reaped.
 		KilledAccount(AccountId),
 	}
 );
@@ -565,11 +552,7 @@ decl_module! {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight = FunctionOf(
-			|(ratio,): (&Perbill,)| *ratio * T::MaximumBlockWeight::get(),
-			DispatchClass::Operational,
-			Pays::Yes,
-		)]
+		#[weight = *_ratio * T::MaximumBlockWeight::get()]
 		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
 		}
@@ -668,13 +651,10 @@ decl_module! {
 		/// - Base Weight: 0.568 * i µs
 		/// - Writes: Number of items
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(items,): (&Vec<KeyValue>,)| {
-				T::DbWeight::get().writes(items.len() as Weight)
-					.saturating_add((items.len() as Weight).saturating_mul(600_000))
-			},
+		#[weight = (
+			T::DbWeight::get().writes(items.len() as Weight)
+				.saturating_add((items.len() as Weight).saturating_mul(600_000)),
 			DispatchClass::Operational,
-			Pays::Yes,
 		)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
@@ -691,13 +671,10 @@ decl_module! {
 		/// - Base Weight: .378 * i µs
 		/// - Writes: Number of items
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(keys,): (&Vec<Key>,)| {
-				T::DbWeight::get().writes(keys.len() as Weight)
-					.saturating_add((keys.len() as Weight).saturating_mul(400_000))
-			},
+		#[weight = (
+			T::DbWeight::get().writes(keys.len() as Weight)
+				.saturating_add((keys.len() as Weight).saturating_mul(400_000)),
 			DispatchClass::Operational,
-			Pays::Yes,
 		)]
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
@@ -717,13 +694,10 @@ decl_module! {
 		/// - Base Weight: 0.834 * P µs
 		/// - Writes: Number of subkeys + 1
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, &subkeys): (&Key, &u32)| {
-				T::DbWeight::get().writes(Weight::from(subkeys) + 1)
-					.saturating_add((Weight::from(subkeys) + 1).saturating_mul(850_000))
-			},
+		#[weight = (
+			T::DbWeight::get().writes(Weight::from(*_subkeys) + 1)
+				.saturating_add((Weight::from(*_subkeys) + 1).saturating_mul(850_000)),
 			DispatchClass::Operational,
-			Pays::Yes,
 		)]
 		fn kill_prefix(origin, prefix: Key, _subkeys: u32) {
 			ensure_root(origin)?;
@@ -741,12 +715,12 @@ decl_module! {
 		/// No DB Read or Write operations because caller is already in overlay
 		/// # </weight>
 		#[weight = (10_000_000, DispatchClass::Operational)]
-		fn suicide(origin) {
+		pub fn suicide(origin) {
 			let who = ensure_signed(origin)?;
 			let account = Account::<T>::get(&who);
 			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
 			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
-			Account::<T>::remove(who);
+			Self::kill_account(&who);
 		}
 	}
 }
@@ -843,6 +817,30 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
 		unimplemented!()
+	}
+}
+
+/// The "OR gate" implementation of `EnsureOrigin`.
+///
+/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
+pub struct EnsureOneOf<AccountId, L, R>(sp_std::marker::PhantomData<(AccountId, L, R)>);
+impl<
+	AccountId,
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	L: EnsureOrigin<O>,
+	R: EnsureOrigin<O>,
+> EnsureOrigin<O> for EnsureOneOf<AccountId, L, R> {
+	type Success = Either<L::Success, R::Success>;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		L::try_origin(o).map_or_else(
+			|o| R::try_origin(o).map(|o| Either::Right(o)),
+			|o| Ok(Either::Left(o)),
+		)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		L::successful_origin()
 	}
 }
 
@@ -1130,6 +1128,15 @@ impl<T: Trait> Module<T> {
 		AllExtrinsicsLen::put(len as u32);
 	}
 
+	/// Reset events. Can be used as an alternative to
+	/// `initialize` for tests that don't need to bother with the other environment entries.
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	pub fn reset_events() {
+		<Events<T>>::kill();
+		EventCount::kill();
+		<EventTopics<T>>::remove_all();
+	}
+
 	/// Return the chain's current runtime version.
 	pub fn runtime_version() -> RuntimeVersion { T::Version::get() }
 
@@ -1221,8 +1228,8 @@ impl<T: Trait> Module<T> {
 					"WARNING: Referenced account deleted. This is probably a bug."
 				);
 			}
-			Module::<T>::on_killed_account(who.clone());
 		}
+		Module::<T>::on_killed_account(who.clone());
 	}
 
 	/// Determine whether or not it is possible to update the code.
@@ -1265,6 +1272,15 @@ pub struct CallKillAccount<T>(PhantomData<T>);
 impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 	fn happened(who: &T::AccountId) {
 		Module::<T>::kill_account(who)
+	}
+}
+
+impl<T: Trait> BlockNumberProvider for Module<T>
+{
+	type BlockNumber = <T as Trait>::BlockNumber;
+
+	fn current_block_number() -> Self::BlockNumber {
+		Module::<T>::block_number()
 	}
 }
 
@@ -1337,503 +1353,10 @@ pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S
 	}
 }
 
-/// resource limit check.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
-
-impl<T: Trait + Send + Sync> CheckWeight<T> where
-	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
-{
-	/// Get the quota ratio of each dispatch class type. This indicates that all operational and mandatory
-	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
-	/// a portion.
-	fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
-		match class {
-			DispatchClass::Operational | DispatchClass::Mandatory
-				=> <Perbill as sp_runtime::PerThing>::one(),
-			DispatchClass::Normal => T::AvailableBlockRatio::get(),
-		}
-	}
-
-	/// Checks if the current extrinsic does not exceed `MaximumExtrinsicWeight` limit.
-	fn check_extrinsic_weight(
-		info: &DispatchInfoOf<T::Call>,
-	) -> Result<(), TransactionValidityError> {
-		match info.class {
-			// Mandatory and Operational transactions does not
-			DispatchClass::Mandatory | DispatchClass::Operational => Ok(()),
-			DispatchClass::Normal => {
-				let maximum_weight = T::MaximumExtrinsicWeight::get();
-				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
-				if extrinsic_weight > maximum_weight {
-					Err(InvalidTransaction::ExhaustsResources.into())
-				} else {
-					Ok(())
-				}
-			}
-		}
-	}
-
-	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
-	///
-	/// Upon successes, it returns the new block weight as a `Result`.
-	fn check_block_weight(
-		info: &DispatchInfoOf<T::Call>,
-	) -> Result<ExtrinsicsWeight, TransactionValidityError> {
-		let maximum_weight = T::MaximumBlockWeight::get();
-		let mut all_weight = Module::<T>::block_weight();
-		match info.class {
-			// If we have a dispatch that must be included in the block, it ignores all the limits.
-			DispatchClass::Mandatory => {
-				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
-				all_weight.add(extrinsic_weight, DispatchClass::Mandatory);
-				Ok(all_weight)
-			},
-			// If we have a normal dispatch, we follow all the normal rules and limits.
-			DispatchClass::Normal => {
-				let normal_limit = Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_weight;
-				let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
-					.ok_or(InvalidTransaction::ExhaustsResources)?;
-				all_weight.checked_add(extrinsic_weight, DispatchClass::Normal)
-					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
-				if all_weight.get(DispatchClass::Normal) > normal_limit {
-					Err(InvalidTransaction::ExhaustsResources.into())
-				} else {
-					Ok(all_weight)
-				}
-			},
-			// If we have an operational dispatch, allow it if we have not used our full
-			// "operational space" (independent of existing fullness).
-			DispatchClass::Operational => {
-				let operational_limit = Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
-				let normal_limit = Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_weight;
-				let operational_space = operational_limit.saturating_sub(normal_limit);
-
-				let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
-					.ok_or(InvalidTransaction::ExhaustsResources)?;
-				all_weight.checked_add(extrinsic_weight, DispatchClass::Operational)
-					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
-
-				// If it would fit in normally, its okay
-				if all_weight.total() <= maximum_weight ||
-				// If we have not used our operational space
-				all_weight.get(DispatchClass::Operational) <= operational_space {
-					Ok(all_weight)
-				} else {
-					Err(InvalidTransaction::ExhaustsResources.into())
-				}
-			}
-		}
-	}
-
-	/// Checks if the current extrinsic can fit into the block with respect to block length limits.
-	///
-	/// Upon successes, it returns the new block length as a `Result`.
-	fn check_block_length(
-		info: &DispatchInfoOf<T::Call>,
-		len: usize,
-	) -> Result<u32, TransactionValidityError> {
-		let current_len = Module::<T>::all_extrinsics_len();
-		let maximum_len = T::MaximumBlockLength::get();
-		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_len;
-		let added_len = len as u32;
-		let next_len = current_len.saturating_add(added_len);
-		if next_len > limit {
-			Err(InvalidTransaction::ExhaustsResources.into())
-		} else {
-			Ok(next_len)
-		}
-	}
-
-	/// get the priority of an extrinsic denoted by `info`.
-	fn get_priority(info: &DispatchInfoOf<T::Call>) -> TransactionPriority {
-		match info.class {
-			DispatchClass::Normal => info.weight.into(),
-			DispatchClass::Operational => Bounded::max_value(),
-			// Mandatory extrinsics are only for inherents; never transactions.
-			DispatchClass::Mandatory => Bounded::min_value(),
-		}
-	}
-
-	/// Creates new `SignedExtension` to check weight of the extrinsic.
-	pub fn new() -> Self {
-		Self(PhantomData)
-	}
-
-	/// Do the pre-dispatch checks. This can be applied to both signed and unsigned.
-	///
-	/// It checks and notes the new weight and length.
-	fn do_pre_dispatch(
-		info: &DispatchInfoOf<T::Call>,
-		len: usize,
-	) -> Result<(), TransactionValidityError> {
-		let next_len = Self::check_block_length(info, len)?;
-		let next_weight = Self::check_block_weight(info)?;
-		Self::check_extrinsic_weight(info)?;
-
-		AllExtrinsicsLen::put(next_len);
-		BlockWeight::put(next_weight);
-		Ok(())
-	}
-
-	/// Do the validate checks. This can be applied to both signed and unsigned.
-	///
-	/// It only checks that the block weight and length limit will not exceed.
-	fn do_validate(
-		info: &DispatchInfoOf<T::Call>,
-		len: usize,
-	) -> TransactionValidity {
-		// ignore the next length. If they return `Ok`, then it is below the limit.
-		let _ = Self::check_block_length(info, len)?;
-		// during validation we skip block limit check. Since the `validate_transaction`
-		// call runs on an empty block anyway, by this we prevent `on_initialize` weight
-		// consumption from causing false negatives.
-		Self::check_extrinsic_weight(info)?;
-
-		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
-	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
-{
-	type AccountId = T::AccountId;
-	type Call = T::Call;
-	type AdditionalSigned = ();
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckWeight";
-
-	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
-
-	fn pre_dispatch(
-		self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
-		len: usize,
-	) -> Result<(), TransactionValidityError> {
-		if info.class == DispatchClass::Mandatory {
-			Err(InvalidTransaction::MandatoryDispatch)?
-		}
-		Self::do_pre_dispatch(info, len)
-	}
-
-	fn validate(
-		&self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
-		len: usize,
-	) -> TransactionValidity {
-		if info.class == DispatchClass::Mandatory {
-			Err(InvalidTransaction::MandatoryDispatch)?
-		}
-		Self::do_validate(info, len)
-	}
-
-	fn pre_dispatch_unsigned(
-		_call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
-		len: usize,
-	) -> Result<(), TransactionValidityError> {
-		Self::do_pre_dispatch(info, len)
-	}
-
-	fn validate_unsigned(
-		_call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
-		len: usize,
-	) -> TransactionValidity {
-		Self::do_validate(info, len)
-	}
-
-	fn post_dispatch(
-		_pre: Self::Pre,
-		info: &DispatchInfoOf<Self::Call>,
-		post_info: &PostDispatchInfoOf<Self::Call>,
-		_len: usize,
-		result: &DispatchResult,
-	) -> Result<(), TransactionValidityError> {
-		// Since mandatory dispatched do not get validated for being overweight, we are sensitive
-		// to them actually being useful. Block producers are thus not allowed to include mandatory
-		// extrinsics that result in error.
-		if info.class == DispatchClass::Mandatory && result.is_err() {
-			Err(InvalidTransaction::BadMandatory)?
-		}
-
-		let unspent = post_info.calc_unspent(info);
-		if unspent > 0 {
-			BlockWeight::mutate(|current_weight| {
-				current_weight.sub(unspent, info.class);
-			})
-		}
-
-		Ok(())
-	}
-}
-
-impl<T: Trait + Send + Sync> Debug for CheckWeight<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckWeight")
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-/// Nonce check and increment to give replay protection for transactions.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckNonce<T: Trait>(#[codec(compact)] T::Index);
-
-impl<T: Trait> CheckNonce<T> {
-	/// utility constructor. Used only in client/factory code.
-	pub fn from(nonce: T::Index) -> Self {
-		Self(nonce)
-	}
-}
-
-impl<T: Trait> Debug for CheckNonce<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckNonce({})", self.0)
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: Trait> SignedExtension for CheckNonce<T> where
-	T::Call: Dispatchable<Info=DispatchInfo>
-{
-	type AccountId = T::AccountId;
-	type Call = T::Call;
-	type AdditionalSigned = ();
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckNonce";
-
-	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
-
-	fn pre_dispatch(
-		self,
-		who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> Result<(), TransactionValidityError> {
-		let mut account = Account::<T>::get(who);
-		if self.0 != account.nonce {
-			return Err(
-				if self.0 < account.nonce {
-					InvalidTransaction::Stale
-				} else {
-					InvalidTransaction::Future
-				}.into()
-			)
-		}
-		account.nonce += T::Index::one();
-		Account::<T>::insert(who, account);
-		Ok(())
-	}
-
-	fn validate(
-		&self,
-		who: &Self::AccountId,
-		_call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> TransactionValidity {
-		// check index
-		let account = Account::<T>::get(who);
-		if self.0 < account.nonce {
-			return InvalidTransaction::Stale.into()
-		}
-
-		let provides = vec![Encode::encode(&(who, self.0))];
-		let requires = if account.nonce < self.0 {
-			vec![Encode::encode(&(who, self.0 - One::one()))]
-		} else {
-			vec![]
-		};
-
-		Ok(ValidTransaction {
-			priority: info.weight as TransactionPriority,
-			requires,
-			provides,
-			longevity: TransactionLongevity::max_value(),
-			propagate: true,
-		})
-	}
-}
 
 impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T> {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		!Account::<T>::contains_key(who)
-	}
-}
-
-/// Check for transaction mortality.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckEra<T: Trait + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
-
-impl<T: Trait + Send + Sync> CheckEra<T> {
-	/// utility constructor. Used only in client/factory code.
-	pub fn from(era: Era) -> Self {
-		Self(era, sp_std::marker::PhantomData)
-	}
-}
-
-impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckEra({:?})", self.0)
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
-	type AccountId = T::AccountId;
-	type Call = T::Call;
-	type AdditionalSigned = T::Hash;
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckEra";
-
-	fn validate(
-		&self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> TransactionValidity {
-		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let valid_till = self.0.death(current_u64);
-		Ok(ValidTransaction {
-			longevity: valid_till.saturating_sub(current_u64),
-			..Default::default()
-		})
-	}
-
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let n = self.0.birth(current_u64).saturated_into::<T::BlockNumber>();
-		if !<BlockHash<T>>::contains_key(n) {
-			Err(InvalidTransaction::AncientBirthBlock.into())
-		} else {
-			Ok(<Module<T>>::block_hash(n))
-		}
-	}
-}
-
-/// Nonce check and increment to give replay protection for transactions.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckGenesis<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
-
-impl<T: Trait + Send + Sync> Debug for CheckGenesis<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckGenesis")
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: Trait + Send + Sync> CheckGenesis<T> {
-	/// Creates new `SignedExtension` to check genesis hash.
-	pub fn new() -> Self {
-		Self(sp_std::marker::PhantomData)
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
-	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
-	type AdditionalSigned = T::Hash;
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckGenesis";
-
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(<Module<T>>::block_hash(T::BlockNumber::zero()))
-	}
-}
-
-/// Ensure the transaction version registered in the transaction is the same as at present.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckTxVersion<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
-
-impl<T: Trait + Send + Sync> Debug for CheckTxVersion<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckTxVersion")
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: Trait + Send + Sync> CheckTxVersion<T> {
-	/// Create new `SignedExtension` to check transaction version.
-	pub fn new() -> Self {
-		Self(sp_std::marker::PhantomData)
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for CheckTxVersion<T> {
-	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
-	type AdditionalSigned = u32;
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckTxVersion";
-
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(<Module<T>>::runtime_version().transaction_version)
-	}
-}
-
-/// Ensure the runtime version registered in the transaction is the same as at present.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckSpecVersion<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
-
-impl<T: Trait + Send + Sync> Debug for CheckSpecVersion<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckSpecVersion")
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: Trait + Send + Sync> CheckSpecVersion<T> {
-	/// Create new `SignedExtension` to check runtime version.
-	pub fn new() -> Self {
-		Self(sp_std::marker::PhantomData)
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for CheckSpecVersion<T> {
-	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
-	type AdditionalSigned = u32;
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckSpecVersion";
-
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(<Module<T>>::runtime_version().spec_version)
 	}
 }
 
@@ -1850,836 +1373,5 @@ impl<T: Trait> Lookup for ChainContext<T> {
 
 	fn lookup(&self, s: Self::Source) -> Result<Self::Target, LookupError> {
 		<T::Lookup as StaticLookup>::lookup(s)
-	}
-}
-
-#[cfg(test)]
-pub(crate) mod tests {
-	use super::*;
-	use sp_std::cell::RefCell;
-	use sp_core::H256;
-	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, SignedExtension}, testing::Header, DispatchError};
-	use frame_support::{
-		impl_outer_origin, parameter_types, assert_ok, assert_noop,
-		weights::WithPostDispatchInfo,
-	};
-
-	impl_outer_origin! {
-		pub enum Origin for Test where system = super {}
-	}
-
-	#[derive(Clone, Eq, PartialEq, Debug)]
-	pub struct Test;
-
-	parameter_types! {
-		pub const BlockHashCount: u64 = 10;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumExtrinsicWeight: Weight = 768;
-		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
-		pub const MaximumBlockLength: u32 = 1024;
-		pub const Version: RuntimeVersion = RuntimeVersion {
-			spec_name: sp_version::create_runtime_str!("test"),
-			impl_name: sp_version::create_runtime_str!("system-test"),
-			authoring_version: 1,
-			spec_version: 1,
-			impl_version: 1,
-			apis: sp_version::create_apis_vec!([]),
-			transaction_version: 1,
-		};
-		pub const BlockExecutionWeight: Weight = 10;
-		pub const ExtrinsicBaseWeight: Weight = 5;
-		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 10,
-			write: 100,
-		};
-	}
-
-	thread_local!{
-		pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	}
-
-	pub struct RecordKilled;
-	impl OnKilledAccount<u64> for RecordKilled {
-		fn on_killed_account(who: &u64) { KILLED.with(|r| r.borrow_mut().push(*who)) }
-	}
-
-	#[derive(Debug, codec::Encode, codec::Decode)]
-	pub struct Call;
-
-	impl Dispatchable for Call {
-		type Origin = ();
-		type Trait = ();
-		type Info = DispatchInfo;
-		type PostInfo = PostDispatchInfo;
-		fn dispatch(self, _origin: Self::Origin)
-			-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-				panic!("Do not use dummy implementation for dispatch.");
-		}
-	}
-
-	impl Trait for Test {
-		type Origin = Origin;
-		type Call = Call;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = Event<Self>;
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = DbWeight;
-		type BlockExecutionWeight = BlockExecutionWeight;
-		type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
-		type MaximumExtrinsicWeight = MaximumExtrinsicWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type MaximumBlockLength = MaximumBlockLength;
-		type Version = Version;
-		type ModuleToIndex = ();
-		type AccountData = u32;
-		type OnNewAccount = ();
-		type OnKilledAccount = RecordKilled;
-	}
-
-	type System = Module<Test>;
-	type SysEvent = <Test as Trait>::Event;
-
-	const CALL: &<Test as Trait>::Call = &Call;
-
-	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut ext: sp_io::TestExternalities = GenesisConfig::default().build_storage::<Test>().unwrap().into();
-		// Add to each test the initial weight of a block
-		ext.execute_with(|| System::register_extra_weight_unchecked(<Test as Trait>::BlockExecutionWeight::get(), DispatchClass::Mandatory));
-		ext
-	}
-
-	fn normal_weight_limit() -> Weight {
-		<Test as Trait>::AvailableBlockRatio::get() * <Test as Trait>::MaximumBlockWeight::get()
-	}
-
-	fn normal_length_limit() -> u32 {
-		<Test as Trait>::AvailableBlockRatio::get() * <Test as Trait>::MaximumBlockLength::get()
-	}
-
-	#[test]
-	fn origin_works() {
-		let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
-		let x: Result<RawOrigin<u64>, Origin> = o.into();
-		assert_eq!(x, Ok(RawOrigin::<u64>::Signed(1u64)));
-	}
-
-	#[test]
-	fn stored_map_works() {
-		new_test_ext().execute_with(|| {
-			System::insert(&0, 42);
-			assert!(System::allow_death(&0));
-
-			System::inc_ref(&0);
-			assert!(!System::allow_death(&0));
-
-			System::insert(&0, 69);
-			assert!(!System::allow_death(&0));
-
-			System::dec_ref(&0);
-			assert!(System::allow_death(&0));
-
-			assert!(KILLED.with(|r| r.borrow().is_empty()));
-			System::kill_account(&0);
-			assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0u64]);
-		});
-	}
-
-	#[test]
-	fn deposit_event_should_work() {
-		new_test_ext().execute_with(|| {
-			System::initialize(
-				&1,
-				&[0u8; 32].into(),
-				&[0u8; 32].into(),
-				&Default::default(),
-				InitKind::Full,
-			);
-			System::note_finished_extrinsics();
-			System::deposit_event(SysEvent::CodeUpdated);
-			System::finalize();
-			assert_eq!(
-				System::events(),
-				vec![
-					EventRecord {
-						phase: Phase::Finalization,
-						event: SysEvent::CodeUpdated,
-						topics: vec![],
-					}
-				]
-			);
-
-			System::initialize(
-				&2,
-				&[0u8; 32].into(),
-				&[0u8; 32].into(),
-				&Default::default(),
-				InitKind::Full,
-			);
-			System::deposit_event(SysEvent::NewAccount(32));
-			System::note_finished_initialize();
-			System::deposit_event(SysEvent::KilledAccount(42));
-			System::note_applied_extrinsic(&Ok(().into()), Default::default());
-			System::note_applied_extrinsic(
-				&Err(DispatchError::BadOrigin.into()),
-				Default::default()
-			);
-			System::note_finished_extrinsics();
-			System::deposit_event(SysEvent::NewAccount(3));
-			System::finalize();
-			assert_eq!(
-				System::events(),
-				vec![
-					EventRecord {
-						phase: Phase::Initialization,
-						event: SysEvent::NewAccount(32),
-						topics: vec![],
-					},
-					EventRecord {
-						phase: Phase::ApplyExtrinsic(0),
-						event: SysEvent::KilledAccount(42),
-						topics: vec![]
-					},
-					EventRecord {
-						phase: Phase::ApplyExtrinsic(0),
-						event: SysEvent::ExtrinsicSuccess(Default::default()),
-						topics: vec![]
-					},
-					EventRecord {
-						phase: Phase::ApplyExtrinsic(1),
-						event: SysEvent::ExtrinsicFailed(
-							DispatchError::BadOrigin.into(),
-							Default::default()
-						),
-						topics: vec![]
-					},
-					EventRecord {
-						phase: Phase::Finalization,
-						event: SysEvent::NewAccount(3),
-						topics: vec![]
-					},
-				]
-			);
-		});
-	}
-
-	#[test]
-	fn deposit_event_uses_actual_weight() {
-		new_test_ext().execute_with(|| {
-			System::initialize(
-				&1,
-				&[0u8; 32].into(),
-				&[0u8; 32].into(),
-				&Default::default(),
-				InitKind::Full,
-			);
-			System::note_finished_initialize();
-
-			let pre_info = DispatchInfo {
-				weight: 1000,
-				.. Default::default()
-			};
-			System::note_applied_extrinsic(
-				&Ok(Some(300).into()),
-				pre_info,
-			);
-			System::note_applied_extrinsic(
-				&Ok(Some(1000).into()),
-				pre_info,
-			);
-			System::note_applied_extrinsic(
-				// values over the pre info should be capped at pre dispatch value
-				&Ok(Some(1200).into()),
-				pre_info,
-			);
-			System::note_applied_extrinsic(
-				&Err(DispatchError::BadOrigin.with_weight(999)),
-				pre_info,
-			);
-
-			assert_eq!(
-				System::events(),
-				vec![
-					EventRecord {
-						phase: Phase::ApplyExtrinsic(0),
-						event: SysEvent::ExtrinsicSuccess(
-							DispatchInfo {
-								weight: 300,
-								.. Default::default()
-							},
-						),
-						topics: vec![]
-					},
-					EventRecord {
-						phase: Phase::ApplyExtrinsic(1),
-						event: SysEvent::ExtrinsicSuccess(
-							DispatchInfo {
-								weight: 1000,
-								.. Default::default()
-							},
-						),
-						topics: vec![]
-					},
-					EventRecord {
-						phase: Phase::ApplyExtrinsic(2),
-						event: SysEvent::ExtrinsicSuccess(
-							DispatchInfo {
-								weight: 1000,
-								.. Default::default()
-							},
-						),
-						topics: vec![]
-					},
-					EventRecord {
-						phase: Phase::ApplyExtrinsic(3),
-						event: SysEvent::ExtrinsicFailed(
-							DispatchError::BadOrigin.into(),
-							DispatchInfo {
-								weight: 999,
-								.. Default::default()
-							},
-						),
-						topics: vec![]
-					},
-				]
-			);
-		});
-	}
-
-	#[test]
-	fn deposit_event_topics() {
-		new_test_ext().execute_with(|| {
-			const BLOCK_NUMBER: u64 = 1;
-
-			System::initialize(
-				&BLOCK_NUMBER,
-				&[0u8; 32].into(),
-				&[0u8; 32].into(),
-				&Default::default(),
-				InitKind::Full,
-			);
-			System::note_finished_extrinsics();
-
-			let topics = vec![
-				H256::repeat_byte(1),
-				H256::repeat_byte(2),
-				H256::repeat_byte(3),
-			];
-
-			// We deposit a few events with different sets of topics.
-			System::deposit_event_indexed(&topics[0..3], SysEvent::NewAccount(1));
-			System::deposit_event_indexed(&topics[0..1], SysEvent::NewAccount(2));
-			System::deposit_event_indexed(&topics[1..2], SysEvent::NewAccount(3));
-
-			System::finalize();
-
-			// Check that topics are reflected in the event record.
-			assert_eq!(
-				System::events(),
-				vec![
-					EventRecord {
-						phase: Phase::Finalization,
-						event: SysEvent::NewAccount(1),
-						topics: topics[0..3].to_vec(),
-					},
-					EventRecord {
-						phase: Phase::Finalization,
-						event: SysEvent::NewAccount(2),
-						topics: topics[0..1].to_vec(),
-					},
-					EventRecord {
-						phase: Phase::Finalization,
-						event: SysEvent::NewAccount(3),
-						topics: topics[1..2].to_vec(),
-					}
-				]
-			);
-
-			// Check that the topic-events mapping reflects the deposited topics.
-			// Note that these are indexes of the events.
-			assert_eq!(
-				System::event_topics(&topics[0]),
-				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 1)],
-			);
-			assert_eq!(
-				System::event_topics(&topics[1]),
-				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 2)],
-			);
-			assert_eq!(
-				System::event_topics(&topics[2]),
-				vec![(BLOCK_NUMBER, 0)],
-			);
-		});
-	}
-
-	#[test]
-	fn prunes_block_hash_mappings() {
-		new_test_ext().execute_with(|| {
-			// simulate import of 15 blocks
-			for n in 1..=15 {
-				System::initialize(
-					&n,
-					&[n as u8 - 1; 32].into(),
-					&[0u8; 32].into(),
-					&Default::default(),
-					InitKind::Full,
-				);
-
-				System::finalize();
-			}
-
-			// first 5 block hashes are pruned
-			for n in 0..5 {
-				assert_eq!(
-					System::block_hash(n),
-					H256::zero(),
-				);
-			}
-
-			// the remaining 10 are kept
-			for n in 5..15 {
-				assert_eq!(
-					System::block_hash(n),
-					[n as u8; 32].into(),
-				);
-			}
-		})
-	}
-
-	#[test]
-	fn signed_ext_check_nonce_works() {
-		new_test_ext().execute_with(|| {
-			Account::<Test>::insert(1, AccountInfo { nonce: 1, refcount: 0, data: 0 });
-			let info = DispatchInfo::default();
-			let len = 0_usize;
-			// stale
-			assert!(CheckNonce::<Test>(0).validate(&1, CALL, &info, len).is_err());
-			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, CALL, &info, len).is_err());
-			// correct
-			assert!(CheckNonce::<Test>(1).validate(&1, CALL, &info, len).is_ok());
-			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, &info, len).is_ok());
-			// future
-			assert!(CheckNonce::<Test>(5).validate(&1, CALL, &info, len).is_ok());
-			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, CALL, &info, len).is_err());
-		})
-	}
-
-	#[test]
-	fn signed_ext_check_weight_works_normal_tx() {
-		new_test_ext().execute_with(|| {
-			let normal_limit = normal_weight_limit();
-			let small = DispatchInfo { weight: 100, ..Default::default() };
-			let medium = DispatchInfo {
-				weight: normal_limit - <Test as Trait>::ExtrinsicBaseWeight::get(),
-				..Default::default()
-			};
-			let big = DispatchInfo {
-				weight: normal_limit - <Test as Trait>::ExtrinsicBaseWeight::get() + 1,
-				..Default::default()
-			};
-			let len = 0_usize;
-
-			let reset_check_weight = |i, f, s| {
-				BlockWeight::mutate(|current_weight| {
-					current_weight.put(s, DispatchClass::Normal)
-				});
-				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, i, len);
-				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
-			};
-
-			reset_check_weight(&small, false, 0);
-			reset_check_weight(&medium, false, 0);
-			reset_check_weight(&big, true, 1);
-		})
-	}
-
-	#[test]
-	fn signed_ext_check_weight_refund_works() {
-		new_test_ext().execute_with(|| {
-			// This is half of the max block weight
-			let info = DispatchInfo { weight: 512, ..Default::default() };
-			let post_info = PostDispatchInfo { actual_weight: Some(128), };
-			let len = 0_usize;
-
-			// We allow 75% for normal transaction, so we put 25% - extrinsic base weight
-			BlockWeight::mutate(|current_weight| {
-				current_weight.put(256 - <Test as Trait>::ExtrinsicBaseWeight::get(), DispatchClass::Normal)
-			});
-
-			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
-			assert_eq!(BlockWeight::get().total(), info.weight + 256);
-
-			assert!(
-				CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(()))
-				.is_ok()
-			);
-			assert_eq!(
-				BlockWeight::get().total(),
-				post_info.actual_weight.unwrap() + 256,
-			);
-		})
-	}
-
-	#[test]
-	fn signed_ext_check_weight_actual_weight_higher_than_max_is_capped() {
-		new_test_ext().execute_with(|| {
-			let info = DispatchInfo { weight: 512, ..Default::default() };
-			let post_info = PostDispatchInfo { actual_weight: Some(700), };
-			let len = 0_usize;
-
-			BlockWeight::mutate(|current_weight| {
-				current_weight.put(128, DispatchClass::Normal)
-			});
-
-			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
-			assert_eq!(
-				BlockWeight::get().total(),
-				info.weight + 128 + <Test as Trait>::ExtrinsicBaseWeight::get(),
-			);
-
-			assert!(
-				CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(()))
-				.is_ok()
-			);
-			assert_eq!(
-				BlockWeight::get().total(),
-				info.weight + 128 + <Test as Trait>::ExtrinsicBaseWeight::get(),
-			);
-		})
-	}
-
-	#[test]
-	fn zero_weight_extrinsic_still_has_base_weight() {
-		new_test_ext().execute_with(|| {
-			let free = DispatchInfo { weight: 0, ..Default::default() };
-			let len = 0_usize;
-
-			// Initial weight from `BlockExecutionWeight`
-			assert_eq!(System::block_weight().total(), <Test as Trait>::BlockExecutionWeight::get());
-			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &free, len);
-			assert!(r.is_ok());
-			assert_eq!(
-				System::block_weight().total(),
-				<Test as Trait>::ExtrinsicBaseWeight::get() + <Test as Trait>::BlockExecutionWeight::get()
-			);
-		})
-	}
-
-	#[test]
-	fn mandatory_extrinsic_doesnt_care_about_limits() {
-		fn check(call: impl FnOnce(&DispatchInfo, usize)) {
-			new_test_ext().execute_with(|| {
-				let max = DispatchInfo {
-					weight: Weight::max_value(),
-					class: DispatchClass::Mandatory,
-					..Default::default()
-				};
-				let len = 0_usize;
-
-				call(&max, len);
-			});
-		}
-
-		check(|max, len| {
-			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(max, len));
-			assert_eq!(System::block_weight().total(), Weight::max_value());
-			assert!(System::block_weight().total() > <Test as Trait>::MaximumBlockWeight::get());
-		});
-		check(|max, len| {
-			assert_ok!(CheckWeight::<Test>::do_validate(max, len));
-		});
-	}
-
-	#[test]
-	fn normal_extrinsic_limited_by_maximum_extrinsic_weight() {
-		new_test_ext().execute_with(|| {
-			let max = DispatchInfo {
-				weight: MaximumExtrinsicWeight::get() + 1,
-				class: DispatchClass::Normal,
-				..Default::default()
-			};
-			let len = 0_usize;
-
-			assert_noop!(
-				CheckWeight::<Test>::do_validate(&max, len),
-				InvalidTransaction::ExhaustsResources
-			);
-		});
-	}
-
-	#[test]
-	fn register_extra_weight_unchecked_doesnt_care_about_limits() {
-		new_test_ext().execute_with(|| {
-			System::register_extra_weight_unchecked(Weight::max_value(), DispatchClass::Normal);
-			assert_eq!(System::block_weight().total(), Weight::max_value());
-			assert!(System::block_weight().total() > <Test as Trait>::MaximumBlockWeight::get());
-		});
-	}
-
-	#[test]
-	fn full_block_with_normal_and_operational() {
-		new_test_ext().execute_with(|| {
-			// Max block is 1024
-			// Max normal is 768 (75%)
-			// 10 is taken for block execution weight
-			// So normal extrinsic can be 758 weight (-5 for base extrinsic weight)
-			// And Operational can be 256 to produce a full block (-5 for base)
-			let max_normal = DispatchInfo { weight: 753, ..Default::default() };
-			let rest_operational = DispatchInfo { weight: 251, class: DispatchClass::Operational, ..Default::default() };
-
-			let len = 0_usize;
-
-			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
-			assert_eq!(System::block_weight().total(), 768);
-			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
-			assert_eq!(<Test as Trait>::MaximumBlockWeight::get(), 1024);
-			assert_eq!(System::block_weight().total(), <Test as Trait>::MaximumBlockWeight::get());
-		});
-	}
-
-	#[test]
-	fn dispatch_order_does_not_effect_weight_logic() {
-		new_test_ext().execute_with(|| {
-			// We switch the order of `full_block_with_normal_and_operational`
-			let max_normal = DispatchInfo { weight: 753, ..Default::default() };
-			let rest_operational = DispatchInfo { weight: 251, class: DispatchClass::Operational, ..Default::default() };
-
-			let len = 0_usize;
-
-			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
-			// Extra 15 here from block execution + base extrinsic weight
-			assert_eq!(System::block_weight().total(), 266);
-			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
-			assert_eq!(<Test as Trait>::MaximumBlockWeight::get(), 1024);
-			assert_eq!(System::block_weight().total(), <Test as Trait>::MaximumBlockWeight::get());
-		});
-	}
-
-	#[test]
-	fn operational_works_on_full_block() {
-		new_test_ext().execute_with(|| {
-			// An on_initialize takes up the whole block! (Every time!)
-			System::register_extra_weight_unchecked(Weight::max_value(), DispatchClass::Mandatory);
-			let dispatch_normal = DispatchInfo { weight: 251, class: DispatchClass::Normal, ..Default::default() };
-			let dispatch_operational = DispatchInfo { weight: 251, class: DispatchClass::Operational, ..Default::default() };
-			let len = 0_usize;
-
-			assert_noop!(CheckWeight::<Test>::do_pre_dispatch(&dispatch_normal, len), InvalidTransaction::ExhaustsResources);
-			// Thank goodness we can still do an operational transaction to possibly save the blockchain.
-			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&dispatch_operational, len));
-			// Not too much though
-			assert_noop!(CheckWeight::<Test>::do_pre_dispatch(&dispatch_operational, len), InvalidTransaction::ExhaustsResources);
-		});
-	}
-
-	#[test]
-	fn signed_ext_check_weight_works_operational_tx() {
-		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, ..Default::default() };
-			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: Pays::Yes };
-			let len = 0_usize;
-			let normal_limit = normal_weight_limit();
-
-			// given almost full block
-			BlockWeight::mutate(|current_weight| {
-				current_weight.put(normal_limit, DispatchClass::Normal)
-			});
-			// will not fit.
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len).is_err());
-			// will fit.
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len).is_ok());
-
-			// likewise for length limit.
-			let len = 100_usize;
-			AllExtrinsicsLen::put(normal_length_limit());
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len).is_err());
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len).is_ok());
-		})
-	}
-
-	#[test]
-	fn signed_ext() {
-		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
-			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: Pays::Yes };
-			let len = 0_usize;
-
-			let priority = CheckWeight::<Test>(PhantomData)
-				.validate(&1, CALL, &normal, len)
-				.unwrap()
-				.priority;
-			assert_eq!(priority, 100);
-
-			let priority = CheckWeight::<Test>(PhantomData)
-				.validate(&1, CALL, &op, len)
-				.unwrap()
-				.priority;
-			assert_eq!(priority, u64::max_value());
-		})
-	}
-
-	#[test]
-	fn signed_ext_check_weight_block_size_works() {
-		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo::default();
-			let normal_limit = normal_weight_limit() as usize;
-			let reset_check_weight = |tx, s, f| {
-				AllExtrinsicsLen::put(0);
-				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, tx, s);
-				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
-			};
-
-			reset_check_weight(&normal, normal_limit - 1, false);
-			reset_check_weight(&normal, normal_limit, false);
-			reset_check_weight(&normal, normal_limit + 1, true);
-
-			// Operational ones don't have this limit.
-			let op = DispatchInfo { weight: 0, class: DispatchClass::Operational, pays_fee: Pays::Yes };
-			reset_check_weight(&op, normal_limit, false);
-			reset_check_weight(&op, normal_limit + 100, false);
-			reset_check_weight(&op, 1024, false);
-			reset_check_weight(&op, 1025, true);
-		})
-	}
-
-	#[test]
-	fn signed_ext_check_era_should_work() {
-		new_test_ext().execute_with(|| {
-			// future
-			assert_eq!(
-				CheckEra::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
-				InvalidTransaction::AncientBirthBlock.into(),
-			);
-
-			// correct
-			System::set_block_number(13);
-			<BlockHash<Test>>::insert(12, H256::repeat_byte(1));
-			assert!(CheckEra::<Test>::from(Era::mortal(4, 12)).additional_signed().is_ok());
-		})
-	}
-
-	#[test]
-	fn signed_ext_check_era_should_change_longevity() {
-		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
-			let len = 0_usize;
-			let ext = (
-				CheckWeight::<Test>(PhantomData),
-				CheckEra::<Test>::from(Era::mortal(16, 256)),
-			);
-			System::set_block_number(17);
-			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
-
-			assert_eq!(ext.validate(&1, CALL, &normal, len).unwrap().longevity, 15);
-		})
-	}
-
-
-	#[test]
-	fn set_code_checks_works() {
-		struct CallInWasm(Vec<u8>);
-
-		impl sp_core::traits::CallInWasm for CallInWasm {
-			fn call_in_wasm(
-				&self,
-				_: &[u8],
-				_: Option<Vec<u8>>,
-				_: &str,
-				_: &[u8],
-				_: &mut dyn sp_externalities::Externalities,
-				_: sp_core::traits::MissingHostFunctions,
-			) -> Result<Vec<u8>, String> {
-				Ok(self.0.clone())
-			}
-		}
-
-		let test_data = vec![
-			("test", 1, 2, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
-			("test", 1, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
-			("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
-			("test", 2, 1, Ok(())),
-			("test", 0, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
-			("test", 1, 0, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
-		];
-
-		for (spec_name, spec_version, impl_version, expected) in test_data.into_iter() {
-			let version = RuntimeVersion {
-				spec_name: spec_name.into(),
-				spec_version,
-				impl_version,
-				..Default::default()
-			};
-			let call_in_wasm = CallInWasm(version.encode());
-
-			let mut ext = new_test_ext();
-			ext.register_extension(sp_core::traits::CallInWasmExt::new(call_in_wasm));
-			ext.execute_with(|| {
-				let res = System::set_code(
-					RawOrigin::Root.into(),
-					vec![1, 2, 3, 4],
-				);
-
-				assert_eq!(expected.map_err(DispatchError::from), res);
-			});
-		}
-	}
-
-	#[test]
-	fn set_code_with_real_wasm_blob() {
-		let executor = substrate_test_runtime_client::new_native_executor();
-		let mut ext = new_test_ext();
-		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
-		ext.execute_with(|| {
-			System::set_block_number(1);
-			System::set_code(
-				RawOrigin::Root.into(),
-				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
-			).unwrap();
-
-			assert_eq!(
-				System::events(),
-				vec![EventRecord {
-					phase: Phase::Initialization,
-					event: SysEvent::CodeUpdated,
-					topics: vec![],
-				}],
-			);
-		});
-	}
-
-	#[test]
-	fn runtime_upgraded_with_set_storage() {
-		let executor = substrate_test_runtime_client::new_native_executor();
-		let mut ext = new_test_ext();
-		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
-		ext.execute_with(|| {
-			System::set_storage(
-				RawOrigin::Root.into(),
-				vec![(
-					well_known_keys::CODE.to_vec(),
-					substrate_test_runtime_client::runtime::WASM_BINARY.to_vec()
-				)],
-			).unwrap();
-		});
-	}
-
-	#[test]
-	fn events_not_emitted_during_genesis() {
-		new_test_ext().execute_with(|| {
-			// Block Number is zero at genesis
-			assert!(System::block_number().is_zero());
-			System::on_created_account(Default::default());
-			assert!(System::events().is_empty());
-			// Events will be emitted starting on block 1
-			System::set_block_number(1);
-			System::on_created_account(Default::default());
-			assert!(System::events().len() == 1);
-		});
 	}
 }

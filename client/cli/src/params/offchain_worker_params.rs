@@ -32,7 +32,7 @@ use crate::OffchainWorkerEnabled;
 
 
 /// Offchain worker related parameters.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct OffchainWorkerParams {
 	/// Should execute offchain workers on every block.
 	///

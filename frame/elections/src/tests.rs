@@ -671,7 +671,7 @@ fn retracting_active_voter_should_slash_reporter() {
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		System::set_block_number(8);
-		assert_ok!(Elections::set_desired_seats(Origin::ROOT, 3));
+		assert_ok!(Elections::set_desired_seats(Origin::root(), 3));
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		System::set_block_number(10);
@@ -863,45 +863,6 @@ fn election_voting_should_work() {
 		assert_eq!(Elections::all_approvals_of(&4), vec![true]);
 		assert_eq!(Elections::all_approvals_of(&2), vec![false, true, true]);
 		assert_eq!(Elections::all_approvals_of(&3), vec![false, true, true]);
-
-		assert_eq!(voter_ids(), vec![1, 4, 2, 3]);
-	});
-}
-
-#[test]
-fn election_proxy_voting_should_work() {
-	ExtBuilder::default().build().execute_with(|| {
-		assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-
-		<Proxy<Test>>::insert(11, 1);
-		<Proxy<Test>>::insert(12, 2);
-		<Proxy<Test>>::insert(13, 3);
-		<Proxy<Test>>::insert(14, 4);
-		assert_ok!(
-			Elections::proxy_set_approvals(Origin::signed(11), vec![true], 0, 0, 10)
-		);
-		assert_ok!(
-			Elections::proxy_set_approvals(Origin::signed(14), vec![true], 0, 1, 40)
-		);
-
-		assert_eq!(Elections::all_approvals_of(&1), vec![true]);
-		assert_eq!(Elections::all_approvals_of(&4), vec![true]);
-		assert_eq!(voter_ids(), vec![1, 4]);
-
-		assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-		assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
-
-		assert_ok!(
-			Elections::proxy_set_approvals(Origin::signed(12), vec![false, true], 0, 2, 20)
-		);
-		assert_ok!(
-			Elections::proxy_set_approvals(Origin::signed(13), vec![false, true], 0, 3, 30)
-		);
-
-		assert_eq!(Elections::all_approvals_of(&1), vec![true]);
-		assert_eq!(Elections::all_approvals_of(&4), vec![true]);
-		assert_eq!(Elections::all_approvals_of(&2), vec![false, true]);
-		assert_eq!(Elections::all_approvals_of(&3), vec![false, true]);
 
 		assert_eq!(voter_ids(), vec![1, 4, 2, 3]);
 	});
@@ -1284,7 +1245,7 @@ fn election_second_tally_should_use_runners_up() {
 
 		System::set_block_number(8);
 		assert_ok!(Elections::set_approvals(Origin::signed(6), vec![false, false, true, false], 1, 0, 60));
-		assert_ok!(Elections::set_desired_seats(Origin::ROOT, 3));
+		assert_ok!(Elections::set_desired_seats(Origin::root(), 3));
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		System::set_block_number(10);

@@ -51,7 +51,6 @@ fn to_tag(nonce: u64, from: AccountId) -> Tag {
 
 impl ChainApi for TestApi {
 	type Block = Block;
-	type Hash = H256;
 	type Error = sp_transaction_pool::error::Error;
 	type ValidationFuture = Ready<sp_transaction_pool::error::Result<TransactionValidity>>;
 	type BodyFuture = Ready<sp_transaction_pool::error::Result<Option<Vec<Extrinsic>>>>;
@@ -107,7 +106,7 @@ impl ChainApi for TestApi {
 		})
 	}
 
-	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (H256, usize) {
 		let encoded = uxt.encode();
 		(blake2_256(&encoded).into(), encoded.len())
 	}

@@ -20,7 +20,7 @@ use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
 
-mod common;
+pub mod common;
 
 #[test]
 #[cfg(unix)]

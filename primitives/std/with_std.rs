@@ -33,6 +33,7 @@ pub use std::num;
 pub use std::ops;
 pub use std::ptr;
 pub use std::rc;
+pub use std::sync;
 pub use std::result;
 pub use std::slice;
 pub use std::str;

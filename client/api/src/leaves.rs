@@ -314,7 +314,7 @@ mod tests {
 		let mut tx = Transaction::new();
 
 		set.prepare_transaction(&mut tx, 0, PREFIX);
-		db.commit(tx);
+		db.commit(tx).unwrap();
 
 		let set2 = LeafSet::read_from_db(&*db, 0, PREFIX).unwrap();
 		assert_eq!(set, set2);
@@ -348,12 +348,12 @@ mod tests {
 
 		let mut tx = Transaction::new();
 		set.prepare_transaction(&mut tx, 0, PREFIX);
-		db.commit(tx);
+		db.commit(tx).unwrap();
 
 		let _ = set.finalize_height(11);
 		let mut tx = Transaction::new();
 		set.prepare_transaction(&mut tx, 0, PREFIX);
-		db.commit(tx);
+		db.commit(tx).unwrap();
 
 		assert!(set.contains(11, 11_1));
 		assert!(set.contains(11, 11_2));

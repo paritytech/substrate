@@ -38,7 +38,7 @@ use frame_support::{
 	}
 };
 use codec::{Encode, Decode};
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 
 mod mock;
 mod tests;
@@ -274,10 +274,6 @@ decl_storage! {
 		/// of each entry; It may be the direct summed approval stakes, or a weighted version of it.
 		/// Sorted from low to high.
 		pub Leaderboard get(fn leaderboard): Option<Vec<(BalanceOf<T>, T::AccountId)> >;
-
-		/// Who is able to vote for whom. Value is the fund-holding account, key is the
-		/// vote-transaction-sending account.
-		pub Proxy get(fn proxy): map hasher(blake2_128_concat) T::AccountId => Option<T::AccountId>;
 	}
 }
 
@@ -292,8 +288,6 @@ decl_error! {
 		CannotReapPresenting,
 		/// Cannot reap during grace period.
 		ReapGrace,
-		/// Not a proxy.
-		NotProxy,
 		/// Invalid reporter index.
 		InvalidReporterIndex,
 		/// Invalid target index.
@@ -427,23 +421,6 @@ decl_module! {
 			#[compact] value: BalanceOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::do_set_approvals(who, votes, index, hint, value)
-		}
-
-		/// Set candidate approvals from a proxy. Approval slots stay valid as long as candidates in
-		/// those slots are registered.
-		///
-		/// # <weight>
-		/// - Same as `set_approvals` with one additional storage read.
-		/// # </weight>
-		#[weight = 2_500_000_000]
-		fn proxy_set_approvals(origin,
-			votes: Vec<bool>,
-			#[compact] index: VoteIndex,
-			hint: SetIndex,
-			#[compact] value: BalanceOf<T>,
-		) -> DispatchResult {
-			let who = Self::proxy(ensure_signed(origin)?).ok_or(Error::<T>::NotProxy)?;
 			Self::do_set_approvals(who, votes, index, hint, value)
 		}
 
@@ -723,13 +700,14 @@ decl_module! {
 
 decl_event!(
 	pub enum Event<T> where <T as frame_system::Trait>::AccountId {
-		/// reaped voter, reaper
+		/// Reaped [voter, reaper].
 		VoterReaped(AccountId, AccountId),
-		/// slashed reaper
+		/// Slashed [reaper].
 		BadReaperSlashed(AccountId),
-		/// A tally (for approval votes of seat(s)) has started.
+		/// A tally (for approval votes of [seats]) has started.
 		TallyStarted(u32),
-		/// A tally (for approval votes of seat(s)) has ended (with one or more new members).
+		/// A tally (for approval votes of seat(s)) has ended (with one or more new members). 
+		/// [incoming, outgoing]
 		TallyFinalized(Vec<AccountId>, Vec<AccountId>),
 	}
 );

@@ -29,7 +29,7 @@ fn cancel_referendum_should_work() {
 			0
 		);
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
-		assert_ok!(Democracy::cancel_referendum(Origin::ROOT, r.into()));
+		assert_ok!(Democracy::cancel_referendum(Origin::root(), r.into()));
 
 		next_block();
 		next_block();
@@ -53,8 +53,8 @@ fn cancel_queued_should_work() {
 
 		assert!(pallet_scheduler::Agenda::<Test>::get(6)[0].is_some());
 
-		assert_noop!(Democracy::cancel_queued(Origin::ROOT, 1), Error::<Test>::ProposalMissing);
-		assert_ok!(Democracy::cancel_queued(Origin::ROOT, 0));
+		assert_noop!(Democracy::cancel_queued(Origin::root(), 1), Error::<Test>::ProposalMissing);
+		assert_ok!(Democracy::cancel_queued(Origin::root(), 0));
 		assert!(pallet_scheduler::Agenda::<Test>::get(6)[0].is_none());
 	});
 }

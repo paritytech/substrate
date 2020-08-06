@@ -19,6 +19,7 @@ pub extern crate alloc;
 
 pub use alloc::boxed;
 pub use alloc::rc;
+pub use alloc::sync;
 pub use alloc::vec;
 pub use core::any;
 pub use core::cell;

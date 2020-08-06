@@ -36,7 +36,7 @@ use crate::{DatabaseSettings, DatabaseSettingsSrc, Database, DbHash};
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
-#[cfg(any(feature = "kvdb-rocksdb", feature = "test-helpers", test))]
+#[cfg(any(feature = "with-kvdb-rocksdb", feature = "with-parity-db", feature = "test-helpers", test))]
 pub const NUM_COLUMNS: u32 = 11;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: u32 = 0;
@@ -181,8 +181,8 @@ pub fn insert_hash_to_key_mapping<N: TryInto<u32>, H: AsRef<[u8]> + Clone>(
 ) -> sp_blockchain::Result<()> {
 	transaction.set_from_vec(
 		key_lookup_col,
-		hash.clone().as_ref(),
-		number_and_hash_to_lookup_key(number, hash)?,
+		hash.as_ref(),
+		number_and_hash_to_lookup_key(number, hash.clone())?,
 	);
 	Ok(())
 }
@@ -219,7 +219,7 @@ pub fn open_database<Block: BlockT>(
 	);
 
 	let db: Arc<dyn Database<DbHash>> = match &config.source {
-		#[cfg(any(feature = "kvdb-rocksdb", test))]
+		#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 		DatabaseSettingsSrc::RocksDb { path, cache_size } => {
 			// first upgrade database to required version
 			crate::upgrade::upgrade_db::<Block>(&path, db_type)?;
@@ -255,27 +255,27 @@ pub fn open_database<Block: BlockT>(
 				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?;
 			sp_database::as_database(db)
 		},
-		#[cfg(not(any(feature = "kvdb-rocksdb", test)))]
+		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
 		DatabaseSettingsSrc::RocksDb { .. } => {
-			return db_open_error("kvdb-rocksdb");
+			return db_open_error("with-kvdb-rocksdb");
 		},
-		#[cfg(feature = "subdb")]
+		#[cfg(feature = "with-subdb")]
 		DatabaseSettingsSrc::SubDb { path } => {
 			crate::subdb::open(&path, NUM_COLUMNS)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
-		#[cfg(not(feature = "subdb"))]
+		#[cfg(not(feature = "with-subdb"))]
 		DatabaseSettingsSrc::SubDb { .. } => {
-			return db_open_error("subdb");
+			return db_open_error("with-subdb");
 		},
-		#[cfg(feature = "parity-db")]
+		#[cfg(feature = "with-parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
 			crate::parity_db::open(&path)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
-		#[cfg(not(feature = "parity-db"))]
+		#[cfg(not(feature = "with-parity-db"))]
 		DatabaseSettingsSrc::ParityDb { .. } => {
-			return db_open_error("parity-db");
+			return db_open_error("with-parity-db");
 		},
 		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};
@@ -297,7 +297,7 @@ pub fn check_database_type(db: &dyn Database<DbHash>, db_type: DatabaseType) -> 
 		None => {
 			let mut transaction = Transaction::new();
 			transaction.set(COLUMN_META, meta_keys::TYPE, db_type.as_str().as_bytes());
-			db.commit(transaction)
+			db.commit(transaction)?;
 		},
 	}
 

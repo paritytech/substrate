@@ -104,7 +104,7 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::BadMandatory =>
 				"A call was labelled as mandatory, but resulted in an Error.",
 			InvalidTransaction::MandatoryDispatch =>
-				"Tranaction dispatch is mandatory; transactions may not have mandatory dispatches.",
+				"Transaction dispatch is mandatory; transactions may not have mandatory dispatches.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 		}
 	}

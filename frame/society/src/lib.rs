@@ -264,11 +264,12 @@ use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, d
 use frame_support::weights::Weight;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
-	ExistenceRequirement::AllowDeath, EnsureOrigin
+	ExistenceRequirement::AllowDeath, EnsureOrigin, OnUnbalanced, Imbalance
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// The module's configuration trait.
 pub trait Trait<I=DefaultInstance>: system::Trait {
@@ -532,7 +533,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
-		#[weight = 50_000_000]
+		#[weight = T::MaximumBlockWeight::get() / 10]
 		pub fn bid(origin, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
@@ -571,7 +572,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(B + X)
 		/// # </weight>
-		#[weight = 20_000_000]
+		#[weight = T::MaximumBlockWeight::get() / 10]
 		pub fn unbid(origin, pos: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -641,7 +642,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
-		#[weight = 50_000_000]
+		#[weight = T::MaximumBlockWeight::get() / 10]
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			// Check user is not suspended.
@@ -682,7 +683,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(B)
 		/// # </weight>
-		#[weight = 20_000_000]
+		#[weight = T::MaximumBlockWeight::get() / 10]
 		pub fn unvouch(origin, pos: u32) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			ensure!(Self::vouching(&voucher) == Some(VouchingStatus::Vouching), Error::<T, I>::NotVouching);
@@ -720,7 +721,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + C)
 		/// # </weight>
-		#[weight = 30_000_000]
+		#[weight = T::MaximumBlockWeight::get() / 10]
 		pub fn vote(origin, candidate: <T::Lookup as StaticLookup>::Source, approve: bool) {
 			let voter = ensure_signed(origin)?;
 			let candidate = T::Lookup::lookup(candidate)?;
@@ -751,7 +752,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM)
 		/// # </weight>
-		#[weight = 20_000_000]
+		#[weight = T::MaximumBlockWeight::get() / 10]
 		pub fn defender_vote(origin, approve: bool) {
 			let voter = ensure_signed(origin)?;
 			let members = <Members<T, I>>::get();
@@ -783,7 +784,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + P + X)
 		/// # </weight>
-		#[weight = 30_000_000]
+		#[weight = T::MaximumBlockWeight::get() / 10]
 		pub fn payout(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -825,7 +826,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-		#[weight = 0]
+		#[weight = T::MaximumBlockWeight::get() / 10]
 		fn found(origin, founder: T::AccountId, max_members: u32, rules: Vec<u8>) {
 			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
@@ -852,7 +853,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-		#[weight = 20_000_000]
+		#[weight = T::MaximumBlockWeight::get() / 10]
 		fn unfound(origin) {
 			let founder = ensure_signed(origin)?;
 			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
@@ -894,7 +895,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + B)
 		/// # </weight>
-		#[weight = 30_000_000]
+		#[weight = T::MaximumBlockWeight::get() / 10]
 		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			ensure!(<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::NotSuspended);
@@ -965,7 +966,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + B + X)
 		/// # </weight>
-		#[weight = 50_000_000]
+		#[weight = T::MaximumBlockWeight::get() / 10]
 		fn judge_suspended_candidate(origin, who: T::AccountId, judgement: Judgement) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			if let Some((value, kind)) = <SuspendedCandidates<T, I>>::get(&who) {
@@ -1025,7 +1026,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-		#[weight = 0]
+		#[weight = T::MaximumBlockWeight::get() / 10]
 		fn set_max_members(origin, max: u32) {
 			ensure_root(origin)?;
 			ensure!(max > 1, Error::<T, I>::MaxMembers);
@@ -1036,10 +1037,14 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut members = vec![];
 
+			let mut weight = 0;
+
 			// Run a candidate/membership rotation
 			if (n % T::RotationPeriod::get()).is_zero() {
 				members = <Members<T, I>>::get();
 				Self::rotate_period(&mut members);
+
+				weight += T::MaximumBlockWeight::get() / 20;
 			}
 
 			// Run a challenge rotation
@@ -1049,9 +1054,11 @@ decl_module! {
 					members = <Members<T, I>>::get();
 				}
 				Self::rotate_challenge(&mut members);
+
+				weight += T::MaximumBlockWeight::get() / 20;
 			}
 
-			0
+			weight
 		}
 	}
 }
@@ -1104,39 +1111,41 @@ decl_event! {
 		AccountId = <T as system::Trait>::AccountId,
 		Balance = BalanceOf<T, I>
 	{
-		/// The society is founded by the given identity.
+		/// The society is founded by the given identity. [founder]
 		Founded(AccountId),
 		/// A membership bid just happened. The given account is the candidate's ID and their offer
-		/// is the second.
+		/// is the second. [candidate_id, offer]
 		Bid(AccountId, Balance),
 		/// A membership bid just happened by vouching. The given account is the candidate's ID and
-		/// their offer is the second. The vouching party is the third.
+		/// their offer is the second. The vouching party is the third. [candidate_id, offer, vouching]
 		Vouch(AccountId, Balance, AccountId),
-		/// A candidate was dropped (due to an excess of bids in the system).
+		/// A [candidate] was dropped (due to an excess of bids in the system).
 		AutoUnbid(AccountId),
-		/// A candidate was dropped (by their request).
+		/// A [candidate] was dropped (by their request).
 		Unbid(AccountId),
-		/// A candidate was dropped (by request of who vouched for them).
+		/// A [candidate] was dropped (by request of who vouched for them).
 		Unvouch(AccountId),
 		/// A group of candidates have been inducted. The batch's primary is the first value, the
-		/// batch in full is the second.
+		/// batch in full is the second. [primary, candidates]
 		Inducted(AccountId, Vec<AccountId>),
-		/// A suspended member has been judged
+		/// A suspended member has been judged. [who, judged]
 		SuspendedMemberJudgement(AccountId, bool),
-		/// A candidate has been suspended
+		/// A [candidate] has been suspended
 		CandidateSuspended(AccountId),
-		/// A member has been suspended
+		/// A [member] has been suspended
 		MemberSuspended(AccountId),
-		/// A member has been challenged
+		/// A [member] has been challenged
 		Challenged(AccountId),
-		/// A vote has been placed (candidate, voter, vote)
+		/// A vote has been placed [candidate, voter, vote]
 		Vote(AccountId, AccountId, bool),
-		/// A vote has been placed for a defending member (voter, vote)
+		/// A vote has been placed for a defending member [voter, vote]
 		DefenderVote(AccountId, bool),
-		/// A new max member count has been set
+		/// A new [max] member count has been set
 		NewMaxMembers(u32),
-		/// Society is unfounded.
+		/// Society is unfounded. [founder]
 		Unfounded(AccountId),
+		/// Some funds were deposited into the society account. [value]
+		Deposit(Balance),
 	}
 }
 
@@ -1657,5 +1666,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		} else {
 			vec![]
 		}
+	}
+}
+
+impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
+	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T>) {
+		let numeric_amount = amount.peek();
+
+		// Must resolve into existing but better to be safe.
+		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
+
+		Self::deposit_event(RawEvent::Deposit(numeric_amount));
 	}
 }

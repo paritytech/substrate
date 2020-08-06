@@ -16,17 +16,18 @@
 // limitations under the License.
 
 //! Fuzzing for staking pallet.
+//!
+//! HFUZZ_RUN_ARGS="-n 8" cargo hfuzz run submit_solution
 
 use honggfuzz::fuzz;
 
 use mock::Test;
-use pallet_staking::testing_utils::{
-	USER, get_seq_phragmen_solution, get_weak_solution, setup_chain_stakers,
-	set_validator_count, signed_account,
-};
-use frame_support::{assert_ok, storage::StorageValue};
-use sp_runtime::{traits::Dispatchable, DispatchError};
+use pallet_staking::testing_utils::*;
+use frame_support::{assert_ok, storage::StorageValue, traits::UnfilteredDispatchable};
+use frame_system::RawOrigin;
+use sp_runtime::DispatchError;
 use sp_core::offchain::{testing::TestOffchainExt, OffchainExt};
+use pallet_staking::{EraElectionStatus, ElectionStatus, Module as Staking, Call as StakingCall};
 
 mod mock;
 
@@ -43,7 +44,9 @@ enum Mode {
 }
 
 pub fn new_test_ext(iterations: u32) -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default().build_storage::<mock::Test>().map(Into::into)
+	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default()
+		.build_storage::<mock::Test>()
+		.map(Into::into)
 		.expect("Failed to create test externalities.");
 
 	let (offchain, offchain_state) = TestOffchainExt::new();
@@ -69,96 +72,109 @@ fn main() {
 	loop {
 		fuzz!(|data: (u32, u32, u32, u32, u32)| {
 			let (mut num_validators, mut num_nominators, mut edge_per_voter, mut to_elect, mode_u32) = data;
+			// always run with 5 iterations.
 			let mut ext = new_test_ext(5);
 			let mode: Mode = unsafe { std::mem::transmute(mode_u32) };
 			num_validators = to_range(num_validators, 50, 1000);
 			num_nominators = to_range(num_nominators, 50, 2000);
 			edge_per_voter = to_range(edge_per_voter, 1, 16);
 			to_elect = to_range(to_elect, 20, num_validators);
+
 			let do_reduce = true;
 
-			println!("+++ instance with params {} / {} / {} / {:?}({}) / {}",
+			println!("+++ instance with params {} / {} / {} / {} / {:?}({})",
 				num_nominators,
 				num_validators,
 				edge_per_voter,
+				to_elect,
 				mode,
 				mode_u32,
-				to_elect,
 			);
 
 			ext.execute_with(|| {
 				// initial setup
-				set_validator_count::<Test>(to_elect);
-				pallet_staking::testing_utils::init_active_era();
-				setup_chain_stakers::<Test>(
+				init_active_era();
+
+				assert_ok!(create_validators_with_nominators_for_era::<Test>(
 					num_validators,
 					num_nominators,
-					edge_per_voter,
-				);
-				<pallet_staking::EraElectionStatus<Test>>::put(pallet_staking::ElectionStatus::Open(1));
+					edge_per_voter as usize,
+					true,
+					None,
+				));
 
-				println!("++ Chain setup done.");
+				<EraElectionStatus<Test>>::put(ElectionStatus::Open(1));
+				assert!(<Staking<Test>>::create_stakers_snapshot().0);
+
+				let origin = RawOrigin::Signed(create_funded_user::<Test>("fuzzer", 0, 100));
 
 				// stuff to submit
-				let (winners, compact, score) = match mode {
+				let (winners, compact, score, size) = match mode {
 					Mode::InitialSubmission => {
 						/* No need to setup anything */
 						get_seq_phragmen_solution::<Test>(do_reduce)
 					},
 					Mode::StrongerSubmission => {
-						let (winners, compact, score) = get_weak_solution::<Test>(false);
+						let (winners, compact, score, size) = get_weak_solution::<Test>(false);
 						println!("Weak on chain score = {:?}", score);
 						assert_ok!(
-							<pallet_staking::Module<Test>>::submit_election_solution(
-								signed_account::<Test>(USER),
+							<Staking<Test>>::submit_election_solution(
+								origin.clone().into(),
 								winners,
 								compact,
 								score,
-								pallet_staking::testing_utils::active_era::<Test>(),
+								current_era::<Test>(),
+								size,
 							)
 						);
 						get_seq_phragmen_solution::<Test>(do_reduce)
 					},
 					Mode::WeakerSubmission => {
-						let (winners, compact, score) = get_seq_phragmen_solution::<Test>(do_reduce);
+						let (winners, compact, score, size) = get_seq_phragmen_solution::<Test>(do_reduce);
 						println!("Strong on chain score = {:?}", score);
 						assert_ok!(
-							<pallet_staking::Module<Test>>::submit_election_solution(
-								signed_account::<Test>(USER),
+							<Staking<Test>>::submit_election_solution(
+								origin.clone().into(),
 								winners,
 								compact,
 								score,
-								pallet_staking::testing_utils::active_era::<Test>(),
+								current_era::<Test>(),
+								size,
 							)
 						);
 						get_weak_solution::<Test>(false)
 					}
 				};
 
-				println!("++ Submission ready. Score = {:?}", score);
-
 				// must have chosen correct number of winners.
-				assert_eq!(winners.len() as u32, <pallet_staking::Module<Test>>::validator_count());
+				assert_eq!(winners.len() as u32, <Staking<Test>>::validator_count());
 
 				// final call and origin
-				let call = pallet_staking::Call::<Test>::submit_election_solution(
+				let call = StakingCall::<Test>::submit_election_solution(
 					winners,
 					compact,
 					score,
-					pallet_staking::testing_utils::active_era::<Test>(),
+					current_era::<Test>(),
+					size,
 				);
-				let caller = signed_account::<Test>(USER);
 
 				// actually submit
 				match mode {
 					Mode::WeakerSubmission => {
 						assert_eq!(
-							call.dispatch(caller.into()).unwrap_err().error,
-							DispatchError::Module { index: 0, error: 16, message: Some("PhragmenWeakSubmission") },
+							call.dispatch_bypass_filter(origin.into()).unwrap_err().error,
+							DispatchError::Module {
+								index: 0,
+								error: 16,
+								message: Some("PhragmenWeakSubmission"),
+							},
 						);
 					},
-					// NOTE: so exhaustive pattern doesn't work here.. maybe some rust issue? or due to `#[repr(u32)]`?
-					Mode::InitialSubmission | Mode::StrongerSubmission => assert!(call.dispatch(caller.into()).is_ok()),
+					// NOTE: so exhaustive pattern doesn't work here.. maybe some rust issue?
+					// or due to `#[repr(u32)]`?
+					Mode::InitialSubmission | Mode::StrongerSubmission => {
+						assert_ok!(call.dispatch_bypass_filter(origin.into()));
+					}
 				};
 			})
 		});

@@ -56,8 +56,10 @@
 
 #![warn(missing_docs)]
 
-use futures::prelude::*;
-use futures::StreamExt;
+use futures::{
+	prelude::*,
+	StreamExt,
+};
 use log::{debug, info};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
@@ -70,16 +72,20 @@ use sp_api::ProvideRuntimeApi;
 use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
-use sc_keystore::KeyStorePtr;
 use sp_inherents::InherentDataProviders;
 use sp_consensus::{SelectChain, BlockImport};
-use sp_core::Pair;
+use sp_core::{
+	crypto::Public,
+	traits::BareCryptoStorePtr,
+};
+use sp_application_crypto::AppKey;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use parking_lot::RwLock;
 
 use finality_grandpa::Error as GrandpaError;
-use finality_grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
+use finality_grandpa::{voter, voter_set::VoterSet};
+pub use finality_grandpa::BlockNumberOps;
 
 use std::{fmt, io};
 use std::sync::Arc;
@@ -121,7 +127,7 @@ pub use authorities::SharedAuthoritySet;
 pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider, make_finality_proof_request};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
-pub use light_import::light_block_import;
+pub use light_import::{light_block_import, GrandpaLightBlockImport};
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
@@ -131,10 +137,10 @@ use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::{NetworkBridge, Network as NetworkT};
-use sp_finality_grandpa::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};
+use sp_finality_grandpa::{AuthorityList, AuthoritySignature, SetId};
 
 // Re-export these two because it's just so damn convenient.
-pub use sp_finality_grandpa::{AuthorityId, GrandpaApi, ScheduledChange};
+pub use sp_finality_grandpa::{AuthorityId, AuthorityPair, GrandpaApi, ScheduledChange};
 use std::marker::PhantomData;
 
 #[cfg(test)]
@@ -264,7 +270,7 @@ pub struct Config {
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
-	pub keystore: Option<sc_keystore::KeyStorePtr>,
+	pub keystore: Option<BareCryptoStorePtr>,
 }
 
 impl Config {
@@ -284,6 +290,8 @@ pub enum Error {
 	Blockchain(String),
 	/// Could not complete a round on disk.
 	Client(ClientError),
+	/// Could not sign outgoing message
+	Signing(String),
 	/// An invariant has been violated (e.g. not finalizing pending change blocks in-order)
 	Safety(String),
 	/// A timer failed to fire.
@@ -586,7 +594,7 @@ fn global_communication<BE, Block: BlockT, C, N>(
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: Arc<C>,
 	network: &NetworkBridge<Block, N>,
-	keystore: &Option<KeyStorePtr>,
+	keystore: Option<&BareCryptoStorePtr>,
 	metrics: Option<until_imported::Metrics>,
 ) -> (
 	impl Stream<
@@ -729,7 +737,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 			.for_each(move |_| {
 				let curr = authorities.current_authorities();
 				let mut auths = curr.iter().map(|(p, _)| p);
-				let maybe_authority_id = authority_id(&mut auths, &conf.keystore)
+				let maybe_authority_id = authority_id(&mut auths, conf.keystore.as_ref())
 					.unwrap_or_default();
 
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
@@ -865,8 +873,7 @@ where
 	fn rebuild_voter(&mut self) {
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
 
-		let authority_id = is_voter(&self.env.voters, &self.env.config.keystore)
-			.map(|ap| ap.public())
+		let authority_id = is_voter(&self.env.voters, self.env.config.keystore.as_ref())
 			.unwrap_or_default();
 
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
@@ -901,7 +908,7 @@ where
 					&self.env.voters,
 					self.env.client.clone(),
 					&self.env.network,
-					&self.env.config.keystore,
+					self.env.config.keystore.as_ref(),
 					self.metrics.as_ref().map(|m| m.until_imported.clone()),
 				);
 
@@ -1089,12 +1096,16 @@ pub fn setup_disabled_grandpa<Block: BlockT, Client, N>(
 /// Returns the key pair of the node that is being used in the current voter set or `None`.
 fn is_voter(
 	voters: &Arc<VoterSet<AuthorityId>>,
-	keystore: &Option<KeyStorePtr>,
-) -> Option<AuthorityPair> {
+	keystore: Option<&BareCryptoStorePtr>,
+) -> Option<AuthorityId> {
 	match keystore {
 		Some(keystore) => voters
 			.iter()
-			.find_map(|(p, _)| keystore.read().key_pair::<AuthorityPair>(&p).ok()),
+			.find(|(p, _)| {
+				keystore.read()
+					.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)])
+			})
+			.map(|(p, _)| p.clone()),
 		None => None,
 	}
 }
@@ -1102,19 +1113,16 @@ fn is_voter(
 /// Returns the authority id of this node, if available.
 fn authority_id<'a, I>(
 	authorities: &mut I,
-	keystore: &Option<KeyStorePtr>,
+	keystore: Option<&BareCryptoStorePtr>,
 ) -> Option<AuthorityId> where
 	I: Iterator<Item = &'a AuthorityId>,
 {
 	match keystore {
 		Some(keystore) => {
 			authorities
-				.find_map(|p| {
-					keystore.read().key_pair::<AuthorityPair>(&p)
-						.ok()
-						.map(|ap| ap.public())
-				})
-		}
+				.find(|p| keystore.read().has_keys(&[(p.to_raw_vec(), AuthorityId::ID)]))
+				.cloned()
+		},
 		None => None,
 	}
 }

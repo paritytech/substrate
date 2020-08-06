@@ -26,7 +26,7 @@ use sp_runtime::{
 };
 use sp_core::H256;
 use sp_io;
-use frame_support::{impl_outer_origin, parameter_types};
+use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use frame_support::traits::Get;
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use std::cell::RefCell;
@@ -35,6 +35,17 @@ use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInf
 use frame_system as system;
 impl_outer_origin!{
 	pub enum Origin for Test {}
+}
+
+mod balances {
+	pub use crate::Event;
+}
+
+impl_outer_event! {
+	pub enum Event for Test {
+		system<T>,
+		balances<T>,
+	}
 }
 
 thread_local! {
@@ -56,6 +67,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -65,7 +77,7 @@ impl frame_system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
@@ -79,6 +91,7 @@ impl frame_system::Trait for Test {
 	type AccountData = super::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
@@ -93,9 +106,10 @@ impl pallet_transaction_payment::Trait for Test {
 impl Trait for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = ();
+	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = system::Module<Test>;
+	type WeightInfo = ();
 }
 
 pub struct ExtBuilder {
@@ -138,7 +152,10 @@ impl ExtBuilder {
 				vec![]
 			},
 		}.assimilate_storage(&mut t).unwrap();
-		t.into()
+
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 }
 

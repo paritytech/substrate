@@ -18,8 +18,8 @@
 
 use std::sync::Arc;
 use rpc::futures::future::result;
+use jsonrpc_pubsub::manager::SubscriptionManager;
 
-use sc_rpc_api::Subscriptions;
 use sc_client_api::{BlockchainEvents, BlockBackend};
 use sp_runtime::{generic::{BlockId, SignedBlock}, traits::{Block as BlockT}};
 
@@ -32,14 +32,14 @@ pub struct FullChain<Block: BlockT, Client> {
 	/// Substrate client.
 	client: Arc<Client>,
 	/// Current subscriptions.
-	subscriptions: Subscriptions,
+	subscriptions: SubscriptionManager,
 	/// phantom member to pin the block type
 	_phantom: PhantomData<Block>,
 }
 
 impl<Block: BlockT, Client> FullChain<Block, Client> {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client>, subscriptions: Subscriptions) -> Self {
+	pub fn new(client: Arc<Client>, subscriptions: SubscriptionManager) -> Self {
 		Self {
 			client,
 			subscriptions,
@@ -56,7 +56,7 @@ impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client> whe
 		&self.client
 	}
 
-	fn subscriptions(&self) -> &Subscriptions {
+	fn subscriptions(&self) -> &SubscriptionManager {
 		&self.subscriptions
 	}
 

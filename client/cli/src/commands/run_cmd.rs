@@ -21,13 +21,13 @@ use crate::error::{Error, Result};
 use crate::params::ImportParams;
 use crate::params::KeystoreParams;
 use crate::params::NetworkParams;
+use crate::params::OffchainWorkerParams;
 use crate::params::SharedParams;
 use crate::params::TransactionPoolParams;
-use crate::params::OffchainWorkerParams;
 use crate::CliConfiguration;
 use regex::Regex;
 use sc_service::{
-	config::{MultiaddrWithPeerId, PrometheusConfig, TransactionPoolOptions},
+	config::{BasePath, MultiaddrWithPeerId, PrometheusConfig, TransactionPoolOptions},
 	ChainSpec, Role,
 };
 use sc_telemetry::TelemetryEndpoints;
@@ -35,7 +35,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use structopt::StructOpt;
 
 /// The `run` command used to run a node.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct RunCmd {
 	/// Enable validator mode.
 	///
@@ -65,7 +65,7 @@ pub struct RunCmd {
 	pub sentry: Vec<MultiaddrWithPeerId>,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
-	#[structopt(long = "no-grandpa")]
+	#[structopt(long)]
 	pub no_grandpa: bool,
 
 	/// Experimental: Run in light client mode.
@@ -121,6 +121,10 @@ pub struct RunCmd {
 	/// Default is local.
 	#[structopt(long = "prometheus-external")]
 	pub prometheus_external: bool,
+
+	/// Specify IPC RPC server path
+	#[structopt(long = "ipc-path", value_name = "PATH")]
+	pub ipc_path: Option<String>,
 
 	/// Specify HTTP RPC server TCP port.
 	#[structopt(long = "rpc-port", value_name = "PORT")]
@@ -250,6 +254,16 @@ pub struct RunCmd {
 		conflicts_with_all = &[ "sentry", "public-addr" ]
 	)]
 	pub sentry_nodes: Vec<MultiaddrWithPeerId>,
+
+	/// Run a temporary node.
+	///
+	/// A temporary directory will be created to store the configuration and will be deleted
+	/// at the end of the process.
+	///
+	/// Note: the directory is random per process execution. This directory is used as base path
+	/// which includes: database, node key and keystore.
+	#[structopt(long, conflicts_with = "base-path")]
+	pub tmp: bool,
 }
 
 impl RunCmd {
@@ -311,7 +325,7 @@ impl CliConfiguration for RunCmd {
 			Error::Input(format!(
 				"Invalid node name '{}'. Reason: {}. If unsure, use none.",
 				name, msg
-			));
+		))
 		})?;
 
 		Ok(name)
@@ -424,6 +438,10 @@ impl CliConfiguration for RunCmd {
 		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(9933))))
 	}
 
+	fn rpc_ipc(&self) -> Result<Option<String>> {
+		Ok(self.ipc_path.clone())
+	}
+
 	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
 		let interface = rpc_interface(
 			self.ws_external,
@@ -445,6 +463,14 @@ impl CliConfiguration for RunCmd {
 
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
 		Ok(self.max_runtime_instances.map(|x| x.min(256)))
+	}
+
+	fn base_path(&self) -> Result<Option<BasePath>> {
+		Ok(if self.tmp {
+			Some(BasePath::new_temp_dir()?)
+		} else {
+			self.shared_params().base_path()
+		})
 	}
 }
 
@@ -584,7 +610,9 @@ mod tests {
 
 	#[test]
 	fn tests_node_name_bad() {
-		assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
+		assert!(is_node_name_valid(
+			"very very long names are really not very cool for the ui at all, really they're not"
+		).is_err());
 		assert!(is_node_name_valid("Dots.not.Ok").is_err());
 		assert!(is_node_name_valid("http://visit.me").is_err());
 		assert!(is_node_name_valid("https://visit.me").is_err());

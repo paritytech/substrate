@@ -39,8 +39,9 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
-	type Call = ();
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -62,6 +63,7 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 parameter_types! {
@@ -73,6 +75,7 @@ impl pallet_balances::Trait for Test {
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -127,7 +130,7 @@ impl ChangeMembers<u64> for TestChangeMembers {
 }
 
 parameter_types!{
-	pub const ElectionModuleId: LockIdentifier = *b"py/elect"; 
+	pub const ElectionModuleId: LockIdentifier = *b"py/elect";
 }
 
 impl elections::Trait for Test {

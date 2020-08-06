@@ -31,7 +31,7 @@ const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
 /// Parameters used to create the `NodeKeyConfig`, which determines the keypair
 /// used for libp2p networking.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct NodeKeyParams {
 	/// The secret key to use for libp2p networking.
 	///

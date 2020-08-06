@@ -30,10 +30,9 @@
 
 #![warn(missing_docs)]
 
-use std::{sync::Arc, fmt};
+use std::sync::Arc;
 
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
-use node_runtime::UncheckedExtrinsic;
 use sp_api::ProvideRuntimeApi;
 use sp_transaction_pool::TransactionPool;
 use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
@@ -45,7 +44,8 @@ use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;
 use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet, FinalityProofProvider};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
-use sc_rpc_api::DenyUnsafe;
+use sp_block_builder::BlockBuilder;
+pub use sc_rpc_api::DenyUnsafe;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
@@ -95,6 +95,9 @@ pub struct FullDeps<C, P, SC, B> {
 	pub grandpa: GrandpaDeps<B>,
 }
 
+/// A IO handler that uses all Full RPC extensions.
+pub type IoHandler = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
+
 /// Instantiate all Full RPC extensions.
 pub fn create_full<C, P, M, SC, B>(
 	deps: FullDeps<C, P, SC, B>,
@@ -104,9 +107,9 @@ pub fn create_full<C, P, M, SC, B>(
 	C: Send + Sync + 'static,
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber>,
-	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
+	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
 	C::Api: BabeApi<Block>,
-	<C::Api as sp_api::ApiErrorExt>::Error: fmt::Debug,
+	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
 	M: jsonrpc_core::Metadata + Default,
 	SC: SelectChain<Block> +'static,
@@ -138,7 +141,7 @@ pub fn create_full<C, P, M, SC, B>(
 	} = grandpa;
 
 	io.extend_with(
-		SystemApi::to_delegate(FullSystem::new(client.clone(), pool))
+		SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe))
 	);
 	// Making synchronous calls in light client freezes the browser currently,
 	// more context: https://github.com/paritytech/substrate/pull/3480
@@ -190,7 +193,7 @@ pub fn create_light<C, P, M, F>(
 	} = deps;
 	let mut io = jsonrpc_core::IoHandler::default();
 	io.extend_with(
-		SystemApi::<AccountId, Index>::to_delegate(LightSystem::new(client, remote_blockchain, fetcher, pool))
+		SystemApi::<Hash, AccountId, Index>::to_delegate(LightSystem::new(client, remote_blockchain, fetcher, pool))
 	);
 
 	io

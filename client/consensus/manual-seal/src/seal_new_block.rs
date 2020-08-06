@@ -87,7 +87,7 @@ pub async fn seal_new_block<B, SC, HB, E, T, P>(
 		E: Environment<B>,
 		<E as Environment<B>>::Error: std::fmt::Display,
 		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
-		P: txpool::ChainApi<Block=B, Hash=<B as BlockT>::Hash>,
+		P: txpool::ChainApi<Block=B>,
 		SC: SelectChain<B>,
 {
 	let future = async {
@@ -108,7 +108,7 @@ pub async fn seal_new_block<B, SC, HB, E, T, P>(
 			None => select_chain.best_chain()?
 		};
 
-		let mut proposer = env.init(&header)
+		let proposer = env.init(&header)
 			.map_err(|err| Error::StringError(format!("{}", err))).await?;
 		let id = inherent_data_provider.create_inherent_data()?;
 		let inherents_len = id.len();

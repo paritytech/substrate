@@ -1003,7 +1003,7 @@ dependencies = [
  "sp-application-crypto",
  "sp-core",
  "sp-io",
- "sp-phragmen",
+ "sp-npos-elections",
  "sp-runtime",
  "sp-staking",
  "sp-std",
@@ -1027,7 +1027,7 @@ dependencies = [
  "rand 0.7.3",
  "sp-core",
  "sp-io",
- "sp-phragmen",
+ "sp-npos-elections",
  "sp-runtime",
  "sp-std",
 ]
@@ -1751,19 +1751,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-phragmen"
+name = "sp-npos-elections"
 version = "2.0.0-alpha.5"
 dependencies = [
  "parity-scale-codec",
  "serde",
- "sp-phragmen-compact",
+ "sp-npos-elections-compact",
  "sp-runtime",
  "sp-std",
 ]
 
 [[package]]
-name = "sp-phragmen-compact"
-version = "2.0.0-dev"
+name = "sp-npos-elections-compact"
+version = "2.0.0-rc3"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",

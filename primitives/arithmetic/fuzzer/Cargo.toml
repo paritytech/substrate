@@ -1,6 +1,6 @@
 [package]
 name = "sp-arithmetic-fuzzer"
-version = "2.0.0-dev"
+version = "2.0.0-rc5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,7 +14,7 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-arithmetic = { version = "2.0.0-dev", path = ".." }
+sp-arithmetic = { version = "2.0.0-rc5", path = ".." }
 honggfuzz = "0.5.49"
 primitive-types = "0.7.0"
 num-bigint = "0.2"
@@ -25,6 +25,10 @@ name = "biguint"
 path = "src/biguint.rs"
 
 [[bin]]
+name = "normalize"
+path = "src/normalize.rs"
+
+[[bin]]
 name = "per_thing_rational"
 path = "src/per_thing_rational.rs"
 
@@ -33,5 +37,5 @@ name = "rational128"
 path = "src/rational128.rs"
 
 [[bin]]
-name = "fixed"
-path = "src/fixed.rs"
+name = "fixed_point"
+path = "src/fixed_point.rs"

@@ -39,7 +39,7 @@ pub use crate::params::shared_params::*;
 pub use crate::params::transaction_pool_params::*;
 
 /// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a decimal.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BlockNumber(String);
 
 impl FromStr for BlockNumber {
@@ -72,7 +72,7 @@ impl BlockNumber {
 }
 
 /// Wrapper type that is either a `Hash` or the number of a `Block`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BlockNumberOrHash(String);
 
 impl FromStr for BlockNumberOrHash {

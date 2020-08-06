@@ -24,10 +24,10 @@ use futures::future::{poll_fn, FutureExt};
 use futures::sink::SinkExt;
 use futures::task::LocalSpawn;
 use futures::poll;
-use libp2p::{kad, PeerId};
+use libp2p::{kad, core::multiaddr, PeerId};
 
 use sp_api::{ProvideRuntimeApi, ApiRef};
-use sp_core::testing::KeyStore;
+use sp_core::{crypto::Public, testing::KeyStore};
 use sp_runtime::traits::{Zero, Block as BlockT, NumberFor};
 use substrate_test_runtime_client::runtime::Block;
 
@@ -210,7 +210,7 @@ impl NetworkStateInfo for TestNetwork {
 	}
 
 	fn external_addresses(&self) -> Vec<Multiaddr> {
-		vec!["/ip6/2001:db8::".parse().unwrap()]
+		vec!["/ip6/2001:db8::/tcp/30333".parse().unwrap()]
 	}
 }
 
@@ -281,7 +281,7 @@ fn publish_discover_cycle() {
 		let peer_id = network.local_peer_id();
 		let address = network.external_addresses().pop().unwrap();
 
-		address.with(libp2p::core::multiaddr::Protocol::P2p(
+		address.with(multiaddr::Protocol::P2p(
 			peer_id.into(),
 		))
 	};
@@ -459,5 +459,104 @@ fn dont_stop_polling_when_error_is_returned() {
 				"The authority discovery should have ended",
 			);
 		}
+	);
+}
+
+/// In the scenario of a validator publishing the address of its sentry node to
+/// the DHT, said sentry node should not add its own Multiaddr to the
+/// peerset "authority" priority group.
+#[test]
+fn never_add_own_address_to_priority_group() {
+	let validator_key_store = KeyStore::new();
+	let validator_public = validator_key_store
+		.write()
+		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+		.unwrap();
+
+	let sentry_network: Arc<TestNetwork> = Arc::new(Default::default());
+
+	let sentry_multiaddr = {
+		let peer_id = sentry_network.local_peer_id();
+		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse().unwrap();
+
+		address.with(multiaddr::Protocol::P2p(
+			peer_id.into(),
+		))
+	};
+
+	// Address of some other sentry node of `validator`.
+	let random_multiaddr = {
+		let peer_id = PeerId::random();
+		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
+
+		address.with(multiaddr::Protocol::P2p(
+			peer_id.into(),
+		))
+	};
+
+	let dht_event = {
+		let addresses = vec![
+			sentry_multiaddr.to_vec(),
+			random_multiaddr.to_vec(),
+		];
+
+		let mut serialized_addresses = vec![];
+		schema::AuthorityAddresses { addresses }
+		.encode(&mut serialized_addresses)
+			.map_err(Error::EncodingProto)
+			.unwrap();
+
+		let signature = validator_key_store.read()
+			.sign_with(
+				key_types::AUTHORITY_DISCOVERY,
+				&validator_public.clone().into(),
+				serialized_addresses.as_slice(),
+			)
+			.map_err(|_| Error::Signing)
+			.unwrap();
+
+		let mut signed_addresses = vec![];
+		schema::SignedAuthorityAddresses {
+			addresses: serialized_addresses.clone(),
+			signature,
+		}
+			.encode(&mut signed_addresses)
+			.map_err(Error::EncodingProto)
+			.unwrap();
+
+		let key = hash_authority_id(&validator_public.to_raw_vec());
+		let value = signed_addresses;
+		(key, value)
+	};
+
+	let (_dht_event_tx, dht_event_rx) = channel(1);
+	let sentry_test_api = Arc::new(TestApi {
+		// Make sure the sentry node identifies its validator as an authority.
+		authorities: vec![validator_public.into()],
+	});
+
+	let mut sentry_authority_discovery = AuthorityDiscovery::new(
+		sentry_test_api,
+		sentry_network.clone(),
+		vec![],
+		dht_event_rx.boxed(),
+		Role::Sentry,
+		None,
+	);
+
+	sentry_authority_discovery.handle_dht_value_found_event(vec![dht_event]).unwrap();
+
+	assert_eq!(
+		sentry_network.set_priority_group_call.lock().unwrap().len(), 1,
+		"Expect authority discovery to set the priority set.",
+	);
+
+	assert_eq!(
+		sentry_network.set_priority_group_call.lock().unwrap()[0],
+		(
+			"authorities".to_string(),
+			HashSet::from_iter(vec![random_multiaddr.clone()].into_iter(),)
+		),
+		"Expect authority discovery to only add `random_multiaddr`."
 	);
 }

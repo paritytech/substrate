@@ -42,6 +42,7 @@ parameter_types! {
 }
 
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
@@ -65,6 +66,7 @@ impl frame_system::Trait for Test {
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
 	type MaximumExtrinsicWeight = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
@@ -75,6 +77,7 @@ impl pallet_balances::Trait for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -84,6 +87,7 @@ impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 impl pallet_session::historical::Trait for Test {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
@@ -126,6 +130,7 @@ impl pallet_session::Trait for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type DisabledValidatorsThreshold = ();
+	type WeightInfo = ();
 }
 pallet_staking_reward_curve::build! {
 	const I_NPOS: sp_runtime::curve::PiecewiseLinear<'static> = curve!(
@@ -176,6 +181,8 @@ impl pallet_staking::Trait for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = ();
 	type MaxIterations = ();
+	type MinSolutionScoreBump = ();
+	type WeightInfo = ();
 }
 
 impl pallet_im_online::Trait for Test {
@@ -184,10 +191,11 @@ impl pallet_im_online::Trait for Test {
 	type SessionDuration = Period;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();
+	type WeightInfo = ();
 }
 
 parameter_types! {
-	pub const OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
+	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
 }
 
 impl pallet_offences::Trait for Test {
@@ -195,6 +203,7 @@ impl pallet_offences::Trait for Test {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
+	type WeightInfo = ();
 }
 
 impl<T> frame_system::offchain::SendTransactionTypes<T> for Test where Call: From<T> {

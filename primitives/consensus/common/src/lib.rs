@@ -56,6 +56,7 @@ pub use block_import::{
 };
 pub use select_chain::SelectChain;
 pub use sp_state_machine::Backend as StateBackend;
+pub use import_queue::DefaultImportQueue;
 
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]
@@ -157,7 +158,7 @@ pub trait Proposer<B: BlockT> {
 	///
 	/// Returns a future that resolves to a [`Proposal`] or to [`Error`].
 	fn propose(
-		&mut self,
+		self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<B>,
 		max_duration: Duration,

@@ -28,7 +28,7 @@ use sc_executor_common::{
 	util::{WasmModuleInfo, DataSegmentsSnapshot},
 };
 use sp_wasm_interface::{Pointer, WordSize, Value};
-use wasmtime::{Store, Instance, Module, Memory, Table, Val, Func, Extern, Global};
+use wasmtime::{Engine, Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
 
 mod globals_snapshot;
 
@@ -42,8 +42,8 @@ pub struct ModuleWrapper {
 }
 
 impl ModuleWrapper {
-	pub fn new(store: &Store, code: &[u8]) -> Result<Self> {
-		let module = Module::new(&store, code)
+	pub fn new(engine: &Engine, code: &[u8]) -> Result<Self> {
+		let module = Module::new(engine, code)
 			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
 
 		let module_info = WasmModuleInfo::new(code)
@@ -121,8 +121,8 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 
 impl InstanceWrapper {
 	/// Create a new instance wrapper from the given wasm module.
-	pub fn new(module_wrapper: &ModuleWrapper, imports: &Imports, heap_pages: u32) -> Result<Self> {
-		let instance = Instance::new(&module_wrapper.module, &imports.externs)
+	pub fn new(store: &Store, module_wrapper: &ModuleWrapper, imports: &Imports, heap_pages: u32) -> Result<Self> {
+		let instance = Instance::new(store, &module_wrapper.module, &imports.externs)
 			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
 
 		let memory = match imports.memory_import_index {

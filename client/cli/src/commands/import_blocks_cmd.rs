@@ -20,16 +20,18 @@ use crate::error;
 use crate::params::ImportParams;
 use crate::params::SharedParams;
 use crate::CliConfiguration;
-use sc_service::{Configuration, ServiceBuilderCommand};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sc_service::chain_ops::import_blocks;
+use sp_runtime::traits::Block as BlockT;
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, Read, Seek};
 use std::path::PathBuf;
+use std::sync::Arc;
 use structopt::StructOpt;
+use sc_client_api::UsageProvider;
 
 /// The `import-blocks` command used to import blocks.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct ImportBlocksCmd {
 	/// Input file or stdin if unspecified.
 	#[structopt(parse(from_os_str))]
@@ -40,6 +42,10 @@ pub struct ImportBlocksCmd {
 	/// Don't alter this unless you know what you're doing.
 	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,
+
+	/// Try importing blocks from binary format rather than JSON.
+	#[structopt(long)]
+	pub binary: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -57,17 +63,15 @@ impl<T: Read + Seek> ReadPlusSeek for T {}
 
 impl ImportBlocksCmd {
 	/// Run the import-blocks command
-	pub async fn run<B, BC, BB>(
+	pub async fn run<B, C, IQ>(
 		&self,
-		config: Configuration,
-		builder: B,
+		client: Arc<C>,
+		import_queue: IQ,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		C: UsageProvider<B> + Send + Sync + 'static,
+		B: BlockT + for<'de> serde::Deserialize<'de>,
+		IQ: sc_service::ImportQueue<B> + 'static,
 	{
 		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
 			Some(filename) => Box::new(fs::File::open(filename)?),
@@ -78,8 +82,7 @@ impl ImportBlocksCmd {
 			}
 		};
 
-		builder(config)?
-			.import_blocks(file, false)
+		import_blocks(client, import_queue, file, false, self.binary)
 			.await
 			.map_err(Into::into)
 	}

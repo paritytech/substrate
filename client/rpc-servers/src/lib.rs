@@ -62,6 +62,8 @@ pub fn rpc_handler<M: PubSubMetadata>(
 mod inner {
 	use super::*;
 
+	/// Type alias for ipc server
+	pub type IpcServer = ipc::Server;
 	/// Type alias for http server
 	pub type HttpServer = http::Server;
 	/// Type alias for ws server
@@ -87,6 +89,23 @@ mod inner {
 			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
 			.max_request_body_size(MAX_PAYLOAD)
 			.start_http(addr)
+	}
+
+	/// Start IPC server listening on given path.
+	///
+	/// **Note**: Only available if `not(target_os = "unknown")`.
+	pub fn start_ipc<M: pubsub::PubSubMetadata + Default>(
+		addr: &str,
+		io: RpcHandler<M>,
+	) -> io::Result<ipc::Server> {
+		let builder = ipc::ServerBuilder::new(io);
+		#[cfg(target_os = "unix")]
+		builder.set_security_attributes({
+			let security_attributes = ipc::SecurityAttributes::empty();
+			security_attributes.set_mode(0o600)?;
+			security_attributes
+		});
+		builder.start(addr)
 	}
 
 	/// Start WS server listening on given address.

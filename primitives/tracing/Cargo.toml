@@ -1,6 +1,6 @@
 [package]
 name = "sp-tracing"
-version = "2.0.0-dev"
+version = "2.0.0-rc5"
 license = "Apache-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -13,7 +13,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 tracing = { version = "0.1.13", optional = true }
+rental = { version = "0.5.5", optional = true }
+log = { version = "0.4.8", optional = true }
 
 [features]
 default = [ "std" ]
-std = [ "tracing" ]
+std = [ "tracing", "rental", "log" ]

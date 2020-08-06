@@ -1,6 +1,6 @@
 [package]
 name = "sc-finality-grandpa-rpc"
-version = "0.8.0-dev"
+version = "0.8.0-rc5"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "RPC extensions for the GRANDPA finality gadget"
 repository = "https://github.com/paritytech/substrate/"
@@ -8,12 +8,11 @@ edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 
 [dependencies]
-sc-finality-grandpa = { version = "0.8.0-dev", path = "../" }
+sc-finality-grandpa = { version = "0.8.0-rc5", path = "../" }
 finality-grandpa = { version = "0.12.3", features = ["derive-codec"] }
-sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
-jsonrpc-core = "14.0.3"
-jsonrpc-core-client = "14.0.3"
-jsonrpc-derive = "14.0.3"
+jsonrpc-core = "14.2.0"
+jsonrpc-core-client = "14.2.0"
+jsonrpc-derive = "14.2.1"
 futures = { version = "0.3.4", features = ["compat"] }
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = "1.0.50"
@@ -22,7 +21,8 @@ derive_more = "0.99.2"
 sc-network = { version = "0.8.0-dev", path = "../../network" }
 sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
 sp-blockchain = { version = "2.0.0-dev", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
+sp-core = { version = "2.0.0-rc5", path = "../../../primitives/core" }
 sc-network-test = { version = "0.8.0-dev", path = "../../network/test" }

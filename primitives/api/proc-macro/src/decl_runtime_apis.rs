@@ -191,7 +191,8 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 				input: &I, error_desc: &'static str,
 			) -> std::result::Result<R, String>
 		{
-			<R as #crate_::Decode>::decode(
+			<R as #crate_::DecodeLimit>::decode_with_depth_limit(
+				#crate_::MAX_EXTRINSIC_DEPTH,
 				&mut &#crate_::Encode::encode(input)[..],
 			).map_err(|e| format!("{} {}", error_desc, e.what()))
 		}
@@ -251,7 +252,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 					}
 					FnArg::Typed(arg)
 				},
-				r => r.clone(),
+				r => r,
 			});
 
 		let (impl_generics, ty_generics, where_clause) = decl.generics.split_for_impl();
@@ -383,7 +384,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 			renames.push((version, prefix_function_with_trait(&trait_name, &old_name)));
 		}
 
-		renames.sort_unstable_by(|l, r| r.cmp(l));
+		renames.sort_by(|l, r| r.cmp(l));
 		let (versions, old_names) = renames.into_iter().fold(
 			(Vec::new(), Vec::new()),
 			|(mut versions, mut old_names), (version, old_name)| {

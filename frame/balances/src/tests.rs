@@ -26,6 +26,7 @@ impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
 	type Trait = ();
 	type Info = frame_support::weights::DispatchInfo;
 	type PostInfo = frame_support::weights::PostDispatchInfo;
+
 	fn dispatch(self, _origin: Self::Origin)
 		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
 			panic!("Do not use dummy implementation for dispatch.");
@@ -37,7 +38,7 @@ macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
 
 		use crate::*;
-		use sp_runtime::{FixedPointNumber, Fixed128, traits::{SignedExtension, BadOrigin}};
+		use sp_runtime::{FixedPointNumber, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
 			assert_noop, assert_ok, assert_err,
 			traits::{
@@ -45,7 +46,7 @@ macro_rules! decl_tests {
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath, StoredMap
 			}
 		};
-		use pallet_transaction_payment::ChargeTransactionPayment;
+		use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier};
 		use frame_system::RawOrigin;
 
 		const ID_1: LockIdentifier = *b"1       ";
@@ -59,6 +60,18 @@ macro_rules! decl_tests {
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
 			DispatchInfo { weight: w, ..Default::default() }
+		}
+
+		fn events() -> Vec<Event> {
+			let evt = System::events().into_iter().map(|evt| evt.event).collect::<Vec<_>>();
+
+			System::reset_events();
+
+			evt
+		}
+
+		fn last_event() -> Event {
+			system::Module::<Test>::events().pop().expect("Event expected").event
 		}
 
 		#[test]
@@ -154,7 +167,7 @@ macro_rules! decl_tests {
 				.monied(true)
 				.build()
 				.execute_with(|| {
-					pallet_transaction_payment::NextFeeMultiplier::put(Fixed128::saturating_from_integer(1));
+					pallet_transaction_payment::NextFeeMultiplier::put(Multiplier::saturating_from_integer(1));
 					Balances::set_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
 					assert_noop!(
 						<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
@@ -162,7 +175,7 @@ macro_rules! decl_tests {
 					);
 					assert_noop!(
 						<Balances as ReservableCurrency<_>>::reserve(&1, 1),
-						Error::<$test, _>::LiquidityRestrictions
+						Error::<$test, _>::LiquidityRestrictions,
 					);
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
@@ -477,6 +490,10 @@ macro_rules! decl_tests {
 				let _ = Balances::deposit_creating(&2, 1);
 				assert_ok!(Balances::reserve(&1, 110));
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
+				assert_eq!(
+					last_event(),
+					Event::balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
+				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
 				assert_eq!(Balances::reserved_balance(2), 0);
@@ -672,6 +689,102 @@ macro_rules! decl_tests {
 					assert!(Balances::is_dead_account(&1));
 					assert_eq!(Balances::free_balance(1), 0);
 					assert_eq!(Balances::reserved_balance(1), 0);
+				});
+		}
+
+		#[test]
+		fn emit_events_with_reserve_and_unreserve() {
+			<$ext_builder>::default()
+				.build()
+				.execute_with(|| {
+					let _ = Balances::deposit_creating(&1, 100);
+
+					System::set_block_number(2);
+					let _ = Balances::reserve(&1, 10);
+
+					assert_eq!(
+						last_event(),
+						Event::balances(RawEvent::Reserved(1, 10)),
+					);
+
+					System::set_block_number(3);
+					let _ = Balances::unreserve(&1, 5);
+
+					assert_eq!(
+						last_event(),
+						Event::balances(RawEvent::Unreserved(1, 5)),
+					);
+
+					System::set_block_number(4);
+					let _ = Balances::unreserve(&1, 6);
+
+					// should only unreserve 5
+					assert_eq!(
+						last_event(),
+						Event::balances(RawEvent::Unreserved(1, 5)),
+					);
+				});
+		}
+
+		#[test]
+		fn emit_events_with_existential_deposit() {
+			<$ext_builder>::default()
+				.existential_deposit(100)
+				.build()
+				.execute_with(|| {
+					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+
+					assert_eq!(
+						events(),
+						[
+							Event::system(system::RawEvent::NewAccount(1)),
+							Event::balances(RawEvent::Endowed(1, 100)),
+							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+						]
+					);
+
+					let _ = Balances::slash(&1, 1);
+
+					assert_eq!(
+						events(),
+						[
+							Event::balances(RawEvent::DustLost(1, 99)),
+							Event::system(system::RawEvent::KilledAccount(1))
+						]
+					);
+				});
+		}
+
+		#[test]
+		fn emit_events_with_no_existential_deposit_suicide() {
+			<$ext_builder>::default()
+				.existential_deposit(0)
+				.build()
+				.execute_with(|| {
+					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+
+					assert_eq!(
+						events(),
+						[
+							Event::system(system::RawEvent::NewAccount(1)),
+							Event::balances(RawEvent::Endowed(1, 100)),
+							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+						]
+					);
+
+					let _ = Balances::slash(&1, 100);
+
+					// no events
+					assert_eq!(events(), []);
+
+					assert_ok!(System::suicide(Origin::signed(1)));
+
+					assert_eq!(
+						events(),
+						[
+							Event::system(system::RawEvent::KilledAccount(1))
+						]
+					);
 				});
 		}
 	}

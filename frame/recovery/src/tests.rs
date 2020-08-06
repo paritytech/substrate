@@ -46,7 +46,7 @@ fn set_recovered_works() {
 		// Not accessible by a normal user
 		assert_noop!(Recovery::set_recovered(Origin::signed(1), 5, 1), BadOrigin);
 		// Root can set a recovered account though
-		assert_ok!(Recovery::set_recovered(Origin::ROOT, 5, 1));
+		assert_ok!(Recovery::set_recovered(Origin::root(), 5, 1));
 		// Account 1 should now be able to make a call through account 5
 		let call = Box::new(Call::Balances(BalancesCall::transfer(1, 100)));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));

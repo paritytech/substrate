@@ -23,15 +23,21 @@
 pub mod digests;
 pub mod inherents;
 
-pub use sp_consensus_vrf::schnorrkel::{
-	Randomness, VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH
-};
 pub use merlin::Transcript;
+pub use sp_consensus_vrf::schnorrkel::{
+	Randomness, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
+};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
+#[cfg(feature = "std")]
+use sp_core::vrf::{VRFTranscriptData, VRFTranscriptValue};
+use sp_runtime::{traits::Header, ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
-use sp_runtime::{ConsensusEngineId, RuntimeDebug};
-use crate::digests::{NextEpochDescriptor, NextConfigDescriptor};
+
+use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
+
+/// Key type for BABE module.
+pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::BABE;
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};
@@ -71,7 +77,10 @@ pub const MEDIAN_ALGORITHM_CARDINALITY: usize = 1200; // arbitrary suggestion by
 pub type AuthorityIndex = u32;
 
 /// A slot number.
-pub type SlotNumber = u64;
+pub use sp_consensus_slots::SlotNumber;
+
+/// An equivocation proof for multiple block authorships on the same slot (i.e. double vote).
+pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, AuthorityId>;
 
 /// The weight of an authority.
 // NOTE: we use a unique name for the weight to avoid conflicts with other
@@ -92,6 +101,23 @@ pub fn make_transcript(
 	transcript.append_u64(b"current epoch", epoch);
 	transcript.append_message(b"chain randomness", &randomness[..]);
 	transcript
+}
+
+/// Make a VRF transcript data container
+#[cfg(feature = "std")]
+pub fn make_transcript_data(
+	randomness: &Randomness,
+	slot_number: u64,
+	epoch: u64,
+) -> VRFTranscriptData {
+	VRFTranscriptData {
+		label: &BABE_ENGINE_ID,
+		items: vec![
+			("slot number", VRFTranscriptValue::U64(slot_number)),
+			("current epoch", VRFTranscriptValue::U64(epoch)),
+			("chain randomness", VRFTranscriptValue::Bytes(&randomness[..])),
+		]
+	}
 }
 
 /// An consensus log item for BABE.
@@ -237,6 +263,93 @@ pub struct BabeEpochConfiguration {
 	pub allowed_slots: AllowedSlots,
 }
 
+/// Verifies the equivocation proof by making sure that: both headers have
+/// different hashes, are targetting the same slot, and have valid signatures by
+/// the same authority.
+pub fn check_equivocation_proof<H>(proof: EquivocationProof<H>) -> bool
+where
+	H: Header,
+{
+	use digests::*;
+	use sp_application_crypto::RuntimeAppPublic;
+
+	let find_pre_digest = |header: &H| {
+		header
+			.digest()
+			.logs()
+			.iter()
+			.find_map(|log| log.as_babe_pre_digest())
+	};
+
+	let verify_seal_signature = |mut header: H, offender: &AuthorityId| {
+		let seal = header.digest_mut().pop()?.as_babe_seal()?;
+		let pre_hash = header.hash();
+
+		if !offender.verify(&pre_hash.as_ref(), &seal) {
+			return None;
+		}
+
+		Some(())
+	};
+
+	let verify_proof = || {
+		// we must have different headers for the equivocation to be valid
+		if proof.first_header.hash() == proof.second_header.hash() {
+			return None;
+		}
+
+		let first_pre_digest = find_pre_digest(&proof.first_header)?;
+		let second_pre_digest = find_pre_digest(&proof.second_header)?;
+
+		// both headers must be targetting the same slot and it must
+		// be the same as the one in the proof.
+		if proof.slot_number != first_pre_digest.slot_number() ||
+			first_pre_digest.slot_number() != second_pre_digest.slot_number()
+		{
+			return None;
+		}
+
+		// both headers must have been authored by the same authority
+		if first_pre_digest.authority_index() != second_pre_digest.authority_index() {
+			return None;
+		}
+
+		// we finally verify that the expected authority has signed both headers and
+		// that the signature is valid.
+		verify_seal_signature(proof.first_header, &proof.offender)?;
+		verify_seal_signature(proof.second_header, &proof.offender)?;
+
+		Some(())
+	};
+
+	// NOTE: we isolate the verification code into an helper function that
+	// returns `Option<()>` so that we can use `?` to deal with any intermediate
+	// errors and discard the proof as invalid.
+	verify_proof().is_some()
+}
+
+/// An opaque type used to represent the key ownership proof at the runtime API
+/// boundary. The inner value is an encoded representation of the actual key
+/// ownership proof which will be parameterized when defining the runtime. At
+/// the runtime API boundary this type is unknown and as such we keep this
+/// opaque representation, implementors of the runtime API will have to make
+/// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
+#[derive(Decode, Encode, PartialEq)]
+pub struct OpaqueKeyOwnershipProof(Vec<u8>);
+impl OpaqueKeyOwnershipProof {
+	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded
+	/// representation.
+	pub fn new(inner: Vec<u8>) -> OpaqueKeyOwnershipProof {
+		OpaqueKeyOwnershipProof(inner)
+	}
+
+	/// Try to decode this `OpaqueKeyOwnershipProof` into the given concrete key
+	/// ownership proof type.
+	pub fn decode<T: Decode>(self) -> Option<T> {
+		Decode::decode(&mut &self.0[..]).ok()
+	}
+}
+
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	#[api_version(2)]
@@ -250,5 +363,34 @@ sp_api::decl_runtime_apis! {
 
 		/// Returns the slot number that started the current epoch.
 		fn current_epoch_start() -> SlotNumber;
+
+		/// Generates a proof of key ownership for the given authority in the
+		/// current epoch. An example usage of this module is coupled with the
+		/// session historical module to prove that a given authority key is
+		/// tied to a given staking identity during a specific session. Proofs
+		/// of key ownership are necessary for submitting equivocation reports.
+		/// NOTE: even though the API takes a `slot_number` as parameter the current
+		/// implementations ignores this parameter and instead relies on this
+		/// method being called at the correct block height, i.e. any point at
+		/// which the epoch for the given slot is live on-chain. Future
+		/// implementations will instead use indexed data through an offchain
+		/// worker, not requiring older states to be available.
+		fn generate_key_ownership_proof(
+			slot_number: SlotNumber,
+			authority_id: AuthorityId,
+		) -> Option<OpaqueKeyOwnershipProof>;
+
+		/// Submits an unsigned extrinsic to report an equivocation. The caller
+		/// must provide the equivocation proof and a key ownership proof
+		/// (should be obtained using `generate_key_ownership_proof`). The
+		/// extrinsic will be unsigned and should only be accepted for local
+		/// authorship (not to be broadcast to the network). This method returns
+		/// `None` when creation of the extrinsic fails, e.g. if equivocation
+		/// reporting is disabled for the given runtime (i.e. this method is
+		/// hardcoded to return `None`). Only useful in an offchain context.
+		fn submit_report_equivocation_unsigned_extrinsic(
+			equivocation_proof: EquivocationProof<Block::Header>,
+			key_owner_proof: OpaqueKeyOwnershipProof,
+		) -> Option<()>;
 	}
 }

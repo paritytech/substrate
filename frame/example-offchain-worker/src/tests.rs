@@ -39,7 +39,7 @@ use sp_runtime::{
 };
 
 impl_outer_origin! {
-	pub enum Origin for Test  where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 // For testing the module, we construct most of a mock runtime. This means
@@ -54,6 +54,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = ();
 	type Index = u64;
@@ -77,6 +78,7 @@ impl frame_system::Trait for Test {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 type Extrinsic = TestXt<Call<Test>, ()>;
@@ -151,6 +153,52 @@ fn should_make_http_call_and_parse_result() {
 		// then
 		assert_eq!(price, 15523);
 	});
+}
+
+#[test]
+fn knows_how_to_mock_several_http_calls() {
+	let (offchain, state) = testing::TestOffchainExt::new();
+	let mut t = sp_io::TestExternalities::default();
+	t.register_extension(OffchainExt::new(offchain));
+
+	{
+		let mut state = state.write();
+		state.expect_request(testing::PendingRequest {
+			method: "GET".into(),
+			uri: "https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".into(),
+			response: Some(br#"{"USD": 1}"#.to_vec()),
+			sent: true,
+			..Default::default()
+		});
+
+		state.expect_request(testing::PendingRequest {
+			method: "GET".into(),
+			uri: "https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".into(),
+			response: Some(br#"{"USD": 2}"#.to_vec()),
+			sent: true,
+			..Default::default()
+		});
+
+		state.expect_request(testing::PendingRequest {
+			method: "GET".into(),
+			uri: "https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".into(),
+			response: Some(br#"{"USD": 3}"#.to_vec()),
+			sent: true,
+			..Default::default()
+		});
+	}
+
+
+	t.execute_with(|| {
+		let price1 = Example::fetch_price().unwrap();
+		let price2 = Example::fetch_price().unwrap();
+		let price3 = Example::fetch_price().unwrap();
+
+		assert_eq!(price1, 100);
+		assert_eq!(price2, 200);
+		assert_eq!(price3, 300);
+	})
+
 }
 
 #[test]
@@ -318,7 +366,7 @@ fn should_submit_raw_unsigned_transaction_on_chain() {
 }
 
 fn price_oracle_response(state: &mut testing::OffchainState) {
-	state.expect_request(0, testing::PendingRequest {
+	state.expect_request(testing::PendingRequest {
 		method: "GET".into(),
 		uri: "https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".into(),
 		response: Some(br#"{"USD": 155.23}"#.to_vec()),

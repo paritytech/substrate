@@ -106,7 +106,7 @@ impl TestNetFactory for GrandpaTestNet {
 		_cfg: &ProtocolConfig,
 		_: &PeerData,
 	) -> Self::Verifier {
-		PassThroughVerifier(false) // use non-instant finality.
+		PassThroughVerifier::new(false) // use non-instant finality.
 	}
 
 	fn make_block_import<Transaction>(&self, client: PeersClient)
@@ -217,7 +217,7 @@ sp_api::mock_impl_runtime_apis! {
 			self.inner.genesis_authorities.clone()
 		}
 
-		fn submit_report_equivocation_extrinsic(
+		fn submit_report_equivocation_unsigned_extrinsic(
 			_equivocation_proof: EquivocationProof<Hash, BlockNumber>,
 			_key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()> {
@@ -282,7 +282,7 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 
-fn create_keystore(authority: Ed25519Keyring) -> (KeyStorePtr, tempfile::TempDir) {
+fn create_keystore(authority: Ed25519Keyring) -> (BareCryptoStorePtr, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
 	keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(&authority.to_seed())
@@ -1050,7 +1050,7 @@ fn voter_persists_its_votes() {
 			voter_rx: TracingUnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
-			keystore: KeyStorePtr,
+			keystore: BareCryptoStorePtr,
 		}
 
 		impl Future for ResettableVoter {
@@ -1136,7 +1136,7 @@ fn voter_persists_its_votes() {
 		let config = Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
 			justification_period: 32,
-			keystore: Some(keystore),
+			keystore: Some(keystore.clone()),
 			name: Some(format!("peer#{}", 1)),
 			is_authority: true,
 			observer_enabled: true,
@@ -1160,10 +1160,10 @@ fn voter_persists_its_votes() {
 		);
 
 		let (round_rx, round_tx) = network.round_communication(
+			Some((peers[1].public().into(), keystore).into()),
 			communication::Round(1),
 			communication::SetId(0),
 			Arc::new(VoterSet::new(voters).unwrap()),
-			Some(peers[1].pair().into()),
 			HasVoted::No,
 		);
 

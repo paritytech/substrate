@@ -669,6 +669,7 @@ where
 					Error::Blockchain(error) => ConsensusError::ClientImport(error),
 					Error::Client(error) => ConsensusError::ClientImport(error.to_string()),
 					Error::Safety(error) => ConsensusError::ClientImport(error),
+					Error::Signing(error) => ConsensusError::ClientImport(error),
 					Error::Timer(error) => ConsensusError::ClientImport(error.to_string()),
 				});
 			},

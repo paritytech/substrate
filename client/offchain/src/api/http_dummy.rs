@@ -19,8 +19,18 @@
 use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
 use std::{future::Future, pin::Pin, task::Context, task::Poll};
 
+/// Wrapper struct (wrapping nothing in case of http_dummy) used for keeping the hyper_rustls client running.
+#[derive(Clone)]
+pub struct SharedClient;
+
+impl SharedClient {
+	pub fn new() -> Self {
+		Self
+	}
+}
+
 /// Creates a pair of [`HttpApi`] and [`HttpWorker`].
-pub fn http() -> (HttpApi, HttpWorker) {
+pub fn http(_: SharedClient) -> (HttpApi, HttpWorker) {
 	(HttpApi, HttpWorker)
 }
 

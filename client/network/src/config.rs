@@ -272,8 +272,21 @@ pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 /// Splits a Multiaddress into a Multiaddress and PeerId.
 pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
-		Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
-			.map_err(|_| ParseErr::InvalidPeerId)?,
+		Some(multiaddr::Protocol::P2p(key)) => {
+			if !matches!(key.algorithm(), multiaddr::multihash::Code::Identity) {
+				// (note: this is the "person bowing" emoji)
+				log::warn!(
+					"🙇 You are using the peer ID {}. This peer ID uses a legacy, deprecated \
+					representation that will no longer be supported in the future. \
+					Please refresh it by performing a RPC query to the appropriate node, \
+					by looking at its logs, or by using `subkey inspect-node-key` on its \
+					private key.",
+					bs58::encode(key.as_bytes()).into_string()
+				);
+			}
+
+			PeerId::from_multihash(key).map_err(|_| ParseErr::InvalidPeerId)?
+		},
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
 
@@ -412,9 +425,6 @@ pub struct NetworkConfiguration {
 	pub max_parallel_downloads: u32,
 	/// Should we insert non-global addresses into the DHT?
 	pub allow_non_globals_in_dht: bool,
-	/// If true, uses the `/<chainid>/block-requests/<version>` experimental protocol rather than
-	/// the legacy substream. This option is meant to be hard-wired to `true` in the future.
-	pub use_new_block_requests_protocol: bool,
 }
 
 impl NetworkConfiguration {
@@ -446,7 +456,6 @@ impl NetworkConfiguration {
 			},
 			max_parallel_downloads: 5,
 			allow_non_globals_in_dht: false,
-			use_new_block_requests_protocol: true,
 		}
 	}
 }

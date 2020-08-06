@@ -35,12 +35,12 @@ use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
 
+use sp_core::traits::BareCryptoStorePtr;
 use finality_grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use finality_grandpa::{voter, voter_set::VoterSet};
 use sc_network::{NetworkService, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use parity_scale_codec::{Encode, Decode};
-use sp_core::Pair;
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
@@ -58,7 +58,7 @@ use gossip::{
 	VoteMessage,
 };
 use sp_finality_grandpa::{
-	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
+	AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
 };
 use sp_utils::mpsc::TracingUnboundedReceiver;
 
@@ -103,6 +103,34 @@ mod benefit {
 	pub(super) const BASIC_VALIDATED_CATCH_UP: Rep = Rep::new(200, "Grandpa: Catch-up message");
 	pub(super) const BASIC_VALIDATED_COMMIT: Rep = Rep::new(100, "Grandpa: Commit");
 	pub(super) const PER_EQUIVOCATION: i32 = 10;
+}
+
+/// A type that ties together our local authority id and a keystore where it is
+/// available for signing.
+pub struct LocalIdKeystore((AuthorityId, BareCryptoStorePtr));
+
+impl LocalIdKeystore {
+	/// Returns a reference to our local authority id.
+	fn local_id(&self) -> &AuthorityId {
+		&(self.0).0
+	}
+
+	/// Returns a reference to the keystore.
+	fn keystore(&self) -> &BareCryptoStorePtr {
+		&(self.0).1
+	}
+}
+
+impl AsRef<BareCryptoStorePtr> for LocalIdKeystore {
+	fn as_ref(&self) -> &BareCryptoStorePtr {
+		self.keystore()
+	}
+}
+
+impl From<(AuthorityId, BareCryptoStorePtr)> for LocalIdKeystore {
+	fn from(inner: (AuthorityId, BareCryptoStorePtr)) -> LocalIdKeystore {
+		LocalIdKeystore(inner)
+	}
 }
 
 /// If the voter set is larger than this value some telemetry events are not
@@ -272,10 +300,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// network all within the current set.
 	pub(crate) fn round_communication(
 		&self,
+		keystore: Option<LocalIdKeystore>,
 		round: Round,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
-		local_key: Option<AuthorityPair>,
 		has_voted: HasVoted<B>,
 	) -> (
 		impl Stream<Item = SignedMessage<B>> + Unpin,
@@ -287,10 +315,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			&*voters,
 		);
 
-		let locals = local_key.and_then(|pair| {
-			let id = pair.public();
-			if voters.contains(&id) {
-				Some((pair, id))
+		let keystore = keystore.and_then(|ks| {
+			let id = ks.local_id();
+			if voters.contains(id) {
+				Some(ks)
 			} else {
 				None
 			}
@@ -350,10 +378,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let (tx, out_rx) = mpsc::channel(0);
 		let outgoing = OutgoingMessages::<B> {
+			keystore,
 			round: round.0,
 			set_id: set_id.0,
 			network: self.gossip_engine.clone(),
-			locals,
 			sender: tx,
 			has_voted,
 		};
@@ -628,7 +656,7 @@ pub struct SetId(pub SetIdNumber);
 pub(crate) struct OutgoingMessages<Block: BlockT> {
 	round: RoundNumber,
 	set_id: SetIdNumber,
-	locals: Option<(AuthorityPair, AuthorityId)>,
+	keystore: Option<LocalIdKeystore>,
 	sender: mpsc::Sender<SignedMessage<Block>>,
 	network: Arc<Mutex<GossipEngine<Block>>>,
 	has_voted: HasVoted<Block>,
@@ -665,14 +693,19 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 		}
 
 		// when locals exist, sign messages on import
-		if let Some((ref pair, _)) = self.locals {
+		if let Some(ref keystore) = self.keystore {
 			let target_hash = *(msg.target().0);
 			let signed = sp_finality_grandpa::sign_message(
+				keystore.as_ref(),
 				msg,
-				pair,
+				keystore.local_id().clone(),
 				self.round,
 				self.set_id,
-			);
+			).ok_or_else(
+				|| Error::Signing(format!(
+					"Failed to sign GRANDPA vote for round {} targetting {:?}", self.round, target_hash
+				))
+			)?;
 
 			let message = GossipMessage::Vote(VoteMessage::<Block> {
 				message: signed.clone(),
@@ -760,7 +793,7 @@ fn check_compact_commit<Block: BlockT>(
 		use crate::communication::gossip::Misbehavior;
 		use finality_grandpa::Message as GrandpaMessage;
 
-		if let Err(()) = sp_finality_grandpa::check_message_signature_with_buffer(
+		if !sp_finality_grandpa::check_message_signature_with_buffer(
 			&GrandpaMessage::Precommit(precommit.clone()),
 			id,
 			sig,
@@ -848,7 +881,7 @@ fn check_catch_up<Block: BlockT>(
 		for (msg, id, sig) in messages {
 			signatures_checked += 1;
 
-			if let Err(()) = sp_finality_grandpa::check_message_signature_with_buffer(
+			if !sp_finality_grandpa::check_message_signature_with_buffer(
 				&msg,
 				id,
 				sig,

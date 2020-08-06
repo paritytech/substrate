@@ -21,8 +21,14 @@
 #![allow(deprecated)]
 use super::*;
 use authorship::claim_slot;
-use sp_core::crypto::Pair;
-use sp_consensus_babe::{AuthorityPair, SlotNumber, AllowedSlots};
+use sp_core::{crypto::Pair, vrf::make_transcript as transcript_from_data};
+use sp_consensus_babe::{
+	AuthorityPair,
+	SlotNumber,
+	AllowedSlots,
+	make_transcript,
+	make_transcript_data,
+};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
 	NoNetwork as DummyOracle, Proposal, RecordProof,
@@ -35,6 +41,11 @@ use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use sc_client_api::{BlockchainEvents, backend::TransactionFor};
 use log::debug;
 use std::{time::Duration, cell::RefCell, task::Poll};
+use rand::RngCore;
+use rand_chacha::{
+	rand_core::SeedableRng,
+	ChaChaRng,
+};
 
 type Item = DigestItem<Hash>;
 
@@ -159,7 +170,7 @@ impl Proposer<TestBlock> for DummyProposer {
 	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction>, Error>>;
 
 	fn propose(
-		&mut self,
+		mut self,
 		_: InherentData,
 		pre_digests: DigestFor<TestBlock>,
 		_: Duration,
@@ -203,8 +214,13 @@ pub struct BabeTestNet {
 type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
+type TestSelectChain = substrate_test_runtime_client::LongestChain<
+	substrate_test_runtime_client::Backend,
+	TestBlock,
+>;
+
 pub struct TestVerifier {
-	inner: BabeVerifier<TestBlock, PeersFullClient>,
+	inner: BabeVerifier<TestBlock, PeersFullClient, TestSelectChain>,
 	mutator: Mutator,
 }
 
@@ -286,15 +302,20 @@ impl TestNetFactory for BabeTestNet {
 	)
 		-> Self::Verifier
 	{
+		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
+
 		let client = client.as_full().expect("only full clients are used in test");
 		trace!(target: "babe", "Creating a verifier");
 
 		// ensure block import and verifier are linked correctly.
 		let data = maybe_link.as_ref().expect("babe link always provided to verifier instantiation");
 
+		let (_, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+
 		TestVerifier {
 			inner: BabeVerifier {
 				client: client.clone(),
+				select_chain: longest_chain,
 				inherent_data_providers: data.inherent_data_providers.clone(),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
@@ -795,4 +816,37 @@ fn verify_slots_are_strictly_increasing() {
 		&mut proposer_factory,
 		&mut block_import,
 	);
+}
+
+#[test]
+fn babe_transcript_generation_match() {
+	let _ = env_logger::try_init();
+	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+	let pair = keystore.write().insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
+		.expect("Generates authority pair");
+
+	let epoch = Epoch {
+		start_slot: 0,
+		authorities: vec![(pair.public(), 1)],
+		randomness: [0; 32],
+		epoch_index: 1,
+		duration: 100,
+		config: BabeEpochConfiguration {
+			c: (3, 10),
+			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
+		},
+	};
+
+	let orig_transcript = make_transcript(&epoch.randomness.clone(), 1, epoch.epoch_index);
+	let new_transcript = make_transcript_data(&epoch.randomness, 1, epoch.epoch_index);
+
+	let test = |t: merlin::Transcript| -> [u8; 16] {
+		let mut b = [0u8; 16];
+		t.build_rng()
+			.finalize(&mut ChaChaRng::from_seed([0u8;32]))
+			.fill_bytes(&mut b);
+		b
+	};
+	debug_assert!(test(orig_transcript) == test(transcript_from_data(new_transcript)));
 }

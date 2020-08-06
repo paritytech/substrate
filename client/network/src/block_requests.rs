@@ -277,21 +277,13 @@ where
 			return SendRequestOutcome::NotConnected;
 		};
 
-		let protobuf_rq = schema::v1::BlockRequest {
-			fields: u32::from_be_bytes([req.fields.bits(), 0, 0, 0]),
-			from_block: match req.from {
-				message::FromBlock::Hash(h) =>
-					Some(schema::v1::block_request::FromBlock::Hash(h.encode())),
-				message::FromBlock::Number(n) =>
-					Some(schema::v1::block_request::FromBlock::Number(n.encode())),
-			},
-			to_block: req.to.map(|h| h.encode()).unwrap_or_default(),
-			direction: match req.direction {
-				message::Direction::Ascending => schema::v1::Direction::Ascending as i32,
-				message::Direction::Descending => schema::v1::Direction::Descending as i32,
-			},
-			max_blocks: req.max.unwrap_or(0),
-		};
+		let protobuf_rq = build_protobuf_block_request(
+			req.fields,
+			req.from.clone(),
+			req.to.clone(),
+			req.direction,
+			req.max,
+		);
 
 		let mut buf = Vec::with_capacity(protobuf_rq.encoded_len());
 		if let Err(err) = protobuf_rq.encode(&mut buf) {
@@ -386,7 +378,7 @@ where
 				return Err(io::Error::new(io::ErrorKind::Other, msg).into())
 			};
 
-		let attributes = BlockAttributes::decode(&mut request.fields.to_be_bytes().as_ref())?;
+		let attributes = BlockAttributes::from_be_u32(request.fields)?;
 		let get_header = attributes.contains(BlockAttributes::HEADER);
 		let get_body = attributes.contains(BlockAttributes::BODY);
 		let get_justification = attributes.contains(BlockAttributes::JUSTIFICATION);
@@ -417,7 +409,7 @@ where
 				},
 				body: if get_body {
 					self.chain.block_body(&BlockId::Hash(hash))?
-						.unwrap_or(Vec::new())
+						.unwrap_or_default()
 						.iter_mut()
 						.map(|extrinsic| extrinsic.encode())
 						.collect()
@@ -426,7 +418,7 @@ where
 				},
 				receipt: Vec::new(),
 				message_queue: Vec::new(),
-				justification: justification.unwrap_or(Vec::new()),
+				justification: justification.unwrap_or_default(),
 				is_empty_justification,
 			};
 
@@ -463,8 +455,8 @@ where
 			marker: PhantomData,
 		};
 		let mut cfg = OneShotHandlerConfig::default();
-		cfg.inactive_timeout = self.config.inactivity_timeout;
-		cfg.substream_timeout = self.config.request_timeout;
+		cfg.keep_alive_timeout = self.config.inactivity_timeout;
+		cfg.outbound_substream_timeout = self.config.request_timeout;
 		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
 	}
 
@@ -824,5 +816,30 @@ where
 					ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e))
 				})
 		}.boxed()
+	}
+}
+
+/// Build protobuf block request message.
+pub(crate) fn build_protobuf_block_request<Hash: Encode, Number: Encode>(
+	attributes: BlockAttributes,
+	from_block: message::FromBlock<Hash, Number>,
+	to_block: Option<Hash>,
+	direction: message::Direction,
+	max_blocks: Option<u32>,
+) -> schema::v1::BlockRequest {
+	schema::v1::BlockRequest {
+		fields: attributes.to_be_u32(),
+		from_block: match from_block {
+			message::FromBlock::Hash(h) =>
+				Some(schema::v1::block_request::FromBlock::Hash(h.encode())),
+			message::FromBlock::Number(n) =>
+				Some(schema::v1::block_request::FromBlock::Number(n.encode())),
+		},
+		to_block: to_block.map(|h| h.encode()).unwrap_or_default(),
+		direction: match direction {
+			message::Direction::Ascending => schema::v1::Direction::Ascending as i32,
+			message::Direction::Descending => schema::v1::Direction::Descending as i32,
+		},
+		max_blocks: max_blocks.unwrap_or(0),
 	}
 }

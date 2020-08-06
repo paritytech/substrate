@@ -16,12 +16,13 @@
 // limitations under the License.
 
 mod command;
+mod writer;
 
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
 use std::fmt::Debug;
 
 /// The `benchmark` command used to benchmark FRAME Pallets.
-#[derive(Debug, structopt::StructOpt, Clone)]
+#[derive(Debug, structopt::StructOpt)]
 pub struct BenchmarkCmd {
 	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
 	#[structopt(short, long)]
@@ -58,6 +59,22 @@ pub struct BenchmarkCmd {
 	/// Don't print the min-squares linear regression analysis.
 	#[structopt(long)]
 	pub no_min_squares: bool,
+
+	/// Output the benchmarks to a Rust file.
+	#[structopt(long)]
+	pub output: bool,
+
+	/// Output the trait definition to a Rust file.
+	#[structopt(long)]
+	pub weight_trait: bool,
+
+	/// Set the heap pages while running benchmarks.
+	#[structopt(long)]
+	pub heap_pages: Option<u64>,
+
+	/// Display and run extra benchmarks that would otherwise not be needed for weight construction.
+	#[structopt(long)]
+	pub extra: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]

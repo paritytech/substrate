@@ -49,7 +49,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[rpc(name = "chain_getBlockHash", alias("chain_getHead"))]
 	fn block_hash(
 		&self,
-		hash: Option<ListOrValue<NumberOrHex<Number>>>,
+		hash: Option<ListOrValue<NumberOrHex>>,
 	) -> Result<ListOrValue<Option<Hash>>>;
 
 	/// Get hash of the last finalized block in the canon chain.

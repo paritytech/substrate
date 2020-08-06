@@ -1,0 +1,29 @@
+[package]
+name = "sp-npos-elections-fuzzer"
+version = "2.0.0-alpha.5"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Fuzzer for phragmén implementation."
+documentation = "https://docs.rs/sp-npos-elections-fuzzer"
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+sp-npos-elections = { version = "2.0.0-rc5", path = ".." }
+sp-std = { version = "2.0.0-rc5", path = "../../std" }
+sp-runtime = { version = "2.0.0-rc5", path = "../../runtime" }
+honggfuzz = "0.5"
+rand = { version = "0.7.3", features = ["std", "small_rng"] }
+
+[[bin]]
+name = "reduce"
+path = "src/reduce.rs"
+
+[[bin]]
+name = "balance_solution"
+path = "src/balance_solution.rs"

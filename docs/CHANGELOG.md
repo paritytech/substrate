@@ -6,6 +6,148 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+## 2.0.0-rc4 -> 2.0.0-rc5 – River Dolphin
+
+Runtime
+-------
+
+* Support using system storage directly for EVM balance and nonce (#6659)
+* Properly filter out duplicate voters in elections. (#6693)
+* Treasury burning can be directed (#6671)
+* identity: Don't let subs be re-registered (#6667)
+* Regression test to ensure we don't break deterministic builds in wasm (#6597)
+* allow to specify schedule time as a relative value (#6578)
+* Make signature batching use specialized methods (#6616)
+* Rename `CheckEra` to `CheckMortality` (#6619)
+* Add `WeightInfo` to all pallets with benchmarks. (#6575)
+* Don't require module name in inherents (#6576)
+* pallet-evm: return Ok(()) when EVM execution fails (#6493)
+* Make the encoded-Call Vec<u8> explicitly so in metadata (#6566)
+* Allow specify schedule dispatch origin (#6387)
+* pallet-evm: customizable chain id (#6537)
+* Refactor as_sub to make things clearer. (#6503)
+
+Client
+------
+
+* Update wasmtime to (almost) lastest master (#6662)
+* Update to latest sysinfo prevents leaking fd-handlers (#6708)
+* Tracing values (#6679)
+* Graceful shutdown for the task manager (#6654)
+* Update substrate-networking Grafana dashboard (#6649)
+* *: Update to libp2p v0.21.1 (#6559)
+* Send Status message on all newly-opened legacy substreams (#6593)
+* babe: report equivocations (#6362)
+* Support synching of blocks that are not `new_best` (#6508)
+* Remove the service, replacing it with a struct of individual chain components (#6352)
+* Fix tx-pool returning the same transaction multiple times (#6535)
+
+API
+---
+
+* Better handling of stable-only build (#6569)
+* Remove the service builder (#6557)
+* seal: Prevent contracts from going below subsistence (#6623)
+* seal: Rework contracts API (#6573)
+* Make evm errors public (#6598)
+* Add log rotation (#6564)
+* decl_module! macro: use 'frame_system' instead of `system` as default ident (#6500)
+* Restrict `Protected` to some heap types. (#6471)
+
+## 2.0.0-rc3 -> 2.0.0-rc4 (Rhinoceros)
+
+Runtime
+-------
+
+* Staking Payout Creates Controller (#6496)
+* `pallet-scheduler`: Check that `when` is not in the past (#6480)
+* Fix `sp-api` handling of multiple arguments (#6484)
+* Fix issues with `Operational` transactions validity and prioritization. (#6435)
+* pallet-atomic-swap: generialized swap action (#6421)
+* Avoid multisig reentrancy (#6445)
+* Root origin use no filter by default. Scheduler and Democracy dispatch without asserting BaseCallFilter (#6408)
+* Scale and increase validator count (#6417)
+* Pallet: Atomic Swap (#6349)
+* Restrict remove_proxies (#6383)
+* Stored call in multisig (#6319)
+* Allow Sudo to do anything (#6375)
+* vesting: Force Vested Transfer (#6368)
+* Add events for balance reserve and unreserve functions (#6330)
+* Introduce frozen indices. (#6307)
+
+Client
+------
+
+* client/network/service: Add primary dimension to connection metrics (#6472)
+* Fix Babe secondary plain slots claiming (#6451)
+* add network propagated metrics (#6438)
+* client/authority-discovery: Compare PeerIds and not Multihashes (#6414)
+* Update sync chain info on own block import (#6424)
+* Remove --legacy-network-protocol CLI flag (#6411)
+* Runtime interface to add support for tracing from wasm (#6381)
+* Remove penalty on duplicate Status message (#6377)
+* Fix the broken weight multiplier update function (#6334)
+* client/authority-discovery: Don't add own address to priority group (#6370)
+* Split the service initialisation up into seperate functions (#6332)
+* Fix transaction pool event sending (#6341)
+* Add a [prefix]_process_start_time_seconds metric (#6315)
+* new crate sc-light (#6235)
+* Allow adding a prefix to the informant (#6174)
+
+API
+---
+
+* seal: Remove ext_dispatch_call and ext_get_runtime_storage (#6464)
+* seal: Refactor ext_gas_price (#6478)
+* Implement nested storage transactions (#6269)
+* Allow empty values in the storage (#6364)
+* add system_dryRun (#6300)
+* Introduce in-origin filtering (#6318)
+* add extend_lock for StorageLock (#6323)
+* Deprecate FunctionOf and remove its users (#6340)
+* transaction-pool: expose blocking api for tx submission (#6325)
+
+
+## 2.0.0-rc2 -> 2.0.0-rc3
+
+Runtime
+-------
+
+* Introduce stacked filtering (#6273)
+* Allow "anonymous" proxied accounts (#6236)
+* Allow over-weight collective proposals to be closed (#6163)
+* Fix Election when ForceNone V1 (#6166)
+
+Client
+------
+
+* Make transaction pool prune transactions only of canonical blocks (#6123)
+* Rename all the election operations (#6245)
+* Sentry nodes and validator nodes also imply reserved (#6251)
+* Fix peerset not filtering incoming connections in reserved-only (#6249)
+* Use Subscription Manager from `jsonrpc-pubsub` (#6208)
+* Add a Substrate networking Grafana dashboard template (#6171)
+* Add subkey inspect-node-key (#6153)
+
+## 2.0.0-rc1 -> 2.0.0-rc2
+
+(nothing of note)
+
+## 2.0.0-alpha.8 -> 2.0.0-rc1
+
+Runtime
+-------
+
+* Allow operational recovery path if on_initialize use fullblock. (#6089)
+* Maximum extrinsic weight limit (#6067)
+
+Client
+------
+
+* Add JSON format to import blocks and set it as default (#5816)
+* Upgrade to libp2p v0.19 - Changes the default PeerId representation (#6064)
+
+
 ## 2.0.0-alpha.7 -> 2.0.0-alpha.8
 
 **License Changed**

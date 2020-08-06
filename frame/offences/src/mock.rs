@@ -96,6 +96,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Runtime {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -119,10 +120,11 @@ impl frame_system::Trait for Runtime {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 parameter_types! {
-	pub const OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
+	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
 }
 
 impl Trait for Runtime {
@@ -130,6 +132,7 @@ impl Trait for Runtime {
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
+	type WeightInfo = ();
 }
 
 mod offences {

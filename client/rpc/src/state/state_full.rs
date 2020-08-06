@@ -21,10 +21,10 @@ use std::sync::Arc;
 use std::ops::Range;
 use futures::{future, StreamExt as _, TryStreamExt as _};
 use log::warn;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use rpc::{Result as RpcResult, futures::{stream, Future, Sink, Stream, future::result}};
 
-use sc_rpc_api::{Subscriptions, state::ReadProof};
+use sc_rpc_api::state::ReadProof;
 use sc_client_api::backend::Backend;
 use sp_blockchain::{Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata, HeaderBackend};
 use sc_client_api::BlockchainEvents;
@@ -60,7 +60,7 @@ struct QueryStorageRange<Block: BlockT> {
 /// State API backend for full nodes.
 pub struct FullState<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
-	subscriptions: Subscriptions,
+	subscriptions: SubscriptionManager,
 	_phantom: PhantomData<(BE, Block)>
 }
 
@@ -72,7 +72,7 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 		Block: BlockT + 'static,
 {
 	/// Create new state API backend for full nodes.
-	pub fn new(client: Arc<Client>, subscriptions: Subscriptions) -> Self {
+	pub fn new(client: Arc<Client>, subscriptions: SubscriptionManager) -> Self {
 		Self { client, subscriptions, _phantom: PhantomData }
 	}
 

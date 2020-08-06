@@ -19,18 +19,17 @@ while IFS= read -r line; do
   if has_label 'paritytech/substrate' "$pr_id" 'B0-silent'; then
     continue
   fi
-  if has_label 'paritytech/substrate' "$pr_id" 'B1-runtimenoteworthy'; then
-    runtime_changes="$runtime_changes
+  if has_label 'paritytech/substrate' "$pr_id" 'B3-apinoteworthy' ; then
+    api_changes="$api_changes
 $line"
   fi
-  if has_label 'paritytech/substrate' "$pr_id" 'B1-clientnoteworthy'; then
+  if has_label 'paritytech/substrate' "$pr_id" 'B5-clientnoteworthy'; then
     client_changes="$client_changes
 $line"
   fi
-   if has_label 'paritytech/substrate' "$pr_id" 'B1-apinoteworthy' ; then
-    api_changes="$api_changes
+  if has_label 'paritytech/substrate' "$pr_id" 'B7-runtimenoteworthy'; then
+    runtime_changes="$runtime_changes
 $line"
-    continue
   fi
 done <<< "$all_changes"
 

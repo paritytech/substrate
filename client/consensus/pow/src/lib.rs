@@ -466,7 +466,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
-	spawner: &impl sp_core::traits::SpawnBlocking,
+	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
 ) -> Result<
 	PowImportQueue<B, Transaction>,
@@ -610,7 +610,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			continue 'outer
 		}
 
-		let mut proposer = futures::executor::block_on(env.init(&best_header))
+		let proposer = futures::executor::block_on(env.init(&best_header))
 			.map_err(|e| Error::Environment(format!("{:?}", e)))?;
 
 		let inherent_data = inherent_data_providers
@@ -648,6 +648,8 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			}
 		};
 
+		log::info!("✅ Successfully mined block: {}", best_hash);
+		
 		let (hash, seal) = {
 			let seal = DigestItem::Seal(POW_ENGINE_ID, seal);
 			let mut header = header.clone();

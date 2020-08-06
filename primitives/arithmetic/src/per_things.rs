@@ -21,9 +21,15 @@ use serde::{Serialize, Deserialize};
 use sp_std::{ops, fmt, prelude::*, convert::TryInto};
 use codec::{Encode, CompactAs};
 use crate::traits::{
-	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero,
+	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero, Unsigned,
 };
 use sp_debug_derive::RuntimeDebug;
+
+/// Get the inner type of a `PerThing`.
+pub type InnerOf<P> = <P as PerThing>::Inner;
+
+/// Get the upper type of a `PerThing`.
+pub type UpperOf<P> = <P as PerThing>::Upper;
 
 /// Something that implements a fixed point ration with an arbitrary granularity `X`, as _parts per
 /// `X`_.
@@ -31,11 +37,13 @@ pub trait PerThing:
 	Sized + Saturating + Copy + Default + Eq + PartialEq + Ord + PartialOrd + Bounded + fmt::Debug
 {
 	/// The data type used to build this per-thingy.
-	type Inner: BaseArithmetic + Copy + fmt::Debug;
+	type Inner: BaseArithmetic + Unsigned + Copy + fmt::Debug;
 
 	/// A data type larger than `Self::Inner`, used to avoid overflow in some computations.
 	/// It must be able to compute `ACCURACY^2`.
-	type Upper: BaseArithmetic + Copy + From<Self::Inner> + TryInto<Self::Inner> + fmt::Debug;
+	type Upper:
+		BaseArithmetic + Copy + From<Self::Inner> + TryInto<Self::Inner> +
+		UniqueSaturatedInto<Self::Inner> + Unsigned + fmt::Debug;
 
 	/// The accuracy of this type.
 	const ACCURACY: Self::Inner;
@@ -86,7 +94,7 @@ pub trait PerThing:
 	/// ```
 	fn mul_floor<N>(self, b: N) -> N
 	where N: Clone + From<Self::Inner> + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
-		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>
+		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Unsigned
 	{
 		overflow_prune_mul::<N, Self>(b, self.deconstruct(), Rounding::Down)
 	}
@@ -108,7 +116,7 @@ pub trait PerThing:
 	/// ```
 	fn mul_ceil<N>(self, b: N) -> N
 	where N: Clone + From<Self::Inner> + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
-		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>
+		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Unsigned
 	{
 		overflow_prune_mul::<N, Self>(b, self.deconstruct(), Rounding::Up)
 	}
@@ -124,7 +132,8 @@ pub trait PerThing:
 	/// ```
 	fn saturating_reciprocal_mul<N>(self, b: N) -> N
 	where N: Clone + From<Self::Inner> + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
-		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Saturating
+		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Saturating +
+		Unsigned
 	{
 		saturating_reciprocal_mul::<N, Self>(b, self.deconstruct(), Rounding::Nearest)
 	}
@@ -143,7 +152,8 @@ pub trait PerThing:
 	/// ```
 	fn saturating_reciprocal_mul_floor<N>(self, b: N) -> N
 	where N: Clone + From<Self::Inner> + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
-		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Saturating
+		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Saturating +
+		Unsigned
 	{
 		saturating_reciprocal_mul::<N, Self>(b, self.deconstruct(), Rounding::Down)
 	}
@@ -162,7 +172,8 @@ pub trait PerThing:
 	/// ```
 	fn saturating_reciprocal_mul_ceil<N>(self, b: N) -> N
 	where N: Clone + From<Self::Inner> + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
-		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Saturating
+		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Saturating +
+		Unsigned
 	{
 		saturating_reciprocal_mul::<N, Self>(b, self.deconstruct(), Rounding::Up)
 	}
@@ -190,14 +201,14 @@ pub trait PerThing:
 	/// # fn main () {
 	/// // 989/100 is technically closer to 99%.
 	/// assert_eq!(
-	///		Percent::from_rational_approximation(989, 1000),
+	///		Percent::from_rational_approximation(989u64, 1000),
 	///		Percent::from_parts(98),
 	///	);
 	/// # }
 	/// ```
 	fn from_rational_approximation<N>(p: N, q: N) -> Self
 	where N: Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + TryInto<Self::Upper> +
-		ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N>;
+		ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned;
 }
 
 /// The rounding method to use.
@@ -219,7 +230,7 @@ fn saturating_reciprocal_mul<N, P>(
 ) -> N
 where
 	N: Clone + From<P::Inner> + UniqueSaturatedInto<P::Inner> + ops::Div<N, Output=N> + ops::Mul<N,
-	Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N> + Saturating,
+	Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N> + Saturating + Unsigned,
 	P: PerThing,
 {
 	let maximum: N = P::ACCURACY.into();
@@ -240,7 +251,7 @@ fn overflow_prune_mul<N, P>(
 ) -> N
 where
 	N: Clone + From<P::Inner> + UniqueSaturatedInto<P::Inner> + ops::Div<N, Output=N> + ops::Mul<N,
-	Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N>,
+	Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N> + Unsigned,
 	P: PerThing,
 {
 	let maximum: N = P::ACCURACY.into();
@@ -266,7 +277,7 @@ fn rational_mul_correction<N, P>(
 ) -> N
 where
 	N: From<P::Inner> + UniqueSaturatedInto<P::Inner> + ops::Div<N, Output=N> + ops::Mul<N,
-	Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N>,
+	Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N> + Unsigned,
 	P: PerThing,
 {
 	let numer_upper = P::Upper::from(numer);
@@ -312,8 +323,7 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[derive(Encode, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord,
-				 RuntimeDebug, CompactAs)]
+		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, CompactAs)]
 		pub struct $name($type);
 
 		impl PerThing for $name {
@@ -328,14 +338,15 @@ macro_rules! implement_per_thing {
 			/// Build this type from a number of parts per thing.
 			fn from_parts(parts: Self::Inner) -> Self { Self(parts.min($max)) }
 
+			/// NOTE: saturate to 0 or 1 if x is beyond `[0, 1]`
 			#[cfg(feature = "std")]
 			fn from_fraction(x: f64) -> Self {
-				Self::from_parts((x * $max as f64) as Self::Inner)
+				Self::from_parts((x.max(0.).min(1.) * $max as f64) as Self::Inner)
 			}
 
 			fn from_rational_approximation<N>(p: N, q: N) -> Self
 			where N: Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + TryInto<Self::Upper>
-				+ ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N>
+				+ ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned
 			{
 				let div_ceil = |x: N, f: N| -> N {
 					let mut o = x.clone() / f.clone();
@@ -383,7 +394,6 @@ macro_rules! implement_per_thing {
 		impl $name {
 			/// From an explicitly defined number of parts per maximum of the type.
 			///
-			/// This can be called at compile time.
 			// needed only for peru16. Since peru16 is the only type in which $max ==
 			// $type::max_value(), rustc is being a smart-a** here by warning that the comparison
 			// is not needed.
@@ -399,9 +409,9 @@ macro_rules! implement_per_thing {
 				Self(([x, 100][(x > 100) as usize] as $upper_type * $max as $upper_type / 100) as $type)
 			}
 
-			/// See [`PerThing::one`].
-			pub fn one() -> Self {
-				<Self as PerThing>::one()
+			/// See [`PerThing::one`]
+			pub const fn one() -> Self {
+				Self::from_parts($max)
 			}
 
 			/// See [`PerThing::is_one`].
@@ -410,8 +420,8 @@ macro_rules! implement_per_thing {
 			}
 
 			/// See [`PerThing::zero`].
-			pub fn zero() -> Self {
-				<Self as PerThing>::zero()
+			pub const fn zero() -> Self {
+				Self::from_parts(0)
 			}
 
 			/// See [`PerThing::is_zero`].
@@ -420,8 +430,8 @@ macro_rules! implement_per_thing {
 			}
 
 			/// See [`PerThing::deconstruct`].
-			pub fn deconstruct(self) -> $type {
-				PerThing::deconstruct(self)
+			pub const fn deconstruct(self) -> $type {
+				self.0
 			}
 
 			/// See [`PerThing::square`].
@@ -439,7 +449,8 @@ macro_rules! implement_per_thing {
 			pub fn from_rational_approximation<N>(p: N, q: N) -> Self
 				where N: Clone + Ord + From<$type> + TryInto<$type> +
 					TryInto<$upper_type> + ops::Div<N, Output=N> + ops::Rem<N, Output=N> +
-					ops::Add<N, Output=N> {
+					ops::Add<N, Output=N> + Unsigned
+			{
 				<Self as PerThing>::from_rational_approximation(p, q)
 			}
 
@@ -447,7 +458,8 @@ macro_rules! implement_per_thing {
 			pub fn mul_floor<N>(self, b: N) -> N
 				where N: Clone + From<$type> + UniqueSaturatedInto<$type> +
 					ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
-					ops::Add<N, Output=N> {
+					ops::Add<N, Output=N> + Unsigned
+			{
 				PerThing::mul_floor(self, b)
 			}
 
@@ -455,7 +467,8 @@ macro_rules! implement_per_thing {
 			pub fn mul_ceil<N>(self, b: N) -> N
 				where N: Clone + From<$type> + UniqueSaturatedInto<$type> +
 					ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
-					ops::Add<N, Output=N> {
+					ops::Add<N, Output=N> + Unsigned
+			{
 				PerThing::mul_ceil(self, b)
 			}
 
@@ -463,7 +476,8 @@ macro_rules! implement_per_thing {
 			pub fn saturating_reciprocal_mul<N>(self, b: N) -> N
 				where N: Clone + From<$type> + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N> +
 					ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> +
-					Saturating {
+					Saturating + Unsigned
+			{
 				PerThing::saturating_reciprocal_mul(self, b)
 			}
 
@@ -471,7 +485,8 @@ macro_rules! implement_per_thing {
 			pub fn saturating_reciprocal_mul_floor<N>(self, b: N) -> N
 				where N: Clone + From<$type> + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N> +
 					ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> +
-					Saturating {
+					Saturating + Unsigned
+			{
 				PerThing::saturating_reciprocal_mul_floor(self, b)
 			}
 
@@ -479,7 +494,8 @@ macro_rules! implement_per_thing {
 			pub fn saturating_reciprocal_mul_ceil<N>(self, b: N) -> N
 				where N: Clone + From<$type> + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N> +
 					ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> +
-					Saturating {
+					Saturating + Unsigned
+			{
 				PerThing::saturating_reciprocal_mul_ceil(self, b)
 			}
 		}
@@ -567,13 +583,19 @@ macro_rules! implement_per_thing {
 			}
 		}
 
+		impl Default for $name {
+			fn default() -> Self {
+				<Self as PerThing>::zero()
+			}
+		}
+
 		/// Non-overflow multiplication.
 		///
 		/// This is tailored to be used with a balance type.
 		impl<N> ops::Mul<N> for $name
 		where
 			N: Clone + From<$type> + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N>
-				+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
+				+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Unsigned,
 		{
 			type Output = N;
 			fn mul(self, b: N) -> Self::Output {
@@ -672,6 +694,8 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_fraction(0.0), $name::from_parts(Zero::zero()));
 				assert_eq!($name::from_fraction(0.1), $name::from_parts($max / 10));
 				assert_eq!($name::from_fraction(1.0), $name::from_parts($max));
+				assert_eq!($name::from_fraction(2.0), $name::from_parts($max));
+				assert_eq!($name::from_fraction(-1.0), $name::from_parts(Zero::zero()));
 			}
 
 			macro_rules! u256ify {
@@ -1130,8 +1154,65 @@ macro_rules! implement_per_thing {
 					1,
 				);
 			}
+
+			#[test]
+			#[allow(unused)]
+			fn const_fns_work() {
+				const C1: $name = $name::from_percent(50);
+				const C2: $name = $name::one();
+				const C3: $name = $name::zero();
+				const C4: $name = $name::from_parts(1);
+
+				// deconstruct is also const, hence it can be called in const rhs.
+				const C5: bool = C1.deconstruct() == 0;
+			}
 		}
 	};
+}
+
+macro_rules! implement_per_thing_with_perthousand {
+	(
+		$name:ident,
+		$test_mod:ident,
+		$pt_test_mod:ident,
+		[$($test_units:tt),+],
+		$max:tt,
+		$type:ty,
+		$upper_type:ty,
+		$title:expr $(,)?
+	) => {
+		implement_per_thing! {
+			$name, $test_mod, [ $( $test_units ),+ ], $max, $type, $upper_type, $title,
+		}
+		impl $name {
+			/// Converts a percent into `Self`. Equal to `x / 1000`.
+			///
+			/// This can be created at compile time.
+			pub const fn from_perthousand(x: $type) -> Self {
+				Self(([x, 1000][(x > 1000) as usize] as $upper_type * $max as $upper_type / 1000) as $type)
+			}
+		}
+		#[cfg(test)]
+		mod $pt_test_mod {
+			use super::$name;
+			use crate::traits::Zero;
+
+			#[test]
+			fn from_perthousand_works() {
+				// some really basic stuff
+				assert_eq!($name::from_perthousand(00), $name::from_parts(Zero::zero()));
+				assert_eq!($name::from_perthousand(100), $name::from_parts($max / 10));
+				assert_eq!($name::from_perthousand(1000), $name::from_parts($max));
+				assert_eq!($name::from_perthousand(2000), $name::from_parts($max));
+			}
+
+			#[test]
+			#[allow(unused)]
+			fn const_fns_work() {
+				const C1: $name = $name::from_perthousand(500);
+			}
+		}
+	}
 }
 
 implement_per_thing!(
@@ -1143,36 +1224,40 @@ implement_per_thing!(
 	u16,
 	"_Percent_",
 );
-implement_per_thing!(
+implement_per_thing_with_perthousand!(
 	PerU16,
 	test_peru16,
+	test_peru16_extra,
 	[u32, u64, u128],
 	65535_u16,
 	u16,
 	u32,
 	"_Parts per 65535_",
 );
-implement_per_thing!(
+implement_per_thing_with_perthousand!(
 	Permill,
 	test_permill,
+	test_permill_extra,
 	[u32, u64, u128],
 	1_000_000u32,
 	u32,
 	u64,
 	"_Parts per Million_",
 );
-implement_per_thing!(
+implement_per_thing_with_perthousand!(
 	Perbill,
 	test_perbill,
+	test_perbill_extra,
 	[u32, u64, u128],
 	1_000_000_000u32,
 	u32,
 	u64,
 	"_Parts per Billion_",
 );
-implement_per_thing!(
+implement_per_thing_with_perthousand!(
 	Perquintill,
 	test_perquintill,
+	test_perquintill_extra,
 	[u64, u128],
 	1_000_000_000_000_000_000u64,
 	u64,
