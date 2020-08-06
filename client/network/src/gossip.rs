@@ -125,7 +125,6 @@ impl<M> Drop for QueueSender<M> {
 		// The "clean" way to notify the `Condvar` here is normally to first lock the `Mutex`,
 		// then notify the `Condvar` while the `Mutex` is locked. Unfortunately, the `Mutex`
 		// being asynchronous, it can't reasonably be locked from within a destructor.
-		// For this reason, this destructor is a "best effort" destructor.
 		// See also the corresponding code in the background task.
 		self.shared.stop_task.store(true, atomic::Ordering::Release);
 		self.shared.condvar.notify_all();
@@ -258,14 +257,14 @@ async fn spawn_task<M, F: Fn(M) -> Vec<u8>>(
 ) {
 	loop {
 		let next_message = 'next_msg: loop {
-			let mut lock = shared.messages_queue.lock().await;
+			let mut queue = shared.messages_queue.lock().await;
 
 			loop {
 				if shared.stop_task.load(atomic::Ordering::Acquire) {
 					return;
 				}
 
-				if let Some(msg) = lock.pop_front() {
+				if let Some(msg) = queue.pop_front() {
 					break 'next_msg msg;
 				}
 
@@ -275,7 +274,7 @@ async fn spawn_task<M, F: Fn(M) -> Vec<u8>>(
 				// See also the corresponding comment in `QueueSender::drop`.
 				// For this reason, we use `wait_timeout`. In the worst case scenario,
 				// `stop_task` will always be checked again after the timeout is reached.
-				lock = shared.condvar.wait_timeout(lock, Duration::from_secs(10)).await.0;
+				queue = shared.condvar.wait_timeout(queue, Duration::from_secs(10)).await.0;
 			}
 		};
 
