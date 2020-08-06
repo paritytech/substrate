@@ -93,26 +93,26 @@ pub enum Mode {
 }
 
 impl std::str::FromStr for Mode {
-    type Err = &'static str;
-    fn from_str(day: &str) -> Result<Self, Self::Err> {
-        match day {
-            "regular" => Ok(Mode::Regular),
-            "profile" => Ok(Mode::Profile),
-            _ => Err("Could not parse mode"),
-        }
-    }
+	type Err = &'static str;
+	fn from_str(day: &str) -> Result<Self, Self::Err> {
+		match day {
+			"regular" => Ok(Mode::Regular),
+			"profile" => Ok(Mode::Profile),
+			_ => Err("Could not parse mode"),
+		}
+	}
 }
 
 impl fmt::Display for BenchmarkOutput {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(
 			f,
 			"{}: avg {}, w_avg {}",
 			self.name,
 			NsFormatter(self.raw_average),
 			NsFormatter(self.average),
 		)
-    }
+	}
 }
 
 pub fn run_benchmark(
