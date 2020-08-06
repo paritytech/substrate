@@ -165,7 +165,7 @@ pub struct WeightsPerClass {
 /// It should be obvious now that it's possible for one class to reach it's limit (say `Normal`),
 /// while the block has still capacity to process more transactions (`max_block` not reached,
 /// `Operational` transactions can still go in). Setting `max_total` to `None` disables the
-/// per-class limit. This is generally highly recommended for `Mandatory` dispatch class, while it 
+/// per-class limit. This is generally highly recommended for `Mandatory` dispatch class, while it
 /// can be dangerous for `Normal` class and should only be done with extra care and consideration.
 ///
 /// Often it's desirable for some class of transactions to be added to the block despite it being
@@ -247,6 +247,13 @@ impl BlockWeights {
 				"[{:?}] {:?} (max_extrinsic) can't be greater than {:?} (max for class)",
 				class, weights.max_extrinsic,
 				max_for_class.saturating_sub(base_for_class),
+			);
+			// Max extrinsic should not be 0
+			error_assert!(
+				weights.max_extrinsic.unwrap_or_else(|| Weight::max_value()) > 0,
+				&mut error,
+				"[{:?}] {:?} (max_extrinsic) must not be 0. Check base cost and average initialization cost.",
+				class, weights.max_extrinsic,
 			);
 			// Make sure that if reserved is set it's greater than base_for_class.
 			error_assert!(
@@ -382,26 +389,26 @@ impl BlockWeightsBuilder {
 
 	/// Construct the `BlockWeights` object.
 	pub fn build(self) -> ValidationResult {
-		use sp_runtime::traits::Saturating;
 		// compute max extrinsic size
 		let Self { mut weights, init_cost } = self;
 
-		let max_rate = init_cost.map(|x| Perbill::one().saturating_sub(x))
-			.unwrap_or_else(Perbill::one);
+		// compute max block size.
 		for class in DispatchClass::all() {
-			let per_class = weights.per_class.get_mut(*class);
-			// compute max weight of single extrinsic
-			let max_for_class = per_class.max_total;
-			if per_class.max_extrinsic.is_none() && init_cost.is_some() {
-				per_class.max_extrinsic = max_for_class
-					.map(|x| max_rate * x)
-					.map(|x| x.saturating_sub(per_class.base_extrinsic));
-			}
-			// Compute max block
-			weights.max_block = match max_for_class {
+			weights.max_block = match weights.per_class.get(*class).max_total {
 				Some(max) if max > weights.max_block => max,
 				_ => weights.max_block,
 			};
+		}
+		// compute max size of single extrinsic
+		if let Some(init_weight) = init_cost.map(|rate| rate * weights.max_block) {
+			for class in DispatchClass::all() {
+				let per_class = weights.per_class.get_mut(*class);
+				if per_class.max_extrinsic.is_none() && init_cost.is_some() {
+					per_class.max_extrinsic = per_class.max_total
+						.map(|x| x.saturating_sub(init_weight))
+						.map(|x| x.saturating_sub(per_class.base_extrinsic));
+				}
+			}
 		}
 
 		// Validate the result
