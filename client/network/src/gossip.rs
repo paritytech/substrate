@@ -24,25 +24,25 @@
 //! the [`NetworkService::notification_sender`] method. This method is quite low level and isn't
 //! expected to be used directly.
 //!
-//! The [`DirectedGossip`] struct provided by this module is built on top of
+//! The [`QueueSender`] struct provided by this module is built on top of
 //! [`NetworkService::notification_sender`] and provides a cleaner way to send notifications.
 //!
 //! # Behaviour
 //!
-//! An instance of [`DirectedGossip`] is specific to a certain combination of `PeerId` and
+//! An instance of [`QueueSender`] is specific to a certain combination of `PeerId` and
 //! protocol name. It maintains a buffer of messages waiting to be sent out. The user of this API
 //! is able to manipulate that queue, adding or removing obsolete messages.
 //!
-//! Creating a [`DirectedGossip`] also returns a opaque `Future` whose responsibility it to
+//! Creating a [`QueueSender`] also returns a opaque `Future` whose responsibility it to
 //! drain that queue and actually send the messages. If the substream with the given combination
 //! of peer and protocol is closed, the queue is silently discarded. It is the role of the user
 //! to track which peers we are connected to.
 //!
-//! In normal situations, messages sent through a [`DirectedGossip`] will arrive in the same
+//! In normal situations, messages sent through a [`QueueSender`] will arrive in the same
 //! order as they have been sent.
 //! It is possible, in the situation of disconnects and reconnects, that messages arrive in a
 //! different order. See also https://github.com/paritytech/substrate/issues/6756.
-//! However, if multiple instances of [`DirectedGossip`] exist for the same peer and protocol, or
+//! However, if multiple instances of [`QueueSender`] exist for the same peer and protocol, or
 //! if some other code uses the [`NetworkService`] to send notifications to this combination or
 //! peer and protocol, then the notifications will be interleaved in an unpredictable way.
 //!
@@ -64,16 +64,16 @@ use std::{
 mod tests;
 
 /// Notifications sender for a specific combination of network service, peer, and protocol.
-pub struct DirectedGossip<M> {
+pub struct QueueSender<M> {
 	/// Shared between the front and the back task.
 	shared: Arc<Shared<M>>,
 }
 
-impl<M> DirectedGossip<M> {
-	/// Returns a new [`DirectedGossip`] containing a queue of message for this specific
+impl<M> QueueSender<M> {
+	/// Returns a new [`QueueSender`] containing a queue of message for this specific
 	/// combination of peer and protocol.
 	///
-	/// In addition to the [`DirectedGossip`], also returns a `Future` whose role is to drive
+	/// In addition to the [`QueueSender`], also returns a `Future` whose role is to drive
 	/// the messages sending forward.
 	pub fn new<B, H, F>(
 		service: Arc<NetworkService<B, H>>,
@@ -88,15 +88,15 @@ impl<M> DirectedGossip<M> {
 		H: ExHashT,
 		F: Fn(M) -> Vec<u8> + Send + 'static,
 	{
-		DirectedGossipPrototype::new(service, peer_id)
+		QueueSenderPrototype::new(service, peer_id)
 			.build(protocol, queue_size_limit, messages_encode)
 	}
 
 	/// Locks the queue of messages towards this peer.
 	///
 	/// The returned `Future` is expected to be ready quite quickly.
-	pub async fn lock_queue<'a>(&'a self) -> QueueLock<'a, M> {
-		QueueLock {
+	pub async fn lock_queue<'a>(&'a self) -> QueueGuard<'a, M> {
+		QueueGuard {
 			messages_queue: self.shared.messages_queue.lock().await,
 			condvar: &self.shared.condvar,
 			queue_size_limit: self.shared.queue_size_limit,
@@ -114,13 +114,13 @@ impl<M> DirectedGossip<M> {
 	}
 }
 
-impl<M> fmt::Debug for DirectedGossip<M> {
+impl<M> fmt::Debug for QueueSender<M> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_struct("DirectedGossip").finish()
+		f.debug_struct("QueueSender").finish()
 	}
 }
 
-impl<M> Drop for DirectedGossip<M> {
+impl<M> Drop for QueueSender<M> {
 	fn drop(&mut self) {
 		// The "clean" way to notify the `Condvar` here is normally to first lock the `Mutex`,
 		// then notify the `Condvar` while the `Mutex` is locked. Unfortunately, the `Mutex`
@@ -133,15 +133,15 @@ impl<M> Drop for DirectedGossip<M> {
 }
 
 /// Utility. Generic over the type of the messages. Holds a [`NetworkService`] and a [`PeerId`].
-/// Provides a [`DirectedGossipPrototype::build`] function that builds a [`DirectedGossip`].
+/// Provides a [`QueueSenderPrototype::build`] function that builds a [`QueueSender`].
 #[derive(Clone)]
-pub struct DirectedGossipPrototype {
+pub struct QueueSenderPrototype {
 	service: Arc<dyn AbstractNotificationSender + Send + Sync + 'static>,
 	peer_id: PeerId,
 }
 
-impl DirectedGossipPrototype {
-	/// Builds a new [`DirectedGossipPrototype`] containing the given components.
+impl QueueSenderPrototype {
+	/// Builds a new [`QueueSenderPrototype`] containing the given components.
 	pub fn new<B, H>(
 		service: Arc<NetworkService<B, H>>,
 		peer_id: PeerId,
@@ -150,13 +150,13 @@ impl DirectedGossipPrototype {
 		B: BlockT + 'static,
 		H: ExHashT,
 	{
-		DirectedGossipPrototype {
+		QueueSenderPrototype {
 			service,
 			peer_id,
 		}
 	}
 
-	/// Turns this [`DirectedGossipPrototype`] into a [`DirectedGossip`] and a future.
+	/// Turns this [`QueueSenderPrototype`] into a [`QueueSender`] and a future.
 	///
 	/// See [`DirectGossip::new`] for details.
 	pub fn build<M, F>(
@@ -164,7 +164,7 @@ impl DirectedGossipPrototype {
 		protocol: ConsensusEngineId,
 		queue_size_limit: usize,
 		messages_encode: F
-	) -> (DirectedGossip<M>, impl Future<Output = ()> + Send + 'static)
+	) -> (QueueSender<M>, impl Future<Output = ()> + Send + 'static)
 	where
 		M: Send + 'static,
 		F: Fn(M) -> Vec<u8> + Send + 'static,
@@ -184,13 +184,13 @@ impl DirectedGossipPrototype {
 			messages_encode
 		);
 
-		(DirectedGossip { shared }, task)
+		(QueueSender { shared }, task)
 	}
 }
 
-impl fmt::Debug for DirectedGossipPrototype {
+impl fmt::Debug for QueueSenderPrototype {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_struct("DirectedGossipPrototype")
+		f.debug_struct("QueueSenderPrototype")
 			.field("peer_id", &self.peer_id)
 			.finish()
 	}
@@ -198,18 +198,21 @@ impl fmt::Debug for DirectedGossipPrototype {
 
 /// Locked queue of messages to the given peer.
 ///
-/// As long as this struct exists, the background task is asleep and the owner of the [`QueueLock`]
-/// is in total control of the buffer.
+/// As long as this struct exists, the background task is asleep and the owner of the [`QueueGuard`]
+/// is in total control of the buffer. Messages can only ever be sent out after the [`QueueGuard`]
+/// is dropped.
 #[must_use]
-pub struct QueueLock<'a, M> {
+pub struct QueueGuard<'a, M> {
 	messages_queue: MutexGuard<'a, VecDeque<M>>,
 	condvar: &'a Condvar,
 	/// Same as [`Shared::queue_size_limit`].
 	queue_size_limit: usize,
 }
 
-impl<'a, M: Send + 'static> QueueLock<'a, M> {
+impl<'a, M: Send + 'static> QueueGuard<'a, M> {
 	/// Pushes a message to the queue, or discards it if the queue is full.
+	///
+	/// The message will only start being sent out after the [`QueueGuard`] is dropped.
 	pub fn push_or_discard(&mut self, message: M) {
 		if self.messages_queue.len() < self.queue_size_limit {
 			self.messages_queue.push_back(message);
@@ -226,7 +229,7 @@ impl<'a, M: Send + 'static> QueueLock<'a, M> {
 	}
 }
 
-impl<'a, M> Drop for QueueLock<'a, M> {
+impl<'a, M> Drop for QueueGuard<'a, M> {
 	fn drop(&mut self) {
 		// We notify the `Condvar` in the destructor in order to be able to push multiple
 		// messages and wake up the background task only once afterwards.
@@ -266,10 +269,10 @@ async fn spawn_task<M, F: Fn(M) -> Vec<u8>>(
 					break 'next_msg msg;
 				}
 
-				// It is possible that the destructor of `DirectedGossip` sets `stop_task` to
+				// It is possible that the destructor of `QueueSender` sets `stop_task` to
 				// true and notifies the `Condvar` after the background task loads `stop_task`
 				// and before it calls `Condvar::wait`.
-				// See also the corresponding comment in `DirectedGossip::drop`.
+				// See also the corresponding comment in `QueueSender::drop`.
 				// For this reason, we use `wait_timeout`. In the worst case scenario,
 				// `stop_task` will always be checked again after the timeout is reached.
 				lock = shared.condvar.wait_timeout(lock, Duration::from_secs(10)).await.0;
