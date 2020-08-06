@@ -101,6 +101,8 @@ pub trait CliConfiguration: Sized {
 			.node_params()
 			.map(|x| x.base_path())
 			.transpose()?
+			.flatten()
+			.map(|x| Some(x))
 			.unwrap_or_else(|| self.shared_params().base_path()))
 	}
 
