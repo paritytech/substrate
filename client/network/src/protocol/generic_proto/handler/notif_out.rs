@@ -203,7 +203,7 @@ impl NotifsOutHandler {
 		}
 	}
 
-	/// Returns `true` there has been an attempt to open the substream, but the remote refused
+	/// Returns `true` if there has been an attempt to open the substream, but the remote refused
 	/// the substream.
 	///
 	/// Always returns `false` if the handler is in a disabled state.
