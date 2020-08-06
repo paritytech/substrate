@@ -24,5 +24,4 @@ async fn basic_test(_: TaskExecutor) {
 }
 
 fn main() {
-	println!("Hello, world!");
 }
