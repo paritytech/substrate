@@ -18,7 +18,7 @@ use exit_future::Signal;
 use log::{debug, error};
 use futures::{
 	Future, FutureExt, StreamExt,
-	future::{select, Either, BoxFuture, select_all, join_all},
+	future::{select, Either, BoxFuture, join_all, try_join_all, select_all, self},
 	sink::SinkExt,
 };
 use prometheus_endpoint::{
@@ -305,34 +305,20 @@ impl TaskManager {
 	///
 	/// This function will not wait until the end of the remaining task. You must call and await
 	/// `clean_shutdown()` after this.
-	pub fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
-		Box::pin(async move {
-			let mut t1 = self.essential_failed_rx.next().fuse();
-			let mut t2 = self.on_exit.clone().fuse();
+	pub fn future<'a>(
+		&'a mut self,
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
+		let t1 = self.essential_failed_rx
+			.next()
+			.then(|_| future::ready(Err(Error::Other("Essential task failed.".into()))))
+			.boxed();
+		let t2 = self.on_exit.clone().then(|_| future::ready(Ok(()))).boxed();
+		let res = select_all(vec![t1, t2]).map(|v| v.0).boxed();
 
-			if self.children.is_empty() {
-				loop {
-					futures::select! {
-						_ = t1 => break Err(Error::Other("Essential task failed.".into())),
-						_ = t2 => break Ok(()),
-					}
-				}
-			} else {
-				let mut t3 = select_all(self.children.iter_mut().map(|x| x.future())).fuse();
-
-				loop {
-					futures::select! {
-						_ = t1 => break Err(Error::Other("Essential task failed.".into())),
-						_ = t2 => break Ok(()),
-						(res, _, _) = t3 => if res.is_err() {
-							break res;
-						} else {
-							continue;
-						},
-					}
-				}
-			}
-		})
+		// Join all the task managers to make sure everything has finished as intended.
+		try_join_all(
+			self.children.iter_mut().map(|x| x.future().boxed()).chain(std::iter::once(res)),
+		).map(|res| res.map(drop)).boxed()
 	}
 
 	/// Signal to terminate all the running tasks.
