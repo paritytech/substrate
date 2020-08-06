@@ -32,6 +32,10 @@ const createPod = async (nodeSpec, namespace) => {
       labels: {
         app: label
       },
+      annotations: {
+        "prometheus.io/scrape": "true",
+        "prometheus.io/port": "9615"
+      },
       name: nodeId
     },
     spec: {

@@ -28,6 +28,7 @@ exports.createAlice = async function (image, port) {
     '--no-telemetry',
     '--rpc-cors',
     'all',
+    '--prometheus-external',
     '--alice']
   const nodeSpec = {
     nodeId: 'alice',
@@ -56,6 +57,7 @@ exports.createBob = async function (image, port) {
     '--no-telemetry',
     '--rpc-cors',
     'all',
+    '--prometheus-external',
     '--bootnodes',
     getBootNodeUrl(this.config.bootnode)]
   const nodeSpec = {
@@ -108,7 +110,8 @@ exports.createBootNode = async function(options) {
         '-d',
         '/substrate',
         '--unsafe-ws-external',
-        '--unsafe-rpc-external'
+        '--unsafe-rpc-external',
+        '--prometheus-external',
     ]
 
     const nodeSpec = {
@@ -140,6 +143,7 @@ exports.createCustomNode = async function(options, nodeId) {
         '/substrate',
         '--unsafe-ws-external',
         '--unsafe-rpc-external',
+        '--prometheus-external',
         '--bootnodes',
         getBootNodeUrl(this.config.bootnode)
     ]
