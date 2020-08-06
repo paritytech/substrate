@@ -316,7 +316,7 @@ impl TaskManager {
 			futures::select! {
 				_ = t1 => Err(Error::Other("Essential task failed.".into())),
 				_ = t2 => Ok(()),
-				res = t3 => res.map(|_| ()),
+				res = t3 => Err(res.map(|_| ()).expect_err("this future never ends; qed")),
 			}
 		})
 	}
