@@ -40,8 +40,8 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///
 /// - The identifier of the voter. This can be any type that supports `parity-scale-codec`'s compact
 ///   encoding.
-/// - The identifier of the voter. This can be any type that supports `parity-scale-codec`'s compact
-///   encoding.
+/// - The identifier of the target. This can be any type that supports `parity-scale-codec`'s
+///   compact encoding.
 /// - The accuracy of the ratios. This must be one of the `PerThing` types defined in
 ///   `sp-arithmetic`.
 ///
@@ -67,8 +67,8 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///
 /// ```ignore
 /// generate_solution_type!(
-/// 	#[compact]
-/// 	pub struct TestSolutionCompact<u16, u8, Perbill>::(8)
+///     #[compact]
+///     pub struct TestSolutionCompact<u16, u8, Perbill>::(8)
 /// )
 /// ```
 #[proc_macro]
@@ -120,7 +120,7 @@ fn struct_def(
 	compact_encoding: bool,
 ) -> Result<TokenStream2> {
 	if count <= 2 {
-		Err(syn_err("cannot build compact solution struct with capacity less than 2."))?
+		Err(syn_err("cannot build compact solution struct with capacity less than 3."))?
 	}
 
 	let singles = {
@@ -243,25 +243,30 @@ struct SolutionDef {
 	compact_encoding: bool,
 }
 
-fn check_compact_attr(input: ParseStream) -> bool {
+fn check_compact_attr(input: ParseStream) -> Result<bool> {
 	let mut attrs = input.call(syn::Attribute::parse_outer).unwrap_or_default();
 	if attrs.len() == 1 {
 		let attr = attrs.pop().expect("Vec with len 1 can be popped.");
 		if attr.path.segments.len() == 1 {
 			let segment = attr.path.segments.first().expect("Vec with len 1 can be popped.");
 			if segment.ident == Ident::new("compact", Span::call_site()) {
-				return true
+				Ok(true)
+			} else {
+				Err(syn_err("generate_solution_type macro can only accept #[compact] attribute."))
 			}
+		} else {
+			Err(syn_err("generate_solution_type macro can only accept #[compact] attribute."))
 		}
+	} else {
+		Ok(false)
 	}
-	false
 }
 
 /// #[compact] pub struct CompactName::<u32, u32, u32>()
 impl Parse for SolutionDef {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		// optional #[compact]
-		let compact_encoding = check_compact_attr(input);
+		let compact_encoding = check_compact_attr(input)?;
 
 		// <vis> struct <name>
 		let vis: syn::Visibility = input.parse()?;
