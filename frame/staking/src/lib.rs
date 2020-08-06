@@ -1458,6 +1458,17 @@ decl_module! {
 			// `on_finalize` weight is tracked in `on_initialize`
 		}
 
+		fn integrity_test() {
+			sp_io::TestExternalities::new_empty().execute_with(||
+				assert!(
+					T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
+					"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
+					T::SlashDeferDuration::get(),
+					T::BondingDuration::get(),
+				)
+			);
+		}
+
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
 		/// be the account that controls it.
 		///
