@@ -54,6 +54,7 @@ sp-keyring = { version = "2.0.0-rc5", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0-rc5",  path = "../../test-utils/runtime/client" }
 sp-consensus-babe = { version = "0.8.0-rc5", path = "../../primitives/consensus/babe" }
 sp-state-machine = { version = "0.8.0-rc5", path = "../../primitives/state-machine" }
+sp-tracing = { version = "2.0.0-rc5", path = "../../primitives/tracing" }
 tokio = { version = "0.2", features = ["rt-core"] }
 tempfile = "3.1.0"
 sp-api = { version = "2.0.0-rc5", path = "../../primitives/api" }

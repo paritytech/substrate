@@ -39,6 +39,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0-rc5", path = "../../../primitives/keyring" }
+sp-tracing = { version = "2.0.0-rc5", path = "../../../primitives/tracing" }
 sc-executor = { version = "0.8.0-rc5", path = "../../executor" }
 sc-network = { version = "0.8.0-rc5", path = "../../network" }
 sc-network-test = { version = "0.8.0-rc5", path = "../../network/test" }

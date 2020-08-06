@@ -29,15 +29,16 @@ sp-consensus = { version = "0.8.0-rc5", path = "../../../primitives/consensus/co
 sp-transaction-pool = { version = "2.0.0-rc5", path = "../../../primitives/transaction-pool" }
 sc-basic-authorship = { version = "0.8.0-rc5", path = "../../../client/basic-authorship" }
 sp-inherents = { version = "2.0.0-rc5", path = "../../../primitives/inherents" }
-sp-finality-tracker = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/finality-tracker" }
-sp-timestamp = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/timestamp" }
+sp-finality-tracker = { version = "2.0.0-rc5", path = "../../../primitives/finality-tracker" }
+sp-timestamp = { version = "2.0.0-rc5", path = "../../../primitives/timestamp" }
+sp-tracing = { version = "2.0.0-rc5", path = "../../../primitives/tracing" }
 hash-db = "0.15.2"
 tempfile = "3.1.0"
 fs_extra = "1"
 hex = "0.4.0"
 rand = { version = "0.7.2", features = ["small_rng"] }
 lazy_static = "1.4.0"
-parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.7.0", features = ["primitive-types"] }
 parity-db = { version = "0.1.2" }
 sc-transaction-pool = { version = "2.0.0-rc5", path = "../../../client/transaction-pool" }
 futures = { version = "0.3.4", features = ["thread-pool"] }
