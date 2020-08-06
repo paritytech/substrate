@@ -166,8 +166,10 @@ impl PeersClient {
 
 	fn offchain_storage(&self) -> Option<PeerOffchainStorage> {
 		match *self {
-			PeersClient::Full(ref _client, ref backend) => backend.offchain_storage().map(PeerOffchainStorage::Full),
-			PeersClient::Light(ref _client, ref backend) => backend.offchain_storage().map(PeerOffchainStorage::Light),
+			PeersClient::Full(ref _client, ref backend) =>
+				backend.offchain_storage().map(PeerOffchainStorage::Full),
+			PeersClient::Light(ref _client, ref backend) =>
+				backend.offchain_storage().map(PeerOffchainStorage::Light),
 		}
 	}
 

@@ -18,6 +18,19 @@
 
 use futures::executor::block_on;
 use super::*;
+use std::ops::Range;
+
+fn wait_until_x_peers_want_cid(net: &mut TestNet, x: usize, peers: Range<usize>, cid: &cid::Cid) {
+	block_on(futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		for peer in peers.clone() {
+			if net.peer(peer).network.bitswap_api().num_peers_want(cid) != x {
+				return Poll::Pending
+			}
+		}
+		Poll::Ready(())
+	}));
+}
 
 #[test]
 fn test_bitswap_peers_connect() {
@@ -55,18 +68,6 @@ fn test_bitswap_peers_sending_and_cancelling_wants_works() {
 	net.peer(0).network.bitswap_api().cancel_block(&cid);
 
 	wait_until_x_peers_want_cid(&mut net, 0, 0..3, &cid);
-}
-
-fn wait_until_x_peers_want_cid(net: &mut TestNet, x: usize, peers: std::ops::Range<usize>, cid: &cid::Cid) {
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
-		net.poll(cx);
-		for peer in peers.clone() {
-			if net.peer(peer).network.bitswap_api().num_peers_want(cid) != x {
-				return Poll::Pending
-			}
-		}
-		Poll::Ready(())
-	}));
 }
 
 #[test]

@@ -31,7 +31,8 @@ const REFS: &'static [u8] = b"bitswap_refs";
 
 /// A wrapper around an `OffchainStorage` for the purpose of storing bitswap blocks.
 ///
-/// This is based on the implementation of the `libipld` [`MemStore`](https://github.com/ipfs-rust/rust-ipld/blob/604fa5782479f322faa17d17ef3cbbb7f6e88aee/src/mem.rs#L13).
+/// This is based on the implementation of the `libipld`
+/// [`MemStore`](https://github.com/ipfs-rust/rust-ipld/blob/604fa5782479f322faa17d17ef3cbbb7f6e88aee/src/mem.rs#L13).
 ///
 /// Mappings:
 ///
@@ -232,7 +233,8 @@ impl<T: OffchainStorage> Store for BitswapStorage<T> {
 	}
 }
 
-// These tests are copied from https://github.com/ipfs-rust/rust-ipld/blob/604fa5782479f322faa17d17ef3cbbb7f6e88aee/src/mem.rs#L221.
+// These tests are copied from
+// https://github.com/ipfs-rust/rust-ipld/blob/604fa5782479f322faa17d17ef3cbbb7f6e88aee/src/mem.rs#L221.
 #[cfg(test)]
 mod tests {
 	use super::*;
