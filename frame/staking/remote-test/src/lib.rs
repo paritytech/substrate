@@ -221,7 +221,7 @@ impl pallet_staking::Trait for Runtime {
 #[test]
 fn test_phragmms_phragmen() {
 	init_log!();
-	let test_block = hex_literal::hex!["82cddc9262057360541568f4bc70ab633db4cf2bb74665201cd786f1b11d9104"];
+	let test_block = hex_literal::hex!["1cc8189339d483806e2b2ac794b4d777804845154785f18bdc6e7770762fce34"];
 	remote_externalities::Builder::new()
 		.module("Staking")
 		.at(test_block.into())

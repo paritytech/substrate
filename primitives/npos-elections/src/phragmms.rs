@@ -152,10 +152,7 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 			// `RationalInfinite` as the score type does not introduce significant overhead. Then we
 			// can switch the score type to `RationalInfinite` and ensure compatibility with any
 			// crazy token scale.
-			let score_n = candidate.approval_stake.checked_mul(one).unwrap_or_else(|| {
-				println!("## Overflow: {} * {}", candidate.approval_stake, one);
-				Bounded::max_value()
-			});
+			let score_n = candidate.approval_stake.checked_mul(one).unwrap_or_else(|| Bounded::max_value());
 			candidate.score = Rational128::from(score_n, score_d);
 
 			// check if we have a new winner.
@@ -181,105 +178,45 @@ pub(crate) fn apply_elected<AccountId: IdentifierT>(
 	voters: &mut Vec<Voter<AccountId>>,
 	elected_ptr: CandidatePtr<AccountId>,
 ) {
-	// let elected_who = elected_ptr.borrow().who.clone();
-	// let cutoff = elected_ptr.borrow().score.to_den(1)
-	// 	.expect("(n / d) < u128::max() and (n' / 1) == (n / d), thus n' < u128::max()'; qed.")
-	// 	.n();
-
-	// let mut elected_backed_stake = elected_ptr.borrow().backed_stake;
-	// for voter in voters {
-	// 	if let Some(new_edge_index) = voter.edges.iter().position(|e| e.who == elected_who) {
-	// 		let used_budget: ExtendedBalance = voter.edges.iter().map(|e| e.weight).sum();
-	// 		// we will add this to the edge and the corresponding candidate at the end.
-	// 		let mut new_edge_weight = voter.budget.saturating_sub(used_budget);
-
-	// 		// Iterate over all other edges.
-	// 		for (_, edge) in voter.edges
-	// 			.iter_mut()
-	// 			.enumerate()
-	// 			.filter(|(edge_index, edge_inner)| *edge_index != new_edge_index && edge_inner.weight > 0)
-	// 		{
-	// 			let mut edge_candidate = edge.candidate.borrow_mut();
-	// 			if edge_candidate.backed_stake > cutoff {
-	// 				let stake_to_take = edge.weight.saturating_mul(cutoff) / edge_candidate.backed_stake.max(1);
-
-	// 				// subtract this amount from this edge.
-	// 				edge.weight = edge.weight.saturating_sub(stake_to_take);
-	// 				edge_candidate.backed_stake = edge_candidate.backed_stake.saturating_sub(stake_to_take);
-
-	// 				// inject it into the outer loop's edge.
-	// 				elected_backed_stake = elected_backed_stake.saturating_add(stake_to_take);
-	// 				new_edge_weight = new_edge_weight.saturating_add(stake_to_take);
-	// 			}
-	// 		}
-
-	// 		// do the deferred update.
-	// 		voter.edges[new_edge_index].weight = new_edge_weight;
-	// 		elected_backed_stake = elected_backed_stake.saturating_add(new_edge_weight);
-	// 	}
-	// }
-
-	// // final update.
-	// elected_ptr.borrow_mut().backed_stake = elected_backed_stake;
-
-	let mut elected = elected_ptr.borrow_mut();
-	let cutoff = elected.score.to_den(1)
+	let elected_who = elected_ptr.borrow().who.clone();
+	let cutoff = elected_ptr.borrow().score.to_den(1)
 		.expect("(n / d) < u128::max() and (n' / 1) == (n / d), thus n' < u128::max()'; qed.")
 		.n();
-	for voter_index in 0..voters.len() {
-		let voter = &mut voters[voter_index];
 
-		for new_edge_index in 0..voter.edges.len() {
-			let new_edge_immutable = &voter.edges[new_edge_index];
+	let mut elected_backed_stake = elected_ptr.borrow().backed_stake;
+	for voter in voters {
+		if let Some(new_edge_index) = voter.edges.iter().position(|e| e.who == elected_who) {
+			let used_budget: ExtendedBalance = voter.edges.iter().map(|e| e.weight).sum();
 
-			// ideally, we'd have to do:
-			// new_edge_immutable.candidate.borrow().who == elected.who
-			// but this will fail because if equality is correct, then borrowing will panic. Hence,
-			// we play with fire here and assume that if `try_borrow()` fails, then it was the same
-			// candidate.
-			if new_edge_immutable.candidate.try_borrow().is_err() {
-				let used_budget: ExtendedBalance = voter.edges.iter().map(|e| e.weight).sum();
-				let new_edge_weight = voter.budget.saturating_sub(used_budget);
+			let mut new_edge_weight = voter.budget.saturating_sub(used_budget);
+			elected_backed_stake = elected_backed_stake.saturating_add(new_edge_weight);
 
-				// just for brevity. We won't need this ref anymore and want to create a new mutable
-				// one now.
-				drop(new_edge_immutable);
+			// Iterate over all other edges.
+			for (_, edge) in voter.edges
+				.iter_mut()
+				.enumerate()
+				.filter(|(edge_index, edge_inner)| *edge_index != new_edge_index && edge_inner.weight > 0)
+			{
+				let mut edge_candidate = edge.candidate.borrow_mut();
+				if edge_candidate.backed_stake > cutoff {
+					let stake_to_take = edge.weight.saturating_mul(cutoff) / edge_candidate.backed_stake.max(1);
 
-				let mut new_edge_mut = &mut voter.edges[new_edge_index];
-				new_edge_mut.weight = new_edge_weight;
-				elected.backed_stake = elected.backed_stake.saturating_add(new_edge_weight);
-				drop(new_edge_mut);
+					// subtract this amount from this edge.
+					edge.weight = edge.weight.saturating_sub(stake_to_take);
+					edge_candidate.backed_stake = edge_candidate.backed_stake.saturating_sub(stake_to_take);
 
-				for edge_index in 0..voter.edges.len() {
-					let mut edge = &mut voter.edges[edge_index];
-
-					// opposite of the above error. We need to ensure
-					// `edge.candidate.borrow().who != elected.who`, thus if borrowing is okay they
-					// are different.
-					if edge.weight > 0 && edge.candidate.try_borrow().is_ok() {
-						let mut edge_candidate = edge.candidate.borrow_mut();
-
-						if edge_candidate.backed_stake > cutoff {
-							let stake_to_take =
-								edge.weight.saturating_mul(cutoff) / edge_candidate.backed_stake.max(1);
-							edge.weight = edge.weight.saturating_sub(stake_to_take);
-							edge_candidate.backed_stake =
-								edge_candidate.backed_stake.saturating_sub(stake_to_take);
-							elected.backed_stake = elected.backed_stake.saturating_add(stake_to_take);
-
-							// drop previous borrows of `voter.edges`.
-							drop(edge_candidate);
-							drop(edge);
-
-							// make another temporary borrow of `voter.edges`.
-							voter.edges[new_edge_index].weight =
-								voter.edges[new_edge_index].weight.saturating_add(stake_to_take);
-						}
-					}
+					// inject it into the outer loop's edge.
+					elected_backed_stake = elected_backed_stake.saturating_add(stake_to_take);
+					new_edge_weight = new_edge_weight.saturating_add(stake_to_take);
 				}
 			}
+
+			voter.edges[new_edge_index].weight = new_edge_weight;
 		}
 	}
+
+	// final update.
+	elected_ptr.borrow_mut().backed_stake = elected_backed_stake;
 }
 
 #[cfg(test)]
