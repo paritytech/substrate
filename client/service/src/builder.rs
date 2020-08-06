@@ -33,7 +33,7 @@ use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator, Chain},
 	import_queue::ImportQueue,
 };
-use futures::{FutureExt, StreamExt, future::ready};
+use futures::{FutureExt, StreamExt, future::ready, channel::oneshot};
 use jsonrpc_pubsub::manager::SubscriptionManager;
 use sc_keystore::Store as Keystore;
 use log::{info, warn, error};
@@ -668,7 +668,7 @@ fn build_telemetry<TBl: BlockT>(
 	let startup_time = SystemTime::UNIX_EPOCH.elapsed()
 		.map(|dur| dur.as_millis())
 		.unwrap_or(0);
-	
+
 	spawn_handle.spawn(
 		"telemetry-worker",
 		telemetry.clone()
@@ -824,6 +824,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl, TBackend>(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 		NetworkStatusSinks<TBl>,
 		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
+		NetworkStarter,
 	),
 	Error
 >
@@ -904,6 +905,22 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl, TBackend>(
 		backend,
 	);
 
+	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the
+	// node through the `NetworkConfiguration` struct. But because this function doesn't know in
+	// advance which components, such as GrandPa or Polkadot, will be plugged on top of the
+	// service, it is unfortunately not possible to do so without some deep refactoring. To bypass
+	// this problem, the `NetworkService` provides a `register_notifications_protocol` method that
+	// can be called even after the network has been initialized. However, we want to avoid the
+	// situation where `register_notifications_protocol` is called *after* the network actually
+	// connects to other peers. For this reason, we delay the process of the network future until
+	// the user calls `NetworkStarter::start_network`.
+	//
+	// This entire hack should eventually be removed in favour of passing the list of protocols
+	// through the configuration.
+	//
+	// See also https://github.com/paritytech/substrate/issues/6827
+	let (network_start_tx, network_start_rx) = oneshot::channel();
+
 	// The network worker is responsible for gathering all network messages and processing
 	// them. This is quite a heavy task, and at the time of the writing of this comment it
 	// frequently happens that this future takes several seconds or in some situations
@@ -911,7 +928,32 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl, TBackend>(
 	// issue, and ideally we would like to fix the network future to take as little time as
 	// possible, but we also take the extra harm-prevention measure to execute the networking
 	// future using `spawn_blocking`.
-	spawn_handle.spawn_blocking("network-worker", future);
+	spawn_handle.spawn_blocking("network-worker", async move {
+		if network_start_rx.await.is_err() {
+			debug_assert!(false);
+			log::warn!(
+				"The NetworkStart returned as part of `build_network` has been silently dropped"
+			);
+			// This `return` might seem unnecessary, but we don't want to make it look like
+			// everything is working as normal even though the user is clearly misusing the API.
+			return;
+		}
 
-	Ok((network, network_status_sinks, system_rpc_tx))
+		future.await
+	});
+
+	Ok((network, network_status_sinks, system_rpc_tx, NetworkStarter(network_start_tx)))
+}
+
+/// Object used to start the network.
+#[must_use]
+pub struct NetworkStarter(oneshot::Sender<()>);
+
+impl NetworkStarter {
+	/// Start the network. Call this after all sub-components have been initialized.
+	///
+	/// > **Note**: If you don't call this function, the networking will not work.
+	pub fn start_network(self) {
+		let _ = self.0.send(());
+	}
 }
