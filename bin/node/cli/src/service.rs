@@ -498,7 +498,7 @@ mod tests {
 							setup_handles = Some((block_import.clone(), babe_link.clone()));
 						}
 					)?;
-				
+
 				let node = sc_service_test::TestNetComponents::new(
 					keep_alive, client, network, transaction_pool
 				);
@@ -521,11 +521,9 @@ mod tests {
 
 				futures::executor::block_on(
 					service.transaction_pool().maintain(
-						ChainEvent::NewBlock {
-							is_new_best: true,
+						ChainEvent::NewBestBlock {
 							hash: parent_header.hash(),
 							tree_route: None,
-							header: parent_header.clone(),
 						},
 					)
 				);

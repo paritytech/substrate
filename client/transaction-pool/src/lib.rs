@@ -34,7 +34,7 @@ pub mod testing;
 pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
-use std::{collections::{HashMap, HashSet}, sync::Arc, pin::Pin};
+use std::{collections::{HashMap, HashSet}, sync::Arc, pin::Pin, convert::TryInto};
 use futures::{prelude::*, future::{self, ready}, channel::oneshot};
 use parking_lot::Mutex;
 
@@ -465,11 +465,10 @@ impl<N: Clone + Copy + AtLeast32Bit> RevalidationStrategy<N> {
 		block: N,
 		revalidate_time_period: Option<std::time::Duration>,
 		revalidate_block_period: Option<N>,
-		is_best_block: bool,
 	) -> RevalidationAction {
 		match self {
 			Self::Light(status) => RevalidationAction {
-				revalidate: is_best_block && status.next_required(
+				revalidate: status.next_required(
 					block,
 					revalidate_time_period,
 					revalidate_block_period,
@@ -550,7 +549,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>> {
 		match event {
-			ChainEvent::NewBlock { hash, tree_route, is_new_best, .. } => {
+			ChainEvent::NewBestBlock { hash, tree_route } => {
 				let pool = self.pool.clone();
 				let api = self.api.clone();
 
@@ -571,17 +570,11 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 					block_number,
 					Some(std::time::Duration::from_secs(60)),
 					Some(20.into()),
-					is_new_best,
 				);
 				let revalidation_strategy = self.revalidation_strategy.clone();
 				let revalidation_queue = self.revalidation_queue.clone();
 				let ready_poll = self.ready_poll.clone();
 				let metrics = self.metrics.clone();
-				let best_block = if is_new_best {
-					Some(id)
-				} else {
-					None
-				};
 
 				async move {
 					// We keep track of everything we prune so that later we won't add
@@ -615,10 +608,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 						})
 					}
 
-					// If this is a new best block, we need to prune its transactions from the pool.
-					if is_new_best {
-						pruned_log.extend(prune_known_txs_for_block(id.clone(), &*api, &*pool).await);
-					}
+					pruned_log.extend(prune_known_txs_for_block(id.clone(), &*api, &*pool).await);
 
 					metrics.report(
 						|metrics| metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64)
@@ -696,7 +686,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 							.ready()
 							.map(|tx| tx.hash.clone())
 							.collect();
-						revalidation_queue.revalidate_later(block_number, best_block, hashes).await;
+						revalidation_queue.revalidate_later(block_number, hashes).await;
 
 						revalidation_strategy.lock().clear();
 					}
@@ -728,7 +718,9 @@ pub async fn notification_future<Client, Pool, Block>(
 		Client: sc_client_api::BlockchainEvents<Block>,
 		Pool: MaintainedTransactionPool<Block=Block>,
 {
-	let import_stream = client.import_notification_stream().map(Into::into).fuse();
+	let import_stream = client.import_notification_stream()
+		.filter_map(|n| ready(n.try_into().ok()))
+		.fuse();
 	let finality_stream = client.finality_notification_stream()
 		.map(Into::into)
 		.fuse();

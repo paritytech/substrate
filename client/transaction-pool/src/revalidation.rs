@@ -38,8 +38,6 @@ const MIN_BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
 
 /// Payload from queue to worker.
 struct WorkerPayload<Api: ChainApi> {
-	/// The last known best_block.
-	best_block: Option<BlockId<Api::Block>>,
 	at: NumberFor<Api>,
 	transactions: Vec<ExtrinsicHash<Api>>,
 }
@@ -50,7 +48,7 @@ struct WorkerPayload<Api: ChainApi> {
 struct RevalidationWorker<Api: ChainApi> {
 	api: Arc<Api>,
 	pool: Arc<Pool<Api>>,
-	best_block: BlockId<Api::Block>,
+	best_block: NumberFor<Api>,
 	block_ordered: BTreeMap<NumberFor<Api>, HashSet<ExtrinsicHash<Api>>>,
 	members: HashMap<ExtrinsicHash<Api>, NumberFor<Api>>,
 }
@@ -64,29 +62,16 @@ impl<Api: ChainApi> Unpin for RevalidationWorker<Api> {}
 async fn batch_revalidate<Api: ChainApi>(
 	pool: Arc<Pool<Api>>,
 	api: Arc<Api>,
-	at: BlockId<Api::Block>,
+	at: NumberFor<Api>,
 	batch: impl IntoIterator<Item=ExtrinsicHash<Api>>,
 ) {
 	let mut invalid_hashes = Vec::new();
 	let mut revalidated = HashMap::new();
 
-	let block_number = match api.block_id_to_number(&at) {
-		Ok(Some(n)) => n,
-		_ => {
-			log::warn!(
-				target: "txpool",
-				"Failed to get block number of `{:?}`, aborting revalidation.",
-				at,
-			);
-
-			return;
-		}
-	};
-
 	let validation_results = futures::future::join_all(
 		batch.into_iter().filter_map(|ext_hash| {
 			pool.validated_pool().ready_by_hash(&ext_hash).map(|ext| {
-				api.validate_transaction(&at, ext.source, ext.data.clone())
+				api.validate_transaction(&BlockId::Number(at), ext.source, ext.data.clone())
 					.map(move |validation_result| (validation_result, ext_hash, ext))
 			})
 		})
@@ -107,7 +92,7 @@ async fn batch_revalidate<Api: ChainApi>(
 				revalidated.insert(
 					ext_hash.clone(),
 					ValidatedTransaction::valid_at(
-						block_number.saturated_into::<u64>(),
+						at.saturated_into::<u64>(),
 						ext_hash,
 						ext.source,
 						ext.data.clone(),
@@ -144,7 +129,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 			pool,
 			block_ordered: Default::default(),
 			members: Default::default(),
-			best_block: BlockId::Number(Zero::zero()),
+			best_block: Zero::zero(),
 		}
 	}
 
@@ -261,9 +246,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 				workload = from_queue.next() => {
 					match workload {
 						Some(worker_payload) => {
-							if let Some(at) = worker_payload.best_block {
-								this.best_block = at;
-							}
+							this.best_block = worker_payload.at;
 							this.push(worker_payload);
 
 							if this.members.len() > 0 {
@@ -355,7 +338,6 @@ where
 	pub async fn revalidate_later(
 		&self,
 		at: NumberFor<Api>,
-		best_block: Option<BlockId<Api::Block>>,
 		transactions: Vec<ExtrinsicHash<Api>>,
 	) {
 		if transactions.len() > 0 {
@@ -366,13 +348,13 @@ where
 		}
 
 		if let Some(ref to_worker) = self.background {
-			if let Err(e) = to_worker.unbounded_send(WorkerPayload { at, transactions, best_block }) {
+			if let Err(e) = to_worker.unbounded_send(WorkerPayload { at, transactions }) {
 				log::warn!(target: "txpool", "Failed to update background worker: {:?}", e);
 			}
-		} else if let Some(best_block) = best_block {
+		} else {
 			let pool = self.pool.clone();
 			let api = self.api.clone();
-			batch_revalidate(pool, api, best_block, transactions).await
+			batch_revalidate(pool, api, at, transactions).await
 		}
 	}
 }
@@ -403,7 +385,7 @@ mod tests {
 			pool.submit_one(&BlockId::number(0), TransactionSource::External, uxt.clone())
 		).expect("Should be valid");
 
-		block_on(queue.revalidate_later(0, Some(BlockId::Number(0)), vec![uxt_hash]));
+		block_on(queue.revalidate_later(0, vec![uxt_hash]));
 
 		// revalidated in sync offload 2nd time
 		assert_eq!(api.validation_requests().len(), 2);
