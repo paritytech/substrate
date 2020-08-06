@@ -48,7 +48,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// Try to init a simple tracing subscriber with log compatibility layer.
 /// Ignores any error. Useful for testing.
 pub fn try_init_simple() {
-	let _ = tracing_subscriber::fmt().try_init();
+	let _ = tracing_subscriber::fmt().with_writer(std::io::stderr).try_init();
 }
 
 /// Flag to signal whether to run wasm tracing

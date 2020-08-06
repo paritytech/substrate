@@ -281,6 +281,7 @@ pub fn init_logger(
 		.with_env_filter(env_filter)
 		.with_target(false)
 		.with_ansi(enable_color)
+		.with_writer(std::io::stderr)
 		.compact()
 		.finish();
 
