@@ -160,7 +160,7 @@ use sp_runtime::{
 use codec::{Encode, Decode, Input};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
-	weights::{Weight, DispatchClass},
+	weights::{Weight, DispatchClass, Pays},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnUnbalanced, BalanceStatus, schedule::{Named as ScheduleNamed, DispatchTime}, EnsureOrigin
@@ -458,14 +458,14 @@ decl_event! {
 		Vetoed(AccountId, Hash, BlockNumber),
 		/// A proposal's preimage was noted, and the deposit taken. [proposal_hash, who, deposit]
 		PreimageNoted(Hash, AccountId, Balance),
-		/// A proposal preimage was removed and used (the deposit was returned). 
+		/// A proposal preimage was removed and used (the deposit was returned).
 		/// [proposal_hash, provider, deposit]
 		PreimageUsed(Hash, AccountId, Balance),
 		/// A proposal could not be executed because its preimage was invalid. [proposal_hash, ref_index]
 		PreimageInvalid(Hash, ReferendumIndex),
 		/// A proposal could not be executed because its preimage was missing. [proposal_hash, ref_index]
 		PreimageMissing(Hash, ReferendumIndex),
-		/// A registered preimage was removed and the deposit collected by the reaper. 
+		/// A registered preimage was removed and the deposit collected by the reaper.
 		/// [proposal_hash, provider, deposit, reaper]
 		PreimageReaped(Hash, AccountId, Balance, AccountId),
 		/// An [account] has been unlocked successfully.
@@ -1000,7 +1000,9 @@ decl_module! {
 		}
 
 		/// Register the preimage for an upcoming proposal. This requires the proposal to be
-		/// in the dispatch queue. No deposit is needed.
+		/// in the dispatch queue. No deposit is needed. When this call is successful, i.e.
+		/// the preimage has not been uploaded before and matches some imminent proposal,
+		/// no fee is paid.
 		///
 		/// The dispatch origin of this call must be _Signed_.
 		///
@@ -1014,8 +1016,11 @@ decl_module! {
 		/// - Db writes: `Preimages`
 		/// # </weight>
 		#[weight = T::WeightInfo::note_imminent_preimage(encoded_proposal.len() as u32)]
-		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
+		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) -> DispatchResultWithPostInfo {
 			Self::note_imminent_preimage_inner(ensure_signed(origin)?, encoded_proposal)?;
+			// We check that this preimage was not uploaded before in `note_imminent_preimage_inner`,
+			// thus this call can only be successful once. If successful, user does not pay a fee.
+			Ok(Pays::No.into())
 		}
 
 		/// Same as `note_imminent_preimage` but origin is `OperationalPreimageOrigin`.
@@ -1023,9 +1028,12 @@ decl_module! {
 			T::WeightInfo::note_imminent_preimage(encoded_proposal.len() as u32),
 			DispatchClass::Operational,
 		)]
-		fn note_imminent_preimage_operational(origin, encoded_proposal: Vec<u8>) {
+		fn note_imminent_preimage_operational(origin, encoded_proposal: Vec<u8>) -> DispatchResultWithPostInfo {
 			let who = T::OperationalPreimageOrigin::ensure_origin(origin)?;
 			Self::note_imminent_preimage_inner(who, encoded_proposal)?;
+			// We check that this preimage was not uploaded before in `note_imminent_preimage_inner`,
+			// thus this call can only be successful once. If successful, user does not pay a fee.
+			Ok(Pays::No.into())
 		}
 
 		/// Remove an expired proposal preimage and collect the deposit.
