@@ -72,8 +72,6 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 		I: Iterator<Item = (&'a T::AccountId, Self::Key)>,
 	{
 		let mut keys = authorities.map(|x| x.1).collect::<Vec<_>>();
-		keys.sort();
-		keys.dedup();
 
 		Self::initialize_keys(&keys);
 	}
