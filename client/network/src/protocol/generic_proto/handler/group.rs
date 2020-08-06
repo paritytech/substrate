@@ -697,6 +697,10 @@ impl ProtocolsHandler for NotifsHandler {
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(message)) => {
 						// `notifications_sink_rx.is_some()` is how we know whether the user has
 						// been informed of the substreams being open.
+						// `notifications_sink_rx` containing `None` should only ever happen for
+						// the last few messages being received during a shutdown, or if the
+						// remote is impolite. In order to enforce API invariants, we have no other
+						// choice but to discard the message.
 						if self.notifications_sink_rx.is_some() {
 							let msg = NotifsHandlerOut::Notification {
 								message,
