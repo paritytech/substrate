@@ -301,7 +301,7 @@ impl Parse for SolutionDef {
 		};
 		let int_lit = match expr_lit {
 			syn::Lit::Int(int_lit) => int_lit,
-			_ => return Err(syn_err("Count must be literal."))
+			_ => return Err(syn_err("Count must be int literal."))
 		};
 		let count = int_lit.base10_parse::<usize>()?;
 
