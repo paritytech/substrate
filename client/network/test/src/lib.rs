@@ -648,7 +648,7 @@ pub trait TestNetFactory: Sized {
 			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
-			&sp_core::testing::SpawnBlockingExecutor::new(),
+			&sp_core::testing::TaskExecutor::new(),
 			None,
 		));
 
@@ -728,7 +728,7 @@ pub trait TestNetFactory: Sized {
 			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
-			&sp_core::testing::SpawnBlockingExecutor::new(),
+			&sp_core::testing::TaskExecutor::new(),
 			None,
 		));
 

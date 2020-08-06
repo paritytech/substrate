@@ -34,10 +34,10 @@ where
 	let reverted = backend.revert(blocks, false)?;
 	let info = client.usage_info().chain;
 
-	if reverted.is_zero() {
+	if reverted.0.is_zero() {
 		info!("There aren't any non-finalized blocks to revert.");
 	} else {
-		info!("Reverted {} blocks. Best: #{} ({})", reverted, info.best_number, info.best_hash);
+		info!("Reverted {} blocks. Best: #{} ({})", reverted.0, info.best_number, info.best_hash);
 	}
 	Ok(())
 }

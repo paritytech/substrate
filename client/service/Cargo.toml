@@ -39,7 +39,6 @@ pin-project = "0.4.8"
 hash-db = "0.15.2"
 serde = "1.0.101"
 serde_json = "1.0.41"
-sysinfo = "0.14.15"
 sc-keystore = { version = "2.0.0-rc5", path = "../keystore" }
 sp-io = { version = "2.0.0-rc5", path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-rc5", path = "../../primitives/runtime" }
@@ -53,13 +52,14 @@ sp-session = { version = "2.0.0-rc5", path = "../../primitives/session" }
 sp-state-machine = { version = "0.8.0-rc5", path = "../../primitives/state-machine" }
 sp-application-crypto = { version = "2.0.0-rc5", path = "../../primitives/application-crypto" }
 sp-consensus = { version = "0.8.0-rc5", path = "../../primitives/consensus/common" }
+sp-inherents = { version = "2.0.0-rc5", path = "../../primitives/inherents" }
 sc-network = { version = "0.8.0-rc5", path = "../network" }
 sc-chain-spec = { version = "2.0.0-rc5", path = "../chain-spec" }
 sc-light = { version = "2.0.0-rc5", path = "../light" }
 sc-client-api = { version = "2.0.0-rc5", path = "../api" }
 sp-api = { version = "2.0.0-rc5", path = "../../primitives/api" }
 sc-client-db = { version = "0.8.0-rc5", default-features = false, path = "../db" }
-codec = { package = "parity-scale-codec", version = "1.3.1" }
+codec = { package = "parity-scale-codec", version = "1.3.4" }
 sc-executor = { version = "0.8.0-rc5", path = "../executor" }
 sc-transaction-pool = { version = "2.0.0-rc5", path = "../transaction-pool" }
 sp-transaction-pool = { version = "2.0.0-rc5", path = "../../primitives/transaction-pool" }
@@ -74,12 +74,6 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 sc-tracing = { version = "2.0.0-rc5", path = "../tracing" }
 tracing = "0.1.10"
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
-
-[target.'cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))'.dependencies]
-netstat2 = "0.8.1"
-
-[target.'cfg(target_os = "linux")'.dependencies]
-procfs = '0.7.8'
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 tempfile = "3.1.0"
