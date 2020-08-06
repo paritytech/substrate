@@ -841,7 +841,14 @@ impl pallet_vesting::Trait for Runtime {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	pub const MaxPermissionedNodes: u32 = 8;
+}
 impl pallet_node_permission::Trait for Runtime {
+	type Event = Event;
+	type MaxPermissionedNodes = MaxPermissionedNodes;
+	type AddNodeOrigin = EnsureRootOrHalfCouncil;
+	type ResetNodesOrigin = EnsureRootOrHalfCouncil;
 }
 
 construct_runtime!(
@@ -882,7 +889,7 @@ construct_runtime!(
 		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
 		Proxy: pallet_proxy::{Module, Call, Storage, Event<T>},
 		Multisig: pallet_multisig::{Module, Call, Storage, Event<T>},
-		NodePermission: pallet_node_permission::{Module, Call, Storage},
+		NodePermission: pallet_node_permission::{Module, Call, Storage, Event},
 	}
 );
 

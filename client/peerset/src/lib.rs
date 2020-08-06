@@ -205,8 +205,8 @@ pub struct Peerset {
 	created: Instant,
 	/// Last time when we updated the reputations of connected nodes.
 	latest_time_update: Instant,
-	/// List of nodes that are permissioned to connect.
-	node_allowlist: Option<Vec<PeerId>>,
+	/// List of nodes that are allowed to connect.
+	allowlist: Option<Vec<PeerId>>,
 }
 
 impl Peerset {
@@ -229,7 +229,7 @@ impl Peerset {
 			message_queue: VecDeque::new(),
 			created: now,
 			latest_time_update: now,
-			node_allowlist: None,
+			allowlist: None,
 		};
 
 		for node in config.priority_groups.into_iter().flat_map(|(_, l)| l) {
@@ -362,7 +362,7 @@ impl Peerset {
 	}
 
 	fn on_set_allowlist(&mut self, peer_ids: Vec<PeerId>) {
-		self.node_allowlist = Some(peer_ids);
+		self.allowlist = Some(peer_ids);
 		self.alloc_slots(); // TODO only disconnect if it's not empty
 	}
 

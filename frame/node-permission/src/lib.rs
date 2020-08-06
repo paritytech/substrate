@@ -24,51 +24,78 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use sp_core::{ed25519::Public, storage::well_known_keys};
 use sp_std::prelude::*;
 use frame_support::{
-    decl_module, decl_storage, dispatch::DispatchResult,
-    storage,
+    decl_module, decl_storage, decl_event, decl_error,
+    dispatch::DispatchResult, storage, ensure,
+    traits::{Get, EnsureOrigin},
 };
-use frame_system::ensure_signed;
-use sp_core::ed25519::Public;
-use sp_core::storage::well_known_keys;
 
 type NodeId = Public;
 
 /// The module's config trait.
-pub trait Trait: frame_system::Trait {}
+pub trait Trait: frame_system::Trait {
+    /// The event type of this module.
+	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+
+    /// The maximum number of permissioned nodes that are allowed to set
+    type MaxPermissionedNodes: Get<u32>;
+
+    /// The origin which can add a permissioned node.
+    type AddNodeOrigin: EnsureOrigin<Self::Origin>;
+
+    /// The origin which can reset the permissioned nodes.
+    type ResetNodesOrigin: EnsureOrigin<Self::Origin>;
+}
 
 decl_storage! {
     trait Store for Module<T: Trait> as NodePermission {
-        /// Public keys of the permissioned nodes.
-        // TODO add genesis config
-        NodePublicKeys get(fn node_public_keys): Vec<NodeId>;
+    }
+}
+
+decl_event! {
+    pub enum Event {
+        /// The given node was added.
+        NodeAdded,
+    }
+}
+
+decl_error! {
+    /// Error for the node permission module.
+    pub enum Error for Module<T: Trait> {
+        /// Too many permissioned nodes.
+        TooManyNodes,
+        AlreadyJoined,
     }
 }
 
 decl_module! {
     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-        // type Error = Error<T>;
+        /// The maximum number of permissioned nodes
+        const MaxPermissionedNodes: u32 = T::MaxPermissionedNodes::get();
 
-        // fn deposit_event() = default;
+        type Error = Error<T>;
+
+        fn deposit_event() = default;
 
         /// Add a node to the allowlist.
+        ///
+        /// Can only be called from `T::AddNodeOrigin`.
         #[weight = 0]
         pub fn add_node(origin, node_public_key: NodeId) -> DispatchResult {
-            // TODO ensure to be coucil/root
-            let _who = ensure_signed(origin)?;
+            T::AddNodeOrigin::ensure_origin(origin)?;
 
-            let mut nodes: Vec<NodeId> = storage::unhashed::get(well_known_keys::NODE_ALLOWLIST).unwrap();
-            nodes.push(node_public_key);
+            let mut nodes: Vec<NodeId> = storage::unhashed::get_or_default(well_known_keys::NODE_ALLOWLIST);
+            ensure!(nodes.len() < T::MaxPermissionedNodes::get() as usize, Error::<T>::TooManyNodes);
+
+            let location = nodes.binary_search(&node_public_key).err().ok_or(Error::<T>::AlreadyJoined)?;
+            nodes.insert(location, node_public_key);
             storage::unhashed::put(well_known_keys::NODE_ALLOWLIST, &nodes);
+
+            Self::deposit_event(Event::NodeAdded);
+
             Ok(())
         }
-    }
-}
-
-impl<T: Trait> Module<T> {
-    /// Retrieve all the permissioned nodes.
-    pub fn nodes() -> Vec<NodeId> {
-        NodePublicKeys::get()
     }
 }
