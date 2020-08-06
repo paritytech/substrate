@@ -16,8 +16,7 @@ tracing = { version = "0.1.13", optional = true }
 rental = { version = "0.5.5", optional = true }
 log = { version = "0.4.8", optional = true }
 tracing-subscriber = { version = "0.2.10", optional = true }
-tracing-log = { version = "0.1.1", optional = true }
 
 [features]
 default = [ "std" ]
-std = [ "tracing", "rental", "log", "tracing-subscriber", "tracing-log" ]
+std = [ "tracing", "rental", "log", "tracing-subscriber" ]
