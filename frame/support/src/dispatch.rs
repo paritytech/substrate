@@ -1015,6 +1015,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			$origin:ident $( , $(#[$codec_attr:ident])* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1039,6 +1040,7 @@ macro_rules! decl_module {
 				$( $dispatchables )*
 				$(#[doc = $doc_attr])*
 				#[weight = $weight]
+				$(#[$fn_attr])*
 				$fn_vis fn $fn_name(
 					$origin $( , $(#[$codec_attr])* $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
@@ -1066,6 +1068,7 @@ macro_rules! decl_module {
 		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			$from:ident $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1094,6 +1097,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			$origin:ident : T::Origin $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1121,6 +1125,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			origin : $origin:ty $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1148,6 +1153,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty ),* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1410,13 +1416,13 @@ macro_rules! decl_module {
 		$origin_ty:ty;
 		$error_type:ty;
 		$ignore:ident;
-		$(#[doc = $doc_attr:tt])*
+		$(#[$fn_attr:meta])*
 		$vis:vis fn $name:ident (
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) { $( $impl:tt )* }
 	) => {
-		$(#[doc = $doc_attr])*
 		#[allow(unreachable_code)]
+		$(#[$fn_attr])*
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
@@ -1432,12 +1438,12 @@ macro_rules! decl_module {
 		$origin_ty:ty;
 		$error_type:ty;
 		$ignore:ident;
-		$(#[doc = $doc_attr:tt])*
+		$(#[$fn_attr:meta])*
 		$vis:vis fn $name:ident (
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) -> $result:ty { $( $impl:tt )* }
 	) => {
-		$(#[doc = $doc_attr])*
+		$(#[$fn_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
 			$crate::sp_tracing::enter_span!(stringify!($name));
 			$( $impl )*
@@ -1569,6 +1575,7 @@ macro_rules! decl_module {
 			$(
 				$(#[doc = $doc_attr:tt])*
 				#[weight = $weight:expr]
+				$(#[$fn_attr:meta])*
 				$fn_vis:vis fn $fn_name:ident(
 					$from:ident $( , $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 				) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1654,6 +1661,7 @@ macro_rules! decl_module {
 					$(#[doc = $doc_attr])*
 					///
 					/// NOTE: Calling this function will bypass origin filters.
+					$(#[$fn_attr])*
 					$fn_vis fn $fn_name (
 						$from $(, $param_name : $param )*
 					) $( -> $result )* { $( $impl )* }

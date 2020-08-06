@@ -17,7 +17,8 @@
 
 use codec::{Encode, Decode, EncodeLike};
 use frame_support::{
-	assert_ok, assert_noop, transactional, StorageMap, StorageValue, storage::{with_transaction, TransactionOutcome::*},
+	assert_ok, assert_noop, dispatch::{DispatchError, DispatchResult}, transactional, StorageMap, StorageValue,
+	storage::{with_transaction, TransactionOutcome::*},
 };
 use sp_io::TestExternalities;
 use sp_std::result;
@@ -28,7 +29,20 @@ pub trait Trait {
 }
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		#[weight = 0]
+		#[transactional]
+		fn value_commits(_origin, v: u32) {
+			Value::set(v);
+		}
+
+		#[weight = 0]
+		#[transactional]
+		fn value_rollbacks(_origin, v: u32) -> DispatchResult {
+			Value::set(v);
+			Err(DispatchError::Other("nah"))
+		}
+	}
 }
 
 frame_support::decl_storage!{
@@ -38,6 +52,11 @@ frame_support::decl_storage!{
 	}
 }
 
+struct Runtime;
+impl Trait for Runtime {
+	type Origin = u32;
+	type BlockNumber = u32;
+}
 
 #[test]
 fn storage_transaction_basic_commit() {
@@ -178,5 +197,16 @@ fn transactional_annotation() {
 		assert_eq!(Value::get(), 2);
 
 		assert_noop!(value_rollbacks(3), "nah");
+	});
+}
+
+#[test]
+fn transactional_annotation_in_decl_module() {
+	TestExternalities::default().execute_with(|| {
+		let origin = 0;
+		assert_ok!(<Module<Runtime>>::value_commits(origin, 2));
+		assert_eq!(Value::get(), 2);
+
+		assert_noop!(<Module<Runtime>>::value_rollbacks(origin, 3), "nah");
 	});
 }
