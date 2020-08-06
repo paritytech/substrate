@@ -12,20 +12,13 @@ autotests = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-futures = { version = "0.3.1", features = ["compat"], optional = true }
-substrate-test-utils-derive = { path = "./derive", optional = true }
-tokio = { version = "0.2.13", features = ["macros"], optional = true }
+futures = { version = "0.3.1", features = ["compat"] }
+substrate-test-utils-derive = { path = "./derive" }
+tokio = { version = "0.2.13", features = ["macros"] }
 
 [dev-dependencies]
 sc-service = { path = "../client/service" }
 trybuild = { version = "1.0", features = ["diff"] }
-
-[features]
-macros = [
-	"futures",
-	"substrate-test-utils-derive",
-	"tokio",
-]
 
 [[test]]
 name = "basic"

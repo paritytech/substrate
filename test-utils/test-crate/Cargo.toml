@@ -12,5 +12,5 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dev-dependencies]
 tokio = { version = "0.2.13", features = ["macros"] }
-test-utils = { path = "..", package = "substrate-test-utils", features = ["macros"] }
+test-utils = { path = "..", package = "substrate-test-utils" }
 sc-service = { path = "../../client/service" }

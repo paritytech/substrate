@@ -18,12 +18,9 @@
 //! Test utils
 
 #[doc(hidden)]
-#[cfg(feature = "macros")]
 pub use futures;
-#[cfg(feature = "macros")]
 pub use substrate_test_utils_derive::test;
 #[doc(hidden)]
-#[cfg(feature = "macros")]
 pub use tokio;
 
 /// Panic when the vectors are different, without taking the order into account.
