@@ -8,8 +8,8 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-quote = "1"
-syn = { version = "1", default-features = false }
+quote = "1.0.6"
+syn = { version = "1.0.33", default-features = false }
 
 [lib]
 proc-macro = true
