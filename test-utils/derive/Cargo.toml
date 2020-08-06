@@ -9,7 +9,8 @@ repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 quote = "1.0.6"
-syn = { version = "1.0.33", default-features = false }
+syn = { version = "1.0.33", features = ["full"] }
+proc-macro-crate = "0.1.4"
 
 [lib]
 proc-macro = true

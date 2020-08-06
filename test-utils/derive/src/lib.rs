@@ -16,8 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use proc_macro::TokenStream;
+use proc_macro::{Span, TokenStream};
+use proc_macro_crate::crate_name;
 use quote::quote;
+use std::env;
 
 #[proc_macro_attribute]
 pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
@@ -53,9 +55,18 @@ fn parse_knobs(
 		}
 	};
 
+	let crate_name = if env::var("CARGO_PKG_NAME").unwrap() == "substrate-test-utils" {
+		syn::Ident::new("substrate_test_utils", Span::call_site().into())
+	} else {
+		let crate_name = crate_name("substrate-test-utils")
+			.map_err(|e| syn::Error::new_spanned(&sig, e))?;
+
+		syn::Ident::new(&crate_name, Span::call_site().into())
+	};
+
 	let header = {
 		quote! {
-			#[tokio::test(#(#args)*)]
+			#[#crate_name::tokio::test(#(#args)*)]
 		}
 	};
 
@@ -63,13 +74,13 @@ fn parse_knobs(
 		#header
 		#(#attrs)*
 		#vis #sig {
-			use substrate_test_utils::futures::future::FutureExt;
+			use #crate_name::futures::future::FutureExt;
 
 			let #task_executor_name: #task_executor_type = (|fut, _| {
-				substrate_test_utils::tokio::spawn(fut).map(drop)
+				#crate_name::tokio::spawn(fut).map(drop)
 			})
 			.into();
-			let timeout_task = substrate_test_utils::tokio::time::delay_for(
+			let timeout_task = #crate_name::tokio::time::delay_for(
 				std::time::Duration::from_secs(
 					std::env::var("SUBSTRATE_TEST_TIMEOUT")
 						.ok()
@@ -81,9 +92,9 @@ fn parse_knobs(
 			}
 			.fuse();
 
-			substrate_test_utils::futures::pin_mut!(timeout_task, actual_test_task);
+			#crate_name::futures::pin_mut!(timeout_task, actual_test_task);
 
-			substrate_test_utils::futures::select! {
+			#crate_name::futures::select! {
 				_ = timeout_task => {
 					panic!("the test took too long");
 				},

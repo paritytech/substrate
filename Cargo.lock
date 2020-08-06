@@ -8626,8 +8626,18 @@ dependencies = [
 name = "substrate-test-utils-derive"
 version = "0.8.0-rc4"
 dependencies = [
+ "proc-macro-crate",
  "quote 1.0.6",
  "syn 1.0.33",
+]
+
+[[package]]
+name = "substrate-test-utils-test-crate"
+version = "0.1.0"
+dependencies = [
+ "sc-service",
+ "substrate-test-utils",
+ "tokio 0.2.21",
 ]
 
 [[package]]
