@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::CliConfiguration;
+use crate::{CliConfiguration, ChainSpecFactory};
 use crate::Result;
 use crate::Subcommand;
 use crate::SubstrateCli;
@@ -122,7 +122,11 @@ pub struct Runner<C: SubstrateCli> {
 
 impl<C: SubstrateCli> Runner<C> {
 	/// Create a new runtime with the command provided in argument
-	pub fn new<T: CliConfiguration>(cli: &C, command: &T) -> Result<Runner<C>> {
+	pub fn new<T, F>(command: &T, factory: F) -> Result<Runner<C>>
+		where
+			T: CliConfiguration,
+			F: ChainSpecFactory,
+	{
 		let tokio_runtime = build_runtime()?;
 		let runtime_handle = tokio_runtime.handle().clone();
 
@@ -136,7 +140,7 @@ impl<C: SubstrateCli> Runner<C> {
 		};
 
 		Ok(Runner {
-			config: command.create_configuration(cli, task_executor.into())?,
+			config: command.create_configuration::<C, F>(factory, task_executor.into())?,
 			tokio_runtime,
 			phantom: PhantomData,
 		})

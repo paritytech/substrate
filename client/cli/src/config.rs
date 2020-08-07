@@ -403,14 +403,18 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Create a Configuration object from the current object
-	fn create_configuration<C: SubstrateCli>(
+	fn create_configuration<C, F>(
 		&self,
-		cli: &C,
+		factory: F,
 		task_executor: TaskExecutor,
-	) -> Result<Configuration> {
+	) -> Result<Configuration>
+		where
+			C: SubstrateCli,
+			F: ChainSpecFactory,
+	{
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
-		let chain_spec = cli.load_spec(chain_id.as_str())?;
+		let chain_spec = factory.load_spec(chain_id)?;
 		let base_path = self
 			.base_path()?
 			.unwrap_or_else(|| BasePath::from_project("", "", &C::executable_name()));
@@ -504,6 +508,22 @@ pub trait CliConfiguration: Sized {
 		init_logger(&logger_pattern);
 
 		Ok(())
+	}
+}
+
+/// Chain spec factory, allows for creating different chain specs, given different
+/// chain_id's.
+pub trait ChainSpecFactory {
+	/// produces a chain spec given a valid chain_id.
+	fn load_spec(&self, id: String) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String>;
+}
+
+impl<F> ChainSpecFactory for F
+	where
+		F: Fn(String) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String>
+{
+	fn load_spec(&self, id: String) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
+		(self)(id)
 	}
 }
 

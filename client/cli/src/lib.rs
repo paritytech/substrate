@@ -88,9 +88,6 @@ pub trait SubstrateCli: Sized {
 	/// Copyright starting year (x-current year)
 	fn copyright_start_year() -> i32;
 
-	/// Chain spec factory
-	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String>;
-
 	/// Helper function used to parse the command line arguments. This is the equivalent of
 	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
 	/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
@@ -209,19 +206,28 @@ pub trait SubstrateCli: Sized {
 	}
 
 	/// Only create a Configuration for the command provided in argument
-	fn create_configuration<T: CliConfiguration>(
+	fn create_configuration<T, F>(
 		&self,
 		command: &T,
+		factory: F,
 		task_executor: TaskExecutor,
-	) -> error::Result<Configuration> {
-		command.create_configuration(self, task_executor)
+	) -> Result<Configuration>
+		where
+			T: CliConfiguration,
+			F: ChainSpecFactory,
+	{
+		command.create_configuration::<Self, F>(factory, task_executor)
 	}
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
-	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
+	fn create_runner<C, F>(&self, command: &C, factory: F) -> error::Result<Runner<Self>>
+		where
+			C: CliConfiguration,
+			F: ChainSpecFactory,
+	{
 		command.init::<Self>()?;
-		Runner::new(self, command)
+		Runner::new::<C, F>(command, factory)
 	}
 
 	/// Native runtime version.
