@@ -166,6 +166,20 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 		Ok(RemovedIterator { stack: removed })
 	}
+
+	/// Return the lowest root number.
+	pub fn lowest_node_number(&self) -> Option<N> {
+		let mut result = None;
+		for root in self.roots.iter() {
+			let replace = result.as_ref().map(|lowest| &root.number < lowest)
+				.unwrap_or(true);
+			if replace {
+				result = Some(root.number.clone());
+			}
+		}
+		
+		result
+	}
 }
 
 impl<H, N, V> ForkTree<H, N, V> where

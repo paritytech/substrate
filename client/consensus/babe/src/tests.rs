@@ -278,6 +278,7 @@ impl TestNetFactory for BabeTestNet {
 			config,
 			client.clone(),
 			client.clone(),
+			None,
 		).expect("can initialize block-import");
 
 		let block_import = PanickingBlockImport(block_import);

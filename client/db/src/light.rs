@@ -21,13 +21,14 @@
 use std::{sync::Arc, collections::HashMap};
 use std::convert::TryInto;
 use parking_lot::RwLock;
+use std::collections::VecDeque;
 
 use sc_client_api::{
 	cht, backend::{AuxStore, NewBlockState}, UsageInfo,
 	blockchain::{
 		BlockStatus, Cache as BlockchainCache, Info as BlockchainInfo,
 	},
-	Storage
+	Storage, SharedPruningRequirements,PruningLimit,
 };
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
@@ -42,7 +43,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFo
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, DatabaseType, Meta, read_db, block_id_to_lookup_key, read_meta};
 use crate::{DatabaseSettings, FrozenForDuration, DbHash};
-use log::{trace, warn, debug};
+use log::{warn, debug};
 
 pub(crate) mod columns {
 	pub const META: u32 = crate::utils::COLUMN_META;
@@ -58,6 +59,9 @@ const HEADER_CHT_PREFIX: u8 = 0;
 /// Prefix for changes tries roots CHT.
 const CHANGES_TRIE_CHT_PREFIX: u8 = 1;
 
+/// Aux key to store pending pruning CHT ranges.
+const AUX_PENDING_CHT_RANGES: &'static[u8] = b"pending_cht_pruning_ranges";
+
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
 /// Locks order: meta, cache.
 pub struct LightStorage<Block: BlockT> {
@@ -65,6 +69,8 @@ pub struct LightStorage<Block: BlockT> {
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
+	shared_pruning_requirements: SharedPruningRequirements<Block>,
+	pending_cht_pruning: RwLock<VecDeque<(NumberFor<Block>, NumberFor<Block>)>>,
 
 	#[cfg(not(target_os = "unknown"))]
 	io_stats: FrozenForDuration<kvdb::IoStats>,
@@ -72,19 +78,26 @@ pub struct LightStorage<Block: BlockT> {
 
 impl<Block: BlockT> LightStorage<Block> {
 	/// Create new storage with given settings.
-	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
+	pub fn new(
+		config: DatabaseSettings,
+		shared_pruning_requirements: SharedPruningRequirements<Block>,
+	) -> ClientResult<Self> {
 		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Light)?;
-		Self::from_kvdb(db as Arc<_>)
+		Self::from_kvdb(db as Arc<_>, shared_pruning_requirements)
 	}
 
 	/// Create new memory-backed `LightStorage` for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test() -> Self {
 		let db = Arc::new(sp_database::MemDb::default());
-		Self::from_kvdb(db as Arc<_>).expect("failed to create test-db")
+		let shared_pruning_requirements = SharedPruningRequirements::default();
+		Self::from_kvdb(db as Arc<_>, shared_pruning_requirements).expect("failed to create test-db")
 	}
 
-	fn from_kvdb(db: Arc<dyn Database<DbHash>>) -> ClientResult<Self> {
+	fn from_kvdb(
+		db: Arc<dyn Database<DbHash>>,
+		shared_pruning_requirements: SharedPruningRequirements<Block>,
+	) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let header_metadata_cache = Arc::new(HeaderMetadataCache::default());
 		let cache = DbCache::new(
@@ -97,6 +110,9 @@ impl<Block: BlockT> LightStorage<Block> {
 			ComplexBlockId::new(meta.finalized_hash, meta.finalized_number),
 		);
 
+		let pending_cht_pruning_ranges = db.get(columns::AUX, AUX_PENDING_CHT_RANGES)
+			.and_then(|encoded|	Decode::decode(&mut encoded.as_slice()).ok())
+			.unwrap_or_default();
 		Ok(LightStorage {
 			db,
 			meta: RwLock::new(meta),
@@ -104,6 +120,8 @@ impl<Block: BlockT> LightStorage<Block> {
 			header_metadata_cache,
 			#[cfg(not(target_os = "unknown"))]
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
+			shared_pruning_requirements,
+			pending_cht_pruning: RwLock::new(pending_cht_pruning_ranges),
 		})
 	}
 
@@ -335,26 +353,144 @@ impl<Block: BlockT> LightStorage<Block> {
 				);
 			}
 
-			// prune headers that are replaced with CHT
-			let mut prune_block = new_cht_start;
 			let new_cht_end = cht::end_number(cht::size(), new_cht_number);
-			trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}",
-				new_cht_start, new_cht_end, new_cht_number);
+			self.try_prune_pending(transaction, false)?;
+			self.prune_range(new_cht_start, new_cht_end, transaction)?;
+		} else {
+			self.try_prune_pending(transaction, true)?;
+		}
 
-			while prune_block <= new_cht_end {
-				if let Some(hash) = self.hash(prune_block)? {
-					let lookup_key = block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Number(prune_block))?
-						.expect("retrieved hash for `prune_block` right above. therefore retrieving lookup key must succeed. q.e.d.");
-					utils::remove_key_mappings(
-						transaction,
-						columns::KEY_LOOKUP,
-						prune_block,
-						hash
-					)?;
-					transaction.remove(columns::HEADER, &lookup_key);
+		Ok(())
+	}
+
+	/// Prune headers that are replaced with CHT.
+	/// Note that end index is inclusive (as start).
+	fn prune_range(
+		&self,
+		start: NumberFor<Block>,
+		end: NumberFor<Block>,
+		transaction: &mut Transaction<DbHash>,
+	) -> ClientResult<()> {
+		if let Some((start, end)) = match self.shared_pruning_requirements.finalized_headers_needed() {
+			PruningLimit::None => {
+				Some((start, end))
+			},
+			PruningLimit::Some(limit) => {
+				if limit > end {
+					Some((start, end))
+				} else if limit > start {
+					self.add_prune_range_pending(limit, end, transaction)?;
+					Some((start, limit - One::one()))
+				} else {
+					self.add_prune_range_pending(start, end, transaction)?;
+					None
 				}
-				prune_block += One::one();
+			},
+			PruningLimit::Locked => {
+				self.add_prune_range_pending(start, end, transaction)?;
+				None
+			},
+		} {
+			self.prune_range_unchecked(start, end, transaction)?;
+		}
+		Ok(())
+	}
+	
+	fn prune_range_unchecked(
+		&self,
+		start: NumberFor<Block>,
+		end: NumberFor<Block>,
+		transaction: &mut Transaction<DbHash>,
+	) -> ClientResult<()> {
+		let mut prune_block = start;
+		while prune_block <= end {
+			if let Some(hash) = self.hash(prune_block)? {
+				let lookup_key = block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Number(prune_block))?
+					.expect("retrieved hash for `prune_block` right above. therefore retrieving lookup key must succeed. q.e.d.");
+				utils::remove_key_mappings(
+					transaction,
+					columns::KEY_LOOKUP,
+					prune_block,
+					hash
+				)?;
+				transaction.remove(columns::HEADER, &lookup_key);
 			}
+			prune_block += One::one();
+		}
+		Ok(())
+	}
+
+	/// Stack some pending pruning range.
+	fn add_prune_range_pending(
+		&self,
+		start: NumberFor<Block>,
+		end: NumberFor<Block>,
+		transaction: &mut Transaction<DbHash>,
+	) -> ClientResult<()> {
+		// Note that we do not handle the error case for in memory data
+		// as with other field of light storage.
+		self.pending_cht_pruning.write().push_back((start, end));
+
+		let encoded_pending = self.pending_cht_pruning.read().encode();
+		transaction.set_from_vec(columns::AUX, AUX_PENDING_CHT_RANGES, encoded_pending);
+
+		Ok(())
+	}
+
+	#[cfg(test)]
+	fn try_prune_pending_test(&self, do_check: bool) -> ClientResult<()> {
+		let mut transaction = Transaction::new();
+		self.try_prune_pending(&mut transaction, do_check)?;
+		self.db.commit(transaction)?;
+		Ok(())
+	}
+
+	/// Try pruning pending.
+	fn try_prune_pending(
+		&self,
+		transaction: &mut Transaction<DbHash>,
+		do_check: bool,
+	) -> ClientResult<()> {
+		let mut changed = false;
+		let mut to_prune = VecDeque::new();
+		// TODO bool condition
+		let pass = if do_check {
+			self.shared_pruning_requirements.modification_check()
+		} else {
+			true
+		};
+		if !self.pending_cht_pruning.read().is_empty()
+			&& pass {
+			match self.shared_pruning_requirements.finalized_headers_needed() {
+				PruningLimit::Locked => (),
+				PruningLimit::None => {
+					to_prune = std::mem::replace(&mut *self.pending_cht_pruning.write(), VecDeque::new());
+				},
+				PruningLimit::Some(limit) => {
+					let mut shared = self.pending_cht_pruning.write();
+					while let Some(range) = shared.pop_front() {
+						if limit > range.1 {
+							to_prune.push_back(range);
+						} else if limit > range.0 {
+							to_prune.push_back((range.0, limit - One::one()));
+							shared.push_front((limit, range.1));
+							break;
+						} else {
+							shared.push_front((range.0, range.1));
+							break;
+						}
+					}
+				},
+			}
+		}
+		for range in to_prune {
+			changed = true;
+			self.prune_range_unchecked(range.0, range.1, transaction)?;
+		}
+
+		if changed {
+			let encoded_pending = self.pending_cht_pruning.read().encode();
+			transaction.set_from_vec(columns::AUX, AUX_PENDING_CHT_RANGES, encoded_pending);
 		}
 
 		Ok(())
@@ -738,7 +874,7 @@ pub(crate) mod tests {
 	#[test]
 	fn import_header_works() {
 		let raw_db = Arc::new(sp_database::MemDb::default());
-		let db = LightStorage::from_kvdb(raw_db.clone()).unwrap();
+		let db = LightStorage::from_kvdb(raw_db.clone(), Default::default()).unwrap();
 
 		let genesis_hash = insert_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
 		assert_eq!(raw_db.count(columns::HEADER), 1);
@@ -751,11 +887,15 @@ pub(crate) mod tests {
 
 	#[test]
 	fn finalized_ancient_headers_are_replaced_with_cht() {
-		fn insert_headers<F: Fn(&Hash, u64) -> Header>(header_producer: F) ->
-			(Arc<sp_database::MemDb<DbHash>>, LightStorage<Block>)
-		{
+		fn insert_headers<F: Fn(&Hash, u64) -> Header>(
+			header_producer: F,
+			limit: PruningLimit<u64>,
+		) -> (Arc<sp_database::MemDb<DbHash>>, LightStorage<Block>, SharedPruningRequirements<Block>) {
 			let raw_db = Arc::new(sp_database::MemDb::default());
-			let db = LightStorage::from_kvdb(raw_db.clone()).unwrap();
+			let shared_pruning_requirements = SharedPruningRequirements::default();
+			let req = shared_pruning_requirements.next_instance();
+			req.set_finalized_headers_needed(limit);
+			let db = LightStorage::from_kvdb(raw_db.clone(), req.clone()).unwrap();
 			let cht_size: u64 = cht::size();
 			let ucht_size: usize = cht_size as _;
 
@@ -796,11 +936,11 @@ pub(crate) mod tests {
 				db.finalize_header(BlockId::Number(i as _)).unwrap();
 			}
 			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
-			(raw_db, db)
+			(raw_db, db, req)
 		}
 
 		// when headers are created without changes tries roots
-		let (raw_db, db) = insert_headers(default_header);
+		let (raw_db, db, _pruning_limit) = insert_headers(default_header, PruningLimit::None);
 		let cht_size: u64 = cht::size();
 		assert_eq!(raw_db.count(columns::HEADER), (1 + cht_size + 1) as usize);
 		assert_eq!(raw_db.count(columns::KEY_LOOKUP), (2 * (1 + cht_size + 1)) as usize);
@@ -811,8 +951,28 @@ pub(crate) mod tests {
 		assert!(db.changes_trie_cht_root(cht_size, cht_size / 2).is_err());
 		assert!(db.changes_trie_cht_root(cht_size, cht_size + cht_size / 2).unwrap().is_none());
 
+		// try locked pruning
+		let (raw_db, db, pruning_limit) = insert_headers(default_header, PruningLimit::Locked);
+		let cht_size: u64 = cht::size();
+		assert_eq!(raw_db.count(columns::HEADER), (2 + 2 * cht_size) as usize);
+		assert_eq!(raw_db.count(columns::KEY_LOOKUP), (2 * (2 + 2 * cht_size)) as usize);
+		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_some()));
+
+		assert!(pruning_limit.set_finalized_headers_needed(PruningLimit::Some(1000)));
+		db.try_prune_pending_test(true).unwrap();
+		assert_eq!(raw_db.count(columns::HEADER), (2 + 2 * cht_size) as usize - 999);
+		assert_eq!(raw_db.count(columns::KEY_LOOKUP), (2 * (2 + 2 * cht_size - 999)) as usize);
+		assert!((1..999 as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
+		assert!((999..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_some()));
+
+		assert!(pruning_limit.set_finalized_headers_needed(PruningLimit::None));
+		db.try_prune_pending_test(true).unwrap();
+		assert_eq!(raw_db.count(columns::HEADER), (1 + cht_size + 1) as usize);
+		assert_eq!(raw_db.count(columns::KEY_LOOKUP), (2 * (1 + cht_size + 1)) as usize);
+		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
+
 		// when headers are created with changes tries roots
-		let (raw_db, db) = insert_headers(header_with_changes_trie);
+		let (raw_db, db, _pruning_limit) = insert_headers(header_with_changes_trie, PruningLimit::None);
 		assert_eq!(raw_db.count(columns::HEADER), (1 + cht_size + 1) as usize);
 		assert_eq!(raw_db.count(columns::CHT), 2);
 		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
@@ -1138,7 +1298,7 @@ pub(crate) mod tests {
 		assert_eq!(db.header(BlockId::Hash(hash0)).unwrap().unwrap().hash(), hash0);
 
 		let db = db.db;
-		let db = LightStorage::from_kvdb(db).unwrap();
+		let db = LightStorage::from_kvdb(db, Default::default()).unwrap();
 		assert_eq!(db.info().best_hash, hash0);
 		assert_eq!(db.header(BlockId::Hash::<Block>(hash0)).unwrap().unwrap().hash(), hash0);
 	}
@@ -1199,7 +1359,8 @@ pub(crate) mod tests {
 		};
 
 		// restart && check that after restart value is read from the cache
-		let db = LightStorage::<Block>::from_kvdb(storage as Arc<_>).expect("failed to create test-db");
+		let db = LightStorage::<Block>::from_kvdb(storage as Arc<_>, Default::default())
+			.expect("failed to create test-db");
 		assert_eq!(
 			db.cache().get_at(b"test", &BlockId::Number(0)).unwrap(),
 			Some(((0, genesis_hash.unwrap()), None, vec![42])),

@@ -18,7 +18,7 @@
 
 pub mod migration;
 
-use std::{sync::Arc, ops::Add, collections::BTreeMap, borrow::{Borrow, BorrowMut}};
+use std::{sync::Arc, ops::{Add, Sub}, collections::BTreeMap, borrow::{Borrow, BorrowMut}};
 use parking_lot::Mutex;
 use codec::{Encode, Decode};
 use fork_tree::ForkTree;
@@ -322,7 +322,7 @@ impl<Hash, Number, E: Epoch> Default for EpochChanges<Hash, Number, E> where
 
 impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 	Hash: PartialEq + Ord + AsRef<[u8]> + AsMut<[u8]> + Copy,
-	Number: Ord + One + Zero + Add<Output=Number> + Copy,
+	Number: Ord + One + Zero + Sub<Output=Number> + Add<Output=Number> + Copy,
 {
 	/// Create a new epoch change.
 	pub fn new() -> Self {
@@ -639,6 +639,14 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 	/// Return the inner fork tree.
 	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpochHeader<E>> {
 		&self.inner
+	}
+
+	/// Get the minimal block height where we need to be able
+	/// to do `is_descendent_of` queries.
+	pub fn needed_parent_relation(&self) -> Option<Number> {
+		// TODO consider using tree accessor and remove this function
+		self.inner.lowest_node_number()
+			.map(|number| number - One::one())
 	}
 }
 

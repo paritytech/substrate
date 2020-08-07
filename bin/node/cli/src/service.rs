@@ -80,6 +80,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		sc_consensus_babe::Config::get_or_compute(&*client)?,
 		grandpa_block_import,
 		client.clone(),
+		None,
 	)?;
 
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
@@ -338,7 +339,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
-	let (client, backend, keystore, mut task_manager, on_demand) =
+	let (client, backend, keystore, mut task_manager, on_demand, shared_pruning_requirements) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
@@ -364,6 +365,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 		sc_consensus_babe::Config::get_or_compute(&*client)?,
 		grandpa_block_import,
 		client.clone(),
+		Some(&shared_pruning_requirements),
 	)?;
 
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
