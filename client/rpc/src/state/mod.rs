@@ -102,8 +102,19 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		block: Option<Block::Hash>,
 		key: StorageKey,
 	) -> FutureResult<Option<u64>> {
-		Box::new(self.storage(block, key)
-			.map(|x| x.map(|x| x.0.len() as u64)))
+		let value_len = self.storage(block, key.clone()).map(|x| x.map(|x| x.0.len() as u64));
+		let pairs_len = self.storage_pairs(block, key.clone())
+			.map(|kv| {
+				let item_sum = kv.iter().map(|(_, v)| v.0.len() as u64).sum::<u64>();
+				if item_sum > 0 {
+					Some(item_sum)
+				} else {
+					None
+				}
+			});
+
+		let both = value_len.join(pairs_len);
+		Box::new(both.map(|(a, b)| a.or(b)))
 	}
 
 	/// Returns the runtime metadata as an opaque blob.
