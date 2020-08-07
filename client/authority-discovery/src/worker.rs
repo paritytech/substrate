@@ -136,7 +136,7 @@ where
 	/// Interval on which to query for addresses of other authorities.
 	query_interval: Interval,
 
-	addr_cache: addr_cache::AddrCache<AuthorityId, Multiaddr>,
+	addr_cache: addr_cache::AddrCache,
 
 	metrics: Option<Metrics>,
 
