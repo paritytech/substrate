@@ -240,6 +240,9 @@ pub trait Trait: frame_system::Trait {
 	/// Bounty duration in blocks.
 	type BountyDuration: Get<Self::BlockNumber>;
 
+	/// Percentage of the curator fee that will be reserved upfront as deposit for bounty curator.
+	type BountyCuratorDeposit: Get<Permill>;
+
 	/// Maximum acceptable reason length.
 	type MaximumReasonLength: Get<u32>;
 
@@ -513,6 +516,9 @@ decl_module! {
 
 		/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 		const BountyDepositPayoutDelay: T::BlockNumber = T::BountyDepositPayoutDelay::get();
+
+		/// Percentage of the curator fee that will be reserved upfront as deposit for bounty curator.
+		const BountyCuratorDeposit: Permill = T::BountyCuratorDeposit::get();
 
 		/// Maximum acceptable reason length.
 		const MaximumReasonLength: u32 = T::MaximumReasonLength::get();
@@ -858,6 +864,56 @@ decl_module! {
 			})?;
 		}
 
+		#[weight = 10_000]
+		fn assign_curator(
+			origin,
+			#[compact] bounty_id: ProposalIndex,
+			curator: <T::Lookup as StaticLookup>::Source,
+			#[compact] fee: BalanceOf<T>,
+		) {
+			T::ApproveOrigin::ensure_origin(origin)?;
+
+			let curator = T::Lookup::lookup(curator)?;
+			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+				match bounty.status {
+					BountyStatus::Funded | BountyStatus::CuratorAssigned { .. } => {},
+					_ => return Err(Error::<T>::UnexpectedStatus.into()),
+				};
+
+				bounty.status = BountyStatus::CuratorAssigned { curator };
+				bounty.fee = fee;
+
+				Ok(())
+			})?;
+		}
+
+		#[weight = 10_000]
+		fn accept_curator(origin, #[compact] bounty_id: ProposalIndex) {
+			let signer = ensure_signed(origin)?;
+
+			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+				ensure!(bounty.status == BountyStatus::Funded, Error::<T>::UnexpectedStatus);
+
+				match bounty.status {
+					BountyStatus::CuratorAssigned { ref curator } => {
+						ensure!(signer == *curator, Error::<T>::RequireCurator);
+
+						let deposit = T::BountyCuratorDeposit::get() * bounty.fee;
+						T::Currency::reserve(curator, deposit)?;
+						bounty.curator_deposit = deposit;
+
+						let expires = system::Module::<T>::block_number() + T::BountyDuration::get();
+						bounty.status = BountyStatus::Active { curator: curator.clone(), expires };
+
+						Ok(())
+					},
+					_ => Err(Error::<T>::UnexpectedStatus.into()),
+				}
+			})?;
+		}
+
 		/// Award bounty to a beneficiary account. The beneficiary will be able to claim the funds after a delay.
 		///
 		/// The dispatch origin for this call must be the curator of this bounty.
@@ -876,7 +932,7 @@ decl_module! {
 						curator,
 						..
 					} => {
-						ensure!(*curator == signer, Error::<T>::RequireCurator);
+						ensure!(signer == *curator, Error::<T>::RequireCurator);
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}

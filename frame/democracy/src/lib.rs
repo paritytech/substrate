@@ -491,14 +491,14 @@ decl_event! {
 		Vetoed(AccountId, Hash, BlockNumber),
 		/// A proposal's preimage was noted, and the deposit taken. [proposal_hash, who, deposit]
 		PreimageNoted(Hash, AccountId, Balance),
-		/// A proposal preimage was removed and used (the deposit was returned). 
+		/// A proposal preimage was removed and used (the deposit was returned).
 		/// [proposal_hash, provider, deposit]
 		PreimageUsed(Hash, AccountId, Balance),
 		/// A proposal could not be executed because its preimage was invalid. [proposal_hash, ref_index]
 		PreimageInvalid(Hash, ReferendumIndex),
 		/// A proposal could not be executed because its preimage was missing. [proposal_hash, ref_index]
 		PreimageMissing(Hash, ReferendumIndex),
-		/// A registered preimage was removed and the deposit collected by the reaper. 
+		/// A registered preimage was removed and the deposit collected by the reaper.
 		/// [proposal_hash, provider, deposit, reaper]
 		PreimageReaped(Hash, AccountId, Balance, AccountId),
 		/// An [account] has been unlocked successfully.
