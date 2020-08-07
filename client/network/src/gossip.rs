@@ -47,7 +47,7 @@
 //! peer and protocol, then the notifications will be interleaved in an unpredictable way.
 //!
 
-use crate::{ExHashT, NetworkService, service::{NotificationSender, NotificationSenderError}};
+use crate::{ExHashT, NetworkService};
 
 use async_std::sync::{Condvar, Mutex, MutexGuard};
 use futures::prelude::*;
@@ -88,8 +88,22 @@ impl<M> QueueSender<M> {
 		H: ExHashT,
 		F: Fn(M) -> Vec<u8> + Send + 'static,
 	{
-		QueueSenderPrototype::new(service, peer_id)
-			.build(protocol, queue_size_limit, messages_encode)
+		let shared = Arc::new(Shared {
+			stop_task: atomic::AtomicBool::new(false),
+			condvar: Condvar::new(),
+			queue_size_limit,
+			messages_queue: Mutex::new(VecDeque::with_capacity(queue_size_limit)),
+		});
+
+		let task = spawn_task(
+			service,
+			peer_id,
+			protocol,
+			shared.clone(),
+			messages_encode
+		);
+
+		(QueueSender { shared }, task)
 	}
 
 	/// Locks the queue of messages towards this peer.
@@ -128,70 +142,6 @@ impl<M> Drop for QueueSender<M> {
 		// See also the corresponding code in the background task.
 		self.shared.stop_task.store(true, atomic::Ordering::Release);
 		self.shared.condvar.notify_all();
-	}
-}
-
-/// Utility. Generic over the type of the messages. Holds a [`NetworkService`] and a [`PeerId`].
-/// Provides a [`QueueSenderPrototype::build`] function that builds a [`QueueSender`].
-#[derive(Clone)]
-pub struct QueueSenderPrototype {
-	service: Arc<dyn AbstractNotificationSender + Send + Sync + 'static>,
-	peer_id: PeerId,
-}
-
-impl QueueSenderPrototype {
-	/// Builds a new [`QueueSenderPrototype`] containing the given components.
-	pub fn new<B, H>(
-		service: Arc<NetworkService<B, H>>,
-		peer_id: PeerId,
-	) -> Self
-	where
-		B: BlockT + 'static,
-		H: ExHashT,
-	{
-		QueueSenderPrototype {
-			service,
-			peer_id,
-		}
-	}
-
-	/// Turns this [`QueueSenderPrototype`] into a [`QueueSender`] and a future.
-	///
-	/// See [`DirectGossip::new`] for details.
-	pub fn build<M, F>(
-		self,
-		protocol: ConsensusEngineId,
-		queue_size_limit: usize,
-		messages_encode: F
-	) -> (QueueSender<M>, impl Future<Output = ()> + Send + 'static)
-	where
-		M: Send + 'static,
-		F: Fn(M) -> Vec<u8> + Send + 'static,
-	{
-		let shared = Arc::new(Shared {
-			stop_task: atomic::AtomicBool::new(false),
-			condvar: Condvar::new(),
-			queue_size_limit,
-			messages_queue: Mutex::new(VecDeque::with_capacity(queue_size_limit)),
-		});
-
-		let task = spawn_task(
-			self.service,
-			self.peer_id,
-			protocol,
-			shared.clone(),
-			messages_encode
-		);
-
-		(QueueSender { shared }, task)
-	}
-}
-
-impl fmt::Debug for QueueSenderPrototype {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_struct("QueueSenderPrototype")
-			.field("peer_id", &self.peer_id)
-			.finish()
 	}
 }
 
@@ -248,8 +198,8 @@ struct Shared<M> {
 	queue_size_limit: usize,
 }
 
-async fn spawn_task<M, F: Fn(M) -> Vec<u8>>(
-	service: Arc<dyn AbstractNotificationSender + Send + Sync + 'static>,
+async fn spawn_task<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>(
+	service: Arc<NetworkService<B, H>>,
 	peer_id: PeerId,
 	protocol: ConsensusEngineId,
 	shared: Arc<Shared<M>>,
@@ -291,24 +241,5 @@ async fn spawn_task<M, F: Fn(M) -> Vec<u8>>(
 		};
 
 		let _ = ready.send(messages_encode(next_message));
-	}
-}
-
-/// Abstraction around `NetworkService` that permits removing the `B` and `H` parameters.
-trait AbstractNotificationSender {
-	fn notification_sender(
-		&self,
-		target: PeerId,
-		engine_id: ConsensusEngineId,
-	) -> Result<NotificationSender, NotificationSenderError>;
-}
-
-impl<B: BlockT, H: ExHashT> AbstractNotificationSender for NetworkService<B, H> {
-	fn notification_sender(
-		&self,
-		target: PeerId,
-		engine_id: ConsensusEngineId,
-	) -> Result<NotificationSender, NotificationSenderError> {
-		NetworkService::notification_sender(self, target, engine_id)
 	}
 }
