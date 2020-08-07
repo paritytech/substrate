@@ -16,11 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#[cfg(test)]
-use sc_service::{TaskExecutor};
-
 #[test_utils::test]
-async fn basic_test(_: TaskExecutor) {
+async fn basic_test(_: sc_service::TaskExecutor) {
 	assert!(true);
 }
 
