@@ -16,13 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::arg_enums::{Cors, RpcMethods};
+use crate::arg_enums::{Cors, RpcMethods, TelemetryEndpoint};
 use crate::error::{Error, Result};
 use sc_service::{
 	config::{BasePath, MultiaddrWithPeerId, PrometheusConfig},
 	ChainSpec, Role,
 };
-use sc_telemetry::TelemetryEndpoints;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use structopt::StructOpt;
 
@@ -167,8 +166,8 @@ pub struct NodeParams {
 	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
 	/// the least verbosity.
 	/// Expected format is 'URL VERBOSITY', e.g. `--telemetry-url 'wss://foo/bar 0'`.
-	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
-	pub telemetry_endpoints: Vec<(String, u8)>,
+	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str))]
+	pub telemetry_endpoints: Vec<TelemetryEndpoint>,
 
 	/// Shortcut for `--name Alice --validator` with session keys for `Alice` added to keystore.
 	#[structopt(long, conflicts_with_all = &["bob", "charlie", "dave", "eve", "ferdie", "one", "two"])]
@@ -284,14 +283,13 @@ impl NodeParams {
 	pub fn telemetry_endpoints(
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
-	) -> Result<Option<TelemetryEndpoints>> {
+	) -> Result<Option<sc_telemetry::TelemetryEndpoints>> {
 		Ok(if self.no_telemetry {
 			None
 		} else if !self.telemetry_endpoints.is_empty() {
-			Some(
-				TelemetryEndpoints::new(self.telemetry_endpoints.clone())
-					.map_err(|e| e.to_string())?,
-			)
+			Some(sc_telemetry::TelemetryEndpoints::new(
+				self.telemetry_endpoints.iter().cloned().map(Into::into).collect(),
+			).map_err(|e| e.to_string())?)
 		} else {
 			chain_spec.telemetry_endpoints().clone()
 		})
@@ -454,36 +452,5 @@ fn rpc_interface(
 		Ok(Ipv4Addr::UNSPECIFIED.into())
 	} else {
 		Ok(Ipv4Addr::LOCALHOST.into())
-	}
-}
-
-#[derive(Debug)]
-enum TelemetryParsingError {
-	MissingVerbosity,
-	VerbosityParsingError(std::num::ParseIntError),
-}
-
-impl std::error::Error for TelemetryParsingError {}
-
-impl std::fmt::Display for TelemetryParsingError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match &*self {
-			TelemetryParsingError::MissingVerbosity => write!(f, "Verbosity level missing"),
-			TelemetryParsingError::VerbosityParsingError(e) => write!(f, "{}", e),
-		}
-	}
-}
-
-fn parse_telemetry_endpoints(s: &str) -> std::result::Result<(String, u8), TelemetryParsingError> {
-	let pos = s.find(' ');
-	match pos {
-		None => Err(TelemetryParsingError::MissingVerbosity),
-		Some(pos_) => {
-			let url = s[..pos_].to_string();
-			let verbosity = s[pos_ + 1..]
-				.parse()
-				.map_err(TelemetryParsingError::VerbosityParsingError)?;
-			Ok((url, verbosity))
-		}
 	}
 }

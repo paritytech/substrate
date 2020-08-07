@@ -207,6 +207,47 @@ impl From<&str> for Cors {
 	}
 }
 
+#[derive(Debug, Clone)]
+pub struct TelemetryEndpoint(String, u8);
+
+#[derive(Debug)]
+pub enum TelemetryParsingError {
+	MissingVerbosity,
+	VerbosityParsingError(std::num::ParseIntError),
+}
+
+impl std::error::Error for TelemetryParsingError {}
+
+impl std::fmt::Display for TelemetryParsingError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match &*self {
+			TelemetryParsingError::MissingVerbosity => write!(f, "Verbosity level missing"),
+			TelemetryParsingError::VerbosityParsingError(e) => write!(f, "{}", e),
+		}
+	}
+}
+
+impl std::str::FromStr for TelemetryEndpoint {
+	type Err = TelemetryParsingError;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		let mut parts = s.splitn(2, ' ');
+		let url = parts.next().expect("SplitN always has at least one result; qed");
+		let verbosity = parts.next().ok_or(TelemetryParsingError::MissingVerbosity)?;
+
+		Ok(TelemetryEndpoint(
+			url.to_string(),
+			verbosity.parse().map_err(TelemetryParsingError::VerbosityParsingError)?,
+		))
+	}
+}
+
+impl From<TelemetryEndpoint> for (String, u8) {
+	fn from(i: TelemetryEndpoint) -> Self {
+		(i.0, i.1)
+	}
+}
+
 /// Default value for the `--execution-syncing` parameter.
 pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
 /// Default value for the `--execution-import-block` parameter.
