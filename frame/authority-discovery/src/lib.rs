@@ -71,9 +71,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	where
 		I: Iterator<Item = (&'a T::AccountId, Self::Key)>,
 	{
-		let mut keys = authorities.map(|x| x.1).collect::<Vec<_>>();
-
-		Self::initialize_keys(&keys);
+		Self::initialize_keys(&authorities.map(|x| x.1).collect::<Vec<_>>());
 	}
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
@@ -249,7 +247,9 @@ mod tests {
 				first_authorities.iter().map(|id| (id, id.clone()))
 			);
 			first_authorities.sort();
-			assert_eq!(first_authorities, AuthorityDiscovery::authorities());
+			let mut authorities_returned = AuthorityDiscovery::authorities();
+			authorities_returned.sort();
+			assert_eq!(first_authorities, authorities_returned);
 
 			// When `changed` set to false, the authority set should not be updated.
 			AuthorityDiscovery::on_new_session(
@@ -257,9 +257,11 @@ mod tests {
 				second_authorities_and_account_ids.clone().into_iter(),
 				third_authorities_and_account_ids.clone().into_iter(),
 			);
+			let mut authorities_returned = AuthorityDiscovery::authorities();
+			authorities_returned.sort();
 			assert_eq!(
 				first_authorities,
-				AuthorityDiscovery::authorities(),
+				authorities_returned,
 				"Expected authority set not to change as `changed` was set to false.",
 			);
 
