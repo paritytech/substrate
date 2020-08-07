@@ -170,7 +170,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ### Transactional Function Example
 ///
 /// Transactional function discards all changes to storage if it returns `Err`, or commits if
-/// `Ok`, via the #\[transactonal\] attribute. Note the attribute must be after #\[weight\].
+/// `Ok`, via the #\[transactional\] attribute. Note the attribute must be after #\[weight\].
 ///
 /// ```
 /// # #[macro_use]
@@ -210,6 +210,14 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// }
 /// # fn main() {}
 /// ```
+///
+/// ### Attributes on Functions
+///
+/// Attributes on functions are supported, but must be in the order of:
+/// 1. Optional #\[doc\] attribute.
+/// 2. #\[weight\] attribute.
+/// 3. Optional function attributes, for instance #\[transactional\]. Those function attributes will be written
+/// only on the dispatchable functions implemented on `Module`, not on the `Call` enum variant.
 ///
 /// ## Multiple Module Instances Example
 ///
