@@ -35,6 +35,7 @@ use substrate_test_runtime_client::{
 	AccountKeyring::{self, *},
 };
 use sp_blockchain::CachedHeaderMetadata;
+use futures::future::ready;
 
 /// Error type used by [`TestApi`].
 #[derive(Debug, derive_more::From, derive_more::Display)]
@@ -52,9 +53,30 @@ impl std::error::Error for Error {
 	}
 }
 
+pub enum IsBestBlock {
+	Yes,
+	No,
+}
+
+impl IsBestBlock {
+	pub fn is_best(&self) -> bool {
+		matches!(self, Self::Yes)
+	}
+}
+
+impl From<bool> for IsBestBlock {
+	fn from(is_best: bool) -> Self {
+		if is_best {
+			Self::Yes
+		} else {
+			Self::No
+		}
+	}
+}
+
 #[derive(Default)]
 pub struct ChainState {
-	pub block_by_number: BTreeMap<BlockNumber, Vec<Block>>,
+	pub block_by_number: BTreeMap<BlockNumber, Vec<(Block, IsBestBlock)>>,
 	pub block_by_hash: HashMap<Hash, Block>,
 	pub nonces: HashMap<AccountId, u64>,
 	pub invalid_hashes: HashSet<Hash>,
@@ -86,7 +108,7 @@ impl TestApi {
 		};
 
 		// Push genesis block
-		api.push_block(0, Vec::new());
+		api.push_block(0, Vec::new(), true);
 
 		api
 	}
@@ -97,10 +119,12 @@ impl TestApi {
 	}
 
 	/// Push block under given number.
-	///
-	/// If multiple blocks exists with the same block number, the first inserted block will be
-	/// interpreted as part of the canonical chain.
-	pub fn push_block(&self, block_number: BlockNumber, xts: Vec<Extrinsic>) -> Header {
+	pub fn push_block(
+		&self,
+		block_number: BlockNumber,
+		xts: Vec<Extrinsic>,
+		is_best_block: bool,
+	) -> Header {
 		let parent_hash = {
 			let chain = self.chain.read();
 			block_number
@@ -109,12 +133,12 @@ impl TestApi {
 					chain.block_by_number
 						.get(&num)
 						.map(|blocks| {
-							blocks[0].header.hash()
+							blocks[0].0.header.hash()
 						})
 				}).unwrap_or_default()
 		};
 
-		self.push_block_with_parent(parent_hash, xts)
+		self.push_block_with_parent(parent_hash, xts, is_best_block)
 	}
 
 	/// Push a block using the given `parent`.
@@ -124,14 +148,14 @@ impl TestApi {
 		&self,
 		parent: Hash,
 		xts: Vec<Extrinsic>,
+		is_best_block: bool,
 	) -> Header {
-		let mut chain = self.chain.write();
-
 		// `Hash::default()` is the genesis parent hash
 		let block_number = if parent == Hash::default() {
 			0
 		} else {
-			*chain.block_by_hash
+			*self.chain.read()
+				.block_by_hash
 				.get(&parent)
 				.expect("`parent` exists")
 				.header()
@@ -146,12 +170,19 @@ impl TestApi {
 			state_root: Default::default(),
 		};
 
-		let hash = header.hash();
-		let block = Block::new(header.clone(), xts);
-		chain.block_by_hash.insert(hash, block.clone());
-		chain.block_by_number.entry(block_number).or_default().push(block);
+		self.add_block(Block::new(header.clone(), xts), is_best_block);
 
 		header
+	}
+
+	/// Add a block to the internal state.
+	pub fn add_block(&self, block: Block, is_best_block: bool) {
+		let hash = block.header.hash();
+		let block_number = block.header.number().clone();
+
+		let mut chain = self.chain.write();
+		chain.block_by_hash.insert(hash, block.clone());
+		chain.block_by_number.entry(block_number).or_default().push((block, is_best_block.into()));
 	}
 
 	fn hash_and_length_inner(ex: &Extrinsic) -> (Hash, usize) {
@@ -203,11 +234,35 @@ impl sc_transaction_graph::ChainApi for TestApi {
 
 	fn validate_transaction(
 		&self,
-		_at: &BlockId<Self::Block>,
+		at: &BlockId<Self::Block>,
 		_source: TransactionSource,
 		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		self.validation_requests.write().push(uxt.clone());
+
+		match self.block_id_to_number(at) {
+			Ok(Some(number)) => {
+				let found_best = self.chain
+					.read()
+					.block_by_number
+					.get(&number)
+					.map(|blocks| blocks.iter().any(|b| b.1.is_best()))
+					.unwrap_or(false);
+
+				// If there is no best block, we don't know based on which block we should validate
+				// the transaction. (This is not required for this test function, but in real
+				// environment it would fail because of this).
+				if !found_best {
+					return ready(Ok(
+						Err(TransactionValidityError::Invalid(InvalidTransaction::Custom(1)).into())
+					))
+				}
+			},
+			Ok(None) => return ready(Ok(
+				Err(TransactionValidityError::Invalid(InvalidTransaction::Custom(2)).into())
+			)),
+			Err(e) => return ready(Err(e)),
+		}
 
 		let (requires, provides) = if let Some(transfer) = uxt.try_transfer() {
 			let chain_nonce = self.chain.read().nonces.get(&transfer.from).cloned().unwrap_or(0);
@@ -224,7 +279,7 @@ impl sc_transaction_graph::ChainApi for TestApi {
 		};
 
 		if self.chain.read().invalid_hashes.contains(&self.hash_and_length(&uxt).0) {
-			return futures::future::ready(Ok(
+			return ready(Ok(
 				Err(TransactionValidityError::Invalid(InvalidTransaction::Custom(0)).into())
 			))
 		}
@@ -239,7 +294,7 @@ impl sc_transaction_graph::ChainApi for TestApi {
 
 		(self.valid_modifier.read())(&mut validity);
 
-		futures::future::ready(Ok(Ok(validity)))
+		ready(Ok(Ok(validity)))
 	}
 
 	fn block_id_to_number(
@@ -266,7 +321,7 @@ impl sc_transaction_graph::ChainApi for TestApi {
 				.read()
 				.block_by_number
 				.get(num)
-				.map(|blocks| blocks[0].header().hash()),
+				.and_then(|blocks| blocks.iter().find(|b| b.1.is_best()).map(|b| b.0.header().hash())),
 		})
 	}
 
@@ -283,7 +338,7 @@ impl sc_transaction_graph::ChainApi for TestApi {
 				.read()
 				.block_by_number
 				.get(num)
-				.map(|b| b[0].extrinsics().to_vec()),
+				.map(|b| b[0].0.extrinsics().to_vec()),
 			BlockId::Hash(hash) => self.chain
 				.read()
 				.block_by_hash
@@ -332,4 +387,3 @@ pub fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
 	let signature = transfer.using_encoded(|e| who.sign(e)).into();
 	Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: false }
 }
-
