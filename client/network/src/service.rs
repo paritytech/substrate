@@ -91,7 +91,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// Local copy of the `PeerId` of the local node.
 	local_peer_id: PeerId,
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
-	bandwidth: Arc<transport::BandwidthSinks>,
+	bandwidth: Arc<transport::BandwidthMonitor>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,

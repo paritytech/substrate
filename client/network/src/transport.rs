@@ -16,7 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use async_std::task;
 use futures::prelude::*;
+use futures_timer::Delay;
 use libp2p::{
 	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
 	core::{
@@ -27,7 +29,14 @@ use libp2p::{
 };
 #[cfg(not(target_os = "unknown"))]
 use libp2p::{tcp, dns, websocket};
-use std::{io, sync::Arc, time::Duration, usize};
+use std::{
+	iter,
+	io,
+	ops::Range,
+	sync::{Arc, atomic::{Ordering, AtomicU64}},
+	time::Duration,
+};
+use void::Void;
 
 pub use self::bandwidth::BandwidthSinks;
 
@@ -43,7 +52,7 @@ pub fn build_transport(
 	memory_only: bool,
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
 	use_yamux_flow_control: bool
-) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
+) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<BandwidthMonitor>) {
 	// Build configuration objects for encryption mechanisms.
 	let noise_config = {
 		// For more information about these two panics, see in "On the Importance of
@@ -104,7 +113,8 @@ pub fn build_transport(
 		OptionalTransport::none()
 	});
 
-	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
+	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport);
+	let bandwidth = BandwidthMonitor::new(sinks);
 
 	// Encryption
 	let transport = transport.and_then(move |stream, endpoint| {
@@ -145,5 +155,108 @@ pub fn build_transport(
 			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 			.boxed();
 
-	(transport, sinks)
+	(transport, bandwidth)
+}
+
+/// A monitor for network bandwidth usage.
+pub struct BandwidthMonitor {
+	avg_inbound_per_sec: AtomicU64,
+	avg_outbound_per_sec: AtomicU64,
+}
+
+/// The number of data points, i.e. total bandwidth usage
+/// measurements, tracked for moving average bandwidth
+/// calculation.
+const DATA_POINTS: usize = 5;
+/// The number of consecutive pairs of data points,
+/// i.e. windows of size 2, for moving average bandwidth
+/// calculation.
+const DATA_WINDOWS: usize = DATA_POINTS - 1;
+
+/// The data of the background task that updates the `BandwidthMonitor`.
+struct BandwidthTask {
+	timer: Delay,
+	data: [(u64, u64); DATA_POINTS],
+	index: iter::Cycle<Range<usize>>,
+	input: Arc<BandwidthSinks>,
+	output: Arc<BandwidthMonitor>,
+}
+
+impl BandwidthTask {
+	/// Runs the task that periodically updates the `BandwidthMonitor`
+	/// from the `BandwidthSinks`.
+	async fn run(mut self) -> Void {
+		loop {
+			future::poll_fn(|cx| self.timer.poll_unpin(cx)).await;
+
+			let inbound = self.input.total_inbound();
+			let outbound = self.input.total_outbound();
+
+			let ix = self.index.next().expect("Cycle never ends; qed");
+			self.data[ix] = (inbound, outbound);
+
+			let mut i = ix;
+			let (mut rx, mut tx): (u64, u64) = (0,0);
+			for _ in 0 .. DATA_WINDOWS {
+				let j = dec_mod(i);
+				let (rx_i, tx_i) = self.data[i];
+				let (rx_j, tx_j) = self.data[j];
+				rx = rx.saturating_add(rx_i - rx_j);
+				tx = tx.saturating_add(tx_i - tx_j);
+				i = j;
+			}
+			let rx_avg = rx / DATA_WINDOWS as u64;
+			let tx_avg = tx / DATA_WINDOWS as u64;
+
+			self.output.avg_inbound_per_sec.store(rx_avg, Ordering::Relaxed);
+			self.output.avg_outbound_per_sec.store(tx_avg, Ordering::Relaxed);
+
+			self.timer.reset(Duration::from_secs(1));
+		}
+	}
+}
+
+impl BandwidthMonitor {
+	/// The (moving) average number of bytes sent per second
+	/// within the last few seconds.
+	pub fn average_upload_per_sec(&self) -> u64 {
+		self.avg_outbound_per_sec.load(Ordering::Relaxed)
+	}
+
+	/// The (moving) average number of bytes received per second
+	/// within the last few seconds.
+	pub fn average_download_per_sec(&self) -> u64 {
+		self.avg_inbound_per_sec.load(Ordering::Relaxed)
+	}
+
+	fn new(input: Arc<BandwidthSinks>) -> Arc<Self> {
+		let monitor = Arc::new(BandwidthMonitor {
+			avg_inbound_per_sec: AtomicU64::new(0),
+			avg_outbound_per_sec: AtomicU64::new(0),
+		});
+
+		let task = BandwidthTask {
+			input,
+			data: [(0,0); DATA_POINTS],
+			index: (0..DATA_POINTS).into_iter().cycle(),
+			timer: Delay::new(Duration::from_secs(1)),
+			output: monitor.clone(),
+		};
+
+		let _handle = task::Builder::new()
+			.name("network-bandwidth".to_string())
+			.spawn(task.run())
+			.expect("Failed to spawn network-bandwidth task.");
+
+		monitor
+	}
+}
+
+/// Decrements in `Z/{DATA_POINTS}Z`.
+fn dec_mod(n: usize) -> usize {
+	if n == 0 {
+		DATA_POINTS - 1
+	} else {
+		n - 1
+	}
 }
