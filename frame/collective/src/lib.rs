@@ -235,26 +235,6 @@ decl_error! {
 	}
 }
 
-/// Functions for calcuating the weight of dispatchables.
-mod weight_for {
-	use frame_support::weights::Weight;
-	use super::{Trait, Instance, WeightInfo};
-
-	/// Calculate the weight for `close`.
-	pub(crate) fn close<T: Trait<I>, I: Instance>(
-		length: u32,             // B
-		members: u32,            // M
-		proposal_weight: Weight, // P1
-		proposals: u32,          // P2
-	) -> Weight {
-		T::WeightInfo::close_early_approved(length, members, proposals)
-			.max(T::WeightInfo::close_early_disapproved(members, proposals))
-			.max(T::WeightInfo::close_approved(length, members, proposals))
-			.max(T::WeightInfo::close_disapproved(members, proposals))
-			.saturating_add(proposal_weight)
-	}
-}
-
 /// Return the weight of a dispatch call result as an `Option`.
 ///
 /// Will return the weight regardless of what the state of the result is.
@@ -572,12 +552,17 @@ decl_module! {
 		// disapproved:       B * 0.003 vs 0 * b
 		// approved:          65.95 vs 77.033
 		#[weight = (
-			weight_for::close::<T, I>(
-				*length_bound, // B
-				MAX_MEMBERS, // `M`
-				*proposal_weight_bound, // `P1`
-				T::MaxProposals::get(), // `P2`
-			),
+			{
+				let b = *length_bound;
+				let m = MAX_MEMBERS;
+				let p1 = *proposal_weight_bound;
+				let p2 = T::MaxProposals::get();
+				T::WeightInfo::close_early_approved(b, m, p2)
+					.max(T::WeightInfo::close_early_disapproved(m, p2))
+					.max(T::WeightInfo::close_approved(b, m, p2))
+					.max(T::WeightInfo::close_disapproved(m, p2))
+					.saturating_add(p1)
+			},
 			DispatchClass::Operational
 		)]
 		fn close(origin,

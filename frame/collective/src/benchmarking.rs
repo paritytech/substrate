@@ -287,12 +287,12 @@ benchmarks_instance! {
 	}
 
 	close_early_disapproved {
-		let b in 1 .. MAX_BYTES;
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
 		let m in 4 .. MAX_MEMBERS;
 		let p in 1 .. T::MaxProposals::get();
 
-		let bytes_in_storage = b + size_of::<u32>() as u32;
+		let bytes = 100;
+		let bytes_in_storage = bytes + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -313,7 +313,7 @@ benchmarks_instance! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; b as usize]).into();
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; bytes as usize]).into();
 			Collective::<T, _>::propose(
 				SystemOrigin::Signed(proposer.clone()).into(),
 				threshold,
@@ -445,12 +445,12 @@ benchmarks_instance! {
 	}
 
 	close_disapproved {
-		let b in 1 .. MAX_BYTES;
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
 		let m in 4 .. MAX_MEMBERS;
 		let p in 1 .. T::MaxProposals::get();
 
-		let bytes_in_storage = b + size_of::<u32>() as u32;
+		let bytes = 100;
+		let bytes_in_storage = bytes + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -474,7 +474,7 @@ benchmarks_instance! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; b as usize]).into();
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; bytes as usize]).into();
 			Collective::<T, _>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
