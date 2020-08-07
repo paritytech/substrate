@@ -28,7 +28,7 @@ use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 use wasmtime::{Func, Val};
-use sandbox::SandboxCapabiliesHolder;
+use sandbox::{SandboxBackend, SandboxCapabiliesHolder};
 
 /// Wrapper type for pointer to a Wasm table entry.
 ///
@@ -324,7 +324,13 @@ impl Sandbox for HostState {
 		};
 
 		let instance_idx_or_err_code =
-			match sandbox::instantiate::<_, _, Holder>(dispatch_thunk, wasm, guest_env, state)
+			match sandbox::instantiate::<_, _, Holder>(
+				SandboxBackend::Wasmtime,
+				dispatch_thunk, 
+				wasm, 
+				guest_env, 
+				state
+			)
 				.map(|i| i.register(&mut *self.inner.sandbox_store.borrow_mut()))
 			{
 				Ok(instance_idx) => instance_idx,

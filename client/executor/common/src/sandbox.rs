@@ -339,6 +339,11 @@ where
 	f(&mut guest_externals)
 }
 
+enum BackendInstance {
+	Wasmi(wasmi::ModuleRef),
+	Wasmtime(wasmtime::Instance),
+}
+
 /// Sandboxed instance of a wasm module.
 ///
 /// It's primary purpose is to [`invoke`] exported functions on it.
@@ -354,8 +359,7 @@ where
 ///
 /// [`invoke`]: #method.invoke
 pub struct SandboxInstance<FR> {
-	wasmi_instance: ModuleRef,
-	wasmtime_instance: wasmtime::Instance,
+	backend_instance: BackendInstance,
 	dispatch_thunk: FR,
 	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
 }
@@ -393,47 +397,52 @@ impl<FR> SandboxInstance<FR> {
 				self,
 				state,
 				|guest_externals| {
+					match &self.backend_instance {
+						BackendInstance::Wasmi(wasmi_instance) => {
+							let wasmi_result = wasmi_instance
+								.invoke_export(export_name, args, guest_externals)?;
+							
+							Ok(wasmi_result)
+						}
 
-					let wasmi_result = self.wasmi_instance
-						.invoke_export(export_name, args, guest_externals)?;
+						BackendInstance::Wasmtime(wasmtime_instance) => {
+							let wasmtime_function = wasmtime_instance
+								.get_func(export_name)
+								.ok_or(wasmi::Error::Function("wasmtime function failed".to_string()))?;
 
-					let wasmtime_function = self
-						.wasmtime_instance
-						.get_func(export_name)
-						.ok_or(wasmi::Error::Function("wasmtime function failed".to_string()))?;
+							let args: Vec<Val> = args
+								.iter()
+								.map(|v| match *v {
+									RuntimeValue::I32(val) => Val::I32(val),
+									RuntimeValue::I64(val) => Val::I64(val),
+									RuntimeValue::F32(val) => Val::F32(val.into()),
+									RuntimeValue::F64(val) => Val::F64(val.into()),
+								})
+								.collect();
 
-					let args: Vec<Val> = args
-						.iter()
-						.map(|v| match *v {
-							RuntimeValue::I32(val) => Val::I32(val),
-							RuntimeValue::I64(val) => Val::I64(val),
-							RuntimeValue::F32(val) => Val::F32(val.into()),
-							RuntimeValue::F64(val) => Val::F64(val.into()),
-						})
-						.collect();
+							let wasmtime_result = wasmtime_function
+								.call(&args)
+								.map_err(|e| wasmi::Error::Function(e.to_string()))?;
 
-					let wasmtime_result = wasmtime_function
-						.call(&args)
-						.map_err(|e| wasmi::Error::Function(e.to_string()))?;
+							assert!(wasmtime_result.len() < 2, "multiple return types are not supported yet");
 
-					assert!(wasmtime_result.len() < 2, "multiple return types are not supported yet");
+							let wasmtime_result = if let Some(wasmtime_value) = wasmtime_result.first() {
+								let wasmtime_value = match *wasmtime_value {
+									Val::I32(val) => RuntimeValue::I32(val),
+									Val::I64(val) => RuntimeValue::I64(val),
+									Val::F32(val) => RuntimeValue::F32(val.into()),
+									Val::F64(val) => RuntimeValue::F64(val.into()),
+									_ => unreachable!(),
+								};
 
-					let wasmtime_result = if let Some(wasmi_value) = wasmi_result {
-						let wasmtime_value = match *wasmtime_result.first().expect("value should exist") {
-							Val::I32(val) => RuntimeValue::I32(val),
-							Val::I64(val) => RuntimeValue::I64(val),
-							Val::F32(val) => RuntimeValue::F32(val.into()),
-							Val::F64(val) => RuntimeValue::F64(val.into()),
-							_ => unreachable!(),
-						};
+								Some(wasmtime_value)
+							} else {
+								None
+							};
 
-						assert_eq!(wasmi_value, wasmtime_value, "return values do not match");
-						Some(wasmtime_value)
-					} else {
-						None
-					};
-
-					Ok(wasmtime_result)
+							Ok(wasmtime_result)
+						}
+					}
 				},
 			)
 		})
@@ -443,25 +452,29 @@ impl<FR> SandboxInstance<FR> {
 	///
 	/// Returns `Some(_)` if the global could be found.
 	pub fn get_global_val(&self, name: &str) -> Option<sp_wasm_interface::Value> {
-		let wasmi_global = self.wasmi_instance
-			.export_by_name(name)?
-			.as_global()?
-			.get();
+		match &self.backend_instance {
+			BackendInstance::Wasmi(wasmi_instance) => {
+				let wasmi_global = wasmi_instance
+					.export_by_name(name)?
+					.as_global()?
+					.get();
 
-		let wasmi_value: sp_wasm_interface::Value = wasmi_global.into();
+				Some(wasmi_global.into())
+			}
 
-		let wasmtime_global = self.wasmtime_instance.get_global(name)?.get();
-		let wasmtime_value = match wasmtime_global {
-			Val::I32(val) => Value::I32(val),
-			Val::I64(val) => Value::I64(val),
-			Val::F32(val) => Value::F32(val),
-			Val::F64(val) => Value::F64(val),
-			_ => None?,
-		};
+			BackendInstance::Wasmtime(wasmtime_instance) => {
+				let wasmtime_global = wasmtime_instance.get_global(name)?.get();
+				let wasmtime_value = match wasmtime_global {
+					Val::I32(val) => Value::I32(val),
+					Val::I64(val) => Value::I64(val),
+					Val::F32(val) => Value::F32(val),
+					Val::F64(val) => Value::F64(val),
+					_ => None?,
+				};
 
-		assert_eq!(wasmi_value, wasmtime_value);
-
-		Some(wasmtime_value)
+				Some(wasmtime_value)
+			}
+		}
 	}
 }
 
@@ -571,6 +584,11 @@ pub trait SandboxCapabiliesHolder {
 	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R;
 }
 
+pub enum SandboxBackend {
+	Wasmi,
+	Wasmtime,
+}
+
 /// Instantiate a guest module and return it's index in the store.
 ///
 /// The guest module's code is specified in `wasm`. Environment that will be available to
@@ -581,6 +599,7 @@ pub trait SandboxCapabiliesHolder {
 /// Returns uninitialized sandboxed module instance or an instantiation error.
 pub fn instantiate<'a, FR, FE, SCH>(
 	// supervisor_externals: &mut FE,
+	sandbox_backend: SandboxBackend,
 	dispatch_thunk: FR,
 	wasm: &[u8],
 	guest_env: GuestEnvironment,
@@ -591,142 +610,156 @@ where
 	FE: SandboxCapabilities<SupervisorFuncRef = FR> + 'a,
 	SCH: SandboxCapabiliesHolder<SupervisorFuncRef = FR, SC = FE>,
 {
-	let wasmi_module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
-	let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
-		.map_err(|_| InstantiationError::Instantiation)?;
 
-	let mut config = wasmtime::Config::new();
-	config.cranelift_opt_level(wasmtime::OptLevel::Speed);
-	config.strategy(wasmtime::Strategy::Cranelift).map_err(|_| InstantiationError::ModuleDecoding)?;
+	let sandbox_instance = match sandbox_backend {
+		SandboxBackend::Wasmi => {
+			let wasmi_module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
+			let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
+				.map_err(|_| InstantiationError::Instantiation)?;
 
-	let wasmtime_engine = wasmtime::Engine::new(&config);
-	let wasmtime_store = wasmtime::Store::new(&wasmtime_engine);
+			let sandbox_instance = Rc::new(SandboxInstance {
+				// In general, it's not a very good idea to use `.not_started_instance()` for anything
+				// but for extracting memory and tables. But in this particular case, we are extracting
+				// for the purpose of running `start` function which should be ok.
+				backend_instance: BackendInstance::Wasmi(wasmi_instance.not_started_instance().clone()),
+				dispatch_thunk,
+				guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
+			});
 
-	let wasmtime_module = wasmtime::Module::new(&wasmtime_engine, wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
+			SCH::with_sandbox_capabilities( |supervisor_externals| {
+				with_guest_externals(
+					supervisor_externals,
+					&sandbox_instance,
+					state,
+					|guest_externals| {
+						wasmi_instance
+							.run_start(guest_externals)
+							.map_err(|_| InstantiationError::StartTrapped)
 
-	let module_imports: Vec<_> = wasmtime_module
-		.imports()
-		.filter_map(|import| {
-			if let wasmtime::ExternType::Func(func_ty) = import.ty() {
-				let guest_func_index = guest_env.imports
-					.func_by_name(import.module(), import.name()).expect("missing import");
+						// Note: no need to run start on wasmtime instance, since it's done automatically
+					},
+				)
+			})?;
 
-				let supervisor_func_index = guest_env.guest_to_supervisor_mapping
-					.func_by_guest_index(guest_func_index).expect("missing guest to host mapping");
+			sandbox_instance
+		}
 
-				let dispatch_thunk = dispatch_thunk.clone();
-				Some(wasmtime::Extern::Func(wasmtime::Func::new(&wasmtime_store, func_ty,
-					move |_caller, params, result| {
-						SCH::with_sandbox_capabilities(|supervisor_externals| {
-							// Serialize arguments into a byte vector.
-							let invoke_args_data = params
-								.iter()
-								.map(|val| match val {
-									Val::I32(val) => Value::I32(*val),
-									Val::I64(val) => Value::I64(*val),
-									Val::F32(val) => Value::F32(*val),
-									Val::F64(val) => Value::F64(*val),
-									_ => unimplemented!()
+		SandboxBackend::Wasmtime => {
+			let mut config = wasmtime::Config::new();
+			config.cranelift_opt_level(wasmtime::OptLevel::Speed);
+			config.strategy(wasmtime::Strategy::Cranelift).map_err(|_| InstantiationError::ModuleDecoding)?;
+
+			let wasmtime_engine = wasmtime::Engine::new(&config);
+			let wasmtime_store = wasmtime::Store::new(&wasmtime_engine);
+
+			let wasmtime_module = wasmtime::Module::new(&wasmtime_engine, wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
+
+			let module_imports: Vec<_> = wasmtime_module
+				.imports()
+				.filter_map(|import| {
+					if let wasmtime::ExternType::Func(func_ty) = import.ty() {
+						let guest_func_index = guest_env.imports
+							.func_by_name(import.module(), import.name()).expect("missing import");
+
+						let supervisor_func_index = guest_env.guest_to_supervisor_mapping
+							.func_by_guest_index(guest_func_index).expect("missing guest to host mapping");
+
+						let dispatch_thunk = dispatch_thunk.clone();
+						Some(wasmtime::Extern::Func(wasmtime::Func::new(&wasmtime_store, func_ty,
+							move |_caller, params, result| {
+								SCH::with_sandbox_capabilities(|supervisor_externals| {
+									// Serialize arguments into a byte vector.
+									let invoke_args_data = params
+										.iter()
+										.map(|val| match val {
+											Val::I32(val) => Value::I32(*val),
+											Val::I64(val) => Value::I64(*val),
+											Val::F32(val) => Value::F32(*val),
+											Val::F64(val) => Value::F64(*val),
+											_ => unimplemented!()
+										})
+										.collect::<Vec<_>>()
+										.encode();
+
+									// Move serialized arguments inside the memory, invoke dispatch thunk and
+									// then free allocated memory.
+									let invoke_args_len = invoke_args_data.len() as WordSize;
+									let invoke_args_ptr = supervisor_externals
+										.allocate_memory(invoke_args_len)
+										.map_err(|_| wasmtime::Trap::new("Can't allocate memory in supervisor for the arguments"))?;
+
+									let deallocate = |fe: &mut FE, ptr, fail_msg| {
+										fe
+											.deallocate_memory(ptr)
+											.map_err(|_| wasmtime::Trap::new(fail_msg))
+									};
+
+									if supervisor_externals
+										.write_memory(invoke_args_ptr, &invoke_args_data)
+										.is_err()
+									{
+										deallocate(supervisor_externals, invoke_args_ptr, "Failed dealloction after failed write of invoke arguments")?;
+										return Err(wasmtime::Trap::new("Can't write invoke args into memory"));
+									}
+
+									let serialized_result = supervisor_externals.invoke(
+										&dispatch_thunk,
+										invoke_args_ptr,
+										invoke_args_len,
+										state,
+										supervisor_func_index,
+									)
+										.map_err(|e| wasmtime::Trap::new(e.to_string()))?;
+
+									// dispatch_thunk returns pointer to serialized arguments.
+									// Unpack pointer and len of the serialized result data.
+									let (serialized_result_val_ptr, serialized_result_val_len) = {
+										// Cast to u64 to use zero-extension.
+										let v = serialized_result as u64;
+										let ptr = (v as u64 >> 32) as u32;
+										let len = (v & 0xFFFFFFFF) as u32;
+										(Pointer::new(ptr), len)
+									};
+
+									let serialized_result_val = supervisor_externals
+										.read_memory(serialized_result_val_ptr, serialized_result_val_len)
+										.map_err(|_| wasmtime::Trap::new("Can't read the serialized result from dispatch thunk"));
+
+									let deserialized_result = deallocate(supervisor_externals, serialized_result_val_ptr, "Can't deallocate memory for dispatch thunk's result")
+										.and_then(|_| serialized_result_val)
+										.and_then(|serialized_result_val| {
+											deserialize_result(&serialized_result_val)
+												.map_err(|e| wasmtime::Trap::new(e.to_string()))
+										})?;
+
+									if let Some(value) = deserialized_result {
+										result[0] = match value {
+											RuntimeValue::I32(val) => Val::I32(val),
+											RuntimeValue::I64(val) => Val::I64(val),
+											RuntimeValue::F32(val) => Val::F32(val.into()),
+											RuntimeValue::F64(val) => Val::F64(val.into()),
+										}
+									}
+
+									Ok(())
 								})
-								.collect::<Vec<_>>()
-								.encode();
-
-							// Move serialized arguments inside the memory, invoke dispatch thunk and
-							// then free allocated memory.
-							let invoke_args_len = invoke_args_data.len() as WordSize;
-							let invoke_args_ptr = supervisor_externals
-								.allocate_memory(invoke_args_len)
-								.map_err(|_| wasmtime::Trap::new("Can't allocate memory in supervisor for the arguments"))?;
-
-							let deallocate = |fe: &mut FE, ptr, fail_msg| {
-								fe
-									.deallocate_memory(ptr)
-									.map_err(|_| wasmtime::Trap::new(fail_msg))
-							};
-
-							if supervisor_externals
-								.write_memory(invoke_args_ptr, &invoke_args_data)
-								.is_err()
-							{
-								deallocate(supervisor_externals, invoke_args_ptr, "Failed dealloction after failed write of invoke arguments")?;
-								return Err(wasmtime::Trap::new("Can't write invoke args into memory"));
 							}
-
-							let serialized_result = supervisor_externals.invoke(
-								&dispatch_thunk,
-								invoke_args_ptr,
-								invoke_args_len,
-								state,
-								supervisor_func_index,
-							)
-								.map_err(|e| wasmtime::Trap::new(e.to_string()))?;
-
-							// dispatch_thunk returns pointer to serialized arguments.
-							// Unpack pointer and len of the serialized result data.
-							let (serialized_result_val_ptr, serialized_result_val_len) = {
-								// Cast to u64 to use zero-extension.
-								let v = serialized_result as u64;
-								let ptr = (v as u64 >> 32) as u32;
-								let len = (v & 0xFFFFFFFF) as u32;
-								(Pointer::new(ptr), len)
-							};
-
-							let serialized_result_val = supervisor_externals
-								.read_memory(serialized_result_val_ptr, serialized_result_val_len)
-								.map_err(|_| wasmtime::Trap::new("Can't read the serialized result from dispatch thunk"));
-
-							let deserialized_result = deallocate(supervisor_externals, serialized_result_val_ptr, "Can't deallocate memory for dispatch thunk's result")
-								.and_then(|_| serialized_result_val)
-								.and_then(|serialized_result_val| {
-									deserialize_result(&serialized_result_val)
-										.map_err(|e| wasmtime::Trap::new(e.to_string()))
-								})?;
-
-							if let Some(value) = deserialized_result {
-								result[0] = match value {
-									RuntimeValue::I32(val) => Val::I32(val),
-									RuntimeValue::I64(val) => Val::I64(val),
-									RuntimeValue::F32(val) => Val::F32(val.into()),
-									RuntimeValue::F64(val) => Val::F64(val.into()),
-								}
-							}
-
-							Ok(())
-						})
+						)))
+					} else {
+						None
 					}
-				)))
-			} else {
-				None
-			}
-		})
-		.collect();
+				})
+				.collect();
 
-	let wasmtime_instance = wasmtime::Instance::new(&wasmtime_store, &wasmtime_module, &module_imports).map_err(|_| InstantiationError::Instantiation)?;
+			let wasmtime_instance = wasmtime::Instance::new(&wasmtime_store, &wasmtime_module, &module_imports).map_err(|_| InstantiationError::Instantiation)?;
 
-	let sandbox_instance = Rc::new(SandboxInstance {
-		// In general, it's not a very good idea to use `.not_started_instance()` for anything
-		// but for extracting memory and tables. But in this particular case, we are extracting
-		// for the purpose of running `start` function which should be ok.
-		wasmi_instance: wasmi_instance.not_started_instance().clone(),
-		wasmtime_instance,
-		dispatch_thunk,
-		guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
-	});
-
-	SCH::with_sandbox_capabilities( |supervisor_externals| {
-		with_guest_externals(
-			supervisor_externals,
-			&sandbox_instance,
-			state,
-			|guest_externals| {
-				wasmi_instance
-					.run_start(guest_externals)
-					.map_err(|_| InstantiationError::StartTrapped)
-
-				// Note: no need to run start on wasmtime instance, since it's done automatically
-			},
-		)
-	})?;
+			Rc::new(SandboxInstance {
+				backend_instance: BackendInstance::Wasmtime(wasmtime_instance),
+				dispatch_thunk,
+				guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
+			})
+		}
+	};
 
 	Ok(UnregisteredInstance { sandbox_instance })
 }

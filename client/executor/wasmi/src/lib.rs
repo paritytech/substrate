@@ -35,6 +35,7 @@ use sc_executor_common::{
 	sandbox,
 };
 use sc_executor_common::util::{DataSegmentsSnapshot, WasmModuleInfo};
+use sandbox::SandboxBackend;
 
 #[derive(Clone)]
 struct FunctionExecutor {
@@ -278,7 +279,13 @@ impl Sandbox for FunctionExecutor {
 			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
 		};
 
-		let result = EXECUTOR.set(self, || sandbox::instantiate::<_, _, Holder>(dispatch_thunk, wasm, guest_env, state));
+		let result = EXECUTOR.set(self, || sandbox::instantiate::<_, _, Holder>(
+			SandboxBackend::Wasmi,
+			dispatch_thunk, 
+			wasm, 
+			guest_env, 
+			state
+		));
 
 		let instance_idx_or_err_code =
 			match result
