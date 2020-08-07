@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::arg_enums::RpcMethods;
+use crate::arg_enums::{Cors, RpcMethods};
 use crate::error::{Error, Result};
 use sc_service::{
 	config::{BasePath, MultiaddrWithPeerId, PrometheusConfig},
@@ -136,7 +136,7 @@ pub struct NodeParams {
 	/// value). Value of `all` will disable origin validation. Default is to
 	/// allow localhost and https://polkadot.js.org origins. When running in
 	/// --dev mode the default is to allow all origins.
-	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
+	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(from_str))]
 	pub rpc_cors: Option<Cors>,
 
 	/// Specify Prometheus data source server TCP Port.
@@ -486,46 +486,4 @@ fn parse_telemetry_endpoints(s: &str) -> std::result::Result<(String, u8), Telem
 			Ok((url, verbosity))
 		}
 	}
-}
-
-/// CORS setting
-///
-/// The type is introduced to overcome `Option<Option<T>>`
-/// handling of `structopt`.
-#[derive(Clone, Debug)]
-pub enum Cors {
-	/// All hosts allowed.
-	All,
-	/// Only hosts on the list are allowed.
-	List(Vec<String>),
-}
-
-impl From<Cors> for Option<Vec<String>> {
-	fn from(cors: Cors) -> Self {
-		match cors {
-			Cors::All => None,
-			Cors::List(list) => Some(list),
-		}
-	}
-}
-
-/// Parse cors origins.
-fn parse_cors(s: &str) -> std::result::Result<Cors, Box<dyn std::error::Error>> {
-	let mut is_all = false;
-	let mut origins = Vec::new();
-	for part in s.split(',') {
-		match part {
-			"all" | "*" => {
-				is_all = true;
-				break;
-			}
-			other => origins.push(other.to_owned()),
-		}
-	}
-
-	Ok(if is_all {
-		Cors::All
-	} else {
-		Cors::List(origins)
-	})
 }

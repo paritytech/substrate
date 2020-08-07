@@ -174,6 +174,39 @@ arg_enum! {
 	}
 }
 
+/// CORS setting
+///
+/// The type is introduced to overcome `Option<Option<T>>`
+/// handling of `structopt`.
+#[derive(Clone, Debug)]
+pub enum Cors {
+	/// All hosts allowed.
+	All,
+	/// Only hosts on the list are allowed.
+	List(Vec<String>),
+}
+
+impl From<Cors> for Option<Vec<String>> {
+	fn from(cors: Cors) -> Self {
+		match cors {
+			Cors::All => None,
+			Cors::List(list) => Some(list),
+		}
+	}
+}
+
+impl From<&str> for Cors {
+	fn from(s: &str) -> Self {
+		let parts: Vec<_> = s.split(',').map(std::string::ToString::to_string).collect();
+
+		if parts.iter().any(|x| matches!(x.as_str(), "all" | "*")) {
+			Cors::All
+		} else {
+			Cors::List(parts)
+		}
+	}
+}
+
 /// Default value for the `--execution-syncing` parameter.
 pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
 /// Default value for the `--execution-import-block` parameter.
