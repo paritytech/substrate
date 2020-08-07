@@ -132,7 +132,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 			let mut root = root
 				.expect("find_node_index_where will return array with at least one index; \
-                         this results in at least one item in removed; qed");
+						 this results in at least one item in removed; qed");
 
 			let mut removed = old_roots;
 
