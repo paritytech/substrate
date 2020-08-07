@@ -324,11 +324,11 @@ pub trait CliConfiguration: Sized {
 		Ok(self.node_params().and_then(|x| x.rpc_ws_max_connections()))
 	}
 
-	/// Get the RPC cors (`None` if disabled)
+	/// Get the RPC CORS (`None` if disabled)
 	///
-	/// By default this is `Some(vec![])`.
+	/// By default this is `Some(vec![])` meaning CORS will be enabled but there will be no allowed
+	/// origins.
 	fn rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {
-		// TODO: is it None or Some(vec![]) by default??
 		Ok(self
 			.node_params()
 			.map(|x| x.rpc_cors(is_dev))
