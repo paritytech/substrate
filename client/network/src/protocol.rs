@@ -48,7 +48,10 @@ use sp_runtime::traits::{
 use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, Message};
 use message::generic::{Message as GenericMessage, Roles};
-use prometheus_endpoint::{Registry, Gauge, Counter, GaugeVec, PrometheusError, Opts, register, U64};
+use prometheus_endpoint::{
+	Registry, Gauge, Counter, CounterVec, GaugeVec,
+	PrometheusError, Opts, register, U64
+};
 use sync::{ChainSync, SyncState};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque, hash_map::Entry};
@@ -142,7 +145,7 @@ struct Metrics {
 	finality_proofs: GaugeVec<U64>,
 	justifications: GaugeVec<U64>,
 	propagated_transactions: Counter<U64>,
-	legacy_requests_received: Counter<U64>,
+	legacy_requests_received: CounterVec<U64>,
 }
 
 impl Metrics {
@@ -188,9 +191,12 @@ impl Metrics {
 				"sync_propagated_transactions",
 				"Number of transactions propagated to at least one peer",
 			)?, r)?,
-			legacy_requests_received: register(Counter::new(
-				"sync_legacy_requests_received",
-				"Number of block/finality/light-client requests received on the legacy substream",
+			legacy_requests_received: register(CounterVec::new(
+				Opts::new(
+					"sync_legacy_requests_received",
+					"Number of block/finality/light-client requests received on the legacy substream",
+				),
+				&["kind"]
 			)?, r)?,
 		})
 	}
@@ -719,7 +725,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 	fn on_block_request(&mut self, peer: PeerId, request: message::BlockRequest<B>) {
 		if let Some(metrics) = &self.metrics {
-			metrics.legacy_requests_received.inc();
+			metrics.legacy_requests_received.with_label_values(&["block-request"]).inc();
 		}
 
 		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?} for {:?}",
@@ -1395,7 +1401,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		);
 
 		if let Some(metrics) = &self.metrics {
-			metrics.legacy_requests_received.inc();
+			metrics.legacy_requests_received.with_label_values(&["remote-call"]).inc();
 		}
 
 		let proof = match self.context_data.chain.execution_proof(
@@ -1519,7 +1525,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		request: message::RemoteReadRequest<B::Hash>,
 	) {
 		if let Some(metrics) = &self.metrics {
-			metrics.legacy_requests_received.inc();
+			metrics.legacy_requests_received.with_label_values(&["remote-read"]).inc();
 		}
 
 		if request.keys.is_empty() {
@@ -1572,7 +1578,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		request: message::RemoteReadChildRequest<B::Hash>,
 	) {
 		if let Some(metrics) = &self.metrics {
-			metrics.legacy_requests_received.inc();
+			metrics.legacy_requests_received.with_label_values(&["remote-child"]).inc();
 		}
 
 		if request.keys.is_empty() {
@@ -1632,7 +1638,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		request: message::RemoteHeaderRequest<NumberFor<B>>,
 	) {
 		if let Some(metrics) = &self.metrics {
-			metrics.legacy_requests_received.inc();
+			metrics.legacy_requests_received.with_label_values(&["remote-header"]).inc();
 		}
 
 		trace!(target: "sync", "Remote header proof request {} from {} ({})",
@@ -1666,7 +1672,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		request: message::RemoteChangesRequest<B::Hash>,
 	) {
 		if let Some(metrics) = &self.metrics {
-			metrics.legacy_requests_received.inc();
+			metrics.legacy_requests_received.with_label_values(&["remote-changes"]).inc();
 		}
 
 		trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{})",
@@ -1733,7 +1739,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		request: message::FinalityProofRequest<B::Hash>,
 	) {
 		if let Some(metrics) = &self.metrics {
-			metrics.legacy_requests_received.inc();
+			metrics.legacy_requests_received.with_label_values(&["finality-proof"]).inc();
 		}
 
 		trace!(target: "sync", "Finality proof request from {} for {}", who, request.block);

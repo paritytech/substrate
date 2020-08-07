@@ -46,7 +46,7 @@ type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
 
 pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponents<
 	FullClient, FullBackend, FullSelectChain,
-	sc_consensus_babe::BabeImportQueue<Block, FullClient>,
+	sp_consensus::DefaultImportQueue<Block, FullClient>,
 	sc_transaction_pool::FullPool<Block, FullClient>,
 	(
 		impl Fn(node_rpc::DenyUnsafe) -> node_rpc::IoHandler,
@@ -164,8 +164,8 @@ pub fn new_full_base(
 
 	let finality_proof_provider =
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
-	
-	let (network, network_status_sinks, system_rpc_tx) =
+
+	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
@@ -206,7 +206,7 @@ pub fn new_full_base(
 		network_status_sinks,
 		system_rpc_tx,
 	})?;
-	
+
 	let (block_import, grandpa_link, babe_link) = import_setup;
 	let shared_voter_state = rpc_setup;
 
@@ -322,6 +322,7 @@ pub fn new_full_base(
 		)?;
 	}
 
+	network_starter.start_network();
 	Ok((task_manager, inherent_data_providers, client, network, transaction_pool))
 }
 
@@ -383,7 +384,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	let finality_proof_provider =
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
-	let (network, network_status_sinks, system_rpc_tx) =
+	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
@@ -395,7 +396,8 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			finality_proof_request_builder: Some(finality_proof_request_builder),
 			finality_proof_provider: Some(finality_proof_provider),
 		})?;
-	
+	network_starter.start_network();
+
 	if config.offchain_worker.enabled {
 		sc_service::build_offchain_workers(
 			&config, backend.clone(), task_manager.spawn_handle(), client.clone(), network.clone(),
@@ -412,7 +414,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	let rpc_extensions = node_rpc::create_light(light_deps);
 
 	let rpc_handlers =
-		sc_service::spawn_tasks(sc_service::SpawnTasksParams {	
+		sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 			on_demand: Some(on_demand),
 			remote_blockchain: Some(backend.remote_blockchain()),
 			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
@@ -423,7 +425,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
 			task_manager: &mut task_manager,
 		})?;
-	
+
 	Ok((task_manager, rpc_handlers, client, network, transaction_pool))
 }
 
@@ -498,7 +500,7 @@ mod tests {
 							setup_handles = Some((block_import.clone(), babe_link.clone()));
 						}
 					)?;
-				
+
 				let node = sc_service_test::TestNetComponents::new(
 					keep_alive, client, network, transaction_pool
 				);

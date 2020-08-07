@@ -30,6 +30,13 @@ pub enum BenchmarkParameter {
 	a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z,
 }
 
+#[cfg(feature = "std")]
+impl std::fmt::Display for BenchmarkParameter {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{:?}", self)
+	}
+}
+
 /// The results of a single of benchmark.
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
 pub struct BenchmarkBatch {
@@ -66,6 +73,7 @@ sp_api::decl_runtime_apis! {
 			highest_range_values: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
+			extra: bool,
 		) -> Result<Vec<BenchmarkBatch>, RuntimeString>;
 	}
 }
@@ -112,7 +120,11 @@ pub trait Benchmarking {
 pub trait Benchmarking<T> {
 	/// Get the benchmarks available for this pallet. Generally there is one benchmark per
 	/// extrinsic, so these are sometimes just called "extrinsics".
-	fn benchmarks() -> Vec<&'static [u8]>;
+	///
+	/// Parameters
+	/// - `extra`: Also return benchmarks marked "extra" which would otherwise not be
+	///            needed for weight calculation.
+	fn benchmarks(extra: bool) -> Vec<&'static [u8]>;
 
 	/// Run the benchmarks for this pallet.
 	///

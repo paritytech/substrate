@@ -75,6 +75,7 @@ impl BenchmarkCmd {
 				self.highest_range_values.clone(),
 				self.steps.clone(),
 				self.repeat,
+				self.extra,
 			).encode(),
 			extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
@@ -94,8 +95,7 @@ impl BenchmarkCmd {
 						let mut file = crate::writer::open_file("traits.rs")?;
 						crate::writer::write_trait(&mut file, batches.clone())?;
 					} else {
-						let mut file = crate::writer::open_file("benchmarks.rs")?;
-						crate::writer::write_results(&mut file, batches.clone())?;
+						crate::writer::write_results(&batches)?;
 					}
 				}
 
