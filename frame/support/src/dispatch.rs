@@ -167,6 +167,28 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # fn main() {}
 /// ```
 ///
+/// ### Transactional Function Example
+///
+/// Transactional function discards all changes to storage if it returns `Err`, or commits if
+/// `Ok`, via the #\[transactonal\] attribute. Note the attribute must be after #\[weight\].
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate frame_support;
+/// # use frame_support::transactional;
+/// # use frame_system::Trait;
+/// decl_module! {
+/// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+/// 		#[weight = 0]
+/// 		#[transactional]
+/// 		fn my_short_function(origin) {
+///				// Your implementation
+/// 		}
+/// 	}
+/// }
+/// # fn main() {}
+/// ```
+///
 /// ### Privileged Function Example
 ///
 /// A privileged function checks that the origin of the call is `ROOT`.
