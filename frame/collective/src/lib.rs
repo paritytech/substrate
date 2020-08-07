@@ -89,19 +89,6 @@ pub trait WeightInfo {
 	fn disapprove_proposal(p: u32, ) -> Weight;
 }
 
-impl WeightInfo for () {
-	fn set_members(_m: u32, _n: u32, _p: u32, ) -> Weight { 1_000_000_000 }
-	fn execute(_b: u32, _m: u32, ) -> Weight { 1_000_000_000 }
-	fn propose_execute(_b: u32, _m: u32, ) -> Weight { 1_000_000_000 }
-	fn propose_proposed(_b: u32, _m: u32, _p: u32, ) -> Weight { 1_000_000_000 }
-	fn vote(_m: u32, ) -> Weight { 1_000_000_000 }
-	fn close_early_disapproved(_m: u32, _p: u32, ) -> Weight { 1_000_000_000 }
-	fn close_early_approved(_b: u32, _m: u32, _p: u32, ) -> Weight { 1_000_000_000 }
-	fn close_disapproved(_m: u32, _p: u32, ) -> Weight { 1_000_000_000 }
-	fn close_approved(_b: u32, _m: u32, _p: u32, ) -> Weight { 1_000_000_000 }
-	fn disapprove_proposal(_p: u32, ) -> Weight { 1_000_000_000 }
-}
-
 pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	/// The outer origin type.
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
