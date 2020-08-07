@@ -187,11 +187,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 			if print_deprecated_message {
 				log::warn!(
-					"🙇 Sentry nodes are deprecated, and the `--sentry` and
-					`--sentry-nodes` CLI options will eventually be removed in a future version. The Substrate
-					and Polkadot networking protocol require validators to be publicly-accessible.
-					Please do not block access to your validator nodes.
-					For details see https://github.com/paritytech/substrate/issues/6845.
+					"🙇 Sentry nodes are deprecated, and the `--sentry` and  `--sentry-nodes` \
+					CLI options will eventually be removed in a future version. The Substrate \
+					and Polkadot networking protocol require validators to be \
+					publicly-accessible. Please do not block access to your validator nodes. \
+					For details, see https://github.com/paritytech/substrate/issues/6845."
 				);
 			}
 
