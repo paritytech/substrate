@@ -326,7 +326,6 @@ decl_module! {
 			gas_price: U256,
 			nonce: Option<U256>,
 		) -> DispatchResult {
-			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
 			match Self::execute_call(
@@ -335,7 +334,7 @@ decl_module! {
 				input,
 				value,
 				gas_limit,
-				gas_price,
+				Some(gas_price),
 				nonce,
 				true,
 			)? {
@@ -362,7 +361,6 @@ decl_module! {
 			gas_price: U256,
 			nonce: Option<U256>,
 		) -> DispatchResult {
-			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
 			match Self::execute_create(
@@ -370,7 +368,7 @@ decl_module! {
 				init,
 				value,
 				gas_limit,
-				gas_price,
+				Some(gas_price),
 				nonce,
 				true,
 			)? {
@@ -397,7 +395,6 @@ decl_module! {
 			gas_price: U256,
 			nonce: Option<U256>,
 		) -> DispatchResult {
-			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
 			match Self::execute_create2(
@@ -406,7 +403,7 @@ decl_module! {
 				salt,
 				value,
 				gas_limit,
-				gas_price,
+				Some(gas_price),
 				nonce,
 				true,
 			)? {
@@ -486,7 +483,7 @@ impl<T: Trait> Module<T> {
 		init: Vec<u8>,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 		apply_state: bool,
 	) -> Result<(ExitReason, H160, U256), Error<T>> {
@@ -518,7 +515,7 @@ impl<T: Trait> Module<T> {
 		salt: H256,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 		apply_state: bool,
 	) -> Result<(ExitReason, H160, U256), Error<T>> {
@@ -552,7 +549,7 @@ impl<T: Trait> Module<T> {
 		input: Vec<u8>,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 		apply_state: bool,
 	) -> Result<(ExitReason, Vec<u8>, U256), Error<T>> {
@@ -578,13 +575,21 @@ impl<T: Trait> Module<T> {
 		source: H160,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 		apply_state: bool,
 		f: F,
 	) -> Result<(ExitReason, R, U256), Error<T>> where
 		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (ExitReason, R),
 	{
+		let gas_price = match gas_price {
+			Some(gas_price) => {
+				ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+				gas_price
+			},
+			None => U256::zero(),
+		};
+
 		let vicinity = Vicinity {
 			gas_price,
 			origin: source,
