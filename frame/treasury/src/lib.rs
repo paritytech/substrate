@@ -922,7 +922,6 @@ decl_module! {
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
-				ensure!(bounty.status == BountyStatus::Funded, Error::<T>::UnexpectedStatus);
 
 				match bounty.status {
 					BountyStatus::CuratorAssigned { ref curator } => {
