@@ -221,7 +221,7 @@ pub struct Peer<D> {
 	block_import: BlockImportAdapter<()>,
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
-	network: NetworkWorker<Block, <Block as BlockT>::Hash>,
+	network: NetworkWorker<Block, substrate_test_runtime_client::Backend, <Block as BlockT>::Hash>,
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
 }
@@ -680,6 +680,7 @@ pub trait TestNetFactory: Sized {
 			block_announce_validator: config.block_announce_validator
 				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
 			metrics_registry: None,
+			permissioned_network: false
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -704,6 +705,7 @@ pub trait TestNetFactory: Sized {
 		});
 	}
 
+	// TODO this needs fix, Peer need a network with LightBackend
 	/// Add a light peer.
 	fn add_light_peer(&mut self) {
 		let (c, backend) = substrate_test_runtime_client::new_light();
@@ -759,6 +761,7 @@ pub trait TestNetFactory: Sized {
 			import_queue,
 			block_announce_validator: Box::new(DefaultBlockAnnounceValidator),
 			metrics_registry: None,
+			permissioned_network: false,
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -769,7 +772,7 @@ pub trait TestNetFactory: Sized {
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
 			let finality_notification_stream = Box::pin(client.finality_notification_stream().fuse());
 
-			peers.push(Peer {
+			peers.push(LightPeer {
 				data,
 				verifier,
 				select_chain: None,

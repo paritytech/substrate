@@ -269,7 +269,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		announce_block: true,
 		base_path: Some(BasePath::new(root)),
 		informant_output_format: Default::default(),
-		update_allowlist: true,
+		permissioned_network: true,
 	}
 }
 

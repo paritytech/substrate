@@ -54,6 +54,7 @@ use libp2p::{
 };
 use prost::Message;
 use sp_runtime::{generic::BlockId, traits::{Block, Header, One, Zero}};
+use sc_client_api::backend::Backend;
 use std::{
 	cmp::min,
 	collections::{HashMap, VecDeque},
@@ -194,11 +195,14 @@ impl Config {
 }
 
 /// The block request handling behaviour.
-pub struct BlockRequests<B: Block> {
+pub struct BlockRequests<B: Block, BE>
+	where
+		BE: Backend<B>
+{
 	/// This behaviour's configuration.
 	config: Config,
 	/// Blockchain client.
-	chain: Arc<dyn Client<B>>,
+	chain: Arc<dyn Client<B, BE>>,
 	/// List of all active connections and the requests we've sent.
 	peers: HashMap<PeerId, Vec<Connection<B>>>,
 	/// Futures sending back the block request response. Returns the `PeerId` we sent back to, and
@@ -243,11 +247,12 @@ pub enum SendRequestOutcome<B: Block> {
 	EncodeError(prost::EncodeError),
 }
 
-impl<B> BlockRequests<B>
+impl<B, BE> BlockRequests<B, BE>
 where
 	B: Block,
+	BE: Backend<B>
 {
-	pub fn new(cfg: Config, chain: Arc<dyn Client<B>>) -> Self {
+	pub fn new(cfg: Config, chain: Arc<dyn Client<B, BE>>) -> Self {
 		BlockRequests {
 			config: cfg,
 			chain,
@@ -462,9 +467,10 @@ where
 	}
 }
 
-impl<B> NetworkBehaviour for BlockRequests<B>
+impl<B, BE> NetworkBehaviour for BlockRequests<B, BE>
 where
-	B: Block
+	B: Block,
+	BE: Backend<B> + 'static,
 {
 	type ProtocolsHandler = OneShotHandler<InboundProtocol<B>, OutboundProtocol<B>, NodeEvent<B, NegotiatedSubstream>>;
 	type OutEvent = Event<B>;

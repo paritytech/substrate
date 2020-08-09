@@ -844,6 +844,7 @@ pub fn build_network<TBl, TBE, TExPool, TImpQu, TCl>(
 		imports_external_transactions: !matches!(config.role, Role::Light),
 		pool: transaction_pool,
 		client: client.clone(),
+		_backend: Default::default(),
 	});
 
 	let protocol_id = {
@@ -882,7 +883,8 @@ pub fn build_network<TBl, TBE, TExPool, TImpQu, TCl>(
 		import_queue: Box::new(import_queue),
 		protocol_id,
 		block_announce_validator,
-		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone())
+		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+		permissioned_network: config.permissioned_network,
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
@@ -900,7 +902,7 @@ pub fn build_network<TBl, TBE, TExPool, TImpQu, TCl>(
 		system_rpc_rx,
 		has_bootnodes,
 		config.announce_block,
-		config.update_allowlist,
+		config.permissioned_network,
 	);
 
 	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the

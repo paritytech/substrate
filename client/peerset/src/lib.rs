@@ -180,6 +180,9 @@ pub struct PeersetConfig {
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
 	/// >			otherwise it will not be able to connect to them.
 	pub priority_groups: Vec<(String, HashSet<PeerId>)>,
+
+	/// Initialization of permissioned nodes
+	pub init_allowlist: Option<Vec<PeerId>>
 }
 
 /// Side of the peer set manager owned by the network. In other words, the "receiving" side.
@@ -229,7 +232,7 @@ impl Peerset {
 			message_queue: VecDeque::new(),
 			created: now,
 			latest_time_update: now,
-			allowlist: None,
+			allowlist: config.init_allowlist,
 		};
 
 		for node in config.priority_groups.into_iter().flat_map(|(_, l)| l) {
@@ -573,6 +576,7 @@ impl Peerset {
 		self.update_time();
 
 		// Only connect to permissioned node
+		trace!(target: "peerset", "==== incoming allowlist {:?}", &self.allowlist);
 		if let Some(peer_ids) = &self.allowlist {
 			info!(target: "peerset", "-======== allowed incoming peer_ids =========: {:?}, incoming: {:?}", peer_ids, peer_id);
 			if !peer_ids.contains(&peer_id) {

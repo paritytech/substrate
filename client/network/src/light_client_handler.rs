@@ -58,6 +58,7 @@ use nohash_hasher::IntMap;
 use prost::Message;
 use sc_client_api::{
 	StorageProof,
+	backend::Backend,
 	light::{
 		self, RemoteReadRequest, RemoteBodyRequest, ChangesProof,
 		RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
@@ -284,11 +285,14 @@ enum PeerStatus {
 }
 
 /// The light client handler behaviour.
-pub struct LightClientHandler<B: Block> {
+pub struct LightClientHandler<B: Block, BE>
+	where
+		BE: Backend<B>
+{
 	/// This behaviour's configuration.
 	config: Config,
 	/// Blockchain client.
-	chain: Arc<dyn Client<B>>,
+	chain: Arc<dyn Client<B, BE>>,
 	/// Verifies that received responses are correct.
 	checker: Arc<dyn light::FetchChecker<B>>,
 	/// Peer information (addresses, their best block, etc.)
@@ -305,14 +309,15 @@ pub struct LightClientHandler<B: Block> {
 	peerset: sc_peerset::PeersetHandle,
 }
 
-impl<B> LightClientHandler<B>
+impl<B, BE> LightClientHandler<B, BE>
 where
 	B: Block,
+	BE: Backend<B>,
 {
 	/// Construct a new light client handler.
 	pub fn new(
 		cfg: Config,
-		chain: Arc<dyn Client<B>>,
+		chain: Arc<dyn Client<B, BE>>,
 		checker: Arc<dyn light::FetchChecker<B>>,
 		peerset: sc_peerset::PeersetHandle,
 	) -> Self {
@@ -744,9 +749,10 @@ where
 	}
 }
 
-impl<B> NetworkBehaviour for LightClientHandler<B>
+impl<B, BE> NetworkBehaviour for LightClientHandler<B, BE>
 where
-	B: Block
+	B: Block,
+	BE: Backend<B> + 'static,
 {
 	type ProtocolsHandler = OneShotHandler<InboundProtocol, OutboundProtocol, Event<NegotiatedSubstream>>;
 	type OutEvent = Void;
@@ -1499,7 +1505,7 @@ mod tests {
 		( ok: bool
 		, ps: sc_peerset::PeersetHandle
 		, cf: super::Config
-		) -> LightClientHandler<Block>
+		) -> LightClientHandler<Block, Backend>
 	{
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let checker = Arc::new(DummyFetchChecker { ok, _mark: std::marker::PhantomData });
@@ -1510,7 +1516,7 @@ mod tests {
 		ConnectedPoint::Dialer { address: Multiaddr::empty() }
 	}
 
-	fn poll(mut b: &mut LightClientHandler<Block>) -> Poll<NetworkBehaviourAction<OutboundProtocol, Void>> {
+	fn poll(mut b: &mut LightClientHandler<Block, Backend>) -> Poll<NetworkBehaviourAction<OutboundProtocol, Void>> {
 		let mut p = EmptyPollParams(PeerId::random());
 		match future::poll_fn(|cx| Pin::new(&mut b).poll(cx, &mut p)).now_or_never() {
 			Some(a) => Poll::Ready(a),

@@ -112,7 +112,7 @@ pub struct Configuration {
 	/// Configuration of the output format that the informant uses.
 	pub informant_output_format: sc_informant::OutputFormat,
 	/// Refresh nodes allowlist after block imported TODO do i need this?
-	pub update_allowlist: bool,
+	pub permissioned_network: bool,
 }
 
 /// Type for tasks spawned by the executor.

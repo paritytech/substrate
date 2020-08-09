@@ -39,8 +39,11 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
 use std::task::Poll;
-use libp2p::identity::PublicKey;
-use libp2p::identity::ed25519::PublicKey as Ed25519PublicKey;
+use std::marker::PhantomData;
+use libp2p::identity::{
+	ed25519::PublicKey as Ed25519PublicKey,
+	PublicKey
+};
 use parking_lot::Mutex;
 
 use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
@@ -52,8 +55,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
-use sp_core::storage::well_known_keys;
-use sp_core::storage::{StorageKey, StorageData};
+use sp_core::storage::{StorageKey, StorageData, well_known_keys};
 use sp_core::ed25519::Public as NodePublic;
 use sc_client_api::backend::{Backend as BackendT, StorageProvider};
 
@@ -192,13 +194,13 @@ async fn build_network_future<
 	H: sc_network::ExHashT
 > (
 	role: Role,
-	mut network: sc_network::NetworkWorker<B, H>,
+	mut network: sc_network::NetworkWorker<B, BE, H>,
 	client: Arc<C>,
 	status_sinks: NetworkStatusSinks<B>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
-	update_allowlist: bool,
+	permissioned_network: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
@@ -243,7 +245,7 @@ async fn build_network_future<
 					);
 				}
 				
-				if update_allowlist {
+				if permissioned_network {
 					let id = BlockId::hash(client.info().best_hash);
 					let raw_allowlist = match client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec())) {
 						Ok(Some(r)) => r,
@@ -507,10 +509,11 @@ impl RpcSession {
 }
 
 /// Transaction pool adapter.
-pub struct TransactionPoolAdapter<C, P> {
+pub struct TransactionPoolAdapter<BE, C, P> {
 	imports_external_transactions: bool,
 	pool: Arc<P>,
 	client: Arc<C>,
+	_backend: PhantomData<BE>,
 }
 
 /// Get transactions for propagation.
@@ -534,12 +537,13 @@ where
 		.collect()
 }
 
-impl<B, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for
-	TransactionPoolAdapter<C, Pool>
+impl<B, BE, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for
+	TransactionPoolAdapter<BE, C, Pool>
 where
-	C: sc_network::config::Client<B> + Send + Sync,
-	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
+	BE: BackendT<B>,
+	C: sc_network::config::Client<B, BE> + Send + Sync,
+	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
 	E: 'static + IntoPoolError + From<sp_transaction_pool::error::Error>,
 {

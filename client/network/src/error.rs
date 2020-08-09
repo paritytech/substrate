@@ -61,6 +61,8 @@ pub enum Error {
 		/// The invalid addresses.
 		addresses: Vec<Multiaddr>,
 	},
+	/// Unable to fetch storage error.
+	InvalidStorage,
 }
 
 // Make `Debug` use the `Display` implementation.
@@ -78,6 +80,7 @@ impl std::error::Error for Error {
 			Error::DuplicateBootnode { .. } => None,
 			Error::Prometheus(ref err) => Some(err),
 			Error::AddressesForAnotherTransport { .. } => None,
+			Error::InvalidStorage => None, // TODO is it correct
 		}
 	}
 }

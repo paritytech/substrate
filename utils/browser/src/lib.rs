@@ -106,7 +106,7 @@ where
 			enable_color: false,
 			prefix: String::new(),
 		},
-		update_allowlist: true,
+		permissioned_network: true,
 	};
 
 	Ok(config)

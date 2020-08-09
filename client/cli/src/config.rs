@@ -475,7 +475,7 @@ pub trait CliConfiguration: Sized {
 			role,
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
-			update_allowlist: true,
+			permissioned_network: true, // TODO make it default to false
 		})
 	}
 

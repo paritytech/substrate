@@ -59,7 +59,10 @@ use std::sync::Arc;
 use std::fmt::Write;
 use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
-use sc_client_api::{ChangesProof, StorageProof};
+use sc_client_api::{
+	backend::Backend as BackendT,
+	ChangesProof, StorageProof
+};
 use util::LruHashSet;
 use wasm_timer::Instant;
 
@@ -227,7 +230,10 @@ impl<H: ExHashT> Future for PendingTransaction<H> {
 }
 
 // Lock must always be taken in order declared here.
-pub struct Protocol<B: BlockT, H: ExHashT> {
+pub struct Protocol<B: BlockT, BE, H: ExHashT>
+	where
+		BE: BackendT<B>
+{
 	/// Interval at which we call `tick`.
 	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Interval at which we call `propagate_transactions`.
@@ -243,8 +249,8 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	pending_transactions_peers: HashMap<H, Vec<PeerId>>,
 	config: ProtocolConfig,
 	genesis_hash: B::Hash,
-	sync: ChainSync<B>,
-	context_data: ContextData<B, H>,
+	sync: ChainSync<B, BE>,
+	context_data: ContextData<B, BE, H>,
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
 	important_peers: HashSet<PeerId>,
@@ -306,11 +312,14 @@ pub struct PeerInfo<B: BlockT> {
 }
 
 /// Data necessary to create a context.
-struct ContextData<B: BlockT, H: ExHashT> {
+struct ContextData<B: BlockT, BE, H: ExHashT>
+	where
+		BE: BackendT<B>
+{
 	// All connected peers
 	peers: HashMap<PeerId, Peer<B, H>>,
 	stats: HashMap<&'static str, PacketStats>,
-	pub chain: Arc<dyn Client<B>>,
+	pub chain: Arc<dyn Client<B, BE>>,
 }
 
 /// Configuration for the Substrate-specific part of the networking layer.
@@ -344,8 +353,12 @@ struct BlockAnnouncesHandshake<B: BlockT> {
 	genesis_hash: B::Hash,
 }
 
-impl<B: BlockT> BlockAnnouncesHandshake<B> {
-	fn build(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B>>) -> Self {
+impl<B: BlockT> BlockAnnouncesHandshake<B>
+{
+	fn build<BE>(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B, BE>>) -> Self
+		where
+			BE: BackendT<B>
+	{
 		let info = chain.info();
 		BlockAnnouncesHandshake {
 			genesis_hash: info.genesis_hash,
@@ -357,7 +370,10 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 }
 
 /// Builds a SCALE-encoded "Status" message to send as handshake for the legacy protocol.
-fn build_status_message<B: BlockT>(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B>>) -> Vec<u8> {
+fn build_status_message<B: BlockT, BE>(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B, BE>>) -> Vec<u8>
+	where
+		BE: BackendT<B>
+{
 	let info = chain.info();
 	let status = message::generic::Status {
 		version: CURRENT_VERSION,
@@ -383,12 +399,15 @@ enum Fallback {
 	BlockAnnounce,
 }
 
-impl<B: BlockT, H: ExHashT> Protocol<B, H> {
+impl<B: BlockT, BE, H: ExHashT> Protocol<B, BE, H>
+	where
+		BE: BackendT<B>
+{
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
 		local_peer_id: PeerId,
-		chain: Arc<dyn Client<B>>,
+		chain: Arc<dyn Client<B, BE>>,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
@@ -397,7 +416,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		metrics_registry: Option<&Registry>,
 		boot_node_ids: Arc<HashSet<PeerId>>,
-	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle)> {
+	) -> error::Result<(Protocol<B, BE, H>, sc_peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
 			config.roles,
@@ -1927,7 +1946,10 @@ fn send_message<B: BlockT>(
 	}
 }
 
-impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
+impl<B: BlockT, BE, H: ExHashT> NetworkBehaviour for Protocol<B, BE, H>
+	where
+		BE: BackendT<B> + 'static
+{
 	type ProtocolsHandler = <GenericProto as NetworkBehaviour>::ProtocolsHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
@@ -2148,7 +2170,10 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 	}
 }
 
-impl<B: BlockT, H: ExHashT> Drop for Protocol<B, H> {
+impl<B: BlockT, BE, H: ExHashT> Drop for Protocol<B, BE, H>
+	where
+		BE: BackendT<B>
+{
 	fn drop(&mut self) {
 		debug!(target: "sync", "Network stats:\n{}", self.format_stats());
 	}
