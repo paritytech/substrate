@@ -209,7 +209,7 @@ pub trait SubstrateCli: Sized {
 	}
 
 	/// Only create a Configuration for the command provided in argument
-	fn create_configuration<T: CliConfiguration>(
+	fn create_configuration<T: CliConfiguration<DVC>, DVC: DefaultConfigurationValues>(
 		&self,
 		command: &T,
 		task_executor: TaskExecutor,
