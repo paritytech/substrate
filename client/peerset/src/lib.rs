@@ -23,7 +23,7 @@ mod peersstate;
 
 use std::{collections::{HashSet, HashMap}, collections::VecDeque};
 use futures::prelude::*;
-use log::{debug, error, trace};
+use log::{debug, error, trace, info};
 use serde_json::json;
 use std::{pin::Pin, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
@@ -428,6 +428,7 @@ impl Peerset {
 
 		// Try to connnect to permissioned nodes
 		if let Some(peer_ids) = &self.allowlist {
+			info!(target: "peerset", "alloc_slots peer_ids =========: {:?}", peer_ids);
 			loop {
 				let next = {
 					let data = &mut self.data;
@@ -443,6 +444,8 @@ impl Peerset {
 					Some(n) => n,
 					None => break,
 				};
+
+				info!(target: "peerset", "this peer_id =========: {:?}", next);
 
 				let next = match self.data.peer(&next) {
 					peersstate::Peer::Unknown(n) => n.discover(),
@@ -568,6 +571,15 @@ impl Peerset {
 	pub fn incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
 		trace!(target: "peerset", "Incoming {:?}", peer_id);
 		self.update_time();
+
+		// Only connect to permissioned node
+		if let Some(peer_ids) = &self.allowlist {
+			info!(target: "peerset", "-======== allowed incoming peer_ids =========: {:?}, incoming: {:?}", peer_ids, peer_id);
+			if !peer_ids.contains(&peer_id) {
+				self.message_queue.push_back(Message::Reject(index));
+				return;
+			}
+		}
 
 		if self.reserved_only {
 			if !self.priority_groups.get(RESERVED_NODES).map_or(false, |n| n.contains(&peer_id)) {

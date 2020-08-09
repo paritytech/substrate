@@ -45,7 +45,7 @@ use parking_lot::Mutex;
 
 use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
-use log::{warn, debug, error};
+use log::{warn, debug, error, info};
 use codec::{Encode, Decode};
 use sc_client_api::blockchain::HeaderBackend;
 use sp_runtime::generic::BlockId;
@@ -53,7 +53,8 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
 use sp_core::storage::well_known_keys;
-use sp_core::storage::StorageKey;
+use sp_core::storage::{StorageKey, StorageData};
+use sp_core::ed25519::Public as NodePublic;
 use sc_client_api::backend::{Backend as BackendT, StorageProvider};
 
 pub use self::error::Error;
@@ -244,13 +245,45 @@ async fn build_network_future<
 				
 				if update_allowlist {
 					let id = BlockId::hash(client.info().best_hash);
-					let node_allowlist = match client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec())) {
-							Ok(r) => r,
-							Err(_) => return, // TODO log error
-						};
+					let raw_allowlist = match client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec())) {
+						Ok(Some(r)) => r,
+						Ok(None) => { 
+							info!(
+								target: "sub-libp2p",
+								"🏷  err in get storage -------------"
+							);
+							StorageData(vec![])
+						},
+						Err(_) => {
+							info!(
+								target: "sub-libp2p",
+								"🏷  err in get storage error result -------------"
+							);
+							return
+						}, // TODO log error
+					};
+					let node_allowlist: Vec<NodePublic> = match Decode::decode(&mut &raw_allowlist.0[..]) {
+						Ok(r) => r,
+						Err(_) => {
+							info!(
+								target: "sub-libp2p",
+								"🏷  err in decode------------- {:?}",
+								raw_allowlist
+							);
+							vec![]
+						}, // TODO log error
+					};
 					// Transform to PeerId
 					let peer_ids = node_allowlist.iter()
-						.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok())
+						.filter_map(|pubkey| {
+							info!(
+								target: "sub-libp2p",
+								"🏷  deocoding node id now: {:?}, {:?}",
+								Ed25519PublicKey::decode(&pubkey.0),
+								&pubkey.0
+							);
+							Ed25519PublicKey::decode(&pubkey.0).ok()
+						})
 						.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
 						.collect();
 					network.service().set_peer_allowlist(peer_ids);
