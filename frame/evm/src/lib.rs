@@ -33,7 +33,7 @@ use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
-use frame_support::weights::Weight;
+use frame_support::weights::{Weight, Pays};
 use frame_support::traits::{Currency, ExistenceRequirement, Get};
 use frame_system::RawOrigin;
 use sp_core::{U256, H256, H160, Hasher};
@@ -315,7 +315,10 @@ decl_module! {
 		}
 
 		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
-		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
+		#[weight = (
+			(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
+			Pays::No,
+		)]
 		fn call(
 			origin,
 			source: H160,
@@ -351,7 +354,10 @@ decl_module! {
 
 		/// Issue an EVM create operation. This is similar to a contract creation transaction in
 		/// Ethereum.
-		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
+		#[weight = (
+			(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
+			Pays::No,
+		)]
 		fn create(
 			origin,
 			source: H160,
@@ -384,7 +390,10 @@ decl_module! {
 		}
 
 		/// Issue an EVM create2 operation.
-		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
+		#[weight = (
+			(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
+			Pays::No,
+		)]
 		fn create2(
 			origin,
 			source: H160,
