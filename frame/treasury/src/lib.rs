@@ -889,6 +889,34 @@ decl_module! {
 		}
 
 		#[weight = 10_000]
+		fn unassign_curator(
+			origin,
+			#[compact] bounty_id: ProposalIndex,
+		) {
+			let maybe_curator = ensure_signed(origin.clone())
+				.map(Some)
+				.or_else(|_| T::ApproveOrigin::ensure_origin(origin).map(|_| None))?;
+
+			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+				match bounty.status {
+					BountyStatus::CuratorAssigned { ref curator } => {
+						ensure!(maybe_curator.map_or(true, |c| c == *curator), BadOrigin);
+					},
+					BountyStatus::Active { ref curator, .. } | BountyStatus::PendingPayout { ref curator, .. } => {
+						ensure!(maybe_curator.map_or(true, |c| c == *curator), BadOrigin);
+						let _ = T::Currency::slash_reserved(curator, bounty.curator_deposit);
+						bounty.curator_deposit = 0.into();
+					},
+					_ => return Err(Error::<T>::UnexpectedStatus.into()),
+				};
+
+				bounty.status = BountyStatus::Funded;
+				Ok(())
+			})?;
+		}
+
+		#[weight = 10_000]
 		fn accept_curator(origin, #[compact] bounty_id: ProposalIndex) {
 			let signer = ensure_signed(origin)?;
 
@@ -986,23 +1014,23 @@ decl_module! {
 		/// - `bounty_id`: Bounty ID to cancel.
 		#[weight = T::WeightInfo::cancel_bounty()]
 		fn cancel_bounty(origin, #[compact] bounty_id: BountyIndex) {
-			let maybe_curator = ensure_signed(origin.clone())
-				.map(Some)
-				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
-
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
 
 				match &bounty.status {
+					BountyStatus::Funded |
+					BountyStatus::CuratorAssigned { .. } |
+					BountyStatus::PendingPayout { .. } => {
+						T::RejectOrigin::ensure_origin(origin)?;
+					},
 					BountyStatus::Active { curator, expires } => {
+						let signer = ensure_signed(origin)?;
+
 						let now = system::Module::<T>::block_number();
 						if *expires > now {
 							// only curator can cancel unexpired bounty
-							ensure!(maybe_curator.map_or(false, |c| c == *curator), Error::<T>::RequireCurator);
+							ensure!(signer == *curator, Error::<T>::RequireCurator);
 						}
-					},
-					BountyStatus::PendingPayout { .. } => {
-						ensure!(maybe_curator.is_none(), BadOrigin);
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}
