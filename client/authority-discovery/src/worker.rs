@@ -135,6 +135,9 @@ where
 	publish_interval: Interval,
 	/// Interval on which to query for addresses of other authorities.
 	query_interval: Interval,
+	/// Interval on which to set the peerset priority group to a new random
+	/// set of addresses.
+	priority_group_set_interval: Interval,
 
 	addr_cache: addr_cache::AddrCache,
 
@@ -187,6 +190,13 @@ where
 			Duration::from_secs(10 * 60),
 		);
 
+		// TODO: Check whether it is fine in case the priority group is empty?
+		// TODO: Add a better delay to set off apart from query_interval.
+		let priority_group_set_interval = interval_at(
+			Instant::now() + Duration::from_secs(60) + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
+			Duration::from_secs(10 * 60),
+		);
+
 		let sentry_nodes = if !sentry_nodes.is_empty() {
 			Some(sentry_nodes.into_iter().map(|ma| ma.concat()).collect::<Vec<_>>())
 		} else {
@@ -216,6 +226,7 @@ where
 			dht_event_rx,
 			publish_interval,
 			query_interval,
+			priority_group_set_interval,
 			addr_cache,
 			role,
 			metrics,
@@ -488,7 +499,6 @@ where
 					self.addr_cache.num_ids().try_into().unwrap_or(std::u64::MAX)
 				);
 			}
-			self.update_peer_set_priority_group()?;
 		}
 
 		Ok(())
@@ -525,9 +535,10 @@ where
 		Ok(intersection)
 	}
 
-	/// Update the peer set 'authority' priority group.
-	fn update_peer_set_priority_group(&self) -> Result<()> {
-		let addresses = self.addr_cache.get_subset();
+	/// Set the peer set 'authority' priority group to a new random set of
+	/// [`Multiaddr`]s.
+	fn set_priority_group(&self) -> Result<()> {
+		let addresses = self.addr_cache.get_random_subset();
 
 		if let Some(metrics) = &self.metrics {
 			metrics.priority_group_size.set(addresses.len().try_into().unwrap_or(std::u64::MAX));
@@ -589,6 +600,19 @@ where
 				error!(
 					target: LOG_TARGET,
 					"Failed to request addresses of authorities: {:?}", e,
+				);
+			}
+		}
+
+		// Set peerset priority group to a new random set of addresses.
+		if let Poll::Ready(_) = self.priority_group_set_interval.poll_next_unpin(cx) {
+			// Register waker of underlying task for next interval.
+			while let Poll::Ready(_) = self.priority_group_set_interval.poll_next_unpin(cx) {}
+
+			if let Err(e) = self.set_priority_group() {
+				error!(
+					target: LOG_TARGET,
+					"Failed to set priority group: {:?}", e,
 				);
 			}
 		}

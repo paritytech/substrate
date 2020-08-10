@@ -27,24 +27,14 @@ use sc_network::PeerId;
 
 /// The maximum number of authority connections initialized through the authority discovery module.
 ///
-/// In other words the maximum size of the `authority` peer set priority group.
+/// In other words the maximum size of the `authority` peerset priority group.
 const MAX_NUM_AUTHORITY_CONN: usize = 10;
 
-/// Cache of Multiaddresses of authority nodes or their sentry nodes.
+/// Cache for [`AuthorityId`] -> [`Vec<Multiaddr>`] and [`PeerId`] -> [`AuthorityId`] mappings.
 pub(super) struct AddrCache {
 	authority_id_to_addresses: BTreeMap<AuthorityId, Vec<Multiaddr>>,
 	// TODO: Make sure to clean this one up on authority set change. As in add tests!
 	peer_id_to_authority_id: HashMap<PeerId, AuthorityId>,
-
-	/// Random number to seed address selection RNG.
-	///
-	/// A node should only try to connect to a subset of all authorities. To choose this subset one
-	/// uses randomness. The choice should differ between nodes to prevent hot spots, but not within
-	/// each node between each update to prevent connection churn. Thus before each selection we
-	/// seed an RNG with the same seed.
-	//
-	// TODO: Probably better to use something larger.
-	rand_addr_selection_seed: u64,
 }
 
 impl AddrCache {
@@ -52,7 +42,6 @@ impl AddrCache {
 		AddrCache {
 			authority_id_to_addresses: BTreeMap::new(),
 			peer_id_to_authority_id: HashMap::new(),
-			rand_addr_selection_seed: rand::thread_rng().gen(),
 		}
 	}
 
@@ -84,17 +73,10 @@ impl AddrCache {
 		self.authority_id_to_addresses.get(&id)
 	}
 
-	// Each node should connect to a subset of all authorities. In order to prevent hot spots, this
-	// selection is based on randomness. Selecting randomly each time we alter the address cache
-	// would result in connection churn. To reduce this churn a node generates a seed on startup and
-	// uses this seed for a new rng on each update. (One could as well use ones peer id as a seed.
-	// Given that the peer id is publicly known, it would make this process predictable by others,
-	// which might be used as an attack.)
-	//
-	// Note: This is still subject to churn when the number of authorities in
-	// `self.authority_id_to_addresses` changes.
-	pub fn get_subset(&self) -> Vec<Multiaddr> {
-		let mut rng = StdRng::seed_from_u64(self.rand_addr_selection_seed);
+	/// Returns a single address for a random subset (maximum of [`MAX_NUM_AUTHORITY_CONN`]) of all
+	/// known authorities.
+	pub fn get_random_subset(&self) -> Vec<Multiaddr> {
+		let mut rng = rand::thread_rng();
 
 		let mut addresses = self
 			.authority_id_to_addresses
@@ -117,6 +99,8 @@ impl AddrCache {
 			.collect()
 	}
 
+	/// Removes all [`PeerId`]s and [`Multiaddr`]s from the cache that are not related to the given
+	/// [`AuthorityId`]s.
 	pub fn retain_ids(&mut self, authority_ids: &Vec<AuthorityId>) {
 		// The below logic could be replaced by `BtreeMap::drain_filter` once it stabilized.
 		let authority_ids_to_remove = self.authority_id_to_addresses.iter()
@@ -189,97 +173,6 @@ mod tests {
 	}
 
 	#[test]
-	fn returns_addresses_of_same_authorities_on_repeated_calls() {
-		fn property(input: Vec<(TestAuthorityId, Vec<TestMultiaddr>)>) -> TestResult {
-			// Expect less than 1000 authorities.
-			if input.len() > 1000 {
-				return TestResult::discard();
-			}
-
-			// Expect less than 100 addresses per authority.
-			for i in &input {
-				if i.1.len() > 100 {
-					return TestResult::discard();
-				}
-			}
-
-			let mut c = AddrCache::new();
-
-			for (id, addresses) in input {
-				c.insert(id.0, addresses.into_iter().map(|a| a.0).collect());
-			}
-
-			let result = c.get_subset();
-			assert!(result.len() <= MAX_NUM_AUTHORITY_CONN);
-
-			for _ in 1..100 {
-				assert_eq!(c.get_subset(), result);
-			}
-
-			TestResult::passed()
-		}
-
-		QuickCheck::new()
-			.max_tests(10)
-			.quickcheck(property as fn(_) -> TestResult)
-	}
-
-	#[test]
-	fn returns_same_addresses_of_first_authority_when_second_authority_changes() {
-		fn property(
-			first: (TestAuthorityId, Vec<TestMultiaddr>),
-			second: (TestAuthorityId, Vec<TestMultiaddr>),
-			second_altered_addresses: Vec<TestMultiaddr>,
-		) -> TestResult {
-			// Unwrap from `TestXXX` types.
-			let first = ((first.0).0, first.1.into_iter().map(|a| a.0).collect::<Vec<_>>());
-			let second = ((second.0).0, second.1.into_iter().map(|a| a.0).collect::<Vec<_>>());
-			let second_altered_addresses = second_altered_addresses.into_iter()
-				.map(|a| a.0)
-				.collect::<Vec<_>>();
-
-			if first.1.is_empty() || second.1.is_empty() || second_altered_addresses.is_empty() {
-				return TestResult::discard();
-			}
-
-			let mut c = AddrCache::new();
-
-			// Insert addresses of first and second authority.
-			c.insert(first.0.clone(), first.1.clone());
-			c.insert(second.0.clone(), second.1);
-			assert_eq!(2, c.authority_id_to_addresses.len());
-
-			let first_subset = c.get_subset();
-			let first_subset_str = format!("{:?}", first_subset);
-			assert_eq!(2, first_subset.len());
-			let chosen_first_authority_address = first_subset.into_iter()
-				.filter(|a| first.1.contains(a))
-				.collect::<Vec<_>>()
-				.pop()
-				.expect("Subset to contain one address of first authority.");
-
-			// Alter address of second authority.
-			c.insert(second.0.clone(), second_altered_addresses);
-			assert_eq!(2, c.authority_id_to_addresses.len());
-
-			let second_subset = c.get_subset();
-			assert_eq!(2, second_subset.len());
-
-			assert!(
-				second_subset.contains(&chosen_first_authority_address),
-				"\nExpect second subset {:?} \nto contain same chosen address {:?} \nof first authority {:?} \nas in previous subset {:?}.\n",
-				second_subset, chosen_first_authority_address, first.1, first_subset_str,
-			);
-
-			TestResult::passed()
-		}
-
-		QuickCheck::new()
-			.max_tests(10)
-			.quickcheck(property as fn(_, _, _) -> TestResult)
-	}
-
-	#[test]
 	fn retains_only_entries_of_provided_ids() {
 		fn property(
 			first: (TestAuthorityId, TestMultiaddr),
@@ -296,7 +189,7 @@ mod tests {
 			cache.insert(second.0.clone(), vec![second.1.clone()]);
 			cache.insert(third.0.clone(), vec![third.1.clone()]);
 
-			let subset = cache.get_subset();
+			let subset = cache.get_random_subset();
 			assert!(
 				subset.contains(&first.1) && subset.contains(&second.1) && subset.contains(&third.1),
 				"Expect initial subset to contain all authorities.",
@@ -304,7 +197,7 @@ mod tests {
 
 			cache.retain_ids(&vec![first.0, second.0]);
 
-			let subset = cache.get_subset();
+			let subset = cache.get_random_subset();
 			assert!(
 				subset.contains(&first.1) || subset.contains(&second.1),
 				"Expected both first and second authority."

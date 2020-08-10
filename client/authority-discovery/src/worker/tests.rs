@@ -351,6 +351,7 @@ fn publish_discover_cycle() {
 		if let Poll::Ready(e) = worker.handle_dht_events(cx) {
 			panic!("Unexpected error: {:?}", e);
 		}
+		worker.set_priority_group();
 
 		// Expect authority discovery to set the priority set.
 		assert_eq!(network.set_priority_group_call.lock().unwrap().len(), 1);
@@ -560,6 +561,7 @@ fn never_add_own_address_to_priority_group() {
 	);
 
 	sentry_worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
+	sentry_worker.set_priority_group();
 
 	assert_eq!(
 		sentry_network.set_priority_group_call.lock().unwrap().len(), 1,
