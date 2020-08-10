@@ -29,7 +29,7 @@
 
 use crate::{
 	ExHashT, NetworkStateInfo,
-	behaviour::{Behaviour, BehaviourOut, BitswapApi},
+	behaviour::{Behaviour, BehaviourOut},
 	config::{parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
 	DhtEvent,
 	discovery::DiscoveryConfig,
@@ -553,9 +553,19 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.service.add_reserved_peer(peer)
 	}
 
-	/// Get a mutable reference to the Bitswap behaviour.
-	pub fn bitswap_api(&mut self) -> BitswapApi {
-		self.network_service.bitswap_api()
+	/// Get the number of bitswap peers we are connected to.
+	pub fn bitswap_num_peers(&self) -> usize {
+		self.network_service.bitswap.peers().count()
+	}
+
+	/// Get the number of bitswap peers who want a block.
+	pub fn bitswap_num_peers_want(&self, cid: &cid::Cid) -> usize {
+		self.network_service.bitswap.peers_want(cid).count()
+	}
+
+	/// Get if a specific bitswap peer wants a block.
+	pub fn bitswap_peer_wants_cid(&self, peer_id: &PeerId, cid: &cid::Cid) -> bool {
+		self.network_service.bitswap.peers_want(cid).find(|id| **id == *peer_id).is_some()
 	}
 }
 
@@ -941,6 +951,34 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
 	}
+
+	/// Send a bitswap block to a peer.
+	pub fn bitswap_send_block(&self, peer_id: PeerId, cid: cid::Cid, data: Box<[u8]>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::BitswapSendBlock(peer_id, cid, data));
+	}
+
+	/// Send a bitswap block to all peers that have the block in their wantlist.
+	pub fn bitswap_send_block_all(&self, cid: cid::Cid, data: Box<[u8]>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::BitswapSendBlockAll(cid, data));
+	}
+
+	/// Send a bitswap WANT request to all peers for a block.
+	pub fn bitswap_want_block(&self, cid: cid::Cid, priority: i32) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::BitswapWantBlock(cid, priority));
+	}
+
+	/// Cancel a bitswap WANT request.
+	pub fn bitswap_cancel_block(&self, cid: cid::Cid) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::BitswapCancelBlock(cid));
+	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
@@ -1084,6 +1122,10 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	DisconnectPeer(PeerId),
 	UpdateChain,
 	OwnBlockImported(B::Hash, NumberFor<B>),
+	BitswapSendBlock(PeerId, cid::Cid, Box<[u8]>),
+	BitswapSendBlockAll(cid::Cid, Box<[u8]>),
+	BitswapWantBlock(cid::Cid, i32),
+	BitswapCancelBlock(cid::Cid),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -1401,6 +1443,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().update_chain(),
 				ServiceToWorkerMsg::OwnBlockImported(hash, number) =>
 					this.network_service.user_protocol_mut().own_block_imported(hash, number),
+				ServiceToWorkerMsg::BitswapSendBlock(peer_id, cid, block) =>
+					this.network_service.bitswap.send_block(&peer_id, cid, block),
+				ServiceToWorkerMsg::BitswapSendBlockAll(cid, block) =>
+					this.network_service.bitswap.send_block_all(&cid, &block),
+				ServiceToWorkerMsg::BitswapWantBlock(cid, priority) =>
+					this.network_service.bitswap.want_block(cid, priority),
+				ServiceToWorkerMsg::BitswapCancelBlock(cid) =>
+					this.network_service.bitswap.cancel_block(&cid),
 			}
 		}
 

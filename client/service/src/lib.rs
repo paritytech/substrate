@@ -42,7 +42,7 @@ use std::time::Duration;
 use std::task::Poll;
 use parking_lot::Mutex;
 
-use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
+use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*, future};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
@@ -219,7 +219,7 @@ async fn build_network_future<
 
 
 	let mut bitswap_events = network.service().event_stream("bitswap")
-		.filter_map(|event| futures::future::ready(if let sc_network::Event::Bitswap(event) = event {
+		.filter_map(|event| future::ready(if let sc_network::Event::Bitswap(event) = event {
 			Some(event)
 		} else {
 			None
@@ -344,7 +344,7 @@ async fn build_network_future<
 
 			event = bitswap_events.select_next_some() => {
 				if let Some(offchain) = backend.offchain_storage() {
-					if let Err(err) = handle_bitswap_event(&mut network, event, offchain) {
+					if let Err(err) = handle_bitswap_event(network.service(), event, offchain) {
 						warn!("{}", err);
 					}
 				}
@@ -355,7 +355,7 @@ async fn build_network_future<
 
 /// Handle a `BitswapEvent`, reading and writing from the `OffchainStorage`.
 pub fn handle_bitswap_event<B: BlockT, H: sc_network::ExHashT, S: OffchainStorage>(
-	network: &mut sc_network::NetworkWorker<B, H>,
+	service: &Arc<sc_network::NetworkService<B, H>>,
 	event: sc_network::BitswapEvent,
 	storage: S,
 ) -> Result<(), BitswapStorageError> {
@@ -363,12 +363,14 @@ pub fn handle_bitswap_event<B: BlockT, H: sc_network::ExHashT, S: OffchainStorag
 
 	match event {
 		sc_network::BitswapEvent::ReceivedBlock(_, cid, data) => {
-			storage.insert(&cid, data)
+			storage.insert(&cid, data.clone())?;
+			service.put_value(cid.to_bytes().into(), data.to_vec());
+			Ok(())
 		},
 		sc_network::BitswapEvent::ReceivedWant(peer_id, cid, _) => {
 			match storage.get(&cid) {
 				Ok(data) => {
-					network.bitswap_api().send_block(&peer_id, cid, data.into_boxed_slice());
+					service.bitswap_send_block(peer_id, cid, data.into_boxed_slice());
 					Ok(())
 				},
 				Err(error) => Err(error)

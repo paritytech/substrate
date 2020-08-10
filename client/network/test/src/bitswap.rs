@@ -20,11 +20,18 @@ use futures::executor::block_on;
 use super::*;
 use std::ops::Range;
 
+fn generate_block_and_cid(string: &str) -> (&[u8], cid::Cid) {
+	let block = string.as_bytes();
+	let hash = multihash::Code::Sha2_256.digest(block);
+	let cid = cid::Cid::new_v1(cid::Codec::Raw, hash);
+	(block, cid)
+}
+
 fn wait_until_x_peers_want_cid(net: &mut TestNet, x: usize, peers: Range<usize>, cid: &cid::Cid) {
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		for peer in peers.clone() {
-			if net.peer(peer).network.bitswap_api().num_peers_want(cid) != x {
+			if net.peer(peer).network.bitswap_num_peers_want(cid) != x {
 				return Poll::Pending
 			}
 		}
@@ -40,7 +47,7 @@ fn test_bitswap_peers_connect() {
 	net.block_until_connected();
 
 	for peer in 0 .. 3 {
-		assert_eq!(net.peer(peer).network.bitswap_api().num_peers(), 2);
+		assert_eq!(net.peer(peer).network.bitswap_num_peers(), 2);
 	}
 }
 
@@ -49,23 +56,23 @@ fn test_bitswap_peers_sending_and_cancelling_wants_works() {
 	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
 
-	let cid: cid::Cid = "bafkreiaapsxdkhlebw676iqic2r7fmq3gngqqcvfwh7aisvnxl7zrt24em".parse().unwrap();
+	let (_, cid) = generate_block_and_cid("test_bitswap_peers_sending_and_cancelling_wants_works");
 	
-	net.peer(0).network.bitswap_api().want_block(cid.clone(), 0);
+	net.peer(0).network_service().bitswap_want_block(cid.clone(), 0);
 
 	let peer_0 = net.peer(0).id();
 
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		for peer in 1..3 {
-			if !net.peer(peer).network.bitswap_api().peer_wants_cid(&peer_0, &cid) {
+			if !net.peer(peer).network.bitswap_peer_wants_cid(&peer_0, &cid) {
 				return Poll::Pending
 			}
 		}
 		Poll::Ready(())
 	}));
 
-	net.peer(0).network.bitswap_api().cancel_block(&cid);
+	net.peer(0).network.service().bitswap_cancel_block(cid.clone());
 
 	wait_until_x_peers_want_cid(&mut net, 0, 0..3, &cid);
 }
@@ -75,16 +82,14 @@ fn test_bitswap_sending_blocks_works() {
 	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
 
-	let block = "abcdefghi".as_bytes();
+	let (block, cid) = generate_block_and_cid("test_bitswap_sending_blocks_works");
 	
-	let hash = multihash::Code::Sha2_256.digest(block);
-	let cid = cid::Cid::new_v1(cid::Codec::Raw, hash);
-
-	net.peer(0).network.bitswap_api().want_block(cid.clone(), 0);
+	net.peer(0).network.service().bitswap_want_block(cid.clone(), 0);
 
 	wait_until_x_peers_want_cid(&mut net, 1, 1..3, &cid);
 
-	net.peer(2).network.bitswap_api().send_block_all(&cid, block);
+	net.peer(2).network.service()
+		.bitswap_send_block_all(cid.clone(), block.to_vec().into_boxed_slice());
 
 	wait_until_x_peers_want_cid(&mut net, 0, 0..3, &cid);
 
@@ -109,16 +114,13 @@ fn test_bitswap_sending_blocks_from_store_works() {
 	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
 
-	let block = "abcdefghi".as_bytes();
+	let (block, cid) = generate_block_and_cid("test_bitswap_sending_blocks_from_store_works");
 	
-	let hash = multihash::Code::Sha2_256.digest(block);
-	let cid = cid::Cid::new_v1(cid::Codec::Raw, hash);
-
 	net.peer(2).client.bitswap_storage().unwrap().insert(&cid, block.into()).unwrap();
 
 	net.block_until_connected();
 
-	net.peer(0).network.bitswap_api().want_block(cid.clone(), 0);
+	net.peer(0).network.service().bitswap_want_block(cid.clone(), 0);
 
 	wait_until_x_peers_want_cid(&mut net, 1, 1..3, &cid);
 

@@ -51,7 +51,7 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
 	/// Exchanges blocks of data with other nodes.
-	bitswap: libp2p_bitswap::Bitswap,
+	pub(crate) bitswap: libp2p_bitswap::Bitswap,
 	/// Block request handling.
 	block_requests: block_requests::BlockRequests<B>,
 	/// Finality proof request handling.
@@ -164,46 +164,6 @@ pub enum BitswapEvent {
 	ReceivedWant(PeerId, cid::Cid, i32),
 }
 
-/// An opaque API used to interact with bitswap.
-pub struct BitswapApi<'a>(&'a mut libp2p_bitswap::Bitswap);
-
-impl<'a> BitswapApi<'a> {
-	/// Send a block to a peer.
-	pub fn send_block(&mut self, peer_id: &PeerId, cid: cid::Cid, data: Box<[u8]>) {
-		self.0.send_block(peer_id, cid, data)
-	}
-
-	/// Send a block to all peers that have the block in their wantlist.
-	pub fn send_block_all(&mut self, cid: &cid::Cid, data: &[u8]) {
-		self.0.send_block_all(cid, data)
-	}
-
-	/// Send a WANT request to all peers for a block.
-	pub fn want_block(&mut self, cid: cid::Cid, priority: i32) {
-		self.0.want_block(cid, priority)
-	}
-
-	/// Cancel a WANT request.
-	pub fn cancel_block(&mut self, cid: &cid::Cid) {
-		self.0.cancel_block(cid)
-	}
-
-	/// Get the number of peers we are connected to.
-	pub fn num_peers(&self) -> usize {
-		self.0.peers().count()
-	}
-
-	/// Get the number of peers who want a block.
-	pub fn num_peers_want(&self, cid: &cid::Cid) -> usize {
-		self.0.peers_want(cid).count()
-	}
-
-	/// Get if a specific peer wants a block.
-	pub fn peer_wants_cid(&self, peer_id: &PeerId, cid: &cid::Cid) -> bool {
-		self.0.peers_want(cid).find(|id| **id == *peer_id).is_some()
-	}
-}
-
 impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	/// Builds a new `Behaviour`.
 	pub fn new(
@@ -314,11 +274,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	/// Issue a light client request.
 	pub fn light_client_request(&mut self, r: light_client_handler::Request<B>) -> Result<(), light_client_handler::Error> {
 		self.light_client_handler.request(r)
-	}
-
-	/// Returns an API to interact with bitswap.
-	pub fn bitswap_api(&mut self) -> BitswapApi {
-		BitswapApi(&mut self.bitswap)
 	}
 }
 
