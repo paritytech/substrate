@@ -681,12 +681,100 @@ fn approve_bounty_works() {
 
 #[test]
 fn assign_curator_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
 
+		assert_ok!(Treasury::approve_bounty(Origin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Treasury::assign_curator(Origin::root(), 0, 4, 4));
+
+		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
+			proposer: 0,
+			fee: 4,
+			curator_deposit: 2,
+			value: 50,
+			bond: 85,
+			status: BountyStatus::CuratorAssigned {
+				curator: 4,
+			},
+		});
+
+		assert_noop!(Treasury::accept_curator(Origin::signed(1), 0), Error::<Test>::RequireCurator);
+		assert_noop!(Treasury::accept_curator(Origin::signed(4), 0), pallet_balances::Error::<Test, _>::InsufficientBalance);
+
+		Balances::make_free_balance_be(&4, 10);
+
+		assert_ok!(Treasury::accept_curator(Origin::signed(4), 0));
+
+		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
+			proposer: 0,
+			fee: 4,
+			curator_deposit: 2,
+			value: 50,
+			bond: 85,
+			status: BountyStatus::Active {
+				curator: 4,
+				expires: 22,
+			},
+		});
+
+		assert_eq!(Balances::free_balance(&4), 8);
+		assert_eq!(Balances::reserved_balance(&4), 2);
+	});
 }
 
 #[test]
 fn unassign_curator_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
 
+		assert_ok!(Treasury::approve_bounty(Origin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Treasury::assign_curator(Origin::root(), 0, 4, 4));
+
+		assert_noop!(Treasury::unassign_curator(Origin::signed(1), 0), BadOrigin);
+
+		assert_ok!(Treasury::unassign_curator(Origin::signed(4), 0));
+
+		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
+			proposer: 0,
+			fee: 4,
+			curator_deposit: 0,
+			value: 50,
+			bond: 85,
+			status: BountyStatus::Funded,
+		});
+
+		assert_ok!(Treasury::assign_curator(Origin::root(), 0, 4, 4));
+
+		Balances::make_free_balance_be(&4, 10);
+
+		assert_ok!(Treasury::accept_curator(Origin::signed(4), 0));
+
+		assert_ok!(Treasury::unassign_curator(Origin::root(), 0));
+
+		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
+			proposer: 0,
+			fee: 4,
+			curator_deposit: 0,
+			value: 50,
+			bond: 85,
+			status: BountyStatus::Funded,
+		});
+
+		assert_eq!(Balances::free_balance(&4), 8);
+		assert_eq!(Balances::reserved_balance(&4), 0); // slashed 2
+	});
 }
 
 #[test]
