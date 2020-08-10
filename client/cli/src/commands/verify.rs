@@ -18,10 +18,7 @@
 
 //! implementation of the `verify` subcommand
 
-use crate::{
-	error, utils, with_crypto_scheme,
-	CliConfiguration, CryptoSchemeFlag, SharedParams,
-};
+use crate::{error, utils, with_crypto_scheme, CryptoSchemeFlag};
 use sp_core::{Public, crypto::Ss58Codec};
 use structopt::StructOpt;
 
@@ -51,10 +48,6 @@ pub struct VerifyCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub shared_params: SharedParams,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
 	pub crypto_scheme: CryptoSchemeFlag,
 }
 
@@ -76,13 +69,6 @@ impl VerifyCmd {
 		)
 	}
 }
-
-impl CliConfiguration for VerifyCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
-}
-
 
 fn verify<Pair>(sig_data: Vec<u8>, message: Vec<u8>, uri: &str) -> error::Result<()>
 	where

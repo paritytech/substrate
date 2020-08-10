@@ -218,9 +218,6 @@ impl<C: SubstrateCli> Runner<C> {
 				let (client, _, _, task_manager) = builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, chain_spec), task_manager)
 			},
-			Subcommand::Sign(cmd) => cmd.run(),
-			Subcommand::Verify(cmd) => cmd.run(),
-			Subcommand::Vanity(cmd) => cmd.run()
 		}
 	}
 

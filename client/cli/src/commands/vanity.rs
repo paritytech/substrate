@@ -19,8 +19,8 @@
 //! implementation of the `vanity` subcommand
 
 use crate::{
-	error, utils, CliConfiguration, with_crypto_scheme,
-	CryptoSchemeFlag, NetworkSchemeFlag, OutputTypeFlag, SharedParams,
+	error, utils, with_crypto_scheme,
+	CryptoSchemeFlag, NetworkSchemeFlag, OutputTypeFlag,
 };
 use sp_core::crypto::Ss58Codec;
 use structopt::StructOpt;
@@ -37,10 +37,6 @@ pub struct VanityCmd {
 	/// Desired pattern
 	#[structopt(long, parse(try_from_str = assert_non_empty_string))]
 	pattern: String,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -70,12 +66,6 @@ impl VanityCmd {
 			)
 		);
 		Ok(())
-	}
-}
-
-impl CliConfiguration for VanityCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
 	}
 }
 

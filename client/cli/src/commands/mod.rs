@@ -39,7 +39,6 @@ pub mod tests;
 
 use std::fmt::Debug;
 use structopt::StructOpt;
-use crate::params::SharedParams;
 
 pub use self::{
 	build_spec_cmd::BuildSpecCmd,
@@ -88,15 +87,6 @@ pub enum Subcommand {
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
-
-	/// Sign a message, with a given (secret) key
-	Sign(SignCmd),
-
-	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
-	Verify(VerifyCmd),
-
-	/// Generate a seed that provides a vanity address.
-	Vanity(VanityCmd),
 }
 
 // TODO: move to config.rs?
@@ -455,8 +445,5 @@ substrate_cli_subcommands!(
 		ImportBlocks,
 		CheckBlock,
 		Revert,
-		PurgeChain,
-		Sign,
-		Verify,
-		Vanity
+		PurgeChain
 );

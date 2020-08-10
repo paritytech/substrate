@@ -17,8 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Implementation of the `sign` subcommand
-use crate::{error, utils, CliConfiguration, KeystoreParams, with_crypto_scheme, CryptoSchemeFlag};
-use super::SharedParams;
+use crate::{error, utils, with_crypto_scheme, CryptoSchemeFlag, KeystoreParams};
 use structopt::StructOpt;
 use sp_core::crypto::SecretString;
 
@@ -50,10 +49,6 @@ pub struct SignCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub shared_params: SharedParams,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
 	pub crypto_scheme: CryptoSchemeFlag,
 }
 
@@ -72,16 +67,6 @@ impl SignCmd {
 
 		println!("{}", signature);
 		Ok(())
-	}
-}
-
-impl CliConfiguration for SignCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
-
-	fn keystore_params(&self) -> Option<&KeystoreParams> {
-		Some(&self.keystore_params)
 	}
 }
 
