@@ -94,6 +94,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		inherent_data_providers.clone(),
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
+		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
 	)?;
 
 	let import_setup = (block_import, grandpa_link, babe_link);
@@ -379,6 +380,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 		inherent_data_providers.clone(),
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
+		sp_consensus::NeverCanAuthor,
 	)?;
 
 	let finality_proof_provider =
