@@ -406,6 +406,40 @@ fn terminate_when_event_stream_terminates() {
 }
 
 #[test]
+fn continue_operating_when_service_channel_is_dropped() {
+	let (_dht_event_tx, dht_event_rx) = channel(0);
+	let network: Arc<TestNetwork> = Arc::new(Default::default());
+	let key_store = KeyStore::new();
+	let test_api = Arc::new(TestApi {
+		authorities: vec![],
+	});
+
+	let (to_worker, from_service) = mpsc::channel(0);
+	let mut worker = Worker::new(
+		from_service,
+		test_api,
+		network.clone(),
+		vec![],
+		dht_event_rx.boxed(),
+		Role::Authority(key_store),
+		None,
+	);
+
+	block_on(async {
+		assert_eq!(Poll::Pending, poll!(&mut worker));
+
+		drop(to_worker);
+
+		for _ in 0..100 {
+			assert_eq!(
+				Poll::Pending, poll!(&mut worker),
+				"Expect authority discovery `Worker` not to panic when service channel is dropped.",
+			);
+		}
+	});
+}
+
+#[test]
 fn dont_stop_polling_when_error_is_returned() {
 	#[derive(PartialEq, Debug)]
 	enum Event {
