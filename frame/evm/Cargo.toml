@@ -27,6 +27,7 @@ rlp = { version = "0.4", default-features = false }
 evm = { version = "0.17", default-features = false }
 sha3 = { version = "0.8", default-features = false }
 impl-trait-for-tuples = "0.1"
+ripemd160 = { version = "0.9", default-features = false }
 
 [features]
 default = ["std"]
@@ -45,4 +46,5 @@ std = [
 	"primitive-types/std",
 	"evm/std",
 	"pallet-timestamp/std",
+	"ripemd160/std",
 ]

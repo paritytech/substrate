@@ -207,6 +207,7 @@ mod tests {
 	use sp_consensus::ImportedAux;
 	use sp_inherents::InherentDataProviders;
 	use sc_basic_authorship::ProposerFactory;
+	use sc_client_api::BlockBackend;
 
 	fn api() -> Arc<TestApi> {
 		Arc::new(TestApi::empty())
@@ -415,15 +416,13 @@ mod tests {
 				}
 			}
 		);
-		// assert that there's a new block in the db.
-		assert!(client.header(&BlockId::Number(0)).unwrap().is_some());
+		let block = client.block(&BlockId::Number(1)).unwrap().unwrap().block;
+		pool_api.add_block(block, true);
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 1)).await.is_ok());
 
 		let header = client.header(&BlockId::Number(1)).expect("db error").expect("imported above");
-		pool.maintain(sp_transaction_pool::ChainEvent::NewBlock {
+		pool.maintain(sp_transaction_pool::ChainEvent::NewBestBlock {
 			hash: header.hash(),
-			header,
-			is_new_best: true,
 			tree_route: None,
 		}).await;
 
@@ -438,10 +437,11 @@ mod tests {
 			rx1.await.expect("should be no error receiving"),
 			Ok(_)
 		);
-		assert!(client.header(&BlockId::Number(1)).unwrap().is_some());
+		let block = client.block(&BlockId::Number(2)).unwrap().unwrap().block;
+		pool_api.add_block(block, true);
 		pool_api.increment_nonce(Alice.into());
 
-		assert!(pool.submit_one(&BlockId::Number(2), SOURCE, uxt(Alice, 2)).await.is_ok());
+		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 2)).await.is_ok());
 		let (tx2, rx2) = futures::channel::oneshot::channel();
 		assert!(sink.send(EngineCommand::SealNewBlock {
 			parent_hash: Some(created_block.hash),

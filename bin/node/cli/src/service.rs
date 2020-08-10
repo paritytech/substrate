@@ -46,10 +46,13 @@ type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
 
 pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponents<
 	FullClient, FullBackend, FullSelectChain,
-	sc_consensus_babe::BabeImportQueue<Block, FullClient>,
+	sp_consensus::DefaultImportQueue<Block, FullClient>,
 	sc_transaction_pool::FullPool<Block, FullClient>,
 	(
-		impl Fn(node_rpc::DenyUnsafe) -> node_rpc::IoHandler,
+		impl Fn(
+			node_rpc::DenyUnsafe,
+			jsonrpc_pubsub::manager::SubscriptionManager
+		) -> node_rpc::IoHandler,
 		(
 			sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
 			grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
@@ -101,6 +104,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	let (rpc_extensions_builder, rpc_setup) = {
 		let (_, grandpa_link, babe_link) = &import_setup;
 
+		let justification_stream = grandpa_link.justification_stream();
 		let shared_authority_set = grandpa_link.shared_authority_set().clone();
 		let shared_voter_state = grandpa::SharedVoterState::empty();
 
@@ -114,7 +118,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		let select_chain = select_chain.clone();
 		let keystore = keystore.clone();
 
-		let rpc_extensions_builder = move |deny_unsafe| {
+		let rpc_extensions_builder = move |deny_unsafe, subscriptions| {
 			let deps = node_rpc::FullDeps {
 				client: client.clone(),
 				pool: pool.clone(),
@@ -128,6 +132,8 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 				grandpa: node_rpc::GrandpaDeps {
 					shared_voter_state: shared_voter_state.clone(),
 					shared_authority_set: shared_authority_set.clone(),
+					justification_stream: justification_stream.clone(),
+					subscriptions,
 				},
 			};
 
@@ -165,7 +171,7 @@ pub fn new_full_base(
 	let finality_proof_provider =
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
-	let (network, network_status_sinks, system_rpc_tx) =
+	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
@@ -322,6 +328,7 @@ pub fn new_full_base(
 		)?;
 	}
 
+	network_starter.start_network();
 	Ok((task_manager, inherent_data_providers, client, network, transaction_pool))
 }
 
@@ -383,7 +390,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	let finality_proof_provider =
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
-	let (network, network_status_sinks, system_rpc_tx) =
+	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
@@ -395,6 +402,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			finality_proof_request_builder: Some(finality_proof_request_builder),
 			finality_proof_provider: Some(finality_proof_provider),
 		})?;
+	network_starter.start_network();
 
 	if config.offchain_worker.enabled {
 		sc_service::build_offchain_workers(
@@ -521,11 +529,9 @@ mod tests {
 
 				futures::executor::block_on(
 					service.transaction_pool().maintain(
-						ChainEvent::NewBlock {
-							is_new_best: true,
+						ChainEvent::NewBestBlock {
 							hash: parent_header.hash(),
 							tree_route: None,
-							header: parent_header.clone(),
 						},
 					)
 				);
