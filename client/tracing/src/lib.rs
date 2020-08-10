@@ -31,7 +31,7 @@ use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use serde::ser::{Serialize, Serializer, SerializeMap};
-use tracing_core::{
+use tracing::{
 	event::Event,
 	field::{Visit, Field},
 	Level,

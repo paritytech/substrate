@@ -7100,7 +7100,6 @@ dependencies = [
  "slog",
  "sp-tracing",
  "tracing",
- "tracing-core",
  "tracing-subscriber",
 ]
 
