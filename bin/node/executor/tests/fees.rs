@@ -36,7 +36,7 @@ use self::common::{*, sign};
 
 #[test]
 fn fee_multiplier_increases_and_decreases_on_big_weight() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 
 	// initial fee multiplier must be one.
 	let mut prev_multiplier = Multiplier::one();
@@ -45,7 +45,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
 	});
 
-	let mut tt = new_test_ext(COMPACT_CODE, false);
+	let mut tt = new_test_ext(compact_code_unwrap(), false);
 
 	// big one in terms of weight.
 	let block1 = construct_block(
@@ -130,7 +130,7 @@ fn transaction_fee_is_correct() {
 	//   - 1 MILLICENTS in substrate node.
 	//   - 1 milli-dot based on current polkadot runtime.
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		(0u32, 0u8, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
@@ -209,9 +209,9 @@ fn block_weight_capacity_report() {
 	use node_primitives::Index;
 
 	// execution ext.
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	// setup ext.
-	let mut tt = new_test_ext(COMPACT_CODE, false);
+	let mut tt = new_test_ext(compact_code_unwrap(), false);
 
 	let factor = 50;
 	let mut time = 10;
@@ -276,9 +276,9 @@ fn block_length_capacity_report() {
 	use node_primitives::Index;
 
 	// execution ext.
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	// setup ext.
-	let mut tt = new_test_ext(COMPACT_CODE, false);
+	let mut tt = new_test_ext(compact_code_unwrap(), false);
 
 	let factor = 256 * 1024;
 	let mut time = 10;

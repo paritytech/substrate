@@ -47,7 +47,7 @@ use sp_consensus::{
 	BlockOrigin, Error as ConsensusError, SelectChain, SlotData, BlockCheckParams, ImportResult
 };
 use sp_consensus::import_queue::{
-	Verifier, BasicQueue, BoxJustificationImport, BoxFinalityProofImport,
+	Verifier, BasicQueue, DefaultImportQueue, BoxJustificationImport, BoxFinalityProofImport,
 };
 use sc_client_api::{backend::AuxStore, BlockOf};
 use sp_blockchain::{
@@ -713,9 +713,6 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 		.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet.into())
 }
 
-/// The Aura import queue type.
-pub type AuraImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
-
 /// Register the aura inherent data provider, if not registered already.
 fn register_aura_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
@@ -824,7 +821,7 @@ pub fn import_queue<B, I, C, P, S>(
 	inherent_data_providers: InherentDataProviders,
 	spawner: &S,
 	registry: Option<&Registry>,
-) -> Result<AuraImportQueue<B, sp_api::TransactionFor<C, B>>, sp_consensus::Error> where
+) -> Result<DefaultImportQueue<B, C>, sp_consensus::Error> where
 	B: BlockT,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
 	C: 'static + ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,

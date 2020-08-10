@@ -330,7 +330,6 @@ use sp_npos_elections::{
 	is_score_better, VotingLimit, SupportMap, VoteWeight,
 };
 
-const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const STAKING_ID: LockIdentifier = *b"staking ";
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 pub const MAX_NOMINATIONS: usize = <CompactAssignments as VotingLimit>::LIMIT;
@@ -1032,8 +1031,7 @@ decl_storage! {
 		pub ValidatorCount get(fn validator_count) config(): u32;
 
 		/// Minimum number of staking participants before emergency conditions are imposed.
-		pub MinimumValidatorCount get(fn minimum_validator_count) config():
-			u32 = DEFAULT_MINIMUM_VALIDATOR_COUNT;
+		pub MinimumValidatorCount get(fn minimum_validator_count) config(): u32;
 
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
 		/// easy to initialize and the performance hit is minimal (we expect no more than four
@@ -1238,12 +1236,12 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Trait>::AccountId {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
-		/// the remainder from the maximum amount of reward. 
+		/// the remainder from the maximum amount of reward.
 		/// [era_index, validator_payout, remainder]
 		EraPayout(EraIndex, Balance, Balance),
 		/// The staker has been rewarded by this amount. [stash, amount]
 		Reward(AccountId, Balance),
-		/// One validator (and its nominators) has been slashed by the given amount. 
+		/// One validator (and its nominators) has been slashed by the given amount.
 		/// [validator, amount]
 		Slash(AccountId, Balance),
 		/// An old slashing report from a prior era was discarded because it could
@@ -1457,6 +1455,17 @@ decl_module! {
 				}
 			}
 			// `on_finalize` weight is tracked in `on_initialize`
+		}
+
+		fn integrity_test() {
+			sp_io::TestExternalities::new_empty().execute_with(||
+				assert!(
+					T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
+					"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
+					T::SlashDeferDuration::get(),
+					T::BondingDuration::get(),
+				)
+			);
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
@@ -2889,7 +2898,7 @@ impl<T: Trait> Module<T> {
 				let mut exposure_clipped = exposure;
 				let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
 				if exposure_clipped.others.len() > clipped_max_len {
-					exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value).reverse());
+					exposure_clipped.others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
 					exposure_clipped.others.truncate(clipped_max_len);
 				}
 				<ErasStakersClipped<T>>::insert(&current_era, &stash, exposure_clipped);

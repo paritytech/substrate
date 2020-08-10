@@ -371,7 +371,16 @@ macro_rules! ss58_address_format {
 			fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
 				match x {
 					$($number => Ok(Ss58AddressFormat::$identifier)),*,
-					_ => Err(()),
+					_ => {
+						#[cfg(feature = "std")]
+						match Ss58AddressFormat::default() {
+							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(x)),
+							_ => Err(()),
+						}
+						
+						#[cfg(not(feature = "std"))]
+						Err(())
+					},
 				}
 			}
 		}
@@ -387,8 +396,7 @@ macro_rules! ss58_address_format {
 			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, Self::Error> {
 				match x {
 					$($name => Ok(Ss58AddressFormat::$identifier)),*,
-					a => a.parse::<u8>().map(Ss58AddressFormat::Custom)
-						.map_err(|_| ParseError),
+					a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ParseError),
 				}
 			}
 		}
@@ -429,6 +437,8 @@ ss58_address_format!(
 		(2, "kusama", "Kusama Relay-chain, standard account (*25519).")
 	Reserved3 =>
 		(3, "reserved3", "Reserved for future use (3).")
+	KatalChainAccount =>
+		(4, "katalchain", "Katal Chain, standard account (*25519).")
 	PlasmAccount =>
 		(5, "plasm", "Plasm Network, standard account (*25519).")
 	BifrostAccount =>
@@ -453,6 +463,8 @@ ss58_address_format!(
 		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
 	StafiAccount =>
 		(20, "stafi", "Stafi mainnet, standard account (*25519).")
+	SubsocialAccount =>
+		(28, "subsocial", "Subsocial network, standard account (*25519).")
 	RobonomicsAccount =>
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>

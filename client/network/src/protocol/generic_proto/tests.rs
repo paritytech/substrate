@@ -83,7 +83,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		});
 
 		let behaviour = CustomProtoWithAddr {
-			inner: GenericProto::new(local_peer_id, &b"test"[..], &[1], vec![], peerset, None),
+			inner: GenericProto::new(local_peer_id, &b"test"[..], &[1], vec![], peerset),
 			addrs: addrs
 				.iter()
 				.enumerate()
@@ -221,9 +221,10 @@ fn two_nodes_transfer_lots_of_packets() {
 	// We spawn two nodes, then make the first one send lots of packets to the second one. The test
 	// ends when the second one has received all of them.
 
-	// Note that if we go too high, we will reach the limit to the number of simultaneous
-	// substreams allowed by the multiplexer.
-	const NUM_PACKETS: u32 = 5000;
+	// This test consists in transferring this given number of packets. Considering that (by
+	// design) the connection gets closed if one of the remotes can't follow the pace, this number
+	// should not exceed the size of the buffer of pending notifications.
+	const NUM_PACKETS: u32 = 512;
 
 	let (mut service1, mut service2) = build_nodes();
 
