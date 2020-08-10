@@ -24,7 +24,7 @@
 //!
 //! See [`Worker`] and [`Service`] for more documentation.
 
-use crate::{service::Service, worker::{NetworkProvider, Worker, Role}};
+pub use crate::{service::Service, worker::{NetworkProvider, Worker, Role}};
 
 use std::pin::Pin;
 use std::sync::Arc;
