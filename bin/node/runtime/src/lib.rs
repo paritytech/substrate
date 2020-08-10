@@ -22,7 +22,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
-use sp_std::prelude::*;
+use sp_std::{prelude::*, marker::PhantomData};
 
 use frame_support::{
 	construct_runtime, parameter_types, debug, RuntimeDebug,
@@ -336,8 +336,8 @@ parameter_types! {
 }
 
 impl pallet_transaction_payment::Trait for Runtime {
-	type Currency = Balances;
-	type OnTransactionPayment = DealWithFees;
+	type Balance = Balance;
+	type OnChargeTransaction = (PhantomData<pallet_balances::Module<Runtime>>, PhantomData<DealWithFees>);
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<Balance>;
 	type FeeMultiplierUpdate =

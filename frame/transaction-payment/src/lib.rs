@@ -32,7 +32,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
+use sp_std::{prelude::*, fmt::Debug, marker::PhantomData};
 use codec::{Encode, Decode, FullCodec};
 use frame_support::{
 	decl_storage, decl_module,
@@ -55,10 +55,12 @@ use sp_runtime::{
 	},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
-use std::fmt::Debug;
 
 /// Fee multiplier.
 pub type Multiplier = FixedU128;
+
+type NegativeImbalanceOf<C, T> =
+	<C as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// A struct to update the weight multiplier per block. It implements `Convert<Multiplier,
 /// Multiplier>`, meaning that it can convert the previous multiplier to the next one. This should
@@ -216,11 +218,48 @@ pub trait OnChargeTransaction<T: Trait> {
 		fee: T::Balance,
 		tip: T::Balance,
 	) -> Result<(T::Balance, Self::WithdrawAmount), TransactionValidityError>;
+
 	fn refund(
 		who: &T::AccountId,
 		amount: Self::WithdrawAmount,
 		refund: T::Balance,
-	) -> Result<(Self::WithdrawAmount), TransactionValidityError>;
+	) -> Result<Self::WithdrawAmount, TransactionValidityError>;
+
+	fn deposit(
+		amount: Self::WithdrawAmount,
+	);
+}
+
+impl<T, C, OU> OnChargeTransaction<T> for (PhantomData<C>, PhantomData<OU>)
+where 
+	T: Trait,
+	C: Currency<<T as frame_system::Trait>::AccountId>,
+	OU: OnUnbalanced<NegativeImbalanceOf<C, T>>,
+{
+	type WithdrawAmount = ();
+
+	fn withdraw(
+		who: &T::AccountId,
+		fee: T::Balance,
+		tip: T::Balance,
+	) -> Result<(T::Balance, Self::WithdrawAmount), TransactionValidityError> {
+		todo!()
+	}
+
+	fn refund(
+		who: &T::AccountId,
+		amount: Self::WithdrawAmount,
+		refund: T::Balance,
+	) -> Result<Self::WithdrawAmount, TransactionValidityError> {
+		todo!()
+	}
+
+	fn deposit(
+		amount: Self::WithdrawAmount,
+	) {
+		todo!()
+	}
+	
 }
 
 pub trait Trait: frame_system::Trait {
@@ -234,11 +273,11 @@ pub trait Trait: frame_system::Trait {
 		+ Send
 		+ Sync;
 
-	/// Handler for the unbalanced reduction when taking transaction fees. This is either one or
-	/// two separate imbalances, the first is the transaction fee paid, the second is the tip paid,
-	/// if any.
-	type OnTransactionPayment: OnUnbalanced<_>;
-
+	/// Handler for withdrawing, refunding and depositing the transaction fee.
+	/// Transaction fees are withdrawen before the transaction is executed.
+	/// After the transaction was executed the transaction weight can be adjusted, depending on the used resources by 
+	/// the transaction. If the transaction weight is lower than expected, parts of the transaction fee might be refunded.
+	/// In the end the fees can be deposited.
 	type OnChargeTransaction: OnChargeTransaction<Self>;
 
 	/// The fee to be paid for making a transaction; the per-byte portion.
@@ -553,11 +592,8 @@ where
 				tip,
 			);
 			let refund = fee.saturating_sub(actual_fee);
-			let actual_payment = T::OnChargeTransaction::refund(&who, imbalance, refund)?;
-			let imbalances = actual_payment.split(tip);
-			T::OnTransactionPayment::on_unbalanceds(
-				Some(imbalances.0).into_iter().chain(Some(imbalances.1)),
-			);
+			let actual_payment = T::OnChargeTransaction::refund(&who, payed, refund)?;
+			T::OnChargeTransaction::deposit(actual_payment);
 		}
 		Ok(())
 	}
