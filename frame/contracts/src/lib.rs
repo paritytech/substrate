@@ -78,6 +78,7 @@
 //! * [Balances](../pallet_balances/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(feature = "runtime-benchmarks", recursion_limit="256")]
 
 #[macro_use]
 mod gas;
