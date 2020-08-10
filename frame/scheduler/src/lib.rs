@@ -890,6 +890,54 @@ mod tests {
 	}
 
 	#[test]
+	fn reschedule_works() {
+		new_test_ext().execute_with(|| {
+			let call = Call::Logger(logger::Call::log(42, 1000));
+			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert_eq!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call).unwrap(), (4, 0));
+
+			run_to_block(3);
+			assert!(logger::log().is_empty());
+
+			assert_eq!(Scheduler::do_reschedule((4, 0), DispatchTime::At(6)).unwrap(), (6, 0));
+
+			run_to_block(4);
+			assert!(logger::log().is_empty());
+
+			run_to_block(6);
+			assert_eq!(logger::log(), vec![(root(), 42u32)]);
+
+			run_to_block(100);
+			assert_eq!(logger::log(), vec![(root(), 42u32)]);
+		});
+	}
+
+	#[test]
+	fn reschedule_named_works() {
+		new_test_ext().execute_with(|| {
+			let call = Call::Logger(logger::Call::log(42, 1000));
+			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert_eq!(Scheduler::do_schedule_named(
+				1u32.encode(), DispatchTime::At(4), None, 127, root(), call
+			).unwrap(), (4, 0));
+
+			run_to_block(3);
+			assert!(logger::log().is_empty());
+
+			assert_eq!(Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)).unwrap(), (6, 0));
+
+			run_to_block(4);
+			assert!(logger::log().is_empty());
+
+			run_to_block(6);
+			assert_eq!(logger::log(), vec![(root(), 42u32)]);
+
+			run_to_block(100);
+			assert_eq!(logger::log(), vec![(root(), 42u32)]);
+		});
+	}
+
+	#[test]
 	fn cancel_named_scheduling_works_with_normal_cancel() {
 		new_test_ext().execute_with(|| {
 			// at #4.
