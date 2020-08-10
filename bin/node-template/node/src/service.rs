@@ -81,7 +81,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	} = new_partial(&config)?;
 
 	let finality_proof_provider =
-		GrandpaFinalityProofProvider::new_for_service(backend.clone(),client.clone());
+		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {

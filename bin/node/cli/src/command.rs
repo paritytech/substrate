@@ -48,21 +48,21 @@ impl SubstrateCli for Cli {
 		2017
 	}
 
+	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
+		Ok(match id {
+			"dev" => Box::new(chain_spec::development_config()),
+			"local" => Box::new(chain_spec::local_testnet_config()),
+			"" | "fir" | "flaming-fir" => Box::new(chain_spec::flaming_fir_config()?),
+			"staging" => Box::new(chain_spec::staging_testnet_config()),
+			path => Box::new(chain_spec::ChainSpec::from_json_file(
+				std::path::PathBuf::from(path),
+			)?),
+		})
+	}
+
 	fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static RuntimeVersion {
 		&node_runtime::VERSION
 	}
-}
-
-fn spec_factory(id: String) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
-	Ok(match &*id {
-		"dev" => Box::new(chain_spec::development_config()),
-		"local" => Box::new(chain_spec::local_testnet_config()),
-		"" | "fir" | "flaming-fir" => Box::new(chain_spec::flaming_fir_config()?),
-		"staging" => Box::new(chain_spec::staging_testnet_config()),
-		path => Box::new(chain_spec::ChainSpec::from_json_file(
-			std::path::PathBuf::from(path),
-		)?),
-	})
 }
 
 /// Parse command line arguments into service configuration.
@@ -71,20 +71,20 @@ pub fn run() -> Result<()> {
 
 	match &cli.subcommand {
 		None => {
-			let runner = cli.create_runner(&cli.run, spec_factory)?;
+			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| match config.role {
 				Role::Light => service::new_light(config),
 				_ => service::new_full(config),
 			})
 		}
 		Some(Subcommand::Inspect(cmd)) => {
-			let runner = cli.create_runner(cmd, spec_factory)?;
+			let runner = cli.create_runner(cmd)?;
 
 			runner.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor>(config))
 		}
 		Some(Subcommand::Benchmark(cmd)) => {
 			if cfg!(feature = "runtime-benchmarks") {
-				let runner = cli.create_runner(cmd, spec_factory)?;
+				let runner = cli.create_runner(cmd)?;
 
 				runner.sync_run(|config| cmd.run::<Block, Executor>(config))
 			} else {
@@ -94,7 +94,7 @@ pub fn run() -> Result<()> {
 			}
 		}
 		Some(Subcommand::Base(subcommand)) => {
-			let runner = cli.create_runner(subcommand, spec_factory)?;
+			let runner = cli.create_runner(subcommand)?;
 			runner.run_subcommand(subcommand, |config| {
 				let PartialComponents { client, backend, task_manager, import_queue, ..}
 					= new_partial(&config)?;

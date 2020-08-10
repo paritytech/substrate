@@ -47,19 +47,19 @@ impl SubstrateCli for Cli {
 		2017
 	}
 
+	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
+		Ok(match id {
+			"dev" => Box::new(chain_spec::development_config()?),
+			"" | "local" => Box::new(chain_spec::local_testnet_config()?),
+			path => Box::new(chain_spec::ChainSpec::from_json_file(
+				std::path::PathBuf::from(path),
+			)?),
+		})
+	}
+
 	fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static RuntimeVersion {
 		&node_template_runtime::VERSION
 	}
-}
-
-fn spec_factory(id: String) -> Result<Box<dyn ChainSpec>, String> {
-	Ok(match &*id {
-		"dev" => Box::new(chain_spec::development_config()?),
-		"" | "local" => Box::new(chain_spec::local_testnet_config()?),
-		path => Box::new(chain_spec::ChainSpec::from_json_file(
-			std::path::PathBuf::from(path),
-		)?),
-	})
 }
 
 /// Parse and run command line arguments
@@ -68,7 +68,7 @@ pub fn run() -> sc_cli::Result<()> {
 
 	match &cli.subcommand {
 		Some(subcommand) => {
-			let runner = cli.create_runner(subcommand, spec_factory)?;
+			let runner = cli.create_runner(subcommand)?;
 			runner.run_subcommand(subcommand, |config| {
 				let PartialComponents { client, backend, task_manager, import_queue, .. }
 					= new_partial(&config)?;
@@ -76,7 +76,7 @@ pub fn run() -> sc_cli::Result<()> {
 			})
 		}
 		None => {
-			let runner = cli.create_runner(&cli.run, spec_factory)?;
+			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| match config.role {
 				Role::Light => service::new_light(config),
 				_ => service::new_full(config),
