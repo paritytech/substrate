@@ -32,7 +32,7 @@ use sp_transaction_pool::{TransactionPool, TransactionSource};
 use crate::core::{self, Path, Mode};
 
 pub struct PoolBenchmarkDescription {
-    pub database_type: DatabaseType,
+	pub database_type: DatabaseType,
 }
 
 pub struct PoolBenchmark {
@@ -41,7 +41,7 @@ pub struct PoolBenchmark {
 
 impl core::BenchmarkDescription for PoolBenchmarkDescription {
 	fn path(&self) -> Path {
-        Path::new(&["node", "txpool"])
+		Path::new(&["node", "txpool"])
 	}
 
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
@@ -55,7 +55,7 @@ impl core::BenchmarkDescription for PoolBenchmarkDescription {
 	}
 
 	fn name(&self) -> Cow<'static, str> {
-        "Transaction pool benchmark".into()
+		"Transaction pool benchmark".into()
 	}
 }
 
