@@ -485,7 +485,7 @@ fn full_wasm_block_import_works() {
 
 const CODE_TRANSFER: &str = r#"
 (module
-;; ext_call(
+;; seal_call(
 ;;    callee_ptr: u32,
 ;;    callee_len: u32,
 ;;    gas: u64,
@@ -496,15 +496,15 @@ const CODE_TRANSFER: &str = r#"
 ;;    output_ptr: u32,
 ;;    output_len_ptr: u32
 ;; ) -> u32
-(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
-(import "env" "ext_input" (func $ext_input (param i32 i32)))
+(import "seal0" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 (import "env" "memory" (memory 1 1))
 (func (export "deploy")
 )
 (func (export "call")
 	(block $fail
 		;; Load input data to contract memory
-		(call $ext_input
+		(call $seal_input
 			(i32.const 0)
 			(i32.const 52)
 		)
@@ -543,7 +543,7 @@ const CODE_TRANSFER: &str = r#"
 		)
 
 		(drop
-			(call $ext_call
+			(call $seal_call
 				(i32.const 4)  ;; Pointer to "callee" address.
 				(i32.const 32)  ;; Length of "callee" address.
 				(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.

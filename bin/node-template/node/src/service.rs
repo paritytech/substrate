@@ -114,7 +114,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		let client = client.clone();
 		let pool = transaction_pool.clone();
 
-		Box::new(move |deny_unsafe| {
+		Box::new(move |deny_unsafe, _| {
 			let deps = crate::rpc::FullDeps {
 				client: client.clone(),
 				pool: pool.clone(),
@@ -280,7 +280,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		transaction_pool,
 		task_manager: &mut task_manager,
 		on_demand: Some(on_demand),
-		rpc_extensions_builder: Box::new(|_| ()),
+		rpc_extensions_builder: Box::new(|_, _| ()),
 		telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
 		config,
 		client,
