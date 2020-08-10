@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use libp2p::core::multiaddr::{Multiaddr, Protocol};
-use rand::{seq::SliceRandom, Rng};
+use rand::seq::SliceRandom;
 use std::{
 	clone::Clone,
 	collections::HashMap,
