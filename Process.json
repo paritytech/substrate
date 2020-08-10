@@ -21,4 +21,9 @@
 	"project_name": "Smart Contracts",
 	"owner": "pepyakin",
 	"matrix_room_id": "!yBKstWVBkwzUkPslsp:matrix.parity.io"
+},
+{
+	"project_name": "Benchmarking and Weights",
+	"owner": "shawntabrizi",
+	"matrix_room_id": "!pZPWqCRLVtORZTEsEf:matrix.parity.io"
 }]

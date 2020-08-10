@@ -32,6 +32,7 @@ lazy_static::lazy_static! {
 
 type Boxed01Future01 = Box<dyn future01::Future<Item = (), Error = ()> + Send + 'static>;
 
+/// Executor for use in testing
 pub struct TaskExecutor;
 impl future01::Executor<Boxed01Future01> for TaskExecutor {
 	fn execute(
