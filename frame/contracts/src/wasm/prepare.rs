@@ -654,7 +654,7 @@ mod tests {
 			Err("module imports a non-existent function")
 		);
 
-		// nothing can be imported from arbitrary modules
+		// memory is in "env" and not in "seal0"
 		prepare_test!(memory_not_in_seal0,
 			r#"
 			(module
@@ -665,6 +665,45 @@ mod tests {
 			)
 			"#,
 			Err("Invalid module for imported memory")
+		);
+
+		// memory is in "env" and not in some arbitrary module
+		prepare_test!(memory_not_in_arbitrary_module,
+			r#"
+			(module
+				(import "any_module" "memory" (memory 1 1))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("Invalid module for imported memory")
+		);
+
+		// functions are in "env" and not in "seal0"
+		prepare_test!(function_not_in_env,
+			r#"
+			(module
+				(import "env" "nop" (func (param i64)))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("Invalid module for imported function")
+		);
+
+		// functions are in "seal0" and not in in some arbitrary module
+		prepare_test!(function_not_arbitrary_module,
+			r#"
+			(module
+				(import "any_module" "nop" (func (param i64)))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("Invalid module for imported function")
 		);
 
 		// wrong signature
