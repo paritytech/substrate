@@ -123,7 +123,6 @@ impl RpcHandlers {
 	}
 }
 
-
 /// Sinks to propagate network status updates.
 /// For each element, every time the `Interval` fires we push an element on the sender.
 #[derive(Clone)]
