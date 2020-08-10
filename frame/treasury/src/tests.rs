@@ -696,7 +696,7 @@ fn assign_curator_works() {
 		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
 			proposer: 0,
 			fee: 4,
-			curator_deposit: 2,
+			curator_deposit: 0,
 			value: 50,
 			bond: 85,
 			status: BountyStatus::CuratorAssigned {
