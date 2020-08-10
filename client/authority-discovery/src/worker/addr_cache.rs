@@ -18,7 +18,7 @@ use libp2p::core::multiaddr::{Multiaddr, Protocol};
 use rand::{seq::SliceRandom, Rng};
 use std::{
 	clone::Clone,
-	collections::{BTreeMap, HashMap},
+	collections::HashMap,
 	convert::AsRef,
 };
 
@@ -32,19 +32,20 @@ const MAX_NUM_AUTHORITY_CONN: usize = 10;
 
 /// Cache for [`AuthorityId`] -> [`Vec<Multiaddr>`] and [`PeerId`] -> [`AuthorityId`] mappings.
 pub(super) struct AddrCache {
-	authority_id_to_addresses: BTreeMap<AuthorityId, Vec<Multiaddr>>,
-	// TODO: Make sure to clean this one up on authority set change. As in add tests!
+	authority_id_to_addresses: HashMap<AuthorityId, Vec<Multiaddr>>,
 	peer_id_to_authority_id: HashMap<PeerId, AuthorityId>,
 }
 
 impl AddrCache {
 	pub fn new() -> Self {
 		AddrCache {
-			authority_id_to_addresses: BTreeMap::new(),
+			authority_id_to_addresses: HashMap::new(),
 			peer_id_to_authority_id: HashMap::new(),
 		}
 	}
 
+	/// Inserts the given [`Authority`] and [`Vec<Multiaddr>`] pair for future lookups by
+	/// [`AuthorityId`] or [`PeerId`].
 	pub fn insert(&mut self, authority_id: AuthorityId, mut addresses: Vec<Multiaddr>) {
 		if addresses.is_empty() {
 			return;
@@ -68,10 +69,12 @@ impl AddrCache {
 		self.authority_id_to_addresses.len()
 	}
 
+	/// Returns the addresses for the given [`AuthorityId`].
 	pub fn get_addresses_by_authority_id(&self, authority_id: &AuthorityId) -> Option<&Vec<Multiaddr>> {
 		self.authority_id_to_addresses.get(&authority_id)
 	}
 
+	/// Returns the [`AuthorityId`] for the given [`PeerId`].
 	pub fn get_authority_id_by_peer_id(&self, peer_id: &PeerId) -> Option<&AuthorityId> {
 		self.peer_id_to_authority_id.get(peer_id)
 	}
@@ -84,20 +87,19 @@ impl AddrCache {
 		let mut addresses = self
 			.authority_id_to_addresses
 			.iter()
-			.map(|(_authority_id, addresses)| {
+			.filter_map(|(_authority_id, addresses)| {
+				debug_assert!(!addresses.is_empty());
 				addresses
 					.choose(&mut rng)
-					// TODO: Reassure that this assumption is correct.
-					.expect("an empty address vector is never inserted into the cache")
 			})
-			.cloned()
-			.collect::<Vec<Multiaddr>>();
+			.collect::<Vec<&Multiaddr>>();
 
 		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
 		addresses.dedup();
 
 		addresses
 			.choose_multiple(&mut rng, MAX_NUM_AUTHORITY_CONN)
+			.cloned()
 			.cloned()
 			.collect()
 	}
@@ -176,7 +178,7 @@ mod tests {
 	}
 
 	#[test]
-	fn retains_only_entries_of_provided_ids() {
+	fn retains_only_entries_of_provided_authority_ids() {
 		fn property(
 			first: (TestAuthorityId, TestMultiaddr),
 			second: (TestAuthorityId, TestMultiaddr),
@@ -197,6 +199,16 @@ mod tests {
 				subset.contains(&first.1) && subset.contains(&second.1) && subset.contains(&third.1),
 				"Expect initial subset to contain all authorities.",
 			);
+			assert_eq!(
+				Some(&vec![third.1.clone()]),
+				cache.get_addresses_by_authority_id(&third.0),
+				"Expect `get_addresses_by_authority_id` to return addresses of third authority."
+			);
+			assert_eq!(
+				Some(&third.0),
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&third.1).unwrap()),
+				"Expect `get_authority_id_by_peer_id` to return `AuthorityId` of third authority."
+			);
 
 			cache.retain_ids(&vec![first.0, second.0]);
 
@@ -205,9 +217,15 @@ mod tests {
 				subset.contains(&first.1) || subset.contains(&second.1),
 				"Expected both first and second authority."
 			);
-			assert!(!subset.contains(&third.1), "Did not expect third authority");
-
-			// TODO: Also ensure the peerid -> authority id matching is cleaned up.
+			assert!(!subset.contains(&third.1), "Did not expect address from third authority");
+			assert_eq!(
+				None, cache.get_addresses_by_authority_id(&third.0),
+				"Expect `get_addresses_by_authority_id` to not return `None` for third authority."
+			);
+			assert_eq!(
+				None, cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&third.1).unwrap()),
+				"Expect `get_authority_id_by_peer_id` to return `None` for third authority."
+			);
 
 			TestResult::passed()
 		}
