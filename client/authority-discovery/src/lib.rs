@@ -33,7 +33,7 @@ use futures::channel::{mpsc, oneshot};
 use futures::Stream;
 
 use sc_client_api::blockchain::HeaderBackend;
-use sc_network::{config::MultiaddrWithPeerId, DhtEvent,	Multiaddr};
+use sc_network::{config::MultiaddrWithPeerId, DhtEvent,	Multiaddr, PeerId};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId};
 use sp_runtime::traits::Block as BlockT;
 use sp_api::ProvideRuntimeApi;
@@ -71,6 +71,8 @@ where
 
 /// Message send from the [`Service`] to the [`Worker`].
 pub(crate) enum ServicetoWorkerMsg {
-	/// See [`Service::get_addresses`].
-	GetAddresses(AuthorityId, oneshot::Sender<Option<Vec<Multiaddr>>>)
+	/// See [`Service::get_addresses_by_authority_id`].
+	GetAddressesByAuthorityId(AuthorityId, oneshot::Sender<Option<Vec<Multiaddr>>>),
+	/// See [`Service::get_authority_id_by_peer_id`].
+	GetAuthorityIdByPeerId(PeerId, oneshot::Sender<Option<AuthorityId>>)
 }

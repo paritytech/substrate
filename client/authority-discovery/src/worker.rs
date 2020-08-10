@@ -620,9 +620,14 @@ where
 		// Handle messages from [`Service`].
 		while let Poll::Ready(Some(msg)) = self.from_service.poll_next_unpin(cx) {
 			match msg {
-				ServicetoWorkerMsg::GetAddresses(authority, sender) => {
+				ServicetoWorkerMsg::GetAddressesByAuthorityId(authority, sender) => {
 					let _ = sender.send(
-						self.addr_cache.get_addresses(&authority).map(Clone::clone),
+						self.addr_cache.get_addresses_by_authority_id(&authority).map(Clone::clone),
+					);
+				}
+				ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, sender) => {
+					let _ = sender.send(
+						self.addr_cache.get_authority_id_by_peer_id(&peer_id).map(Clone::clone),
 					);
 				}
 			}

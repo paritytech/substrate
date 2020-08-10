@@ -19,7 +19,7 @@ use crate::ServicetoWorkerMsg;
 use futures::channel::{mpsc, oneshot};
 use futures::SinkExt;
 
-use sc_network::Multiaddr;
+use sc_network::{Multiaddr, PeerId};
 use sp_authority_discovery::AuthorityId;
 
 /// Service to interact with the [`Worker`].
@@ -38,14 +38,25 @@ impl Service {
 	}
 
 	/// Get the addresses for the given [`AuthorityId`] from the local address cache.
-	//
-	// TODO: Should this function be able to error?
-	pub async fn get_addresses(&mut self, authority: AuthorityId) -> Option<Vec<Multiaddr>> {
+	pub async fn get_addresses_by_authority_id(&mut self, authority: AuthorityId) -> Option<Vec<Multiaddr>> {
 		let (tx, rx) = oneshot::channel();
 
-		if let Err(_) = self.to_worker.send(ServicetoWorkerMsg::GetAddresses(authority, tx)).await {
-			return None;
-		}
+		self.to_worker
+			.send(ServicetoWorkerMsg::GetAddressesByAuthorityId(authority, tx))
+			.await
+			.ok()?;
+
+		rx.await.ok().flatten()
+	}
+
+	/// Get the [`AuthorityId`] for the given [`PeerId`] from the local address cache.
+	pub async fn get_authority_id_by_peer_id(&mut self, peer_id: PeerId) -> Option<AuthorityId> {
+		let (tx, rx) = oneshot::channel();
+
+		self.to_worker
+			.send(ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, tx))
+			.await
+			.ok()?;
 
 		rx.await.ok().flatten()
 	}

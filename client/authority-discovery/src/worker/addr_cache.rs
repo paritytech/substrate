@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use libp2p::core::multiaddr::{Multiaddr, Protocol};
-use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
+use rand::{seq::SliceRandom, Rng};
 use std::{
 	clone::Clone,
 	collections::{BTreeMap, HashMap},
@@ -68,9 +68,12 @@ impl AddrCache {
 		self.authority_id_to_addresses.len()
 	}
 
-	// TODO: How about authority_id_to_address instead?
-	pub fn get_addresses(&self, id: &AuthorityId) -> Option<&Vec<Multiaddr>> {
-		self.authority_id_to_addresses.get(&id)
+	pub fn get_addresses_by_authority_id(&self, authority_id: &AuthorityId) -> Option<&Vec<Multiaddr>> {
+		self.authority_id_to_addresses.get(&authority_id)
+	}
+
+	pub fn get_authority_id_by_peer_id(&self, peer_id: &PeerId) -> Option<&AuthorityId> {
+		self.peer_id_to_authority_id.get(peer_id)
 	}
 
 	/// Returns a single address for a random subset (maximum of [`MAX_NUM_AUTHORITY_CONN`]) of all
