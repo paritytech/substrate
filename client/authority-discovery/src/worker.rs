@@ -161,9 +161,6 @@ where
 	///
 	/// Note: When specifying `sentry_nodes` this module will not advertise the public addresses of
 	/// the node itself but only the public addresses of its sentry nodes.
-	//
-	// TODO: Instead of a method returning both worker and service, how about a
-	// separate function returning both?
 	pub(crate) fn new(
 		from_service: mpsc::Receiver<ServicetoWorkerMsg>,
 		client: Arc<Client>,
@@ -185,16 +182,17 @@ where
 		// External addresses of other authorities can change at any given point in time. The
 		// interval on which to query for external addresses of other authorities is a trade off
 		// between efficiency and performance.
-		let query_interval = interval_at(
-			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
-			Duration::from_secs(10 * 60),
-		);
+		let query_interval_duration = Duration::from_secs(10 * 60);
+		let query_interval_start = Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME;
+		let query_interval = interval_at(query_interval_start, query_interval_duration);
 
-		// TODO: Check whether it is fine in case the priority group is empty?
-		// TODO: Add a better delay to set off apart from query_interval.
+		// Querying 500 [`AuthorityId`]s takes ~1m on the Kusama DHT (10th of August 2020) when
+		// comparing `authority_discovery_authority_addresses_requested_total` and
+		// `authority_discovery_dht_event_received`. With that in mind set the peerset priority
+		// group on the same interval as the [`query_interval`] above, just delayed by 2 minutes.
 		let priority_group_set_interval = interval_at(
-			Instant::now() + Duration::from_secs(60) + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
-			Duration::from_secs(10 * 60),
+			query_interval_start + Duration::from_secs(2 * 60),
+			query_interval_duration,
 		);
 
 		let sentry_nodes = if !sentry_nodes.is_empty() {
@@ -540,6 +538,14 @@ where
 	fn set_priority_group(&self) -> Result<()> {
 		let addresses = self.addr_cache.get_random_subset();
 
+		if addresses.is_empty() {
+			debug!(
+				target: LOG_TARGET,
+				"Got no addresses in cache for peerset priority group.",
+			);
+			return Ok(());
+		}
+
 		if let Some(metrics) = &self.metrics {
 			metrics.priority_group_size.set(addresses.len().try_into().unwrap_or(std::u64::MAX));
 		}
@@ -548,6 +554,7 @@ where
 			target: LOG_TARGET,
 			"Applying priority group {:?} to peerset.", addresses,
 		);
+
 		self.network
 			.set_priority_group(
 				AUTHORITIES_PRIORITY_GROUP_NAME.to_string(),
