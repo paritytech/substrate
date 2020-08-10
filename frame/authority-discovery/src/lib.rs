@@ -23,7 +23,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
+use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 use frame_support::{decl_module, decl_storage};
 use sp_authority_discovery::AuthorityId;
 
@@ -80,11 +80,8 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	{
 		// Remember who the authorities are for the new and next session.
 		if changed {
-			let mut keys = validators.chain(queued_validators).map(|x| x.1).collect::<Vec<_>>();
-			keys.sort();
-			keys.dedup();
-
-			Keys::put(keys);
+			let keys = validators.chain(queued_validators).map(|x| x.1).collect::<BTreeSet<_>>();
+			Keys::put(keys.into_iter().collect::<Vec<_>>());
 		}
 	}
 
