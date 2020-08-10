@@ -102,6 +102,8 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		block: Option<Block::Hash>,
 		key: StorageKey,
 	) -> FutureResult<Option<u64>> {
+		use rpc::futures::{future::Either, done};
+
 		let value_len = self.storage(block, key.clone()).map(|x| x.map(|x| x.0.len() as u64));
 		let pairs_len = self.storage_pairs(block, key.clone())
 			.map(|kv| {
@@ -113,8 +115,13 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 				}
 			});
 
-		let both = value_len.join(pairs_len);
-		Box::new(both.map(|(a, b)| a.or(b)))
+		// if value size is there, use that, else execute another future that looks for map len.
+		let value_or_map = value_len.and_then(|result| match result {
+			Some(size) => Either::A(done(Ok(Some(size)))),
+			None => Either::B(pairs_len),
+		 });
+
+		Box::new(value_or_map)
 	}
 
 	/// Returns the runtime metadata as an opaque blob.
