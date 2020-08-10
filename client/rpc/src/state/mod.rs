@@ -140,21 +140,21 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	/// New runtime version subscription
 	fn subscribe_runtime_version(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<RuntimeVersion>,
 	);
 
 	/// Unsubscribe from runtime version subscription
 	fn unsubscribe_runtime_version(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool>;
 
 	/// New storage subscription
 	fn subscribe_storage(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
 		keys: Option<Vec<StorageKey>>,
 	);
@@ -162,7 +162,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	/// Unsubscribe from storage subscription
 	fn unsubscribe_storage(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool>;
 }
@@ -230,7 +230,7 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		Block: BlockT + 'static,
 		Client: Send + Sync + 'static,
 {
-	type Metadata = crate::metadata::Metadata;
+	type Metadata = crate::Metadata;
 
 	fn call(&self, method: String, data: Bytes, block: Option<Block::Hash>) -> FutureResult<Bytes> {
 		self.backend.call(block, method, data)
@@ -390,7 +390,7 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 		Block: BlockT + 'static,
 		Client: Send + Sync + 'static,
 {
-	type Metadata = crate::metadata::Metadata;
+	type Metadata = crate::Metadata;
 
 	fn storage(
 		&self,
