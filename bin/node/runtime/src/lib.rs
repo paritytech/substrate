@@ -889,7 +889,7 @@ construct_runtime!(
 		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
 		Proxy: pallet_proxy::{Module, Call, Storage, Event<T>},
 		Multisig: pallet_multisig::{Module, Call, Storage, Event<T>},
-		NodePermission: pallet_node_permission::{Module, Call, Storage, Event},
+		NodePermission: pallet_node_permission::{Module, Call, Storage, Event, Config},
 	}
 );
 

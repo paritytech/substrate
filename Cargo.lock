@@ -3571,6 +3571,7 @@ dependencies = [
  "pallet-grandpa",
  "pallet-im-online",
  "pallet-indices",
+ "pallet-node-permission",
  "pallet-staking",
  "pallet-timestamp",
  "pallet-transaction-payment",
@@ -4562,7 +4563,9 @@ dependencies = [
  "frame-support",
  "frame-system",
  "parity-scale-codec",
+ "serde",
  "sp-core",
+ "sp-io",
  "sp-std",
 ]
 

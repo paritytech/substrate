@@ -31,6 +31,7 @@ use frame_support::{
     dispatch::DispatchResult, storage, ensure,
     traits::{Get, EnsureOrigin},
 };
+use codec::Encode;
 
 type NodeId = Public;
 
@@ -51,6 +52,12 @@ pub trait Trait: frame_system::Trait {
 
 decl_storage! {
     trait Store for Module<T: Trait> as NodePermission {
+    }
+    add_extra_genesis {
+        config(nodes): Vec<NodeId>;
+        build(|config: &GenesisConfig| {
+            sp_io::storage::set(well_known_keys::NODE_ALLOWLIST, &config.nodes.encode());
+        });
     }
 }
 
