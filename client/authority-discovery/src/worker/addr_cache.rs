@@ -44,7 +44,7 @@ impl AddrCache {
 		}
 	}
 
-	/// Inserts the given [`Authority`] and [`Vec<Multiaddr>`] pair for future lookups by
+	/// Inserts the given [`AuthorityId`] and [`Vec<Multiaddr>`] pair for future lookups by
 	/// [`AuthorityId`] or [`PeerId`].
 	pub fn insert(&mut self, authority_id: AuthorityId, mut addresses: Vec<Multiaddr>) {
 		if addresses.is_empty() {
