@@ -3548,6 +3548,7 @@ dependencies = [
  "futures 0.3.5",
  "hex-literal",
  "jsonrpc-core",
+ "jsonrpc-pubsub",
  "log",
  "nix",
  "node-executor",
@@ -3680,6 +3681,7 @@ name = "node-rpc"
 version = "2.0.0-rc5"
 dependencies = [
  "jsonrpc-core",
+ "jsonrpc-pubsub",
  "node-primitives",
  "node-runtime",
  "pallet-contracts-rpc",
@@ -3698,7 +3700,6 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-babe",
- "sp-runtime",
  "sp-transaction-pool",
  "substrate-frame-rpc-system",
 ]
@@ -6622,11 +6623,23 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
+ "jsonrpc-pubsub",
+ "lazy_static",
  "log",
+ "parity-scale-codec",
+ "sc-block-builder",
  "sc-finality-grandpa",
+ "sc-network-test",
+ "sc-rpc",
  "serde",
  "serde_json",
+ "sp-blockchain",
+ "sp-consensus",
  "sp-core",
+ "sp-finality-grandpa",
+ "sp-keyring",
+ "sp-runtime",
+ "substrate-test-runtime-client",
 ]
 
 [[package]]
