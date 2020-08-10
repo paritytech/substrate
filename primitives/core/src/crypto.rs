@@ -1023,8 +1023,6 @@ pub mod key_types {
 	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
 	/// Key type for equivocation reporting, built-in. Identified as `fish`.
 	pub const REPORTING: KeyTypeId = KeyTypeId(*b"fish");
-	/// Key type for node permission module, build-in. Identified as `node`.
-	pub const NODE_PERMISSION: KeyTypeId = KeyTypeId(*b"node");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
