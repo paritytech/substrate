@@ -492,14 +492,16 @@ fn check_header<C, B: BlockT, P: Pair>(
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, P> {
+pub struct AuraVerifier<C, P, CAW> {
 	client: Arc<C>,
 	phantom: PhantomData<P>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
+	can_author_with: CAW,
 }
 
-impl<C, P> AuraVerifier<C, P>
-	where P: Send + Sync + 'static
+impl<C, P, CAW> AuraVerifier<C, P, CAW> where
+	P: Send + Sync + 'static,
+	CAW: Send + Sync + 'static,
 {
 	fn check_inherents<B: BlockT>(
 		&self,
@@ -507,10 +509,15 @@ impl<C, P> AuraVerifier<C, P>
 		block_id: BlockId<B>,
 		inherent_data: InherentData,
 		timestamp_now: u64,
-	) -> Result<(), Error<B>>
-		where C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>
+	) -> Result<(), Error<B>> where
+		C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
+		CAW: CanAuthorWith<B>,
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
+
+		if let Err(_) = self.can_author_with.can_author_with(&block_id) {
+			return Ok(())
+		}
 
 		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
@@ -553,7 +560,7 @@ impl<C, P> AuraVerifier<C, P>
 }
 
 #[forbid(deprecated)]
-impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
+impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 	C: ProvideRuntimeApi<B> +
 		Send +
 		Sync +
@@ -565,6 +572,7 @@ impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
+	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 {
 	fn verify(
 		&mut self,
@@ -812,7 +820,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, I, C, P, S>(
+pub fn import_queue<B, I, C, P, S, CAW>(
 	slot_duration: SlotDuration,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<B>>,
@@ -821,6 +829,7 @@ pub fn import_queue<B, I, C, P, S>(
 	inherent_data_providers: InherentDataProviders,
 	spawner: &S,
 	registry: Option<&Registry>,
+	can_author_with: CAW,
 ) -> Result<DefaultImportQueue<B, C>, sp_consensus::Error> where
 	B: BlockT,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
@@ -831,6 +840,7 @@ pub fn import_queue<B, I, C, P, S>(
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
 	S: sp_core::traits::SpawnNamed,
+	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;
@@ -839,6 +849,7 @@ pub fn import_queue<B, I, C, P, S>(
 		client,
 		inherent_data_providers,
 		phantom: PhantomData,
+		can_author_with,
 	};
 
 	Ok(BasicQueue::new(
@@ -854,7 +865,7 @@ pub fn import_queue<B, I, C, P, S>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_consensus::{NoNetwork as DummyOracle, Proposal, RecordProof};
+	use sp_consensus::{NoNetwork as DummyOracle, Proposal, RecordProof, AlwaysCanAuthor};
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
 	use sc_network::config::ProtocolConfig;
@@ -924,7 +935,7 @@ mod tests {
 	}
 
 	impl TestNetFactory for AuraTestNet {
-		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair>;
+		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair, AlwaysCanAuthor>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -951,6 +962,7 @@ mod tests {
 						client,
 						inherent_data_providers,
 						phantom: Default::default(),
+						can_author_with: AlwaysCanAuthor,
 					}
 				},
 				PeersClient::Light(_, _) => unreachable!("No (yet) tests for light client + Aura"),
