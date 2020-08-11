@@ -794,7 +794,7 @@ pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW> {
 	config: Config,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	time_source: TimeSource,
-	can_author_with: CAW
+	can_author_with: CAW,
 }
 
 impl<Block, Client, SelectChain, CAW> BabeVerifier<Block, Client, SelectChain, CAW>
@@ -1439,7 +1439,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	inherent_data_providers: InherentDataProviders,
 	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
-	can_author_with: CAW
+	can_author_with: CAW,
 ) -> ClientResult<DefaultImportQueue<Block, Client>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
