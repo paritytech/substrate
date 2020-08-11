@@ -1,3 +1,5 @@
+// This file is part of Substrate.
+
 // Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -17,8 +19,7 @@
 
 use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 
-pub struct WeightInfo;
-impl pallet_treasury::WeightInfo for WeightInfo {
+impl crate::WeightInfo for () {
 	fn propose_spend() -> Weight {
 		(45321000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))

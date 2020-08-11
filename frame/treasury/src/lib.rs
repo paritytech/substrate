@@ -142,6 +142,7 @@ use frame_system::{self as system, ensure_signed};
 
 mod tests;
 mod benchmarking;
+mod default_weights;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
@@ -152,12 +153,15 @@ pub trait WeightInfo {
 	fn reject_proposal() -> Weight;
 	fn approve_proposal() -> Weight;
 	fn report_awesome(r: u32, ) -> Weight;
-	fn retract_tip(r: u32, ) -> Weight;
+	fn retract_tip() -> Weight;
 	fn tip_new(r: u32, t: u32, ) -> Weight;
 	fn tip(t: u32, ) -> Weight;
 	fn close_tip(t: u32, ) -> Weight;
 	fn propose_bounty(r: u32, ) -> Weight;
 	fn approve_bounty() -> Weight;
+	fn assign_curator() -> Weight;
+	fn unassign_curator() -> Weight;
+	fn accept_curator() -> Weight;
 	fn reject_bounty() -> Weight;
 	fn award_bounty() -> Weight;
 	fn claim_bounty() -> Weight;
@@ -166,27 +170,6 @@ pub trait WeightInfo {
 	fn update_bounty_value_minimum() -> Weight;
 	fn on_initialize_proposals(p: u32, ) -> Weight;
 	fn on_initialize_bounties(b: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn propose_spend() -> Weight { 1_000_000_000 }
-	fn reject_proposal() -> Weight { 1_000_000_000 }
-	fn approve_proposal() -> Weight { 1_000_000_000 }
-	fn report_awesome(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn retract_tip(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn tip_new(_r: u32, _t: u32, ) -> Weight { 1_000_000_000 }
-	fn tip(_t: u32, ) -> Weight { 1_000_000_000 }
-	fn close_tip(_t: u32, ) -> Weight { 1_000_000_000 }
-	fn propose_bounty(_r: u32, ) -> Weight { 1_000_000_000 }
-	fn approve_bounty() -> Weight { 1_000_000_000 }
-	fn reject_bounty() -> Weight { 1_000_000_000 }
-	fn award_bounty() -> Weight { 1_000_000_000 }
-	fn claim_bounty() -> Weight { 1_000_000_000 }
-	fn cancel_bounty() -> Weight { 1_000_000_000 }
-	fn extend_bounty_expiry() -> Weight { 1_000_000_000 }
-	fn update_bounty_value_minimum() -> Weight { 1_000_000_000 }
-	fn on_initialize_proposals(_p: u32, ) -> Weight { 1_000_000_000 }
-	fn on_initialize_bounties(_b: u32, ) -> Weight { 1_000_000_000 }
 }
 
 pub trait Trait: frame_system::Trait {
@@ -669,7 +652,7 @@ decl_module! {
 		/// - DbReads: `Tips`, `origin account`
 		/// - DbWrites: `Reasons`, `Tips`, `origin account`
 		/// # </weight>
-		#[weight = T::WeightInfo::retract_tip(0)]
+		#[weight = T::WeightInfo::retract_tip()]
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
@@ -882,7 +865,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = 10_000]
+		#[weight = T::WeightInfo::assign_curator()]
 		fn assign_curator(
 			origin,
 			#[compact] bounty_id: ProposalIndex,
@@ -916,7 +899,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = 10_000]
+		#[weight = T::WeightInfo::unassign_curator()]
 		fn unassign_curator(
 			origin,
 			#[compact] bounty_id: ProposalIndex,
@@ -954,7 +937,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = 10_000]
+		#[weight = T::WeightInfo::accept_curator()]
 		fn accept_curator(origin, #[compact] bounty_id: ProposalIndex) {
 			let signer = ensure_signed(origin)?;
 
