@@ -150,12 +150,12 @@ pub fn get_tracing_subscriber<'a>() -> Option<&'a Box<dyn TracingSubscriber>> {
 }
 
 
-#[cfg(any(not(no_std), not(feature = "with-tracing")))]
+#[cfg(all(no_std, not(feature = "with-tracing")))]
 pub fn get_tracing_subscriber<'a>() -> Option<&'a Box<dyn TracingSubscriber>> {
 	None
 }
 
-#[cfg(any(not(no_std), not(feature = "with-tracing")))]
+#[cfg(all(no_std, not(feature = "with-tracing")))]
 pub fn set_tracing_subscriber(_subscriber: Box<dyn TracingSubscriber>) {
 	unreachable!()
 }

@@ -28,6 +28,8 @@ sp-tracing = { version = "2.0.0-rc5", default-features = false, path = "../traci
 log = { version = "0.4.8", optional = true }
 futures = { version = "0.3.1", features = ["thread-pool"], optional = true }
 parking_lot = { version = "0.10.0", optional = true }
+tracing = { version = "0.1.18", optional = true }
+tracing-core = { version = "0.1.13", optional = true }
 
 [features]
 default = ["std"]
@@ -42,6 +44,8 @@ std = [
 	"sp-runtime-interface/std",
 	"sp-externalities",
 	"sp-wasm-interface/std",
+	"tracing",
+	"tracing-core",
 	"log",
 	"futures",
 	"parking_lot",

@@ -33,6 +33,9 @@ use sp_std::vec::Vec;
 use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]
+use tracing;
+
+#[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
 	traits::{KeystoreExt, CallInWasmExt, TaskExecutorExt},
@@ -1008,44 +1011,112 @@ impl<T: Encode + Decode> PassBy for Crossing<T> {
 #[runtime_interface]
 pub trait WasmTracing {
 	fn enabled(&mut self, metadata: Crossing<sp_tracing::WasmMetadata>) -> bool {
-		todo! {}
+		let metadata : &tracing_core::metadata::Metadata<'static> = (&metadata.0).into();
+		tracing::dispatcher::get_default(|d| {
+			d.enabled(metadata)
+		})
 	}
 	fn new_span(&mut self, span: Crossing<sp_tracing::WasmAttributes>) -> u64 {
-
-		todo! {}
-		// crate::get_tracing_subscriber().map(|t|{
-		// 	t.new_span(span)
-		// }).unwrap_or(0)
+		let span : tracing::Span = span.0.into();
+		match span.id() {
+			Some(id) => tracing::dispatcher::get_default(|d| {
+				// inform dispatch that we'll keep the ID around
+				d.clone_span(&id).into_u64()
+			}),
+			_ => {
+				0
+			}
+		}
 	}
-	fn record(&mut self, span: u64, values: Crossing<sp_tracing::WasmValues>) {
-
-		todo! {}
-		// crate::get_tracing_subscriber().map(|t|{
-		// 	t.record(span, values)
-		// });
-	}
+	
 	fn event(&mut self, event: Crossing<sp_tracing::WasmEvent>) {
-
-		todo! {}
-		// crate::get_tracing_subscriber().map(|t|{
-		// 	t.event(event)
-		// });
+		event.0.emit();
 	}
-	fn enter(&mut self, span: u64) {
 
-		todo! {}
-		// crate::get_tracing_subscriber().map(|t|{
-		// 	t.enter(span)
-		// });
+	fn enter(&mut self, span: u64) {
+		tracing::dispatcher::get_default(|d| {
+			d.enter(&tracing_core::span::Id::from_u64(span))
+		});
 	}
 	fn exit(&mut self, span: u64) {
-
-		todo! {}
-		// crate::get_tracing_subscriber().map(|t|{
-		// 	t.exit(span)
-		// });
+		tracing::dispatcher::get_default(|d| {
+			d.exit(&tracing_core::span::Id::from_u64(span))
+		});
 	}
 }
+
+
+// impl TracingSubscriber for ProfilingSubscriber {
+// 	fn enabled(&self, metadata: WasmMetadata) -> bool {
+// 		let level = metadata.level();
+// 		let target = metadata.target();
+// 		if self.check_target(target, &level) {
+// 			log::debug!(target: "tracing", "Enabled target: {}, level: {}", target, level);
+// 			true
+// 		} else {
+// 			log::debug!(target: "tracing", "Disabled target: {}, level: {}", target, level);
+// 			false
+// 		}
+// 	}
+
+// 	fn new_span(&self, attrs: WasmAttributes) -> u64 {
+// 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+// 		let values = attrs.fields.into();
+// 		let span_datum = SpanDatum {
+// 			id: Id::from_u64(id.clone()),
+// 			parent_id: attrs.parent_id.map(|id| Id::from_u64(id)).or_else(|| self.current_span.id()),
+// 			name: String::from_utf8(attrs.metadata.name).unwrap_or_else(|_| UNABLE_TO_DECODE.to_owned()),
+// 			target: String::from_utf8(attrs.metadata.target).unwrap_or_else(|_| UNABLE_TO_DECODE.to_owned()),
+// 			level: attrs.metadata.level.into(),
+// 			line: attrs.metadata.line,
+// 			start_time: Instant::now(),
+// 			overall_time: ZERO_DURATION,
+// 			values,
+// 		};
+// 		self.span_data.lock().insert(span_datum.id.clone(), span_datum);
+// 		id
+// 	}
+
+// 	fn record(&self, span: u64, values: WasmValues) {
+// 		let mut span_data = self.span_data.lock();
+// 		if let Some(mut s) = span_data.get_mut(&Id::from_u64(span)) {
+// 			let new_values: Values = values.into();
+// 			s.values.extend(new_values);
+// 		}
+// 	}
+
+// 	fn event(&self, event: WasmEvent) {
+// 		let mut values = event.fields.into();
+// 		let trace_event = TraceEvent {
+// 			name: event.metadata.name().to_owned(),
+// 			target: event.metadata.target().to_owned(),
+// 			level: event.metadata.level(),
+// 			values,
+// 			parent_id: event.parent_id.map(|id| Id::from_u64(id)).or_else(|| self.current_span.id()),
+// 		};
+// 		self.trace_handler.handle_event(trace_event);
+// 	}
+
+// 	fn enter(&self, span: u64) {
+// 		let id = Id::from_u64(span);
+// 		self.current_span.enter(id.clone());
+// 		let mut span_data = self.span_data.lock();
+// 		let start_time = Instant::now();
+// 		if let Some(mut s) = span_data.get_mut(&id) {
+// 			s.start_time = start_time;
+// 		}
+// 	}
+
+// 	fn exit(&self, span: u64) {
+// 		self.current_span.exit();
+// 		let end_time = Instant::now();
+// 		let mut span_data = self.span_data.lock();
+// 		if let Some(mut s) = span_data.remove(&Id::from_u64(span)) {
+// 			s.overall_time = end_time - s.start_time + s.overall_time;
+// 			self.trace_handler.handle_span(s);
+// 		}
+// 	}
+// }
 
 
 #[cfg(no_std)]
@@ -1059,9 +1130,6 @@ impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
 	}
 	fn new_span(&self, attrs: sp_tracing::WasmAttributes) -> u64 {
 		wasm_tracing::new_span(Crossing(attrs))
-	}
-	fn record(&self, span: u64, values: sp_tracing::WasmValues) {
-		wasm_tracing::record(span, Crossing(values))
 	}
 	fn event(&self, event: sp_tracing::WasmEvent) {
 		wasm_tracing::event(Crossing(event))
