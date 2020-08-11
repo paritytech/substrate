@@ -243,12 +243,25 @@ impl BandwidthMonitor {
 			output: monitor.clone(),
 		};
 
-		let _handle = task::Builder::new()
+		Self::spawn(task);
+
+		monitor
+	}
+
+	#[cfg(not(target_arch = "wasm32"))]
+	fn spawn(task: BandwidthTask) {
+		task::Builder::new()
 			.name("network-bandwidth".to_string())
 			.spawn(task.run())
 			.expect("Failed to spawn network-bandwidth task.");
+	}
 
-		monitor
+	#[cfg(target_arch = "wasm32")]
+	fn spawn(task: BandwidthTask) {
+		task::Builder::new()
+			.name("network-bandwidth".to_string())
+			.local(task.run())
+			.expect("Failed to spawn network-bandwidth task.");
 	}
 }
 
