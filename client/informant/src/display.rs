@@ -80,13 +80,16 @@ impl<B: BlockT> InformantDisplay<B> {
 		self.last_update = now;
 		self.last_number = Some(best_number);
 
-		let avg_bytes_per_sec_inbound = (total_bytes_inbound - self.last_total_bytes_inbound) / elapsed;
-		let avg_bytes_per_sec_outbound = (total_bytes_outbound - self.last_total_bytes_outbound) / elapsed;
-
-		if elapsed > 0 {
-			self.last_total_bytes_inbound = total_bytes_inbound;
-			self.last_total_bytes_outbound = total_bytes_outbound;
-		}
+		let diff_bytes_inbound = total_bytes_inbound - self.last_total_bytes_inbound;
+		let diff_bytes_outbound = total_bytes_outbound - self.last_total_bytes_outbound;
+		let (avg_bytes_per_sec_inbound, avg_bytes_per_sec_outbound) =
+			if elapsed > 0 {
+				self.last_total_bytes_inbound = total_bytes_inbound;
+				self.last_total_bytes_outbound = total_bytes_outbound;
+				(diff_bytes_inbound / elapsed, diff_bytes_outbound / elapsed)
+			} else {
+				(diff_bytes_inbound, diff_bytes_outbound)
+			};
 
 		let (level, status, target) = match (net_status.sync_state, net_status.best_seen_block) {
 			(SyncState::Idle, _) => ("💤", "Idle".into(), "".into()),

@@ -153,6 +153,7 @@ impl MetricsService {
 		net_status: &NetworkStatus<T>,
 	) {
 		let now = Instant::now();
+		let elapsed = (now - self.last_update).as_secs();
 
 		let best_number = info.chain.best_number.saturated_into::<u64>();
 		let best_hash = info.chain.best_hash;
@@ -164,13 +165,16 @@ impl MetricsService {
 			.best_seen_block
 			.map(|num: NumberFor<T>| num.unique_saturated_into() as u64);
 
-		let elapsed = (now - self.last_update).as_secs();
-		let inbound_per_sec = (total_bytes_inbound - self.last_total_bytes_inbound) / elapsed;
-		let outbound_per_sec = (total_bytes_outbound - self.last_total_bytes_outbound) / elapsed;
-		if elapsed > 0 {
-			self.last_total_bytes_inbound = total_bytes_inbound;
-			self.last_total_bytes_outbound = total_bytes_outbound;
-		}
+		let diff_bytes_inbound = total_bytes_inbound - self.last_total_bytes_inbound;
+		let diff_bytes_outbound = total_bytes_outbound - self.last_total_bytes_outbound;
+		let (avg_bytes_per_sec_inbound, avg_bytes_per_sec_outbound) =
+			if elapsed > 0 {
+				self.last_total_bytes_inbound = total_bytes_inbound;
+				self.last_total_bytes_outbound = total_bytes_outbound;
+				(diff_bytes_inbound / elapsed, diff_bytes_outbound / elapsed)
+			} else {
+				(diff_bytes_inbound, diff_bytes_outbound)
+			};
 		self.last_update = now;
 
 		telemetry!(
@@ -182,8 +186,8 @@ impl MetricsService {
 			"txcount" => txpool_status.ready,
 			"finalized_height" => finalized_number,
 			"finalized_hash" => ?info.chain.finalized_hash,
-			"bandwidth_download" => inbound_per_sec,
-			"bandwidth_upload" => outbound_per_sec,
+			"bandwidth_download" => avg_bytes_per_sec_inbound,
+			"bandwidth_upload" => avg_bytes_per_sec_outbound,
 			"used_state_cache_size" => info.usage.as_ref()
 				.map(|usage| usage.memory.state_cache.as_bytes())
 				.unwrap_or(0),
