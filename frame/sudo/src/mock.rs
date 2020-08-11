@@ -23,8 +23,6 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_core::H256;
-// The testing primitives are very useful for avoiding having to work with signatures
-// or public keys.
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use sp_io;
 use crate as sudo;
@@ -35,8 +33,8 @@ pub mod logger {
 	use super::*;
 	use frame_system::ensure_root;
 
-	pub trait Trait: system::Trait {
-		type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	pub trait Trait: frame_system::Trait {
+		type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	}
 
 	decl_storage! {
@@ -54,7 +52,7 @@ pub mod logger {
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+		pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Trait>::Origin {
 			fn deposit_event() = default;
 
 			#[weight = *weight]
@@ -87,7 +85,7 @@ mod test_events {
 
 impl_outer_event! {
 	pub enum TestEvent for Test {
-		system<T>,
+		frame_system<T>,
 		sudo<T>,
 		logger<T>,
 	}
@@ -145,6 +143,7 @@ impl frame_system::Trait for Test {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 // Implement the logger module's `Trait` on the Test runtime.
@@ -161,7 +160,7 @@ impl Trait for Test {
 // Assign back to type variables in order to make dispatched calls of these modules later.
 pub type Sudo = Module<Test>;
 pub type Logger = logger::Module<Test>;
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 
 // New types for dispatchable functions.
 pub type SudoCall = sudo::Call<Test>;

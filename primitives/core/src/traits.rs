@@ -19,9 +19,9 @@
 
 use crate::{
 	crypto::{KeyTypeId, CryptoTypePublicPair},
+	vrf::{VRFTranscriptData, VRFSignature},
 	ed25519, sr25519, ecdsa,
 };
-
 use std::{
 	borrow::Cow,
 	fmt::{Debug, Display},
@@ -33,7 +33,7 @@ pub use sp_externalities::{Externalities, ExternalitiesExt};
 
 /// BareCryptoStore error
 #[derive(Debug, derive_more::Display)]
-pub enum BareCryptoStoreError {
+pub enum Error {
 	/// Public key type is not supported
 	#[display(fmt="Key not supported: {:?}", _0)]
 	KeyNotSupported(KeyTypeId),
@@ -64,7 +64,7 @@ pub trait BareCryptoStore: Send + Sync {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<sr25519::Public, BareCryptoStoreError>;
+	) -> Result<sr25519::Public, Error>;
 	/// Returns all ed25519 public keys for the given key type.
 	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public>;
 	/// Generate a new ed25519 key pair for the given key type and an optional seed.
@@ -76,7 +76,7 @@ pub trait BareCryptoStore: Send + Sync {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<ed25519::Public, BareCryptoStoreError>;
+	) -> Result<ed25519::Public, Error>;
 	/// Returns all ecdsa public keys for the given key type.
 	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public>;
 	/// Generate a new ecdsa key pair for the given key type and an optional seed.
@@ -88,7 +88,7 @@ pub trait BareCryptoStore: Send + Sync {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<ecdsa::Public, BareCryptoStoreError>;
+	) -> Result<ecdsa::Public, Error>;
 
 	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.
@@ -108,11 +108,11 @@ pub trait BareCryptoStore: Send + Sync {
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
-	) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError>;
+	) -> Result<Vec<CryptoTypePublicPair>, Error>;
 	/// List all supported keys
 	///
 	/// Returns a set of public keys the signer supports.
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError>;
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error>;
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
@@ -131,7 +131,7 @@ pub trait BareCryptoStore: Send + Sync {
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> Result<Vec<u8>, BareCryptoStoreError>;
+	) -> Result<Vec<u8>, Error>;
 
 	/// Sign with any key
 	///
@@ -144,7 +144,7 @@ pub trait BareCryptoStore: Send + Sync {
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8]
-	) -> Result<(CryptoTypePublicPair, Vec<u8>), BareCryptoStoreError> {
+	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
 		if keys.len() == 1 {
 			return self.sign_with(id, &keys[0], msg).map(|s| (keys[0].clone(), s));
 		} else {
@@ -154,7 +154,7 @@ pub trait BareCryptoStore: Send + Sync {
 				}
 			}
 		}
-		Err(BareCryptoStoreError::KeyNotSupported(id))
+		Err(Error::KeyNotSupported(id))
 	}
 
 	/// Sign with all keys
@@ -163,15 +163,36 @@ pub trait BareCryptoStore: Send + Sync {
 	/// each key given that the key is supported.
 	///
 	/// Returns a list of `Result`s each representing the SCALE encoded
-	/// signature of each key or a BareCryptoStoreError for non-supported keys.
+	/// signature of each key or a Error for non-supported keys.
 	fn sign_with_all(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8],
-	) -> Result<Vec<Result<Vec<u8>, BareCryptoStoreError>>, ()>{
+	) -> Result<Vec<Result<Vec<u8>, Error>>, ()>{
 		Ok(keys.iter().map(|k| self.sign_with(id, k, msg)).collect())
 	}
+
+	/// Generate VRF signature for given transcript data.
+	///
+	/// Receives KeyTypeId and Public key to be able to map
+	/// them to a private key that exists in the keystore which
+	/// is, in turn, used for signing the provided transcript.
+	///
+	/// Returns a result containing the signature data.
+	/// Namely, VRFOutput and VRFProof which are returned
+	/// inside the `VRFSignature` container struct.
+	///
+	/// This function will return an error in the cases where
+	/// the public key and key type provided do not match a private
+	/// key in the keystore. Or, in the context of remote signing
+	/// an error could be a network one.
+	fn sr25519_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		transcript_data: VRFTranscriptData,
+	) -> Result<VRFSignature, Error>;
 }
 
 /// A pointer to the key store.
@@ -331,26 +352,21 @@ impl CallInWasmExt {
 	}
 }
 
-/// Something that can spawn tasks and also can be cloned.
-pub trait CloneableSpawn: futures::task::Spawn + Send + Sync {
-	/// Clone as heap-allocated handle.
-	fn clone(&self) -> Box<dyn CloneableSpawn>;
-}
-
 sp_externalities::decl_extension! {
 	/// Task executor extension.
-	pub struct TaskExecutorExt(Box<dyn CloneableSpawn>);
+	pub struct TaskExecutorExt(Box<dyn SpawnNamed>);
 }
 
 impl TaskExecutorExt {
 	/// New instance of task executor extension.
-	pub fn new(spawn_handle: Box<dyn CloneableSpawn>) -> Self {
-		Self(spawn_handle)
+	pub fn new(spawn_handle: impl SpawnNamed + Send + 'static) -> Self {
+		Self(Box::new(spawn_handle))
 	}
 }
 
-/// Something that can spawn futures (blocking and non-blocking) with am assigned name.
-pub trait SpawnNamed {
+/// Something that can spawn futures (blocking and non-blocking) with an assigned name.
+#[dyn_clonable::clonable]
+pub trait SpawnNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
@@ -359,4 +375,14 @@ pub trait SpawnNamed {
 	///
 	/// The given `name` is used to identify the future in tracing.
 	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+}
+
+impl SpawnNamed for Box<dyn SpawnNamed> {
+	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		(**self).spawn_blocking(name, future)
+	}
+
+	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		(**self).spawn(name, future)
+	}
 }

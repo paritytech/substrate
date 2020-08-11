@@ -573,7 +573,7 @@ pub mod tests {
 	use sp_consensus::{import_queue::CacheKeyId, ForkChoiceStrategy, BlockImport};
 	use sp_finality_grandpa::AuthorityId;
 	use sp_core::{H256, crypto::Public};
-	use sc_client_api::{in_mem::Blockchain as InMemoryAuxStore, StorageProof};
+	use sc_client_api::{in_mem::Blockchain as InMemoryAuxStore, StorageProof, BlockBackend};
 	use substrate_test_runtime_client::runtime::{Block, Header};
 	use crate::tests::TestApi;
 	use crate::finality_proof::{

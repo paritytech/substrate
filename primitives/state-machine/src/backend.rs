@@ -212,7 +212,22 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Commit given transaction to storage.
-	fn commit(&self, _: H::Out, _: Self::Transaction) -> Result<(), Self::Error> {
+	fn commit(&self, _: H::Out, _: Self::Transaction, _: StorageCollection) -> Result<(), Self::Error> {
+		unimplemented!()
+	}
+
+	/// Get the read/write count of the db
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		unimplemented!()
+	}
+
+	/// Get the read/write count of the db
+	fn reset_read_write_count(&self) {
+		unimplemented!()
+	}
+
+	/// Update the whitelist for tracking db reads/writes
+	fn set_whitelist(&self, _: Vec<Vec<u8>>) {
 		unimplemented!()
 	}
 }

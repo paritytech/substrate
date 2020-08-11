@@ -25,7 +25,7 @@ use num_traits::One;
 use crate::{
 	StorageKey,
 	backend::Backend,
-	overlayed_changes::OverlayedChanges,
+	overlayed_changes::{OverlayedChanges, OverlayedValue},
 	trie_backend_essence::TrieBackendEssence,
 	changes_trie::{
 		AnchorBlockId, ConfigurationRange, Storage, BlockNumber,
@@ -43,7 +43,7 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 	backend: &'a B,
 	storage: &'a dyn Storage<H, Number>,
 	config: ConfigurationRange<'a, Number>,
-	changes: &'a OverlayedChanges,
+	overlay: &'a OverlayedChanges,
 	parent: &'a AnchorBlockId<H::Out, Number>,
 ) -> Result<(
 		impl Iterator<Item=InputPair<Number>> + 'a,
@@ -60,7 +60,7 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 	let (extrinsics_input, children_extrinsics_input) = prepare_extrinsics_input(
 		backend,
 		&number,
-		changes,
+		overlay,
 	)?;
 	let (digest_input, mut children_digest_input, digest_input_blocks) = prepare_digest_input::<H, Number>(
 		parent,
@@ -96,7 +96,7 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 fn prepare_extrinsics_input<'a, B, H, Number>(
 	backend: &'a B,
 	block: &Number,
-	changes: &'a OverlayedChanges,
+	overlay: &'a OverlayedChanges,
 ) -> Result<(
 		impl Iterator<Item=InputPair<Number>> + 'a,
 		BTreeMap<ChildIndex<Number>, impl Iterator<Item=InputPair<Number>> + 'a>,
@@ -108,20 +108,21 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 {
 	let mut children_result = BTreeMap::new();
 
-	for child_info in changes.child_infos() {
+	for (child_changes, child_info) in overlay.children() {
 		let child_index = ChildIndex::<Number> {
 			block: block.clone(),
 			storage_key: child_info.prefixed_storage_key(),
 		};
 
 		let iter = prepare_extrinsics_input_inner(
-			backend, block, changes,
-			Some(child_info.clone())
+			backend, block, overlay,
+			Some(child_info.clone()),
+			child_changes,
 		)?;
 		children_result.insert(child_index, iter);
 	}
 
-	let top = prepare_extrinsics_input_inner(backend, block, changes, None)?;
+	let top = prepare_extrinsics_input_inner(backend, block, overlay, None, overlay.changes())?;
 
 	Ok((top, children_result))
 }
@@ -129,40 +130,38 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	backend: &'a B,
 	block: &Number,
-	changes: &'a OverlayedChanges,
+	overlay: &'a OverlayedChanges,
 	child_info: Option<ChildInfo>,
+	changes: impl Iterator<Item=(&'a StorageKey, &'a OverlayedValue)>
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
 	where
 		B: Backend<H>,
 		H: Hasher,
 		Number: BlockNumber,
 {
-	changes.changes(child_info.as_ref())
-		.filter(|( _, v)| v.extrinsics().is_some())
+	changes
+		.filter(|( _, v)| v.extrinsics().next().is_some())
 		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, v)| {
 			match map.entry(k) {
 				Entry::Vacant(entry) => {
 					// ignore temporary values (values that have null value at the end of operation
 					// AND are not in storage at the beginning of operation
 					if let Some(child_info) = child_info.as_ref() {
-						if !changes.child_storage(child_info, k).map(|v| v.is_some()).unwrap_or_default() {
+						if !overlay.child_storage(child_info, k).map(|v| v.is_some()).unwrap_or_default() {
 							if !backend.exists_child_storage(&child_info, k)
 								.map_err(|e| format!("{}", e))? {
 								return Ok(map);
 							}
 						}
 					} else {
-						if !changes.storage(k).map(|v| v.is_some()).unwrap_or_default() {
+						if !overlay.storage(k).map(|v| v.is_some()).unwrap_or_default() {
 							if !backend.exists_storage(k).map_err(|e| format!("{}", e))? {
 								return Ok(map);
 							}
 						}
 					};
 
-					let extrinsics = v.extrinsics()
-						.expect("filtered by filter() call above; qed")
-						.cloned()
-						.collect();
+					let extrinsics = v.extrinsics().cloned().collect();
 					entry.insert((ExtrinsicIndex {
 						block: block.clone(),
 						key: k.to_vec(),
@@ -173,11 +172,9 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 					// AND we are checking it before insertion
 					let extrinsics = &mut entry.get_mut().1;
 					extrinsics.extend(
-						v.extrinsics()
-							.expect("filtered by filter() call above; qed")
-							.cloned()
+						v.extrinsics().cloned()
 					);
-					extrinsics.sort_unstable();
+					extrinsics.sort();
 				},
 			}
 
@@ -404,6 +401,8 @@ mod test {
 		let mut changes = OverlayedChanges::default();
 		changes.set_collect_extrinsics(true);
 
+		changes.start_transaction();
+
 		changes.set_extrinsic_index(1);
 		changes.set_storage(vec![101], Some(vec![203]));
 
@@ -411,7 +410,7 @@ mod test {
 		changes.set_storage(vec![100], Some(vec![202]));
 		changes.set_child_storage(&child_info_1, vec![100], Some(vec![202]));
 
-		changes.commit_prospective();
+		changes.commit_transaction().unwrap();
 
 		changes.set_extrinsic_index(0);
 		changes.set_storage(vec![100], Some(vec![0]));

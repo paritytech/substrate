@@ -87,7 +87,7 @@
 //! ```rust,ignore
 //! use pallet_assets as assets;
 //! use frame_support::{decl_module, dispatch, ensure};
-//! use frame_system::{self as system, ensure_signed};
+//! use frame_system::ensure_signed;
 //!
 //! pub trait Trait: assets::Trait { }
 //!
@@ -134,8 +134,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure};
-use sp_runtime::traits::{Member, AtLeast32Bit, Zero, StaticLookup};
-use frame_system::{self as system, ensure_signed};
+use sp_runtime::traits::{Member, AtLeast32Bit, AtLeast32BitUnsigned, Zero, StaticLookup};
+use frame_system::ensure_signed;
 use sp_runtime::traits::One;
 
 /// The module configuration trait.
@@ -144,7 +144,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The units in which we record balances.
-	type Balance: Member + Parameter + AtLeast32Bit + Default + Copy;
+	type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy;
 
 	/// The arithmetic type of asset identifier.
 	type AssetId: Parameter + AtLeast32Bit + Default + Copy;
@@ -230,11 +230,11 @@ decl_event! {
 		<T as Trait>::Balance,
 		<T as Trait>::AssetId,
 	{
-		/// Some assets were issued.
+		/// Some assets were issued. [asset_id, owner, total_supply]
 		Issued(AssetId, AccountId, Balance),
-		/// Some assets were transferred.
+		/// Some assets were transferred. [asset_id, from, to, amount]
 		Transferred(AssetId, AccountId, AccountId, Balance),
-		/// Some assets were destroyed.
+		/// Some assets were destroyed. [asset_id, owner, balance]
 		Destroyed(AssetId, AccountId, Balance),
 	}
 }
@@ -284,17 +284,12 @@ mod tests {
 
 	use frame_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, weights::Weight};
 	use sp_core::H256;
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
-	// For testing the pallet, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -328,6 +323,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -336,8 +332,6 @@ mod tests {
 	}
 	type Assets = Module<Test>;
 
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}

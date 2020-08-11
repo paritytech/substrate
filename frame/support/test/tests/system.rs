@@ -31,7 +31,7 @@ pub trait Trait: 'static + Eq + Clone {
 }
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin, {}
 }
 
 impl<T: Trait> Module<T> {
@@ -57,7 +57,7 @@ frame_support::decl_error! {
 }
 
 /// Origin for the system module.
-#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode)]
 pub enum RawOrigin<AccountId> {
 	Root,
 	Signed(AccountId),

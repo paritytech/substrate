@@ -31,7 +31,6 @@ use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use serde::ser::{Serialize, Serializer, SerializeMap};
-use slog::{SerdeValue, Value};
 use tracing_core::{
 	event::Event,
 	field::{Visit, Field},
@@ -65,85 +64,124 @@ impl Default for TracingReceiver {
 /// A handler for tracing `SpanDatum`
 pub trait TraceHandler: Send + Sync {
 	/// Process a `SpanDatum`
-	fn process_span(&self, span: SpanDatum);
+	fn handle_span(&self, span: SpanDatum);
 }
 
 /// Represents a single instance of a tracing span
 #[derive(Debug)]
 pub struct SpanDatum {
+	/// id for this span
 	pub id: u64,
+	/// Name of the span
 	pub name: String,
+	/// Target, typically module
 	pub target: String,
+	/// Tracing Level - ERROR, WARN, INFO, DEBUG or TRACE
 	pub level: Level,
+	/// Line number in source
 	pub line: u32,
+	/// Time that the span was last entered
 	pub start_time: Instant,
+	/// Total duration of span while entered
 	pub overall_time: Duration,
-	pub values: Visitor,
+	/// Values recorded to this span
+	pub values: Values,
 }
 
 /// Holds associated values for a tracing span
-#[derive(Clone, Debug)]
-pub struct Visitor(FxHashMap<String, String>);
+#[derive(Default, Clone, Debug)]
+pub struct Values {
+	/// HashMap of `bool` values
+	pub bool_values: FxHashMap<String, bool>,
+	/// HashMap of `i64` values
+	pub i64_values: FxHashMap<String, i64>,
+	/// HashMap of `u64` values
+	pub u64_values: FxHashMap<String, u64>,
+	/// HashMap of `String` values
+	pub string_values: FxHashMap<String, String>,
+}
 
-impl Visitor {
-	/// Consume the Visitor, returning the inner FxHashMap
-	pub fn into_inner(self) -> FxHashMap<String, String> {
-		self.0
+impl Values {
+	/// Returns a new instance of Values
+	pub fn new() -> Self {
+		Default::default()
+	}
+
+	/// Checks if all individual collections are empty
+	pub fn is_empty(&self) -> bool {
+		self.bool_values.is_empty() &&
+			self.i64_values.is_empty() &&
+			self.u64_values.is_empty() &&
+			self.string_values.is_empty()
 	}
 }
 
-impl Visit for Visitor {
+impl Visit for Values {
 	fn record_i64(&mut self, field: &Field, value: i64) {
-		self.0.insert(field.name().to_string(), value.to_string());
+		self.i64_values.insert(field.name().to_string(), value);
 	}
 
 	fn record_u64(&mut self, field: &Field, value: u64) {
-		self.0.insert(field.name().to_string(), value.to_string());
+		self.u64_values.insert(field.name().to_string(), value);
 	}
 
 	fn record_bool(&mut self, field: &Field, value: bool) {
-		self.0.insert(field.name().to_string(), value.to_string());
+		self.bool_values.insert(field.name().to_string(), value);
 	}
 
 	fn record_str(&mut self, field: &Field, value: &str) {
-		self.0.insert(field.name().to_string(), value.to_owned());
+		self.string_values.insert(field.name().to_string(), value.to_owned());
 	}
 
 	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-		self.0.insert(field.name().to_string(), format!("{:?}", value));
+		self.string_values.insert(field.name().to_string(), format!("{:?}", value).to_owned());
 	}
 }
 
-impl Serialize for Visitor {
+impl Serialize for Values {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 		where S: Serializer,
 	{
-		let mut map = serializer.serialize_map(Some(self.0.len()))?;
-		for (k, v) in &self.0 {
+		let len = self.bool_values.len() + self.i64_values.len() + self.u64_values.len() + self.string_values.len();
+		let mut map = serializer.serialize_map(Some(len))?;
+		for (k, v) in &self.bool_values {
+			map.serialize_entry(k, v)?;
+		}
+		for (k, v) in &self.i64_values {
+			map.serialize_entry(k, v)?;
+		}
+		for (k, v) in &self.u64_values {
+			map.serialize_entry(k, v)?;
+		}
+		for (k, v) in &self.string_values {
 			map.serialize_entry(k, v)?;
 		}
 		map.end()
 	}
 }
 
-impl fmt::Display for Visitor {
+impl fmt::Display for Values {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let values = self.0.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>().join(", ");
+		let bool_iter = self.bool_values.iter().map(|(k, v)| format!("{}={}", k, v));
+		let i64_iter = self.i64_values.iter().map(|(k, v)| format!("{}={}", k, v));
+		let u64_iter = self.u64_values.iter().map(|(k, v)| format!("{}={}", k, v));
+		let string_iter = self.string_values.iter().map(|(k, v)| format!("{}=\"{}\"", k, v));
+		let values = bool_iter.chain(i64_iter).chain(u64_iter).chain(string_iter).collect::<Vec<String>>().join(", ");
 		write!(f, "{}", values)
 	}
 }
 
-impl SerdeValue for Visitor {
+impl slog::SerdeValue for Values {
 	fn as_serde(&self) -> &dyn erased_serde::Serialize {
 		self
 	}
 
-	fn to_sendable(&self) -> Box<dyn SerdeValue + Send + 'static> {
+	fn to_sendable(&self) -> Box<dyn slog::SerdeValue + Send + 'static> {
 		Box::new(self.clone())
 	}
 }
 
-impl Value for Visitor {
+impl slog::Value for Values {
 	fn serialize(
 		&self,
 		_record: &slog::Record,
@@ -234,10 +272,10 @@ impl Subscriber for ProfilingSubscriber {
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-		let mut values = Visitor(FxHashMap::default());
+		let mut values = Values::default();
 		attrs.record(&mut values);
 		// If this is a wasm trace, check if target/level is enabled
-		if let Some(wasm_target) = values.0.get(WASM_TARGET_KEY) {
+		if let Some(wasm_target) = values.string_values.get(WASM_TARGET_KEY) {
 			if !self.check_target(wasm_target, attrs.metadata().level()) {
 				return Id::from_u64(id);
 			}
@@ -290,16 +328,16 @@ impl Subscriber for ProfilingSubscriber {
 		};
 		if let Some(mut span_datum) = span_datum {
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
-				span_datum.values.0.insert("wasm".to_owned(), "true".to_owned());
-				if let Some(n) = span_datum.values.0.remove(WASM_NAME_KEY) {
+				span_datum.values.bool_values.insert("wasm".to_owned(), true);
+				if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
 					span_datum.name = n;
 				}
-				if let Some(t) = span_datum.values.0.remove(WASM_TARGET_KEY) {
+				if let Some(t) = span_datum.values.string_values.remove(WASM_TARGET_KEY) {
 					span_datum.target = t;
 				}
 			}
 			if self.check_target(&span_datum.target, &span_datum.level) {
-				self.trace_handler.process_span(span_datum);
+				self.trace_handler.handle_span(span_datum);
 			}
 		};
 		true
@@ -320,8 +358,8 @@ fn log_level(level: Level) -> log::Level {
 }
 
 impl TraceHandler for LogTraceHandler {
-	fn process_span(&self, span_datum: SpanDatum) {
-		if span_datum.values.0.is_empty() {
+	fn handle_span(&self, span_datum: SpanDatum) {
+		if span_datum.values.is_empty() {
 			log::log!(
 				log_level(span_datum.level), 
 				"{}: {}, time: {}",
@@ -348,7 +386,7 @@ impl TraceHandler for LogTraceHandler {
 pub struct TelemetryTraceHandler;
 
 impl TraceHandler for TelemetryTraceHandler {
-	fn process_span(&self, span_datum: SpanDatum) {
+	fn handle_span(&self, span_datum: SpanDatum) {
 		telemetry!(SUBSTRATE_INFO; "tracing.profiling";
 			"name" => span_datum.name,
 			"target" => span_datum.target,
@@ -356,5 +394,80 @@ impl TraceHandler for TelemetryTraceHandler {
 			"time" => span_datum.overall_time.as_nanos(),
 			"values" => span_datum.values
 		);
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::sync::Arc;
+
+	struct TestTraceHandler {
+		spans: Arc<Mutex<Vec<SpanDatum>>>,
+	}
+
+	impl TraceHandler for TestTraceHandler {
+		fn handle_span(&self, sd: SpanDatum) {
+			self.spans.lock().push(sd);
+		}
+	}
+
+	fn setup_subscriber() -> (ProfilingSubscriber, Arc<Mutex<Vec<SpanDatum>>>) {
+		let spans = Arc::new(Mutex::new(Vec::new()));
+		let handler = TestTraceHandler {
+			spans: spans.clone(),
+		};
+		let test_subscriber = ProfilingSubscriber::new_with_handler(
+			Box::new(handler),
+			"test_target"
+		);
+		(test_subscriber, spans)
+	}
+
+	#[test]
+	fn test_span() {
+		let (sub, spans) = setup_subscriber();
+		let _sub_guard = tracing::subscriber::set_default(sub);
+		let span = tracing::info_span!(target: "test_target", "test_span1");
+		assert_eq!(spans.lock().len(), 0);
+		let _guard = span.enter();
+		assert_eq!(spans.lock().len(), 0);
+		drop(_guard);
+		drop(span);
+		assert_eq!(spans.lock().len(), 1);
+		let sd = spans.lock().remove(0);
+		assert_eq!(sd.name, "test_span1");
+		assert_eq!(sd.target, "test_target");
+		let time: u128 = sd.overall_time.as_nanos();
+		assert!(time > 0);
+	}
+
+	#[test]
+	fn test_span_values() {
+		let (sub, spans) = setup_subscriber();
+		let _sub_guard = tracing::subscriber::set_default(sub);
+		let test_bool = true;
+		let test_u64 = 1u64;
+		let test_i64 = 2i64;
+		let test_str = "test_str";
+		let span = tracing::info_span!(
+			target: "test_target",
+			"test_span1",
+			test_bool,
+			test_u64,
+			test_i64,
+			test_str
+		);
+		let _guard = span.enter();
+		drop(_guard);
+		drop(span);
+		let sd = spans.lock().remove(0);
+		assert_eq!(sd.name, "test_span1");
+		assert_eq!(sd.target, "test_target");
+		let values = sd.values;
+		assert_eq!(values.bool_values.get("test_bool").unwrap(), &test_bool);
+		assert_eq!(values.u64_values.get("test_u64").unwrap(), &test_u64);
+		assert_eq!(values.i64_values.get("test_i64").unwrap(), &test_i64);
+		assert_eq!(values.string_values.get("test_str").unwrap(), &test_str.to_owned());
 	}
 }

@@ -37,7 +37,6 @@
   "annotations": {
     "list": [
       {
-        "$$hashKey": "object:821",
         "builtIn": 1,
         "datasource": "-- Grafana --",
         "enable": true,
@@ -49,7 +48,6 @@
         "type": "dashboard"
       },
       {
-        "$$hashKey": "object:822",
         "datasource": "$data_source",
         "enable": true,
         "expr": "count(count(${metric_namespace}_sub_libp2p_connections / max_over_time(${metric_namespace}_sub_libp2p_connections[1h]) < 0.1) >= count(${metric_namespace}_sub_libp2p_connections) / 10)",
@@ -70,7 +68,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1590742405831,
+  "iteration": 1594715467007,
   "links": [],
   "panels": [
     {
@@ -154,7 +152,6 @@
       },
       "yaxes": [
         {
-          "$$hashKey": "object:1044",
           "format": "percentunit",
           "label": null,
           "logBase": 1,
@@ -163,7 +160,6 @@
           "show": true
         },
         {
-          "$$hashKey": "object:1045",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -198,7 +194,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$data_source",
-      "fill": 1,
+      "fill": 0,
       "fillGradient": 0,
       "gridPos": {
         "h": 4,
@@ -286,7 +282,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$data_source",
-      "fill": 1,
+      "fill": 0,
       "fillGradient": 0,
       "gridPos": {
         "h": 4,
@@ -436,7 +432,6 @@
       },
       "yaxes": [
         {
-          "$$hashKey": "object:1230",
           "format": "s",
           "label": null,
           "logBase": 1,
@@ -445,7 +440,6 @@
           "show": true
         },
         {
-          "$$hashKey": "object:1231",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -465,7 +459,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$data_source",
-      "fill": 1,
+      "fill": 0,
       "fillGradient": 0,
       "gridPos": {
         "h": 4,
@@ -642,7 +636,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$data_source",
-      "fill": 1,
+      "fill": 0,
       "fillGradient": 0,
       "gridPos": {
         "h": 4,
@@ -731,7 +725,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 185
+        "y": 32
       },
       "id": 23,
       "panels": [],
@@ -751,7 +745,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 186
+        "y": 33
       },
       "hiddenSeries": false,
       "id": 31,
@@ -781,12 +775,10 @@
       "repeatDirection": "v",
       "seriesOverrides": [
         {
-          "$$hashKey": "object:850",
           "alias": "/(in)/",
           "color": "#73BF69"
         },
         {
-          "$$hashKey": "object:851",
           "alias": "/(out)/",
           "color": "#F2495C"
         }
@@ -822,7 +814,6 @@
       },
       "yaxes": [
         {
-          "$$hashKey": "object:874",
           "format": "cps",
           "label": "Notifs/sec",
           "logBase": 1,
@@ -831,7 +822,6 @@
           "show": true
         },
         {
-          "$$hashKey": "object:875",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -857,7 +847,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 186
+        "y": 33
       },
       "hiddenSeries": false,
       "id": 37,
@@ -890,12 +880,10 @@
       "repeatDirection": "v",
       "seriesOverrides": [
         {
-          "$$hashKey": "object:942",
           "alias": "/(in)/",
           "color": "#73BF69"
         },
         {
-          "$$hashKey": "object:943",
           "alias": "/(out)/",
           "color": "#F2495C"
         }
@@ -932,7 +920,6 @@
       },
       "yaxes": [
         {
-          "$$hashKey": "object:966",
           "format": "Bps",
           "label": "Bandwidth",
           "logBase": 1,
@@ -941,7 +928,6 @@
           "show": true
         },
         {
-          "$$hashKey": "object:967",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -964,10 +950,10 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 12,
         "x": 0,
-        "y": 193
+        "y": 40
       },
       "hiddenSeries": false,
       "id": 16,
@@ -976,13 +962,13 @@
         "current": false,
         "max": false,
         "min": false,
-        "show": true,
+        "show": false,
         "total": false,
         "values": false
       },
       "lines": true,
       "linewidth": 1,
-      "nullPointMode": "null",
+      "nullPointMode": "null as zero",
       "options": {
         "dataLinks": []
       },
@@ -993,7 +979,7 @@
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
-      "steppedLine": false,
+      "steppedLine": true,
       "targets": [
         {
           "expr": "max(${metric_namespace}_sub_libp2p_out_events_notifications_sizes{instance=~\"${nodename}\", protocol=\"${notif_protocol}\", action=\"sent\"} - ignoring(action) ${metric_namespace}_sub_libp2p_out_events_notifications_sizes{instance=~\"${nodename}\", protocol=\"${notif_protocol}\", action=\"received\"}) by (instance) > 0",
@@ -1035,7 +1021,7 @@
           "logBase": 1,
           "max": null,
           "min": null,
-          "show": true
+          "show": false
         }
       ],
       "yaxis": {
@@ -1052,10 +1038,10 @@
       "fill": 1,
       "fillGradient": 1,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 12,
         "x": 12,
-        "y": 193
+        "y": 40
       },
       "hiddenSeries": false,
       "id": 21,
@@ -1112,7 +1098,6 @@
       },
       "yaxes": [
         {
-          "$$hashKey": "object:2050",
           "format": "bytes",
           "label": "Max. notification size",
           "logBase": 10,
@@ -1121,7 +1106,6 @@
           "show": true
         },
         {
-          "$$hashKey": "object:2051",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -1148,7 +1132,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 201
+        "y": 46
       },
       "hiddenSeries": false,
       "id": 14,
@@ -1253,7 +1237,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 201
+        "y": 46
       },
       "hiddenSeries": false,
       "id": 134,
@@ -1310,7 +1294,6 @@
       },
       "yaxes": [
         {
-          "$$hashKey": "object:1524",
           "format": "bytes",
           "label": "Max. notification size",
           "logBase": 10,
@@ -1319,7 +1302,6 @@
           "show": true
         },
         {
-          "$$hashKey": "object:1525",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -1340,7 +1322,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 1853
+        "y": 96
       },
       "id": 27,
       "panels": [],
@@ -1359,7 +1341,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 1854
+        "y": 97
       },
       "hiddenSeries": false,
       "id": 19,
@@ -1486,6 +1468,102 @@
     },
     {
       "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 103
+      },
+      "hiddenSeries": false,
+      "id": 189,
+      "interval": "1m",
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "hideEmpty": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "maxPerRow": 2,
+      "nullPointMode": "null as zero",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeatDirection": "v",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "1 - \n\navg(\n  ${metric_namespace}_sub_libp2p_distinct_peers_connections_opened_total{instance=~\"${nodename}\"} - ${metric_namespace}_sub_libp2p_distinct_peers_connections_closed_total{instance=~\"${nodename}\"}\n) by (instance)\n\n/\n\navg(\r\n  sum(${metric_namespace}_sub_libp2p_connections_opened_total{instance=~\"${nodename}\"}) by (instance) - sum(${metric_namespace}_sub_libp2p_connections_closed_total{instance=~\"${nodename}\"}) by (instance)\r\n) by (instance)",
+          "format": "time_series",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Percentage of peers for which we have more than one connection open",
+      "tooltip": {
+        "shared": true,
+        "sort": 2,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "percentunit",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
       "bars": true,
       "dashLength": 10,
       "dashes": false,
@@ -1496,7 +1574,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 1860
+        "y": 109
       },
       "hiddenSeries": false,
       "id": 39,
@@ -1605,7 +1683,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 1860
+        "y": 109
       },
       "heatmap": {},
       "hideZeroBuckets": false,
@@ -1662,7 +1740,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 1866
+        "y": 115
       },
       "hiddenSeries": false,
       "id": 81,
@@ -1757,7 +1835,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 1866
+        "y": 115
       },
       "hiddenSeries": false,
       "id": 46,
@@ -1845,7 +1923,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 1873
+        "y": 122
       },
       "id": 52,
       "panels": [],
@@ -1864,7 +1942,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 1874
+        "y": 123
       },
       "hiddenSeries": false,
       "id": 54,
@@ -1969,28 +2047,28 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 1880
+        "y": 129
       },
       "id": 25,
       "panels": [],
       "repeat": null,
-      "title": "Kademlia",
+      "title": "Kademlia & authority-discovery",
       "type": "row"
     },
     {
       "aliasColors": {},
-      "bars": true,
+      "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "$data_source",
       "description": "",
-      "fill": 1,
+      "fill": 0,
       "fillGradient": 0,
       "gridPos": {
-        "h": 6,
+        "h": 5,
         "w": 12,
         "x": 0,
-        "y": 1881
+        "y": 130
       },
       "hiddenSeries": false,
       "id": 33,
@@ -2004,22 +2082,17 @@
         "total": false,
         "values": false
       },
-      "lines": false,
+      "lines": true,
       "linewidth": 1,
       "nullPointMode": "null",
       "options": {
         "dataLinks": []
       },
-      "percentage": false,
+      "percentage": true,
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
-      "seriesOverrides": [
-        {
-          "alias": "/.*/",
-          "color": "#B877D9"
-        }
-      ],
+      "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
       "steppedLine": false,
@@ -2027,9 +2100,9 @@
         {
           "expr": "${metric_namespace}_sub_libp2p_kbuckets_num_nodes{instance=~\"${nodename}\"}",
           "format": "time_series",
-          "instant": true,
+          "instant": false,
           "interval": "",
-          "legendFormat": "Number nodes in all kbuckets",
+          "legendFormat": "{{instance}}",
           "refId": "A"
         }
       ],
@@ -2037,10 +2110,10 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Distribution over number of entries in k-buckets",
+      "title": "Number of entries in Kademlia k-buckets",
       "tooltip": {
-        "shared": false,
-        "sort": 0,
+        "shared": true,
+        "sort": 1,
         "value_type": "individual"
       },
       "type": "graph",
@@ -2048,7 +2121,7 @@
         "buckets": null,
         "max": 0,
         "min": null,
-        "mode": "histogram",
+        "mode": "time",
         "name": null,
         "show": true,
         "values": []
@@ -2059,7 +2132,7 @@
           "label": null,
           "logBase": 1,
           "max": null,
-          "min": "0",
+          "min": null,
           "show": true
         },
         {
@@ -2082,28 +2155,28 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$data_source",
-      "fill": 7,
+      "fill": 0,
       "fillGradient": 7,
       "gridPos": {
-        "h": 6,
+        "h": 5,
         "w": 12,
         "x": 12,
-        "y": 1881
+        "y": 130
       },
       "hiddenSeries": false,
       "id": 35,
-      "interval": "1m",
+      "interval": "",
       "legend": {
         "avg": false,
         "current": false,
         "max": false,
         "min": false,
-        "show": true,
+        "show": false,
         "total": false,
         "values": false
       },
       "lines": true,
-      "linewidth": 2,
+      "linewidth": 1,
       "nullPointMode": "null",
       "options": {
         "dataLinks": []
@@ -2118,9 +2191,9 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "60 * sum(irate(${metric_namespace}_sub_libp2p_random_kademalia_queries_total{instance=~\"${nodename}\"}[$__interval]))",
+          "expr": "rate(${metric_namespace}_sub_libp2p_kademlia_random_queries_total{instance=~\"${nodename}\"}[5m])",
           "interval": "",
-          "legendFormat": "Number of Kademlia random queries started per minute on all nodes",
+          "legendFormat": "{{instance}}",
           "refId": "A"
         }
       ],
@@ -2128,10 +2201,10 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Number of Kademlia discovery queries per minute on all nodes combined",
+      "title": "Kademlia random discovery queries started per second",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 1,
         "value_type": "individual"
       },
       "type": "graph",
@@ -2144,8 +2217,8 @@
       },
       "yaxes": [
         {
-          "format": "cpm",
-          "label": "Queries per minute",
+          "format": "cps",
+          "label": "Queries per second",
           "logBase": 1,
           "max": null,
           "min": null,
@@ -2177,7 +2250,7 @@
         "h": 4,
         "w": 12,
         "x": 0,
-        "y": 1887
+        "y": 135
       },
       "hiddenSeries": false,
       "id": 111,
@@ -2200,48 +2273,26 @@
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
-      "seriesOverrides": [
-        {
-          "alias": "max",
-          "fillBelowTo": "min",
-          "lines": false
-        },
-        {
-          "alias": "min",
-          "lines": false
-        }
-      ],
+      "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
-      "steppedLine": false,
+      "steppedLine": true,
       "targets": [
         {
-          "expr": "avg(${metric_namespace}_sub_libp2p_kademlia_records_count{instance=~\"${nodename}\"})",
+          "expr": "${metric_namespace}_sub_libp2p_kademlia_records_count{instance=~\"${nodename}\"}",
           "interval": "",
-          "legendFormat": "avg",
+          "legendFormat": "{{instance}}",
           "refId": "A"
-        },
-        {
-          "expr": "min(${metric_namespace}_sub_libp2p_kademlia_records_count{instance=~\"${nodename}\"})",
-          "interval": "",
-          "legendFormat": "min",
-          "refId": "B"
-        },
-        {
-          "expr": "max(${metric_namespace}_sub_libp2p_kademlia_records_count{instance=~\"${nodename}\"})",
-          "interval": "",
-          "legendFormat": "max",
-          "refId": "C"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Number of Kademlia records (average/min/max per node)",
+      "title": "Number of Kademlia records",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 1,
         "value_type": "individual"
       },
       "type": "graph",
@@ -2287,7 +2338,7 @@
         "h": 4,
         "w": 12,
         "x": 12,
-        "y": 1887
+        "y": 135
       },
       "hiddenSeries": false,
       "id": 112,
@@ -2310,48 +2361,26 @@
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
-      "seriesOverrides": [
-        {
-          "alias": "max",
-          "fillBelowTo": "min",
-          "lines": false
-        },
-        {
-          "alias": "min",
-          "lines": false
-        }
-      ],
+      "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
       "steppedLine": false,
       "targets": [
         {
-          "expr": "avg(${metric_namespace}_sub_libp2p_kademlia_records_sizes_total{instance=~\"${nodename}\"})",
+          "expr": "${metric_namespace}_sub_libp2p_kademlia_records_sizes_total{instance=~\"${nodename}\"}",
           "interval": "",
-          "legendFormat": "avg",
+          "legendFormat": "{{instance}}",
           "refId": "A"
-        },
-        {
-          "expr": "min(${metric_namespace}_sub_libp2p_kademlia_records_sizes_total{instance=~\"${nodename}\"})",
-          "interval": "",
-          "legendFormat": "min",
-          "refId": "B"
-        },
-        {
-          "expr": "max(${metric_namespace}_sub_libp2p_kademlia_records_sizes_total{instance=~\"${nodename}\"})",
-          "interval": "",
-          "legendFormat": "max",
-          "refId": "C"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Total size of Kademlia records (average/min/max per node)",
+      "title": "Total size of Kademlia records",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -2391,13 +2420,201 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$data_source",
-      "fill": 1,
+      "description": "",
+      "fill": 0,
       "fillGradient": 0,
       "gridPos": {
         "h": 5,
-        "w": 24,
+        "w": 12,
         "x": 0,
-        "y": 1891
+        "y": 139
+      },
+      "hiddenSeries": false,
+      "id": 211,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": true,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "${metric_namespace}_authority_discovery_known_authorities_count{instance=~\"${nodename}\"}",
+          "format": "time_series",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Number of authorities discovered by authority-discovery",
+      "tooltip": {
+        "shared": true,
+        "sort": 1,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "max": 0,
+        "min": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "description": "",
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 139
+      },
+      "hiddenSeries": false,
+      "id": 233,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": true,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "${metric_namespace}_authority_discovery_amount_external_addresses_last_published{instance=~\"${nodename}\"}",
+          "format": "time_series",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Number of addresses published by authority-discovery",
+      "tooltip": {
+        "shared": true,
+        "sort": 1,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "max": 0,
+        "min": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 0,
+        "y": 144
       },
       "hiddenSeries": false,
       "id": 68,
@@ -2429,20 +2646,20 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "avg(\n  # The amount of inflight Kademlia queries per node.\r\n  sum by (instance) (\r\n    # The total amount of Kademlia GET_VALUE queries started.\r\n    ${metric_namespace}_authority_discovery_authority_addresses_requested_total{instance=~\"${nodename}\"}\r\n  \r\n    # The total amount of Kademlia PUT_VALUE queries started.\r\n    + ${metric_namespace}_authority_discovery_times_published_total{instance=~\"${nodename}\"}\r\n  )\r\n  - sum by (instance) (\r\n    # The total amount of Kademlia queries (both GET_VALUE and PUT_VALUE) finished.\r\n    ${metric_namespace}_authority_discovery_dht_event_received{instance=~\"${nodename}\"}\r\n  )\n)",
+          "expr": "rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_found\"}[2h]) / ignoring(name) (\n  rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_found\"}[2h]) +\n  ignoring(name) rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_not_found\"}[2h])\n)",
           "interval": "",
-          "legendFormat": "in-progress",
-          "refId": "A"
+          "legendFormat": "{{instance}}",
+          "refId": "B"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Authority discovery Kademlia queries in progress, averaged per node",
+      "title": "Authority discovery get_value success rate in past two hours",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 1,
         "value_type": "individual"
       },
       "type": "graph",
@@ -2455,10 +2672,10 @@
       },
       "yaxes": [
         {
-          "format": "short",
+          "format": "percentunit",
           "label": null,
           "logBase": 1,
-          "max": null,
+          "max": "1.0",
           "min": null,
           "show": true
         },
@@ -2468,7 +2685,7 @@
           "logBase": 1,
           "max": null,
           "min": null,
-          "show": true
+          "show": false
         }
       ],
       "yaxis": {
@@ -2478,33 +2695,33 @@
     },
     {
       "aliasColors": {},
-      "bars": true,
+      "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "$data_source",
-      "fill": 1,
+      "fill": 0,
       "fillGradient": 0,
       "gridPos": {
-        "h": 4,
-        "w": 24,
-        "x": 0,
-        "y": 1896
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 144
       },
       "hiddenSeries": false,
-      "id": 72,
+      "id": 234,
       "interval": "1m",
       "legend": {
         "avg": false,
         "current": false,
         "max": false,
         "min": false,
-        "show": true,
+        "show": false,
         "total": false,
         "values": false
       },
-      "lines": false,
+      "lines": true,
       "linewidth": 1,
-      "nullPointMode": "null",
+      "nullPointMode": "connected",
       "options": {
         "dataLinks": []
       },
@@ -2512,7 +2729,6 @@
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
-      "repeat": null,
       "repeatDirection": "v",
       "seriesOverrides": [],
       "spaceLength": 10,
@@ -2520,32 +2736,20 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "avg(sum without(instance) (delta(${metric_namespace}_authority_discovery_times_published_total{instance=~\"${nodename}\"}[$__interval])))",
+          "expr": "rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_put\"}[2h]) / ignoring(name) (\n  rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_put\"}[2h]) +\n  ignoring(name) rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_put_failed\"}[2h])\n)",
           "interval": "",
-          "legendFormat": "publications",
-          "refId": "A"
-        },
-        {
-          "expr": "avg(sum without(instance) (delta(${metric_namespace}_authority_discovery_dht_event_received{instance=~\"${nodename}\", name=\"value_put\"}[$__interval])))",
-          "interval": "",
-          "legendFormat": "successes",
+          "legendFormat": "{{instance}}",
           "refId": "B"
-        },
-        {
-          "expr": "avg(sum without(instance) (delta(${metric_namespace}_authority_discovery_dht_event_received{instance=~\"${nodename}\", name=\"value_put_failed\"}[$__interval])))",
-          "interval": "",
-          "legendFormat": "failures",
-          "refId": "C"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Authority discovery publications, averaged per node",
+      "title": "Authority discovery put_value success rate in past two hours",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 1,
         "value_type": "individual"
       },
       "type": "graph",
@@ -2558,10 +2762,10 @@
       },
       "yaxes": [
         {
-          "format": "short",
+          "format": "percentunit",
           "label": null,
           "logBase": 1,
-          "max": null,
+          "max": "1.0",
           "min": null,
           "show": true
         },
@@ -2571,7 +2775,7 @@
           "logBase": 1,
           "max": null,
           "min": null,
-          "show": true
+          "show": false
         }
       ],
       "yaxis": {
@@ -2658,7 +2862,6 @@
       {
         "current": {
           "selected": false,
-          "tags": [],
           "text": "prometheus.parity-mgmt",
           "value": "prometheus.parity-mgmt"
         },
@@ -2695,7 +2898,7 @@
     ]
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {
@@ -2718,5 +2921,5 @@
   "variables": {
     "list": []
   },
-  "version": 103
+  "version": 113
 }

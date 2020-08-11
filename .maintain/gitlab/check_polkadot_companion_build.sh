@@ -31,10 +31,7 @@ polkadot companion: paritytech/polkadot#567
 
 
 it will then run cargo check from this polkadot's branch with substrate code
-from this pull request. in absence of that string it will check if a polkadot
-pr is mentioned and will use the last one instead. if none of the above can be
-found it will check if polkadot has a branch of the exact same name than the
-substrate's branch. if it can't find anything, it will uses master instead
+from this pull request. otherwise, it will uses master instead
 
 
 EOT
@@ -50,7 +47,9 @@ SUBSTRATE_PATH=$(pwd)
 git merge origin/master
 
 # Clone the current Polkadot master branch into ./polkadot.
-git clone --depth 1 https://github.com/paritytech/polkadot.git
+# NOTE: we need to pull enough commits to be able to find a common
+# ancestor for successfully performing merges below.
+git clone --depth 20 https://github.com/paritytech/polkadot.git
 
 cd polkadot
 
@@ -72,14 +71,6 @@ then
       -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
     | tail -n 1)"
 
-  if [ -z "${pr_companion}" ]
-  then
-    pr_companion="$(echo "${pr_body}" | sed -n -r \
-      -e 's;^.*paritytech/polkadot/#([0-9]+).*$;\1;p' \
-      -e 's;^.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
-      | tail -n 1)"
-  fi
-
   if [ "${pr_companion}" ]
   then
     boldprint "companion pr specified/detected: #${pr_companion}"
@@ -87,15 +78,7 @@ then
     git checkout pr/${pr_companion}
     git merge origin/master
   else
-    pr_ref="$(grep -Po '"ref"\s*:\s*"\K(?!master)[^"]*' "${pr_data_file}")"
-    if git fetch origin "$pr_ref":branch/"$pr_ref" 2>/dev/null
-    then
-      boldprint "companion branch detected: $pr_ref"
-      git checkout branch/"$pr_ref"
-      git merge origin/master
-    else
-      boldprint "no companion branch found - building polkadot:master"
-    fi
+    boldprint "no companion branch found - building polkadot:master"
   fi
   rm -f "${pr_data_file}"
 else
@@ -111,9 +94,5 @@ echo "paths = [ \"$SUBSTRATE_PATH\" ]" > .cargo/config
 mkdir -p target/debug/wbuild/.cargo
 cp .cargo/config target/debug/wbuild/.cargo/config
 
-# package, others are updated along the way.
-cargo update
-
 # Test Polkadot pr or master branch with this Substrate commit.
 time cargo test --all --release --verbose
-

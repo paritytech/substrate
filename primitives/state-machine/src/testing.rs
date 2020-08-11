@@ -39,6 +39,8 @@ use sp_core::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 		Storage,
 	},
+	traits::TaskExecutorExt,
+	testing::TaskExecutor,
 };
 use codec::Encode;
 use sp_externalities::{Extensions, Extension};
@@ -109,8 +111,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		let offchain_overlay = OffchainOverlayedChanges::enabled();
 
 		let mut extensions = Extensions::default();
-		extensions.register(sp_core::traits::TaskExecutorExt(sp_core::tasks::executor()));
-
+		extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
 
 		let offchain_db = TestPersistentOffchainDB::new();
 
@@ -153,15 +154,15 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 
 	/// Return a new backend with all pending value.
 	pub fn commit_all(&self) -> InMemoryBackend<H> {
-		let top: Vec<_> = self.overlay.changes(None)
+		let top: Vec<_> = self.overlay.changes()
 			.map(|(k, v)| (k.clone(), v.value().cloned()))
 			.collect();
 		let mut transaction = vec![(None, top)];
 
-		for child_info in self.overlay.child_infos() {
+		for (child_changes, child_info) in self.overlay.children() {
 			transaction.push((
 				Some(child_info.clone()),
-				self.overlay.changes(Some(child_info))
+				child_changes
 					.map(|(k, v)| (k.clone(), v.value().cloned()))
 					.collect(),
 			))

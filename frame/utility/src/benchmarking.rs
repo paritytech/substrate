@@ -20,10 +20,18 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_system::RawOrigin;
+use frame_system::{RawOrigin, EventRecord};
 use frame_benchmarking::{benchmarks, account};
 
 const SEED: u32 = 0;
+
+fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
+	let events = frame_system::Module::<T>::events();
+	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
+	// compare to the last event record
+	let EventRecord { event, .. } = &events[events.len() - 1];
+	assert_eq!(event, &system_event);
+}
 
 benchmarks! {
 	_ { }
@@ -37,14 +45,11 @@ benchmarks! {
 		}
 		let caller = account("caller", 0, SEED);
 	}: _(RawOrigin::Signed(caller), calls)
+	verify {
+		assert_last_event::<T>(Event::BatchCompleted.into())
+	}
 
-	as_sub {
-		let u in 0 .. 1000;
-		let caller = account("caller", u, SEED);
-		let call = Box::new(frame_system::Call::remark(vec![]).into());
-	}: _(RawOrigin::Signed(caller), u as u16, call)
-
-	as_limited_sub {
+	as_derivative {
 		let u in 0 .. 1000;
 		let caller = account("caller", u, SEED);
 		let call = Box::new(frame_system::Call::remark(vec![]).into());
@@ -61,8 +66,7 @@ mod tests {
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_batch::<Test>());
-			assert_ok!(test_benchmark_as_sub::<Test>());
-			assert_ok!(test_benchmark_as_limited_sub::<Test>());
+			assert_ok!(test_benchmark_as_derivative::<Test>());
 		});
 	}
 }

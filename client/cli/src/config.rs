@@ -28,18 +28,15 @@ use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
 	BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
-	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods, TaskType,
-	TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
+	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver};
-use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::pin::Pin;
-use std::sync::Arc;
 
 /// The maximum number of characters for a node name.
-pub(crate) const NODE_NAME_MAX_LENGTH: usize = 32;
+pub(crate) const NODE_NAME_MAX_LENGTH: usize = 64;
 
 /// default sub directory to store network config
 pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";
@@ -161,7 +158,7 @@ pub trait CliConfiguration: Sized {
 	fn database_cache_size(&self) -> Result<Option<usize>> {
 		Ok(self.database_params()
 			.map(|x| x.database_cache_size())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the database backend variant.
@@ -198,7 +195,7 @@ pub trait CliConfiguration: Sized {
 	fn state_cache_size(&self) -> Result<usize> {
 		Ok(self.import_params()
 			.map(|x| x.state_cache_size())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the state cache child ratio (if any).
@@ -215,7 +212,7 @@ pub trait CliConfiguration: Sized {
 	fn pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
 		self.pruning_params()
 			.map(|x| x.pruning(unsafe_pruning, role))
-			.unwrap_or(Ok(Default::default()))
+			.unwrap_or_else(|| Ok(Default::default()))
 	}
 
 	/// Get the chain ID (string).
@@ -239,7 +236,7 @@ pub trait CliConfiguration: Sized {
 	fn wasm_method(&self) -> Result<WasmExecutionMethod> {
 		Ok(self.import_params()
 			.map(|x| x.wasm_method())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the execution strategies.
@@ -254,7 +251,7 @@ pub trait CliConfiguration: Sized {
 		Ok(self
 			.import_params()
 			.map(|x| x.execution_strategies(is_dev, is_validator))
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the RPC HTTP address (`None` if disabled).
@@ -368,7 +365,7 @@ pub trait CliConfiguration: Sized {
 	fn tracing_targets(&self) -> Result<Option<String>> {
 		Ok(self.import_params()
 			.map(|x| x.tracing_targets())
-			.unwrap_or(Default::default()))
+			.unwrap_or_else(|| Default::default()))
 	}
 
 	/// Get the TracingReceiver value from the current object
@@ -378,7 +375,7 @@ pub trait CliConfiguration: Sized {
 	fn tracing_receiver(&self) -> Result<TracingReceiver> {
 		Ok(self.import_params()
 			.map(|x| x.tracing_receiver())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the node key from the current object
@@ -388,7 +385,7 @@ pub trait CliConfiguration: Sized {
 	fn node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> {
 		self.node_key_params()
 			.map(|x| x.node_key(net_config_dir))
-			.unwrap_or(Ok(Default::default()))
+			.unwrap_or_else(|| Ok(Default::default()))
 	}
 
 	/// Get maximum runtime instances
@@ -409,14 +406,14 @@ pub trait CliConfiguration: Sized {
 	fn create_configuration<C: SubstrateCli>(
 		&self,
 		cli: &C,
-		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
+		task_executor: TaskExecutor,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
 		let chain_spec = cli.load_spec(chain_id.as_str())?;
 		let base_path = self
 			.base_path()?
-			.unwrap_or_else(|| BasePath::from_project("", "", C::executable_name()));
+			.unwrap_or_else(|| BasePath::from_project("", "", &C::executable_name()));
 		let config_dir = base_path
 			.path()
 			.to_path_buf()
@@ -477,6 +474,7 @@ pub trait CliConfiguration: Sized {
 			announce_block: self.announce_block()?,
 			role,
 			base_path: Some(base_path),
+			informant_output_format: Default::default(),
 		})
 	}
 
@@ -500,7 +498,7 @@ pub trait CliConfiguration: Sized {
 	fn init<C: SubstrateCli>(&self) -> Result<()> {
 		let logger_pattern = self.log_filters()?;
 
-		sp_panic_handler::set(C::support_url(), C::impl_version());
+		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
 		fdlimit::raise_fd_limit();
 		init_logger(&logger_pattern);

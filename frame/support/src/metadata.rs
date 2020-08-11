@@ -316,7 +316,7 @@ mod tests {
 			}
 		);
 
-		#[derive(Clone, PartialEq, Eq, Debug)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
@@ -413,7 +413,7 @@ mod tests {
 	}
 
 	impl_outer_origin! {
-		pub enum Origin for TestRuntime {}
+		pub enum Origin for TestRuntime where system = system {}
 	}
 
 	impl_outer_dispatch! {

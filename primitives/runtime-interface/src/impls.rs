@@ -365,6 +365,10 @@ impl<T: codec::Codec> PassBy for Option<T> {
 	type PassBy = Codec<Self>;
 }
 
+impl PassBy for (u32, u32, u32, u32) {
+	type PassBy = Codec<Self>;
+}
+
 /// Implement `PassBy` with `Inner` for the given fixed sized hash types.
 macro_rules! for_primitive_types {
 	{ $( $hash:ident $n:expr ),* $(,)? } => {

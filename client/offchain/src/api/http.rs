@@ -33,9 +33,22 @@ use log::error;
 use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
 use std::{convert::TryFrom, fmt, io::Read as _, pin::Pin, task::{Context, Poll}};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
+use std::sync::Arc;
+use hyper::{Client as HyperClient, Body, client};
+use hyper_rustls::HttpsConnector;
+
+/// Wrapper struct used for keeping the hyper_rustls client running.
+#[derive(Clone)]
+pub struct SharedClient(Arc<HyperClient<HttpsConnector<client::HttpConnector>, Body>>);
+
+impl SharedClient {
+	pub fn new() -> Self {
+		Self(Arc::new(HyperClient::builder().build(HttpsConnector::new())))
+	}
+}
 
 /// Creates a pair of [`HttpApi`] and [`HttpWorker`].
-pub fn http() -> (HttpApi, HttpWorker) {
+pub fn http(shared_client: SharedClient) -> (HttpApi, HttpWorker) {
 	let (to_worker, from_api) = tracing_unbounded("mpsc_ocw_to_worker");
 	let (to_api, from_worker) = tracing_unbounded("mpsc_ocw_to_api");
 
@@ -51,7 +64,7 @@ pub fn http() -> (HttpApi, HttpWorker) {
 	let engine = HttpWorker {
 		to_api,
 		from_api,
-		http_client: hyper::Client::builder().build(hyper_rustls::HttpsConnector::new()),
+		http_client: shared_client.0,
 		requests: Vec::new(),
 	};
 
@@ -551,7 +564,7 @@ pub struct HttpWorker {
 	/// Used to receive messages from the `HttpApi`.
 	from_api: TracingUnboundedReceiver<ApiToWorker>,
 	/// The engine that runs HTTP requests.
-	http_client: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, hyper::Body>,
+	http_client: Arc<HyperClient<HttpsConnector<client::HttpConnector>, Body>>,
 	/// HTTP requests that are being worked on by the engine.
 	requests: Vec<(HttpRequestId, HttpWorkerRequest)>,
 }
@@ -685,21 +698,23 @@ impl fmt::Debug for HttpWorkerRequest {
 mod tests {
 	use core::convert::Infallible;
 	use crate::api::timestamp;
-	use super::http;
+	use super::{http, SharedClient};
 	use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Duration};
 	use futures::future;
+	use lazy_static::lazy_static;
+	
+	// Using lazy_static to avoid spawning lots of different SharedClients,
+	// as spawning a SharedClient is CPU-intensive and opens lots of fds.
+	lazy_static! {
+		static ref SHARED_CLIENT: SharedClient = SharedClient::new();
+	}
 
 	// Returns an `HttpApi` whose worker is ran in the background, and a `SocketAddr` to an HTTP
 	// server that runs in the background as well.
 	macro_rules! build_api_server {
 		() => {{
-			// We spawn quite a bit of HTTP servers here due to how async API
-			// works for offchain workers, so be sure to raise the FD limit
-			// (particularly useful for macOS where the default soft limit may
-			// not be enough).
-			fdlimit::raise_fd_limit();
-
-			let (api, worker) = http();
+			let hyper_client = SHARED_CLIENT.clone();
+			let (api, worker) = http(hyper_client.clone());
 
 			let (addr_tx, addr_rx) = std::sync::mpsc::channel();
 			std::thread::spawn(move || {

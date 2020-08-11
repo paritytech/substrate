@@ -64,8 +64,13 @@ where
 			return;
 		}
 
-		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
+		addresses.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
 		self.cache.insert(id, addresses);
+	}
+
+	/// Returns the number of authority IDs in the cache.
+	pub fn num_ids(&self) -> usize {
+		self.cache.len()
 	}
 
 	// Each node should connect to a subset of all authorities. In order to prevent hot spots, this
@@ -89,7 +94,7 @@ where
 			.collect::<Vec<Addr>>();
 
 		addresses.dedup();
-		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
+		addresses.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
 
 		addresses
 			.choose_multiple(&mut rng, MAX_NUM_AUTHORITY_CONN)

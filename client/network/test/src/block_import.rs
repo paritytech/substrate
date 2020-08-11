@@ -59,7 +59,7 @@ fn import_single_good_block_works() {
 		&mut substrate_test_runtime_client::new(),
 		BlockOrigin::File,
 		block,
-		&mut PassThroughVerifier(true)
+		&mut PassThroughVerifier::new(true)
 	) {
 		Ok(BlockImportResult::ImportedUnknown(ref num, ref aux, ref org))
 			if *num == number && *aux == expected_aux && *org == Some(peer_id) => {}
@@ -74,7 +74,7 @@ fn import_single_good_known_block_is_ignored() {
 		&mut client,
 		BlockOrigin::File,
 		block,
-		&mut PassThroughVerifier(true)
+		&mut PassThroughVerifier::new(true)
 	) {
 		Ok(BlockImportResult::ImportedKnown(ref n)) if *n == number => {}
 		_ => panic!()
@@ -89,7 +89,7 @@ fn import_single_good_block_without_header_fails() {
 		&mut substrate_test_runtime_client::new(),
 		BlockOrigin::File,
 		block,
-		&mut PassThroughVerifier(true)
+		&mut PassThroughVerifier::new(true)
 	) {
 		Err(BlockImportError::IncompleteHeader(ref org)) if *org == Some(peer_id) => {}
 		_ => panic!()
@@ -98,10 +98,10 @@ fn import_single_good_block_without_header_fails() {
 
 #[test]
 fn async_import_queue_drops() {
-	let executor = sp_core::testing::SpawnBlockingExecutor::new();
+	let executor = sp_core::testing::TaskExecutor::new();
 	// Perform this test multiple times since it exhibits non-deterministic behavior.
 	for _ in 0..100 {
-		let verifier = PassThroughVerifier(true);
+		let verifier = PassThroughVerifier::new(true);
 
 		let queue = BasicQueue::new(
 			verifier,

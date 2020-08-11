@@ -30,7 +30,7 @@
 
 use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering, convert::TryFrom};
 use sp_arithmetic::{
-	PerThing, Rational128, ThresholdOrd,
+	PerThing, Rational128, ThresholdOrd, InnerOf, Normalizable,
 	helpers_128bit::multiply_by_rational,
 	traits::{Zero, Saturating, Bounded, SaturatedConversion},
 };
@@ -84,6 +84,8 @@ pub enum Error {
 	CompactTargetOverflow,
 	/// One of the index functions returned none.
 	CompactInvalidIndex,
+	/// An error occurred in some arithmetic operation.
+	ArithmeticError(&'static str),
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the
@@ -155,16 +157,16 @@ pub struct ElectionResult<AccountId, T: PerThing> {
 /// A voter's stake assignment among a set of targets, represented as ratios.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
-pub struct Assignment<AccountId, T: PerThing> {
+pub struct Assignment<AccountId, P: PerThing> {
 	/// Voter's identifier.
 	pub who: AccountId,
 	/// The distribution of the voter's stake.
-	pub distribution: Vec<(AccountId, T)>,
+	pub distribution: Vec<(AccountId, P)>,
 }
 
-impl<AccountId, T: PerThing> Assignment<AccountId, T>
+impl<AccountId: IdentifierT, P: PerThing> Assignment<AccountId, P>
 where
-	ExtendedBalance: From<<T as PerThing>::Inner>,
+	ExtendedBalance: From<InnerOf<P>>,
 {
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
@@ -173,49 +175,48 @@ where
 	/// distribution's sum is exactly equal to the total budget, by adding or subtracting the
 	/// remainder from the last distribution.
 	///
-	/// If an edge ratio is [`Bounded::max_value()`], it is dropped. This edge can never mean
+	/// If an edge ratio is [`Bounded::min_value()`], it is dropped. This edge can never mean
 	/// anything useful.
-	pub fn into_staked(self, stake: ExtendedBalance, fill: bool) -> StakedAssignment<AccountId>
+	pub fn into_staked(self, stake: ExtendedBalance) -> StakedAssignment<AccountId>
 	where
-		T: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
+		P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 	{
-		let mut sum: ExtendedBalance = Bounded::min_value();
-		let mut distribution = self
-			.distribution
+		let distribution = self.distribution
 			.into_iter()
 			.filter_map(|(target, p)| {
 				// if this ratio is zero, then skip it.
-				if p == Bounded::min_value() {
+				if p.is_zero() {
 					None
 				} else {
 					// NOTE: this mul impl will always round to the nearest number, so we might both
 					// overflow and underflow.
 					let distribution_stake = p * stake;
-					// defensive only. We assume that balance cannot exceed extended balance.
-					sum = sum.saturating_add(distribution_stake);
 					Some((target, distribution_stake))
 				}
 			})
 			.collect::<Vec<(AccountId, ExtendedBalance)>>();
 
-		if fill {
-			// NOTE: we can do this better.
-			// https://revs.runtime-revolution.com/getting-100-with-rounded-percentages-273ffa70252b
-			if let Some(leftover) = stake.checked_sub(sum) {
-				if let Some(last) = distribution.last_mut() {
-					last.1 = last.1.saturating_add(leftover);
-				}
-			} else if let Some(excess) = sum.checked_sub(stake) {
-				if let Some(last) = distribution.last_mut() {
-					last.1 = last.1.saturating_sub(excess);
-				}
-			}
-		}
-
 		StakedAssignment {
 			who: self.who,
 			distribution,
 		}
+	}
+
+	/// Try and normalize this assignment.
+	///
+	/// If `Ok(())` is returned, then the assignment MUST have been successfully normalized to 100%.
+	pub fn try_normalize(&mut self) -> Result<(), &'static str> {
+		self.distribution
+			.iter()
+			.map(|(_, p)| *p)
+			.collect::<Vec<_>>()
+			.normalize(P::one())
+			.map(|normalized_ratios|
+				self.distribution
+					.iter_mut()
+					.zip(normalized_ratios)
+					.for_each(|((_, old), corrected)| { *old = corrected; })
+			)
 	}
 }
 
@@ -243,47 +244,52 @@ impl<AccountId> StakedAssignment<AccountId> {
 	///
 	/// If an edge stake is so small that it cannot be represented in `T`, it is ignored. This edge
 	/// can never be re-created and does not mean anything useful anymore.
-	pub fn into_assignment<T: PerThing>(self, fill: bool) -> Assignment<AccountId, T>
+	pub fn into_assignment<P: PerThing>(self) -> Assignment<AccountId, P>
 	where
-		ExtendedBalance: From<<T as PerThing>::Inner>,
+		ExtendedBalance: From<InnerOf<P>>,
+		AccountId: IdentifierT,
 	{
-		let accuracy: u128 = T::ACCURACY.saturated_into();
-		let mut sum: u128 = Zero::zero();
-		let stake = self.distribution.iter().map(|x| x.1).sum();
-		let mut distribution = self
-			.distribution
+		let stake = self.total();
+		let distribution = self.distribution
 			.into_iter()
 			.filter_map(|(target, w)| {
-				let per_thing = T::from_rational_approximation(w, stake);
+				let per_thing = P::from_rational_approximation(w, stake);
 				if per_thing == Bounded::min_value() {
 					None
 				} else {
-					sum += per_thing.clone().deconstruct().saturated_into();
 					Some((target, per_thing))
 				}
 			})
-			.collect::<Vec<(AccountId, T)>>();
-
-		if fill {
-			if let Some(leftover) = accuracy.checked_sub(sum) {
-				if let Some(last) = distribution.last_mut() {
-					last.1 = last.1.saturating_add(
-						T::from_parts(leftover.saturated_into())
-					);
-				}
-			} else if let Some(excess) = sum.checked_sub(accuracy) {
-				if let Some(last) = distribution.last_mut() {
-					last.1 = last.1.saturating_sub(
-						T::from_parts(excess.saturated_into())
-					);
-				}
-			}
-		}
+			.collect::<Vec<(AccountId, P)>>();
 
 		Assignment {
 			who: self.who,
 			distribution,
 		}
+	}
+
+	/// Try and normalize this assignment.
+	///
+	/// If `Ok(())` is returned, then the assignment MUST have been successfully normalized to
+	/// `stake`.
+	///
+	/// NOTE: current implementation of `.normalize` is almost safe to `expect()` upon. The only
+	/// error case is when the input cannot fit in `T`, or the sum of input cannot fit in `T`.
+	/// Sadly, both of these are dependent upon the implementation of `VoteLimit`, i.e. the limit
+	/// of edges per voter which is enforced from upstream. Hence, at this crate, we prefer
+	/// returning a result and a use the name prefix `try_`.
+	pub fn try_normalize(&mut self, stake: ExtendedBalance) -> Result<(), &'static str> {
+		self.distribution
+			.iter()
+			.map(|(_, ref weight)| *weight)
+			.collect::<Vec<_>>()
+			.normalize(stake)
+			.map(|normalized_weights|
+				self.distribution
+					.iter_mut()
+					.zip(normalized_weights.into_iter())
+					.for_each(|((_, weight), corrected)| { *weight = corrected; })
+			)
 	}
 
 	/// Get the total stake of this assignment (aka voter budget).
@@ -365,6 +371,10 @@ pub fn seq_phragmen<AccountId, R>(
 	voters.extend(initial_voters.into_iter().map(|(who, voter_stake, votes)| {
 		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
 		for v in votes {
+			if edges.iter().any(|e| e.who == v) {
+				// duplicate edge.
+				continue;
+			}
 			if let Some(idx) = c_idx_cache.get(&v) {
 				// This candidate is valid + already cached.
 				candidates[*idx].approval_stake = candidates[*idx].approval_stake
@@ -410,7 +420,7 @@ pub fn seq_phragmen<AccountId, R>(
 						n.load.n(),
 						n.budget,
 						c.approval_stake,
-					).unwrap_or(Bounded::max_value());
+					).unwrap_or_else(|_| Bounded::max_value());
 					let temp_d = n.load.d();
 					let temp = Rational128::from(temp_n, temp_d);
 					c.score = c.score.lazy_saturating_add(temp);
@@ -464,14 +474,14 @@ pub fn seq_phragmen<AccountId, R>(
 								n.load.n(),
 							)
 							// If result cannot fit in u128. Not much we can do about it.
-							.unwrap_or(Bounded::max_value());
+							.unwrap_or_else(|_| Bounded::max_value());
 
 							TryFrom::try_from(parts)
 								// If the result cannot fit into R::Inner. Defensive only. This can
 								// never happen. `desired_scale * e / n`, where `e / n < 1` always
 								// yields a value smaller than `desired_scale`, which will fit into
 								// R::Inner.
-								.unwrap_or(Bounded::max_value())
+								.unwrap_or_else(|_| Bounded::max_value())
 						} else {
 							// defensive only. Both edge and voter loads are built from
 							// scores, hence MUST have the same denominator.
@@ -739,7 +749,7 @@ fn do_balancing<AccountId>(
 		e.1 = 0;
 	});
 
-	elected_edges.sort_unstable_by_key(|e|
+	elected_edges.sort_by_key(|e|
 		if let Some(e) = support_map.get(&e.0) { e.total } else { Zero::zero() }
 	);
 

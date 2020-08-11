@@ -19,9 +19,9 @@
 use crate::{
 	CliConfiguration, error, params::{ImportParams, SharedParams, BlockNumberOrHash},
 };
-use sc_service::{Configuration, ServiceBuilderCommand};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
-use std::{fmt::Debug, str::FromStr};
+use sc_client_api::{BlockBackend, UsageProvider};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use std::{fmt::Debug, str::FromStr, sync::Arc};
 use structopt::StructOpt;
 
 /// The `check-block` command used to validate blocks.
@@ -48,21 +48,21 @@ pub struct CheckBlockCmd {
 
 impl CheckBlockCmd {
 	/// Run the check-block command
-	pub async fn run<B, BC, BB>(
+	pub async fn run<B, C, IQ>(
 		&self,
-		config: Configuration,
-		builder: B,
+		client: Arc<C>,
+		import_queue: IQ,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: BlockT + Debug,
-		<NumberFor<BB> as FromStr>::Err: std::fmt::Debug,
-		BB::Hash: FromStr,
-		<BB::Hash as FromStr>::Err: std::fmt::Debug,
+		B: BlockT + for<'de> serde::Deserialize<'de>,
+		C: BlockBackend<B> + UsageProvider<B> + Send + Sync + 'static,
+		IQ: sc_service::ImportQueue<B> + 'static,
+		B::Hash: FromStr,
+		<B::Hash as FromStr>::Err: Debug,
+		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		let start = std::time::Instant::now();
-		builder(config)?.check_block(self.input.parse()?).await?;
+		sc_service::chain_ops::check_block(client, import_queue, self.input.parse()?).await?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 
 		Ok(())

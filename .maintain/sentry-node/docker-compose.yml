@@ -131,11 +131,6 @@ services:
       - "sub-authority-discovery=trace"
       - "--prometheus-external"
 
-  ui:
-    image: polkadot-js/apps
-    ports:
-      - "3000:80"
-
   prometheus:
     image: prom/prometheus
     networks:

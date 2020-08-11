@@ -37,6 +37,7 @@ pub enum Error {
 	Input(String),
 	/// Invalid listen multiaddress
 	#[display(fmt="Invalid listen multiaddress")]
+	#[from(ignore)]
 	InvalidListenMultiaddress,
 	/// Other uncategorized error.
 	#[from(ignore)]

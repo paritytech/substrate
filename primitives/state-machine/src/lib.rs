@@ -26,7 +26,7 @@ use codec::{Decode, Encode, Codec};
 use sp_core::{
 	offchain::storage::OffchainOverlayedChanges,
 	storage::ChildInfo, NativeOrEncoded, NeverNativeValue, hexdisplay::HexDisplay,
-	traits::{CodeExecutor, CallInWasmExt, RuntimeCode},
+	traits::{CodeExecutor, CallInWasmExt, RuntimeCode, SpawnNamed},
 };
 use sp_externalities::Extensions;
 
@@ -77,7 +77,10 @@ pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};
 pub use in_memory_backend::new_in_mem;
 pub use stats::{UsageInfo, UsageUnit, StateMachineStats};
-pub use sp_core::traits::CloneableSpawn;
+
+const PROOF_CLOSE_TRANSACTION: &str = "\
+	Closing a transaction that was started in this function. Client initiated transactions
+	are protected from being closed by the runtime. qed";
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
@@ -229,7 +232,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		call_data: &'a [u8],
 		mut extensions: Extensions,
 		runtime_code: &'a RuntimeCode,
-		spawn_handle: Box<dyn CloneableSpawn>,
+		spawn_handle: impl SpawnNamed + Send + 'static,
 	) -> Self {
 		extensions.register(CallInWasmExt::new(exec.clone()));
 		extensions.register(sp_core::traits::TaskExecutorExt::new(spawn_handle));
@@ -297,6 +300,8 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			None => &mut cache,
 		};
 
+		self.overlay.enter_runtime().expect("StateMachine is never called from the runtime; qed");
+
 		let mut ext = Ext::new(
 			self.overlay,
 			self.offchain_overlay,
@@ -324,6 +329,9 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			native_call,
 		);
 
+		self.overlay.exit_runtime()
+			.expect("Runtime is not able to call this function in the overlay; qed");
+
 		trace!(
 			target: "state", "{:04x}: Return. Native={:?}, Result={:?}",
 			id,
@@ -347,11 +355,11 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 				CallResult<R, Exec::Error>,
 			) -> CallResult<R, Exec::Error>
 	{
-		let pending_changes = self.overlay.clone_pending();
+		self.overlay.start_transaction();
 		let (result, was_native) = self.execute_aux(true, native_call.take());
 
 		if was_native {
-			self.overlay.replace_pending(pending_changes);
+			self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
@@ -366,6 +374,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 				on_consensus_failure(wasm_result, result)
 			}
 		} else {
+			self.overlay.commit_transaction().expect(PROOF_CLOSE_TRANSACTION);
 			result
 		}
 	}
@@ -378,16 +387,17 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			R: Decode + Encode + PartialEq,
 			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
-		let pending_changes = self.overlay.clone_pending();
+		self.overlay.start_transaction();
 		let (result, was_native) = self.execute_aux(
 			true,
 			native_call.take(),
 		);
 
 		if !was_native || result.is_ok() {
+			self.overlay.commit_transaction().expect(PROOF_CLOSE_TRANSACTION);
 			result
 		} else {
-			self.overlay.replace_pending(pending_changes);
+			self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
@@ -452,11 +462,11 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 }
 
 /// Prove execution using the given state backend, overlayed changes, and call executor.
-pub fn prove_execution<B, H, N, Exec>(
+pub fn prove_execution<B, H, N, Exec, Spawn>(
 	mut backend: B,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Spawn,
 	method: &str,
 	call_data: &[u8],
 	runtime_code: &RuntimeCode,
@@ -467,10 +477,11 @@ where
 	H::Out: Ord + 'static + codec::Codec,
 	Exec: CodeExecutor + Clone + 'static,
 	N: crate::changes_trie::BlockNumber,
+	Spawn: SpawnNamed + Send + 'static,
 {
 	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
-	prove_execution_on_trie_backend::<_, _, N, _>(
+	prove_execution_on_trie_backend::<_, _, N, _, _>(
 		trie_backend,
 		overlay,
 		exec,
@@ -490,11 +501,11 @@ where
 ///
 /// Note: changes to code will be in place if this call is made again. For running partial
 /// blocks (e.g. a transaction at a time), ensure a different method is used.
-pub fn prove_execution_on_trie_backend<S, H, N, Exec>(
+pub fn prove_execution_on_trie_backend<S, H, N, Exec, Spawn>(
 	trie_backend: &TrieBackend<S, H>,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Spawn,
 	method: &str,
 	call_data: &[u8],
 	runtime_code: &RuntimeCode,
@@ -505,6 +516,7 @@ where
 	H::Out: Ord + 'static + codec::Codec,
 	Exec: CodeExecutor + 'static + Clone,
 	N: crate::changes_trie::BlockNumber,
+	Spawn: SpawnNamed + Send + 'static,
 {
 	let mut offchain_overlay = OffchainOverlayedChanges::default();
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
@@ -530,12 +542,12 @@ where
 }
 
 /// Check execution proof, generated by `prove_execution` call.
-pub fn execution_proof_check<H, N, Exec>(
+pub fn execution_proof_check<H, N, Exec, Spawn>(
 	root: H::Out,
 	proof: StorageProof,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Spawn,
 	method: &str,
 	call_data: &[u8],
 	runtime_code: &RuntimeCode,
@@ -545,9 +557,10 @@ where
 	Exec: CodeExecutor + Clone + 'static,
 	H::Out: Ord + 'static + codec::Codec,
 	N: crate::changes_trie::BlockNumber,
+	Spawn: SpawnNamed + Send + 'static,
 {
 	let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
-	execution_proof_check_on_trie_backend::<_, N, _>(
+	execution_proof_check_on_trie_backend::<_, N, _, _>(
 		&trie_backend,
 		overlay,
 		exec,
@@ -559,11 +572,11 @@ where
 }
 
 /// Check execution proof on proving backend, generated by `prove_execution` call.
-pub fn execution_proof_check_on_trie_backend<H, N, Exec>(
+pub fn execution_proof_check_on_trie_backend<H, N, Exec, Spawn>(
 	trie_backend: &TrieBackend<MemoryDB<H>, H>,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Spawn,
 	method: &str,
 	call_data: &[u8],
 	runtime_code: &RuntimeCode,
@@ -573,6 +586,7 @@ where
 	H::Out: Ord + 'static + codec::Codec,
 	Exec: CodeExecutor + Clone + 'static,
 	N: crate::changes_trie::BlockNumber,
+	Spawn: SpawnNamed + Send + 'static,
 {
 	let mut offchain_overlay = OffchainOverlayedChanges::default();
 	let mut sm = StateMachine::<_, H, N, Exec>::new(
@@ -754,7 +768,9 @@ mod tests {
 	use super::*;
 	use super::ext::Ext;
 	use super::changes_trie::Configuration as ChangesTrieConfig;
-	use sp_core::{map, traits::{Externalities, RuntimeCode}};
+	use sp_core::{
+		map, traits::{Externalities, RuntimeCode}, testing::TaskExecutor,
+	};
 	use sp_runtime::traits::BlakeTwo256;
 
 	#[derive(Clone)]
@@ -848,7 +864,7 @@ mod tests {
 			&[],
 			Default::default(),
 			&wasm_code,
-			sp_core::tasks::executor(),
+			TaskExecutor::new(),
 		);
 
 		assert_eq!(
@@ -880,7 +896,7 @@ mod tests {
 			&[],
 			Default::default(),
 			&wasm_code,
-			sp_core::tasks::executor(),
+			TaskExecutor::new(),
 		);
 
 		assert_eq!(state_machine.execute(ExecutionStrategy::NativeElseWasm).unwrap(), vec![66]);
@@ -909,7 +925,7 @@ mod tests {
 			&[],
 			Default::default(),
 			&wasm_code,
-			sp_core::tasks::executor(),
+			TaskExecutor::new(),
 		);
 
 		assert!(
@@ -936,23 +952,23 @@ mod tests {
 		// fetch execution proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
-		let (remote_result, remote_proof) = prove_execution::<_, _, u64, _>(
+		let (remote_result, remote_proof) = prove_execution::<_, _, u64, _, _>(
 			remote_backend,
 			&mut Default::default(),
 			&executor,
-			sp_core::tasks::executor(),
+			TaskExecutor::new(),
 			"test",
 			&[],
 			&RuntimeCode::empty(),
 		).unwrap();
 
 		// check proof locally
-		let local_result = execution_proof_check::<BlakeTwo256, u64, _>(
+		let local_result = execution_proof_check::<BlakeTwo256, u64, _, _>(
 			remote_root,
 			remote_proof,
 			&mut Default::default(),
 			&executor,
-			sp_core::tasks::executor(),
+			TaskExecutor::new(),
 			"test",
 			&[],
 			&RuntimeCode::empty(),
@@ -977,7 +993,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_storage(b"aba".to_vec(), Some(b"1312".to_vec()));
 		overlay.set_storage(b"bab".to_vec(), Some(b"228".to_vec()));
-		overlay.commit_prospective();
+		overlay.start_transaction();
 		overlay.set_storage(b"abd".to_vec(), Some(b"69".to_vec()));
 		overlay.set_storage(b"bbd".to_vec(), Some(b"42".to_vec()));
 
@@ -994,10 +1010,10 @@ mod tests {
 			);
 			ext.clear_prefix(b"ab");
 		}
-		overlay.commit_prospective();
+		overlay.commit_transaction().unwrap();
 
 		assert_eq!(
-			overlay.changes(None).map(|(k, v)| (k.clone(), v.value().cloned()))
+			overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned()))
 				.collect::<HashMap<_, _>>(),
 			map![
 				b"abc".to_vec() => None.into(),
@@ -1083,7 +1099,7 @@ mod tests {
 				Some(vec![reference_data[0].clone()].encode()),
 			);
 		}
-		overlay.commit_prospective();
+		overlay.start_transaction();
 		{
 			let mut ext = Ext::new(
 				&mut overlay,
@@ -1102,7 +1118,7 @@ mod tests {
 				Some(reference_data.encode()),
 			);
 		}
-		overlay.discard_prospective();
+		overlay.rollback_transaction().unwrap();
 		{
 			let ext = Ext::new(
 				&mut overlay,
@@ -1145,7 +1161,7 @@ mod tests {
 			ext.clear_storage(key.as_slice());
 			ext.storage_append(key.clone(), Item::InitializationItem.encode());
 		}
-		overlay.commit_prospective();
+		overlay.start_transaction();
 
 		// For example, first transaction resulted in panic during block building
 		{
@@ -1170,7 +1186,7 @@ mod tests {
 				Some(vec![Item::InitializationItem, Item::DiscardedItem].encode()),
 			);
 		}
-		overlay.discard_prospective();
+		overlay.rollback_transaction().unwrap();
 
 		// Then we apply next transaction which is valid this time.
 		{
@@ -1196,7 +1212,7 @@ mod tests {
 			);
 
 		}
-		overlay.commit_prospective();
+		overlay.start_transaction();
 
 		// Then only initlaization item and second (commited) item should persist.
 		{
@@ -1317,9 +1333,11 @@ mod tests {
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
+		overlay.start_transaction();
 		overlay.set_storage(b"ccc".to_vec(), Some(b"".to_vec()));
 		assert_eq!(overlay.storage(b"ccc"), Some(Some(&[][..])));
-		overlay.commit_prospective();
+		overlay.commit_transaction().unwrap();
+		overlay.start_transaction();
 		assert_eq!(overlay.storage(b"ccc"), Some(Some(&[][..])));
 		assert_eq!(overlay.storage(b"bbb"), None);
 
@@ -1339,7 +1357,7 @@ mod tests {
 			ext.clear_storage(b"ccc");
 			assert_eq!(ext.storage(b"ccc"), None);
 		}
-		overlay.commit_prospective();
+		overlay.commit_transaction().unwrap();
 		assert_eq!(overlay.storage(b"ccc"), Some(None));
 	}
 }

@@ -160,74 +160,18 @@ pub type DigestItem = generic::DigestItem<H256>;
 pub type Digest = generic::Digest<H256>;
 
 /// Block Header
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, Default, parity_util_mem::MallocSizeOf)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct Header {
-	/// Parent hash
-	pub parent_hash: H256,
-	/// Block Number
-	pub number: u64,
-	/// Post-execution state trie root
-	pub state_root: H256,
-	/// Merkle root of block's extrinsics
-	pub extrinsics_root: H256,
-	/// Digest items
-	pub digest: Digest,
-}
-
-impl traits::Header for Header {
-	type Number = u64;
-	type Hashing = BlakeTwo256;
-	type Hash = H256;
-
-	fn number(&self) -> &Self::Number { &self.number }
-	fn set_number(&mut self, num: Self::Number) { self.number = num }
-
-	fn extrinsics_root(&self) -> &Self::Hash { &self.extrinsics_root }
-	fn set_extrinsics_root(&mut self, root: Self::Hash) { self.extrinsics_root = root }
-
-	fn state_root(&self) -> &Self::Hash { &self.state_root }
-	fn set_state_root(&mut self, root: Self::Hash) { self.state_root = root }
-
-	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
-	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
-
-	fn digest(&self) -> &Digest { &self.digest }
-	fn digest_mut(&mut self) -> &mut Digest { &mut self.digest }
-
-	fn new(
-		number: Self::Number,
-		extrinsics_root: Self::Hash,
-		state_root: Self::Hash,
-		parent_hash: Self::Hash,
-		digest: Digest,
-	) -> Self {
-		Header {
-			number,
-			extrinsics_root,
-			state_root,
-			parent_hash,
-			digest,
-		}
-	}
-}
+pub type Header = generic::Header<u64, BlakeTwo256>;
 
 impl Header {
 	/// A new header with the given number and default hash for all other fields.
 	pub fn new_from_number(number: <Self as traits::Header>::Number) -> Self {
 		Self {
 			number,
-			..Default::default()
+			extrinsics_root: Default::default(),
+			state_root: Default::default(),
+			parent_hash: Default::default(),
+			digest: Default::default(),
 		}
-	}
-}
-
-impl<'a> Deserialize<'a> for Header {
-	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
-		let r = <Vec<u8>>::deserialize(de)?;
-		Decode::decode(&mut &r[..])
-			.map_err(|e| DeError::custom(format!("Invalid value passed into decode: {}", e.what())))
 	}
 }
 

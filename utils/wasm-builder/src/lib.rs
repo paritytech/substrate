@@ -172,8 +172,8 @@ pub fn build_project_with_default_rustflags(
 		file_name.into(),
 		format!(
 			r#"
-				pub const WASM_BINARY: &[u8] = include_bytes!("{wasm_binary}");
-				pub const WASM_BINARY_BLOATY: &[u8] = include_bytes!("{wasm_binary_bloaty}");
+				pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
+				pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
 			"#,
 			wasm_binary = wasm_binary.wasm_binary_path_escaped(),
 			wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path_escaped(),
@@ -189,7 +189,7 @@ fn check_skip_build() -> bool {
 /// Write to the given `file` if the `content` is different.
 fn write_file_if_changed(file: PathBuf, content: String) {
 	if fs::read_to_string(&file).ok().as_ref() != Some(&content) {
-		fs::write(&file, content).expect(&format!("Writing `{}` can not fail!", file.display()));
+		fs::write(&file, content).unwrap_or_else(|_| panic!("Writing `{}` can not fail!", file.display()));
 	}
 }
 
@@ -200,7 +200,7 @@ fn copy_file_if_changed(src: PathBuf, dst: PathBuf) {
 
 	if src_file != dst_file {
 		fs::copy(&src, &dst)
-			.expect(&format!("Copying `{}` to `{}` can not fail; qed", src.display(), dst.display()));
+			.unwrap_or_else(|_| panic!("Copying `{}` to `{}` can not fail; qed", src.display(), dst.display()));
 	}
 }
 

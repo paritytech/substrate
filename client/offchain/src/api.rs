@@ -31,6 +31,7 @@ use sp_core::offchain::{
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
 pub use sp_offchain::STORAGE_PREFIX;
+pub use http::SharedClient;
 
 #[cfg(not(target_os = "unknown"))]
 mod http;
@@ -260,8 +261,9 @@ impl AsyncApi {
 		db: S,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
-	) -> (Api<S>, AsyncApi) {
-		let (http_api, http_worker) = http::http();
+		shared_client: SharedClient,
+	) -> (Api<S>, Self) {
+		let (http_api, http_worker) = http::http(shared_client);
 
 		let api = Api {
 			db,
@@ -270,7 +272,7 @@ impl AsyncApi {
 			http: http_api,
 		};
 
-		let async_api = AsyncApi {
+		let async_api = Self {
 			http: Some(http_worker),
 		};
 
@@ -308,11 +310,14 @@ mod tests {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
 		let mock = Arc::new(MockNetworkStateInfo());
+		let shared_client = SharedClient::new();
+
 
 		AsyncApi::new(
 			db,
 			mock,
 			false,
+			shared_client,
 		)
 	}
 
@@ -329,7 +334,7 @@ mod tests {
 
 		// Compare.
 		assert!(timestamp.unix_millis() > 0);
-		assert_eq!(timestamp.unix_millis(), d);
+		assert!(timestamp.unix_millis() >= d);
 	}
 
 	#[test]

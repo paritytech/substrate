@@ -2,7 +2,7 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'substrate_validator-a'
+  - job_name: 'substrate-nodes'
     static_configs:
       - targets: ['validator-a:9615']
         labels:

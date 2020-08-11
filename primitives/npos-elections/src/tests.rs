@@ -17,8 +17,6 @@
 
 //! Tests for npos-elections.
 
-#![cfg(test)]
-
 use crate::mock::*;
 use crate::{
 	seq_phragmen, balance_solution, build_support_map, is_score_better, helpers::*,
@@ -591,191 +589,345 @@ fn self_votes_should_be_kept() {
 }
 
 #[test]
-fn assignment_convert_works() {
-	let staked = StakedAssignment {
-		who: 1 as AccountId,
-		distribution: vec![
-			(20, 100 as ExtendedBalance),
-			(30, 25),
-		],
-	};
+fn duplicate_target_is_ignored() {
+	let candidates = vec![1, 2, 3];
+	let voters = vec![
+		(10, 100, vec![1, 1, 2, 3]),
+		(20, 100, vec![2, 3]),
+		(30, 50, vec![1, 1, 2]),
+	];
 
-	let assignment = staked.clone().into_assignment(true);
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
+		2,
+		2,
+		candidates,
+		voters,
+	).unwrap();
+	let winners = to_without_backing(winners);
+
+	assert_eq!(winners, vec![(2), (3)]);
 	assert_eq!(
-		assignment,
-		Assignment {
+		assignments
+			.into_iter()
+			.map(|x| (x.who, x.distribution.into_iter().map(|(w, _)| w).collect::<Vec<_>>()))
+			.collect::<Vec<_>>(),
+		vec![
+			(10, vec![2, 3]),
+			(20, vec![2, 3]),
+			(30, vec![2]),
+		],
+	);
+}
+
+#[test]
+fn duplicate_target_is_ignored_when_winner() {
+	let candidates = vec![1, 2, 3];
+	let voters = vec![
+		(10, 100, vec![1, 1, 2, 3]),
+		(20, 100, vec![1, 2]),
+	];
+
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
+		2,
+		2,
+		candidates,
+		voters,
+	).unwrap();
+	let winners = to_without_backing(winners);
+
+	assert_eq!(winners, vec![1, 2]);
+	assert_eq!(
+		assignments
+			.into_iter()
+			.map(|x| (x.who, x.distribution.into_iter().map(|(w, _)| w).collect::<Vec<_>>()))
+			.collect::<Vec<_>>(),
+		vec![
+			(10, vec![1, 2]),
+			(20, vec![1, 2]),
+		],
+	);
+}
+
+mod assignment_convert_normalize {
+	use super::*;
+	#[test]
+	fn assignment_convert_works() {
+		let staked = StakedAssignment {
+			who: 1 as AccountId,
+			distribution: vec![
+				(20, 100 as ExtendedBalance),
+				(30, 25),
+			],
+		};
+
+		let assignment = staked.clone().into_assignment();
+		assert_eq!(
+			assignment,
+			Assignment {
+				who: 1,
+				distribution: vec![
+					(20, Perbill::from_percent(80)),
+					(30, Perbill::from_percent(20)),
+				]
+			}
+		);
+
+		assert_eq!(
+			assignment.into_staked(125),
+			staked,
+		);
+	}
+
+	#[test]
+	fn assignment_convert_will_not_normalize() {
+		assert_eq!(
+			Assignment {
+				who: 1,
+				distribution: vec![
+					(2, Perbill::from_percent(33)),
+					(3, Perbill::from_percent(66)),
+				]
+			}.into_staked(100),
+			StakedAssignment {
+				who: 1,
+				distribution: vec![
+					(2, 33),
+					(3, 66),
+					// sum is not 100!
+				],
+			},
+		);
+
+		assert_eq!(
+			StakedAssignment {
+				who: 1,
+				distribution: vec![
+					(2, 333_333_333_333_333),
+					(3, 333_333_333_333_333),
+					(4, 666_666_666_666_333),
+				],
+			}.into_assignment(),
+			Assignment {
+				who: 1,
+				distribution: vec![
+					(2, Perbill::from_parts(250000000)),
+					(3, Perbill::from_parts(250000000)),
+					(4, Perbill::from_parts(499999999)),
+					// sum is not 100%!
+				]
+			},
+		)
+	}
+
+	#[test]
+	fn assignment_can_normalize() {
+		let mut a = Assignment {
 			who: 1,
 			distribution: vec![
-				(20, Perbill::from_percent(80)),
-				(30, Perbill::from_percent(20)),
+				(2, Perbill::from_parts(330000000)),
+				(3, Perbill::from_parts(660000000)),
+				// sum is not 100%!
 			]
+		};
+		a.try_normalize().unwrap();
+		assert_eq!(
+			a,
+			Assignment {
+				who: 1,
+				distribution: vec![
+					(2, Perbill::from_parts(340000000)),
+					(3, Perbill::from_parts(660000000)),
+				]
+			},
+		);
+	}
+
+	#[test]
+	fn staked_assignment_can_normalize() {
+		let mut a = StakedAssignment {
+			who: 1,
+			distribution: vec![
+				(2, 33),
+				(3, 66),
+			]
+		};
+		a.try_normalize(100).unwrap();
+		assert_eq!(
+			a,
+			StakedAssignment {
+				who: 1,
+				distribution: vec![
+					(2, 34),
+					(3, 66),
+				]
+			},
+		);
+	}
+}
+
+mod score {
+	use super::*;
+	#[test]
+	fn score_comparison_is_lexicographical_no_epsilon() {
+		let epsilon = Perbill::zero();
+		// only better in the fist parameter, worse in the other two ✅
+		assert_eq!(
+			is_score_better([12, 10, 35], [10, 20, 30], epsilon),
+			true,
+		);
+
+		// worse in the first, better in the other two ❌
+		assert_eq!(
+			is_score_better([9, 30, 10], [10, 20, 30], epsilon),
+			false,
+		);
+
+		// equal in the first, the second one dictates.
+		assert_eq!(
+			is_score_better([10, 25, 40], [10, 20, 30], epsilon),
+			true,
+		);
+
+		// equal in the first two, the last one dictates.
+		assert_eq!(
+			is_score_better([10, 20, 40], [10, 20, 30], epsilon),
+			false,
+		);
+	}
+
+	#[test]
+	fn score_comparison_with_epsilon() {
+		let epsilon = Perbill::from_percent(1);
+
+		{
+			// no more than 1 percent (10) better in the first param.
+			assert_eq!(
+				is_score_better([1009, 5000, 100000], [1000, 5000, 100000], epsilon),
+				false,
+			);
+
+			// now equal, still not better.
+			assert_eq!(
+				is_score_better([1010, 5000, 100000], [1000, 5000, 100000], epsilon),
+				false,
+			);
+
+			// now it is.
+			assert_eq!(
+				is_score_better([1011, 5000, 100000], [1000, 5000, 100000], epsilon),
+				true,
+			);
 		}
-	);
 
-	assert_eq!(
-		assignment.into_staked(125, true),
-		staked,
-	);
-}
+		{
+			// First score score is epsilon better, but first score is no longer `ge`. Then this is
+			// still not a good solution.
+			assert_eq!(
+				is_score_better([999, 6000, 100000], [1000, 5000, 100000], epsilon),
+				false,
+			);
+		}
 
-#[test]
-fn score_comparison_is_lexicographical_no_epsilon() {
-	let epsilon = Perbill::zero();
-	// only better in the fist parameter, worse in the other two ✅
-	assert_eq!(
-		is_score_better([12, 10, 35], [10, 20, 30], epsilon),
-		true,
-	);
+		{
+			// first score is equal or better, but not epsilon. Then second one is the determinant.
+			assert_eq!(
+				is_score_better([1005, 5000, 100000], [1000, 5000, 100000], epsilon),
+				false,
+			);
 
-	// worse in the first, better in the other two ❌
-	assert_eq!(
-		is_score_better([9, 30, 10], [10, 20, 30], epsilon),
-		false,
-	);
+			assert_eq!(
+				is_score_better([1005, 5050, 100000], [1000, 5000, 100000], epsilon),
+				false,
+			);
 
-	// equal in the first, the second one dictates.
-	assert_eq!(
-		is_score_better([10, 25, 40], [10, 20, 30], epsilon),
-		true,
-	);
+			assert_eq!(
+				is_score_better([1005, 5051, 100000], [1000, 5000, 100000], epsilon),
+				true,
+			);
+		}
 
-	// equal in the first two, the last one dictates.
-	assert_eq!(
-		is_score_better([10, 20, 40], [10, 20, 30], epsilon),
-		false,
-	);
-}
+		{
+			// first score and second are equal or less than epsilon more, third is determinant.
+			assert_eq!(
+				is_score_better([1005, 5025, 100000], [1000, 5000, 100000], epsilon),
+				false,
+			);
 
-#[test]
-fn score_comparison_with_epsilon() {
-	let epsilon = Perbill::from_percent(1);
+			assert_eq!(
+				is_score_better([1005, 5025, 99_000], [1000, 5000, 100000], epsilon),
+				false,
+			);
 
-	{
-		// no more than 1 percent (10) better in the first param.
+			assert_eq!(
+				is_score_better([1005, 5025, 98_999], [1000, 5000, 100000], epsilon),
+				true,
+			);
+		}
+	}
+
+	#[test]
+	fn score_comparison_large_value() {
+		// some random value taken from eras in kusama.
+		let initial = [12488167277027543u128, 5559266368032409496, 118749283262079244270992278287436446];
+		// this claim is 0.04090% better in the third component. It should be accepted as better if
+		// epsilon is smaller than 5/10_0000
+		let claim = [12488167277027543u128, 5559266368032409496, 118700736389524721358337889258988054];
+
 		assert_eq!(
-			is_score_better([1009, 5000, 100000], [1000, 5000, 100000], epsilon),
-			false,
-		);
-
-		// now equal, still not better.
-		assert_eq!(
-			is_score_better([1010, 5000, 100000], [1000, 5000, 100000], epsilon),
-			false,
-		);
-
-		// now it is.
-		assert_eq!(
-			is_score_better([1011, 5000, 100000], [1000, 5000, 100000], epsilon),
+			is_score_better(
+				claim.clone(),
+				initial.clone(),
+				Perbill::from_rational_approximation(1u32, 10_000),
+			),
 			true,
 		);
-	}
-
-	{
-		// First score score is epsilon better, but first score is no longer `ge`. Then this is
-		// still not a good solution.
-		assert_eq!(
-			is_score_better([999, 6000, 100000], [1000, 5000, 100000], epsilon),
-			false,
-		);
-	}
-
-	{
-		// first score is equal or better, but not epsilon. Then second one is the determinant.
-		assert_eq!(
-			is_score_better([1005, 5000, 100000], [1000, 5000, 100000], epsilon),
-			false,
-		);
 
 		assert_eq!(
-			is_score_better([1005, 5050, 100000], [1000, 5000, 100000], epsilon),
-			false,
-		);
-
-		assert_eq!(
-			is_score_better([1005, 5051, 100000], [1000, 5000, 100000], epsilon),
+			is_score_better(
+				claim.clone(),
+				initial.clone(),
+				Perbill::from_rational_approximation(2u32, 10_000),
+			),
 			true,
 		);
-	}
-
-	{
-		// first score and second are equal or less than epsilon more, third is determinant.
-		assert_eq!(
-			is_score_better([1005, 5025, 100000], [1000, 5000, 100000], epsilon),
-			false,
-		);
 
 		assert_eq!(
-			is_score_better([1005, 5025, 99_000], [1000, 5000, 100000], epsilon),
-			false,
-		);
-
-		assert_eq!(
-			is_score_better([1005, 5025, 98_999], [1000, 5000, 100000], epsilon),
+			is_score_better(
+				claim.clone(),
+				initial.clone(),
+				Perbill::from_rational_approximation(3u32, 10_000),
+			),
 			true,
 		);
+
+		assert_eq!(
+			is_score_better(
+				claim.clone(),
+				initial.clone(),
+				Perbill::from_rational_approximation(4u32, 10_000),
+			),
+			true,
+		);
+
+		assert_eq!(
+			is_score_better(
+				claim.clone(),
+				initial.clone(),
+				Perbill::from_rational_approximation(5u32, 10_000),
+			),
+			false,
+		);
 	}
-}
-
-#[test]
-fn score_comparison_large_value() {
-	// some random value taken from eras in kusama.
-	let initial = [12488167277027543u128, 5559266368032409496, 118749283262079244270992278287436446];
-	// this claim is 0.04090% better in the third component. It should be accepted as better if
-	// epsilon is smaller than 5/10_0000
-	let claim = [12488167277027543u128, 5559266368032409496, 118700736389524721358337889258988054];
-
-	assert_eq!(
-		is_score_better(
-			claim.clone(),
-			initial.clone(),
-			Perbill::from_rational_approximation(1u32, 10_000),
-		),
-		true,
-	);
-
-	assert_eq!(
-		is_score_better(
-			claim.clone(),
-			initial.clone(),
-			Perbill::from_rational_approximation(2u32, 10_000),
-		),
-		true,
-	);
-
-	assert_eq!(
-		is_score_better(
-			claim.clone(),
-			initial.clone(),
-			Perbill::from_rational_approximation(3u32, 10_000),
-		),
-		true,
-	);
-
-	assert_eq!(
-		is_score_better(
-			claim.clone(),
-			initial.clone(),
-			Perbill::from_rational_approximation(4u32, 10_000),
-		),
-		true,
-	);
-
-	assert_eq!(
-		is_score_better(
-			claim.clone(),
-			initial.clone(),
-			Perbill::from_rational_approximation(5u32, 10_000),
-		),
-		false,
-	);
 }
 
 mod compact {
 	use codec::{Decode, Encode};
-	use crate::{generate_compact_solution_type, VoteWeight};
-	use super::{AccountId};
+	use super::AccountId;
 	// these need to come from the same dev-dependency `sp-npos-elections`, not from the crate.
-	use sp_npos_elections::{Assignment, StakedAssignment, Error as PhragmenError, ExtendedBalance};
+	use crate::{
+		generate_compact_solution_type, VoteWeight, Assignment, StakedAssignment,
+		Error as PhragmenError, ExtendedBalance,
+	};
 	use sp_std::{convert::{TryInto, TryFrom}, fmt::Debug};
 	use sp_arithmetic::Percent;
 

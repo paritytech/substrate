@@ -130,6 +130,8 @@ pub enum Error {
 	IncompletePipeline,
 	#[display(fmt = "Transaction pool not ready for block production.")]
 	TransactionPoolNotReady,
+	#[display(fmt = "Database: {}", _0)]
+	DatabaseError(sp_database::error::DatabaseError),
 	/// A convenience variant for String
 	#[display(fmt = "{}", _0)]
 	Msg(String),

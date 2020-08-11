@@ -200,16 +200,14 @@ mod tests {
 		AccountKeyring::*,
 		TestClientBuilder,
 	};
-	use sc_transaction_pool::{
-		BasicPool,
-		txpool::Options,
-	};
+	use sc_transaction_pool::{BasicPool, RevalidationType, txpool::Options};
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use sp_transaction_pool::{TransactionPool, MaintainedTransactionPool, TransactionSource};
 	use sp_runtime::generic::BlockId;
 	use sp_consensus::ImportedAux;
 	use sp_inherents::InherentDataProviders;
 	use sc_basic_authorship::ProposerFactory;
+	use sc_client_api::BlockBackend;
 
 	fn api() -> Arc<TestApi> {
 		Arc::new(TestApi::empty())
@@ -223,7 +221,10 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool = Arc::new(BasicPool::with_revalidation_type(
+			Options::default(), api(), None, RevalidationType::Full, spawner,
+		));
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone(),
@@ -288,7 +289,10 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool = Arc::new(BasicPool::with_revalidation_type(
+			Options::default(), api(), None, RevalidationType::Full, spawner,
+		));
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone(),
@@ -357,7 +361,10 @@ mod tests {
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
 		let pool_api = api();
-		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone(), None).0);
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool = Arc::new(BasicPool::with_revalidation_type(
+			Options::default(), pool_api.clone(), None, RevalidationType::Full, spawner,
+		));
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone(),
@@ -409,15 +416,13 @@ mod tests {
 				}
 			}
 		);
-		// assert that there's a new block in the db.
-		assert!(client.header(&BlockId::Number(0)).unwrap().is_some());
+		let block = client.block(&BlockId::Number(1)).unwrap().unwrap().block;
+		pool_api.add_block(block, true);
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 1)).await.is_ok());
 
 		let header = client.header(&BlockId::Number(1)).expect("db error").expect("imported above");
-		pool.maintain(sp_transaction_pool::ChainEvent::NewBlock {
+		pool.maintain(sp_transaction_pool::ChainEvent::NewBestBlock {
 			hash: header.hash(),
-			header,
-			is_new_best: true,
 			tree_route: None,
 		}).await;
 
@@ -432,10 +437,11 @@ mod tests {
 			rx1.await.expect("should be no error receiving"),
 			Ok(_)
 		);
-		assert!(client.header(&BlockId::Number(1)).unwrap().is_some());
+		let block = client.block(&BlockId::Number(2)).unwrap().unwrap().block;
+		pool_api.add_block(block, true);
 		pool_api.increment_nonce(Alice.into());
 
-		assert!(pool.submit_one(&BlockId::Number(2), SOURCE, uxt(Alice, 2)).await.is_ok());
+		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 2)).await.is_ok());
 		let (tx2, rx2) = futures::channel::oneshot::channel();
 		assert!(sink.send(EngineCommand::SealNewBlock {
 			parent_hash: Some(created_block.hash),

@@ -44,7 +44,9 @@ enum Mode {
 }
 
 pub fn new_test_ext(iterations: u32) -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default().build_storage::<mock::Test>().map(Into::into)
+	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default()
+		.build_storage::<mock::Test>()
+		.map(Into::into)
 		.expect("Failed to create test externalities.");
 
 	let (offchain, offchain_state) = TestOffchainExt::new();
@@ -70,26 +72,29 @@ fn main() {
 	loop {
 		fuzz!(|data: (u32, u32, u32, u32, u32)| {
 			let (mut num_validators, mut num_nominators, mut edge_per_voter, mut to_elect, mode_u32) = data;
+			// always run with 5 iterations.
 			let mut ext = new_test_ext(5);
 			let mode: Mode = unsafe { std::mem::transmute(mode_u32) };
 			num_validators = to_range(num_validators, 50, 1000);
 			num_nominators = to_range(num_nominators, 50, 2000);
 			edge_per_voter = to_range(edge_per_voter, 1, 16);
 			to_elect = to_range(to_elect, 20, num_validators);
+
 			let do_reduce = true;
 
-			println!("+++ instance with params {} / {} / {} / {:?}({}) / {}",
+			println!("+++ instance with params {} / {} / {} / {} / {:?}({})",
 				num_nominators,
 				num_validators,
 				edge_per_voter,
+				to_elect,
 				mode,
 				mode_u32,
-				to_elect,
 			);
 
 			ext.execute_with(|| {
 				// initial setup
 				init_active_era();
+
 				assert_ok!(create_validators_with_nominators_for_era::<Test>(
 					num_validators,
 					num_nominators,
@@ -97,11 +102,11 @@ fn main() {
 					true,
 					None,
 				));
+
 				<EraElectionStatus<Test>>::put(ElectionStatus::Open(1));
 				assert!(<Staking<Test>>::create_stakers_snapshot().0);
-				let origin = RawOrigin::Signed(create_funded_user::<Test>("fuzzer", 0, 100));
 
-				println!("++ Chain setup done.");
+				let origin = RawOrigin::Signed(create_funded_user::<Test>("fuzzer", 0, 100));
 
 				// stuff to submit
 				let (winners, compact, score, size) = match mode {
@@ -141,8 +146,6 @@ fn main() {
 					}
 				};
 
-				println!("++ Submission ready. Score = {:?}", score);
-
 				// must have chosen correct number of winners.
 				assert_eq!(winners.len() as u32, <Staking<Test>>::validator_count());
 
@@ -159,7 +162,7 @@ fn main() {
 				match mode {
 					Mode::WeakerSubmission => {
 						assert_eq!(
-							call.dispatch_bypass_filter(origin.clone().into()).unwrap_err().error,
+							call.dispatch_bypass_filter(origin.into()).unwrap_err().error,
 							DispatchError::Module {
 								index: 0,
 								error: 16,

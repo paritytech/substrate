@@ -25,6 +25,7 @@ use std::{
 
 use crate::{columns, Database, DbHash, Transaction};
 use parking_lot::Mutex;
+use log::error;
 
 /// Offchain local storage
 #[derive(Clone)]
@@ -64,7 +65,9 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		let mut tx = Transaction::new();
 		tx.set(columns::OFFCHAIN, &key, value);
 
-		self.db.commit(tx);
+		if let Err(err) = self.db.commit(tx) {
+			error!("Error setting on local storage: {}", err)
+		}
 	}
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
@@ -72,7 +75,9 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		let mut tx = Transaction::new();
 		tx.remove(columns::OFFCHAIN, &key);
 
-		self.db.commit(tx);
+		if let Err(err) = self.db.commit(tx) {
+			error!("Error removing on local storage: {}", err)
+		}
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {

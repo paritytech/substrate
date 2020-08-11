@@ -224,17 +224,19 @@ fn struct_def(
 }
 
 fn imports() -> Result<TokenStream2> {
-	let sp_phragmen_imports = match crate_name("sp-npos-elections") {
-		Ok(sp_npos_elections) => {
-			let ident = syn::Ident::new(&sp_npos_elections, Span::call_site());
-			quote!( extern crate #ident as _phragmen; )
+	if std::env::var("CARGO_PKG_NAME").unwrap() == "sp-npos-elections" {
+		Ok(quote! {
+			use crate as _phragmen;
+		})
+	} else {
+		match crate_name("sp-npos-elections") {
+			Ok(sp_npos_elections) => {
+				let ident = syn::Ident::new(&sp_npos_elections, Span::call_site());
+				Ok(quote!( extern crate #ident as _phragmen; ))
+			},
+			Err(e) => Err(syn::Error::new(Span::call_site(), &e)),
 		}
-		Err(e) => return Err(syn::Error::new(Span::call_site(), &e)),
-	};
-
-	Ok(quote!(
-		#sp_phragmen_imports
-	))
+	}
 }
 
 struct CompactSolutionDef {
