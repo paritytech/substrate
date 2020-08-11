@@ -591,8 +591,8 @@ mod tests {
 		pub const TransactionByteFee: Balance = 0;
 	}
 	impl pallet_transaction_payment::Trait for Runtime {
-		type Currency = Balances;
-		type OnTransactionPayment = ();
+		type Balance = Balance;
+		type OnChargeTransaction = (PhantomData<pallet_balances::Module<Runtime>>, PhantomData<()>);
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = IdentityFee<Balance>;
 		type FeeMultiplierUpdate = ();

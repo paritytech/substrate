@@ -227,6 +227,7 @@ pub trait OnChargeTransaction<T: Trait> {
 
 	fn finalize(
 		amount: Self::WithdrawAmount,
+		tip: T::Balance,
 	);
 }
 
@@ -294,9 +295,11 @@ where
 		}
 	}
 
-	fn finalize(amount: Self::WithdrawAmount) {
-		if let Some(_payed) = amount {
-			// pay out the MONEY! Call OU
+	fn finalize(amount: Self::WithdrawAmount, tip: T::Balance) {
+		if let Some(payed) = amount {
+			let imbalances = payed.split(tip);
+			OU::on_unbalanceds(Some(imbalances.0).into_iter()
+				.chain(Some(imbalances.1)));
 		}
 	}
 }
@@ -630,7 +633,7 @@ where
 		);
 		let refund = fee.saturating_sub(actual_fee);
 		let actual_payment = T::OnChargeTransaction::refund(&who, imbalance, refund)?;
-		T::OnChargeTransaction::finalize(actual_payment);
+		T::OnChargeTransaction::finalize(actual_payment, tip);
 		Ok(())
 	}
 }
