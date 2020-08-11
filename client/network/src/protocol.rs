@@ -761,7 +761,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			.contains(message::BlockAttributes::JUSTIFICATION);
 		let mut total_size = 0;
 		while let Some(header) = self.context_data.chain.header(id).unwrap_or(None) {
-			if blocks.len() >= max || total_size > MAX_BODIES_BYTES {
+			if blocks.len() >= max || (blocks.len() >= 1 && total_size > MAX_BODIES_BYTES) {
 				break;
 			}
 			let number = *header.number();
