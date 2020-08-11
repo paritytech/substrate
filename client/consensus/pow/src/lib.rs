@@ -229,8 +229,15 @@ impl<B, I, C, S, Algorithm, CAW> PowBlockImport<B, I, C, S, Algorithm, CAW> wher
 		inherent_data_providers: sp_inherents::InherentDataProviders,
 		can_author_with: CAW,
 	) -> Self {
-		Self { inner, client, algorithm, check_inherents_after,
-			   select_chain, inherent_data_providers, can_author_with, }
+		Self {
+			inner,
+			client,
+			algorithm,
+			check_inherents_after,
+			select_chain,
+			inherent_data_providers,
+			can_author_with,
+		}
 	}
 
 	fn check_inherents(
