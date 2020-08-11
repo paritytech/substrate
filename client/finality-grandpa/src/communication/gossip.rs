@@ -922,7 +922,7 @@ impl<Block: BlockT> Inner<Block> {
 			PendingCatchUp::Processing { .. } => {
 				self.pending_catch_up = PendingCatchUp::None;
 			},
-			state => trace!(target: "afg",
+			state => debug!(target: "afg",
 				"Noted processed catch up message when state was: {:?}",
 				state,
 			),
@@ -1043,7 +1043,7 @@ impl<Block: BlockT> Inner<Block> {
 				let (catch_up_allowed, catch_up_report) = self.note_catch_up_request(who, &request);
 
 				if catch_up_allowed {
-					trace!(target: "afg", "Sending catch-up request for round {} to {}",
+					debug!(target: "afg", "Sending catch-up request for round {} to {}",
 						   round,
 						   who,
 					);
