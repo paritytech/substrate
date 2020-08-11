@@ -1048,7 +1048,11 @@ pub trait WasmTracing {
 }
 
 
+#[cfg(no_std)]
+/// The PassingTracingSubscriber implements `sp_tracing::TracingSubscriber`
+/// and pushes the information accross the runtime interface to the host
 pub struct PassingTracingSubsciber;
+#[cfg(no_std)]
 impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
 	fn enabled(&self, metadata: sp_tracing::WasmMetadata) -> bool {
 		wasm_tracing::enabled(Crossing(metadata))
