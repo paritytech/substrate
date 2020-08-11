@@ -108,7 +108,8 @@ Substrate-based blockchain nodes expose a number of capabilities:
 -   Consensus: Blockchains must have a way to come to
     [consensus](https://substrate.dev/docs/en/knowledgebase/advanced/consensus) on the state of the
     network. Substrate makes it possible to supply custom consensus engines and also ships with
-    several consensus mechanisms that have been built on top of Web3 Foundation research.
+    several consensus mechanisms that have been built on top of
+    [Web3 Foundation research](https://research.web3.foundation/en/latest/polkadot/NPoS/index.html).
 -   RPC Server: A remote procedure call (RPC) server is used to interact with Substrate nodes.
 
 There are several files in the `node` directory - take special note of the following:
@@ -140,12 +141,17 @@ capabilities and configuration parameters that it exposes:
 
 ### Runtime
 
-The Substrate project in this repository uses the
-[FRAME](https://substrate.dev/docs/en/knowledgebase/runtime/frame) framework to construct a
+In Substrate, the terms
+"[runtime](https://substrate.dev/docs/en/knowledgebase/getting-started/glossary#runtime)" and
+"[state transition function](https://substrate.dev/docs/en/knowledgebase/getting-started/glossary#stf-state-transition-function)"
+are analogous - they refer to the core logic of the blockchain that is responsible for validating
+blocks and executing the state changes they define. The Substrate project in this repository uses
+the [FRAME](https://substrate.dev/docs/en/knowledgebase/runtime/frame) framework to construct a
 blockchain runtime. FRAME allows runtime developers to declare domain-specific logic in modules
 called "pallets". At the heart of FRAME is a helpful
 [macro language](https://substrate.dev/docs/en/knowledgebase/runtime/macros) that makes it easy to
-create pallets and flexibly compose them to create blockchains that can address a variety of needs.
+create pallets and flexibly compose them to create blockchains that can address
+[a variety of needs](https://www.substrate.io/substrate-users/).
 
 Review the [FRAME runtime implementation](./runtime/src/lib.rs) included in this template and note
 the following:

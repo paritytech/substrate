@@ -632,6 +632,23 @@ mod tests {
 	}
 
 	#[test]
+	fn double_map_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			type DoubleMap = DataDM;
+
+			let (key1, key2) = (11, 13);
+
+			// mutated
+			DoubleMap::mutate_exists(key1, key2, |v| *v = Some(1));
+			assert_eq!(DoubleMap::get(&key1, key2), 1);
+
+			// removed if mutated to `None`
+			DoubleMap::mutate_exists(key1, key2, |v| *v = None);
+			assert!(!DoubleMap::contains_key(&key1, key2));
+		});
+	}
+
+	#[test]
 	fn double_map_try_mutate_exists_should_work() {
 		new_test_ext().execute_with(|| {
 			type DoubleMap = DataDM;

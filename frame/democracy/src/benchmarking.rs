@@ -31,7 +31,6 @@ use crate::Module as Democracy;
 
 const SEED: u32 = 0;
 const MAX_REFERENDUMS: u32 = 100;
-const MAX_PROPOSALS: u32 = 100;
 const MAX_SECONDERS: u32 = 100;
 const MAX_BYTES: u32 = 16_384;
 
@@ -101,21 +100,12 @@ benchmarks! {
 	_ { }
 
 	propose {
-		let p in 1 .. MAX_PROPOSALS;
-
-		// Add p proposals
-		for i in 0 .. p {
-			add_proposal::<T>(i)?;
-		}
-
-		assert_eq!(Democracy::<T>::public_props().len(), p as usize, "Proposals not created.");
-
 		let caller = funded_account::<T>("caller", 0);
-		let proposal_hash: T::Hash = T::Hashing::hash_of(&p);
+		let proposal_hash: T::Hash = T::Hashing::hash_of(&0);
 		let value = T::MinimumDeposit::get();
 	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
 	verify {
-		assert_eq!(Democracy::<T>::public_props().len(), (p + 1) as usize, "Proposals not created.");
+		assert_eq!(Democracy::<T>::public_props().len(), 1, "Proposals not created.");
 	}
 
 	second {
@@ -206,18 +196,8 @@ benchmarks! {
 	}
 
 	emergency_cancel {
-		let r in 1 .. MAX_REFERENDUMS;
 		let origin = T::CancellationOrigin::successful_origin();
-
-		// Create and cancel a bunch of referendums
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			let call = Call::<T>::emergency_cancel(ref_idx);
-			call.dispatch_bypass_filter(origin.clone())?;
-		}
-
-		// Lets now measure one more
-		let referendum_index = add_referendum::<T>(r)?;
+		let referendum_index = add_referendum::<T>(0)?;
 		let call = Call::<T>::emergency_cancel(referendum_index);
 		assert!(Democracy::<T>::referendum_status(referendum_index).is_ok());
 	}: { call.dispatch_bypass_filter(origin)? }
@@ -228,11 +208,10 @@ benchmarks! {
 
 	// Worst case scenario, we external propose a previously blacklisted proposal
 	external_propose {
-		let p in 1 .. MAX_PROPOSALS;
 		let v in 1 .. MAX_VETOERS as u32;
 
 		let origin = T::ExternalOrigin::successful_origin();
-		let proposal_hash = T::Hashing::hash_of(&p);
+		let proposal_hash = T::Hashing::hash_of(&0);
 		// Add proposal to blacklist with block number 0
 		Blacklist::<T>::insert(
 			proposal_hash,
@@ -247,10 +226,8 @@ benchmarks! {
 	}
 
 	external_propose_majority {
-		let p in 1 .. MAX_PROPOSALS;
-
 		let origin = T::ExternalMajorityOrigin::successful_origin();
-		let proposal_hash = T::Hashing::hash_of(&p);
+		let proposal_hash = T::Hashing::hash_of(&0);
 		let call = Call::<T>::external_propose_majority(proposal_hash);
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -259,10 +236,8 @@ benchmarks! {
 	}
 
 	external_propose_default {
-		let p in 1 .. MAX_PROPOSALS;
-
 		let origin = T::ExternalDefaultOrigin::successful_origin();
-		let proposal_hash = T::Hashing::hash_of(&p);
+		let proposal_hash = T::Hashing::hash_of(&0);
 		let call = Call::<T>::external_propose_default(proposal_hash);
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -271,10 +246,8 @@ benchmarks! {
 	}
 
 	fast_track {
-		let p in 1 .. MAX_PROPOSALS;
-
 		let origin_propose = T::ExternalDefaultOrigin::successful_origin();
-		let proposal_hash: T::Hash = T::Hashing::hash_of(&p);
+		let proposal_hash: T::Hash = T::Hashing::hash_of(&0);
 		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
 
 		// NOTE: Instant origin may invoke a little bit more logic, but may not always succeed.
@@ -315,24 +288,21 @@ benchmarks! {
 	}
 
 	cancel_referendum {
-		let r in 0 .. MAX_REFERENDUMS;
-		// Should have no effect on the execution time.
-		for i in 0..r {
-			add_referendum::<T>(i)?;
-		}
-		let referendum_index = add_referendum::<T>(r)?;
+		let referendum_index = add_referendum::<T>(0)?;
 	}: _(RawOrigin::Root, referendum_index)
 
 	cancel_queued {
 		let r in 1 .. MAX_REFERENDUMS;
-		// Should have no effect on the execution time.
+
 		for i in 0..r {
-			add_referendum::<T>(i)?;
+			add_referendum::<T>(i)?; // This add one element in the scheduler
 		}
+
 		let referendum_index = add_referendum::<T>(r)?;
 	}: _(RawOrigin::Root, referendum_index)
 
 	// Note that we have a separate benchmark for `launch_next`
+	#[extra]
 	on_initialize_external {
 		let r in 0 .. MAX_REFERENDUMS;
 
@@ -371,6 +341,7 @@ benchmarks! {
 		}
 	}
 
+	#[extra]
 	on_initialize_public {
 		let r in 1 .. MAX_REFERENDUMS;
 
@@ -401,7 +372,8 @@ benchmarks! {
 		}
 	}
 
-	on_initialize_no_launch_no_maturing {
+	// No launch no maturing referenda.
+	on_initialize_base {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		for i in 0..r {
@@ -526,11 +498,7 @@ benchmarks! {
 	}
 
 	clear_public_proposals {
-		let p in 0 .. MAX_PROPOSALS;
-
-		for i in 0 .. p {
-			add_proposal::<T>(i)?;
-		}
+		add_proposal::<T>(0)?;
 
 	}: _(RawOrigin::Root)
 
@@ -687,41 +655,36 @@ benchmarks! {
 		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
 	}
 
+	// Worst case is when target == caller and referendum is ongoing
 	remove_other_vote {
 		let r in 1 .. MAX_REFERENDUMS;
 
-		let other = funded_account::<T>("other", r);
+		let caller = funded_account::<T>("caller", r);
 		let account_vote = account_vote::<T>(100.into());
 
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(other.clone()).into(), ref_idx, account_vote.clone())?;
+			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
 		}
 
-		let votes = match VotingOf::<T>::get(&other) {
+		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
 			_ => return Err("Votes are not direct"),
 		};
 		assert_eq!(votes.len(), r as usize, "Votes not created");
 
 		let referendum_index = r - 1;
-		ReferendumInfoOf::<T>::insert(
-			referendum_index,
-			ReferendumInfo::Finished { end: T::BlockNumber::zero(), approved: true }
-		);
-		let caller = funded_account::<T>("caller", 0);
 
-		System::<T>::set_block_number(T::EnactmentPeriod::get() * 10u32.into());
-
-	}: _(RawOrigin::Signed(caller), other.clone(), referendum_index)
+	}: _(RawOrigin::Signed(caller.clone()), caller.clone(), referendum_index)
 	verify {
-		let votes = match VotingOf::<T>::get(&other) {
+		let votes = match VotingOf::<T>::get(&caller) {
 			Voting::Direct { votes, .. } => votes,
 			_ => return Err("Votes are not direct"),
 		};
 		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
 	}
 
+	#[extra]
 	enact_proposal_execute {
 		// Num of bytes in encoded proposal
 		let b in 0 .. MAX_BYTES;
@@ -743,6 +706,7 @@ benchmarks! {
 		assert_last_event::<T>(RawEvent::Executed(0, false).into());
 	}
 
+	#[extra]
 	enact_proposal_slash {
 		// Num of bytes in encoded proposal
 		let b in 0 .. MAX_BYTES;
@@ -788,7 +752,7 @@ mod tests {
 			assert_ok!(test_benchmark_cancel_queued::<Test>());
 			assert_ok!(test_benchmark_on_initialize_external::<Test>());
 			assert_ok!(test_benchmark_on_initialize_public::<Test>());
-			assert_ok!(test_benchmark_on_initialize_no_launch_no_maturing::<Test>());
+			assert_ok!(test_benchmark_on_initialize_base::<Test>());
 			assert_ok!(test_benchmark_delegate::<Test>());
 			assert_ok!(test_benchmark_undelegate::<Test>());
 			assert_ok!(test_benchmark_clear_public_proposals::<Test>());

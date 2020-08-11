@@ -1,0 +1,29 @@
+[{
+	"project_name": "Networking",
+	"owner": "tomaka",
+	"matrix_room_id": "!vUADSGcyXmxhKLeDsW:matrix.parity.io"
+},
+{	"project_name": "Client",
+	"owner": "gnunicorn",
+	"matrix_room_id": "!aenJixaHcSKbJOWxYk:matrix.parity.io"
+},
+{
+	"project_name": "Runtime",
+	"owner": "gavofyork",
+	"matrix_room_id": "!yBKstWVBkwzUkPslsp:matrix.parity.io"
+},
+{
+	"project_name": "Consensus",
+	"owner": "andresilva",
+	"matrix_room_id": "!XdNWDTfVNFVixljKZU:matrix.parity.io"
+},
+{
+	"project_name": "Smart Contracts",
+	"owner": "pepyakin",
+	"matrix_room_id": "!yBKstWVBkwzUkPslsp:matrix.parity.io"
+},
+{
+	"project_name": "Benchmarking and Weights",
+	"owner": "shawntabrizi",
+	"matrix_room_id": "!pZPWqCRLVtORZTEsEf:matrix.parity.io"
+}]

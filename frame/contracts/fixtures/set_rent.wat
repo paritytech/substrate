@@ -1,14 +1,14 @@
 (module
-	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
-	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
-	(import "env" "ext_clear_storage" (func $ext_clear_storage (param i32)))
-	(import "env" "ext_set_rent_allowance" (func $ext_set_rent_allowance (param i32 i32)))
-	(import "env" "ext_input" (func $ext_input (param i32 i32)))
+	(import "seal0" "seal_transfer" (func $seal_transfer (param i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32)))
+	(import "seal0" "seal_clear_storage" (func $seal_clear_storage (param i32)))
+	(import "seal0" "seal_set_rent_allowance" (func $seal_set_rent_allowance (param i32 i32)))
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; insert a value of 4 bytes into storage
 	(func $call_0
-		(call $ext_set_storage
+		(call $seal_set_storage
 			(i32.const 1)
 			(i32.const 0)
 			(i32.const 4)
@@ -17,14 +17,19 @@
 
 	;; remove the value inserted by call_1
 	(func $call_1
-		(call $ext_clear_storage
+		(call $seal_clear_storage
 			(i32.const 1)
 		)
 	)
 
 	;; transfer 50 to CHARLIE
 	(func $call_2
-		(call $ext_transfer (i32.const 68) (i32.const 8) (i32.const 76) (i32.const 8))
+		(call $assert
+			(i32.eq
+				(call $seal_transfer (i32.const 68) (i32.const 8) (i32.const 76) (i32.const 8))
+				(i32.const 0)
+			)
+		)
 	)
 
 	;; do nothing
@@ -43,7 +48,7 @@
 	(func (export "call")
 		(local $input_size i32)
 		(i32.store (i32.const 64) (i32.const 64))
-		(call $ext_input (i32.const 1024) (i32.const 64))
+		(call $seal_input (i32.const 1024) (i32.const 64))
 		(set_local $input_size
 			(i32.load (i32.const 64))
 		)
@@ -71,16 +76,16 @@
 	;; Set into storage a 4 bytes value
 	;; Set call set_rent_allowance with input
 	(func (export "deploy")
-		(call $ext_set_storage
+		(call $seal_set_storage
 			(i32.const 0)
 			(i32.const 0)
 			(i32.const 4)
 		)
-		(call $ext_input
+		(call $seal_input
 			(i32.const 0)
 			(i32.const 64)
 		)
-		(call $ext_set_rent_allowance
+		(call $seal_set_rent_allowance
 			(i32.const 0)
 			(i32.load (i32.const 64))
 		)

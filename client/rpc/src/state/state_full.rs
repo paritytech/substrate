@@ -373,7 +373,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 
 	fn subscribe_runtime_version(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<RuntimeVersion>,
 	) {
 		let stream = match self.client.storage_changes_notification_stream(
@@ -424,7 +424,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 
 	fn unsubscribe_runtime_version(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
@@ -432,7 +432,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 
 	fn subscribe_storage(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
 		keys: Option<Vec<StorageKey>>,
 	) {
@@ -484,7 +484,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 
 	fn unsubscribe_storage(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))

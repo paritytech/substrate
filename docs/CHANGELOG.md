@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+Client
+------
+
+* Child nodes can be handled by adding a child `TaskManager` to the parent's `TaskManager` (#6771)
+
 ## 2.0.0-rc4 -> 2.0.0-rc5 – River Dolphin
 
 Runtime

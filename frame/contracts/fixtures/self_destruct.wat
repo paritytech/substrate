@@ -1,11 +1,11 @@
 (module
-	(import "env" "ext_input" (func $ext_input (param i32 i32)))
-	(import "env" "ext_address" (func $ext_address (param i32 i32)))
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_terminate" (func $ext_terminate (param i32 i32)))
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "seal0" "seal_address" (func $seal_address (param i32 i32)))
+	(import "seal0" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_terminate" (func $seal_terminate (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; [0, 8) reserved for $ext_address output
+	;; [0, 8) reserved for $seal_address output
 
 	;; [8, 16) length of the buffer
 	(data (i32.const 8) "\08")
@@ -13,7 +13,7 @@
 	;; [16, 24) Address of django
 	(data (i32.const 16) "\04\00\00\00\00\00\00\00")
 
-	;; [24, 32) reserved for output of $ext_input
+	;; [24, 32) reserved for output of $seal_input
 
 	;; [32, 36) length of the buffer
 	(data (i32.const 32) "\04")
@@ -36,10 +36,10 @@
 		;; This should trap instead of self-destructing since a contract cannot be removed live in
 		;; the execution stack cannot be removed. If the recursive call traps, then trap here as
 		;; well.
-		(call $ext_input (i32.const 24) (i32.const 32))
+		(call $seal_input (i32.const 24) (i32.const 32))
 		(if (i32.load (i32.const 32))
 			(then
-				(call $ext_address (i32.const 0) (i32.const 8))
+				(call $seal_address (i32.const 0) (i32.const 8))
 
 				;; Expect address to be 8 bytes.
 				(call $assert
@@ -52,7 +52,7 @@
 				;; Recursively call self with empty input data.
 				(call $assert
 					(i32.eq
-						(call $ext_call
+						(call $seal_call
 							(i32.const 0)	;; Pointer to own address
 							(i32.const 8)	;; Length of own address
 							(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
@@ -69,11 +69,11 @@
 			)
 			(else
 				;; Try to terminate and give balance to django.
-				(call $ext_terminate
+				(call $seal_terminate
 					(i32.const 16)	;; Pointer to beneficiary address
 					(i32.const 8)	;; Length of beneficiary address
 				)
-				(unreachable) ;; ext_terminate never returns
+				(unreachable) ;; seal_terminate never returns
 			)
 		)
 	)
