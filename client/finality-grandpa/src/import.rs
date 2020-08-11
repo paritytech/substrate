@@ -18,7 +18,7 @@
 
 use std::{sync::Arc, collections::HashMap};
 
-use log::{debug, trace};
+use log::debug;
 use parity_scale_codec::Encode;
 use parking_lot::RwLockWriteGuard;
 
