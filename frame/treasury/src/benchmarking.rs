@@ -349,7 +349,8 @@ benchmarks! {
 	}: _(RawOrigin::Signed(curator), bounty_id, Vec::new())
 
 	update_bounty_value_minimum {
-	}: _(RawOrigin::Root, 100.into())
+		let minimum_balance = T::Currency::minimum_balance();
+	}: _(RawOrigin::Root, minimum_balance.into())
 
 	on_initialize_proposals {
 		let p in 0 .. 100;
