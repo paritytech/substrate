@@ -448,6 +448,8 @@ ss58_address_format!(
 		(20, "stafi", "Stafi mainnet, standard account (*25519).")
 	SubsocialAccount =>
 		(28, "subsocial", "Subsocial network, standard account (*25519).")
+	PhalaAccount =>
+		(30, "phala", "Phala Network, standard account (*25519).")
 	RobonomicsAccount =>
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>
