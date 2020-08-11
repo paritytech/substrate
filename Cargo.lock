@@ -6705,6 +6705,7 @@ name = "sc-network"
 version = "0.8.0-rc5"
 dependencies = [
  "assert_matches",
+ "async-std",
  "bitflags",
  "bs58",
  "bytes 0.5.4",
