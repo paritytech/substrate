@@ -226,7 +226,7 @@ decl_storage! {
 		// ---- State
 		/// The current elected membership. Sorted based on account id.
 		pub Members get(fn members): Vec<(T::AccountId, BalanceOf<T>)>;
-		/// The current runners_up. Sorted based on low to high merit (worse to best runner).
+		/// The current runners_up. Sorted based on low to high merit (worse to best).
 		pub RunnersUp get(fn runners_up): Vec<(T::AccountId, BalanceOf<T>)>;
 		/// The total number of vote rounds that have happened, excluding the upcoming one.
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
