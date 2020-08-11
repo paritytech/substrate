@@ -101,10 +101,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
-	) -> FutureResult<Option<u64>> {
-		Box::new(self.storage(block, key)
-			.map(|x| x.map(|x| x.0.len() as u64)))
-	}
+	) -> FutureResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes>;
