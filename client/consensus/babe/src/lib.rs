@@ -920,7 +920,8 @@ where
 	}
 }
 
-impl<Block, Client, SelectChain, CAW> Verifier<Block> for BabeVerifier<Block, Client, SelectChain, CAW>
+impl<Block, Client, SelectChain, CAW> Verifier<Block>
+	for BabeVerifier<Block, Client, SelectChain, CAW>
 where
 	Block: BlockT,
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
