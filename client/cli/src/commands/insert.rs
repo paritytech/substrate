@@ -48,6 +48,10 @@ pub struct InsertCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
+	pub keystore_params: KeystoreParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
 	pub crypto_scheme: CryptoSchemeFlag,
 }
 
@@ -78,7 +82,9 @@ impl InsertCmd {
 
 		keystore.write()
 			.insert_unknown(key_type, &suri, &public[..])
-			.map_err(|e| Error::Other(format!("{:?}", e)))
+			.map_err(|e| Error::Other(format!("{:?}", e)))?;
+
+		Ok(())
 	}
 }
 
