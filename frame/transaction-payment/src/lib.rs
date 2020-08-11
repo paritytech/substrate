@@ -210,27 +210,40 @@ impl Default for Releases {
 	}
 }
 
+/// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeTransaction<T: Trait> {
 	type WithdrawAmount: Default;
 
+	/// Withdraw the transaction fee from a specific account. The sender of the transaction may also indicate that they
+	/// want to pay a tip to the block author.
+	/// A tuple containing the deducted balance and some state information for handling the deducted amount.
 	fn withdraw(
 		who: &T::AccountId,
 		fee: T::Balance,
 		tip: T::Balance,
 	) -> Result<(T::Balance, Self::WithdrawAmount), TransactionValidityError>;
 
+	/// After executing the transaction, the fee may be adjusted to the actual cost. In that case parts of the fee may be refunded.
+	/// Refunding parts of the transaction fees should be handled in this method.
+	/// - `who` the origin of the transaction
+	/// - `amount` the original amount that was paid by the origin.
+	/// - `refund` the amount that should be refunded.
 	fn refund(
 		who: &T::AccountId,
 		amount: Self::WithdrawAmount,
 		refund: T::Balance,
 	) -> Result<Self::WithdrawAmount, TransactionValidityError>;
 
+	/// After the transaction was executed and the correct fees where collected, the resulting funds can be spend here.
+	/// - `amount` the state information about how much was actually deducted from the origin.
+	/// - `tip` the tip contained inside the amount
 	fn finalize(
 		amount: Self::WithdrawAmount,
 		tip: T::Balance,
 	);
 }
 
+/// Default implementation for a Currency and an OnUnbalanced handler.
 impl<T, C, OU, B> OnChargeTransaction<T> for (PhantomData<C>, PhantomData<OU>)
 where
 	B: AtLeast32BitUnsigned
