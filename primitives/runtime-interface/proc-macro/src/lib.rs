@@ -39,10 +39,8 @@ pub fn runtime_interface(
 ) -> proc_macro::TokenStream {
 	let trait_def = parse_macro_input!(input as ItemTrait);
 	let wasm_only = parse_macro_input!(attrs as Option<runtime_interface::keywords::wasm_only>);
-	// FIXME: actual parse for this
-	let no_tracing : Option<()> = None; //parse_macro_input!(tracing_attrs as Option<runtime_interface::keywords::no_tracing>);
 
-	runtime_interface::runtime_interface_impl(trait_def, wasm_only.is_some(), no_tracing.is_none())
+	runtime_interface::runtime_interface_impl(trait_def, wasm_only.is_some())
 		.unwrap_or_else(|e| e.to_compile_error())
 		.into()
 }

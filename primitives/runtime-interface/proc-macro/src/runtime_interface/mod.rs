@@ -33,17 +33,13 @@ mod trait_decl_impl;
 pub mod keywords {
 	// Custom keyword `wasm_only` that can be given as attribute to [`runtime_interface`].
 	syn::custom_keyword!(wasm_only);
-	// Custom keyword `no_tracing` that can be given as attribute to [`runtime_interface`].
-	syn::custom_keyword!(no_tracing);
 }
 
 /// Implementation of the `runtime_interface` attribute.
 ///
 /// It expects the trait definition the attribute was put above and if this should be an wasm only
 /// interface.
-pub fn runtime_interface_impl(trait_def: ItemTrait, is_wasm_only: bool, with_tracing: bool)
-	-> Result<TokenStream>
-{
+pub fn runtime_interface_impl(trait_def: ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let bare_functions = bare_function_interface::generate(&trait_def, is_wasm_only)?;
 	let crate_include = generate_runtime_interface_include();
 	let mod_name = Ident::new(&trait_def.ident.to_string().to_snake_case(), Span::call_site());

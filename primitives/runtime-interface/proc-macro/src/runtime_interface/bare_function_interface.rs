@@ -62,10 +62,10 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream
 
 	// earlier versions compatibility dispatch (only std variant)
 	let result: Result<TokenStream> = runtime_interface.all_versions().try_fold(token_stream?, |mut t, (version, method)|
-		{
-			t.extend(function_std_impl(trait_name, method, version, is_wasm_only)?);
-			Ok(t)
-		});
+	{
+		t.extend(function_std_impl(trait_name, method, version, is_wasm_only)?);
+		Ok(t)
+	});
 
 	result
 }
@@ -174,6 +174,7 @@ fn function_std_impl(
 			#[cfg(feature = "std")]
 			#( #attrs )*
 			fn #function_name( #( #args, )* ) #return_value {
+				#crate_::sp_tracing::enter_span!(#function_name_str);
 				#call_to_trait
 			}
 		}
