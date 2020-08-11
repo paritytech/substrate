@@ -211,7 +211,7 @@ impl Default for Releases {
 }
 
 pub trait OnChargeTransaction<T: Trait> {
-	type WithdrawAmount;
+	type WithdrawAmount: Default;
 
 	fn withdraw(
 		who: &T::AccountId,
@@ -225,41 +225,80 @@ pub trait OnChargeTransaction<T: Trait> {
 		refund: T::Balance,
 	) -> Result<Self::WithdrawAmount, TransactionValidityError>;
 
-	fn deposit(
+	fn finalize(
 		amount: Self::WithdrawAmount,
 	);
 }
 
-impl<T, C, OU> OnChargeTransaction<T> for (PhantomData<C>, PhantomData<OU>)
-where 
-	T: Trait,
-	C: Currency<<T as frame_system::Trait>::AccountId>,
+impl<T, C, OU, B> OnChargeTransaction<T> for (PhantomData<C>, PhantomData<OU>)
+where
+	B: AtLeast32BitUnsigned
+	+ FullCodec
+	+ Copy
+	+ MaybeSerializeDeserialize
+	+ Debug
+	+ Default
+	+ Send
+	+ Sync,
+	T: Trait<Balance=B>,
+	T::TransactionByteFee: Get<B>,
+	C: Currency<<T as frame_system::Trait>::AccountId, Balance=B>,
+	C::PositiveImbalance: Imbalance<B, Opposite=C::NegativeImbalance>,
+	C::NegativeImbalance: Imbalance<B, Opposite=C::PositiveImbalance>,
 	OU: OnUnbalanced<NegativeImbalanceOf<C, T>>,
 {
-	type WithdrawAmount = ();
+	type WithdrawAmount = Option<NegativeImbalanceOf<C, T>>;
 
 	fn withdraw(
 		who: &T::AccountId,
-		fee: T::Balance,
-		tip: T::Balance,
-	) -> Result<(T::Balance, Self::WithdrawAmount), TransactionValidityError> {
-		todo!()
+		fee: B,
+		tip: B,
+	) -> Result<(B, Self::WithdrawAmount), TransactionValidityError> {
+		if fee.is_zero() {
+			return Ok((B::zero(), None))
+		}
+		match C::withdraw(
+			who,
+			fee,
+			if tip.is_zero() {
+				WithdrawReason::TransactionPayment.into()
+			} else {
+				WithdrawReason::TransactionPayment | WithdrawReason::Tip
+			},
+			ExistenceRequirement::KeepAlive,
+		) {
+			Ok(imbalance) => Ok((fee, Some(imbalance))),
+			Err(_) => Err(InvalidTransaction::Payment.into()),
+		}
 	}
 
 	fn refund(
 		who: &T::AccountId,
 		amount: Self::WithdrawAmount,
-		refund: T::Balance,
+		refund: B,
 	) -> Result<Self::WithdrawAmount, TransactionValidityError> {
-		todo!()
+		if let Some(payed) = amount {
+			match C::deposit_into_existing(&who, refund) {
+				Ok(refund_imbalance) =>
+					// The refund cannot be larger than the up front payed max weight.
+					// `PostDispatchInfo::calc_unspent` guards against such a case.
+					match payed.offset(refund_imbalance) {
+						Ok(actual_payment) => Ok(Some(actual_payment)),
+						Err(_) => return Err(InvalidTransaction::Payment.into()),
+					}				// We do not recreate the account using the refund. The up front payment
+				// is gone in that case.
+				Err(_) => Ok(Some(payed)),
+			}
+		} else {
+			Ok(amount)
+		}
 	}
 
-	fn deposit(
-		amount: Self::WithdrawAmount,
-	) {
-		todo!()
+	fn finalize(amount: Self::WithdrawAmount) {
+		if let Some(_payed) = amount {
+			// pay out the MONEY! Call OU
+		}
 	}
-	
 }
 
 pub trait Trait: frame_system::Trait {
@@ -275,7 +314,7 @@ pub trait Trait: frame_system::Trait {
 
 	/// Handler for withdrawing, refunding and depositing the transaction fee.
 	/// Transaction fees are withdrawen before the transaction is executed.
-	/// After the transaction was executed the transaction weight can be adjusted, depending on the used resources by 
+	/// After the transaction was executed the transaction weight can be adjusted, depending on the used resources by
 	/// the transaction. If the transaction weight is lower than expected, parts of the transaction fee might be refunded.
 	/// In the end the fees can be deposited.
 	type OnChargeTransaction: OnChargeTransaction<Self>;
@@ -502,7 +541,7 @@ where
 	) -> Result<
 		(
 			T::Balance,
-			Option<<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::WithdrawAmount>,
+			<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::WithdrawAmount,
 		),
 		TransactionValidityError,
 	> {
@@ -511,11 +550,10 @@ where
 
 		// Only mess with balances if fee is not zero.
 		if fee.is_zero() {
-			return Ok((fee, None));
+			return Ok((fee, Default::default()));
 		}
 
 		<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::withdraw(who, fee, tip)
-			.map(|(x, y)| (x, Some(y)))
 	}
 }
 
@@ -542,7 +580,7 @@ where
 	type Pre = (
 		T::Balance,
 		Self::AccountId,
-		Option<<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::WithdrawAmount>,
+		<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::WithdrawAmount,
 		T::Balance,
 	);
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
@@ -584,17 +622,15 @@ where
 		_result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
 		let (tip, who, imbalance, fee) = pre;
-		if let Some(payed) = imbalance {
-			let actual_fee = Module::<T>::compute_actual_fee(
-				len as u32,
-				info,
-				post_info,
-				tip,
-			);
-			let refund = fee.saturating_sub(actual_fee);
-			let actual_payment = T::OnChargeTransaction::refund(&who, payed, refund)?;
-			T::OnChargeTransaction::deposit(actual_payment);
-		}
+		let actual_fee = Module::<T>::compute_actual_fee(
+			len as u32,
+			info,
+			post_info,
+			tip,
+		);
+		let refund = fee.saturating_sub(actual_fee);
+		let actual_payment = T::OnChargeTransaction::refund(&who, imbalance, refund)?;
+		T::OnChargeTransaction::finalize(actual_payment);
 		Ok(())
 	}
 }
@@ -727,8 +763,8 @@ mod tests {
 	}
 
 	impl Trait for Runtime {
-		type Currency = pallet_balances::Module<Runtime>;
-		type OnTransactionPayment = ();
+		type Balance = u64;
+		type OnChargeTransaction = (PhantomData<pallet_balances::Module<Runtime>>, PhantomData<()>);
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = WeightToFee;
 		type FeeMultiplierUpdate = ();
