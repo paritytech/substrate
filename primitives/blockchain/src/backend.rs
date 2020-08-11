@@ -279,10 +279,10 @@ pub mod well_known_cache_keys {
 	/// Current Epoch data.
 	pub const EPOCH: Id = *b"epch";
 
-	/// hash of runtime code
+	/// Hash of runtime code.
 	pub const CODE_HASH: Id = *b"cdhs";
 
-	/// heap pages.
+	/// Heap pages.
 	pub const HEAP_PAGES: Id = *b"hppg";
 
 	/// Changes trie configuration.

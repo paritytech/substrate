@@ -45,10 +45,10 @@ pub struct OnDemand<B: BlockT> {
 	/// Objects that checks whether what has been retrieved is correct.
 	checker: Arc<dyn FetchChecker<B>>,
 
-	/// reference to backend.
+	/// Reference to backend.
 	backend: Arc<LightStorage<B>>,
 
-	/// reference to cache
+	/// Reference to cache.
 	cache: Arc<dyn Cache<B>>,
 
 	/// Queue of requests. Set to `Some` at initialization, then extracted by the network.

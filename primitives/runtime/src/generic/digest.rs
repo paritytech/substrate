@@ -168,9 +168,9 @@ impl<'a, Hash: Decode> serde::Deserialize<'a> for DigestItem<Hash> {
 pub enum DigestItemRef<'a, Hash: 'a> {
 	/// Reference to `DigestItem::ChangesTrieRoot`.
 	ChangesTrieRoot(&'a Hash),
-	/// Reference to `DigestItem::RuntimeCodeChanged`
+	/// Reference to `DigestItem::RuntimeCodeChanged`.
 	RuntimeCodeChanged(&'a Hash),
-	/// Reference to `DigestItem::HeapPagesChanged`
+	/// Reference to `DigestItem::HeapPagesChanged`.
 	HeapPagesChanged(u64),
 	/// A pre-runtime digest.
 	///
