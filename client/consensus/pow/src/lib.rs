@@ -253,7 +253,13 @@ impl<B, I, C, S, Algorithm, CAW> PowBlockImport<B, I, C, S, Algorithm, CAW> wher
 			return Ok(())
 		}
 
-		if let Err(_) = self.can_author_with.can_author_with(&block_id) {
+		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
+			debug!(
+				target: "pow",
+				"Skipping `check_inherents` as authoring version is not compatible: {}",
+				e,
+			);
+
 			return Ok(())
 		}
 
