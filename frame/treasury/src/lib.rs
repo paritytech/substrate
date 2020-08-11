@@ -850,6 +850,8 @@ decl_module! {
 		/// Approve a bounty proposal. At a later time, the bounty will be funded and become active
 		/// and the original deposit will be returned.
 		///
+		/// May only be called from `T::ApproveOrigin`.
+		///
 		/// # <weight>
 		/// - O(1).
 		/// - Limited storage reads.
@@ -871,6 +873,15 @@ decl_module! {
 			})?;
 		}
 
+		/// Assign a curator to a funded bounty.
+		///
+		/// May only be called from `T::ApproveOrigin`.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change.
+		/// # </weight>
 		#[weight = 10_000]
 		fn assign_curator(
 			origin,
@@ -895,6 +906,16 @@ decl_module! {
 			})?;
 		}
 
+		/// Unassign curator from a bounty.
+		/// If the bounty is on active or pending payout status, the curator deposit will be slashed from curator.
+		///
+		/// May only be called from `T::ApproveOrigin` or the curator.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change.
+		/// # </weight>
 		#[weight = 10_000]
 		fn unassign_curator(
 			origin,
@@ -923,6 +944,16 @@ decl_module! {
 			})?;
 		}
 
+		/// Accept the curator role for a bounty.
+		/// A deposit will be reserved from curator and refund upon successful payout.
+		///
+		/// May only be called from the curator.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change.
+		/// # </weight>
 		#[weight = 10_000]
 		fn accept_curator(origin, #[compact] bounty_id: ProposalIndex) {
 			let signer = ensure_signed(origin)?;
