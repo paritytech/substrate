@@ -39,6 +39,8 @@ impl Service {
 
 	/// Get the addresses for the given [`AuthorityId`] from the local address cache.
 	///
+	/// Returns `None` if no entry was present or connection to the [`crate::Worker`] failed.
+	///
 	/// [`Multiaddr`]s returned always include a [`libp2p::core::multiaddr:Protocol::P2p`]
 	/// component.
 	pub async fn get_addresses_by_authority_id(&mut self, authority: AuthorityId) -> Option<Vec<Multiaddr>> {
@@ -53,6 +55,8 @@ impl Service {
 	}
 
 	/// Get the [`AuthorityId`] for the given [`PeerId`] from the local address cache.
+	///
+	/// Returns `None` if no entry was present or connection to the [`crate::Worker`] failed.
 	pub async fn get_authority_id_by_peer_id(&mut self, peer_id: PeerId) -> Option<AuthorityId> {
 		let (tx, rx) = oneshot::channel();
 
