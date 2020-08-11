@@ -258,20 +258,52 @@ benchmarks! {
 	propose_bounty {
 		let d in 0 .. MAX_BYTES;
 
-		let (caller, curator_lookup, fee, value, description) = setup_bounty::<T>(d);
+		let (caller, curator, fee, value, description) = setup_bounty::<T>(d);
 	}: _(RawOrigin::Signed(caller), value, description)
 
 	reject_bounty {
-		let (caller, curator_lookup, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
+		let (caller, curator, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
 		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::get() - 1;
 	}: _(RawOrigin::Root, bounty_id)
 
 	approve_bounty {
-		let (caller, curator_lookup, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
+		let (caller, curator, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
 		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::get() - 1;
 	}: _(RawOrigin::Root, bounty_id)
+
+	assign_curator {
+		setup_pod_account::<T>();
+		let (caller, curator, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
+		let curator_lookup = T::Lookup::unlookup(curator.clone());
+		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
+		let bounty_id = BountyCount::get() - 1;
+		Treasury::<T>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
+	}: _(RawOrigin::Root, bounty_id, curator_lookup, fee)
+
+	unassign_curator {
+		setup_pod_account::<T>();
+		let (caller, curator, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
+		let curator_lookup = T::Lookup::unlookup(curator.clone());
+		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
+		let bounty_id = BountyCount::get() - 1;
+		Treasury::<T>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T>::assign_curator(RawOrigin::Root.into(), bounty_id, curator_lookup, fee)?;
+	}: _(RawOrigin::Root, bounty_id)
+
+	accept_curator {
+		setup_pod_account::<T>();
+		let (caller, curator, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
+		let curator_lookup = T::Lookup::unlookup(curator.clone());
+		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
+		let bounty_id = BountyCount::get() - 1;
+		Treasury::<T>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T>::assign_curator(RawOrigin::Root.into(), bounty_id, curator_lookup, fee)?;
+	}: _(RawOrigin::Signed(curator), bounty_id)
 
 	award_bounty {
 		setup_pod_account::<T>();
@@ -356,6 +388,9 @@ mod tests {
 			assert_ok!(test_benchmark_propose_bounty::<Test>());
 			assert_ok!(test_benchmark_approve_bounty::<Test>());
 			assert_ok!(test_benchmark_reject_bounty::<Test>());
+			assert_ok!(test_benchmark_assign_curator::<Test>());
+			assert_ok!(test_benchmark_unassign_curator::<Test>());
+			assert_ok!(test_benchmark_accept_curator::<Test>());
 			assert_ok!(test_benchmark_award_bounty::<Test>());
 			assert_ok!(test_benchmark_claim_bounty::<Test>());
 			assert_ok!(test_benchmark_cancel_bounty::<Test>());
