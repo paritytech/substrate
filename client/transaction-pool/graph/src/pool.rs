@@ -1,62 +1,59 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{
-	hash,
 	collections::HashMap,
 	sync::Arc,
 };
 
-use crate::base_pool as base;
-use crate::watcher::Watcher;
-use serde::Serialize;
+use crate::{base_pool as base, watcher::Watcher};
 
-use futures::{
-	Future, FutureExt,
-	channel::mpsc,
-};
+use futures::{Future, FutureExt};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{self, SaturatedConversion},
+	traits::{self, SaturatedConversion, Block as BlockT},
 	transaction_validity::{
 		TransactionValidity, TransactionTag as Tag, TransactionValidityError, TransactionSource,
 	},
 };
 use sp_transaction_pool::error;
 use wasm_timer::Instant;
+use sp_utils::mpsc::TracingUnboundedReceiver;
 
 use crate::validated_pool::ValidatedPool;
 pub use crate::validated_pool::ValidatedTransaction;
 
 /// Modification notification event stream type;
-pub type EventStream<H> = mpsc::UnboundedReceiver<H>;
+pub type EventStream<H> = TracingUnboundedReceiver<H>;
 
-/// Extrinsic hash type for a pool.
-pub type ExHash<A> = <A as ChainApi>::Hash;
 /// Block hash type for a pool.
 pub type BlockHash<A> = <<A as ChainApi>::Block as traits::Block>::Hash;
+/// Extrinsic hash type for a pool.
+pub type ExtrinsicHash<A> = <<A as ChainApi>::Block as traits::Block>::Hash;
 /// Extrinsic type for a pool.
 pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as traits::Block>::Extrinsic;
 /// Block number type for the ChainApi
 pub type NumberFor<A> = traits::NumberFor<<A as ChainApi>::Block>;
 /// A type of transaction stored in the pool
-pub type TransactionFor<A> = Arc<base::Transaction<ExHash<A>, ExtrinsicFor<A>>>;
+pub type TransactionFor<A> = Arc<base::Transaction<ExtrinsicHash<A>, ExtrinsicFor<A>>>;
 /// A type of validated transaction stored in the pool.
 pub type ValidatedTransactionFor<A> = ValidatedTransaction<
-	ExHash<A>,
+	ExtrinsicHash<A>,
 	ExtrinsicFor<A>,
 	<A as ChainApi>::Error,
 >;
@@ -64,15 +61,15 @@ pub type ValidatedTransactionFor<A> = ValidatedTransaction<
 /// Concrete extrinsic validation and query logic.
 pub trait ChainApi: Send + Sync {
 	/// Block type.
-	type Block: traits::Block;
-	/// Transaction Hash type
-	type Hash: hash::Hash + Eq + traits::Member + Serialize;
+	type Block: BlockT;
 	/// Error type.
 	type Error: From<error::Error> + error::IntoPoolError;
 	/// Validate transaction future.
 	type ValidationFuture: Future<Output=Result<TransactionValidity, Self::Error>> + Send + Unpin;
 	/// Body future (since block body might be remote)
-	type BodyFuture: Future<Output = Result<Option<Vec<<Self::Block as traits::Block>::Extrinsic>>, Self::Error>> + Unpin + Send + 'static;
+	type BodyFuture: Future<
+		Output = Result<Option<Vec<<Self::Block as traits::Block>::Extrinsic>>, Self::Error>
+	> + Unpin + Send + 'static;
 
 	/// Verify extrinsic at given block.
 	fn validate_transaction(
@@ -83,13 +80,19 @@ pub trait ChainApi: Send + Sync {
 	) -> Self::ValidationFuture;
 
 	/// Returns a block number given the block id.
-	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error>;
+	fn block_id_to_number(
+		&self,
+		at: &BlockId<Self::Block>,
+	) -> Result<Option<NumberFor<Self>>, Self::Error>;
 
 	/// Returns a block hash given the block id.
-	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> Result<Option<BlockHash<Self>>, Self::Error>;
+	fn block_id_to_hash(
+		&self,
+		at: &BlockId<Self::Block>,
+	) -> Result<Option<<Self::Block as BlockT>::Hash>, Self::Error>;
 
 	/// Returns hash and encoding length of the extrinsic.
-	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize);
+	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (ExtrinsicHash<Self>, usize);
 
 	/// Returns a block body given the block id.
 	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
@@ -130,7 +133,6 @@ pub struct Pool<B: ChainApi> {
 #[cfg(not(target_os = "unknown"))]
 impl<B: ChainApi> parity_util_mem::MallocSizeOf for Pool<B>
 where
-	B::Hash: parity_util_mem::MallocSizeOf,
 	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
 {
 	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
@@ -153,7 +155,7 @@ impl<B: ChainApi> Pool<B> {
 		source: TransactionSource,
 		xts: T,
 		force: bool,
-	) -> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error> where
+	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> where
 		T: IntoIterator<Item=ExtrinsicFor<B>>,
 	{
 		let validated_pool = self.validated_pool.clone();
@@ -172,7 +174,7 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
-	) -> Result<ExHash<B>, B::Error> {
+	) -> Result<ExtrinsicHash<B>, B::Error> {
 		self.submit_at(at, source, std::iter::once(xt), false)
 			.map(|import_result| import_result.and_then(|mut import_result| import_result
 				.pop()
@@ -187,7 +189,7 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
-	) -> Result<Watcher<ExHash<B>, BlockHash<B>>, B::Error> {
+	) -> Result<Watcher<ExtrinsicHash<B>, ExtrinsicHash<B>>, B::Error> {
 		let block_number = self.resolve_block_number(at)?;
 		let (_, tx) = self.verify_one(
 			at, block_number, source, xt, false
@@ -198,7 +200,7 @@ impl<B: ChainApi> Pool<B> {
 	/// Resubmit some transaction that were validated elsewhere.
 	pub fn resubmit(
 		&self,
-		revalidated_transactions: HashMap<ExHash<B>, ValidatedTransactionFor<B>>,
+		revalidated_transactions: HashMap<ExtrinsicHash<B>, ValidatedTransactionFor<B>>,
 	) {
 
 		let now = Instant::now();
@@ -215,7 +217,11 @@ impl<B: ChainApi> Pool<B> {
 	/// Used to clear the pool from transactions that were part of recently imported block.
 	/// The main difference from the `prune` is that we do not revalidate any transactions
 	/// and ignore unknown passed hashes.
-	pub fn prune_known(&self, at: &BlockId<B::Block>, hashes: &[ExHash<B>]) -> Result<(), B::Error> {
+	pub fn prune_known(
+		&self,
+		at: &BlockId<B::Block>,
+		hashes: &[ExtrinsicHash<B>],
+	) -> Result<(), B::Error> {
 		// Get details of all extrinsics that are already in the pool
 		let in_pool_tags = self.validated_pool.extrinsics_tags(hashes)
 			.into_iter().filter_map(|x| x).flat_map(|x| x);
@@ -299,7 +305,7 @@ impl<B: ChainApi> Pool<B> {
 		&self,
 		at: &BlockId<B::Block>,
 		tags: impl IntoIterator<Item=Tag>,
-		known_imported_hashes: impl IntoIterator<Item=ExHash<B>> + Clone,
+		known_imported_hashes: impl IntoIterator<Item=ExtrinsicHash<B>> + Clone,
 	) -> Result<(), B::Error> {
 		log::debug!(target: "txpool", "Pruning at {:?}", at);
 		// Prune all transactions that provide given tags
@@ -336,7 +342,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Returns transaction hash
-	pub fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExHash<B> {
+	pub fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExtrinsicHash<B> {
 		self.validated_pool.api().hash_and_length(xt).0
 	}
 
@@ -353,7 +359,7 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		xts: impl IntoIterator<Item=(TransactionSource, ExtrinsicFor<B>)>,
 		force: bool,
-	) -> Result<HashMap<ExHash<B>, ValidatedTransactionFor<B>>, B::Error> {
+	) -> Result<HashMap<ExtrinsicHash<B>, ValidatedTransactionFor<B>>, B::Error> {
 		// we need a block number to compute tx validity
 		let block_number = self.resolve_block_number(at)?;
 		let mut result = HashMap::new();
@@ -379,7 +385,7 @@ impl<B: ChainApi> Pool<B> {
 		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
 		force: bool,
-	) -> (ExHash<B>, ValidatedTransactionFor<B>) {
+	) -> (ExtrinsicHash<B>, ValidatedTransactionFor<B>) {
 		let (hash, bytes) = self.validated_pool.api().hash_and_length(&xt);
 		if !force && self.validated_pool.is_banned(&hash) {
 			return (
@@ -444,9 +450,12 @@ mod tests {
 	use futures::executor::block_on;
 	use super::*;
 	use sp_transaction_pool::TransactionStatus;
-	use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction, TransactionSource};
+	use sp_runtime::{
+		traits::Hash,
+		transaction_validity::{ValidTransaction, InvalidTransaction, TransactionSource},
+	};
 	use codec::Encode;
-	use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
+	use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId, Hashing};
 	use assert_matches::assert_matches;
 	use wasm_timer::Instant;
 	use crate::base_pool::Limit;
@@ -457,14 +466,13 @@ mod tests {
 	#[derive(Clone, Debug, Default)]
 	struct TestApi {
 		delay: Arc<Mutex<Option<std::sync::mpsc::Receiver<()>>>>,
-		invalidate: Arc<Mutex<HashSet<u64>>>,
-		clear_requirements: Arc<Mutex<HashSet<u64>>>,
-		add_requirements: Arc<Mutex<HashSet<u64>>>,
+		invalidate: Arc<Mutex<HashSet<H256>>>,
+		clear_requirements: Arc<Mutex<HashSet<H256>>>,
+		add_requirements: Arc<Mutex<HashSet<H256>>>,
 	}
 
 	impl ChainApi for TestApi {
 		type Block = Block;
-		type Hash = u64;
 		type Error = error::Error;
 		type ValidationFuture = futures::future::Ready<error::Result<TransactionValidity>>;
 		type BodyFuture = futures::future::Ready<error::Result<Option<Vec<Extrinsic>>>>;
@@ -518,7 +526,10 @@ mod tests {
 		}
 
 		/// Returns a block number given the block id.
-		fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error> {
+		fn block_id_to_number(
+			&self,
+			at: &BlockId<Self::Block>,
+		) -> Result<Option<NumberFor<Self>>, Self::Error> {
 			Ok(match at {
 				BlockId::Number(num) => Some(*num),
 				BlockId::Hash(_) => None,
@@ -526,7 +537,10 @@ mod tests {
 		}
 
 		/// Returns a block hash given the block id.
-		fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> Result<Option<BlockHash<Self>>, Self::Error> {
+		fn block_id_to_hash(
+			&self,
+			at: &BlockId<Self::Block>,
+		) -> Result<Option<<Self::Block as BlockT>::Hash>, Self::Error> {
 			Ok(match at {
 				BlockId::Number(num) => Some(H256::from_low_u64_be(*num)).into(),
 				BlockId::Hash(_) => None,
@@ -534,12 +548,10 @@ mod tests {
 		}
 
 		/// Hash the extrinsic.
-		fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize) {
-			let len = uxt.encode().len();
-			(
-				(H256::from(uxt.transfer().from.clone()).to_low_u64_be() << 5) + uxt.transfer().nonce,
-				len
-			)
+		fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (BlockHash<Self>, usize) {
+			let encoded = uxt.encode();
+			let len = encoded.len();
+			(Hashing::hash(&encoded), len)
 		}
 
 		fn block_body(&self, _id: &BlockId<Self::Block>) -> Self::BodyFuture {
@@ -599,19 +611,19 @@ mod tests {
 
 	#[test]
 	fn should_notify_about_pool_events() {
-		let stream = {
+		let (stream, hash0, hash1) = {
 			// given
 			let pool = pool();
 			let stream = pool.validated_pool().import_notification_stream();
 
 			// when
-			let _hash = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
+			let hash0 = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 				from: AccountId::from_h256(H256::from_low_u64_be(1)),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
 			}))).unwrap();
-			let _hash = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
+			let hash1 = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 				from: AccountId::from_h256(H256::from_low_u64_be(1)),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
@@ -627,13 +639,14 @@ mod tests {
 
 			assert_eq!(pool.validated_pool().status().ready, 2);
 			assert_eq!(pool.validated_pool().status().future, 1);
-			stream
+
+			(stream, hash0, hash1)
 		};
 
 		// then
 		let mut it = futures::executor::block_on_stream(stream);
-		assert_eq!(it.next(), Some(32));
-		assert_eq!(it.next(), Some(33));
+		assert_eq!(it.next(), Some(hash0));
+		assert_eq!(it.next(), Some(hash1));
 		assert_eq!(it.next(), None);
 	}
 
@@ -795,7 +808,10 @@ mod tests {
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-			assert_eq!(stream.next(), Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())));
+			assert_eq!(
+				stream.next(),
+				Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())),
+			);
 		}
 
 		#[test]
@@ -812,14 +828,19 @@ mod tests {
 			assert_eq!(pool.validated_pool().status().future, 0);
 
 			// when
-			block_on(pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![2u64])).unwrap();
+			block_on(
+				pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![watcher.hash().clone()]),
+			).unwrap();
 			assert_eq!(pool.validated_pool().status().ready, 0);
 			assert_eq!(pool.validated_pool().status().future, 0);
 
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-			assert_eq!(stream.next(), Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())));
+			assert_eq!(
+				stream.next(),
+				Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())),
+			);
 		}
 
 		#[test]

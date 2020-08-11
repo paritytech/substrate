@@ -17,7 +17,6 @@
 //! Network event types. These are are not the part of the protocol, but rather
 //! events that happen on the network like DHT get/put results received.
 
-use crate::config::Roles;
 use bytes::Bytes;
 use libp2p::core::PeerId;
 use libp2p::kad::record::Key;
@@ -55,8 +54,8 @@ pub enum Event {
 		remote: PeerId,
 		/// The concerned protocol. Each protocol uses a different substream.
 		engine_id: ConsensusEngineId,
-		/// Roles that the remote .
-		roles: Roles,
+		/// Role of the remote.
+		role: ObservedRole,
 	},
 
 	/// Closed a substream with the given node. Always matches a corresponding previous
@@ -75,4 +74,27 @@ pub enum Event {
 		/// Concerned protocol and associated message.
 		messages: Vec<(ConsensusEngineId, Bytes)>,
 	},
+}
+
+/// Role that the peer sent to us during the handshake, with the addition of what our local node
+/// knows about that peer.
+#[derive(Debug, Clone)]
+pub enum ObservedRole {
+	/// Full node.
+	Full,
+	/// Light node.
+	Light,
+	/// When we are a validator node, this is a sentry that protects us.
+	OurSentry,
+	/// When we are a sentry node, this is the authority we are protecting.
+	OurGuardedAuthority,
+	/// Third-party authority.
+	Authority,
+}
+
+impl ObservedRole {
+	/// Returns `true` for `ObservedRole::Light`.
+	pub fn is_light(&self) -> bool {
+		matches!(self, ObservedRole::Light)
+	}
 }

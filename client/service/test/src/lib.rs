@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Service integration test utils.
 
@@ -32,15 +34,20 @@ use sc_service::{
 	GenericChainSpec,
 	ChainSpecExtension,
 	Configuration,
-	config::{DatabaseConfig, KeystoreConfig},
+	config::{BasePath, DatabaseConfig, KeystoreConfig},
 	RuntimeGenesis,
-	Roles,
+	Role,
 	Error,
+	TaskExecutor,
 };
-use sc_network::{multiaddr, Multiaddr, NetworkStateInfo};
-use sc_network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
+use sp_blockchain::HeaderBackend;
+use sc_network::{multiaddr, Multiaddr};
+use sc_network::config::{NetworkConfiguration, TransportConfig};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_transaction_pool::TransactionPool;
+
+#[cfg(test)]
+mod client;
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
@@ -134,8 +141,8 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'static + Send> (
 	index: usize,
 	spec: &GenericChainSpec<G, E>,
-	role: Roles,
-	task_executor: Arc<dyn Fn(Pin<Box<dyn futures::Future<Output = ()> + Send>>) + Send + Sync>,
+	role: Role,
+	task_executor: TaskExecutor,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
@@ -143,76 +150,69 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 {
 	let root = root.path().join(format!("node-{}", index));
 
-	let config_path = Some(root.join("network"));
-	let net_config_path = config_path.clone();
+	let mut network_config = NetworkConfiguration::new(
+		format!("Node {}", index),
+		"network/test/0.1",
+		Default::default(),
+		None,
+	);
 
-	let network_config = NetworkConfiguration {
-		config_path,
-		net_config_path,
-		listen_addresses: vec! [
-			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
-				.chain(iter::once(multiaddr::Protocol::Tcp(base_port + index as u16)))
-				.collect()
-		],
-		public_addresses: vec![],
-		boot_nodes: vec![],
-		node_key: NodeKeyConfig::Ed25519(Secret::New),
-		in_peers: 50,
-		out_peers: 450,
-		reserved_nodes: vec![],
-		non_reserved_mode: NonReservedPeerMode::Accept,
-		sentry_nodes: vec![],
-		client_version: "network/test/0.1".to_owned(),
-		node_name: "unknown".to_owned(),
-		transport: TransportConfig::Normal {
-			enable_mdns: false,
-			allow_private_ipv4: true,
-			wasm_external_transport: None,
-			use_yamux_flow_control: true,
-		},
-		max_parallel_downloads: NetworkConfiguration::default().max_parallel_downloads,
+	network_config.allow_non_globals_in_dht = true;
+
+	network_config.listen_addresses.push(
+		iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+			.chain(iter::once(multiaddr::Protocol::Tcp(base_port + index as u16)))
+			.collect()
+	);
+
+	network_config.transport = TransportConfig::Normal {
+		enable_mdns: false,
+		allow_private_ipv4: true,
+		wasm_external_transport: None,
+		use_yamux_flow_control: true,
 	};
 
 	Configuration {
 		impl_name: "network-test-impl",
 		impl_version: "0.1",
-		impl_commit: "",
-		roles: role,
-		task_executor: Some(task_executor),
+		role,
+		task_executor,
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::Path {
 			path: root.join("key"),
 			password: None
 		},
-		config_dir: Some(root.clone()),
-		database: Some(DatabaseConfig::Path {
+		database: DatabaseConfig::RocksDb {
 			path: root.join("db"),
-			cache_size: None
-		}),
+			cache_size: 128,
+		},
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
-		chain_spec: Some(Box::new((*spec).clone())),
-		name: format!("Node {}", index),
+		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
 		rpc_http: None,
+		rpc_ipc: None,
 		rpc_ws: None,
 		rpc_ws_max_connections: None,
 		rpc_cors: None,
+		rpc_methods: Default::default(),
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		telemetry_external_transport: None,
 		default_heap_pages: None,
-		offchain_worker: false,
-		sentry_mode: false,
+		offchain_worker: Default::default(),
 		force_authoring: false,
 		disable_grandpa: false,
 		dev_key_seed: key_seed,
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
 		max_runtime_instances: 8,
+		announce_block: true,
+		base_path: Some(BasePath::new(root)),
+		informant_output_format: Default::default(),
 	}
 }
 
@@ -257,17 +257,19 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration) -> Result<(F, U), Error>)>
 	) {
 		let executor = self.runtime.executor();
+		let task_executor: TaskExecutor = {
+			let executor = executor.clone();
+			(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _| {
+				executor.spawn(fut.unit_error().compat());
+			}).into()
+		};
 
 		for (key, authority) in authorities {
-			let task_executor = {
-				let executor = executor.clone();
-				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
-			};
 			let node_config = node_config(
 				self.nodes,
 				&self.chain_spec,
-				Roles::AUTHORITY,
-				task_executor,
+				Role::Authority { sentry_nodes: Vec::new() },
+				task_executor.clone(),
 				Some(key),
 				self.base_port,
 				&temp,
@@ -277,38 +279,46 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let service = SyncService::from(service);
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().clone().into()));
 			self.authority_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
 
 		for full in full {
-			let task_executor = {
-				let executor = executor.clone();
-				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
-			};
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, task_executor, None, self.base_port, &temp);
+			let node_config = node_config(
+				self.nodes,
+				&self.chain_spec,
+				Role::Full,
+				task_executor.clone(),
+				None,
+				self.base_port,
+				&temp,
+			);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 			let service = SyncService::from(service);
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().clone().into()));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
 
 		for light in light {
-			let task_executor = {
-				let executor = executor.clone();
-				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
-			};
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, task_executor, None, self.base_port, &temp);
+			let node_config = node_config(
+				self.nodes,
+				&self.chain_spec,
+				Role::Light,
+				task_executor.clone(),
+				None,
+				self.base_port,
+				&temp,
+			);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(light(node_config).expect("Error creating test node service"));
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().clone().into()));
 			self.light_nodes.push((self.nodes, service, addr));
 			self.nodes += 1;
 		}
@@ -460,6 +470,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 
 			make_block_and_import(&first_service.get(), first_user_data);
 		}
+		(network.full_nodes[0].1).0.lock().unwrap().network().update_chain();
 		network.full_nodes[0].3.clone()
 	};
 
@@ -472,15 +483,15 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().chain_info().best_number == (NUM_BLOCKS as u32).into(),
+			service.get().client().info().best_number == (NUM_BLOCKS as u32).into(),
 		|_index, service|
-			service.get().client().chain_info().best_number == (NUM_BLOCKS as u32).into(),
+			service.get().client().info().best_number == (NUM_BLOCKS as u32).into(),
 	);
 
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
 	let first_user_data = &network.full_nodes[0].2;
-	let best_block = BlockId::number(first_service.get().client().chain_info().best_number);
+	let best_block = BlockId::number(first_service.get().client().info().best_number);
 	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
 	let source = sp_transaction_pool::TransactionSource::External;
 
@@ -533,9 +544,9 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().chain_info().finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
+			service.get().client().info().finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
 		|_index, service|
-			service.get().client().chain_info().best_number >= (NUM_BLOCKS as u32 / 2).into(),
+			service.get().client().info().best_number >= (NUM_BLOCKS as u32 / 2).into(),
 	);
 
 	info!("Adding more peers");
@@ -555,8 +566,8 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().chain_info().finalized_number >= (NUM_BLOCKS as u32).into(),
+			service.get().client().info().finalized_number >= (NUM_BLOCKS as u32).into(),
 		|_index, service|
-			service.get().client().chain_info().best_number >= (NUM_BLOCKS as u32).into(),
+			service.get().client().info().best_number >= (NUM_BLOCKS as u32).into(),
 	);
 }

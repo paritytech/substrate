@@ -1,37 +1,35 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
-use std::fmt::Debug;
-use std::io::{Read, Seek, self};
-use std::fs;
-use std::path::PathBuf;
-use structopt::StructOpt;
-use sc_service::{
-	Configuration, ServiceBuilderCommand, ChainSpec, Roles,
-};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::VersionInfo;
-use crate::runtime::run_until_exit;
-use crate::params::SharedParams;
 use crate::params::ImportParams;
+use crate::params::SharedParams;
+use crate::CliConfiguration;
+use sc_service::{Configuration, ServiceBuilderCommand};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use std::fmt::Debug;
+use std::fs;
+use std::io::{self, Read, Seek};
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 /// The `import-blocks` command used to import blocks.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct ImportBlocksCmd {
 	/// Input file or stdin if unspecified.
 	#[structopt(parse(from_os_str))]
@@ -42,6 +40,10 @@ pub struct ImportBlocksCmd {
 	/// Don't alter this unless you know what you're doing.
 	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,
+
+	/// Try importing blocks from binary format rather than JSON.
+	#[structopt(long)]
+	pub binary: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -59,8 +61,8 @@ impl<T: Read + Seek> ReadPlusSeek for T {}
 
 impl ImportBlocksCmd {
 	/// Run the import-blocks command
-	pub fn run<B, BC, BB>(
-		self,
+	pub async fn run<B, BC, BB>(
+		&self,
 		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
@@ -77,27 +79,22 @@ impl ImportBlocksCmd {
 				let mut buffer = Vec::new();
 				io::stdin().read_to_end(&mut buffer)?;
 				Box::new(io::Cursor::new(buffer))
-			},
+			}
 		};
 
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.import_blocks(file, false))
-		})
+		builder(config)?
+			.import_blocks(file, false, self.binary)
+			.await
+			.map_err(Into::into)
+	}
+}
+
+impl CliConfiguration for ImportBlocksCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
 	}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.import_params.update_config(&mut config, Roles::FULL, self.shared_params.dev)?;
-		config.use_in_memory_keystore()?;
-
-		Ok(())
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
 	}
 }

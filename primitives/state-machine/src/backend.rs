@@ -1,28 +1,25 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! State machine backends. These manage the code and storage of contracts.
 
-use log::warn;
 use hash_db::Hasher;
 use codec::{Decode, Encode};
-
-use sp_core::{traits::RuntimeCode, storage::{ChildInfo, OwnedChildInfo, well_known_keys}};
-use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
-
+use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
@@ -54,19 +51,17 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Get keyed child storage or None if there is nothing associated.
 	fn child_storage(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error>;
 
 	/// Get child keyed storage value hash or None if there is nothing associated.
 	fn child_storage_hash(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<H::Out>, Self::Error> {
-		self.child_storage(storage_key, child_info, key).map(|v| v.map(|v| H::hash(&v)))
+		self.child_storage(child_info, key).map(|v| v.map(|v| H::hash(&v)))
 	}
 
 	/// true if a key exists in storage.
@@ -77,11 +72,10 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// true if a key exists in child storage.
 	fn exists_child_storage(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		Ok(self.child_storage(storage_key, child_info, key)?.is_some())
+		Ok(self.child_storage(child_info, key)?.is_some())
 	}
 
 	/// Return the next key in storage in lexicographic order or `None` if there is no value.
@@ -90,16 +84,14 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Return the next key in child storage in lexicographic order or `None` if there is no value.
 	fn next_child_storage_key(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8]
 	) -> Result<Option<StorageKey>, Self::Error>;
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	);
 
@@ -118,8 +110,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// call `f` for each of those keys.
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	);
@@ -127,23 +118,19 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
 	/// Does not include child storage updates.
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		H::Out: Ord;
+	fn storage_root<'a>(
+		&self,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (H::Out, Self::Transaction) where H::Out: Ord;
 
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
 	/// is true if child storage root equals default storage root.
-	fn child_storage_root<I>(
+	fn child_storage_root<'a>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
-		delta: I,
-	) -> (H::Out, bool, Self::Transaction)
-	where
-		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		H::Out: Ord;
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord;
 
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)>;
@@ -158,12 +145,11 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Get all keys of child storage with given prefix
 	fn child_keys(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<StorageKey> {
 		let mut all = Vec::new();
-		self.for_child_keys_with_prefix(storage_key, child_info, prefix, |k| all.push(k.to_vec()));
+		self.for_child_keys_with_prefix(child_info, prefix, |k| all.push(k.to_vec()));
 		all
 	}
 
@@ -175,44 +161,50 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
-	fn full_storage_root<I1, I2i, I2>(
+	fn full_storage_root<'a>(
 		&self,
-		delta: I1,
-		child_deltas: I2)
-	-> (H::Out, Self::Transaction)
-	where
-		I1: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		I2i: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		I2: IntoIterator<Item=(StorageKey, I2i, OwnedChildInfo)>,
-		H::Out: Ord + Encode,
-	{
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		child_deltas: impl Iterator<Item = (
+			&'a ChildInfo,
+			impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		)>,
+	) -> (H::Out, Self::Transaction) where H::Out: Ord + Encode {
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
-		for (storage_key, child_delta, child_info) in child_deltas {
+		for (child_info, child_delta) in child_deltas {
 			let (child_root, empty, child_txs) =
-				self.child_storage_root(&storage_key[..], child_info.as_ref(), child_delta);
+				self.child_storage_root(&child_info, child_delta);
+			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
-				child_roots.push((storage_key, None));
+				child_roots.push((prefixed_storage_key.into_inner(), None));
 			} else {
-				child_roots.push((storage_key, Some(child_root.encode())));
+				child_roots.push((prefixed_storage_key.into_inner(), Some(child_root.encode())));
 			}
 		}
-		let (root, parent_txs) = self.storage_root(
-			delta.into_iter().chain(child_roots.into_iter())
+		let (root, parent_txs) = self.storage_root(delta
+			.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+			.chain(
+				child_roots
+					.iter()
+					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+			)
 		);
 		txs.consolidate(parent_txs);
 		(root, txs)
 	}
 
+	/// Register stats from overlay of state machine.
+	///
+	/// By default nothing is registered.
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats);
+
 	/// Query backend usage statistics (i/o, memory)
 	///
 	/// Not all implementations are expected to be able to do this. In the
 	/// case when they don't, empty statistics is returned.
-	fn usage_info(&self) -> UsageInfo {
-		UsageInfo::empty()
-	}
+	fn usage_info(&self) -> UsageInfo;
 
 	/// Wipe the state database.
 	fn wipe(&self) -> Result<(), Self::Error> {
@@ -220,7 +212,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Commit given transaction to storage.
-	fn commit(&self, _storage_root: H::Out, _transaction: Self::Transaction) -> Result<(), Self::Error> {
+	fn commit(&self, _: H::Out, _: Self::Transaction) -> Result<(), Self::Error> {
 		unimplemented!()
 	}
 }
@@ -236,20 +228,18 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn child_storage(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
-		(*self).child_storage(storage_key, child_info, key)
+		(*self).child_storage(child_info, key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	) {
-		(*self).for_keys_in_child_storage(storage_key, child_info, f)
+		(*self).for_keys_in_child_storage(child_info, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
@@ -258,11 +248,10 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn next_child_storage_key(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
-		(*self).next_child_storage_key(storage_key, child_info, key)
+		(*self).next_child_storage_key(child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -271,33 +260,26 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
-		(*self).for_child_keys_with_prefix(storage_key, child_info, prefix, f)
+		(*self).for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		H::Out: Ord,
-	{
+	fn storage_root<'b>(
+		&self,
+		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		(*self).storage_root(delta)
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'b>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
-		delta: I,
-	) -> (H::Out, bool, Self::Transaction)
-	where
-		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		H::Out: Ord,
-	{
-		(*self).child_storage_root(storage_key, child_info, delta)
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
+		(*self).child_storage_root(child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
@@ -308,10 +290,12 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).for_key_values_with_prefix(prefix, f);
 	}
 
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) {	}
+
 	fn usage_info(&self) -> UsageInfo {
 		(*self).usage_info()
 	}
- }
+}
 
 /// Trait that allows consolidate two transactions together.
 pub trait Consolidate {
@@ -326,7 +310,7 @@ impl Consolidate for () {
 }
 
 impl Consolidate for Vec<(
-		Option<(StorageKey, OwnedChildInfo)>,
+		Option<ChildInfo>,
 		StorageCollection,
 	)> {
 	fn consolidate(&mut self, mut other: Self) {
@@ -341,17 +325,20 @@ impl<H: Hasher, KF: sp_trie::KeyFunction<H>> Consolidate for sp_trie::GenericMem
 }
 
 /// Insert input pairs into memory db.
-pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Option<H::Out>
+#[cfg(test)]
+pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut sp_trie::MemoryDB<H>, input: I) -> Option<H::Out>
 	where
 		H: Hasher,
 		I: IntoIterator<Item=(StorageKey, StorageValue)>,
 {
+	use sp_trie::{TrieMut, trie_types::TrieDBMut};
+
 	let mut root = <H as Hasher>::Out::default();
 	{
 		let mut trie = TrieDBMut::<H>::new(mdb, &mut root);
 		for (key, value) in input {
 			if let Err(e) = trie.insert(&key, &value) {
-				warn!(target: "trie", "Failed to write to trie: {}", e);
+				log::warn!(target: "trie", "Failed to write to trie: {}", e);
 				return None;
 			}
 		}

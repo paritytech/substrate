@@ -25,13 +25,11 @@
 //!
 //! 1. **Makes itself discoverable**
 //!
-//!    1. Retrieves its external addresses.
+//!    1. Retrieves its external addresses (including peer id) or the ones of its sentry nodes.
 //!
-//!    2. Adds its network peer id to the addresses.
+//!    2. Signs the above.
 //!
-//!    3. Signs the above.
-//!
-//!    4. Puts the signature and the addresses on the libp2p Kademlia DHT.
+//!    3. Puts the signature and the addresses on the libp2p Kademlia DHT.
 //!
 //!
 //! 2. **Discovers other authorities**
@@ -43,6 +41,12 @@
 //!    3. Validates the signatures of the retrieved key value pairs.
 //!
 //!    4. Adds the retrieved external addresses as priority nodes to the peerset.
+//!
+//! When run as a sentry node, the authority discovery module does not
+//! publish any addresses to the DHT but still discovers validators and
+//! sentry nodes of validators, i.e. only step 2 (Discovers other authorities)
+//! is executed.
+
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::marker::PhantomData;
@@ -51,23 +55,30 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::task::{Context, Poll};
-use futures::{Future, FutureExt, Stream, StreamExt};
+use futures::{Future, FutureExt, ready, Stream, StreamExt};
 use futures_timer::Delay;
 
-use codec::{Decode, Encode};
+use addr_cache::AddrCache;
+use codec::Decode;
 use error::{Error, Result};
-use libp2p::Multiaddr;
-use log::{debug, error, log_enabled, warn};
+use libp2p::core::multiaddr;
+use log::{debug, error, log_enabled};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
 use prost::Message;
 use sc_client_api::blockchain::HeaderBackend;
-use sc_network::{DhtEvent, ExHashT, NetworkStateInfo};
+use sc_network::{
+	config::MultiaddrWithPeerId,
+	DhtEvent,
+	ExHashT,
+	Multiaddr,
+	NetworkStateInfo,
+	PeerId,
+};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, Pair};
 use sp_core::traits::BareCryptoStorePtr;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
-use addr_cache::AddrCache;
 
 #[cfg(test)]
 mod tests;
@@ -81,6 +92,8 @@ mod schema {
 
 type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
 
+const LOG_TARGET: &'static str = "sub-authority-discovery";
+
 /// Upper bound estimation on how long one should wait before accessing the Kademlia DHT.
 const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 
@@ -88,51 +101,15 @@ const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
 
-/// Prometheus metrics for an `AuthorityDiscovery`.
-#[derive(Clone)]
-pub(crate) struct Metrics {
-	publish: Counter<U64>,
-	amount_last_published: Gauge<U64>,
-	request: Counter<U64>,
-	dht_event_received: CounterVec<U64>,
-}
-
-impl Metrics {
-	pub(crate) fn register(registry: &prometheus_endpoint::Registry) -> Result<Self> {
-		Ok(Self {
-			publish: register(
-				Counter::new(
-					"authority_discovery_times_published_total",
-					"Number of times authority discovery has published external addresses."
-				)?,
-				registry,
-			)?,
-			amount_last_published: register(
-				Gauge::new(
-					"authority_discovery_amount_external_addresses_last_published",
-					"Number of external addresses published when authority discovery last published addresses ."
-				)?,
-				registry,
-			)?,
-			request: register(
-				Counter::new(
-					"authority_discovery_times_requested_total",
-					"Number of times authority discovery has requested external addresses."
-				)?,
-				registry,
-			)?,
-			dht_event_received: register(
-				CounterVec::new(
-					Opts::new(
-						"authority_discovery_dht_event_received",
-						"Number of dht events received by authority discovery."
-					),
-					&["name"],
-				)?,
-				registry,
-			)?,
-		})
-	}
+/// Role an authority discovery module can run as.
+pub enum Role {
+	/// Actual authority as well as a reference to its key store.
+	Authority(BareCryptoStorePtr),
+	/// Sentry node that guards an authority.
+	///
+	/// No reference to its key store needed, as sentry nodes don't have an identity to sign
+	/// addresses with in the first place.
+	Sentry,
 }
 
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
@@ -157,8 +134,6 @@ where
 	/// Channel we receive Dht events on.
 	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 
-	key_store: BareCryptoStorePtr,
-
 	/// Interval to be proactive, publishing own addresses.
 	publish_interval: Interval,
 	/// Interval on which to query for addresses of other authorities.
@@ -167,6 +142,8 @@ where
 	addr_cache: addr_cache::AddrCache<AuthorityId, Multiaddr>,
 
 	metrics: Option<Metrics>,
+
+	role: Role,
 
 	phantom: PhantomData<Block>,
 }
@@ -187,9 +164,9 @@ where
 	pub fn new(
 		client: Arc<Client>,
 		network: Arc<Network>,
-		sentry_nodes: Vec<String>,
-		key_store: BareCryptoStorePtr,
+		sentry_nodes: Vec<MultiaddrWithPeerId>,
 		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+		role: Role,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 	) -> Self {
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h.
@@ -210,18 +187,7 @@ where
 		);
 
 		let sentry_nodes = if !sentry_nodes.is_empty() {
-			let addrs = sentry_nodes.into_iter().filter_map(|a| match a.parse() {
-				Ok(addr) => Some(addr),
-				Err(e) => {
-					error!(
-						target: "sub-authority-discovery",
-						"Failed to parse sentry node public address '{:?}', continuing anyways.", e,
-					);
-					None
-				}
-			}).collect::<Vec<Multiaddr>>();
-
-			Some(addrs)
+			Some(sentry_nodes.into_iter().map(|ma| ma.concat()).collect::<Vec<_>>())
 		} else {
 			None
 		};
@@ -233,7 +199,7 @@ where
 				match Metrics::register(&registry) {
 					Ok(metrics) => Some(metrics),
 					Err(e) => {
-						error!(target: "sub-authority-discovery", "Failed to register metrics: {:?}", e);
+						error!(target: LOG_TARGET, "Failed to register metrics: {:?}", e);
 						None
 					},
 				}
@@ -246,10 +212,10 @@ where
 			network,
 			sentry_nodes,
 			dht_event_rx,
-			key_store,
 			publish_interval,
 			query_interval,
 			addr_cache,
+			role,
 			metrics,
 			phantom: PhantomData,
 		}
@@ -257,6 +223,14 @@ where
 
 	/// Publish either our own or if specified the public addresses of our sentry nodes.
 	fn publish_ext_addresses(&mut self) -> Result<()> {
+		let key_store = match &self.role {
+			Role::Authority(key_store) => key_store,
+			// Only authority nodes can put addresses (their own or the ones of their sentry nodes)
+			// on the Dht. Sentry nodes don't have a known identity to authenticate such addresses,
+			// thus `publish_ext_addresses` becomes a no-op.
+			Role::Sentry => return Ok(()),
+		};
+
 		if let Some(metrics) = &self.metrics {
 			metrics.publish.inc()
 		}
@@ -267,7 +241,7 @@ where
 				.collect(),
 			None => self.network.external_addresses()
 				.into_iter()
-				.map(|a| a.with(libp2p::core::multiaddr::Protocol::P2p(
+				.map(|a| a.with(multiaddr::Protocol::P2p(
 					self.network.local_peer_id().into(),
 				)))
 				.map(|a| a.to_vec())
@@ -283,19 +257,35 @@ where
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		for key in self.get_priv_keys_within_authority_set()?.into_iter() {
-			let signature = key.sign(&serialized_addresses);
+		let keys = AuthorityDiscovery::get_own_public_keys_within_authority_set(
+			&key_store,
+			&self.client,
+		)?.into_iter().map(Into::into).collect::<Vec<_>>();
 
+		let signatures = key_store.read()
+			.sign_with_all(
+				key_types::AUTHORITY_DISCOVERY,
+				keys.clone(),
+				serialized_addresses.as_slice(),
+			)
+			.map_err(|_| Error::Signing)?;
+
+		for (sign_result, key) in signatures.into_iter().zip(keys) {
 			let mut signed_addresses = vec![];
+
+			// sign_with_all returns Result<Signature, Error> signature
+			// is generated for a public key that is supported.
+			// Verify that all signatures exist for all provided keys.
+			let signature = sign_result.map_err(|_| Error::MissingSignature(key.clone()))?;
 			schema::SignedAuthorityAddresses {
 				addresses: serialized_addresses.clone(),
-				signature: signature.encode(),
+				signature,
 			}
 			.encode(&mut signed_addresses)
 				.map_err(Error::EncodingProto)?;
 
 			self.network.put_value(
-				hash_authority_id(key.public().as_ref())?,
+				hash_authority_id(key.1.as_ref()),
 				signed_addresses,
 			);
 		}
@@ -304,10 +294,6 @@ where
 	}
 
 	fn request_addresses_of_others(&mut self) -> Result<()> {
-		if let Some(metrics) = &self.metrics {
-			metrics.request.inc();
-		}
-
 		let id = BlockId::hash(self.client.info().best_hash);
 
 		let authorities = self
@@ -316,18 +302,40 @@ where
 			.authorities(&id)
 			.map_err(Error::CallingRuntime)?;
 
+		let local_keys = match &self.role {
+			Role::Authority(key_store) => {
+				key_store.read()
+					.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
+					.into_iter()
+					.collect::<HashSet<_>>()
+			},
+			Role::Sentry => HashSet::new(),
+		};
+
 		for authority_id in authorities.iter() {
-			self.network
-				.get_value(&hash_authority_id(authority_id.as_ref())?);
+			// Make sure we don't look up our own keys.
+			if !local_keys.contains(authority_id.as_ref()) {
+				if let Some(metrics) = &self.metrics {
+					metrics.request.inc();
+				}
+
+				self.network
+					.get_value(&hash_authority_id(authority_id.as_ref()));
+			}
 		}
 
 		Ok(())
 	}
 
-	fn handle_dht_events(&mut self, cx: &mut Context) -> Result<()> {
-		while let Poll::Ready(Some(event)) = self.dht_event_rx.poll_next_unpin(cx) {
-			match event {
-				DhtEvent::ValueFound(v) => {
+	/// Handle incoming Dht events.
+	///
+	/// Returns either:
+	///   - Poll::Pending when there are no more events to handle or
+	///   - Poll::Ready(()) when the dht event stream terminated.
+	fn handle_dht_events(&mut self, cx: &mut Context) -> Poll<()>{
+		loop {
+			match ready!(self.dht_event_rx.poll_next_unpin(cx)) {
+				Some(DhtEvent::ValueFound(v)) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_found"]).inc();
 					}
@@ -335,47 +343,58 @@ where
 					if log_enabled!(log::Level::Debug) {
 						let hashes = v.iter().map(|(hash, _value)| hash.clone());
 						debug!(
-							target: "sub-authority-discovery",
+							target: LOG_TARGET,
 							"Value for hash '{:?}' found on Dht.", hashes,
 						);
 					}
 
-					self.handle_dht_value_found_event(v)?;
+					if let Err(e) = self.handle_dht_value_found_event(v) {
+						if let Some(metrics) = &self.metrics {
+							metrics.handle_value_found_event_failure.inc();
+						}
+
+						debug!(
+							target: LOG_TARGET,
+							"Failed to handle Dht value found event: {:?}", e,
+						);
+					}
 				}
-				DhtEvent::ValueNotFound(hash) => {
+				Some(DhtEvent::ValueNotFound(hash)) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_not_found"]).inc();
 					}
 
 					debug!(
-						target: "sub-authority-discovery",
+						target: LOG_TARGET,
 						"Value for hash '{:?}' not found on Dht.", hash
 					)
 				},
-				DhtEvent::ValuePut(hash) => {
+				Some(DhtEvent::ValuePut(hash)) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_put"]).inc();
 					}
 
 					debug!(
-						target: "sub-authority-discovery",
+						target: LOG_TARGET,
 						"Successfully put hash '{:?}' on Dht.", hash,
 					)
 				},
-				DhtEvent::ValuePutFailed(hash) => {
+				Some(DhtEvent::ValuePutFailed(hash)) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_put_failed"]).inc();
 					}
 
-					warn!(
-						target: "sub-authority-discovery",
+					debug!(
+						target: LOG_TARGET,
 						"Failed to put hash '{:?}' on Dht.", hash
 					)
 				},
+				None => {
+					debug!(target: LOG_TARGET, "Dht event stream terminated.");
+					return Poll::Ready(());
+				},
 			}
 		}
-
-		Ok(())
 	}
 
 	fn handle_dht_value_found_event(
@@ -403,14 +422,16 @@ where
 			self.addr_cache.retain_ids(&authorities);
 			authorities
 				.into_iter()
-				.map(|id| hash_authority_id(id.as_ref()).map(|h| (h, id)))
-				.collect::<Result<HashMap<_, _>>>()?
+				.map(|id| (hash_authority_id(id.as_ref()), id))
+				.collect::<HashMap<_, _>>()
 		};
 
 		// Check if the event origins from an authority in the current authority set.
 		let authority_id: &AuthorityId = authorities
 			.get(&remote_key)
 			.ok_or(Error::MatchingHashedAuthorityIdWithAuthorityId)?;
+
+		let local_peer_id = self.network.local_peer_id();
 
 		let remote_addresses: Vec<Multiaddr> = values.into_iter()
 			.map(|(_k, v)| {
@@ -436,7 +457,27 @@ where
 				Ok(addresses)
 			})
 			.collect::<Result<Vec<Vec<Multiaddr>>>>()?
-			.into_iter().flatten().collect();
+			.into_iter()
+			.flatten()
+			// Ignore own addresses.
+			.filter(|addr| !addr.iter().any(|protocol| {
+				// Parse to PeerId first as Multihashes of old and new PeerId
+				// representation don't equal.
+				//
+				// See https://github.com/libp2p/rust-libp2p/issues/555 for
+				// details.
+				if let multiaddr::Protocol::P2p(hash) = protocol {
+					let peer_id = match PeerId::from_multihash(hash) {
+						Ok(peer_id) => peer_id,
+						Err(_) => return true, // Discard address.
+					};
+
+					return peer_id == local_peer_id;
+				}
+
+				false // Multiaddr does not contain a PeerId.
+			}))
+			.collect();
 
 		if !remote_addresses.is_empty() {
 			self.addr_cache.insert(authority_id.clone(), remote_addresses);
@@ -446,38 +487,23 @@ where
 		Ok(())
 	}
 
-	/// Retrieve all local authority discovery private keys that are within the current authority
-	/// set.
-	fn get_priv_keys_within_authority_set(&mut self) -> Result<Vec<AuthorityPair>> {
-		let keys = self.get_own_public_keys_within_authority_set()?
-			.into_iter()
-			.map(std::convert::Into::into)
-			.filter_map(|pub_key| {
-				self.key_store.read().sr25519_key_pair(key_types::AUTHORITY_DISCOVERY, &pub_key)
-			})
-			.map(std::convert::Into::into)
-			.collect();
-
-		Ok(keys)
-	}
-
 	/// Retrieve our public keys within the current authority set.
 	//
 	// A node might have multiple authority discovery keys within its keystore, e.g. an old one and
 	// one for the upcoming session. In addition it could be participating in the current authority
 	// set with two keys. The function does not return all of the local authority discovery public
 	// keys, but only the ones intersecting with the current authority set.
-	fn get_own_public_keys_within_authority_set(&mut self) -> Result<HashSet<AuthorityId>> {
-		let local_pub_keys = self.key_store
-			.read()
+	fn get_own_public_keys_within_authority_set(
+		key_store: &BareCryptoStorePtr,
+		client: &Client,
+	) -> Result<HashSet<AuthorityId>> {
+		let local_pub_keys = key_store.read()
 			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
 			.into_iter()
 			.collect::<HashSet<_>>();
 
-		let id = BlockId::hash(self.client.info().best_hash);
-		let current_authorities = self
-			.client
-			.runtime_api()
+		let id = BlockId::hash(client.info().best_hash);
+		let current_authorities = client.runtime_api()
 			.authorities(&id)
 			.map_err(Error::CallingRuntime)?
 			.into_iter()
@@ -493,16 +519,22 @@ where
 	}
 
 	/// Update the peer set 'authority' priority group.
-	//
 	fn update_peer_set_priority_group(&self) -> Result<()> {
 		let addresses = self.addr_cache.get_subset();
 
+		if let Some(metrics) = &self.metrics {
+			metrics.priority_group_size.set(addresses.len().try_into().unwrap_or(std::u64::MAX));
+		}
+
 		debug!(
-			target: "sub-authority-discovery",
+			target: LOG_TARGET,
 			"Applying priority group {:?} to peerset.", addresses,
 		);
 		self.network
-			.set_priority_group(AUTHORITIES_PRIORITY_GROUP_NAME.to_string(), addresses.into_iter().collect())
+			.set_priority_group(
+				AUTHORITIES_PRIORITY_GROUP_NAME.to_string(),
+				addresses.into_iter().collect(),
+			)
 			.map_err(Error::SettingPeersetPriorityGroup)?;
 
 		Ok(())
@@ -520,40 +552,41 @@ where
 	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let mut inner = || -> Result<()> {
-			// Process incoming events before triggering new ones.
-			self.handle_dht_events(cx)?;
+		// Process incoming events.
+		if let Poll::Ready(()) = self.handle_dht_events(cx) {
+			// `handle_dht_events` returns `Poll::Ready(())` when the Dht event stream terminated.
+			// Termination of the Dht event stream implies that the underlying network terminated,
+			// thus authority discovery should terminate as well.
+			return Poll::Ready(());
+		}
 
-			if let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {
-				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise,
-				// in case one of the function calls within this block do a `return`, we don't call
-				// `interval.poll` again and thereby the underlying Tokio task is never registered
-				// with Tokio's Reactor to be woken up on the next interval tick.
-				while let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {}
 
-				self.publish_ext_addresses()?;
+		// Publish own addresses.
+		if let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {
+			// Register waker of underlying task for next interval.
+			while let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {}
+
+			if let Err(e) = self.publish_ext_addresses() {
+				error!(
+					target: LOG_TARGET,
+					"Failed to publish external addresses: {:?}", e,
+				);
 			}
+		}
 
-			if let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {
-				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise,
-				// in case one of the function calls within this block do a `return`, we don't call
-				// `interval.poll` again and thereby the underlying Tokio task is never registered
-				// with Tokio's Reactor to be woken up on the next interval tick.
-				while let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {}
+		// Request addresses of authorities.
+		if let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {
+			// Register waker of underlying task for next interval.
+			while let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {}
 
-				self.request_addresses_of_others()?;
+			if let Err(e) = self.request_addresses_of_others() {
+				error!(
+					target: LOG_TARGET,
+					"Failed to request addresses of authorities: {:?}", e,
+				);
 			}
+		}
 
-			Ok(())
-		};
-
-		match inner() {
-			Ok(()) => {}
-			Err(e) => error!(target: "sub-authority-discovery", "Poll failure: {:?}", e),
-		};
-
-		// Make sure to always return NotReady as this is a long running task with the same lifetime
-		// as the node itself.
 		Poll::Pending
 	}
 }
@@ -596,10 +629,8 @@ where
 	}
 }
 
-fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
-	libp2p::multihash::encode(libp2p::multihash::Hash::SHA2256, id)
-		.map(|k| libp2p::kad::record::Key::new(&k))
-		.map_err(Error::HashingAuthorityId)
+fn hash_authority_id(id: &[u8]) -> libp2p::kad::record::Key {
+	libp2p::kad::record::Key::new(&libp2p::multihash::Sha2_256::digest(id))
 }
 
 fn interval_at(start: Instant, duration: Duration) -> Interval {
@@ -610,4 +641,69 @@ fn interval_at(start: Instant, duration: Duration) -> Interval {
 	});
 
 	Box::new(stream)
+}
+
+/// Prometheus metrics for an `AuthorityDiscovery`.
+#[derive(Clone)]
+pub(crate) struct Metrics {
+	publish: Counter<U64>,
+	amount_last_published: Gauge<U64>,
+	request: Counter<U64>,
+	dht_event_received: CounterVec<U64>,
+	handle_value_found_event_failure: Counter<U64>,
+	priority_group_size: Gauge<U64>,
+}
+
+impl Metrics {
+	pub(crate) fn register(registry: &prometheus_endpoint::Registry) -> Result<Self> {
+		Ok(Self {
+			publish: register(
+				Counter::new(
+					"authority_discovery_times_published_total",
+					"Number of times authority discovery has published external addresses."
+				)?,
+				registry,
+			)?,
+			amount_last_published: register(
+				Gauge::new(
+					"authority_discovery_amount_external_addresses_last_published",
+					"Number of external addresses published when authority discovery last \
+					 published addresses."
+				)?,
+				registry,
+			)?,
+			request: register(
+				Counter::new(
+					"authority_discovery_authority_addresses_requested_total",
+					"Number of times authority discovery has requested external addresses of a \
+					 single authority."
+				)?,
+				registry,
+			)?,
+			dht_event_received: register(
+				CounterVec::new(
+					Opts::new(
+						"authority_discovery_dht_event_received",
+						"Number of dht events received by authority discovery."
+					),
+					&["name"],
+				)?,
+				registry,
+			)?,
+			handle_value_found_event_failure: register(
+				Counter::new(
+					"authority_discovery_handle_value_found_event_failure",
+					"Number of times handling a dht value found event failed."
+				)?,
+				registry,
+			)?,
+			priority_group_size: register(
+				Gauge::new(
+					"authority_discovery_priority_group_size",
+					"Number of addresses passed to the peer set as a priority group."
+				)?,
+				registry,
+			)?,
+		})
+	}
 }

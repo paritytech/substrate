@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Interfaces, types and utils for benchmarking a FRAME runtime.
 
@@ -22,11 +23,22 @@ use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeString;
 
 /// An alphabet of possible parameters to use for benchmarking.
-#[derive(codec::Encode, codec::Decode, Clone, Copy, PartialEq, Debug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
 #[allow(missing_docs)]
 #[allow(non_camel_case_types)]
 pub enum BenchmarkParameter {
 	a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z,
+}
+
+/// The results of a single of benchmark.
+#[derive(Encode, Decode, Clone, PartialEq, Debug)]
+pub struct BenchmarkBatch {
+	/// The pallet containing this benchmark.
+	pub pallet: Vec<u8>,
+	/// The extrinsic (or benchmark name) of this benchmark.
+	pub benchmark: Vec<u8>,
+	/// The results from this benchmark.
+	pub results: Vec<BenchmarkResults>,
 }
 
 /// Results from running benchmarks on a FRAME pallet.
@@ -39,13 +51,13 @@ sp_api::decl_runtime_apis! {
 	pub trait Benchmark {
 		/// Dispatch the given benchmark.
 		fn dispatch_benchmark(
-			module: Vec<u8>,
-			extrinsic: Vec<u8>,
+			pallet: Vec<u8>,
+			benchmark: Vec<u8>,
 			lowest_range_values: Vec<u32>,
 			highest_range_values: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
-		) -> Result<Vec<BenchmarkResults>, RuntimeString>;
+		) -> Result<Vec<BenchmarkBatch>, RuntimeString>;
 	}
 }
 
@@ -75,19 +87,24 @@ pub trait Benchmarking {
 
 /// The pallet benchmarking trait.
 pub trait Benchmarking<T> {
+	/// Get the benchmarks available for this pallet. Generally there is one benchmark per
+	/// extrinsic, so these are sometimes just called "extrinsics".
+	fn benchmarks() -> Vec<&'static [u8]>;
+
 	/// Run the benchmarks for this pallet.
 	///
 	/// Parameters
-	/// - `extrinsic`: The name of extrinsic function you want to benchmark encoded as bytes.
+	/// - `name`: The name of extrinsic function or benchmark you want to benchmark encoded as
+	///   bytes.
 	/// - `steps`: The number of sample points you want to take across the range of parameters.
 	/// - `lowest_range_values`: The lowest number for each range of parameters.
 	/// - `highest_range_values`: The highest number for each range of parameters.
 	/// - `repeat`: The number of times you want to repeat a benchmark.
 	fn run_benchmark(
-		extrinsic: Vec<u8>,
-		lowest_range_values: Vec<u32>,
-		highest_range_values: Vec<u32>,
-		steps: Vec<u32>,
+		name: &[u8],
+		lowest_range_values: &[u32],
+		highest_range_values: &[u32],
+		steps: &[u32],
 		repeat: u32,
 	) -> Result<Vec<T>, &'static str>;
 }
@@ -97,8 +114,11 @@ pub trait BenchmarkingSetup<T> {
 	/// Return the components and their ranges which should be tested in this benchmark.
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
 
-	/// Set up the storage, and prepare a closure to test in a single run of the benchmark.
+	/// Set up the storage, and prepare a closure to run the benchmark.
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+
+	/// Set up the storage, and prepare a closure to test and verify the benchmark
+	fn verify(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
 /// The required setup for creating a benchmark.
@@ -106,8 +126,11 @@ pub trait BenchmarkingSetupInstance<T, I> {
 	/// Return the components and their ranges which should be tested in this benchmark.
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
 
-	/// Set up the storage, and prepare a closure to test in a single run of the benchmark.
+	/// Set up the storage, and prepare a closure to run the benchmark.
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+
+	/// Set up the storage, and prepare a closure to test and verify the benchmark
+	fn verify(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
 /// Grab an account, seeded by a name and index.

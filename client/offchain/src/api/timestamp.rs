@@ -51,12 +51,14 @@ pub fn timestamp_from_now(timestamp: Timestamp) -> Duration {
 pub fn deadline_to_future(
 	deadline: Option<Timestamp>,
 ) -> futures::future::MaybeDone<impl futures::Future> {
-	use futures::future;
+	use futures::future::{self, Either};
 
-	future::maybe_done(match deadline {
-		Some(deadline) => future::Either::Left(
-			futures_timer::Delay::new(timestamp_from_now(deadline))
-		),
-		None => future::Either::Right(future::pending())
+	future::maybe_done(match deadline.map(timestamp_from_now) {
+		None => Either::Left(future::pending()),
+		// Only apply delay if we need to wait a non-zero duration
+		Some(duration) if duration <= Duration::from_secs(0) =>
+			Either::Right(Either::Left(future::ready(()))),
+		Some(duration) =>
+			Either::Right(Either::Right(futures_timer::Delay::new(duration))),
 	})
 }

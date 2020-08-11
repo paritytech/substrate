@@ -3,6 +3,8 @@ members = [
 	"bin/node-template/node",
 	"bin/node-template/runtime",
 	"bin/node-template/pallets/template",
+	"bin/node/bench",
+	"bin/node/browser-testing",
 	"bin/node/cli",
 	"bin/node/executor",
 	"bin/node/primitives",
@@ -10,10 +12,8 @@ members = [
 	"bin/node/rpc",
 	"bin/node/runtime",
 	"bin/node/testing",
-	"bin/node/transaction-factory",
 	"bin/utils/subkey",
 	"bin/utils/chain-spec-builder",
-	"client",
 	"client/api",
 	"client/authority-discovery",
 	"client/basic-authorship",
@@ -24,6 +24,7 @@ members = [
 	"client/consensus/aura",
 	"client/consensus/babe",
 	"client/consensus/babe/rpc",
+	"client/consensus/common",
 	"client/consensus/manual-seal",
 	"client/consensus/pow",
 	"client/consensus/uncles",
@@ -37,6 +38,7 @@ members = [
 	"client/executor/runtime-test",
 	"client/finality-grandpa",
 	"client/informant",
+	"client/light",
 	"client/tracing",
 	"client/keystore",
 	"client/network",
@@ -44,6 +46,7 @@ members = [
 	"client/network-gossip",
 	"client/offchain",
 	"client/peerset",
+	"client/proposer-metrics",
 	"client/rpc-servers",
 	"client/rpc",
 	"client/rpc-api",
@@ -57,6 +60,7 @@ members = [
 	"utils/wasm-builder-runner",
 	"frame/assets",
 	"frame/aura",
+	"frame/atomic-swap",
 	"frame/authority-discovery",
 	"frame/authorship",
 	"frame/babe",
@@ -82,16 +86,20 @@ members = [
 	"frame/indices",
 	"frame/membership",
 	"frame/metadata",
+	"frame/multisig",
 	"frame/nicks",
 	"frame/offences",
+	"frame/proxy",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
+	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
 	"frame/session/benchmarking",
 	"frame/society",
 	"frame/staking",
 	"frame/staking/reward-curve",
+	"frame/staking/fuzzer",
 	"frame/sudo",
 	"frame/support",
 	"frame/support/procedural",
@@ -99,6 +107,7 @@ members = [
 	"frame/support/procedural/tools/derive",
 	"frame/support/test",
 	"frame/system",
+	"frame/system/benchmarking",
 	"frame/system/rpc/runtime-api",
 	"frame/timestamp",
 	"frame/transaction-payment",
@@ -120,6 +129,8 @@ members = [
 	"primitives/consensus/pow",
 	"primitives/consensus/vrf",
 	"primitives/core",
+	"primitives/chain-spec",
+	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/storage",
 	"primitives/externalities",
@@ -129,7 +140,9 @@ members = [
 	"primitives/keyring",
 	"primitives/offchain",
 	"primitives/panic-handler",
-	"primitives/phragmen",
+	"primitives/npos-elections",
+	"primitives/npos-elections/fuzzer",
+	"primitives/npos-elections/compact",
 	"primitives/rpc",
 	"primitives/runtime-interface",
 	"primitives/runtime-interface/proc-macro",
@@ -153,7 +166,9 @@ members = [
 	"primitives/timestamp",
 	"primitives/test-primitives",
 	"primitives/transaction-pool",
+	"primitives/tracing",
 	"primitives/trie",
+	"primitives/utils",
 	"primitives/wasm-interface",
 	"test-utils/client",
 	"test-utils/runtime",
@@ -167,6 +182,74 @@ members = [
 	"utils/frame/rpc/system",
 	"utils/wasm-builder",
 ]
+
+# The list of dependencies below (which can be both direct and indirect dependencies) are crates
+# that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of
+# their debug info might be missing) or to require to be frequently recompiled. We compile these
+# dependencies with `opt-level=3` even in "dev" mode in order to make "dev" mode more usable.
+# The majority of these crates are cryptographic libraries.
+#
+# Note that this does **not** affect crates that depend on Substrate. In other words, if you add
+# a dependency on Substrate, you have to copy-paste this list in your own `Cargo.toml` (assuming
+# that you want the same list). This list is only relevant when running `cargo build` from within
+# the Substrate workspace.
+#
+# If you see an error mentioning "profile package spec ... did not match any packages", it
+# probably concerns this list.
+#
+# This list is ordered alphabetically.
+[profile.dev.package]
+aes-ctr = { opt-level = 3 }
+aes-soft = { opt-level = 3 }
+aesni = { opt-level = 3 }
+blake2 = { opt-level = 3 }
+blake2-rfc = { opt-level = 3 }
+blake2b_simd = { opt-level = 3 }
+blake2s_simd = { opt-level = 3 }
+chacha20-poly1305-aead = { opt-level = 3 }
+cranelift-codegen = { opt-level = 3 }
+cranelift-wasm = { opt-level = 3 }
+crc32fast = { opt-level = 3 }
+crossbeam-deque = { opt-level = 3 }
+crossbeam-queue = { opt-level = 3 }
+crypto-mac = { opt-level = 3 }
+ctr = { opt-level = 3 }
+curve25519-dalek = { opt-level = 3 }
+ed25519-dalek = { opt-level = 3 }
+evm-core = { opt-level = 3 }
+evm-runtime = { opt-level = 3 }
+flate2 = { opt-level = 3 }
+futures-channel = { opt-level = 3 }
+hashbrown = { opt-level = 3 }
+h2 = { opt-level = 3 }
+hash-db = { opt-level = 3 }
+hmac = { opt-level = 3 }
+httparse = { opt-level = 3 }
+integer-sqrt = { opt-level = 3 }
+keccak = { opt-level = 3 }
+libm = { opt-level = 3 }
+librocksdb-sys = { opt-level = 3 }
+libsecp256k1 = { opt-level = 3 }
+libz-sys = { opt-level = 3 }
+mio = { opt-level = 3 }
+nalgebra = { opt-level = 3 }
+num-bigint = { opt-level = 3 }
+parking_lot = { opt-level = 3 }
+parking_lot_core = { opt-level = 3 }
+percent-encoding = { opt-level = 3 }
+primitive-types = { opt-level = 3 }
+ring = { opt-level = 3 }
+rustls = { opt-level = 3 }
+sha2 = { opt-level = 3 }
+sha3 = { opt-level = 3 }
+smallvec = { opt-level = 3 }
+snow = { opt-level = 3 }
+twox-hash = { opt-level = 3 }
+uint = { opt-level = 3 }
+wasmi = { opt-level = 3 }
+x25519-dalek = { opt-level = 3 }
+yamux = { opt-level = 3 }
+zeroize = { opt-level = 3 }
 
 [profile.release]
 # Substrate runtime requires unwinding.

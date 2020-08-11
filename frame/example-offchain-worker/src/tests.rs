@@ -1,36 +1,41 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::*;
 
-use codec::Decode;
+use codec::{Encode, Decode};
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types,
-	weights::{GetDispatchInfo, Weight},
+	weights::Weight,
 };
 use sp_core::{
 	H256,
 	offchain::{OffchainExt, TransactionPoolExt, testing},
+	sr25519::Signature,
 	testing::KeyStore,
 	traits::KeystoreExt,
 };
 use sp_runtime::{
 	Perbill, RuntimeAppPublic,
 	testing::{Header, TestXt},
-	traits::{BlakeTwo256, IdentityLookup, Extrinsic as ExtrinsicsT},
+	traits::{
+		BlakeTwo256, IdentityLookup, Extrinsic as ExtrinsicT,
+		IdentifyAccount, Verify,
+	},
 };
 
 impl_outer_origin! {
@@ -40,7 +45,7 @@ impl_outer_origin! {
 // For testing the module, we construct most of a mock runtime. This means
 // first constructing a configuration type (`Test`) which `impl`s each of the
 // configuration traits of modules we want to use.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -49,6 +54,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = ();
 	type Index = u64;
@@ -61,32 +67,44 @@ impl frame_system::Trait for Test {
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = ();
+	type MigrateAccount = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
 
 type Extrinsic = TestXt<Call<Test>, ()>;
-type SubmitTransaction = frame_system::offchain::TransactionSubmitter<
-	crypto::Public,
-	Test,
-	Extrinsic
->;
+type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
-impl frame_system::offchain::CreateTransaction<Test, Extrinsic> for Test {
-	type Public = sp_core::sr25519::Public;
-	type Signature = sp_core::sr25519::Signature;
+impl frame_system::offchain::SigningTypes for Test {
+	type Public = <Signature as Verify>::Signer;
+	type Signature = Signature;
+}
 
-	fn create_transaction<F: frame_system::offchain::Signer<Self::Public, Self::Signature>>(
-		call: <Extrinsic as ExtrinsicsT>::Call,
-		_public: Self::Public,
-		_account: <Test as frame_system::Trait>::AccountId,
-		nonce: <Test as frame_system::Trait>::Index,
-	) -> Option<(<Extrinsic as ExtrinsicsT>::Call, <Extrinsic as ExtrinsicsT>::SignaturePayload)> {
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test where
+	Call<Test>: From<LocalCall>,
+{
+	type OverarchingCall = Call<Test>;
+	type Extrinsic = Extrinsic;
+}
+
+impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Test where
+	Call<Test>: From<LocalCall>,
+{
+	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
+		call: Call<Test>,
+		_public: <Signature as Verify>::Signer,
+		_account: AccountId,
+		nonce: u64,
+	) -> Option<(Call<Test>, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
 		Some((call, (nonce, ())))
 	}
 }
@@ -94,15 +112,16 @@ impl frame_system::offchain::CreateTransaction<Test, Extrinsic> for Test {
 parameter_types! {
 	pub const GracePeriod: u64 = 5;
 	pub const UnsignedInterval: u64 = 128;
+	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
 impl Trait for Test {
 	type Event = ();
+	type AuthorityId = crypto::TestAuthId;
 	type Call = Call<Test>;
-	type SubmitSignedTransaction = SubmitTransaction;
-	type SubmitUnsignedTransaction = SubmitTransaction;
 	type GracePeriod = GracePeriod;
 	type UnsignedInterval = UnsignedInterval;
+	type UnsignedPriority = UnsignedPriority;
 }
 
 type Example = Module<Test>;
@@ -169,18 +188,128 @@ fn should_submit_signed_transaction_on_chain() {
 }
 
 #[test]
-fn should_submit_unsigned_transaction_on_chain() {
+fn should_submit_unsigned_transaction_on_chain_for_any_account() {
+	const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+
+	let keystore = KeyStore::new();
+
+	keystore.write().sr25519_generate_new(
+		crate::crypto::Public::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
+	t.register_extension(KeystoreExt(keystore.clone()));
+
+	price_oracle_response(&mut offchain_state.write());
+
+	let public_key = keystore.read()
+		.sr25519_public_keys(crate::crypto::Public::ID)
+		.get(0)
+		.unwrap()
+		.clone();
+
+	let price_payload = PricePayload {
+		block_number: 1,
+		price: 15523,
+		public: <Test as SigningTypes>::Public::from(public_key),
+	};
+
+	// let signature = price_payload.sign::<crypto::TestAuthId>().unwrap();
+	t.execute_with(|| {
+		// when
+		Example::fetch_price_and_send_unsigned_for_any_account(1).unwrap();
+		// then
+		let tx = pool_state.write().transactions.pop().unwrap();
+		let tx = Extrinsic::decode(&mut &*tx).unwrap();
+		assert_eq!(tx.signature, None);
+		if let Call::submit_price_unsigned_with_signed_payload(body, signature) = tx.call {
+			assert_eq!(body, price_payload);
+
+			let signature_valid = <PricePayload<
+				<Test as SigningTypes>::Public,
+				<Test as frame_system::Trait>::BlockNumber
+					> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&price_payload, signature);
+
+			assert!(signature_valid);
+		}
+	});
+}
+
+#[test]
+fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
+	const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
+	let (offchain, offchain_state) = testing::TestOffchainExt::new();
+	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+
+	let keystore = KeyStore::new();
+
+	keystore.write().sr25519_generate_new(
+		crate::crypto::Public::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+
+	let mut t = sp_io::TestExternalities::default();
+	t.register_extension(OffchainExt::new(offchain));
+	t.register_extension(TransactionPoolExt::new(pool));
+	t.register_extension(KeystoreExt(keystore.clone()));
+
+	price_oracle_response(&mut offchain_state.write());
+
+	let public_key = keystore.read()
+		.sr25519_public_keys(crate::crypto::Public::ID)
+		.get(0)
+		.unwrap()
+		.clone();
+
+	let price_payload = PricePayload {
+		block_number: 1,
+		price: 15523,
+		public: <Test as SigningTypes>::Public::from(public_key),
+	};
+
+	// let signature = price_payload.sign::<crypto::TestAuthId>().unwrap();
+	t.execute_with(|| {
+		// when
+		Example::fetch_price_and_send_unsigned_for_all_accounts(1).unwrap();
+		// then
+		let tx = pool_state.write().transactions.pop().unwrap();
+		let tx = Extrinsic::decode(&mut &*tx).unwrap();
+		assert_eq!(tx.signature, None);
+		if let Call::submit_price_unsigned_with_signed_payload(body, signature) = tx.call {
+			assert_eq!(body, price_payload);
+
+			let signature_valid = <PricePayload<
+				<Test as SigningTypes>::Public,
+				<Test as frame_system::Trait>::BlockNumber
+					> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&price_payload, signature);
+
+			assert!(signature_valid);
+		}
+	});
+}
+
+#[test]
+fn should_submit_raw_unsigned_transaction_on_chain() {
+	let (offchain, offchain_state) = testing::TestOffchainExt::new();
+	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+
+	let keystore = KeyStore::new();
+
+	let mut t = sp_io::TestExternalities::default();
+	t.register_extension(OffchainExt::new(offchain));
+	t.register_extension(TransactionPoolExt::new(pool));
+	t.register_extension(KeystoreExt(keystore));
 
 	price_oracle_response(&mut offchain_state.write());
 
 	t.execute_with(|| {
 		// when
-		Example::fetch_price_and_send_unsigned(1).unwrap();
+		Example::fetch_price_and_send_raw_unsigned(1).unwrap();
 		// then
 		let tx = pool_state.write().transactions.pop().unwrap();
 		assert!(pool_state.read().transactions.is_empty());
@@ -188,15 +317,6 @@ fn should_submit_unsigned_transaction_on_chain() {
 		assert_eq!(tx.signature, None);
 		assert_eq!(tx.call, Call::submit_price_unsigned(1, 15523));
 	});
-}
-
-#[test]
-fn weights_work() {
-	// must have a default weight.
-	let default_call = <Call<Test>>::submit_price(10);
-	let info = default_call.get_dispatch_info();
-	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-	assert_eq!(info.weight, 10_000);
 }
 
 fn price_oracle_response(state: &mut testing::OffchainState) {

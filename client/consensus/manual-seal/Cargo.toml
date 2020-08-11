@@ -1,37 +1,41 @@
 [package]
 name = "sc-consensus-manual-seal"
-version = "0.8.0-alpha.5"
+version = "0.8.0-rc3"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Manual sealing engine for Substrate"
 edition = "2018"
-license = "GPL-3.0"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dependencies]
 derive_more = "0.99.2"
-futures = "0.3.1"
-jsonrpc-core = "14.0.5"
-jsonrpc-core-client = "14.0.5"
-jsonrpc-derive = "14.0.5"
+futures = "0.3.4"
+jsonrpc-core = "14.2.0"
+jsonrpc-core-client = "14.2.0"
+jsonrpc-derive = "14.2.1"
 log = "0.4.8"
 parking_lot = "0.10.0"
 serde = { version = "1.0", features=["derive"] }
 assert_matches = "1.3.0"
 
-sc-client = { path = "../../../client" , version = "0.8.0-alpha.5"}
-sc-client-api = { path = "../../../client/api" , version = "2.0.0-alpha.5"}
-sc-transaction-pool = { path = "../../transaction-pool" , version = "2.0.0-alpha.5"}
-sp-blockchain = { path = "../../../primitives/blockchain" , version = "2.0.0-alpha.5"}
-sp-consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common" , version = "0.8.0-alpha.5"}
-sp-inherents = { path = "../../../primitives/inherents" , version = "2.0.0-alpha.5"}
-sp-runtime = {  path = "../../../primitives/runtime" , version = "2.0.0-alpha.5"}
-sp-transaction-pool = { path = "../../../primitives/transaction-pool" , version = "2.0.0-alpha.5"}
+sc-client-api = { path = "../../../client/api", version = "2.0.0-rc3" }
+sc-transaction-pool = { path = "../../transaction-pool", version = "2.0.0-rc3" }
+sp-blockchain = { path = "../../../primitives/blockchain", version = "2.0.0-rc3" }
+sp-consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common", version = "0.8.0-rc3" }
+sp-inherents = { path = "../../../primitives/inherents", version = "2.0.0-rc3" }
+sp-runtime = {  path = "../../../primitives/runtime", version = "2.0.0-rc3" }
+sp-core = {  path = "../../../primitives/core", version = "2.0.0-rc3" }
+sp-transaction-pool = { path = "../../../primitives/transaction-pool", version = "2.0.0-rc3" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0-rc3" }
 
 [dev-dependencies]
-sc-basic-authorship = { path = "../../basic-authorship" , version = "0.8.0-alpha.5"}
-substrate-test-runtime-client = { path = "../../../test-utils/runtime/client" , version = "2.0.0-dev"}
-substrate-test-runtime-transaction-pool = { path = "../../../test-utils/runtime/transaction-pool" , version = "2.0.0-dev"}
+sc-basic-authorship = { path = "../../basic-authorship", version = "0.8.0-rc3" }
+substrate-test-runtime-client = { path = "../../../test-utils/runtime/client", version = "2.0.0-rc3" }
+substrate-test-runtime-transaction-pool = { path = "../../../test-utils/runtime/transaction-pool", version = "2.0.0-rc3" }
 tokio = { version = "0.2", features = ["rt-core", "macros"] }
 env_logger = "0.7.0"
 tempfile = "3.1.0"

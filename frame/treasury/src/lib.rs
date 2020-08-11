@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Treasury Module
 //!
@@ -96,25 +97,24 @@ use frame_support::traits::{
 	ReservableCurrency, WithdrawReason
 };
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
-	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
+	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
 }};
-use frame_support::{weights::{Weight, WeighData, SimpleDispatchInfo}, traits::Contains};
+use frame_support::weights::{Weight, DispatchClass};
+use frame_support::traits::{Contains, ContainsLengthBound, EnsureOrigin};
 use codec::{Encode, Decode};
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed};
 
-#[cfg(test)]
 mod tests;
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
-/// The treasury's module id, used for deriving its sovereign account ID.
-const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
-
 pub trait Trait: frame_system::Trait {
+	/// The treasury's module id, used for deriving its sovereign account ID.
+	type ModuleId: Get<ModuleId>;
+
 	/// The staking balance.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
@@ -125,7 +125,9 @@ pub trait Trait: frame_system::Trait {
 	type RejectOrigin: EnsureOrigin<Self::Origin>;
 
 	/// Origin from which tippers must come.
-	type Tippers: Contains<Self::AccountId>;
+	///
+	/// `ContainsLengthBound::max_len` must be cost free (i.e. no storage read or heavy operation).
+	type Tippers: Contains<Self::AccountId> + ContainsLengthBound;
 
 	/// The period for which a tip remains open after is has achieved threshold tippers.
 	type TipCountdown: Get<Self::BlockNumber>;
@@ -288,6 +290,16 @@ decl_error! {
 	}
 }
 
+mod migration {
+	use super::*;
+	pub fn migrate<T: Trait>() {
+		for i in 0..ProposalCount::get() {
+			Proposals::<T>::migrate_key_from_blake(i);
+		}
+		Reasons::<T>::remove_all();
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
@@ -314,21 +326,30 @@ decl_module! {
 
 		/// The amount held on deposit per byte within the tip report reason.
 		const TipReportDepositPerByte: BalanceOf<T> = T::TipReportDepositPerByte::get();
+		
+		/// The treasury's module id, used for deriving its sovereign account ID.
+		const ModuleId: ModuleId = T::ModuleId::get();
 
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
+
+		// The edgeware migration is so big we just assume it consumes the whole block.
+		fn on_runtime_upgrade() -> Weight {
+			migration::migrate::<T>();
+			T::MaximumBlockWeight::get()
+		}
 
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
 		/// proposal is awarded.
 		///
 		/// # <weight>
-		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB change, one extra DB entry.
+		/// - Complexity: O(1)
+		/// - DbReads: `ProposalCount`, `origin account`
+		/// - DbWrites: `ProposalCount`, `Proposals`, `origin account`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		#[weight = 120_000_000 + T::DbWeight::get().reads_writes(1, 2)]
 		fn propose_spend(
 			origin,
 			#[compact] value: BalanceOf<T>,
@@ -351,15 +372,13 @@ decl_module! {
 		/// Reject a proposed spend. The original deposit will be slashed.
 		///
 		/// # <weight>
-		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB clear.
+		/// - Complexity: O(1)
+		/// - DbReads: `Proposals`, `rejected proposer account`
+		/// - DbWrites: `Proposals`, `rejected proposer account`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
+		#[weight = (130_000_000 + T::DbWeight::get().reads_writes(2, 2), DispatchClass::Operational)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::RejectOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::RejectOrigin::ensure_origin(origin)?;
 
 			let proposal = <Proposals<T>>::take(&proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
 			let value = proposal.bond;
@@ -373,15 +392,13 @@ decl_module! {
 		/// and the original deposit will be returned.
 		///
 		/// # <weight>
-		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB change.
+		/// - Complexity: O(1).
+		/// - DbReads: `Proposals`, `Approvals`
+		/// - DbWrite: `Approvals`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
+		#[weight = (34_000_000 + T::DbWeight::get().reads_writes(2, 1), DispatchClass::Operational)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::ApproveOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ApproveOrigin::ensure_origin(origin)?;
 
 			ensure!(<Proposals<T>>::contains_key(proposal_id), Error::<T>::InvalidProposalIndex);
 			Approvals::mutate(|v| v.push(proposal_id));
@@ -401,12 +418,12 @@ decl_module! {
 		/// Emits `NewTip` if successful.
 		///
 		/// # <weight>
-		/// - `O(R)` where `R` length of `reason`.
-		/// - One balance operation.
-		/// - One storage mutation (codec `O(R)`).
-		/// - One event.
+		/// - Complexity: `O(R)` where `R` length of `reason`.
+		///   - encoding and hashing of 'reason'
+		/// - DbReads: `Reasons`, `Tips`, `who account data`
+		/// - DbWrites: `Tips`, `who account data`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
+		#[weight = 140_000_000 + 4_000 * reason.len() as Weight + T::DbWeight::get().reads_writes(3, 2)]
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
@@ -443,12 +460,12 @@ decl_module! {
 		/// Emits `TipRetracted` if successful.
 		///
 		/// # <weight>
-		/// - `O(T)`
-		/// - One balance operation.
-		/// - Two storage removals (one read, codec `O(T)`).
-		/// - One event.
+		/// - Complexity: `O(1)`
+		///   - Depends on the length of `T::Hash` which is fixed.
+		/// - DbReads: `Tips`, `origin account`
+		/// - DbWrites: `Reasons`, `Tips`, `origin account`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = 120_000_000 + T::DbWeight::get().reads_writes(1, 2)]
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
@@ -475,12 +492,18 @@ decl_module! {
 		/// Emits `NewTip` if successful.
 		///
 		/// # <weight>
-		/// - `O(R + T)` where `R` length of `reason`, `T` is the number of tippers. `T` is
-		///   naturally capped as a membership set, `R` is limited through transaction-size.
-		/// - Two storage insertions (codecs `O(R)`, `O(T)`), one read `O(1)`.
-		/// - One event.
+		/// - Complexity: `O(R + T)` where `R` length of `reason`, `T` is the number of tippers.
+		///   - `O(T)`: decoding `Tipper` vec of length `T`
+		///     `T` is charged as upper bound given by `ContainsLengthBound`.
+		///     The actual cost depends on the implementation of `T::Tippers`.
+		///   - `O(R)`: hashing and encoding of reason of length `R`
+		/// - DbReads: `Tippers`, `Reasons`
+		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
+		#[weight = 110_000_000
+			+ 4_000 * reason.len() as Weight
+			+ 480_000 * T::Tippers::max_len() as Weight
+			+ T::DbWeight::get().reads_writes(2, 2)]
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -510,11 +533,18 @@ decl_module! {
 		/// has started.
 		///
 		/// # <weight>
-		/// - `O(T)`
-		/// - One storage mutation (codec `O(T)`), one storage read `O(1)`.
-		/// - Up to one event.
+		/// - Complexity: `O(T)` where `T` is the number of tippers.
+		///   decoding `Tipper` vec of length `T`, insert tip and check closing,
+		///   `T` is charged as upper bound given by `ContainsLengthBound`.
+		///   The actual cost depends on the implementation of `T::Tippers`.
+		///
+		///   Actually weight could be lower as it depends on how many tips are in `OpenTip` but it
+		///   is weighted as if almost full i.e of length `T-1`.
+		/// - DbReads: `Tippers`, `Tips`
+		/// - DbWrites: `Tips`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = 68_000_000 + 2_000_000 * T::Tippers::max_len() as Weight
+			+ T::DbWeight::get().reads_writes(2, 1)]
 		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -536,11 +566,15 @@ decl_module! {
 		///   as the hash of the tuple of the original tip `reason` and the beneficiary account ID.
 		///
 		/// # <weight>
-		/// - `O(T)`
-		/// - One storage retrieval (codec `O(T)`) and two removals.
-		/// - Up to three balance operations.
+		/// - Complexity: `O(T)` where `T` is the number of tippers.
+		///   decoding `Tipper` vec of length `T`.
+		///   `T` is charged as upper bound given by `ContainsLengthBound`.
+		///   The actual cost depends on the implementation of `T::Tippers`.
+		/// - DbReads: `Tips`, `Tippers`, `tip finder`
+		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = 220_000_000 + 1_100_000 * T::Tippers::max_len() as Weight
+			+ T::DbWeight::get().reads_writes(3, 3)]
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 
@@ -550,16 +584,26 @@ decl_module! {
 			// closed.
 			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(hash);
-			Self::payout_tip(tip);
+			Self::payout_tip(hash, tip);
 		}
 
+		/// # <weight>
+		/// - Complexity: `O(A)` where `A` is the number of approvals
+		/// - Db reads and writes: `Approvals`, `pot account data`
+		/// - Db reads and writes per approval:
+		///   `Proposals`, `proposer account data`, `beneficiary account data`
+		/// - The weight is overestimated if some approvals got missed.
+		/// # </weight>
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			// Check to see if we should spend some funds!
 			if (n % T::SpendPeriod::get()).is_zero() {
-				Self::spend_funds();
-			}
+				let approvals_len = Self::spend_funds();
 
-			SimpleDispatchInfo::default().weigh_data(())
+				270_000_000 * approvals_len
+					+ T::DbWeight::get().reads_writes(2 + approvals_len * 3, 2 + approvals_len * 3)
+			} else {
+				0
+			}
 		}
 	}
 }
@@ -572,7 +616,7 @@ impl<T: Trait> Module<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		MODULE_ID.into_account()
+		T::ModuleId::get().into_account()
 	}
 
 	/// The needed bond for a proposal whose spend is `value`.
@@ -628,7 +672,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Up to three balance operations.
 	/// Plus `O(T)` (`T` is Tippers length).
-	fn payout_tip(tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>) {
+	fn payout_tip(hash: T::Hash, tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>) {
 		let mut tips = tip.tips;
 		Self::retain_active_tips(&mut tips);
 		tips.sort_by_key(|i| i.1);
@@ -648,16 +692,18 @@ impl<T: Trait> Module<T> {
 		}
 		// same as above: best-effort only.
 		let _ = T::Currency::transfer(&treasury, &tip.who, payout, KeepAlive);
+		Self::deposit_event(RawEvent::TipClosed(hash, tip.who, payout));
 	}
 
-	// Spend some money!
-	fn spend_funds() {
+	/// Spend some money! returns number of approvals before spend.
+	fn spend_funds() -> u64 {
 		let mut budget_remaining = Self::pot();
 		Self::deposit_event(RawEvent::Spending(budget_remaining));
 
 		let mut missed_any = false;
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
-		Approvals::mutate(|v| {
+		let prior_approvals_len = Approvals::mutate(|v| {
+			let prior_approvals_len = v.len() as u64;
 			v.retain(|&index| {
 				// Should always be true, but shouldn't panic if false or we're screwed.
 				if let Some(p) = Self::proposals(index) {
@@ -681,6 +727,7 @@ impl<T: Trait> Module<T> {
 					false
 				}
 			});
+			prior_approvals_len
 		});
 
 		if !missed_any {
@@ -707,6 +754,8 @@ impl<T: Trait> Module<T> {
 		}
 
 		Self::deposit_event(RawEvent::Rollover(budget_remaining));
+
+		prior_approvals_len
 	}
 
 	/// Return the amount of money in the pot.

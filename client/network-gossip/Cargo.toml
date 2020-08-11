@@ -1,24 +1,30 @@
 [package]
 description = "Gossiping for the Substrate network protocol"
 name = "sc-network-gossip"
-version = "0.8.0-alpha.5"
-license = "GPL-3.0"
+version = "0.8.0-rc3"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sc-network-gossip"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 
 [dependencies]
-futures = "0.3.1"
+futures = "0.3.4"
 futures-timer = "3.0.1"
-libp2p = { version = "0.16.2", default-features = false, features = ["libp2p-websocket"] }
+libp2p = { version = "0.19.1", default-features = false }
 log = "0.4.8"
 lru = "0.4.3"
-sc-network = { version = "0.8.0-alpha.5", path = "../network" }
-sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
+sc-network = { version = "0.8.0-rc3", path = "../network" }
+sp-runtime = { version = "2.0.0-rc3", path = "../../primitives/runtime" }
 wasm-timer = "0.2"
 
 [dev-dependencies]
-substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
+async-std = "1.5"
+quickcheck = "0.9.0"
+rand = "0.7.2"
+substrate-test-runtime-client = { version = "2.0.0-rc3", path = "../../test-utils/runtime/client" }

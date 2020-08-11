@@ -1,31 +1,35 @@
 [package]
 description = "Substrate offchain workers"
 name = "sc-offchain"
-version = "2.0.0-alpha.5"
-license = "GPL-3.0"
+version = "2.0.0-rc3"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dependencies]
 bytes = "0.5"
-sc-client-api = { version = "2.0.0-alpha.5", path = "../api" }
-sp-api = { version = "2.0.0-alpha.5", path = "../../primitives/api" }
+sc-client-api = { version = "2.0.0-rc3", path = "../api" }
+sp-api = { version = "2.0.0-rc3", path = "../../primitives/api" }
 fnv = "1.0.6"
-futures = "0.3.1"
+futures = "0.3.4"
 futures-timer = "3.0.1"
 log = "0.4.8"
 threadpool = "1.7"
 num_cpus = "1.10"
-sp-offchain = { version = "2.0.0-alpha.5", path = "../../primitives/offchain" }
-codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
+sp-offchain = { version = "2.0.0-rc3", path = "../../primitives/offchain" }
+codec = { package = "parity-scale-codec", version = "1.3.1", features = ["derive"] }
 parking_lot = "0.10.0"
-sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
+sp-core = { version = "2.0.0-rc3", path = "../../primitives/core" }
 rand = "0.7.2"
-sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
-sc-network = { version = "0.8.0-alpha.5", path = "../network" }
-sc-keystore = { version = "2.0.0-alpha.5", path = "../keystore" }
+sp-runtime = { version = "2.0.0-rc3", path = "../../primitives/runtime" }
+sp-utils = { version = "2.0.0-rc3", path = "../../primitives/utils" }
+sc-network = { version = "0.8.0-rc3", path = "../network" }
+sc-keystore = { version = "2.0.0-rc3", path = "../keystore" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 hyper = "0.13.2"
@@ -33,12 +37,12 @@ hyper-rustls = "0.20"
 
 [dev-dependencies]
 env_logger = "0.7.0"
-fdlimit = "0.1.4"
-sc-client-db = { version = "0.8.0-alpha.5", default-features = true, path = "../db/" }
-sc-transaction-pool = { version = "2.0.0-alpha.5", path = "../../client/transaction-pool" }
-sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../primitives/transaction-pool" }
-substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
+sc-client-db = { version = "0.8.0-rc3", default-features = true, path = "../db/" }
+sc-transaction-pool = { version = "2.0.0-rc3", path = "../../client/transaction-pool" }
+sp-transaction-pool = { version = "2.0.0-rc3", path = "../../primitives/transaction-pool" }
+substrate-test-runtime-client = { version = "2.0.0-rc3", path = "../../test-utils/runtime/client" }
 tokio = "0.2"
+lazy_static = "1.4.0"
 
 [features]
 default = []

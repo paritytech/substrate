@@ -1,0 +1,11 @@
+error: Block type should be the same between all runtime apis.
+  --> $DIR/mock_only_one_block_type.rs:20:12
+   |
+20 |     impl Api2<Block2> for MockApi {
+   |               ^^^^^^
+
+error: First block type found here
+  --> $DIR/mock_only_one_block_type.rs:16:11
+   |
+16 |     impl Api<Block> for MockApi {
+   |              ^^^^^

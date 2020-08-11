@@ -20,7 +20,6 @@
 //! time during which certain events can and/or must occur.  This crate
 //! provides generic functionality for slots.
 
-#![deny(warnings)]
 #![forbid(unsafe_code, missing_docs)]
 
 mod slots;
@@ -121,11 +120,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 			Self::Claim,
 			Self::EpochData,
-		) -> sp_consensus::BlockImportParams<
-			B,
-			<Self::BlockImport as BlockImport<B>>::Transaction
-		>
-		+ Send
+		) -> Result<
+				sp_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+				sp_consensus::Error
+			> + Send + 'static
 	>;
 
 	/// Whether to force authoring if offline.
@@ -240,7 +238,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let logs = self.pre_digest_data(slot_number, &claim);
 
 		// deadline our production to approx. the end of the slot
-		let proposing = awaiting_proposer.and_then(move |mut proposer| proposer.propose(
+		let proposing = awaiting_proposer.and_then(move |proposer| proposer.propose(
 			slot_info.inherent_data,
 			sp_runtime::generic::Digest {
 				logs,
@@ -258,10 +256,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Box::new(futures::future::select(proposing, delay).map(move |v| match v {
 				futures::future::Either::Left((b, _)) => b.map(|b| (b, claim)),
 				futures::future::Either::Right(_) => {
-					info!("Discarding proposal for slot {}; block production took too long", slot_number);
+					info!("⌛️ Discarding proposal for slot {}; block production took too long", slot_number);
 					// If the node was compiled with debug, tell the user to use release optimizations.
 					#[cfg(build_type="debug")]
-					info!("Recompile your node in `--release` mode to mitigate this problem.");
+					info!("👉 Recompile your node in `--release` mode to mitigate this problem.");
 					telemetry!(CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
 						"slot" => slot_number,
 					);
@@ -273,7 +271,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let block_import = self.block_import();
 		let logging_target = self.logging_target();
 
-		Box::pin(proposal_work.map_ok(move |(proposal, claim)| {
+		Box::pin(proposal_work.and_then(move |(proposal, claim)| {
 			let (header, body) = proposal.block.deconstruct();
 			let header_num = *header.number();
 			let header_hash = header.hash();
@@ -288,8 +286,13 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				epoch_data,
 			);
 
+			let block_import_params = match block_import_params {
+				Ok(params) => params,
+				Err(e) => return future::err(e),
+			};
+
 			info!(
-				"Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
+				"🔖 Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 				header_num,
 				block_import_params.post_hash(),
 				header_hash,
@@ -312,6 +315,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					"hash" => ?parent_hash, "err" => ?err,
 				);
 			}
+			future::ready(Ok(()))
 		}))
 	}
 }
@@ -451,7 +455,7 @@ impl<T: Clone> SlotDuration<T> {
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> sp_blockchain::Result<T>,
 		T: SlotData + Encode + Decode + Debug,
 	{
-		match client.get_aux(T::SLOT_KEY)? {
+		let slot_duration = match client.get_aux(T::SLOT_KEY)? {
 			Some(v) => <T as codec::Decode>::decode(&mut &v[..])
 				.map(SlotDuration)
 				.map_err(|_| {
@@ -466,7 +470,7 @@ impl<T: Clone> SlotDuration<T> {
 					cb(client.runtime_api(), &BlockId::number(Zero::zero()))?;
 
 				info!(
-					"Loaded block-time = {:?} milliseconds from genesis on first-launch",
+					"⏱  Loaded block-time = {:?} milliseconds from genesis on first-launch",
 					genesis_slot_duration
 				);
 
@@ -475,11 +479,136 @@ impl<T: Clone> SlotDuration<T> {
 
 				Ok(SlotDuration(genesis_slot_duration))
 			}
+		}?;
+
+		if slot_duration.slot_duration() == 0 {
+			return Err(sp_blockchain::Error::Msg(
+				"Invalid value for slot_duration: the value must be greater than 0.".into(),
+			))
 		}
+
+		Ok(slot_duration)
 	}
 
 	/// Returns slot data value.
 	pub fn get(&self) -> T {
 		self.0.clone()
+	}
+}
+
+/// Calculate a slot duration lenience based on the number of missed slots from current
+/// to parent. If the number of skipped slots is greated than 0 this method will apply
+/// an exponential backoff of at most `2^7 * slot_duration`, if no slots were skipped
+/// this method will return `None.`
+pub fn slot_lenience_exponential(parent_slot: u64, slot_info: &SlotInfo) -> Option<Duration> {
+	// never give more than 2^this times the lenience.
+	const BACKOFF_CAP: u64 = 7;
+
+	// how many slots it takes before we double the lenience.
+	const BACKOFF_STEP: u64 = 2;
+
+	// we allow a lenience of the number of slots since the head of the
+	// chain was produced, minus 1 (since there is always a difference of at least 1)
+	//
+	// exponential back-off.
+	// in normal cases we only attempt to issue blocks up to the end of the slot.
+	// when the chain has been stalled for a few slots, we give more lenience.
+	let skipped_slots = slot_info.number.saturating_sub(parent_slot + 1);
+
+	if skipped_slots == 0 {
+		None
+	} else {
+		let slot_lenience = skipped_slots / BACKOFF_STEP;
+		let slot_lenience = std::cmp::min(slot_lenience, BACKOFF_CAP);
+		let slot_lenience = 1 << slot_lenience;
+		Some(Duration::from_millis(slot_lenience * slot_info.duration))
+	}
+}
+
+/// Calculate a slot duration lenience based on the number of missed slots from current
+/// to parent. If the number of skipped slots is greated than 0 this method will apply
+/// a linear backoff of at most `20 * slot_duration`, if no slots were skipped
+/// this method will return `None.`
+pub fn slot_lenience_linear(parent_slot: u64, slot_info: &SlotInfo) -> Option<Duration> {
+	// never give more than 20 times more lenience.
+	const BACKOFF_CAP: u64 = 20;
+
+	// we allow a lenience of the number of slots since the head of the
+	// chain was produced, minus 1 (since there is always a difference of at least 1)
+	//
+	// linear back-off.
+	// in normal cases we only attempt to issue blocks up to the end of the slot.
+	// when the chain has been stalled for a few slots, we give more lenience.
+	let skipped_slots = slot_info.number.saturating_sub(parent_slot + 1);
+
+	if skipped_slots == 0 {
+		None
+	} else {
+		let slot_lenience = std::cmp::min(skipped_slots, BACKOFF_CAP);
+		Some(Duration::from_millis(slot_lenience * slot_info.duration))
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use std::time::{Duration, Instant};
+
+	const SLOT_DURATION: Duration = Duration::from_millis(6000);
+
+	fn slot(n: u64) -> super::slots::SlotInfo {
+		super::slots::SlotInfo {
+			number: n,
+			last_number: n - 1,
+			duration: SLOT_DURATION.as_millis() as u64,
+			timestamp: Default::default(),
+			inherent_data: Default::default(),
+			ends_at: Instant::now(),
+		}
+	}
+
+	#[test]
+	fn linear_slot_lenience() {
+		// if no slots are skipped there should be no lenience
+		assert_eq!(super::slot_lenience_linear(1, &slot(2)), None);
+
+		// otherwise the lenience is incremented linearly with
+		// the number of skipped slots.
+		for n in 3..=22 {
+			assert_eq!(
+				super::slot_lenience_linear(1, &slot(n)),
+				Some(SLOT_DURATION * (n - 2) as u32),
+			);
+		}
+
+		// but we cap it to a maximum of 20 slots
+		assert_eq!(
+			super::slot_lenience_linear(1, &slot(23)),
+			Some(SLOT_DURATION * 20),
+		);
+	}
+
+	#[test]
+	fn exponential_slot_lenience() {
+		// if no slots are skipped there should be no lenience
+		assert_eq!(super::slot_lenience_exponential(1, &slot(2)), None);
+
+		// otherwise the lenience is incremented exponentially every two slots
+		for n in 3..=17 {
+			assert_eq!(
+				super::slot_lenience_exponential(1, &slot(n)),
+				Some(SLOT_DURATION * 2u32.pow((n / 2 - 1) as u32)),
+			);
+		}
+
+		// but we cap it to a maximum of 14 slots
+		assert_eq!(
+			super::slot_lenience_exponential(1, &slot(18)),
+			Some(SLOT_DURATION * 2u32.pow(7)),
+		);
+
+		assert_eq!(
+			super::slot_lenience_exponential(1, &slot(19)),
+			Some(SLOT_DURATION * 2u32.pow(7)),
+		);
 	}
 }

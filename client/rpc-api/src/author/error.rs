@@ -1,23 +1,26 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Authoring RPC module errors.
 
 use crate::errors;
 use jsonrpc_core as rpc;
+use sp_runtime::transaction_validity::InvalidTransaction;
 
 /// Author RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -57,6 +60,8 @@ pub enum Error {
 	/// Invalid session keys encoding.
 	#[display(fmt="Session keys are not encoded correctly")]
 	InvalidSessionKeys,
+	/// Call to an unsafe RPC was denied.
+	UnsafeRpcCalled(crate::policy::UnsafeRpcError),
 }
 
 impl std::error::Error for Error {
@@ -65,6 +70,7 @@ impl std::error::Error for Error {
 			Error::Client(ref err) => Some(&**err),
 			Error::Pool(ref err) => Some(err),
 			Error::Verification(ref err) => Some(&**err),
+			Error::UnsafeRpcCalled(ref err) => Some(err),
 			_ => None,
 		}
 	}
@@ -109,10 +115,18 @@ impl From<Error> for rpc::Error {
 				message: format!("Verification Error: {}", e).into(),
 				data: Some(format!("{:?}", e).into()),
 			},
-			Error::Pool(PoolError::InvalidTransaction(e)) => rpc::Error {
+			Error::Pool(PoolError::InvalidTransaction(InvalidTransaction::Custom(e))) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),
 				message: "Invalid Transaction".into(),
-				data: serde_json::to_value(e).ok(),
+				data: Some(format!("Custom error: {}", e).into()),
+			},
+			Error::Pool(PoolError::InvalidTransaction(e)) => {
+				let msg: &str = e.into();
+				rpc::Error {
+					code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),
+					message: "Invalid Transaction".into(),
+					data: Some(msg.into()),
+				}
 			},
 			Error::Pool(PoolError::UnknownTransaction(e)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_UNKNOWN_VALIDITY),
@@ -152,6 +166,7 @@ impl From<Error> for rpc::Error {
 					request to insert the key successfully.".into()
 				),
 			},
+			Error::UnsafeRpcCalled(e) => e.into(),
 			e => errors::internal(e),
 		}
 	}

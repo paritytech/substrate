@@ -1,20 +1,23 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Balances pallet benchmarking.
+
+#![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
 
@@ -49,10 +52,13 @@ benchmarks! {
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&caller, balance);
 
 		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account, and reap this user.
-		let recipient = account("recipient", u, SEED);
-		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient);
+		let recipient: T::AccountId = account("recipient", u, SEED);
+		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 		let transfer_amount = existential_deposit.saturating_mul((e - 1).into()) + 1.into();
 	}: _(RawOrigin::Signed(caller), recipient_lookup, transfer_amount)
+	verify {
+		assert_eq!(Balances::<T>::free_balance(&recipient), transfer_amount);
+	}
 
 	// Benchmark `transfer` with the best possible condition:
 	// * Both accounts exist and will continue to exist.
@@ -116,4 +122,46 @@ benchmarks! {
 		let balance_amount = existential_deposit.saturating_mul(e.into());
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, balance_amount);
 	}: set_balance(RawOrigin::Root, user_lookup, 0.into(), 0.into())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests_composite::{ExtBuilder, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn transfer() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(test_benchmark_transfer::<Test>());
+		});
+	}
+
+	#[test]
+	fn transfer_best_case() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(test_benchmark_transfer_best_case::<Test>());
+		});
+	}
+
+	#[test]
+	fn transfer_keep_alive() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(test_benchmark_transfer_keep_alive::<Test>());
+		});
+	}
+
+	#[test]
+	fn transfer_set_balance() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(test_benchmark_set_balance::<Test>());
+		});
+	}
+
+	#[test]
+	fn transfer_set_balance_killing() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(test_benchmark_set_balance_killing::<Test>());
+		});
+	}
 }

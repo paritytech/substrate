@@ -33,7 +33,6 @@ use sp_consensus::{
 	import_queue::BoxBlockImport,
 };
 use sp_blockchain::HeaderBackend;
-use sc_client_api::backend::Backend as ClientBackend;
 use std::collections::HashMap;
 use std::time::Duration;
 use sp_inherents::InherentDataProviders;
@@ -42,7 +41,7 @@ use sp_inherents::InherentDataProviders;
 const MAX_PROPOSAL_DURATION: u64 = 10;
 
 /// params for sealing a new block
-pub struct SealBlockParams<'a, B: BlockT, C, CB, E, T, P: txpool::ChainApi> {
+pub struct SealBlockParams<'a, B: BlockT, SC, HB, E, T, P: txpool::ChainApi> {
 	/// if true, empty blocks(without extrinsics) will be created.
 	/// otherwise, will return Error::EmptyTransactionPool.
 	pub create_empty: bool,
@@ -54,12 +53,12 @@ pub struct SealBlockParams<'a, B: BlockT, C, CB, E, T, P: txpool::ChainApi> {
 	pub sender: rpc::Sender<CreatedBlock<<B as BlockT>::Hash>>,
 	/// transaction pool
 	pub pool: Arc<txpool::Pool<P>>,
-	/// client backend
-	pub backend: Arc<CB>,
+	/// header backend
+	pub client: Arc<HB>,
 	/// Environment trait object for creating a proposer
 	pub env: &'a mut E,
 	/// SelectChain object
-	pub select_chain: &'a C,
+	pub select_chain: &'a SC,
 	/// block import object
 	pub block_import: &'a mut BoxBlockImport<B, T>,
 	/// inherent data provider
@@ -67,28 +66,28 @@ pub struct SealBlockParams<'a, B: BlockT, C, CB, E, T, P: txpool::ChainApi> {
 }
 
 /// seals a new block with the given params
-pub async fn seal_new_block<B, SC, CB, E, T, P>(
+pub async fn seal_new_block<B, SC, HB, E, T, P>(
 	SealBlockParams {
 		create_empty,
 		finalize,
 		pool,
 		parent_hash,
-		backend: back_end,
+		client,
 		select_chain,
 		block_import,
 		env,
 		inherent_data_provider,
 		mut sender,
 		..
-	}: SealBlockParams<'_, B, SC, CB, E, T, P>
+	}: SealBlockParams<'_, B, SC, HB, E, T, P>
 )
 	where
 		B: BlockT,
-		CB: ClientBackend<B>,
+		HB: HeaderBackend<B>,
 		E: Environment<B>,
 		<E as Environment<B>>::Error: std::fmt::Display,
 		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
-		P: txpool::ChainApi<Block=B, Hash=<B as BlockT>::Hash>,
+		P: txpool::ChainApi<Block=B>,
 		SC: SelectChain<B>,
 {
 	let future = async {
@@ -101,7 +100,7 @@ pub async fn seal_new_block<B, SC, CB, E, T, P>(
 		// or fetch the best_block.
 		let header = match parent_hash {
 			Some(hash) => {
-				match back_end.blockchain().header(BlockId::Hash(hash))? {
+				match client.header(BlockId::Hash(hash))? {
 					Some(header) => header,
 					None => return Err(Error::BlockNotFound(format!("{}", hash))),
 				}
@@ -109,7 +108,7 @@ pub async fn seal_new_block<B, SC, CB, E, T, P>(
 			None => select_chain.best_chain()?
 		};
 
-		let mut proposer = env.init(&header)
+		let proposer = env.init(&header)
 			.map_err(|err| Error::StringError(format!("{}", err))).await?;
 		let id = inherent_data_provider.create_inherent_data()?;
 		let inherents_len = id.len();

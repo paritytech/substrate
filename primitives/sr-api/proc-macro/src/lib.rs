@@ -103,6 +103,7 @@ mod utils;
 ///     impl_version: 0,
 ///     // Here we are exposing the runtime api versions.
 ///     apis: RUNTIME_API_VERSIONS,
+///     transaction_version: 1,
 /// };
 ///
 /// # fn main() {}

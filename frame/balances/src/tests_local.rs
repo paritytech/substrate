@@ -1,33 +1,51 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Test utilities
 
-use sp_runtime::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header};
+#![cfg(test)]
+
+use sp_runtime::{
+	Perbill,
+	traits::IdentityLookup,
+	testing::Header,
+};
 use sp_core::H256;
 use sp_io;
-use frame_support::{impl_outer_origin, parameter_types};
+use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use frame_support::traits::{Get, StorageMapShim};
-use frame_support::weights::{Weight, DispatchInfo};
+use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use std::cell::RefCell;
-use crate::{GenesisConfig, Module, Trait, decl_tests};
+use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInfo};
 
 use frame_system as system;
 impl_outer_origin!{
 	pub enum Origin for Test {}
+}
+
+mod balances {
+	pub use crate::Event;
+}
+
+impl_outer_event! {
+	pub enum Event for Test {
+		system<T>,
+		balances<T>,
+	}
 }
 
 thread_local! {
@@ -49,42 +67,46 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = CallWithDispatchInfo;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = super::AccountData<u64>;
+	type MigrateAccount = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = Module<Test>;
 }
 parameter_types! {
-	pub const TransactionBaseFee: u64 = 0;
 	pub const TransactionByteFee: u64 = 1;
 }
 impl pallet_transaction_payment::Trait for Test {
 	type Currency = Module<Test>;
 	type OnTransactionPayment = ();
-	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
-	type WeightToFee = ConvertInto;
+	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }
 impl Trait for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = ();
+	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = StorageMapShim<
 		super::Account<Test>,
@@ -137,8 +159,45 @@ impl ExtBuilder {
 				vec![]
 			},
 		}.assimilate_storage(&mut t).unwrap();
-		t.into()
+
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 }
 
 decl_tests!{ Test, ExtBuilder, EXISTENTIAL_DEPOSIT }
+
+#[test]
+fn emit_events_with_no_existential_deposit_suicide_with_dust() {
+	<ExtBuilder>::default()
+		.existential_deposit(0)
+		.build()
+		.execute_with(|| {
+			assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+
+			assert_eq!(
+				events(),
+				[
+					Event::system(system::RawEvent::NewAccount(1)),
+					Event::balances(RawEvent::Endowed(1, 100)),
+					Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+				]
+			);
+
+			let _ = Balances::slash(&1, 99);
+
+			// no events
+			assert_eq!(events(), []);
+
+			assert_ok!(System::suicide(Origin::signed(1)));
+
+			assert_eq!(
+				events(),
+				[
+					Event::balances(RawEvent::DustLost(1, 1)),
+					Event::system(system::RawEvent::KilledAccount(1))
+				]
+			);
+		});
+}

@@ -16,11 +16,11 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
+use crate::{Schedule, Trait, CodeHash, BalanceOf};
 use crate::exec::{
 	Ext, ExecResult, ExecError, ExecReturnValue, StorageKey, TopicOf, STATUS_SUCCESS,
 };
-use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
+use crate::gas::{Gas, GasMeter, Token, GasMeterResult};
 use sp_sandbox;
 use frame_system;
 use sp_std::{prelude::*, mem, convert::TryInto};
@@ -32,6 +32,7 @@ use sp_io::hashing::{
 	blake2_128,
 	sha2_256,
 };
+use frame_support::weights::GetDispatchInfo;
 
 /// The value returned from ext_call and ext_instantiate contract external functions if the call or
 /// instantiation traps. This value is chosen as if the execution does not trap, the return value
@@ -50,6 +51,8 @@ enum SpecialTrap {
 	/// Signals that a trap was generated in response to a succesful call to the
 	/// `ext_terminate` host function.
 	Termination,
+	/// Signals that a trap was generated because of a successful restoration.
+	Restoration,
 }
 
 /// Can only be used for one call.
@@ -99,6 +102,12 @@ pub(crate) fn to_execution_result<E: Ext>(
 				data: Vec::new(),
 			})
 		},
+		Some(SpecialTrap::Restoration) => {
+			return Ok(ExecReturnValue {
+				status: STATUS_SUCCESS,
+				data: Vec::new(),
+			})
+		}
 		Some(SpecialTrap::OutOfGas) => {
 			return Err(ExecError {
 				reason: "ran out of gas during contract execution".into(),
@@ -153,8 +162,8 @@ pub enum RuntimeToken {
 	/// The given number of bytes is read from the sandbox memory and
 	/// is returned as the return data buffer of the call.
 	ReturnData(u32),
-	/// Dispatch fee calculated by `T::ComputeDispatchFee`.
-	ComputedDispatchFee(Gas),
+	/// Dispatched a call with the given weight.
+	DispatchWithWeight(Gas),
 	/// (topic_count, data_bytes): A buffer of the given size is posted as an event indexed with the
 	/// given number of topics.
 	DepositEvent(u32, u32),
@@ -195,7 +204,7 @@ impl<T: Trait> Token<T> for RuntimeToken {
 						data_and_topics_cost.checked_add(metadata.event_base_cost)
 					)
 			},
-			ComputedDispatchFee(gas) => Some(gas),
+			DispatchWithWeight(gas) => gas.checked_add(metadata.dispatch_base_cost),
 		};
 
 		value.unwrap_or_else(|| Bounded::max_value())
@@ -386,7 +395,7 @@ define_env!(Env, <E: Ext>,
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		let value = Some(read_sandbox_memory(ctx, value_ptr, value_len)?);
-		ctx.ext.set_storage(key, value).map_err(|_| sp_sandbox::HostError)?;
+		ctx.ext.set_storage(key, value);
 		Ok(())
 	},
 
@@ -398,7 +407,7 @@ define_env!(Env, <E: Ext>,
 	ext_clear_storage(ctx, key_ptr: u32) => {
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
-		ctx.ext.set_storage(key, None).map_err(|_| sp_sandbox::HostError)?;
+		ctx.ext.set_storage(key, None);
 		Ok(())
 	},
 
@@ -692,7 +701,7 @@ define_env!(Env, <E: Ext>,
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_gas_price(ctx) => {
 		ctx.scratch_buf.clear();
-		ctx.gas_meter.gas_price().encode_to(&mut ctx.scratch_buf);
+		ctx.ext.get_weight_price().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -783,16 +792,14 @@ define_env!(Env, <E: Ext>,
 		let call: <<E as Ext>::T as Trait>::Call =
 			read_sandbox_memory_as(ctx, call_ptr, call_len)?;
 
-		// Charge gas for dispatching this call.
-		let fee = {
-			let balance_fee = <<E as Ext>::T as Trait>::ComputeDispatchFee::compute_dispatch_fee(&call);
-			approx_gas_for_balance(ctx.gas_meter.gas_price(), balance_fee)
-		};
+		// We already deducted the len costs when reading from the sandbox.
+		// Bill on the actual weight of the dispatched call.
+		let info = call.get_dispatch_info();
 		charge_gas(
 			&mut ctx.gas_meter,
 			ctx.schedule,
 			&mut ctx.special_trap,
-			RuntimeToken::ComputedDispatchFee(fee)
+			RuntimeToken::DispatchWithWeight(info.weight)
 		)?;
 
 		ctx.ext.note_dispatch_call(call);
@@ -800,17 +807,18 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Record a request to restore the caller contract to the specified contract.
+	// Try to restore the given destination contract sacrificing the caller.
 	//
-	// At the finalization stage, i.e. when all changes from the extrinsic that invoked this
-	// contract are committed, this function will compute a tombstone hash from the caller's
-	// storage and the given code hash and if the hash matches the hash found in the tombstone at
-	// the specified address - kill the caller contract and restore the destination contract and set
-	// the specified `rent_allowance`. All caller's funds are transferred to the destination.
+	// This function will compute a tombstone hash from the caller's storage and the given code hash
+	// and if the hash matches the hash found in the tombstone at the specified address - kill
+	// the caller contract and restore the destination contract and set the specified `rent_allowance`.
+	// All caller's funds are transfered to the destination.
 	//
-	// This function doesn't perform restoration right away but defers it to the end of the
-	// transaction. If there is no tombstone in the destination address or if the hashes don't match
-	// then restoration is cancelled and no changes are made.
+	// If there is no tombstone at the destination address, the hashes don't match or this contract
+	// instance is already present on the contract call stack, a trap is generated.
+	//
+	// Otherwise, the destination contract is restored. This function is diverging and stops execution
+	// even on success.
 	//
 	// `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
 	// with the address of the to be restored contract.
@@ -858,14 +866,15 @@ define_env!(Env, <E: Ext>,
 			delta
 		};
 
-		ctx.ext.note_restore_to(
+		if let Ok(()) = ctx.ext.restore_to(
 			dest,
 			code_hash,
 			rent_allowance,
 			delta,
-		);
-
-		Ok(())
+		) {
+			ctx.special_trap = Some(SpecialTrap::Restoration);
+		}
+		Err(sp_sandbox::HostError)
 	},
 
 	// Returns the size of the scratch buffer.

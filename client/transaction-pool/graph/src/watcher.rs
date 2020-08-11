@@ -1,33 +1,33 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Extrinsics status updates.
 
-use futures::{
-	Stream,
-	channel::mpsc,
-};
+use futures::Stream;
 use sp_transaction_pool::TransactionStatus;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 /// Extrinsic watcher.
 ///
 /// Represents a stream of status updates for particular extrinsic.
 #[derive(Debug)]
 pub struct Watcher<H, BH> {
-	receiver: mpsc::UnboundedReceiver<TransactionStatus<H, BH>>,
+	receiver: TracingUnboundedReceiver<TransactionStatus<H, BH>>,
 	hash: H,
 }
 
@@ -48,7 +48,7 @@ impl<H, BH> Watcher<H, BH> {
 /// Sender part of the watcher. Exposed only for testing purposes.
 #[derive(Debug)]
 pub struct Sender<H, BH> {
-	receivers: Vec<mpsc::UnboundedSender<TransactionStatus<H, BH>>>,
+	receivers: Vec<TracingUnboundedSender<TransactionStatus<H, BH>>>,
 	is_finalized: bool,
 }
 
@@ -64,7 +64,7 @@ impl<H, BH> Default for Sender<H, BH> {
 impl<H: Clone, BH: Clone> Sender<H, BH> {
 	/// Add a new watcher to this sender object.
 	pub fn new_watcher(&mut self, hash: H) -> Watcher<H, BH> {
-		let (tx, receiver) = mpsc::unbounded();
+		let (tx, receiver) = tracing_unbounded("mpsc_txpool_watcher");
 		self.receivers.push(tx);
 		Watcher {
 			receiver,

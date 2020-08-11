@@ -1,25 +1,26 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::utils::{
 	generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
 	fold_fn_decl_for_client_side, extract_parameter_names_types_and_borrows,
 	generate_native_call_generator_fn_name, return_type_extract_type,
 	generate_method_runtime_api_impl_name, generate_call_api_at_fn_name, prefix_function_with_trait,
-	replace_wild_card_parameter_names,
+	replace_wild_card_parameter_names, AllowSelfRefInParameters,
 };
 
 use proc_macro2::{TokenStream, Span};
@@ -190,7 +191,8 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 				input: &I, error_desc: &'static str,
 			) -> std::result::Result<R, String>
 		{
-			<R as #crate_::Decode>::decode(
+			<R as #crate_::DecodeLimit>::decode_with_depth_limit(
+				#crate_::MAX_EXTRINSIC_DEPTH,
 				&mut &#crate_::Encode::encode(input)[..],
 			).map_err(|e| format!("{} {}", error_desc, e.what()))
 		}
@@ -198,7 +200,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 
 	// Generate a native call generator for each function of the given trait.
 	for fn_ in fns {
-		let params = extract_parameter_names_types_and_borrows(&fn_)?;
+		let params = extract_parameter_names_types_and_borrows(&fn_, AllowSelfRefInParameters::No)?;
 		let trait_fn_name = &fn_.ident;
 		let fn_name = generate_native_call_generator_fn_name(&fn_.ident);
 		let output = return_type_replace_block_with_node_block(fn_.output.clone());
@@ -407,6 +409,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				at: &#crate_::BlockId<Block>,
 				args: Vec<u8>,
 				changes: &std::cell::RefCell<#crate_::OverlayedChanges>,
+				offchain_changes: &std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 				storage_transaction_cache: &std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, T::StateBackend>
 				>,
@@ -436,6 +439,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 							native_call: None,
 							arguments: args,
 							overlayed_changes: changes,
+							offchain_changes,
 							storage_transaction_cache,
 							initialize_block,
 							context,
@@ -456,6 +460,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 					native_call,
 					arguments: args,
 					overlayed_changes: changes,
+					offchain_changes,
 					storage_transaction_cache,
 					initialize_block,
 					context,
@@ -592,7 +597,10 @@ impl<'a> ToClientSideDecl<'a> {
 
 		// Get types and if the value is borrowed from all parameters.
 		// If there is an error, we push it as the block to the user.
-		let param_types = match extract_parameter_names_types_and_borrows(fn_sig) {
+		let param_types = match extract_parameter_names_types_and_borrows(
+			fn_sig,
+			AllowSelfRefInParameters::No,
+		) {
 			Ok(res) => res.into_iter().map(|v| {
 				let ty = v.1;
 				let borrow = v.2;
@@ -629,7 +637,10 @@ impl<'a> ToClientSideDecl<'a> {
 		mut method: TraitItemMethod,
 		context: TokenStream,
 	) -> TraitItemMethod {
-		let params = match extract_parameter_names_types_and_borrows(&method.sig) {
+		let params = match extract_parameter_names_types_and_borrows(
+			&method.sig,
+			AllowSelfRefInParameters::No,
+		) {
 			Ok(res) => res.into_iter().map(|v| v.0).collect::<Vec<_>>(),
 			Err(e) => {
 				self.errors.push(e.to_compile_error());
@@ -780,7 +791,7 @@ fn generate_runtime_api_id(trait_name: &str) -> TokenStream {
 	let mut res = [0; 8];
 	res.copy_from_slice(blake2_rfc::blake2b::blake2b(8, &[], trait_name.as_bytes()).as_bytes());
 
-	quote!(	const ID: [u8; 8] = [ #( #res ),* ]; )
+	quote!( const ID: [u8; 8] = [ #( #res ),* ]; )
 }
 
 /// Generates the const variable that holds the runtime api version.
@@ -870,6 +881,53 @@ struct CheckTraitDecl {
 	errors: Vec<Error>,
 }
 
+impl CheckTraitDecl {
+	/// Check the given trait.
+	///
+	/// All errors will be collected in `self.errors`.
+	fn check(&mut self, trait_: &ItemTrait) {
+		self.check_method_declarations(trait_.items.iter().filter_map(|i| match i {
+			TraitItem::Method(method) => Some(method),
+			_ => None,
+		}));
+
+		visit::visit_item_trait(self, trait_);
+	}
+
+	/// Check that the given method declarations are correct.
+	///
+	/// Any error is stored in `self.errors`.
+	fn check_method_declarations<'a>(&mut self, methods: impl Iterator<Item = &'a TraitItemMethod>) {
+		let mut method_to_signature_changed = HashMap::<Ident, Vec<Option<u64>>>::new();
+
+		methods.into_iter().for_each(|method| {
+			let attributes = remove_supported_attributes(&mut method.attrs.clone());
+
+			let changed_in = match get_changed_in(&attributes) {
+				Ok(r) => r,
+				Err(e) => { self.errors.push(e); return; },
+			};
+
+			method_to_signature_changed
+				.entry(method.sig.ident.clone())
+				.or_default()
+				.push(changed_in);
+		});
+
+		method_to_signature_changed.into_iter().for_each(|(f, changed)| {
+			// If `changed_in` is `None`, it means it is the current "default" method that calls
+			// into the latest implementation.
+			if changed.iter().filter(|c| c.is_none()).count() == 0 {
+				self.errors.push(Error::new(
+					f.span(),
+					"There is no 'default' method with this name (without `changed_in` attribute).\n\
+					 The 'default' method is used to call into the latest implementation.",
+				));
+			}
+		});
+	}
+}
+
 impl<'ast> Visit<'ast> for CheckTraitDecl {
 	fn visit_fn_arg(&mut self, input: &'ast FnArg) {
 		if let FnArg::Receiver(_) = input {
@@ -917,7 +975,7 @@ impl<'ast> Visit<'ast> for CheckTraitDecl {
 /// Check that the trait declarations are in the format we expect.
 fn check_trait_decls(decls: &[ItemTrait]) -> Result<()> {
 	let mut checker = CheckTraitDecl { errors: Vec::new() };
-	decls.iter().for_each(|decl| visit::visit_item_trait(&mut checker, &decl));
+	decls.iter().for_each(|decl| checker.check(decl));
 
 	if let Some(err) = checker.errors.pop() {
 		Err(checker.errors.into_iter().fold(err, |mut err, other| {

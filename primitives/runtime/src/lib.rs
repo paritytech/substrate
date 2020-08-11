@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Runtime Modules shared primitive types.
 
@@ -42,7 +43,8 @@ pub use sp_core::storage::{Storage, StorageChild};
 
 use sp_std::prelude::*;
 use sp_std::convert::TryFrom;
-use sp_core::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
+use sp_core::{crypto::{self, Public}, ed25519, sr25519, ecdsa, hash::{H256, H512}};
+
 use codec::{Encode, Decode};
 
 pub mod curve;
@@ -61,20 +63,25 @@ pub use crate::runtime_string::*;
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use sp_core::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, AccountId32}};
+pub use sp_core::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, CryptoTypeId, AccountId32}};
 pub use sp_application_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
-pub use sp_arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64, PerThing};
+pub use sp_arithmetic::{
+	PerThing, traits::SaturatedConversion, Perquintill, Perbill, Permill, Percent, PerU16,
+	Rational128, FixedI64, FixedI128, FixedU128, FixedPointNumber, FixedPointOperand,
+};
 /// Re-export 128 bit helpers.
 pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
 pub use sp_arithmetic::biguint;
 
 pub use random_number_generator::RandomNumberGenerator;
+
+pub use either::Either;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -132,15 +139,15 @@ impl BuildStorage for sp_core::storage::Storage {
 		storage: &mut sp_core::storage::Storage,
 	)-> Result<(), String> {
 		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
-		for (k, other_map) in self.children.iter() {
+		for (k, other_map) in self.children_default.iter() {
 			let k = k.clone();
-			if let Some(map) = storage.children.get_mut(&k) {
+			if let Some(map) = storage.children_default.get_mut(&k) {
 				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
-				if !map.child_info.try_update(other_map.child_info.as_ref()) {
+				if !map.child_info.try_update(&other_map.child_info) {
 					return Err("Incompatible child info update".to_string());
 				}
 			} else {
-				storage.children.insert(k, other_map.clone());
+				storage.children_default.insert(k, other_map.clone());
 			}
 		}
 		Ok(())
@@ -178,15 +185,36 @@ impl From<ed25519::Signature> for MultiSignature {
 	}
 }
 
+impl TryFrom<MultiSignature> for ed25519::Signature {
+	type Error = ();
+	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
+		if let MultiSignature::Ed25519(x) = m { Ok(x) } else { Err(()) }
+	}
+}
+
 impl From<sr25519::Signature> for MultiSignature {
 	fn from(x: sr25519::Signature) -> Self {
 		MultiSignature::Sr25519(x)
 	}
 }
 
+impl TryFrom<MultiSignature> for sr25519::Signature {
+	type Error = ();
+	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
+		if let MultiSignature::Sr25519(x) = m { Ok(x) } else { Err(()) }
+	}
+}
+
 impl From<ecdsa::Signature> for MultiSignature {
 	fn from(x: ecdsa::Signature) -> Self {
 		MultiSignature::Ecdsa(x)
+	}
+}
+
+impl TryFrom<MultiSignature> for ecdsa::Signature {
+	type Error = ();
+	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
+		if let MultiSignature::Ecdsa(x) = m { Ok(x) } else { Err(()) }
 	}
 }
 
@@ -296,7 +324,6 @@ impl std::fmt::Display for MultiSigner {
 impl Verify for MultiSignature {
 	type Signer = MultiSigner;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
-		use sp_core::crypto::Public;
 		match (self, signer) {
 			(MultiSignature::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
 			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
@@ -321,7 +348,6 @@ pub struct AnySignature(H512);
 impl Verify for AnySignature {
 	type Signer = sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
-		use sp_core::crypto::Public;
 		let msg = msg.get();
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 			.map(|s| s.verify(msg, signer))
@@ -350,11 +376,16 @@ impl From<DispatchError> for DispatchOutcome {
 	}
 }
 
-/// Result of a module function call; either nothing (functions are only called for "side effects")
-/// or an error message.
+/// This is the legacy return type of `Dispatchable`. It is still exposed for compatibility reasons.
+/// The new return type is `DispatchResultWithInfo`. FRAME runtimes should use
+/// `frame_support::dispatch::DispatchResult`.
 pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 
-/// Reason why a dispatch call failed
+/// Return type of a `Dispatchable` which contains the `DispatchResult` and additional information
+/// about the `Dispatchable` that is only known post dispatch.
+pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
+
+/// Reason why a dispatch call failed.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
 pub enum DispatchError {
@@ -364,16 +395,28 @@ pub enum DispatchError {
 	CannotLookup,
 	/// A bad origin.
 	BadOrigin,
-	/// A custom error in a module
+	/// A custom error in a module.
 	Module {
-		/// Module index, matching the metadata module index
+		/// Module index, matching the metadata module index.
 		index: u8,
-		/// Module specific error value
+		/// Module specific error value.
 		error: u8,
 		/// Optional error message.
 		#[codec(skip)]
 		message: Option<&'static str>,
 	},
+}
+
+/// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
+/// the `Dispatchable` that is only known post dispatch.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub struct DispatchErrorWithPostInfo<Info> where
+	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+{
+	/// Additional information about the `Dispatchable` which is only known post dispatch.
+	pub post_info: Info,
+	/// The actual `DispatchResult` indicating whether the dispatch was successful.
+	pub error: DispatchError,
 }
 
 impl DispatchError {
@@ -383,6 +426,18 @@ impl DispatchError {
 			DispatchError::Module { index, error, message: Some(_) }
 				=> DispatchError::Module { index, error, message: None },
 			m => m,
+		}
+	}
+}
+
+impl<T, E> From<E> for DispatchErrorWithPostInfo<T> where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable + Default,
+	E: Into<DispatchError>
+{
+	fn from(error: E) -> Self {
+		Self {
+			post_info: Default::default(),
+			error: error.into(),
 		}
 	}
 }
@@ -416,6 +471,14 @@ impl From<DispatchError> for &'static str {
 	}
 }
 
+impl<T> From<DispatchErrorWithPostInfo<T>> for &'static str where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+{
+	fn from(err: DispatchErrorWithPostInfo<T>) -> &'static str {
+		err.error.into()
+	}
+}
+
 impl traits::Printable for DispatchError {
 	fn print(&self) {
 		"DispatchError".print();
@@ -431,6 +494,16 @@ impl traits::Printable for DispatchError {
 				}
 			}
 		}
+	}
+}
+
+impl<T> traits::Printable for DispatchErrorWithPostInfo<T> where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+{
+	fn print(&self) {
+		self.error.print();
+		"PostInfo: ".print();
+		self.post_info.print();
 	}
 }
 
@@ -464,6 +537,10 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 ///   a transaction in the block doesn't make sense.
 /// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
 pub type ApplyExtrinsicResult = Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
+
+/// Same as `ApplyExtrinsicResult` but augmented with `PostDispatchInfo` on success.
+pub type ApplyExtrinsicResultWithInfo<T> =
+	Result<DispatchResultWithInfo<T>, transaction_validity::TransactionValidityError>;
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
@@ -685,6 +762,39 @@ pub fn print(print: impl traits::Printable) {
 	print.print();
 }
 
+
+/// Batching session.
+///
+/// To be used in runtime only. Outside of runtime, just construct
+/// `BatchVerifier` directly.
+#[must_use = "`verify()` needs to be called to finish batch signature verification!"]
+pub struct SignatureBatching(bool);
+
+impl SignatureBatching {
+	/// Start new batching session.
+	pub fn start() -> Self {
+		sp_io::crypto::start_batch_verify();
+		SignatureBatching(false)
+	}
+
+	/// Verify all signatures submitted during the batching session.
+	#[must_use]
+	pub fn verify(mut self) -> bool {
+		self.0 = true;
+		sp_io::crypto::finish_batch_verify()
+	}
+}
+
+impl Drop for SignatureBatching {
+	fn drop(&mut self) {
+		// Sanity check. If user forgets to actually call `verify()`.
+		if !self.0 {
+			panic!("Signature verification has not been called before `SignatureBatching::drop`")
+		}
+	}
+}
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -731,5 +841,20 @@ mod tests {
 
 		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
+	}
+
+
+	#[test]
+	#[should_panic(expected = "Signature verification has not been called")]
+	fn batching_still_finishes_when_not_called_directly() {
+		let mut ext = sp_state_machine::BasicExternalities::with_tasks_executor();
+		ext.execute_with(|| {
+			let _batching = SignatureBatching::start();
+			sp_io::crypto::sr25519_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+		});
 	}
 }

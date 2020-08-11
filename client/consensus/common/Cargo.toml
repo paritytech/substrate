@@ -1,0 +1,18 @@
+[package]
+name = "sc-consensus"
+version = "0.8.0-rc3"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Collection of common consensus specific imlementations for Substrate (client)"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+sc-client-api = { version = "2.0.0-rc3", path = "../../api" }
+sp-blockchain = { version = "2.0.0-rc3", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "2.0.0-rc3", path = "../../../primitives/runtime" }
+sp-consensus = { version = "0.8.0-rc3", path = "../../../primitives/consensus/common" }

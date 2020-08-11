@@ -172,7 +172,7 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 		}
 
 		for log in logs {
-			Module::<T>::deposit_event(Event::Log(Log {
+			Module::<T>::deposit_event(Event::<T>::Log(Log {
 				address: log.address,
 				topics: log.topics,
 				data: log.data,

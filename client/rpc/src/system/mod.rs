@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate system API.
 
@@ -20,26 +22,41 @@
 mod tests;
 
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
-use futures::{channel::{mpsc, oneshot}, compat::Compat};
-use sc_rpc_api::Receiver;
+use futures::{channel::oneshot, compat::Compat};
+use sc_rpc_api::{DenyUnsafe, Receiver};
+use sp_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::{self, Header as HeaderT};
 
 use self::error::Result;
 
 pub use sc_rpc_api::system::*;
-pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
+pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
+
+macro_rules! bail_if_unsafe {
+	($value: expr) => {
+		if let Err(err) = $value.check_if_safe() {
+			return async move { Err(err.into()) }.boxed().compat();
+		}
+	};
+}
 
 /// System API implementation
 pub struct System<B: traits::Block> {
 	info: SystemInfo,
-	send_back: mpsc::UnboundedSender<Request<B>>,
+	send_back: TracingUnboundedSender<Request<B>>,
+	deny_unsafe: DenyUnsafe,
 }
 
 /// Request to be processed.
 pub enum Request<B: traits::Block> {
 	/// Must return the health of the network.
 	Health(oneshot::Sender<Health>),
+	/// Must return the base58-encoded local `PeerId`.
+	LocalPeerId(oneshot::Sender<String>),
+	/// Must return the string representation of the addresses we listen on, including the
+	/// trailing `/p2p/`.
+	LocalListenAddresses(oneshot::Sender<Vec<String>>),
 	/// Must return information about the peers we are connected to.
 	Peers(oneshot::Sender<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>>),
 	/// Must return the state of the network.
@@ -59,11 +76,13 @@ impl<B: traits::Block> System<B> {
 	/// reading from that channel and answering the requests.
 	pub fn new(
 		info: SystemInfo,
-		send_back: mpsc::UnboundedSender<Request<B>>,
+		send_back: TracingUnboundedSender<Request<B>>,
+		deny_unsafe: DenyUnsafe,
 	) -> Self {
 		System {
 			info,
 			send_back,
+			deny_unsafe,
 		}
 	}
 }
@@ -81,7 +100,11 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		Ok(self.info.chain_name.clone())
 	}
 
-	fn system_properties(&self) -> Result<Properties> {
+	fn system_type(&self) -> Result<sp_chain_spec::ChainType> {
+		Ok(self.info.chain_type.clone())
+	}
+
+	fn system_properties(&self) -> Result<sp_chain_spec::Properties> {
 		Ok(self.info.properties.clone())
 	}
 
@@ -91,21 +114,49 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		Receiver(Compat::new(rx))
 	}
 
-	fn system_peers(&self) -> Receiver<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>> {
+	fn system_local_peer_id(&self) -> Receiver<String> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::Peers(tx));
+		let _ = self.send_back.unbounded_send(Request::LocalPeerId(tx));
 		Receiver(Compat::new(rx))
 	}
 
-	fn system_network_state(&self) -> Receiver<rpc::Value> {
+	fn system_local_listen_addresses(&self) -> Receiver<Vec<String>> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::LocalListenAddresses(tx));
+		Receiver(Compat::new(rx))
+	}
+
+	fn system_peers(&self)
+		-> Compat<BoxFuture<'static, rpc::Result<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>>>>
+	{
+		bail_if_unsafe!(self.deny_unsafe);
+
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::Peers(tx));
+
+		async move {
+			rx.await.map_err(|_| rpc::Error::internal_error())
+		}.boxed().compat()
+	}
+
+	fn system_network_state(&self)
+		-> Compat<BoxFuture<'static, rpc::Result<rpc::Value>>>
+	{
+		bail_if_unsafe!(self.deny_unsafe);
+
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NetworkState(tx));
-		Receiver(Compat::new(rx))
+
+		async move {
+			rx.await.map_err(|_| rpc::Error::internal_error())
+		}.boxed().compat()
 	}
 
 	fn system_add_reserved_peer(&self, peer: String)
 		-> Compat<BoxFuture<'static, std::result::Result<(), rpc::Error>>>
 	{
+		bail_if_unsafe!(self.deny_unsafe);
+
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NetworkAddReservedPeer(peer, tx));
 		async move {
@@ -120,6 +171,8 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 	fn system_remove_reserved_peer(&self, peer: String)
 		-> Compat<BoxFuture<'static, std::result::Result<(), rpc::Error>>>
 	{
+		bail_if_unsafe!(self.deny_unsafe);
+
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NetworkRemoveReservedPeer(peer, tx));
 		async move {

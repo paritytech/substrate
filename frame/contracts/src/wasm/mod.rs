@@ -157,11 +157,13 @@ mod tests {
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
-	use crate::CodeHash;
+	use crate::{CodeHash, BalanceOf};
 	use wabt;
 	use hex_literal::hex;
 	use assert_matches::assert_matches;
 	use sp_runtime::DispatchError;
+
+	const GAS_LIMIT: Gas = 10_000_000_000;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct DispatchEntry(Call);
@@ -227,11 +229,8 @@ mod tests {
 		fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}
-		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>)
-			-> Result<(), &'static str>
-		{
+		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
 			*self.storage.entry(key).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
-			Ok(())
 		}
 		fn instantiate(
 			&mut self,
@@ -302,19 +301,20 @@ mod tests {
 		fn note_dispatch_call(&mut self, call: Call) {
 			self.dispatches.push(DispatchEntry(call));
 		}
-		fn note_restore_to(
+		fn restore_to(
 			&mut self,
 			dest: u64,
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) {
+		) -> Result<(), &'static str> {
 			self.restores.push(RestoreEntry {
 				dest,
 				code_hash,
 				rent_allowance,
 				delta,
 			});
+			Ok(())
 		}
 		fn caller(&self) -> &u64 {
 			&42
@@ -373,6 +373,9 @@ mod tests {
 				)
 			)
 		}
+		fn get_weight_price(&self) -> BalanceOf<Self::T> {
+			1312_u32.into()
+		}
 	}
 
 	impl Ext for &mut MockExt {
@@ -381,9 +384,7 @@ mod tests {
 		fn get_storage(&self, key: &[u8; 32]) -> Option<Vec<u8>> {
 			(**self).get_storage(key)
 		}
-		fn set_storage(&mut self, key: [u8; 32], value: Option<Vec<u8>>)
-			-> Result<(), &'static str>
-		{
+		fn set_storage(&mut self, key: [u8; 32], value: Option<Vec<u8>>) {
 			(**self).set_storage(key, value)
 		}
 		fn instantiate(
@@ -422,14 +423,14 @@ mod tests {
 		fn note_dispatch_call(&mut self, call: Call) {
 			(**self).note_dispatch_call(call)
 		}
-		fn note_restore_to(
+		fn restore_to(
 			&mut self,
 			dest: u64,
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) {
-			(**self).note_restore_to(
+		) -> Result<(), &'static str> {
+			(**self).restore_to(
 				dest,
 				code_hash,
 				rent_allowance,
@@ -477,6 +478,9 @@ mod tests {
 		}
 		fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 			(**self).get_runtime_storage(key)
+		}
+		fn get_weight_price(&self) -> BalanceOf<Self::T> {
+			(**self).get_weight_price()
 		}
 	}
 
@@ -544,7 +548,7 @@ mod tests {
 			CODE_TRANSFER,
 			vec![],
 			&mut mock_ext,
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
 		assert_eq!(
@@ -553,7 +557,7 @@ mod tests {
 				to: 7,
 				value: 153,
 				data: Vec::new(),
-				gas_left: 49978,
+				gas_left: 9989000000,
 			}]
 		);
 	}
@@ -604,7 +608,7 @@ mod tests {
 			CODE_CALL,
 			vec![],
 			&mut mock_ext,
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
 		assert_eq!(
@@ -613,7 +617,7 @@ mod tests {
 				to: 9,
 				value: 6,
 				data: vec![1, 2, 3, 4],
-				gas_left: 49971,
+				gas_left: 9985500000,
 			}]
 		);
 	}
@@ -666,7 +670,7 @@ mod tests {
 			CODE_INSTANTIATE,
 			vec![],
 			&mut mock_ext,
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
 		assert_eq!(
@@ -675,7 +679,7 @@ mod tests {
 				code_hash: [0x11; 32].into(),
 				endowment: 3,
 				data: vec![1, 2, 3, 4],
-				gas_left: 49947,
+				gas_left: 9973500000,
 			}]
 		);
 	}
@@ -709,14 +713,14 @@ mod tests {
 			CODE_TERMINATE,
 			vec![],
 			&mut mock_ext,
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
 		assert_eq!(
 			&mock_ext.terminations,
 			&[TerminationEntry {
 				beneficiary: 0x09,
-				gas_left: 49989,
+				gas_left: 9994500000,
 			}]
 		);
 	}
@@ -767,7 +771,7 @@ mod tests {
 			&CODE_TRANSFER_LIMITED_GAS,
 			vec![],
 			&mut mock_ext,
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
 		assert_eq!(
@@ -860,7 +864,7 @@ mod tests {
 			CODE_GET_STORAGE,
 			vec![],
 			mock_ext,
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
 		assert_eq!(output, ExecReturnValue { status: STATUS_SUCCESS, data: [0x22; 32].to_vec() });
@@ -924,7 +928,7 @@ mod tests {
 			CODE_CALLER,
 			vec![],
 			MockExt::default(),
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 	}
 
@@ -986,7 +990,7 @@ mod tests {
 			CODE_ADDRESS,
 			vec![],
 			MockExt::default(),
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 	}
 
@@ -1041,7 +1045,7 @@ mod tests {
 
 	#[test]
 	fn balance() {
-		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 		let _ = execute(
 			CODE_BALANCE,
 			vec![],
@@ -1101,7 +1105,7 @@ mod tests {
 
 	#[test]
 	fn gas_price() {
-		let mut gas_meter = GasMeter::with_limit(50_000, 1312);
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 		let _ = execute(
 			CODE_GAS_PRICE,
 			vec![],
@@ -1159,7 +1163,7 @@ mod tests {
 
 	#[test]
 	fn gas_left() {
-		let mut gas_meter = GasMeter::with_limit(50_000, 1312);
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 
 		let output = execute(
 			CODE_GAS_LEFT,
@@ -1169,7 +1173,7 @@ mod tests {
 		).unwrap();
 
 		let gas_left = Gas::decode(&mut output.data.as_slice()).unwrap();
-		assert!(gas_left < 50_000, "gas_left must be less than initial");
+		assert!(gas_left < GAS_LIMIT, "gas_left must be less than initial");
 		assert!(gas_left > gas_meter.gas_left(), "gas_left must be greater than final");
 	}
 
@@ -1224,7 +1228,7 @@ mod tests {
 
 	#[test]
 	fn value_transferred() {
-		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 		let _ = execute(
 			CODE_VALUE_TRANSFERRED,
 			vec![],
@@ -1260,7 +1264,7 @@ mod tests {
 			CODE_DISPATCH_CALL,
 			vec![],
 			&mut mock_ext,
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
 		assert_eq!(
@@ -1300,7 +1304,7 @@ mod tests {
 			CODE_RETURN_FROM_START_FN,
 			vec![],
 			MockExt::default(),
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
 		assert_eq!(output, ExecReturnValue { status: STATUS_SUCCESS, data: vec![1, 2, 3, 4] });
@@ -1357,7 +1361,7 @@ mod tests {
 
 	#[test]
 	fn now() {
-		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 		let _ = execute(
 			CODE_TIMESTAMP_NOW,
 			vec![],
@@ -1416,7 +1420,7 @@ mod tests {
 
 	#[test]
 	fn minimum_balance() {
-		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 		let _ = execute(
 			CODE_MINIMUM_BALANCE,
 			vec![],
@@ -1475,7 +1479,7 @@ mod tests {
 
 	#[test]
 	fn tombstone_deposit() {
-		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 		let _ = execute(
 			CODE_TOMBSTONE_DEPOSIT,
 			vec![],
@@ -1543,7 +1547,7 @@ mod tests {
 
 	#[test]
 	fn random() {
-		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 
 		let output = execute(
 			CODE_RANDOM,
@@ -1588,7 +1592,7 @@ mod tests {
 	#[test]
 	fn deposit_event() {
 		let mut mock_ext = MockExt::default();
-		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 		let _ = execute(
 			CODE_DEPOSIT_EVENT,
 			vec![],
@@ -1601,7 +1605,7 @@ mod tests {
 			vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00])
 		]);
 
-		assert_eq!(gas_meter.gas_left(), 49934);
+		assert_eq!(gas_meter.gas_left(), 9967000000);
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
@@ -1634,7 +1638,7 @@ mod tests {
 	#[test]
 	fn deposit_event_max_topics() {
 		// Checks that the runtime traps if there are more than `max_topic_events` topics.
-		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 
 		assert_matches!(
 			execute(
@@ -1678,7 +1682,7 @@ mod tests {
 	#[test]
 	fn deposit_event_duplicates() {
 		// Checks that the runtime traps if there are duplicates.
-		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 
 		assert_matches!(
 			execute(
@@ -1749,7 +1753,7 @@ mod tests {
 			CODE_BLOCK_NUMBER,
 			vec![],
 			MockExt::default(),
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 	}
 
@@ -1789,7 +1793,7 @@ mod tests {
 			CODE_SIMPLE_ASSERT,
 			input_data,
 			MockExt::default(),
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
 		assert_eq!(output.data.len(), 0);
@@ -1805,7 +1809,7 @@ mod tests {
 			CODE_SIMPLE_ASSERT,
 			input_data,
 			MockExt::default(),
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).err().unwrap();
 
 		assert_eq!(error.buffer.capacity(), 1_234);
@@ -1859,7 +1863,7 @@ mod tests {
 			CODE_RETURN_WITH_DATA,
 			hex!("00112233445566778899").to_vec(),
 			MockExt::default(),
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
 		assert_eq!(output, ExecReturnValue { status: 0, data: hex!("445566778899").to_vec() });
@@ -1872,7 +1876,7 @@ mod tests {
 			CODE_RETURN_WITH_DATA,
 			hex!("112233445566778899").to_vec(),
 			MockExt::default(),
-			&mut GasMeter::with_limit(50_000, 1),
+			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
 		assert_eq!(output, ExecReturnValue { status: 17, data: hex!("5566778899").to_vec() });
@@ -1958,7 +1962,7 @@ mod tests {
 
 	#[test]
 	fn get_runtime_storage() {
-		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 		let mock_ext = MockExt::default();
 
 		// "\01\02\03\04" - Some(0x14144020)

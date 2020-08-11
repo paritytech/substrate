@@ -1,27 +1,44 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Macro for creating the tests for the module.
+
+#![cfg(test)]
+
+#[derive(Debug)]
+pub struct CallWithDispatchInfo;
+impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
+	type Origin = ();
+	type Trait = ();
+	type Info = frame_support::weights::DispatchInfo;
+	type PostInfo = frame_support::weights::PostDispatchInfo;
+
+	fn dispatch(self, _origin: Self::Origin)
+		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+			panic!("Do not use dummy implementation for dispatch.");
+	}
+}
 
 #[macro_export]
 macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
 
 		use crate::*;
-		use sp_runtime::{Fixed64, traits::{SignedExtension, BadOrigin}};
+		use sp_runtime::{FixedPointNumber, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
 			assert_noop, assert_ok, assert_err,
 			traits::{
@@ -29,7 +46,7 @@ macro_rules! decl_tests {
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath, StoredMap
 			}
 		};
-		use pallet_transaction_payment::ChargeTransactionPayment;
+		use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier};
 		use frame_system::RawOrigin;
 
 		const ID_1: LockIdentifier = *b"1       ";
@@ -38,11 +55,23 @@ macro_rules! decl_tests {
 		pub type System = frame_system::Module<$test>;
 		pub type Balances = Module<$test>;
 
-		pub const CALL: &<$test as frame_system::Trait>::Call = &();
+		pub const CALL: &<$test as frame_system::Trait>::Call = &$crate::tests::CallWithDispatchInfo;
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
-			DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
+			DispatchInfo { weight: w, ..Default::default() }
+		}
+
+		fn events() -> Vec<Event> {
+			let evt = System::events().into_iter().map(|evt| evt.event).collect::<Vec<_>>();
+
+			System::reset_events();
+
+			evt
+		}
+
+		fn last_event() -> Event {
+			system::Module::<Test>::events().pop().expect("Event expected").event
 		}
 
 		#[test]
@@ -138,7 +167,7 @@ macro_rules! decl_tests {
 				.monied(true)
 				.build()
 				.execute_with(|| {
-					pallet_transaction_payment::NextFeeMultiplier::put(Fixed64::from_natural(1));
+					pallet_transaction_payment::NextFeeMultiplier::put(Multiplier::saturating_from_integer(1));
 					Balances::set_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
 					assert_noop!(
 						<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
@@ -146,20 +175,20 @@ macro_rules! decl_tests {
 					);
 					assert_noop!(
 						<Balances as ReservableCurrency<_>>::reserve(&1, 1),
-						Error::<$test, _>::LiquidityRestrictions
+						Error::<$test, _>::LiquidityRestrictions,
 					);
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
 						&1,
 						CALL,
-						info_from_weight(1),
+						&info_from_weight(1),
 						1,
 					).is_err());
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
 						CALL,
-						info_from_weight(1),
+						&info_from_weight(1),
 						1,
 					).is_ok());
 
@@ -170,14 +199,14 @@ macro_rules! decl_tests {
 						ChargeTransactionPayment::from(1),
 						&1,
 						CALL,
-						info_from_weight(1),
+						&info_from_weight(1),
 						1,
 					).is_err());
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
 						CALL,
-						info_from_weight(1),
+						&info_from_weight(1),
 						1,
 					).is_err());
 				});
@@ -461,6 +490,10 @@ macro_rules! decl_tests {
 				let _ = Balances::deposit_creating(&2, 1);
 				assert_ok!(Balances::reserve(&1, 110));
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
+				assert_eq!(
+					last_event(),
+					Event::balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
+				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
 				assert_eq!(Balances::reserved_balance(2), 0);
@@ -656,6 +689,102 @@ macro_rules! decl_tests {
 					assert!(Balances::is_dead_account(&1));
 					assert_eq!(Balances::free_balance(1), 0);
 					assert_eq!(Balances::reserved_balance(1), 0);
+				});
+		}
+
+		#[test]
+		fn emit_events_with_reserve_and_unreserve() {
+			<$ext_builder>::default()
+				.build()
+				.execute_with(|| {
+					let _ = Balances::deposit_creating(&1, 100);
+
+					System::set_block_number(2);
+					let _ = Balances::reserve(&1, 10);
+
+					assert_eq!(
+						last_event(),
+						Event::balances(RawEvent::Reserved(1, 10)),
+					);
+
+					System::set_block_number(3);
+					let _ = Balances::unreserve(&1, 5);
+
+					assert_eq!(
+						last_event(),
+						Event::balances(RawEvent::Unreserved(1, 5)),
+					);
+
+					System::set_block_number(4);
+					let _ = Balances::unreserve(&1, 6);
+
+					// should only unreserve 5
+					assert_eq!(
+						last_event(),
+						Event::balances(RawEvent::Unreserved(1, 5)),
+					);
+				});
+		}
+
+		#[test]
+		fn emit_events_with_existential_deposit() {
+			<$ext_builder>::default()
+				.existential_deposit(100)
+				.build()
+				.execute_with(|| {
+					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+
+					assert_eq!(
+						events(),
+						[
+							Event::system(system::RawEvent::NewAccount(1)),
+							Event::balances(RawEvent::Endowed(1, 100)),
+							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+						]
+					);
+
+					let _ = Balances::slash(&1, 1);
+
+					assert_eq!(
+						events(),
+						[
+							Event::balances(RawEvent::DustLost(1, 99)),
+							Event::system(system::RawEvent::KilledAccount(1))
+						]
+					);
+				});
+		}
+
+		#[test]
+		fn emit_events_with_no_existential_deposit_suicide() {
+			<$ext_builder>::default()
+				.existential_deposit(0)
+				.build()
+				.execute_with(|| {
+					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+
+					assert_eq!(
+						events(),
+						[
+							Event::system(system::RawEvent::NewAccount(1)),
+							Event::balances(RawEvent::Endowed(1, 100)),
+							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+						]
+					);
+
+					let _ = Balances::slash(&1, 100);
+
+					// no events
+					assert_eq!(events(), []);
+
+					assert_ok!(System::suicide(Origin::signed(1)));
+
+					assert_eq!(
+						events(),
+						[
+							Event::system(system::RawEvent::KilledAccount(1))
+						]
+					);
 				});
 		}
 	}

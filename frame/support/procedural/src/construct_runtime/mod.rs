@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 mod parse;
 
@@ -88,6 +89,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let outer_config = decl_outer_config(&name, modules.iter(), &scrate);
 	let inherent = decl_outer_inherent(&block, &unchecked_extrinsic, modules.iter(), &scrate);
 	let validate_unsigned = decl_validate_unsigned(&name, modules.iter(), &scrate);
+	let integrity_test = decl_integrity_test(&scrate);
 
 	let res = quote!(
 		#scrate_decl
@@ -119,6 +121,8 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		#inherent
 
 		#validate_unsigned
+
+		#integrity_test
 	);
 
 	Ok(res.into())
@@ -404,4 +408,18 @@ fn find_system_module<'a>(
 	module_declarations
 		.find(|decl| decl.name == SYSTEM_MODULE_NAME)
 		.map(|decl| &decl.module)
+}
+
+fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
+	quote!(
+		#[cfg(test)]
+		mod __construct_runtime_integrity_test {
+			use super::*;
+
+			#[test]
+			pub fn runtime_integrity_tests() {
+				<AllModules as #scrate::traits::IntegrityTest>::integrity_test();
+			}
+		}
+	)
 }

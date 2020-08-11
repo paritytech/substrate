@@ -14,22 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
-use sp_std::convert::TryFrom;
-use sp_runtime::traits::{
-	CheckedMul, Zero, SaturatedConversion, AtLeast32Bit, UniqueSaturatedInto,
-};
-use frame_support::{
-	traits::{Currency, ExistenceRequirement, Imbalance, OnUnbalanced, WithdrawReason}, StorageValue,
-	dispatch::DispatchError,
+use crate::Trait;
+use sp_std::marker::PhantomData;
+use sp_runtime::traits::Zero;
+use frame_support::dispatch::{
+	DispatchError, DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo,
 };
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
 
-// Gas units are chosen to be represented by u64 so that gas metering instructions can operate on
-// them efficiently.
-pub type Gas = u64;
+// Gas is essentially the same as weight. It is a 1 to 1 correspondence.
+pub type Gas = frame_support::weights::Weight;
 
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
@@ -88,20 +84,19 @@ pub struct ErasedToken {
 }
 
 pub struct GasMeter<T: Trait> {
-	limit: Gas,
+	gas_limit: Gas,
 	/// Amount of gas left from initial gas limit. Can reach zero.
 	gas_left: Gas,
-	gas_price: BalanceOf<T>,
-
+	_phantom: PhantomData<T>,
 	#[cfg(test)]
 	tokens: Vec<ErasedToken>,
 }
 impl<T: Trait> GasMeter<T> {
-	pub fn with_limit(gas_limit: Gas, gas_price: BalanceOf<T>) -> GasMeter<T> {
+	pub fn new(gas_limit: Gas) -> Self {
 		GasMeter {
-			limit: gas_limit,
+			gas_limit,
 			gas_left: gas_limit,
-			gas_price,
+			_phantom: PhantomData,
 			#[cfg(test)]
 			tokens: Vec::new(),
 		}
@@ -147,6 +142,14 @@ impl<T: Trait> GasMeter<T> {
 		}
 	}
 
+	// Account for not fully used gas.
+	//
+	// This can be used after dispatching a runtime call to refund gas that was not
+	// used by the dispatchable.
+	pub fn refund(&mut self, gas: Gas) {
+		self.gas_left = self.gas_left.saturating_add(gas).max(self.gas_limit);
+	}
+
 	/// Allocate some amount of gas and perform some work with
 	/// a newly created nested gas meter.
 	///
@@ -165,7 +168,7 @@ impl<T: Trait> GasMeter<T> {
 			f(None)
 		} else {
 			self.gas_left = self.gas_left - amount;
-			let mut nested = GasMeter::with_limit(amount, self.gas_price);
+			let mut nested = GasMeter::new(amount);
 
 			let r = f(Some(&mut nested));
 
@@ -175,8 +178,9 @@ impl<T: Trait> GasMeter<T> {
 		}
 	}
 
-	pub fn gas_price(&self) -> BalanceOf<T> {
-		self.gas_price
+	/// Returns how much gas left from the initial budget.
+	fn gas_spent(&self) -> Gas {
+		self.gas_limit - self.gas_left
 	}
 
 	/// Returns how much gas left from the initial budget.
@@ -184,76 +188,22 @@ impl<T: Trait> GasMeter<T> {
 		self.gas_left
 	}
 
-	/// Returns how much gas was spent.
-	fn spent(&self) -> Gas {
-		self.limit - self.gas_left
+	/// Turn this GasMeter into a DispatchResult that contains the actually used gas.
+	pub fn into_dispatch_result<R, E>(self, result: Result<R, E>) -> DispatchResultWithPostInfo where
+		E: Into<DispatchError>,
+	{
+		let post_info = PostDispatchInfo {
+			actual_weight: Some(self.gas_spent()),
+		};
+
+		result
+			.map(|_| post_info)
+			.map_err(|e| DispatchErrorWithPostInfo { post_info, error: e.into() })
 	}
 
 	#[cfg(test)]
 	pub fn tokens(&self) -> &[ErasedToken] {
 		&self.tokens
-	}
-}
-
-/// Buy the given amount of gas.
-///
-/// Cost is calculated by multiplying the gas cost (taken from the storage) by the `gas_limit`.
-/// The funds are deducted from `transactor`.
-pub fn buy_gas<T: Trait>(
-	transactor: &T::AccountId,
-	gas_limit: Gas,
-) -> Result<(GasMeter<T>, NegativeImbalanceOf<T>), DispatchError> {
-	// Buy the specified amount of gas.
-	let gas_price = <Module<T>>::gas_price();
-	let cost = if gas_price.is_zero() {
-		<BalanceOf<T>>::zero()
-	} else {
-		<BalanceOf<T> as TryFrom<Gas>>::try_from(gas_limit).ok()
-			.and_then(|gas_limit| gas_price.checked_mul(&gas_limit))
-			.ok_or("overflow multiplying gas limit by price")?
-	};
-
-	let imbalance = T::Currency::withdraw(
-		transactor,
-		cost,
-		WithdrawReason::Fee.into(),
-		ExistenceRequirement::KeepAlive
-	)?;
-
-	Ok((GasMeter::with_limit(gas_limit, gas_price), imbalance))
-}
-
-/// Refund the unused gas.
-pub fn refund_unused_gas<T: Trait>(
-	transactor: &T::AccountId,
-	gas_meter: GasMeter<T>,
-	imbalance: NegativeImbalanceOf<T>,
-) {
-	let gas_spent = gas_meter.spent();
-	let gas_left = gas_meter.gas_left();
-
-	// Increase total spent gas.
-	// This cannot overflow, since `gas_spent` is never greater than `block_gas_limit`, which
-	// also has Gas type.
-	GasSpent::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
-
-	// Refund gas left by the price it was bought at.
-	let refund = gas_meter.gas_price * gas_left.unique_saturated_into();
-	let refund_imbalance = T::Currency::deposit_creating(transactor, refund);
-	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
-		T::GasPayment::on_unbalanced(imbalance);
-	}
-}
-
-/// A little handy utility for converting a value in balance units into approximate value in gas units
-/// at the given gas price.
-pub fn approx_gas_for_balance<Balance>(gas_price: Balance, balance: Balance) -> Gas
-	where Balance: AtLeast32Bit
-{
-	if gas_price.is_zero() {
-		Zero::zero()
-	} else {
-		(balance / gas_price).saturated_into::<Gas>()
 	}
 }
 
@@ -298,7 +248,7 @@ macro_rules! match_tokens {
 #[cfg(test)]
 mod tests {
 	use super::{GasMeter, Token};
-	use crate::{tests::Test, gas::approx_gas_for_balance};
+	use crate::tests::Test;
 
 	/// A trivial token that charges the specified number of gas units.
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -326,26 +276,24 @@ mod tests {
 
 	#[test]
 	fn it_works() {
-		let gas_meter = GasMeter::<Test>::with_limit(50000, 10);
+		let gas_meter = GasMeter::<Test>::new(50000);
 		assert_eq!(gas_meter.gas_left(), 50000);
 	}
 
 	#[test]
 	fn simple() {
-		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
+		let mut gas_meter = GasMeter::<Test>::new(50000);
 
 		let result = gas_meter
 			.charge(&MultiplierTokenMetadata { multiplier: 3 }, MultiplierToken(10));
 		assert!(!result.is_out_of_gas());
 
 		assert_eq!(gas_meter.gas_left(), 49_970);
-		assert_eq!(gas_meter.spent(), 30);
-		assert_eq!(gas_meter.gas_price(), 10);
 	}
 
 	#[test]
 	fn tracing() {
-		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
+		let mut gas_meter = GasMeter::<Test>::new(50000);
 		assert!(!gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
 		assert!(!gas_meter
 			.charge(&MultiplierTokenMetadata { multiplier: 3 }, MultiplierToken(10))
@@ -358,7 +306,7 @@ mod tests {
 	// This test makes sure that nothing can be executed if there is no gas.
 	#[test]
 	fn refuse_to_execute_anything_if_zero() {
-		let mut gas_meter = GasMeter::<Test>::with_limit(0, 10);
+		let mut gas_meter = GasMeter::<Test>::new(0);
 		assert!(gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
 	}
 
@@ -369,7 +317,7 @@ mod tests {
 	// if the gas meter runs out of gas. However, this is just a nice property to have.
 	#[test]
 	fn overcharge_is_unrecoverable() {
-		let mut gas_meter = GasMeter::<Test>::with_limit(200, 10);
+		let mut gas_meter = GasMeter::<Test>::new(200);
 
 		// The first charge is should lead to OOG.
 		assert!(gas_meter.charge(&(), SimpleToken(300)).is_out_of_gas());
@@ -383,25 +331,7 @@ mod tests {
 	// possible.
 	#[test]
 	fn charge_exact_amount() {
-		let mut gas_meter = GasMeter::<Test>::with_limit(25, 10);
+		let mut gas_meter = GasMeter::<Test>::new(25);
 		assert!(!gas_meter.charge(&(), SimpleToken(25)).is_out_of_gas());
-	}
-
-	// A unit test for `fn approx_gas_for_balance()`, and makes
-	// sure setting gas_price 0 does not cause `div by zero` error.
-	#[test]
-	fn approx_gas_for_balance_works() {
-		let tests = vec![
-			(approx_gas_for_balance(0_u64, 123), 0),
-			(approx_gas_for_balance(0_u64, 456), 0),
-			(approx_gas_for_balance(1_u64, 123), 123),
-			(approx_gas_for_balance(1_u64, 456), 456),
-			(approx_gas_for_balance(100_u64, 900), 9),
-			(approx_gas_for_balance(123_u64, 900), 7),
-		];
-
-		for (lhs, rhs) in tests {
-			assert_eq!(lhs, rhs);
-		}
 	}
 }

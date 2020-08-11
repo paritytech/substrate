@@ -1,18 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Defines data and logic needed for interaction with an WebAssembly instance of a substrate
 //! runtime module.
@@ -20,11 +22,55 @@
 use crate::util;
 use crate::imports::Imports;
 
-use sc_executor_common::error::{Error, Result};
+use std::{slice, marker};
+use sc_executor_common::{
+	error::{Error, Result},
+	util::{WasmModuleInfo, DataSegmentsSnapshot},
+};
 use sp_wasm_interface::{Pointer, WordSize, Value};
-use std::slice;
-use std::marker;
-use wasmtime::{Instance, Module, Memory, Table, Val};
+use wasmtime::{Store, Instance, Module, Memory, Table, Val, Func, Extern, Global};
+
+mod globals_snapshot;
+
+pub use globals_snapshot::GlobalsSnapshot;
+
+pub struct ModuleWrapper {
+	imported_globals_count: u32,
+	globals_count: u32,
+	module: Module,
+	data_segments_snapshot: DataSegmentsSnapshot,
+}
+
+impl ModuleWrapper {
+	pub fn new(store: &Store, code: &[u8]) -> Result<Self> {
+		let module = Module::new(&store, code)
+			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
+
+		let module_info = WasmModuleInfo::new(code)
+			.ok_or_else(|| Error::from("cannot deserialize module".to_string()))?;
+		let declared_globals_count = module_info.declared_globals_count();
+		let imported_globals_count = module_info.imported_globals_count();
+		let globals_count = imported_globals_count + declared_globals_count;
+
+		let data_segments_snapshot = DataSegmentsSnapshot::take(&module_info)
+			.map_err(|e| Error::from(format!("cannot take data segments snapshot: {}", e)))?;
+
+		Ok(Self {
+			module,
+			imported_globals_count,
+			globals_count,
+			data_segments_snapshot,
+		})
+	}
+
+	pub fn module(&self) -> &Module {
+		&self.module
+	}
+
+	pub fn data_segments_snapshot(&self) -> &DataSegmentsSnapshot {
+		&self.data_segments_snapshot
+	}
+}
 
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
 ///
@@ -32,6 +78,8 @@ use wasmtime::{Instance, Module, Memory, Table, Val};
 /// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
+	globals_count: u32,
+	imported_globals_count: u32,
 	// The memory instance of the `instance`.
 	//
 	// It is important to make sure that we don't make any copies of this to make it easier to proof
@@ -42,16 +90,44 @@ pub struct InstanceWrapper {
 	_not_send_nor_sync: marker::PhantomData<*const ()>,
 }
 
+fn extern_memory(extern_: &Extern) -> Option<&Memory> {
+	match extern_ {
+		Extern::Memory(mem) => Some(mem),
+		_ => None,
+	}
+}
+
+
+fn extern_global(extern_: &Extern) -> Option<&Global> {
+	match extern_ {
+		Extern::Global(glob) => Some(glob),
+		_ => None,
+	}
+}
+
+fn extern_table(extern_: &Extern) -> Option<&Table> {
+	match extern_ {
+		Extern::Table(table) => Some(table),
+		_ => None,
+	}
+}
+
+fn extern_func(extern_: &Extern) -> Option<&Func> {
+	match extern_ {
+		Extern::Func(func) => Some(func),
+		_ => None,
+	}
+}
+
 impl InstanceWrapper {
 	/// Create a new instance wrapper from the given wasm module.
-	pub fn new(module: &Module, imports: &Imports, heap_pages: u32) -> Result<Self> {
-		let instance = Instance::new(module, &imports.externs)
+	pub fn new(module_wrapper: &ModuleWrapper, imports: &Imports, heap_pages: u32) -> Result<Self> {
+		let instance = Instance::new(&module_wrapper.module, &imports.externs)
 			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
 
 		let memory = match imports.memory_import_index {
 			Some(memory_idx) => {
-				imports.externs[memory_idx]
-					.memory()
+				extern_memory(&imports.externs[memory_idx])
 					.expect("only memory can be at the `memory_idx`; qed")
 					.clone()
 			}
@@ -66,8 +142,10 @@ impl InstanceWrapper {
 
 		Ok(Self {
 			table: get_table(&instance),
-			memory,
 			instance,
+			globals_count: module_wrapper.globals_count,
+			imported_globals_count: module_wrapper.imported_globals_count,
+			memory,
 			_not_send_nor_sync: marker::PhantomData,
 		})
 	}
@@ -82,8 +160,7 @@ impl InstanceWrapper {
 			.instance
 			.get_export(name)
 			.ok_or_else(|| Error::from(format!("Exported method {} is not found", name)))?;
-		let entrypoint = export
-			.func()
+		let entrypoint = extern_func(&export)
 			.ok_or_else(|| Error::from(format!("Export {} is not a function", name)))?;
 		match (entrypoint.ty().params(), entrypoint.ty().results()) {
 			(&[wasmtime::ValType::I32, wasmtime::ValType::I32], &[wasmtime::ValType::I64]) => {}
@@ -116,8 +193,7 @@ impl InstanceWrapper {
 			.get_export("__heap_base")
 			.ok_or_else(|| Error::from("__heap_base is not found"))?;
 
-		let heap_base_global = heap_base_export
-			.global()
+		let heap_base_global = extern_global(&heap_base_export)
 			.ok_or_else(|| Error::from("__heap_base is not a global"))?;
 
 		let heap_base = heap_base_global
@@ -135,7 +211,7 @@ impl InstanceWrapper {
 			None => return Ok(None),
 		};
 
-		let global = global.global().ok_or_else(|| format!("`{}` is not a global", name))?;
+		let global = extern_global(&global).ok_or_else(|| format!("`{}` is not a global", name))?;
 
 		match global.get() {
 			Val::I32(val) => Ok(Some(Value::I32(val))),
@@ -153,8 +229,7 @@ fn get_linear_memory(instance: &Instance) -> Result<Memory> {
 		.get_export("memory")
 		.ok_or_else(|| Error::from("memory is not exported under `memory` name"))?;
 
-	let memory = memory_export
-		.memory()
+	let memory = extern_memory(&memory_export)
 		.ok_or_else(|| Error::from("the `memory` export should have memory type"))?
 		.clone();
 
@@ -165,7 +240,8 @@ fn get_linear_memory(instance: &Instance) -> Result<Memory> {
 fn get_table(instance: &Instance) -> Option<Table> {
 	instance
 		.get_export("__indirect_function_table")
-		.and_then(|export| export.table())
+		.as_ref()
+		.and_then(extern_table)
 		.cloned()
 }
 

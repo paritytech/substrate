@@ -1,40 +1,35 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::fmt::Debug;
-use std::str::FromStr;
-use structopt::StructOpt;
-use sc_service::{
-	Configuration, ServiceBuilderCommand, Roles, ChainSpec,
+use crate::{
+	CliConfiguration, error, params::{ImportParams, SharedParams, BlockNumberOrHash},
 };
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use sp_runtime::generic::BlockId;
-
-use crate::error;
-use crate::VersionInfo;
-use crate::runtime::run_until_exit;
-use crate::params::SharedParams;
-use crate::params::ImportParams;
+use sc_service::{Configuration, ServiceBuilderCommand};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
+use std::{fmt::Debug, str::FromStr};
+use structopt::StructOpt;
 
 /// The `check-block` command used to validate blocks.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct CheckBlockCmd {
 	/// Block hash or number
 	#[structopt(value_name = "HASH or NUMBER")]
-	pub input: String,
+	pub input: BlockNumberOrHash,
 
 	/// The default number of 64KB pages to ever allocate for Wasm execution.
 	///
@@ -53,49 +48,33 @@ pub struct CheckBlockCmd {
 
 impl CheckBlockCmd {
 	/// Run the check-block command
-	pub fn run<B, BC, BB>(
-		self,
+	pub async fn run<B, BC, BB>(
+		&self,
 		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
 	where
 		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		BB: BlockT + Debug,
+		<NumberFor<BB> as FromStr>::Err: std::fmt::Debug,
+		BB::Hash: FromStr,
+		<BB::Hash as FromStr>::Err: std::fmt::Debug,
 	{
-		let input = if self.input.starts_with("0x") { &self.input[2..] } else { &self.input[..] };
-		let block_id = match FromStr::from_str(input) {
-			Ok(hash) => BlockId::hash(hash),
-			Err(_) => match self.input.parse::<u32>() {
-				Ok(n) => BlockId::number((n as u32).into()),
-				Err(_) => return Err(error::Error::Input("Invalid hash or number specified".into())),
-			}
-		};
-
 		let start = std::time::Instant::now();
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.check_block(block_id))
-		})?;
+		builder(config)?.check_block(self.input.parse()?).await?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 
 		Ok(())
 	}
+}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.import_params.update_config(&mut config, Roles::FULL, self.shared_params.dev)?;
-		config.use_in_memory_keystore()?;
+impl CliConfiguration for CheckBlockCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
 
-		Ok(())
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
 	}
 }

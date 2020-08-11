@@ -1,34 +1,306 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Traits for FRAME.
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
 use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
-use codec::{FullCodec, Codec, Encode, Decode};
+use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeDebug,
-	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput},
+	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError, traits::{
+		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
+		BadOrigin
+	},
 };
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
+use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
+
+/// Re-expected for the macro.
+#[doc(hidden)]
+pub use sp_std::{mem::{swap, take}, cell::RefCell, vec::Vec, boxed::Box};
+
+/// Simple trait for providing a filter over a reference to some type.
+pub trait Filter<T> {
+	/// Determine if a given value should be allowed through the filter (returns `true`) or not.
+	fn filter(_: &T) -> bool;
+}
+
+impl<T> Filter<T> for () {
+	fn filter(_: &T) -> bool { true }
+}
+
+/// Migrate a given account.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+pub trait MigrateAccount<A> {
+	/// Migrate the `account`.
+	fn migrate_account(account: &A);
+}
+
+/// Trait to add a constraint onto the filter.
+pub trait FilterStack<T>: Filter<T> {
+	/// The type used to archive the stack.
+	type Stack;
+
+	/// Add a new `constraint` onto the filter.
+	fn push(constraint: impl Fn(&T) -> bool + 'static);
+
+	/// Removes the most recently pushed, and not-yet-popped, constraint from the filter.
+	fn pop();
+
+	/// Clear the filter, returning a value that may be used later to `restore` it.
+	fn take() -> Self::Stack;
+
+	/// Restore the filter from a previous `take` operation.
+	fn restore(taken: Self::Stack);
+}
+
+/// Guard type for pushing a constraint to a `FilterStack` and popping when dropped.
+pub struct FilterStackGuard<F: FilterStack<T>, T>(PhantomData<(F, T)>);
+
+/// Guard type for clearing all pushed constraints from a `FilterStack` and reinstating them when
+/// dropped.
+pub struct ClearFilterGuard<F: FilterStack<T>, T>(Option<F::Stack>, PhantomData<T>);
+
+impl<F: FilterStack<T>, T> FilterStackGuard<F, T> {
+	/// Create a new instance, adding a new `constraint` onto the filter `T`, and popping it when
+	/// this instance is dropped.
+	pub fn new(constraint: impl Fn(&T) -> bool + 'static) -> Self {
+		F::push(constraint);
+		Self(PhantomData)
+	}
+}
+
+impl<F: FilterStack<T>, T> Drop for FilterStackGuard<F, T> {
+	fn drop(&mut self) {
+		F::pop();
+	}
+}
+
+impl<F: FilterStack<T>, T> ClearFilterGuard<F, T> {
+	/// Create a new instance, adding a new `constraint` onto the filter `T`, and popping it when
+	/// this instance is dropped.
+	pub fn new() -> Self {
+		Self(Some(F::take()), PhantomData)
+	}
+}
+
+impl<F: FilterStack<T>, T> Drop for ClearFilterGuard<F, T> {
+	fn drop(&mut self) {
+		if let Some(taken) = self.0.take() {
+			F::restore(taken);
+		}
+	}
+}
+
+/// Simple trait for providing a filter over a reference to some type, given an instance of itself.
+pub trait InstanceFilter<T>: Sized + Send + Sync {
+	/// Determine if a given value should be allowed through the filter (returns `true`) or not.
+	fn filter(&self, _: &T) -> bool;
+
+	/// Determines whether `self` matches at least everything that `_o` does.
+	fn is_superset(&self, _o: &Self) -> bool { false }
+}
+
+impl<T> InstanceFilter<T> for () {
+	fn filter(&self, _: &T) -> bool { true }
+	fn is_superset(&self, _o: &Self) -> bool { true }
+}
+
+#[macro_export]
+macro_rules! impl_filter_stack {
+	($target:ty, $base:ty, $call:ty, $module:ident) => {
+		#[cfg(feature = "std")]
+		mod $module {
+			#[allow(unused_imports)]
+			use super::*;
+			use $crate::traits::{swap, take, RefCell, Vec, Box, Filter, FilterStack};
+
+			thread_local! {
+				static FILTER: RefCell<Vec<Box<dyn Fn(&$call) -> bool + 'static>>> = RefCell::new(Vec::new());
+			}
+
+			impl Filter<$call> for $target {
+				fn filter(call: &$call) -> bool {
+					<$base>::filter(call) &&
+						FILTER.with(|filter| filter.borrow().iter().all(|f| f(call)))
+				}
+			}
+
+			impl FilterStack<$call> for $target {
+				type Stack = Vec<Box<dyn Fn(&$call) -> bool + 'static>>;
+				fn push(f: impl Fn(&$call) -> bool + 'static) {
+					FILTER.with(|filter| filter.borrow_mut().push(Box::new(f)));
+				}
+				fn pop() {
+					FILTER.with(|filter| filter.borrow_mut().pop());
+				}
+				fn take() -> Self::Stack {
+					FILTER.with(|filter| take(filter.borrow_mut().as_mut()))
+				}
+				fn restore(mut s: Self::Stack) {
+					FILTER.with(|filter| swap(filter.borrow_mut().as_mut(), &mut s));
+				}
+			}
+		}
+
+		#[cfg(not(feature = "std"))]
+		mod $module {
+			#[allow(unused_imports)]
+			use super::*;
+			use $crate::traits::{swap, take, RefCell, Vec, Box, Filter, FilterStack};
+
+			struct ThisFilter(RefCell<Vec<Box<dyn Fn(&$call) -> bool + 'static>>>);
+			// NOTE: Safe only in wasm (guarded above) because there's only one thread.
+			unsafe impl Send for ThisFilter {}
+			unsafe impl Sync for ThisFilter {}
+
+			static FILTER: ThisFilter = ThisFilter(RefCell::new(Vec::new()));
+
+			impl Filter<$call> for $target {
+				fn filter(call: &$call) -> bool {
+					<$base>::filter(call) && FILTER.0.borrow().iter().all(|f| f(call))
+				}
+			}
+
+			impl FilterStack<$call> for $target {
+				type Stack = Vec<Box<dyn Fn(&$call) -> bool + 'static>>;
+				fn push(f: impl Fn(&$call) -> bool + 'static) {
+					FILTER.0.borrow_mut().push(Box::new(f));
+				}
+				fn pop() {
+					FILTER.0.borrow_mut().pop();
+				}
+				fn take() -> Self::Stack {
+					take(FILTER.0.borrow_mut().as_mut())
+				}
+				fn restore(mut s: Self::Stack) {
+					swap(FILTER.0.borrow_mut().as_mut(), &mut s);
+				}
+			}
+		}
+	}
+}
+
+/// Type that provide some integrity tests.
+///
+/// This implemented for modules by `decl_module`.
+#[impl_for_tuples(30)]
+pub trait IntegrityTest {
+	/// Run integrity test.
+	///
+	/// The test is not executed in a externalities provided environment.
+	fn integrity_test() {}
+}
+
+#[cfg(test)]
+mod test_impl_filter_stack {
+	use super::*;
+
+	pub struct IsCallable;
+	pub struct BaseFilter;
+	impl Filter<u32> for BaseFilter {
+		fn filter(x: &u32) -> bool { x % 2 == 0 }
+	}
+	impl_filter_stack!(
+		crate::traits::test_impl_filter_stack::IsCallable,
+		crate::traits::test_impl_filter_stack::BaseFilter,
+		u32,
+		is_callable
+	);
+
+	#[test]
+	fn impl_filter_stack_should_work() {
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(IsCallable::filter(&42));
+		assert!(!IsCallable::filter(&43));
+
+		IsCallable::push(|x| *x < 42);
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(!IsCallable::filter(&42));
+
+		IsCallable::push(|x| *x % 3 == 0);
+		assert!(IsCallable::filter(&36));
+		assert!(!IsCallable::filter(&40));
+
+		IsCallable::pop();
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(!IsCallable::filter(&42));
+
+		let saved = IsCallable::take();
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(IsCallable::filter(&42));
+		assert!(!IsCallable::filter(&43));
+
+		IsCallable::restore(saved);
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(!IsCallable::filter(&42));
+
+		IsCallable::pop();
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(IsCallable::filter(&42));
+		assert!(!IsCallable::filter(&43));
+	}
+
+	#[test]
+	fn guards_should_work() {
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(IsCallable::filter(&42));
+		assert!(!IsCallable::filter(&43));
+		{
+			let _guard_1 = FilterStackGuard::<IsCallable, u32>::new(|x| *x < 42);
+			assert!(IsCallable::filter(&36));
+			assert!(IsCallable::filter(&40));
+			assert!(!IsCallable::filter(&42));
+			{
+				let _guard_2 = FilterStackGuard::<IsCallable, u32>::new(|x| *x % 3 == 0);
+				assert!(IsCallable::filter(&36));
+				assert!(!IsCallable::filter(&40));
+			}
+			assert!(IsCallable::filter(&36));
+			assert!(IsCallable::filter(&40));
+			assert!(!IsCallable::filter(&42));
+			{
+				let _guard_2 = ClearFilterGuard::<IsCallable, u32>::new();
+				assert!(IsCallable::filter(&36));
+				assert!(IsCallable::filter(&40));
+				assert!(IsCallable::filter(&42));
+				assert!(!IsCallable::filter(&43));
+			}
+			assert!(IsCallable::filter(&36));
+			assert!(IsCallable::filter(&40));
+			assert!(!IsCallable::filter(&42));
+		}
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(IsCallable::filter(&42));
+		assert!(!IsCallable::filter(&43));
+	}
+}
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
@@ -87,25 +359,28 @@ impl<
 	Created: Happened<K>,
 	Removed: Happened<K>,
 	K: FullCodec,
-	T: FullCodec
+	T: FullCodec,
 > StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
 	fn get(k: &K) -> T { S::get(k) }
 	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
 	fn insert(k: &K, t: T) {
+		let existed = S::contains_key(&k);
 		S::insert(k, t);
-		if !S::contains_key(&k) {
+		if !existed {
 			Created::happened(k);
 		}
 	}
 	fn remove(k: &K) {
-		if S::contains_key(&k) {
+		let existed = S::contains_key(&k);
+		S::remove(k);
+		if existed {
 			Removed::happened(&k);
 		}
-		S::remove(k);
 	}
 	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R {
+		let existed = S::contains_key(&k);
 		let r = S::mutate(k, f);
-		if !S::contains_key(&k) {
+		if !existed {
 			Created::happened(k);
 		}
 		r
@@ -138,6 +413,49 @@ impl<
 	}
 }
 
+/// Something that can estimate at which block the next session rotation will happen. This should
+/// be the same logical unit that dictates `ShouldEndSession` to the session module. No Assumptions
+/// are made about the scheduling of the sessions.
+pub trait EstimateNextSessionRotation<BlockNumber> {
+	/// Return the block number at which the next session rotation is estimated to happen.
+	///
+	/// None should be returned if the estimation fails to come to an answer
+	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber>;
+
+	/// Return the weight of calling `estimate_next_session_rotation`
+	fn weight(now: BlockNumber) -> Weight;
+}
+
+impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
+	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
+		Default::default()
+	}
+
+	fn weight(_: BlockNumber) -> Weight {
+		0
+	}
+}
+
+/// Something that can estimate at which block the next `new_session` will be triggered. This must
+/// always be implemented by the session module.
+pub trait EstimateNextNewSession<BlockNumber> {
+	/// Return the block number at which the next new session is estimated to happen.
+	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
+
+	/// Return the weight of calling `estimate_next_new_session`
+	fn weight(now: BlockNumber) -> Weight;
+}
+
+impl<BlockNumber: Bounded> EstimateNextNewSession<BlockNumber> for () {
+	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
+		Default::default()
+	}
+
+	fn weight(_: BlockNumber) -> Weight {
+		0
+	}
+}
+
 /// Anything that can have a `::len()` method.
 pub trait Len {
 	/// Return the length of data type.
@@ -150,9 +468,11 @@ impl<T: IntoIterator + Clone,> Len for T where <T as IntoIterator>::IntoIter: Ex
 	}
 }
 
-/// A trait for querying a single fixed value from a type.
+/// A trait for querying a single value from a type.
+///
+/// It is not required that the value is constant.
 pub trait Get<T> {
-	/// Return a constant value.
+	/// Return the current value.
 	fn get() -> T;
 }
 
@@ -160,9 +480,7 @@ impl<T: Default> Get<T> for () {
 	fn get() -> T { T::default() }
 }
 
-/// A trait for querying whether a type can be said to statically "contain" a value. Similar
-/// in nature to `Get`, except it is designed to be lazy rather than active (you can't ask it to
-/// enumerate all values that it contains) and work for multiple values rather than just one.
+/// A trait for querying whether a type can be said to "contain" a value.
 pub trait Contains<T: Ord> {
 	/// Return `true` if this "contains" the given value `t`.
 	fn contains(t: &T) -> bool { Self::sorted_members().binary_search(t).is_ok() }
@@ -178,7 +496,15 @@ pub trait Contains<T: Ord> {
 	///
 	/// **Should be used for benchmarking only!!!**
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add(t: &T);
+	fn add(_t: &T) { unimplemented!() }
+}
+
+/// A trait for querying bound for the length of an implementation of `Contains`
+pub trait ContainsLengthBound {
+	/// Minimum number of elements contained
+	fn min_len() -> usize;
+	/// Maximum number of elements contained
+	fn max_len() -> usize;
 }
 
 /// Determiner to say whether a given account is unused.
@@ -250,6 +576,21 @@ pub trait KeyOwnerProofSystem<Key> {
 	/// Check a proof of membership on-chain. Return `Some` iff the proof is
 	/// valid and recent enough to check.
 	fn check_proof(key: Key, proof: Self::Proof) -> Option<Self::IdentificationTuple>;
+}
+
+impl<Key> KeyOwnerProofSystem<Key> for () {
+	// The proof and identification tuples is any bottom type to guarantee that the methods of this
+	// implementation can never be called or return anything other than `None`.
+	type Proof = crate::Void;
+	type IdentificationTuple = crate::Void;
+
+	fn prove(_key: Key) -> Option<Self::Proof> {
+		None
+	}
+
+	fn check_proof(_key: Key, _proof: Self::Proof) -> Option<Self::IdentificationTuple> {
+		None
+	}
 }
 
 /// Handler for when some currency "account" decreased in balance for
@@ -685,6 +1026,7 @@ pub trait Currency<AccountId> {
 }
 
 /// Status of funds.
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum BalanceStatus {
 	/// Funds are free, as corresponding to `free` item in Balances.
 	Free,
@@ -858,6 +1200,12 @@ pub trait Time {
 	fn now() -> Self::Moment;
 }
 
+/// Trait to deal with unix time.
+pub trait UnixTime {
+	/// Return duration since `SystemTime::UNIX_EPOCH`.
+	fn now() -> core::time::Duration;
+}
+
 impl WithdrawReasons {
 	/// Choose all variants except for `one`.
 	///
@@ -997,6 +1345,21 @@ impl<Output: Decode + Default> Randomness<Output> for () {
 	}
 }
 
+/// Trait to be used by block producing consensus engine modules to determine
+/// how late the current block is (e.g. in a slot-based proposal mechanism how
+/// many slots were skipped since the previous block).
+pub trait Lateness<N> {
+	/// Returns a generic measure of how late the current block is compared to
+	/// its parent.
+	fn lateness(&self) -> N;
+}
+
+impl<N: Zero> Lateness<N> for () {
+	fn lateness(&self) -> N {
+		Zero::zero()
+	}
+}
+
 /// Implementors of this trait provide information about whether or not some validator has
 /// been registered with them. The [Session module](../../pallet_session/index.html) is an implementor.
 pub trait ValidatorRegistration<ValidatorId> {
@@ -1107,6 +1470,159 @@ pub trait OffchainWorker<BlockNumber> {
 	/// with results to trigger any on-chain changes.
 	/// Any state alterations are lost and are not persisted.
 	fn offchain_worker(_n: BlockNumber) {}
+}
+
+pub mod schedule {
+	use super::*;
+
+	/// Information relating to the period of a scheduled task. First item is the length of the
+	/// period and the second is the number of times it should be executed in total before the task
+	/// is considered finished and removed.
+	pub type Period<BlockNumber> = (BlockNumber, u32);
+
+	/// Priority with which a call is scheduled. It's just a linear amount with lowest values meaning
+	/// higher priority.
+	pub type Priority = u8;
+
+	/// The highest priority. We invert the value so that normal sorting will place the highest
+	/// priority at the beginning of the list.
+	pub const HIGHEST_PRIORITY: Priority = 0;
+	/// Anything of this value or lower will definitely be scheduled on the block that they ask for, even
+	/// if it breaches the `MaximumWeight` limitation.
+	pub const HARD_DEADLINE: Priority = 63;
+	/// The lowest priority. Most stuff should be around here.
+	pub const LOWEST_PRIORITY: Priority = 255;
+
+	/// A type that can be used as a scheduler.
+	pub trait Anon<BlockNumber, Call> {
+		/// An address which can be used for removing a scheduled task.
+		type Address: Codec + Clone + Eq + EncodeLike + Debug;
+
+		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		///
+		/// This is not named.
+		///
+		/// Infallible.
+		fn schedule(
+			when: BlockNumber,
+			maybe_periodic: Option<Period<BlockNumber>>,
+			priority: Priority,
+			call: Call
+		) -> Result<Self::Address, DispatchError>;
+
+		/// Cancel a scheduled task. If periodic, then it will cancel all further instances of that,
+		/// also.
+		///
+		/// Will return an error if the `address` is invalid.
+		///
+		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
+		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
+		///
+		/// NOTE2: This will not work to cancel periodic tasks after their initial execution. For
+		/// that, you must name the task explicitly using the `Named` trait.
+		fn cancel(address: Self::Address) -> Result<(), ()>;
+	}
+
+	/// A type that can be used as a scheduler.
+	pub trait Named<BlockNumber, Call> {
+		/// An address which can be used for removing a scheduled task.
+		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
+
+		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		///
+		/// - `id`: The identity of the task. This must be unique and will return an error if not.
+		fn schedule_named(
+			id: Vec<u8>,
+			when: BlockNumber,
+			maybe_periodic: Option<Period<BlockNumber>>,
+			priority: Priority,
+			call: Call
+		) -> Result<Self::Address, ()>;
+
+		/// Cancel a scheduled, named task. If periodic, then it will cancel all further instances
+		/// of that, also.
+		///
+		/// Will return an error if the `id` is invalid.
+		///
+		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
+		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
+		fn cancel_named(id: Vec<u8>) -> Result<(), ()>;
+	}
+}
+
+/// Some sort of check on the origin is performed by this object.
+pub trait EnsureOrigin<OuterOrigin> {
+	/// A return type.
+	type Success;
+	/// Perform the origin check.
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, BadOrigin> {
+		Self::try_origin(o).map_err(|_| BadOrigin)
+	}
+	/// Perform the origin check.
+	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	///
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin;
+}
+
+/// Type that can be dispatched with an origin but without checking the origin filter.
+///
+/// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
+/// `construct_runtime` and `impl_outer_dispatch`.
+pub trait UnfilteredDispatchable {
+	/// The origin type of the runtime, (i.e. `frame_system::Trait::Origin`).
+	type Origin;
+
+	/// Dispatch this call but do not check the filter in origin.
+	fn dispatch_bypass_filter(self, origin: Self::Origin) -> crate::dispatch::DispatchResultWithPostInfo;
+}
+
+/// Methods available on `frame_system::Trait::Origin`.
+pub trait OriginTrait: Sized {
+	/// Runtime call type, as in `frame_system::Trait::Call`
+	type Call;
+
+	/// The caller origin, overarching type of all pallets origins.
+	type PalletsOrigin;
+
+	/// Add a filter to the origin.
+	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
+
+	/// Reset origin filters to default one, i.e `frame_system::Trait::BaseCallFilter`.
+	fn reset_filter(&mut self);
+
+	/// Replace the caller with caller from the other origin
+	fn set_caller_from(&mut self, other: impl Into<Self>);
+
+	/// Filter the call, if false then call is filtered out.
+	fn filter_call(&self, call: &Self::Call) -> bool;
+}
+
+/// Trait to be used when types are exactly same.
+///
+/// This allow to convert back and forth from type, a reference and a mutable reference.
+pub trait IsType<T>: Into<T> + From<T> {
+	/// Cast reference.
+	fn from_ref(t: &T) -> &Self;
+
+	/// Cast reference.
+	fn into_ref(&self) -> &T;
+
+	/// Cast mutable reference.
+	fn from_mut(t: &mut T) -> &mut Self;
+
+	/// Cast mutable reference.
+	fn into_mut(&mut self) -> &mut T;
+}
+
+impl<T> IsType<T> for T {
+	fn from_ref(t: &T) -> &Self { t }
+	fn into_ref(&self) -> &T { self }
+	fn from_mut(t: &mut T) -> &mut Self { t }
+	fn into_mut(&mut self) -> &mut T { self }
 }
 
 #[cfg(test)]

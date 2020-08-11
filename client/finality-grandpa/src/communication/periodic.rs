@@ -17,9 +17,10 @@
 //! Periodic rebroadcast of neighbor packets.
 
 use futures_timer::Delay;
-use futures::{channel::mpsc, future::{FutureExt as _}, prelude::*, ready, stream::Stream};
+use futures::{future::{FutureExt as _}, prelude::*, ready, stream::Stream};
 use log::debug;
 use std::{pin::Pin, task::{Context, Poll}, time::Duration};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
 use sc_network::PeerId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
@@ -31,7 +32,7 @@ const REBROADCAST_AFTER: Duration = Duration::from_secs(2 * 60);
 /// A sender used to send neighbor packets to a background job.
 #[derive(Clone)]
 pub(super) struct NeighborPacketSender<B: BlockT>(
-	mpsc::UnboundedSender<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>
+	TracingUnboundedSender<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>
 );
 
 impl<B: BlockT> NeighborPacketSender<B> {
@@ -54,14 +55,15 @@ impl<B: BlockT> NeighborPacketSender<B> {
 pub(super) struct NeighborPacketWorker<B: BlockT> {
 	last: Option<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>,
 	delay: Delay,
-	rx: mpsc::UnboundedReceiver<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>,
+	rx: TracingUnboundedReceiver<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>,
 }
 
 impl<B: BlockT> Unpin for NeighborPacketWorker<B> {}
 
 impl<B: BlockT> NeighborPacketWorker<B> {
 	pub(super) fn new() -> (Self, NeighborPacketSender<B>){
-		let (tx, rx) = mpsc::unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>();
+		let (tx, rx) = tracing_unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>
+			("mpsc_grandpa_neighbor_packet_worker");
 		let delay = Delay::new(REBROADCAST_AFTER);
 
 		(NeighborPacketWorker {
@@ -84,7 +86,7 @@ impl <B: BlockT> Stream for NeighborPacketWorker<B> {
 				this.delay.reset(REBROADCAST_AFTER);
 				this.last = Some((to.clone(), packet.clone()));
 
-				return Poll::Ready(Some((to, GossipMessage::<B>::from(packet.clone()))));
+				return Poll::Ready(Some((to, GossipMessage::<B>::from(packet))));
 			}
 			// Don't return yet, maybe the timer fired.
 			Poll::Pending => {},
@@ -106,6 +108,6 @@ impl <B: BlockT> Stream for NeighborPacketWorker<B> {
 			return Poll::Ready(Some((to.clone(), GossipMessage::<B>::from(packet.clone()))));
 		}
 
-		return Poll::Pending;
+		Poll::Pending
 	}
 }

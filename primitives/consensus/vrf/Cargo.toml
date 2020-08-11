@@ -1,25 +1,28 @@
 [package]
 name = "sp-consensus-vrf"
-version = "0.8.0-alpha.5"
+version = "0.8.0-rc3"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for VRF based consensus"
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 repository = "https://github.com/paritytech/substrate/"
 homepage = "https://substrate.dev"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dependencies]
 codec = { version = "1.0.0", package = "parity-scale-codec", default-features = false }
-schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"], optional = true }
-sp-std = { version = "2.0.0-alpha.5", path = "../../std", default-features = false }
-sp-core = { version = "2.0.0-alpha.5", path = "../../core", default-features = false }
-sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../../runtime" }
+schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false }
+sp-std = { version = "2.0.0-rc3", path = "../../std", default-features = false }
+sp-core = { version = "2.0.0-rc3", path = "../../core", default-features = false }
+sp-runtime = { version = "2.0.0-rc3", default-features = false, path = "../../runtime" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
-	"schnorrkel",
+	"schnorrkel/std",
 	"sp-std/std",
 	"sp-core/std",
 	"sp-runtime/std",

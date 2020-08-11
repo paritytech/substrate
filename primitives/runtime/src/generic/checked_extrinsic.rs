@@ -1,26 +1,27 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
 use crate::traits::{
-	self, Member, MaybeDisplay, SignedExtension, Dispatchable,
+	self, Member, MaybeDisplay, SignedExtension, Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
+	ValidateUnsigned,
 };
-use crate::traits::ValidateUnsigned;
 use crate::transaction_validity::{TransactionValidity, TransactionSource};
 
 /// Definition of something that the external world might want to say; its
@@ -36,28 +37,26 @@ pub struct CheckedExtrinsic<AccountId, Call, Extra> {
 	pub function: Call,
 }
 
-impl<AccountId, Call, Extra, Origin, Info> traits::Applyable for
+impl<AccountId, Call, Extra, Origin> traits::Applyable for
 	CheckedExtrinsic<AccountId, Call, Extra>
 where
 	AccountId: Member + MaybeDisplay,
 	Call: Member + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=AccountId, Call=Call, DispatchInfo=Info>,
+	Extra: SignedExtension<AccountId=AccountId, Call=Call>,
 	Origin: From<Option<AccountId>>,
-	Info: Clone,
 {
 	type Call = Call;
-	type DispatchInfo = Info;
 
 	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
 		&self,
 		// TODO [#5006;ToDr] should source be passed to `SignedExtension`s?
 		// Perhaps a change for 2.0 to avoid breaking too much APIs?
 		source: TransactionSource,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signed {
-			Extra::validate(extra, id, &self.function, info.clone(), len)
+			Extra::validate(extra, id, &self.function, info, len)
 		} else {
 			let valid = Extra::validate_unsigned(&self.function, info, len)?;
 			let unsigned_validation = U::validate_unsigned(source, &self.function)?;
@@ -67,19 +66,23 @@ where
 
 	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
-	) -> crate::ApplyExtrinsicResult {
+	) -> crate::ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>> {
 		let (maybe_who, pre) = if let Some((id, extra)) = self.signed {
-			let pre = Extra::pre_dispatch(extra, &id, &self.function, info.clone(), len)?;
+			let pre = Extra::pre_dispatch(extra, &id, &self.function, info, len)?;
 			(Some(id), pre)
 		} else {
-			let pre = Extra::pre_dispatch_unsigned(&self.function, info.clone(), len)?;
+			let pre = Extra::pre_dispatch_unsigned(&self.function, info, len)?;
 			U::pre_dispatch(&self.function)?;
 			(None, pre)
 		};
 		let res = self.function.dispatch(Origin::from(maybe_who));
-		Extra::post_dispatch(pre, info.clone(), len);
-		Ok(res.map_err(Into::into))
+		let post_info = match res {
+			Ok(info) => info,
+			Err(err) => err.post_info,
+		};
+		Extra::post_dispatch(pre, info, &post_info, len, &res.map(|_| ()).map_err(|e| e.error))?;
+		Ok(res)
 	}
 }

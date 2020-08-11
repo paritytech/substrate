@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Proof of work consensus for Substrate.
 //!
@@ -49,8 +51,11 @@ use sp_consensus::{
 	SelectChain, Error as ConsensusError, CanAuthorWith, RecordProof, BlockImport,
 	BlockCheckParams, ImportResult,
 };
-use sp_consensus::import_queue::{BoxBlockImport, BasicQueue, Verifier};
+use sp_consensus::import_queue::{
+	BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport, BoxFinalityProofImport,
+};
 use codec::{Encode, Decode};
+use prometheus_endpoint::Registry;
 use sc_client_api;
 use log::*;
 use sp_timestamp::{InherentError as TIError, TimestampInherentData};
@@ -151,7 +156,7 @@ pub trait PowAlgorithm<B: BlockT> {
 	///
 	/// This function will be called twice during the import process, so the implementation
 	/// should be properly cached.
-	fn difficulty(&self, parent: &BlockId<B>) -> Result<Self::Difficulty, Error<B>>;
+	fn difficulty(&self, parent: B::Hash) -> Result<Self::Difficulty, Error<B>>;
 	/// Verify that the seal is valid against given pre hash when parent block is not yet imported.
 	///
 	/// None means that preliminary verify is not available for this algorithm.
@@ -335,7 +340,7 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 
 		let difficulty = match intermediate.difficulty {
 			Some(difficulty) => difficulty,
-			None => self.algorithm.difficulty(&BlockId::hash(parent_hash))?,
+			None => self.algorithm.difficulty(parent_hash)?,
 		};
 
 		let pre_hash = block.header.hash();
@@ -457,8 +462,12 @@ pub type PowImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 /// Import queue for PoW engine.
 pub fn import_queue<B, Transaction, Algorithm>(
 	block_import: BoxBlockImport<B, Transaction>,
+	justification_import: Option<BoxJustificationImport<B>>,
+	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
+	spawner: &impl sp_core::traits::SpawnNamed,
+	registry: Option<&Registry>,
 ) -> Result<
 	PowImportQueue<B, Transaction>,
 	sp_consensus::Error
@@ -474,8 +483,10 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	Ok(BasicQueue::new(
 		verifier,
 		block_import,
-		None,
-		None
+		justification_import,
+		finality_proof_import,
+		spawner,
+		registry,
 	))
 }
 
@@ -599,7 +610,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			continue 'outer
 		}
 
-		let mut proposer = futures::executor::block_on(env.init(&best_header))
+		let proposer = futures::executor::block_on(env.init(&best_header))
 			.map_err(|e| Error::Environment(format!("{:?}", e)))?;
 
 		let inherent_data = inherent_data_providers
@@ -617,9 +628,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 
 		let (header, body) = proposal.block.deconstruct();
 		let (difficulty, seal) = {
-			let difficulty = algorithm.difficulty(
-				&BlockId::Hash(best_hash),
-			)?;
+			let difficulty = algorithm.difficulty(best_hash)?;
 
 			loop {
 				let seal = algorithm.mine(

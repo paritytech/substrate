@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
@@ -24,7 +26,7 @@ pub use self::generic::{
 	RemoteHeaderRequest, RemoteHeaderResponse,
 	RemoteChangesRequest, RemoteChangesResponse,
 	FinalityProofRequest, FinalityProofResponse,
-	FromBlock, RemoteReadChildRequest,
+	FromBlock, RemoteReadChildRequest, Roles,
 };
 use sc_client_api::StorageProof;
 
@@ -85,6 +87,20 @@ bitflags! {
 	}
 }
 
+impl BlockAttributes {
+	/// Encodes attributes as big endian u32, compatible with SCALE-encoding (i.e the
+	/// significant byte has zero index).
+	pub fn to_be_u32(&self) -> u32 {
+		u32::from_be_bytes([self.bits(), 0, 0, 0])
+	}
+
+	/// Decodes attributes, encoded with the `encode_to_be_u32()` call.
+	pub fn from_be_u32(encoded: u32) -> Result<Self, Error> {
+		BlockAttributes::from_bits(encoded.to_be_bytes()[0])
+			.ok_or_else(|| Error::from("Invalid BlockAttributes"))
+	}
+}
+
 impl Encode for BlockAttributes {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push_byte(self.bits())
@@ -137,14 +153,71 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
+	use bitflags::bitflags;
 	use codec::{Encode, Decode, Input, Output};
 	use sp_runtime::Justification;
-	use crate::config::Roles;
 	use super::{
 		RemoteReadResponse, Transactions, Direction,
 		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
 		BlockState, StorageProof,
 	};
+
+	bitflags! {
+		/// Bitmask of the roles that a node fulfills.
+		pub struct Roles: u8 {
+			/// No network.
+			const NONE = 0b00000000;
+			/// Full node, does not participate in consensus.
+			const FULL = 0b00000001;
+			/// Light client node.
+			const LIGHT = 0b00000010;
+			/// Act as an authority
+			const AUTHORITY = 0b00000100;
+		}
+	}
+
+	impl Roles {
+		/// Does this role represents a client that holds full chain data locally?
+		pub fn is_full(&self) -> bool {
+			self.intersects(Roles::FULL | Roles::AUTHORITY)
+		}
+
+		/// Does this role represents a client that does not participates in the consensus?
+		pub fn is_authority(&self) -> bool {
+			*self == Roles::AUTHORITY
+		}
+
+		/// Does this role represents a client that does not hold full chain data locally?
+		pub fn is_light(&self) -> bool {
+			!self.is_full()
+		}
+	}
+
+	impl<'a> From<&'a crate::config::Role> for Roles {
+		fn from(roles: &'a crate::config::Role) -> Self {
+			match roles {
+				crate::config::Role::Full => Roles::FULL,
+				crate::config::Role::Light => Roles::LIGHT,
+				crate::config::Role::Sentry { .. } => Roles::AUTHORITY,
+				crate::config::Role::Authority { .. } => Roles::AUTHORITY,
+			}
+		}
+	}
+
+	impl codec::Encode for Roles {
+		fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+			dest.push_byte(self.bits())
+		}
+	}
+
+	impl codec::EncodeLike for Roles {}
+
+	impl codec::Decode for Roles {
+		fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+			Self::from_bits(input.read_byte()?).ok_or_else(|| codec::Error::from("Invalid bytes"))
+		}
+	}
+
 	/// Consensus is mostly opaque to us
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct ConsensusMessage {
@@ -420,11 +493,6 @@ pub mod generic {
 		pub block: H,
 		/// Child Storage key.
 		pub storage_key: Vec<u8>,
-		/// Child trie source information.
-		pub child_info: Vec<u8>,
-		/// Child type, its required to resolve `child_info`
-		/// content and choose child implementation.
-		pub child_type: u32,
 		/// Storage key.
 		pub keys: Vec<Vec<u8>>,
 	}

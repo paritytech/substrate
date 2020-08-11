@@ -1,17 +1,20 @@
 [package]
 name = "node-rpc-client"
-version = "2.0.0-alpha.5"
+version = "2.0.0-rc3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 env_logger = "0.7.0"
 futures = "0.1.29"
 hyper = "0.12.35"
-jsonrpc-core-client = { version = "14.0.3", features = ["http", "ws"] }
+jsonrpc-core-client = { version = "14.2.0", default-features = false, features = ["http"] }
 log = "0.4.8"
-node-primitives = { version = "2.0.0-alpha.5", path = "../primitives" }
-sc-rpc = { version = "2.0.0-alpha.5", path = "../../../client/rpc" }
+node-primitives = { version = "2.0.0-rc3", path = "../primitives" }
+sc-rpc = { version = "2.0.0-rc3", path = "../../../client/rpc" }

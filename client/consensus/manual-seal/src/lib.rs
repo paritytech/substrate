@@ -1,82 +1,50 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
+use futures::prelude::*;
 use sp_consensus::{
-	self, BlockImport, Environment, Proposer, BlockCheckParams,
-	ForkChoiceStrategy, BlockImportParams, BlockOrigin,
-	ImportResult, SelectChain,
-	import_queue::{
-		BasicQueue,
-		CacheKeyId,
-		Verifier,
-		BoxBlockImport,
-	},
+	Environment, Proposer, ForkChoiceStrategy, BlockImportParams, BlockOrigin, SelectChain,
+	import_queue::{BasicQueue, CacheKeyId, Verifier, BoxBlockImport},
 };
+use sp_blockchain::HeaderBackend;
 use sp_inherents::InherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justification};
-use sc_client_api::backend::Backend as ClientBackend;
-use futures::prelude::*;
+use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
 use sc_transaction_pool::txpool;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{sync::Arc, marker::PhantomData};
+use prometheus_endpoint::Registry;
 
-pub mod rpc;
 mod error;
 mod finalize_block;
 mod seal_new_block;
-use finalize_block::{finalize_block, FinalizeBlockParams};
-use seal_new_block::{seal_new_block, SealBlockParams};
-pub use error::Error;
-pub use rpc::{EngineCommand, CreatedBlock};
+pub mod rpc;
 
-/// The synchronous block-import worker of the engine.
-pub struct ManualSealBlockImport<I> {
-	inner: I,
-}
-
-impl<I> From<I> for ManualSealBlockImport<I> {
-	fn from(i: I) -> Self {
-		ManualSealBlockImport { inner: i }
-	}
-}
-
-impl<B, I> BlockImport<B> for ManualSealBlockImport<I>
-	where
-		B: BlockT,
-		I: BlockImport<B, Transaction = ()>,
-{
-	type Error = I::Error;
-	type Transaction = ();
-
-	fn check_block(&mut self, block: BlockCheckParams<B>) -> Result<ImportResult, Self::Error>
-	{
-		self.inner.check_block(block)
-	}
-
-	fn import_block(
-		&mut self,
-		block: BlockImportParams<B, Self::Transaction>,
-		cache: HashMap<CacheKeyId, Vec<u8>>,
-	) -> Result<ImportResult, Self::Error> {
-		self.inner.import_block(block, cache)
-	}
-}
+use self::{
+	finalize_block::{finalize_block, FinalizeBlockParams},
+	seal_new_block::{seal_new_block, SealBlockParams},
+};
+pub use self::{
+	error::Error,
+	rpc::{EngineCommand, CreatedBlock},
+};
 
 /// The verifier for the manual seal engine; instantly finalizes.
 struct ManualSealVerifier;
@@ -92,7 +60,7 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 		let mut import_params = BlockImportParams::new(origin, header);
 		import_params.justification = justification;
 		import_params.body = body;
-		import_params.finalized = true;
+		import_params.finalized = false;
 		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 		Ok((import_params, None))
@@ -100,37 +68,47 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 }
 
 /// Instantiate the import queue for the manual seal consensus engine.
-pub fn import_queue<B: BlockT>(block_import: BoxBlockImport<B, ()>) -> BasicQueue<B, ()>
+pub fn import_queue<Block, Transaction>(
+	block_import: BoxBlockImport<Block, Transaction>,
+	spawner: &impl sp_core::traits::SpawnNamed,
+	registry: Option<&Registry>,
+) -> BasicQueue<Block, Transaction>
+	where
+		Block: BlockT,
+		Transaction: Send + Sync + 'static,
 {
 	BasicQueue::new(
 		ManualSealVerifier,
 		block_import,
 		None,
 		None,
+		spawner,
+		registry,
 	)
 }
 
 /// Creates the background authorship task for the manual seal engine.
-pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
+pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
 	mut block_import: BoxBlockImport<B, T>,
 	mut env: E,
-	backend: Arc<CB>,
+	client: Arc<C>,
 	pool: Arc<txpool::Pool<A>>,
-	mut seal_block_channel: S,
-	select_chain: C,
+	mut commands_stream: S,
+	select_chain: SC,
 	inherent_data_providers: InherentDataProviders,
 )
 	where
+		A: txpool::ChainApi<Block=B> + 'static,
 		B: BlockT + 'static,
+		C: HeaderBackend<B> + Finalizer<B, CB> + 'static,
 		CB: ClientBackend<B> + 'static,
 		E: Environment<B> + 'static,
 		E::Error: std::fmt::Display,
 		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
-		A: txpool::ChainApi<Block=B, Hash=<B as BlockT>::Hash> + 'static,
 		S: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
-		C: SelectChain<B> + 'static,
+		SC: SelectChain<B> + 'static,
 {
-	while let Some(command) = seal_block_channel.next().await {
+	while let Some(command) = commands_stream.next().await {
 		match command {
 			EngineCommand::SealNewBlock {
 				create_empty,
@@ -149,7 +127,7 @@ pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
 						block_import: &mut block_import,
 						inherent_data_provider: &inherent_data_providers,
 						pool: pool.clone(),
-						backend: backend.clone(),
+						client: client.clone(),
 					}
 				).await;
 			}
@@ -159,7 +137,8 @@ pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
 						hash,
 						sender,
 						justification,
-						backend: backend.clone(),
+						finalizer: client.clone(),
+						_phantom: PhantomData,
 					}
 				).await
 			}
@@ -170,26 +149,28 @@ pub async fn run_manual_seal<B, CB, E, A, C, S, T>(
 /// runs the background authorship task for the instant seal engine.
 /// instant-seal creates a new block for every transaction imported into
 /// the transaction pool.
-pub async fn run_instant_seal<B, CB, E, A, C, T>(
+pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 	block_import: BoxBlockImport<B, T>,
 	env: E,
-	backend: Arc<CB>,
+	client: Arc<C>,
 	pool: Arc<txpool::Pool<A>>,
-	select_chain: C,
+	select_chain: SC,
 	inherent_data_providers: InherentDataProviders,
 )
 	where
-		A: txpool::ChainApi<Block=B, Hash=<B as BlockT>::Hash> + 'static,
+		A: txpool::ChainApi<Block=B> + 'static,
 		B: BlockT + 'static,
+		C: HeaderBackend<B> + Finalizer<B, CB> + 'static,
 		CB: ClientBackend<B> + 'static,
 		E: Environment<B> + 'static,
 		E::Error: std::fmt::Display,
 		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
-		C: SelectChain<B> + 'static
+		SC: SelectChain<B> + 'static
 {
 	// instant-seal creates blocks as soon as transactions are imported
 	// into the transaction pool.
-	let seal_block_channel = pool.validated_pool().import_notification_stream()
+	let commands_stream = pool.validated_pool()
+		.import_notification_stream()
 		.map(|_| {
 			EngineCommand::SealNewBlock {
 				create_empty: false,
@@ -202,9 +183,9 @@ pub async fn run_instant_seal<B, CB, E, A, C, T>(
 	run_manual_seal(
 		block_import,
 		env,
-		backend,
+		client,
 		pool,
-		seal_block_channel,
+		commands_stream,
 		select_chain,
 		inherent_data_providers,
 	).await
@@ -226,9 +207,7 @@ mod tests {
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use sp_transaction_pool::{TransactionPool, MaintainedTransactionPool, TransactionSource};
 	use sp_runtime::generic::BlockId;
-	use sp_blockchain::HeaderBackend;
 	use sp_consensus::ImportedAux;
-	use sc_client::LongestChain;
 	use sp_inherents::InherentDataProviders;
 	use sc_basic_authorship::ProposerFactory;
 
@@ -241,14 +220,14 @@ mod tests {
 	#[tokio::test]
 	async fn instant_seal() {
 		let builder = TestClientBuilder::new();
-		let backend = builder.backend();
-		let client = Arc::new(builder.build());
-		let select_chain = LongestChain::new(backend.clone());
+		let (client, select_chain) = builder.build_with_longest_chain();
+		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api()).0);
+		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
 		let env = ProposerFactory::new(
 			client.clone(),
-			pool.clone()
+			pool.clone(),
+			None,
 		);
 		// this test checks that blocks are created as soon as transactions are imported into the pool.
 		let (sender, receiver) = futures::channel::oneshot::channel();
@@ -257,7 +236,7 @@ mod tests {
 			.map(move |_| {
 				// we're only going to submit one tx so this fn will only be called once.
 				let mut_sender =  Arc::get_mut(&mut sender).unwrap();
-				let sender = std::mem::replace(mut_sender, None);
+				let sender = std::mem::take(mut_sender);
 				EngineCommand::SealNewBlock {
 					create_empty: false,
 					finalize: true,
@@ -268,7 +247,7 @@ mod tests {
 		let future = run_manual_seal(
 			Box::new(client.clone()),
 			env,
-			backend.clone(),
+			client.clone(),
 			pool.pool().clone(),
 			stream,
 			select_chain,
@@ -300,27 +279,27 @@ mod tests {
 			}
 		);
 		// assert that there's a new block in the db.
-		assert!(backend.blockchain().header(BlockId::Number(1)).unwrap().is_some())
+		assert!(client.header(&BlockId::Number(1)).unwrap().is_some())
 	}
 
 	#[tokio::test]
 	async fn manual_seal_and_finalization() {
 		let builder = TestClientBuilder::new();
-		let backend = builder.backend();
-		let client = Arc::new(builder.build());
-		let select_chain = LongestChain::new(backend.clone());
+		let (client, select_chain) = builder.build_with_longest_chain();
+		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api()).0);
+		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
 		let env = ProposerFactory::new(
 			client.clone(),
-			pool.clone()
+			pool.clone(),
+			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
 		let future = run_manual_seal(
 			Box::new(client.clone()),
 			env,
-			backend.clone(),
+			client.clone(),
 			pool.pool().clone(),
 			stream,
 			select_chain,
@@ -360,7 +339,7 @@ mod tests {
 			}
 		);
 		// assert that there's a new block in the db.
-		let header = backend.blockchain().header(BlockId::Number(1)).unwrap().unwrap();
+		let header = client.header(&BlockId::Number(1)).unwrap().unwrap();
 		let (tx, rx) = futures::channel::oneshot::channel();
 		sink.send(EngineCommand::FinalizeBlock {
 			sender: Some(tx),
@@ -374,22 +353,22 @@ mod tests {
 	#[tokio::test]
 	async fn manual_seal_fork_blocks() {
 		let builder = TestClientBuilder::new();
-		let backend = builder.backend();
-		let client = Arc::new(builder.build());
-		let select_chain = LongestChain::new(backend.clone());
+		let (client, select_chain) = builder.build_with_longest_chain();
+		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
 		let pool_api = api();
-		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone()).0);
+		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone(), None).0);
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone(),
+			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
 		let future = run_manual_seal(
 			Box::new(client.clone()),
 			env,
-			backend.clone(),
+			client.clone(),
 			pool.pool().clone(),
 			stream,
 			select_chain,
@@ -431,14 +410,15 @@ mod tests {
 			}
 		);
 		// assert that there's a new block in the db.
-		assert!(backend.blockchain().header(BlockId::Number(0)).unwrap().is_some());
+		assert!(client.header(&BlockId::Number(0)).unwrap().is_some());
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 1)).await.is_ok());
 
+		let header = client.header(&BlockId::Number(1)).expect("db error").expect("imported above");
 		pool.maintain(sp_transaction_pool::ChainEvent::NewBlock {
-			id: BlockId::Number(1),
-			header: backend.blockchain().header(BlockId::Number(1)).expect("db error").expect("imported above"),
+			hash: header.hash(),
+			header,
 			is_new_best: true,
-			retracted: vec![],
+			tree_route: None,
 		}).await;
 
 		let (tx1, rx1) = futures::channel::oneshot::channel();
@@ -452,7 +432,7 @@ mod tests {
 			rx1.await.expect("should be no error receiving"),
 			Ok(_)
 		);
-		assert!(backend.blockchain().header(BlockId::Number(1)).unwrap().is_some());
+		assert!(client.header(&BlockId::Number(1)).unwrap().is_some());
 		pool_api.increment_nonce(Alice.into());
 
 		assert!(pool.submit_one(&BlockId::Number(2), SOURCE, uxt(Alice, 2)).await.is_ok());
@@ -465,6 +445,6 @@ mod tests {
 		}).await.is_ok());
 		let imported = rx2.await.unwrap().unwrap();
 		// assert that fork block is in the db
-		assert!(backend.blockchain().header(BlockId::Hash(imported.hash)).unwrap().is_some())
+		assert!(client.header(&BlockId::Hash(imported.hash)).unwrap().is_some())
 	}
 }

@@ -1,0 +1,47 @@
+error: Only `&self` is supported!
+  --> $DIR/mock_only_self_reference.rs:14:11
+   |
+14 |         fn test(self, data: u64) {}
+   |                 ^^^^
+
+error: Only `&self` is supported!
+  --> $DIR/mock_only_self_reference.rs:16:12
+   |
+16 |         fn test2(&mut self, data: u64) {}
+   |                  ^
+
+error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for trait
+  --> $DIR/mock_only_self_reference.rs:12:1
+   |
+3  | / sp_api::decl_runtime_apis! {
+4  | |     pub trait Api {
+5  | |         fn test(data: u64);
+6  | |         fn test2(data: u64);
+7  | |     }
+8  | | }
+   | |_- type in trait
+...
+12 |   sp_api::mock_impl_runtime_apis! {
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `()`
+   |
+   = note: expected fn pointer `fn(&MockApi, &sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>, sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ExecutionContext, std::option::Option<u64>, std::vec::Vec<_>) -> std::result::Result<_, _>`
+              found fn pointer `fn(&MockApi, &sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>, sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ExecutionContext, std::option::Option<()>, std::vec::Vec<_>) -> std::result::Result<_, _>`
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0053]: method `Api_test2_runtime_api_impl` has an incompatible type for trait
+  --> $DIR/mock_only_self_reference.rs:12:1
+   |
+3  | / sp_api::decl_runtime_apis! {
+4  | |     pub trait Api {
+5  | |         fn test(data: u64);
+6  | |         fn test2(data: u64);
+7  | |     }
+8  | | }
+   | |_- type in trait
+...
+12 |   sp_api::mock_impl_runtime_apis! {
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `()`
+   |
+   = note: expected fn pointer `fn(&MockApi, &sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>, sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ExecutionContext, std::option::Option<u64>, std::vec::Vec<_>) -> std::result::Result<_, _>`
+              found fn pointer `fn(&MockApi, &sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>, sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ExecutionContext, std::option::Option<()>, std::vec::Vec<_>) -> std::result::Result<_, _>`
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)

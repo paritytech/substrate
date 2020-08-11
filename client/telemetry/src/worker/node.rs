@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Contains the `Node` struct, which handles communications with a single telemetry endpoint.
 
@@ -116,7 +118,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 				pending.push_back(payload.into());
 				Ok(())
 			} else {
-				warn!(target: "telemetry", "Rejected log entry because queue is full for {:?}",
+				warn!(target: "telemetry", "⚠️  Rejected log entry because queue is full for {:?}",
 					self.addr);
 				Err(())
 			}
@@ -137,7 +139,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 							break NodeSocket::Connected(conn)
 						},
 						Poll::Ready(Err(err)) => {
-							warn!(target: "telemetry", "Disconnected from {}: {:?}", self.addr, err);
+							warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
 							let timeout = gen_rand_reconnect_delay();
 							self.socket = NodeSocket::WaitingReconnect(timeout);
 							return Poll::Ready(NodeEvent::Disconnected(err))
@@ -146,7 +148,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 				}
 				NodeSocket::Dialing(mut s) => match Future::poll(Pin::new(&mut s), cx) {
 					Poll::Ready(Ok(sink)) => {
-						debug!(target: "telemetry", "Connected to {}", self.addr);
+						debug!(target: "telemetry", "✅ Connected to {}", self.addr);
 						let conn = NodeSocketConnected {
 							sink,
 							pending: VecDeque::new(),
@@ -158,7 +160,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 					},
 					Poll::Pending => break NodeSocket::Dialing(s),
 					Poll::Ready(Err(err)) => {
-						warn!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
+						warn!(target: "telemetry", "❌ Error while dialing {}: {:?}", self.addr, err);
 						let timeout = gen_rand_reconnect_delay();
 						socket = NodeSocket::WaitingReconnect(timeout);
 					}
@@ -169,7 +171,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 						socket = NodeSocket::Dialing(d);
 					}
 					Err(err) => {
-						warn!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
+						warn!(target: "telemetry", "❌ Error while dialing {}: {:?}", self.addr, err);
 						let timeout = gen_rand_reconnect_delay();
 						socket = NodeSocket::WaitingReconnect(timeout);
 					}
@@ -181,7 +183,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 						break NodeSocket::WaitingReconnect(s)
 					}
 				NodeSocket::Poisoned => {
-					error!(target: "telemetry", "Poisoned connection with {}", self.addr);
+					error!(target: "telemetry", "‼️ Poisoned connection with {}", self.addr);
 					break NodeSocket::Poisoned
 				}
 			}

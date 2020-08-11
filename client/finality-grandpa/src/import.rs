@@ -1,33 +1,35 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{sync::Arc, collections::HashMap};
 
-use log::{debug, trace, info};
+use log::{debug, trace};
 use parity_scale_codec::Encode;
-use futures::channel::mpsc;
 use parking_lot::RwLockWriteGuard;
 
 use sp_blockchain::{BlockStatus, well_known_cache_keys};
 use sc_client_api::{backend::Backend, utils::is_descendent_of};
+use sp_utils::mpsc::TracingUnboundedSender;
 use sp_api::{TransactionFor};
 
 use sp_consensus::{
 	BlockImport, Error as ConsensusError,
-	BlockCheckParams, BlockImportParams, ImportResult, JustificationImport,
+	BlockCheckParams, BlockImportParams, BlockOrigin, ImportResult, JustificationImport,
 	SelectChain,
 };
 use sp_finality_grandpa::{ConsensusLog, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
@@ -57,7 +59,7 @@ pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	inner: Arc<Client>,
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
+	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	authority_set_hard_forks: HashMap<Block::Hash, PendingChange<Block::Hash, NumberFor<Block>>>,
 	_phantom: PhantomData<Backend>,
@@ -128,7 +130,12 @@ impl<BE, Block: BlockT, Client, SC> JustificationImport<Block>
 		number: NumberFor<Block>,
 		justification: Justification,
 	) -> Result<(), Self::Error> {
-		GrandpaBlockImport::import_justification(self, hash, number, justification, false)
+		// this justification was requested by the sync service, therefore we
+		// are not sure if it should enact a change or not. it could have been a
+		// request made as part of initial sync but that means the justification
+		// wasn't part of the block and was requested asynchronously, probably
+		// makes sense to log in that case.
+		GrandpaBlockImport::import_justification(self, hash, number, justification, false, false)
 	}
 }
 
@@ -250,6 +257,7 @@ where
 		&self,
 		block: &mut BlockImportParams<Block, TransactionFor<Client, Block>>,
 		hash: Block::Hash,
+		initial_sync: bool,
 	) -> Result<PendingSetChanges<Block>, ConsensusError> {
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
@@ -288,7 +296,7 @@ where
 			}
 		}
 
-		let number = block.header.number().clone();
+		let number = *(block.header.number());
 		let maybe_change = self.check_new_change(
 			&block.header,
 			hash,
@@ -320,11 +328,13 @@ where
 			guard.as_mut().add_pending_change(
 				change,
 				&is_descendent_of,
-			).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
+			).map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 		}
 
 		let applied_changes = {
-			let forced_change_set = guard.as_mut().apply_forced_changes(hash, number, &is_descendent_of)
+			let forced_change_set = guard
+				.as_mut()
+				.apply_forced_changes(hash, number, &is_descendent_of, initial_sync)
 				.map_err(|e| ConsensusError::ClientImport(e.to_string()))
 				.map_err(ConsensusError::from)?;
 
@@ -409,17 +419,20 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
-		let number = block.header.number().clone();
+		let number = *block.header.number();
 
 		// early exit if block already in chain, otherwise the check for
 		// authority changes will error when trying to re-import a change block
 		match self.inner.status(BlockId::Hash(hash)) {
 			Ok(BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
 			Ok(BlockStatus::Unknown) => {},
-			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
+			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 		}
 
-		let pending_changes = self.make_authorities_changes(&mut block, hash)?;
+		// on initial sync we will restrict logging under info to avoid spam.
+		let initial_sync = block.origin == BlockOrigin::NetworkInitialSync;
+
+		let pending_changes = self.make_authorities_changes(&mut block, hash, initial_sync)?;
 
 		// we don't want to finalize on `inner.import_block`
 		let mut justification = block.justification.take();
@@ -445,7 +458,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 						e,
 					);
 					pending_changes.revert();
-					return Err(ConsensusError::ClientImport(e.to_string()).into());
+					return Err(ConsensusError::ClientImport(e.to_string()));
 				},
 			}
 		};
@@ -455,7 +468,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		// Send the pause signal after import but BEFORE sending a `ChangeAuthorities` message.
 		if do_pause {
 			let _ = self.send_voter_commands.unbounded_send(
-				VoterCommand::Pause(format!("Forced change scheduled after inactivity"))
+				VoterCommand::Pause("Forced change scheduled after inactivity".to_string())
 			);
 		}
 
@@ -492,7 +505,15 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 
 		match justification {
 			Some(justification) => {
-				self.import_justification(hash, number, justification, needs_justification).unwrap_or_else(|err| {
+				let import_res = self.import_justification(
+					hash,
+					number,
+					justification,
+					needs_justification,
+					initial_sync,
+				);
+
+				import_res.unwrap_or_else(|err| {
 					if needs_justification || enacts_consensus_change {
 						debug!(target: "afg", "Imported block #{} that enacts authority set change with \
 							invalid justification: {:?}, requesting justification from peers.", number, err);
@@ -536,7 +557,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 		inner: Arc<Client>,
 		select_chain: SC,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-		send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
+		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 		authority_set_hard_forks: Vec<(SetId, PendingChange<Block::Hash, NumberFor<Block>>)>,
 	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
@@ -604,6 +625,7 @@ where
 		number: NumberFor<Block>,
 		justification: Justification,
 		enacts_change: bool,
+		initial_sync: bool,
 	) -> Result<(), ConsensusError> {
 		let justification = GrandpaJustification::decode_and_verify_finalizes(
 			&justification,
@@ -613,7 +635,7 @@ where
 		);
 
 		let justification = match justification {
-			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
+			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 			Ok(justification) => justification,
 		};
 
@@ -625,12 +647,17 @@ where
 			hash,
 			number,
 			justification.into(),
+			initial_sync,
 		);
 
 		match result {
 			Err(CommandOrError::VoterCommand(command)) => {
-				info!(target: "afg", "Imported justification for block #{} that triggers \
-					command {}, signaling voter.", number, command);
+				afg_log!(initial_sync,
+					"👴 Imported justification for block #{} that triggers \
+					command {}, signaling voter.",
+					number,
+					command,
+				);
 
 				// send the command to the voter
 				let _ = self.send_voter_commands.unbounded_send(command);
@@ -642,8 +669,9 @@ where
 					Error::Blockchain(error) => ConsensusError::ClientImport(error),
 					Error::Client(error) => ConsensusError::ClientImport(error.to_string()),
 					Error::Safety(error) => ConsensusError::ClientImport(error),
+					Error::Signing(error) => ConsensusError::ClientImport(error),
 					Error::Timer(error) => ConsensusError::ClientImport(error.to_string()),
-				}.into());
+				});
 			},
 			Ok(_) => {
 				assert!(!enacts_change, "returns Ok when no authority set change should be enacted; qed;");

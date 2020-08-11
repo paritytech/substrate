@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Tests and test helpers for GRANDPA.
 
@@ -22,30 +24,25 @@ use sc_network_test::{
 	Block, Hash, TestNetFactory, BlockImportAdapter, Peer,
 	PeersClient, PassThroughVerifier, PeersFullClient,
 };
-use sc_network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
+use sc_network::config::{ProtocolConfig, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
 use futures_timer::Delay;
 use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
-use sc_client::LongestChain;
 use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
-use sp_api::{ApiRef, ApiErrorExt, Core, RuntimeVersion, ApiExt, StorageProof, ProvideRuntimeApi};
+use sp_api::{ApiRef, StorageProof, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
 	import_queue::{BoxJustificationImport, BoxFinalityProofImport},
 };
-use std::{
-	collections::{HashMap, HashSet},
-	result,
-	pin::Pin,
-};
+use std::{collections::{HashMap, HashSet}, pin::Pin};
 use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
-use sp_core::{H256, NativeOrEncoded, ExecutionContext, crypto::Public};
-use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
+use sp_core::{H256, crypto::Public};
+use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
@@ -54,6 +51,7 @@ use finality_proof::{
 };
 use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
+use sc_consensus::LongestChain;
 
 type PeerData =
 	Mutex<
@@ -78,9 +76,8 @@ impl GrandpaTestNet {
 			peers: Vec::with_capacity(n_peers),
 			test_config,
 		};
-		let config = Self::default_config();
 		for _ in 0..n_peers {
-			net.add_full_peer(&config);
+			net.add_full_peer();
 		}
 		net
 	}
@@ -99,10 +96,8 @@ impl TestNetFactory for GrandpaTestNet {
 	}
 
 	fn default_config() -> ProtocolConfig {
-		// the authority role ensures gossip hits all nodes here.
-		let mut config = ProtocolConfig::default();
-		config.roles = Roles::AUTHORITY;
-		config
+		// This is unused.
+		ProtocolConfig::default()
 	}
 
 	fn make_verifier(
@@ -214,87 +209,27 @@ impl ProvideRuntimeApi<Block> for TestApi {
 	}
 }
 
-impl Core<Block> for RuntimeApi {
-	fn Core_version_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<RuntimeVersion>> {
-		unimplemented!("Not required for testing!")
-	}
+sp_api::mock_impl_runtime_apis! {
+	impl GrandpaApi<Block> for RuntimeApi {
+		type Error = sp_blockchain::Error;
 
-	fn Core_execute_block_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<Block>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<()>> {
-		unimplemented!("Not required for testing!")
-	}
+		fn grandpa_authorities(&self) -> AuthorityList {
+			self.inner.genesis_authorities.clone()
+		}
 
-	fn Core_initialize_block_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<&<Block as BlockT>::Header>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<()>> {
-		unimplemented!("Not required for testing!")
-	}
-}
+		fn submit_report_equivocation_extrinsic(
+			_equivocation_proof: EquivocationProof<Hash, BlockNumber>,
+			_key_owner_proof: OpaqueKeyOwnershipProof,
+		) -> Option<()> {
+			None
+		}
 
-impl ApiErrorExt for RuntimeApi {
-	type Error = sp_blockchain::Error;
-}
-
-impl ApiExt<Block> for RuntimeApi {
-	type StateBackend = <
-		substrate_test_runtime_client::Backend as sc_client_api::backend::Backend<Block>
-	>::State;
-
-	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
-		&self,
-		_: F
-	) -> result::Result<R, E> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn runtime_version_at(&self, _: &BlockId<Block>) -> Result<RuntimeVersion> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn record_proof(&mut self) {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn extract_proof(&mut self) -> Option<StorageProof> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn into_storage_changes(
-		&self,
-		_: &Self::StateBackend,
-		_: Option<&sp_api::ChangesTrieState<sp_api::HashFor<Block>, sp_api::NumberFor<Block>>>,
-		_: <Block as sp_api::BlockT>::Hash,
-	) -> std::result::Result<sp_api::StorageChanges<Self::StateBackend, Block>, String>
-		where Self: Sized
-	{
-		unimplemented!("Not required for testing!")
-	}
-}
-
-impl GrandpaApi<Block> for RuntimeApi {
-	fn GrandpaApi_grandpa_authorities_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<AuthorityList>> {
-		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
+		fn generate_key_ownership_proof(
+			_set_id: SetId,
+			_authority_id: AuthorityId,
+		) -> Option<OpaqueKeyOwnershipProof> {
+			None
+		}
 	}
 }
 
@@ -347,7 +282,7 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 
-fn create_keystore(authority: Ed25519Keyring) -> (KeyStorePtr, tempfile::TempDir) {
+fn create_keystore(authority: Ed25519Keyring) -> (BareCryptoStorePtr, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
 	keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(&authority.to_seed())
@@ -376,8 +311,6 @@ fn run_to_completion_with<F>(
 ) -> u64 where
 	F: FnOnce(Handle) -> Option<Pin<Box<dyn Future<Output = ()>>>>
 {
-	use parking_lot::RwLock;
-
 	let mut wait_for = Vec::new();
 
 	let highest_finalized = Arc::new(RwLock::new(0));
@@ -435,6 +368,7 @@ fn run_to_completion_with<F>(
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -566,6 +500,7 @@ fn finalize_3_voters_1_full_observer() {
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
 		};
 
 		voters.push(run_grandpa_voter(grandpa_params).expect("all in order with client and network"));
@@ -729,6 +664,7 @@ fn transition_3_voters_twice_1_full_observer() {
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -1071,10 +1007,9 @@ fn test_bad_justification() {
 
 #[test]
 fn voter_persists_its_votes() {
-	use std::iter::FromIterator;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use futures::future;
-	use futures::channel::mpsc;
+	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 
 	let _ = env_logger::try_init();
 	let mut runtime = Runtime::new().unwrap();
@@ -1099,7 +1034,7 @@ fn voter_persists_its_votes() {
 
 	// channel between the voter and the main controller.
 	// sending a message on the `voter_tx` restarts the voter.
-	let (voter_tx, voter_rx) = mpsc::unbounded::<()>();
+	let (voter_tx, voter_rx) = tracing_unbounded::<()>("");
 
 	let mut keystore_paths = Vec::new();
 
@@ -1112,10 +1047,10 @@ fn voter_persists_its_votes() {
 
 		struct ResettableVoter {
 			voter: Pin<Box<dyn Future<Output = ()> + Send + Unpin>>,
-			voter_rx: mpsc::UnboundedReceiver<()>,
+			voter_rx: TracingUnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
-			keystore: KeyStorePtr,
+			keystore: BareCryptoStorePtr,
 		}
 
 		impl Future for ResettableVoter {
@@ -1154,6 +1089,7 @@ fn voter_persists_its_votes() {
 							telemetry_on_connect: None,
 							voting_rule: VotingRulesBuilder::default().build(),
 							prometheus_registry: None,
+							shared_voter_state: SharedVoterState::empty(),
 						};
 
 						let voter = run_grandpa_voter(grandpa_params)
@@ -1200,7 +1136,7 @@ fn voter_persists_its_votes() {
 		let config = Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
 			justification_period: 32,
-			keystore: Some(keystore),
+			keystore: Some(keystore.clone()),
 			name: Some(format!("peer#{}", 1)),
 			is_authority: true,
 			observer_enabled: true,
@@ -1224,10 +1160,11 @@ fn voter_persists_its_votes() {
 		);
 
 		let (round_rx, round_tx) = network.round_communication(
+			Some(keystore),
 			communication::Round(1),
 			communication::SetId(0),
-			Arc::new(VoterSet::from_iter(voters)),
-			Some(peers[1].pair().into()),
+			Arc::new(VoterSet::new(voters).unwrap()),
+			Some(peers[1].public().into()),
 			HasVoted::No,
 		);
 
@@ -1381,7 +1318,7 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 
 	let peers = &[Ed25519Keyring::Alice];
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
-	net.add_light_peer(&GrandpaTestNet::default_config());
+	net.add_light_peer();
 
 	// import block#1 WITH consensus data change. Light client ignores justification
 	// && instead fetches finality proof for block #1
@@ -1458,7 +1395,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	run_to_completion(&mut runtime, 11, net.clone(), peers_a);
 
 	// request finalization by light client
-	net.lock().add_light_peer(&GrandpaTestNet::default_config());
+	net.lock().add_light_peer();
 	net.lock().block_until_sync();
 
 	// check block, finalized on light client
@@ -1499,6 +1436,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
 		};
 
 		Box::pin(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
@@ -1743,7 +1681,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 		};
 
 		let msg = finality_grandpa::Message::Precommit(precommit.clone());
-		let encoded = communication::localized_payload(round, set_id, &msg);
+		let encoded = sp_finality_grandpa::localized_payload(round, set_id, &msg);
 		let signature = peers[0].sign(&encoded[..]).into();
 
 		let precommit = finality_grandpa::SignedPrecommit {

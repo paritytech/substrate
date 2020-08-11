@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Configuration of the networking layer.
 //!
@@ -20,8 +22,7 @@
 //! See the documentation of [`Params`].
 
 pub use crate::chain::{Client, FinalityProofProvider};
-pub use crate::on_demand_layer::OnDemand;
-pub use crate::service::{TransactionPool, EmptyTransactionPool};
+pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -29,25 +30,32 @@ pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multia
 #[doc(hidden)]
 pub use crate::protocol::ProtocolConfig;
 
-use crate::service::ExHashT;
+use crate::ExHashT;
 
-use bitflags::bitflags;
-use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
-use sp_runtime::traits::{Block as BlockT};
-use libp2p::identity::{Keypair, ed25519};
-use libp2p::wasm_ext;
-use libp2p::{PeerId, Multiaddr, multiaddr};
 use core::{fmt, iter};
-use std::{future::Future, pin::Pin};
-use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
-use zeroize::Zeroize;
+use futures::future;
+use libp2p::identity::{ed25519, Keypair};
+use libp2p::wasm_ext;
+use libp2p::{multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
-
+use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
+use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
+use std::{borrow::Cow, convert::TryFrom, future::Future, pin::Pin, str::FromStr};
+use std::{
+	collections::HashMap,
+	error::Error,
+	fs,
+	io::{self, Write},
+	net::Ipv4Addr,
+	path::{Path, PathBuf},
+	sync::Arc,
+};
+use zeroize::Zeroize;
 
 /// Network initialization parameters.
 pub struct Params<B: BlockT, H: ExHashT> {
-	/// Assigned roles for our node (full, light, ...).
-	pub roles: Roles,
+	/// Assigned role for our node (full, light, ...).
+	pub role: Role,
 
 	/// How to spawn background tasks. If you pass `None`, then a threads pool will be used by
 	/// default.
@@ -97,54 +105,48 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	pub metrics_registry: Option<Registry>,
 }
 
-bitflags! {
-	/// Bitmask of the roles that a node fulfills.
-	pub struct Roles: u8 {
-		/// No network.
-		const NONE = 0b00000000;
-		/// Full node, does not participate in consensus.
-		const FULL = 0b00000001;
-		/// Light client node.
-		const LIGHT = 0b00000010;
-		/// Act as an authority
-		const AUTHORITY = 0b00000100;
+/// Role of the local node.
+#[derive(Debug, Clone)]
+pub enum Role {
+	/// Regular full node.
+	Full,
+	/// Regular light node.
+	Light,
+	/// Sentry node that guards an authority. Will be reported as "authority" on the wire protocol.
+	Sentry {
+		/// Address and identity of the validator nodes that we're guarding.
+		///
+		/// The nodes will be granted some priviledged status.
+		validators: Vec<MultiaddrWithPeerId>,
+	},
+	/// Actual authority.
+	Authority {
+		/// List of public addresses and identities of our sentry nodes.
+		sentry_nodes: Vec<MultiaddrWithPeerId>,
 	}
 }
 
-impl Roles {
-	/// Does this role represents a client that holds full chain data locally?
-	pub fn is_full(&self) -> bool {
-		self.intersects(Roles::FULL | Roles::AUTHORITY)
-	}
-
-	/// Does this role represents a client that does not participates in the consensus?
+impl Role {
+	/// True for `Role::Authority`
 	pub fn is_authority(&self) -> bool {
-		*self == Roles::AUTHORITY
+		matches!(self, Role::Authority { .. })
 	}
 
-	/// Does this role represents a client that does not hold full chain data locally?
-	pub fn is_light(&self) -> bool {
-		!self.is_full()
+	/// True for `Role::Authority` and `Role::Sentry` since they're both
+	/// announced as having the authority role to the network.
+	pub fn is_network_authority(&self) -> bool {
+		matches!(self, Role::Authority { .. } | Role::Sentry { .. })
 	}
 }
 
-impl fmt::Display for Roles {
+impl fmt::Display for Role {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{:?}", self)
-	}
-}
-
-impl codec::Encode for Roles {
-	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
-		dest.push_byte(self.bits())
-	}
-}
-
-impl codec::EncodeLike for Roles {}
-
-impl codec::Decode for Roles {
-	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
-		Self::from_bits(input.read_byte()?).ok_or_else(|| codec::Error::from("Invalid bytes"))
+		match self {
+			Role::Full => write!(f, "FULL"),
+			Role::Light => write!(f, "LIGHT"),
+			Role::Sentry { .. } => write!(f, "SENTRY"),
+			Role::Authority { .. } => write!(f, "AUTHORITY"),
+		}
 	}
 }
 
@@ -166,6 +168,70 @@ impl<B: BlockT> FinalityProofRequestBuilder<B> for DummyFinalityProofRequestBuil
 
 /// Shared finality proof request builder struct used by the queue.
 pub type BoxFinalityProofRequestBuilder<B> = Box<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
+
+/// Result of the transaction import.
+#[derive(Clone, Copy, Debug)]
+pub enum TransactionImport {
+	/// Transaction is good but already known by the transaction pool.
+	KnownGood,
+	/// Transaction is good and not yet known.
+	NewGood,
+	/// Transaction is invalid.
+	Bad,
+	/// Transaction import was not performed.
+	None,
+}
+
+/// Fuure resolving to transaction import result.
+pub type TransactionImportFuture = Pin<Box<dyn Future<Output=TransactionImport> + Send>>;
+
+/// Transaction pool interface
+pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
+	/// Get transactions from the pool that are ready to be propagated.
+	fn transactions(&self) -> Vec<(H, B::Extrinsic)>;
+	/// Get hash of transaction.
+	fn hash_of(&self, transaction: &B::Extrinsic) -> H;
+	/// Import a transaction into the pool.
+	///
+	/// This will return future.
+	fn import(
+		&self,
+		transaction: B::Extrinsic,
+	) -> TransactionImportFuture;
+	/// Notify the pool about transactions broadcast.
+	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
+	/// Get transaction by hash.
+	fn transaction(&self, hash: &H) -> Option<B::Extrinsic>;
+}
+
+/// Dummy implementation of the [`TransactionPool`] trait for a transaction pool that is always
+/// empty and discards all incoming transactions.
+///
+/// Requires the "hash" type to implement the `Default` trait.
+///
+/// Useful for testing purposes.
+pub struct EmptyTransactionPool;
+
+impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransactionPool {
+	fn transactions(&self) -> Vec<(H, B::Extrinsic)> {
+		Vec::new()
+	}
+
+	fn hash_of(&self, _transaction: &B::Extrinsic) -> H {
+		Default::default()
+	}
+
+	fn import(
+		&self,
+		_transaction: B::Extrinsic
+	) -> TransactionImportFuture {
+		Box::pin(future::ready(TransactionImport::KnownGood))
+	}
+
+	fn on_broadcasted(&self, _: HashMap<H, Vec<String>>) {}
+
+	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
+}
 
 /// Name of a protocol, transmitted on the wire. Should be unique for each chain.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -206,12 +272,86 @@ pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 /// Splits a Multiaddress into a Multiaddress and PeerId.
 pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
-		Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
-			.map_err(|_| ParseErr::InvalidPeerId)?,
+		Some(multiaddr::Protocol::P2p(key)) => {
+			if !matches!(key.algorithm(), multiaddr::multihash::Code::Identity) {
+				// (note: this is the "person bowing" emoji)
+				log::warn!(
+					"🙇 You are using the peer ID {}. This peer ID uses a legacy, deprecated \
+					representation that will no longer be supported in the future. \
+					Please refresh it by performing a RPC query to the appropriate node, \
+					by looking at its logs, or by using `subkey inspect-node-key` on its \
+					private key.",
+					bs58::encode(key.as_bytes()).into_string()
+				);
+			}
+
+			PeerId::from_multihash(key).map_err(|_| ParseErr::InvalidPeerId)?
+		},
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
 
 	Ok((who, addr))
+}
+
+/// Address of a node, including its identity.
+///
+/// This struct represents a decoded version of a multiaddress that ends with `/p2p/<peerid>`.
+///
+/// # Example
+///
+/// ```
+/// # use sc_network::{Multiaddr, PeerId, config::MultiaddrWithPeerId};
+/// let addr: MultiaddrWithPeerId =
+/// 	"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".parse().unwrap();
+/// assert_eq!(addr.peer_id.to_base58(), "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV");
+/// assert_eq!(addr.multiaddr.to_string(), "/ip4/198.51.100.19/tcp/30333");
+/// ```
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct MultiaddrWithPeerId {
+	/// Address of the node.
+	pub multiaddr: Multiaddr,
+	/// Its identity.
+	pub peer_id: PeerId,
+}
+
+impl MultiaddrWithPeerId {
+	/// Concatenates the multiaddress and peer ID into one multiaddress containing both.
+	pub fn concat(&self) -> Multiaddr {
+		let proto = multiaddr::Protocol::P2p(From::from(self.peer_id.clone()));
+		self.multiaddr.clone().with(proto)
+	}
+}
+
+impl fmt::Display for MultiaddrWithPeerId {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Display::fmt(&self.concat(), f)
+	}
+}
+
+impl FromStr for MultiaddrWithPeerId {
+	type Err = ParseErr;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		let (peer_id, multiaddr) = parse_str_addr(s)?;
+		Ok(MultiaddrWithPeerId {
+			peer_id,
+			multiaddr,
+		})
+	}
+}
+
+impl From<MultiaddrWithPeerId> for String {
+	fn from(ma: MultiaddrWithPeerId) -> String {
+		format!("{}", ma)
+	}
+}
+
+impl TryFrom<String> for MultiaddrWithPeerId {
+	type Error = ParseErr;
+	fn try_from(string: String) -> Result<Self, Self::Error> {
+		string.parse()
+	}
 }
 
 /// Error that can be generated by `parse_str_addr`.
@@ -254,8 +394,6 @@ impl From<multiaddr::Error> for ParseErr {
 /// Network service configuration.
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
-	/// Directory path to store general network configuration. None means nothing will be saved.
-	pub config_path: Option<PathBuf>,
 	/// Directory path to store network-specific configuration. None means nothing will be saved.
 	pub net_config_path: Option<PathBuf>,
 	/// Multiaddresses to listen for incoming connections.
@@ -263,19 +401,20 @@ pub struct NetworkConfiguration {
 	/// Multiaddresses to advertise. Detected automatically if empty.
 	pub public_addresses: Vec<Multiaddr>,
 	/// List of initial node addresses
-	pub boot_nodes: Vec<String>,
+	pub boot_nodes: Vec<MultiaddrWithPeerId>,
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
+	/// List of notifications protocols that the node supports. Must also include a
+	/// `ConsensusEngineId` for backwards-compatibility.
+	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, [u8]>)>,
 	/// Maximum allowed number of incoming connections.
 	pub in_peers: u32,
 	/// Number of outgoing connections we're trying to maintain.
 	pub out_peers: u32,
 	/// List of reserved node addresses.
-	pub reserved_nodes: Vec<String>,
+	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 	/// The non-reserved peer mode.
 	pub non_reserved_mode: NonReservedPeerMode,
-	/// List of sentry node public addresses.
-	pub sentry_nodes: Vec<String>,
 	/// Client identifier. Sent over the wire for debugging purposes.
 	pub client_version: String,
 	/// Name of the node. Sent over the wire for debugging purposes.
@@ -284,24 +423,34 @@ pub struct NetworkConfiguration {
 	pub transport: TransportConfig,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
+	/// Should we insert non-global addresses into the DHT?
+	pub allow_non_globals_in_dht: bool,
+	/// If true, uses the `/<chainid>/block-requests/<version>` experimental protocol rather than
+	/// the legacy substream. This option is meant to be hard-wired to `true` in the future.
+	pub use_new_block_requests_protocol: bool,
 }
 
-impl Default for NetworkConfiguration {
-	fn default() -> Self {
+impl NetworkConfiguration {
+	/// Create new default configuration
+	pub fn new<SN: Into<String>, SV: Into<String>>(
+		node_name: SN,
+		client_version: SV,
+		node_key: NodeKeyConfig,
+		net_config_path: Option<PathBuf>,
+	) -> Self {
 		NetworkConfiguration {
-			config_path: None,
-			net_config_path: None,
+			net_config_path,
 			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
-			node_key: NodeKeyConfig::Ed25519(Secret::New),
+			node_key,
+			notifications_protocols: Vec::new(),
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
-			sentry_nodes: Vec::new(),
-			client_version: "unknown".into(),
-			node_name: "unknown".into(),
+			client_version: client_version.into(),
+			node_name: node_name.into(),
 			transport: TransportConfig::Normal {
 				enable_mdns: false,
 				allow_private_ipv4: true,
@@ -309,35 +458,48 @@ impl Default for NetworkConfiguration {
 				use_yamux_flow_control: false,
 			},
 			max_parallel_downloads: 5,
+			allow_non_globals_in_dht: false,
+			use_new_block_requests_protocol: true,
 		}
 	}
 }
 
 impl NetworkConfiguration {
-	/// Create a new instance of default settings.
-	pub fn new() -> Self {
-		Self::default()
-	}
-
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_local() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new();
+		let mut config = NetworkConfiguration::new(
+			"test-node",
+			"test-client",
+			Default::default(),
+			None,
+		);
+
 		config.listen_addresses = vec![
 			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
 				.chain(iter::once(multiaddr::Protocol::Tcp(0)))
 				.collect()
 		];
+
+		config.allow_non_globals_in_dht = true;
 		config
 	}
 
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_memory() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new();
+		let mut config = NetworkConfiguration::new(
+			"test-node",
+			"test-client",
+			Default::default(),
+			None,
+		);
+
 		config.listen_addresses = vec![
 			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
 				.chain(iter::once(multiaddr::Protocol::Tcp(0)))
 				.collect()
 		];
+
+		config.allow_non_globals_in_dht = true;
 		config
 	}
 }
@@ -400,6 +562,12 @@ impl NonReservedPeerMode {
 pub enum NodeKeyConfig {
 	/// A Ed25519 secret key configuration.
 	Ed25519(Secret<ed25519::SecretKey>)
+}
+
+impl Default for NodeKeyConfig {
+	fn default() -> NodeKeyConfig {
+		NodeKeyConfig::Ed25519(Secret::New)
+	}
 }
 
 /// The options for obtaining a Ed25519 secret key.

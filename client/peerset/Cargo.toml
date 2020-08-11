@@ -1,18 +1,22 @@
 [package]
 description = "Connectivity manager based on reputation"
 homepage = "http://parity.io"
-license = "GPL-3.0"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 name = "sc-peerset"
-version = "2.0.0-alpha.5"
+version = "2.0.0-rc3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sc-peerset"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 
 [dependencies]
-futures = "0.3.1"
-libp2p = { version = "0.16.2", default-features = false }
+futures = "0.3.4"
+libp2p = { version = "0.19.1", default-features = false }
+sp-utils = { version = "2.0.0-rc3", path = "../../primitives/utils"}
 log = "0.4.8"
 serde_json = "1.0.41"
 wasm-timer = "0.2"

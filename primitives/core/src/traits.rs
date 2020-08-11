@@ -1,28 +1,55 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Shareable Substrate traits.
 
-use crate::{crypto::KeyTypeId, ed25519, sr25519};
-
+use crate::{
+	crypto::{KeyTypeId, CryptoTypePublicPair},
+	vrf::{VRFTranscriptData, VRFSignature},
+	ed25519, sr25519, ecdsa,
+};
 use std::{
-	fmt::{Debug, Display}, panic::UnwindSafe, sync::Arc, borrow::Cow,
+	borrow::Cow,
+	fmt::{Debug, Display},
+	panic::UnwindSafe,
+	sync::Arc,
 };
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
+
+/// BareCryptoStore error
+#[derive(Debug, derive_more::Display)]
+pub enum Error {
+	/// Public key type is not supported
+	#[display(fmt="Key not supported: {:?}", _0)]
+	KeyNotSupported(KeyTypeId),
+	/// Pair not found for public key and KeyTypeId
+	#[display(fmt="Pair was not found: {}", _0)]
+	PairNotFound(String),
+	/// Validation error
+	#[display(fmt="Validation error: {}", _0)]
+	ValidationError(String),
+	/// Keystore unavailable
+	#[display(fmt="Keystore unavailable")]
+	Unavailable,
+	/// Programming errors
+	#[display(fmt="An unknown keystore error occurred: {}", _0)]
+	Other(String)
+}
 
 /// Something that generates, stores and provides access to keys.
 pub trait BareCryptoStore: Send + Sync {
@@ -37,10 +64,7 @@ pub trait BareCryptoStore: Send + Sync {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<sr25519::Public, String>;
-	/// Returns the sr25519 key pair for the given key type and public key combination.
-	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair>;
-
+	) -> Result<sr25519::Public, Error>;
 	/// Returns all ed25519 public keys for the given key type.
 	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public>;
 	/// Generate a new ed25519 key pair for the given key type and an optional seed.
@@ -52,10 +76,19 @@ pub trait BareCryptoStore: Send + Sync {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<ed25519::Public, String>;
-
-	/// Returns the ed25519 key pair for the given key type and public key combination.
-	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair>;
+	) -> Result<ed25519::Public, Error>;
+	/// Returns all ecdsa public keys for the given key type.
+	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public>;
+	/// Generate a new ecdsa key pair for the given key type and an optional seed.
+	///
+	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
+	///
+	/// Returns the public key of the generated key pair.
+	fn ecdsa_generate_new(
+		&mut self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ecdsa::Public, Error>;
 
 	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.
@@ -67,11 +100,99 @@ pub trait BareCryptoStore: Send + Sync {
 
 	/// Get the password for this store.
 	fn password(&self) -> Option<&str>;
+	/// Find intersection between provided keys and supported keys
+	///
+	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
+	/// a filtered set of public keys which are supported by the keystore.
+	fn supported_keys(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>
+	) -> Result<Vec<CryptoTypePublicPair>, Error>;
+	/// List all supported keys
+	///
+	/// Returns a set of public keys the signer supports.
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error>;
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns `true` iff all private keys could be found.
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
+
+	/// Sign with key
+	///
+	/// Signs a message with the private key that matches
+	/// the public key passed.
+	///
+	/// Returns the SCALE encoded signature if key is found & supported,
+	/// an error otherwise.
+	fn sign_with(
+		&self,
+		id: KeyTypeId,
+		key: &CryptoTypePublicPair,
+		msg: &[u8],
+	) -> Result<Vec<u8>, Error>;
+
+	/// Sign with any key
+	///
+	/// Given a list of public keys, find the first supported key and
+	/// sign the provided message with that key.
+	///
+	/// Returns a tuple of the used key and the SCALE encoded signature.
+	fn sign_with_any(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+		msg: &[u8]
+	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
+		if keys.len() == 1 {
+			return self.sign_with(id, &keys[0], msg).map(|s| (keys[0].clone(), s));
+		} else {
+			for k in self.supported_keys(id, keys)? {
+				if let Ok(sign) = self.sign_with(id, &k, msg) {
+					return Ok((k, sign));
+				}
+			}
+		}
+		Err(Error::KeyNotSupported(id))
+	}
+
+	/// Sign with all keys
+	///
+	/// Provided a list of public keys, sign a message with
+	/// each key given that the key is supported.
+	///
+	/// Returns a list of `Result`s each representing the SCALE encoded
+	/// signature of each key or a Error for non-supported keys.
+	fn sign_with_all(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+		msg: &[u8],
+	) -> Result<Vec<Result<Vec<u8>, Error>>, ()>{
+		Ok(keys.iter().map(|k| self.sign_with(id, k, msg)).collect())
+	}
+
+	/// Generate VRF signature for given transcript data.
+	///
+	/// Receives KeyTypeId and Public key to be able to map
+	/// them to a private key that exists in the keystore which
+	/// is, in turn, used for signing the provided transcript.
+	///
+	/// Returns a result containing the signature data.
+	/// Namely, VRFOutput and VRFProof which are returned
+	/// inside the `VRFSignature` container struct.
+	///
+	/// This function will return an error in the cases where
+	/// the public key and key type provided do not match a private
+	/// key in the keystore. Or, in the context of remote signing
+	/// an error could be a network one.
+	fn sr25519_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		transcript_data: VRFTranscriptData,
+	) -> Result<VRFSignature, Error>;
 }
 
 /// A pointer to the key store.
@@ -180,6 +301,23 @@ impl std::fmt::Display for CodeNotFound {
 	}
 }
 
+/// `Allow` or `Disallow` missing host functions when instantiating a WASM blob.
+#[derive(Clone, Copy, Debug)]
+pub enum MissingHostFunctions {
+	/// Any missing host function will be replaced by a stub that returns an error when
+	/// being called.
+	Allow,
+	/// Any missing host function will result in an error while instantiating the WASM blob,
+	Disallow,
+}
+
+impl MissingHostFunctions {
+	/// Are missing host functions allowed?
+	pub fn allowed(self) -> bool {
+		matches!(self, Self::Allow)
+	}
+}
+
 /// Something that can call a method in a WASM blob.
 pub trait CallInWasm: Send + Sync {
 	/// Call the given `method` in the given `wasm_blob` using `call_data` (SCALE encoded arguments)
@@ -198,6 +336,7 @@ pub trait CallInWasm: Send + Sync {
 		method: &str,
 		call_data: &[u8],
 		ext: &mut dyn Externalities,
+		missing_host_functions: MissingHostFunctions,
 	) -> Result<Vec<u8>, String>;
 }
 
@@ -229,4 +368,16 @@ impl TaskExecutorExt {
 	pub fn new(spawn_handle: Box<dyn CloneableSpawn>) -> Self {
 		Self(spawn_handle)
 	}
+}
+
+/// Something that can spawn futures (blocking and non-blocking) with am assigned name.
+pub trait SpawnNamed {
+	/// Spawn the given blocking future.
+	///
+	/// The given `name` is used to identify the future in tracing.
+	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+	/// Spawn the given non-blocking future.
+	///
+	/// The given `name` is used to identify the future in tracing.
+	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
 }

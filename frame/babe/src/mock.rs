@@ -1,32 +1,42 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Test utilities
 
-use super::{Trait, Module, GenesisConfig};
+use codec::Encode;
+use super::{Trait, Module, GenesisConfig, CurrentSlot};
 use sp_runtime::{
-	traits::IdentityLookup, Perbill, testing::{Header, UintAuthorityId}, impl_opaque_keys,
+	Perbill, impl_opaque_keys,
+	testing::{Header, UintAuthorityId, Digest, DigestItem},
+	traits::IdentityLookup,
 };
-use sp_version::RuntimeVersion;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_system::InitKind;
+use frame_support::{
+	impl_outer_origin, parameter_types, StorageValue,
+	traits::OnInitialize,
+	weights::Weight,
+};
 use sp_io;
-use sp_core::H256;
+use sp_core::{H256, U256, crypto::Pair};
+use sp_consensus_babe::AuthorityPair;
+use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 
 impl_outer_origin!{
-	pub enum Origin for Test  where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 type DummyValidatorId = u64;
@@ -43,17 +53,17 @@ parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
 	pub const EpochDuration: u64 = 3;
 	pub const ExpectedBlockTime: u64 = 1;
-	pub const Version: RuntimeVersion = substrate_test_runtime::VERSION;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
 
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Call = ();
 	type Hash = H256;
-	type Version = Version;
+	type Version = ();
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = DummyValidatorId;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -61,10 +71,15 @@ impl frame_system::Trait for Test {
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = MaximumBlockWeight;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type ModuleToIndex = ();
 	type AccountData = ();
+	type MigrateAccount = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
@@ -79,11 +94,12 @@ impl pallet_session::Trait for Test {
 	type Event = ();
 	type ValidatorId = <Self as frame_system::Trait>::AccountId;
 	type ShouldEndSession = Babe;
-	type SessionHandler = (Babe,Babe,);
+	type SessionHandler = (Babe,);
 	type SessionManager = ();
 	type ValidatorIdOf = ();
 	type Keys = MockSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type NextSessionRotation = Babe;
 }
 
 impl pallet_timestamp::Trait for Test {
@@ -98,13 +114,70 @@ impl Trait for Test {
 	type EpochChangeTrigger = crate::ExternalTrigger;
 }
 
-pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> sp_io::TestExternalities {
+pub fn new_test_ext(authorities_len: usize) -> (Vec<AuthorityPair>, sp_io::TestExternalities) {
+	let pairs = (0..authorities_len).map(|i| {
+		AuthorityPair::from_seed(&U256::from(i).into())
+	}).collect::<Vec<_>>();
+
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
-		authorities: authorities.into_iter().map(|a| (UintAuthorityId(a).to_public_key(), 1)).collect(),
+		authorities: pairs.iter().map(|a| (a.public(), 1)).collect(),
 	}.assimilate_storage::<Test>(&mut t).unwrap();
-	t.into()
+	(pairs, t.into())
+}
+
+pub fn go_to_block(n: u64, s: u64) {
+	let pre_digest = make_secondary_plain_pre_digest(0, s);
+	System::initialize(&n, &Default::default(), &Default::default(), &pre_digest, InitKind::Full);
+	System::set_block_number(n);
+	if s > 1 {
+		CurrentSlot::put(s);
+	}
+	// includes a call into `Babe::do_initialize`.
+	Session::on_initialize(n);
+}
+
+/// Slots will grow accordingly to blocks
+pub fn progress_to_block(n: u64) {
+	let mut slot = Babe::current_slot() + 1;
+	for i in System::block_number()+1..=n {
+		go_to_block(i, slot);
+		slot += 1;
+	}
+}
+
+pub fn make_pre_digest(
+	authority_index: sp_consensus_babe::AuthorityIndex,
+	slot_number: sp_consensus_babe::SlotNumber,
+	vrf_output: VRFOutput,
+	vrf_proof: VRFProof,
+) -> Digest {
+	let digest_data = sp_consensus_babe::digests::PreDigest::Primary(
+		sp_consensus_babe::digests::PrimaryPreDigest {
+			authority_index,
+			slot_number,
+			vrf_output,
+			vrf_proof,
+		}
+	);
+	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
+	Digest { logs: vec![log] }
+}
+
+pub fn make_secondary_plain_pre_digest(
+	authority_index: sp_consensus_babe::AuthorityIndex,
+	slot_number: sp_consensus_babe::SlotNumber,
+) -> Digest {
+	let digest_data = sp_consensus_babe::digests::PreDigest::SecondaryPlain(
+		sp_consensus_babe::digests::SecondaryPlainPreDigest {
+			authority_index,
+			slot_number,
+		}
+	);
+	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
+	Digest { logs: vec![log] }
 }
 
 pub type System = frame_system::Module<Test>;
 pub type Babe = Module<Test>;
+pub type Session = pallet_session::Module<Test>;

@@ -1,0 +1,5 @@
+error: Only associated type with name `Error` is allowed
+  --> $DIR/mock_only_error_associated_type.rs:13:3
+   |
+13 |         type OtherData = u32;
+   |         ^^^^

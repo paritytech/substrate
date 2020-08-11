@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #![cfg_attr(feature = "bench", feature(test))]
 #[cfg(feature = "bench")]
@@ -31,7 +33,7 @@ use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
 	ed25519, sr25519, ecdsa, Pair, Public, H256, hexdisplay::HexDisplay,
 };
-use sp_runtime::{traits::{IdentifyAccount, Verify}, generic::Era};
+use sp_runtime::{traits::{AccountIdConversion, IdentifyAccount, Verify}, generic::Era, ModuleId};
 use std::{
 	convert::{TryInto, TryFrom}, io::{stdin, Read}, str::FromStr, path::PathBuf, fs, fmt,
 };
@@ -79,6 +81,7 @@ trait Crypto: Sized {
 	) where
 		<Self::Pair as Pair>::Public: PublicT,
 	{
+		let v = network_override.unwrap_or_default();
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
 
@@ -86,6 +89,7 @@ trait Crypto: Sized {
 				OutputType::Json => {
 					let json = json!({
 						"secretPhrase": uri,
+						"networkId": String::from(v),
 						"secretSeed": format_seed::<Self>(seed),
 						"publicKey": format_public_key::<Self>(public_key.clone()),
 						"accountId": format_account_id::<Self>(public_key),
@@ -95,11 +99,13 @@ trait Crypto: Sized {
 				},
 				OutputType::Text => {
 					println!("Secret phrase `{}` is account:\n  \
-						Secret seed:      {}\n  \
-						Public key (hex): {}\n  \
-						Account ID:       {}\n  \
-						SS58 Address:     {}",
+						Network ID/version: {}\n  \
+						Secret seed:        {}\n  \
+						Public key (hex):   {}\n  \
+						Account ID:         {}\n  \
+						SS58 Address:       {}",
 						uri,
+						String::from(v),
 						format_seed::<Self>(seed),
 						format_public_key::<Self>(public_key.clone()),
 						format_account_id::<Self>(public_key),
@@ -114,6 +120,7 @@ trait Crypto: Sized {
 				OutputType::Json => {
 					let json = json!({
 						"secretKeyUri": uri,
+						"networkId": String::from(v),
 						"secretSeed": if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
 						"publicKey": format_public_key::<Self>(public_key.clone()),
 						"accountId": format_account_id::<Self>(public_key),
@@ -123,11 +130,13 @@ trait Crypto: Sized {
 				},
 				OutputType::Text => {
 					println!("Secret Key URI `{}` is account:\n  \
-						Secret seed:      {}\n  \
-						Public key (hex): {}\n  \
-						Account ID:       {}\n  \
-						SS58 Address:     {}",
+						Network ID/version: {}\n  \
+						Secret seed:        {}\n  \
+						Public key (hex):   {}\n  \
+						Account ID:         {}\n  \
+						SS58 Address:       {}",
 						uri,
+						String::from(v),
 						if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
 						format_public_key::<Self>(public_key.clone()),
 						format_account_id::<Self>(public_key),
@@ -258,6 +267,9 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 						If the value is a file, the file content is used as URI. \
 						If not given, you will be prompted for the URI.'
 				"),
+			SubCommand::with_name("inspect-node-key")
+				.about("Print the peer ID corresponding to the node key in the given file")
+				.args_from_usage("[file] 'Name of file to read the secret key from'"),
 			SubCommand::with_name("sign")
 				.about("Sign a message, provided on STDIN, with a given (secret) key")
 				.args_from_usage("
@@ -311,6 +323,11 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 					<key-type> 'Key type, examples: \"gran\", or \"imon\" '
 					[node-url] 'Node JSON-RPC endpoint, default \"http:://localhost:9933\"'
 				"),
+			SubCommand::with_name("moduleid")
+				.about("Inspect a module ID address")
+				.args_from_usage("
+					<id> 'The module ID used to derive the account'
+				")
 		])
 }
 
@@ -425,6 +442,17 @@ where
 		("inspect", Some(matches)) => {
 			C::print_from_uri(&get_uri("uri", &matches)?, password, maybe_network, output);
 		}
+		("inspect-node-key", Some(matches)) => {
+			let file = matches.value_of("file").ok_or(Error::Static("Input file name is required"))?;
+
+			let mut file_content = fs::read(file)?;
+			let secret = libp2p_ed25519::SecretKey::from_bytes(&mut file_content)
+				.map_err(|_| Error::Static("Bad node key file"))?;
+			let keypair = libp2p_ed25519::Keypair::from(secret);
+			let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
+
+			println!("{}", peer_id);
+		}
 		("sign", Some(matches)) => {
 			let suri = get_uri("suri", &matches)?;
 			let should_decode = matches.is_present("hex");
@@ -499,6 +527,20 @@ where
 				suri,
 				sp_core::Bytes(pair.public().as_ref().to_vec()),
 			);
+		}
+		("moduleid", Some(matches)) => {
+			let id = get_uri("id", &matches)?;
+			if id.len() != 8 {
+				Err("a module id must be a string of 8 characters")?
+			}
+
+			let id_fixed_array: [u8; 8] = id.as_bytes().try_into()
+				.map_err(|_| Error::Static("Cannot convert argument to moduleid: argument should be 8-character string"))?;
+
+			let account_id: AccountId = ModuleId(id_fixed_array).into_account();
+			let v = maybe_network.unwrap_or(Ss58AddressFormat::SubstrateAccount);
+
+			C::print_from_uri(&account_id.to_ss58check_with_version(v), password, maybe_network, output);
 		}
 		_ => print_usage(&matches),
 	}
@@ -676,20 +718,22 @@ fn create_extrinsic<C: Crypto>(
 {
 	let extra = |i: Index, f: Balance| {
 		(
-			frame_system::CheckVersion::<Runtime>::new(),
+			frame_system::CheckSpecVersion::<Runtime>::new(),
+			frame_system::CheckTxVersion::<Runtime>::new(),
 			frame_system::CheckGenesis::<Runtime>::new(),
 			frame_system::CheckEra::<Runtime>::from(Era::Immortal),
 			frame_system::CheckNonce::<Runtime>::from(i),
 			frame_system::CheckWeight::<Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(f),
-			Default::default(),
+			pallet_grandpa::ValidateEquivocationReport::<Runtime>::new(),
 		)
 	};
 	let raw_payload = SignedPayload::from_raw(
 		function,
 		extra(index, 0),
 		(
-			VERSION.spec_version as u32,
+			VERSION.spec_version,
+			VERSION.transaction_version,
 			genesis_hash,
 			genesis_hash,
 			(),

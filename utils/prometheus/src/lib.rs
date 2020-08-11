@@ -16,7 +16,10 @@
 
 use futures_util::{FutureExt, future::Future};
 pub use prometheus::{
+	self,
 	Registry, Error as PrometheusError, Opts,
+	Histogram, HistogramOpts, HistogramVec,
+	exponential_buckets,
 	core::{
 		GenericGauge as Gauge, GenericCounter as Counter,
 		GenericGaugeVec as GaugeVec, GenericCounterVec as CounterVec,
@@ -120,7 +123,7 @@ mod known_os {
 			.await
 			.map_err(|_| Error::PortInUse(prometheus_addr))?;
 
-		log::info!("Prometheus server started at {}", prometheus_addr);
+		log::info!("〽️ Prometheus server started at {}", prometheus_addr);
 
 		let service = make_service_fn(move |_| {
 			let registry = registry.clone();

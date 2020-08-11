@@ -1,34 +1,38 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
 
 use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
 };
 use log::{debug, info, warn};
-
+use sp_core::traits::BareCryptoStorePtr;
 use sp_consensus::SelectChain;
 use sc_client_api::backend::Backend;
+use sp_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 use sp_blockchain::HeaderMetadata;
+
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,
 	LinkHalf, Error, aux_schema::PersistentData, VoterCommand, VoterSetState,
@@ -109,7 +113,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 			Err(e) => return future::err(e.into()),
 		};
 
-		if let Some(_) = validation_result.ghost() {
+		if validation_result.ghost().is_some() {
 			let finalized_hash = commit.target_hash;
 			let finalized_number = commit.target_number;
 
@@ -122,6 +126,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 				finalized_hash,
 				finalized_number,
 				(round, commit).into(),
+				false,
 			) {
 				Ok(_) => {},
 				Err(e) => return future::err(e),
@@ -172,6 +177,7 @@ where
 		select_chain: _,
 		persistent_data,
 		voter_commands_rx,
+		..
 	} = link;
 
 	let network = NetworkBridge::new(
@@ -185,7 +191,7 @@ where
 		client,
 		network,
 		persistent_data,
-		config.keystore.clone(),
+		config.keystore,
 		voter_commands_rx
 	);
 
@@ -205,8 +211,8 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
 	client: Arc<Client>,
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
-	keystore: Option<sc_keystore::KeyStorePtr>,
-	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
+	keystore: Option<BareCryptoStorePtr>,
+	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	_phantom: PhantomData<BE>,
 }
 
@@ -222,8 +228,8 @@ where
 		client: Arc<Client>,
 		network: NetworkBridge<B, Network>,
 		persistent_data: PersistentData<B>,
-		keystore: Option<sc_keystore::KeyStorePtr>,
-		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
+		keystore: Option<BareCryptoStorePtr>,
+		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	) -> Self {
 
 		let mut work = ObserverWork {
@@ -233,7 +239,7 @@ where
 			client,
 			network,
 			persistent_data,
-			keystore,
+			keystore: keystore.clone(),
 			voter_commands_rx,
 			_phantom: PhantomData,
 		};
@@ -255,6 +261,7 @@ where
 			self.client.clone(),
 			&self.network,
 			&self.keystore,
+			None,
 		);
 
 		let last_finalized_number = self.client.info().finalized_number;
@@ -375,6 +382,7 @@ mod tests {
 	use super::*;
 
 	use assert_matches::assert_matches;
+	use sp_utils::mpsc::tracing_unbounded;
 	use crate::{aux_schema,	communication::tests::{Event, make_test_network}};
 	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
 	use sc_network::PeerId;
@@ -404,14 +412,16 @@ mod tests {
 			(Arc::new(client), backend)
 		};
 
+		let voters = vec![(sp_keyring::Ed25519Keyring::Alice.public().into(), 1)];
+
 		let persistent_data = aux_schema::load_persistent(
 			&*backend,
 			client.info().genesis_hash,
 			0,
-			|| Ok(vec![]),
+			|| Ok(voters),
 		).unwrap();
 
-		let (_tx, voter_command_rx) = mpsc::unbounded();
+		let (_tx, voter_command_rx) = tracing_unbounded("");
 		let observer = ObserverWork::new(
 			client,
 			tester.net_handle.clone(),

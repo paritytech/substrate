@@ -1,16 +1,19 @@
 [package]
 name = "sp-rpc"
-version = "2.0.0-alpha.5"
+version = "2.0.0-rc3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Substrate RPC primitives and utilities."
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dependencies]
 serde = { version = "1.0.101", features = ["derive"] }
-sp-core = { version = "2.0.0-alpha.5", path = "../core" }
+sp-core = { version = "2.0.0-rc3", path = "../core" }
 
 [dev-dependencies]
 serde_json = "1.0.41"

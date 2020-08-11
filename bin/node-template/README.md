@@ -56,7 +56,7 @@ cargo run -- \
   --chain=local \
   --alice \
   --node-key 0000000000000000000000000000000000000000000000000000000000000001 \
-  --telemetry-url ws://telemetry.polkadot.io:1024 \
+  --telemetry-url 'ws://telemetry.polkadot.io:1024 0' \
   --validator
 ```
 
@@ -69,7 +69,7 @@ cargo run -- \
   --chain=local \
   --bob \
   --port 30334 \
-  --telemetry-url ws://telemetry.polkadot.io:1024 \
+  --telemetry-url 'ws://telemetry.polkadot.io:1024 0' \
   --validator
 ```
 

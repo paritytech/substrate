@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Tests for the module.
 
@@ -45,7 +46,7 @@ fn set_recovered_works() {
 		// Not accessible by a normal user
 		assert_noop!(Recovery::set_recovered(Origin::signed(1), 5, 1), BadOrigin);
 		// Root can set a recovered account though
-		assert_ok!(Recovery::set_recovered(Origin::ROOT, 5, 1));
+		assert_ok!(Recovery::set_recovered(Origin::root(), 5, 1));
 		// Account 1 should now be able to make a call through account 5
 		let call = Box::new(Call::Balances(BalancesCall::transfer(1, 100)));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
@@ -240,7 +241,7 @@ fn initiate_recovery_works() {
 		assert_eq!(Balances::reserved_balance(1), 10);
 		// Recovery status object is created correctly
 		let recovery_status = ActiveRecovery {
-			created: 1,
+			created: 0,
 			deposit: 10,
 			friends: vec![],
 		};
@@ -288,7 +289,7 @@ fn vouch_recovery_works() {
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
 		// Final recovery status object is updated correctly
 		let recovery_status = ActiveRecovery {
-			created: 1,
+			created: 0,
 			deposit: 10,
 			friends: vec![2, 3, 4],
 		};
