@@ -201,11 +201,11 @@ impl MetricsService {
 		if let Some(metrics) = self.metrics.as_ref() {
 			metrics
 				.network_bytes
-				.with_label_values(&["inbound"])
+				.with_label_values(&["in"])
 				.set(total_bytes_inbound);
 			metrics
 				.network_bytes
-				.with_label_values(&["outbound"])
+				.with_label_values(&["out"])
 				.set(total_bytes_outbound);
 			metrics
 				.block_height
