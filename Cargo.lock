@@ -307,8 +307,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da71fef07bc806586090247e971229289f64c210a278ee5ae419314eb386b31d"
 dependencies = [
  "proc-macro2",
- "quote 1.0.3",
- "syn 1.0.17",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -681,7 +681,7 @@ name = "chain-spec-builder"
 version = "2.0.0-rc5"
 dependencies = [
  "ansi_term 0.12.1",
- "futures 0.3.4",
+ "futures 0.3.5",
  "node-cli",
  "rand 0.7.3",
  "sc-chain-spec",
@@ -3632,7 +3632,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "futures 0.3.4",
+ "futures 0.3.5",
  "node-primitives",
  "node-runtime",
  "node-testing",
@@ -4390,7 +4390,7 @@ version = "2.0.0-rc5"
 dependencies = [
  "frame-support",
  "frame-system",
- "futures 0.3.4",
+ "futures 0.3.5",
  "lite-json",
  "parity-scale-codec",
  "serde",
@@ -6208,7 +6208,6 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sc-executor",
- "sc-keystore",
  "sc-telemetry",
  "sp-api",
  "sp-blockchain",
@@ -6667,7 +6666,7 @@ version = "2.0.0-rc5"
 dependencies = [
  "async-trait",
  "derive_more",
- "futures 0.3.4",
+ "futures 0.3.5",
  "futures-util",
  "hex",
  "merlin",
@@ -7606,7 +7605,7 @@ dependencies = [
 name = "sp-application-crypto-test"
 version = "2.0.0-rc5"
 dependencies = [
- "futures 0.3.4",
+ "futures 0.3.5",
  "sp-api",
  "sp-application-crypto",
  "sp-core",
