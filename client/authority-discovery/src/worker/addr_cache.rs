@@ -146,6 +146,7 @@ mod tests {
 
 	use libp2p::multihash;
 	use quickcheck::{Arbitrary, Gen, QuickCheck, TestResult};
+	use rand::Rng;
 
 	use sp_authority_discovery::{AuthorityId, AuthorityPair};
 	use sp_core::crypto::Pair;

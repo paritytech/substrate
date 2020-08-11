@@ -611,3 +611,83 @@ fn never_add_own_address_to_priority_group() {
 		"Expect authority discovery to only add `random_multiaddr`."
 	);
 }
+
+#[test]
+fn do_not_cache_addresses_without_peer_id() {
+	let remote_key_store = KeyStore::new();
+	let remote_public = remote_key_store
+		.write()
+		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+		.unwrap();
+
+	let multiaddr_with_peer_id = {
+		let peer_id = PeerId::random();
+		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse().unwrap();
+
+		address.with(multiaddr::Protocol::P2p(peer_id.into()))
+	};
+
+	let multiaddr_without_peer_id: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
+
+	let dht_event = {
+		let addresses = vec![
+			multiaddr_with_peer_id.to_vec(),
+			multiaddr_without_peer_id.to_vec(),
+		];
+
+		let mut serialized_addresses = vec![];
+		schema::AuthorityAddresses { addresses }
+		.encode(&mut serialized_addresses)
+			.map_err(Error::EncodingProto)
+			.unwrap();
+
+		let signature = remote_key_store.read()
+			.sign_with(
+				key_types::AUTHORITY_DISCOVERY,
+				&remote_public.clone().into(),
+				serialized_addresses.as_slice(),
+			)
+			.map_err(|_| Error::Signing)
+			.unwrap();
+
+		let mut signed_addresses = vec![];
+		schema::SignedAuthorityAddresses {
+			addresses: serialized_addresses.clone(),
+			signature,
+		}
+			.encode(&mut signed_addresses)
+			.map_err(Error::EncodingProto)
+			.unwrap();
+
+		let key = hash_authority_id(&remote_public.to_raw_vec());
+		let value = signed_addresses;
+		(key, value)
+	};
+
+	let (_dht_event_tx, dht_event_rx) = channel(1);
+	let local_test_api = Arc::new(TestApi {
+		// Make sure the sentry node identifies its validator as an authority.
+		authorities: vec![remote_public.into()],
+	});
+	let local_network: Arc<TestNetwork> = Arc::new(Default::default());
+	let local_key_store = KeyStore::new();
+
+	let (_to_worker, from_service) = mpsc::channel(0);
+	let mut local_worker = Worker::new(
+		from_service,
+		local_test_api,
+		local_network.clone(),
+		vec![],
+		dht_event_rx.boxed(),
+		Role::Authority(local_key_store),
+		None,
+	);
+
+	local_worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
+
+	assert_eq!(
+		Some(&vec![multiaddr_with_peer_id]),
+		local_worker.addr_cache.get_addresses_by_authority_id(&remote_public.into()),
+		"Expect worker to only cache `Multiaddr`s with `PeerId`s.",
+	);
+}

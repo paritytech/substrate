@@ -38,6 +38,9 @@ impl Service {
 	}
 
 	/// Get the addresses for the given [`AuthorityId`] from the local address cache.
+	///
+	/// [`Multiaddr`]s returned always include a [`libp2p::core::multiaddr:Protocol::P2p`]
+	/// component.
 	pub async fn get_addresses_by_authority_id(&mut self, authority: AuthorityId) -> Option<Vec<Multiaddr>> {
 		let (tx, rx) = oneshot::channel();
 

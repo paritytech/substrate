@@ -470,8 +470,8 @@ where
 			.collect::<Result<Vec<Vec<Multiaddr>>>>()?
 			.into_iter()
 			.flatten()
-			// Ignore own addresses.
-			.filter(|addr| !addr.iter().any(|protocol| {
+			// Ignore [`Multiaddr`]s without [`PeerId`] and own addresses.
+			.filter(|addr| addr.iter().any(|protocol| {
 				// Parse to PeerId first as Multihashes of old and new PeerId
 				// representation don't equal.
 				//
@@ -480,13 +480,14 @@ where
 				if let multiaddr::Protocol::P2p(hash) = protocol {
 					let peer_id = match PeerId::from_multihash(hash) {
 						Ok(peer_id) => peer_id,
-						Err(_) => return true, // Discard address.
+						Err(_) => return false, // Discard address.
 					};
 
-					return peer_id == local_peer_id;
+					// Discard if equal to local peer id, keep if it differs.
+					return !(peer_id == local_peer_id);
 				}
 
-				false // Multiaddr does not contain a PeerId.
+				false // `protocol` is not a [`Protocol::P2p`], let's keep looking.
 			}))
 			.collect();
 
