@@ -70,7 +70,6 @@ mod inner {
         module_path, concat, format_args, file, line,
     };
     use crate::{WasmMetadata};
-    use crate::interface::wasm_tracing;
 
     // just a simplistic holder for span and entered spans
     // that exits on drop
@@ -80,7 +79,7 @@ mod inner {
     impl Span {
         pub fn enter(self) -> Entered {
             if self.0 != 0 {
-                wasm_tracing::enter(self.0);
+                crate::get_tracing_subscriber().map(|t|  t.enter(self.0));
             }
             Entered(self.0)
         }
@@ -89,7 +88,7 @@ mod inner {
     impl Entered {
         pub fn exit(&mut self) {
             if self.0 != 0 {
-                wasm_tracing::exit(self.0);
+                crate::get_tracing_subscriber().map(|t| t.exit(self.0));
             }
         }
     }
@@ -171,11 +170,11 @@ mod inner {
                         fields: $($fields)*
                     };
                     if $crate::is_enabled!(&metdata) {
-                        wasm_tracing::event(WasmEvent {
+                        $crate::get_tracing_subscriber().map(|t| t.event(WasmEvent {
                             parent: $parent,
                             metadata,
                             &$crate::valueset!(meta.fields(), $($fields)*)
-                        })
+                        }));
                     }
                 }
             }
@@ -216,11 +215,11 @@ mod inner {
                         fields: $($fields)*
                     };
                     if $crate::is_enabled!(&metdata) {
-                        wasm_tracing::event(WasmEvent {
+                        $crate::get_tracing_subscriber().map(|t| t.event(WasmEvent {
                             parent: None,
                             metadata,
                             &$crate::valueset!(meta.fields(), $($fields)*)
-                        });
+                        }));
                     }
                 }
             }
@@ -380,17 +379,17 @@ mod inner {
                         fields: $($fields)*
                     };
                     if $crate::is_enabled!(metadata) {
-                        let span_id = wasm_tracing::new_span(WasmAttributes{
+                        let span_id = $crate::get_tracing_subscriber().map(|t| t.new_span(WasmAttributes{
                             parent: Some($parent),
                             metadata,
                             &$crate::valueset!(meta.fields(), $($fields)*)
-                        })
-                        $crate::wasm_tracing::Span(span_id)
+                        })).unwrap_or_default();
+                        $crate::Span(span_id)
                     } else {
-                        $crate::wasm_tracing::Span(0)
+                        $crate::Span(0)
                     }
                 } else {
-                    $crate::wasm_tracing::Span(0)
+                    $crate::Span(0)
                 }
             }
         };
@@ -410,17 +409,17 @@ mod inner {
                         fields: $($fields)*
                     };
                     if $crate::is_enabled!(metadata) {
-                        let span_id = wasm_tracing::new_span(WasmAttributes{
-                            parent: None,
+                        let span_id = $crate::get_tracing_subscriber().map(|t| t.new_span(WasmAttributes{
+                            parent: Some($parent),
                             metadata,
                             &$crate::valueset!(meta.fields(), $($fields)*)
-                        })
-                        $crate::wasm_tracing::Span(span_id)
+                        })).unwrap_or_default();
+                        $crate::Span(span_id)
                     } else {
-                        $crate::wasm_tracing::Span(0)
+                        $crate::Span(0)
                     }
                 } else {
-                    $crate::wasm_tracing::Span(0)
+                    $crate::Span(0)
                 }
             }
         };
@@ -1947,8 +1946,7 @@ macro_rules! level_enabled {
 #[doc(hidden)]
 macro_rules! is_enabled {
     ($metadata:expr) => {{
-        // FIXME: use the runtime interface to figure this out
-        true
+        $crate::get_tracing_subscriber().map(|t| t.enabled($metadata)).unwrap_or_false()
     }};
 }
 

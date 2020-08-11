@@ -52,6 +52,7 @@ use sp_core::{
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 
 use sp_runtime_interface::{runtime_interface, Pointer};
+use sp_runtime_interface::pass_by::PassBy;
 
 use codec::{Encode, Decode};
 
@@ -997,6 +998,79 @@ pub trait Logging {
 	}
 }
 
+#[derive(Encode, Decode)]
+pub struct Crossing<T: Encode + Decode>(T);
+impl<T: Encode + Decode> PassBy for Crossing<T> {
+	type PassBy = sp_runtime_interface::pass_by::Codec<Self>;
+}
+
+/// Interface that provides tracing functions
+// #[runtime_interface(wasm_only, no_tracing)]
+#[runtime_interface]
+pub trait WasmTracing {
+	fn enabled(&mut self, metadata: Crossing<sp_tracing::WasmMetadata>) -> bool {
+		todo! {}
+	}
+	fn new_span(&mut self, span: Crossing<sp_tracing::WasmAttributes>) -> u64 {
+
+		todo! {}
+		// crate::get_tracing_subscriber().map(|t|{
+		// 	t.new_span(span)
+		// }).unwrap_or(0)
+	}
+	fn record(&mut self, span: u64, values: Crossing<sp_tracing::WasmValues>) {
+
+		todo! {}
+		// crate::get_tracing_subscriber().map(|t|{
+		// 	t.record(span, values)
+		// });
+	}
+	fn event(&mut self, event: Crossing<sp_tracing::WasmEvent>) {
+
+		todo! {}
+		// crate::get_tracing_subscriber().map(|t|{
+		// 	t.event(event)
+		// });
+	}
+	fn enter(&mut self, span: u64) {
+
+		todo! {}
+		// crate::get_tracing_subscriber().map(|t|{
+		// 	t.enter(span)
+		// });
+	}
+	fn exit(&mut self, span: u64) {
+
+		todo! {}
+		// crate::get_tracing_subscriber().map(|t|{
+		// 	t.exit(span)
+		// });
+	}
+}
+
+
+pub struct PassingTracingSubsciber;
+impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
+	fn enabled(&self, metadata: sp_tracing::WasmMetadata) -> bool {
+		wasm_tracing::enabled(Crossing(metadata))
+	}
+	fn new_span(&self, attrs: sp_tracing::WasmAttributes) -> u64 {
+		wasm_tracing::new_span(Crossing(attrs))
+	}
+	fn record(&self, span: u64, values: sp_tracing::WasmValues) {
+		wasm_tracing::record(span, Crossing(values))
+	}
+	fn event(&self, event: sp_tracing::WasmEvent) {
+		wasm_tracing::event(Crossing(event))
+	}
+	fn enter(&self, span: u64) {
+		wasm_tracing::enter(span)
+	}
+	fn exit(&self, span: u64) {
+		wasm_tracing::enter(span)
+	}
+}
+
 /// Wasm-only interface that provides functions for interacting with the sandbox.
 #[runtime_interface(wasm_only)]
 pub trait Sandbox {
@@ -1143,7 +1217,7 @@ pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
 	default_child_storage::HostFunctions,
 	misc::HostFunctions,
-	sp_tracing::interface::wasm_tracing::HostFunctions,
+	wasm_tracing::HostFunctions,
 	offchain::HostFunctions,
 	crypto::HostFunctions,
 	hashing::HostFunctions,

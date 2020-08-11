@@ -17,14 +17,12 @@
 
 // #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(not(feature = "std"))]
 use sp_std::{
 	vec::Vec
 };
-use sp_runtime_interface::pass_by::PassByCodec;
 use codec::{Encode, Decode};
 
-#[derive(Clone, Encode, Decode, PassByCodec)]
+#[derive(Clone, Encode, Decode)]
 pub enum WasmLevel {
 	ERROR,
 	WARN,
@@ -33,7 +31,7 @@ pub enum WasmLevel {
 	TRACE
 }
 
-#[derive(Encode, Decode, PassByCodec, Debug)]
+#[derive(Encode, Decode, Debug)]
 pub enum WasmFieldValue {
 	I64(i64),
 	U64(u64),
@@ -46,7 +44,7 @@ pub enum WasmFieldValue {
 pub type WasmFields = Vec<Vec<u8>>;
 pub type WasmValues = Vec<(Vec<u8>, WasmFieldValue)>;
 
-#[derive(Encode, Decode, PassByCodec)]
+#[derive(Encode, Decode)]
 pub struct WasmMetadata {
 	pub name: Vec<u8>,
 	pub target: Vec<u8>,
@@ -58,14 +56,14 @@ pub struct WasmMetadata {
 	pub fields: WasmFields,
 }
 
-#[derive(Encode, Decode, PassByCodec)]
+#[derive(Encode, Decode)]
 pub struct WasmAttributes {
 	pub parent_id: Option<u64>,
 	pub fields: WasmValues,
 	pub metadata: WasmMetadata,
 }
 
-#[derive(Encode, Decode, PassByCodec)]
+#[derive(Encode, Decode)]
 pub struct WasmEvent {
 	pub parent_id: Option<u64>,
 	pub metadata: WasmMetadata,
@@ -73,7 +71,7 @@ pub struct WasmEvent {
 }
 
 // TODO - Do we need this when we have WasmValues ?
-// #[derive(Encode, Decode, PassByCodec)]
+// #[derive(Encode, Decode)]
 // pub struct WasmRecord;
 
 #[cfg(feature = "std")]

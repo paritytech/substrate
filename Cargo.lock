@@ -8183,7 +8183,6 @@ dependencies = [
  "log",
  "once_cell",
  "parity-scale-codec",
- "sp-runtime-interface",
  "sp-std",
  "tracing",
 ]
