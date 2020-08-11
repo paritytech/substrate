@@ -46,7 +46,6 @@ use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 const PROXY_TARGET: &'static str = "sp_tracing::proxy";
-const SPAN_LIMIT: usize = 1000;
 
 /// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingSubscriber {
@@ -309,18 +308,7 @@ impl Subscriber for ProfilingSubscriber {
 			overall_time: ZERO_DURATION,
 			values,
 		};
-		{
-			let mut span_data = self.span_data.lock();
-			if span_data.len() > SPAN_LIMIT {
-				log::warn!("Accumulated too many spans, discarding oldest");
-				let mut keys = span_data.keys().map(|id| id.into_u64()).collect::<Vec<_>>();
-				keys.sort();
-				for key in keys[0.. SPAN_LIMIT / 10].iter() {
-					span_data.remove(&Id::from_u64(*key));
-				}
-			}
-			span_data.insert(id.clone(), span_datum);
-		}
+		self.span_data.lock().insert(id.clone(), span_datum);
 		id
 	}
 
