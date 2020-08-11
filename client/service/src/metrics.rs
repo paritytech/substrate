@@ -35,7 +35,6 @@ struct PrometheusMetrics {
 	ready_transactions_number: Gauge<U64>,
 
 	// I/O
-	network_bytes: GaugeVec<U64>,
 	database_cache: Gauge<U64>,
 	state_cache: Gauge<U64>,
 	state_db: GaugeVec<U64>,
@@ -86,10 +85,6 @@ impl PrometheusMetrics {
 			)?, registry)?,
 
 			// I/ O
-			network_bytes: register(GaugeVec::new(
-				Opts::new("network_bytes", "Bytes sent/received on the network."),
-				&["direction"]
-			)?, registry)?,
 			database_cache: register(Gauge::new(
 				"database_cache_bytes", "RocksDB cache size in bytes",
 			)?, registry)?,
@@ -203,14 +198,6 @@ impl MetricsService {
 		);
 
 		if let Some(metrics) = self.metrics.as_ref() {
-			metrics
-				.network_bytes
-				.with_label_values(&["in"])
-				.set(total_bytes_inbound);
-			metrics
-				.network_bytes
-				.with_label_values(&["out"])
-				.set(total_bytes_outbound);
 			metrics
 				.block_height
 				.with_label_values(&["finalized"])
