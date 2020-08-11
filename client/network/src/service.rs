@@ -91,7 +91,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// Local copy of the `PeerId` of the local node.
 	local_peer_id: PeerId,
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
-	bandwidth: Arc<transport::BandwidthMonitor>,
+	bandwidth: Arc<transport::BandwidthSinks>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
@@ -387,14 +387,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		})
 	}
 
-	/// Returns the downloaded bytes per second averaged over the past few seconds.
-	pub fn average_download_per_sec(&self) -> u64 {
-		self.service.bandwidth.average_download_per_sec()
+	/// Returns the total number of bytes received so far.
+	pub fn total_bytes_inbound(&self) -> u64 {
+		self.service.bandwidth.total_inbound()
 	}
 
-	/// Returns the uploaded bytes per second averaged over the past few seconds.
-	pub fn average_upload_per_sec(&self) -> u64 {
-		self.service.bandwidth.average_upload_per_sec()
+	/// Returns the total number of bytes sent so far.
+	pub fn total_bytes_outbound(&self) -> u64 {
+		self.service.bandwidth.total_outbound()
 	}
 
 	/// Returns the number of peers we're connected to.
@@ -526,8 +526,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			peer_id: Swarm::<B, H>::local_peer_id(&swarm).to_base58(),
 			listened_addresses: Swarm::<B, H>::listeners(&swarm).cloned().collect(),
 			external_addresses: Swarm::<B, H>::external_addresses(&swarm).cloned().collect(),
-			average_download_per_sec: self.service.bandwidth.average_download_per_sec(),
-			average_upload_per_sec: self.service.bandwidth.average_upload_per_sec(),
+			total_bytes_inbound: self.service.bandwidth.total_inbound(),
+			total_bytes_outbound: self.service.bandwidth.total_outbound(),
 			connected_peers,
 			not_connected_peers,
 			peerset: swarm.user_protocol_mut().peerset_debug_info(),
@@ -1133,7 +1133,7 @@ struct Metrics {
 	kbuckets_num_nodes: GaugeVec<U64>,
 	listeners_local_addresses: Gauge<U64>,
 	listeners_errors_total: Counter<U64>,
-	network_per_sec_bytes: GaugeVec<U64>,
+	network_bytes_total: GaugeVec<U64>,
 	notifications_sizes: HistogramVec,
 	notifications_streams_closed_total: CounterVec<U64>,
 	notifications_streams_opened_total: CounterVec<U64>,
@@ -1250,10 +1250,10 @@ impl Metrics {
 				"sub_libp2p_listeners_errors_total",
 				"Total number of non-fatal errors reported by a listener"
 			)?, registry)?,
-			network_per_sec_bytes: register(GaugeVec::new(
+			network_bytes_total: register(GaugeVec::new(
 				Opts::new(
-					"sub_libp2p_network_per_sec_bytes",
-					"Average bandwidth usage per second"
+					"sub_libp2p_network_bytes_total",
+					"Total bandwidth usage"
 				),
 				&["direction"]
 			)?, registry)?,
@@ -1704,8 +1704,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			metrics.network_per_sec_bytes.with_label_values(&["in"]).set(this.service.bandwidth.average_download_per_sec());
-			metrics.network_per_sec_bytes.with_label_values(&["out"]).set(this.service.bandwidth.average_upload_per_sec());
+			metrics.network_bytes_total.with_label_values(&["in"]).set(this.service.bandwidth.total_inbound());
+			metrics.network_bytes_total.with_label_values(&["out"]).set(this.service.bandwidth.total_outbound());
 			metrics.is_major_syncing.set(is_major_syncing as u64);
 			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
 				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
