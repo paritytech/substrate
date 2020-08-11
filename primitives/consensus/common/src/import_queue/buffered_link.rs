@@ -50,7 +50,7 @@ use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 pub fn buffered_link<B: BlockT>() -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {
 	let (tx, rx) = tracing_unbounded("mpsc_buffered_link");
 	let tx = BufferedLinkSender { tx };
-	let rx = BufferedLinkReceiver { rx };
+	let rx = BufferedLinkReceiver { rx: rx.fuse() };
 	(tx, rx)
 }
 
@@ -127,7 +127,7 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 
 /// See [`buffered_link`].
 pub struct BufferedLinkReceiver<B: BlockT> {
-	rx: TracingUnboundedReceiver<BlockImportWorkerMsg<B>>,
+	rx: stream::Fuse<TracingUnboundedReceiver<BlockImportWorkerMsg<B>>>,
 }
 
 impl<B: BlockT> BufferedLinkReceiver<B> {
@@ -162,7 +162,7 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 
 	/// Close the channel.
 	pub fn close(&mut self) {
-		self.rx.close()
+		self.rx.get_mut().close()
 	}
 }
 
