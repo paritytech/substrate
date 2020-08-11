@@ -18,8 +18,8 @@
 //! Implementation of the `moduleid` subcommand
 
 use sc_cli::{
-	Error, SharedParams, utils::print_from_uri, CryptoSchemeFlag,
-	OutputTypeFlag, KeystoreParams, CliConfiguration, with_crypto_scheme,
+	Error, utils::print_from_uri, CryptoSchemeFlag,
+	OutputTypeFlag, KeystoreParams, with_crypto_scheme,
 };
 use sp_runtime::ModuleId;
 use sp_runtime::traits::AccountIdConversion;
@@ -47,10 +47,6 @@ pub struct ModuleIdCmd {
 		default_value = "substrate"
 	)]
 	pub network: Ss58AddressFormat,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -98,12 +94,3 @@ impl ModuleIdCmd {
 	}
 }
 
-impl CliConfiguration for ModuleIdCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
-
-	fn keystore_params(&self) -> Option<&KeystoreParams> {
-		Some(&self.keystore_params)
-	}
-}

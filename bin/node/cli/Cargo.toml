@@ -100,6 +100,7 @@ node-executor = { version = "2.0.0-rc5", path = "../executor" }
 sc-cli = { version = "0.8.0-rc5", optional = true, path = "../../../client/cli" }
 frame-benchmarking-cli = { version = "2.0.0-rc5", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 node-inspect = { version = "0.8.0-rc5", optional = true, path = "../inspect" }
+
 # WASM-specific dependencies
 wasm-bindgen = { version = "0.2.57", optional = true }
 wasm-bindgen-futures = { version = "0.4.7", optional = true }

@@ -89,8 +89,9 @@ fn verify<Pair>(sig_data: Vec<u8>, message: Vec<u8>, uri: &str) -> error::Result
 		Pair::Public::from_slice(pubkey_vec.as_slice())
 	} else {
 		Pair::Public::from_string(uri)
-			.ok()
-			.expect("Invalid URI; expecting either a secret URI or a public URI.")
+			.map_err(|_| {
+				error::Error::Other(format!("Invalid URI; expecting either a secret URI or a public URI."))
+			})?
 	};
 
 	if Pair::verify(&signature, &message, &pubkey) {
