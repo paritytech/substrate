@@ -196,7 +196,9 @@ pub struct PowBlockImport<B: BlockT, I, C, S, Algorithm, CAW> {
 	can_author_with: CAW,
 }
 
-impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone, CAW: Clone> Clone for PowBlockImport<B, I, C, S, Algorithm, CAW> {
+impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone, CAW: Clone> Clone
+	for PowBlockImport<B, I, C, S, Algorithm, CAW>
+{
 	fn clone(&self) -> Self {
 		Self {
 			algorithm: self.algorithm.clone(),
