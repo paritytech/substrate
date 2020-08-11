@@ -55,8 +55,6 @@ pub fn create_validator_with_nominators<T: Trait>(
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
-	MinimumValidatorCount::put(0);
-
 	let (v_stash, v_controller) = create_stash_controller::<T>(0, 100)?;
 	let validator_prefs = ValidatorPrefs {
 		commission: Perbill::from_percent(50),
@@ -356,7 +354,7 @@ benchmarks! {
 	new_era {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
-		MinimumValidatorCount::put(0);
+
 		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 		let session_index = SessionIndex::one();
 	}: {
@@ -393,7 +391,6 @@ benchmarks! {
 	payout_all {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
-		MinimumValidatorCount::put(0);
 		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 		// Start a new Era
 		let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
@@ -577,7 +574,6 @@ benchmarks! {
 		// number of nominator intent
 		let n in 1000 .. 2000;
 
-		MinimumValidatorCount::put(0);
 		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 
 		// needed for the solution to be generates.
