@@ -419,7 +419,7 @@ decl_error! {
 		OutputBufferTooSmall,
 		/// Performing the requested transfer would have brought the contract below
 		/// the subsistence threshold. No transfer is allowed to do this in order to allow
-		/// for a tombstone to be created. Use `ext_terminate` to remove a contract without
+		/// for a tombstone to be created. Use `seal_terminate` to remove a contract without
 		/// leaving a tombstone behind.
 		BelowSubsistenceThreshold,
 		/// The newly created contract is below the subsistence threshold after executing
@@ -768,7 +768,7 @@ impl<T: Trait> Config<T> {
 	/// Rent or any contract initiated balance transfer mechanism cannot make the balance lower
 	/// than the subsistence threshold in order to guarantee that a tombstone is created.
 	///
-	/// The only way to completely kill a contract without a tombstone is calling `ext_terminate`.
+	/// The only way to completely kill a contract without a tombstone is calling `seal_terminate`.
 	pub fn subsistence_threshold(&self) -> BalanceOf<T> {
 		self.existential_deposit.saturating_add(self.tombstone_deposit)
 	}
@@ -846,7 +846,7 @@ pub struct Schedule {
 	/// Maximum allowed size of a declared table.
 	pub max_table_size: u32,
 
-	/// Whether the `ext_println` function is allowed to be used contracts.
+	/// Whether the `seal_println` function is allowed to be used contracts.
 	/// MUST only be enabled for `dev` chains, NOT for production chains
 	pub enable_println: bool,
 
