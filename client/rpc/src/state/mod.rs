@@ -26,7 +26,7 @@ mod tests;
 
 use std::sync::Arc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
-use rpc::{Result as RpcResult, futures::{Future, future::result}};
+use rpc::{Result as RpcResult, futures::{Future, future::result, Async}};
 
 use sc_rpc_api::state::ReadProof;
 use sc_client_api::light::{RemoteBlockchain, Fetcher};
@@ -101,28 +101,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
-	) -> FutureResult<Option<u64>> {
-		use rpc::futures::{future::Either, done};
-
-		let value_len = self.storage(block, key.clone()).map(|x| x.map(|x| x.0.len() as u64));
-		let pairs_len = || self.storage_pairs(block, key.clone())
-			.map(|kv| {
-				let item_sum = kv.iter().map(|(_, v)| v.0.len() as u64).sum::<u64>();
-				if item_sum > 0 {
-					Some(item_sum)
-				} else {
-					None
-				}
-			});
-
-		// if value size is there, use that, else execute another future that looks for map len.
-		let value_or_map = value_len.and_then(|result| match result {
-			Some(size) => Either::A(done(Ok(Some(size)))),
-			None => Either::B(pairs_len()),
-		 });
-
-		Box::new(value_or_map)
-	}
+	) -> FutureResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes>;
