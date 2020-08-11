@@ -2894,11 +2894,6 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn offchain_phragmen_with_less_than_minimum_candidates() {
-		todo!()
-	}
-
-	#[test]
 	fn is_current_session_final_works() {
 		ExtBuilder::default()
 			.session_per_era(3)

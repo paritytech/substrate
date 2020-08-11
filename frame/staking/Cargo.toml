@@ -42,8 +42,6 @@ rand_chacha = { version = "0.2" }
 parking_lot = "0.10.2"
 env_logger = "0.7.1"
 hex = "0.4"
-kusama-runtime = { git = "https://github.com/paritytech/polkadot/", branch = "master" }
-remote-externalities = { path = "../../../substrate-debug-kit/remote-externalities" }
 
 [features]
 default = ["std"]
