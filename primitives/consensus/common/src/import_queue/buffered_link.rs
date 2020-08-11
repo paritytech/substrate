@@ -137,12 +137,14 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 	/// This method should behave in a way similar to `Future::poll`. It can register the current
 	/// task and notify later when more actions are ready to be polled. To continue the comparison,
 	/// it is as if this method always returned `Poll::Pending`.
-	pub fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
+	///
+	/// Returns an error if the corresponding [`BufferedLinkSender`] has been closed.
+	pub fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) -> Result<(), ()> {
 		loop {
-			let msg = if let Poll::Ready(Some(msg)) = Stream::poll_next(Pin::new(&mut self.rx), cx) {
-				msg
-			} else {
-				break
+			let msg = match Stream::poll_next(Pin::new(&mut self.rx), cx) {
+				Poll::Ready(Some(msg)) => msg,
+				Poll::Ready(None) => break Err(()),
+				Poll::Pending => break Ok(()),
 			};
 
 			match msg {
