@@ -105,7 +105,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		use rpc::futures::{future::Either, done};
 
 		let value_len = self.storage(block, key.clone()).map(|x| x.map(|x| x.0.len() as u64));
-		let pairs_len = self.storage_pairs(block, key.clone())
+		let pairs_len = || self.storage_pairs(block, key.clone())
 			.map(|kv| {
 				let item_sum = kv.iter().map(|(_, v)| v.0.len() as u64).sum::<u64>();
 				if item_sum > 0 {
@@ -118,7 +118,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		// if value size is there, use that, else execute another future that looks for map len.
 		let value_or_map = value_len.and_then(|result| match result {
 			Some(size) => Either::A(done(Ok(Some(size)))),
-			None => Either::B(pairs_len),
+			None => Either::B(pairs_len()),
 		 });
 
 		Box::new(value_or_map)
