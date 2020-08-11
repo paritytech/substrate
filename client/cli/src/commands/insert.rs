@@ -44,10 +44,6 @@ pub struct InsertCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub keystore_params: KeystoreParams,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
@@ -82,9 +78,7 @@ impl InsertCmd {
 
 		keystore.write()
 			.insert_unknown(key_type, &suri, &public[..])
-			.map_err(|e| Error::Other(format!("{:?}", e)))?;
-
-		Ok(())
+			.map_err(|e| Error::Other(format!("{:?}", e)))
 	}
 }
 
