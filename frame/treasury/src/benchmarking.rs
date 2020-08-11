@@ -348,10 +348,6 @@ benchmarks! {
 		let curator = T::Lookup::lookup(curator_lookup)?;
 	}: _(RawOrigin::Signed(curator), bounty_id, Vec::new())
 
-	update_bounty_value_minimum {
-		let minimum_balance = T::Currency::minimum_balance();
-	}: _(RawOrigin::Root, minimum_balance.into())
-
 	on_initialize_proposals {
 		let p in 0 .. 100;
 		setup_pod_account::<T>();
@@ -396,7 +392,6 @@ mod tests {
 			assert_ok!(test_benchmark_claim_bounty::<Test>());
 			assert_ok!(test_benchmark_cancel_bounty::<Test>());
 			assert_ok!(test_benchmark_extend_bounty_expiry::<Test>());
-			assert_ok!(test_benchmark_update_bounty_value_minimum::<Test>());
 			assert_ok!(test_benchmark_on_initialize_proposals::<Test>());
 			assert_ok!(test_benchmark_on_initialize_bounties::<Test>());
 		});

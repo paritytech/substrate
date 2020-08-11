@@ -84,10 +84,6 @@ impl pallet_treasury::WeightInfo for WeightInfo {
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
-	fn update_bounty_value_minimum() -> Weight {
-		(2554000 as Weight)
-			.saturating_add(DbWeight::get().writes(1 as Weight))
-	}
 	fn on_initialize_proposals(p: u32, ) -> Weight {
 		(83526000 as Weight)
 			.saturating_add((33062000 as Weight).saturating_mul(p as Weight))
