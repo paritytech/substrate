@@ -97,6 +97,9 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	) -> FutureResult<Option<Block::Hash>>;
 
 	/// Returns the size of a storage entry at a block's state.
+	///
+	/// If data is available at `key`, it is returned. Else, the sum of values who's key has `key`
+	/// prefix is returned, i.e. all the storage (double) maps that have this prefix.
 	fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
