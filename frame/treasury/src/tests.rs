@@ -937,7 +937,7 @@ fn extend_expiry() {
 
 		assert_ok!(Treasury::approve_bounty(Origin::root(), 0));
 
-		assert_noop!(Treasury::extend_bounty_expiry(Origin::signed(1), 0), Error::<Test>::UnexpectedStatus);
+		assert_noop!(Treasury::extend_bounty_expiry(Origin::signed(1), 0, Vec::new()), Error::<Test>::UnexpectedStatus);
 
 		System::set_block_number(2);
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
@@ -948,8 +948,8 @@ fn extend_expiry() {
 		System::set_block_number(10);
 		<Treasury as OnInitialize<u64>>::on_initialize(10);
 
-		assert_noop!(Treasury::extend_bounty_expiry(Origin::signed(0), 0), Error::<Test>::RequireCurator);
-		assert_ok!(Treasury::extend_bounty_expiry(Origin::signed(1), 0));
+		assert_noop!(Treasury::extend_bounty_expiry(Origin::signed(0), 0, Vec::new()), Error::<Test>::RequireCurator);
+		assert_ok!(Treasury::extend_bounty_expiry(Origin::signed(1), 0, Vec::new()));
 
 		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
 			proposer: 0,
@@ -960,7 +960,7 @@ fn extend_expiry() {
 			status: BountyStatus::Active { curator: 1, expires: 30 },
 		});
 
-		assert_ok!(Treasury::extend_bounty_expiry(Origin::signed(1), 0));
+		assert_ok!(Treasury::extend_bounty_expiry(Origin::signed(1), 0, Vec::new()));
 
 		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
 			proposer: 0,

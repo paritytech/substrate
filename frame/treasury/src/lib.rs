@@ -52,8 +52,8 @@
 //!
 //! After the Council has activated a bounty, it delegates the work that requires expertise to a curator in exchange of a deposit. Once the curator accepts the bounty, they
 //! get to close the Active bounty. Closing the Active bounty enacts a delayed payout to the payout address, the curator fee and the return of the curator deposit. The
-//! delay allows for intervention through regular democracy. The Council gets to unassign the curator, resulting in a new curator election. The Council also gets to cancel 
-//! the bounty if deemed necessary before assigning a curator or once the bounty is active or payout is pending, resulting in the slash of the curator's deposit. 
+//! delay allows for intervention through regular democracy. The Council gets to unassign the curator, resulting in a new curator election. The Council also gets to cancel
+//! the bounty if deemed necessary before assigning a curator or once the bounty is active or payout is pending, resulting in the slash of the curator's deposit.
 //!
 //!
 //! ### Terminology
@@ -81,11 +81,11 @@
 //! - **Proposer:** An account proposing a bounty spending.
 //! - **Curator:** An account managing the bounty and assigning a payout address receiving the reward for the completion of work.
 //! - **Deposit:** The amount held on deposit for placing a bounty proposal plus the amount held on deposit per byte within the bounty description.
-//! - **Curator deposit:** The payment from a candidate willing to curate an approved bounty. The deposit is returned when/if the bounty is completed. 
+//! - **Curator deposit:** The payment from a candidate willing to curate an approved bounty. The deposit is returned when/if the bounty is completed.
 //! - **Bounty value:** The total amount that should be paid to the Payout Address if the bounty is rewarded.
 //! - **Payout address:** The account to which the total or part of the bounty is assigned to.
 //! - **Payout Delay:** The delay period for which a bounty beneficiary needs to wait before claiming.
-//! - **Curator fee:** The reserved upfront payment for a curator for work related to the bounty.  
+//! - **Curator fee:** The reserved upfront payment for a curator for work related to the bounty.
 //!
 //! ## Interface
 //!
@@ -1060,8 +1060,9 @@ decl_module! {
 		/// The dispatch origin for this call must be the curator of this bounty.
 		///
 		/// - `bounty_id`: Bounty ID to extend.
+		/// - `remark`: additional information.
 		#[weight = T::WeightInfo::extend_bounty_expiry()]
-		fn extend_bounty_expiry(origin, #[compact] bounty_id: BountyIndex) {
+		fn extend_bounty_expiry(origin, #[compact] bounty_id: BountyIndex, _remark: Vec<u8>) {
 			let signer = ensure_signed(origin)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
