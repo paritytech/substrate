@@ -32,14 +32,17 @@
 
 pub mod types;
 
-#[macro_export]
 #[cfg(not(feature = "std"))]
+#[macro_export]
 mod wasm_tracing;
 
-#[macro_export]
+#[cfg(feature = "std")]
 use tracing;
 
-pub use types::WasmLevel as Level;
+#[cfg(feature = "std")]
+pub use tracing::{
+	span, event, Level
+};
 
 use sp_std::boxed::Box;
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -52,8 +55,10 @@ static WASM_TRACING_ENABLED: AtomicBool = AtomicBool::new(false);
 
 
 pub use crate::types::{
-	WasmMetadata, WasmAttributes, WasmValues, WasmEvent
+	WasmMetadata, WasmAttributes, WasmValues, WasmEvent, WasmLevel,
 };
+#[cfg(not(feature = "std"))]
+pub type Level = WasmLevel;
 
 pub trait TracingSubscriber: Send + Sync {
 	fn enabled(&self, metadata: WasmMetadata) -> bool;
@@ -107,9 +112,9 @@ macro_rules! tracing_span {
 macro_rules! enter_span {
 	( $name:expr ) => {
 		let __tracing_span__ = $crate::if_tracing!(
-			$crate::tracing_span!($crate::Level::TRACE, $name)
+			$crate::span!($crate::Level::TRACE, $name)
 		);
-		let __tracing_guard__ = $crate::if_tracing!(__tracing_span__.enter());
+		// let __tracing_guard__ = $crate::if_tracing!(__tracing_span__.enter());
 	}
 }
 

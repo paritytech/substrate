@@ -66,8 +66,6 @@ pub mod inherent;
 pub mod unsigned;
 #[macro_use]
 pub mod error;
-#[macro_use]
-pub mod wasm_tracing;
 pub mod traits;
 pub mod weights;
 

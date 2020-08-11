@@ -1005,7 +1005,6 @@ impl<T: Encode + Decode> PassBy for Crossing<T> {
 }
 
 /// Interface that provides tracing functions
-// #[runtime_interface(wasm_only, no_tracing)]
 #[runtime_interface]
 pub trait WasmTracing {
 	fn enabled(&mut self, metadata: Crossing<sp_tracing::WasmMetadata>) -> bool {
@@ -1217,7 +1216,7 @@ pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
 	default_child_storage::HostFunctions,
 	misc::HostFunctions,
-	wasm_tracing::HostFunctions,
+	// wasm_tracing::HostFunctions,
 	offchain::HostFunctions,
 	crypto::HostFunctions,
 	hashing::HostFunctions,

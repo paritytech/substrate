@@ -253,13 +253,13 @@ sp_core::wasm_export_functions! {
 		sp_allocator::FreeingBumpHeapAllocator::new(0);
 	}
 
-	// fn test_enter_span() -> u64 {
-	// 	wasm_tracing::enter_span("integration_test_span_target", "integration_test_span_name")
-	// }
-	//
-	// fn test_exit_span(span_id: u64) {
-	// 	wasm_tracing::exit_span(span_id)
-	// }
+	fn test_enter_span() -> u64 {
+		wasm_tracing::enter_span("integration_test_span_target", "integration_test_span_name")
+	}
+	
+	fn test_exit_span(span_id: u64) {
+		wasm_tracing::exit_span(span_id)
+	}
 
 	fn returns_mutable_static() -> u64 {
 		unsafe {
