@@ -420,10 +420,9 @@ impl TraceHandler for LogTraceHandler {
 		log::log!(
 			log_level(event.level),
 			"{}, parent_id: {:?}, {}",
-			// event.name,
 			event.target,
 			event.parent_id.map(|s| s.into_u64()),
-			event.values
+			event.values,
 		);
 	}
 }
