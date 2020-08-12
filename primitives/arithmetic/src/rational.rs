@@ -22,7 +22,7 @@ use crate::biguint::BigUint;
 
 /// A wrapper for any rational number with infinitely large numerator and denominator.
 ///
-/// This type does not provide much functionality and is only created to facilitate `cmp` operation
+/// This type exists to facilitate `cmp` operation
 /// on values like `a/b < c/d` where `a, b, c, d` are all `BigUint`.
 #[derive(Clone, Default, Eq)]
 pub struct RationalInfinite(BigUint, BigUint);
