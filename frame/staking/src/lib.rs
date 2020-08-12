@@ -326,7 +326,7 @@ use frame_system::{
 };
 use sp_npos_elections::{
 	ExtendedBalance, Assignment, ElectionScore, ElectionResult as PrimitiveElectionResult,
-	build_support_map, evaluate_support, seq_phragmen, generate_compact_solution_type,
+	build_support_map, evaluate_support, seq_phragmen, generate_solution_type,
 	is_score_better, VotingLimit, SupportMap, VoteWeight,
 };
 
@@ -368,7 +368,25 @@ pub type EraIndex = u32;
 pub type RewardPoint = u32;
 
 // Note: Maximum nomination limit is set here -- 16.
-generate_compact_solution_type!(pub GenericCompactAssignments, 16);
+generate_solution_type!(
+	#[compact]
+	pub struct CompactAssignments::<NominatorIndex, ValidatorIndex, OffchainAccuracy>(16)
+);
+
+/// Accuracy used for on-chain election.
+pub type ChainAccuracy = Perbill;
+
+/// Accuracy used for off-chain election. This better be small.
+pub type OffchainAccuracy = PerU16;
+
+/// The balance type of this module.
+pub type BalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
+type PositiveImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
+type NegativeImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug)]
@@ -381,25 +399,6 @@ pub struct ActiveEraInfo {
 	/// Start is set on the first on_finalize of the era to guarantee usage of `Time`.
 	start: Option<u64>,
 }
-
-/// Accuracy used for on-chain election.
-pub type ChainAccuracy = Perbill;
-
-/// Accuracy used for off-chain election. This better be small.
-pub type OffchainAccuracy = PerU16;
-
-/// The balance type of this module.
-pub type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-
-/// The compact type for election solutions.
-pub type CompactAssignments =
-	GenericCompactAssignments<NominatorIndex, ValidatorIndex, OffchainAccuracy>;
-
-type PositiveImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
-type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// Reward points of an era. Used to split era total payout between validators.
 ///
@@ -607,7 +606,10 @@ pub struct Nominations<AccountId> {
 	///
 	/// Except for initial nominations which are considered submitted at era 0.
 	pub submitted_in: EraIndex,
-	/// Whether the nominations have been suppressed.
+	/// Whether the nominations have been suppressed. This can happen due to slashing of the
+	/// validators, or other events that might invalidate the nomination.
+	///
+	/// NOTE: this for future proofing and is thus far not used.
 	pub suppressed: bool,
 }
 
@@ -2445,8 +2447,9 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Update the ledger for a controller. This will also update the stash lock. The lock will
-	/// will lock the entire funds except paying for further transactions.
+	/// Update the ledger for a controller.
+	///
+	/// This will also update the stash lock.
 	fn update_ledger(
 		controller: &T::AccountId,
 		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>
