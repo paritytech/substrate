@@ -176,6 +176,7 @@ pub fn new_full_base(
 		other: (rpc_extensions_builder, import_setup, rpc_setup, finality_proof_provider),
 	} = new_partial(&config)?;
 
+	// WIP: JON
 	// let finality_proof_provider =
 	// 	GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 

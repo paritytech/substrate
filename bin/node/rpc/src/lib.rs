@@ -49,6 +49,7 @@ use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
 use sp_consensus::SelectChain;
 use sp_consensus_babe::BabeApi;
 use sp_transaction_pool::TransactionPool;
+use sp_runtime::traits::BlakeTwo256;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
@@ -119,8 +120,8 @@ pub fn create_full<C, P, SC, B>(
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
 	SC: SelectChain<Block> +'static,
-	B: Send + Sync + 'static + sc_client_api::backend::Backend<Block>,
-	<B as sc_client_api::backend::Backend<Block>>::State: sp_state_machine::backend::Backend<sp_runtime::traits::BlakeTwo256>,
+	B: Send + Sync + 'static + sc_client_api::Backend<Block>,
+	<B as sc_client_api::Backend<Block>>::State: sp_state_machine::Backend<BlakeTwo256>,
 {
 	use substrate_frame_rpc_system::{FullSystem, SystemApi};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};

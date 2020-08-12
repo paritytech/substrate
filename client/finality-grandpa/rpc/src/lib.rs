@@ -85,9 +85,14 @@ pub trait GrandpaApi<Notification, Hash> {
 	) -> jsonrpc_core::Result<bool>;
 
 	/// Prove finality for the hash, given a last known finalized hash.
-	// WIP: handle authoroties_set_id changes?
+	// WIP: handle authorities_set_id changes?
 	#[rpc(name = "grandpa_proveFinality")]
-	fn prove_finality(&self, hash: Hash, last_finalized: Hash, authorities_set_id: u64) -> FutureResult<Option<Vec<u8>>>;
+	fn prove_finality(
+		&self,
+		hash: Hash,
+		last_finalized: Hash,
+		authorities_set_id: u64
+	) -> FutureResult<Option<Vec<u8>>>;
 }
 
 /// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
@@ -159,8 +164,14 @@ where
 		Ok(self.manager.cancel(id))
 	}
 
-	fn prove_finality(&self, hash: Block::Hash, last_finalized: Block::Hash, authorities_set_id: u64) -> FutureResult<Option<Vec<u8>>> {
-		let request = sc_finality_grandpa::make_finality_proof_request(last_finalized, authorities_set_id);
+	fn prove_finality(
+		&self,
+		hash: Block::Hash,
+		last_finalized: Block::Hash,
+		authorities_set_id: u64,
+	) -> FutureResult<Option<Vec<u8>>> {
+		let request =
+			sc_finality_grandpa::make_finality_proof_request(last_finalized, authorities_set_id);
 		let result = self.finality_proof_provider.prove_finality(hash, &request);
 		let future = async move { result }.boxed();
 		Box::new(
@@ -224,8 +235,8 @@ mod tests {
 	impl<Block: BlockT> sc_network::config::FinalityProofProvider<Block> for EmptyFinalityProofProvider {
 		fn prove_finality(
 			&self,
-			for_block: Block::Hash,
-			request: &[u8],
+			_for_block: Block::Hash,
+			_request: &[u8],
 		) -> Result<Option<Vec<u8>>, sp_blockchain::Error> {
 			todo!();
 		}
