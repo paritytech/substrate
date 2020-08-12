@@ -438,11 +438,11 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		if current.balance < new.balance {
-			let diff = new.balance - current.balance;
-			T::Currency::slash(&account_id, diff.low_u128().unique_saturated_into());
-		} else if current.balance > new.balance {
+		if current.balance > new.balance {
 			let diff = current.balance - new.balance;
+			T::Currency::slash(&account_id, diff.low_u128().unique_saturated_into());
+		} else if current.balance < new.balance {
+			let diff = new.balance - current.balance;
 			T::Currency::deposit_creating(&account_id, diff.low_u128().unique_saturated_into());
 		}
 	}
