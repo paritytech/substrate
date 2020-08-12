@@ -151,6 +151,7 @@ fn build_nodes_one_proto()
 	(node1, events_stream1, node2, events_stream2)
 }
 
+#[ignore]
 #[test]
 fn notifications_state_consistent() {
 	// Runs two nodes and ensures that events are propagated out of the API in a consistent

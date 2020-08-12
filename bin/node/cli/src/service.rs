@@ -49,7 +49,10 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	sp_consensus::DefaultImportQueue<Block, FullClient>,
 	sc_transaction_pool::FullPool<Block, FullClient>,
 	(
-		impl Fn(node_rpc::DenyUnsafe) -> node_rpc::IoHandler,
+		impl Fn(
+			node_rpc::DenyUnsafe,
+			jsonrpc_pubsub::manager::SubscriptionManager
+		) -> node_rpc::IoHandler,
 		(
 			sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
 			grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
@@ -101,6 +104,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	let (rpc_extensions_builder, rpc_setup) = {
 		let (_, grandpa_link, babe_link) = &import_setup;
 
+		let justification_stream = grandpa_link.justification_stream();
 		let shared_authority_set = grandpa_link.shared_authority_set().clone();
 		let shared_voter_state = grandpa::SharedVoterState::empty();
 
@@ -114,7 +118,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		let select_chain = select_chain.clone();
 		let keystore = keystore.clone();
 
-		let rpc_extensions_builder = move |deny_unsafe| {
+		let rpc_extensions_builder = move |deny_unsafe, subscriptions| {
 			let deps = node_rpc::FullDeps {
 				client: client.clone(),
 				pool: pool.clone(),
@@ -128,6 +132,8 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 				grandpa: node_rpc::GrandpaDeps {
 					shared_voter_state: shared_voter_state.clone(),
 					shared_authority_set: shared_authority_set.clone(),
+					justification_stream: justification_stream.clone(),
+					subscriptions,
 				},
 			};
 
@@ -260,7 +266,7 @@ pub fn new_full_base(
 				Event::Dht(e) => Some(e),
 				_ => None,
 			}}).boxed();
-		let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
+		let (authority_discovery_worker, _service) = sc_authority_discovery::new_worker_and_service(
 			client.clone(),
 			network.clone(),
 			sentries,
@@ -269,7 +275,7 @@ pub fn new_full_base(
 			prometheus_registry.clone(),
 		);
 
-		task_manager.spawn_handle().spawn("authority-discovery", authority_discovery);
+		task_manager.spawn_handle().spawn("authority-discovery-worker", authority_discovery_worker);
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't
