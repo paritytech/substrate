@@ -102,8 +102,10 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 
 	let import_setup = (block_import, grandpa_link, babe_link);
 
-	// WIP: Hack the finality_proof_provider in there. Remember to refactor
-	let (rpc_extensions_builder, rpc_setup, finality_proof_provider) = {
+	let finality_proof_provider =
+		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
+
+	let (rpc_extensions_builder, rpc_setup) = {
 		let (_, grandpa_link, babe_link) = &import_setup;
 
 		let justification_stream = grandpa_link.justification_stream();
@@ -120,9 +122,6 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		let select_chain = select_chain.clone();
 		let keystore = keystore.clone();
 
-		// WIP
-		let finality_proof_provider =
-			GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 		let finality_proof_provider_for_rpc = finality_proof_provider.clone();
 
 		let rpc_extensions_builder = move |deny_unsafe, subscriptions| {
@@ -148,7 +147,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 			node_rpc::create_full(deps)
 		};
 
-		(rpc_extensions_builder, rpc_setup, finality_proof_provider)
+		(rpc_extensions_builder, rpc_setup)
 	};
 
 	Ok(sc_service::PartialComponents {
@@ -175,10 +174,6 @@ pub fn new_full_base(
 		inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup, finality_proof_provider),
 	} = new_partial(&config)?;
-
-	// WIP: JON
-	// let finality_proof_provider =
-	// 	GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
