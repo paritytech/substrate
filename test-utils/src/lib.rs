@@ -28,7 +28,7 @@ pub use futures;
 ///
 /// # Example
 ///
-///	```
+/// ```
 /// #[substrate_test_utils::test]
 /// async fn basic_test(task_executor: TaskExecutor) {
 ///     assert!(true);
