@@ -24,7 +24,7 @@ pub use futures;
 ///
 /// # Requirements
 ///
-///	You must have tokio in the dependency of your crate to use this macro.
+///	You must have tokio in the `[dev-dependencies]` of your crate to use this macro.
 ///
 /// # Example
 ///
