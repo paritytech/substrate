@@ -69,7 +69,7 @@ mod inner {
     use core::{
         module_path, concat, format_args, file, line,
     };
-    use crate::{WasmMetadata};
+    use crate::WasmMetadata;
 
     // just a simplistic holder for span and entered spans
     // that exits on drop
@@ -153,7 +153,7 @@ mod inner {
             {
                 if $crate::level_enabled!($lvl) {
                     #[allow(unused_imports)]
-                    use $crate::{WasmMetadata, WasmEvent, WasmValue, WasmValueSet};
+                    use $crate::{ WasmMetadata, WasmEvent, WasmValue, WasmValueSet };
                     let metadata = WasmMetadata {
                         name: concat!(
                             "event ",
@@ -367,7 +367,7 @@ mod inner {
             {
                 if $crate::level_enabled!($lvl) {
                     #[allow(unused_imports)]
-                    use $crate::{WasmMetadata, WasmAttributes, WasmValue, WasmValueSet};
+                    use $crate::{ WasmMetadata, WasmAttributes, WasmValue, WasmValueSet };
                     let metadata = WasmMetadata {
                         name: $name.as_bytes().to_vec(),
                         file: file!().as_bytes().to_vec(),
