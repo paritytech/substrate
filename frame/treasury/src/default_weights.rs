@@ -117,10 +117,6 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
-	fn update_bounty_value_minimum() -> Weight {
-		(2592000 as Weight)
-			.saturating_add(DbWeight::get().writes(1 as Weight))
-	}
 	fn on_initialize_proposals(p: u32, ) -> Weight {
 		(91695000 as Weight)
 			.saturating_add((33260000 as Weight).saturating_mul(p as Weight))
