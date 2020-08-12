@@ -96,7 +96,7 @@ fn parse_knobs(
 
 			#crate_name::futures::select! {
 				_ = timeout_task => {
-					panic!("the test took too long");
+					panic!("The test took too long!");
 				},
 				_ = actual_test_task => {},
 			}

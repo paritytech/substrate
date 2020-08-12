@@ -22,7 +22,7 @@ pub use futures;
 /// Marks async function to be executed by an async runtime and provide a `TaskExecutor`, suitable
 /// to test environment.
 ///
-///	# Example
+/// # Example
 ///
 ///	```
 ///	use tokio; // WARNING: you must have tokio in the dependency of your crate to use this macro!
