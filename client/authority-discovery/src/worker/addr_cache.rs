@@ -16,11 +16,7 @@
 
 use libp2p::core::multiaddr::{Multiaddr, Protocol};
 use rand::seq::SliceRandom;
-use std::{
-	clone::Clone,
-	collections::HashMap,
-	convert::AsRef,
-};
+use std::collections::HashMap;
 
 use sp_authority_discovery::AuthorityId;
 use sc_network::PeerId;
@@ -99,8 +95,7 @@ impl AddrCache {
 
 		addresses
 			.choose_multiple(&mut rng, MAX_NUM_AUTHORITY_CONN)
-			.cloned()
-			.cloned()
+			.map(|a| (**a).clone())
 			.collect()
 	}
 
