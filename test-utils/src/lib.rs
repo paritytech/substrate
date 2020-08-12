@@ -22,11 +22,13 @@ pub use futures;
 /// Marks async function to be executed by an async runtime and provide a `TaskExecutor`, suitable
 /// to test environment.
 ///
+/// # Requirements
+///
+///	You must have tokio in the dependency of your crate to use this macro.
+///
 /// # Example
 ///
 ///	```
-///	use tokio; // WARNING: you must have tokio in the dependency of your crate to use this macro!
-///
 /// #[substrate_test_utils::test]
 /// async fn basic_test(task_executor: TaskExecutor) {
 ///     assert!(true);
