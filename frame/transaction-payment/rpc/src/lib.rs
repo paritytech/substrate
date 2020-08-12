@@ -69,14 +69,13 @@ impl From<Error> for i64 {
 	}
 }
 
-impl<C, Block, Balance, Extrinsic> TransactionPaymentApi<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
-	for TransactionPayment<C, (Block, Extrinsic)>
+impl<C, Block, Balance> TransactionPaymentApi<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
+	for TransactionPayment<C, Block>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	C::Api: TransactionPaymentRuntimeApi<Block, Balance, Extrinsic>,
+	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
 	Balance: Codec + MaybeDisplay + MaybeFromStr,
-	Extrinsic: Codec + Send + Sync + 'static,
 {
 	fn query_info(
 		&self,
@@ -91,7 +90,7 @@ where
 
 		let encoded_len = encoded_xt.len() as u32;
 
-		let uxt: Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| RpcError {
+		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| RpcError {
 			code: ErrorCode::ServerError(Error::DecodeError.into()),
 			message: "Unable to query dispatch info.".into(),
 			data: Some(format!("{:?}", e).into()),

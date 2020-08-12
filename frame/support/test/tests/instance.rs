@@ -36,7 +36,6 @@ pub trait Currency {}
 
 // Test for:
 // * No default instance
-// * Custom InstantiableTrait
 // * Origin, Inherent, Event
 mod module1 {
 	use super::*;
@@ -49,7 +48,7 @@ mod module1 {
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where
+		pub struct Module<T: Trait<I>, I: Instance> for enum Call where
 			origin: <T as system::Trait>::Origin,
 			system = system,
 			T::BlockNumber: From<u32>
@@ -67,7 +66,7 @@ mod module1 {
 	}
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait<I>, I: InstantiableThing> as Module1 where
+		trait Store for Module<T: Trait<I>, I: Instance> as Module1 where
 			T::BlockNumber: From<u32> + std::fmt::Display
 		{
 			pub Value config(value): T::GenericType;
@@ -97,7 +96,7 @@ mod module1 {
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
 
-	impl<T: Trait<I>, I: InstantiableThing> ProvideInherent for Module<T, I> where
+	impl<T: Trait<I>, I: Instance> ProvideInherent for Module<T, I> where
 		T::BlockNumber: From<u32>
 	{
 		type Call = Call<T, I>;
