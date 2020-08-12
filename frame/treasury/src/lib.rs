@@ -167,7 +167,6 @@ pub trait WeightInfo {
 	fn claim_bounty() -> Weight;
 	fn cancel_bounty() -> Weight;
 	fn extend_bounty_expiry() -> Weight;
-	fn update_bounty_value_minimum() -> Weight;
 	fn on_initialize_proposals(p: u32, ) -> Weight;
 	fn on_initialize_bounties(b: u32, ) -> Weight;
 }
@@ -232,6 +231,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// Percentage of the curator fee that will be reserved upfront as deposit for bounty curator.
 	type BountyCuratorDeposit: Get<Permill>;
+
+	/// Minimum value for a bounty.
+	type BountyValueMinimum: Get<BalanceOf<Self>>;
 
 	/// Maximum acceptable reason length.
 	type MaximumReasonLength: Get<u32>;
@@ -376,9 +378,6 @@ decl_storage! {
 
 		/// Bounty indices that have been approved but not yet funded.
 		pub BountyApprovals get(fn bounty_approvals): Vec<BountyIndex>;
-
-		/// Minimum value for a bounty.
-		pub BountyValueMinimum get(fn bounty_value_minimum) config(): BalanceOf<T>;
 	}
 	add_extra_genesis {
 		build(|_config| {
@@ -386,10 +385,6 @@ decl_storage! {
 			let _ = T::Currency::make_free_balance_be(
 				&<Module<T>>::account_id(),
 				T::Currency::minimum_balance(),
-			);
-			assert!(
-				BountyValueMinimum::<T>::get() >= T::Currency::minimum_balance(),
-				"bounty_value_minimum must not be lower than minimum_balance"
 			);
 		});
 	}
@@ -509,6 +504,8 @@ decl_module! {
 
 		/// Percentage of the curator fee that will be reserved upfront as deposit for bounty curator.
 		const BountyCuratorDeposit: Permill = T::BountyCuratorDeposit::get();
+
+		const BountyValueMinimum: BalanceOf<T> = T::BountyValueMinimum::get();
 
 		/// Maximum acceptable reason length.
 		const MaximumReasonLength: u32 = T::MaximumReasonLength::get();
@@ -1096,20 +1093,6 @@ decl_module! {
 			Self::deposit_event(Event::<T>::BountyExtended(bounty_id));
 		}
 
-		/// Update `BountyValueMinimum`.
-		///
-		/// May only be called from `T::ApproveOrigin`.
-		///
-		/// - `bounty_id`: Bounty ID to extend.
-		#[weight = T::WeightInfo::update_bounty_value_minimum()]
-		fn update_bounty_value_minimum(origin, #[compact] new_value: BalanceOf<T>) {
-			T::ApproveOrigin::ensure_origin(origin)?;
-
-			ensure!(new_value >= T::Currency::minimum_balance(), Error::<T>::InvalidValue);
-
-			BountyValueMinimum::<T>::put(new_value);
-		}
-
 		/// # <weight>
 		/// - Complexity: `O(A)` where `A` is the number of approvals
 		/// - Db reads and writes: `Approvals`, `pot account data`
@@ -1342,7 +1325,7 @@ impl<T: Trait> Module<T> {
 		value: BalanceOf<T>,
 	) -> DispatchResult {
 		ensure!(description.len() <= T::MaximumReasonLength::get() as usize, Error::<T>::ReasonTooBig);
-		ensure!(value >= Self::bounty_value_minimum(), Error::<T>::InvalidValue);
+		ensure!(value >= T::BountyValueMinimum::get(), Error::<T>::InvalidValue);
 
 		let index = Self::bounty_count();
 

@@ -137,6 +137,7 @@ parameter_types! {
 	pub const BountyDuration: u32 = 20;
 	pub const MaximumReasonLength: u32 = 16384;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
+	pub const BountyValueMinimum: u64 = 1;
 }
 impl Trait for Test {
 	type ModuleId = TreasuryModuleId;
@@ -158,6 +159,7 @@ impl Trait for Test {
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
 	type BountyDuration = BountyDuration;
 	type BountyCuratorDeposit = BountyCuratorDeposit;
+	type BountyValueMinimum = BountyValueMinimum;
 	type MaximumReasonLength = MaximumReasonLength;
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
@@ -172,10 +174,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100), (1, 98), (2, 1)],
 	}.assimilate_storage(&mut t).unwrap();
-
-	GenesisConfig::<Test>{
-		bounty_value_minimum: 1,
-	}.assimilate_storage(&mut t).unwrap();
+	GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
 	t.into()
 }
 
@@ -598,15 +597,13 @@ fn propose_bounty_validation_works() {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
 
-		assert_ok!(Treasury::update_bounty_value_minimum(Origin::root(), 5));
-
 		assert_noop!(
 			Treasury::propose_bounty(Origin::signed(1), 10, b"12345678901234567890".to_vec()),
 			Error::<Test>::InsufficientProposersBalance
 		);
 
 		assert_noop!(
-			Treasury::propose_bounty(Origin::signed(1), 4, b"12345678901234567890".to_vec()),
+			Treasury::propose_bounty(Origin::signed(1), 0, b"12345678901234567890".to_vec()),
 			Error::<Test>::InvalidValue
 		);
 	});

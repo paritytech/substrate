@@ -25,7 +25,7 @@ use node_runtime::{
 	AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig,
 	DemocracyConfig,GrandpaConfig, ImOnlineConfig, SessionConfig, SessionKeys, StakerStatus,
 	StakingConfig, ElectionsConfig, IndicesConfig, SocietyConfig, SudoConfig, SystemConfig,
-	TechnicalCommitteeConfig, TreasuryConfig, wasm_binary_unwrap,
+	TechnicalCommitteeConfig, wasm_binary_unwrap,
 };
 use node_runtime::Block;
 use node_runtime::constants::currency::*;
@@ -311,9 +311,7 @@ pub fn testnet_genesis(
 			authorities: vec![],
 		}),
 		pallet_membership_Instance1: Some(Default::default()),
-		pallet_treasury: Some(TreasuryConfig {
-			bounty_value_minimum: 2 * DOLLARS,
-		}),
+		pallet_treasury: Some(Default::default()),
 		pallet_society: Some(SocietyConfig {
 			members: endowed_accounts.iter()
 						.take((num_endowed_accounts + 1) / 2)
