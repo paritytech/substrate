@@ -1544,15 +1544,12 @@ pub mod schedule {
 		/// that, you must name the task explicitly using the `Named` trait.
 		fn cancel(address: Self::Address) -> Result<(), ()>;
 
-		/// Reschedule a task to a different time.
+		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
+		/// only if it is executed *before* the currently scheduled block. For periodic tasks,
+		/// this dispatch is guaranteed to succeed only before the *initial* execution; for
+		/// others, use `reschedule_named`. 
 		///
 		/// Will return an error if the `address` is invalid.
-		///
-		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
-		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
-		///
-		/// NOTE2: This will not work to cancel periodic tasks after their initial execution. For
-		/// that, you must name the task explicitly using the `Named` trait.
 		fn reschedule(
 			address: Self::Address,
 			when: DispatchTime<BlockNumber>,
@@ -1590,12 +1587,8 @@ pub mod schedule {
 		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
 		fn cancel_named(id: Vec<u8>) -> Result<(), ()>;
 
-		/// Reschedule a task to a different time.
-		///
-		/// Will return an error if the `id` is invalid.
-		///
-		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
-		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
+		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
+		/// only if it is executed *before* the currently scheduled block.
 		fn reschedule_named(
 			id: Vec<u8>,
 			when: DispatchTime<BlockNumber>,

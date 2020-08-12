@@ -190,7 +190,7 @@ decl_error! {
 	pub enum Error for Module<T: Trait> {
 		/// Failed to schedule a call
 		FailedToSchedule,
-		/// Cannot found the scheduled call.
+		/// Cannot find the scheduled call.
 		NotFound,
 		/// Given target block number is in the past.
 		TargetBlockNumberInPast,
