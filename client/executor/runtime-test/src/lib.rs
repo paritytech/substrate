@@ -17,7 +17,7 @@ use sp_std::{vec::Vec, vec};
 #[cfg(not(feature = "std"))]
 use sp_io::{
 	storage, hashing::{blake2_128, blake2_256, sha2_256, twox_128, twox_256},
-	crypto::{ed25519_verify, sr25519_verify}, wasm_tracing
+	crypto::{ed25519_verify, sr25519_verify}, wasm_tracing,
 };
 #[cfg(not(feature = "std"))]
 use sp_runtime::{print, traits::{BlakeTwo256, Hash}};
