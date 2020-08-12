@@ -893,7 +893,7 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		}
 		// remove accounts from all current voting in motions.
 		let mut outgoing = outgoing.to_vec();
-		outgoing.sort_unstable();
+		outgoing.sort();
 		for h in Self::proposals().into_iter() {
 			<Voting<T, I>>::mutate(h, |v|
 				if let Some(mut votes) = v.take() {

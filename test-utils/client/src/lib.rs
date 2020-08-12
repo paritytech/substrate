@@ -384,9 +384,11 @@ where
 
 		Box::pin(async move {
 			while let Some(notification) = import_notification_stream.next().await {
-				blocks.insert(notification.hash);
-				if blocks.len() == count {
-					break;
+				if notification.is_new_best {
+					blocks.insert(notification.hash);
+					if blocks.len() == count {
+						break;
+					}
 				}
 			}
 		})

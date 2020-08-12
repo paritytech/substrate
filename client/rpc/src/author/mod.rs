@@ -94,7 +94,7 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 		Client: HeaderBackend<P::Block> + ProvideRuntimeApi<P::Block> + Send + Sync + 'static,
 		Client::Api: SessionKeys<P::Block, Error = ClientError>,
 {
-	type Metadata = crate::metadata::Metadata;
+	type Metadata = crate::Metadata;
 
 	fn insert_key(
 		&self,

@@ -324,7 +324,16 @@ fn get_module_instance(
 	instantiable: Option<syn::Ident>,
 	default_instance: Option<syn::Ident>,
 ) -> syn::Result<Option<super::ModuleInstanceDef>> {
-	let right_syntax = "Should be $Instance: $Instantiable = $DefaultInstance";
+	let right_syntax = "Should be $I: $Instance = $DefaultInstance";
+
+	if instantiable.as_ref().map_or(false, |i| i != "Instance") {
+		let msg = format!(
+			"Instance trait must be named `Instance`, other names are no longer supported, because \
+			it is now defined at frame_support::traits::Instance. Expect `Instance` found `{}`",
+			instantiable.as_ref().unwrap(),
+		);
+		return Err(syn::Error::new(instantiable.span(), msg));
+	}
 
 	match (instance, instantiable, default_instance) {
 		(Some(instance), Some(instantiable), default_instance) => {
