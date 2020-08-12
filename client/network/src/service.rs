@@ -1133,6 +1133,8 @@ struct Metrics {
 	kbuckets_num_nodes: GaugeVec<U64>,
 	listeners_local_addresses: Gauge<U64>,
 	listeners_errors_total: Counter<U64>,
+	// Note: `network_bytes_total` is a monotonic gauge obtained by
+	// sampling an existing counter.
 	network_bytes_total: GaugeVec<U64>,
 	notifications_sizes: HistogramVec,
 	notifications_streams_closed_total: CounterVec<U64>,
