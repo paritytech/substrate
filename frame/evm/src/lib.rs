@@ -35,11 +35,10 @@ use serde::{Serialize, Deserialize};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::{Weight, Pays};
 use frame_support::traits::{Currency, ExistenceRequirement, Get};
+use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_system::RawOrigin;
 use sp_core::{U256, H256, H160, Hasher};
-use sp_runtime::{
-	DispatchResult, AccountId32, traits::{UniqueSaturatedInto, SaturatedConversion, BadOrigin},
-};
+use sp_runtime::{AccountId32, traits::{UniqueSaturatedInto, SaturatedConversion, BadOrigin}};
 use sha3::{Digest, Keccak256};
 pub use evm::{ExitReason, ExitSucceed, ExitError, ExitRevert, ExitFatal};
 use evm::Config;
@@ -315,10 +314,7 @@ decl_module! {
 		}
 
 		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
-		#[weight = (
-			(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
-			Pays::No,
-		)]
+		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
 		fn call(
 			origin,
 			source: H160,
@@ -328,7 +324,7 @@ decl_module! {
 			gas_limit: u32,
 			gas_price: U256,
 			nonce: Option<U256>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
 			match Self::execute_call(
@@ -349,15 +345,12 @@ decl_module! {
 				},
 			}
 
-			Ok(())
+			Ok(Pays::No.into())
 		}
 
 		/// Issue an EVM create operation. This is similar to a contract creation transaction in
 		/// Ethereum.
-		#[weight = (
-			(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
-			Pays::No,
-		)]
+		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
 		fn create(
 			origin,
 			source: H160,
@@ -366,7 +359,7 @@ decl_module! {
 			gas_limit: u32,
 			gas_price: U256,
 			nonce: Option<U256>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
 			match Self::execute_create(
@@ -386,14 +379,11 @@ decl_module! {
 				},
 			}
 
-			Ok(())
+			Ok(Pays::No.into())
 		}
 
 		/// Issue an EVM create2 operation.
-		#[weight = (
-			(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
-			Pays::No,
-		)]
+		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
 		fn create2(
 			origin,
 			source: H160,
@@ -403,7 +393,7 @@ decl_module! {
 			gas_limit: u32,
 			gas_price: U256,
 			nonce: Option<U256>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
 			match Self::execute_create2(
@@ -424,7 +414,7 @@ decl_module! {
 				},
 			}
 
-			Ok(())
+			Ok(Pays::No.into())
 		}
 	}
 }
