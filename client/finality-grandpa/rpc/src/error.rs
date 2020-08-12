@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::NOT_READY_ERROR_CODE;
+use crate::{NOT_READY_ERROR_CODE, INTERNAL_ERROR};
 
 #[derive(derive_more::Display, derive_more::From)]
 /// Top-level error type for the RPC handler
@@ -31,17 +31,19 @@ pub enum Error {
 	#[display(fmt = "GRANDPA reports voter state as unreasonably large")]
 	VoterStateReportsUnreasonablyLargeNumbers,
 	/// GRANDPA prove finality failed.
-	// WIP: extend this to forward more info and use a better description.
-	#[display(fmt = "WIP: GRANDPA prove finality rpc failed")]
+	#[display(fmt = "GRANDPA prove finality rpc failed")]
 	ProveFinalityFailed,
 }
 
 impl From<Error> for jsonrpc_core::Error {
 	fn from(error: Error) -> Self {
+		let code = match error {
+			Error::EndpointNotReady => NOT_READY_ERROR_CODE,
+			_ => INTERNAL_ERROR,
+		};
 		jsonrpc_core::Error {
 			message: format!("{}", error),
-			// WIP: needs updating to return different error codes
-			code: jsonrpc_core::ErrorCode::ServerError(NOT_READY_ERROR_CODE),
+			code: jsonrpc_core::ErrorCode::ServerError(code),
 			data: None,
 		}
 	}

@@ -43,6 +43,8 @@ use notification::JustificationNotification;
 
 /// Returned when Grandpa RPC endpoint is not ready.
 pub const NOT_READY_ERROR_CODE: i64 = 1;
+/// Returned for internal Grandpa RPC errors.
+pub const INTERNAL_ERROR: i64 = 2;
 
 type FutureResult<T> =
 	Box<dyn jsonrpc_core::futures::Future<Item = T, Error = jsonrpc_core::Error> + Send>;
@@ -176,9 +178,9 @@ where
 		let future = async move { result }.boxed();
 		Box::new(
 			future
-				.map_err(|e| match e {
-					// WIP: don't just swallow the error
-					_ => error::Error::ProveFinalityFailed,
+				.map_err(|e| {
+					warn!("Error proving finality: {}", e);
+					error::Error::ProveFinalityFailed
 				})
 				.map_err(jsonrpc_core::Error::from)
 				.compat()
@@ -479,7 +481,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_finality() {
+	fn test_prove_finality() {
 		let (io,  _) = setup_io_handler(TestVoterState);
 
 		let request = "{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_proveFinality\",\"params\":[\
