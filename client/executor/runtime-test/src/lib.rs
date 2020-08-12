@@ -17,7 +17,7 @@ use sp_std::{vec::Vec, vec};
 #[cfg(not(feature = "std"))]
 use sp_io::{
 	storage, hashing::{blake2_128, blake2_256, sha2_256, twox_128, twox_256},
-	crypto::{ed25519_verify, sr25519_verify},
+	crypto::{ed25519_verify, sr25519_verify}, wasm_tracing
 };
 #[cfg(not(feature = "std"))]
 use sp_runtime::{print, traits::{BlakeTwo256, Hash}};
@@ -256,7 +256,7 @@ sp_core::wasm_export_functions! {
 	fn test_enter_span() -> u64 {
 		wasm_tracing::enter_span("integration_test_span_target", "integration_test_span_name")
 	}
-	
+
 	fn test_exit_span(span_id: u64) {
 		wasm_tracing::exit_span(span_id)
 	}

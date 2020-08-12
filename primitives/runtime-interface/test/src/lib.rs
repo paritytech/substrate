@@ -18,8 +18,6 @@
 //! Integration tests for runtime interface primitives
 #![cfg(test)]
 
-#![cfg(test)]
-
 use sp_runtime_interface::*;
 
 use sp_runtime_interface_test_wasm::{wasm_binary_unwrap, test_api::HostFunctions};
@@ -155,3 +153,46 @@ fn test_versionining_with_new_host_works() {
 	);
 }
 
+#[test]
+fn test_tracing() {
+	use tracing::span::Id as SpanId;
+
+	#[derive(Clone)]
+	struct TracingSubscriber(Arc<Mutex<Inner>>);
+
+	#[derive(Default)]
+	struct Inner {
+		spans: HashSet<&'static str>,
+	}
+
+	impl tracing::subscriber::Subscriber for TracingSubscriber {
+		fn enabled(&self, _: &tracing::Metadata) -> bool { true }
+
+		fn new_span(&self, span: &tracing::span::Attributes) -> tracing::Id {
+			let mut inner = self.0.lock().unwrap();
+			let id = SpanId::from_u64((inner.spans.len() + 1) as _);
+			inner.spans.insert(span.metadata().name());
+			id
+		}
+
+		fn record(&self, _: &SpanId, _: &tracing::span::Record) {}
+
+		fn record_follows_from(&self, _: &SpanId, _: &SpanId) {}
+
+		fn event(&self, _: &tracing::Event) {}
+
+		fn enter(&self, _: &SpanId) {}
+
+		fn exit(&self, _: &SpanId) {}
+	}
+
+	let subscriber = TracingSubscriber(Default::default());
+	let _guard = tracing::subscriber::set_default(subscriber.clone());
+
+	// Call some method to generate a trace
+	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_return_data");
+
+	let inner = subscriber.0.lock().unwrap();
+	assert!(inner.spans.contains("return_input_version_1"));
+	assert!(inner.spans.contains("ext_test_api_return_input_version_1"));
+}
