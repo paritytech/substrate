@@ -44,11 +44,16 @@ std = [
 	"sp-runtime-interface/std",
 	"sp-externalities",
 	"sp-wasm-interface/std",
+	"sp-tracing/std",
 	"tracing",
 	"tracing-core",
 	"log",
 	"futures",
 	"parking_lot",
+]
+
+with-tracing = [
+	"sp-tracing/with-tracing"
 ]
 
 # These two features are used for `no_std` builds for the environments which already provides

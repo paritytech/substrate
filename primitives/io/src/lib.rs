@@ -1068,6 +1068,16 @@ impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
 	}
 }
 
+#[cfg(all(no_std, feature="with-tracing"))]
+/// Initialize tracing of sp_tracing
+pub fn init_tracing() {
+	sp_tracing::set_tracing_subscriber(Box::new(PassingTracingSubsciber()));
+}
+
+#[cfg(not(all(no_std, feature="with-tracing")))]
+/// Initialize tracing of sp_tracing – noop
+pub fn init_tracing() { }
+
 /// Wasm-only interface that provides functions for interacting with the sandbox.
 #[runtime_interface(wasm_only)]
 pub trait Sandbox {

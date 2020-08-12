@@ -17,7 +17,7 @@
 
 //! Substrate tracing primitives and macros.
 //!
-//! To trace functions or invidual code in Substrate, this crate provides [`tracing_span`]
+//! To trace functions or invidual code in Substrate, this crate provides [`within_span`]
 //! and [`enter_span`]. See the individual docs for how to use these macros.
 //!
 //! Note that to allow traces from wasm execution environment there are
@@ -47,8 +47,8 @@ pub use tracing::{
 	span, event, Level
 };
 
+#[cfg(all(no_std, feature = "with-tracing"))]
 use sp_std::boxed::Box;
-use core::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(all(no_std, feature = "with-tracing"))]
 use core::lazy::OnceCell;
@@ -80,7 +80,7 @@ static SUBSCRIBER_INSTANCE: OnceCell<Box<dyn TracingSubscriber>> = OnceCell::new
 /// # Example
 ///
 /// ```
-/// sp_tracing::tracing_span! {
+/// sp_tracing::within_span! {
 ///     "test-span";
 ///     1 + 1;
 ///     // some other complex code
@@ -88,35 +88,50 @@ static SUBSCRIBER_INSTANCE: OnceCell<Box<dyn TracingSubscriber>> = OnceCell::new
 /// ```
 #[cfg(any(not(no_std), not(feature = "with-tracing")))]
 #[macro_export]
-macro_rules! tracing_span {
+macro_rules! within_span {
 	(
+		$span:expr;
+		$( $code:tt )*
+	) => {
+		{
+			$crate::enter_span!($span);
+			$( $code )*
+		}
+	};
+	(
+		$lvl:expr,
 		$name:expr;
 		$( $code:tt )*
 	) => {
 		{
-			$crate::enter_span!($name);
-			$( $code )*
+			$crate::within_span!($crate::span!($crate::Level::TRACE, $name); $( $code )*)
 		}
-	}
+	};
 }
 
 #[cfg(all(no_std, not(feature = "with-tracing")))]
 #[macro_export]
-macro_rules! tracing_span {
+macro_rules! within_span {
 	(
+		$span:stmt;
+		$( $code:tt )*
+	) => {
+		$( $code )*
+	};
+	(
+		$lvl:expr,
 		$name:expr;
 		$( $code:tt )*
 	) => {
-		{
-			$( $code )*
-		}
-	}
+		$( $code )*
+	};
 }
 
 
 #[cfg(all(no_std, not(feature = "with-tracing")))]
 #[macro_export]
 macro_rules! enter_span {
+	( $lvl:expr, $name:expr ) => { },
 	( $name:expr ) => {  } // no-op
 }
 
@@ -132,11 +147,14 @@ macro_rules! enter_span {
 #[cfg(any(not(no_std), not(feature = "with-tracing")))]
 #[macro_export]
 macro_rules! enter_span {
-	( $name:expr ) => {
+	( $span:expr ) => {
 		// FIXME: this could be clashing, make the local variable based on name to prevent that
-		let __tracing_span__ = $crate::span!($crate::Level::TRACE, $name);
-		let __tracing_guard__ = __tracing_span__.enter();
-	}
+		let __within_span__ = $span;
+		let __tracing_guard__ = __within_span__.enter();
+	};
+	( $lvl:expr, $name:expr ) => {
+		$crate::enter_span!($crate::span!($crate::Level::TRACE, $name))
+	};
 }
 
 #[cfg(all(no_std, feature = "with-tracing"))]

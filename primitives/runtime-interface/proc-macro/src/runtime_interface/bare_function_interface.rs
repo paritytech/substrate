@@ -174,7 +174,7 @@ fn function_std_impl(
 			#[cfg(feature = "std")]
 			#( #attrs )*
 			fn #function_name( #( #args, )* ) #return_value {
-				#crate_::sp_tracing::enter_span!(#function_name_str);
+				#crate_::sp_tracing::enter_span!(#crate_::sp_tracing::Level::Trace, #function_name_str);
 				#call_to_trait
 			}
 		}

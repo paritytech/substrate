@@ -32,6 +32,9 @@ sp-version = { version = "2.0.0-rc5", path = "../../primitives/version" }
 
 [features]
 default = ["std"]
+with-tracing = [
+	"sp-tracing/with-tracing"
+]
 std = [
 	"codec/std",
 	"frame-support/std",

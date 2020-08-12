@@ -227,7 +227,7 @@ fn generate_host_function_implementation(
 						__function_context__: &mut dyn #crate_::sp_wasm_interface::FunctionContext,
 						args: &mut dyn Iterator<Item = #crate_::sp_wasm_interface::Value>,
 					) -> std::result::Result<Option<#crate_::sp_wasm_interface::Value>, String> {
-						#crate_::sp_tracing::enter_span!(#name);
+						#crate_::sp_tracing::enter_span!(#crate_::sp_tracing::Level::Trace, #name);
 						#( #wasm_to_ffi_values )*
 						#( #ffi_to_host_values )*
 						#host_function_call
