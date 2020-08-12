@@ -263,6 +263,7 @@ test-linux-stable:                 &test-linux
   script:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
+    - WASM_BUILD_NO_COLOR=1 SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - sccache -s
 
 unleash-check:
@@ -727,7 +728,7 @@ deploy-kubernetes-alerting-rules:
     RULES:                         .maintain/monitoring/alerting-rules/alerting-rules.yaml
   script:
     - echo "deploying prometheus alerting rules"
-    - kubectl -n ${NAMESPACE} patch prometheusrule ${PROMETHEUSRULE} 
+    - kubectl -n ${NAMESPACE} patch prometheusrule ${PROMETHEUSRULE}
         --type=merge --patch "$(sed 's/^/  /;1s/^/spec:\n/' ${RULES})"
   only:
     refs:

@@ -1187,6 +1187,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dissimilar"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc4b29f4b9bb94bf267d57269fd0706d343a160937108e9619fe380645428abb"
+
+[[package]]
 name = "dns-parser"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8605,6 +8611,31 @@ dependencies = [
 [[package]]
 name = "substrate-test-utils"
 version = "2.0.0-rc5"
+dependencies = [
+ "futures 0.3.5",
+ "sc-service",
+ "substrate-test-utils-derive",
+ "tokio 0.2.21",
+ "trybuild",
+]
+
+[[package]]
+name = "substrate-test-utils-derive"
+version = "0.8.0-rc5"
+dependencies = [
+ "proc-macro-crate",
+ "quote 1.0.6",
+ "syn 1.0.33",
+]
+
+[[package]]
+name = "substrate-test-utils-test-crate"
+version = "0.1.0"
+dependencies = [
+ "sc-service",
+ "substrate-test-utils",
+ "tokio 0.2.21",
+]
 
 [[package]]
 name = "substrate-wasm-builder"
@@ -9271,6 +9302,7 @@ version = "1.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "459186ab1afd6d93bd23c2269125f4f7694f8771fe0e64434b4bdc212b94034d"
 dependencies = [
+ "dissimilar",
  "glob 0.3.0",
  "lazy_static",
  "serde",
