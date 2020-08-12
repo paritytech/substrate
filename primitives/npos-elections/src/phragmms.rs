@@ -45,6 +45,7 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing>(
 	to_elect: usize,
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	balancing_config: Option<(usize, ExtendedBalance)>,
 ) -> Result<ElectionResult<AccountId, P>, &'static str>
 	where ExtendedBalance: From<InnerOf<P>>
 {
@@ -59,7 +60,9 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing>(
 			round_winner.borrow_mut().elected = true;
 			winners.push(round_winner);
 
-			balance(&mut voters, 2, 0);
+			if let Some((iterations, tolerance)) = balancing_config {
+				balance(&mut voters, iterations, tolerance);
+			}
 		} else {
 			break;
 		}
@@ -334,7 +337,7 @@ mod tests {
 			(30, 30, vec![2, 3]),
 		];
 
-		let ElectionResult { winners, assignments } = phragmms::<_, Perbill>(2, candidates, voters).unwrap();
+		let ElectionResult { winners, assignments } = phragmms::<_, Perbill>(2, candidates, voters, Some((2, 0))).unwrap();
 		assert_eq!(winners, vec![(3, 30), (2, 30)]);
 		assert_eq!(
 			assignments,
@@ -371,7 +374,7 @@ mod tests {
 			(130, 1000, vec![61, 71]),
 		];
 
-		let ElectionResult { winners, assignments: _ } = phragmms::<_, Perbill>(4, candidates, voters).unwrap();
+		let ElectionResult { winners, assignments: _ } = phragmms::<_, Perbill>(4, candidates, voters, Some((2, 0))).unwrap();
 		assert_eq!(winners, vec![
 			(11, 3000),
 			(31, 2000),
@@ -388,7 +391,7 @@ mod tests {
 		// give a bit more to 1 and 3.
 		voters.push((2, u64::max_value(), vec![1, 3]));
 
-		let ElectionResult { winners, assignments: _ } = phragmms::<_, Perbill>(2, candidates, voters).unwrap();
+		let ElectionResult { winners, assignments: _ } = phragmms::<_, Perbill>(2, candidates, voters, Some((2, 0))).unwrap();
 		assert_eq!(winners.into_iter().map(|(w, _)| w).collect::<Vec<_>>(), vec![1u32, 3]);
 	}
 }

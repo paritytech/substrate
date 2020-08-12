@@ -698,18 +698,18 @@ pub struct ElectionSize {
 
 
 impl<BlockNumber: PartialEq> ElectionStatus<BlockNumber> {
-	fn is_open_at(&self, n: BlockNumber) -> bool {
+	pub fn is_open_at(&self, n: BlockNumber) -> bool {
 		*self == Self::Open(n)
 	}
 
-	fn is_closed(&self) -> bool {
+	pub fn is_closed(&self) -> bool {
 		match self {
 			Self::Closed => true,
 			_ => false
 		}
 	}
 
-	fn is_open(&self) -> bool {
+	pub fn is_open(&self) -> bool {
 		!self.is_closed()
 	}
 }
