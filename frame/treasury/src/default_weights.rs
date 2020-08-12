@@ -21,113 +21,113 @@ use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 
 impl crate::WeightInfo for () {
 	fn propose_spend() -> Weight {
-		(45321000 as Weight)
+		(43830000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn reject_proposal() -> Weight {
-		(37054000 as Weight)
+		(36949000 as Weight)
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn approve_proposal() -> Weight {
-		(12276000 as Weight)
+		(12744000 as Weight)
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn report_awesome(r: u32, ) -> Weight {
-		(54579000 as Weight)
+		(54300000 as Weight)
 			.saturating_add((2000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	// WARNING! Some components were not used: ["r"]
 	fn retract_tip() -> Weight {
-		(46249000 as Weight)
+		(46567000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn tip_new(r: u32, t: u32, ) -> Weight {
-		(35100000 as Weight)
+		(35215000 as Weight)
 			.saturating_add((2000 as Weight).saturating_mul(r as Weight))
-			.saturating_add((155000 as Weight).saturating_mul(t as Weight))
+			.saturating_add((151000 as Weight).saturating_mul(t as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn tip(t: u32, ) -> Weight {
-		(25994000 as Weight)
-			.saturating_add((672000 as Weight).saturating_mul(t as Weight))
+		(26499000 as Weight)
+			.saturating_add((675000 as Weight).saturating_mul(t as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn close_tip(t: u32, ) -> Weight {
-		(85723000 as Weight)
-			.saturating_add((342000 as Weight).saturating_mul(t as Weight))
+		(85712000 as Weight)
+			.saturating_add((344000 as Weight).saturating_mul(t as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
 	fn propose_bounty(d: u32, ) -> Weight {
-		(50250000 as Weight)
+		(47117000 as Weight)
 			.saturating_add((1000 as Weight).saturating_mul(d as Weight))
-			.saturating_add(DbWeight::get().reads(2 as Weight))
+			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
 	fn reject_bounty() -> Weight {
-		(47119000 as Weight)
+		(47109000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn approve_bounty() -> Weight {
-		(14874000 as Weight)
+		(14829000 as Weight)
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn assign_curator() -> Weight {
-		(11329000 as Weight)
+		(11392000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn unassign_curator() -> Weight {
-		(11050000 as Weight)
+		(10941000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn accept_curator() -> Weight {
-		(40235000 as Weight)
+		(39884000 as Weight)
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn award_bounty() -> Weight {
-		(29673000 as Weight)
+		(29035000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn claim_bounty() -> Weight {
-		(113188000 as Weight)
+		(111260000 as Weight)
 			.saturating_add(DbWeight::get().reads(4 as Weight))
 			.saturating_add(DbWeight::get().writes(5 as Weight))
 	}
 	fn cancel_bounty() -> Weight {
-		(71107000 as Weight)
+		(70335000 as Weight)
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
 	fn extend_bounty_expiry() -> Weight {
-		(28714000 as Weight)
+		(28002000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn on_initialize_proposals(p: u32, ) -> Weight {
-		(91695000 as Weight)
-			.saturating_add((33260000 as Weight).saturating_mul(p as Weight))
+		(88896000 as Weight)
+			.saturating_add((33093000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().reads((1 as Weight).saturating_mul(p as Weight)))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
 	}
 	fn on_initialize_bounties(b: u32, ) -> Weight {
-		(74444000 as Weight)
-			.saturating_add((50600000 as Weight).saturating_mul(b as Weight))
+		(73564000 as Weight)
+			.saturating_add((49912000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().reads((2 as Weight).saturating_mul(b as Weight)))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
