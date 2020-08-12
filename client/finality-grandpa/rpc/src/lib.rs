@@ -172,6 +172,8 @@ where
 		last_finalized: Block::Hash,
 		authorities_set_id: u64,
 	) -> FutureResult<Option<Vec<u8>>> {
+		// WIP: this encodes and immediately decodes the same blob.
+		// Important to refactor this away as a cleanup step in this PR.
 		let request =
 			sc_finality_grandpa::make_finality_proof_request(last_finalized, authorities_set_id);
 		let result = self.finality_proof_provider.prove_finality(hash, &request);
