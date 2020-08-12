@@ -39,7 +39,6 @@ use sc_finality_grandpa::GrandpaJustificationStream;
 use sp_runtime::traits::Block as BlockT;
 
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
-use sc_network::config::FinalityProofProvider;
 use notification::JustificationNotification;
 
 /// Returned when Grandpa RPC endpoint is not ready.
@@ -96,22 +95,22 @@ pub trait GrandpaApi<Notification, Hash> {
 }
 
 /// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
-pub struct GrandpaRpcHandler<AuthoritySet, VoterState, Block: BlockT> {
+pub struct GrandpaRpcHandler<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
 	justification_stream: GrandpaJustificationStream<Block>,
 	manager: SubscriptionManager,
-	finality_proof_provider: Arc<dyn FinalityProofProvider<Block>>,
+	finality_proof_provider: Arc<ProofProvider>,
 }
 
-impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, VoterState, Block> {
+impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider> GrandpaRpcHandler<AuthoritySet, VoterState, Block, ProofProvider> {
 	/// Creates a new GrandpaRpcHandler instance.
 	pub fn new(
 		authority_set: AuthoritySet,
 		voter_state: VoterState,
 		justification_stream: GrandpaJustificationStream<Block>,
 		manager: SubscriptionManager,
-		finality_proof_provider: Arc<dyn FinalityProofProvider<Block>>
+		finality_proof_provider: Arc<ProofProvider>,
 	) -> Self {
 		Self {
 			authority_set,
@@ -123,12 +122,13 @@ impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, Vo
 	}
 }
 
-impl<AuthoritySet, VoterState, Block> GrandpaApi<JustificationNotification, Block::Hash>
-	for GrandpaRpcHandler<AuthoritySet, VoterState, Block>
+impl<AuthoritySet, VoterState, Block, ProofProvider> GrandpaApi<JustificationNotification, Block::Hash>
+	for GrandpaRpcHandler<AuthoritySet, VoterState, Block, ProofProvider>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
 	Block: BlockT,
+	ProofProvider: sc_network::config::FinalityProofProvider<Block> + 'static,
 {
 	type Metadata = sc_rpc::Metadata;
 
