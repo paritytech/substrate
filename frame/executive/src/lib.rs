@@ -364,7 +364,9 @@ where
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
 	) -> ApplyExtrinsicResult {
-		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "apply_extrinsic");
+		sp_tracing::enter_span!(
+			sp_tracing::trace_span!(target: "executive", "apply_extrinsic", extrinsic=?uxt)
+		);
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 
