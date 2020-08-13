@@ -39,6 +39,7 @@ use sp_core::{
 	crypto::KeyTypeId,
 	u32_trait::{_1, _2, _3, _4},
 	OpaqueMetadata,
+	ed25519::Public as NodePublic,
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
@@ -846,6 +847,7 @@ parameter_types! {
 }
 impl pallet_node_permission::Trait for Runtime {
 	type Event = Event;
+	type NodeId = NodePublic;
 	type MaxPermissionedNodes = MaxPermissionedNodes;
 	type AddOrigin = EnsureRootOrHalfCouncil;
 	type RemoveOrigin = EnsureRootOrHalfCouncil;
@@ -891,7 +893,7 @@ construct_runtime!(
 		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
 		Proxy: pallet_proxy::{Module, Call, Storage, Event<T>},
 		Multisig: pallet_multisig::{Module, Call, Storage, Event<T>},
-		NodePermission: pallet_node_permission::{Module, Call, Storage, Event, Config},
+		NodePermission: pallet_node_permission::{Module, Call, Storage, Event, Config<T>},
 	}
 );
 
