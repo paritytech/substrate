@@ -180,3 +180,137 @@ impl<T: Trait> Module<T> {
         storage::unhashed::put(well_known_keys::NODE_ALLOWLIST, &nodes);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use frame_support::{
+        assert_ok, assert_noop, impl_outer_origin, weights::Weight,
+        parameter_types, ord_parameter_types,
+    };
+    use frame_system::EnsureSignedBy;
+    use sp_core::H256;
+    use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
+
+    impl_outer_origin! {
+        pub enum Origin for Test where system = frame_system {}
+    }
+
+    #[derive(Clone, Eq, PartialEq)]
+    pub struct Test;
+
+    parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: Weight = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
+	}
+	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
+		type Origin = Origin;
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = H256;
+		type Call = ();
+		type Hashing = BlakeTwo256;
+		type AccountId = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type Header = Header;
+		type Event = ();
+		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
+		type MaximumBlockLength = MaximumBlockLength;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type Version = ();
+		type ModuleToIndex = ();
+		type AccountData = ();
+		type OnNewAccount = ();
+		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
+	}
+
+    ord_parameter_types! {
+		pub const One: u64 = 1;
+		pub const Two: u64 = 2;
+		pub const Three: u64 = 3;
+		pub const Four: u64 = 4;
+	}
+    parameter_types! {
+        pub const MaxPermissionedNodes: u32 = 4;
+    }
+    impl Trait for Test {
+        type Event = ();
+        type MaxPermissionedNodes = MaxPermissionedNodes;
+        type NodeId = u64;
+        type AddOrigin = EnsureSignedBy<One, u64>;
+        type RemoveOrigin = EnsureSignedBy<Two, u64>;
+        type SwapOrigin = EnsureSignedBy<Three, u64>;
+        type ResetOrigin = EnsureSignedBy<Four, u64>;
+    }
+
+    type NodePermission = Module<Test>;
+
+    fn new_test_ext() -> sp_io::TestExternalities {
+        let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+        GenesisConfig::<Test>{
+            nodes: vec![10, 20, 30],
+        }.assimilate_storage(&mut t).unwrap();
+        t.into()
+    }
+
+    #[test]
+    fn add_node_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(NodePermission::add_node(Origin::signed(2), 15), BadOrigin);
+            assert_noop!(NodePermission::add_node(Origin::signed(1), 20), Error::<Test>::AlreadyJoined);
+            
+            assert_ok!(NodePermission::add_node(Origin::signed(1), 15));
+            assert_eq!(NodePermission::get_allowlist(), vec![10, 15, 20, 30]);
+            
+            assert_noop!(NodePermission::add_node(Origin::signed(1), 25), Error::<Test>::TooManyNodes);
+        });
+    }
+
+    #[test]
+    fn remove_node_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(NodePermission::remove_node(Origin::signed(3), 20), BadOrigin);
+            assert_noop!(NodePermission::remove_node(Origin::signed(2), 40), Error::<Test>::NotExist);
+            
+            assert_ok!(NodePermission::remove_node(Origin::signed(2), 20));
+            assert_eq!(NodePermission::get_allowlist(), vec![10, 30]);
+        });
+    }
+
+    #[test]
+    fn swap_node_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(NodePermission::swap_node(Origin::signed(4), 20, 5), BadOrigin);
+            
+            assert_ok!(NodePermission::swap_node(Origin::signed(3), 20, 20));
+            assert_eq!(NodePermission::get_allowlist(), vec![10, 20, 30]);
+
+            assert_noop!(NodePermission::swap_node(Origin::signed(3), 15, 5), Error::<Test>::NotExist);
+            assert_noop!(NodePermission::swap_node(Origin::signed(3), 20, 30), Error::<Test>::AlreadyJoined);
+            
+            assert_ok!(NodePermission::swap_node(Origin::signed(3), 20, 5));
+            assert_eq!(NodePermission::get_allowlist(), vec![5, 10, 30]);
+        });
+    }
+
+    #[test]
+    fn reset_nodes_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(NodePermission::reset_nodes(Origin::signed(3), vec![15, 5, 20]), BadOrigin);
+            assert_noop!(NodePermission::reset_nodes(Origin::signed(4), vec![15, 5, 20, 25]), Error::<Test>::TooManyNodes);
+            
+            assert_ok!(NodePermission::reset_nodes(Origin::signed(4), vec![15, 5, 20]));
+            assert_eq!(NodePermission::get_allowlist(), vec![5, 15, 20]);
+        });
+    }
+}
