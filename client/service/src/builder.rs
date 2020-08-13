@@ -882,7 +882,7 @@ pub fn build_network<TBl, TBE, TExPool, TImpQu, TCl>(
 		import_queue: Box::new(import_queue),
 		protocol_id,
 		block_announce_validator,
-		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone())
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

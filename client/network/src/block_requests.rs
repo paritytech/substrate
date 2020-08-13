@@ -464,7 +464,7 @@ where
 
 impl<B> NetworkBehaviour for BlockRequests<B>
 where
-	B: Block,
+	B: Block
 {
 	type ProtocolsHandler = OneShotHandler<InboundProtocol<B>, OutboundProtocol<B>, NodeEvent<B, NegotiatedSubstream>>;
 	type OutEvent = Event<B>;

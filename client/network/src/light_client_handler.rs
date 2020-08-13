@@ -746,7 +746,7 @@ where
 
 impl<B> NetworkBehaviour for LightClientHandler<B>
 where
-	B: Block,
+	B: Block
 {
 	type ProtocolsHandler = OneShotHandler<InboundProtocol, OutboundProtocol, Event<NegotiatedSubstream>>;
 	type OutEvent = Void;
@@ -1499,7 +1499,7 @@ mod tests {
 		( ok: bool
 		, ps: sc_peerset::PeersetHandle
 		, cf: super::Config
-		) -> LightClientHandler<Block, Backend>
+		) -> LightClientHandler<Block>
 	{
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let checker = Arc::new(DummyFetchChecker { ok, _mark: std::marker::PhantomData });
@@ -1510,7 +1510,7 @@ mod tests {
 		ConnectedPoint::Dialer { address: Multiaddr::empty() }
 	}
 
-	fn poll(mut b: &mut LightClientHandler<Block, Backend>) -> Poll<NetworkBehaviourAction<OutboundProtocol, Void>> {
+	fn poll(mut b: &mut LightClientHandler<Block>) -> Poll<NetworkBehaviourAction<OutboundProtocol, Void>> {
 		let mut p = EmptyPollParams(PeerId::random());
 		match future::poll_fn(|cx| Pin::new(&mut b).poll(cx, &mut p)).now_or_never() {
 			Some(a) => Poll::Ready(a),

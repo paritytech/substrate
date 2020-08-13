@@ -344,8 +344,7 @@ struct BlockAnnouncesHandshake<B: BlockT> {
 	genesis_hash: B::Hash,
 }
 
-impl<B: BlockT> BlockAnnouncesHandshake<B>
-{
+impl<B: BlockT> BlockAnnouncesHandshake<B> {
 	fn build(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B>>) -> Self {
 		let info = chain.info();
 		BlockAnnouncesHandshake {
