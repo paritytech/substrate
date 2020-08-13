@@ -125,7 +125,7 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 				// 1 / approval_stake == (DEN / approval_stake) / DEN. If approval_stake is zero,
 				// then the ratio should be as large as possible, essentially `infinity`.
 				if candidate.approval_stake.is_zero() {
-					candidate.score = Rational128::from_unchecked(DEN, 0);
+					candidate.score = Bounded::max_value();
 				} else {
 					candidate.score = Rational128::from(DEN / candidate.approval_stake, DEN);
 				}

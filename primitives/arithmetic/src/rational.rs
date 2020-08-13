@@ -17,7 +17,7 @@
 
 use sp_std::{cmp::Ordering, prelude::*};
 use crate::helpers_128bit;
-use num_traits::{Zero, One};
+use num_traits::{Zero, One, Bounded};
 use crate::biguint::BigUint;
 
 /// A wrapper for any rational number with infinitely large numerator and denominator.
@@ -206,6 +206,16 @@ impl Rational128 {
 		let n = self_scaled.0.checked_sub(other_scaled.0)
 			.ok_or("overflow while subtracting numerators")?;
 		Ok(Self(n, self_scaled.1))
+	}
+}
+
+impl Bounded for Rational128 {
+	fn min_value() -> Self {
+		Self(0, 1)
+	}
+
+	fn max_value() -> Self {
+		Self(Bounded::max_value(), 1)
 	}
 }
 
