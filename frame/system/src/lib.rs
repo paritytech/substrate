@@ -682,7 +682,7 @@ decl_module! {
 		/// - Writes: Number of subkeys + 1
 		/// # </weight>
 		#[weight = (
-			T::SystemWeightInfo::kill_prefix(*_subkeys + 1),
+			T::SystemWeightInfo::kill_prefix(_subkeys.saturating_add(1)),
 			DispatchClass::Operational,
 		)]
 		fn kill_prefix(origin, prefix: Key, _subkeys: u32) {

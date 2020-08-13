@@ -141,7 +141,7 @@ decl_module! {
 		#[weight = (
 			calls.iter()
 				.map(|call| call.get_dispatch_info().weight)
-				.sum::<Weight>()
+				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
 				.saturating_add(T::WeightInfo::batch(calls.len() as u32)),
 			{
 				let all_operational = calls.iter()
