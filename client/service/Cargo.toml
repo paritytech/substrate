@@ -75,7 +75,6 @@ sc-tracing = { version = "2.0.0-rc5", path = "../tracing" }
 tracing = "0.1.18"
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
 ed25519-dalek = { version = "1.0.0-pre.4", default-features = false, features = ["u64_backend", "alloc"] }
-libp2p = { version = "0.22.0", default-features = false }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 tempfile = "3.1.0"
