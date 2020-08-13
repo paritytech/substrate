@@ -157,6 +157,12 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
+		///
+		/// # <weight>
+		/// - `O(T)` where `T` complexity of `on_timestamp_set`
+		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in `on_finalize`)
+		/// - 1 event handler `on_timestamp_set` `O(T)`.
+		/// # </weight>
 		#[weight = (
 			T::WeightInfo::set(),
 			DispatchClass::Mandatory
@@ -181,6 +187,10 @@ decl_module! {
 			T::WeightInfo::on_finalize()
 		}
 
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 storage deletion (codec `O(1)`).
+		/// # </weight>
 		fn on_finalize() {
 			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 		}
