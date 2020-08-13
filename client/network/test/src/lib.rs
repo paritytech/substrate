@@ -760,7 +760,6 @@ pub trait TestNetFactory: Sized {
 			import_queue,
 			block_announce_validator: Box::new(DefaultBlockAnnounceValidator),
 			metrics_registry: None,
-			permissioned_network: false,
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -771,7 +770,7 @@ pub trait TestNetFactory: Sized {
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
 			let finality_notification_stream = Box::pin(client.finality_notification_stream().fuse());
 
-			peers.push(LightPeer {
+			peers.push(Peer {
 				data,
 				verifier,
 				select_chain: None,

@@ -45,6 +45,7 @@ const FORGET_AFTER: Duration = Duration::from_secs(3600);
 enum Action {
 	AddReservedPeer(PeerId),
 	RemoveReservedPeer(PeerId),
+	SetReservedPeers(HashSet<PeerId>),
 	SetReservedOnly(bool),
 	ReportPeer(PeerId, ReputationChange),
 	SetPriorityGroup(String, HashSet<PeerId>),
@@ -97,6 +98,11 @@ impl PeersetHandle {
 	/// Has no effect if the node was not a reserved peer.
 	pub fn remove_reserved_peer(&self, peer_id: PeerId) {
 		let _ = self.tx.unbounded_send(Action::RemoveReservedPeer(peer_id));
+	}
+
+	/// Set reserved peers to the new peers.
+	pub fn set_reserved_peers(&self, peer_ids: HashSet<PeerId>) {
+		let _ = self.tx.unbounded_send(Action::SetReservedPeers(peer_ids));
 	}
 
 	/// Sets whether or not the peerset only has connections .
@@ -257,6 +263,10 @@ impl Peerset {
 
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
 		self.on_remove_from_priority_group(RESERVED_NODES, peer_id);
+	}
+
+	fn on_set_reserved_peers(&mut self, peer_ids: HashSet<PeerId>) {
+		self.on_set_priority_group(RESERVED_NODES, peer_ids);
 	}
 
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
@@ -429,43 +439,43 @@ impl Peerset {
 	fn alloc_slots(&mut self) {
 		self.update_time();
 
-		// Try to connnect to permissioned nodes
-		if let Some(peer_ids) = &self.allowlist {
-			info!(target: "peerset", "alloc_slots peer_ids =========: {:?}", peer_ids);
-			loop {
-				let next = {
-					let data = &mut self.data;
-					peer_ids.iter()
-						.filter(move |n| {
-							data.peer(n).into_connected().is_none()
-						})
-						.next()
-						.cloned()
-				};
+		// // Try to connnect to permissioned nodes
+		// if let Some(peer_ids) = &self.allowlist {
+		// 	info!(target: "peerset", "alloc_slots peer_ids =========: {:?}", peer_ids);
+		// 	loop {
+		// 		let next = {
+		// 			let data = &mut self.data;
+		// 			peer_ids.iter()
+		// 				.filter(move |n| {
+		// 					data.peer(n).into_connected().is_none()
+		// 				})
+		// 				.next()
+		// 				.cloned()
+		// 		};
 
-				let next = match next {
-					Some(n) => n,
-					None => break,
-				};
+		// 		let next = match next {
+		// 			Some(n) => n,
+		// 			None => break,
+		// 		};
 
-				info!(target: "peerset", "this peer_id =========: {:?}", next);
+		// 		info!(target: "peerset", "this peer_id =========: {:?}", next);
 
-				let next = match self.data.peer(&next) {
-					peersstate::Peer::Unknown(n) => n.discover(),
-					peersstate::Peer::NotConnected(n) => n,
-					peersstate::Peer::Connected(_) => {
-						debug_assert!(false, "State inconsistency: not connected state");
-						break;
-					}
-				};
+		// 		let next = match self.data.peer(&next) {
+		// 			peersstate::Peer::Unknown(n) => n.discover(),
+		// 			peersstate::Peer::NotConnected(n) => n,
+		// 			peersstate::Peer::Connected(_) => {
+		// 				debug_assert!(false, "State inconsistency: not connected state");
+		// 				break;
+		// 			}
+		// 		};
 
-				match next.try_outgoing() {
-					Ok(conn) => self.message_queue.push_back(Message::Connect(conn.into_peer_id())),
-					Err(_) => break,	// No more slots available.
-				}
-			}
-			return;
-		}
+		// 		match next.try_outgoing() {
+		// 			Ok(conn) => self.message_queue.push_back(Message::Connect(conn.into_peer_id())),
+		// 			Err(_) => break,	// No more slots available.
+		// 		}
+		// 	}
+		// 	return;
+		// }
 
 		// Try to connect to all the reserved nodes that we are not connected to.
 		loop {
@@ -720,6 +730,8 @@ impl Stream for Peerset {
 					self.on_add_reserved_peer(peer_id),
 				Action::RemoveReservedPeer(peer_id) =>
 					self.on_remove_reserved_peer(peer_id),
+				Action::SetReservedPeers(peer_ids) =>
+					self.on_set_reserved_peers(peer_ids),
 				Action::SetReservedOnly(reserved) =>
 					self.on_set_reserved_only(reserved),
 				Action::ReportPeer(peer_id, score_diff) =>

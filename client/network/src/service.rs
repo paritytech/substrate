@@ -61,7 +61,7 @@ use prometheus_endpoint::{
 use sc_peerset::PeersetHandle;
 use sc_client_api::backend::Backend as BackendT;
 use sp_core::ed25519::Public as NodePublic;
-use sp_core::storage::{StorageKey, StorageData, well_known_keys};
+use sp_core::storage::{StorageKey, well_known_keys};
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
@@ -234,18 +234,18 @@ impl<B: BlockT + 'static, BE, H: ExHashT> NetworkWorker<B, BE, H>
 
 		// Initialize the permissioned nodes
 		let mut init_allowlist = None;
-		let id = BlockId::hash(params.chain.info().best_hash);
-		let allowlist_storage = params.chain.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec())).map_err(|_| Error::InvalidStorage)?;
-		if let Some(raw_allowlist) = allowlist_storage {
-			let node_allowlist: Vec<NodePublic> = Decode::decode(&mut &raw_allowlist.0[..]).map_err(|_| Error::InvalidStorage)?; // TODO another error type
+		// let id = BlockId::hash(params.chain.info().best_hash);
+		// let allowlist_storage = params.chain.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec())).map_err(|_| Error::InvalidStorage)?;
+		// if let Some(raw_allowlist) = allowlist_storage {
+		// 	let node_allowlist: Vec<NodePublic> = Decode::decode(&mut &raw_allowlist.0[..]).map_err(|_| Error::InvalidStorage)?; // TODO another error type
 
-			// Transform to PeerId
-			let peer_ids = node_allowlist.iter()
-				.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok()) // TODO ok or unwrap()
-				.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
-				.collect();
-			init_allowlist = Some(peer_ids);
-		}
+		// 	// Transform to PeerId
+		// 	let peer_ids = node_allowlist.iter()
+		// 		.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok()) // TODO ok or unwrap()
+		// 		.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
+		// 		.collect();
+		// 	init_allowlist = Some(peer_ids);
+		// }
 
 		let peerset_config = sc_peerset::PeersetConfig {
 			in_peers: params.network_config.in_peers,
@@ -906,6 +906,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 		Ok(())
+	}
+
+	/// Sets reserved peers to the new peers
+	pub fn set_reserved_peers(&self, peer_ids: HashSet<PeerId>, reserved_only: bool) {
+		self.peerset.set_reserved_peers(peer_ids);
+		self.peerset.set_reserved_only(reserved_only);
 	}
 
 	/// Configure an explicit fork sync request.

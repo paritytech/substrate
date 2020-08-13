@@ -48,14 +48,14 @@ use parking_lot::Mutex;
 
 use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
-use log::{warn, debug, error, info};
+use log::{warn, debug, error};
 use codec::{Encode, Decode};
 use sc_client_api::blockchain::HeaderBackend;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
-use sp_core::storage::{StorageKey, StorageData, well_known_keys};
+use sp_core::storage::{StorageKey, well_known_keys};
 use sp_core::ed25519::Public as NodePublic;
 use sc_client_api::backend::{Backend as BackendT, StorageProvider};
 
@@ -201,6 +201,8 @@ async fn build_network_future<
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
 ) {
+	check_node_allowlist(&network, &client);
+
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
 	// Stream of finalized blocks reported by the client.
@@ -244,20 +246,22 @@ async fn build_network_future<
 					);
 				}
 				
-				let id = BlockId::hash(client.info().best_hash);
-				let allowlist_storage = client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec()));
-				if let Ok(Some(raw_allowlist)) = allowlist_storage {
-					let node_allowlist: Result<Vec<NodePublic>, _> = Decode::decode(&mut &raw_allowlist.0[..]);
+				check_node_allowlist(&network, &client);
+				// let id = BlockId::hash(client.info().best_hash);
+				// let allowlist_storage = client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec()));
+				// if let Ok(Some(raw_allowlist)) = allowlist_storage {
+				// 	let node_allowlist: Result<Vec<NodePublic>, _> = Decode::decode(&mut &raw_allowlist.0[..]);
 
-					if let Ok(node_allowlist) = node_allowlist {
-						// Transform to PeerId
-						let peer_ids = node_allowlist.iter()
-							.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok()) // TODO ok or unwrap()
-							.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
-							.collect();
-						network.service().set_peer_allowlist(peer_ids);
-					}
-				}
+				// 	if let Ok(node_allowlist) = node_allowlist {
+				// 		// Transform to PeerId.
+				// 		// TODO remove local peer id.
+				// 		let peer_ids = node_allowlist.iter()
+				// 			.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok()) // TODO ok or unwrap()
+				// 			.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
+				// 			.collect();
+				// 		network.service().set_reserved_peers(peer_ids);
+				// 	}
+				// }
 			}
 
 			// List of blocks that the client has finalized.
@@ -353,6 +357,34 @@ async fn build_network_future<
 				let state = network.network_state();
 				ready_sink.send((status, state));
 			}
+		}
+	}
+}
+
+/// Set storage `NODE_ALLOWLIST` means it's a permissioned network,
+/// then only connect to these well known peers.
+fn check_node_allowlist<
+	B: BlockT,
+	BE: BackendT<B>,
+	C: BlockchainEvents<B> + StorageProvider<B, BE> + HeaderBackend<B>,
+	H: sc_network::ExHashT
+> (
+	network: &sc_network::NetworkWorker<B, BE, H>,
+	client: &Arc<C>,
+) {
+	let id = BlockId::hash(client.info().best_hash);
+	let allowlist_storage = client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec()));
+	if let Ok(Some(raw_allowlist)) = allowlist_storage {
+		let node_allowlist: Result<Vec<NodePublic>, _> = Decode::decode(&mut &raw_allowlist.0[..]);
+
+		if let Ok(node_allowlist) = node_allowlist {
+			// Transform to PeerId.
+			// TODO remove local peer id.
+			let peer_ids = node_allowlist.iter()
+				.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok()) // TODO ok or unwrap()
+				.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
+				.collect();
+			network.service().set_reserved_peers(peer_ids, true);
 		}
 	}
 }
