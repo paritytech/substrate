@@ -25,7 +25,7 @@ pub fn interval(duration: Duration) -> impl Stream<Item = ()> + Unpin {
 	unfold((), move |_| Delay::new(duration).map(|_| Some(((), ())))).map(drop)
 }
 
-/// Wrapper around `LinkedHashSet` which grows bounded.
+/// Wrapper around `LinkedHashSet` with bounded growth.
 ///
 /// In the limit, for each element inserted the oldest existing element will be removed.
 #[derive(Debug, Clone)]
