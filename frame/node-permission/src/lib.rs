@@ -17,7 +17,7 @@
 
 //! # Node permission moudule
 //!
-//! This module is used by the `client/peerset` to retrieve the current
+//! This module is used by the `client/service` to retrieve the current
 //! permissioned nodes.
 
 // Ensure we're `no_std` when compiling for Wasm.

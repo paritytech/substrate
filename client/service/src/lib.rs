@@ -48,7 +48,7 @@ use parking_lot::Mutex;
 use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{warn, debug, error};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, DecodeAll};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
@@ -359,7 +359,7 @@ fn check_node_allowlist<
 	let id = BlockId::hash(client.info().best_hash);
 	let allowlist_storage = client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec()));
 	if let Ok(Some(raw_allowlist)) = allowlist_storage {
-		let node_allowlist: Result<Vec<NodePublic>, _> = Decode::decode(&mut &raw_allowlist.0[..]);
+		let node_allowlist = Vec::<NodePublic>::decode_all(&mut &raw_allowlist.0[..]);
 
 		if let Ok(node_allowlist) = node_allowlist {
 			let mut peer_ids: HashSet<PeerId> = node_allowlist.iter()
