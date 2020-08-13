@@ -24,25 +24,25 @@
 //! the [`NetworkService::notification_sender`] method. This method is quite low level and isn't
 //! expected to be used directly.
 //!
-//! The [`QueueSender`] struct provided by this module is built on top of
+//! The [`QueuedSender`] struct provided by this module is built on top of
 //! [`NetworkService::notification_sender`] and provides a cleaner way to send notifications.
 //!
 //! # Behaviour
 //!
-//! An instance of [`QueueSender`] is specific to a certain combination of `PeerId` and
+//! An instance of [`QueuedSender`] is specific to a certain combination of `PeerId` and
 //! protocol name. It maintains a buffer of messages waiting to be sent out. The user of this API
 //! is able to manipulate that queue, adding or removing obsolete messages.
 //!
-//! Creating a [`QueueSender`] also returns a opaque `Future` whose responsibility it to
+//! Creating a [`QueuedSender`] also returns a opaque `Future` whose responsibility it to
 //! drain that queue and actually send the messages. If the substream with the given combination
 //! of peer and protocol is closed, the queue is silently discarded. It is the role of the user
 //! to track which peers we are connected to.
 //!
-//! In normal situations, messages sent through a [`QueueSender`] will arrive in the same
+//! In normal situations, messages sent through a [`QueuedSender`] will arrive in the same
 //! order as they have been sent.
 //! It is possible, in the situation of disconnects and reconnects, that messages arrive in a
 //! different order. See also https://github.com/paritytech/substrate/issues/6756.
-//! However, if multiple instances of [`QueueSender`] exist for the same peer and protocol, or
+//! However, if multiple instances of [`QueuedSender`] exist for the same peer and protocol, or
 //! if some other code uses the [`NetworkService`] to send notifications to this combination or
 //! peer and protocol, then the notifications will be interleaved in an unpredictable way.
 //!
@@ -64,16 +64,16 @@ use std::{
 mod tests;
 
 /// Notifications sender for a specific combination of network service, peer, and protocol.
-pub struct QueueSender<M> {
+pub struct QueuedSender<M> {
 	/// Shared between the front and the back task.
 	shared: Arc<Shared<M>>,
 }
 
-impl<M> QueueSender<M> {
-	/// Returns a new [`QueueSender`] containing a queue of message for this specific
+impl<M> QueuedSender<M> {
+	/// Returns a new [`QueuedSender`] containing a queue of message for this specific
 	/// combination of peer and protocol.
 	///
-	/// In addition to the [`QueueSender`], also returns a `Future` whose role is to drive
+	/// In addition to the [`QueuedSender`], also returns a `Future` whose role is to drive
 	/// the messages sending forward.
 	pub fn new<B, H, F>(
 		service: Arc<NetworkService<B, H>>,
@@ -103,7 +103,7 @@ impl<M> QueueSender<M> {
 			messages_encode
 		);
 
-		(QueueSender { shared }, task)
+		(QueuedSender { shared }, task)
 	}
 
 	/// Locks the queue of messages towards this peer.
@@ -128,13 +128,13 @@ impl<M> QueueSender<M> {
 	}
 }
 
-impl<M> fmt::Debug for QueueSender<M> {
+impl<M> fmt::Debug for QueuedSender<M> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_struct("QueueSender").finish()
+		f.debug_struct("QueuedSender").finish()
 	}
 }
 
-impl<M> Drop for QueueSender<M> {
+impl<M> Drop for QueuedSender<M> {
 	fn drop(&mut self) {
 		// The "clean" way to notify the `Condvar` here is normally to first lock the `Mutex`,
 		// then notify the `Condvar` while the `Mutex` is locked. Unfortunately, the `Mutex`
@@ -218,10 +218,10 @@ async fn spawn_task<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>(
 					break 'next_msg msg;
 				}
 
-				// It is possible that the destructor of `QueueSender` sets `stop_task` to
+				// It is possible that the destructor of `QueuedSender` sets `stop_task` to
 				// true and notifies the `Condvar` after the background task loads `stop_task`
 				// and before it calls `Condvar::wait`.
-				// See also the corresponding comment in `QueueSender::drop`.
+				// See also the corresponding comment in `QueuedSender::drop`.
 				// For this reason, we use `wait_timeout`. In the worst case scenario,
 				// `stop_task` will always be checked again after the timeout is reached.
 				queue = shared.condvar.wait_timeout(queue, Duration::from_secs(10)).await.0;
