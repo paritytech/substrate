@@ -101,10 +101,12 @@ decl_module! {
 
         fn deposit_event() = default;
 
-        /// Add a node id to the allowlist. It's likely the public key of ed25519 keypair.
+        /// Add a node to the allowlist.
         ///
         /// May only be called from `T::AddOrigin`.
-        #[weight = 0]
+        ///
+        /// - `node_id`: identifier of the node, it's likely the public key of ed25519 keypair.
+        #[weight = 50_000_000]
         pub fn add_node(origin, node_id: T::NodeId) {
             T::AddOrigin::ensure_origin(origin)?;
 
@@ -118,10 +120,12 @@ decl_module! {
             Self::deposit_event(Event::NodeAdded);
         }
 
-        /// Remove a node from te allowlist. It's likely the public key of ed25519 keypair.
+        /// Remove a node from the allowlist.
         ///
         /// May only be called from `T::RemoveOrigin`.
-        #[weight = 0]
+        ///
+        /// - `node_id`: identifier of the node, it's likely the public key of ed25519 keypair.
+        #[weight = 50_000_000]
         pub fn remove_node(origin, node_id: T::NodeId) {
             T::RemoveOrigin::ensure_origin(origin)?;
 
@@ -134,11 +138,15 @@ decl_module! {
             Self::deposit_event(Event::NodeRemoved);
         }
 
-        /// Swap two nodes; `remove` is the one which will be put out of the list,
-        /// `add` will be in the list.
+        /// Swap two nodes.
         ///
         /// May only be called from `T::SwapOrigin`.
-        #[weight = 0]
+        ///
+        /// - `remove`: the node which will be moved out from the list, it's likely the public key
+        /// of ed25519 keypair.
+        /// - `add`: the node which will be put in the list, it's likely the public key of ed25519
+        /// keypair.
+        #[weight = 50_000_000]
         pub fn swap_node(origin, remove: T::NodeId, add: T::NodeId) {
             T::SwapOrigin::ensure_origin(origin)?;
 
@@ -157,7 +165,9 @@ decl_module! {
         /// Reset all the permissioned nodes in the list.
         ///
         /// May only be called from `T::ResetOrigin`.
-        #[weight = 0]
+        ///
+        /// - `nodes`: the new nodes for the allowlist.
+        #[weight = 50_000_000]
         pub fn reset_nodes(origin, nodes: Vec<T::NodeId>) {
             T::ResetOrigin::ensure_origin(origin)?;
             ensure!(nodes.len() < T::MaxPermissionedNodes::get() as usize, Error::<T>::TooManyNodes);
@@ -296,7 +306,10 @@ mod tests {
             assert_eq!(NodePermission::get_allowlist(), vec![10, 20, 30]);
 
             assert_noop!(NodePermission::swap_node(Origin::signed(3), 15, 5), Error::<Test>::NotExist);
-            assert_noop!(NodePermission::swap_node(Origin::signed(3), 20, 30), Error::<Test>::AlreadyJoined);
+            assert_noop!(
+                NodePermission::swap_node(Origin::signed(3), 20, 30),
+                Error::<Test>::AlreadyJoined
+            );
             
             assert_ok!(NodePermission::swap_node(Origin::signed(3), 20, 5));
             assert_eq!(NodePermission::get_allowlist(), vec![5, 10, 30]);
@@ -307,7 +320,10 @@ mod tests {
     fn reset_nodes_works() {
         new_test_ext().execute_with(|| {
             assert_noop!(NodePermission::reset_nodes(Origin::signed(3), vec![15, 5, 20]), BadOrigin);
-            assert_noop!(NodePermission::reset_nodes(Origin::signed(4), vec![15, 5, 20, 25]), Error::<Test>::TooManyNodes);
+            assert_noop!(
+                NodePermission::reset_nodes(Origin::signed(4), vec![15, 5, 20, 25]),
+                Error::<Test>::TooManyNodes
+            );
             
             assert_ok!(NodePermission::reset_nodes(Origin::signed(4), vec![15, 5, 20]));
             assert_eq!(NodePermission::get_allowlist(), vec![5, 15, 20]);
