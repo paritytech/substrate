@@ -45,10 +45,6 @@ use crate::{
 use futures::prelude::*;
 use libp2p::{PeerId, multiaddr, Multiaddr};
 use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}, either::EitherError};
-use libp2p::identity::{
-	ed25519::PublicKey as Ed25519PublicKey,
-	PublicKey
-};
 use libp2p::kad::record;
 use libp2p::ping::handler::PingFailure;
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent, protocols_handler::NodeHandlerWrapperError};
@@ -60,12 +56,9 @@ use prometheus_endpoint::{
 };
 use sc_peerset::PeersetHandle;
 use sc_client_api::backend::Backend as BackendT;
-use sp_core::ed25519::Public as NodePublic;
-use sp_core::storage::{StorageKey, well_known_keys};
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
-	generic::BlockId,
 	ConsensusEngineId,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -83,7 +76,6 @@ use std::{
 	},
 	task::Poll,
 };
-use codec::Decode;
 
 mod out_events;
 #[cfg(test)]
@@ -232,28 +224,12 @@ impl<B: BlockT + 'static, BE, H: ExHashT> NetworkWorker<B, BE, H>
 			]
 		};
 
-		// Initialize the permissioned nodes
-		let mut init_allowlist = None;
-		// let id = BlockId::hash(params.chain.info().best_hash);
-		// let allowlist_storage = params.chain.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec())).map_err(|_| Error::InvalidStorage)?;
-		// if let Some(raw_allowlist) = allowlist_storage {
-		// 	let node_allowlist: Vec<NodePublic> = Decode::decode(&mut &raw_allowlist.0[..]).map_err(|_| Error::InvalidStorage)?; // TODO another error type
-
-		// 	// Transform to PeerId
-		// 	let peer_ids = node_allowlist.iter()
-		// 		.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok()) // TODO ok or unwrap()
-		// 		.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
-		// 		.collect();
-		// 	init_allowlist = Some(peer_ids);
-		// }
-
 		let peerset_config = sc_peerset::PeersetConfig {
 			in_peers: params.network_config.in_peers,
 			out_peers: params.network_config.out_peers,
 			bootnodes,
 			reserved_only: params.network_config.non_reserved_mode == NonReservedPeerMode::Deny,
 			priority_groups,
-			init_allowlist,
 		};
 
 		// Private and public keys configuration.
@@ -984,11 +960,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
-	}
-
-	/// Inform the network service about refresh node allowlist.
-	pub fn set_peer_allowlist(&self, peer_ids: Vec<PeerId>) {
-		self.peerset.set_allowlist(peer_ids);
 	}
 }
 

@@ -23,7 +23,7 @@ mod peersstate;
 
 use std::{collections::{HashSet, HashMap}, collections::VecDeque};
 use futures::prelude::*;
-use log::{debug, error, trace, info};
+use log::{debug, error, trace};
 use serde_json::json;
 use std::{pin::Pin, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
@@ -51,7 +51,6 @@ enum Action {
 	SetPriorityGroup(String, HashSet<PeerId>),
 	AddToPriorityGroup(String, PeerId),
 	RemoveFromPriorityGroup(String, PeerId),
-	SetAllowList(Vec<PeerId>),
 }
 
 /// Description of a reputation adjustment for a node.
@@ -129,11 +128,6 @@ impl PeersetHandle {
 	pub fn remove_from_priority_group(&self, group_id: String, peer_id: PeerId) {
 		let _ = self.tx.unbounded_send(Action::RemoveFromPriorityGroup(group_id, peer_id));
 	}
-
-	/// Refresh node allowlist
-	pub fn set_allowlist(&self, peer_ids: Vec<PeerId>) {
-		let _ = self.tx.unbounded_send(Action::SetAllowList(peer_ids));
-	}
 }
 
 /// Message that can be sent by the peer set manager (PSM).
@@ -186,9 +180,6 @@ pub struct PeersetConfig {
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
 	/// >			otherwise it will not be able to connect to them.
 	pub priority_groups: Vec<(String, HashSet<PeerId>)>,
-
-	/// Initialization of permissioned nodes
-	pub init_allowlist: Option<Vec<PeerId>>
 }
 
 /// Side of the peer set manager owned by the network. In other words, the "receiving" side.
@@ -214,8 +205,6 @@ pub struct Peerset {
 	created: Instant,
 	/// Last time when we updated the reputations of connected nodes.
 	latest_time_update: Instant,
-	/// List of nodes that are allowed to connect.
-	allowlist: Option<Vec<PeerId>>,
 }
 
 impl Peerset {
@@ -238,7 +227,6 @@ impl Peerset {
 			message_queue: VecDeque::new(),
 			created: now,
 			latest_time_update: now,
-			allowlist: config.init_allowlist,
 		};
 
 		for node in config.priority_groups.into_iter().flat_map(|(_, l)| l) {
@@ -374,11 +362,6 @@ impl Peerset {
 		}
 	}
 
-	fn on_set_allowlist(&mut self, peer_ids: Vec<PeerId>) {
-		self.allowlist = Some(peer_ids);
-		self.alloc_slots(); // TODO only disconnect if it's not empty
-	}
-
 	/// Updates the value of `self.latest_time_update` and performs all the updates that happen
 	/// over time, such as reputation increases for staying connected.
 	fn update_time(&mut self) {
@@ -438,44 +421,6 @@ impl Peerset {
 	/// Try to fill available out slots with nodes.
 	fn alloc_slots(&mut self) {
 		self.update_time();
-
-		// // Try to connnect to permissioned nodes
-		// if let Some(peer_ids) = &self.allowlist {
-		// 	info!(target: "peerset", "alloc_slots peer_ids =========: {:?}", peer_ids);
-		// 	loop {
-		// 		let next = {
-		// 			let data = &mut self.data;
-		// 			peer_ids.iter()
-		// 				.filter(move |n| {
-		// 					data.peer(n).into_connected().is_none()
-		// 				})
-		// 				.next()
-		// 				.cloned()
-		// 		};
-
-		// 		let next = match next {
-		// 			Some(n) => n,
-		// 			None => break,
-		// 		};
-
-		// 		info!(target: "peerset", "this peer_id =========: {:?}", next);
-
-		// 		let next = match self.data.peer(&next) {
-		// 			peersstate::Peer::Unknown(n) => n.discover(),
-		// 			peersstate::Peer::NotConnected(n) => n,
-		// 			peersstate::Peer::Connected(_) => {
-		// 				debug_assert!(false, "State inconsistency: not connected state");
-		// 				break;
-		// 			}
-		// 		};
-
-		// 		match next.try_outgoing() {
-		// 			Ok(conn) => self.message_queue.push_back(Message::Connect(conn.into_peer_id())),
-		// 			Err(_) => break,	// No more slots available.
-		// 		}
-		// 	}
-		// 	return;
-		// }
 
 		// Try to connect to all the reserved nodes that we are not connected to.
 		loop {
@@ -584,16 +529,6 @@ impl Peerset {
 	pub fn incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
 		trace!(target: "peerset", "Incoming {:?}", peer_id);
 		self.update_time();
-
-		// Only connect to permissioned node
-		trace!(target: "peerset", "==== incoming allowlist {:?}", &self.allowlist);
-		if let Some(peer_ids) = &self.allowlist {
-			info!(target: "peerset", "-======== allowed incoming peer_ids =========: {:?}, incoming: {:?}", peer_ids, peer_id);
-			if !peer_ids.contains(&peer_id) {
-				self.message_queue.push_back(Message::Reject(index));
-				return;
-			}
-		}
 
 		if self.reserved_only {
 			if !self.priority_groups.get(RESERVED_NODES).map_or(false, |n| n.contains(&peer_id)) {
@@ -742,8 +677,6 @@ impl Stream for Peerset {
 					self.on_add_to_priority_group(&group_id, peer_id),
 				Action::RemoveFromPriorityGroup(group_id, peer_id) =>
 					self.on_remove_from_priority_group(&group_id, peer_id),
-				Action::SetAllowList(peer_ids) =>
-					self.on_set_allowlist(peer_ids),
 			}
 		}
 	}
