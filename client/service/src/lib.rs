@@ -200,7 +200,6 @@ async fn build_network_future<
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
-	permissioned_network: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
@@ -245,50 +244,19 @@ async fn build_network_future<
 					);
 				}
 				
-				if permissioned_network {
-					let id = BlockId::hash(client.info().best_hash);
-					let raw_allowlist = match client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec())) {
-						Ok(Some(r)) => r,
-						Ok(None) => { 
-							info!(
-								target: "sub-libp2p",
-								"🏷  err in get storage -------------"
-							);
-							StorageData(vec![])
-						},
-						Err(_) => {
-							info!(
-								target: "sub-libp2p",
-								"🏷  err in get storage error result -------------"
-							);
-							return
-						}, // TODO log error
-					};
-					let node_allowlist: Vec<NodePublic> = match Decode::decode(&mut &raw_allowlist.0[..]) {
-						Ok(r) => r,
-						Err(_) => {
-							info!(
-								target: "sub-libp2p",
-								"🏷  err in decode------------- {:?}",
-								raw_allowlist
-							);
-							vec![]
-						}, // TODO log error
-					};
-					// Transform to PeerId
-					let peer_ids = node_allowlist.iter()
-						.filter_map(|pubkey| {
-							info!(
-								target: "sub-libp2p",
-								"🏷  deocoding node id now: {:?}, {:?}",
-								Ed25519PublicKey::decode(&pubkey.0),
-								&pubkey.0
-							);
-							Ed25519PublicKey::decode(&pubkey.0).ok()
-						})
-						.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
-						.collect();
-					network.service().set_peer_allowlist(peer_ids);
+				let id = BlockId::hash(client.info().best_hash);
+				let allowlist_storage = client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec()));
+				if let Ok(Some(raw_allowlist)) = allowlist_storage {
+					let node_allowlist: Result<Vec<NodePublic>, _> = Decode::decode(&mut &raw_allowlist.0[..]);
+
+					if let Ok(node_allowlist) = node_allowlist {
+						// Transform to PeerId
+						let peer_ids = node_allowlist.iter()
+							.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok()) // TODO ok or unwrap()
+							.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
+							.collect();
+						network.service().set_peer_allowlist(peer_ids);
+					}
 				}
 			}
 

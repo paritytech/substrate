@@ -847,8 +847,10 @@ parameter_types! {
 impl pallet_node_permission::Trait for Runtime {
 	type Event = Event;
 	type MaxPermissionedNodes = MaxPermissionedNodes;
-	type AddNodeOrigin = EnsureRootOrHalfCouncil;
-	type ResetNodesOrigin = EnsureRootOrHalfCouncil;
+	type AddOrigin = EnsureRootOrHalfCouncil;
+	type RemoveOrigin = EnsureRootOrHalfCouncil;
+	type SwapOrigin = EnsureRootOrHalfCouncil;
+	type ResetOrigin = EnsureRootOrHalfCouncil;
 }
 
 construct_runtime!(

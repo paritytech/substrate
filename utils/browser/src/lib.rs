@@ -106,7 +106,6 @@ where
 			enable_color: false,
 			prefix: String::new(),
 		},
-		permissioned_network: true,
 	};
 
 	Ok(config)

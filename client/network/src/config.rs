@@ -107,9 +107,6 @@ pub struct Params<B: BlockT, BE, H: ExHashT>
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
-
-	/// Whether a node is in a permissioned network or not.
-	pub permissioned_network: bool,
 }
 
 /// Role of the local node.

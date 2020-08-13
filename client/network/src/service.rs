@@ -234,41 +234,14 @@ impl<B: BlockT + 'static, BE, H: ExHashT> NetworkWorker<B, BE, H>
 
 		// Initialize the permissioned nodes
 		let mut init_allowlist = None;
-		if params.permissioned_network {
-			let id = BlockId::hash(params.chain.info().best_hash);
-			let raw_allowlist = match params.chain.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec())) {
-				Ok(Some(r)) => r,
-				Ok(None) => { 
-					info!(
-						target: "sub-libp2p",
-						"🏷  err in get init storage -------------"
-					);
-					StorageData(vec![])
-				},
-				Err(_) => return Err(Error::InvalidStorage), // TODO log error
-			};
-			let node_allowlist: Vec<NodePublic> = match Decode::decode(&mut &raw_allowlist.0[..]) {
-				Ok(r) => r,
-				Err(_) => {
-					info!(
-						target: "sub-libp2p",
-						"🏷  err in init decode------------- {:?}",
-						raw_allowlist
-					);
-					vec![]
-				}, // TODO log error
-			};
+		let id = BlockId::hash(params.chain.info().best_hash);
+		let allowlist_storage = params.chain.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec())).map_err(|_| Error::InvalidStorage)?;
+		if let Some(raw_allowlist) = allowlist_storage {
+			let node_allowlist: Vec<NodePublic> = Decode::decode(&mut &raw_allowlist.0[..]).map_err(|_| Error::InvalidStorage)?; // TODO another error type
+
 			// Transform to PeerId
 			let peer_ids = node_allowlist.iter()
-				.filter_map(|pubkey| {
-					info!(
-						target: "sub-libp2p",
-						"🏷  init deocoding node id now: {:?}, {:?}",
-						Ed25519PublicKey::decode(&pubkey.0),
-						&pubkey.0
-					);
-					Ed25519PublicKey::decode(&pubkey.0).ok()
-				})
+				.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok()) // TODO ok or unwrap()
 				.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
 				.collect();
 			init_allowlist = Some(peer_ids);

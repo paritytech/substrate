@@ -680,7 +680,6 @@ pub trait TestNetFactory: Sized {
 			block_announce_validator: config.block_announce_validator
 				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
 			metrics_registry: None,
-			permissioned_network: false
 		}).unwrap();
 
 		self.mut_peers(|peers| {

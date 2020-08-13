@@ -16,7 +16,6 @@
 // limitations under the License.
 
 //! # Node permission moudule
-
 //!
 //! This module is used by the `client/peerset` to retrieve the current
 //! permissioned nodes.
@@ -28,14 +27,12 @@ use sp_core::{ed25519::Public, storage::well_known_keys};
 use sp_std::prelude::*;
 use frame_support::{
     decl_module, decl_storage, decl_event, decl_error,
-    dispatch::DispatchResult, storage, ensure,
-    traits::{Get, EnsureOrigin},
+    storage, ensure, traits::{Get, EnsureOrigin},
 };
 use codec::Encode;
 
 type NodeId = Public;
 
-/// The module's config trait.
 pub trait Trait: frame_system::Trait {
     /// The event type of this module.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
@@ -44,15 +41,20 @@ pub trait Trait: frame_system::Trait {
     type MaxPermissionedNodes: Get<u32>;
 
     /// The origin which can add a permissioned node.
-    type AddNodeOrigin: EnsureOrigin<Self::Origin>;
+    type AddOrigin: EnsureOrigin<Self::Origin>;
+
+    /// The origin which can remove a permissioned node.
+    type RemoveOrigin: EnsureOrigin<Self::Origin>;
+
+    /// The origin which can swap the permissioned nodes.
+    type SwapOrigin: EnsureOrigin<Self::Origin>;
 
     /// The origin which can reset the permissioned nodes.
-    type ResetNodesOrigin: EnsureOrigin<Self::Origin>;
+    type ResetOrigin: EnsureOrigin<Self::Origin>;
 }
 
 decl_storage! {
-    trait Store for Module<T: Trait> as NodePermission {
-    }
+    trait Store for Module<T: Trait> as NodePermission {}
     add_extra_genesis {
         config(nodes): Vec<NodeId>;
         build(|config: &GenesisConfig| {
@@ -63,8 +65,14 @@ decl_storage! {
 
 decl_event! {
     pub enum Event {
-        /// The given node was added.
+        /// The given node was added; see the transaction for node id.
         NodeAdded,
+        /// The given node was removed; see the transaction for node id.
+        NodeRemoved,
+        /// Two given nodes were swapped; see the transaction for node id.
+        NodesSwapped,
+        /// The given nodes were reset; see the transaction for new set.
+        NodesReset,
     }
 }
 
@@ -73,7 +81,10 @@ decl_error! {
     pub enum Error for Module<T: Trait> {
         /// Too many permissioned nodes.
         TooManyNodes,
+        /// The node is already joined in the list.
         AlreadyJoined,
+        /// The node doesn't exist in the list.
+        NotExist,
     }
 }
 
@@ -88,21 +99,80 @@ decl_module! {
 
         /// Add a node to the allowlist.
         ///
-        /// Can only be called from `T::AddNodeOrigin`.
+        /// May only be called from `T::AddOrigin`.
         #[weight = 0]
-        pub fn add_node(origin, node_public_key: NodeId) -> DispatchResult {
-            T::AddNodeOrigin::ensure_origin(origin)?;
+        pub fn add_node(origin, node_public_key: NodeId) {
+            T::AddOrigin::ensure_origin(origin)?;
 
-            let mut nodes: Vec<NodeId> = storage::unhashed::get_or_default(well_known_keys::NODE_ALLOWLIST);
+            let mut nodes: Vec<NodeId> = Self::get_allowlist();
             ensure!(nodes.len() < T::MaxPermissionedNodes::get() as usize, Error::<T>::TooManyNodes);
 
             let location = nodes.binary_search(&node_public_key).err().ok_or(Error::<T>::AlreadyJoined)?;
             nodes.insert(location, node_public_key);
-            storage::unhashed::put(well_known_keys::NODE_ALLOWLIST, &nodes);
+            Self::put_allowlist(nodes);
 
             Self::deposit_event(Event::NodeAdded);
-
-            Ok(())
         }
+
+        /// Remove a node from te allowlist.
+        ///
+        /// May only be called from `T::RemoveOrigin`.
+        #[weight = 0]
+        pub fn remove_node(origin, node_public_key: NodeId) {
+            T::RemoveOrigin::ensure_origin(origin)?;
+
+            let mut nodes: Vec<NodeId> = Self::get_allowlist();
+
+            let location = nodes.binary_search(&node_public_key).ok().ok_or(Error::<T>::NotExist)?;
+            nodes.remove(location);
+            Self::put_allowlist(nodes);
+
+            Self::deposit_event(Event::NodeRemoved);
+        }
+
+        /// Swap two nodes; `remove` is the one which will be put out of the list,
+        /// `add` will be in the list.
+        ///
+        /// May only be called from `T::SwapOrigin`.
+        #[weight = 0]
+        pub fn swap_node(origin, remove: NodeId, add: NodeId) {
+            T::SwapOrigin::ensure_origin(origin)?;
+
+            if remove == add { return Ok(()) }
+            
+            let mut nodes: Vec<NodeId> = Self::get_allowlist();
+            let location = nodes.binary_search(&remove).ok().ok_or(Error::<T>::NotExist)?;
+            let _ = nodes.binary_search(&add).err().ok_or(Error::<T>::AlreadyJoined)?;
+            nodes[location] = add;
+            nodes.sort();
+            Self::put_allowlist(nodes);
+
+            Self::deposit_event(Event::NodesSwapped);
+        }
+
+        /// Reset all the permissioned nodes in the list.
+        ///
+        /// May only be called from `T::ResetOrigin`.
+        #[weight = 0]
+        pub fn reset_nodes(origin, nodes: Vec<NodeId>) {
+            T::ResetOrigin::ensure_origin(origin)?;
+            ensure!(nodes.len() < T::MaxPermissionedNodes::get() as usize, Error::<T>::TooManyNodes);
+
+            let mut nodes = nodes;
+            nodes.sort();
+            Self::put_allowlist(nodes);
+
+            Self::deposit_event(Event::NodesReset);
+        }
+    }
+}
+
+impl<T: Trait> Module<T> {
+    fn get_allowlist() -> Vec<NodeId> {
+        storage::unhashed::get_or_default(well_known_keys::NODE_ALLOWLIST)
+    }
+
+    fn put_allowlist(nodes: Vec<NodeId>) {
+        storage::unhashed::put(well_known_keys::NODE_ALLOWLIST, &nodes);
     }
 }
