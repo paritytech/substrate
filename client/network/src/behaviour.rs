@@ -29,7 +29,6 @@ use libp2p::identify::IdentifyInfo;
 use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters};
 use log::debug;
-use sc_client_api::backend::Backend as BackendT;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId, Justification};
 use std::{
@@ -43,23 +42,20 @@ use std::{
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "BehaviourOut<B>", poll_method = "poll")]
-pub struct Behaviour<B: BlockT, BE, H: ExHashT>
-	where
-		BE: BackendT<B>
-{
+pub struct Behaviour<B: BlockT, H: ExHashT> {
 	/// All the substrate-specific protocols.
-	substrate: Protocol<B, BE, H>,
+	substrate: Protocol<B, H>,
 	/// Periodically pings and identifies the nodes we are connected to, and store information in a
 	/// cache.
 	peer_info: peer_info::PeerInfoBehaviour,
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
 	/// Block request handling.
-	block_requests: block_requests::BlockRequests<B, BE>,
+	block_requests: block_requests::BlockRequests<B>,
 	/// Finality proof request handling.
 	finality_proof_requests: finality_requests::FinalityProofRequests<B>,
 	/// Light client request handling.
-	light_client_handler: light_client_handler::LightClientHandler<B, BE>,
+	light_client_handler: light_client_handler::LightClientHandler<B>,
 
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
@@ -154,19 +150,16 @@ pub enum BehaviourOut<B: BlockT> {
 	Dht(DhtEvent, Duration),
 }
 
-impl<B: BlockT, BE, H: ExHashT> Behaviour<B, BE, H>
-	where
-		BE: BackendT<B>
-{
+impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	/// Builds a new `Behaviour`.
 	pub fn new(
-		substrate: Protocol<B, BE, H>,
+		substrate: Protocol<B, H>,
 		role: Role,
 		user_agent: String,
 		local_public_key: PublicKey,
-		block_requests: block_requests::BlockRequests<B, BE>,
+		block_requests: block_requests::BlockRequests<B>,
 		finality_proof_requests: finality_requests::FinalityProofRequests<B>,
-		light_client_handler: light_client_handler::LightClientHandler<B, BE>,
+		light_client_handler: light_client_handler::LightClientHandler<B>,
 		disco_config: DiscoveryConfig,
 	) -> Self {
 		Behaviour {
@@ -244,12 +237,12 @@ impl<B: BlockT, BE, H: ExHashT> Behaviour<B, BE, H>
 	}
 
 	/// Returns a shared reference to the user protocol.
-	pub fn user_protocol(&self) -> &Protocol<B, BE, H> {
+	pub fn user_protocol(&self) -> &Protocol<B, H> {
 		&self.substrate
 	}
 
 	/// Returns a mutable reference to the user protocol.
-	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B, BE, H> {
+	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B, H> {
 		&mut self.substrate
 	}
 
@@ -285,20 +278,15 @@ fn reported_roles_to_observed_role(local_role: &Role, remote: &PeerId, roles: Ro
 	}
 }
 
-impl<B: BlockT, BE, H: ExHashT> NetworkBehaviourEventProcess<void::Void> for
-Behaviour<B, BE, H>
-	where
-		BE: BackendT<B>
-{
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<void::Void> for
+Behaviour<B, H> {
 	fn inject_event(&mut self, event: void::Void) {
 		void::unreachable(event)
 	}
 }
 
-impl<B: BlockT, BE, H: ExHashT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for
-Behaviour<B, BE, H>
-	where BE: BackendT<B>
-{
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for
+Behaviour<B, H> {
 	fn inject_event(&mut self, event: CustomMessageOutcome<B>) {
 		match event {
 			CustomMessageOutcome::BlockImport(origin, blocks) =>
@@ -370,10 +358,7 @@ Behaviour<B, BE, H>
 	}
 }
 
-impl<B: BlockT, BE, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B>> for Behaviour<B, BE, H>
-	where
-		BE: BackendT<B>
-{
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B>> for Behaviour<B, H> {
 	fn inject_event(&mut self, event: block_requests::Event<B>) {
 		match event {
 			block_requests::Event::AnsweredRequest { peer, total_handling_time } => {
@@ -407,10 +392,7 @@ impl<B: BlockT, BE, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Eve
 	}
 }
 
-impl<B: BlockT, BE, H: ExHashT> NetworkBehaviourEventProcess<finality_requests::Event<B>> for Behaviour<B, BE, H>
-	where
-		BE: BackendT<B>
-{
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<finality_requests::Event<B>> for Behaviour<B, H> {
 	fn inject_event(&mut self, event: finality_requests::Event<B>) {
 		match event {
 			finality_requests::Event::Response { peer, block_hash, proof } => {
@@ -430,11 +412,8 @@ impl<B: BlockT, BE, H: ExHashT> NetworkBehaviourEventProcess<finality_requests::
 	}
 }
 
-impl<B: BlockT, BE, H: ExHashT> NetworkBehaviourEventProcess<peer_info::PeerInfoEvent>
-	for Behaviour<B, BE, H>
-	where
-		BE: BackendT<B>
-{
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<peer_info::PeerInfoEvent>
+	for Behaviour<B, H> {
 	fn inject_event(&mut self, event: peer_info::PeerInfoEvent) {
 		let peer_info::PeerInfoEvent::Identified {
 			peer_id,
@@ -463,11 +442,8 @@ impl<B: BlockT, BE, H: ExHashT> NetworkBehaviourEventProcess<peer_info::PeerInfo
 	}
 }
 
-impl<B: BlockT, BE, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
-	for Behaviour<B, BE, H>
-	where
-		BE: BackendT<B>
-{
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
+	for Behaviour<B, H> {
 	fn inject_event(&mut self, out: DiscoveryOut) {
 		match out {
 			DiscoveryOut::UnroutablePeer(_peer_id) => {
@@ -500,10 +476,7 @@ impl<B: BlockT, BE, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 	}
 }
 
-impl<B: BlockT, BE, H: ExHashT> Behaviour<B, BE, H>
-	where
-		BE: BackendT<B>
-{
+impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	fn poll<TEv>(&mut self, _: &mut Context, _: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
 		if let Some(event) = self.events.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))

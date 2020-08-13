@@ -844,7 +844,6 @@ pub fn build_network<TBl, TBE, TExPool, TImpQu, TCl>(
 		imports_external_transactions: !matches!(config.role, Role::Light),
 		pool: transaction_pool,
 		client: client.clone(),
-		_backend: Default::default(),
 	});
 
 	let protocol_id = {

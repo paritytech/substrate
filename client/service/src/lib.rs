@@ -39,7 +39,6 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
 use std::task::Poll;
-use std::marker::PhantomData;
 use libp2p::identity::{
 	ed25519::PublicKey as Ed25519PublicKey,
 	PublicKey
@@ -194,7 +193,7 @@ async fn build_network_future<
 	H: sc_network::ExHashT
 > (
 	role: Role,
-	mut network: sc_network::NetworkWorker<B, BE, H>,
+	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
 	status_sinks: NetworkStatusSinks<B>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
@@ -247,21 +246,6 @@ async fn build_network_future<
 				}
 				
 				check_node_allowlist(&network, &client);
-				// let id = BlockId::hash(client.info().best_hash);
-				// let allowlist_storage = client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec()));
-				// if let Ok(Some(raw_allowlist)) = allowlist_storage {
-				// 	let node_allowlist: Result<Vec<NodePublic>, _> = Decode::decode(&mut &raw_allowlist.0[..]);
-
-				// 	if let Ok(node_allowlist) = node_allowlist {
-				// 		// Transform to PeerId.
-				// 		// TODO remove local peer id.
-				// 		let peer_ids = node_allowlist.iter()
-				// 			.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok()) // TODO ok or unwrap()
-				// 			.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
-				// 			.collect();
-				// 		network.service().set_reserved_peers(peer_ids);
-				// 	}
-				// }
 			}
 
 			// List of blocks that the client has finalized.
@@ -369,7 +353,7 @@ fn check_node_allowlist<
 	C: BlockchainEvents<B> + StorageProvider<B, BE> + HeaderBackend<B>,
 	H: sc_network::ExHashT
 > (
-	network: &sc_network::NetworkWorker<B, BE, H>,
+	network: &sc_network::NetworkWorker<B, H>,
 	client: &Arc<C>,
 ) {
 	let id = BlockId::hash(client.info().best_hash);
@@ -509,11 +493,10 @@ impl RpcSession {
 }
 
 /// Transaction pool adapter.
-pub struct TransactionPoolAdapter<BE, C, P> {
+pub struct TransactionPoolAdapter<C, P> {
 	imports_external_transactions: bool,
 	pool: Arc<P>,
 	client: Arc<C>,
-	_backend: PhantomData<BE>,
 }
 
 /// Get transactions for propagation.
@@ -537,12 +520,11 @@ where
 		.collect()
 }
 
-impl<B, BE, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for
-	TransactionPoolAdapter<BE, C, Pool>
+impl<B, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for
+	TransactionPoolAdapter<C, Pool>
 where
 	B: BlockT,
-	BE: BackendT<B>,
-	C: sc_network::config::Client<B, BE> + Send + Sync,
+	C: sc_network::config::Client<B> + Send + Sync,
 	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
 	E: 'static + IntoPoolError + From<sp_transaction_pool::error::Error>,

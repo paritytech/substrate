@@ -38,7 +38,6 @@ use libp2p::identity::{ed25519, Keypair};
 use libp2p::wasm_ext;
 use libp2p::{multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
-use sc_client_api::backend::Backend as BackendT;
 use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{borrow::Cow, convert::TryFrom, future::Future, pin::Pin, str::FromStr};
@@ -54,10 +53,7 @@ use std::{
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
-pub struct Params<B: BlockT, BE, H: ExHashT>
-	where
-		BE: BackendT<B>
-{
+pub struct Params<B: BlockT, H: ExHashT> {
 	/// Assigned role for our node (full, light, ...).
 	pub role: Role,
 
@@ -69,7 +65,7 @@ pub struct Params<B: BlockT, BE, H: ExHashT>
 	pub network_config: NetworkConfiguration,
 
 	/// Client that contains the blockchain.
-	pub chain: Arc<dyn Client<B, BE>>,
+	pub chain: Arc<dyn Client<B>>,
 
 	/// Finality proof provider.
 	///

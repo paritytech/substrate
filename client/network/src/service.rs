@@ -55,7 +55,6 @@ use prometheus_endpoint::{
 	PrometheusError, Registry, U64,
 };
 use sc_peerset::PeersetHandle;
-use sc_client_api::backend::Backend as BackendT;
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
@@ -111,16 +110,13 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	_marker: PhantomData<H>,
 }
 
-impl<B: BlockT + 'static, BE, H: ExHashT> NetworkWorker<B, BE, H>
-	where
-		BE: BackendT<B>
-{
+impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// Creates the network service.
 	///
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(params: Params<B, BE, H>) -> Result<NetworkWorker<B, BE, H>, Error> {
+	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
 		// Ensure the listen addresses are consistent with the transport.
 		ensure_addresses_consistent_with_transport(
 			params.network_config.listen_addresses.iter(),
@@ -274,7 +270,7 @@ impl<B: BlockT + 'static, BE, H: ExHashT> NetworkWorker<B, BE, H>
 		)?;
 
 		// Build the swarm.
-		let (mut swarm, bandwidth): (Swarm<B, BE, H>, _) = {
+		let (mut swarm, bandwidth): (Swarm<B, H>, _) = {
 			let user_agent = format!(
 				"{} ({})",
 				params.network_config.client_version,
@@ -359,14 +355,14 @@ impl<B: BlockT + 'static, BE, H: ExHashT> NetworkWorker<B, BE, H>
 
 		// Listen on multiaddresses.
 		for addr in &params.network_config.listen_addresses {
-			if let Err(err) = Swarm::<B, BE, H>::listen_on(&mut swarm, addr.clone()) {
+			if let Err(err) = Swarm::<B, H>::listen_on(&mut swarm, addr.clone()) {
 				warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
 			}
 		}
 
 		// Add external addresses.
 		for addr in &params.network_config.public_addresses {
-			Swarm::<B, BE, H>::add_external_address(&mut swarm, addr.clone());
+			Swarm::<B, H>::add_external_address(&mut swarm, addr.clone());
 		}
 
 		let external_addresses = Arc::new(Mutex::new(Vec::new()));
@@ -481,14 +477,14 @@ impl<B: BlockT + 'static, BE, H: ExHashT> NetworkWorker<B, BE, H>
 
 	/// Returns the local `PeerId`.
 	pub fn local_peer_id(&self) -> &PeerId {
-		Swarm::<B, BE, H>::local_peer_id(&self.network_service)
+		Swarm::<B, H>::local_peer_id(&self.network_service)
 	}
 
 	/// Returns the list of addresses we are listening on.
 	///
 	/// Does **NOT** include a trailing `/p2p/` with our `PeerId`.
 	pub fn listen_addresses(&self) -> impl Iterator<Item = &Multiaddr> {
-		Swarm::<B, BE, H>::listeners(&self.network_service)
+		Swarm::<B, H>::listeners(&self.network_service)
 	}
 
 	/// Get network state.
@@ -542,9 +538,9 @@ impl<B: BlockT + 'static, BE, H: ExHashT> NetworkWorker<B, BE, H>
 		};
 
 		NetworkState {
-			peer_id: Swarm::<B, BE, H>::local_peer_id(&swarm).to_base58(),
-			listened_addresses: Swarm::<B, BE, H>::listeners(&swarm).cloned().collect(),
-			external_addresses: Swarm::<B, BE, H>::external_addresses(&swarm).cloned().collect(),
+			peer_id: Swarm::<B, H>::local_peer_id(&swarm).to_base58(),
+			listened_addresses: Swarm::<B, H>::listeners(&swarm).cloned().collect(),
+			external_addresses: Swarm::<B, H>::external_addresses(&swarm).cloned().collect(),
 			average_download_per_sec: self.service.bandwidth.average_download_per_sec(),
 			average_upload_per_sec: self.service.bandwidth.average_upload_per_sec(),
 			connected_peers,
@@ -1110,10 +1106,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 ///
 /// You are encouraged to poll this in a separate background thread or task.
 #[must_use = "The NetworkWorker must be polled in order for the network to advance"]
-pub struct NetworkWorker<B: BlockT + 'static, BE, H: ExHashT>
-	where
-		BE: BackendT<B> + 'static
-{
+pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
@@ -1123,7 +1116,7 @@ pub struct NetworkWorker<B: BlockT + 'static, BE, H: ExHashT>
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, H>>,
 	/// The *actual* network.
-	network_service: Swarm<B, BE, H>,
+	network_service: Swarm<B, H>,
 	/// The import queue that was passed at initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the [`NetworkService`] that must be processed.
@@ -1363,10 +1356,7 @@ impl Metrics {
 	}
 }
 
-impl<B: BlockT + 'static, BE, H: ExHashT> Future for NetworkWorker<B, BE, H>
-	where
-		BE: BackendT<B>
-{
+impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
@@ -1723,7 +1713,7 @@ impl<B: BlockT + 'static, BE, H: ExHashT> Future for NetworkWorker<B, BE, H>
 		// Update the variables shared with the `NetworkService`.
 		this.num_connected.store(num_connected_peers, Ordering::Relaxed);
 		{
-			let external_addresses = Swarm::<B, BE, H>::external_addresses(&this.network_service).cloned().collect();
+			let external_addresses = Swarm::<B, H>::external_addresses(&this.network_service).cloned().collect();
 			*this.external_addresses.lock() = external_addresses;
 		}
 
@@ -1760,10 +1750,7 @@ impl<B: BlockT + 'static, BE, H: ExHashT> Future for NetworkWorker<B, BE, H>
 	}
 }
 
-impl<B: BlockT + 'static, BE, H: ExHashT> Unpin for NetworkWorker<B, BE, H>
-	where
-		BE: BackendT<B>
-{
+impl<B: BlockT + 'static, H: ExHashT> Unpin for NetworkWorker<B, H> {
 }
 
 /// Turns bytes that are potentially UTF-8 into a reasonable representable string.
@@ -1778,20 +1765,14 @@ fn maybe_utf8_bytes_to_string(id: &[u8]) -> Cow<str> {
 }
 
 /// The libp2p swarm, customized for our needs.
-type Swarm<B, BE, H> = libp2p::swarm::Swarm<Behaviour<B, BE, H>>;
+type Swarm<B, H> = libp2p::swarm::Swarm<Behaviour<B, H>>;
 
 // Implementation of `import_queue::Link` trait using the available local variables.
-struct NetworkLink<'a, B: BlockT, BE, H: ExHashT>
-where
-	BE: BackendT<B> + 'static
-{
-	protocol: &'a mut Swarm<B, BE, H>,
+struct NetworkLink<'a, B: BlockT, H: ExHashT> {
+	protocol: &'a mut Swarm<B, H>,
 }
 
-impl<'a, B: BlockT, BE, H: ExHashT> Link<B> for NetworkLink<'a, B, BE, H>
-	where
-		BE: BackendT<B>
-{
+impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 	fn blocks_processed(
 		&mut self,
 		imported: usize,

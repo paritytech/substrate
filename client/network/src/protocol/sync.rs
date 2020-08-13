@@ -29,7 +29,6 @@
 
 use codec::Encode;
 use blocks::BlockCollection;
-use sc_client_api::backend::Backend as BackendT;
 use sp_blockchain::{Error as ClientError, Info as BlockchainInfo, HeaderMetadata};
 use sp_consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
@@ -155,12 +154,9 @@ impl Default for PendingRequests {
 
 /// The main data structure which contains all the state for a chains
 /// active syncing strategy.
-pub struct ChainSync<B: BlockT, BE>
-	where
-		BE: BackendT<B>
-{
+pub struct ChainSync<B: BlockT> {
 	/// Chain client.
-	client: Arc<dyn crate::chain::Client<B, BE>>,
+	client: Arc<dyn crate::chain::Client<B>>,
 	/// The active peers that we are using to sync and their PeerSync status
 	peers: HashMap<PeerId, PeerSync<B>>,
 	/// A `BlockCollection` of blocks that are being downloaded from peers
@@ -347,14 +343,11 @@ pub enum OnBlockFinalityProof<B: BlockT> {
 	}
 }
 
-impl<B: BlockT, BE> ChainSync<B, BE>
-	where
-		BE: BackendT<B>
-{
+impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance.
 	pub fn new(
 		role: Roles,
-		client: Arc<dyn crate::chain::Client<B, BE>>,
+		client: Arc<dyn crate::chain::Client<B>>,
 		info: &BlockchainInfo<B>,
 		request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,

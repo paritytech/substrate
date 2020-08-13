@@ -221,7 +221,7 @@ pub struct Peer<D> {
 	block_import: BlockImportAdapter<()>,
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
-	network: NetworkWorker<Block, substrate_test_runtime_client::Backend, <Block as BlockT>::Hash>,
+	network: NetworkWorker<Block, <Block as BlockT>::Hash>,
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
 }
@@ -704,7 +704,6 @@ pub trait TestNetFactory: Sized {
 		});
 	}
 
-	// TODO this needs fix, Peer need a network with LightBackend
 	/// Add a light peer.
 	fn add_light_peer(&mut self) {
 		let (c, backend) = substrate_test_runtime_client::new_light();

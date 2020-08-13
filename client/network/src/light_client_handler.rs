@@ -58,7 +58,6 @@ use nohash_hasher::IntMap;
 use prost::Message;
 use sc_client_api::{
 	StorageProof,
-	backend::Backend,
 	light::{
 		self, RemoteReadRequest, RemoteBodyRequest, ChangesProof,
 		RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
@@ -285,14 +284,11 @@ enum PeerStatus {
 }
 
 /// The light client handler behaviour.
-pub struct LightClientHandler<B: Block, BE>
-	where
-		BE: Backend<B>
-{
+pub struct LightClientHandler<B: Block> {
 	/// This behaviour's configuration.
 	config: Config,
 	/// Blockchain client.
-	chain: Arc<dyn Client<B, BE>>,
+	chain: Arc<dyn Client<B>>,
 	/// Verifies that received responses are correct.
 	checker: Arc<dyn light::FetchChecker<B>>,
 	/// Peer information (addresses, their best block, etc.)
@@ -309,15 +305,14 @@ pub struct LightClientHandler<B: Block, BE>
 	peerset: sc_peerset::PeersetHandle,
 }
 
-impl<B, BE> LightClientHandler<B, BE>
+impl<B> LightClientHandler<B>
 where
 	B: Block,
-	BE: Backend<B>,
 {
 	/// Construct a new light client handler.
 	pub fn new(
 		cfg: Config,
-		chain: Arc<dyn Client<B, BE>>,
+		chain: Arc<dyn Client<B>>,
 		checker: Arc<dyn light::FetchChecker<B>>,
 		peerset: sc_peerset::PeersetHandle,
 	) -> Self {
@@ -749,10 +744,9 @@ where
 	}
 }
 
-impl<B, BE> NetworkBehaviour for LightClientHandler<B, BE>
+impl<B> NetworkBehaviour for LightClientHandler<B>
 where
 	B: Block,
-	BE: Backend<B> + 'static,
 {
 	type ProtocolsHandler = OneShotHandler<InboundProtocol, OutboundProtocol, Event<NegotiatedSubstream>>;
 	type OutEvent = Void;
