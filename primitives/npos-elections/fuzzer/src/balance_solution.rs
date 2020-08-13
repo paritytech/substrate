@@ -34,7 +34,7 @@ use rand::{self, Rng, SeedableRng, RngCore};
 
 type AccountId = u64;
 
-fn generate_random_phragmen_result(
+fn generate_random_npos_result(
 	voter_count: u64,
 	target_count: u64,
 	to_elect: usize,
@@ -47,17 +47,17 @@ fn generate_random_phragmen_result(
 	BTreeMap<AccountId, VoteWeight>,
 ) {
 	let prefix = 100_000;
-	// Note, it is important that stakes are always bigger than ed and
+	// Note, it is important that stakes are always bigger than ed.
 	let base_stake: u64 = 1_000_000_000;
 	let ed: u64 = base_stake;
 
 	let mut candidates = Vec::with_capacity(target_count as usize);
-	let mut stake_of_tree: BTreeMap<AccountId, VoteWeight> = BTreeMap::new();
+	let mut stake_of: BTreeMap<AccountId, VoteWeight> = BTreeMap::new();
 
 	(1..=target_count).for_each(|acc| {
 		candidates.push(acc);
 		let stake_var = rng.gen_range(ed, 100 * ed);
-		stake_of_tree.insert(acc, base_stake + stake_var);
+		stake_of.insert(acc, base_stake + stake_var);
 	});
 
 	let mut voters = Vec::with_capacity(voter_count as usize);
@@ -74,7 +74,7 @@ fn generate_random_phragmen_result(
 
 		let stake_var = rng.gen_range(ed, 100 * ed) ;
 		let stake = base_stake + stake_var;
-		stake_of_tree.insert(acc, stake);
+		stake_of.insert(acc, stake);
 		voters.push((acc, stake, targets));
 	});
 
@@ -87,7 +87,7 @@ fn generate_random_phragmen_result(
 		).unwrap(),
 		candidates,
 		voters,
-		stake_of_tree,
+		stake_of,
 	)
 }
 
@@ -105,7 +105,7 @@ fn main() {
 			let rng = rand::rngs::SmallRng::seed_from_u64(seed);
 			target_count = to_range(target_count, 50, 2000);
 			voter_count = to_range(voter_count, 50, 1000);
-			iterations = to_range(iterations, 1, 20);
+			iterations = to_range(iterations, 1, 50);
 			to_elect = to_range(to_elect, 25, target_count);
 			edge_per_voter = to_range(edge_per_voter, 1, target_count);
 
