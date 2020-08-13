@@ -21,7 +21,7 @@ use crate::{
 	chain::{Client, FinalityProofProvider},
 	config::{BoxFinalityProofRequestBuilder, ProtocolId, TransactionPool, TransactionImportFuture, TransactionImport},
 	error,
-	utils::interval
+	utils::{interval, LruHashSet},
 };
 
 use bytes::{Bytes, BytesMut};
@@ -60,11 +60,9 @@ use std::fmt::Write;
 use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
 use sc_client_api::{ChangesProof, StorageProof};
-use util::LruHashSet;
 use wasm_timer::Instant;
 
 mod generic_proto;
-mod util;
 
 pub mod message;
 pub mod event;
