@@ -30,38 +30,40 @@
 //! the associated Fields mentioned above.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(once_cell))]
 
 mod types;
 
-#[cfg(no_std)]
+#[cfg(not(feature = "std"))]
 #[macro_export]
 mod wasm_tracing;
 
-#[cfg(not(no_std))]
+#[cfg(not(feature = "std"))]
+pub use wasm_tracing::Span;
+
+#[cfg(feature = "std")]
 use tracing;
 
-#[cfg(not(no_std))]
+#[cfg(feature = "std")]
 pub use tracing::{
 	debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
-	span, event, Level
+	span, event, Level,
 };
 
-#[cfg(all(no_std, feature = "with-tracing"))]
+#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
 use sp_std::boxed::Box;
 
-#[cfg(all(no_std, feature = "with-tracing"))]
-use core::lazy::OnceCell;
+#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
+use once_cell::sync::OnceCell;
 
 pub use crate::types::{
 	WasmMetadata, WasmAttributes, WasmValues, WasmEvent, WasmLevel,
 };
-#[cfg(no_std)]
+#[cfg(not(feature = "std"))]
 pub type Level = WasmLevel;
 
-#[cfg(no_std)]
+#[cfg(not(feature = "std"))]
 pub trait TracingSubscriber: Send + Sync {
-	fn enabled(&self, metadata: WasmMetadata) -> bool;
+	fn enabled(&self, metadata: &WasmMetadata) -> bool;
 	fn new_span(&self, attrs: WasmAttributes) -> u64;
 	fn record(&self, span: u64, values: WasmValues);
 	fn event(&self, event: WasmEvent);
@@ -70,23 +72,31 @@ pub trait TracingSubscriber: Send + Sync {
 }
 
 /// Instance of the native subscriber in use
-#[cfg(all(no_std, feature = "with-tracing"))]
+#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
 static SUBSCRIBER_INSTANCE: OnceCell<Box<dyn TracingSubscriber>> = OnceCell::new();
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///
-/// If tracing is not enabled, the code is still executed.
+/// If tracing is not enabled, the code is still executed. Pass in level and name before followed
+/// by `;` and the code to execute, or use any valid `sp_tracing::Span`.
 ///
 /// # Example
 ///
 /// ```
 /// sp_tracing::within_span! {
+///		sp_tracing::Level::TRACE, 
 ///     "test-span";
 ///     1 + 1;
 ///     // some other complex code
 /// }
+///
+/// sp_tracing::within_span! {
+///		sp_tracing::span!(sp_tracing::Level::WARN, "warn-span",  you_can_pass="any params");
+///     1 + 1;
+///     // some other complex code
+/// }
 /// ```
-#[cfg(any(not(no_std), not(feature = "with-tracing")))]
+#[cfg(any(feature = "std", not(feature = "with-tracing")))]
 #[macro_export]
 macro_rules! within_span {
 	(
@@ -109,7 +119,7 @@ macro_rules! within_span {
 	};
 }
 
-#[cfg(all(no_std, not(feature = "with-tracing")))]
+#[cfg(all(not(feature = "std"), not(feature = "with-tracing")))]
 #[macro_export]
 macro_rules! within_span {
 	(
@@ -128,7 +138,8 @@ macro_rules! within_span {
 }
 
 
-#[cfg(all(no_std, not(feature = "with-tracing")))]
+/// Enter a span - noop for `no_std` without `with-tracing`
+#[cfg(all(not(feature = "std"), not(feature = "with-tracing")))]
 #[macro_export]
 macro_rules! enter_span {
 	( $lvl:expr, $name:expr ) => { },
@@ -137,14 +148,17 @@ macro_rules! enter_span {
 
 /// Enter a span.
 ///
-/// The span will be valid, until the scope is left.
+/// The span will be valid, until the scope is left. Use either level and name
+/// or pass in any valid `sp_tracing::Span` for extended usage.
 ///
 /// # Example
 ///
 /// ```
-/// sp_tracing::enter_span!("test-span");
+/// sp_tracing::enter_span!(sp_tracing::Level::TRACE, "test-span");
+/// sp_tracing::enter_span!(sp_tracing::span!(sp_tracing::Level::DEBUG, "debug-span",  params="value"));
+/// sp_tracing::enter_span!(sp_tracing::info_span!("info-span",  params="value"));
 /// ```
-#[cfg(any(not(no_std), not(feature = "with-tracing")))]
+#[cfg(any(feature = "std", not(feature = "with-tracing")))]
 #[macro_export]
 macro_rules! enter_span {
 	( $span:expr ) => {
@@ -157,23 +171,23 @@ macro_rules! enter_span {
 	};
 }
 
-#[cfg(all(no_std, feature = "with-tracing"))]
+#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
 pub fn set_tracing_subscriber(subscriber: Box<dyn TracingSubscriber>) {
 	let _ = SUBSCRIBER_INSTANCE.set(subscriber);
 }
 
-#[cfg(all(no_std, feature = "with-tracing"))]
+#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
 pub fn get_tracing_subscriber<'a>() -> Option<&'a Box<dyn TracingSubscriber>> {
 	SUBSCRIBER_INSTANCE.get()
 }
 
 
-#[cfg(all(no_std, not(feature = "with-tracing")))]
+#[cfg(all(not(feature = "std"), not(feature = "with-tracing")))]
 pub fn get_tracing_subscriber<'a>() -> Option<&'a Box<dyn TracingSubscriber>> {
 	None
 }
 
-#[cfg(all(no_std, not(feature = "with-tracing")))]
+#[cfg(all(not(feature = "std"), not(feature = "with-tracing")))]
 pub fn set_tracing_subscriber(_subscriber: Box<dyn TracingSubscriber>) {
 	unreachable!()
 }

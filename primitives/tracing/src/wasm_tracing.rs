@@ -22,13 +22,15 @@ use sp_std::{
 
 #[cfg(not(feature = "with-tracing"))]
 mod inner {
+    // we are no-op
+    pub type Span = ();
+
     #[doc(hidden)]
     #[macro_export]
     macro_rules! __tracing_mk_span {
         (target: $target:expr, parent: $parent:expr, $lvl:expr, $name:expr, $($fields:tt)*) => { {} };
         (target: $target:expr, $lvl:expr, $name:expr, $($fields:tt)*) => { {} };
     }
-
 
     /// Constructs a new `Event` – noop
     #[macro_export]
@@ -69,7 +71,6 @@ mod inner {
     use core::{
         module_path, concat, format_args, file, line,
     };
-    use crate::WasmMetadata;
 
     // just a simplistic holder for span and entered spans
     // that exits on drop
@@ -77,12 +78,22 @@ mod inner {
     pub struct Entered(u64);  // 0 means no item
 
     impl Span {
-        pub fn enter(self) -> Entered {
+        pub fn new(v: u64) -> Self {
+            Span(v)
+        }
+        pub fn none() -> Self {
+            Span::new(0)
+        }
+        pub fn enter(&self) -> Entered {
             if self.0 != 0 {
                 crate::get_tracing_subscriber().map(|t|  t.enter(self.0));
             }
             Entered(self.0)
         }
+        pub fn in_scope<F: FnOnce() -> T, T>(&self, f: F) -> T {
+            let _enter = self.enter();
+            f()
+        }    
     }
 
     impl Entered {
@@ -113,7 +124,7 @@ mod inner {
     /// # Examples
     ///
     /// ```rust
-    /// use tracing::{event, Level};
+    /// use sp_tracing::{event, Level};
     ///
     /// # fn main() {
     /// let data = (42, "forty-two");
@@ -141,8 +152,8 @@ mod inner {
     // /// For example, the following does not compile:
     // /// ```rust,compile_fail
     // /// # #[macro_use]
-    // /// # extern crate tracing;
-    // /// # use tracing::Level;
+    // /// # extern crate sp_tracing;
+    // /// # use sp_tracing::Level;
     // /// # fn main() {
     // /// event!(Level::INFO, foo = 5, bad_field, bar = "hello")
     // /// #}
@@ -153,7 +164,7 @@ mod inner {
             {
                 if $crate::level_enabled!($lvl) {
                     #[allow(unused_imports)]
-                    use $crate::{ WasmMetadata, WasmEvent, WasmValue, WasmValueSet };
+                    use $crate::{ WasmMetadata, WasmEvent, WasmValues };
                     let metadata = WasmMetadata {
                         name: concat!(
                             "event ",
@@ -164,16 +175,16 @@ mod inner {
                         file: file!().as_bytes().to_vec(),
                         line: line!(),
                         is_span: false,
-                        target: $target,
+                        target: $target.into(),
                         level: $lvl,
-                        module_path: module_path().as_bytes().to_vec(),
-                        fields: $($fields)*
+                        module_path: module_path!().as_bytes().to_vec(),
+                        fields: vec![]
                     };
-                    if $crate::is_enabled!(&metdata) {
+                    if $crate::is_enabled!(&metadata) {
                         $crate::get_tracing_subscriber().map(|t| t.event(WasmEvent {
-                            parent: $parent,
+                            parent_id: Some($parent.0),
                             metadata,
-                            &$crate::valueset!(meta.fields(), $($fields)*)
+                            fields: vec![].into()
                         }));
                     }
                 }
@@ -198,7 +209,7 @@ mod inner {
             {
                 if $crate::level_enabled!($lvl) {
                     #[allow(unused_imports)]
-                    use $crate::{WasmMetadata, WasmEvent, WasmValue, WasmValueSet};
+                    use $crate::{WasmMetadata, WasmEvent, WasmValues};
                     let metadata = WasmMetadata {
                         name: concat!(
                             "event ",
@@ -209,16 +220,16 @@ mod inner {
                         file: file!().as_bytes().to_vec(),
                         line: line!(),
                         is_span: false,
-                        target: $target,
+                        target: $target.into(),
                         level: $lvl,
-                        module_path: module_path().as_bytes().to_vec(),
-                        fields: $($fields)*
+                        module_path: module_path!().as_bytes().to_vec(),
+                        fields: vec![]
                     };
-                    if $crate::is_enabled!(&metdata) {
+                    if $crate::is_enabled!(&metadata) {
                         $crate::get_tracing_subscriber().map(|t| t.event(WasmEvent {
-                            parent: None,
+                            parent_id: None,
                             metadata,
-                            &$crate::valueset!(meta.fields(), $($fields)*)
+                            fields: vec![].into()
                         }));
                     }
                 }
@@ -367,29 +378,31 @@ mod inner {
             {
                 if $crate::level_enabled!($lvl) {
                     #[allow(unused_imports)]
-                    use $crate::{ WasmMetadata, WasmAttributes, WasmValue, WasmValueSet };
+                    use $crate::{ WasmMetadata, WasmAttributes, WasmValues };
                     let metadata = WasmMetadata {
                         name: $name.as_bytes().to_vec(),
                         file: file!().as_bytes().to_vec(),
                         line: line!(),
                         is_span: true,
-                        target: $target,
+                        target: $target.into(),
                         level: $lvl,
-                        module_path: module_path().as_bytes().to_vec(),
-                        fields: $($fields)*
+                        module_path: module_path!().as_bytes().to_vec(),
+                        fields: vec![]
                     };
                     if $crate::is_enabled!(metadata) {
-                        let span_id = $crate::get_tracing_subscriber().map(|t| t.new_span(WasmAttributes{
-                            parent: Some($parent),
-                            metadata,
-                            &$crate::valueset!(meta.fields(), $($fields)*)
-                        })).unwrap_or_default();
-                        $crate::Span(span_id)
+                        let span_id = $crate::get_tracing_subscriber().map(|t| t.new_span(
+                            WasmAttributes {
+                                parent_id: Some($parent.0),
+                                metadata,
+                                fields: vec![].into()
+                            })
+                        ).unwrap_or_default();
+                        $crate::Span::new(span_id)
                     } else {
-                        $crate::Span(0)
+                        $crate::Span::none()
                     }
                 } else {
-                    $crate::Span(0)
+                    $crate::Span::none()
                 }
             }
         };
@@ -397,29 +410,31 @@ mod inner {
             {
                 if $crate::level_enabled!($lvl) {
                     #[allow(unused_imports)]
-                    use $crate::{WasmMetadata, WasmAttributes, WasmValue, WasmValueSet};
+                    use $crate::{WasmMetadata, WasmAttributes, WasmValues};
                     let metadata = WasmMetadata {
                         name: $name.as_bytes().to_vec(),
                         file: file!().as_bytes().to_vec(),
                         line: line!(),
                         is_span: true,
-                        target: $target,
+                        target: $target.into(),
                         level: $lvl,
-                        module_path: module_path().as_bytes().to_vec(),
-                        fields: $($fields)*
+                        module_path: module_path!().as_bytes().to_vec(),
+                        fields: vec![]
                     };
                     if $crate::is_enabled!(metadata) {
-                        let span_id = $crate::get_tracing_subscriber().map(|t| t.new_span(WasmAttributes{
-                            parent: Some($parent),
-                            metadata,
-                            &$crate::valueset!(meta.fields(), $($fields)*)
-                        })).unwrap_or_default();
-                        $crate::Span(span_id)
+                        let span_id = $crate::get_tracing_subscriber().map(|t| t.new_span(
+                            WasmAttributes {
+                                parent_id: None,
+                                metadata,
+                                fields: vec![].into()
+                            })
+                        ).unwrap_or_default();
+                        $crate::Span::new(span_id)
                     } else {
-                        $crate::Span(0)
+                        $crate::Span::none()
                     }
                 } else {
-                    $crate::Span(0)
+                    $crate::Span::none()
                 }
             }
         };
@@ -439,7 +454,7 @@ pub use inner::*;
 ///
 /// Creating a new span:
 /// ```
-/// # use tracing::{span, Level};
+/// # use sp_tracing::{span, Level};
 /// # fn main() {
 /// let span = span!(Level::TRACE, "my span");
 /// let _enter = span.enter();
@@ -520,8 +535,8 @@ macro_rules! span {
 ///
 /// # Examples
 ///
-/// ```rust
-/// # use tracing::{trace_span, span, Level};
+/// ```
+/// # use sp_tracing::{trace_span, span, Level};
 /// # fn main() {
 /// trace_span!("my_span");
 /// // is equivalent to:
@@ -529,8 +544,8 @@ macro_rules! span {
 /// # }
 /// ```
 ///
-/// ```rust
-/// # use tracing::{trace_span, span, Level};
+/// ```
+/// # use sp_tracing::{trace_span, span, Level};
 /// # fn main() {
 /// let span = trace_span!("my span");
 /// span.in_scope(|| {
@@ -602,7 +617,7 @@ macro_rules! trace_span {
 /// # Examples
 ///
 /// ```rust
-/// # use tracing::{debug_span, span, Level};
+/// # use sp_tracing::{debug_span, span, Level};
 /// # fn main() {
 /// debug_span!("my_span");
 /// // is equivalent to:
@@ -611,7 +626,7 @@ macro_rules! trace_span {
 /// ```
 ///
 /// ```rust
-/// # use tracing::debug_span;
+/// # use sp_tracing::debug_span;
 /// # fn main() {
 /// let span = debug_span!("my span");
 /// span.in_scope(|| {
@@ -683,7 +698,7 @@ macro_rules! debug_span {
 /// # Examples
 ///
 /// ```rust
-/// # use tracing::{span, info_span, Level};
+/// # use sp_tracing::{span, info_span, Level};
 /// # fn main() {
 /// info_span!("my_span");
 /// // is equivalent to:
@@ -692,7 +707,7 @@ macro_rules! debug_span {
 /// ```
 ///
 /// ```rust
-/// # use tracing::info_span;
+/// # use sp_tracing::info_span;
 /// # fn main() {
 /// let span = info_span!("my span");
 /// span.in_scope(|| {
@@ -764,7 +779,7 @@ macro_rules! info_span {
 /// # Examples
 ///
 /// ```rust
-/// # use tracing::{warn_span, span, Level};
+/// # use sp_tracing::{warn_span, span, Level};
 /// # fn main() {
 /// warn_span!("my_span");
 /// // is equivalent to:
@@ -773,7 +788,7 @@ macro_rules! info_span {
 /// ```
 ///
 /// ```rust
-/// use tracing::warn_span;
+/// use sp_tracing::warn_span;
 /// # fn main() {
 /// let span = warn_span!("my span");
 /// span.in_scope(|| {
@@ -844,7 +859,7 @@ macro_rules! warn_span {
 /// # Examples
 ///
 /// ```rust
-/// # use tracing::{span, error_span, Level};
+/// # use sp_tracing::{span, error_span, Level};
 /// # fn main() {
 /// error_span!("my_span");
 /// // is equivalent to:
@@ -853,7 +868,7 @@ macro_rules! warn_span {
 /// ```
 ///
 /// ```rust
-/// # use tracing::error_span;
+/// # use sp_tracing::error_span;
 /// # fn main() {
 /// let span = error_span!("my span");
 /// span.in_scope(|| {
@@ -921,7 +936,7 @@ macro_rules! error_span {
 /// # Examples
 ///
 /// ```rust
-/// use tracing::trace;
+/// use sp_tracing::trace;
 /// # #[derive(Debug, Copy, Clone)] struct Position { x: f32, y: f32 }
 /// # impl Position {
 /// # const ORIGIN: Self = Self { x: 0.0, y: 0.0 };
@@ -1121,7 +1136,7 @@ macro_rules! trace {
 /// # Examples
 ///
 /// ```rust
-/// use tracing::debug;
+/// use sp_tracing::debug;
 /// # fn main() {
 /// # #[derive(Debug)] struct Position { x: f32, y: f32 }
 ///
@@ -1322,14 +1337,13 @@ macro_rules! debug {
 /// # Examples
 ///
 /// ```rust
-/// use tracing::info;
+/// use sp_tracing::info;
 /// # // this is so the test will still work in no-std mode
 /// # #[derive(Debug)]
 /// # pub struct Ipv4Addr;
 /// # impl Ipv4Addr { fn new(o1: u8, o2: u8, o3: u8, o4: u8) -> Self { Self } }
 /// # fn main() {
 /// # struct Connection { port: u32, speed: f32 }
-/// use tracing::field;
 ///
 /// let addr = Ipv4Addr::new(127, 0, 0, 1);
 /// let conn = Connection { port: 40, speed: 3.20 };
@@ -1534,7 +1548,7 @@ macro_rules! info {
 /// # Examples
 ///
 /// ```rust
-/// use tracing::warn;
+/// use sp_tracing::warn;
 /// # fn main() {
 ///
 /// let warn_description = "Invalid Input";
@@ -1739,7 +1753,7 @@ macro_rules! warn {
 /// # Examples
 ///
 /// ```rust
-/// use tracing::error;
+/// use sp_tracing::error;
 /// # fn main() {
 ///
 /// let (err_info, port) = ("No connection", 22);
@@ -1946,7 +1960,7 @@ macro_rules! level_enabled {
 #[doc(hidden)]
 macro_rules! is_enabled {
     ($metadata:expr) => {{
-        $crate::get_tracing_subscriber().map(|t| t.enabled($metadata)).unwrap_or_false()
+        $crate::get_tracing_subscriber().map(|t| t.enabled(&$metadata)).unwrap_or(false)
     }};
 }
 

@@ -8181,6 +8181,7 @@ name = "sp-tracing"
 version = "2.0.0-rc5"
 dependencies = [
  "log",
+ "once_cell",
  "parity-scale-codec",
  "sp-std",
  "tracing",

@@ -45,6 +45,12 @@ pub type WasmFields = Vec<Vec<u8>>;
 #[derive(Encode, Decode, Debug)]
 pub struct WasmValues(Vec<(Vec<u8>, WasmFieldValue)>);
 
+impl From<Vec<(Vec<u8>, WasmFieldValue)>> for WasmValues {
+	fn from(v: Vec<(Vec<u8>, WasmFieldValue)>) -> Self {
+		WasmValues(v)
+	}
+}
+
 #[derive(Encode, Decode, Debug)]
 pub struct WasmMetadata {
 	pub name: Vec<u8>,
@@ -60,8 +66,8 @@ pub struct WasmMetadata {
 #[derive(Encode, Decode, Debug)]
 pub struct WasmAttributes {
 	pub parent_id: Option<u64>,
-	pub fields: WasmValues,
 	pub metadata: WasmMetadata,
+	pub fields: WasmValues,
 }
 
 #[derive(Encode, Decode, Debug)]
