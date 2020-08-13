@@ -212,35 +212,31 @@ impl Default for Releases {
 
 /// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeTransaction<T: Trait> {
-	type WithdrawAmount: Default;
+	type LiquidityInfo: Default;
 
-	/// Withdraw the transaction fee from a specific account. The sender of the transaction may also indicate that they
-	/// want to pay a tip to the block author.
-	/// A tuple containing the deducted balance and some state information for handling the deducted amount.
-	fn withdraw(
+	/// Ensure that the transaction fees will be paid. Returns information that are used to conclude the fee payment.
+	///
+	fn ensure_liquidity(
+		dispatch_info: &DispatchInfoOf<T::Call>,
+		call: &T::Call,
 		who: &T::AccountId,
 		fee: T::Balance,
 		tip: T::Balance,
-	) -> Result<(T::Balance, Self::WithdrawAmount), TransactionValidityError>;
-
-	/// After executing the transaction, the fee may be adjusted to the actual cost. In that case parts of the fee may be refunded.
-	/// Refunding parts of the transaction fees should be handled in this method.
-	/// - `who` the origin of the transaction
-	/// - `amount` the original amount that was paid by the origin.
-	/// - `refund` the amount that should be refunded.
-	fn refund(
-		who: &T::AccountId,
-		amount: Self::WithdrawAmount,
-		refund: T::Balance,
-	) -> Result<Self::WithdrawAmount, TransactionValidityError>;
+	) -> Result<Self::LiquidityInfo, TransactionValidityError>;
 
 	/// After the transaction was executed and the correct fees where collected, the resulting funds can be spend here.
-	/// - `amount` the state information about how much was actually deducted from the origin.
-	/// - `tip` the tip contained inside the amount
-	fn finalize(
-		amount: Self::WithdrawAmount,
+	/// - `who`
+	/// - `fee`
+	/// - `tip`
+	/// - `info`
+	fn conclude_payment(
+		dispatch_info: &DispatchInfoOf<T::Call>,
+		post_info: &PostDispatchInfoOf<T::Call>,
+		who: &T::AccountId,
+		fee: T::Balance,
 		tip: T::Balance,
-	);
+		liquidity_info: Self::LiquidityInfo,
+	) -> Result<(), TransactionValidityError>;
 }
 
 /// Default implementation for a Currency and an OnUnbalanced handler.
@@ -261,15 +257,17 @@ where
 	C::NegativeImbalance: Imbalance<B, Opposite=C::PositiveImbalance>,
 	OU: OnUnbalanced<NegativeImbalanceOf<C, T>>,
 {
-	type WithdrawAmount = Option<NegativeImbalanceOf<C, T>>;
+	type LiquidityInfo = Option<NegativeImbalanceOf<C, T>>;
 
-	fn withdraw(
+	fn ensure_liquidity(
+		_info: &DispatchInfoOf<T::Call>,
+		_call: &T::Call,
 		who: &T::AccountId,
 		fee: B,
 		tip: B,
-	) -> Result<(B, Self::WithdrawAmount), TransactionValidityError> {
+	) -> Result<Self::LiquidityInfo, TransactionValidityError> {
 		if fee.is_zero() {
-			return Ok((B::zero(), None))
+			return Ok(None)
 		}
 		match C::withdraw(
 			who,
@@ -281,39 +279,35 @@ where
 			},
 			ExistenceRequirement::KeepAlive,
 		) {
-			Ok(imbalance) => Ok((fee, Some(imbalance))),
+			Ok(imbalance) => Ok(Some(imbalance)),
 			Err(_) => Err(InvalidTransaction::Payment.into()),
 		}
 	}
 
-	fn refund(
+	fn conclude_payment(
+		_dispatch_info: &DispatchInfoOf<T::Call>,
+		_post_info: &PostDispatchInfoOf<T::Call>,
 		who: &T::AccountId,
-		amount: Self::WithdrawAmount,
-		refund: B,
-	) -> Result<Self::WithdrawAmount, TransactionValidityError> {
-		if let Some(payed) = amount {
-			match C::deposit_into_existing(&who, refund) {
-				Ok(refund_imbalance) =>
-					// The refund cannot be larger than the up front payed max weight.
-					// `PostDispatchInfo::calc_unspent` guards against such a case.
-					match payed.offset(refund_imbalance) {
-						Ok(actual_payment) => Ok(Some(actual_payment)),
-						Err(_) => return Err(InvalidTransaction::Payment.into()),
-					}				// We do not recreate the account using the refund. The up front payment
-				// is gone in that case.
-				Err(_) => Ok(Some(payed)),
-			}
-		} else {
-			Ok(amount)
-		}
-	}
-
-	fn finalize(amount: Self::WithdrawAmount, tip: T::Balance) {
-		if let Some(payed) = amount {
-			let imbalances = payed.split(tip);
+		fee: B,
+		tip: B,
+		liquidity_info: Self::LiquidityInfo,
+	) -> Result<(), TransactionValidityError> {
+		if let Some(paid) = liquidity_info {
+			// Calculate how much refund we should return
+			let refund_amount = paid.peek().saturating_sub(fee);
+			// refund to the the account that paid the fees. If this fails, the account might have dropped below the
+			// existential balance. In that case we don't refund anything. sorry. :(
+			let refund_imbalance = C::deposit_into_existing(&who, refund_amount)
+				.unwrap_or_else(|_| C::PositiveImbalance::zero());
+			// merge the imbalance caused by paying the fees and refunding parts of it again.
+			let adjusted_paid = paid.offset(refund_imbalance)
+				.map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
+			// Call someone else to handle the imbalance (fee and tip separately)
+			let imbalances = adjusted_paid.split(tip);
 			OU::on_unbalanceds(Some(imbalances.0).into_iter()
 				.chain(Some(imbalances.1)));
 		}
+		Ok(())
 	}
 }
 
@@ -549,15 +543,16 @@ where
 		Self(fee)
 	}
 
-	fn withdraw_fee(
+	fn ensure_fee(
 		&self,
-		who: &T::AccountId,
 		info: &DispatchInfoOf<T::Call>,
+		call: &T::Call,
+		who: &T::AccountId,
 		len: usize,
 	) -> Result<
 		(
 			T::Balance,
-			<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::WithdrawAmount,
+			<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
 		),
 		TransactionValidityError,
 	> {
@@ -567,9 +562,10 @@ where
 		// Only mess with balances if fee is not zero.
 		if fee.is_zero() {
 			return Ok((fee, Default::default()));
+		} else {
+			<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::ensure_liquidity(info, call, who, fee, tip)
+				.map(|i| (fee, i))
 		}
-
-		<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::withdraw(who, fee, tip)
 	}
 }
 
@@ -594,10 +590,12 @@ where
 	type Call = T::Call;
 	type AdditionalSigned = ();
 	type Pre = (
+		// tip
 		T::Balance,
+		// who paid the fee
 		Self::AccountId,
-		<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::WithdrawAmount,
-		T::Balance,
+		// imbalance resulting from withdrawing the fee
+		<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
 	);
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
 		Ok(())
@@ -606,12 +604,11 @@ where
 	fn validate(
 		&self,
 		who: &Self::AccountId,
-		_call: &Self::Call,
+		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
-		let (fee, _) = self.withdraw_fee(who, info, len)?;
-
+		let (fee, _) = self.ensure_fee(info, call, who, len)?;
 		let mut r = ValidTransaction::default();
 		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
 		// will be a bit more than setting the priority to tip. For now, this is enough.
@@ -622,12 +619,12 @@ where
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
-		_call: &Self::Call,
+		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize
 	) -> Result<Self::Pre, TransactionValidityError> {
-		let (fee, imbalance) = self.withdraw_fee(who, info, len)?;
-		Ok((self.0, who.clone(), imbalance, fee))
+		let (_fee, imbalance) = self.ensure_fee(info, call, who, len)?;
+		Ok((self.0, who.clone(), imbalance))
 	}
 
 	fn post_dispatch(
@@ -637,16 +634,14 @@ where
 		len: usize,
 		_result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
-		let (tip, who, imbalance, fee) = pre;
+		let (tip, who, imbalance) = pre;
 		let actual_fee = Module::<T>::compute_actual_fee(
 			len as u32,
 			info,
 			post_info,
 			tip,
 		);
-		let refund = fee.saturating_sub(actual_fee);
-		let actual_payment = T::OnChargeTransaction::refund(&who, imbalance, refund)?;
-		T::OnChargeTransaction::finalize(actual_payment, tip);
+		T::OnChargeTransaction::conclude_payment(info, post_info, &who, actual_fee, tip, imbalance)?;
 		Ok(())
 	}
 }
