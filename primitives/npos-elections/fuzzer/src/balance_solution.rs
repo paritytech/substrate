@@ -115,7 +115,7 @@ fn main() {
 				candidates,
 				voters,
 				stake_of_tree,
-			) = generate_random_phragmen_result(
+			) = generate_random_npos_result(
 				voter_count as u64,
 				target_count as u64,
 				to_elect,

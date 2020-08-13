@@ -119,7 +119,7 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 
 	crate::log!(
 		info,
-		"prepared a seq-phragmen solution after {} balancing iterations with score {:?}",
+		"prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
 		iters,
 		score,
 	);
