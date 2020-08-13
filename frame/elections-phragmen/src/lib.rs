@@ -2130,6 +2130,10 @@ mod tests {
 				System::events().iter().last().unwrap().event,
 				Event::elections_phragmen(RawEvent::NewTerm(vec![])),
 			);
+
+			// outgoing have lost their bond.
+			assert_eq!(balances(&4), (37, 0));
+			assert_eq!(balances(&5), (47, 0));
 		});
 	}
 

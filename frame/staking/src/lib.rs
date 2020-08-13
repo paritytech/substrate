@@ -1156,7 +1156,7 @@ decl_storage! {
 			=> Option<BalanceOf<T>>;
 
 		/// Slashing spans for stash accounts.
-		pub SlashingSpans: map hasher(twox_64_concat) T::AccountId => Option<slashing::SlashingSpans>;
+		SlashingSpans: map hasher(twox_64_concat) T::AccountId => Option<slashing::SlashingSpans>;
 
 		/// Records information about the maximum slash of a stash within a slashing span,
 		/// as well as how much reward has been paid out.
@@ -3048,6 +3048,7 @@ impl<T: Trait> Module<T> {
 		}));
 
 		if all_validators.len() < Self::minimum_validator_count().max(1) as usize {
+			// If we don't have enough candidates, nothing to do.
 			None
 		} else {
 			seq_phragmen::<_, Accuracy>(

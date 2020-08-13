@@ -40,7 +40,7 @@ fn force_unstake_works() {
 		// Cant transfer
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 1, 10),
-			BalancesError::<Test, _>::LiquidityRestrictions,
+			BalancesError::<Test, _>::LiquidityRestrictions
 		);
 		// Force unstake requires root.
 		assert_noop!(Staking::force_unstake(Origin::signed(11), 11, 2), BadOrigin);

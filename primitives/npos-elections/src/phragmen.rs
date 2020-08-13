@@ -61,6 +61,8 @@ const DEN: ExtendedBalance = ExtendedBalance::max_value();
 /// assignments, `assignment.distribution.map(|p| p.deconstruct()).sum()` fails to fit inside
 /// `UpperOf<P>`. A user of this crate may statically assert that this can never happen and safely
 /// `expect` this to return `Ok`.
+///
+/// This can only fail if the normalization fails.
 pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing>(
 	rounds: usize,
 	initial_candidates: Vec<AccountId>,

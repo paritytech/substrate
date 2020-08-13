@@ -1084,7 +1084,6 @@ mod solution_type {
 			compact.encode().len()
 		};
 
-		dbg!(with_compact, without_compact);
 		assert!(with_compact < without_compact);
 	}
 
