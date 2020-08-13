@@ -60,7 +60,7 @@ use futures::{
 	prelude::*,
 	StreamExt,
 };
-use log::{debug, info};
+use log::{debug, error, info};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
 	LockImportRun, BlockchainEvents, CallExecutor,
@@ -119,12 +119,14 @@ mod finality_proof;
 mod import;
 mod justification;
 mod light_import;
+mod notification;
 mod observer;
 mod until_imported;
 mod voting_rule;
 
 pub use authorities::SharedAuthoritySet;
 pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
+pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
 pub use light_import::{light_block_import, GrandpaLightBlockImport};
@@ -448,12 +450,19 @@ pub struct LinkHalf<Block: BlockT, C, SC> {
 	select_chain: SC,
 	persistent_data: PersistentData<Block>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+	justification_sender: GrandpaJustificationSender<Block>,
+	justification_stream: GrandpaJustificationStream<Block>,
 }
 
 impl<Block: BlockT, C, SC> LinkHalf<Block, C, SC> {
 	/// Get the shared authority set.
 	pub fn shared_authority_set(&self) -> &SharedAuthoritySet<Block::Hash, NumberFor<Block>> {
 		&self.persistent_data.authority_set
+	}
+
+	/// Get the receiving end of justification notifications.
+	pub fn justification_stream(&self) -> GrandpaJustificationStream<Block> {
+		self.justification_stream.clone()
 	}
 }
 
@@ -553,6 +562,9 @@ where
 
 	let (voter_commands_tx, voter_commands_rx) = tracing_unbounded("mpsc_grandpa_voter_command");
 
+	let (justification_sender, justification_stream) =
+		GrandpaJustificationStream::channel();
+
 	// create pending change objects with 0 delay and enacted on finality
 	// (i.e. standard changes) for each authority set hard fork.
 	let authority_set_hard_forks = authority_set_hard_forks
@@ -579,12 +591,15 @@ where
 			voter_commands_tx,
 			persistent_data.consensus_changes.clone(),
 			authority_set_hard_forks,
+			justification_sender.clone(),
 		),
 		LinkHalf {
 			client,
 			select_chain,
 			persistent_data,
 			voter_commands_rx,
+			justification_sender,
+			justification_stream,
 		},
 	))
 }
@@ -719,6 +734,8 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		select_chain,
 		persistent_data,
 		voter_commands_rx,
+		justification_sender,
+		justification_stream: _,
 	} = link;
 
 	let network = NetworkBridge::new(
@@ -767,10 +784,15 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		voter_commands_rx,
 		prometheus_registry,
 		shared_voter_state,
+		justification_sender,
 	);
 
-	let voter_work = voter_work
-		.map(|_| ());
+	let voter_work = voter_work.map(|res| match res {
+		Ok(()) => error!(target: "afg",
+			"GRANDPA voter future has concluded naturally, this should be unreachable."
+		),
+		Err(e) => error!(target: "afg", "GRANDPA voter error: {:?}", e),
+	});
 
 	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
 	let telemetry_task = telemetry_task
@@ -827,6 +849,7 @@ where
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 		shared_voter_state: SharedVoterState,
+		justification_sender: GrandpaJustificationSender<Block>,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -850,6 +873,7 @@ where
 			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
+			justification_sender: Some(justification_sender),
 			_phantom: PhantomData,
 		});
 
@@ -988,6 +1012,7 @@ where
 					network: self.env.network.clone(),
 					voting_rule: self.env.voting_rule.clone(),
 					metrics: self.env.metrics.clone(),
+					justification_sender: self.env.justification_sender.clone(),
 					_phantom: PhantomData,
 				});
 
@@ -1031,7 +1056,9 @@ where
 			Poll::Pending => {}
 			Poll::Ready(Ok(())) => {
 				// voters don't conclude naturally
-				return Poll::Ready(Err(Error::Safety("GRANDPA voter has concluded.".into())))
+				return Poll::Ready(
+					Err(Error::Safety("finality-grandpa inner voter has concluded.".into()))
+				)
 			}
 			Poll::Ready(Err(CommandOrError::Error(e))) => {
 				// return inner observer error
@@ -1048,7 +1075,9 @@ where
 			Poll::Pending => {}
 			Poll::Ready(None) => {
 				// the `voter_commands_rx` stream should never conclude since it's never closed.
-				return Poll::Ready(Ok(()))
+				return Poll::Ready(
+					Err(Error::Safety("`voter_commands_rx` was closed.".into()))
+				)
 			}
 			Poll::Ready(Some(command)) => {
 				// some command issued externally
