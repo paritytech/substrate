@@ -36,7 +36,7 @@ mod task_manager;
 
 use std::{io, pin::Pin};
 use std::net::SocketAddr;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use std::task::Poll;
 use libp2p::identity::{
@@ -49,7 +49,6 @@ use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
-use sc_client_api::blockchain::HeaderBackend;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
@@ -57,6 +56,8 @@ use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,
 use sp_core::storage::{StorageKey, well_known_keys};
 use sp_core::ed25519::Public as NodePublic;
 use sc_client_api::backend::{Backend as BackendT, StorageProvider};
+use sc_client_api::blockchain::HeaderBackend;
+use sc_client_api::BlockchainEvents;
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -88,7 +89,6 @@ pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
-use sc_client_api::BlockchainEvents;
 pub use sc_keystore::KeyStorePtr as KeyStore;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
@@ -362,12 +362,13 @@ fn check_node_allowlist<
 		let node_allowlist: Result<Vec<NodePublic>, _> = Decode::decode(&mut &raw_allowlist.0[..]);
 
 		if let Ok(node_allowlist) = node_allowlist {
-			// Transform to PeerId.
-			// TODO remove local peer id.
-			let peer_ids = node_allowlist.iter()
-				.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok()) // TODO ok or unwrap()
+			let mut peer_ids: HashSet<PeerId> = node_allowlist.iter()
+				.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok())
 				.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
 				.collect();
+			peer_ids.remove(network.local_peer_id());
+
+			// Set only reserved peers are allowed to connect.
 			network.service().set_reserved_peers(peer_ids, true);
 		}
 	}
