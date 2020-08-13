@@ -39,7 +39,7 @@ use std::net::SocketAddr;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use std::task::Poll;
-use libp2p::identity::{
+use sc_network::config::identity::{
 	ed25519::PublicKey as Ed25519PublicKey,
 	PublicKey
 };
