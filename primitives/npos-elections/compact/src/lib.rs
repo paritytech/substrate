@@ -181,7 +181,7 @@ fn struct_def(
 		}
 	} else {
 		// automatically derived.
-		quote!(#[derive(Default, PartialEq, Eq, Clone, Debug, _phragmen::codec::Encode, _phragmen::codec::Decode)])
+		quote!(#[derive(Default, PartialEq, Eq, Clone, Debug, _npos::codec::Encode, _npos::codec::Decode)])
 	};
 
 	Ok(quote! (
@@ -189,7 +189,7 @@ fn struct_def(
 		#derives_and_maybe_compact_encoding
 		#vis struct #ident { #singles #doubles #rest }
 
-		impl _phragmen::VotingLimit for #ident {
+		impl _npos::VotingLimit for #ident {
 			const LIMIT: usize = #count;
 		}
 
@@ -220,13 +220,13 @@ fn struct_def(
 fn imports() -> Result<TokenStream2> {
 	if std::env::var("CARGO_PKG_NAME").unwrap() == "sp-npos-elections" {
 		Ok(quote! {
-			use crate as _phragmen;
+			use crate as _npos;
 		})
 	} else {
 		match crate_name("sp-npos-elections") {
 			Ok(sp_npos_elections) => {
 				let ident = syn::Ident::new(&sp_npos_elections, Span::call_site());
-				Ok(quote!( extern crate #ident as _phragmen; ))
+				Ok(quote!( extern crate #ident as _npos; ))
 			},
 			Err(e) => Err(syn::Error::new(Span::call_site(), &e)),
 		}
