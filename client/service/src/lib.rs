@@ -330,16 +330,16 @@ async fn build_network_future<
 					sc_rpc::system::Request::GenChainSpec(raw, hardcode_sync, sender) => {
 						let mut chain_spec = chain_spec.cloned_box();
 
-						let hardcoded_sync_result = if hardcode_sync {
-							build_hardcoded_sync(client.clone(), backend.clone())
-								.map(|hardcoded_sync| {
-									chain_spec.set_hardcoded_sync(hardcoded_sync.to_serializable())
+						let light_sync_state_result = if hardcode_sync {
+							build_light_sync_state(client.clone(), backend.clone())
+								.map(|light_sync_state| {
+									chain_spec.set_light_sync_state(light_sync_state.to_serializable())
 								})
 						} else {
 							Ok(())
 						};
 
-						let value = match hardcoded_sync_result {
+						let value = match light_sync_state_result {
 							Ok(()) => chain_spec.as_json_value(raw).map_err(|err| err.into()),
 							Err(error) => Err(error)
 						};
@@ -373,10 +373,10 @@ async fn build_network_future<
 	}
 }
 
-fn build_hardcoded_sync<TBl, TCl, TBackend>(
+fn build_light_sync_state<TBl, TCl, TBackend>(
 	client: Arc<TCl>,
 	backend: Arc<TBackend>,
-) -> Result<sc_chain_spec::HardcodedSync<TBl>, sc_rpc::system::error::Error>
+) -> Result<sc_chain_spec::LightSyncState<TBl>, sc_rpc::system::error::Error>
 	where
 		TBl: BlockT,
 		TCl: HeaderBackend<TBl>,
@@ -405,7 +405,7 @@ fn build_hardcoded_sync<TBl, TCl, TBackend>(
 		number += cht::size();
 	}
 
-	Ok(sc_chain_spec::HardcodedSync::<TBl> {
+	Ok(sc_chain_spec::LightSyncState {
 		header: client.header(BlockId::Hash(finalized_hash))?.unwrap(),
 		chts,
 	})

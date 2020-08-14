@@ -159,7 +159,7 @@ struct ClientSpec<E> {
 	consensus_engine: (),
 	#[serde(skip_serializing)]
 	genesis: serde::de::IgnoredAny,
-	hardcoded_sync: Option<SerializableHardcodedSync>,
+	light_sync_state: Option<SerializableLightSyncState>,
 }
 
 /// A type denoting empty extensions.
@@ -248,7 +248,7 @@ impl<G, E> ChainSpec<G, E> {
 			extensions,
 			consensus_engine: (),
 			genesis: Default::default(),
-			hardcoded_sync: None,
+			light_sync_state: None,
 		};
 
 		ChainSpec {
@@ -263,8 +263,8 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Hardcode infomation to allow light clients to sync quickly into the chain spec.
-	fn set_hardcoded_sync(&mut self, hardcoded_sync: SerializableHardcodedSync) {
-		self.client_spec.hardcoded_sync = Some(hardcoded_sync);	
+	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState) {
+		self.client_spec.light_sync_state = Some(light_sync_state);	
 	}
 }
 
@@ -403,32 +403,32 @@ where
 		self.genesis = GenesisSource::Storage(storage);
 	}
 
-	fn set_hardcoded_sync(&mut self, hardcoded_sync: SerializableHardcodedSync) {
-		ChainSpec::set_hardcoded_sync(self, hardcoded_sync)
+	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState) {
+		ChainSpec::set_light_sync_state(self, light_sync_state)
 	}
 }
 
 /// Hardcoded infomation that allows light clients to sync quickly.
-pub struct HardcodedSync<Block: BlockT> {
+pub struct LightSyncState<Block: BlockT> {
 	/// The header of the best finalized block.
 	pub header: <Block as BlockT>::Header,
 	/// A list of all CHTs in the chain.
 	pub chts: Vec<<Block as BlockT>::Hash>,
 }
 
-impl<Block: BlockT> HardcodedSync<Block> {
-	/// Convert into a `SerializableHardcodecSync`.
-	pub fn to_serializable(&self) -> SerializableHardcodedSync {
+impl<Block: BlockT> LightSyncState<Block> {
+	/// Convert into a `SerializableLightSyncState`.
+	pub fn to_serializable(&self) -> SerializableLightSyncState {
 		use codec::Encode;
 
-		SerializableHardcodedSync {
+		SerializableLightSyncState {
 			header: StorageData(self.header.encode()),
 			chts: self.chts.iter().map(|hash| StorageData(hash.encode())).collect(),
 		}
 	}
 
-	/// Convert from a `SerializableHardcodecSync`.
-	pub fn from_serializable(serialized: &SerializableHardcodedSync) -> Result<Self, codec::Error> {
+	/// Convert from a `SerializableLightSyncState`.
+	pub fn from_serializable(serialized: &SerializableLightSyncState) -> Result<Self, codec::Error> {
 		Ok(Self {
 			header: codec::Decode::decode(&mut &serialized.header.0[..])?,
 			chts: serialized.chts.iter()
@@ -438,11 +438,11 @@ impl<Block: BlockT> HardcodedSync<Block> {
 	}
 }
 
-/// The serializable form of `HardcodedSync`. Created using `HardcodedSync::serialize`.
+/// The serializable form of `LightSyncState`. Created using `LightSyncState::serialize`.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub struct SerializableHardcodedSync {
+pub struct SerializableLightSyncState {
 	header: StorageData,
 	chts: Vec<StorageData>,
 }
