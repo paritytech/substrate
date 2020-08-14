@@ -53,6 +53,7 @@ use parking_lot::Mutex;
 use prometheus_endpoint::{
 	register, Counter, CounterVec, Gauge, GaugeVec, Histogram, HistogramOpts, HistogramVec, Opts,
 	PrometheusError, Registry, U64,
+	SourcedCounter, MetricSource
 };
 use sc_peerset::PeersetHandle;
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
@@ -240,12 +241,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			local_peer_id_legacy
 		);
 
-		// Initialize the metrics.
-		let metrics = match &params.metrics_registry {
-			Some(registry) => Some(Metrics::register(&registry)?),
-			None => None
-		};
-
 		let checker = params.on_demand.as_ref()
 			.map(|od| od.checker().clone())
 			.unwrap_or_else(|| Arc::new(AlwaysBadChecker));
@@ -351,6 +346,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				builder = builder.executor(Box::new(SpawnImpl(spawner)));
 			}
 			(builder.build(), bandwidth)
+		};
+
+		// Initialize the metrics.
+		let metrics = match &params.metrics_registry {
+			Some(registry) => {
+				// External metrics.
+				Metrics::register_bandwidth(registry, bandwidth.clone())?;
+				// Other metrics.
+				Some(Metrics::register(registry)?)
+			}
+			None => None
 		};
 
 		// Listen on multiaddresses.
@@ -1148,9 +1154,6 @@ struct Metrics {
 	kbuckets_num_nodes: GaugeVec<U64>,
 	listeners_local_addresses: Gauge<U64>,
 	listeners_errors_total: Counter<U64>,
-	// Note: `network_bytes_total` is a monotonic gauge obtained by
-	// sampling an existing counter.
-	network_bytes_total: GaugeVec<U64>,
 	notifications_sizes: HistogramVec,
 	notifications_streams_closed_total: CounterVec<U64>,
 	notifications_streams_opened_total: CounterVec<U64>,
@@ -1164,7 +1167,34 @@ struct Metrics {
 	requests_out_started_total: CounterVec<U64>,
 }
 
+/// The source for bandwidth metrics.
+#[derive(Clone)]
+struct BandwidthSource(Arc<transport::BandwidthSinks>);
+
+impl MetricSource for BandwidthSource {
+	type N = u64;
+
+	fn collect(&self, mut set: impl FnMut(&[&str], Self::N)) {
+		set(&[&"in"], self.0.total_inbound());
+		set(&[&"out"], self.0.total_outbound());
+	}
+}
+
 impl Metrics {
+	fn register_bandwidth(registry: &Registry, sinks: Arc<transport::BandwidthSinks>)
+		-> Result<(), PrometheusError>
+	{
+		register(SourcedCounter::new(
+			&Opts::new(
+				"sub_libp2p_network_bytes_total",
+				"Total bandwidth usage"
+			).variable_label("direction"),
+			BandwidthSource(sinks),
+		)?, registry)?;
+
+		Ok(())
+	}
+
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			// This list is ordered alphabetically
@@ -1266,13 +1296,6 @@ impl Metrics {
 			listeners_errors_total: register(Counter::new(
 				"sub_libp2p_listeners_errors_total",
 				"Total number of non-fatal errors reported by a listener"
-			)?, registry)?,
-			network_bytes_total: register(GaugeVec::new(
-				Opts::new(
-					"sub_libp2p_network_bytes_total",
-					"Total bandwidth usage"
-				),
-				&["direction"]
 			)?, registry)?,
 			notifications_sizes: register(HistogramVec::new(
 				HistogramOpts {
@@ -1721,8 +1744,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			metrics.network_bytes_total.with_label_values(&["in"]).set(this.service.bandwidth.total_inbound());
-			metrics.network_bytes_total.with_label_values(&["out"]).set(this.service.bandwidth.total_outbound());
 			metrics.is_major_syncing.set(is_major_syncing as u64);
 			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
 				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
