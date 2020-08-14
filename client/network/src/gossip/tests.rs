@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, gossip::QueueSender, Event, NetworkService, NetworkWorker};
+use crate::{config, gossip::QueuedSender, Event, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, Header as _};
@@ -181,7 +181,7 @@ fn basic_works() {
 
 	async_std::task::block_on(async move {
 		let (sender, bg_future) =
-			QueueSender::new(node1, node2_id, ENGINE_ID, NUM_NOTIFS, |msg| msg);
+			QueuedSender::new(node1, node2_id, ENGINE_ID, NUM_NOTIFS, |msg| msg);
 		async_std::task::spawn(bg_future);
 
 		// Wait for the `NotificationStreamOpened`.
