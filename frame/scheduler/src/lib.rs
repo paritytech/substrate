@@ -949,9 +949,10 @@ mod tests {
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 
+			assert_eq!(Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(5)).unwrap(), (5, 0));
 			assert_eq!(Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)).unwrap(), (6, 0));
 
-			run_to_block(4);
+			run_to_block(5);
 			assert!(logger::log().is_empty());
 
 			run_to_block(6);
