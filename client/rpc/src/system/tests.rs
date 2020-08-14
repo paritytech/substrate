@@ -79,7 +79,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						});
 					}
 					let _ = sender.send(peers);
-				}
+				},
 				Request::NetworkState(sender) => {
 					let _ = sender.send(serde_json::to_value(&sc_network::network_state::NetworkState {
 						peer_id: String::new(),
@@ -103,10 +103,13 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						Ok(_) => sender.send(Ok(())),
 						Err(s) => sender.send(Err(error::Error::MalformattedPeerArg(s.to_string()))),
 					};
-				}
+				},
 				Request::NodeRoles(sender) => {
 					let _ = sender.send(vec![NodeRole::Authority]);
-				}
+				},
+				Request::GenChainSpec(_, _, sender) => {
+					let _ = sender.send(Ok(serde_json::Value::Null));
+				},
 			};
 
 			future::ready(())

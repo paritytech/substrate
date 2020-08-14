@@ -391,7 +391,7 @@ fn build_hardcoded_sync<TBl, TCl, TBackend>(
 
 	let mut chts = Vec::new();
 
-	/// We can't fetch a CHT root later than `finalized_number - 2 * cht_size`.
+	// We can't fetch a CHT root later than `finalized_number - 2 * cht_size`.
 	let cht_size_x_2 = cht::size::<NumberFor::<TBl>>() * NumberFor::<TBl>::from(2);
 
 	let mut number = NumberFor::<TBl>::one();
