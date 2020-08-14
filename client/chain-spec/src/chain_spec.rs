@@ -438,10 +438,10 @@ impl<Block: BlockT> HardcodedSync<Block> {
 	}
 }
 
+/// The serializable form of `HardcodedSync`. Created using `HardcodedSync::serialize`.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-/// The serializable form of `HardcodedSync`. Created using `HardcodedSync::serialize`.
 pub struct SerializableHardcodedSync {
 	header: StorageData,
 	chts: Vec<StorageData>,

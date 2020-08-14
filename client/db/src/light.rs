@@ -616,28 +616,6 @@ impl<Block> ChtRootStorage<Block> for LightStorage<Block>
 	}
 }
 
-
-impl<'a, Block> ChtRootStorage<Block> for &'a LightStorage<Block>
-	where Block: BlockT,
-{
-	fn header_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> ClientResult<Option<Block::Hash>> {
-		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
-	}
-
-	fn changes_trie_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> ClientResult<Option<Block::Hash>> {
-		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
-	}
-}
-
-
 /// Build the key for inserting header-CHT at given block.
 fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 	let mut key = [cht_type; 5];
