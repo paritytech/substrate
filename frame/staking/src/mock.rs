@@ -20,7 +20,7 @@
 use std::{collections::HashSet, cell::RefCell};
 use sp_runtime::Perbill;
 use sp_runtime::curve::PiecewiseLinear;
-use sp_runtime::traits::{IdentityLookup, Convert, SaturatedConversion, Zero};
+use sp_runtime::traits::{IdentityLookup, Zero};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use sp_core::H256;
@@ -33,7 +33,6 @@ use frame_support::{
 use sp_io;
 use sp_npos_elections::{
 	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
-	VoteWeight,
 };
 use crate::*;
 
@@ -44,19 +43,6 @@ pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
-
-/// Simple structure that exposes how u64 currency can be represented as... u64.
-pub struct CurrencyToVoteHandler;
-impl Convert<Balance, u64> for CurrencyToVoteHandler {
-	fn convert(x: Balance) -> u64 {
-		x.saturated_into()
-	}
-}
-impl Convert<u128, Balance> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> Balance {
-		x
-	}
-}
 
 thread_local! {
 	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
@@ -312,7 +298,7 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 impl Trait for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
-	type CurrencyToVote = CurrencyToVoteHandler;
+	type CurrencyToVote = frame_support::traits::IdentityCurrencyToVote;
 	type RewardRemainder = RewardRemainderMock;
 	type Event = MetaEvent;
 	type Slash = ();
@@ -911,13 +897,11 @@ pub(crate) fn prepare_submission_with(
 	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
 	let winners = sp_npos_elections::to_without_backing(winners);
 
-	let stake_of = |who: &AccountId| -> VoteWeight {
-		<CurrencyToVoteHandler as Convert<Balance, VoteWeight>>::convert(
-			Staking::slashable_balance_of(&who)
-		)
-	};
+	let mut staked = sp_npos_elections::assignment_ratio_to_staked(
+		assignments,
+		Staking::weight_of_fn(),
+	);
 
-	let mut staked = sp_npos_elections::assignment_ratio_to_staked(assignments, stake_of);
 	let (mut support_map, _) = build_support_map::<AccountId>(&winners, &staked);
 
 	if iterations > 0 {
@@ -964,7 +948,7 @@ pub(crate) fn prepare_submission_with(
 	let score = {
 		let staked = sp_npos_elections::assignment_ratio_to_staked(
 			assignments_reduced.clone(),
-			Staking::slashable_balance_of_vote_weight,
+			Staking::weight_of_fn(),
 		);
 
 		let (support_map, _) = build_support_map::<AccountId>(

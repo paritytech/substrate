@@ -298,7 +298,7 @@ use frame_support::{
 	},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		UnixTime, EstimateNextNewSession, EnsureOrigin,
+		UnixTime, EstimateNextNewSession, EnsureOrigin, CurrencyToVote,
 	}
 };
 use pallet_session::historical;
@@ -907,7 +907,7 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// [`sp_npos_elections`] crate which accepts u64 numbers and does operations in 128.
 	/// Consequently, the backward convert is used convert the u128s from sp-elections back to a
 	/// [`BalanceOf`].
-	type CurrencyToVote: Convert<BalanceOf<Self>, VoteWeight> + Convert<u128, BalanceOf<Self>>;
+	type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 	/// Tokens have been minted and are unused for validator-reward.
 	/// See [Era payout](./index.html#era-payout).
@@ -2299,11 +2299,21 @@ impl<T: Trait> Module<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
-	/// internal impl of [`slashable_balance_of`] that returns [`VoteWeight`].
-	fn slashable_balance_of_vote_weight(stash: &T::AccountId) -> VoteWeight {
-		<T::CurrencyToVote as Convert<BalanceOf<T>, VoteWeight>>::convert(
-			Self::slashable_balance_of(stash)
-		)
+	/// Internal impl of [`slashable_balance_of`] that returns [`VoteWeight`].
+	fn slashable_balance_of_vote_weight(stash: &T::AccountId, issuance: BalanceOf<T>) -> VoteWeight {
+		T::CurrencyToVote::to_vote(Self::slashable_balance_of(stash), issuance)
+	}
+
+	/// Returns a closure around `slashable_balance_of_vote_weight` that can be passed around.
+	///
+	/// This prevents call sites from repeatedly requesting `total_issuance` from backend.
+	pub(crate) fn weight_of_fn() -> Box<dyn Fn(&T::AccountId) -> VoteWeight> {
+		// TODO: changing this to unboxed `impl Fn(..)` return type and the module will still
+		// compile, while some types in mock fail to resolve, all in all, wtf is all I can say.
+		let issuance = T::Currency::total_issuance();
+		Box::new(move |who: &T::AccountId| -> VoteWeight {
+			Self::slashable_balance_of_vote_weight(who, issuance)
+		})
 	}
 
 	/// Dump the list of validators and nominators into vectors and keep them on-chain.
@@ -2702,7 +2712,7 @@ impl<T: Trait> Module<T> {
 		// convert into staked assignments.
 		let staked_assignments = sp_npos_elections::assignment_ratio_to_staked(
 			assignments,
-			Self::slashable_balance_of_vote_weight,
+			Self::weight_of_fn(),
 		);
 
 		// build the support map thereof in order to evaluate.
@@ -2972,7 +2982,7 @@ impl<T: Trait> Module<T> {
 
 			let staked_assignments = sp_npos_elections::assignment_ratio_to_staked(
 				assignments,
-				Self::slashable_balance_of_vote_weight,
+				Self::weight_of_fn(),
 			);
 
 			let (supports, _) = build_support_map::<T::AccountId>(
@@ -3008,11 +3018,12 @@ impl<T: Trait> Module<T> {
 	///
 	/// No storage item is updated.
 	fn do_phragmen<Accuracy: PerThing>() -> Option<PrimitiveElectionResult<T::AccountId, Accuracy>> {
+		let weight_of = Self::weight_of_fn();
 		let mut all_nominators: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> = Vec::new();
 		let mut all_validators = Vec::new();
 		for (validator, _) in <Validators<T>>::iter() {
 			// append self vote
-			let self_vote = (validator.clone(), Self::slashable_balance_of_vote_weight(&validator), vec![validator.clone()]);
+			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
 			all_nominators.push(self_vote);
 			all_validators.push(validator);
 		}
@@ -3032,7 +3043,7 @@ impl<T: Trait> Module<T> {
 			(nominator, targets)
 		});
 		all_nominators.extend(nominator_votes.map(|(n, ns)| {
-			let s = Self::slashable_balance_of_vote_weight(&n);
+			let s = weight_of(&n);
 			(n, s, ns)
 		}));
 
@@ -3046,8 +3057,9 @@ impl<T: Trait> Module<T> {
 
 	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a [`Exposure`]
 	fn collect_exposure(supports: SupportMap<T::AccountId>) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
-		let to_balance = |e: ExtendedBalance|
-			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
+		let total_issuance = T::Currency::total_issuance();
+		let to_currency = |e: ExtendedBalance|
+			<T::CurrencyToVote>::to_currency(e, total_issuance);
 
 		supports.into_iter().map(|(validator, support)| {
 			// build `struct exposure` from `support`
@@ -3056,7 +3068,7 @@ impl<T: Trait> Module<T> {
 			let mut total: BalanceOf<T> = Zero::zero();
 			support.voters
 				.into_iter()
-				.map(|(nominator, weight)| (nominator, to_balance(weight)))
+				.map(|(nominator, weight)| (nominator, to_currency(weight)))
 				.for_each(|(nominator, stake)| {
 					if nominator == validator {
 						own = own.saturating_add(stake);

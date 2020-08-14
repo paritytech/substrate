@@ -174,7 +174,7 @@ pub fn prepare_submission<T: Trait>(
 	// convert into absolute value and to obtain the reduced version.
 	let mut staked = sp_npos_elections::assignment_ratio_to_staked(
 		assignments,
-		<Module<T>>::slashable_balance_of_vote_weight,
+		<Module<T>>::weight_of_fn(),
 	);
 
 	let (mut support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
@@ -217,7 +217,7 @@ pub fn prepare_submission<T: Trait>(
 	let score = {
 		let staked = sp_npos_elections::assignment_ratio_to_staked(
 			low_accuracy_assignment.clone(),
-			<Module<T>>::slashable_balance_of_vote_weight,
+			<Module<T>>::weight_of_fn(),
 		);
 
 		let (support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);

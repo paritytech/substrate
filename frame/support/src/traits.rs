@@ -23,9 +23,10 @@ use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError, traits::{
+	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError,
+	traits::{
 		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-		BadOrigin, AtLeast32BitUnsigned
+		BadOrigin, AtLeast32BitUnsigned, UniqueSaturatedFrom, UniqueSaturatedInto,
 	},
 };
 use crate::dispatch::Parameter;
@@ -1662,6 +1663,70 @@ impl<T> IsType<T> for T {
 pub trait Instance: 'static {
     /// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
     const PREFIX: &'static str ;
+}
+
+/// A trait similar to `Convert` to convert values from `B` (i.e. the `Balance` type of the chain)
+/// into u64, which is the standard numeric types used in election and other places where complex
+/// calculation over balance type is needed.
+///
+/// Total issuance of the chain is passed in, but an implementation may or may not use it.
+pub trait CurrencyToVote<B> {
+	/// Convert balance to u64.
+	fn to_vote(value: B, issuance: B) -> u64;
+
+	/// Convert u128 to balance.
+	fn to_currency(value: u128, issuance: B) -> B;
+}
+
+/// An implementation of `CurrencyToVote` tailored for chain's that have a balance type of u128.
+///
+/// The factor is the `(total_issuance / u64::max()).max(1)`, represented as u64. Let's look at the
+/// important cases:
+///
+/// If the chain's total issuance is less than u64::max(), this will always be 1, which means that
+/// the factor will not have any effect. In this case, any account's balance is also less. Thus,
+/// both of the conversions are basically an `as`; Any balance can fit in u64.
+///
+/// If the chain's total issuance is more than 2*u64::max(), then a factor might be multiplied and
+/// divided upon conversion.
+///
+/// # Warning
+///
+/// This will have undefined behavior if the chain's balance type is u32.
+pub struct U128CurrencyToVote;
+
+impl U128CurrencyToVote {
+	fn factor(issuance: u128) -> u128 {
+		(issuance / u64::max_value() as u128).max(1)
+	}
+}
+
+impl CurrencyToVote<u128> for U128CurrencyToVote {
+	fn to_vote(value: u128, issuance: u128) -> u64 {
+		(value / Self::factor(issuance)) as u64
+	}
+
+	fn to_currency(value: u128, issuance: u128) -> u128 {
+		value.saturating_mul(Self::factor(issuance))
+	}
+}
+
+
+/// A naive implementation of `CurrencyConvert` that simply saturates all conversions.
+///
+/// # Warning
+///
+/// This is designed to be used mostly for testing. Use with care, and think about the consequences.
+pub struct IdentityCurrencyToVote;
+
+impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> for IdentityCurrencyToVote {
+	fn to_vote(value: B, _: B) -> u64 {
+		value.unique_saturated_into()
+	}
+
+	fn to_currency(value: u128, _: B) -> B {
+		B::unique_saturated_from(value)
+	}
 }
 
 #[cfg(test)]

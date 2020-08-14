@@ -87,7 +87,7 @@ use codec::{Encode, Decode};
 use sp_std::prelude::*;
 use sp_runtime::{
 	DispatchError, RuntimeDebug, Perbill,
-	traits::{Zero, StaticLookup, Convert},
+	traits::{Zero, StaticLookup},
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
@@ -97,10 +97,10 @@ use frame_support::{
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus, InitializeMembers,
-		ContainsLengthBound,
+		ContainsLengthBound, CurrencyToVote,
 	}
 };
-use sp_npos_elections::{build_support_map, ExtendedBalance, VoteWeight, ElectionResult};
+use sp_npos_elections::{build_support_map, VoteWeight, ElectionResult};
 use frame_system::{ensure_signed, ensure_root};
 
 mod benchmarking;
@@ -189,7 +189,7 @@ pub trait Trait: frame_system::Trait {
 
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
-	type CurrencyToVote: Convert<BalanceOf<Self>, VoteWeight> + Convert<ExtendedBalance, BalanceOf<Self>>;
+	type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 	/// How much should be locked up in order to submit one's candidacy.
 	type CandidacyBond: Get<BalanceOf<Self>>;
@@ -893,19 +893,17 @@ impl<T: Trait> Module<T> {
 		// previous runners_up are also always candidates for the next round.
 		candidates.append(&mut Self::runners_up_ids());
 
+
 		// helper closures to deal with balance/stake.
-		let to_votes = |b: BalanceOf<T>| -> VoteWeight {
-			<T::CurrencyToVote as Convert<BalanceOf<T>, VoteWeight>>::convert(b)
-		};
-		let to_balance = |e: ExtendedBalance| -> BalanceOf<T> {
-			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e)
-		};
+		let total_issuance = T::Currency::total_issuance();
 		let stake_of = |who: &T::AccountId| -> VoteWeight {
-			to_votes(Self::locked_stake_of(who))
+			<T::CurrencyToVote>::to_vote(Self::locked_stake_of(who), total_issuance)
 		};
 
 		let voters_and_votes = Voting::<T>::iter()
-			.map(|(voter, (stake, targets))| { (voter, to_votes(stake), targets) })
+			.map(|(voter, (stake, targets))|
+				(voter, <T::CurrencyToVote>::to_vote(stake, total_issuance), targets)
+			)
 			.collect::<Vec<_>>();
 		let maybe_phragmen_result = sp_npos_elections::seq_phragmen::<T::AccountId, Perbill>(
 			num_to_elect,
@@ -953,7 +951,7 @@ impl<T: Trait> Module<T> {
 							"entire new_set was given to build_support_map; en entry must be \
 							created for each item; qed"
 						);
-					(m.clone(), to_balance(support.total))
+					(m.clone(), <T::CurrencyToVote>::to_currency(support.total, total_issuance))
 				})
 				.collect::<Vec<(T::AccountId, BalanceOf<T>)>>();
 
@@ -1220,17 +1218,6 @@ mod tests {
 		}
 	}
 
-	/// Simple structure that exposes how u64 currency can be represented as... u64.
-	pub struct CurrencyToVoteHandler;
-	impl Convert<u64, u64> for CurrencyToVoteHandler {
-		fn convert(x: u64) -> u64 { x }
-	}
-	impl Convert<u128, u64> for CurrencyToVoteHandler {
-		fn convert(x: u128) -> u64 {
-			x as u64
-		}
-	}
-
 	parameter_types!{
 		pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 	}
@@ -1239,7 +1226,7 @@ mod tests {
 		type ModuleId = ElectionsPhragmenModuleId;
 		type Event = Event;
 		type Currency = Balances;
-		type CurrencyToVote = CurrencyToVoteHandler;
+		type CurrencyToVote = frame_support::traits::IdentityCurrencyToVote;
 		type ChangeMembers = TestChangeMembers;
 		type InitializeMembers = ();
 		type CandidacyBond = CandidacyBond;

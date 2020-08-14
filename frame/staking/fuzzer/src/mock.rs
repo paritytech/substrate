@@ -17,7 +17,6 @@
 
 //! Mock file for staking fuzzing.
 
-use sp_runtime::traits::{Convert, SaturatedConversion};
 use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types};
 
 type AccountId = u64;
@@ -38,18 +37,6 @@ impl_outer_origin! {
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
 		staking::Staking,
-	}
-}
-
-pub struct CurrencyToVoteHandler;
-impl Convert<u64, u64> for CurrencyToVoteHandler {
-	fn convert(x: u64) -> u64 {
-		x
-	}
-}
-impl Convert<u128, u64> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u64 {
-		x.saturated_into()
 	}
 }
 
@@ -176,7 +163,7 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Test where
 impl pallet_staking::Trait for Test {
 	type Currency = Balances;
 	type UnixTime = pallet_timestamp::Module<Self>;
-	type CurrencyToVote = CurrencyToVoteHandler;
+	type CurrencyToVote = frame_support::traits::IdentityCurrencyToVote;
 	type RewardRemainder = ();
 	type Event = ();
 	type Slash = ();
