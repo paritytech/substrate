@@ -214,6 +214,14 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
+	fn storage_size(
+		&self,
+		_: Option<Block::Hash>,
+		_: StorageKey,
+	) -> FutureResult<Option<u64>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
 	fn storage(
 		&self,
 		block: Option<Block::Hash>,
@@ -289,7 +297,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn subscribe_storage(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
 		keys: Option<Vec<StorageKey>>
 	) {
@@ -384,7 +392,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn unsubscribe_storage(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		if !self.subscriptions.cancel(id.clone()) {
@@ -412,7 +420,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn subscribe_runtime_version(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<RuntimeVersion>,
 	) {
 		self.subscriptions.add(subscriber, move |sink| {
@@ -459,7 +467,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn unsubscribe_runtime_version(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
