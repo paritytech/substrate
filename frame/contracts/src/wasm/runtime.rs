@@ -87,7 +87,7 @@ impl From<ExecReturnValue> for ReturnCode {
 	}
 }
 
-/// The data passed through when a contract uses `ext_return`.
+/// The data passed through when a contract uses `seal_return`.
 struct ReturnData {
 	/// The flags as passed through by the contract. They are still unchecked and
 	/// will later be parsed into a `ReturnFlags` bitflags struct.
@@ -106,10 +106,10 @@ enum TrapReason {
 	/// The supervisor trapped the contract because of an error condition occurred during
 	/// execution in privileged code.
 	SupervisorError(DispatchError),
-	/// Signals that trap was generated in response to call `ext_return` host function.
+	/// Signals that trap was generated in response to call `seal_return` host function.
 	Return(ReturnData),
 	/// Signals that a trap was generated in response to a successful call to the
-	/// `ext_terminate` host function.
+	/// `seal_terminate` host function.
 	Termination,
 	/// Signals that a trap was generated because of a successful restoration.
 	Restoration,
@@ -378,7 +378,7 @@ fn write_sandbox_memory<E: Ext>(
 ///
 /// If `out_ptr` is set to the sentinel value of `u32::max_value()`  and `allow_skip` is true the
 /// operation is skipped and `Ok` is returned. This is supposed to help callers to make copying
-/// output optional. For example to skip copying back the output buffer of an `ext_call`
+/// output optional. For example to skip copying back the output buffer of an `seal_call`
 /// when the caller is not interested in the result.
 ///
 /// In addition to the error conditions of `write_sandbox_memory` this functions returns
@@ -538,7 +538,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// - If value length exceeds the configured maximum value length of a storage entry.
 	// - Upon trying to set an empty storage entry (value length is 0).
-	ext_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
+	seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
 		if value_len > ctx.ext.max_value_size() {
 			// Bail out if value length exceeds the set maximum value size.
 			return Err(sp_sandbox::HostError);
@@ -555,7 +555,7 @@ define_env!(Env, <E: Ext>,
 	// # Parameters
 	//
 	// - `key_ptr`: pointer into the linear memory where the location to clear the value is placed.
-	ext_clear_storage(ctx, key_ptr: u32) => {
+	seal_clear_storage(ctx, key_ptr: u32) => {
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		ctx.ext.set_storage(key, None);
@@ -574,7 +574,7 @@ define_env!(Env, <E: Ext>,
 	// # Errors
 	//
 	// `ReturnCode::KeyNotFound`
-	ext_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+	seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		if let Some(value) = ctx.ext.get_storage(&key) {
@@ -600,7 +600,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
-	ext_transfer(
+	seal_transfer(
 		ctx,
 		account_ptr: u32,
 		account_len: u32,
@@ -647,7 +647,7 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
 	// `ReturnCode::NotCallable`
-	ext_call(
+	seal_call(
 		ctx,
 		callee_ptr: u32,
 		callee_len: u32,
@@ -734,7 +734,7 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::TransferFailed`
 	// `ReturnCode::NewContractNotFunded`
 	// `ReturnCode::CodeNotFound`
-	ext_instantiate(
+	seal_instantiate(
 		ctx,
 		code_hash_ptr: u32,
 		code_hash_len: u32,
@@ -798,7 +798,7 @@ define_env!(Env, <E: Ext>,
 	// # Traps
 	//
 	// - The contract is live i.e is already on the call stack.
-	ext_terminate(
+	seal_terminate(
 		ctx,
 		beneficiary_ptr: u32,
 		beneficiary_len: u32
@@ -812,7 +812,7 @@ define_env!(Env, <E: Ext>,
 		Err(sp_sandbox::HostError)
 	},
 
-	ext_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
+	seal_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
 		if let Some(input) = ctx.input_data.take() {
 			write_sandbox_output(ctx, buf_ptr, buf_len_ptr, &input, false)
 		} else {
@@ -826,7 +826,7 @@ define_env!(Env, <E: Ext>,
 	// This is the only way to return a data buffer to the caller. Returning from
 	// execution without calling this function is equivalent to calling:
 	// ```
-	// ext_return(0, 0, 0);
+	// seal_return(0, 0, 0);
 	// ```
 	//
 	// The flags argument is a bitfield that can be used to signal special return
@@ -837,7 +837,7 @@ define_env!(Env, <E: Ext>,
 	// --- msb ---
 	//
 	// Using a reserved bit triggers a trap.
-	ext_return(ctx, flags: u32, data_ptr: u32, data_len: u32) => {
+	seal_return(ctx, flags: u32, data_ptr: u32, data_len: u32) => {
 		charge_gas(
 			ctx.gas_meter,
 			ctx.schedule,
@@ -866,7 +866,7 @@ define_env!(Env, <E: Ext>,
 	// If this is a top-level call (i.e. initiated by an extrinsic) the origin address of the
 	// extrinsic will be returned. Otherwise, if this call is initiated by another contract then the
 	// address of the contract will be returned. The value is encoded as T::AccountId.
-	ext_caller(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_caller(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.caller().encode(), false)
 	},
 
@@ -876,7 +876,7 @@ define_env!(Env, <E: Ext>,
 	// `out_len_ptr` must point to a u32 value that describes the available space at
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	ext_address(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_address(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.address().encode(), false)
 	},
 
@@ -893,7 +893,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// It is recommended to avoid specifying very small values for `gas` as the prices for a single
 	// gas can be smaller than one.
-	ext_weight_to_fee(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
+	seal_weight_to_fee(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(
 			ctx, out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode(), false
 		)
@@ -907,7 +907,7 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as Gas.
-	ext_gas_left(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_gas_left(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.gas_meter.gas_left().encode(), false)
 	},
 
@@ -919,7 +919,7 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Balance.
-	ext_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.balance().encode(), false)
 	},
 
@@ -931,7 +931,7 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Balance.
-	ext_value_transferred(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_value_transferred(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(
 			ctx, out_ptr, out_len_ptr, &ctx.ext.value_transferred().encode(), false
 		)
@@ -945,7 +945,7 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Hash.
-	ext_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
+	seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		// The length of a subject can't exceed `max_subject_len`.
 		if subject_len > ctx.schedule.max_subject_len {
 			return Err(sp_sandbox::HostError);
@@ -962,14 +962,14 @@ define_env!(Env, <E: Ext>,
 	// `out_len_ptr` must point to a u32 value that describes the available space at
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	ext_now(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_now(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.now().encode(), false)
 	},
 
 	// Stores the minimum balance (a.k.a. existential deposit) into the supplied buffer.
 	//
 	// The data is encoded as T::Balance.
-	ext_minimum_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_minimum_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.minimum_balance().encode(), false)
 	},
 
@@ -988,7 +988,7 @@ define_env!(Env, <E: Ext>,
 	// a contract to leave a tombstone the balance of the contract must not go
 	// below the sum of existential deposit and the tombstone deposit. The sum
 	// is commonly referred as subsistence threshold in code.
-	ext_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(
 			ctx, out_ptr, out_len_ptr, &ctx.ext.tombstone_deposit().encode(), false
 		)
@@ -1020,7 +1020,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// - Tombstone hashes do not match
 	// - Calling cantract is live i.e is already on the call stack.
-	ext_restore_to(
+	seal_restore_to(
 		ctx,
 		dest_ptr: u32,
 		dest_len: u32,
@@ -1077,7 +1077,7 @@ define_env!(Env, <E: Ext>,
 	// - topics_len - the length of the topics buffer. Pass 0 if you want to pass an empty vector.
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
-	ext_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
+	seal_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
 		let mut topics: Vec::<TopicOf<<E as Ext>::T>> = match topics_len {
 			0 => Vec::new(),
 			_ => read_sandbox_memory_as(ctx, topics_ptr, topics_len)?,
@@ -1111,7 +1111,7 @@ define_env!(Env, <E: Ext>,
 	// - value_ptr: a pointer to the buffer with value, how much to allow for rent
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
 	// - value_len: length of the value buffer.
-	ext_set_rent_allowance(ctx, value_ptr: u32, value_len: u32) => {
+	seal_set_rent_allowance(ctx, value_ptr: u32, value_len: u32) => {
 		let value: BalanceOf<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 		ctx.ext.set_rent_allowance(value);
@@ -1127,14 +1127,14 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Balance.
-	ext_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.rent_allowance().encode(), false)
 	},
 
 	// Prints utf8 encoded string from the data buffer.
 	// Only available on `--dev` chains.
 	// This function may be removed at any time, superseded by a more general contract debugging feature.
-	ext_println(ctx, str_ptr: u32, str_len: u32) => {
+	seal_println(ctx, str_ptr: u32, str_len: u32) => {
 		let data = read_sandbox_memory(ctx, str_ptr, str_len)?;
 		if let Ok(utf8) = core::str::from_utf8(&data) {
 			sp_runtime::print(utf8);
@@ -1148,7 +1148,7 @@ define_env!(Env, <E: Ext>,
 	// `out_len_ptr` must point to a u32 value that describes the available space at
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	ext_block_number(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_block_number(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.block_number().encode(), false)
 	},
 
@@ -1172,7 +1172,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	ext_hash_sha2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	seal_hash_sha2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		compute_hash_on_intermediate_buffer(ctx, sha2_256, input_ptr, input_len, output_ptr)
 	},
 
@@ -1196,7 +1196,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	ext_hash_keccak_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	seal_hash_keccak_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		compute_hash_on_intermediate_buffer(ctx, keccak_256, input_ptr, input_len, output_ptr)
 	},
 
@@ -1220,7 +1220,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	ext_hash_blake2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	seal_hash_blake2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		compute_hash_on_intermediate_buffer(ctx, blake2_256, input_ptr, input_len, output_ptr)
 	},
 
@@ -1244,7 +1244,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	ext_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	seal_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		compute_hash_on_intermediate_buffer(ctx, blake2_128, input_ptr, input_len, output_ptr)
 	},
 );

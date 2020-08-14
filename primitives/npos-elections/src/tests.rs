@@ -920,28 +920,76 @@ mod score {
 	}
 }
 
-mod compact {
+mod solution_type {
 	use codec::{Decode, Encode};
 	use super::AccountId;
 	// these need to come from the same dev-dependency `sp-npos-elections`, not from the crate.
 	use crate::{
-		generate_compact_solution_type, VoteWeight, Assignment, StakedAssignment,
-		Error as PhragmenError, ExtendedBalance,
+		generate_solution_type, Assignment,
+		Error as PhragmenError,
 	};
-	use sp_std::{convert::{TryInto, TryFrom}, fmt::Debug};
+	use sp_std::{convert::TryInto, fmt::Debug};
 	use sp_arithmetic::Percent;
 
-	type Accuracy = Percent;
+	type TestAccuracy = Percent;
 
-	generate_compact_solution_type!(TestCompact, 16);
+	generate_solution_type!(pub struct TestSolutionCompact::<u32, u8, TestAccuracy>(16));
+
+	#[allow(dead_code)]
+	mod __private {
+		// This is just to make sure that that the compact can be generated in a scope without any
+		// imports.
+		use crate::generate_solution_type;
+		use sp_arithmetic::Percent;
+		generate_solution_type!(
+			#[compact]
+			struct InnerTestSolutionCompact::<u32, u8, Percent>(12)
+		);
+
+	}
 
 	#[test]
-	fn compact_struct_is_codec() {
-		let compact = TestCompact::<_, _, _> {
-			votes1: vec![(2u64, 20), (4, 40)],
+	fn solution_struct_works_with_and_without_compact() {
+		// we use u32 size to make sure compact is smaller.
+		let without_compact = {
+			generate_solution_type!(pub struct InnerTestSolution::<u32, u32, Percent>(16));
+			let compact = InnerTestSolution {
+				votes1: vec![(2, 20), (4, 40)],
+				votes2: vec![
+					(1, (10, TestAccuracy::from_percent(80)), 11),
+					(5, (50, TestAccuracy::from_percent(85)), 51),
+				],
+				..Default::default()
+			};
+
+			compact.encode().len()
+		};
+
+		let with_compact = {
+			generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<u32, u32, Percent>(16));
+			let compact = InnerTestSolutionCompact {
+				votes1: vec![(2, 20), (4, 40)],
+				votes2: vec![
+					(1, (10, TestAccuracy::from_percent(80)), 11),
+					(5, (50, TestAccuracy::from_percent(85)), 51),
+				],
+				..Default::default()
+			};
+
+			compact.encode().len()
+		};
+
+		dbg!(with_compact, without_compact);
+		assert!(with_compact < without_compact);
+	}
+
+	#[test]
+	fn solution_struct_is_codec() {
+		let compact = TestSolutionCompact {
+			votes1: vec![(2, 20), (4, 40)],
 			votes2: vec![
-				(1, (10, Accuracy::from_percent(80)), 11),
-				(5, (50, Accuracy::from_percent(85)), 51),
+				(1, (10, TestAccuracy::from_percent(80)), 11),
+				(5, (50, TestAccuracy::from_percent(85)), 51),
 			],
 			..Default::default()
 		};
@@ -956,14 +1004,8 @@ mod compact {
 		assert_eq!(compact.edge_count(), 2 + 4);
 	}
 
-	fn basic_ratio_test_with<V, T>() where
-		V: codec::Codec + Copy + Default + PartialEq + Eq + TryInto<usize> + TryFrom<usize> + From<u8> + Debug,
-		T: codec::Codec + Copy + Default + PartialEq + Eq + TryInto<usize> + TryFrom<usize> + From<u8> + Debug,
-		<V as TryFrom<usize>>::Error: std::fmt::Debug,
-		<T as TryFrom<usize>>::Error: std::fmt::Debug,
-		<V as TryInto<usize>>::Error: std::fmt::Debug,
-		<T as TryInto<usize>>::Error: std::fmt::Debug,
-	{
+	#[test]
+	fn basic_from_and_into_compact_works_assignments() {
 		let voters = vec![
 			2 as AccountId,
 			4,
@@ -986,44 +1028,44 @@ mod compact {
 		let assignments = vec![
 			Assignment {
 				who: 2 as AccountId,
-				distribution: vec![(20u64, Accuracy::from_percent(100))]
+				distribution: vec![(20u64, TestAccuracy::from_percent(100))]
 			},
 			Assignment {
 				who: 4,
-				distribution: vec![(40, Accuracy::from_percent(100))],
+				distribution: vec![(40, TestAccuracy::from_percent(100))],
 			},
 			Assignment {
 				who: 1,
 				distribution: vec![
-					(10, Accuracy::from_percent(80)),
-					(11, Accuracy::from_percent(20))
+					(10, TestAccuracy::from_percent(80)),
+					(11, TestAccuracy::from_percent(20))
 				],
 			},
 			Assignment {
 				who: 5,
 				distribution: vec![
-					(50, Accuracy::from_percent(85)),
-					(51, Accuracy::from_percent(15)),
+					(50, TestAccuracy::from_percent(85)),
+					(51, TestAccuracy::from_percent(15)),
 				]
 			},
 			Assignment {
 				who: 3,
 				distribution: vec![
-					(30, Accuracy::from_percent(50)),
-					(31, Accuracy::from_percent(25)),
-					(32, Accuracy::from_percent(25)),
+					(30, TestAccuracy::from_percent(50)),
+					(31, TestAccuracy::from_percent(25)),
+					(32, TestAccuracy::from_percent(25)),
 				],
 			},
 		];
 
-		let voter_index = |a: &AccountId| -> Option<V> {
+		let voter_index = |a: &AccountId| -> Option<u32> {
 			voters.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
-		let target_index = |a: &AccountId| -> Option<T> {
+		let target_index = |a: &AccountId| -> Option<u8> {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted = <TestCompact<V, T, Percent>>::from_assignment(
+		let compacted = TestSolutionCompact::from_assignment(
 			assignments.clone(),
 			voter_index,
 			target_index,
@@ -1038,25 +1080,29 @@ mod compact {
 
 		assert_eq!(
 			compacted,
-			TestCompact {
-				votes1: vec![(V::from(0u8), T::from(2u8)), (V::from(1u8), T::from(6u8))],
+			TestSolutionCompact {
+				votes1: vec![(0, 2), (1, 6)],
 				votes2: vec![
-					(V::from(2u8), (T::from(0u8), Accuracy::from_percent(80)), T::from(1u8)),
-					(V::from(3u8), (T::from(7u8), Accuracy::from_percent(85)), T::from(8u8)),
+					(2, (0, TestAccuracy::from_percent(80)), 1),
+					(3, (7, TestAccuracy::from_percent(85)), 8),
 				],
 				votes3: vec![
 					(
-						V::from(4),
-						[(T::from(3u8), Accuracy::from_percent(50)), (T::from(4u8), Accuracy::from_percent(25))],
-						T::from(5u8),
+						4,
+						[(3, TestAccuracy::from_percent(50)), (4, TestAccuracy::from_percent(25))],
+						5,
 					),
 				],
 				..Default::default()
 			}
 		);
 
-		let voter_at = |a: V| -> Option<AccountId> { voters.get(<V as TryInto<usize>>::try_into(a).unwrap()).cloned() };
-		let target_at = |a: T| -> Option<AccountId> { targets.get(<T as TryInto<usize>>::try_into(a).unwrap()).cloned() };
+		let voter_at = |a: u32| -> Option<AccountId> {
+			voters.get(<u32 as TryInto<usize>>::try_into(a).unwrap()).cloned()
+		};
+		let target_at = |a: u8| -> Option<AccountId> {
+			targets.get(<u8 as TryInto<usize>>::try_into(a).unwrap()).cloned()
+		};
 
 		assert_eq!(
 			compacted.into_assignment(voter_at, target_at).unwrap(),
@@ -1065,239 +1111,58 @@ mod compact {
 	}
 
 	#[test]
-	fn basic_from_and_into_compact_works_assignments() {
-		basic_ratio_test_with::<u16, u16>();
-		basic_ratio_test_with::<u16, u32>();
-		basic_ratio_test_with::<u8, u32>();
-	}
-
-	#[test]
-	fn basic_from_and_into_compact_works_staked_assignments() {
-		let voters = vec![
-			2 as AccountId,
-			4,
-			1,
-			5,
-			3,
-		];
-		let targets = vec![
-			10 as AccountId, 11,
-			20,
-			30, 31, 32,
-			40,
-			50, 51,
-		];
-
-		let assignments = vec![
-			StakedAssignment {
-				who: 2 as AccountId,
-				distribution: vec![(20, 100 as ExtendedBalance)]
-			},
-			StakedAssignment {
-				who: 4,
-				distribution: vec![(40, 100)],
-			},
-			StakedAssignment {
-				who: 1,
-				distribution: vec![
-					(10, 80),
-					(11, 20)
-				],
-			},
-			StakedAssignment {
-				who: 5, distribution:
-				vec![
-					(50, 85),
-					(51, 15),
-				]
-			},
-			StakedAssignment {
-				who: 3,
-				distribution: vec![
-					(30, 50),
-					(31, 25),
-					(32, 25),
-				],
-			},
-		];
-
-		let voter_index = |a: &AccountId| -> Option<u16> {
-			voters.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
-		};
-		let target_index = |a: &AccountId| -> Option<u16> {
-			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
-		};
-
-		let compacted = <TestCompact<u16, u16, ExtendedBalance>>::from_staked(
-			assignments.clone(),
-			voter_index,
-			target_index,
-		).unwrap();
-		assert_eq!(compacted.len(), assignments.len());
-		assert_eq!(
-			compacted.edge_count(),
-			assignments.iter().fold(0, |a, b| a + b.distribution.len()),
-		);
-
-		assert_eq!(
-			compacted,
-			TestCompact {
-				votes1: vec![(0, 2), (1, 6)],
-				votes2: vec![
-					(2, (0, 80), 1),
-					(3, (7, 85), 8),
-				],
-				votes3: vec![
-					(4, [(3, 50), (4, 25)], 5),
-				],
-				..Default::default()
-			}
-		);
-
-		let max_of_fn = |_: &AccountId| -> VoteWeight { 100 };
-		let voter_at = |a: u16| -> Option<AccountId> { voters.get(a as usize).cloned() };
-		let target_at = |a: u16| -> Option<AccountId> { targets.get(a as usize).cloned() };
-
-		assert_eq!(
-			compacted.into_staked(
-				max_of_fn,
-				voter_at,
-				target_at,
-			).unwrap(),
-			assignments,
-		);
-	}
-
-	#[test]
-	fn compact_into_stake_must_report_overflow() {
-		// The last edge which is computed from the rest should ALWAYS be positive.
-		// in votes2
-		let compact = TestCompact::<u16, u16, ExtendedBalance> {
-			votes1: Default::default(),
-			votes2: vec![(0, (1, 10), 2)],
-			..Default::default()
-		};
-
-		let entity_at = |a: u16| -> Option<AccountId> { Some(a as AccountId) };
-		let max_of = |_: &AccountId| -> VoteWeight { 5 };
-
-		assert_eq!(
-			compact.into_staked(&max_of, &entity_at, &entity_at).unwrap_err(),
-			PhragmenError::CompactStakeOverflow,
-		);
-
-		// in votes3 onwards
-		let compact = TestCompact::<u16, u16, ExtendedBalance> {
-			votes1: Default::default(),
-			votes2: Default::default(),
-			votes3: vec![(0, [(1, 7), (2, 8)], 3)],
-			..Default::default()
-		};
-
-		assert_eq!(
-			compact.into_staked(&max_of, &entity_at, &entity_at).unwrap_err(),
-			PhragmenError::CompactStakeOverflow,
-		);
-
-		// Also if equal
-		let compact = TestCompact::<u16, u16, ExtendedBalance> {
-			votes1: Default::default(),
-			votes2: Default::default(),
-			// 5 is total, we cannot leave none for 30 here.
-			votes3: vec![(0, [(1, 3), (2, 2)], 3)],
-			..Default::default()
-		};
-
-		assert_eq!(
-			compact.into_staked(&max_of, &entity_at, &entity_at).unwrap_err(),
-			PhragmenError::CompactStakeOverflow,
-		);
-	}
-
-	#[test]
 	fn compact_into_assignment_must_report_overflow() {
 		// in votes2
-		let compact = TestCompact::<u16, u16, Accuracy> {
+		let compact = TestSolutionCompact {
 			votes1: Default::default(),
-			votes2: vec![(0, (1, Accuracy::from_percent(100)), 2)],
+			votes2: vec![(0, (1, TestAccuracy::from_percent(100)), 2)],
 			..Default::default()
 		};
 
-		let entity_at = |a: u16| -> Option<AccountId> { Some(a as AccountId) };
+		let voter_at = |a: u32| -> Option<AccountId> { Some(a as AccountId) };
+		let target_at = |a: u8| -> Option<AccountId> { Some(a as AccountId) };
+
 
 		assert_eq!(
-			compact.into_assignment(&entity_at, &entity_at).unwrap_err(),
+			compact.into_assignment(&voter_at, &target_at).unwrap_err(),
 			PhragmenError::CompactStakeOverflow,
 		);
 
 		// in votes3 onwards
-		let compact = TestCompact::<u16, u16, Accuracy> {
+		let compact = TestSolutionCompact {
 			votes1: Default::default(),
 			votes2: Default::default(),
-			votes3: vec![(0, [(1, Accuracy::from_percent(70)), (2, Accuracy::from_percent(80))], 3)],
+			votes3: vec![(0, [(1, TestAccuracy::from_percent(70)), (2, TestAccuracy::from_percent(80))], 3)],
 			..Default::default()
 		};
 
 		assert_eq!(
-			compact.into_assignment(&entity_at, &entity_at).unwrap_err(),
+			compact.into_assignment(&voter_at, &target_at).unwrap_err(),
 			PhragmenError::CompactStakeOverflow,
 		);
 	}
 
 	#[test]
 	fn target_count_overflow_is_detected() {
-		let assignments = vec![
-			StakedAssignment {
-				who: 1 as AccountId,
-				distribution: (10..26).map(|i| (i as AccountId, i as ExtendedBalance)).collect::<Vec<_>>(),
-			},
-		];
-
-		let entity_index = |a: &AccountId| -> Option<u16> { Some(*a as u16) };
-
-		let compacted = <TestCompact<u16, u16, ExtendedBalance>>::from_staked(
-			assignments.clone(),
-			entity_index,
-			entity_index,
-		);
-
-		assert!(compacted.is_ok());
-
-		let assignments = vec![
-			StakedAssignment {
-				who: 1 as AccountId,
-				distribution: (10..27).map(|i| (i as AccountId, i as ExtendedBalance)).collect::<Vec<_>>(),
-			},
-		];
-
-		let compacted = <TestCompact<u16, u16, ExtendedBalance>>::from_staked(
-			assignments.clone(),
-			entity_index,
-			entity_index,
-		);
-
-		assert_eq!(
-			compacted.unwrap_err(),
-			PhragmenError::CompactTargetOverflow,
-		);
+		let voter_index = |a: &AccountId| -> Option<u32> { Some(*a as u32) };
+		let target_index = |a: &AccountId| -> Option<u8> { Some(*a as u8) };
 
 		let assignments = vec![
 			Assignment {
 				who: 1 as AccountId,
-				distribution: (10..27).map(|i| (i as AccountId, Percent::from_parts(i as u8))).collect::<Vec<_>>(),
+				distribution:
+					(10..27)
+					.map(|i| (i as AccountId, Percent::from_parts(i as u8)))
+					.collect::<Vec<_>>(),
 			},
 		];
 
-		let compacted = <TestCompact<u16, u16, Percent>>::from_assignment(
+		let compacted = TestSolutionCompact::from_assignment(
 			assignments.clone(),
-			entity_index,
-			entity_index,
+			voter_index,
+			target_index,
 		);
-
-		assert_eq!(
-			compacted.unwrap_err(),
-			PhragmenError::CompactTargetOverflow,
-		);
+		assert_eq!(compacted.unwrap_err(), PhragmenError::CompactTargetOverflow);
 	}
 
 		#[test]
@@ -1306,24 +1171,24 @@ mod compact {
 		let targets = vec![10 as AccountId, 11];
 
 		let assignments = vec![
-			StakedAssignment {
+			Assignment {
 				who: 1 as AccountId,
-				distribution: vec![(10, 100 as ExtendedBalance), (11, 100)]
+				distribution: vec![(10, Percent::from_percent(50)), (11, Percent::from_percent(50))],
 			},
-			StakedAssignment {
+			Assignment {
 				who: 2,
 				distribution: vec![],
 			},
 		];
 
-		let voter_index = |a: &AccountId| -> Option<u16> {
+		let voter_index = |a: &AccountId| -> Option<u32> {
 			voters.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
-		let target_index = |a: &AccountId| -> Option<u16> {
+		let target_index = |a: &AccountId| -> Option<u8> {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted = <TestCompact<u16, u16, ExtendedBalance>>::from_staked(
+		let compacted = TestSolutionCompact::from_assignment(
 			assignments.clone(),
 			voter_index,
 			target_index,
@@ -1331,9 +1196,9 @@ mod compact {
 
 		assert_eq!(
 			compacted,
-			TestCompact {
+			TestSolutionCompact {
 				votes1: Default::default(),
-				votes2: vec![(0, (0, 100), 1)],
+				votes2: vec![(0, (0, Percent::from_percent(50)), 1)],
 				..Default::default()
 			}
 		);
