@@ -322,8 +322,8 @@ async fn build_network_future<
 					num_sync_peers: network.num_sync_peers(),
 					num_connected_peers: network.num_connected_peers(),
 					num_active_peers: network.num_active_peers(),
-					average_download_per_sec: network.average_download_per_sec(),
-					average_upload_per_sec: network.average_upload_per_sec(),
+					total_bytes_inbound: network.total_bytes_inbound(),
+					total_bytes_outbound: network.total_bytes_outbound(),
 				};
 				let state = network.network_state();
 				ready_sink.send((status, state));
