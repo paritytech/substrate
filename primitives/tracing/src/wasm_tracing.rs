@@ -164,7 +164,9 @@ mod inner {
 			{
 				if $crate::level_enabled!($lvl) {
 					#[allow(unused_imports)]
-					use $crate::{ WasmMetadata, WasmEvent, WasmValues };
+					use $crate::{
+						WasmMetadata, WasmAttributes, WasmEvent, WasmFields, WasmFieldName, WasmValuesSet
+					};
 					let metadata = WasmMetadata {
 						name: concat!(
 							"event ",
@@ -178,13 +180,13 @@ mod inner {
 						target: $target.into(),
 						level: $lvl,
 						module_path: module_path!().as_bytes().to_vec(),
-						fields: vec![]
+						fields: $crate::fieldset!($($fields)*),
 					};
 					if $crate::is_enabled!(&metadata) {
 						$crate::get_tracing_subscriber().map(|t| t.event(WasmEvent {
 							parent_id: Some($parent.0),
+							fields: $crate::valueset!(metadata.fields, $($fields)*),
 							metadata,
-							fields: vec![].into()
 						}));
 					}
 				}
@@ -209,7 +211,9 @@ mod inner {
 			{
 				if $crate::level_enabled!($lvl) {
 					#[allow(unused_imports)]
-					use $crate::{WasmMetadata, WasmEvent, WasmValues};
+					use $crate::{
+						WasmMetadata, WasmAttributes, WasmEvent, WasmFields, WasmFieldName, WasmValuesSet
+					};
 					let metadata = WasmMetadata {
 						name: concat!(
 							"event ",
@@ -223,13 +227,13 @@ mod inner {
 						target: $target.into(),
 						level: $lvl,
 						module_path: module_path!().as_bytes().to_vec(),
-						fields: vec![]
+						fields: $crate::fieldset!($($fields)*)
 					};
 					if $crate::is_enabled!(&metadata) {
 						$crate::get_tracing_subscriber().map(|t| t.event(WasmEvent {
 							parent_id: None,
 							metadata,
-							fields: vec![].into()
+							fields: $crate::valueset!(metadata.fields, $($fields)*)
 						}));
 					}
 				}
@@ -378,7 +382,9 @@ mod inner {
 			{
 				if $crate::level_enabled!($lvl) {
 					#[allow(unused_imports)]
-					use $crate::{ WasmMetadata, WasmAttributes, WasmValues };
+					use $crate::{
+						WasmMetadata, WasmAttributes, WasmEvent, WasmFields, WasmFieldName, WasmValuesSet
+					};
 					let metadata = WasmMetadata {
 						name: $name.as_bytes().to_vec(),
 						file: file!().as_bytes().to_vec(),
@@ -387,14 +393,14 @@ mod inner {
 						target: $target.into(),
 						level: $lvl,
 						module_path: module_path!().as_bytes().to_vec(),
-						fields: vec![]
+						fields: $crate::fieldset!($($fields)*)
 					};
 					if $crate::is_enabled!(metadata) {
 						let span_id = $crate::get_tracing_subscriber().map(|t| t.new_span(
 							WasmAttributes {
 								parent_id: Some($parent.0),
 								metadata,
-								fields: vec![].into()
+								fields: $crate::valueset!(metadata.fields, $($fields)*)
 							})
 						).unwrap_or_default();
 						$crate::Span::new(span_id)
@@ -410,7 +416,9 @@ mod inner {
 			{
 				if $crate::level_enabled!($lvl) {
 					#[allow(unused_imports)]
-					use $crate::{WasmMetadata, WasmAttributes, WasmValues};
+					use $crate::{
+						WasmMetadata, WasmAttributes, WasmEvent, WasmFields, WasmFieldName, WasmValuesSet
+					};
 					let metadata = WasmMetadata {
 						name: $name.as_bytes().to_vec(),
 						file: file!().as_bytes().to_vec(),
@@ -419,14 +427,14 @@ mod inner {
 						target: $target.into(),
 						level: $lvl,
 						module_path: module_path!().as_bytes().to_vec(),
-						fields: vec![]
+						fields: $crate::fieldset!($($fields)*)
 					};
 					if $crate::is_enabled!(metadata) {
 						let span_id = $crate::get_tracing_subscriber().map(|t| t.new_span(
 							WasmAttributes {
 								parent_id: None,
 								metadata,
-								fields: vec![].into()
+								fields: $crate::valueset!(metadata.fields, $($fields)*)
 							})
 						).unwrap_or_default();
 						$crate::Span::new(span_id)
@@ -1970,7 +1978,7 @@ macro_rules! valueset {
 
 	// === base case ===
 	(@ { $(,)* $($val:expr),* $(,)* }, $next:expr $(,)*) => {
-		vec![ $($val),* ]
+		WasmValuesSet::from(vec![ $($val),* ])
 	};
 
 	// === recursive case (more tts) ===
@@ -1982,103 +1990,103 @@ macro_rules! valueset {
 	// };
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+ = ?$val:expr, $($rest:tt)*) => {
 		$crate::valueset!(
-			@ { $($out),*, (&$next, Some(&debug(&$val) as &Value)) },
+			@ { $($out),*, ($next, Some(WasmValue::from(&debug(&$val)))) },
 			$next,
 			$($rest)*
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+ = %$val:expr, $($rest:tt)*) => {
 		$crate::valueset!(
-			@ { $($out),*, (&$next, Some(&display(&$val) as &Value)) },
+			@ { $($out),*, ($next, Some(WasmValue::from(&display(&$val)))) },
 			$next,
 			$($rest)*
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+ = $val:expr, $($rest:tt)*) => {
 		$crate::valueset!(
-			@ { $($out),*, (&$next, Some(&$val as &Value)) },
+			@ { $($out),*, ($next, Some(WasmValue::from(&$val))) },
 			$next,
 			$($rest)*
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+, $($rest:tt)*) => {
 		$crate::valueset!(
-			@ { $($out),*, (&$next, Some(&$($k).+ as &Value)) },
+			@ { $($out),*, ($next, Some(WasmValue::from(&$($k).+ as))) },
 			$next,
 			$($rest)*
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, ?$($k:ident).+, $($rest:tt)*) => {
 		$crate::valueset!(
-			@ { $($out),*, (&$next, Some(&debug(&$($k).+) as &Value)) },
+			@ { $($out),*, ($next, Some(WasmValue::from(&debug(&$($k).+) ))) },
 			$next,
 			$($rest)*
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, %$($k:ident).+, $($rest:tt)*) => {
 		$crate::valueset!(
-			@ { $($out),*, (&$next, Some(&display(&$($k).+) as &Value)) },
+			@ { $($out),*, ($next, Some(WasmValue::from(&display(&$($k).+)))) },
 			$next,
 			$($rest)*
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+ = ?$val:expr) => {
 		$crate::valueset!(
-			@ { $($out),*, (&$next, Some(&debug(&$val) as &Value)) },
+			@ { $($out),*, ($next, Some(WasmValue::from(&debug(&$val)))) },
 			$next,
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+ = %$val:expr) => {
 		$crate::valueset!(
-			@ { $($out),*, (&$next, Some(&display(&$val) as &Value)) },
+			@ { $($out),*, ($next, Some(WasmValue::from(&display(&$val)))) },
 			$next,
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+ = $val:expr) => {
 		$crate::valueset!(
-			@ { $($out),*, (&$next, Some(&$val as &Value)) },
+			@ { $($out),*, ($next, Some(WasmValue::from(&$val))) },
 			$next,
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+) => {
 		$crate::valueset!(
-			@ { $($out),*, (&$next, Some(&$($k).+ as &Value)) },
+			@ { $($out),*, ($next, Some(WasmValue::from(&$($k).+))) },
 			$next,
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, ?$($k:ident).+) => {
 		$crate::valueset!(
-			@ { $($out),*, (&$next, Some(&debug(&$($k).+) as &Value)) },
+			@ { $($out),*, ($next, Some(WasmValue::from(&debug(&$($k).+)))) },
 			$next,
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, %$($k:ident).+) => {
 		$crate::valueset!(
-			@ { $($out),*, (&$next, Some(&display(&$($k).+) as &Value)) },
+			@ { $($out),*, ($next, Some(WasmValue::from(&display(&$($k).+))))},
 			$next,
 		)
 	};
 	// Remainder is unparseable, but exists --- must be format args!
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($rest:tt)+) => {
-		$crate::valueset!(@ { (&$next, Some(&format_args!($($rest)+) as &Value)), $($out),* }, $next, )
+		$crate::valueset!(@ { ($next, Some(WasmValue::from(&format_args!($($rest)+)))), $($out),* }, $next, )
 	};
 
 	// === entry ===
 	($fields:expr, $($kvs:tt)+) => {
 		{
 			#[allow(unused_imports)]
-			use $crate::field::{debug, display, Value};
+			use $crate::{WasmValuesSet, WasmValue};
 			let mut iter = $fields.iter();
-			$fields.value_set($crate::valueset!(
+			$crate::valueset!(
 				@ { },
-				iter.next().expect("FieldSet corrupted (this is a bug)"),
+				iter.next().expect("Fields must be defined"),
 				$($kvs)+
-			))
+			)
 		}
 	};
 	($fields:expr,) => {
 		{
-			$fields.value_set(&[])
+			WasmValuesSet::empty()
 		}
 	};
 }
@@ -2088,7 +2096,7 @@ macro_rules! valueset {
 macro_rules! fieldset {
 	// == base case ==
 	(@ { $(,)* $($out:expr),* $(,)* } $(,)*) => {
-		vec![ $($out),* ]
+		WasmFields::from(vec![ $($out),* ])
 	};
 
 	// == recursive cases (more tts) ==

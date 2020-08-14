@@ -56,7 +56,7 @@ use sp_std::boxed::Box;
 use once_cell::sync::OnceCell;
 
 pub use crate::types::{
-	WasmMetadata, WasmAttributes, WasmValues, WasmEvent, WasmLevel,
+	WasmMetadata, WasmAttributes, WasmValuesSet, WasmValue, WasmFields, WasmEvent, WasmLevel, WasmFieldName
 };
 #[cfg(not(feature = "std"))]
 pub type Level = WasmLevel;
@@ -65,7 +65,7 @@ pub type Level = WasmLevel;
 pub trait TracingSubscriber: Send + Sync {
 	fn enabled(&self, metadata: &WasmMetadata) -> bool;
 	fn new_span(&self, attrs: WasmAttributes) -> u64;
-	fn record(&self, span: u64, values: WasmValues);
+	fn record(&self, span: u64, values: WasmValuesSet);
 	fn event(&self, event: WasmEvent);
 	fn enter(&self, span: u64);
 	fn exit(&self, span: u64);
