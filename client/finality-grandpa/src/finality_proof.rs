@@ -180,7 +180,38 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	) -> Arc<Self> {
 		Arc::new(Self::new(backend, storage_and_proof_provider))
 	}
+}
 
+/// WIP: TODO
+pub trait RpcFinalityProofProvider<Block: BlockT>: Send + Sync {
+	/// WIP: TODO
+	fn prove_finality_for_best_hash(
+		&self,
+		authorities_set_id: u64,
+		last_finalized: Block::Hash,
+	) -> Result<Option<Vec<u8>>, ClientError>;
+}
+
+impl<B, Block> RpcFinalityProofProvider<Block> for FinalityProofProvider<B, Block>
+	where
+		Block: BlockT,
+		NumberFor<Block>: BlockNumberOps,
+		B: Backend<Block> + Send + Sync + 'static,
+{
+	fn prove_finality_for_best_hash(
+		&self,
+		authorities_set_id: u64,
+		last_finalized: Block::Hash,
+	) -> Result<Option<Vec<u8>>, ClientError> {
+		use sp_blockchain::HeaderBackend;
+		prove_finality::<_, _, GrandpaJustification<Block>>(
+			&*self.backend.blockchain(),
+			&*self.authority_provider,
+			authorities_set_id,
+			last_finalized.clone(),
+			self.backend.blockchain().info().best_hash,
+		)
+	}
 }
 
 impl<B, Block> sc_network::config::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
@@ -281,7 +312,7 @@ pub fn make_finality_proof_request<H: Encode + Decode>(last_finalized: H, author
 /// It is assumed that the caller already knows all blocks in the range (begin; end].
 ///
 /// Returns None if there are no finalized blocks unknown to the caller.
-pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
+fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 	blockchain: &B,
 	authorities_provider: &dyn AuthoritySetForFinalityProver<Block>,
 	authorities_set_id: u64,

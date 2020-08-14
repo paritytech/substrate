@@ -35,7 +35,7 @@ mod error;
 mod notification;
 mod report;
 
-use sc_finality_grandpa::GrandpaJustificationStream;
+use sc_finality_grandpa::{RpcFinalityProofProvider, GrandpaJustificationStream};
 use sp_runtime::traits::Block as BlockT;
 
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
@@ -90,7 +90,6 @@ pub trait GrandpaApi<Notification, Hash> {
 	#[rpc(name = "grandpa_proveFinality")]
 	fn prove_finality(
 		&self,
-		hash: Hash,
 		last_finalized: Hash,
 		authorities_set_id: u64
 	) -> FutureResult<Option<Vec<u8>>>;
@@ -130,7 +129,7 @@ where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
 	Block: BlockT,
-	ProofProvider: sc_network::config::FinalityProofProvider<Block> + 'static,
+	ProofProvider: RpcFinalityProofProvider<Block> + 'static,
 {
 	type Metadata = sc_rpc::Metadata;
 
@@ -168,15 +167,12 @@ where
 
 	fn prove_finality(
 		&self,
-		hash: Block::Hash,
 		last_finalized: Block::Hash,
 		authorities_set_id: u64,
 	) -> FutureResult<Option<Vec<u8>>> {
-		// WIP: this encodes and immediately decodes the same blob.
-		// Important to refactor this away as a cleanup step in this PR.
-		let request =
-			sc_finality_grandpa::make_finality_proof_request(last_finalized, authorities_set_id);
-		let result = self.finality_proof_provider.prove_finality(hash, &request);
+		let result = self
+			.finality_proof_provider
+			.prove_finality_for_best_hash(authorities_set_id, last_finalized);
 		let future = async move { result }.boxed();
 		Box::new(
 			future
@@ -236,11 +232,11 @@ mod tests {
 		}
 	}
 
-	impl<Block: BlockT> sc_network::config::FinalityProofProvider<Block> for EmptyFinalityProofProvider {
-		fn prove_finality(
+	impl<Block: BlockT> RpcFinalityProofProvider<Block> for EmptyFinalityProofProvider {
+		fn prove_finality_for_best_hash(
 			&self,
-			_for_block: Block::Hash,
-			_request: &[u8],
+			_authoritites_set_id: u64,
+			_last_finalized: Block::Hash,
 		) -> Result<Option<Vec<u8>>, sp_blockchain::Error> {
 			todo!();
 		}
