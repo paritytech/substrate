@@ -309,8 +309,8 @@ pub struct NetworkStatus<B: BlockT> {
 	pub num_connected_peers: usize,
 	/// Total number of active peers.
 	pub num_active_peers: usize,
-	/// Downloaded bytes per second averaged over the past few seconds.
-	pub average_download_per_sec: u64,
-	/// Uploaded bytes per second averaged over the past few seconds.
-	pub average_upload_per_sec: u64,
+	/// The total number of bytes received.
+	pub total_bytes_inbound: u64,
+	/// The total number of bytes sent.
+	pub total_bytes_outbound: u64,
 }
