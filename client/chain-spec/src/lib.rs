@@ -108,7 +108,9 @@
 mod chain_spec;
 mod extension;
 
-pub use chain_spec::{ChainSpec as GenericChainSpec, NoExtension, HardcodedSync, SerializableHardcodedSync};
+pub use chain_spec::{
+	ChainSpec as GenericChainSpec, NoExtension, HardcodedSync, SerializableHardcodedSync,
+};
 pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 pub use sp_chain_spec::{Properties, ChainType};

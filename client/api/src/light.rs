@@ -232,7 +232,9 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 
 
 /// Light client blockchain storage.
-pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError> + ChtRootStorage<Block> {
+pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block>
+	+ HeaderMetadata<Block, Error=ClientError> + ChtRootStorage<Block>
+{
 	/// Store new header. Should refuse to revert any finalized blocks.
 	///
 	/// Takes new authorities, the leaf state of the new block, and
