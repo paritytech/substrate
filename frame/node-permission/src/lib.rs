@@ -280,6 +280,7 @@ mod tests {
         type RemoveOrigin = EnsureSignedBy<Two, u64>;
         type SwapOrigin = EnsureSignedBy<Three, u64>;
         type ResetOrigin = EnsureSignedBy<Four, u64>;
+        type WeightInfo = ();
     }
 
     type NodePermission = Module<Test>;
