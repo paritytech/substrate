@@ -38,8 +38,8 @@ pub enum Gauge {}
 /// instead of being independently recorded.
 #[derive(Debug, Clone)]
 pub struct SourcedMetric<T, S> {
-    source: S,
-    desc: Desc,
+	source: S,
+	desc: Desc,
 	_type: PhantomData<T>,
 }
 
@@ -53,18 +53,18 @@ pub trait MetricSource: Sync + Send + Clone {
 
 impl<T: SourcedType, S: MetricSource> SourcedMetric<T, S> {
 	/// Creates a new metric that obtains its values from the given source.
-    pub fn new(opts: &Opts, source: S) -> prometheus::Result<Self> {
+	pub fn new(opts: &Opts, source: S) -> prometheus::Result<Self> {
 		let desc = opts.describe()?;
-        Ok(Self { source, desc, _type: PhantomData })
-    }
+		Ok(Self { source, desc, _type: PhantomData })
+	}
 }
 
 impl<T: SourcedType, S: MetricSource> Collector for SourcedMetric<T, S> {
-    fn desc(&self) -> Vec<&Desc> {
-        vec![&self.desc]
-    }
+	fn desc(&self) -> Vec<&Desc> {
+		vec![&self.desc]
+	}
 
-    fn collect(&self) -> Vec<proto::MetricFamily> {
+	fn collect(&self) -> Vec<proto::MetricFamily> {
 		let mut counters = Vec::new();
 
 		self.source.collect(|label_values, value| {
@@ -107,14 +107,14 @@ impl<T: SourcedType, S: MetricSource> Collector for SourcedMetric<T, S> {
 			counters.push(m);
 		});
 
-        let mut m = proto::MetricFamily::default();
-        m.set_name(self.desc.fq_name.clone());
-        m.set_help(self.desc.help.clone());
-        m.set_field_type(T::proto());
-        m.set_metric(counters);
+		let mut m = proto::MetricFamily::default();
+		m.set_name(self.desc.fq_name.clone());
+		m.set_help(self.desc.help.clone());
+		m.set_field_type(T::proto());
+		m.set_metric(counters);
 
-        vec![m]
-    }
+		vec![m]
+	}
 }
 
 /// Types of metrics that can obtain their values from an existing source.
