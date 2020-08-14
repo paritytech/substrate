@@ -73,7 +73,7 @@ pub trait Trait: frame_system::Trait {
     type ResetOrigin: EnsureOrigin<Self::Origin>;
 
     /// Weight information for extrinsics in this pallet.
-	type WeightInfo: WeightInfo;
+    type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
