@@ -32,7 +32,7 @@ use sp_std::vec::Vec;
 use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
+use frame_support::{debug, ensure, decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::{Weight, Pays};
 use frame_support::traits::{Currency, ExistenceRequirement, Get};
 use frame_support::dispatch::DispatchResultWithPostInfo;
@@ -617,6 +617,16 @@ impl<T: Trait> Module<T> {
 
 		let used_gas = U256::from(executor.used_gas());
 		let actual_fee = executor.fee(gas_price);
+		debug::debug!(
+			target: "evm",
+			"Execution {:?} [source: {:?}, value: {}, gas_limit: {}, used_gas: {}, actual_fee: {}]",
+			retv,
+			source,
+			value,
+			gas_limit,
+			used_gas,
+			actual_fee
+		);
 		executor.deposit(source, total_fee.saturating_sub(actual_fee));
 
 		if apply_state {
