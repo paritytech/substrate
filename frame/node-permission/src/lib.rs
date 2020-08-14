@@ -29,9 +29,25 @@ use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Member, MaybeSerializeDeserialize, MaybeDisplay};
 use frame_support::{
     decl_module, decl_storage, decl_event, decl_error,
-    Parameter, storage, ensure, traits::{Get, EnsureOrigin},
+    Parameter, storage, ensure,
+    weights::{DispatchClass, Weight},
+    traits::{Get, EnsureOrigin},
 };
 use codec::Encode;
+
+pub trait WeightInfo {
+    fn add_node() -> Weight;
+    fn remove_node() -> Weight;
+    fn swap_node() -> Weight;
+    fn reset_nodes() -> Weight;
+}
+
+impl WeightInfo for () {
+    fn add_node() -> Weight { 50_000_000 }
+    fn remove_node() -> Weight { 50_000_000 }
+    fn swap_node() -> Weight { 50_000_000 }
+    fn reset_nodes() -> Weight { 50_000_000 }
+}
 
 pub trait Trait: frame_system::Trait {
     /// The event type of this module.
@@ -55,6 +71,9 @@ pub trait Trait: frame_system::Trait {
 
     /// The origin which can reset the permissioned nodes.
     type ResetOrigin: EnsureOrigin<Self::Origin>;
+
+    /// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -106,7 +125,7 @@ decl_module! {
         /// May only be called from `T::AddOrigin`.
         ///
         /// - `node_id`: identifier of the node, it's likely the public key of ed25519 keypair.
-        #[weight = 50_000_000]
+        #[weight = (T::WeightInfo::add_node(), DispatchClass::Operational)]
         pub fn add_node(origin, node_id: T::NodeId) {
             T::AddOrigin::ensure_origin(origin)?;
 
@@ -125,7 +144,7 @@ decl_module! {
         /// May only be called from `T::RemoveOrigin`.
         ///
         /// - `node_id`: identifier of the node, it's likely the public key of ed25519 keypair.
-        #[weight = 50_000_000]
+        #[weight = (T::WeightInfo::remove_node(), DispatchClass::Operational)]
         pub fn remove_node(origin, node_id: T::NodeId) {
             T::RemoveOrigin::ensure_origin(origin)?;
 
@@ -146,7 +165,7 @@ decl_module! {
         /// of ed25519 keypair.
         /// - `add`: the node which will be put in the list, it's likely the public key of ed25519
         /// keypair.
-        #[weight = 50_000_000]
+        #[weight = (T::WeightInfo::swap_node(), DispatchClass::Operational)]
         pub fn swap_node(origin, remove: T::NodeId, add: T::NodeId) {
             T::SwapOrigin::ensure_origin(origin)?;
 
@@ -167,7 +186,7 @@ decl_module! {
         /// May only be called from `T::ResetOrigin`.
         ///
         /// - `nodes`: the new nodes for the allowlist.
-        #[weight = 50_000_000]
+        #[weight = (T::WeightInfo::reset_nodes(), DispatchClass::Operational)]
         pub fn reset_nodes(origin, nodes: Vec<T::NodeId>) {
             T::ResetOrigin::ensure_origin(origin)?;
             ensure!(nodes.len() < T::MaxPermissionedNodes::get() as usize, Error::<T>::TooManyNodes);
