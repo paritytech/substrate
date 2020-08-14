@@ -455,9 +455,6 @@ decl_module! {
 		///   - 1 storage mutation `Voting` (codec `O(M)`)
 		/// - 1 event
 		/// # </weight>
-		// NOTE: surprising difference between old manual weight and new generated weight:
-		// (49155000 as Weight)
-		//	.saturating_add((295000 as Weight).saturating_mul(m as Weight))
 		#[weight = (
 			T::WeightInfo::vote(MAX_MEMBERS),
 			DispatchClass::Operational
@@ -533,11 +530,6 @@ decl_module! {
 		///  - any mutations done while executing `proposal` (`P1`)
 		/// - up to 3 events
 		/// # </weight>
-		// NOTE: surprising difference between old manual weight and new generated weight:
-		// early disapproved: 37.21 vs 47.412
-		// early approved:    50.82 vs 69.466 and B * 0.008 vs 0.004 * b
-		// disapproved:       B * 0.003 vs 0 * b
-		// approved:          65.95 vs 77.033
 		#[weight = (
 			{
 				let b = *length_bound;
