@@ -791,11 +791,13 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 }
 
 /// Parameters to pass into `build_network`.
-pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
+pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl, TBackend> {
 	/// The service configuration.
 	pub config: &'a Configuration,
 	/// A shared client returned by `new_full_parts`/`new_light_parts`.
 	pub client: Arc<TCl>,
+	/// A shared backend returned by `new_full_parts`/`new_light_parts`.
+	pub backend: Arc<TBackend>,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// A handle for spawning tasks.
@@ -815,8 +817,8 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
-pub fn build_network<TBl, TExPool, TImpQu, TCl>(
-	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>
+pub fn build_network<TBl, TExPool, TImpQu, TCl, TBackend>(
+	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl, TBackend>
 ) -> Result<
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
@@ -833,9 +835,10 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
+		TBackend: crate::MaybeChtRootStorageProvider<TBl> + Send + Sync + 'static,
 {
 	let BuildNetworkParams {
-		config, client, transaction_pool, spawn_handle, import_queue, on_demand,
+		config, client, backend, transaction_pool, spawn_handle, import_queue, on_demand,
 		block_announce_validator_builder, finality_proof_request_builder, finality_proof_provider,
 	} = params;
 
@@ -893,8 +896,10 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 
 	let future = build_network_future(
 		config.role.clone(),
+		config.chain_spec.cloned_box(),
 		network_mut,
 		client,
+		backend.clone(),
 		network_status_sinks.clone(),
 		system_rpc_rx,
 		has_bootnodes,

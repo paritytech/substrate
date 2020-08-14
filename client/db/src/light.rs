@@ -27,7 +27,7 @@ use sc_client_api::{
 	blockchain::{
 		BlockStatus, Cache as BlockchainCache, Info as BlockchainInfo,
 	},
-	Storage
+	Storage, ChtRootStorage,
 };
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
@@ -523,22 +523,6 @@ impl<Block> Storage<Block> for LightStorage<Block>
 		}
 	}
 
-	fn header_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> ClientResult<Option<Block::Hash>> {
-		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
-	}
-
-	fn changes_trie_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> ClientResult<Option<Block::Hash>> {
-		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
-	}
-
 	fn finalize_header(&self, id: BlockId<Block>) -> ClientResult<()> {
 		if let Some(header) = self.header(id)? {
 			let mut transaction = Transaction::new();
@@ -611,6 +595,48 @@ impl<Block> Storage<Block> for LightStorage<Block>
 		None
 	}
 }
+
+impl<Block> ChtRootStorage<Block> for LightStorage<Block>
+	where Block: BlockT,
+{
+	fn header_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Option<Block::Hash>> {
+		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
+	}
+
+	fn changes_trie_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Option<Block::Hash>> {
+		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
+	}
+}
+
+
+impl<'a, Block> ChtRootStorage<Block> for &'a LightStorage<Block>
+	where Block: BlockT,
+{
+	fn header_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Option<Block::Hash>> {
+		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
+	}
+
+	fn changes_trie_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Option<Block::Hash>> {
+		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
+	}
+}
+
 
 /// Build the key for inserting header-CHT at given block.
 fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {

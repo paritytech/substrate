@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate chain configurations.
+#![warn(missing_docs)]
 
 use std::{borrow::Cow, fs::File, path::PathBuf, sync::Arc, collections::HashMap};
 use serde::{Serialize, Deserialize};
@@ -26,6 +27,7 @@ use serde_json as json;
 use crate::{RuntimeGenesis, ChainType, extension::GetExtension, Properties};
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
+use sp_runtime::traits::Block as BlockT;
 
 enum GenesisSource<G> {
 	File(PathBuf),
@@ -157,6 +159,7 @@ struct ClientSpec<E> {
 	consensus_engine: (),
 	#[serde(skip_serializing)]
 	genesis: serde::de::IgnoredAny,
+	hardcoded_sync: Option<SerializableHardcodedSync>,
 }
 
 /// A type denoting empty extensions.
@@ -245,6 +248,7 @@ impl<G, E> ChainSpec<G, E> {
 			extensions,
 			consensus_engine: (),
 			genesis: Default::default(),
+			hardcoded_sync: None,
 		};
 
 		ChainSpec {
@@ -256,6 +260,11 @@ impl<G, E> ChainSpec<G, E> {
 	/// Type of the chain.
 	fn chain_type(&self) -> ChainType {
 		self.client_spec.chain_type.clone()
+	}
+
+	/// Hardcode infomation to allow light clients to sync quickly into the chain spec.
+	fn set_hardcoded_sync(&mut self, hardcoded_sync: SerializableHardcodedSync) {
+		self.client_spec.hardcoded_sync = Some(hardcoded_sync);	
 	}
 }
 
@@ -284,16 +293,15 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 	}
 }
 
-impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
-	/// Dump to json string.
-	pub fn as_json(&self, raw: bool) -> Result<String, String> {
-		#[derive(Serialize, Deserialize)]
-		struct Container<G, E> {
-			#[serde(flatten)]
-			client_spec: ClientSpec<E>,
-			genesis: Genesis<G>,
+#[derive(Serialize, Deserialize)]
+struct JsonContainer<G, E> {
+	#[serde(flatten)]
+	client_spec: ClientSpec<E>,
+	genesis: Genesis<G>,
+}
 
-		};
+impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
+	fn json_container(&self, raw: bool) -> Result<JsonContainer<G, E>, String> {
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::Runtime(g)) => {
 				let storage = g.build_storage()?;
@@ -313,11 +321,23 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 			},
 			(_, genesis) => genesis,
 		};
-		let container = Container {
+		Ok(JsonContainer {
 			client_spec: self.client_spec.clone(),
 			genesis,
-		};
+		})
+	}
+
+	/// Dump to json string.
+	pub fn as_json(&self, raw: bool) -> Result<String, String> {
+		let container = self.json_container(raw)?;
 		json::to_string_pretty(&container)
+			.map_err(|e| format!("Error generating spec json: {}", e))
+	}
+
+	/// Dump to json value
+	pub fn as_json_value(&self, raw: bool) -> Result<json::Value, String> {
+		let container = self.json_container(raw)?;
+		json::to_value(container)
 			.map_err(|e| format!("Error generating spec json: {}", e))
 	}
 }
@@ -367,6 +387,10 @@ where
 		ChainSpec::as_json(self, raw)
 	}
 
+	fn as_json_value(&self, raw: bool) -> Result<serde_json::Value, String> {
+		ChainSpec::as_json_value(self, raw)
+	}
+
 	fn as_storage_builder(&self) -> &dyn BuildStorage {
 		self
 	}
@@ -378,6 +402,49 @@ where
 	fn set_storage(&mut self, storage: Storage) {
 		self.genesis = GenesisSource::Storage(storage);
 	}
+
+	fn set_hardcoded_sync(&mut self, hardcoded_sync: SerializableHardcodedSync) {
+		ChainSpec::set_hardcoded_sync(self, hardcoded_sync)
+	}
+}
+
+/// Hardcoded infomation that allows light clients to sync quickly.
+pub struct HardcodedSync<Block: BlockT> {
+	/// The header of the best finalized block.
+	pub header: <Block as BlockT>::Header,
+	/// A list of all CHTs in the chain.
+	pub chts: Vec<<Block as BlockT>::Hash>,
+}
+
+impl<Block: BlockT> HardcodedSync<Block> {
+	/// Convert into a `SerializableHardcodecSync`.
+	pub fn to_serializable(&self) -> SerializableHardcodedSync {
+		use codec::Encode;
+
+		SerializableHardcodedSync {
+			header: StorageData(self.header.encode()),
+			chts: self.chts.iter().map(|hash| StorageData(hash.encode())).collect(),
+		}
+	}
+
+	/// Convert from a `SerializableHardcodecSync`.
+	pub fn from_serializable(serialized: &SerializableHardcodedSync) -> Result<Self, codec::Error> {
+		Ok(Self {
+			header: codec::Decode::decode(&mut &serialized.header.0[..])?,
+			chts: serialized.chts.iter()
+				.map(|cht| codec::Decode::decode(&mut &cht.0[..]))
+				.collect::<Result<_, _>>()?,
+		})
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+/// The serializable form of `HardcodedSync`. Created using `HardcodedSync::serialize`.
+pub struct SerializableHardcodedSync {
+	header: StorageData,
+	chts: Vec<StorageData>,
 }
 
 #[cfg(test)]

@@ -46,9 +46,10 @@ use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, One};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
+use sp_blockchain::HeaderBackend;
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -153,6 +154,24 @@ impl TelemetryConnectionSinks {
 	}
 }
 
+/// Something that might allow access to a `ChtRootStorage`.
+pub trait MaybeChtRootStorageProvider<Block> {
+	/// Potentially get a reference to a `ChtRootStorage`.
+	fn cht_root_storage(&self) -> Option<&dyn sc_client_api::light::ChtRootStorage<Block>>;
+}
+
+impl<Block: BlockT> MaybeChtRootStorageProvider<Block> for TFullBackend<Block> {
+	fn cht_root_storage(&self) -> Option<&dyn sc_client_api::light::ChtRootStorage<Block>> {
+		None
+	}
+}
+
+impl<Block: BlockT> MaybeChtRootStorageProvider<Block> for TLightBackend<Block> {
+	fn cht_root_storage(&self) -> Option<&dyn sc_client_api::light::ChtRootStorage<Block>> {
+		Some(self.blockchain().storage())
+	}
+}
+
 /// An imcomplete set of chain components, but enough to run the chain ops subcommands.
 pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, TransactionPool, Other> {
 	/// A shared client instance.
@@ -180,12 +199,15 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 async fn build_network_future<
 	B: BlockT,
-	C: BlockchainEvents<B>,
+	C: BlockchainEvents<B> + HeaderBackend<B>,
+	BE: MaybeChtRootStorageProvider<B>,
 	H: sc_network::ExHashT
 > (
 	role: Role,
+	chain_spec: Box<dyn ChainSpec>,
 	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
+	backend: Arc<BE>,
 	status_sinks: NetworkStatusSinks<B>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
@@ -304,6 +326,23 @@ async fn build_network_future<
 						};
 
 						let _ = sender.send(vec![node_role]);
+					},
+					sc_rpc::system::Request::GenChainSpec(raw, hardcode_sync, sender) => {
+						let mut chain_spec = chain_spec.cloned_box();
+
+						let hardcoded_sync_result = if hardcode_sync {
+							build_hardcoded_sync(client.clone(), backend.clone())
+								.map(|hardcoded_sync| chain_spec.set_hardcoded_sync(hardcoded_sync.serialize()))
+						} else {
+							Ok(())
+						};
+
+						let value = match hardcoded_sync_result {
+							Ok(()) => chain_spec.as_json_value(raw).map_err(|err| err.into()),
+							Err(error) => Err(error)
+						};
+
+						let _ = sender.send(value);
 					}
 				}
 			}
@@ -330,6 +369,51 @@ async fn build_network_future<
 			}
 		}
 	}
+}
+
+fn build_hardcoded_sync<TBl, TCl, TBackend>(
+	client: Arc<TCl>,
+	backend: Arc<TBackend>,
+) -> Result<sc_chain_spec::HardcodedSync<TBl>, sc_rpc::system::error::Error>
+	where
+		TBl: BlockT,
+		TCl: HeaderBackend<TBl>,
+		TBackend: MaybeChtRootStorageProvider<TBl>,
+{
+	let storage = backend.cht_root_storage().ok_or(sc_rpc::system::error::Error::BackendNoChtRoots)?;
+
+	let finalized_hash = client.info().finalized_hash;
+	let finalized_number = client.info().finalized_number;
+
+	let header = client.header(BlockId::Hash(finalized_hash))?.unwrap();
+
+	use sc_client_api::cht;
+
+	let mut chts = Vec::new();
+
+	if finalized_number > cht::size::<NumberFor::<TBl>>() * NumberFor::<TBl>::from(2) {
+		let max = cht::block_to_cht_number(cht::size(), finalized_number).unwrap();
+
+		let mut i = NumberFor::<TBl>::zero();
+
+		log::warn!("{:?} {:?}", i, max);
+
+		while i <= max {
+			let number = (i * cht::size()) + NumberFor::<TBl>::one();
+
+			match storage.header_cht_root(cht::size(), number)? {
+				Some(cht_root) => chts.push(cht_root),
+				None => log::warn!("No CHT found for block {}", number),
+			}
+
+			i += NumberFor::<TBl>::one();
+		}
+	}
+
+	Ok(sc_chain_spec::HardcodedSync::<TBl> {
+		header,
+		chts,
+	})
 }
 
 #[cfg(not(target_os = "unknown"))]

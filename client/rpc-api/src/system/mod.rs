@@ -103,4 +103,9 @@ pub trait SystemApi<Hash, Number> {
 	/// Returns the roles the node is running as.
 	#[rpc(name = "system_nodeRoles", returns = "Vec<NodeRole>")]
 	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>>;
+
+	/// Returns the json-serialized chainspec running the node.
+	#[rpc(name = "system_genChainSpec", returns = "jsonrpc_core::Value")]
+	fn system_gen_chain_spec(&self, raw: bool, hardcode_sync: bool)
+		-> Compat<BoxFuture<'static, jsonrpc_core::Result<jsonrpc_core::Value>>>;
 }

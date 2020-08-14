@@ -108,7 +108,7 @@
 mod chain_spec;
 mod extension;
 
-pub use chain_spec::{ChainSpec as GenericChainSpec, NoExtension};
+pub use chain_spec::{ChainSpec as GenericChainSpec, NoExtension, HardcodedSync, SerializableHardcodedSync};
 pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 pub use sp_chain_spec::{Properties, ChainType};
@@ -147,6 +147,8 @@ pub trait ChainSpec: BuildStorage + Send {
 	fn add_boot_node(&mut self, addr: MultiaddrWithPeerId);
 	/// Return spec as JSON.
 	fn as_json(&self, raw: bool) -> Result<String, String>;
+	/// Return spec as JSON value.
+	fn as_json_value(&self, raw: bool) -> Result<serde_json::Value, String>;
 	/// Return StorageBuilder for this spec.
 	fn as_storage_builder(&self) -> &dyn BuildStorage;
 	/// Returns a cloned `Box<dyn ChainSpec>`.
@@ -155,6 +157,8 @@ pub trait ChainSpec: BuildStorage + Send {
 	///
 	/// This will be used as storage at genesis.
 	fn set_storage(&mut self, storage: Storage);
+	/// Hardcode infomation to allow light clients to sync quickly into the chain spec.
+	fn set_hardcoded_sync(&mut self, hardcoded_sync: SerializableHardcodedSync);
 }
 
 impl std::fmt::Debug for dyn ChainSpec {

@@ -6134,6 +6134,7 @@ name = "sc-chain-spec"
 version = "2.0.0-rc5"
 dependencies = [
  "impl-trait-for-tuples",
+ "parity-scale-codec",
  "sc-chain-spec-derive",
  "sc-network",
  "sc-telemetry",
@@ -6918,6 +6919,7 @@ dependencies = [
  "parking_lot 0.10.2",
  "serde",
  "serde_json",
+ "sp-blockchain",
  "sp-chain-spec",
  "sp-core",
  "sp-rpc",
@@ -8624,8 +8626,8 @@ name = "substrate-test-utils-derive"
 version = "0.8.0-rc5"
 dependencies = [
  "proc-macro-crate",
- "quote 1.0.6",
- "syn 1.0.33",
+ "quote",
+ "syn",
 ]
 
 [[package]]
