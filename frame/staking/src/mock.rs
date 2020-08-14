@@ -437,7 +437,7 @@ impl ExtBuilder {
 		self.max_offchain_iterations = iterations;
 		self
 	}
-	pub fn offchain_phragmen_ext(self) -> Self {
+	pub fn offchain_election_ext(self) -> Self {
 		self.session_per_era(4)
 			.session_length(5)
 			.election_lookahead(3)
@@ -787,7 +787,7 @@ pub(crate) fn add_slash(who: &AccountId) {
 
 // winners will be chosen by simply their unweighted total backing stake. Nominator stake is
 // distributed evenly.
-pub(crate) fn horrible_phragmen_with_post_processing(
+pub(crate) fn horrible_npos_solution(
 	do_reduce: bool,
 ) -> (CompactAssignments, Vec<ValidatorIndex>, ElectionScore) {
 	let mut backing_stake_of: BTreeMap<AccountId, Balance> = BTreeMap::new();

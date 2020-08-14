@@ -35,7 +35,7 @@ fn float_phragmen_poc_works() {
 		(30, vec![2, 3]),
 	];
 	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30), (1, 0), (2, 0), (3, 0)]);
-	let mut phragmen_result = elect_float(2, candidates, voters, &stake_of);
+	let mut phragmen_result = elect_float(2, candidates, voters, &stake_of).unwrap();
 	let winners = phragmen_result.clone().winners;
 	let assignments = phragmen_result.clone().assignments;
 
