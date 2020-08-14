@@ -30,6 +30,7 @@
 //! the associated Fields mentioned above.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(once_cell))]
 
 mod types;
 
@@ -53,7 +54,7 @@ pub use tracing::{
 use sp_std::boxed::Box;
 
 #[cfg(all(not(feature = "std"), feature = "with-tracing"))]
-use once_cell::sync::OnceCell;
+use core::lazy::OnceCell;
 
 pub use crate::types::{
 	WasmMetadata, WasmAttributes, WasmValuesSet, WasmValue, WasmFields, WasmEvent, WasmLevel, WasmFieldName

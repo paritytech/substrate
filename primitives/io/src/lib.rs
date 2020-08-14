@@ -1045,20 +1045,28 @@ pub trait WasmTracing {
 	}
 }
 
-#[cfg(no_std)]
+#[cfg(not(feature="std"))]
 /// The PassingTracingSubscriber implements `sp_tracing::TracingSubscriber`
 /// and pushes the information accross the runtime interface to the host
 pub struct PassingTracingSubsciber;
-#[cfg(no_std)]
+#[cfg(not(feature="std"))]
 impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
-	fn enabled(&self, metadata: sp_tracing::WasmMetadata) -> bool {
-		wasm_tracing::enabled(Crossing(metadata))
+	fn enabled(&self, metadata: &sp_tracing::WasmMetadata) -> bool {
+		wasm_tracing::enabled(Crossing(*metadata))
 	}
 	fn new_span(&self, attrs: sp_tracing::WasmAttributes) -> u64 {
 		wasm_tracing::new_span(Crossing(attrs))
 	}
-	fn event(&self, event: sp_tracing::WasmEvent) {
-		wasm_tracing::event(Crossing(event))
+	fn event(&self,
+		parent_id: Option<u64>,
+		metadata: &sp_tracing::WasmMetadata, 
+		values: &sp_tracing::WasmValueSet
+	) {
+		wasm_tracing::event(Crossing(WasmEvent {
+			parent_id,
+			metadata: metadata.clone(),
+			values: values.clone()
+		}))
 	}
 	fn enter(&self, span: u64) {
 		wasm_tracing::enter(span)
