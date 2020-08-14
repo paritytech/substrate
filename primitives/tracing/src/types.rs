@@ -17,7 +17,7 @@
 
 use core::fmt::Debug;
 use sp_std::{
-	vec::Vec
+	vec::Vec,
 };
 use codec::{Encode, Decode};
 
@@ -33,13 +33,14 @@ pub enum WasmLevel {
 #[derive(Encode, Decode, Clone, Debug)]
 pub enum WasmValue {
 	U8(u8),
+	I8(i8),
 	U32(u32),
 	I32(i32),
 	I64(i64),
 	U64(u64),
 	Bool(bool),
 	Str(Vec<u8>),
-	Display(Vec<u8>),
+	Formatted(Vec<u8>),
 	Encoded(Vec<u8>),
 }
 
@@ -49,12 +50,17 @@ impl From<u8> for WasmValue {
 	}
 }
 
+impl From<&i8> for WasmValue {
+	fn from(inp: &i8) -> WasmValue {
+		WasmValue::I8(inp.clone())
+	}
+}
+
 impl From<&str> for WasmValue {
 	fn from(inp: &str) -> WasmValue {
 		WasmValue::Str(inp.as_bytes().to_vec())
 	}
 }
-
 
 impl From<&&str> for WasmValue {
 	fn from(inp: &&str) -> WasmValue {
@@ -68,21 +74,37 @@ impl From<bool> for WasmValue {
 	}
 }
 
-impl From<&core::fmt::Arguments<'_>> for WasmValue {
-	fn from(inp: &core::fmt::Arguments<'_>) -> WasmValue {
-		todo!{}
+struct DebugWriter(Vec<u8>);
+impl core::fmt::Write for DebugWriter {
+	fn write_str(&mut self, s: &str) -> core::result::Result<(), core::fmt::Error> {
+		self.0.extend_from_slice(s.as_bytes());
+		Ok(())
 	}
 }
 
-impl From<u32> for WasmValue {
-	fn from(u: u32) -> WasmValue {
-		WasmValue::U32(u)
+impl From<&core::fmt::Arguments<'_>> for WasmValue {
+	fn from(inp: &core::fmt::Arguments<'_>) -> WasmValue {
+		let mut buf = DebugWriter(Vec::new());
+		core::fmt::write(&mut buf, *inp).expect("Writing of arguments doesn't fail");
+		WasmValue::Formatted(buf.0)
+	}
+}
+
+impl From<i8> for WasmValue {
+	fn from(u: i8) -> WasmValue {
+		WasmValue::I8(u)
 	}
 }
 
 impl From<i32> for WasmValue {
 	fn from(u: i32) -> WasmValue {
 		WasmValue::I32(u)
+	}
+}
+
+impl From<u32> for WasmValue {
+	fn from(u: u32) -> WasmValue {
+		WasmValue::U32(u)
 	}
 }
 
