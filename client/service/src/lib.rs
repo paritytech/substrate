@@ -371,6 +371,9 @@ fn check_node_allowlist<
 			// Set only reserved peers are allowed to connect.
 			network.service().set_reserved_peers(peer_ids, true);
 		}
+	} else {
+	    // Note that the situation where the storage entry previously existed but no longer
+	    // does isn't handled at the moment.
 	}
 }
 
