@@ -37,6 +37,7 @@ pub enum Error {
 	/// Backend doesn't store CHT roots.
 	#[display(fmt = "Backend doesn't store CHT roots. Make sure you're calling this on a light client.")]
 	BackendNoChtRoots,
+	/// Generic blockchain backend error.
 	BlockchainError(sp_blockchain::Error),
 }
 

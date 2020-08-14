@@ -46,7 +46,7 @@ use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, One};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Saturating, One};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
 use sp_blockchain::HeaderBackend;
@@ -387,33 +387,26 @@ fn build_hardcoded_sync<TBl, TCl, TBackend>(
 	let finalized_hash = client.info().finalized_hash;
 	let finalized_number = client.info().finalized_number;
 
-	let header = client.header(BlockId::Hash(finalized_hash))?.unwrap();
-
 	use sc_client_api::cht;
 
 	let mut chts = Vec::new();
 
-	if finalized_number > cht::size::<NumberFor::<TBl>>() * NumberFor::<TBl>::from(2) {
-		let max = cht::block_to_cht_number(cht::size(), finalized_number).unwrap();
+	/// We can't fetch a CHT root later than `finalized_number - 2 * cht_size`.
+	let cht_size_x_2 = cht::size::<NumberFor::<TBl>>() * NumberFor::<TBl>::from(2);
 
-		let mut i = NumberFor::<TBl>::zero();
+	let mut number = NumberFor::<TBl>::one();
 
-		log::warn!("{:?} {:?}", i, max);
-
-		while i <= max {
-			let number = (i * cht::size()) + NumberFor::<TBl>::one();
-
-			match storage.header_cht_root(cht::size(), number)? {
-				Some(cht_root) => chts.push(cht_root),
-				None => log::warn!("No CHT found for block {}", number),
-			}
-
-			i += NumberFor::<TBl>::one();
+	while number <= finalized_number.saturating_sub(cht_size_x_2) {
+		match storage.header_cht_root(cht::size(), number)? {
+			Some(cht_root) => chts.push(cht_root),
+			None => log::error!("No CHT found for block {}", number),
 		}
+
+		number += cht::size();
 	}
 
 	Ok(sc_chain_spec::HardcodedSync::<TBl> {
-		header,
+		header: client.header(BlockId::Hash(finalized_hash))?.unwrap(),
 		chts,
 	})
 }
