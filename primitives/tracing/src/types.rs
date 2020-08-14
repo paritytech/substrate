@@ -102,9 +102,21 @@ impl From<i32> for WasmValue {
 	}
 }
 
+impl From<&i32> for WasmValue {
+	fn from(u: &i32) -> WasmValue {
+		WasmValue::I32(*u)
+	}
+}
+
 impl From<u32> for WasmValue {
 	fn from(u: u32) -> WasmValue {
 		WasmValue::U32(u)
+	}
+}
+
+impl From<&u32> for WasmValue {
+	fn from(u: &u32) -> WasmValue {
+		WasmValue::U32(*u)
 	}
 }
 
@@ -172,10 +184,10 @@ impl From<Vec<(WasmFieldName, Option<WasmValue>)>> for WasmValuesSet {
 		WasmValuesSet(v)
 	}
 }
-impl From<Vec<(&WasmFieldName, Option<WasmValue>)>> for WasmValuesSet {
-	fn from(v: Vec<(&WasmFieldName, Option<WasmValue>)>) -> Self {
+impl From<Vec<(&&WasmFieldName, Option<WasmValue>)>> for WasmValuesSet {
+	fn from(v: Vec<(&&WasmFieldName, Option<WasmValue>)>) -> Self {
 		// FIXME: remove this clone!
-		WasmValuesSet(v.into_iter().map(|(k, v)| ((*k).clone(), v)).collect())
+		WasmValuesSet(v.into_iter().map(|(k, v)| ((**k).clone(), v)).collect())
 	}
 }
 

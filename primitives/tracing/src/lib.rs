@@ -65,8 +65,8 @@ pub type Level = WasmLevel;
 pub trait TracingSubscriber: Send + Sync {
 	fn enabled(&self, metadata: &WasmMetadata) -> bool;
 	fn new_span(&self, attrs: WasmAttributes) -> u64;
-	fn record(&self, span: u64, values: WasmValuesSet);
-	fn event(&self, event: WasmEvent);
+	fn record(&self, span: u64, values: &WasmValuesSet);
+	fn event(&self, parent_id: Option<u64>, metadata: &WasmMetadata, values: &WasmValuesSet);
 	fn enter(&self, span: u64);
 	fn exit(&self, span: u64);
 }

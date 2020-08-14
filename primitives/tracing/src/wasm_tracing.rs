@@ -160,92 +160,88 @@ mod inner {
 	// /// ```
 	#[macro_export]
 	macro_rules! event {
-		(target: $target:expr, parent: $parent:expr, $lvl:expr, { $($fields:tt)* } )=> ({
-			{
-				if $crate::level_enabled!($lvl) {
-					#[allow(unused_imports)]
-					use $crate::{
-						WasmMetadata, WasmAttributes, WasmEvent, WasmFields, WasmFieldName, WasmValuesSet
-					};
-					let metadata = WasmMetadata {
-						name: concat!(
-							"event ",
-							file!(),
-							":",
-							line!()
-						).as_bytes().to_vec(),
-						file: file!().as_bytes().to_vec(),
-						line: line!(),
-						is_span: false,
-						target: $target.into(),
-						level: $lvl,
-						module_path: module_path!().as_bytes().to_vec(),
-						fields: $crate::fieldset!( $($fields)* ),
-					};
-					if $crate::is_enabled!(&metadata) {
-						$crate::get_tracing_subscriber().map(move |t| t.event(WasmEvent {
-							parent_id: Some($parent.0),
-							fields: $crate::valueset!(&metadata.fields, $($fields)*),
-							metadata,
-						}));
-					}
+		(target: $target:expr, parent: $parent:expr, $lvl:expr, { $($fields:tt)* } )=> (
+			if $crate::level_enabled!($lvl) {
+				#[allow(unused_imports)]
+				use $crate::{
+					WasmMetadata, WasmAttributes, WasmEvent, WasmFields, WasmFieldName, WasmValuesSet
+				};
+				let metadata = WasmMetadata {
+					name: concat!(
+						"event ",
+						file!(),
+						":",
+						line!()
+					).as_bytes().to_vec(),
+					file: file!().as_bytes().to_vec(),
+					line: line!(),
+					is_span: false,
+					target: $target.into(),
+					level: $lvl,
+					module_path: module_path!().as_bytes().to_vec(),
+					fields: $crate::fieldset!( $($fields)* ),
+				};
+				if $crate::is_enabled!(&metadata) {
+					$crate::get_tracing_subscriber().map(|t| t.event(
+						Some($parent.0),
+						&metadata,
+						&$crate::valueset!(&metadata.fields, $($fields)*),
+					));
 				}
 			}
-		});
+		);
 
-		(target: $target:expr, parent: $parent:expr, $lvl:expr, { $($fields:tt)* }, $($arg:tt)+ ) => ({
+		(target: $target:expr, parent: $parent:expr, $lvl:expr, { $($fields:tt)* }, $($arg:tt)+ ) => (
 			$crate::event!(
 				target: $target,
 				parent: $parent,
 				$lvl,
 				{ message = format_args!($($arg)+), $($fields)* }
 			)
-		});
+		);
 		(target: $target:expr, parent: $parent:expr, $lvl:expr, $($k:ident).+ = $($fields:tt)* ) => (
 			$crate::event!(target: $target, parent: $parent, $lvl, { $($k).+ = $($fields)* })
 		);
 		(target: $target:expr, parent: $parent:expr, $lvl:expr, $($arg:tt)+) => (
 			$crate::event!(target: $target, parent: $parent, $lvl, { $($arg)+ })
 		);
-		(target: $target:expr, $lvl:expr, { $($fields:tt)* } )=> ({
-			{
-				if $crate::level_enabled!($lvl) {
-					#[allow(unused_imports)]
-					use $crate::{
-						WasmMetadata, WasmAttributes, WasmEvent, WasmFields, WasmFieldName, WasmValuesSet
-					};
-					let metadata = WasmMetadata {
-						name: concat!(
-							"event ",
-							file!(),
-							":",
-							line!()
-						).as_bytes().to_vec(),
-						file: file!().as_bytes().to_vec(),
-						line: line!(),
-						is_span: false,
-						target: $target.into(),
-						level: $lvl,
-						module_path: module_path!().as_bytes().to_vec(),
-						fields: $crate::fieldset!( $($fields)* )
-					};
-					if $crate::is_enabled!(&metadata) {
-						$crate::get_tracing_subscriber().map(move |t| t.event(WasmEvent {
-							parent_id: None,
-							fields: $crate::valueset!(&metadata.fields, $($fields)*),
-							metadata,
-						}));
-					}
+		(target: $target:expr, $lvl:expr, { $($fields:tt)* } )=> (
+			if $crate::level_enabled!($lvl) {
+				#[allow(unused_imports)]
+				use $crate::{
+					WasmMetadata, WasmAttributes, WasmEvent, WasmFields, WasmFieldName, WasmValuesSet
+				};
+				let metadata = WasmMetadata {
+					name: concat!(
+						"event ",
+						file!(),
+						":",
+						line!()
+					).as_bytes().to_vec(),
+					file: file!().as_bytes().to_vec(),
+					line: line!(),
+					is_span: false,
+					target: $target.into(),
+					level: $lvl,
+					module_path: module_path!().as_bytes().to_vec(),
+					fields: $crate::fieldset!( $($fields)* )
+				};
+				if $crate::is_enabled!(&metadata) {
+					$crate::get_tracing_subscriber().map(|t| t.event(
+						None,
+						&metadata,
+						&$crate::valueset!(&metadata.fields, $($fields)*),
+					));
 				}
 			}
-		});
-		(target: $target:expr, $lvl:expr, { $($fields:tt)* }, $($arg:tt)+ ) => ({
+		);
+		(target: $target:expr, $lvl:expr, { $($fields:tt)* }, $($arg:tt)+ ) => (
 			$crate::event!(
 				target: $target,
 				$lvl,
 				{ message = format_args!($($arg)+), $($fields)* }
 			)
-		});
+		);
 		(target: $target:expr, $lvl:expr, $($k:ident).+ = $($fields:tt)* ) => (
 			$crate::event!(target: $target, $lvl, { $($k).+ = $($fields)* })
 		);
@@ -1586,7 +1582,7 @@ macro_rules! warn {
 	);
 	(target: $target:expr, parent: $parent:expr, $($arg:tt)+ ) => (
 		$crate::event!(target: $target, parent: $parent, $crate::Level::WARN, {}, $($arg)+)
-	);struct
+	);
 	(parent: $parent:expr, { $($field:tt)+ }, $($arg:tt)+ ) => (
 		$crate::event!(
 			target: module_path!(),
@@ -1990,85 +1986,85 @@ macro_rules! valueset {
 	// };
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+ = ?$val:expr, $($rest:tt)*) => {
 		$crate::valueset!(
-			@ { $($out),*, ($next, Some(WasmValue::from(&format_args!("{:?}", &$val)))) },
+			@ { $($out),*, (&$next, Some(WasmValue::from(&format_args!("{:?}", &$val)))) },
 			$next,
 			$($rest)*
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+ = %$val:expr, $($rest:tt)*) => {
 		$crate::valueset!(
-			@ { $($out),*, ($next, Some(WasmValue::from(&format_args!("{}", &$val)))) },
+			@ { $($out),*, (&$next, Some(WasmValue::from(&format_args!("{}", &$val)))) },
 			$next,
 			$($rest)*
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+ = $val:expr, $($rest:tt)*) => {
 		$crate::valueset!(
-			@ { $($out),*, ($next, Some(WasmValue::from(&$val))) },
+			@ { $($out),*, (&$next, Some(WasmValue::from(&$val))) },
 			$next,
 			$($rest)*
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+, $($rest:tt)*) => {
 		$crate::valueset!(
-			@ { $($out),*, ($next, Some(WasmValue::from(&$($k).+ as))) },
+			@ { $($out),*, (&$next, Some(WasmValue::from(&$($k).+))) },
 			$next,
 			$($rest)*
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, ?$($k:ident).+, $($rest:tt)*) => {
 		$crate::valueset!(
-			@ { $($out),*, ($next, Some(WasmValue::from(&format_args!("{:?}", &$($k).+) ))) },
+			@ { $($out),*, (&$next, Some(WasmValue::from(&format_args!("{:?}", &$($k).+) ))) },
 			$next,
 			$($rest)*
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, %$($k:ident).+, $($rest:tt)*) => {
 		$crate::valueset!(
-			@ { $($out),*, ($next, Some(WasmValue::from(&format_args!("{}", &$($k).+)))) },
+			@ { $($out),*, (&$next, Some(WasmValue::from(&format_args!("{}", &$($k).+)))) },
 			$next,
 			$($rest)*
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+ = ?$val:expr) => {
 		$crate::valueset!(
-			@ { $($out),*, ($next, Some(WasmValue::from(&format_args!("{:?}", &$val)))) },
+			@ { $($out),*, (&$next, Some(WasmValue::from(&format_args!("{:?}", &$val)))) },
 			$next,
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+ = %$val:expr) => {
 		$crate::valueset!(
-			@ { $($out),*, ($next, Some(WasmValue::from(&format_args!("{}", &$val)))) },
+			@ { $($out),*, (&$next, Some(WasmValue::from(&format_args!("{}", &$val)))) },
 			$next,
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+ = $val:expr) => {
 		$crate::valueset!(
-			@ { $($out),*, ($next, Some(WasmValue::from(&$val))) },
+			@ { $($out),*, (&$next, Some(WasmValue::from(&$val))) },
 			$next,
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($k:ident).+) => {
 		$crate::valueset!(
-			@ { $($out),*, ($next, Some(WasmValue::from(&$($k).+))) },
+			@ { $($out),*, (&$next, Some(WasmValue::from(&$($k).+))) },
 			$next,
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, ?$($k:ident).+) => {
 		$crate::valueset!(
-			@ { $($out),*, ($next, Some(WasmValue::from(&format_args!("{:?}", &$($k).+)))) },
+			@ { $($out),*, (&$next, Some(WasmValue::from(&format_args!("{:?}", &$($k).+)))) },
 			$next,
 		)
 	};
 	(@ { $(,)* $($out:expr),* }, $next:expr, %$($k:ident).+) => {
 		$crate::valueset!(
-			@ { $($out),*, ($next, Some(WasmValue::from(&format_args!("{:?}", &$($k).+))))},
+			@ { $($out),*, (&$next, Some(WasmValue::from(&format_args!("{:?}", &$($k).+)))) },
 			$next,
 		)
 	};
 	// Remainder is unparseable, but exists --- must be format args!
 	(@ { $(,)* $($out:expr),* }, $next:expr, $($rest:tt)+) => {
-		$crate::valueset!(@ { ($next, Some(WasmValue::from(&format_args!($($rest)+)))), $($out),* }, $next, )
+		$crate::valueset!(@ { (&$next, Some(WasmValue::from(&format_args!($($rest)+)))), $($out),* }, $next, )
 	};
 
 	// === entry ===
@@ -2084,11 +2080,10 @@ macro_rules! valueset {
 			)
 		}
 	};
-	($fields:expr,) => {
-		{
+	($fields:expr,) => (
 			WasmValuesSet::empty()
-		}
-	};
+		
+	);
 }
 
 #[doc(hidden)]
