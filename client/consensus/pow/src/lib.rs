@@ -88,6 +88,8 @@ pub enum Error<B: BlockT> {
 	CreateInherents(sp_inherents::Error),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
+	#[display(fmt = "Multiple pre-runtime digests")]
+	MultiplePreRuntimeDigests,
 	Client(sp_blockchain::Error),
 	Codec(codec::Error),
 	Environment(String),
@@ -172,6 +174,7 @@ pub trait PowAlgorithm<B: BlockT> {
 		&self,
 		parent: &BlockId<B>,
 		pre_hash: &B::Hash,
+		pre_digest: Option<&[u8]>,
 		seal: &Seal,
 		difficulty: Self::Difficulty,
 	) -> Result<bool, Error<B>>;
@@ -180,6 +183,7 @@ pub trait PowAlgorithm<B: BlockT> {
 		&self,
 		parent: &BlockId<B>,
 		pre_hash: &B::Hash,
+		pre_digest: Option<&[u8]>,
 		difficulty: Self::Difficulty,
 		round: u32,
 	) -> Result<Option<Seal>, Error<B>>;
@@ -344,9 +348,11 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 		};
 
 		let pre_hash = block.header.hash();
+		let pre_digest = find_pre_digest::<B>(&block.header)?;
 		if !self.algorithm.verify(
 			&BlockId::hash(parent_hash),
 			&pre_hash,
+			pre_digest.as_ref().map(|v| &v[..]),
 			&inner_seal,
 			difficulty,
 		)? {
@@ -505,7 +511,7 @@ pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 	client: Arc<C>,
 	algorithm: Algorithm,
 	mut env: E,
-	preruntime: Option<Vec<u8>>,
+	pre_runtime: Option<Vec<u8>>,
 	round: u32,
 	mut sync_oracle: SO,
 	build_time: std::time::Duration,
@@ -533,7 +539,7 @@ pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 				client.as_ref(),
 				&algorithm,
 				&mut env,
-				preruntime.as_ref(),
+				pre_runtime.as_ref(),
 				round,
 				&mut sync_oracle,
 				build_time.clone(),
@@ -557,7 +563,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 	client: &C,
 	algorithm: &Algorithm,
 	env: &mut E,
-	preruntime: Option<&Vec<u8>>,
+	pre_runtime: Option<&Vec<u8>>,
 	round: u32,
 	sync_oracle: &mut SO,
 	build_time: std::time::Duration,
@@ -616,8 +622,8 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 		let inherent_data = inherent_data_providers
 			.create_inherent_data().map_err(Error::CreateInherents)?;
 		let mut inherent_digest = Digest::default();
-		if let Some(preruntime) = &preruntime {
-			inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, preruntime.to_vec()));
+		if let Some(pre_runtime) = &pre_runtime {
+			inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, pre_runtime.to_vec()));
 		}
 		let proposal = futures::executor::block_on(proposer.propose(
 			inherent_data,
@@ -634,6 +640,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 				let seal = algorithm.mine(
 					&BlockId::Hash(best_hash),
 					&header.hash(),
+					pre_runtime.map(|v| &v[..]),
 					difficulty,
 					round,
 				)?;
@@ -675,4 +682,23 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 		block_import.import_block(import_block, HashMap::default())
 			.map_err(|e| Error::BlockBuiltError(best_hash, e))?;
 	}
+}
+
+/// Find PoW pre-runtime.
+fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Error<B>> {
+	let mut pre_digest: Option<_> = None;
+	for log in header.digest().logs() {
+		trace!(target: "pow", "Checking log {:?}, looking for pre runtime digest", log);
+		match (log, pre_digest.is_some()) {
+			(DigestItem::PreRuntime(POW_ENGINE_ID, _), true) => {
+				return Err(Error::MultiplePreRuntimeDigests)
+			},
+			(DigestItem::PreRuntime(POW_ENGINE_ID, v), false) => {
+				pre_digest = Some(v.clone());
+			},
+			(_, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
+		}
+	}
+
+	Ok(pre_digest)
 }
