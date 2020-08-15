@@ -336,9 +336,12 @@ impl TaskManager {
 		}
 	}
 
-	/// Set what the task manager should keep alive.
-	pub(super) fn keep_alive<T: 'static + Send + Sync>(&mut self, to_keep_alive: T) {
-		self.keep_alive = Box::new(to_keep_alive);
+	/// Set what the task manager should keep alive, can be called multiple times.
+	pub fn keep_alive<T: 'static + Send + Sync>(&mut self, to_keep_alive: T) {
+		// allows this fn to safely called multiple times.
+		use std::mem;
+		let old = mem::replace(&mut self.keep_alive, Box::new(()));
+		self.keep_alive = Box::new((to_keep_alive, old));
 	}
 
 	/// Register another TaskManager to terminate and gracefully shutdown when the parent
