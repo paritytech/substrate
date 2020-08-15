@@ -174,7 +174,7 @@ decl_module! {
             let mut nodes = Self::get_allowlist();
             let remove_location = nodes.binary_search(&remove).ok().ok_or(Error::<T>::NotExist)?;
             nodes.remove(remove_location);
-            let _ = nodes.binary_search(&add).err().ok_or(Error::<T>::AlreadyJoined)?;
+            let add_location = nodes.binary_search(&add).err().ok_or(Error::<T>::AlreadyJoined)?;
             nodes[location] = add;
             nodes.sort();
             Self::put_allowlist(nodes);
