@@ -345,7 +345,7 @@ async fn build_network_future<
 	}
 }
 
-/// Set storage `NODE_ALLOWLIST` means it's a permissioned network,
+/// Set storage `NODE_ALLOW_LIST` means it's a permissioned network,
 /// then only connect to these well known peers.
 fn check_node_allowlist<
 	B: BlockT,
@@ -357,7 +357,7 @@ fn check_node_allowlist<
 	client: &Arc<C>,
 ) {
 	let id = BlockId::hash(client.info().best_hash);
-	let allowlist_storage = client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOWLIST.to_vec()));
+	let allowlist_storage = client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOW_LIST.to_vec()));
 	if let Ok(Some(raw_allowlist)) = allowlist_storage {
 		let node_allowlist = Vec::<NodePublic>::decode_all(&mut &raw_allowlist.0[..]);
 
@@ -372,8 +372,8 @@ fn check_node_allowlist<
 			network.service().set_reserved_peers(peer_ids, true);
 		}
 	} else {
-	    // Note that the situation where the storage entry previously existed but no longer
-	    // does isn't handled at the moment.
+		// Note that the situation where the storage entry previously existed but no longer
+		// does isn't handled at the moment.
 	}
 }
 

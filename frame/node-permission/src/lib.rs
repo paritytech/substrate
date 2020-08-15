@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Node permission module
+//! # Node permission pallet
 //!
-//! This module is used by the `client/service` to retrieve the current
-//! permissioned nodes.
+//! This pallet manages a configurable set of nodes for a permissioned blockchain.
+//! The node set is stored under [`well_known_keys::NODE_ALLOW_LIST`].
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -81,7 +81,7 @@ decl_storage! {
     add_extra_genesis {
         config(nodes): Vec<T::NodeId>;
         build(|config: &GenesisConfig<T>| {
-            sp_io::storage::set(well_known_keys::NODE_ALLOWLIST, &config.nodes.encode());
+            sp_io::storage::set(well_known_keys::NODE_ALLOW_LIST, &config.nodes.encode());
         });
     }
 }
@@ -175,22 +175,23 @@ decl_module! {
             let remove_location = nodes.binary_search(&remove).ok().ok_or(Error::<T>::NotExist)?;
             nodes.remove(remove_location);
             let add_location = nodes.binary_search(&add).err().ok_or(Error::<T>::AlreadyJoined)?;
-            nodes.insert(add_location, node_id);
+            nodes.insert(add_location, add);
             Self::put_allowlist(nodes);
 
             Self::deposit_event(Event::NodesSwapped);
         }
-
+        
         /// Reset all the permissioned nodes in the list.
         ///
         /// May only be called from `T::ResetOrigin`.
         ///
         /// - `nodes`: the new nodes for the allowlist.
         #[weight = (T::WeightInfo::reset_nodes(), DispatchClass::Operational)]
-        pub fn reset_nodes(origin, mut nodes: Vec<T::NodeId>) {
+        pub fn reset_nodes(origin, nodes: Vec<T::NodeId>) {
             T::ResetOrigin::ensure_origin(origin)?;
             ensure!(nodes.len() < T::MaxPermissionedNodes::get() as usize, Error::<T>::TooManyNodes);
 
+            let mut nodes = nodes;
             nodes.sort();
             Self::put_allowlist(nodes);
 
@@ -201,11 +202,11 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
     fn get_allowlist() -> Vec<T::NodeId> {
-        storage::unhashed::get_or_default(well_known_keys::NODE_ALLOWLIST)
+        storage::unhashed::get_or_default(well_known_keys::NODE_ALLOW_LIST)
     }
 
     fn put_allowlist(nodes: Vec<T::NodeId>) {
-        storage::unhashed::put(well_known_keys::NODE_ALLOWLIST, &nodes);
+        storage::unhashed::put(well_known_keys::NODE_ALLOW_LIST, &nodes);
     }
 }
 

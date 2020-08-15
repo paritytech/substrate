@@ -152,7 +152,7 @@ pub mod well_known_keys {
 	pub const DEFAULT_CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:default:";
 
 	/// Permissioned node list.
-	pub const NODE_ALLOWLIST: &'static [u8] = b":node_allowlist";
+	pub const NODE_ALLOW_LIST: &'static [u8] = b":node_allow_list";
 
 	/// Whether a key is a child storage key.
 	///
