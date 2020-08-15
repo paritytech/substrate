@@ -187,7 +187,7 @@ decl_module! {
         ///
         /// - `nodes`: the new nodes for the allowlist.
         #[weight = (T::WeightInfo::reset_nodes(), DispatchClass::Operational)]
-        pub fn reset_nodes(origin, nodes: Vec<T::NodeId>) {
+        pub fn reset_nodes(origin, mut nodes: Vec<T::NodeId>) {
             T::ResetOrigin::ensure_origin(origin)?;
             ensure!(nodes.len() < T::MaxPermissionedNodes::get() as usize, Error::<T>::TooManyNodes);
 
