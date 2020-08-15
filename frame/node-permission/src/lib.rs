@@ -191,7 +191,6 @@ decl_module! {
             T::ResetOrigin::ensure_origin(origin)?;
             ensure!(nodes.len() < T::MaxPermissionedNodes::get() as usize, Error::<T>::TooManyNodes);
 
-            let mut nodes = nodes;
             nodes.sort();
             Self::put_allowlist(nodes);
 
