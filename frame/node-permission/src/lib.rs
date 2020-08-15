@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Node permission moudule
+//! # Node permission module
 //!
 //! This module is used by the `client/service` to retrieve the current
 //! permissioned nodes.
