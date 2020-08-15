@@ -194,6 +194,8 @@ decl_error! {
 		NotFound,
 		/// Given target block number is in the past.
 		TargetBlockNumberInPast,
+		/// Reschedule failed because it does not change scheduled time.
+		RescheduleNoChange,
 	}
 }
 
@@ -512,6 +514,10 @@ impl<T: Trait> Module<T> {
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		let new_time = Self::resolve_time(new_time)?;
 
+		if new_time == when {
+			return Err(Error::<T>::RescheduleNoChange.into());
+		}
+
 		Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
 			let task = agenda.get_mut(index as usize).ok_or(Error::<T>::NotFound)?;
 			let task = task.take().ok_or(Error::<T>::NotFound)?;
@@ -590,6 +596,11 @@ impl<T: Trait> Module<T> {
 
 		Lookup::<T>::try_mutate_exists(id, |lookup| -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 			let (when, index) = lookup.ok_or(Error::<T>::NotFound)?;
+
+			if new_time == when {
+				return Err(Error::<T>::RescheduleNoChange.into());
+			}
+
 			Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
 				let task = agenda.get_mut(index as usize).ok_or(Error::<T>::NotFound)?;
 				let task = task.take().ok_or(Error::<T>::NotFound)?;
@@ -901,6 +912,8 @@ mod tests {
 
 			assert_eq!(Scheduler::do_reschedule((4, 0), DispatchTime::At(6)).unwrap(), (6, 0));
 
+			assert_noop!(Scheduler::do_reschedule((6, 0), DispatchTime::At(6)), Error::<Test>::RescheduleNoChange);
+
 			run_to_block(4);
 			assert!(logger::log().is_empty());
 
@@ -925,6 +938,8 @@ mod tests {
 			assert!(logger::log().is_empty());
 
 			assert_eq!(Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)).unwrap(), (6, 0));
+
+			assert_noop!(Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)), Error::<Test>::RescheduleNoChange);
 
 			run_to_block(4);
 			assert!(logger::log().is_empty());
