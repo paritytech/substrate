@@ -56,6 +56,7 @@ use frame_support::{
 	weights::{DispatchClass, GetDispatchInfo, Weight},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
+use sp_runtime::app_crypto::sp_core::blake2_256;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -102,7 +103,8 @@ impl WeightInfo for () {
 
 pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	/// The outer origin type.
-	type Origin: From<RawOrigin<Self::AccountId, I>>;
+	type Origin: From<RawOrigin<Self::AccountId, I>> + From<system::RawOrigin<Self::AccountId>>
+		+ Into<Result<RawOrigin<Self::AccountId, I>, <Self as Trait<I>>::Origin>>;
 
 	/// The outer call dispatch type.
 	type Proposal: Parameter
@@ -471,7 +473,8 @@ decl_module! {
 			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
-			let result = proposal.dispatch(RawOrigin::Member(who).into());
+			let origin = RawOrigin::Member(who).into();
+			let result = proposal.dispatch(origin);
 			Self::deposit_event(
 				RawEvent::MemberExecuted(proposal_hash, result.map(|_| ()).map_err(|e| e.error))
 			);
@@ -750,7 +753,8 @@ decl_module! {
 			}
 		}
 
-		/// Disapprove a proposal, close, and remove it from the system, regardless of its current state.
+		/// Disapprove a proposal, close, and remove it from the system, regardless of its current
+		/// state.
 		///
 		/// Must be called by the Root origin.
 		///
@@ -771,6 +775,28 @@ decl_module! {
 			ensure_root(origin)?;
 			let actual_weight = Self::do_disapprove_proposal(proposal_hash);
 			Ok(Some(actual_weight).into())
+		}
+
+		/// Re-originate a call from a Signed origin with a well-known account ID.
+		///
+		/// Must be called by the Members origin with an amount of members such that the proportion
+		/// with the overall `MemberCount` is at least `n / d`.
+		///
+		/// Parameters:
+		/// * `n`: The numerator of the proportion of members required of the origin for this `call`
+		/// to execute.
+		/// * `d`: The denominator of the proportion of members required of the origin for this
+		/// `call` to execute.
+		/// * `call`: The call to execute.
+		#[weight = T::DbWeight::get().reads_writes(1, 0) // `Voting`, `Proposals`, `ProposalOf`
+			.saturating_add(100_000) // P2
+			.saturating_add(call.get_dispatch_info().weight)
+		]
+		fn as_account_proportion_at_least(origin, n: u32, d: u32, call: Box<<T as Trait<I>>::Proposal>) {
+			let _ = ensure_proportion_at_least(origin, n, d)?;
+			let id = Self::account_id_proportion_at_least(n, d);
+			let origin = system::RawOrigin::Signed(id).into();
+			let _ = call.dispatch(origin);
 		}
 	}
 }
@@ -858,6 +884,18 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		});
 		T::DbWeight::get().reads_writes(1, 3) // `Voting`, `Proposals`, `ProposalOf`
 			.saturating_add(490_000 * num_proposals as Weight) // P2
+	}
+
+	/// Derive a derivative account ID from the owner account and the sub-account index.
+	pub fn account_id_proportion_at_least(n: u32, d: u32) -> T::AccountId {
+		let entropy = (
+			b"modlpy/collectiv",
+			b"account_id_proportion_at_least",
+			I::PREFIX,
+			n,
+			d,
+		).using_encoded(blake2_256);
+		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 	}
 }
 
@@ -979,6 +1017,23 @@ impl<
 	}
 }
 
+/// Ensure that the origin `o` represents more than `num / den` members of the total member count.
+/// Returns `Ok` or an `Err` otherwise.
+pub fn ensure_proportion_more_than<OuterOrigin, AccountId, I>(
+	o: OuterOrigin,
+	num: MemberCount,
+	den: MemberCount,
+)
+	-> result::Result<MemberCount, &'static str>
+where
+	OuterOrigin: Into<result::Result<RawOrigin<AccountId, I>, OuterOrigin>>
+{
+	match o.into() {
+		Ok(RawOrigin::Members(n, m)) if n * den > num * m => Ok(n),
+		_ => Err("bad origin: expected to be a threshold number of members"),
+	}
+}
+
 pub struct EnsureProportionMoreThan<N: U32, D: U32, AccountId, I=DefaultInstance>(
 	sp_std::marker::PhantomData<(N, D, AccountId, I)>
 );
@@ -1000,6 +1055,23 @@ impl<
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
 		O::from(RawOrigin::Members(1u32, 0u32))
+	}
+}
+
+/// Ensure that the origin `o` represents at least `num / den` members of the total member count.
+/// Returns `Ok` or an `Err` otherwise.
+pub fn ensure_proportion_at_least<OuterOrigin, AccountId, I>(
+	o: OuterOrigin,
+	num: MemberCount,
+	den: MemberCount,
+)
+	-> result::Result<MemberCount, &'static str>
+where
+	OuterOrigin: Into<result::Result<RawOrigin<AccountId, I>, OuterOrigin>>
+{
+	match o.into() {
+		Ok(RawOrigin::Members(n, m)) if n * den >= num * m => Ok(n),
+		_ => Err("bad origin: expected to be a threshold number of members"),
 	}
 }
 
