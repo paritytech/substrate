@@ -736,8 +736,14 @@ macro_rules! impl_benchmark {
 					_ => return Err("Could not find extrinsic."),
 				};
 
-				// Add whitelist to DB
-				$crate::benchmarking::set_whitelist(whitelist.to_vec());
+				// Add whitelist to DB including whitelisted caller
+				let mut whitelist = whitelist.to_vec();
+				let whitelisted_caller_key =
+					<frame_system::Account::<T> as frame_support::storage::StorageMap<_,_>>::hashed_key_for(
+						$crate::whitelisted_caller::<T::AccountId>()
+					);
+				whitelist.push(whitelisted_caller_key);
+				$crate::benchmarking::set_whitelist(whitelist);
 
 				// Warm up the DB
 				$crate::benchmarking::commit_db();

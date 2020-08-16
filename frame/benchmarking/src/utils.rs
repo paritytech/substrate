@@ -185,3 +185,8 @@ pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed
 	let entropy = (name, index, seed).using_encoded(blake2_256);
 	AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 }
+
+/// This caller account is automatically whitelisted for DB reads/writes by the benchmarking macro.
+pub fn whitelisted_caller<AccountId: Decode + Default>() -> AccountId {
+	account::<AccountId>("whitelisted_caller", 0, 0)
+}
