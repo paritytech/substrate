@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Node permission pallet
+//! # Node authorization pallet
 //!
 //! This pallet manages a configurable set of nodes for a permissioned blockchain.
 //! The node set is stored under [`well_known_keys::NODE_ALLOW_LIST`].
@@ -53,23 +53,23 @@ pub trait Trait: frame_system::Trait {
     /// The event type of this module.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 
-    /// The maximum number of permissioned nodes that are allowed to set
-    type MaxPermissionedNodes: Get<u32>;
+    /// The maximum number of authorized nodes that are allowed to set
+    type MaxAuthorizedNodes: Get<u32>;
 
     /// The node identifier type for the runtime.
     type NodeId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay
         + Ord + Default;
 
-    /// The origin which can add a permissioned node.
+    /// The origin which can add a authorized node.
     type AddOrigin: EnsureOrigin<Self::Origin>;
 
-    /// The origin which can remove a permissioned node.
+    /// The origin which can remove a authorized node.
     type RemoveOrigin: EnsureOrigin<Self::Origin>;
 
-    /// The origin which can swap the permissioned nodes.
+    /// The origin which can swap the authorized nodes.
     type SwapOrigin: EnsureOrigin<Self::Origin>;
 
-    /// The origin which can reset the permissioned nodes.
+    /// The origin which can reset the authorized nodes.
     type ResetOrigin: EnsureOrigin<Self::Origin>;
 
     /// Weight information for extrinsics in this pallet.
@@ -77,7 +77,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-    trait Store for Module<T: Trait> as NodePermission {}
+    trait Store for Module<T: Trait> as NodeAuthorization {}
     add_extra_genesis {
         config(nodes): Vec<T::NodeId>;
         build(|config: &GenesisConfig<T>| {
@@ -100,9 +100,9 @@ decl_event! {
 }
 
 decl_error! {
-    /// Error for the node permission module.
+    /// Error for the node authorization module.
     pub enum Error for Module<T: Trait> {
-        /// Too many permissioned nodes.
+        /// Too many authorized nodes.
         TooManyNodes,
         /// The node is already joined in the list.
         AlreadyJoined,
@@ -113,8 +113,8 @@ decl_error! {
 
 decl_module! {
     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-        /// The maximum number of permissioned nodes
-        const MaxPermissionedNodes: u32 = T::MaxPermissionedNodes::get();
+        /// The maximum number of authorized nodes
+        const MaxAuthorizedNodes: u32 = T::MaxAuthorizedNodes::get();
 
         type Error = Error<T>;
 
@@ -130,7 +130,7 @@ decl_module! {
             T::AddOrigin::ensure_origin(origin)?;
 
             let mut nodes = Self::get_allowlist();
-            ensure!(nodes.len() < T::MaxPermissionedNodes::get() as usize, Error::<T>::TooManyNodes);
+            ensure!(nodes.len() < T::MaxAuthorizedNodes::get() as usize, Error::<T>::TooManyNodes);
 
             let location = nodes.binary_search(&node_id).err().ok_or(Error::<T>::AlreadyJoined)?;
             nodes.insert(location, node_id);
@@ -181,7 +181,7 @@ decl_module! {
             Self::deposit_event(Event::NodesSwapped);
         }
         
-        /// Reset all the permissioned nodes in the list.
+        /// Reset all the authorized nodes in the list.
         ///
         /// May only be called from `T::ResetOrigin`.
         ///
@@ -189,7 +189,7 @@ decl_module! {
         #[weight = (T::WeightInfo::reset_nodes(), DispatchClass::Operational)]
         pub fn reset_nodes(origin, nodes: Vec<T::NodeId>) {
             T::ResetOrigin::ensure_origin(origin)?;
-            ensure!(nodes.len() < T::MaxPermissionedNodes::get() as usize, Error::<T>::TooManyNodes);
+            ensure!(nodes.len() < T::MaxAuthorizedNodes::get() as usize, Error::<T>::TooManyNodes);
 
             let mut nodes = nodes;
             nodes.sort();
@@ -270,11 +270,11 @@ mod tests {
 		pub const Four: u64 = 4;
 	}
     parameter_types! {
-        pub const MaxPermissionedNodes: u32 = 4;
+        pub const MaxAuthorizedNodes: u32 = 4;
     }
     impl Trait for Test {
         type Event = ();
-        type MaxPermissionedNodes = MaxPermissionedNodes;
+        type MaxAuthorizedNodes = MaxAuthorizedNodes;
         type NodeId = u64;
         type AddOrigin = EnsureSignedBy<One, u64>;
         type RemoveOrigin = EnsureSignedBy<Two, u64>;
@@ -283,7 +283,7 @@ mod tests {
         type WeightInfo = ();
     }
 
-    type NodePermission = Module<Test>;
+    type NodeAuthorization = Module<Test>;
 
     fn new_test_ext() -> sp_io::TestExternalities {
         let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -296,57 +296,57 @@ mod tests {
     #[test]
     fn add_node_works() {
         new_test_ext().execute_with(|| {
-            assert_noop!(NodePermission::add_node(Origin::signed(2), 15), BadOrigin);
-            assert_noop!(NodePermission::add_node(Origin::signed(1), 20), Error::<Test>::AlreadyJoined);
+            assert_noop!(NodeAuthorization::add_node(Origin::signed(2), 15), BadOrigin);
+            assert_noop!(NodeAuthorization::add_node(Origin::signed(1), 20), Error::<Test>::AlreadyJoined);
             
-            assert_ok!(NodePermission::add_node(Origin::signed(1), 15));
-            assert_eq!(NodePermission::get_allowlist(), vec![10, 15, 20, 30]);
+            assert_ok!(NodeAuthorization::add_node(Origin::signed(1), 15));
+            assert_eq!(NodeAuthorization::get_allowlist(), vec![10, 15, 20, 30]);
             
-            assert_noop!(NodePermission::add_node(Origin::signed(1), 25), Error::<Test>::TooManyNodes);
+            assert_noop!(NodeAuthorization::add_node(Origin::signed(1), 25), Error::<Test>::TooManyNodes);
         });
     }
 
     #[test]
     fn remove_node_works() {
         new_test_ext().execute_with(|| {
-            assert_noop!(NodePermission::remove_node(Origin::signed(3), 20), BadOrigin);
-            assert_noop!(NodePermission::remove_node(Origin::signed(2), 40), Error::<Test>::NotExist);
+            assert_noop!(NodeAuthorization::remove_node(Origin::signed(3), 20), BadOrigin);
+            assert_noop!(NodeAuthorization::remove_node(Origin::signed(2), 40), Error::<Test>::NotExist);
             
-            assert_ok!(NodePermission::remove_node(Origin::signed(2), 20));
-            assert_eq!(NodePermission::get_allowlist(), vec![10, 30]);
+            assert_ok!(NodeAuthorization::remove_node(Origin::signed(2), 20));
+            assert_eq!(NodeAuthorization::get_allowlist(), vec![10, 30]);
         });
     }
 
     #[test]
     fn swap_node_works() {
         new_test_ext().execute_with(|| {
-            assert_noop!(NodePermission::swap_node(Origin::signed(4), 20, 5), BadOrigin);
+            assert_noop!(NodeAuthorization::swap_node(Origin::signed(4), 20, 5), BadOrigin);
             
-            assert_ok!(NodePermission::swap_node(Origin::signed(3), 20, 20));
-            assert_eq!(NodePermission::get_allowlist(), vec![10, 20, 30]);
+            assert_ok!(NodeAuthorization::swap_node(Origin::signed(3), 20, 20));
+            assert_eq!(NodeAuthorization::get_allowlist(), vec![10, 20, 30]);
 
-            assert_noop!(NodePermission::swap_node(Origin::signed(3), 15, 5), Error::<Test>::NotExist);
+            assert_noop!(NodeAuthorization::swap_node(Origin::signed(3), 15, 5), Error::<Test>::NotExist);
             assert_noop!(
-                NodePermission::swap_node(Origin::signed(3), 20, 30),
+                NodeAuthorization::swap_node(Origin::signed(3), 20, 30),
                 Error::<Test>::AlreadyJoined
             );
             
-            assert_ok!(NodePermission::swap_node(Origin::signed(3), 20, 5));
-            assert_eq!(NodePermission::get_allowlist(), vec![5, 10, 30]);
+            assert_ok!(NodeAuthorization::swap_node(Origin::signed(3), 20, 5));
+            assert_eq!(NodeAuthorization::get_allowlist(), vec![5, 10, 30]);
         });
     }
 
     #[test]
     fn reset_nodes_works() {
         new_test_ext().execute_with(|| {
-            assert_noop!(NodePermission::reset_nodes(Origin::signed(3), vec![15, 5, 20]), BadOrigin);
+            assert_noop!(NodeAuthorization::reset_nodes(Origin::signed(3), vec![15, 5, 20]), BadOrigin);
             assert_noop!(
-                NodePermission::reset_nodes(Origin::signed(4), vec![15, 5, 20, 25]),
+                NodeAuthorization::reset_nodes(Origin::signed(4), vec![15, 5, 20, 25]),
                 Error::<Test>::TooManyNodes
             );
             
-            assert_ok!(NodePermission::reset_nodes(Origin::signed(4), vec![15, 5, 20]));
-            assert_eq!(NodePermission::get_allowlist(), vec![5, 15, 20]);
+            assert_ok!(NodeAuthorization::reset_nodes(Origin::signed(4), vec![15, 5, 20]));
+            assert_eq!(NodeAuthorization::get_allowlist(), vec![5, 15, 20]);
         });
     }
 }
