@@ -595,7 +595,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Operational)]
 		pub fn set_code(origin, code: Vec<u8>) {
-			Self::can_set_code(origin, &code)?;
+			ensure_root(origin)?;
+			Self::can_set_code(&code)?;
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 			Self::deposit_event(RawEvent::CodeUpdated);
@@ -1234,14 +1235,10 @@ impl<T: Trait> Module<T> {
 
 	/// Determine whether or not it is possible to update the code.
 	///
-	/// This function has no side effects and is idempotent, but is fairly
-	/// heavy. It is automatically called by `set_code`; in most cases,
-	/// a direct call to `set_code` is preferable. It is useful to call
-	/// `can_set_code` when it is desirable to perform the appropriate
-	/// runtime checks without actually changing the code yet.
-	pub fn can_set_code(origin: T::Origin, code: &[u8]) -> Result<(), sp_runtime::DispatchError> {
-		ensure_root(origin)?;
-
+	/// Checks the given code if it is a valid runtime wasm blob by instantianting
+	/// it and extracting the runtime version of it. It checks that the runtime version
+	/// of the old and new runtime has the same spec name and that the spec version is increasing.
+	pub fn can_set_code(code: &[u8]) -> Result<(), sp_runtime::DispatchError> {
 		let current_version = T::Version::get();
 		let new_version = sp_io::misc::runtime_version(&code)
 			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())

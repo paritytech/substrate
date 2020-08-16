@@ -43,10 +43,10 @@ pub struct NetworkState {
 	pub connected_peers: HashMap<String, Peer>,
 	/// List of node that we know of but that we're not connected to.
 	pub not_connected_peers: HashMap<String, NotConnectedPeer>,
-	/// Downloaded bytes per second averaged over the past few seconds.
-	pub average_download_per_sec: u64,
-	/// Uploaded bytes per second averaged over the past few seconds.
-	pub average_upload_per_sec: u64,
+	/// The total number of bytes received.
+	pub total_bytes_inbound: u64,
+	/// The total number of bytes sent.
+	pub total_bytes_outbound: u64,
 	/// State of the peerset manager.
 	pub peerset: serde_json::Value,
 }
