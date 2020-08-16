@@ -93,7 +93,8 @@ pub enum Error<B: BlockT> {
 	Client(sp_blockchain::Error),
 	Codec(codec::Error),
 	Environment(String),
-	Runtime(RuntimeString)
+	Runtime(RuntimeString),
+	Other(String),
 }
 
 impl<B: BlockT> std::convert::From<Error<B>> for String {
