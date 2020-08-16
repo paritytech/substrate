@@ -426,6 +426,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.wipe_tracker()
 	}
 
+	fn get_whitelist(&self) -> Vec<Vec<u8>> {
+		self.whitelist.borrow_mut().to_vec()
+	}
+
 	fn set_whitelist(&self, new: Vec<Vec<u8>>) {
 		*self.whitelist.borrow_mut() = new;
 	}

@@ -252,6 +252,13 @@ pub trait Externalities: ExtensionStore {
 	/// Benchmarking related functionality and shouldn't be used anywhere else!
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	///
+	/// Gets the current DB tracking whitelist.
+	fn get_whitelist(&self) -> Vec<Vec<u8>>;
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
 	/// Adds new storage keys to the DB tracking whitelist.
 	fn set_whitelist(&mut self, new: Vec<Vec<u8>>);
 }

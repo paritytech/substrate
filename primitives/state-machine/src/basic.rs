@@ -325,6 +325,10 @@ impl Externalities for BasicExternalities {
 		unimplemented!("reset_read_write_count is not supported in Basic")
 	}
 
+	fn get_whitelist(&self) -> Vec<Vec<u8>> {
+		unimplemented!("get_whitelist is not supported in Basic")
+	}
+
 	fn set_whitelist(&mut self, _: Vec<Vec<u8>>) {
 		unimplemented!("set_whitelist is not supported in Basic")
 	}

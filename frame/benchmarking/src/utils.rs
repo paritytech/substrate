@@ -101,18 +101,38 @@ pub trait Benchmarking {
 		self.commit()
 	}
 
-	/// Get the read/write count
+	/// Get the read/write count.
 	fn read_write_count(&self) -> (u32, u32, u32, u32) {
 		self.read_write_count()
 	}
 
-	/// Reset the read/write count
+	/// Reset the read/write count.
 	fn reset_read_write_count(&mut self) {
 		self.reset_read_write_count()
 	}
 
+	/// Get the DB whitelist.
+	fn get_whitelist(&self) -> Vec<Vec<u8>> {
+		self.get_whitelist()
+	}
+
+	/// Set the DB whitelist.
 	fn set_whitelist(&mut self, new: Vec<Vec<u8>>) {
 		self.set_whitelist(new)
+	}
+
+	// Add a new item to the DB whitelist.
+	fn add_whitelist(&mut self, add: Vec<u8>) {
+		let mut whitelist = self.get_whitelist();
+		whitelist.push(add);
+		self.set_whitelist(whitelist);
+	}
+
+	// Remove an item from the DB whitelist.
+	fn remove_whitelist(&mut self, remove: Vec<u8>) {
+		let mut whitelist = self.get_whitelist();
+		whitelist.retain(|x| x != &remove);
+		self.set_whitelist(whitelist);
 	}
 }
 
