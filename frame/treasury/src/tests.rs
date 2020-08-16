@@ -790,6 +790,8 @@ fn award_and_claim_bounty_works() {
 		assert_ok!(Treasury::assign_curator(Origin::root(), 0, 4, 4));
 		assert_ok!(Treasury::accept_curator(Origin::signed(4), 0));
 
+		assert_eq!(Balances::free_balance(4), 8); // inital 10 - 2 deposit
+
 		assert_noop!(Treasury::award_bounty(Origin::signed(1), 0, 3), Error::<Test>::RequireCurator);
 
 		assert_ok!(Treasury::award_bounty(Origin::signed(4), 0, 3));
@@ -818,7 +820,7 @@ fn award_and_claim_bounty_works() {
 
 		assert_eq!(last_event(), RawEvent::BountyClaimed(0, 56, 3));
 
-		assert_eq!(Balances::free_balance(4), 12);
+		assert_eq!(Balances::free_balance(4), 14); // initial 10 + fee 4
 		assert_eq!(Balances::free_balance(3), 56);
 		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 0);
 
