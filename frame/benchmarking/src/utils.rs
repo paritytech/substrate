@@ -180,9 +180,6 @@ pub trait BenchmarkingSetup<T, I = ()>
 
 	/// Set up the storage, and prepare a closure to test and verify the benchmark
 	fn verify(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
-
-	/// The origin used when executing the extrinsic.
-	fn origin(&self) -> T::Origin;
 }
 
 /// Grab an account, seeded by a name and index.

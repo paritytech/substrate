@@ -287,7 +287,6 @@ macro_rules! benchmarks_iter {
 					Call::<T $(, $instance)? >::$dispatch($($arg),*), $origin.into()
 				)?;
 			}
-			{ frame_system::RawOrigin::Root } // Additionally pass origin
 			verify $postcode
 			$( $rest )*
 		}
@@ -300,7 +299,6 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $eval:block
-		{ $origin:expr }
 		verify $postcode:block
 		$( $rest:tt )*
 	) => {
@@ -313,7 +311,6 @@ macro_rules! benchmarks_iter {
 			{ $eval }
 			{ $( $code )* }
 			$postcode
-			{ $origin }
 		}
 
 		#[cfg(test)]
@@ -433,7 +430,6 @@ macro_rules! benchmark_backend {
 			$( $rest:tt )*
 		}
 		$postcode:block
-		{ $origin:expr }
 	) => {
 		$crate::benchmark_backend! {
 			{ $( $instance)? }
@@ -447,7 +443,6 @@ macro_rules! benchmark_backend {
 			{ $eval }
 			{ $( $rest )* }
 			$postcode
-			{ $origin }
 		}
 	};
 	(
@@ -462,7 +457,6 @@ macro_rules! benchmark_backend {
 			$( $rest:tt )*
 		}
 		$postcode:block
-		{ $origin:expr }
 	) => {
 		$crate::benchmark_backend! {
 			{ $( $instance)? }
@@ -476,7 +470,6 @@ macro_rules! benchmark_backend {
 			{ $eval }
 			{ $( $rest )* }
 			$postcode
-			{ $origin }
 		}
 	};
 	// mutation arm to look after defaulting to a common param
@@ -492,7 +485,6 @@ macro_rules! benchmark_backend {
 			$( $rest:tt )*
 		}
 		$postcode:block
-		{ $origin:expr }
 	) => {
 		$crate::benchmark_backend! {
 			{ $( $instance)? }
@@ -509,7 +501,6 @@ macro_rules! benchmark_backend {
 				$( $rest )*
 			}
 			$postcode
-			{ $origin }
 		}
 	};
 	// mutation arm to look after defaulting only the range to common param
@@ -525,7 +516,6 @@ macro_rules! benchmark_backend {
 			$( $rest:tt )*
 		}
 		$postcode:block
-		{ $origin:expr }
 	) => {
 		$crate::benchmark_backend! {
 			{ $( $instance)? }
@@ -542,7 +532,6 @@ macro_rules! benchmark_backend {
 				$( $rest )*
 			}
 			$postcode
-			{ $origin }
 		}
 	};
 	// mutation arm to look after a single tt for param_from.
@@ -558,7 +547,6 @@ macro_rules! benchmark_backend {
 			$( $rest:tt )*
 		}
 		$postcode:block
-		{ $origin:expr }
 	) => {
 		$crate::benchmark_backend! {
 			{ $( $instance)? }
@@ -572,7 +560,6 @@ macro_rules! benchmark_backend {
 				$( $rest )*
 			}
 			$postcode
-			{ $origin }
 		}
 	};
 	// mutation arm to look after the default tail of `=> ()`
@@ -588,7 +575,6 @@ macro_rules! benchmark_backend {
 			$( $rest:tt )*
 		}
 		$postcode:block
-		{ $origin:expr }
 	) => {
 		$crate::benchmark_backend! {
 			{ $( $instance)? }
@@ -602,7 +588,6 @@ macro_rules! benchmark_backend {
 				$( $rest )*
 			}
 			$postcode
-			{ $origin }
 		}
 	};
 	// mutation arm to look after `let _ =`
@@ -618,7 +603,6 @@ macro_rules! benchmark_backend {
 			$( $rest:tt )*
 		}
 		$postcode:block
-		{ $origin:expr }
 	) => {
 		$crate::benchmark_backend! {
 			{ $( $instance)? }
@@ -632,7 +616,6 @@ macro_rules! benchmark_backend {
 				$( $rest )*
 			}
 			$postcode
-			{ $origin }
 		}
 	};
 	// actioning arm
@@ -648,7 +631,6 @@ macro_rules! benchmark_backend {
 		{ $eval:block }
 		{ $( $post:tt )* }
 		$postcode:block
-		{ $origin:expr }
 	) => {
 		#[allow(non_camel_case_types)]
 		struct $name;
@@ -705,10 +687,6 @@ macro_rules! benchmark_backend {
 				$( $post )*
 
 				Ok(Box::new(move || -> Result<(), &'static str> { $eval; $postcode; Ok(()) }))
-			}
-
-			fn origin(&self) -> T::Origin {
-				$origin.into()
 			}
 		}
 	};
@@ -779,10 +757,6 @@ macro_rules! selected_benchmark {
 						>::verify(&$bench, components),
 					)*
 				}
-			}
-
-			fn origin(&self) -> T::Origin {
-				frame_system::RawOrigin::Root.into()
 			}
 		}
 	};
