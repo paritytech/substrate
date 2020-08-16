@@ -169,7 +169,9 @@ pub trait Benchmarking<T> {
 ///
 /// Instance generic parameter is optional and can be used in order to capture unused generics for
 /// instantiable pallets.
-pub trait BenchmarkingSetup<T, I = ()> {
+pub trait BenchmarkingSetup<T, I = ()>
+	where T: frame_system::Trait
+{
 	/// Return the components and their ranges which should be tested in this benchmark.
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
 
@@ -178,6 +180,9 @@ pub trait BenchmarkingSetup<T, I = ()> {
 
 	/// Set up the storage, and prepare a closure to test and verify the benchmark
 	fn verify(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+
+	/// The origin used when executing the extrinsic.
+	fn origin(&self) -> T::Origin;
 }
 
 /// Grab an account, seeded by a name and index.

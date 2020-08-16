@@ -287,6 +287,7 @@ macro_rules! benchmarks_iter {
 					Call::<T $(, $instance)? >::$dispatch($($arg),*), $origin.into()
 				)?;
 			}
+			{ frame_system::RawOrigin::Root } // Additionally pass origin
 			verify $postcode
 			$( $rest )*
 		}
@@ -299,6 +300,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $eval:block
+		{ $origin:expr }
 		verify $postcode:block
 		$( $rest:tt )*
 	) => {
@@ -311,6 +313,7 @@ macro_rules! benchmarks_iter {
 			{ $eval }
 			{ $( $code )* }
 			$postcode
+			{ $origin }
 		}
 
 		#[cfg(test)]
@@ -418,156 +421,235 @@ macro_rules! benchmarks_iter {
 #[doc(hidden)]
 macro_rules! benchmark_backend {
 	// parsing arms
-	( { $( $instance:ident )? } $name:ident {
-		$( $where_clause:tt )*
-	} {
-		$( $common:tt )*
-	} {
-		$( PRE { $( $pre_parsed:tt )* } )*
-	} { $eval:block } {
+	(
+		{ $( $instance:ident )? }
+		$name:ident
+		{ $( $where_clause:tt )* }
+		{ $( $common:tt )* }
+		{ $( PRE { $( $pre_parsed:tt )* } )* }
+		{ $eval:block }
+		{
 			let $pre_id:tt : $pre_ty:ty = $pre_ex:expr;
 			$( $rest:tt )*
-	} $postcode:block) => {
+		}
+		$postcode:block
+		{ $origin:expr }
+	) => {
 		$crate::benchmark_backend! {
-			{ $( $instance)? } $name { $( $where_clause )* } { $( $common )* } {
+			{ $( $instance)? }
+			$name
+			{ $( $where_clause )* }
+			{ $( $common )* }
+			{
 				$( PRE { $( $pre_parsed )* } )*
 				PRE { $pre_id , $pre_ty , $pre_ex }
-			} { $eval } { $( $rest )* } $postcode
+			}
+			{ $eval }
+			{ $( $rest )* }
+			$postcode
+			{ $origin }
 		}
 	};
-	( { $( $instance:ident )? } $name:ident {
-		$( $where_clause:tt )*
-	} {
-		$( $common:tt )*
-	} {
-		$( $parsed:tt )*
-	} { $eval:block } {
-		let $param:ident in ( $param_from:expr ) .. $param_to:expr => $param_instancer:expr;
-		$( $rest:tt )*
-	} $postcode:block) => {
+	(
+		{ $( $instance:ident )? }
+		$name:ident
+		{ $( $where_clause:tt )* }
+		{ $( $common:tt )* }
+		{ $( $parsed:tt )* }
+		{ $eval:block }
+		{
+			let $param:ident in ( $param_from:expr ) .. $param_to:expr => $param_instancer:expr;
+			$( $rest:tt )*
+		}
+		$postcode:block
+		{ $origin:expr }
+	) => {
 		$crate::benchmark_backend! {
-			{ $( $instance)? } $name { $( $where_clause )* } { $( $common )* } {
+			{ $( $instance)? }
+			$name
+			{ $( $where_clause )* }
+			{ $( $common )* }
+			{
 				$( $parsed )*
 				PARAM { $param , $param_from , $param_to , $param_instancer }
-			} { $eval } { $( $rest )* } $postcode
+			}
+			{ $eval }
+			{ $( $rest )* }
+			$postcode
+			{ $origin }
 		}
 	};
 	// mutation arm to look after defaulting to a common param
-	( { $( $instance:ident )? } $name:ident {
-		$( $where_clause:tt )*
-	} {
-		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
-	} {
-		$( $parsed:tt )*
-	} { $eval:block } {
-		let $param:ident in ...;
-		$( $rest:tt )*
-	} $postcode:block) => {
+	(
+		{ $( $instance:ident )? }
+		$name:ident
+		{ $( $where_clause:tt )* }
+		{ $( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )* }
+		{ $( $parsed:tt )* }
+		{ $eval:block }
+		{
+			let $param:ident in ...;
+			$( $rest:tt )*
+		}
+		$postcode:block
+		{ $origin:expr }
+	) => {
 		$crate::benchmark_backend! {
-			{ $( $instance)? } $name { $( $where_clause )* } {
-				$( { $common , $common_from , $common_to , $common_instancer } )*
-			} {
-				$( $parsed )*
-			} { $eval } {
+			{ $( $instance)? }
+			$name
+			{ $( $where_clause )* }
+			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
+			{ $( $parsed )* }
+			{ $eval }
+			{
 				let $param
 					in ({ $( let $common = $common_from; )* $param })
 					.. ({ $( let $common = $common_to; )* $param })
 					=> ({ $( let $common = || -> Result<(), &'static str> { $common_instancer ; Ok(()) }; )* $param()? });
 				$( $rest )*
-			} $postcode
+			}
+			$postcode
+			{ $origin }
 		}
 	};
 	// mutation arm to look after defaulting only the range to common param
-	( { $( $instance:ident )? } $name:ident {
-		$( $where_clause:tt )*
-	} {
-		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
-	} {
-		$( $parsed:tt )*
-	} { $eval:block } {
-		let $param:ident in _ .. _ => $param_instancer:expr ;
-		$( $rest:tt )*
-	} $postcode:block) => {
+	(
+		{ $( $instance:ident )? }
+		$name:ident
+		{ $( $where_clause:tt )* }
+		{ $( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )* }
+		{ $( $parsed:tt )* }
+		{ $eval:block }
+		{
+			let $param:ident in _ .. _ => $param_instancer:expr ;
+			$( $rest:tt )*
+		}
+		$postcode:block
+		{ $origin:expr }
+	) => {
 		$crate::benchmark_backend! {
-			{ $( $instance)? } $name { $( $where_clause )* } {
-				$( { $common , $common_from , $common_to , $common_instancer } )*
-			} {
-				$( $parsed )*
-			} { $eval } {
+			{ $( $instance)? }
+			$name
+			{ $( $where_clause )* }
+			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
+			{ $( $parsed )* }
+			{ $eval }
+			{
 				let $param
 					in ({ $( let $common = $common_from; )* $param })
 					.. ({ $( let $common = $common_to; )* $param })
 					=> $param_instancer ;
 				$( $rest )*
-			} $postcode
+			}
+			$postcode
+			{ $origin }
 		}
 	};
 	// mutation arm to look after a single tt for param_from.
-	( { $( $instance:ident )? } $name:ident {
-		$( $where_clause:tt )*
-	} {
-		$( $common:tt )*
-	} {
-		$( $parsed:tt )*
-	} { $eval:block } {
-		let $param:ident in $param_from:tt .. $param_to:expr => $param_instancer:expr ;
-		$( $rest:tt )*
-	} $postcode:block) => {
+	(
+		{ $( $instance:ident )? }
+		$name:ident
+		{ $( $where_clause:tt )* }
+		{ $( $common:tt )* }
+		{ $( $parsed:tt )* }
+		{ $eval:block }
+		{
+			let $param:ident in $param_from:tt .. $param_to:expr => $param_instancer:expr ;
+			$( $rest:tt )*
+		}
+		$postcode:block
+		{ $origin:expr }
+	) => {
 		$crate::benchmark_backend! {
 			{ $( $instance)? }
-			$name { $( $where_clause )* } { $( $common )* } { $( $parsed )* } { $eval } {
+			$name
+			{ $( $where_clause )* }
+			{ $( $common )* }
+			{ $( $parsed )* }
+			{ $eval }
+			{
 				let $param in ( $param_from ) .. $param_to => $param_instancer;
 				$( $rest )*
-			} $postcode
+			}
+			$postcode
+			{ $origin }
 		}
 	};
 	// mutation arm to look after the default tail of `=> ()`
-	( { $( $instance:ident )? } $name:ident {
-		$( $where_clause:tt )*
-	} {
-		$( $common:tt )*
-	} {
-		$( $parsed:tt )*
-	} { $eval:block } {
-		let $param:ident in $param_from:tt .. $param_to:expr;
-		$( $rest:tt )*
-	} $postcode:block) => {
+	(
+		{ $( $instance:ident )? }
+		$name:ident
+		{ $( $where_clause:tt )* }
+		{ $( $common:tt )* }
+		{ $( $parsed:tt )* }
+		{ $eval:block }
+		{
+			let $param:ident in $param_from:tt .. $param_to:expr;
+			$( $rest:tt )*
+		}
+		$postcode:block
+		{ $origin:expr }
+	) => {
 		$crate::benchmark_backend! {
 			{ $( $instance)? }
-			$name { $( $where_clause )* } { $( $common )* } { $( $parsed )* } { $eval } {
+			$name
+			{ $( $where_clause )* }
+			{ $( $common )* }
+			{ $( $parsed )* }
+			{ $eval }
+			{
 				let $param in $param_from .. $param_to => ();
 				$( $rest )*
-			} $postcode
+			}
+			$postcode
+			{ $origin }
 		}
 	};
 	// mutation arm to look after `let _ =`
-	( { $( $instance:ident )? } $name:ident {
-		$( $where_clause:tt )*
-	} {
-		$( $common:tt )*
-	} {
-		$( $parsed:tt )*
-	} { $eval:block } {
-		let $pre_id:tt = $pre_ex:expr;
-		$( $rest:tt )*
-	} $postcode:block) => {
+	(
+		{ $( $instance:ident )? }
+		$name:ident
+		{ $( $where_clause:tt )* }
+		{ $( $common:tt )* }
+		{ $( $parsed:tt )* }
+		{ $eval:block }
+		{
+			let $pre_id:tt = $pre_ex:expr;
+			$( $rest:tt )*
+		}
+		$postcode:block
+		{ $origin:expr }
+	) => {
 		$crate::benchmark_backend! {
 			{ $( $instance)? }
-			$name { $( $where_clause )* } { $( $common )* } { $( $parsed )* } { $eval } {
+			$name
+			{ $( $where_clause )* }
+			{ $( $common )* }
+			{ $( $parsed )* }
+			{ $eval }
+			{
 				let $pre_id : _ = $pre_ex;
 				$( $rest )*
-			} $postcode
+			}
+			$postcode
+			{ $origin }
 		}
 	};
 	// actioning arm
-	( { $( $instance:ident )? } $name:ident {
-		$( $where_clause:tt )*
-	} {
-		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
-	} {
-		$( PRE { $pre_id:tt , $pre_ty:ty , $pre_ex:expr } )*
-		$( PARAM { $param:ident , $param_from:expr , $param_to:expr , $param_instancer:expr } )*
-	} { $eval:block } { $( $post:tt )* } $postcode:block) => {
+	(
+		{ $( $instance:ident )? }
+		$name:ident
+		{ $( $where_clause:tt )* }
+		{ $( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )* }
+		{
+			$( PRE { $pre_id:tt , $pre_ty:ty , $pre_ex:expr } )*
+			$( PARAM { $param:ident , $param_from:expr , $param_to:expr , $param_instancer:expr } )*
+		}
+		{ $eval:block }
+		{ $( $post:tt )* }
+		$postcode:block
+		{ $origin:expr }
+	) => {
 		#[allow(non_camel_case_types)]
 		struct $name;
 		#[allow(unused_variables)]
@@ -623,6 +705,10 @@ macro_rules! benchmark_backend {
 				$( $post )*
 
 				Ok(Box::new(move || -> Result<(), &'static str> { $eval; $postcode; Ok(()) }))
+			}
+
+			fn origin(&self) -> T::Origin {
+				$origin.into()
 			}
 		}
 	};
@@ -693,6 +779,10 @@ macro_rules! selected_benchmark {
 						>::verify(&$bench, components),
 					)*
 				}
+			}
+
+			fn origin(&self) -> T::Origin {
+				frame_system::RawOrigin::Root.into()
 			}
 		}
 	};
