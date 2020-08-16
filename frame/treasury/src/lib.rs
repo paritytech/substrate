@@ -1021,6 +1021,7 @@ decl_module! {
 					let balance = T::Currency::free_balance(&bounty_account);
 					let fee = bounty.fee;
 					let payout = balance.saturating_sub(fee);
+					let _ = T::Currency::unreserve(&curator, bounty.curator_deposit);
 					let _ = T::Currency::transfer(&bounty_account, &curator, fee, AllowDeath); // should not fail
 					let _ = T::Currency::transfer(&bounty_account, &beneficiary, payout, AllowDeath); // should not fail
 					*maybe_bounty = None;
