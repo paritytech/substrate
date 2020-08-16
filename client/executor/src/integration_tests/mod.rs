@@ -24,7 +24,7 @@ use sp_core::{
 	offchain::{OffchainExt, testing},
 	traits::{Externalities, CallInWasm},
 };
-use sc_runtime_test::WASM_BINARY;
+use sc_runtime_test::wasm_binary_unwrap;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 use test_case::test_case;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
@@ -49,7 +49,7 @@ fn call_in_wasm<E: Externalities>(
 		8,
 	);
 	executor.call_in_wasm(
-		&WASM_BINARY[..],
+		&wasm_binary_unwrap()[..],
 		None,
 		function,
 		call_data,
@@ -533,7 +533,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		8,
 	);
 	executor.call_in_wasm(
-		&WASM_BINARY[..],
+		&wasm_binary_unwrap()[..],
 		None,
 		"test_exhaust_heap",
 		&[0],
@@ -548,7 +548,7 @@ fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
 		1024,
-		&WASM_BINARY[..],
+		&wasm_binary_unwrap()[..],
 		HostFunctions::host_functions(),
 		true,
 	).expect("Creates runtime");
@@ -582,7 +582,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
 		REQUIRED_MEMORY_PAGES,
-		&WASM_BINARY[..],
+		&wasm_binary_unwrap()[..],
 		HostFunctions::host_functions(),
 		true,
 	).expect("Creates runtime");
@@ -602,7 +602,7 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
 		1024,
-		&WASM_BINARY[..],
+		&wasm_binary_unwrap()[..],
 		HostFunctions::host_functions(),
 		true,
 	).expect("Creates runtime");
@@ -630,7 +630,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 		HostFunctions::host_functions(),
 		8,
 	));
-	let code_hash = blake2_256(WASM_BINARY).to_vec();
+	let code_hash = blake2_256(wasm_binary_unwrap()).to_vec();
 	let threads: Vec<_> = (0..8).map(|_|
 		{
 			let executor = executor.clone();
@@ -640,7 +640,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 				let mut ext = ext.ext();
 				assert_eq!(
 					executor.call_in_wasm(
-						&WASM_BINARY[..],
+						&wasm_binary_unwrap()[..],
 						Some(code_hash.clone()),
 						"test_twox_128",
 						&[0],
@@ -661,7 +661,8 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 	use std::sync::{Arc, Mutex};
-	use sc_tracing::SpanDatum;
+
+	use sc_tracing::{SpanDatum, TraceEvent};
 
 	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
 
@@ -669,6 +670,8 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 		fn handle_span(&self, sd: SpanDatum) {
 			self.0.lock().unwrap().push(sd);
 		}
+
+		fn handle_event(&self, _event: TraceEvent) {}
 	}
 
 	let traces = Arc::new(Mutex::new(Vec::new()));

@@ -52,9 +52,11 @@ use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,
 
 pub use self::error::Error;
 pub use self::builder::{
-	new_full_client, new_client,
-	ServiceBuilder, TFullClient, TLightClient, TFullBackend, TLightBackend,
-	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder,
+	new_full_client, new_client, new_full_parts, new_light_parts,
+	spawn_tasks, build_network, BuildNetworkParams, NetworkStarter, build_offchain_workers,
+	SpawnTasksParams, TFullClient, TLightClient, TFullBackend, TLightBackend,
+	TLightBackendWithHash, TLightClientWithBackend,
+	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
 };
 pub use config::{
 	BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskExecutor, TaskType,
@@ -78,7 +80,8 @@ pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
-use sc_client_api::{Backend, BlockchainEvents};
+use sc_client_api::BlockchainEvents;
+pub use sc_keystore::KeyStorePtr as KeyStore;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -93,7 +96,8 @@ impl<T: MallocSizeOf> MallocSizeOfWasm for T {}
 impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
-pub struct RpcHandlers(sc_rpc_server::RpcHandler<sc_rpc::Metadata>);
+#[derive(Clone)]
+pub struct RpcHandlers(Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>>);
 
 impl RpcHandlers {
 	/// Starts an RPC query.
@@ -112,10 +116,16 @@ impl RpcHandlers {
 			.map(|res| res.expect("this should never fail"))
 			.boxed()
 	}
+
+	/// Provides access to the underlying `MetaIoHandler`
+	pub fn io_handler(&self) -> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>> {
+		self.0.clone()
+	}
 }
 
 /// Sinks to propagate network status updates.
 /// For each element, every time the `Interval` fires we push an element on the sender.
+#[derive(Clone)]
 pub struct NetworkStatusSinks<Block: BlockT>(
 	Arc<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>,
 );
@@ -137,9 +147,10 @@ impl<Block: BlockT> NetworkStatusSinks<Block> {
 }
 
 /// Sinks to propagate telemetry connection established events.
-pub struct TelemetryOnConnectSinks(pub Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
+#[derive(Default, Clone)]
+pub struct TelemetryConnectionSinks(Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
 
-impl TelemetryOnConnectSinks {
+impl TelemetryConnectionSinks {
 	/// Get event stream for telemetry connection established events.
 	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
 		let (sink, stream) =tracing_unbounded("mpsc_telemetry_on_connect");
@@ -148,33 +159,26 @@ impl TelemetryOnConnectSinks {
 	}
 }
 
-/// The individual components of the chain, built by the service builder. You are encouraged to
-/// deconstruct this into its fields.
-pub struct ServiceComponents<TBl: BlockT, TBackend: Backend<TBl>, TSc, TExPool, TCl> {
-	/// A blockchain client.
-	pub client: Arc<TCl>,
-	/// A shared transaction pool instance.
-	pub transaction_pool: Arc<TExPool>,
+/// An imcomplete set of chain components, but enough to run the chain ops subcommands.
+pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, TransactionPool, Other> {
+	/// A shared client instance.
+	pub client: Arc<Client>,
+	/// A shared backend instance.
+	pub backend: Arc<Backend>,
 	/// The chain task manager.
 	pub task_manager: TaskManager,
-	/// A keystore that stores keys.
-	pub keystore: sc_keystore::KeyStorePtr,
-	/// A shared network instance.
-	pub network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	/// RPC handlers that can perform RPC queries.
-	pub rpc_handlers: Arc<RpcHandlers>,
-	/// A shared instance of the chain selection algorithm.
-	pub select_chain: Option<TSc>,
-	/// Sinks to propagate network status updates.
-	pub network_status_sinks: NetworkStatusSinks<TBl>,
-	/// A prometheus metrics registry, (if enabled).
-	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
-	/// Shared Telemetry connection sinks,
-	pub telemetry_on_connect_sinks: TelemetryOnConnectSinks,
-	/// A shared offchain workers instance.
-	pub offchain_workers: Option<Arc<sc_offchain::OffchainWorkers<
-		TCl, TBackend::OffchainStorage, TBl
-	>>>,
+	/// A shared keystore instance.
+	pub keystore: KeyStore,
+	/// A chain selection algorithm instance.
+	pub select_chain: SelectChain,
+	/// An import queue.
+	pub import_queue: ImportQueue,
+	/// A shared transaction pool.
+	pub transaction_pool: Arc<TransactionPool>,
+	/// A registry of all providers of `InherentData`.
+	pub inherent_data_providers: sp_inherents::InherentDataProviders,
+	/// Everything else that needs to be passed into the main build function.
+	pub other: Other,
 }
 
 /// Builds a never-ending future that continuously polls the network.
@@ -188,7 +192,7 @@ async fn build_network_future<
 	role: Role,
 	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
-	status_sinks: Arc<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>,
+	status_sinks: NetworkStatusSinks<B>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
@@ -317,15 +321,15 @@ async fn build_network_future<
 
 			// At a regular interval, we send the state of the network on what is called
 			// the "status sinks".
-			ready_sink = status_sinks.next().fuse() => {
+			ready_sink = status_sinks.0.next().fuse() => {
 				let status = NetworkStatus {
 					sync_state: network.sync_state(),
 					best_seen_block: network.best_seen_block(),
 					num_sync_peers: network.num_sync_peers(),
 					num_connected_peers: network.num_connected_peers(),
 					num_active_peers: network.num_active_peers(),
-					average_download_per_sec: network.average_download_per_sec(),
-					average_upload_per_sec: network.average_upload_per_sec(),
+					total_bytes_inbound: network.total_bytes_inbound(),
+					total_bytes_outbound: network.total_bytes_outbound(),
 				};
 				let state = network.network_state();
 				ready_sink.send((status, state));
@@ -558,17 +562,16 @@ mod tests {
 	use sp_consensus::SelectChain;
 	use sp_runtime::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
-	use sc_transaction_pool::{BasicPool, FullChainApi};
+	use sc_transaction_pool::BasicPool;
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
 		// given
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
 			spawner,
 			client.clone(),

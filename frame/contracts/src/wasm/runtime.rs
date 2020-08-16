@@ -18,7 +18,7 @@
 
 use crate::{Schedule, Trait, CodeHash, BalanceOf, Error};
 use crate::exec::{
-	Ext, ExecResult, ExecReturnValue, StorageKey, TopicOf, ReturnFlags,
+	Ext, ExecResult, ExecReturnValue, StorageKey, TopicOf, ReturnFlags, ExecError
 };
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult};
 use crate::wasm::env_def::ConvertibleToWasm;
@@ -36,21 +36,33 @@ use sp_io::hashing::{
 	sha2_256,
 };
 
-/// Every error that can be returned from a runtime API call.
+/// Every error that can be returned to a contract when it calls any of the host functions.
 #[repr(u32)]
 pub enum ReturnCode {
 	/// API call successful.
 	Success = 0,
 	/// The called function trapped and has its state changes reverted.
 	/// In this case no output buffer is returned.
-	/// Can only be returned from `ext_call` and `ext_instantiate`.
 	CalleeTrapped = 1,
 	/// The called function ran to completion but decided to revert its state.
 	/// An output buffer is returned when one was supplied.
-	/// Can only be returned from `ext_call` and `ext_instantiate`.
 	CalleeReverted = 2,
 	/// The passed key does not exist in storage.
 	KeyNotFound = 3,
+	/// Transfer failed because it would have brought the sender's total balance below the
+	/// subsistence threshold.
+	BelowSubsistenceThreshold = 4,
+	/// Transfer failed for other reasons. Most probably reserved or locked balance of the
+	/// sender prevents the transfer.
+	TransferFailed = 5,
+	/// The newly created contract is below the subsistence threshold after executing
+	/// its constructor.
+	NewContractNotFunded = 6,
+	/// No code could be found at the supplied code hash.
+	CodeNotFound = 7,
+	/// The contract that was called is either no contract at all (a plain account)
+	/// or is a tombstone.
+	NotCallable = 8,
 }
 
 impl ConvertibleToWasm for ReturnCode {
@@ -66,7 +78,7 @@ impl ConvertibleToWasm for ReturnCode {
 }
 
 impl From<ExecReturnValue> for ReturnCode {
-	fn from(from: ExecReturnValue) -> ReturnCode {
+	fn from(from: ExecReturnValue) -> Self {
 		if from.flags.contains(ReturnFlags::REVERT) {
 			Self::CalleeReverted
 		} else {
@@ -75,7 +87,7 @@ impl From<ExecReturnValue> for ReturnCode {
 	}
 }
 
-/// The data passed through when a contract uses `ext_return`.
+/// The data passed through when a contract uses `seal_return`.
 struct ReturnData {
 	/// The flags as passed through by the contract. They are still unchecked and
 	/// will later be parsed into a `ReturnFlags` bitflags struct.
@@ -94,10 +106,10 @@ enum TrapReason {
 	/// The supervisor trapped the contract because of an error condition occurred during
 	/// execution in privileged code.
 	SupervisorError(DispatchError),
-	/// Signals that trap was generated in response to call `ext_return` host function.
+	/// Signals that trap was generated in response to call `seal_return` host function.
 	Return(ReturnData),
-	/// Signals that a trap was generated in response to a succesful call to the
-	/// `ext_terminate` host function.
+	/// Signals that a trap was generated in response to a successful call to the
+	/// `seal_terminate` host function.
 	Termination,
 	/// Signals that a trap was generated because of a successful restoration.
 	Restoration,
@@ -131,35 +143,42 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	}
 }
 
+/// Converts the sandbox result and the runtime state into the execution outcome.
+///
+/// It evaluates information stored in the `trap_reason` variable of the runtime and
+/// bases the outcome on the value if this variable. Only if `trap_reason` is `None`
+/// the result of the sandbox is evaluated.
 pub(crate) fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
 	sandbox_result: Result<sp_sandbox::ReturnValue, sp_sandbox::Error>,
 ) -> ExecResult {
-	match runtime.trap_reason {
-		// The trap was the result of the execution `return` host function.
-		Some(TrapReason::Return(ReturnData{ flags, data })) => {
-			let flags = ReturnFlags::from_bits(flags).ok_or_else(||
-				"used reserved bit in return flags"
-			)?;
-			return Ok(ExecReturnValue {
-				flags,
-				data,
-			})
-		},
-		Some(TrapReason::Termination) => {
-			return Ok(ExecReturnValue {
-				flags: ReturnFlags::empty(),
-				data: Vec::new(),
-			})
-		},
-		Some(TrapReason::Restoration) => {
-			return Ok(ExecReturnValue {
-				flags: ReturnFlags::empty(),
-				data: Vec::new(),
-			})
+	// If a trap reason is set we base our decision solely on that.
+	if let Some(trap_reason) = runtime.trap_reason {
+		return match trap_reason {
+			// The trap was the result of the execution `return` host function.
+			TrapReason::Return(ReturnData{ flags, data }) => {
+				let flags = ReturnFlags::from_bits(flags).ok_or_else(||
+					"used reserved bit in return flags"
+				)?;
+				Ok(ExecReturnValue {
+					flags,
+					data,
+				})
+			},
+			TrapReason::Termination => {
+				Ok(ExecReturnValue {
+					flags: ReturnFlags::empty(),
+					data: Vec::new(),
+				})
+			},
+			TrapReason::Restoration => {
+				Ok(ExecReturnValue {
+					flags: ReturnFlags::empty(),
+					data: Vec::new(),
+				})
+			},
+			TrapReason::SupervisorError(error) => Err(error)?,
 		}
-		Some(TrapReason::SupervisorError(error)) => Err(error)?,
-		None => (),
 	}
 
 	// Check the exact type of the error.
@@ -178,7 +197,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 			Err("validation error")?,
 		// Any other kind of a trap should result in a failure.
 		Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-			Err("contract trapped during execution")?,
+			Err(Error::<E::T>::ContractTrapped)?
 	}
 }
 
@@ -280,7 +299,8 @@ fn read_sandbox_memory<E: Ext>(
 	)?;
 
 	let mut buf = vec![0u8; len as usize];
-	ctx.memory.get(ptr, buf.as_mut_slice()).map_err(|_| sp_sandbox::HostError)?;
+	ctx.memory.get(ptr, buf.as_mut_slice())
+		.map_err(|_| store_err(ctx, Error::<E::T>::OutOfBounds))?;
 	Ok(buf)
 }
 
@@ -304,7 +324,7 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 		RuntimeToken::ReadMemory(buf.len() as u32),
 	)?;
 
-	ctx.memory.get(ptr, buf).map_err(Into::into)
+	ctx.memory.get(ptr, buf).map_err(|_| store_err(ctx, Error::<E::T>::OutOfBounds))
 }
 
 /// Read designated chunk from the sandbox memory, consuming an appropriate amount of
@@ -322,7 +342,7 @@ fn read_sandbox_memory_as<E: Ext, D: Decode>(
 	len: u32,
 ) -> Result<D, sp_sandbox::HostError> {
 	let buf = read_sandbox_memory(ctx, ptr, len)?;
-	D::decode(&mut &buf[..]).map_err(|_| sp_sandbox::HostError)
+	D::decode(&mut &buf[..]).map_err(|_| store_err(ctx, Error::<E::T>::DecodingFailed))
 }
 
 /// Write the given buffer to the designated location in the sandbox memory, consuming
@@ -345,9 +365,8 @@ fn write_sandbox_memory<E: Ext>(
 		RuntimeToken::WriteMemory(buf.len() as u32),
 	)?;
 
-	ctx.memory.set(ptr, buf)?;
-
-	Ok(())
+	ctx.memory.set(ptr, buf)
+		.map_err(|_| store_err(ctx, Error::<E::T>::OutOfBounds))
 }
 
 /// Write the given buffer and its length to the designated locations in sandbox memory.
@@ -359,7 +378,7 @@ fn write_sandbox_memory<E: Ext>(
 ///
 /// If `out_ptr` is set to the sentinel value of `u32::max_value()`  and `allow_skip` is true the
 /// operation is skipped and `Ok` is returned. This is supposed to help callers to make copying
-/// output optional. For example to skip copying back the output buffer of an `ext_call`
+/// output optional. For example to skip copying back the output buffer of an `seal_call`
 /// when the caller is not interested in the result.
 ///
 /// In addition to the error conditions of `write_sandbox_memory` this functions returns
@@ -379,7 +398,7 @@ fn write_sandbox_output<E: Ext>(
 	let len: u32 = read_sandbox_memory_as(ctx, out_len_ptr, 4)?;
 
 	if len < buf_len {
-		Err(map_err(ctx, Error::<E::T>::OutputBufferTooSmall))?
+		Err(store_err(ctx, Error::<E::T>::OutputBufferTooSmall))?
 	}
 
 	charge_gas(
@@ -398,12 +417,80 @@ fn write_sandbox_output<E: Ext>(
 /// Stores a DispatchError returned from an Ext function into the trap_reason.
 ///
 /// This allows through supervisor generated errors to the caller.
-fn map_err<E, Error>(ctx: &mut Runtime<E>, err: Error) -> sp_sandbox::HostError where
+fn store_err<E, Error>(ctx: &mut Runtime<E>, err: Error) -> sp_sandbox::HostError where
 	E: Ext,
 	Error: Into<DispatchError>,
 {
 	ctx.trap_reason = Some(TrapReason::SupervisorError(err.into()));
 	sp_sandbox::HostError
+}
+
+/// Fallible conversion of `DispatchError` to `ReturnCode`.
+fn err_into_return_code<T: Trait>(from: DispatchError) -> Result<ReturnCode, DispatchError> {
+	use ReturnCode::*;
+
+	let below_sub = Error::<T>::BelowSubsistenceThreshold.into();
+	let transfer_failed = Error::<T>::TransferFailed.into();
+	let not_funded = Error::<T>::NewContractNotFunded.into();
+	let no_code = Error::<T>::CodeNotFound.into();
+	let invalid_contract = Error::<T>::NotCallable.into();
+
+	match from {
+		x if x == below_sub => Ok(BelowSubsistenceThreshold),
+		x if x == transfer_failed => Ok(TransferFailed),
+		x if x == not_funded => Ok(NewContractNotFunded),
+		x if x == no_code => Ok(CodeNotFound),
+		x if x == invalid_contract => Ok(NotCallable),
+		err => Err(err)
+	}
+}
+
+/// Fallible conversion of a `ExecResult` to `ReturnCode`.
+fn exec_into_return_code<T: Trait>(from: ExecResult) -> Result<ReturnCode, DispatchError> {
+	use crate::exec::ErrorOrigin::Callee;
+
+	let ExecError { error, origin } = match from {
+		Ok(retval) => return Ok(retval.into()),
+		Err(err) => err,
+	};
+
+	match (error, origin) {
+		(_, Callee) => Ok(ReturnCode::CalleeTrapped),
+		(err, _) => err_into_return_code::<T>(err)
+	}
+}
+
+/// Used by Runtime API that calls into other contracts.
+///
+/// Those need to transform the the `ExecResult` returned from the execution into
+/// a `ReturnCode`. If this conversion fails because the `ExecResult` constitutes a
+/// a fatal error then this error is stored in the `ExecutionContext` so it can be
+/// extracted for display in the UI.
+fn map_exec_result<E: Ext>(ctx: &mut Runtime<E>, result: ExecResult)
+	-> Result<ReturnCode, sp_sandbox::HostError>
+{
+	match exec_into_return_code::<E::T>(result) {
+		Ok(code) => Ok(code),
+		Err(err) => Err(store_err(ctx, err)),
+	}
+}
+
+/// Try to convert an error into a `ReturnCode`.
+///
+/// Used to decide between fatal and non-fatal errors.
+fn map_dispatch_result<T, E: Ext>(ctx: &mut Runtime<E>, result: Result<T, DispatchError>)
+	-> Result<ReturnCode, sp_sandbox::HostError>
+{
+	let err = if let Err(err) = result {
+		err
+	} else {
+		return Ok(ReturnCode::Success)
+	};
+
+	match err_into_return_code::<E::T>(err) {
+		Ok(code) => Ok(code),
+		Err(err) => Err(store_err(ctx, err)),
+	}
 }
 
 // ***********************************************************
@@ -412,6 +499,12 @@ fn map_err<E, Error>(ctx: &mut Runtime<E>, err: Error) -> sp_sandbox::HostError 
 
 // Define a function `fn init_env<E: Ext>() -> HostFunctionSet<E>` that returns
 // a function set which can be imported by an executed contract.
+//
+// # Note
+//
+// Any input that leads to a out of bound error (reading or writing) or failing to decode
+// data passed to the supervisor will lead to a trap. This is not documented explicitly
+// for every function.
 define_env!(Env, <E: Ext>,
 
 	// Account for used gas. Traps if gas used is greater than gas limit.
@@ -441,11 +534,11 @@ define_env!(Env, <E: Ext>,
 	// - `value_ptr`: pointer into the linear memory where the value to set is placed.
 	// - `value_len`: the length of the value in bytes.
 	//
-	// # Errors
+	// # Traps
 	//
 	// - If value length exceeds the configured maximum value length of a storage entry.
 	// - Upon trying to set an empty storage entry (value length is 0).
-	ext_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
+	seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
 		if value_len > ctx.ext.max_value_size() {
 			// Bail out if value length exceeds the set maximum value size.
 			return Err(sp_sandbox::HostError);
@@ -462,7 +555,7 @@ define_env!(Env, <E: Ext>,
 	// # Parameters
 	//
 	// - `key_ptr`: pointer into the linear memory where the location to clear the value is placed.
-	ext_clear_storage(ctx, key_ptr: u32) => {
+	seal_clear_storage(ctx, key_ptr: u32) => {
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		ctx.ext.set_storage(key, None);
@@ -480,13 +573,8 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Errors
 	//
-	// If there is no entry under the given key then this function will return
-	// `ReturnCode::KeyNotFound`.
-	//
-	// # Traps
-	//
-	// Traps if the supplied buffer length is smaller than the size of the stored value.
-	ext_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+	// `ReturnCode::KeyNotFound`
+	seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		if let Some(value) = ctx.ext.get_storage(&key) {
@@ -508,24 +596,24 @@ define_env!(Env, <E: Ext>,
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
 	// - value_len: length of the value buffer.
 	//
-	// # Traps
+	// # Errors
 	//
-	// Traps if the transfer wasn't succesful. This can happen when the value transfered
-	// brings the sender below the existential deposit. Use `ext_terminate` to remove
-	// the caller contract.
-	ext_transfer(
+	// `ReturnCode::BelowSubsistenceThreshold`
+	// `ReturnCode::TransferFailed`
+	seal_transfer(
 		ctx,
 		account_ptr: u32,
 		account_len: u32,
 		value_ptr: u32,
 		value_len: u32
-	) => {
+	) -> ReturnCode => {
 		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
 			read_sandbox_memory_as(ctx, account_ptr, account_len)?;
 		let value: BalanceOf<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 
-		ctx.ext.transfer(&callee, value, ctx.gas_meter).map_err(|e| map_err(ctx, e))
+		let result = ctx.ext.transfer(&callee, value, ctx.gas_meter);
+		map_dispatch_result(ctx, result)
 	},
 
 	// Make a call to another contract.
@@ -551,18 +639,15 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Errors
 	//
-	// `ReturnCode::CalleeReverted`: The callee ran to completion but decided to have its
-	//  changes reverted. The delivery of the output buffer is still possible.
-	// `ReturnCode::CalleeTrapped`: The callee trapped during execution. All changes are reverted
-	//  and no output buffer is delivered.
+	// An error means that the call wasn't successful output buffer is returned unless
+	// stated otherwise.
 	//
-	// # Traps
-	//
-	// - Transfer of balance failed. This call can not bring the sender below the existential
-	//   deposit. Use `ext_terminate` to remove the caller.
-	// - Callee does not exist.
-	// - Supplied output buffer is too small.
-	ext_call(
+	// `ReturnCode::CalleeReverted`: Output buffer is returned.
+	// `ReturnCode::CalleeTrapped`
+	// `ReturnCode::BelowSubsistenceThreshold`
+	// `ReturnCode::TransferFailed`
+	// `ReturnCode::NotCallable`
+	seal_call(
 		ctx,
 		callee_ptr: u32,
 		callee_len: u32,
@@ -594,22 +679,16 @@ define_env!(Env, <E: Ext>,
 						nested_meter,
 						input_data,
 					)
-					.map_err(|_| ())
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(()),
+				None => Err(Error::<<E as Ext>::T>::OutOfGas.into()),
 			}
 		});
 
-		match call_outcome {
-			Ok(output) => {
-				write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true)?;
-				Ok(output.into())
-			},
-			Err(_) => {
-				Ok(ReturnCode::CalleeTrapped)
-			},
+		if let Ok(output) = &call_outcome {
+			write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true)?;
 		}
+		map_exec_result(ctx, call_outcome)
 	},
 
 	// Instantiate a contract with the specified code hash.
@@ -617,10 +696,12 @@ define_env!(Env, <E: Ext>,
 	// This function creates an account and executes the constructor defined in the code specified
 	// by the code hash. The address of this new account is copied to `address_ptr` and its length
 	// to `address_len_ptr`. The constructors output buffer is copied to `output_ptr` and its
-	// length to `output_len_ptr`.
+	// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
+	// supplying the sentinel value of `u32::max_value()` to `output_ptr` or `address_ptr`.
 	//
-	// The copy of the output buffer and address can be skipped by supplying the sentinel value
-	// of `u32::max_value()` to `output_ptr` or `address_ptr`.
+	// After running the constructor it is verfied that the contract account holds at
+	// least the subsistence threshold. If that is not the case the instantion fails and
+	// the contract is not created.
 	//
 	// # Parameters
 	//
@@ -641,20 +722,19 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Errors
 	//
-	// `ReturnCode::CalleeReverted`: The callee's constructor ran to completion but decided to have
-	//		its changes reverted. The delivery of the output buffer is still possible but the
-	//		account was not created and no address is returned.
-	// `ReturnCode::CalleeTrapped`: The callee trapped during execution. All changes are reverted
-	//		and no output buffer is delivered. The accounts was not created and no address is
-	//		returned.
+	// Please consult the `ReturnCode` enum declaration for more information on those
+	// errors. Here we only note things specific to this function.
 	//
-	// # Traps
+	// An error means that the account wasn't created and no address or output buffer
+	// is returned unless stated otherwise.
 	//
-	// - Transfer of balance failed. This call can not bring the sender below the existential
-	//   deposit. Use `ext_terminate` to remove the caller.
-	// - Code hash does not exist.
-	// - Supplied output buffers are too small.
-	ext_instantiate(
+	// `ReturnCode::CalleeReverted`: Output buffer is returned.
+	// `ReturnCode::CalleeTrapped`
+	// `ReturnCode::BelowSubsistenceThreshold`
+	// `ReturnCode::TransferFailed`
+	// `ReturnCode::NewContractNotFunded`
+	// `ReturnCode::CodeNotFound`
+	seal_instantiate(
 		ctx,
 		code_hash_ptr: u32,
 		code_hash_len: u32,
@@ -688,26 +768,20 @@ define_env!(Env, <E: Ext>,
 						nested_meter,
 						input_data
 					)
-					.map_err(|_| ())
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(()),
+				None => Err(Error::<<E as Ext>::T>::OutOfGas.into()),
 			}
 		});
-		match instantiate_outcome {
-			Ok((address, output)) => {
-				if !output.flags.contains(ReturnFlags::REVERT) {
-					write_sandbox_output(
-						ctx, address_ptr, address_len_ptr, &address.encode(), true
-					)?;
-				}
-				write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true)?;
-				Ok(output.into())
-			},
-			Err(_) => {
-				Ok(ReturnCode::CalleeTrapped)
-			},
+		if let Ok((address, output)) = &instantiate_outcome {
+			if !output.flags.contains(ReturnFlags::REVERT) {
+				write_sandbox_output(
+					ctx, address_ptr, address_len_ptr, &address.encode(), true
+				)?;
+			}
+			write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true)?;
 		}
+		map_exec_result(ctx, instantiate_outcome.map(|(_id, retval)| retval))
 	},
 
 	// Remove the calling account and transfer remaining balance.
@@ -720,7 +794,11 @@ define_env!(Env, <E: Ext>,
 	//   where all remaining funds of the caller are transfered.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
 	// - beneficiary_len: length of the address buffer.
-	ext_terminate(
+	//
+	// # Traps
+	//
+	// - The contract is live i.e is already on the call stack.
+	seal_terminate(
 		ctx,
 		beneficiary_ptr: u32,
 		beneficiary_len: u32
@@ -734,7 +812,7 @@ define_env!(Env, <E: Ext>,
 		Err(sp_sandbox::HostError)
 	},
 
-	ext_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
+	seal_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
 		if let Some(input) = ctx.input_data.take() {
 			write_sandbox_output(ctx, buf_ptr, buf_len_ptr, &input, false)
 		} else {
@@ -748,7 +826,7 @@ define_env!(Env, <E: Ext>,
 	// This is the only way to return a data buffer to the caller. Returning from
 	// execution without calling this function is equivalent to calling:
 	// ```
-	// ext_return(0, 0, 0);
+	// seal_return(0, 0, 0);
 	// ```
 	//
 	// The flags argument is a bitfield that can be used to signal special return
@@ -759,7 +837,7 @@ define_env!(Env, <E: Ext>,
 	// --- msb ---
 	//
 	// Using a reserved bit triggers a trap.
-	ext_return(ctx, flags: u32, data_ptr: u32, data_len: u32) => {
+	seal_return(ctx, flags: u32, data_ptr: u32, data_len: u32) => {
 		charge_gas(
 			ctx.gas_meter,
 			ctx.schedule,
@@ -788,7 +866,7 @@ define_env!(Env, <E: Ext>,
 	// If this is a top-level call (i.e. initiated by an extrinsic) the origin address of the
 	// extrinsic will be returned. Otherwise, if this call is initiated by another contract then the
 	// address of the contract will be returned. The value is encoded as T::AccountId.
-	ext_caller(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_caller(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.caller().encode(), false)
 	},
 
@@ -798,7 +876,7 @@ define_env!(Env, <E: Ext>,
 	// `out_len_ptr` must point to a u32 value that describes the available space at
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	ext_address(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_address(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.address().encode(), false)
 	},
 
@@ -815,7 +893,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// It is recommended to avoid specifying very small values for `gas` as the prices for a single
 	// gas can be smaller than one.
-	ext_weight_to_fee(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
+	seal_weight_to_fee(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(
 			ctx, out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode(), false
 		)
@@ -829,7 +907,7 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as Gas.
-	ext_gas_left(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_gas_left(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.gas_meter.gas_left().encode(), false)
 	},
 
@@ -841,7 +919,7 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Balance.
-	ext_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.balance().encode(), false)
 	},
 
@@ -853,7 +931,7 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Balance.
-	ext_value_transferred(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_value_transferred(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(
 			ctx, out_ptr, out_len_ptr, &ctx.ext.value_transferred().encode(), false
 		)
@@ -867,7 +945,7 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Hash.
-	ext_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
+	seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		// The length of a subject can't exceed `max_subject_len`.
 		if subject_len > ctx.schedule.max_subject_len {
 			return Err(sp_sandbox::HostError);
@@ -884,14 +962,14 @@ define_env!(Env, <E: Ext>,
 	// `out_len_ptr` must point to a u32 value that describes the available space at
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	ext_now(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_now(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.now().encode(), false)
 	},
 
 	// Stores the minimum balance (a.k.a. existential deposit) into the supplied buffer.
 	//
 	// The data is encoded as T::Balance.
-	ext_minimum_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_minimum_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.minimum_balance().encode(), false)
 	},
 
@@ -910,7 +988,7 @@ define_env!(Env, <E: Ext>,
 	// a contract to leave a tombstone the balance of the contract must not go
 	// below the sum of existential deposit and the tombstone deposit. The sum
 	// is commonly referred as subsistence threshold in code.
-	ext_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(
 			ctx, out_ptr, out_len_ptr, &ctx.ext.tombstone_deposit().encode(), false
 		)
@@ -937,7 +1015,12 @@ define_env!(Env, <E: Ext>,
 	// encodes the rent allowance that must be set in the case of successful restoration.
 	// `delta_ptr` is the pointer to the start of a buffer that has `delta_count` storage keys
 	// laid out sequentially.
-	ext_restore_to(
+	//
+	// # Traps
+	//
+	// - Tombstone hashes do not match
+	// - Calling cantract is live i.e is already on the call stack.
+	seal_restore_to(
 		ctx,
 		dest_ptr: u32,
 		dest_len: u32,
@@ -994,7 +1077,7 @@ define_env!(Env, <E: Ext>,
 	// - topics_len - the length of the topics buffer. Pass 0 if you want to pass an empty vector.
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
-	ext_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
+	seal_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
 		let mut topics: Vec::<TopicOf<<E as Ext>::T>> = match topics_len {
 			0 => Vec::new(),
 			_ => read_sandbox_memory_as(ctx, topics_ptr, topics_len)?,
@@ -1028,7 +1111,7 @@ define_env!(Env, <E: Ext>,
 	// - value_ptr: a pointer to the buffer with value, how much to allow for rent
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
 	// - value_len: length of the value buffer.
-	ext_set_rent_allowance(ctx, value_ptr: u32, value_len: u32) => {
+	seal_set_rent_allowance(ctx, value_ptr: u32, value_len: u32) => {
 		let value: BalanceOf<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 		ctx.ext.set_rent_allowance(value);
@@ -1044,14 +1127,14 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Balance.
-	ext_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.rent_allowance().encode(), false)
 	},
 
 	// Prints utf8 encoded string from the data buffer.
 	// Only available on `--dev` chains.
 	// This function may be removed at any time, superseded by a more general contract debugging feature.
-	ext_println(ctx, str_ptr: u32, str_len: u32) => {
+	seal_println(ctx, str_ptr: u32, str_len: u32) => {
 		let data = read_sandbox_memory(ctx, str_ptr, str_len)?;
 		if let Ok(utf8) = core::str::from_utf8(&data) {
 			sp_runtime::print(utf8);
@@ -1065,7 +1148,7 @@ define_env!(Env, <E: Ext>,
 	// `out_len_ptr` must point to a u32 value that describes the available space at
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	ext_block_number(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	seal_block_number(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.block_number().encode(), false)
 	},
 
@@ -1089,7 +1172,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	ext_hash_sha2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	seal_hash_sha2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		compute_hash_on_intermediate_buffer(ctx, sha2_256, input_ptr, input_len, output_ptr)
 	},
 
@@ -1113,7 +1196,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	ext_hash_keccak_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	seal_hash_keccak_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		compute_hash_on_intermediate_buffer(ctx, keccak_256, input_ptr, input_len, output_ptr)
 	},
 
@@ -1137,7 +1220,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	ext_hash_blake2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	seal_hash_blake2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		compute_hash_on_intermediate_buffer(ctx, blake2_256, input_ptr, input_len, output_ptr)
 	},
 
@@ -1161,7 +1244,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	ext_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	seal_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		compute_hash_on_intermediate_buffer(ctx, blake2_128, input_ptr, input_len, output_ptr)
 	},
 );
@@ -1209,7 +1292,7 @@ where
 /// the order of items is not preserved.
 fn has_duplicates<T: PartialEq + AsRef<[u8]>>(items: &mut Vec<T>) -> bool {
 	// Sort the vector
-	items.sort_unstable_by(|a, b| {
+	items.sort_by(|a, b| {
 		Ord::cmp(a.as_ref(), b.as_ref())
 	});
 	// And then find any two consecutive equal elements.

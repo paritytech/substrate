@@ -172,8 +172,8 @@ pub fn build_project_with_default_rustflags(
 		file_name.into(),
 		format!(
 			r#"
-				pub const WASM_BINARY: &[u8] = include_bytes!("{wasm_binary}");
-				pub const WASM_BINARY_BLOATY: &[u8] = include_bytes!("{wasm_binary_bloaty}");
+				pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
+				pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
 			"#,
 			wasm_binary = wasm_binary.wasm_binary_path_escaped(),
 			wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path_escaped(),

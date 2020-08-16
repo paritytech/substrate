@@ -2810,7 +2810,7 @@ fn remove_multi_deferred() {
 	})
 }
 
-mod offchain_phragmen {
+mod offchain_election {
 	use crate::*;
 	use codec::Encode;
 	use frame_support::{
@@ -2836,7 +2836,7 @@ mod offchain_phragmen {
 
 	/// setup a new set of validators and nominator storage items independent of the parent mock
 	/// file. This produces a edge graph that can be reduced.
-	pub fn build_offchain_phragmen_test_ext() {
+	pub fn build_offchain_election_test_ext() {
 		for i in (10..=40).step_by(10) {
 			// Note: we respect the convention of the mock (10, 11 pairs etc.) since these accounts
 			// have corresponding keys in session which makes everything more ergonomic and
@@ -2861,9 +2861,9 @@ mod offchain_phragmen {
 		let (offchain, offchain_state) = TestOffchainExt::new();
 		let (pool, pool_state) = TestTransactionPoolExt::new();
 
-	    let mut seed = [0_u8; 32];
-	    seed[0..4].copy_from_slice(&iterations.to_le_bytes());
-	    offchain_state.write().seed = seed;
+		let mut seed = [0_u8; 32];
+		seed[0..4].copy_from_slice(&iterations.to_le_bytes());
+		offchain_state.write().seed = seed;
 
 		ext.register_extension(OffchainExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
@@ -3104,7 +3104,7 @@ mod offchain_phragmen {
 	#[ignore] // This takes a few mins
 	fn offchain_wont_work_if_snapshot_fails() {
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.build()
 			.execute_with(|| {
 				run_to_block(12);
@@ -3128,7 +3128,7 @@ mod offchain_phragmen {
 	#[test]
 	fn staking_is_locked_when_election_window_open() {
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.election_lookahead(3)
 			.build()
 			.execute_with(|| {
@@ -3150,7 +3150,7 @@ mod offchain_phragmen {
 		// should check that we have a new validator set normally, event says that it comes from
 		// offchain.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.build()
 			.execute_with(|| {
 				run_to_block(12);
@@ -3208,7 +3208,7 @@ mod offchain_phragmen {
 	fn signed_result_can_be_submitted_later() {
 		// same as `signed_result_can_be_submitted` but at a later block.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.build()
 			.execute_with(|| {
 				run_to_block(14);
@@ -3246,7 +3246,7 @@ mod offchain_phragmen {
 		// should check that we have a new validator set normally, event says that it comes from
 		// offchain.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.build()
 			.execute_with(|| {
 				run_to_block(11);
@@ -3267,7 +3267,7 @@ mod offchain_phragmen {
 						current_era(),
 						ElectionSize::default(),
 					),
-					Error::<Test>::PhragmenEarlySubmission,
+					Error::<Test>::OffchainElectionEarlySubmission,
 					Some(<Test as frame_system::Trait>::DbWeight::get().reads(1)),
 				);
 			})
@@ -3277,12 +3277,12 @@ mod offchain_phragmen {
 	fn weak_solution_is_rejected() {
 		// A solution which is weaker than what we currently have on-chain is rejected.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.has_stakers(false)
 			.validator_count(4)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				// a good solution
@@ -3295,7 +3295,7 @@ mod offchain_phragmen {
 				));
 
 				// a bad solution
-				let (compact, winners, score) = horrible_phragmen_with_post_processing(false);
+				let (compact, winners, score) = horrible_npos_solution(false);
 				assert_err_with_weight!(
 					submit_solution(
 						Origin::signed(10),
@@ -3303,7 +3303,7 @@ mod offchain_phragmen {
 						compact.clone(),
 						score,
 					),
-					Error::<Test>::PhragmenWeakSubmission,
+					Error::<Test>::OffchainElectionWeakSubmission,
 					Some(<Test as frame_system::Trait>::DbWeight::get().reads(3))
 				);
 			})
@@ -3313,16 +3313,16 @@ mod offchain_phragmen {
 	fn better_solution_is_accepted() {
 		// A solution which is better than what we currently have on-chain is accepted.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				// a meeeeh solution
-				let (compact, winners, score) = horrible_phragmen_with_post_processing(false);
+				let (compact, winners, score) = horrible_npos_solution(false);
 				assert_ok!(submit_solution(
 					Origin::signed(10),
 					winners,
@@ -3345,7 +3345,7 @@ mod offchain_phragmen {
 	fn offchain_worker_runs_when_window_open() {
 		// at the end of the first finalized block with ElectionStatus::open(_), it should execute.
 		let mut ext = ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(2)
 			.build();
 		let state = offchainify(&mut ext, 0);
@@ -3387,7 +3387,7 @@ mod offchain_phragmen {
 		// Offchain worker equalises based on the number provided by randomness. See the difference
 		// in the priority, which comes from the computed score.
 		let mut ext = ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(2)
 			.max_offchain_iterations(2)
 			.build();
@@ -3429,7 +3429,7 @@ mod offchain_phragmen {
 	#[test]
 	fn mediocre_submission_from_authority_is_early_rejected() {
 		let mut ext = ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.build();
 		let state = offchainify(&mut ext, 0);
@@ -3463,21 +3463,21 @@ mod offchain_phragmen {
 					&inner,
 				),
 				TransactionValidity::Err(
-					InvalidTransaction::Custom(<Error<Test>>::PhragmenWeakSubmission.as_u8()).into(),
+					InvalidTransaction::Custom(<Error<Test>>::OffchainElectionWeakSubmission.as_u8()).into(),
 				),
 			)
 		})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_correct_number_of_winners() {
+	fn invalid_election_correct_number_of_winners() {
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				ValidatorCount::put(3);
@@ -3493,15 +3493,15 @@ mod offchain_phragmen {
 						compact,
 						score,
 					),
-					Error::<Test>::PhragmenBogusWinnerCount,
+					Error::<Test>::OffchainElectionBogusWinnerCount,
 				);
 			})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_solution_size() {
+	fn invalid_election_solution_size() {
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.build()
 			.execute_with(|| {
 				run_to_block(12);
@@ -3517,21 +3517,21 @@ mod offchain_phragmen {
 						current_era(),
 						ElectionSize::default(),
 					),
-					Error::<Test>::PhragmenBogusElectionSize,
+					Error::<Test>::OffchainElectionBogusElectionSize,
 				);
 			})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_correct_number_of_winners_1() {
+	fn invalid_election_correct_number_of_winners_1() {
 		// if we have too little validators, then the number of candidates is the bound.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(8) // we simply cannot elect 8
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				ValidatorCount::put(3);
@@ -3547,21 +3547,21 @@ mod offchain_phragmen {
 						compact,
 						score,
 					),
-					Error::<Test>::PhragmenBogusWinnerCount,
+					Error::<Test>::OffchainElectionBogusWinnerCount,
 				);
 			})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_correct_number_of_winners_2() {
+	fn invalid_election_correct_number_of_winners_2() {
 		// if we have too little validators, then the number of candidates is the bound.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(8) // we simply cannot elect 8
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				let (compact, winners, score) = prepare_submission_with(true, 2, |_| {});
@@ -3579,15 +3579,15 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn invalid_phragmen_result_out_of_bound_nominator_index() {
+	fn invalid_election_out_of_bound_nominator_index() {
 		// A nominator index which is simply invalid
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
@@ -3605,21 +3605,21 @@ mod offchain_phragmen {
 						compact,
 						score,
 					),
-					Error::<Test>::PhragmenBogusCompact,
+					Error::<Test>::OffchainElectionBogusCompact,
 				);
 			})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_out_of_bound_validator_index() {
+	fn invalid_election_out_of_bound_validator_index() {
 		// A validator index which is out of bound
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
@@ -3637,21 +3637,21 @@ mod offchain_phragmen {
 						compact,
 						score,
 					),
-					Error::<Test>::PhragmenBogusCompact,
+					Error::<Test>::OffchainElectionBogusCompact,
 				);
 			})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_out_of_bound_winner_index() {
+	fn invalid_election_out_of_bound_winner_index() {
 		// A winner index which is simply invalid
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
@@ -3668,22 +3668,22 @@ mod offchain_phragmen {
 						compact,
 						score,
 					),
-					Error::<Test>::PhragmenBogusWinner,
+					Error::<Test>::OffchainElectionBogusWinner,
 				);
 			})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_non_winner_validator_index() {
+	fn invalid_election_non_winner_validator_index() {
 		// An edge that points to a correct validator index who is NOT a winner. This is very
-		// similar to the test that raises `PhragmenBogusNomination`.
+		// similar to the test that raises `OffchainElectionBogusNomination`.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(2) // we select only 2.
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
@@ -3703,21 +3703,21 @@ mod offchain_phragmen {
 						compact,
 						score,
 					),
-					Error::<Test>::PhragmenBogusEdge,
+					Error::<Test>::OffchainElectionBogusEdge,
 				);
 			})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_wrong_self_vote() {
+	fn invalid_election_wrong_self_vote() {
 		// A self vote for someone else.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				let (compact, winners, score) = prepare_submission_with(true, 2, |a| {
@@ -3738,21 +3738,21 @@ mod offchain_phragmen {
 						compact,
 						score,
 					),
-					Error::<Test>::PhragmenBogusSelfVote,
+					Error::<Test>::OffchainElectionBogusSelfVote,
 				);
 			})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_wrong_self_vote_2() {
+	fn invalid_election_wrong_self_vote_2() {
 		// A self validator voting for someone else next to self vote.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				let (compact, winners, score) = prepare_submission_with(true, 2, |a| {
@@ -3773,21 +3773,21 @@ mod offchain_phragmen {
 						compact,
 						score,
 					),
-					Error::<Test>::PhragmenBogusSelfVote,
+					Error::<Test>::OffchainElectionBogusSelfVote,
 				);
 			})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_over_stake() {
+	fn invalid_election_over_stake() {
 		// Someone's edge ratios sums to more than 100%.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				// Note: we don't reduce here to be able to tweak votes3. votes3 will vanish if you
@@ -3807,13 +3807,13 @@ mod offchain_phragmen {
 						compact,
 						score,
 					),
-					Error::<Test>::PhragmenBogusCompact,
+					Error::<Test>::OffchainElectionBogusCompact,
 				);
 			})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_under_stake() {
+	fn invalid_election_under_stake() {
 		// at the time of this writing, we cannot under stake someone. The compact assignment works
 		// in a way that some of the stakes are presented by the submitter, and the last one is read
 		// from chain by subtracting the rest from total. Hence, the sum is always correct.
@@ -3821,16 +3821,16 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn invalid_phragmen_result_invalid_target_stealing() {
+	fn invalid_election_invalid_target_stealing() {
 		// A valid voter who voted for someone who is a candidate, and is a correct winner, but is
 		// actually NOT nominated by this nominator.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				let (compact, winners, score) = prepare_submission_with(false, 0, |a| {
@@ -3848,7 +3848,7 @@ mod offchain_phragmen {
 						compact,
 						score,
 					),
-					Error::<Test>::PhragmenBogusNomination,
+					Error::<Test>::OffchainElectionBogusNomination,
 				);
 			})
 	}
@@ -3859,12 +3859,12 @@ mod offchain_phragmen {
 		// nomination should be disabled for the upcoming election. A solution must respect this
 		// rule.
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 
 				// finalize the round with fallback. This is needed since all nominator submission
 				// are in era zero and we want this one to pass with no problems.
@@ -3928,21 +3928,21 @@ mod offchain_phragmen {
 						compact,
 						score,
 					),
-					Error::<Test>::PhragmenSlashedNomination,
+					Error::<Test>::OffchainElectionSlashedNomination,
 				);
 			})
 	}
 
 	#[test]
-	fn invalid_phragmen_result_wrong_score() {
+	fn invalid_election_wrong_score() {
 		// A valid voter who's total distributed stake is more than what they bond
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
-				build_offchain_phragmen_test_ext();
+				build_offchain_election_test_ext();
 				run_to_block(12);
 
 				let (compact, winners, mut score) = prepare_submission_with(true, 2, |_| {});
@@ -3955,7 +3955,7 @@ mod offchain_phragmen {
 						compact,
 						score,
 					),
-					Error::<Test>::PhragmenBogusScore,
+					Error::<Test>::OffchainElectionBogusScore,
 				);
 			})
 	}
@@ -3963,7 +3963,7 @@ mod offchain_phragmen {
 	#[test]
 	fn offchain_storage_is_set() {
 		let mut ext = ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.build();
 		let state = offchainify(&mut ext, 0);
@@ -3987,7 +3987,7 @@ mod offchain_phragmen {
 	#[test]
 	fn offchain_storage_prevents_duplicate() {
 		let mut ext = ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.build();
 		let _ = offchainify(&mut ext, 0);
@@ -4032,7 +4032,7 @@ mod offchain_phragmen {
 	#[should_panic]
 	fn offence_is_blocked_when_window_open() {
 		ExtBuilder::default()
-			.offchain_phragmen_ext()
+			.offchain_election_ext()
 			.validator_count(4)
 			.has_stakers(false)
 			.build()
@@ -4575,12 +4575,12 @@ fn on_initialize_weight_is_correct() {
 	});
 
 	ExtBuilder::default()
-	.offchain_phragmen_ext()
+	.offchain_election_ext()
 	.validator_count(4)
 	.has_stakers(false)
 	.build()
 	.execute_with(|| {
-		crate::tests::offchain_phragmen::build_offchain_phragmen_test_ext();
+		crate::tests::offchain_election::build_offchain_election_test_ext();
 		run_to_block(11);
 		Staking::on_finalize(System::block_number());
 		System::set_block_number((System::block_number() + 1).into());

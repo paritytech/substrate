@@ -108,9 +108,9 @@ pub struct Extensions {
 }
 
 impl std::fmt::Debug for Extensions {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Extensions: ({})", self.extensions.len())
-    }
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "Extensions: ({})", self.extensions.len())
+	}
 }
 
 impl Extensions {

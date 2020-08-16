@@ -19,8 +19,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use super::*;
+use super::{*, Module as Grandpa};
 use frame_benchmarking::benchmarks;
+use frame_system::RawOrigin;
 use sp_core::H256;
 
 benchmarks! {
@@ -62,6 +63,15 @@ benchmarks! {
 	} verify {
 		assert!(sp_finality_grandpa::check_equivocation_proof(equivocation_proof2));
 	}
+
+	note_stalled {
+		let delay = 1000.into();
+		let best_finalized_block_number = 1.into();
+
+	}: _(RawOrigin::Root, delay, best_finalized_block_number)
+	verify {
+		assert!(Grandpa::<T>::stalled().is_some());
+	}
 }
 
 #[cfg(test)]
@@ -74,6 +84,7 @@ mod tests {
 	fn test_benchmarks() {
 		new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 			assert_ok!(test_benchmark_check_equivocation_proof::<Test>());
+			assert_ok!(test_benchmark_note_stalled::<Test>());
 		})
 	}
 

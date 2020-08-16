@@ -656,6 +656,8 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			}
 		};
 
+		log::info!("✅ Successfully mined block: {}", best_hash);
+		
 		let (hash, seal) = {
 			let seal = DigestItem::Seal(POW_ENGINE_ID, seal);
 			let mut header = header.clone();

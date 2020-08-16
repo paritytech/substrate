@@ -98,7 +98,7 @@ fn import_single_good_block_without_header_fails() {
 
 #[test]
 fn async_import_queue_drops() {
-	let executor = sp_core::testing::SpawnBlockingExecutor::new();
+	let executor = sp_core::testing::TaskExecutor::new();
 	// Perform this test multiple times since it exhibits non-deterministic behavior.
 	for _ in 0..100 {
 		let verifier = PassThroughVerifier::new(true);

@@ -43,9 +43,10 @@ use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
 	Parameter,
 };
-use frame_system::{ensure_none, ensure_signed, DigestOf};
+use frame_system::{ensure_none, ensure_root, ensure_signed};
+use pallet_finality_tracker::OnFinalizationStalled;
 use sp_runtime::{
-	generic::{DigestItem, OpaqueDigestItemId},
+	generic::DigestItem,
 	traits::Zero,
 	DispatchResult, KeyTypeId,
 };
@@ -205,7 +206,7 @@ decl_storage! {
 		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
 
 		/// Pending change: (signaled at, scheduled change).
-		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
+		PendingChange get(fn pending_change): Option<StoredPendingChange<T::BlockNumber>>;
 
 		/// next block number where we can force a change.
 		NextForced get(fn next_forced): Option<T::BlockNumber>;
@@ -280,6 +281,24 @@ decl_module! {
 			)?;
 		}
 
+		/// Note that the current authority set of the GRANDPA finality gadget has
+		/// stalled. This will trigger a forced authority set change at the beginning
+		/// of the next session, to be enacted `delay` blocks after that. The delay
+		/// should be high enough to safely assume that the block signalling the
+		/// forced change will not be re-orged (e.g. 1000 blocks). The GRANDPA voters
+		/// will start the new authority set using the given finalized block as base.
+		/// Only callable by root.
+		#[weight = weight_for::note_stalled::<T>()]
+		fn note_stalled(
+			origin,
+			delay: T::BlockNumber,
+			best_finalized_block_number: T::BlockNumber,
+		) {
+			ensure_root(origin)?;
+
+			Self::on_stalled(delay, best_finalized_block_number)
+		}
+
 		fn on_finalize(block_number: T::BlockNumber) {
 			// check for scheduled pending authority set changes
 			if let Some(pending_change) = <PendingChange<T>>::get() {
@@ -295,7 +314,7 @@ decl_module! {
 						))
 					} else {
 						Self::deposit_log(ConsensusLog::ScheduledChange(
-							ScheduledChange{
+							ScheduledChange {
 								delay: pending_change.delay,
 								next_authorities: pending_change.next_authorities.clone(),
 							}
@@ -376,6 +395,11 @@ mod weight_for {
 			.saturating_add(T::DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
 			// fetching set id -> session index mappings
 			.saturating_add(T::DbWeight::get().reads(2))
+	}
+
+	pub fn note_stalled<T: super::Trait>() -> Weight {
+		(3 * WEIGHT_PER_MICROS)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
 
@@ -580,42 +604,6 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Module<T> {
-	/// Attempt to extract a GRANDPA log from a generic digest.
-	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<ConsensusLog<T::BlockNumber>> {
-		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
-		digest.convert_first(|l| l.try_to::<ConsensusLog<T::BlockNumber>>(id))
-	}
-
-	/// Attempt to extract a pending set-change signal from a digest.
-	pub fn pending_change(digest: &DigestOf<T>)
-		-> Option<ScheduledChange<T::BlockNumber>>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_change())
-	}
-
-	/// Attempt to extract a forced set-change signal from a digest.
-	pub fn forced_change(digest: &DigestOf<T>)
-		-> Option<(T::BlockNumber, ScheduledChange<T::BlockNumber>)>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
-	}
-
-	/// Attempt to extract a pause signal from a digest.
-	pub fn pending_pause(digest: &DigestOf<T>)
-		-> Option<T::BlockNumber>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_pause())
-	}
-
-	/// Attempt to extract a resume signal from a digest.
-	pub fn pending_resume(digest: &DigestOf<T>)
-		-> Option<T::BlockNumber>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_resume())
-	}
-}
-
 impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
@@ -638,14 +626,26 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 		// Always issue a change if `session` says that the validators have changed.
 		// Even if their session keys are the same as before, the underlying economic
 		// identities have changed.
-		let current_set_id = if changed {
+		let current_set_id = if changed || <Stalled<T>>::exists() {
 			let next_authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
-			if let Some((further_wait, median)) = <Stalled<T>>::take() {
-				let _ = Self::schedule_change(next_authorities, further_wait, Some(median));
+
+			let res = if let Some((further_wait, median)) = <Stalled<T>>::take() {
+				Self::schedule_change(next_authorities, further_wait, Some(median))
 			} else {
-				let _ = Self::schedule_change(next_authorities, Zero::zero(), None);
+				Self::schedule_change(next_authorities, Zero::zero(), None)
+			};
+
+			if res.is_ok() {
+				CurrentSetId::mutate(|s| {
+					*s += 1;
+					*s
+				})
+			} else {
+				// either the session module signalled that the validators have changed
+				// or the set was stalled. but since we didn't successfully schedule
+				// an authority set change we do not increment the set id.
+				Self::current_set_id()
 			}
-			CurrentSetId::mutate(|s| { *s += 1; *s })
 		} else {
 			// nothing's changed, neither economic conditions nor session keys. update the pointer
 			// of the current set.
@@ -663,7 +663,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 	}
 }
 
-impl<T: Trait> pallet_finality_tracker::OnFinalizationStalled<T::BlockNumber> for Module<T> {
+impl<T: Trait> OnFinalizationStalled<T::BlockNumber> for Module<T> {
 	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {
 		// when we record old authority sets, we can use `pallet_finality_tracker::median`
 		// to figure out _who_ failed. until then, we can't meaningfully guard
