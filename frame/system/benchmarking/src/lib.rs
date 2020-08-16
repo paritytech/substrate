@@ -24,13 +24,11 @@ use sp_std::vec;
 use sp_std::prelude::*;
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use sp_runtime::traits::Hash;
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::storage::{self, StorageMap};
 use frame_system::{Module as System, Call, RawOrigin, DigestItemOf, AccountInfo};
 
 mod mock;
-
-const SEED: u32 = 0;
 
 pub struct Module<T: Trait>(System<T>);
 pub trait Trait: frame_system::Trait {}
@@ -42,7 +40,7 @@ benchmarks! {
 		// # of Bytes
 		let b in 0 .. 16_384;
 		let remark_message = vec![1; b as usize];
-		let caller = account("caller", 0, SEED);
+		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), remark_message)
 
 	set_heap_pages {
@@ -142,7 +140,7 @@ benchmarks! {
 
 	suicide {
 		let n in 1 .. 1000;
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		let account_info = AccountInfo::<T::Index, T::AccountData> {
 			nonce: n.into(),
 			refcount: 0,
