@@ -73,17 +73,17 @@ pub trait RpcExtensionBuilder {
 
 	/// Returns an instance of the RPC extension for a particular `DenyUnsafe`
 	/// value, e.g. the RPC extension might not expose some unsafe methods.
-	fn build(&self, deny: sc_rpc::DenyUnsafe) -> Self::Output;
+	fn build(&self, deny: sc_rpc::DenyUnsafe, subscriptions: SubscriptionManager) -> Self::Output;
 }
 
 impl<F, R> RpcExtensionBuilder for F where
-	F: Fn(sc_rpc::DenyUnsafe) -> R,
+	F: Fn(sc_rpc::DenyUnsafe, SubscriptionManager) -> R,
 	R: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
 	type Output = R;
 
-	fn build(&self, deny: sc_rpc::DenyUnsafe) -> Self::Output {
-		(*self)(deny)
+	fn build(&self, deny: sc_rpc::DenyUnsafe, subscriptions: SubscriptionManager) -> Self::Output {
+		(*self)(deny, subscriptions)
 	}
 }
 
@@ -97,7 +97,7 @@ impl<R> RpcExtensionBuilder for NoopRpcExtensionBuilder<R> where
 {
 	type Output = R;
 
-	fn build(&self, _deny: sc_rpc::DenyUnsafe) -> Self::Output {
+	fn build(&self, _deny: sc_rpc::DenyUnsafe, _subscriptions: SubscriptionManager) -> Self::Output {
 		self.0.clone()
 	}
 }
@@ -442,7 +442,7 @@ pub fn build_offchain_workers<TBl, TBackend, TCl>(
 /// Spawn the tasks that are required to run a node.
 pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
-) -> Result<Arc<RpcHandlers>, Error>
+) -> Result<RpcHandlers, Error>
 	where
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
@@ -540,7 +540,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	);
 	let rpc = start_rpc_servers(&config, gen_handler)?;
 	// This is used internally, so don't restrict access to unsafe RPC
-	let rpc_handlers = Arc::new(RpcHandlers(gen_handler(sc_rpc::DenyUnsafe::No)));
+	let rpc_handlers = RpcHandlers(Arc::new(gen_handler(sc_rpc::DenyUnsafe::No).into()));
 
 	// Telemetry
 	let telemetry = config.telemetry_endpoints.clone().and_then(|endpoints| {
@@ -764,7 +764,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	let author = sc_rpc::author::Author::new(
 		client,
 		transaction_pool,
-		subscriptions,
+		subscriptions.clone(),
 		keystore,
 		deny_unsafe,
 	);
@@ -786,7 +786,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 		maybe_offchain_rpc,
 		author::AuthorApi::to_delegate(author),
 		system::SystemApi::to_delegate(system),
-		rpc_extensions_builder.build(deny_unsafe),
+		rpc_extensions_builder.build(deny_unsafe, subscriptions),
 	))
 }
 

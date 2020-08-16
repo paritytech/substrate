@@ -58,9 +58,9 @@ pub enum TransactorKind {
 /// Output of a contract call or instantiation which ran to completion.
 #[cfg_attr(test, derive(PartialEq, Eq, Debug))]
 pub struct ExecReturnValue {
-	/// Flags passed along by `ext_return`. Empty when `ext_return` was never called.
+	/// Flags passed along by `seal_return`. Empty when `seal_return` was never called.
 	pub flags: ReturnFlags,
-	/// Buffer passed along by `ext_return`. Empty when `ext_return` was never called.
+	/// Buffer passed along by `seal_return`. Empty when `seal_return` was never called.
 	pub data: Vec<u8>,
 }
 
@@ -355,7 +355,7 @@ where
 		// `collect_rent` will be done on first call and destination contract and balance
 		// cannot be changed before the first call
 		// We do not allow 'calling' plain accounts. For transfering value
-		// `ext_transfer` must be used.
+		// `seal_transfer` must be used.
 		let contract = if let Some(ContractInfo::Alive(info)) = rent::collect_rent::<T>(&dest) {
 			info
 		} else {
@@ -455,7 +455,7 @@ where
 
 			// We need each contract that exists to be above the subsistence threshold
 			// in order to keep up the guarantuee that we always leave a tombstone behind
-			// with the exception of a contract that called `ext_terminate`.
+			// with the exception of a contract that called `seal_terminate`.
 			if T::Currency::total_balance(&dest) < nested.config.subsistence_threshold() {
 				Err(Error::<T>::NewContractNotFunded)?
 			}
@@ -599,7 +599,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 		Err(Error::<T>::OutOfGas)?
 	}
 
-	// Only ext_terminate is allowed to bring the sender below the subsistence
+	// Only seal_terminate is allowed to bring the sender below the subsistence
 	// threshold or even existential deposit.
 	let existence_requirement = match (cause, origin) {
 		(Terminate, _) => ExistenceRequirement::AllowDeath,

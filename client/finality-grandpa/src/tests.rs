@@ -1567,6 +1567,7 @@ where
 		network,
 		voting_rule,
 		metrics: None,
+		justification_sender: None,
 		_phantom: PhantomData,
 	}
 }
