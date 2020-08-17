@@ -111,7 +111,7 @@ use futures::channel::mpsc::{channel, Sender, Receiver};
 use retain_mut::RetainMut;
 
 use futures::prelude::*;
-use log::{debug, info, log, trace, warn, error};
+use log::{debug, info, log, trace, warn};
 use prometheus_endpoint::Registry;
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
@@ -1400,10 +1400,7 @@ fn prune_finalized<Block, Client>(
 		&info.finalized_hash,
 		info.finalized_number,
 		finalized_slot,
-	)
-		.map_err(|e| error!(target: "babe", "Failed pruning epoch changes tree {:?}", e))
-		// Continue runing node on pruning failure.
-		.unwrap_or(());
+	).map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
 
 	Ok(())
 }
