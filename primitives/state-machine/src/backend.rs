@@ -23,7 +23,7 @@ use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
-	UsageInfo, StorageKey, StorageValue, StorageCollection,
+	UsageInfo, StorageKey, StorageValue, StorageCollection, ChildStorageCollection,
 };
 
 /// A state backend is used to read state data and can have changes committed
@@ -212,7 +212,13 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Commit given transaction to storage.
-	fn commit(&self, _: H::Out, _: Self::Transaction, _: StorageCollection) -> Result<(), Self::Error> {
+	fn commit(
+		&self,
+		_: H::Out,
+		_: Self::Transaction,
+		_: StorageCollection,
+		_: ChildStorageCollection,
+	) -> Result<(), Self::Error> {
 		unimplemented!()
 	}
 
