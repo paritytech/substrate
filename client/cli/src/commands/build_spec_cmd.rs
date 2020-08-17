@@ -41,7 +41,7 @@ pub struct BuildSpecCmd {
 
 	/// Sync the chain using a light client, and export the state in the chain spec so that other
 	/// light clients can sync faster.
-	#[structopt(long = "export-sync-state")]
+	#[structopt(long)]
 	pub export_sync_state: bool,
 
 	/// Disable adding the default bootnode to the specification.
@@ -101,13 +101,9 @@ impl BuildSpecCmd {
 			CL: sp_blockchain::HeaderBackend<B>,
 			BA: MaybeChtRootStorageProvider<B>,
 	{
-		network_status_sinks.network_status(std::time::Duration::from_secs(1)).take_while(|(status, _)| {
-			ready(if status.sync_state == sc_network::SyncState::Idle && status.num_sync_peers > 0 {
-				false
-			} else {
-				true
-			})
-		}).for_each(|_| ready(())).await;
+		network_status_sinks.network_status(std::time::Duration::from_secs(1)).filter(|(status, _)| {
+			ready(status.sync_state == sc_network::SyncState::Idle && status.num_sync_peers > 0)
+		}).into_future().await;
 
 		let light_sync_state = build_light_sync_state(client, backend)?;
 		spec.set_light_sync_state(light_sync_state.to_serializable());
