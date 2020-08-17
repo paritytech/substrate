@@ -124,8 +124,10 @@ pub trait Benchmarking {
 	// Add a new item to the DB whitelist.
 	fn add_whitelist(&mut self, add: Vec<u8>) {
 		let mut whitelist = self.get_whitelist();
-		whitelist.push(add);
-		self.set_whitelist(whitelist);
+		if !whitelist.contains(&add) {
+			whitelist.push(add);
+			self.set_whitelist(whitelist);
+		}
 	}
 
 	// Remove an item from the DB whitelist.
