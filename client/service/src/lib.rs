@@ -96,7 +96,8 @@ impl<T: MallocSizeOf> MallocSizeOfWasm for T {}
 impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
-pub struct RpcHandlers(sc_rpc_server::RpcHandler<sc_rpc::Metadata>);
+#[derive(Clone)]
+pub struct RpcHandlers(Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>>);
 
 impl RpcHandlers {
 	/// Starts an RPC query.
@@ -114,6 +115,11 @@ impl RpcHandlers {
 			.compat()
 			.map(|res| res.expect("this should never fail"))
 			.boxed()
+	}
+
+	/// Provides access to the underlying `MetaIoHandler`
+	pub fn io_handler(&self) -> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>> {
+		self.0.clone()
 	}
 }
 
@@ -322,8 +328,8 @@ async fn build_network_future<
 					num_sync_peers: network.num_sync_peers(),
 					num_connected_peers: network.num_connected_peers(),
 					num_active_peers: network.num_active_peers(),
-					average_download_per_sec: network.average_download_per_sec(),
-					average_upload_per_sec: network.average_upload_per_sec(),
+					total_bytes_inbound: network.total_bytes_inbound(),
+					total_bytes_outbound: network.total_bytes_outbound(),
 				};
 				let state = network.network_state();
 				ready_sink.send((status, state));

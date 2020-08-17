@@ -26,6 +26,7 @@ use sp_transaction_pool::PoolStatus;
 use sp_utils::metrics::register_globals;
 use sc_client_api::ClientInfo;
 use sc_network::config::Role;
+use wasm_timer::Instant;
 
 struct PrometheusMetrics {
 	// generic info
@@ -34,7 +35,6 @@ struct PrometheusMetrics {
 	ready_transactions_number: Gauge<U64>,
 
 	// I/O
-	network_per_sec_bytes: GaugeVec<U64>,
 	database_cache: Gauge<U64>,
 	state_cache: Gauge<U64>,
 	state_db: GaugeVec<U64>,
@@ -85,10 +85,6 @@ impl PrometheusMetrics {
 			)?, registry)?,
 
 			// I/ O
-			network_per_sec_bytes: register(GaugeVec::new(
-				Opts::new("network_per_sec_bytes", "Networking bytes per second"),
-				&["direction"]
-			)?, registry)?,
 			database_cache: register(Gauge::new(
 				"database_cache_bytes", "RocksDB cache size in bytes",
 			)?, registry)?,
@@ -105,11 +101,19 @@ impl PrometheusMetrics {
 
 pub struct MetricsService {
 	metrics: Option<PrometheusMetrics>,
+	last_update: Instant,
+	last_total_bytes_inbound: u64,
+	last_total_bytes_outbound: u64,
 }
 
 impl MetricsService {
 	pub fn new() -> Self {
-		MetricsService { metrics: None }
+		MetricsService {
+			metrics: None,
+			last_total_bytes_inbound: 0,
+			last_total_bytes_outbound: 0,
+			last_update: Instant::now(),
+		}
 	}
 
 	pub fn with_prometheus(
@@ -129,7 +133,12 @@ impl MetricsService {
 			&config.impl_version,
 			role_bits,
 		)
-		.map(|p| MetricsService { metrics: Some(p) })
+		.map(|p| MetricsService {
+			metrics: Some(p),
+			last_total_bytes_inbound: 0,
+			last_total_bytes_outbound: 0,
+			last_update: Instant::now(),
+		})
 	}
 
 	pub fn tick<T: Block>(
@@ -138,15 +147,30 @@ impl MetricsService {
 		txpool_status: &PoolStatus,
 		net_status: &NetworkStatus<T>,
 	) {
+		let now = Instant::now();
+		let elapsed = (now - self.last_update).as_secs();
+
 		let best_number = info.chain.best_number.saturated_into::<u64>();
 		let best_hash = info.chain.best_hash;
 		let num_peers = net_status.num_connected_peers;
 		let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
-		let bandwidth_download = net_status.average_download_per_sec;
-		let bandwidth_upload = net_status.average_upload_per_sec;
+		let total_bytes_inbound = net_status.total_bytes_inbound;
+		let total_bytes_outbound = net_status.total_bytes_outbound;
 		let best_seen_block = net_status
 			.best_seen_block
 			.map(|num: NumberFor<T>| num.unique_saturated_into() as u64);
+
+		let diff_bytes_inbound = total_bytes_inbound - self.last_total_bytes_inbound;
+		let diff_bytes_outbound = total_bytes_outbound - self.last_total_bytes_outbound;
+		let (avg_bytes_per_sec_inbound, avg_bytes_per_sec_outbound) =
+			if elapsed > 0 {
+				self.last_total_bytes_inbound = total_bytes_inbound;
+				self.last_total_bytes_outbound = total_bytes_outbound;
+				(diff_bytes_inbound / elapsed, diff_bytes_outbound / elapsed)
+			} else {
+				(diff_bytes_inbound, diff_bytes_outbound)
+			};
+		self.last_update = now;
 
 		telemetry!(
 			SUBSTRATE_INFO;
@@ -157,8 +181,8 @@ impl MetricsService {
 			"txcount" => txpool_status.ready,
 			"finalized_height" => finalized_number,
 			"finalized_hash" => ?info.chain.finalized_hash,
-			"bandwidth_download" => bandwidth_download,
-			"bandwidth_upload" => bandwidth_upload,
+			"bandwidth_download" => avg_bytes_per_sec_inbound,
+			"bandwidth_upload" => avg_bytes_per_sec_outbound,
 			"used_state_cache_size" => info.usage.as_ref()
 				.map(|usage| usage.memory.state_cache.as_bytes())
 				.unwrap_or(0),
@@ -174,14 +198,6 @@ impl MetricsService {
 		);
 
 		if let Some(metrics) = self.metrics.as_ref() {
-			metrics
-				.network_per_sec_bytes
-				.with_label_values(&["download"])
-				.set(net_status.average_download_per_sec);
-			metrics
-				.network_per_sec_bytes
-				.with_label_values(&["upload"])
-				.set(net_status.average_upload_per_sec);
 			metrics
 				.block_height
 				.with_label_values(&["finalized"])
