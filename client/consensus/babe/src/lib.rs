@@ -86,7 +86,7 @@ use sp_core::{crypto::Public, traits::BareCryptoStore};
 use sp_application_crypto::AppKey;
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
-	traits::{Block as BlockT, Header, DigestItemFor, Zero},
+	traits::{Block as BlockT, Header, DigestItemFor, Zero, One},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use sc_keystore::KeyStorePtr;
@@ -104,7 +104,7 @@ use sp_consensus::import_queue::{Verifier, BasicQueue, DefaultImportQueue, Cache
 use sc_client_api::{
 	backend::AuxStore,
 	BlockchainEvents, ProvideUncles,
-	SharedPruningRequirements, PruningLimit,
+	SharedPruningRequirements, SharedPruningRequirementsSource, PruningLimit,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use futures::channel::mpsc::{channel, Sender, Receiver};
@@ -1087,11 +1087,11 @@ impl<Block: BlockT, Client, I> BabeBlockImport<Block, Client, I> {
 		epoch_changes: SharedEpochChanges<Block, Epoch>,
 		block_import: I,
 		config: Config,
-		shared_pruning_requirements: Option<&SharedPruningRequirements<Block>>,
+		shared_pruning_requirements: Option<&SharedPruningRequirementsSource<Block>>,
 	) -> Self {
 		let shared_pruning_requirements = shared_pruning_requirements.map(|shared| {
 			let req = shared.next_instance();
-			assert!(req.set_finalized_headers_needed(PruningLimit::Locked));
+			req.set_finalized_headers_needed(PruningLimit::Locked);
 			req
 		});
 		BabeBlockImport {
@@ -1302,14 +1302,16 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 
 			// new epoch limits, update shared pruning limit if needed
 			if let Some(shared_pruning_requirements) = self.shared_pruning_requirements.as_ref() {
-				let needed_height = epoch_changes.needed_parent_relation();
+				// resolve needed height for later pruning `is_descendant_of` uses.
+				let needed_height = epoch_changes.tree().lowest_node_number()
+					.map(|number| number - One::one());
 				debug!(target: "babe", "Using prune limit {:?}", needed_height);
 				if needed_height != self.previous_needed_height {
 					self.previous_needed_height = needed_height.clone();
 					if let Some(height) = needed_height {
-						assert!(shared_pruning_requirements.set_finalized_headers_needed(PruningLimit::Some(height)));
+						shared_pruning_requirements.set_finalized_headers_needed(PruningLimit::Some(height));
 					} else {
-						assert!(shared_pruning_requirements.set_finalized_headers_needed(PruningLimit::Locked));
+						shared_pruning_requirements.set_finalized_headers_needed(PruningLimit::Locked);
 					}
 				}
 			}
@@ -1412,7 +1414,7 @@ pub fn block_import<Client, Block: BlockT, I>(
 	config: Config,
 	wrapped_block_import: I,
 	client: Arc<Client>,
-	shared_pruning_requirements: Option<&SharedPruningRequirements<Block>>,
+	shared_pruning_requirements: Option<&SharedPruningRequirementsSource<Block>>,
 ) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)> where
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {

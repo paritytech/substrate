@@ -28,7 +28,7 @@ use sc_client_api::{
 	blockchain::{
 		BlockStatus, Cache as BlockchainCache, Info as BlockchainInfo,
 	},
-	Storage, SharedPruningRequirements,PruningLimit,
+	Storage, SharedPruningRequirementsSource, PruningLimit,
 };
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
@@ -69,7 +69,7 @@ pub struct LightStorage<Block: BlockT> {
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
-	shared_pruning_requirements: SharedPruningRequirements<Block>,
+	shared_pruning_requirements: SharedPruningRequirementsSource<Block>,
 	pending_cht_pruning: RwLock<VecDeque<(NumberFor<Block>, NumberFor<Block>)>>,
 
 	#[cfg(not(target_os = "unknown"))]
@@ -80,7 +80,7 @@ impl<Block: BlockT> LightStorage<Block> {
 	/// Create new storage with given settings.
 	pub fn new(
 		config: DatabaseSettings,
-		shared_pruning_requirements: SharedPruningRequirements<Block>,
+		shared_pruning_requirements: SharedPruningRequirementsSource<Block>,
 	) -> ClientResult<Self> {
 		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Light)?;
 		Self::from_kvdb(db as Arc<_>, shared_pruning_requirements)
@@ -90,13 +90,13 @@ impl<Block: BlockT> LightStorage<Block> {
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test() -> Self {
 		let db = Arc::new(sp_database::MemDb::default());
-		let shared_pruning_requirements = SharedPruningRequirements::default();
+		let shared_pruning_requirements = SharedPruningRequirementsSource::default();
 		Self::from_kvdb(db as Arc<_>, shared_pruning_requirements).expect("failed to create test-db")
 	}
 
 	fn from_kvdb(
 		db: Arc<dyn Database<DbHash>>,
-		shared_pruning_requirements: SharedPruningRequirements<Block>,
+		shared_pruning_requirements: SharedPruningRequirementsSource<Block>,
 	) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let header_metadata_cache = Arc::new(HeaderMetadataCache::default());
@@ -354,10 +354,10 @@ impl<Block: BlockT> LightStorage<Block> {
 			}
 
 			let new_cht_end = cht::end_number(cht::size(), new_cht_number);
-			self.try_prune_pending(transaction, false)?;
+			self.try_prune_pending(transaction)?;
 			self.prune_range(new_cht_start, new_cht_end, transaction)?;
 		} else {
-			self.try_prune_pending(transaction, true)?;
+			self.try_prune_pending(transaction)?;
 		}
 
 		Ok(())
@@ -438,9 +438,9 @@ impl<Block: BlockT> LightStorage<Block> {
 	}
 
 	#[cfg(test)]
-	fn try_prune_pending_test(&self, do_check: bool) -> ClientResult<()> {
+	fn try_prune_pending_test(&self) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
-		self.try_prune_pending(&mut transaction, do_check)?;
+		self.try_prune_pending(&mut transaction)?;
 		self.db.commit(transaction)?;
 		Ok(())
 	}
@@ -449,18 +449,10 @@ impl<Block: BlockT> LightStorage<Block> {
 	fn try_prune_pending(
 		&self,
 		transaction: &mut Transaction<DbHash>,
-		do_check: bool,
 	) -> ClientResult<()> {
 		let mut changed = false;
 		let mut to_prune = VecDeque::new();
-		// TODO bool condition
-		let pass = if do_check {
-			self.shared_pruning_requirements.modification_check()
-		} else {
-			true
-		};
-		if !self.pending_cht_pruning.read().is_empty()
-			&& pass {
+		if !self.pending_cht_pruning.read().is_empty() {
 			match self.shared_pruning_requirements.finalized_headers_needed() {
 				PruningLimit::Locked => (),
 				PruningLimit::None => {
@@ -757,7 +749,7 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use sc_client_api::cht;
+	use sc_client_api::{cht, SharedPruningRequirements};
 	use sp_core::ChangesTrieConfiguration;
 	use sp_runtime::generic::{DigestItem, ChangesTrieSignal};
 	use sp_runtime::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
@@ -892,10 +884,10 @@ pub(crate) mod tests {
 			limit: PruningLimit<u64>,
 		) -> (Arc<sp_database::MemDb<DbHash>>, LightStorage<Block>, SharedPruningRequirements<Block>) {
 			let raw_db = Arc::new(sp_database::MemDb::default());
-			let shared_pruning_requirements = SharedPruningRequirements::default();
-			let req = shared_pruning_requirements.next_instance();
+			let shared_source = SharedPruningRequirementsSource::default();
+			let req = shared_source.next_instance();
 			req.set_finalized_headers_needed(limit);
-			let db = LightStorage::from_kvdb(raw_db.clone(), req.clone()).unwrap();
+			let db = LightStorage::from_kvdb(raw_db.clone(), shared_source).unwrap();
 			let cht_size: u64 = cht::size();
 			let ucht_size: usize = cht_size as _;
 
@@ -958,15 +950,15 @@ pub(crate) mod tests {
 		assert_eq!(raw_db.count(columns::KEY_LOOKUP), (2 * (2 + 2 * cht_size)) as usize);
 		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_some()));
 
-		assert!(pruning_limit.set_finalized_headers_needed(PruningLimit::Some(1000)));
-		db.try_prune_pending_test(true).unwrap();
+		pruning_limit.set_finalized_headers_needed(PruningLimit::Some(1000));
+		db.try_prune_pending_test().unwrap();
 		assert_eq!(raw_db.count(columns::HEADER), (2 + 2 * cht_size) as usize - 999);
 		assert_eq!(raw_db.count(columns::KEY_LOOKUP), (2 * (2 + 2 * cht_size - 999)) as usize);
 		assert!((1..999 as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
 		assert!((999..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_some()));
 
-		assert!(pruning_limit.set_finalized_headers_needed(PruningLimit::None));
-		db.try_prune_pending_test(true).unwrap();
+		pruning_limit.set_finalized_headers_needed(PruningLimit::None);
+		db.try_prune_pending_test().unwrap();
 		assert_eq!(raw_db.count(columns::HEADER), (1 + cht_size + 1) as usize);
 		assert_eq!(raw_db.count(columns::KEY_LOOKUP), (2 * (1 + cht_size + 1)) as usize);
 		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));

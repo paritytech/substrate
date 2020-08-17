@@ -26,7 +26,7 @@ use crate::{
 };
 use sc_client_api::{
 	light::RemoteBlockchain, ForkBlocks, BadBlocks, UsageProvider, ExecutorProvider,
-	SharedPruningRequirements,
+	SharedPruningRequirementsSource,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_chain_spec::get_extension;
@@ -168,7 +168,7 @@ type TLightParts<TBl, TRtApi, TExecDisp> = (
 	Arc<RwLock<sc_keystore::Store>>,
 	TaskManager,
 	Arc<OnDemand<TBl>>,
-	SharedPruningRequirements<TBl>,
+	SharedPruningRequirementsSource<TBl>,
 );
 
 /// Light client backend type with a specific hash type.
@@ -273,7 +273,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	let shared_pruning_requirements = SharedPruningRequirements::default();
+	let shared_pruning_requirements = SharedPruningRequirementsSource::default();
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);

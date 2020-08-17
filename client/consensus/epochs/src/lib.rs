@@ -640,14 +640,6 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpochHeader<E>> {
 		&self.inner
 	}
-
-	/// Get the minimal block height where we need to be able
-	/// to do `is_descendent_of` queries.
-	pub fn needed_parent_relation(&self) -> Option<Number> {
-		// TODO consider using tree accessor and remove this function
-		self.inner.lowest_node_number()
-			.map(|number| number - One::one())
-	}
 }
 
 /// Type alias to produce the epoch-changes tree from a block type.
