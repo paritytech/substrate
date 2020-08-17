@@ -27,7 +27,7 @@ use libp2p::{
 };
 #[cfg(not(target_os = "unknown"))]
 use libp2p::{tcp, dns, websocket};
-use std::{io, sync::Arc, time::Duration, usize};
+use std::{io, sync::Arc, time::Duration};
 
 pub use self::bandwidth::BandwidthSinks;
 
@@ -43,7 +43,11 @@ pub fn build_transport(
 	memory_only: bool,
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
 	use_yamux_flow_control: bool
-) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
+) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<BandwidthSinks>) {
+	// Legacy noise configurations for backward compatibility.
+	let mut noise_legacy = noise::LegacyConfig::default();
+	noise_legacy.send_legacy_handshake = true;
+
 	// Build configuration objects for encryption mechanisms.
 	let noise_config = {
 		// For more information about these two panics, see in "On the Importance of
@@ -58,10 +62,12 @@ pub fn build_transport(
 				once and at initialization, we're taking the bet that the inconvenience of a very \
 				rare panic here is basically zero");
 
-		core::upgrade::SelectUpgrade::new(
-			noise::NoiseConfig::xx(noise_keypair_spec),
-			noise::NoiseConfig::ix(noise_keypair_legacy)
-		)
+		let mut xx_config = noise::NoiseConfig::xx(noise_keypair_spec);
+		xx_config.set_legacy_config(noise_legacy.clone());
+		let mut ix_config = noise::NoiseConfig::ix(noise_keypair_legacy);
+		ix_config.set_legacy_config(noise_legacy);
+
+		core::upgrade::SelectUpgrade::new(xx_config, ix_config)
 	};
 
 	// Build configuration objects for multiplexing mechanisms.
@@ -104,7 +110,7 @@ pub fn build_transport(
 		OptionalTransport::none()
 	});
 
-	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
+	let (transport, bandwidth) = bandwidth::BandwidthLogging::new(transport);
 
 	// Encryption
 	let transport = transport.and_then(move |stream, endpoint| {
@@ -145,5 +151,6 @@ pub fn build_transport(
 			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 			.boxed();
 
-	(transport, sinks)
+	(transport, bandwidth)
 }
+
