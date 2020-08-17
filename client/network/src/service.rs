@@ -1380,7 +1380,22 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			}
 		}
 
+		// At the time of writing of this comment, due to a high volume of messages, the network
+		// worker sometimes takes a long time to process the loop below. When that happens, the
+		// rest of the polling is frozen. In order to avoid negative side-effects caused by this
+		// freeze, a limit to the number of iterations is enforced below. If the limit is reached,
+		// the task is scheduled again.
+		//
+		// This allows for a more even distribution in the time taken by each sub-part of the
+		// polling.
+		let mut num_iterations = 0;
 		loop {
+			num_iterations += 1;
+			if num_iterations >= 100 {
+				cx.waker().wake_by_ref();
+				break;
+			}
+
 			// Process the next message coming from the `NetworkService`.
 			let msg = match this.from_service.poll_next_unpin(cx) {
 				Poll::Ready(Some(msg)) => msg,
@@ -1420,7 +1435,16 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			}
 		}
 
+		// `num_iterations` serves the same purpose as in the previous loop.
+		// See the previous loop for explanations.
+		let mut num_iterations = 0;
 		loop {
+			num_iterations += 1;
+			if num_iterations >= 1000 {
+				cx.waker().wake_by_ref();
+				break;
+			}
+
 			// Process the next action coming from the network.
 			let next_event = this.network_service.next_event();
 			futures::pin_mut!(next_event);
