@@ -140,80 +140,90 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	if role.is_authority() {
 		let proposer = sc_basic_authorship::ProposerFactory::new(
 			client.clone(),
-			transaction_pool,
+			transaction_pool.clone(),
 			prometheus_registry.as_ref(),
 		);
 
-		let can_author_with =
-			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
+		// let can_author_with =
+		// 	sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
-		let aura = sc_consensus_aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _>(
-			sc_consensus_aura::slot_duration(&*client)?,
-			client.clone(),
-			select_chain,
-			block_import,
+		// let _aura = sc_consensus_aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _>(
+		// 	sc_consensus_aura::slot_duration(&*client)?,
+		// 	client.clone(),
+		// 	select_chain,
+		// 	block_import,
+		// 	proposer,
+		// 	network.clone(),
+		// 	inherent_data_providers.clone(),
+		// 	force_authoring,
+		// 	keystore.clone(),
+		// 	can_author_with,
+		// )?;
+
+		let authorship_future = sc_consensus_manual_seal::run_instant_seal(
+			Box::new(client.clone()),
 			proposer,
-			network.clone(),
-			inherent_data_providers.clone(),
-			force_authoring,
-			keystore.clone(),
-			can_author_with,
-		)?;
+			client.clone(),
+			transaction_pool.pool().clone(),
+			select_chain,
+			inherent_data_providers
+		);
 
 		// the AURA authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
-		task_manager.spawn_essential_handle().spawn_blocking("aura", aura);
+		// task_manager.spawn_essential_handle().spawn_blocking("aura", aura);
+		task_manager.spawn_essential_handle().spawn_blocking("instant-seal", authorship_future);
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't
 	// need a keystore, regardless of which protocol we use below.
-	let keystore = if role.is_authority() {
-		Some(keystore as sp_core::traits::BareCryptoStorePtr)
-	} else {
-		None
-	};
+	// let keystore = if role.is_authority() {
+	// 	Some(keystore as sp_core::traits::BareCryptoStorePtr)
+	// } else {
+	// 	None
+	// };
 
-	let grandpa_config = sc_finality_grandpa::Config {
-		// FIXME #1578 make this available through chainspec
-		gossip_duration: Duration::from_millis(333),
-		justification_period: 512,
-		name: Some(name),
-		observer_enabled: false,
-		keystore,
-		is_authority: role.is_network_authority(),
-	};
+	// let grandpa_config = sc_finality_grandpa::Config {
+	// 	// FIXME #1578 make this available through chainspec
+	// 	gossip_duration: Duration::from_millis(333),
+	// 	justification_period: 512,
+	// 	name: Some(name),
+	// 	observer_enabled: false,
+	// 	keystore,
+	// 	is_authority: role.is_network_authority(),
+	// };
 
-	if enable_grandpa {
-		// start the full GRANDPA voter
-		// NOTE: non-authorities could run the GRANDPA observer protocol, but at
-		// this point the full voter should provide better guarantees of block
-		// and vote data availability than the observer. The observer has not
-		// been tested extensively yet and having most nodes in a network run it
-		// could lead to finality stalls.
-		let grandpa_config = sc_finality_grandpa::GrandpaParams {
-			config: grandpa_config,
-			link: grandpa_link,
-			network,
-			inherent_data_providers,
-			telemetry_on_connect: Some(telemetry_connection_sinks.on_connect_stream()),
-			voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
-			prometheus_registry,
-			shared_voter_state: SharedVoterState::empty(),
-		};
+	// if enable_grandpa {
+	// 	// start the full GRANDPA voter
+	// 	// NOTE: non-authorities could run the GRANDPA observer protocol, but at
+	// 	// this point the full voter should provide better guarantees of block
+	// 	// and vote data availability than the observer. The observer has not
+	// 	// been tested extensively yet and having most nodes in a network run it
+	// 	// could lead to finality stalls.
+	// 	let grandpa_config = sc_finality_grandpa::GrandpaParams {
+	// 		config: grandpa_config,
+	// 		link: grandpa_link,
+	// 		network,
+	// 		inherent_data_providers,
+	// 		telemetry_on_connect: Some(telemetry_connection_sinks.on_connect_stream()),
+	// 		voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
+	// 		prometheus_registry,
+	// 		shared_voter_state: SharedVoterState::empty(),
+	// 	};
 
-		// the GRANDPA voter task is considered infallible, i.e.
-		// if it fails we take down the service with it.
-		task_manager.spawn_essential_handle().spawn_blocking(
-			"grandpa-voter",
-			sc_finality_grandpa::run_grandpa_voter(grandpa_config)?
-		);
-	} else {
-		sc_finality_grandpa::setup_disabled_grandpa(
-			client,
-			&inherent_data_providers,
-			network,
-		)?;
-	}
+	// 	// the GRANDPA voter task is considered infallible, i.e.
+	// 	// if it fails we take down the service with it.
+	// 	task_manager.spawn_essential_handle().spawn_blocking(
+	// 		"grandpa-voter",
+	// 		sc_finality_grandpa::run_grandpa_voter(grandpa_config)?
+	// 	);
+	// } else {
+	// 	sc_finality_grandpa::setup_disabled_grandpa(
+	// 		client,
+	// 		&inherent_data_providers,
+	// 		network,
+	// 	)?;
+	// }
 
 	network_starter.start_network();
 	Ok(task_manager)

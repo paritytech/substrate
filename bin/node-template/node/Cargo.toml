@@ -26,6 +26,7 @@ sp-inherents = { version = "2.0.0-rc5", path = "../../../primitives/inherents" }
 sc-transaction-pool = { version = "2.0.0-rc5", path = "../../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0-rc5", path = "../../../primitives/transaction-pool" }
 sc-consensus-aura = { version = "0.8.0-rc5", path = "../../../client/consensus/aura" }
+sc-consensus-manual-seal = { version = "0.8.0-rc5", path = "../../../client/consensus/manual-seal" }
 sp-consensus-aura = { version = "0.8.0-rc5", path = "../../../primitives/consensus/aura" }
 sp-consensus = { version = "0.8.0-rc5", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.8.0-rc5", path = "../../../client/consensus/common" }

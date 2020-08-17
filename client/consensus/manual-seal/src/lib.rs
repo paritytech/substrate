@@ -32,6 +32,8 @@ use sc_transaction_pool::txpool;
 use std::{sync::Arc, marker::PhantomData};
 use prometheus_endpoint::Registry;
 
+use log::info;
+
 mod error;
 mod finalize_block;
 mod seal_new_block;
@@ -169,6 +171,9 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 {
 	// instant-seal creates blocks as soon as transactions are imported
 	// into the transaction pool.
+
+	info!("!!! run_instant_seal !!!");
+
 	let commands_stream = pool.validated_pool()
 		.import_notification_stream()
 		.map(|_| {
