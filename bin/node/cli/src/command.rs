@@ -103,9 +103,9 @@ pub fn run() -> Result<()> {
 					Ok((client, backend, import_queue, task_manager))
 				},
 				|config| {
-					let (task_manager, client, backend, _, network, ..) =
+					let (task_manager, client, backend, _, network_status_sinks, ..) =
 						new_light_base(config)?;
-					Ok((client, backend, network, task_manager))
+					Ok((client, backend, network_status_sinks, task_manager))
 				},
 			)
 		}

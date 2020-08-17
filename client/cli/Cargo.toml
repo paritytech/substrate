@@ -36,7 +36,6 @@ sp-core = { version = "2.0.0-rc5", path = "../../primitives/core" }
 sc-service = { version = "0.8.0-rc5", default-features = false, path = "../service" }
 sp-state-machine = { version = "0.8.0-rc5", path = "../../primitives/state-machine" }
 sc-telemetry = { version = "2.0.0-rc5", path = "../telemetry" }
-sp-consensus = { version = "0.8.0-rc5", path = "../../primitives/consensus/common" }
 substrate-prometheus-endpoint = { path = "../../utils/prometheus" , version = "0.8.0-rc5"}
 sp-keyring = { version = "2.0.0-rc5", path = "../../primitives/keyring" }
 names = "0.11.0"

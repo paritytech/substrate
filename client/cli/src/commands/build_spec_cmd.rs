@@ -17,14 +17,20 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::NodeKeyParams;
-use crate::params::SharedParams;
+use crate::params::{SharedParams, NetworkParams};
 use crate::CliConfiguration;
+use crate::Role;
 use log::info;
 use sc_network::config::build_multiaddr;
 use sc_service::{config::{MultiaddrWithPeerId, NetworkConfiguration}, ChainSpec};
 use structopt::StructOpt;
 use std::io::Write;
+use std::sync::Arc;
+use sp_runtime::traits::Block as BlockT;
+use sc_service::chain_ops::{MaybeChtRootStorageProvider, build_light_sync_state};
+use sc_service::NetworkStatusSinks;
+use futures::stream::StreamExt;
+use futures::future::ready;
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt)]
@@ -32,6 +38,11 @@ pub struct BuildSpecCmd {
 	/// Force raw genesis storage output.
 	#[structopt(long = "raw")]
 	pub raw: bool,
+
+	/// Sync the chain using a light client, and export the state in the chain spec so that other
+	/// light clients can sync faster.
+	#[structopt(long = "export-sync-state")]
+	pub export_sync_state: bool,
 
 	/// Disable adding the default bootnode to the specification.
 	///
@@ -46,7 +57,7 @@ pub struct BuildSpecCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub node_key_params: NodeKeyParams,
+	pub network_params: NetworkParams,
 }
 
 impl BuildSpecCmd {
@@ -75,6 +86,34 @@ impl BuildSpecCmd {
 		}
 		Ok(())
 	}
+
+	/// Sync the light client, export the sync state and run the command as per normal.
+	pub async fn run_export_sync_state<B, CL, BA>(
+		&self,
+		mut spec: Box<dyn ChainSpec>,
+		network_config: NetworkConfiguration,
+		client: Arc<CL>,
+		backend: Arc<BA>,
+		network_status_sinks: NetworkStatusSinks<B>,
+	) -> error::Result<()>
+		where
+			B: BlockT,
+			CL: sp_blockchain::HeaderBackend<B>,
+			BA: MaybeChtRootStorageProvider<B>,
+	{
+		network_status_sinks.network_status(std::time::Duration::from_secs(1)).take_while(|(status, _)| {
+			ready(if status.sync_state == sc_network::SyncState::Idle && status.num_sync_peers > 0 {
+				false
+			} else {
+				true
+			})
+		}).for_each(|_| ready(())).await;
+
+		let light_sync_state = build_light_sync_state(client, backend)?;
+		spec.set_light_sync_state(light_sync_state.to_serializable());
+
+		self.run(spec, network_config)
+	}
 }
 
 impl CliConfiguration for BuildSpecCmd {
@@ -82,7 +121,11 @@ impl CliConfiguration for BuildSpecCmd {
 		&self.shared_params
 	}
 
-	fn node_key_params(&self) -> Option<&NodeKeyParams> {
-		Some(&self.node_key_params)
+	fn network_params(&self) -> Option<&NetworkParams> {
+		Some(&self.network_params)
+	}
+
+	fn role(&self, _is_dev: bool) -> error::Result<Role> {
+		Ok(Role::Light)
 	}
 }

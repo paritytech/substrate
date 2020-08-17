@@ -23,7 +23,6 @@ mod import_blocks_cmd;
 mod purge_chain_cmd;
 mod revert_cmd;
 mod run_cmd;
-mod export_sync_state_cmd;
 
 pub use self::build_spec_cmd::BuildSpecCmd;
 pub use self::check_block_cmd::CheckBlockCmd;
@@ -33,7 +32,6 @@ pub use self::import_blocks_cmd::ImportBlocksCmd;
 pub use self::purge_chain_cmd::PurgeChainCmd;
 pub use self::revert_cmd::RevertCmd;
 pub use self::run_cmd::RunCmd;
-pub use self::export_sync_state_cmd::ExportSyncStateCmd;
 use std::fmt::Debug;
 use structopt::StructOpt;
 
@@ -64,9 +62,6 @@ pub enum Subcommand {
 
 	/// Export state as raw chain spec.
 	ExportState(ExportStateCmd),
-
-	/// Export the chain spec containing a state to sync the light client.
-	ExportSyncState(ExportSyncStateCmd),
 }
 
 // TODO: move to config.rs?
@@ -418,5 +413,5 @@ macro_rules! substrate_cli_subcommands {
 }
 
 substrate_cli_subcommands!(
-	Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain, ExportState, ExportSyncState
+	Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain, ExportState
 );

@@ -27,7 +27,7 @@ use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
 	config::{Role, Configuration}, error::{Error as ServiceError},
-	RpcHandlers, TaskManager,
+	RpcHandlers, TaskManager, NetworkStatusSinks,
 };
 use sp_inherents::InherentDataProviders;
 use sc_network::{Event, NetworkService};
@@ -344,7 +344,7 @@ pub fn new_full(config: Configuration)
 
 pub fn new_light_base(config: Configuration) -> Result<(
 	TaskManager, Arc<LightClient>, Arc<LightBackend>,
-	RpcHandlers, Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+	RpcHandlers, NetworkStatusSinks<Block>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
 	let (client, backend, keystore, mut task_manager, on_demand) =
@@ -430,13 +430,14 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			client: client.clone(),
 			backend: backend.clone(),
 			transaction_pool: transaction_pool.clone(),
-			config, keystore, network_status_sinks, system_rpc_tx,
+			network_status_sinks: network_status_sinks.clone(),
+			config, keystore, system_rpc_tx,
 			network: network.clone(),
 			telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
 			task_manager: &mut task_manager,
 		})?;
 
-	Ok((task_manager, client, backend, rpc_handlers, network, transaction_pool))
+	Ok((task_manager, client, backend, rpc_handlers, network_status_sinks, transaction_pool))
 }
 
 /// Builds a new service for a light client.

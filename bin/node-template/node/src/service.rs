@@ -10,8 +10,7 @@ use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::{FinalityProofProvider as GrandpaFinalityProofProvider, SharedVoterState};
-use sp_runtime::traits::Block as BlockT;
-use sc_network::NetworkService;
+use sc_service::NetworkStatusSinks;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -226,7 +225,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 
 pub(crate) fn new_light_base(config: Configuration) -> Result<(
 	TaskManager,
-	Arc<LightClient>, Arc<LightBackend>,Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+	Arc<LightClient>, Arc<LightBackend>, NetworkStatusSinks<Block>,
 ), ServiceError> {
 	let (client, backend, keystore, mut task_manager, on_demand) =
 	sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
@@ -293,13 +292,13 @@ pub(crate) fn new_light_base(config: Configuration) -> Result<(
 		keystore,
 		backend: backend.clone(),
 		network: network.clone(),
-		network_status_sinks,
+		network_status_sinks: network_status_sinks.clone(),
 		system_rpc_tx,
 	})?;
 
 	network_starter.start_network();
 
-	Ok((task_manager, client, backend, network))
+	Ok((task_manager, client, backend, network_status_sinks))
 }
 
 /// Builds a new service for a light client.

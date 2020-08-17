@@ -77,9 +77,9 @@ pub fn run() -> sc_cli::Result<()> {
 					Ok((client, backend, import_queue, task_manager))
 				},
 				|config| {
-					let (task_manager, client, backend, network)
+					let (task_manager, client, backend, network_status_sinks)
 						= new_light_base(config)?;
-					Ok((client, backend, network, task_manager))
+					Ok((client, backend, network_status_sinks, task_manager))
 				},
 			)
 		}

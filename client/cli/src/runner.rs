@@ -31,6 +31,7 @@ use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::{fmt::Debug, marker::PhantomData, str::FromStr, sync::Arc};
 use sc_client_api::{UsageProvider, BlockBackend, StorageProvider};
 use sp_blockchain::HeaderBackend;
+use sc_service::NetworkStatusSinks;
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -178,14 +179,14 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
 	/// `SIGTERM` or `SIGINT`.
-	pub fn run_subcommand<B, FBA, IQ, FCL, FB, LB, LCL, LBA, SO>(
+	pub fn run_subcommand<B, FBA, IQ, FCL, FB, LB, LCL, LBA>(
 		self, subcommand: &Subcommand, full_builder: FB, light_builder: LB,
 	) -> Result<()>
 	where
 		FB: FnOnce(Configuration)
 			-> sc_service::error::Result<(Arc<FCL>, Arc<FBA>, IQ, TaskManager)>,
 		LB: FnOnce(Configuration)
-			-> sc_service::error::Result<(Arc<LCL>, Arc<LBA>, SO, TaskManager)>,
+			-> sc_service::error::Result<(Arc<LCL>, Arc<LBA>, NetworkStatusSinks<B>, TaskManager)>,
 		B: BlockT + for<'de> serde::Deserialize<'de>,
 		FBA: sc_client_api::backend::Backend<B> + 'static,
 		IQ: sc_service::ImportQueue<B> + 'static,
@@ -196,14 +197,24 @@ impl<C: SubstrateCli> Runner<C> {
 		'static,
 		LCL: HeaderBackend<B>,
 		LBA: sc_service::chain_ops::MaybeChtRootStorageProvider<B>,
-		SO: sp_consensus::SyncOracle,
 	{
 		let chain_spec = self.config.chain_spec.cloned_box();
 		let network_config = self.config.network.clone();
 		let db_config = self.config.database.clone();
 
 		match subcommand {
-			Subcommand::BuildSpec(cmd) => cmd.run(chain_spec, network_config),
+			Subcommand::BuildSpec(cmd) => {
+				if cmd.export_sync_state {
+					let (client, backend, network_status_rx, task_manager) = light_builder(self.config)?;
+					run_until_exit(
+						self.tokio_runtime,
+						cmd.run_export_sync_state(chain_spec, network_config, client, backend, network_status_rx),
+						task_manager
+					)
+				} else {
+					cmd.run(chain_spec, network_config)
+				}
+			},
 			Subcommand::ExportBlocks(cmd) => {
 				let (client, _, _, task_manager) = full_builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, db_config), task_manager)
@@ -225,10 +236,6 @@ impl<C: SubstrateCli> Runner<C> {
 				let (client, _, _, task_manager) = full_builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, chain_spec), task_manager)
 			},
-			Subcommand::ExportSyncState(cmd) => {
-				let (client, backend, sync_oracle, task_manager) = light_builder(self.config)?;
-				run_until_exit(self.tokio_runtime, cmd.run(chain_spec, client, backend, sync_oracle), task_manager)
-			}
 		}
 	}
 
