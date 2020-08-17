@@ -649,8 +649,8 @@ impl<Block: BlockT> Default for ComponentPruningRequirements<Block> {
 pub enum PruningLimit<N> {
 	/// Ignore.
 	None,
-	/// The component require at least this number
-	/// of unpruned elements.
+	/// Only block with a number lower than N
+	/// can be pruned.
 	Some(N),
 	/// We lock all pruning.
 	Locked,

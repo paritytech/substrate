@@ -21,7 +21,6 @@
 use std::{sync::Arc, collections::HashMap};
 use std::convert::TryInto;
 use parking_lot::RwLock;
-use std::collections::VecDeque;
 
 use sc_client_api::{
 	cht, backend::{AuxStore, NewBlockState}, UsageInfo,
@@ -70,7 +69,7 @@ pub struct LightStorage<Block: BlockT> {
 	cache: Arc<DbCacheSync<Block>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	shared_pruning_requirements: SharedPruningRequirementsSource<Block>,
-	pending_cht_pruning: RwLock<VecDeque<(NumberFor<Block>, NumberFor<Block>)>>,
+	pending_cht_pruning: RwLock<Option<(NumberFor<Block>, NumberFor<Block>)>>,
 
 	#[cfg(not(target_os = "unknown"))]
 	io_stats: FrozenForDuration<kvdb::IoStats>,
@@ -429,9 +428,15 @@ impl<Block: BlockT> LightStorage<Block> {
 	) -> ClientResult<()> {
 		// Note that we do not handle the error case for in memory data
 		// as with other field of light storage.
-		self.pending_cht_pruning.write().push_back((start, end));
-
-		let encoded_pending = self.pending_cht_pruning.read().encode();
+		let mut pending_cht_pruning = self.pending_cht_pruning.write();
+		let start = pending_cht_pruning.as_ref()
+			.map(|(old_start, old_end)| {
+				debug_assert!(old_end == &(start - One::one()));
+				old_start.clone()
+			})
+			.unwrap_or(start);
+		*pending_cht_pruning = Some((start, end));
+		let encoded_pending = pending_cht_pruning.encode();
 		transaction.set_from_vec(columns::AUX, AUX_PENDING_CHT_RANGES, encoded_pending);
 
 		Ok(())
@@ -450,37 +455,27 @@ impl<Block: BlockT> LightStorage<Block> {
 		&self,
 		transaction: &mut Transaction<DbHash>,
 	) -> ClientResult<()> {
-		let mut changed = false;
-		let mut to_prune = VecDeque::new();
-		if !self.pending_cht_pruning.read().is_empty() {
+		let mut to_prune = None;
+		if !self.pending_cht_pruning.read().is_none() {
 			match self.shared_pruning_requirements.finalized_headers_needed() {
 				PruningLimit::Locked => (),
 				PruningLimit::None => {
-					to_prune = std::mem::replace(&mut *self.pending_cht_pruning.write(), VecDeque::new());
+					to_prune = std::mem::replace(&mut *self.pending_cht_pruning.write(), None);
 				},
 				PruningLimit::Some(limit) => {
-					let mut shared = self.pending_cht_pruning.write();
-					while let Some(range) = shared.pop_front() {
-						if limit > range.1 {
-							to_prune.push_back(range);
-						} else if limit > range.0 {
-							to_prune.push_back((range.0, limit - One::one()));
-							shared.push_front((limit, range.1));
-							break;
-						} else {
-							shared.push_front((range.0, range.1));
-							break;
+					if let Some((start, end)) = self.pending_cht_pruning.write().as_mut() {
+						if &limit > end  {
+							to_prune = self.pending_cht_pruning.write().take();
+						} else if &limit > start {
+							let start = std::mem::replace(start, limit);
+							to_prune = Some((start, limit - One::one()));
 						}
 					}
 				},
 			}
 		}
-		for range in to_prune {
-			changed = true;
+		if let Some(range) = to_prune {
 			self.prune_range_unchecked(range.0, range.1, transaction)?;
-		}
-
-		if changed {
 			let encoded_pending = self.pending_cht_pruning.read().encode();
 			transaction.set_from_vec(columns::AUX, AUX_PENDING_CHT_RANGES, encoded_pending);
 		}
