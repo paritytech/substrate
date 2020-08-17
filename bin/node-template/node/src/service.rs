@@ -51,7 +51,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	// let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
 	// 	client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
 	// )?;
-
+	//
 	// let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
 	// 	grandpa_block_import.clone(), client.clone(),
 	// );
@@ -61,7 +61,8 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 					&task_manager.spawn_handle(),
 					config.prometheus_registry(),
 				);
-	// let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
+	
+	// let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _, _>(
 	// 	sc_consensus_aura::slot_duration(&*client)?,
 	// 	aura_block_import,
 	// 	Some(Box::new(grandpa_block_import.clone())),
@@ -70,6 +71,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	// 	inherent_data_providers.clone(),
 	// 	&task_manager.spawn_handle(),
 	// 	config.prometheus_registry(),
+	// 	sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
 	// )?;
 
 	Ok(sc_service::PartialComponents {
@@ -263,7 +265,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 					config.prometheus_registry(),
 				);
 
-	// let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
+	// let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _, _>(
 	// 	sc_consensus_aura::slot_duration(&*client)?,
 	// 	grandpa_block_import,
 	// 	None,
@@ -272,6 +274,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 	// 	InherentDataProviders::new(),
 	// 	&task_manager.spawn_handle(),
 	// 	config.prometheus_registry(),
+	// 	sp_consensus::NeverCanAuthor,
 	// )?;
 	//
 	// let finality_proof_provider =
