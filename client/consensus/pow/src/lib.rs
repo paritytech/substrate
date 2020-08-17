@@ -502,7 +502,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 /// However, it's not recommended to use background threads in the rest of the
 /// codebase.
 ///
-/// `preruntime` is a parameter that allows a custom additional pre-runtime
+/// `pre_runtime` is a parameter that allows a custom additional pre-runtime
 /// digest to be inserted for blocks being built. This can encode authorship
 /// information, or just be a graffiti. `round` is for number of rounds the
 /// CPU miner runs each time. This parameter should be tweaked so that each
@@ -657,7 +657,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 		};
 
 		log::info!("✅ Successfully mined block: {}", best_hash);
-		
+
 		let (hash, seal) = {
 			let seal = DigestItem::Seal(POW_ENGINE_ID, seal);
 			let mut header = header.clone();
@@ -699,7 +699,7 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Err
 			(DigestItem::PreRuntime(POW_ENGINE_ID, v), false) => {
 				pre_digest = Some(v.clone());
 			},
-			(_, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
+			(_, _) => trace!(target: "pow", "Ignoring digest not meant for us"),
 		}
 	}
 
