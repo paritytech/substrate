@@ -1665,11 +1665,11 @@ pub trait Instance: 'static {
     const PREFIX: &'static str ;
 }
 
-/// A trait similar to `Convert` to convert values from `B` (i.e. the `Balance` type of the chain)
-/// into u64, which is the standard numeric types used in election and other places where complex
-/// calculation over balance type is needed.
+/// A trait similar to `Convert` to convert values from `B` an abstract balance type
+/// into u64 and back from u128. (This conversion is used in election and other places where complex
+/// calculation over balance type is needed)
 ///
-/// Total issuance of the chain is passed in, but an implementation may or may not use it.
+/// Total issuance of the currency is passed in, but an implementation of this trait may or may not use it.
 pub trait CurrencyToVote<B> {
 	/// Convert balance to u64.
 	fn to_vote(value: B, issuance: B) -> u64;
