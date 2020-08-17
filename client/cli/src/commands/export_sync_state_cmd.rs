@@ -22,6 +22,7 @@ use crate::CliConfiguration;
 use crate::Role;
 use log::info;
 use sc_service::ChainSpec;
+use sc_service::chain_ops::{MaybeChtRootStorageProvider, build_light_sync_state};
 use structopt::StructOpt;
 use std::io::Write;
 use std::sync::Arc;
@@ -56,7 +57,7 @@ impl ExportSyncStateCmd {
 		where
 			B: BlockT,
 			CL: sp_blockchain::HeaderBackend<B>,
-			BA: sc_service::MaybeChtRootStorageProvider<B>,
+			BA: MaybeChtRootStorageProvider<B>,
 			SO: sp_consensus::SyncOracle,
 	{
 		futures::future::poll_fn(|_| {
@@ -68,8 +69,7 @@ impl ExportSyncStateCmd {
 
 		info!("Building chain spec");
 
-		let light_sync_state = sc_service::build_light_sync_state(client, backend)
-			.map_err(|err| err.to_string())?;
+		let light_sync_state = build_light_sync_state(client, backend)?;
 
 		spec.set_light_sync_state(light_sync_state.to_serializable());
 

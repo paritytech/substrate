@@ -195,7 +195,7 @@ impl<C: SubstrateCli> Runner<C> {
 		FCL: UsageProvider<B> + BlockBackend<B> + StorageProvider<B, FBA> + Send + Sync +
 		'static,
 		LCL: HeaderBackend<B>,
-		LBA: sc_service::MaybeChtRootStorageProvider<B>,
+		LBA: sc_service::chain_ops::MaybeChtRootStorageProvider<B>,
 		SO: sp_consensus::SyncOracle,
 	{
 		let chain_spec = self.config.chain_spec.cloned_box();
