@@ -53,7 +53,6 @@ pub mod hashing;
 
 #[cfg(feature = "full_crypto")]
 pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256, keccak_256};
-#[cfg(feature = "std")]
 pub mod hexdisplay;
 pub mod crypto;
 

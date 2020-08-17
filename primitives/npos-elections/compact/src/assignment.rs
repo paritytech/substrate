@@ -78,7 +78,7 @@ fn into_impl(count: usize, per_thing: syn::Type) -> TokenStream2 {
 		let name = field_name_for(1);
 		quote!(
 			for (voter_index, target_index) in self.#name {
-				assignments.push(_phragmen::Assignment {
+				assignments.push(_npos::Assignment {
 					who: voter_at(voter_index).or_invalid_index()?,
 					distribution: vec![
 						(target_at(target_index).or_invalid_index()?, #per_thing::one())
@@ -93,16 +93,16 @@ fn into_impl(count: usize, per_thing: syn::Type) -> TokenStream2 {
 		quote!(
 			for (voter_index, (t1_idx, p1), t2_idx) in self.#name {
 				if p1 >= #per_thing::one() {
-					return Err(_phragmen::Error::CompactStakeOverflow);
+					return Err(_npos::Error::CompactStakeOverflow);
 				}
 
 				// defensive only. Since Percent doesn't have `Sub`.
-				let p2 = _phragmen::sp_arithmetic::traits::Saturating::saturating_sub(
+				let p2 = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
 					#per_thing::one(),
 					p1,
 				);
 
-				assignments.push( _phragmen::Assignment {
+				assignments.push( _npos::Assignment {
 					who: voter_at(voter_index).or_invalid_index()?,
 					distribution: vec![
 						(target_at(t1_idx).or_invalid_index()?, p1),
@@ -121,25 +121,25 @@ fn into_impl(count: usize, per_thing: syn::Type) -> TokenStream2 {
 				let mut inners_parsed = inners
 					.iter()
 					.map(|(ref t_idx, p)| {
-						sum = _phragmen::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
+						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
 						let target = target_at(*t_idx).or_invalid_index()?;
 						Ok((target, *p))
 					})
-					.collect::<Result<Vec<(A, #per_thing)>, _phragmen::Error>>()?;
+					.collect::<Result<Vec<(A, #per_thing)>, _npos::Error>>()?;
 
 				if sum >= #per_thing::one() {
-					return Err(_phragmen::Error::CompactStakeOverflow);
+					return Err(_npos::Error::CompactStakeOverflow);
 				}
 
 				// defensive only. Since Percent doesn't have `Sub`.
-				let p_last = _phragmen::sp_arithmetic::traits::Saturating::saturating_sub(
+				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
 					#per_thing::one(),
 					sum,
 				);
 
 				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
 
-				assignments.push(_phragmen::Assignment {
+				assignments.push(_npos::Assignment {
 					who: voter_at(voter_index).or_invalid_index()?,
 					distribution: inners_parsed,
 				});
@@ -165,38 +165,38 @@ pub(crate) fn assignment(
 	let into_impl = into_impl(count, weight_type.clone());
 
 	quote!(
-		use _phragmen::__OrInvalidIndex;
+		use _npos::__OrInvalidIndex;
 		impl #ident {
 			pub fn from_assignment<FV, FT, A>(
-				assignments: Vec<_phragmen::Assignment<A, #weight_type>>,
+				assignments: Vec<_npos::Assignment<A, #weight_type>>,
 				index_of_voter: FV,
 				index_of_target: FT,
-			) -> Result<Self, _phragmen::Error>
+			) -> Result<Self, _npos::Error>
 				where
-					A: _phragmen::IdentifierT,
+					A: _npos::IdentifierT,
 					for<'r> FV: Fn(&'r A) -> Option<#voter_type>,
 					for<'r> FT: Fn(&'r A) -> Option<#target_type>,
 			{
 				let mut compact: #ident = Default::default();
 
-				for _phragmen::Assignment { who, distribution } in assignments {
+				for _npos::Assignment { who, distribution } in assignments {
 					match distribution.len() {
 						0 => continue,
 						#from_impl
 						_ => {
-							return Err(_phragmen::Error::CompactTargetOverflow);
+							return Err(_npos::Error::CompactTargetOverflow);
 						}
 					}
 				};
 				Ok(compact)
 			}
 
-			pub fn into_assignment<A: _phragmen::IdentifierT>(
+			pub fn into_assignment<A: _npos::IdentifierT>(
 				self,
 				voter_at: impl Fn(#voter_type) -> Option<A>,
 				target_at: impl Fn(#target_type) -> Option<A>,
-			) -> Result<Vec<_phragmen::Assignment<A, #weight_type>>, _phragmen::Error> {
-				let mut assignments: Vec<_phragmen::Assignment<A, #weight_type>> = Default::default();
+			) -> Result<Vec<_npos::Assignment<A, #weight_type>>, _npos::Error> {
+				let mut assignments: Vec<_npos::Assignment<A, #weight_type>> = Default::default();
 				#into_impl
 				Ok(assignments)
 			}

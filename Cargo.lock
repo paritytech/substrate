@@ -307,14 +307,20 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.36"
+version = "0.1.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a265e3abeffdce30b2e26b7a11b222fe37c6067404001b434101457d0385eb92"
+checksum = "caae68055714ff28740f310927e04f2eba76ff580b16fb18ed90073ee71646f7"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "atomic"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64f46ca51dca4837f1520754d1c8c36636356b81553d928dc9c177025369a06e"
 
 [[package]]
 name = "atomic-waker"
@@ -1240,6 +1246,12 @@ dependencies = [
  "redox_users",
  "winapi 0.3.9",
 ]
+
+[[package]]
+name = "dissimilar"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc4b29f4b9bb94bf267d57269fd0706d343a160937108e9619fe380645428abb"
 
 [[package]]
 name = "dns-parser"
@@ -2888,7 +2900,7 @@ dependencies = [
  "libp2p-kad",
  "libp2p-mdns",
  "libp2p-mplex",
- "libp2p-noise",
+ "libp2p-noise 0.21.0",
  "libp2p-ping",
  "libp2p-plaintext",
  "libp2p-pnet",
@@ -2897,6 +2909,39 @@ dependencies = [
  "libp2p-swarm",
  "libp2p-tcp",
  "libp2p-uds",
+ "libp2p-wasm-ext",
+ "libp2p-websocket",
+ "libp2p-yamux",
+ "multihash",
+ "parity-multiaddr",
+ "parking_lot 0.10.2",
+ "pin-project",
+ "smallvec 1.4.1",
+ "wasm-timer",
+]
+
+[[package]]
+name = "libp2p"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1ebb6c031584a5af181fe3a1e4b074af5d0b1a3b31663200f0251f4bcff6b5c"
+dependencies = [
+ "atomic",
+ "bytes 0.5.6",
+ "futures 0.3.5",
+ "lazy_static",
+ "libp2p-core",
+ "libp2p-core-derive",
+ "libp2p-dns",
+ "libp2p-identify",
+ "libp2p-kad",
+ "libp2p-mdns",
+ "libp2p-mplex",
+ "libp2p-noise 0.22.0",
+ "libp2p-ping",
+ "libp2p-secio",
+ "libp2p-swarm",
+ "libp2p-tcp",
  "libp2p-wasm-ext",
  "libp2p-websocket",
  "libp2p-yamux",
@@ -3102,6 +3147,28 @@ name = "libp2p-noise"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f353f8966bbaaf7456535fffd3f366f153148773a0cf04b2ec3860955cb720e"
+dependencies = [
+ "bytes 0.5.6",
+ "curve25519-dalek",
+ "futures 0.3.5",
+ "lazy_static",
+ "libp2p-core",
+ "log",
+ "prost",
+ "prost-build",
+ "rand 0.7.3",
+ "sha2 0.8.2",
+ "snow",
+ "static_assertions",
+ "x25519-dalek",
+ "zeroize",
+]
+
+[[package]]
+name = "libp2p-noise"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e594f2de0c23c2b7ad14802c991a2e68e95315c6a6c7715e53801506f20135d"
 dependencies = [
  "bytes 0.5.6",
  "curve25519-dalek",
@@ -3439,6 +3506,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "matchers"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f099785f7595cc4b4553a174ce30dd7589ef93391ff414dbb67f62392b9e0ce1"
+dependencies = [
+ "regex-automata",
+]
+
+[[package]]
 name = "matches"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3734,7 +3810,7 @@ dependencies = [
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "jsonrpc-core",
- "libp2p",
+ "libp2p 0.23.0",
  "node-cli",
  "sc-rpc-api",
  "serde",
@@ -6057,6 +6133,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae1ded71d66a4a97f5e961fd0cb25a5f366a42a41570d16a763a69c092c26ae4"
 dependencies = [
  "byteorder 1.3.4",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -6307,7 +6384,7 @@ dependencies = [
  "env_logger",
  "futures 0.3.5",
  "futures-timer 3.0.2",
- "libp2p",
+ "libp2p 0.23.0",
  "log",
  "parity-scale-codec",
  "prost",
@@ -6411,7 +6488,7 @@ dependencies = [
  "futures 0.3.5",
  "hex",
  "lazy_static",
- "libp2p",
+ "libp2p 0.22.0",
  "log",
  "names",
  "nix",
@@ -6819,20 +6896,17 @@ name = "sc-executor-wasmtime"
 version = "0.8.0-rc5"
 dependencies = [
  "assert_matches",
- "cranelift-codegen",
- "cranelift-wasm",
  "log",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
+ "pwasm-utils",
  "sc-executor-common",
  "scoped-tls",
  "sp-allocator",
  "sp-core",
  "sp-runtime-interface",
  "sp-wasm-interface",
- "substrate-wasmtime",
- "wasmtime-environ",
- "wasmtime-runtime",
+ "wasmtime",
 ]
 
 [[package]]
@@ -6980,7 +7054,7 @@ dependencies = [
  "futures_codec",
  "hex",
  "ip_network",
- "libp2p",
+ "libp2p 0.23.0",
  "linked-hash-map",
  "linked_hash_set",
  "log",
@@ -7027,7 +7101,7 @@ dependencies = [
  "async-std",
  "futures 0.3.5",
  "futures-timer 3.0.2",
- "libp2p",
+ "libp2p 0.23.0",
  "log",
  "lru 0.4.3",
  "quickcheck",
@@ -7045,7 +7119,7 @@ dependencies = [
  "env_logger",
  "futures 0.3.5",
  "futures-timer 3.0.2",
- "libp2p",
+ "libp2p 0.23.0",
  "log",
  "parking_lot 0.10.2",
  "rand 0.7.3",
@@ -7102,7 +7176,7 @@ name = "sc-peerset"
 version = "2.0.0-rc5"
 dependencies = [
  "futures 0.3.5",
- "libp2p",
+ "libp2p 0.23.0",
  "log",
  "rand 0.7.3",
  "serde_json",
@@ -7220,6 +7294,7 @@ dependencies = [
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "hash-db",
+ "jsonrpc-core",
  "jsonrpc-pubsub",
  "lazy_static",
  "log",
@@ -7329,7 +7404,7 @@ version = "2.0.0-rc5"
 dependencies = [
  "futures 0.3.5",
  "futures-timer 3.0.2",
- "libp2p",
+ "libp2p 0.23.0",
  "log",
  "parking_lot 0.10.2",
  "pin-project",
@@ -7357,7 +7432,7 @@ dependencies = [
  "slog",
  "sp-tracing",
  "tracing",
- "tracing-core",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -7665,6 +7740,15 @@ dependencies = [
  "digest 0.8.1",
  "keccak",
  "opaque-debug 0.2.3",
+]
+
+[[package]]
+name = "sharded-slab"
+version = "0.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06d5a3f5166fb5b42a5439f2eee8b9de149e235961e3eb21c5808fc3ea17ff3e"
+dependencies = [
+ "lazy_static",
 ]
 
 [[package]]
@@ -7989,7 +8073,7 @@ dependencies = [
  "derive_more",
  "futures 0.3.5",
  "futures-timer 3.0.2",
- "libp2p",
+ "libp2p 0.23.0",
  "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
@@ -8875,6 +8959,31 @@ dependencies = [
 [[package]]
 name = "substrate-test-utils"
 version = "2.0.0-rc5"
+dependencies = [
+ "futures 0.3.5",
+ "sc-service",
+ "substrate-test-utils-derive",
+ "tokio 0.2.22",
+ "trybuild",
+]
+
+[[package]]
+name = "substrate-test-utils-derive"
+version = "0.8.0-rc5"
+dependencies = [
+ "proc-macro-crate",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "substrate-test-utils-test-crate"
+version = "0.1.0"
+dependencies = [
+ "sc-service",
+ "substrate-test-utils",
+ "tokio 0.2.22",
+]
 
 [[package]]
 name = "substrate-wasm-builder"
@@ -8894,31 +9003,6 @@ dependencies = [
 [[package]]
 name = "substrate-wasm-builder-runner"
 version = "1.0.6"
-
-[[package]]
-name = "substrate-wasmtime"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d75a69f5b3afef86e3e372529bf3fb1f7219b20287c4490e4cb4b4e91970f4f5"
-dependencies = [
- "anyhow",
- "backtrace",
- "cfg-if",
- "lazy_static",
- "libc",
- "log",
- "region",
- "rustc-demangle",
- "smallvec 1.4.1",
- "target-lexicon",
- "wasmparser 0.59.0",
- "wasmtime-environ",
- "wasmtime-jit",
- "wasmtime-profiling",
- "wasmtime-runtime",
- "wat",
- "winapi 0.3.9",
-]
 
 [[package]]
 name = "subtle"
@@ -9435,9 +9519,9 @@ checksum = "e987b6bf443f4b5b3b6f38704195592cca41c5bb7aedd3c3693c7081f8289860"
 
 [[package]]
 name = "tracing"
-version = "0.1.16"
+version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2e2a2de6b0d5cbb13fc21193a2296888eaab62b6044479aafb3c54c01c29fcd"
+checksum = "f0aae59226cf195d8e74d4b34beae1859257efb4e5fed3f147d2dc2c7d372178"
 dependencies = [
  "cfg-if",
  "log",
@@ -9458,11 +9542,52 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.11"
+version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94ae75f0d28ae10786f3b1895c55fe72e79928fd5ccdebb5438c75e93fec178f"
+checksum = "b2734b5a028fa697686f16c6d18c2c6a3c7e41513f9a213abb6754c4acb3c8d7"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "tracing-log"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e0f8c7178e13481ff6765bd169b33e8d554c5d2bbede5e32c356194be02b9b9"
+dependencies = [
+ "lazy_static",
+ "log",
+ "tracing-core",
+]
+
+[[package]]
+name = "tracing-serde"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6ccba2f8f16e0ed268fc765d9b7ff22e965e7185d32f8f1ec8294fe17d86e79"
+dependencies = [
+ "serde",
+ "tracing-core",
+]
+
+[[package]]
+name = "tracing-subscriber"
+version = "0.2.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7b33f8b2ef2ab0c3778c12646d9c42a24f7772bee4cdafc72199644a9f58fdc"
+dependencies = [
+ "ansi_term 0.12.1",
+ "chrono",
+ "lazy_static",
+ "matchers",
+ "regex",
+ "serde",
+ "serde_json",
+ "sharded-slab",
+ "smallvec 1.4.1",
+ "tracing-core",
+ "tracing-log",
+ "tracing-serde",
 ]
 
 [[package]]
@@ -9531,6 +9656,7 @@ version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbe777c4e2060f44d83892be1189f96200be8ed3d99569d5c2d5ee26e62c0ea9"
 dependencies = [
+ "dissimilar",
  "glob 0.3.0",
  "lazy_static",
  "serde",
@@ -9932,6 +10058,31 @@ name = "wasmparser"
 version = "0.59.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a950e6a618f62147fd514ff445b2a0b53120d382751960797f85f058c7eda9b9"
+
+[[package]]
+name = "wasmtime"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cd3c4f449382779ef6e0a7c3ec6752ae614e20a42e4100000c3efdc973100e2"
+dependencies = [
+ "anyhow",
+ "backtrace",
+ "cfg-if",
+ "lazy_static",
+ "libc",
+ "log",
+ "region",
+ "rustc-demangle",
+ "smallvec 1.4.1",
+ "target-lexicon",
+ "wasmparser 0.59.0",
+ "wasmtime-environ",
+ "wasmtime-jit",
+ "wasmtime-profiling",
+ "wasmtime-runtime",
+ "wat",
+ "winapi 0.3.9",
+]
 
 [[package]]
 name = "wasmtime-debug"
