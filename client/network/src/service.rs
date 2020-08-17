@@ -1201,7 +1201,6 @@ impl MetricSource for BandwidthCounters {
 }
 
 impl Metrics {
-
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			// This list is ordered alphabetically
