@@ -707,6 +707,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///      Notifications should be dropped
 	///             if buffer is full
 	///
+	///
+	/// See also the [`gossip`](crate::gossip) module for a higher-level way to send
+	/// notifications.
+	///
 	pub fn notification_sender(
 		&self,
 		target: PeerId,

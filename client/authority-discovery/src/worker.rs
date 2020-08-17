@@ -182,8 +182,8 @@ where
 		// External addresses of other authorities can change at any given point in time. The
 		// interval on which to query for external addresses of other authorities is a trade off
 		// between efficiency and performance.
-		let query_interval_duration = Duration::from_secs(60);
 		let query_interval_start = Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME;
+		let query_interval_duration = Duration::from_secs(10 * 60);
 		let query_interval = interval_at(query_interval_start, query_interval_duration);
 
 		// Querying 500 [`AuthorityId`]s takes ~1m on the Kusama DHT (10th of August 2020) when
