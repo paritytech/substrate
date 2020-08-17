@@ -184,7 +184,7 @@ parameter_types! {
 
 impl pallet_staking::Trait for Test {
 	type RewardRemainder = ();
-	type CurrencyToVote = frame_support::traits::IdentityCurrencyToVote;
+	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = ();
 	type Currency = Balances;
 	type Slash = ();

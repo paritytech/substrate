@@ -1689,10 +1689,6 @@ pub trait CurrencyToVote<B> {
 ///
 /// If the chain's total issuance is more than 2*u64::max(), then a factor might be multiplied and
 /// divided upon conversion.
-///
-/// # Warning
-///
-/// This will have undefined behavior if the chain's balance type is u32.
 pub struct U128CurrencyToVote;
 
 impl U128CurrencyToVote {
@@ -1717,9 +1713,9 @@ impl CurrencyToVote<u128> for U128CurrencyToVote {
 /// # Warning
 ///
 /// This is designed to be used mostly for testing. Use with care, and think about the consequences.
-pub struct IdentityCurrencyToVote;
+pub struct SaturatingCurrencyToVote;
 
-impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> for IdentityCurrencyToVote {
+impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> for SaturatingCurrencyToVote {
 	fn to_vote(value: B, _: B) -> u64 {
 		value.unique_saturated_into()
 	}

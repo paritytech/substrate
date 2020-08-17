@@ -206,7 +206,7 @@ parameter_types! {
 
 impl staking::Trait for Test {
 	type RewardRemainder = ();
-	type CurrencyToVote = frame_support::traits::IdentityCurrencyToVote;
+	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = TestEvent;
 	type Currency = Balances;
 	type Slash = ();

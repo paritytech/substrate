@@ -159,7 +159,7 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Test where
 impl pallet_staking::Trait for Test {
 	type Currency = Balances;
 	type UnixTime = pallet_timestamp::Module<Self>;
-	type CurrencyToVote = frame_support::traits::IdentityCurrencyToVote;
+	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
 	type Event = ();
 	type Slash = ();

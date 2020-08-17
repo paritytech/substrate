@@ -298,7 +298,7 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 impl Trait for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
-	type CurrencyToVote = frame_support::traits::IdentityCurrencyToVote;
+	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = RewardRemainderMock;
 	type Event = MetaEvent;
 	type Slash = ();
