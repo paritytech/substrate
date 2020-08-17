@@ -43,6 +43,7 @@ type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
 type FullGrandpaBlockImport =
 	grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>;
 type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
+type LightBackend = sc_service::TLightBackend<Block>;
 
 pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponents<
 	FullClient, FullBackend, FullSelectChain,
@@ -342,8 +343,8 @@ pub fn new_full(config: Configuration)
 }
 
 pub fn new_light_base(config: Configuration) -> Result<(
-	TaskManager, Arc<RpcHandlers>, Arc<LightClient>,
-	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+	TaskManager, Arc<LightClient>, Arc<LightBackend>,
+	Arc<RpcHandlers>, Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
 	let (client, backend, keystore, mut task_manager, on_demand) =
@@ -427,19 +428,20 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			remote_blockchain: Some(backend.remote_blockchain()),
 			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
 			client: client.clone(),
+			backend: backend.clone(),
 			transaction_pool: transaction_pool.clone(),
-			config, keystore, backend, network_status_sinks, system_rpc_tx,
+			config, keystore, network_status_sinks, system_rpc_tx,
 			network: network.clone(),
 			telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
 			task_manager: &mut task_manager,
 		})?;
 
-	Ok((task_manager, rpc_handlers, client, network, transaction_pool))
+	Ok((task_manager, client, backend, rpc_handlers, network, transaction_pool))
 }
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
-	new_light_base(config).map(|(task_manager, _, _, _, _)| {
+	new_light_base(config).map(|(task_manager, ..)| {
 		task_manager
 	})
 }

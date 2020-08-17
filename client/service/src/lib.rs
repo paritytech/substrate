@@ -373,7 +373,7 @@ async fn build_network_future<
 	}
 }
 
-fn build_light_sync_state<TBl, TCl, TBackend>(
+pub fn build_light_sync_state<TBl, TCl, TBackend>(
 	client: Arc<TCl>,
 	backend: Arc<TBackend>,
 ) -> Result<sc_chain_spec::LightSyncState<TBl>, sc_rpc::system::error::Error>

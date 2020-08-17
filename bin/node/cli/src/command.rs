@@ -95,11 +95,19 @@ pub fn run() -> Result<()> {
 		}
 		Some(Subcommand::Base(subcommand)) => {
 			let runner = cli.create_runner(subcommand)?;
-			runner.run_subcommand(subcommand, |config| {
-				let PartialComponents { client, backend, task_manager, import_queue, ..}
-					= new_partial(&config)?;
-				Ok((client, backend, import_queue, task_manager))
-			})
+			runner.run_subcommand(
+				subcommand,
+				|config| {
+					let PartialComponents { client, backend, task_manager, import_queue, ..}
+						= new_partial(&config)?;
+					Ok((client, backend, import_queue, task_manager))
+				},
+				|config| {
+					let (task_manager, client, backend, _, network, ..) =
+						crate::service::new_light_base(config)?;
+					Ok((client, backend, network, task_manager))
+				}
+			)
 		}
 	}
 }
