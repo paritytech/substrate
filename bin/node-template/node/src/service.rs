@@ -1,11 +1,11 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
 use std::sync::Arc;
-use std::time::Duration;
-use sc_client_api::{ExecutorProvider, RemoteBackend};
+// use std::time::Duration;
+use sc_client_api::{/*ExecutorProvider,*/ RemoteBackend};
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
-use sp_inherents::InherentDataProviders;
+// use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 // use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
@@ -110,8 +110,8 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	}
 
 	let role = config.role.clone();
-	let force_authoring = config.force_authoring;
-	let name = config.network.node_name.clone();
+	// let force_authoring = config.force_authoring;
+	// let name = config.network.node_name.clone();
 	// let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 	let telemetry_connection_sinks = sc_service::TelemetryConnectionSinks::default();
