@@ -485,3 +485,43 @@ impl<Block: BlockT> std::fmt::Debug for BenchmarkingState<Block> {
 		write!(f, "Bench DB")
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use crate::bench::BenchmarkingState;
+	use sp_state_machine::backend::Backend as _;
+
+	#[test]
+	fn read_to_main_and_child_tries() {
+		let bench_state = BenchmarkingState::<crate::tests::Block>::new(Default::default(), None)
+			.unwrap();
+
+		let child1 = sp_core::storage::ChildInfo::new_default(b"child1");
+		let child2 = sp_core::storage::ChildInfo::new_default(b"child2");
+
+		bench_state.storage(b"foo").unwrap();
+		bench_state.child_storage(&child1, b"foo").unwrap();
+		bench_state.child_storage(&child2, b"foo").unwrap();
+
+		bench_state.storage(b"bar").unwrap();
+		bench_state.child_storage(&child1, b"bar").unwrap();
+		bench_state.child_storage(&child2, b"bar").unwrap();
+
+		bench_state.commit(
+			Default::default(),
+			Default::default(),
+			vec![
+				("foo".as_bytes().to_vec(), None)
+			],
+			vec![
+				("child1".as_bytes().to_vec(), vec![("foo".as_bytes().to_vec(), None)])
+			]
+		).unwrap();
+
+		let rw_tracker = bench_state.read_write_tracker.borrow();
+		assert_eq!(rw_tracker.reads, 6);
+		assert_eq!(rw_tracker.repeat_reads, 0);
+		assert_eq!(rw_tracker.writes, 2);
+		assert_eq!(rw_tracker.repeat_writes, 0);
+	}
+}
