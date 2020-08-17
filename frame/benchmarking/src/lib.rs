@@ -573,7 +573,7 @@ macro_rules! benchmark_backend {
 		#[allow(unused_variables)]
 		impl<T: Trait $( <$instance>, I: Instance)? >
 			$crate::BenchmarkingSetup<T $(, $instance)? > for $name
-			where $( $where_clause )*
+			where T: frame_system::Trait, $( $where_clause )*
 		{
 			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
 				vec! [
@@ -659,7 +659,7 @@ macro_rules! selected_benchmark {
 		// Allow us to select a benchmark from the list of available benchmarks.
 		impl<T: Trait $( <$instance>, I: Instance )? >
 			$crate::BenchmarkingSetup<T $(, $instance )? > for SelectedBenchmark
-			where $( $where_clause )*
+			where T: frame_system::Trait, $( $where_clause )*
 		{
 			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
 				match self {
