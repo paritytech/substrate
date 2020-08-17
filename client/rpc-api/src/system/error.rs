@@ -32,13 +32,6 @@ pub enum Error {
 	NotHealthy(Health),
 	/// Peer argument is malformatted.
 	MalformattedPeerArg(String),
-	/// Failed to serialize chain spec.
-	ChainSpec(serde_json::error::Error),
-	/// Backend doesn't store CHT roots.
-	#[display(fmt = "Backend doesn't store CHT roots. Make sure you're calling this on a light client.")]
-	BackendNoChtRoots,
-	/// Generic blockchain backend error.
-	BlockchainError(sp_blockchain::Error),
 }
 
 impl std::error::Error for Error {}
@@ -58,22 +51,7 @@ impl From<Error> for rpc::Error {
 				code :rpc::ErrorCode::ServerError(BASE_ERROR + 2),
 				message: e.clone(),
 				data: None,
-			},
-			Error::ChainSpec(ref s) => rpc::Error {
-				code :rpc::ErrorCode::ServerError(BASE_ERROR + 3),
-				message: s.to_string(),
-				data: None,
-			},
-			Error::BackendNoChtRoots => rpc::Error {
-				code :rpc::ErrorCode::ServerError(BASE_ERROR + 4),
-				message: format!("{}", e),
-				data: None,
-			},
-			Error::BlockchainError(ref b) => rpc::Error {
-				code :rpc::ErrorCode::ServerError(BASE_ERROR + 5),
-				message: b.to_string(),
-				data: None,
-			},
+			}
 		}
 	}
 }

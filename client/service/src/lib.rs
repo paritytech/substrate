@@ -205,15 +205,12 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 async fn build_network_future<
 	B: BlockT,
-	C: BlockchainEvents<B> + HeaderBackend<B>,
-	BE: MaybeChtRootStorageProvider<B>,
+	C: BlockchainEvents<B>,
 	H: sc_network::ExHashT
 > (
 	role: Role,
-	chain_spec: Box<dyn ChainSpec>,
 	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
-	backend: Arc<BE>,
 	status_sinks: NetworkStatusSinks<B>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
@@ -332,25 +329,6 @@ async fn build_network_future<
 						};
 
 						let _ = sender.send(vec![node_role]);
-					},
-					sc_rpc::system::Request::GenChainSpec(raw, hardcode_sync, sender) => {
-						let mut chain_spec = chain_spec.cloned_box();
-
-						let light_sync_state_result = if hardcode_sync {
-							build_light_sync_state(client.clone(), backend.clone())
-								.map(|light_sync_state| {
-									chain_spec.set_light_sync_state(light_sync_state.to_serializable())
-								})
-						} else {
-							Ok(())
-						};
-
-						let value = match light_sync_state_result {
-							Ok(()) => chain_spec.as_json_value(raw).map_err(|err| err.into()),
-							Err(error) => Err(error)
-						};
-
-						let _ = sender.send(value);
 					}
 				}
 			}
@@ -383,13 +361,14 @@ async fn build_network_future<
 pub fn build_light_sync_state<TBl, TCl, TBackend>(
 	client: Arc<TCl>,
 	backend: Arc<TBackend>,
-) -> Result<sc_chain_spec::LightSyncState<TBl>, sc_rpc::system::error::Error>
+) -> Result<sc_chain_spec::LightSyncState<TBl>, sp_blockchain::Error>
 	where
 		TBl: BlockT,
 		TCl: HeaderBackend<TBl>,
 		TBackend: MaybeChtRootStorageProvider<TBl>,
 {
-	let storage = backend.cht_root_storage().ok_or(sc_rpc::system::error::Error::BackendNoChtRoots)?;
+	let cht_root_error = "Backend doesn't store CHT roots. Make sure you're calling this on a light client.";
+	let storage = backend.cht_root_storage().ok_or(cht_root_error)?;
 
 	let finalized_hash = client.info().finalized_hash;
 	let finalized_number = client.info().finalized_number;
