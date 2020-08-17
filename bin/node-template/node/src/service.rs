@@ -10,6 +10,7 @@ use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::{FinalityProofProvider as GrandpaFinalityProofProvider, SharedVoterState};
+use sp_timestamp;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -26,12 +27,13 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	FullClient, FullBackend, FullSelectChain,
 	sp_consensus::DefaultImportQueue<Block, FullClient>,
 	sc_transaction_pool::FullPool<Block, FullClient>,
-	(
-		sc_finality_grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>,
-		sc_finality_grandpa::LinkHalf<Block, FullClient, FullSelectChain>
-	)
+	()
 >, ServiceError> {
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
+	inherent_data_providers
+		.register_provider(sp_timestamp::InherentDataProvider)
+		.map_err(Into::into)
+		.map_err(sp_consensus::error::Error::InherentData)?;
 
 	let (client, backend, keystore, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
@@ -46,29 +48,34 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		client.clone(),
 	);
 
-	let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
-		client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
-	)?;
+	// let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
+	// 	client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
+	// )?;
 
-	let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
-		grandpa_block_import.clone(), client.clone(),
-	);
+	// let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
+	// 	grandpa_block_import.clone(), client.clone(),
+	// );
 
-	let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
-		sc_consensus_aura::slot_duration(&*client)?,
-		aura_block_import,
-		Some(Box::new(grandpa_block_import.clone())),
-		None,
-		client.clone(),
-		inherent_data_providers.clone(),
-		&task_manager.spawn_handle(),
-		config.prometheus_registry(),
-	)?;
+	let import_queue = sc_consensus_manual_seal::import_queue(
+					Box::new(client.clone()),
+					&task_manager.spawn_handle(),
+					config.prometheus_registry(),
+				);
+	// let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
+	// 	sc_consensus_aura::slot_duration(&*client)?,
+	// 	aura_block_import,
+	// 	Some(Box::new(grandpa_block_import.clone())),
+	// 	None,
+	// 	client.clone(),
+	// 	inherent_data_providers.clone(),
+	// 	&task_manager.spawn_handle(),
+	// 	config.prometheus_registry(),
+	// )?;
 
 	Ok(sc_service::PartialComponents {
 		client, backend, task_manager, import_queue, keystore, select_chain, transaction_pool,
 		inherent_data_providers,
-		other: (grandpa_block_import, grandpa_link),
+		other: (),
 	})
 }
 
@@ -77,11 +84,11 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
 		client, backend, mut task_manager, import_queue, keystore, select_chain, transaction_pool,
 		inherent_data_providers,
-		other: (block_import, grandpa_link),
+		..
 	} = new_partial(&config)?;
 
-	let finality_proof_provider =
-		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
+	// let finality_proof_provider =
+	// 	GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -93,7 +100,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			on_demand: None,
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: None,
-			finality_proof_provider: Some(finality_proof_provider.clone()),
+			finality_proof_provider: None,
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -105,7 +112,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
 	let name = config.network.node_name.clone();
-	let enable_grandpa = !config.disable_grandpa;
+	// let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 	let telemetry_connection_sinks = sc_service::TelemetryConnectionSinks::default();
 
