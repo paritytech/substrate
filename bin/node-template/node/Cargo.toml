@@ -32,7 +32,6 @@ sc-consensus = { version = "0.8.0-rc5", path = "../../../client/consensus/common
 sc-finality-grandpa = { version = "0.8.0-rc5", path = "../../../client/finality-grandpa" }
 sp-finality-grandpa = { version = "2.0.0-rc5", path = "../../../primitives/finality-grandpa" }
 sc-client-api = { version = "2.0.0-rc5", path = "../../../client/api" }
-sc-network = { version = "0.8.0-rc5", path = "../../../client/network" }
 sp-runtime = { version = "2.0.0-rc5", path = "../../../primitives/runtime" }
 
 # These dependencies are used for the node template's RPCs
