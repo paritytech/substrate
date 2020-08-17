@@ -267,7 +267,7 @@ macro_rules! ord_parameter_types {
 }
 
 #[doc(inline)]
-pub use frame_support_procedural::{decl_storage, construct_runtime};
+pub use frame_support_procedural::{decl_storage, construct_runtime, transactional};
 
 /// Return Err of the expression: `return Err($expression);`.
 ///
@@ -626,6 +626,23 @@ mod tests {
 			DoubleMap::insert(&key1, &key2, &vec![1]);
 			DoubleMap::append(&key1, &key2, 2);
 			assert_eq!(DoubleMap::get(&key1, &key2), &[1, 2]);
+		});
+	}
+
+	#[test]
+	fn double_map_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			type DoubleMap = DataDM;
+
+			let (key1, key2) = (11, 13);
+
+			// mutated
+			DoubleMap::mutate_exists(key1, key2, |v| *v = Some(1));
+			assert_eq!(DoubleMap::get(&key1, key2), 1);
+
+			// removed if mutated to `None`
+			DoubleMap::mutate_exists(key1, key2, |v| *v = None);
+			assert!(!DoubleMap::contains_key(&key1, key2));
 		});
 	}
 

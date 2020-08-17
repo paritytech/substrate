@@ -153,7 +153,7 @@ impl<Block> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchChecker<Block
 }
 
 /// Finality proof provider for serving network requests.
-pub struct FinalityProofProvider<B,  Block: BlockT> {
+pub struct FinalityProofProvider<B, Block: BlockT> {
 	backend: Arc<B>,
 	authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 }

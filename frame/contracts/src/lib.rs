@@ -95,6 +95,7 @@ use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
 pub use crate::exec::{ExecResult, ExecReturnValue};
+pub use crate::wasm::ReturnCode as RuntimeReturnCode;
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
@@ -418,11 +419,32 @@ decl_error! {
 		OutputBufferTooSmall,
 		/// Performing the requested transfer would have brought the contract below
 		/// the subsistence threshold. No transfer is allowed to do this in order to allow
-		/// for a tombstone to be created. Use `ext_terminate` to remove a contract without
+		/// for a tombstone to be created. Use `seal_terminate` to remove a contract without
 		/// leaving a tombstone behind.
-		InsufficientBalance,
+		BelowSubsistenceThreshold,
+		/// The newly created contract is below the subsistence threshold after executing
+		/// its contructor. No contracts are allowed to exist below that threshold.
+		NewContractNotFunded,
+		/// Performing the requested transfer failed for a reason originating in the
+		/// chosen currency implementation of the runtime. Most probably the balance is
+		/// too low or locks are placed on it.
+		TransferFailed,
+		/// Performing a call was denied because the calling depth reached the limit
+		/// of what is specified in the schedule.
+		MaxCallDepthReached,
+		/// The contract that was called is either no contract at all (a plain account)
+		/// or is a tombstone.
+		NotCallable,
 		/// The code supplied to `put_code` exceeds the limit specified in the current schedule.
 		CodeTooLarge,
+		/// No code could be found at the supplied code hash.
+		CodeNotFound,
+		/// A buffer outside of sandbox memory was passed to a contract API function.
+		OutOfBounds,
+		/// Input passed to a contract API function failed to decode as expected type.
+		DecodingFailed,
+		/// Contract trapped during execution.
+		ContractTrapped,
 	}
 }
 
@@ -746,7 +768,7 @@ impl<T: Trait> Config<T> {
 	/// Rent or any contract initiated balance transfer mechanism cannot make the balance lower
 	/// than the subsistence threshold in order to guarantee that a tombstone is created.
 	///
-	/// The only way to completely kill a contract without a tombstone is calling `ext_terminate`.
+	/// The only way to completely kill a contract without a tombstone is calling `seal_terminate`.
 	pub fn subsistence_threshold(&self) -> BalanceOf<T> {
 		self.existential_deposit.saturating_add(self.tombstone_deposit)
 	}
@@ -824,7 +846,7 @@ pub struct Schedule {
 	/// Maximum allowed size of a declared table.
 	pub max_table_size: u32,
 
-	/// Whether the `ext_println` function is allowed to be used contracts.
+	/// Whether the `seal_println` function is allowed to be used contracts.
 	/// MUST only be enabled for `dev` chains, NOT for production chains
 	pub enable_println: bool,
 

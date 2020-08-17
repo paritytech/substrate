@@ -347,11 +347,9 @@ mod tests {
 	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
 		where NumberFor<B>: From<u64>
 	{
-		ChainEvent::NewBlock {
+		ChainEvent::NewBestBlock {
 			hash: header.hash(),
 			tree_route: None,
-			is_new_best: true,
-			header,
 		}
 	}
 

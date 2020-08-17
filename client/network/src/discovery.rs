@@ -46,6 +46,7 @@
 //!
 
 use crate::config::ProtocolId;
+use crate::utils::LruHashSet;
 use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
@@ -63,9 +64,14 @@ use libp2p::swarm::toggle::Toggle;
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
-use std::{cmp, collections::{HashMap, HashSet, VecDeque}, io, time::Duration};
+use std::{cmp, collections::{HashMap, HashSet, VecDeque}, io, num::NonZeroUsize, time::Duration};
 use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
+
+/// Maximum number of known external addresses that we will cache.
+/// This only affects whether we will log whenever we (re-)discover
+/// a given address.
+const MAX_KNOWN_EXTERNAL_ADDRESSES: usize = 32;
 
 /// `DiscoveryBehaviour` configuration.
 ///
@@ -190,7 +196,11 @@ impl DiscoveryConfig {
 			} else {
 				None.into()
 			},
-			allow_non_globals_in_dht: self.allow_non_globals_in_dht
+			allow_non_globals_in_dht: self.allow_non_globals_in_dht,
+			known_external_addresses: LruHashSet::new(
+				NonZeroUsize::new(MAX_KNOWN_EXTERNAL_ADDRESSES)
+					.expect("value is a constant; constant is non-zero; qed.")
+			),
 		}
 	}
 }
@@ -221,7 +231,9 @@ pub struct DiscoveryBehaviour {
 	/// Number of active connections over which we interrupt the discovery process.
 	discovery_only_if_under_num: u64,
 	/// Should non-global addresses be added to the DHT?
-	allow_non_globals_in_dht: bool
+	allow_non_globals_in_dht: bool,
+	/// A cache of discovered external addresses. Only used for logging purposes.
+	known_external_addresses: LruHashSet<Multiaddr>,
 }
 
 impl DiscoveryBehaviour {
@@ -312,7 +324,7 @@ impl DiscoveryBehaviour {
 		for k in self.kademlias.values_mut() {
 			if let Err(e) = k.put_record(Record::new(key.clone(), value.clone()), Quorum::All) {
 				warn!(target: "sub-libp2p", "Libp2p => Failed to put record: {:?}", e);
-				self.pending_events.push_back(DiscoveryOut::ValuePutFailed(key.clone()));
+				self.pending_events.push_back(DiscoveryOut::ValuePutFailed(key.clone(), Duration::from_secs(0)));
 			}
 		}
 	}
@@ -379,17 +391,25 @@ pub enum DiscoveryOut {
 	/// the `identify` protocol.
 	UnroutablePeer(PeerId),
 
-	/// The DHT yielded results for the record request, grouped in (key, value) pairs.
-	ValueFound(Vec<(record::Key, Vec<u8>)>),
+	/// The DHT yielded results for the record request.
+	///
+	/// Returning the result grouped in (key, value) pairs as well as the request duration..
+	ValueFound(Vec<(record::Key, Vec<u8>)>, Duration),
 
 	/// The record requested was not found in the DHT.
-	ValueNotFound(record::Key),
+	///
+	/// Returning the corresponding key as well as the request duration.
+	ValueNotFound(record::Key, Duration),
 
 	/// The record with a given key was successfully inserted into the DHT.
-	ValuePut(record::Key),
+	///
+	/// Returning the corresponding key as well as the request duration.
+	ValuePut(record::Key, Duration),
 
 	/// Inserting a value into the DHT failed.
-	ValuePutFailed(record::Key),
+	///
+	/// Returning the corresponding key as well as the request duration.
+	ValuePutFailed(record::Key, Duration),
 
 	/// Started a random Kademlia query for each DHT identified by the given `ProtocolId`s.
 	RandomKademliaStarted(Vec<ProtocolId>),
@@ -499,7 +519,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		let new_addr = addr.clone()
 			.with(Protocol::P2p(self.local_peer_id.clone().into()));
-		info!(target: "sub-libp2p", "🔍 Discovered new external address for our node: {}", new_addr);
+
+		// NOTE: we might re-discover the same address multiple times
+		// in which case we just want to refrain from logging.
+		if self.known_external_addresses.insert(new_addr.clone()) {
+			info!(target: "sub-libp2p",
+				"🔍 Discovered new external address for our node: {}",
+				new_addr,
+			);
+		}
+
 		for k in self.kademlias.values_mut() {
 			NetworkBehaviour::inject_new_external_addr(k, addr)
 		}
@@ -620,7 +649,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								}
 							}
 						}
-						KademliaEvent::QueryResult { result: QueryResult::GetRecord(res), .. } => {
+						KademliaEvent::QueryResult { result: QueryResult::GetRecord(res), stats, .. } => {
 							let ev = match res {
 								Ok(ok) => {
 									let results = ok.records
@@ -628,28 +657,28 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 										.map(|r| (r.record.key, r.record.value))
 										.collect();
 
-									DiscoveryOut::ValueFound(results)
+									DiscoveryOut::ValueFound(results, stats.duration().unwrap_or_else(Default::default))
 								}
 								Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
 									trace!(target: "sub-libp2p",
 										"Libp2p => Failed to get record: {:?}", e);
-									DiscoveryOut::ValueNotFound(e.into_key())
+									DiscoveryOut::ValueNotFound(e.into_key(), stats.duration().unwrap_or_else(Default::default))
 								}
 								Err(e) => {
 									warn!(target: "sub-libp2p",
 										"Libp2p => Failed to get record: {:?}", e);
-									DiscoveryOut::ValueNotFound(e.into_key())
+									DiscoveryOut::ValueNotFound(e.into_key(), stats.duration().unwrap_or_else(Default::default))
 								}
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						}
-						KademliaEvent::QueryResult { result: QueryResult::PutRecord(res), .. } => {
+						KademliaEvent::QueryResult { result: QueryResult::PutRecord(res), stats, .. } => {
 							let ev = match res {
-								Ok(ok) => DiscoveryOut::ValuePut(ok.key),
+								Ok(ok) => DiscoveryOut::ValuePut(ok.key, stats.duration().unwrap_or_else(Default::default)),
 								Err(e) => {
 									warn!(target: "sub-libp2p",
 										"Libp2p => Failed to put record: {:?}", e);
-									DiscoveryOut::ValuePutFailed(e.into_key())
+									DiscoveryOut::ValuePutFailed(e.into_key(), stats.duration().unwrap_or_else(Default::default))
 								}
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));

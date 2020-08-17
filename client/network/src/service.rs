@@ -30,7 +30,8 @@
 use crate::{
 	ExHashT, NetworkStateInfo,
 	behaviour::{Behaviour, BehaviourOut},
-	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
+	config::{parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
+	DhtEvent,
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -42,7 +43,7 @@ use crate::{
 	transport, ReputationChange,
 };
 use futures::prelude::*;
-use libp2p::{PeerId, Multiaddr};
+use libp2p::{PeerId, multiaddr, Multiaddr};
 use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}, either::EitherError};
 use libp2p::kad::record;
 use libp2p::ping::handler::PingFailure;
@@ -177,6 +178,21 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			for reserved in params.network_config.reserved_nodes.iter() {
 				reserved_nodes.insert(reserved.peer_id.clone());
 				known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
+			}
+
+			let print_deprecated_message = match &params.role {
+				Role::Sentry { .. } => true,
+				Role::Authority { sentry_nodes } if !sentry_nodes.is_empty() => true,
+				_ => false,
+			};
+			if print_deprecated_message {
+				log::warn!(
+					"🙇 Sentry nodes are deprecated, and the `--sentry` and  `--sentry-nodes` \
+					CLI options will eventually be removed in a future version. The Substrate \
+					and Polkadot networking protocol require validators to be \
+					publicly-accessible. Please do not block access to your validator nodes. \
+					For details, see https://github.com/paritytech/substrate/issues/6845."
+				);
 			}
 
 			let mut sentries_and_validators = HashSet::new();
@@ -386,14 +402,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		})
 	}
 
-	/// Returns the downloaded bytes per second averaged over the past few seconds.
-	pub fn average_download_per_sec(&self) -> u64 {
-		self.service.bandwidth.average_download_per_sec()
+	/// Returns the total number of bytes received so far.
+	pub fn total_bytes_inbound(&self) -> u64 {
+		self.service.bandwidth.total_inbound()
 	}
 
-	/// Returns the uploaded bytes per second averaged over the past few seconds.
-	pub fn average_upload_per_sec(&self) -> u64 {
-		self.service.bandwidth.average_upload_per_sec()
+	/// Returns the total number of bytes sent so far.
+	pub fn total_bytes_outbound(&self) -> u64 {
+		self.service.bandwidth.total_outbound()
 	}
 
 	/// Returns the number of peers we're connected to.
@@ -525,8 +541,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			peer_id: Swarm::<B, H>::local_peer_id(&swarm).to_base58(),
 			listened_addresses: Swarm::<B, H>::listeners(&swarm).cloned().collect(),
 			external_addresses: Swarm::<B, H>::external_addresses(&swarm).cloned().collect(),
-			average_download_per_sec: self.service.bandwidth.average_download_per_sec(),
-			average_upload_per_sec: self.service.bandwidth.average_upload_per_sec(),
+			total_bytes_inbound: self.service.bandwidth.total_inbound(),
+			total_bytes_outbound: self.service.bandwidth.total_outbound(),
 			connected_peers,
 			not_connected_peers,
 			peerset: swarm.user_protocol_mut().peerset_debug_info(),
@@ -878,21 +894,27 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Modify a peerset priority group.
 	///
-	/// Returns an `Err` if one of the given addresses contains an invalid
-	/// peer ID (which includes the local peer ID).
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
 	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = peers.into_iter()
-			.map(|p| match parse_addr(p) {
-				Err(e) => Err(format!("{:?}", e)),
-				Ok((peer, addr)) =>
-					// Make sure the local peer ID is never added to the PSM
-					// or added as a "known address", even if given.
-					if peer == self.local_peer_id {
-						Err("Local peer ID in priority group.".to_string())
-					} else {
-						Ok((peer, addr))
-					}
-				})
+			.map(|mut addr| {
+				let peer = match addr.pop() {
+					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
+						.map_err(|_| "Invalid PeerId format".to_string())?,
+					_ => return Err("Missing PeerId from address".to_string()),
+				};
+
+				// Make sure the local peer ID is never added to the PSM
+				// or added as a "known address", even if given.
+				if peer == self.local_peer_id {
+					Err("Local peer ID in priority group.".to_string())
+				} else {
+					Ok((peer, addr))
+				}
+			})
 			.collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()?;
 
 		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
@@ -1119,13 +1141,16 @@ struct Metrics {
 	incoming_connections_total: Counter<U64>,
 	is_major_syncing: Gauge<U64>,
 	issued_light_requests: Counter<U64>,
+	kademlia_query_duration: HistogramVec,
 	kademlia_random_queries_total: CounterVec<U64>,
 	kademlia_records_count: GaugeVec<U64>,
 	kademlia_records_sizes_total: GaugeVec<U64>,
 	kbuckets_num_nodes: GaugeVec<U64>,
 	listeners_local_addresses: Gauge<U64>,
 	listeners_errors_total: Counter<U64>,
-	network_per_sec_bytes: GaugeVec<U64>,
+	// Note: `network_bytes_total` is a monotonic gauge obtained by
+	// sampling an existing counter.
+	network_bytes_total: GaugeVec<U64>,
 	notifications_sizes: HistogramVec,
 	notifications_streams_closed_total: CounterVec<U64>,
 	notifications_streams_opened_total: CounterVec<U64>,
@@ -1196,6 +1221,17 @@ impl Metrics {
 				"issued_light_requests",
 				"Number of light client requests that our node has issued.",
 			)?, registry)?,
+			kademlia_query_duration: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"sub_libp2p_kademlia_query_duration",
+						"Duration of Kademlia queries per query type"
+					),
+					buckets: prometheus_endpoint::exponential_buckets(0.5, 2.0, 10)
+						.expect("parameters are always valid values; qed"),
+				},
+				&["type"]
+			)?, registry)?,
 			kademlia_random_queries_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_kademlia_random_queries_total",
@@ -1231,10 +1267,10 @@ impl Metrics {
 				"sub_libp2p_listeners_errors_total",
 				"Total number of non-fatal errors reported by a listener"
 			)?, registry)?,
-			network_per_sec_bytes: register(GaugeVec::new(
+			network_bytes_total: register(GaugeVec::new(
 				Opts::new(
-					"sub_libp2p_network_per_sec_bytes",
-					"Average bandwidth usage per second"
+					"sub_libp2p_network_bytes_total",
+					"Total bandwidth usage"
 				),
 				&["direction"]
 			)?, registry)?,
@@ -1508,8 +1544,19 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						messages,
 					});
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Dht(ev))) => {
-					this.event_streams.send(Event::Dht(ev));
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Dht(event, duration))) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						let query_type = match event {
+							DhtEvent::ValueFound(_) => "value-found",
+							DhtEvent::ValueNotFound(_) => "value-not-found",
+							DhtEvent::ValuePut(_) => "value-put",
+							DhtEvent::ValuePutFailed(_) => "value-put-failed",
+						};
+						metrics.kademlia_query_duration.with_label_values(&[query_type])
+							.observe(duration.as_secs_f64());
+					}
+
+					this.event_streams.send(Event::Dht(event));
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
@@ -1674,8 +1721,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			metrics.network_per_sec_bytes.with_label_values(&["in"]).set(this.service.bandwidth.average_download_per_sec());
-			metrics.network_per_sec_bytes.with_label_values(&["out"]).set(this.service.bandwidth.average_upload_per_sec());
+			metrics.network_bytes_total.with_label_values(&["in"]).set(this.service.bandwidth.total_inbound());
+			metrics.network_bytes_total.with_label_values(&["out"]).set(this.service.bandwidth.total_outbound());
 			metrics.is_major_syncing.set(is_major_syncing as u64);
 			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
 				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
