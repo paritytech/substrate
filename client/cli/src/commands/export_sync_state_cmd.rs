@@ -33,9 +33,9 @@ use sp_runtime::traits::Block as BlockT;
 pub struct ExportSyncStateCmd {
 	/// Force raw genesis storage output in the chain spec.
 	#[structopt(long = "raw")]
-    pub raw: bool,
-    
-    #[allow(missing_docs)]
+	pub raw: bool,
+	
+	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 
@@ -49,16 +49,16 @@ impl ExportSyncStateCmd {
 	pub async fn run<B, CL, BA, SO>(
 		&self,
 		mut spec: Box<dyn ChainSpec>,
-        client: Arc<CL>,
+		client: Arc<CL>,
 		backend: Arc<BA>,
 		mut sync_oracle: SO,
-    ) -> error::Result<()>
-        where
-            B: BlockT,
-            CL: sp_blockchain::HeaderBackend<B>,
+	) -> error::Result<()>
+		where
+			B: BlockT,
+			CL: sp_blockchain::HeaderBackend<B>,
 			BA: sc_service::MaybeChtRootStorageProvider<B>,
 			SO: sp_consensus::SyncOracle,
-    {
+	{
 		futures::future::poll_fn(|_| {
 			match sync_oracle.is_major_syncing() || sync_oracle.is_offline() {
 				true => Poll::Pending,
@@ -66,12 +66,12 @@ impl ExportSyncStateCmd {
 			}
 		}).await;
 
-        info!("Building chain spec");
+		info!("Building chain spec");
 
-        let light_sync_state = sc_service::build_light_sync_state(client, backend)
-            .map_err(|err| err.to_string())?;
+		let light_sync_state = sc_service::build_light_sync_state(client, backend)
+			.map_err(|err| err.to_string())?;
 
-        spec.set_light_sync_state(light_sync_state.to_serializable());
+		spec.set_light_sync_state(light_sync_state.to_serializable());
 
 		let json = sc_service::chain_ops::build_spec(&*spec, self.raw)?;
 		if std::io::stdout().write_all(json.as_bytes()).is_err() {
