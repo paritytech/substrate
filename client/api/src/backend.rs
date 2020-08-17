@@ -537,7 +537,6 @@ pub fn changes_tries_state_at_block<'a, Block: BlockT>(
 	}
 }
 
-#[derive(Clone)]
 /// Pruning requirement to share between multiple client component.
 ///
 /// This allows pruning related synchronisation. For instance in light
@@ -549,6 +548,7 @@ pub fn changes_tries_state_at_block<'a, Block: BlockT>(
 ///
 /// Note that this struct could be split in two different struct (provider without
 /// component and Component), depending on future usage of this shared info.
+#[derive(Clone)]
 pub struct SharedPruningRequirements<Block: BlockT> {
 	shared: Arc<RwLock<(Vec<ComponentPruningRequirements<Block>>, usize)>>,
 	component: Option<usize>,
@@ -670,8 +670,8 @@ impl<Block: BlockT> Default for ComponentPruningRequirements<Block> {
 	}
 }
 
-#[derive(Eq, PartialEq)]
 /// Define a block number limit to apply.
+#[derive(Eq, PartialEq)]
 pub enum PruningLimit<N> {
 	/// Ignore.
 	None,
