@@ -34,9 +34,6 @@ mod inspect;
 mod key;
 pub mod utils;
 
-#[cfg(test)]
-pub mod tests;
-
 use std::fmt::Debug;
 use structopt::StructOpt;
 

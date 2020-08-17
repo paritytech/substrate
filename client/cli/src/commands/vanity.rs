@@ -161,6 +161,13 @@ mod tests {
 	use sp_core::sr25519;
 	#[cfg(feature = "bench")]
 	use test::Bencher;
+	use structopt::StructOpt;
+
+	#[test]
+	fn vanity() {
+		let vanity = VanityCmd::from_iter(&["vanity", "--number", "1", "--pattern", "j"]);
+		assert!(vanity.run().is_ok());
+	}
 
 	#[test]
 	fn test_generation_with_single_char() {

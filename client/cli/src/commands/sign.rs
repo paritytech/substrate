@@ -74,3 +74,25 @@ fn sign<P: sp_core::Pair>(suri: &str, password: Option<SecretString>, message: V
 	let pair = utils::pair_from_suri::<P>(suri, password)?;
 	Ok(format!("{}", hex::encode(pair.sign(&message))))
 }
+
+#[cfg(test)]
+mod test {
+	use super::SignCmd;
+	use structopt::StructOpt;
+
+	#[test]
+	fn sign() {
+		let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
+
+		let sign = SignCmd::from_iter(&[
+			"sign",
+			"--suri",
+			seed,
+			"--message",
+			&seed[2..],
+			"--password",
+			"12345"
+		]);
+		assert!(sign.run().is_ok());
+	}
+}
