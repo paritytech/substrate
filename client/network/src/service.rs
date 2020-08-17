@@ -351,9 +351,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		// Initialize the metrics.
 		let metrics = match &params.metrics_registry {
 			Some(registry) => {
-				// External metrics.
-				Metrics::register_bandwidth(registry, bandwidth.clone())?;
-				// Other metrics.
+				// Sourced metrics.
+				BandwidthCounters::register(registry, bandwidth.clone())?;
+				// Other (i.e. new) metrics.
 				Some(Metrics::register(registry)?)
 			}
 			None => None
@@ -1169,9 +1169,25 @@ struct Metrics {
 
 /// The source for bandwidth metrics.
 #[derive(Clone)]
-struct BandwidthSource(Arc<transport::BandwidthSinks>);
+struct BandwidthCounters(Arc<transport::BandwidthSinks>);
 
-impl MetricSource for BandwidthSource {
+impl BandwidthCounters {
+	fn register(registry: &Registry, sinks: Arc<transport::BandwidthSinks>)
+		-> Result<(), PrometheusError>
+	{
+		register(SourcedCounter::new(
+			&Opts::new(
+				"sub_libp2p_network_bytes_total",
+				"Total bandwidth usage"
+			).variable_label("direction"),
+			BandwidthCounters(sinks),
+		)?, registry)?;
+
+		Ok(())
+	}
+}
+
+impl MetricSource for BandwidthCounters {
 	type N = u64;
 
 	fn collect(&self, mut set: impl FnMut(&[&str], Self::N)) {
@@ -1181,19 +1197,6 @@ impl MetricSource for BandwidthSource {
 }
 
 impl Metrics {
-	fn register_bandwidth(registry: &Registry, sinks: Arc<transport::BandwidthSinks>)
-		-> Result<(), PrometheusError>
-	{
-		register(SourcedCounter::new(
-			&Opts::new(
-				"sub_libp2p_network_bytes_total",
-				"Total bandwidth usage"
-			).variable_label("direction"),
-			BandwidthSource(sinks),
-		)?, registry)?;
-
-		Ok(())
-	}
 
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
