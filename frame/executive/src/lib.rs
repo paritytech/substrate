@@ -465,6 +465,7 @@ mod tests {
 		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason},
 	};
 	use frame_system::{self as system, Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
+	use pallet_transaction_payment::CurrencyAdapter;
 	use pallet_balances::Call as BalancesCall;
 	use hex_literal::hex;
 	const TEST_KEY: &[u8] = &*b":test:key:";
@@ -592,7 +593,7 @@ mod tests {
 	}
 	impl pallet_transaction_payment::Trait for Runtime {
 		type Balance = Balance;
-		type OnChargeTransaction = (PhantomData<pallet_balances::Module<Runtime>>, PhantomData<()>);
+		type OnChargeTransaction = CurrencyAdapter<pallet_balances::Module<Runtime>, ()>;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = IdentityFee<Balance>;
 		type FeeMultiplierUpdate = ();

@@ -29,7 +29,8 @@ use sp_io;
 use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use frame_support::traits::Get;
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
-use std::{marker::PhantomData, cell::RefCell};
+use pallet_transaction_payment::CurrencyAdapter;
+use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInfo};
 
 use frame_system as system;
@@ -98,7 +99,7 @@ parameter_types! {
 }
 impl pallet_transaction_payment::Trait for Test {
 	type Balance = u64;
-	type OnChargeTransaction = (PhantomData<Module<Test>>, PhantomData<()>);
+	type OnChargeTransaction = CurrencyAdapter<Module<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();

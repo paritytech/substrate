@@ -239,8 +239,10 @@ pub trait OnChargeTransaction<T: Trait> {
 	) -> Result<(), TransactionValidityError>;
 }
 
+pub struct CurrencyAdapter<C, OU>(PhantomData<C>, PhantomData<OU>);
+
 /// Default implementation for a Currency and an OnUnbalanced handler.
-impl<T, C, OU, B> OnChargeTransaction<T> for (PhantomData<C>, PhantomData<OU>)
+impl<T, C, OU, B> OnChargeTransaction<T> for CurrencyAdapter<C, OU>
 where
 	B: AtLeast32BitUnsigned
 	+ FullCodec
@@ -775,7 +777,7 @@ mod tests {
 
 	impl Trait for Runtime {
 		type Balance = u64;
-		type OnChargeTransaction = (PhantomData<pallet_balances::Module<Runtime>>, PhantomData<()>);
+		type OnChargeTransaction = CurrencyAdapter<pallet_balances::Module<Runtime>, ()>;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = WeightToFee;
 		type FeeMultiplierUpdate = ();

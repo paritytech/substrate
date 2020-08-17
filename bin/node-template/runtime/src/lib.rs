@@ -6,7 +6,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use sp_std::{prelude::*, marker::PhantomData};
+use sp_std::prelude::*;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	ApplyExtrinsicResult, generic, create_runtime_str, impl_opaque_keys, MultiSignature,
@@ -37,6 +37,7 @@ pub use frame_support::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
 	},
 };
+use pallet_transaction_payment::CurrencyAdapter;
 
 /// Import the template pallet.
 pub use template;
@@ -246,7 +247,7 @@ parameter_types! {
 
 impl pallet_transaction_payment::Trait for Runtime {
 	type Balance = Balance;
-	type OnChargeTransaction = (PhantomData<pallet_balances::Module<Runtime>>, PhantomData<()>);
+	type OnChargeTransaction = CurrencyAdapter<pallet_balances::Module<Runtime>, ()>;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<Balance>;
 	type FeeMultiplierUpdate = ();
