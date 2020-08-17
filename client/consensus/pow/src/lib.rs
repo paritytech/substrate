@@ -191,16 +191,19 @@ pub trait PowAlgorithm<B: BlockT> {
 }
 
 /// A block importer for PoW.
-pub struct PowBlockImport<B: BlockT, I, C, S, Algorithm> {
+pub struct PowBlockImport<B: BlockT, I, C, S, Algorithm, CAW> {
 	algorithm: Algorithm,
 	inner: I,
 	select_chain: Option<S>,
 	client: Arc<C>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
+	can_author_with: CAW,
 }
 
-impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone> Clone for PowBlockImport<B, I, C, S, Algorithm> {
+impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone, CAW: Clone> Clone
+	for PowBlockImport<B, I, C, S, Algorithm, CAW>
+{
 	fn clone(&self) -> Self {
 		Self {
 			algorithm: self.algorithm.clone(),
@@ -209,17 +212,19 @@ impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone> Clone for PowBlockImpor
 			client: self.client.clone(),
 			inherent_data_providers: self.inherent_data_providers.clone(),
 			check_inherents_after: self.check_inherents_after.clone(),
+			can_author_with: self.can_author_with.clone(),
 		}
 	}
 }
 
-impl<B, I, C, S, Algorithm> PowBlockImport<B, I, C, S, Algorithm> where
+impl<B, I, C, S, Algorithm, CAW> PowBlockImport<B, I, C, S, Algorithm, CAW> where
 	B: BlockT,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
 	Algorithm: PowAlgorithm<B>,
+	CAW: CanAuthorWith<B>,
 {
 	/// Create a new block import suitable to be used in PoW
 	pub fn new(
@@ -229,9 +234,17 @@ impl<B, I, C, S, Algorithm> PowBlockImport<B, I, C, S, Algorithm> where
 		check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
 		select_chain: Option<S>,
 		inherent_data_providers: sp_inherents::InherentDataProviders,
+		can_author_with: CAW,
 	) -> Self {
-		Self { inner, client, algorithm, check_inherents_after,
-			   select_chain, inherent_data_providers }
+		Self {
+			inner,
+			client,
+			algorithm,
+			check_inherents_after,
+			select_chain,
+			inherent_data_providers,
+			can_author_with,
+		}
 	}
 
 	fn check_inherents(
@@ -244,6 +257,16 @@ impl<B, I, C, S, Algorithm> PowBlockImport<B, I, C, S, Algorithm> where
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
 		if *block.header().number() < self.check_inherents_after {
+			return Ok(())
+		}
+
+		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
+			debug!(
+				target: "pow",
+				"Skipping `check_inherents` as authoring version is not compatible: {}",
+				e,
+			);
+
 			return Ok(())
 		}
 
@@ -275,7 +298,7 @@ impl<B, I, C, S, Algorithm> PowBlockImport<B, I, C, S, Algorithm> where
 	}
 }
 
-impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algorithm> where
+impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, Algorithm, CAW> where
 	B: BlockT,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
@@ -284,6 +307,7 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
 	Algorithm: PowAlgorithm<B>,
 	Algorithm::Difficulty: 'static,
+	CAW: CanAuthorWith<B>,
 {
 	type Error = ConsensusError;
 	type Transaction = sp_api::TransactionFor<C, B>;

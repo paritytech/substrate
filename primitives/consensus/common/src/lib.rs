@@ -247,6 +247,15 @@ impl<Block: BlockT> CanAuthorWith<Block> for AlwaysCanAuthor {
 	}
 }
 
+/// Never can author.
+pub struct NeverCanAuthor;
+
+impl<Block: BlockT> CanAuthorWith<Block> for NeverCanAuthor {
+	fn can_author_with(&self, _: &BlockId<Block>) -> Result<(), String> {
+		Err("Authoring is always disabled.".to_string())
+	}
+}
+
 /// A type from which a slot duration can be obtained.
 pub trait SlotData {
 	/// Gets the slot duration.
