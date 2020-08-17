@@ -1384,7 +1384,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		// worker sometimes takes a long time to process the loop below. When that happens, the
 		// rest of the polling is frozen. In order to avoid negative side-effects caused by this
 		// freeze, a limit to the number of iterations is enforced below. If the limit is reached,
-		// the task is scheduled again.
+		// the task is interrupted then scheduled again.
 		//
 		// This allows for a more even distribution in the time taken by each sub-part of the
 		// polling.
