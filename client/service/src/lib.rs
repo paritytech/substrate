@@ -379,6 +379,7 @@ async fn build_network_future<
 	}
 }
 
+/// Build a `LightSyncState` from the CHT roots stored in a backend.
 pub fn build_light_sync_state<TBl, TCl, TBackend>(
 	client: Arc<TCl>,
 	backend: Arc<TBackend>,

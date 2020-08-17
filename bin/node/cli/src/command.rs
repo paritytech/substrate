@@ -21,7 +21,7 @@ use node_executor::Executor;
 use node_runtime::{Block, RuntimeApi};
 use sc_cli::{Result, SubstrateCli, RuntimeVersion, Role, ChainSpec};
 use sc_service::PartialComponents;
-use crate::service::new_partial;
+use crate::service::{new_partial, new_light_base};
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -104,9 +104,9 @@ pub fn run() -> Result<()> {
 				},
 				|config| {
 					let (task_manager, client, backend, _, network, ..) =
-						crate::service::new_light_base(config)?;
+						new_light_base(config)?;
 					Ok((client, backend, network, task_manager))
-				}
+				},
 			)
 		}
 	}

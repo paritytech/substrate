@@ -17,12 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::NodeKeyParams;
-use crate::params::SharedParams;
+use crate::params::{SharedParams, NetworkParams};
 use crate::CliConfiguration;
 use crate::Role;
 use log::info;
-use sc_network::config::build_multiaddr;
 use sc_service::ChainSpec;
 use structopt::StructOpt;
 use std::io::Write;
@@ -30,9 +28,10 @@ use std::sync::Arc;
 use std::task::Poll;
 use sp_runtime::traits::Block as BlockT;
 
+/// Export the chain spec containing a state to sync the light client.
 #[derive(Debug, StructOpt)]
 pub struct ExportSyncStateCmd {
-	/// Force raw genesis storage output.
+	/// Force raw genesis storage output in the chain spec.
 	#[structopt(long = "raw")]
     pub raw: bool,
     
@@ -42,10 +41,11 @@ pub struct ExportSyncStateCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub node_key_params: NodeKeyParams,
+	pub network_params: NetworkParams,
 }
 
 impl ExportSyncStateCmd {
+	/// Run the `export-sync-state` command
 	pub async fn run<B, CL, BA, SO>(
 		&self,
 		mut spec: Box<dyn ChainSpec>,
@@ -86,8 +86,8 @@ impl CliConfiguration for ExportSyncStateCmd {
 		&self.shared_params
 	}
 
-	fn node_key_params(&self) -> Option<&NodeKeyParams> {
-		Some(&self.node_key_params)
+	fn network_params(&self) -> Option<&NetworkParams> {
+		Some(&self.network_params)
 	}
 
 	fn role(&self, _is_dev: bool) -> error::Result<Role> {

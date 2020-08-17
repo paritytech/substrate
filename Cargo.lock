@@ -3822,6 +3822,7 @@ dependencies = [
  "sc-consensus-aura",
  "sc-executor",
  "sc-finality-grandpa",
+ "sc-network",
  "sc-rpc",
  "sc-rpc-api",
  "sc-service",
