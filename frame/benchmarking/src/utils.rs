@@ -21,6 +21,7 @@ use codec::{Encode, Decode};
 use sp_std::{vec::Vec, prelude::Box};
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeString;
+use sp_storage::TrackedStorageKey;
 
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
@@ -112,17 +113,17 @@ pub trait Benchmarking {
 	}
 
 	/// Get the DB whitelist.
-	fn get_whitelist(&self) -> Vec<Vec<u8>> {
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
 		self.get_whitelist()
 	}
 
 	/// Set the DB whitelist.
-	fn set_whitelist(&mut self, new: Vec<Vec<u8>>) {
+	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
 		self.set_whitelist(new)
 	}
 
 	// Add a new item to the DB whitelist.
-	fn add_whitelist(&mut self, add: Vec<u8>) {
+	fn add_whitelist(&mut self, add: TrackedStorageKey) {
 		let mut whitelist = self.get_whitelist();
 		if !whitelist.contains(&add) {
 			whitelist.push(add);

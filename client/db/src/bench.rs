@@ -24,7 +24,10 @@ use std::collections::HashMap;
 
 use hash_db::{Prefix, Hasher};
 use sp_trie::{MemoryDB, prefixed_key};
-use sp_core::{storage::ChildInfo, hexdisplay::HexDisplay};
+use sp_core::{
+	storage::{ChildInfo, TrackedStorageKey},
+	hexdisplay::HexDisplay
+};
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend, StorageCollection};
@@ -93,9 +96,9 @@ pub struct BenchmarkingState<B: BlockT> {
 	genesis: HashMap<Vec<u8>, (Vec<u8>, i32)>,
 	record: Cell<Vec<Vec<u8>>>,
 	shared_cache: SharedCache<B>, // shared cache is always empty
-	key_tracker: RefCell<HashMap<Vec<u8>, KeyTracker>>,
+	key_tracker: RefCell<HashMap<Vec<u8>, TrackedStorageKey>>,
 	read_write_tracker: RefCell<ReadWriteTracker>,
-	whitelist: RefCell<Vec<Vec<u8>>>,
+	whitelist: RefCell<Vec<TrackedStorageKey>>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -426,11 +429,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.wipe_tracker()
 	}
 
-	fn get_whitelist(&self) -> Vec<Vec<u8>> {
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
 		self.whitelist.borrow_mut().to_vec()
 	}
 
-	fn set_whitelist(&self, new: Vec<Vec<u8>>) {
+	fn set_whitelist(&self, new: Vec<TrackedStorageKey>) {
 		*self.whitelist.borrow_mut() = new;
 	}
 

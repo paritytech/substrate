@@ -34,6 +34,15 @@ pub struct StorageKey(
 	pub Vec<u8>,
 );
 
+/// Storage key with read/write tracking information.
+#[derive(PartialEq, Eq, RuntimeDebug, Clone)]
+#[cfg_attr(feature = "std", derive(Hash, PartialOrd, Ord))]
+pub struct TrackedStorageKey {
+	pub key: Vec<u8>,
+	pub has_been_read: bool,
+	pub has_been_written: bool,
+}
+
 /// Storage key of a child trie, it contains the prefix to the key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
