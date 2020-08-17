@@ -21,6 +21,10 @@ use prometheus::proto;
 use std::{cmp::Ordering, marker::PhantomData};
 
 /// A counter whose values are obtained from an existing source.
+///
+/// > **Note*: The counter values provided by the source `S`
+/// > must be monotonically increasing. Otherwise use a
+/// > [`SourcedGauge`] instead.
 pub type SourcedCounter<S> = SourcedMetric<Counter, S>;
 
 /// A gauge whose values are obtained from an existing source.
