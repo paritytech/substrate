@@ -60,6 +60,8 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+mod default_weight;
+
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
 
