@@ -123,7 +123,7 @@ pub trait Benchmarking {
 	}
 
 	// Add a new item to the DB whitelist.
-	fn add_whitelist(&mut self, add: TrackedStorageKey) {
+	fn add_to_whitelist(&mut self, add: TrackedStorageKey) {
 		let mut whitelist = self.get_whitelist();
 		match whitelist.iter_mut().find(|x| x.key == add.key) {
 			// If we already have this key in the whitelist, update to be the most constrained value.
@@ -143,7 +143,7 @@ pub trait Benchmarking {
 	}
 
 	// Remove an item from the DB whitelist.
-	fn remove_whitelist(&mut self, remove: Vec<u8>) {
+	fn remove_from_whitelist(&mut self, remove: Vec<u8>) {
 		let mut whitelist = self.get_whitelist();
 		whitelist.retain(|x| x.key != remove);
 		self.set_whitelist(whitelist);
