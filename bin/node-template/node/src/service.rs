@@ -61,7 +61,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 					&task_manager.spawn_handle(),
 					config.prometheus_registry(),
 				);
-	
+
 	// let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _, _>(
 	// 	sc_consensus_aura::slot_duration(&*client)?,
 	// 	aura_block_import,
@@ -169,7 +169,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		// 	can_author_with,
 		// )?;
 
-		let authorship_future = sc_consensus_manual_seal::run_instant_seal(
+		let authorship_future = sc_consensus_manual_seal::run_interval_seal(
 			Box::new(client.clone()),
 			proposer,
 			client.clone(),
