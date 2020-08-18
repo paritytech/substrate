@@ -49,9 +49,9 @@ fn decode_impl(
 		quote! {
 			let #name =
 			<
-				Vec<(_phragmen::codec::Compact<#voter_type>, _phragmen::codec::Compact<#target_type>)>
+				Vec<(_npos::codec::Compact<#voter_type>, _npos::codec::Compact<#target_type>)>
 				as
-				_phragmen::codec::Decode
+				_npos::codec::Decode
 			>::decode(value)?;
 			let #name = #name
 				.into_iter()
@@ -66,12 +66,12 @@ fn decode_impl(
 			let #name =
 			<
 				Vec<(
-					_phragmen::codec::Compact<#voter_type>,
-					(_phragmen::codec::Compact<#target_type>, _phragmen::codec::Compact<#weight_type>),
-					_phragmen::codec::Compact<#target_type>,
+					_npos::codec::Compact<#voter_type>,
+					(_npos::codec::Compact<#target_type>, _npos::codec::Compact<#weight_type>),
+					_npos::codec::Compact<#target_type>,
 				)>
 				as
-				_phragmen::codec::Decode
+				_npos::codec::Decode
 			>::decode(value)?;
 			let #name = #name
 				.into_iter()
@@ -91,11 +91,11 @@ fn decode_impl(
 			let #name =
 			<
 				Vec<(
-					_phragmen::codec::Compact<#voter_type>,
-					[(_phragmen::codec::Compact<#target_type>, _phragmen::codec::Compact<#weight_type>); #c-1],
-					_phragmen::codec::Compact<#target_type>,
+					_npos::codec::Compact<#voter_type>,
+					[(_npos::codec::Compact<#target_type>, _npos::codec::Compact<#weight_type>); #c-1],
+					_npos::codec::Compact<#target_type>,
 				)>
-				as _phragmen::codec::Decode
+				as _npos::codec::Decode
 			>::decode(value)?;
 			let #name = #name
 				.into_iter()
@@ -115,8 +115,8 @@ fn decode_impl(
 	}).collect::<TokenStream2>();
 
 	quote!(
-		impl _phragmen::codec::Decode for #ident {
-			fn decode<I: _phragmen::codec::Input>(value: &mut I) -> Result<Self, _phragmen::codec::Error> {
+		impl _npos::codec::Decode for #ident {
+			fn decode<I: _npos::codec::Input>(value: &mut I) -> Result<Self, _npos::codec::Error> {
 				#decode_impl_single
 				#decode_impl_double
 				#decode_impl_rest
@@ -139,8 +139,8 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 			let #name = self.#name
 				.iter()
 				.map(|(v, t)| (
-					_phragmen::codec::Compact(v.clone()),
-					_phragmen::codec::Compact(t.clone()),
+					_npos::codec::Compact(v.clone()),
+					_npos::codec::Compact(t.clone()),
 				))
 				.collect::<Vec<_>>();
 			#name.encode_to(&mut r);
@@ -153,12 +153,12 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 			let #name = self.#name
 				.iter()
 				.map(|(v, (t1, w), t2)| (
-					_phragmen::codec::Compact(v.clone()),
+					_npos::codec::Compact(v.clone()),
 					(
-						_phragmen::codec::Compact(t1.clone()),
-						_phragmen::codec::Compact(w.clone())
+						_npos::codec::Compact(t1.clone()),
+						_npos::codec::Compact(w.clone())
 					),
-					_phragmen::codec::Compact(t2.clone()),
+					_npos::codec::Compact(t2.clone()),
 				))
 				.collect::<Vec<_>>();
 			#name.encode_to(&mut r);
@@ -171,8 +171,8 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 		// we use the knowledge of the length to avoid copy_from_slice.
 		let inners_compact_array = (0..c-1).map(|i|
 			quote!{(
-				_phragmen::codec::Compact(inner[#i].0.clone()),
-				_phragmen::codec::Compact(inner[#i].1.clone()),
+				_npos::codec::Compact(inner[#i].0.clone()),
+				_npos::codec::Compact(inner[#i].1.clone()),
 			),}
 		).collect::<TokenStream2>();
 
@@ -180,9 +180,9 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 			let #name = self.#name
 				.iter()
 				.map(|(v, inner, t_last)| (
-					_phragmen::codec::Compact(v.clone()),
+					_npos::codec::Compact(v.clone()),
 					[ #inners_compact_array ],
-					_phragmen::codec::Compact(t_last.clone()),
+					_npos::codec::Compact(t_last.clone()),
 				))
 				.collect::<Vec<_>>();
 			#name.encode_to(&mut r);
@@ -190,7 +190,7 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 	}).collect::<TokenStream2>();
 
 	quote!(
-		impl _phragmen::codec::Encode for #ident {
+		impl _npos::codec::Encode for #ident {
 			fn encode(&self) -> Vec<u8> {
 				let mut r = vec![];
 				#encode_impl_single
