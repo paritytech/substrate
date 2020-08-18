@@ -95,8 +95,8 @@ pub struct BenchmarkingState<B: BlockT> {
 	genesis: HashMap<Vec<u8>, (Vec<u8>, i32)>,
 	record: Cell<Vec<Vec<u8>>>,
 	shared_cache: SharedCache<B>, // shared cache is always empty
-	/// Key tracker for keys in the top trie.
-	key_tracker: RefCell<HashMap<Vec<u8>, KeyTracker>>,
+	/// Key tracker for keys in the main trie.
+	main_key_tracker: RefCell<HashMap<Vec<u8>, KeyTracker>>,
 	/// Key tracker for keys in a child trie.
 	/// Child trie are identified by their storage key (i.e. `ChildInfo::storage_key()`)
 	child_key_tracker: RefCell<HashMap<Vec<u8>, HashMap<Vec<u8>, KeyTracker>>>,
@@ -119,7 +119,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			genesis_root: Default::default(),
 			record: Default::default(),
 			shared_cache: new_shared_cache(0, (1, 10)),
-			key_tracker: Default::default(),
+			main_key_tracker: Default::default(),
 			child_key_tracker: Default::default(),
 			read_write_tracker: Default::default(),
 			whitelist: Default::default(),
@@ -160,7 +160,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 	}
 
 	fn add_whitelist_to_tracker(&self) {
-		let mut key_tracker = self.key_tracker.borrow_mut();
+		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
 		let whitelisted = KeyTracker {
 			has_been_read: true,
@@ -170,12 +170,12 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let whitelist = self.whitelist.borrow();
 
 		whitelist.iter().for_each(|key| {
-			key_tracker.insert(key.to_vec(), whitelisted);
+			main_key_tracker.insert(key.to_vec(), whitelisted);
 		});
 	}
 
 	fn wipe_tracker(&self) {
-		*self.key_tracker.borrow_mut() = HashMap::new();
+		*self.main_key_tracker.borrow_mut() = HashMap::new();
 		self.add_whitelist_to_tracker();
 		*self.read_write_tracker.borrow_mut() = Default::default();
 	}
@@ -184,12 +184,12 @@ impl<B: BlockT> BenchmarkingState<B> {
 	fn add_read_key(&self, childtrie: Option<&[u8]>, key: &[u8]) {
 		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
 		let mut child_key_tracker = self.child_key_tracker.borrow_mut();
-		let mut top_key_tracker = self.key_tracker.borrow_mut();
+		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
 		let key_tracker = if let Some(childtrie) = childtrie {
 			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(|| HashMap::new())
 	 	} else {
-			&mut top_key_tracker
+			&mut main_key_tracker
 		};
 
 		let has_been_read = KeyTracker {
@@ -231,12 +231,12 @@ impl<B: BlockT> BenchmarkingState<B> {
 	fn add_write_key(&self, childtrie: Option<&[u8]>, key: &[u8]) {
 		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
 		let mut child_key_tracker = self.child_key_tracker.borrow_mut();
-		let mut top_key_tracker = self.key_tracker.borrow_mut();
+		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
 		let key_tracker = if let Some(childtrie) = childtrie {
 			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(|| HashMap::new())
 	 	} else {
-			&mut top_key_tracker
+			&mut main_key_tracker
 		};
 
 		// If we have written to the key, we also consider that we have read from it.
