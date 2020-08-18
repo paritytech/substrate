@@ -104,62 +104,6 @@ pub struct BenchmarkingState<B: BlockT> {
 	whitelist: RefCell<Vec<Vec<u8>>>,
 }
 
-fn add_read_key_in_key_tracker(
-	key_tracker: &mut HashMap<Vec<u8>, KeyTracker>,
-	read_write_tracker: &mut ReadWriteTracker,
-	key: &[u8]
-) {
-	let maybe_tracker = key_tracker.get(key);
-
-	let has_been_read = KeyTracker {
-		has_been_read: true,
-		has_been_written: false,
-	};
-
-	match maybe_tracker {
-		None => {
-			key_tracker.insert(key.to_vec(), has_been_read);
-			read_write_tracker.add_read();
-		},
-		Some(tracker) => {
-			if !tracker.has_been_read {
-				key_tracker.insert(key.to_vec(), has_been_read);
-				read_write_tracker.add_read();
-			} else {
-				read_write_tracker.add_repeat_read();
-			}
-		}
-	}
-}
-
-fn add_write_key_in_key_tracker(
-	key_tracker: &mut HashMap<Vec<u8>, KeyTracker>,
-	read_write_tracker: &mut ReadWriteTracker,
-	key: &[u8]
-) {
-	let maybe_tracker = key_tracker.get(key);
-
-	let has_been_written = KeyTracker {
-		has_been_read: true,
-		has_been_written: true,
-	};
-
-	match maybe_tracker {
-		None => {
-			key_tracker.insert(key.to_vec(), has_been_written);
-			read_write_tracker.add_write();
-		},
-		Some(tracker) => {
-			if !tracker.has_been_written {
-				key_tracker.insert(key.to_vec(), has_been_written);
-				read_write_tracker.add_write();
-			} else {
-				read_write_tracker.add_repeat_write();
-			}
-		}
-	}
-}
-
 impl<B: BlockT> BenchmarkingState<B> {
 	/// Create a new instance that creates a database in a temporary dir.
 	pub fn new(genesis: Storage, _cache_size_mb: Option<usize>) -> Result<Self, String> {
@@ -236,36 +180,99 @@ impl<B: BlockT> BenchmarkingState<B> {
 		*self.read_write_tracker.borrow_mut() = Default::default();
 	}
 
-	fn add_read_key(&self, key: &[u8]) {
-		log::trace!(target: "benchmark", "Read: {}", HexDisplay::from(&key));
-		let mut key_tracker = self.key_tracker.borrow_mut();
+	// Childtrie is identified by its storage key (i.e. `ChildInfo::storage_key`)
+	fn add_read_key(&self, childtrie: Option<&[u8]>, key: &[u8]) {
 		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
-		add_read_key_in_key_tracker(&mut key_tracker, &mut read_write_tracker, key);
-	}
-
-	fn add_write_key(&self, key: &[u8]) {
-		log::trace!(target: "benchmark", "Write: {}", HexDisplay::from(&key));
-		let mut key_tracker = self.key_tracker.borrow_mut();
-		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
-		add_write_key_in_key_tracker(&mut key_tracker, &mut read_write_tracker, key);
-	}
-
-	fn add_read_child_key(&self, child: &[u8], key: &[u8]) {
-		log::trace!(target: "benchmark", "Read: {}", HexDisplay::from(&key));
 		let mut child_key_tracker = self.child_key_tracker.borrow_mut();
-		let mut key_tracker = child_key_tracker.entry(child.to_vec())
-			.or_insert_with(|| HashMap::new());
-		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
-		add_read_key_in_key_tracker(&mut key_tracker, &mut read_write_tracker, key);
+		let mut top_key_tracker = self.key_tracker.borrow_mut();
+
+		let key_tracker = if let Some(childtrie) = childtrie {
+			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(|| HashMap::new())
+	 	} else {
+			&mut top_key_tracker
+		};
+
+		let has_been_read = KeyTracker {
+			has_been_read: true,
+			has_been_written: false,
+		};
+
+		let read = match key_tracker.get(key) {
+			None => {
+				key_tracker.insert(key.to_vec(), has_been_read);
+				read_write_tracker.add_read();
+				true
+			},
+			Some(tracker) => {
+				if !tracker.has_been_read {
+					key_tracker.insert(key.to_vec(), has_been_read);
+					read_write_tracker.add_read();
+					true
+				} else {
+					read_write_tracker.add_repeat_read();
+					false
+				}
+			}
+		};
+
+		if read {
+			if let Some(childtrie) = childtrie {
+				log::trace!(
+					target: "benchmark",
+					"Childtrie Read: {} {}", HexDisplay::from(&childtrie), HexDisplay::from(&key)
+				);
+			} else {
+				log::trace!(target: "benchmark", "Read: {}", HexDisplay::from(&key));
+			}
+		}
 	}
 
-	fn add_write_child_key(&self, child: &[u8], key: &[u8]) {
-		log::trace!(target: "benchmark", "Write: {}", HexDisplay::from(&key));
-		let mut child_key_tracker = self.child_key_tracker.borrow_mut();
-		let mut key_tracker = child_key_tracker.entry(child.to_vec())
-			.or_insert_with(|| HashMap::new());
+	// Childtrie is identified by its storage key (i.e. `ChildInfo::storage_key`)
+	fn add_write_key(&self, childtrie: Option<&[u8]>, key: &[u8]) {
 		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
-		add_write_key_in_key_tracker(&mut key_tracker, &mut read_write_tracker, key);
+		let mut child_key_tracker = self.child_key_tracker.borrow_mut();
+		let mut top_key_tracker = self.key_tracker.borrow_mut();
+
+		let key_tracker = if let Some(childtrie) = childtrie {
+			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(|| HashMap::new())
+	 	} else {
+			&mut top_key_tracker
+		};
+
+		// If we have written to the key, we also consider that we have read from it.
+		let has_been_written = KeyTracker {
+			has_been_read: true,
+			has_been_written: true,
+		};
+
+		let write = match key_tracker.get(key) {
+			None => {
+				key_tracker.insert(key.to_vec(), has_been_written);
+				read_write_tracker.add_write();
+				true
+			},
+			Some(tracker) => {
+				if !tracker.has_been_written {
+					key_tracker.insert(key.to_vec(), has_been_written);
+					read_write_tracker.add_write();
+					true
+				} else {
+					read_write_tracker.add_repeat_write();
+					false
+				}
+			}
+		};
+
+		if write {
+			if let Some(childtrie) = childtrie {
+				log::trace!(
+					target: "benchmark",
+					"Childtrie Write: {} {}", HexDisplay::from(&childtrie), HexDisplay::from(&key)
+				);
+			} else {
+				log::trace!(target: "benchmark", "Write: {}", HexDisplay::from(&key));
+			}
+		}
 	}
 }
 
@@ -279,12 +286,12 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.add_read_key(key);
+		self.add_read_key(None, key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.storage(key)
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<B::Hash>, Self::Error> {
-		self.add_read_key(key);
+		self.add_read_key(None, key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.storage_hash(key)
 	}
 
@@ -293,12 +300,12 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.add_read_child_key(child_info.storage_key(), key);
+		self.add_read_key(Some(child_info.storage_key()), key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.child_storage(child_info, key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
-		self.add_read_key(key);
+		self.add_read_key(None, key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.exists_storage(key)
 	}
 
@@ -307,12 +314,12 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		self.add_read_child_key(child_info.storage_key(), key);
+		self.add_read_key(Some(child_info.storage_key()), key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.exists_child_storage(child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.add_read_key(key);
+		self.add_read_key(None, key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.next_storage_key(key)
 	}
 
@@ -321,7 +328,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.add_read_child_key(child_info.storage_key(), key);
+		self.add_read_key(Some(child_info.storage_key()), key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.next_child_storage_key(child_info, key)
 	}
 
@@ -422,11 +429,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 			// Track DB Writes
 			main_storage_changes.iter().for_each(|(key, _)| {
-				self.add_write_key(key);
+				self.add_write_key(None, key);
 			});
 			child_storage_changes.iter().for_each(|(child_storage_key, storage_changes)| {
 				storage_changes.iter().for_each(|(key, _)| {
-					self.add_write_child_key(child_storage_key, key);
+					self.add_write_key(Some(child_storage_key), key);
 				})
 			});
 		} else {
