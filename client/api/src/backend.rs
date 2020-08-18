@@ -270,6 +270,15 @@ pub trait AuxStore {
 	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>>;
 }
 
+/// Provides access to an header lookup database.
+pub trait HeaderLookupStore<Block: BlockT> {
+	/// Is the header lookup define for a given number.
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool>;
+
+	/// Cleanup header mapping.
+	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()>;
+}
+
 /// An `Iterator` that iterates keys in a given block under a prefix.
 pub struct KeyIterator<'a, State, Block> {
 	state: State,
@@ -395,7 +404,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 ///
 /// The same applies for live `BlockImportOperation`s: while an import operation building on a
 /// parent `P` is alive, the state for `P` should not be pruned.
-pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
+pub trait Backend<Block: BlockT>: AuxStore + HeaderLookupStore<Block> + Send + Sync {
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation<Block, State = Self::State>;
 	/// Associated blockchain backend type.
@@ -537,121 +546,11 @@ pub fn changes_tries_state_at_block<'a, Block: BlockT>(
 	}
 }
 
-/// Shared pruning requirement read only access and instantiation.
-#[derive(Clone)]
-pub struct SharedPruningRequirementsSource<Block: BlockT> {
-	shared: Arc<RwLock<(Vec<ComponentPruningRequirements<Block>>, usize)>>,
-}
-
 /// Pruning requirement to share between multiple client component.
-///
-/// This allows pruning related synchronisation. For instance in light
-/// client we need to synchronize header pruning from CHT (every N blocks)
-/// with the pruning from consensus used (babe for instance require that
-/// its epoch headers are not pruned which works as long as the slot length
-/// is less than the CHT pruning window.
-/// Each compenent register at a given index (call are done by this order).
-///
-/// Note that this struct could be split in two different struct (provider without
-/// component and Component), depending on future usage of this shared info.
-#[derive(Clone)]
-pub struct SharedPruningRequirements<Block: BlockT> {
-	shared: Arc<RwLock<(Vec<ComponentPruningRequirements<Block>>, usize)>>,
-	component: usize,
-}
-
-impl<Block: BlockT> Default for SharedPruningRequirementsSource<Block> {
-	fn default() -> Self {
-		SharedPruningRequirementsSource {
-			shared: Arc::new(RwLock::new((Vec::new(), 0))),
-		}
-	}
-}
-
-fn shared_finalized_headers_needed<Block: BlockT>(
-	shared: &Arc<RwLock<(Vec<ComponentPruningRequirements<Block>>, usize)>>,
-) -> PruningLimit<NumberFor<Block>> {
-	let mut result = PruningLimit::None;
-	for req in shared.read().0.iter() {
-		match &req.requires_finalized_header_up_to {
-			PruningLimit::Locked => return PruningLimit::Locked,
-			PruningLimit::None => (),
-			PruningLimit::Some(n) => {
-				if let PruningLimit::Some(p) = result {
-					if &p < n {
-						result = PruningLimit::Some(p);
-						continue;
-					}
-				}
-				result = PruningLimit::Some(n.clone());
-			},
-		}
-	}
-	result
-}
-
-impl<Block: BlockT> SharedPruningRequirementsSource<Block> {
-	/// Add a following requirement to apply.
-	/// Returns the shared requirement to use from this component.
-	pub fn next_instance(
-		&self,
-	) -> SharedPruningRequirements<Block> {
-		let req = ComponentPruningRequirements::default();
-		let index = {
-			let mut shared = self.shared.write();
-			let index = shared.0.len();
-			shared.0.push(req);
-			shared.1 += 1;
-			index
-		};
-		SharedPruningRequirements {
-			shared: self.shared.clone(),
-			component: index,
-		}
-	}
-
-	/// Resolve a finalized block headers to keep.
-	pub fn finalized_headers_needed(&self) -> PruningLimit<NumberFor<Block>> {
-		shared_finalized_headers_needed(&self.shared)
-	}
-}
-
-impl<Block: BlockT> SharedPruningRequirements<Block> {
-	/// Resolve a finalized block headers to keep.
-	pub fn finalized_headers_needed(&self) -> PruningLimit<NumberFor<Block>> {
-		shared_finalized_headers_needed(&self.shared)
-	}
-
-	/// Set new requirement on finalized headers.
-	/// Returns false if we do not have a handle on the shared requirement.
-	pub fn set_finalized_headers_needed(&self, limit: PruningLimit<NumberFor<Block>>) {
-		let index = self.component;
-		let mut shared = self.shared.write();
-		shared.0[index].requires_finalized_header_up_to = limit;
-	}
-}
-
-/// Individual pruning requirement for any substrate component.
-struct ComponentPruningRequirements<Block: BlockT> {
-	requires_finalized_header_up_to: PruningLimit<NumberFor<Block>>,
-}
-
-impl<Block: BlockT> Default for ComponentPruningRequirements<Block> {
-	fn default() -> Self {
-		ComponentPruningRequirements {
-			requires_finalized_header_up_to: PruningLimit::None,
-		}
-	}
-}
-
-/// Define a block number limit to apply.
-#[derive(Eq, PartialEq)]
-pub enum PruningLimit<N> {
-	/// Ignore.
-	None,
-	/// Only block with a number lower than N
-	/// can be pruned.
-	Some(N),
-	/// We lock all pruning.
-	Locked,
+#[derive(Clone, Default)]
+pub struct SharedPruningRequirements {
+	/// Some component like babe will need to resolve canonical branch,
+	/// for it we keep some key lookup mapping when pruning CHT in light
+	/// client.
+	pub need_mapping_for_light_pruning: bool,
 }

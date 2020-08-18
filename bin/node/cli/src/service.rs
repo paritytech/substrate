@@ -33,7 +33,7 @@ use sp_inherents::InherentDataProviders;
 use sc_network::{Event, NetworkService};
 use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
-use sc_client_api::{ExecutorProvider, RemoteBackend};
+use sc_client_api::{ExecutorProvider, RemoteBackend, SharedPruningRequirements};
 use sp_core::traits::BareCryptoStorePtr;
 use node_executor::Executor;
 
@@ -346,8 +346,10 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
-	let (client, backend, keystore, mut task_manager, on_demand, shared_pruning_requirements) =
-		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
+	let mut shared_pruning_requirements = SharedPruningRequirements::default();
+	sc_consensus_babe::light_pruning_requirements(&mut shared_pruning_requirements);
+	let (client, backend, keystore, mut task_manager, on_demand) =
+		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config, &shared_pruning_requirements)?;
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 

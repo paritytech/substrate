@@ -38,7 +38,7 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
 	backend::{
 		AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
-		PrunableStateChangesTrieStorage,
+		PrunableStateChangesTrieStorage, HeaderLookupStore,
 	},
 	blockchain::{
 		HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys,
@@ -110,6 +110,16 @@ impl<S: AuxStore, H: Hasher> AuxStore for Backend<S, H> {
 
 	fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		self.blockchain.storage().get_aux(key)
+	}
+}
+
+impl<Block: BlockT, S: HeaderLookupStore<Block>, H: Hasher> HeaderLookupStore<Block> for Backend<S, H> {
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool> {
+		self.blockchain.storage().is_lookup_define_for_number(number)
+	}
+
+	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
+		self.blockchain.storage().clean_up_number_lookup(number)
 	}
 }
 

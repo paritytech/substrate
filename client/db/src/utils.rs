@@ -144,6 +144,17 @@ pub fn remove_number_to_key_mapping<N: TryInto<u32>>(
 	Ok(())
 }
 
+/// Delete hash to hash mapping in DB transaction.
+pub fn remove_hash_to_key_mapping<H: AsRef<[u8]>>(
+	transaction: &mut Transaction<DbHash>,
+	key_lookup_col: u32,
+	hash: H,
+) -> sp_blockchain::Result<()> {
+	transaction.remove(key_lookup_col, hash.as_ref());
+	Ok(())
+}
+
+
 /// Remove key mappings.
 pub fn remove_key_mappings<N: TryInto<u32>, H: AsRef<[u8]>>(
 	transaction: &mut Transaction<DbHash>,
@@ -152,7 +163,7 @@ pub fn remove_key_mappings<N: TryInto<u32>, H: AsRef<[u8]>>(
 	hash: H,
 ) -> sp_blockchain::Result<()> {
 	remove_number_to_key_mapping(transaction, key_lookup_col, number)?;
-	transaction.remove(key_lookup_col, hash.as_ref());
+	remove_hash_to_key_mapping(transaction, key_lookup_col, hash)?;
 	Ok(())
 }
 

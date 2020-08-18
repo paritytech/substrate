@@ -1988,6 +1988,41 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 	}
 }
 
+impl<B, E, Block, RA> sc_client_api::HeaderLookupStore<Block> for Client<B, E, Block, RA>
+	where
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+		Block: BlockT,
+		Self: ProvideRuntimeApi<Block>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+{
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool> {
+		sc_client_api::HeaderLookupStore::is_lookup_define_for_number(&*self.backend, number)
+	}
+
+	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
+		sc_client_api::HeaderLookupStore::clean_up_number_lookup(&*self.backend, number)
+	}
+}
+
+impl<B, E, Block, RA> sc_client_api::HeaderLookupStore<Block> for &Client<B, E, Block, RA>
+	where
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+		Block: BlockT,
+		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+{
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool> {
+		(**self).is_lookup_define_for_number(number)
+	}
+
+	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
+		(**self).clean_up_number_lookup(number)
+	}
+}
+
+
 impl<BE, E, B, RA> sp_consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
 	where BE: backend::Backend<B>,
 		  E: CallExecutor<B>,

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use sc_client_api::{ExecutorProvider, RemoteBackend};
+use sc_client_api::{ExecutorProvider, RemoteBackend, SharedPruningRequirements};
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
 use sp_inherents::InherentDataProviders;
@@ -221,8 +221,12 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
-	let (client, backend, keystore, mut task_manager, on_demand, _shared_pruning_requirements) =
-		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
+	let shared_pruning_requirements = SharedPruningRequirements::default();
+	let (client, backend, keystore, mut task_manager, on_demand) =
+		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(
+			&config,
+			&shared_pruning_requirements,
+		)?;
 
 	let transaction_pool = Arc::new(sc_transaction_pool::BasicPool::new_light(
 		config.transaction_pool.clone(),

@@ -1367,6 +1367,30 @@ impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: Blo
 	}
 }
 
+
+impl<Block> sc_client_api::backend::HeaderLookupStore<Block> for Backend<Block>
+	where Block: BlockT
+{
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool> {
+		utils::block_id_to_lookup_key::<Block>(&*self.storage.db, columns::KEY_LOOKUP, BlockId::Number(number.clone()))
+			.map(|r| r.is_some())
+	}
+
+	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
+		// TODO pass transaction as parameter?
+		let mut transaction = Transaction::new();
+		utils::remove_number_to_key_mapping(
+			&mut transaction,
+			columns::KEY_LOOKUP,
+			number.clone(),
+		)?;
+
+		self.storage.db.commit(transaction)?;
+
+		Ok(())
+	}
+}
+
 impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = BlockchainDb<Block>;

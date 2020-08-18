@@ -421,6 +421,43 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 		Ok(())
 	}
 
+	/// Prune out finalized epochs, except for the ancestor of the finalized
+	/// block. The given slot should be the slot number at which the finalized
+	/// block was authored.
+	pub fn prune_finalized_light<Error, F, C>(
+		&mut self,
+		hash: &Hash,
+		number: Number,
+		slot: E::SlotNumber,
+		is_canonical: F,
+		clean_up: C,
+	) -> Result<(), fork_tree::Error<Error>>
+		where Error: std::error::Error,
+		  F: Fn(&Hash, &Number, &Number) -> Result<bool, Error>,
+			C: Fn(&Number) -> Result<(), Error>,
+	{
+	
+		let predicate = |epoch: &PersistedEpochHeader<E>| match *epoch {
+			PersistedEpochHeader::Genesis(_, ref epoch_1) =>
+				slot >= epoch_1.end_slot,
+			PersistedEpochHeader::Regular(ref epoch_n) =>
+				slot >= epoch_n.end_slot,
+		};
+		let removed = self.inner.prune_light(
+			hash,
+			&number,
+			&is_canonical,
+			&predicate,
+			&clean_up,
+		)?;
+	
+		for (hash, number, _) in removed {
+			self.epochs.remove(&(hash, number));
+		}
+
+		Ok(())
+	}
+
 	/// Get a reference to an epoch with given identifier.
 	pub fn epoch(&self, id: &EpochIdentifier<Hash, Number>) -> Option<&E> {
 		self.epochs.get(&(id.hash, id.number))

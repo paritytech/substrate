@@ -26,7 +26,7 @@ use crate::{
 };
 use sc_client_api::{
 	light::RemoteBlockchain, ForkBlocks, BadBlocks, UsageProvider, ExecutorProvider,
-	SharedPruningRequirementsSource,
+	SharedPruningRequirements,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_chain_spec::get_extension;
@@ -168,7 +168,6 @@ type TLightParts<TBl, TRtApi, TExecDisp> = (
 	Arc<RwLock<sc_keystore::Store>>,
 	TaskManager,
 	Arc<OnDemand<TBl>>,
-	SharedPruningRequirementsSource<TBl>,
 );
 
 /// Light client backend type with a specific hash type.
@@ -268,13 +267,12 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 
 /// Create the initial parts of a light node.
 pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
-	config: &Configuration
+	config: &Configuration,
+	shared_pruning_requirements: &SharedPruningRequirements,
 ) -> Result<TLightParts<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	let shared_pruning_requirements = SharedPruningRequirementsSource::default();
-
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
 		TaskManager::new(config.task_executor.clone(), registry)?
@@ -302,7 +300,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 			pruning: config.pruning.clone(),
 			source: config.database.clone(),
 		};
-		sc_client_db::light::LightStorage::new(db_settings, shared_pruning_requirements.clone())?
+		sc_client_db::light::LightStorage::new(db_settings, shared_pruning_requirements)?
 	};
 	let light_blockchain = sc_light::new_light_blockchain(db_storage);
 	let fetch_checker = Arc::new(
@@ -322,7 +320,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 	)?);
 
-	Ok((client, backend, keystore, task_manager, on_demand, shared_pruning_requirements))
+	Ok((client, backend, keystore, task_manager, on_demand))
 }
 
 /// Create an instance of db-backed client.

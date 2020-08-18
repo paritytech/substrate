@@ -86,7 +86,7 @@ use sp_core::{crypto::Public, traits::BareCryptoStore};
 use sp_application_crypto::AppKey;
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
-	traits::{Block as BlockT, Header, DigestItemFor, Zero, One},
+	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use sc_keystore::KeyStorePtr;
@@ -104,7 +104,7 @@ use sp_consensus::import_queue::{Verifier, BasicQueue, DefaultImportQueue, Cache
 use sc_client_api::{
 	backend::AuxStore,
 	BlockchainEvents, ProvideUncles,
-	SharedPruningRequirements, SharedPruningRequirementsSource, PruningLimit,
+	SharedPruningRequirements, HeaderLookupStore,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use futures::channel::mpsc::{channel, Sender, Receiver};
@@ -1064,8 +1064,7 @@ pub struct BabeBlockImport<Block: BlockT, Client, I> {
 	client: Arc<Client>,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	config: Config,
-	previous_needed_height: Option<NumberFor<Block>>,
-	shared_pruning_requirements: Option<SharedPruningRequirements<Block>>,
+	light_pruning: bool,
 }
 
 impl<Block: BlockT, I: Clone, Client> Clone for BabeBlockImport<Block, Client, I> {
@@ -1075,8 +1074,7 @@ impl<Block: BlockT, I: Clone, Client> Clone for BabeBlockImport<Block, Client, I
 			client: self.client.clone(),
 			epoch_changes: self.epoch_changes.clone(),
 			config: self.config.clone(),
-			previous_needed_height: self.previous_needed_height.clone(),
-			shared_pruning_requirements: self.shared_pruning_requirements.clone(),
+			light_pruning: self.light_pruning,
 		}
 	}
 }
@@ -1087,20 +1085,15 @@ impl<Block: BlockT, Client, I> BabeBlockImport<Block, Client, I> {
 		epoch_changes: SharedEpochChanges<Block, Epoch>,
 		block_import: I,
 		config: Config,
-		shared_pruning_requirements: Option<&SharedPruningRequirementsSource<Block>>,
+		shared_pruning_requirements: Option<&SharedPruningRequirements>,
 	) -> Self {
-		let shared_pruning_requirements = shared_pruning_requirements.map(|shared| {
-			let req = shared.next_instance();
-			req.set_finalized_headers_needed(PruningLimit::Locked);
-			req
-		});
+		let light_pruning = shared_pruning_requirements.is_some();
 		BabeBlockImport {
 			client,
 			inner: block_import,
 			epoch_changes,
 			config,
-			previous_needed_height: Some(Zero::zero()),
-			shared_pruning_requirements,
+			light_pruning,
 		}
 	}
 }
@@ -1110,6 +1103,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
 	Inner::Error: Into<ConsensusError>,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ HeaderLookupStore<Block>
 		+ AuxStore + ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync,
 	Client::Api: BabeApi<Block> + ApiExt<Block>,
 {
@@ -1274,6 +1268,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 				prune_finalized(
 					self.client.clone(),
 					&mut epoch_changes,
+					self.light_pruning,
 				)?;
 
 				epoch_changes.import(
@@ -1299,22 +1294,6 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 					insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
 				)
 			);
-
-			// new epoch limits, update shared pruning limit if needed
-			if let Some(shared_pruning_requirements) = self.shared_pruning_requirements.as_ref() {
-				// resolve needed height for later pruning `is_descendant_of` uses.
-				let needed_height = epoch_changes.tree().lowest_node_number()
-					.map(|number| number - One::one());
-				debug!(target: "babe", "Using prune limit {:?}", needed_height);
-				if needed_height != self.previous_needed_height {
-					self.previous_needed_height = needed_height.clone();
-					if let Some(height) = needed_height {
-						shared_pruning_requirements.set_finalized_headers_needed(PruningLimit::Some(height));
-					} else {
-						shared_pruning_requirements.set_finalized_headers_needed(PruningLimit::Locked);
-					}
-				}
-			}
 		}
 
 		aux_schema::write_block_weight(
@@ -1377,9 +1356,12 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 fn prune_finalized<Block, Client>(
 	client: Arc<Client>,
 	epoch_changes: &mut EpochChangesFor<Block, Epoch>,
+	prune_light: bool,
 ) -> Result<(), ConsensusError> where
 	Block: BlockT,
-	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
+	Client: HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ HeaderLookupStore<Block>,
 {
 	let info = client.info();
 
@@ -1395,14 +1377,37 @@ fn prune_finalized<Block, Client>(
 			.slot_number()
 	};
 
-	epoch_changes.prune_finalized(
-		descendent_query(&*client),
-		&info.finalized_hash,
-		info.finalized_number,
-		finalized_slot,
-	).map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
+	if prune_light {
+		let is_canonical = |_hash: &Block::Hash, number: &NumberFor<Block>, finalized_number: &NumberFor<Block>| {
+			Ok(number <= finalized_number && client.is_lookup_define_for_number(number)?)
+		};
+		let clean_up = |number: &NumberFor<Block>| {
+			client.clean_up_number_lookup(number)?;
+			Ok(())
+		};
+
+		epoch_changes.prune_finalized_light::<sp_blockchain::Error, _, _>(
+			&info.finalized_hash,
+			info.finalized_number,
+			finalized_slot,
+			is_canonical,
+			clean_up,
+		).map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
+	} else {
+		epoch_changes.prune_finalized(
+			descendent_query(&*client),
+			&info.finalized_hash,
+			info.finalized_number,
+			finalized_slot,
+		).map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
+	}
 
 	Ok(())
+}
+
+/// Initialize babe pruning requirements.
+pub fn light_pruning_requirements(shared_pruning_requirements: &mut SharedPruningRequirements) {
+	shared_pruning_requirements.need_mapping_for_light_pruning = true;
 }
 
 /// Produce a BABE block-import object to be used later on in the construction of
@@ -1414,9 +1419,10 @@ pub fn block_import<Client, Block: BlockT, I>(
 	config: Config,
 	wrapped_block_import: I,
 	client: Arc<Client>,
-	shared_pruning_requirements: Option<&SharedPruningRequirementsSource<Block>>,
+	shared_pruning_requirements: Option<&SharedPruningRequirements>,
 ) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)> where
-	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
+	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ HeaderLookupStore<Block>,
 {
 	let epoch_changes = aux_schema::load_epoch_changes::<Block, _>(&*client, &config)?;
 	let link = BabeLink {
@@ -1431,6 +1437,7 @@ pub fn block_import<Client, Block: BlockT, I>(
 	prune_finalized(
 		client.clone(),
 		&mut epoch_changes.lock(),
+		shared_pruning_requirements.is_some(),
 	)?;
 
 	let import = BabeBlockImport::new(

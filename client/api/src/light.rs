@@ -32,7 +32,7 @@ use sp_blockchain::{
 	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
 	Error as ClientError, Result as ClientResult,
 };
-use crate::{backend::{AuxStore, NewBlockState}, UsageInfo};
+use crate::{backend::{AuxStore, NewBlockState, HeaderLookupStore}, UsageInfo};
 
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -232,7 +232,8 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 
 
 /// Light client blockchain storage.
-pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError> {
+pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError>
+	+ HeaderLookupStore<Block> {
 	/// Store new header. Should refuse to revert any finalized blocks.
 	///
 	/// Takes new authorities, the leaf state of the new block, and
