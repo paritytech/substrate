@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 #![warn(unused_extern_crates)]
 #![warn(missing_docs)]
 
@@ -259,6 +260,7 @@ mod utils;
 
 pub mod config;
 pub mod error;
+pub mod gossip;
 pub mod network_state;
 
 pub use service::{NetworkService, NetworkWorker};
