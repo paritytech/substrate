@@ -1019,7 +1019,7 @@ macro_rules! impl_benchmark_test {
 /// ```
 ///
 /// The `whitelist` is a parameter you pass to control the DB read/write tracking.
-/// We use a vector of `TrackedStorageKeys`, which is a simple struct used to set
+/// We use a vector of `TrackedStorageKey`, which is a simple struct used to set
 /// if a key has been read or written to:
 ///
 /// ```ignore

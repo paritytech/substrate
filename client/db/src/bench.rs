@@ -432,7 +432,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	}
 
 	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
-		self.whitelist.borrow_mut().to_vec()
+		self.whitelist.borrow().to_vec()
 	}
 
 	fn set_whitelist(&self, new: Vec<TrackedStorageKey>) {

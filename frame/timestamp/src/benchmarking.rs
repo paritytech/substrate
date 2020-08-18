@@ -50,7 +50,7 @@ benchmarks! {
 		let t in 1 .. MAX_TIME;
 		Timestamp::<T>::set(RawOrigin::None.into(), t.into())?;
 		ensure!(DidUpdate::exists(), "Time was not set.");
-		// Ignore read/write to `DidUpdate` since it transient.
+		// Ignore read/write to `DidUpdate` since it is transient.
 		let did_update_key = crate::DidUpdate::hashed_key().to_vec();
 		frame_benchmarking::benchmarking::add_whitelist(did_update_key.into());
 	}: { Timestamp::<T>::on_finalize(t.into()); }
