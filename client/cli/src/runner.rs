@@ -106,9 +106,7 @@ where
 	pin_mut!(f);
 
 	tokio_runtime.block_on(main(f)).map_err(|e| e.to_string())?;
-
-	task_manager.terminate();
-	drop(tokio_runtime);
+	task_manager.clean_shutdown();
 
 	Ok(())
 }
