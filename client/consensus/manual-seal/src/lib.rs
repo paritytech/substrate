@@ -198,9 +198,8 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 	).await
 }
 
-/// runs the background authorship task for the instant seal engine.
-/// instant-seal creates a new block for every transaction imported into
-/// the transaction pool.
+/// Runs the background authorship task for the interval seal engine.
+/// interval-seal creates a new block every five seconds.
 pub async fn run_interval_seal<B, CB, E, C, A, SC, T>(
 	block_import: BoxBlockImport<B, T>,
 	env: E,
