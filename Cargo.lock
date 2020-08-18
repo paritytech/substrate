@@ -6257,6 +6257,7 @@ dependencies = [
  "parity-util-mem 0.7.0",
  "parking_lot 0.10.2",
  "quickcheck",
+ "rocksdb",
  "sc-client-api",
  "sc-executor",
  "sc-state-db",
