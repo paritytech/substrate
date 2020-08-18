@@ -125,16 +125,27 @@ pub trait Benchmarking {
 	// Add a new item to the DB whitelist.
 	fn add_whitelist(&mut self, add: TrackedStorageKey) {
 		let mut whitelist = self.get_whitelist();
-		if !whitelist.contains(&add) {
-			whitelist.push(add);
-			self.set_whitelist(whitelist);
+		match whitelist.iter_mut().find(|x| x.key == add.key) {
+			// If we already have this key in the whitelist, update to be the most constrained value.
+			Some(item) => {
+				*item = TrackedStorageKey {
+					key: add.key,
+					has_been_read: item.has_been_read || add.has_been_read,
+					has_been_written: item.has_been_written || add.has_been_written,
+				}
+			},
+			// If the key does not exist, add it.
+			None => {
+				whitelist.push(add);
+			}
 		}
+		self.set_whitelist(whitelist);
 	}
 
 	// Remove an item from the DB whitelist.
 	fn remove_whitelist(&mut self, remove: Vec<u8>) {
 		let mut whitelist = self.get_whitelist();
-		whitelist.retain(|x| x != &remove);
+		whitelist.retain(|x| x.key != remove);
 		self.set_whitelist(whitelist);
 	}
 }
@@ -164,7 +175,7 @@ pub trait Benchmarking<T> {
 		highest_range_values: &[u32],
 		steps: &[u32],
 		repeat: u32,
-		whitelist: &[Vec<u8>]
+		whitelist: &[TrackedStorageKey]
 	) -> Result<Vec<T>, &'static str>;
 }
 

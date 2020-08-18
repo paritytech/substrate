@@ -96,7 +96,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	genesis: HashMap<Vec<u8>, (Vec<u8>, i32)>,
 	record: Cell<Vec<Vec<u8>>>,
 	shared_cache: SharedCache<B>, // shared cache is always empty
-	key_tracker: RefCell<HashMap<Vec<u8>, TrackedStorageKey>>,
+	key_tracker: RefCell<HashMap<Vec<u8>, KeyTracker>>,
 	read_write_tracker: RefCell<ReadWriteTracker>,
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
 }
@@ -158,15 +158,14 @@ impl<B: BlockT> BenchmarkingState<B> {
 	fn add_whitelist_to_tracker(&self) {
 		let mut key_tracker = self.key_tracker.borrow_mut();
 
-		let whitelisted = KeyTracker {
-			has_been_read: true,
-			has_been_written: true,
-		};
-
 		let whitelist = self.whitelist.borrow();
 
 		whitelist.iter().for_each(|key| {
-			key_tracker.insert(key.to_vec(), whitelisted);
+			let whitelisted = KeyTracker {
+				has_been_read: key.has_been_read,
+				has_been_written: key.has_been_written,
+			};
+			key_tracker.insert(key.key.clone(), whitelisted);
 		});
 	}
 
@@ -184,18 +183,21 @@ impl<B: BlockT> BenchmarkingState<B> {
 
 		let maybe_tracker = key_tracker.get(key);
 
-		let has_been_read = KeyTracker {
-			has_been_read: true,
-			has_been_written: false,
-		};
-
 		match maybe_tracker {
 			None => {
+				let has_been_read = KeyTracker {
+					has_been_read: true,
+					has_been_written: false,
+				};
 				key_tracker.insert(key.to_vec(), has_been_read);
 				read_write_tracker.add_read();
 			},
 			Some(tracker) => {
 				if !tracker.has_been_read {
+					let has_been_read = KeyTracker {
+						has_been_read: true,
+						has_been_written: tracker.has_been_written,
+					};
 					key_tracker.insert(key.to_vec(), has_been_read);
 					read_write_tracker.add_read();
 				} else {

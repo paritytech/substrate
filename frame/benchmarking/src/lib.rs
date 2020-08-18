@@ -32,6 +32,7 @@ pub use sp_io::storage::root as storage_root;
 pub use sp_runtime::traits::Zero;
 pub use frame_support;
 pub use paste;
+pub use sp_storage::TrackedStorageKey;
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
@@ -790,7 +791,7 @@ macro_rules! impl_benchmark {
 				highest_range_values: &[u32],
 				steps: &[u32],
 				repeat: u32,
-				whitelist: &[Vec<u8>]
+				whitelist: &[$crate::TrackedStorageKey]
 			) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
 				let extrinsic = sp_std::str::from_utf8(extrinsic)
@@ -806,7 +807,7 @@ macro_rules! impl_benchmark {
 					<frame_system::Account::<T> as frame_support::storage::StorageMap<_,_>>::hashed_key_for(
 						$crate::whitelisted_caller::<T::AccountId>()
 					);
-				whitelist.push(whitelisted_caller_key);
+				whitelist.push(whitelisted_caller_key.into());
 				$crate::benchmarking::set_whitelist(whitelist);
 
 				// Warm up the DB
@@ -1017,10 +1018,21 @@ macro_rules! impl_benchmark_test {
 /// let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat, &whitelist);
 /// ```
 ///
-/// The `whitelist` is a `Vec<Vec<u8>>` of storage keys that you would like to skip for DB tracking. For example:
+/// For the `whitelist`, we use a vector of `TrackedStorageKeys`. This is a simple struct used set
+/// if a key has been read or written to:
 ///
 /// ```ignore
-/// let whitelist: Vec<Vec<u8>> = vec![
+/// pub struct TrackedStorageKey {
+/// 	pub key: Vec<u8>,
+/// 	pub has_been_read: bool,
+/// 	pub has_been_written: bool,
+/// }
+/// ```
+///
+/// For values that should be skipped entirely, we can just pass the `key`. For example:
+///
+/// ```ignore
+/// let whitelist: Vec<TrackedStorageKey> = vec![
 /// 	// Block Number
 /// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec(),
 /// 	// Total Issuance

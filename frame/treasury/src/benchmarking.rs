@@ -118,7 +118,7 @@ benchmarks! {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T>(u);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_whitelist(caller_key);
+		frame_benchmarking::benchmarking::add_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), value, beneficiary_lookup)
 
 	reject_proposal {
@@ -148,7 +148,7 @@ benchmarks! {
 		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_whitelist(caller_key);
+		frame_benchmarking::benchmarking::add_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), reason, awesome_person)
 
 	retract_tip {
@@ -163,10 +163,10 @@ benchmarks! {
 		let hash = T::Hashing::hash_of(&(&reason_hash, &awesome_person));
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_whitelist(caller_key);
+		frame_benchmarking::benchmarking::add_whitelist(caller_key.into());
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_whitelist(caller_key);
+		frame_benchmarking::benchmarking::add_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), hash)
 
 	tip_new {
@@ -176,7 +176,7 @@ benchmarks! {
 		let (caller, reason, beneficiary, value) = setup_tip::<T>(r, t)?;
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_whitelist(caller_key);
+		frame_benchmarking::benchmarking::add_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), reason, beneficiary, value)
 
 	tip {
@@ -196,7 +196,7 @@ benchmarks! {
 		let caller = account("member", t - 1, SEED);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_whitelist(caller_key);
+		frame_benchmarking::benchmarking::add_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), hash, value)
 
 	close_tip {
@@ -226,7 +226,7 @@ benchmarks! {
 		let caller = account("caller", t, SEED);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_whitelist(caller_key);
+		frame_benchmarking::benchmarking::add_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), hash)
 
 	on_initialize {

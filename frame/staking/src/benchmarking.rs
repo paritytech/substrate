@@ -474,7 +474,7 @@ benchmarks! {
 
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_whitelist(caller_key);
+		frame_benchmarking::benchmarking::add_whitelist(caller_key.into());
 	}: {
 		let result = <Staking<T>>::submit_election_solution(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -538,7 +538,7 @@ benchmarks! {
 
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_whitelist(caller_key);
+		frame_benchmarking::benchmarking::add_whitelist(caller_key.into());
 
 		// submit a very bad solution on-chain
 		{
@@ -594,7 +594,7 @@ benchmarks! {
 
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_whitelist(caller_key);
+		frame_benchmarking::benchmarking::add_whitelist(caller_key.into());
 
 		// submit a seq-phragmen with all the good stuff on chain.
 		{
