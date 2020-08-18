@@ -139,6 +139,7 @@ mod extensions;
 mod weights;
 #[cfg(test)]
 mod tests;
+mod default_weights;
 
 pub use extensions::{
 	check_mortality::CheckMortality, check_genesis::CheckGenesis, check_nonce::CheckNonce,
@@ -159,25 +160,13 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 pub trait WeightInfo {
-	fn remark(b: u32, ) -> Weight;
-	fn set_heap_pages(i: u32, ) -> Weight;
-	fn set_code_without_checks(b: u32, ) -> Weight;
-	fn set_changes_trie_config(d: u32, ) -> Weight;
+	fn remark() -> Weight;
+	fn set_heap_pages() -> Weight;
+	fn set_changes_trie_config() -> Weight;
 	fn set_storage(i: u32, ) -> Weight;
 	fn kill_storage(i: u32, ) -> Weight;
 	fn kill_prefix(p: u32, ) -> Weight;
-	fn suicide(n: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn remark(_b: u32, ) -> Weight { 1_000_000_000 }
-	fn set_heap_pages(_i: u32, ) -> Weight { 1_000_000_000 }
-	fn set_code_without_checks(_b: u32, ) -> Weight { 1_000_000_000 }
-	fn set_changes_trie_config(_d: u32, ) -> Weight { 1_000_000_000 }
-	fn set_storage(_i: u32, ) -> Weight { 1_000_000_000 }
-	fn kill_storage(_i: u32, ) -> Weight { 1_000_000_000 }
-	fn kill_prefix(_p: u32, ) -> Weight { 1_000_000_000 }
-	fn suicide(_n: u32, ) -> Weight { 1_000_000_000 }
+	fn suicide() -> Weight;
 }
 
 pub trait Trait: 'static + Eq + Clone {
@@ -564,7 +553,7 @@ decl_module! {
 		/// - Base Weight: 0.665 µs, independent of remark length.
 		/// - No DB operations.
 		/// # </weight>
-		#[weight = 700_000]
+		#[weight = T::SystemWeightInfo::remark()]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
@@ -577,7 +566,7 @@ decl_module! {
 		/// - Base Weight: 1.405 µs
 		/// - 1 write to HEAP_PAGES
 		/// # </weight>
-		#[weight = (T::DbWeight::get().writes(1) + 1_500_000, DispatchClass::Operational)]
+		#[weight = (T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational)]
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
@@ -595,7 +584,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Operational)]
 		pub fn set_code(origin, code: Vec<u8>) {
-			Self::can_set_code(origin, &code)?;
+			ensure_root(origin)?;
+			Self::can_set_code(&code)?;
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 			Self::deposit_event(RawEvent::CodeUpdated);
@@ -626,7 +616,7 @@ decl_module! {
 		/// - DB Weight:
 		///     - Writes: Changes Trie, System Digest
 		/// # </weight>
-		#[weight = (T::DbWeight::get().writes(2) + 10_000_000, DispatchClass::Operational)]
+		#[weight = (T::SystemWeightInfo::set_changes_trie_config(), DispatchClass::Operational)]
 		pub fn set_changes_trie_config(origin, changes_trie_config: Option<ChangesTrieConfiguration>) {
 			ensure_root(origin)?;
 			match changes_trie_config.clone() {
@@ -652,8 +642,7 @@ decl_module! {
 		/// - Writes: Number of items
 		/// # </weight>
 		#[weight = (
-			T::DbWeight::get().writes(items.len() as Weight)
-				.saturating_add((items.len() as Weight).saturating_mul(600_000)),
+			T::SystemWeightInfo::set_storage(items.len() as u32),
 			DispatchClass::Operational,
 		)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
@@ -672,8 +661,7 @@ decl_module! {
 		/// - Writes: Number of items
 		/// # </weight>
 		#[weight = (
-			T::DbWeight::get().writes(keys.len() as Weight)
-				.saturating_add((keys.len() as Weight).saturating_mul(400_000)),
+			T::SystemWeightInfo::kill_storage(keys.len() as u32),
 			DispatchClass::Operational,
 		)]
 		fn kill_storage(origin, keys: Vec<Key>) {
@@ -695,8 +683,7 @@ decl_module! {
 		/// - Writes: Number of subkeys + 1
 		/// # </weight>
 		#[weight = (
-			T::DbWeight::get().writes(Weight::from(*_subkeys) + 1)
-				.saturating_add((Weight::from(*_subkeys) + 1).saturating_mul(850_000)),
+			T::SystemWeightInfo::kill_prefix(_subkeys.saturating_add(1)),
 			DispatchClass::Operational,
 		)]
 		fn kill_prefix(origin, prefix: Key, _subkeys: u32) {
@@ -714,7 +701,7 @@ decl_module! {
 		/// Base Weight: 8.626 µs
 		/// No DB Read or Write operations because caller is already in overlay
 		/// # </weight>
-		#[weight = (10_000_000, DispatchClass::Operational)]
+		#[weight = (T::SystemWeightInfo::suicide(), DispatchClass::Operational)]
 		pub fn suicide(origin) {
 			let who = ensure_signed(origin)?;
 			let account = Account::<T>::get(&who);
@@ -1234,14 +1221,10 @@ impl<T: Trait> Module<T> {
 
 	/// Determine whether or not it is possible to update the code.
 	///
-	/// This function has no side effects and is idempotent, but is fairly
-	/// heavy. It is automatically called by `set_code`; in most cases,
-	/// a direct call to `set_code` is preferable. It is useful to call
-	/// `can_set_code` when it is desirable to perform the appropriate
-	/// runtime checks without actually changing the code yet.
-	pub fn can_set_code(origin: T::Origin, code: &[u8]) -> Result<(), sp_runtime::DispatchError> {
-		ensure_root(origin)?;
-
+	/// Checks the given code if it is a valid runtime wasm blob by instantianting
+	/// it and extracting the runtime version of it. It checks that the runtime version
+	/// of the old and new runtime has the same spec name and that the spec version is increasing.
+	pub fn can_set_code(code: &[u8]) -> Result<(), sp_runtime::DispatchError> {
 		let current_version = T::Version::get();
 		let new_version = sp_io::misc::runtime_version(&code)
 			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
