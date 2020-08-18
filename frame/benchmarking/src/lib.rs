@@ -1032,7 +1032,8 @@ macro_rules! impl_benchmark_test {
 ///
 /// For values that should be skipped entirely, we can just pass `key.into()`. For example:
 ///
-/// ```ignore
+/// ```
+/// use frame_benchmarking::TrackedStorageKey;
 /// let whitelist: Vec<TrackedStorageKey> = vec![
 /// 	// Block Number
 /// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec().into(),
@@ -1043,6 +1044,7 @@ macro_rules! impl_benchmark_test {
 /// 	// Event Count
 /// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850").to_vec().into(),
 /// ];
+/// ```
 ///
 /// Then define a mutable local variable to hold your `BenchmarkBatch` object:
 ///
