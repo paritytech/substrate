@@ -788,22 +788,24 @@ impl<Block: BlockT> BabeLink<Block> {
 }
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<Block: BlockT, Client, SelectChain> {
+pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW> {
 	client: Arc<Client>,
 	select_chain: SelectChain,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	config: Config,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	time_source: TimeSource,
+	can_author_with: CAW,
 }
 
-impl<Block, Client, SelectChain> BabeVerifier<Block, Client, SelectChain>
+impl<Block, Client, SelectChain, CAW> BabeVerifier<Block, Client, SelectChain, CAW>
 where
 	Block: BlockT,
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
 	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
 		+ BabeApi<Block, Error = sp_blockchain::Error>,
 	SelectChain: sp_consensus::SelectChain<Block>,
+	CAW: CanAuthorWith<Block>,
 {
 	fn check_inherents(
 		&self,
@@ -811,6 +813,16 @@ where
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
 	) -> Result<(), Error<Block>> {
+		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
+			debug!(
+				target: "babe",
+				"Skipping `check_inherents` as authoring version is not compatible: {}",
+				e,
+			);
+
+			return Ok(())
+		}
+
 		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
 			block,
@@ -909,13 +921,15 @@ where
 	}
 }
 
-impl<Block, Client, SelectChain> Verifier<Block> for BabeVerifier<Block, Client, SelectChain>
+impl<Block, Client, SelectChain, CAW> Verifier<Block>
+	for BabeVerifier<Block, Client, SelectChain, CAW>
 where
 	Block: BlockT,
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + AuxStore + ProvideCache<Block>,
 	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error> + BabeApi<Block, Error = sp_blockchain::Error>,
 	SelectChain: sp_consensus::SelectChain<Block>,
+	CAW: CanAuthorWith<Block> + Send + Sync,
 {
 	fn verify(
 		&mut self,
@@ -1460,7 +1474,7 @@ pub fn block_import<Client, Block: BlockT, I>(
 ///
 /// The block import object provided must be the `BabeBlockImport` or a wrapper
 /// of it, otherwise crucial import logic will be omitted.
-pub fn import_queue<Block: BlockT, Client, SelectChain, Inner>(
+pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	babe_link: BabeLink<Block>,
 	block_import: Inner,
 	justification_import: Option<BoxJustificationImport<Block>>,
@@ -1470,6 +1484,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner>(
 	inherent_data_providers: InherentDataProviders,
 	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
+	can_author_with: CAW,
 ) -> ClientResult<DefaultImportQueue<Block, Client>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
@@ -1477,6 +1492,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner>(
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
+	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
 
@@ -1487,6 +1503,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner>(
 		config: babe_link.config,
 		epoch_changes: babe_link.epoch_changes,
 		time_source: babe_link.time_source,
+		can_author_with,
 	};
 
 	Ok(BasicQueue::new(
