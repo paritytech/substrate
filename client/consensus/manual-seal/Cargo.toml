@@ -31,11 +31,11 @@ sp-runtime = {  path = "../../../primitives/runtime", version = "2.0.0-rc6" }
 sp-core = {  path = "../../../primitives/core", version = "2.0.0-rc6" }
 sp-transaction-pool = { path = "../../../primitives/transaction-pool", version = "2.0.0-rc6" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0-rc6" }
+tokio = { version = "0.2", features = ["full"] }
 
 [dev-dependencies]
 sc-basic-authorship = { path = "../../basic-authorship", version = "0.8.0-rc6" }
 substrate-test-runtime-client = { path = "../../../test-utils/runtime/client", version = "2.0.0-rc6" }
 substrate-test-runtime-transaction-pool = { path = "../../../test-utils/runtime/transaction-pool", version = "2.0.0-rc6" }
-tokio = { version = "0.2", features = ["rt-core", "macros"] }
 env_logger = "0.7.0"
 tempfile = "3.1.0"
