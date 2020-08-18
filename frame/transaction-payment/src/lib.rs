@@ -677,7 +677,7 @@ mod tests {
 
 	impl Trait for Runtime {
 		type Balance = u64;
-		type OnChargeTransaction = CurrencyAdapter<pallet_balances::Module<Runtime>, ()>;
+		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = WeightToFee;
 		type FeeMultiplierUpdate = ();
