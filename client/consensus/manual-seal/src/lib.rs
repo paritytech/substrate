@@ -34,6 +34,8 @@ use prometheus_endpoint::Registry;
 
 use log::info;
 
+use tokio::time::{Duration, interval};
+
 mod error;
 mod finalize_block;
 mod seal_new_block;
@@ -185,12 +187,29 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 			}
 		});
 
+	// I also open a tokio time stream
+	let time_stream = interval(Duration::from_secs(5))
+		.map(|_| {
+			EngineCommand::SealNewBlock {
+				create_empty: false,
+				finalize: false,
+				parent_hash: None,
+				sender: None,
+			}
+		});
+
+	// combining(select) timer and command_stream
+	let combined_stream = futures::stream::select(commands_stream, time_stream);
+
+	// combined_stream here
+
 	run_manual_seal(
 		block_import,
 		env,
 		client,
 		pool,
-		commands_stream,
+		// commands_stream,
+		combined_stream,
 		select_chain,
 		inherent_data_providers,
 	).await
