@@ -91,7 +91,7 @@ pub trait GrandpaApi<Notification, Hash> {
 	fn prove_finality(
 		&self,
 		last_finalized: Hash,
-		authorities_set_id: u64
+		authorities_set_id: Option<u64>,
 	) -> FutureResult<Option<Vec<u8>>>;
 }
 
@@ -168,11 +168,11 @@ where
 	fn prove_finality(
 		&self,
 		last_finalized: Block::Hash,
-		authorities_set_id: u64,
+		authorities_set_id: Option<u64>,
 	) -> FutureResult<Option<Vec<u8>>> {
 		let result = self
 			.finality_proof_provider
-			.prove_finality_for_best_hash(authorities_set_id, last_finalized);
+			.prove_finality_for_best_hash(last_finalized, authorities_set_id);
 		let future = async move { result }.boxed();
 		Box::new(
 			future
@@ -235,8 +235,8 @@ mod tests {
 	impl<Block: BlockT> RpcFinalityProofProvider<Block> for EmptyFinalityProofProvider {
 		fn prove_finality_for_best_hash(
 			&self,
-			_authoritites_set_id: u64,
 			_last_finalized: Block::Hash,
+			_authoritites_set_id: Option<u64>,
 		) -> Result<Option<Vec<u8>>, sp_blockchain::Error> {
 			todo!();
 		}
