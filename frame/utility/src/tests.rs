@@ -235,6 +235,7 @@ fn batch_early_exit_works() {
 
 #[test]
 fn batch_weight_calculation_doesnt_overflow() {
+	use sp_runtime::Perbill;
 	new_test_ext().execute_with(|| {
 		let big_call = Call::System(SystemCall::fill_block(Perbill::from_percent(50)));
 		assert_eq!(big_call.get_dispatch_info().weight, Weight::max_value() / 2);
