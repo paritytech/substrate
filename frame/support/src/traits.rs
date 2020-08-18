@@ -27,6 +27,7 @@ use sp_runtime::{
 	traits::{
 		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
 		BadOrigin, AtLeast32BitUnsigned, UniqueSaturatedFrom, UniqueSaturatedInto,
+		SaturatedConversion,
 	},
 };
 use crate::dispatch::Parameter;
@@ -1699,7 +1700,7 @@ impl U128CurrencyToVote {
 
 impl CurrencyToVote<u128> for U128CurrencyToVote {
 	fn to_vote(value: u128, issuance: u128) -> u64 {
-		(value / Self::factor(issuance)) as u64
+		(value / Self::factor(issuance)).saturated_into()
 	}
 
 	fn to_currency(value: u128, issuance: u128) -> u128 {

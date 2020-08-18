@@ -17,8 +17,6 @@
 
 //! Some configurable implementations as associated type for the substrate runtime.
 
-use node_primitives::Balance;
-use sp_runtime::traits::Convert;
 use frame_support::traits::{OnUnbalanced, Currency};
 use crate::{Balances, Authorship, NegativeImbalance};
 
@@ -31,8 +29,7 @@ impl OnUnbalanced<NegativeImbalance> for Author {
 
 #[cfg(test)]
 mod multiplier_tests {
-	use super::*;
-	use sp_runtime::{assert_eq_error_rate, FixedPointNumber};
+	use sp_runtime::{assert_eq_error_rate, FixedPointNumber, traits::Convert};
 	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
 
 	use crate::{
