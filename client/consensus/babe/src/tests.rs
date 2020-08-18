@@ -31,7 +31,7 @@ use sp_consensus_babe::{
 };
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
-	NoNetwork as DummyOracle, Proposal, RecordProof,
+	NoNetwork as DummyOracle, Proposal, RecordProof, AlwaysCanAuthor,
 	import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport},
 };
 use sc_network_test::*;
@@ -220,7 +220,7 @@ type TestSelectChain = substrate_test_runtime_client::LongestChain<
 >;
 
 pub struct TestVerifier {
-	inner: BabeVerifier<TestBlock, PeersFullClient, TestSelectChain>,
+	inner: BabeVerifier<TestBlock, PeersFullClient, TestSelectChain, AlwaysCanAuthor>,
 	mutator: Mutator,
 }
 
@@ -320,6 +320,7 @@ impl TestNetFactory for BabeTestNet {
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
 				time_source: data.link.time_source.clone(),
+				can_author_with: AlwaysCanAuthor,
 			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
 		}
