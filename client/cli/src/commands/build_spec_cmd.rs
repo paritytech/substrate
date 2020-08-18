@@ -44,9 +44,8 @@ pub struct BuildSpecCmd {
 	#[structopt(long)]
 	pub export_sync_state: bool,
 
-	/// Sync the chain using a light client first. Does nothing unless `--export-sync-state` is also
-	/// called.
-	#[structopt(long)]
+	/// Sync the chain using a light client first.
+	#[structopt(long, requires = "export-sync-state")]
 	pub sync_light_client: bool,
 
 	/// Disable adding the default bootnode to the specification.
