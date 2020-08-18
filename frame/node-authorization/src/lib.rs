@@ -51,7 +51,7 @@ impl WeightInfo for () {
 
 pub trait Trait: frame_system::Trait {
     /// The event type of this module.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
     /// The maximum number of authorized nodes that are allowed to set
     type MaxAuthorizedNodes: Get<u32>;
@@ -86,18 +86,18 @@ decl_storage! {
     }
 }
 
-decl_event! {
-    pub enum Event {
-        /// The given node was added; see the transaction for node id.
-        NodeAdded,
-        /// The given node was removed; see the transaction for node id.
-        NodeRemoved,
-        /// Two given nodes were swapped; see the transaction for node id.
-        NodesSwapped,
-        /// The given nodes were reset; see the transaction for new set.
-        NodesReset,
+decl_event!(
+    pub enum Event<T> where NodeId = <T as Trait>::NodeId {
+        /// The given node was added.
+        NodeAdded(NodeId),
+        /// The given node was removed.
+        NodeRemoved(NodeId),
+        /// Two given nodes were swapped; first item is removed, the latter is added.
+        NodesSwapped(NodeId, NodeId),
+        /// The given nodes were reset.
+        NodesReset(Vec<NodeId>),
     }
-}
+);
 
 decl_error! {
     /// Error for the node authorization module.
@@ -133,10 +133,10 @@ decl_module! {
             ensure!(nodes.len() < T::MaxAuthorizedNodes::get() as usize, Error::<T>::TooManyNodes);
 
             let location = nodes.binary_search(&node_id).err().ok_or(Error::<T>::AlreadyJoined)?;
-            nodes.insert(location, node_id);
-            Self::put_allow_list(nodes);
+            nodes.insert(location, node_id.clone());
+            Self::put_allow_list(&nodes);
 
-            Self::deposit_event(Event::NodeAdded);
+            Self::deposit_event(RawEvent::NodeAdded(node_id));
         }
 
         /// Remove a node from the allow list.
@@ -152,9 +152,9 @@ decl_module! {
 
             let location = nodes.binary_search(&node_id).ok().ok_or(Error::<T>::NotExist)?;
             nodes.remove(location);
-            Self::put_allow_list(nodes);
+            Self::put_allow_list(&nodes);
 
-            Self::deposit_event(Event::NodeRemoved);
+            Self::deposit_event(RawEvent::NodeRemoved(node_id));
         }
 
         /// Swap two nodes.
@@ -175,10 +175,10 @@ decl_module! {
             let remove_location = nodes.binary_search(&remove).ok().ok_or(Error::<T>::NotExist)?;
             nodes.remove(remove_location);
             let add_location = nodes.binary_search(&add).err().ok_or(Error::<T>::AlreadyJoined)?;
-            nodes.insert(add_location, add);
-            Self::put_allow_list(nodes);
+            nodes.insert(add_location, add.clone());
+            Self::put_allow_list(&nodes);
 
-            Self::deposit_event(Event::NodesSwapped);
+            Self::deposit_event(RawEvent::NodesSwapped(remove, add));
         }
         
         /// Reset all the authorized nodes in the list.
@@ -193,9 +193,9 @@ decl_module! {
 
             let mut nodes = nodes;
             nodes.sort();
-            Self::put_allow_list(nodes);
+            Self::put_allow_list(&nodes);
 
-            Self::deposit_event(Event::NodesReset);
+            Self::deposit_event(RawEvent::NodesReset(nodes));
         }
     }
 }
@@ -205,8 +205,8 @@ impl<T: Trait> Module<T> {
         storage::unhashed::get_or_default(well_known_keys::NODE_ALLOW_LIST)
     }
 
-    fn put_allow_list(nodes: Vec<T::NodeId>) {
-        storage::unhashed::put(well_known_keys::NODE_ALLOW_LIST, &nodes);
+    fn put_allow_list(nodes: &Vec<T::NodeId>) {
+        storage::unhashed::put(well_known_keys::NODE_ALLOW_LIST, nodes);
     }
 }
 
