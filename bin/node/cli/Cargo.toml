@@ -67,7 +67,7 @@ sc-consensus = { version = "0.8.0-rc5", path = "../../../client/consensus/common
 sc-transaction-pool = { version = "2.0.0-rc5", path = "../../../client/transaction-pool" }
 sc-network = { version = "0.8.0-rc5", path = "../../../client/network" }
 sc-consensus-babe = { version = "0.8.0-rc5", path = "../../../client/consensus/babe" }
-grandpa = { version = "0.8.0-rc5", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
+grandpa = { version = "0.8.0-rc5", package = "sc-finality-grandpa", path = "../../../client/finality/grandpa" }
 sc-client-db = { version = "0.8.0-rc5", default-features = false, path = "../../../client/db" }
 sc-offchain = { version = "2.0.0-rc5", path = "../../../client/offchain" }
 sc-rpc = { version = "2.0.0-rc5", path = "../../../client/rpc" }

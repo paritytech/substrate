@@ -21,8 +21,8 @@ sc-client-api = { version = "2.0.0-rc5", path = "../../../client/api" }
 sc-consensus-babe = { version = "0.8.0-rc5", path = "../../../client/consensus/babe" }
 sc-consensus-babe-rpc = { version = "0.8.0-rc5", path = "../../../client/consensus/babe/rpc" }
 sc-consensus-epochs = { version = "0.8.0-rc5", path = "../../../client/consensus/epochs" }
-sc-finality-grandpa = { version = "0.8.0-rc5", path = "../../../client/finality-grandpa" }
-sc-finality-grandpa-rpc = { version = "0.8.0-rc5", path = "../../../client/finality-grandpa/rpc" }
+sc-finality-grandpa = { version = "0.8.0-rc5", path = "../../../client/finality/grandpa" }
+sc-finality-grandpa-rpc = { version = "0.8.0-rc5", path = "../../../client/finality/grandpa/rpc" }
 sc-keystore = { version = "2.0.0-rc5", path = "../../../client/keystore" }
 sc-rpc-api = { version = "0.8.0-rc5", path = "../../../client/rpc-api" }
 sc-rpc = { version = "2.0.0-rc5", path = "../../../client/rpc" }
