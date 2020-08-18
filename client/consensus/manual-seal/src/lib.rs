@@ -19,7 +19,15 @@
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
+use std::{sync::Arc, marker::PhantomData, pin::Pin};
+
 use futures::prelude::*;
+use futures::task::{Context, Poll};
+
+use log::info;
+use prometheus_endpoint::Registry;
+use tokio::time::Duration;
+
 use sp_consensus::{
 	Environment, Proposer, ForkChoiceStrategy, BlockImportParams, BlockOrigin, SelectChain,
 	import_queue::{BasicQueue, CacheKeyId, Verifier, BoxBlockImport},
@@ -29,13 +37,6 @@ use sp_inherents::InherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justification};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
 use sc_transaction_pool::txpool;
-use std::{sync::Arc, marker::PhantomData};
-use prometheus_endpoint::Registry;
-
-use log::info;
-
-use tokio::time::{Duration, interval};
-use futures::task::Poll;
 
 mod error;
 mod finalize_block;
@@ -50,9 +51,6 @@ pub use self::{
 	error::Error,
 	rpc::{EngineCommand, CreatedBlock},
 };
-
-use futures::task::Context;
-use std::pin::Pin;
 
 /// The verifier for the manual seal engine; instantly finalizes.
 struct ManualSealVerifier;
@@ -72,6 +70,48 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 		Ok((import_params, None))
+	}
+}
+
+const HEARTBEAT_TIMEOUT: u64 = 5;
+
+struct HeartbeatStream<Hash> {
+	pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin>,
+	delay: tokio::time::Delay,
+}
+
+impl<Hash> HeartbeatStream<Hash> {
+	pub fn new(pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin>) -> Self {
+		Self {
+			pool_stream,
+			delay: tokio::time::delay_for(Duration::from_secs(HEARTBEAT_TIMEOUT)),
+		}
+	}
+}
+
+impl<Hash> Stream for HeartbeatStream<Hash> {
+
+	type Item = EngineCommand<Hash>;
+
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		match self.pool_stream.poll_next_unpin(cx) {
+			Poll::Ready(Some(ec)) => {
+				self.delay = tokio::time::delay_for(Duration::from_secs(HEARTBEAT_TIMEOUT));
+				Poll::Ready(Some(ec))
+			},
+
+			Poll::Pending if self.delay.is_elapsed() => {
+				self.delay = tokio::time::delay_for(Duration::from_secs(HEARTBEAT_TIMEOUT));
+				Poll::Ready(Some(EngineCommand::SealNewBlock {
+					create_empty: true, // heartbeat blocks are empty by definition
+					finalize: false,
+					parent_hash: None,
+					sender: None,
+				}))
+			},
+
+			_ => Poll::Pending,
+		}
 	}
 }
 
@@ -154,44 +194,6 @@ pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
 	}
 }
 
-struct HeartbeatTimer<Hash> {
-	pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin>,
-	delay: tokio::time::Delay,
-}
-
-impl <Hash> HeartbeatTimer<Hash> {
-	pub fn new(pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin>) -> Self {
-		Self {
-			pool_stream,
-			delay: tokio::time::delay_for(Duration::from_secs(30)),
-		}
-	}
-}
-
-impl <Hash> Stream for HeartbeatTimer<Hash> {
-	type Item = EngineCommand<Hash>;
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		match self.pool_stream.poll_next(cx) {
-			Some(Poll::Ready(ec)) => {
-				self.delay = tokio::time::delay_for(Duration::from_secs(30));
-				Some(Poll::Ready(ec))
-			},
-			Some(Poll::Pending) => {
-				if let Poll::Ready(_) = self.delay.poll(cx) {
-					self.delay = tokio::time::delay_for(Duration::from_secs(30));
-					Some(Poll::Ready(EngineCommand::SealNewBlock {
-						create_empty: true, // heartbeat blocks are empty by definition
-						finalize: false,
-						parent_hash: None,
-						sender: None,
-					}))
-				}
-			},
-			None => None,
-		}
-	}
-}
-
 /// runs the background authorship task for the instant seal engine.
 /// instant-seal creates a new block for every transaction imported into
 /// the transaction pool.
@@ -215,9 +217,6 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 {
 	// instant-seal creates blocks as soon as transactions are imported
 	// into the transaction pool.
-
-	info!("!!! run_instant_seal !!!");
-
 	let commands_stream = pool.validated_pool()
 		.import_notification_stream()
 		.map(|_| {
@@ -229,30 +228,13 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 			}
 		});
 
-	// I also open a tokio time stream
-	// let time_stream = interval(Duration::from_secs(5))
-	// 	.map(|_| {
-	// 		EngineCommand::SealNewBlock {
-	// 			create_empty: true, // heartbeat blocks are empty by definition
-	// 			finalize: false,
-	// 			parent_hash: None,
-	// 			sender: None,
-	// 		}
-	// 	});
-
-	// combining(select) timer and command_stream
-	// let combined_stream = futures::stream::select(commands_stream, time_stream);
-
-	let heartbeat_stream = HeartbeatTimer::new(Box::new(commands_stream));
-
-	// combined_stream here
+	let heartbeat_stream = HeartbeatStream::new(Box::new(commands_stream));
 
 	run_manual_seal(
 		block_import,
 		env,
 		client,
 		pool,
-		// commands_stream,
 		heartbeat_stream,
 		select_chain,
 		inherent_data_providers,
