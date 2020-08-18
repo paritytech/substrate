@@ -1,5 +1,5 @@
 [package]
-name = "sg-manual-finality"
+name = "fg-manual-finality"
 version = "0.8.0-rc5"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Manual sealing engine for Substrate"

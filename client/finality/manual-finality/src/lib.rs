@@ -16,8 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
-//! This is suitable for a testing environment.
+//! A manual finality gadget. Listens for rpc calls to finalize blocks.
+//! This is suitable for a testing or learning environment.
 
 use futures::prelude::*;
 use sp_consensus::{
@@ -34,58 +34,15 @@ use prometheus_endpoint::Registry;
 
 mod error;
 mod finalize_block;
-mod seal_new_block;
 pub mod rpc;
 
 use self::{
 	finalize_block::{finalize_block, FinalizeBlockParams},
-	seal_new_block::{seal_new_block, SealBlockParams},
 };
 pub use self::{
 	error::Error,
-	rpc::{EngineCommand, CreatedBlock},
+	rpc::FinalizeBlockCommand,
 };
-
-/// The verifier for the manual seal engine; instantly finalizes.
-struct ManualSealVerifier;
-
-impl<B: BlockT> Verifier<B> for ManualSealVerifier {
-	fn verify(
-		&mut self,
-		origin: BlockOrigin,
-		header: B::Header,
-		justification: Option<Justification>,
-		body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let mut import_params = BlockImportParams::new(origin, header);
-		import_params.justification = justification;
-		import_params.body = body;
-		import_params.finalized = false;
-		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-
-		Ok((import_params, None))
-	}
-}
-
-/// Instantiate the import queue for the manual seal consensus engine.
-pub fn import_queue<Block, Transaction>(
-	block_import: BoxBlockImport<Block, Transaction>,
-	spawner: &impl sp_core::traits::SpawnNamed,
-	registry: Option<&Registry>,
-) -> BasicQueue<Block, Transaction>
-	where
-		Block: BlockT,
-		Transaction: Send + Sync + 'static,
-{
-	BasicQueue::new(
-		ManualSealVerifier,
-		block_import,
-		None,
-		None,
-		spawner,
-		registry,
-	)
-}
 
 /// Creates the background authorship task for the manual seal engine.
 pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
@@ -105,90 +62,20 @@ pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
 		E: Environment<B> + 'static,
 		E::Error: std::fmt::Display,
 		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
-		S: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
+		S: Stream<Item=FinalizeBlockCommand<<B as BlockT>::Hash>> + Unpin + 'static,
 		SC: SelectChain<B> + 'static,
 {
-	while let Some(command) = commands_stream.next().await {
-		match command {
-			EngineCommand::SealNewBlock {
-				create_empty,
-				finalize,
-				parent_hash,
+	while let Some(FinalizeBlockCommand { hash, sender, justification }) = commands_stream.next().await {
+		finalize_block(
+			FinalizeBlockParams {
+				hash,
 				sender,
-			} => {
-				seal_new_block(
-					SealBlockParams {
-						sender,
-						parent_hash,
-						finalize,
-						create_empty,
-						env: &mut env,
-						select_chain: &select_chain,
-						block_import: &mut block_import,
-						inherent_data_provider: &inherent_data_providers,
-						pool: pool.clone(),
-						client: client.clone(),
-					}
-				).await;
+				justification,
+				finalizer: client.clone(),
+				_phantom: PhantomData,
 			}
-			EngineCommand::FinalizeBlock { hash, sender, justification } => {
-				finalize_block(
-					FinalizeBlockParams {
-						hash,
-						sender,
-						justification,
-						finalizer: client.clone(),
-						_phantom: PhantomData,
-					}
-				).await
-			}
-		}
+		).await
 	}
-}
-
-/// runs the background authorship task for the instant seal engine.
-/// instant-seal creates a new block for every transaction imported into
-/// the transaction pool.
-pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
-	block_import: BoxBlockImport<B, T>,
-	env: E,
-	client: Arc<C>,
-	pool: Arc<txpool::Pool<A>>,
-	select_chain: SC,
-	inherent_data_providers: InherentDataProviders,
-)
-	where
-		A: txpool::ChainApi<Block=B> + 'static,
-		B: BlockT + 'static,
-		C: HeaderBackend<B> + Finalizer<B, CB> + 'static,
-		CB: ClientBackend<B> + 'static,
-		E: Environment<B> + 'static,
-		E::Error: std::fmt::Display,
-		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
-		SC: SelectChain<B> + 'static
-{
-	// instant-seal creates blocks as soon as transactions are imported
-	// into the transaction pool.
-	let commands_stream = pool.validated_pool()
-		.import_notification_stream()
-		.map(|_| {
-			EngineCommand::SealNewBlock {
-				create_empty: false,
-				finalize: false,
-				parent_hash: None,
-				sender: None,
-			}
-		});
-
-	run_manual_seal(
-		block_import,
-		env,
-		client,
-		pool,
-		commands_stream,
-		select_chain,
-		inherent_data_providers,
-	).await
 }
 
 #[cfg(test)]

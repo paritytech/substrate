@@ -34,48 +34,19 @@ type FutureResult<T> = Box<dyn jsonrpc_core::futures::Future<Item = T, Error = E
 pub type Sender<T> = Option<oneshot::Sender<std::result::Result<T, crate::Error>>>;
 
 /// Message sent to the background authorship task, usually by RPC.
-pub enum EngineCommand<Hash> {
-	/// Tells the engine to propose a new block
-	///
-	/// if create_empty == true, it will create empty blocks if there are no transactions
-	/// in the transaction pool.
-	///
-	/// if finalize == true, the block will be instantly finalized.
-	SealNewBlock {
-		/// if true, empty blocks(without extrinsics) will be created.
-		/// otherwise, will return Error::EmptyTransactionPool.
-		create_empty: bool,
-		/// instantly finalize this block?
-		finalize: bool,
-		/// specify the parent hash of the about-to-created block
-		parent_hash: Option<Hash>,
-		/// sender to report errors/success to the rpc.
-		sender: Sender<CreatedBlock<Hash>>,
-	},
-	/// Tells the engine to finalize the block with the supplied hash
-	FinalizeBlock {
-		/// hash of the block
-		hash: Hash,
-		/// sender to report errors/success to the rpc.
-		sender: Sender<()>,
-		/// finalization justification
-		justification: Option<Justification>,
-	}
+pub struct FinalizeBlockCommand<Hash> {
+	/// hash of the block
+	pub hash: Hash,
+	/// sender to report errors/success to the rpc.
+	pub sender: Sender<()>,
+	/// finalization justification
+	pub justification: Option<Justification>,
 }
 
-/// RPC trait that provides methods for interacting with the manual-seal authorship task over rpc.
+/// RPC trait that provides methods for interacting with the manual-finality over rpc.
 #[rpc]
-pub trait ManualSealApi<Hash> {
-	/// Instructs the manual-seal authorship task to create a new block
-	#[rpc(name = "engine_createBlock")]
-	fn create_block(
-		&self,
-		create_empty: bool,
-		finalize: bool,
-		parent_hash: Option<Hash>
-	) -> FutureResult<CreatedBlock<Hash>>;
-
-	/// Instructs the manual-seal authorship task to finalize a block
+pub trait ManualFinalityApi<Hash> {
+	/// Instructs the manual-finality task to finalize a block
 	#[rpc(name = "engine_finalizeBlock")]
 	fn finalize_block(
 		&self,
@@ -84,56 +55,26 @@ pub trait ManualSealApi<Hash> {
 	) -> FutureResult<bool>;
 }
 
-/// A struct that implements the [`ManualSealApi`].
-pub struct ManualSeal<Hash> {
-	import_block_channel: mpsc::Sender<EngineCommand<Hash>>,
+/// A struct that implements the `ManualFinalityApi`.
+pub struct ManualFinality<Hash> {
+	import_block_channel: mpsc::Sender<FinalizeBlockCommand<Hash>>,
 }
 
-/// return type of `engine_createBlock`
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
-pub struct CreatedBlock<Hash> {
-	/// hash of the created block.
-	pub hash: Hash,
-	/// some extra details about the import operation
-	pub aux: ImportedAux
-}
-
-impl<Hash> ManualSeal<Hash> {
-	/// Create new `ManualSeal` with the given reference to the client.
-	pub fn new(import_block_channel: mpsc::Sender<EngineCommand<Hash>>) -> Self {
+impl<Hash> ManualFinality<Hash> {
+	/// Create new `ManualFinality` with the given channel.
+	pub fn new(import_block_channel: mpsc::Sender<FinalizeBlockCommand<Hash>>) -> Self {
 		Self { import_block_channel }
 	}
 }
 
-impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
-	fn create_block(
-		&self,
-		create_empty: bool,
-		finalize: bool,
-		parent_hash: Option<Hash>
-	) -> FutureResult<CreatedBlock<Hash>> {
-		let mut sink = self.import_block_channel.clone();
-		let future = async move {
-			let (sender, receiver) = oneshot::channel();
-			let command = EngineCommand::SealNewBlock {
-				create_empty,
-				finalize,
-				parent_hash,
-				sender: Some(sender),
-			};
-			sink.send(command).await?;
-			receiver.await?
-		}.boxed();
-
-		Box::new(future.map_err(Error::from).compat())
-	}
+impl<Hash: Send + 'static> ManualFinalityApi<Hash> for ManualFinality<Hash> {
 
 	fn finalize_block(&self, hash: Hash, justification: Option<Justification>) -> FutureResult<bool> {
 		let mut sink = self.import_block_channel.clone();
 		let future = async move {
 			let (sender, receiver) = oneshot::channel();
 			sink.send(
-				EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification }
+				FinalizeBlockCommand { hash, sender: Some(sender), justification }
 			).await?;
 
 			receiver.await?.map(|_| true)
@@ -143,7 +84,7 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 	}
 }
 
-/// report any errors or successes encountered by the authorship task back
+/// report any errors or successes encountered by the finality gadget task back
 /// to the rpc
 pub fn send_result<T: std::fmt::Debug>(
 	sender: &mut Sender<T>,
@@ -154,10 +95,10 @@ pub fn send_result<T: std::fmt::Debug>(
 			log::warn!("Server is shutting down: {:?}", err)
 		}
 	} else {
-		// instant seal doesn't report errors over rpc, simply log them.
+		// instant finality doesn't report errors over rpc, simply log them.
 		match result {
-			Ok(r) => log::info!("Instant Seal success: {:?}", r),
-			Err(e) => log::error!("Instant Seal encountered an error: {}", e)
+			Ok(r) => log::info!("Instant Finality success: {:?}", r),
+			Err(e) => log::error!("Instant Finality encountered an error: {}", e)
 		}
 	}
 }
