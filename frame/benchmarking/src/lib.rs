@@ -1018,7 +1018,8 @@ macro_rules! impl_benchmark_test {
 /// let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat, &whitelist);
 /// ```
 ///
-/// For the `whitelist`, we use a vector of `TrackedStorageKeys`. This is a simple struct used set
+/// The `whitelist` is a parameter you pass to control the DB read/write tracking.
+/// We use a vector of `TrackedStorageKeys`, which is a simple struct used to set
 /// if a key has been read or written to:
 ///
 /// ```ignore
@@ -1029,18 +1030,18 @@ macro_rules! impl_benchmark_test {
 /// }
 /// ```
 ///
-/// For values that should be skipped entirely, we can just pass the `key`. For example:
+/// For values that should be skipped entirely, we can just pass `key.into()`. For example:
 ///
 /// ```ignore
 /// let whitelist: Vec<TrackedStorageKey> = vec![
 /// 	// Block Number
-/// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec(),
+/// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec().into(),
 /// 	// Total Issuance
-/// 	hex_literal::hex!("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80").to_vec(),
+/// 	hex_literal::hex!("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80").to_vec().into(),
 /// 	// Execution Phase
-/// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a").to_vec(),
+/// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a").to_vec().into(),
 /// 	// Event Count
-/// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850").to_vec(),
+/// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850").to_vec().into(),
 /// ];
 ///
 /// Then define a mutable local variable to hold your `BenchmarkBatch` object:
