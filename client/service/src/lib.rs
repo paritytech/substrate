@@ -206,7 +206,7 @@ async fn build_network_future<
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
 ) {
-	check_node_allowlist(&network, &client);
+	check_node_allow_list(&network, &client);
 
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
@@ -251,7 +251,7 @@ async fn build_network_future<
 					);
 				}
 				
-				check_node_allowlist(&network, &client);
+				check_node_allow_list(&network, &client);
 			}
 
 			// List of blocks that the client has finalized.
@@ -353,7 +353,7 @@ async fn build_network_future<
 
 /// Set storage `NODE_ALLOW_LIST` means it's a permissioned network,
 /// then only connect to these well known peers.
-fn check_node_allowlist<
+fn check_node_allow_list<
 	B: BlockT,
 	BE: BackendT<B>,
 	C: BlockchainEvents<B> + StorageProvider<B, BE> + HeaderBackend<B>,
@@ -363,12 +363,12 @@ fn check_node_allowlist<
 	client: &Arc<C>,
 ) {
 	let id = BlockId::hash(client.info().best_hash);
-	let allowlist_storage = client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOW_LIST.to_vec()));
-	if let Ok(Some(raw_allowlist)) = allowlist_storage {
-		let node_allowlist = Vec::<NodePublic>::decode_all(&mut &raw_allowlist.0[..]);
+	let allow_list_storage = client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOW_LIST.to_vec()));
+	if let Ok(Some(raw_allow_list)) = allow_list_storage {
+		let node_allow_list = Vec::<NodePublic>::decode_all(&mut &raw_allow_list.0[..]);
 
-		if let Ok(node_allowlist) = node_allowlist {
-			let mut peer_ids: HashSet<PeerId> = node_allowlist.iter()
+		if let Ok(node_allow_list) = node_allow_list {
+			let mut peer_ids: HashSet<PeerId> = node_allow_list.iter()
 				.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok())
 				.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
 				.collect();

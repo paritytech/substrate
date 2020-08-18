@@ -120,7 +120,7 @@ decl_module! {
 
         fn deposit_event() = default;
 
-        /// Add a node to the allowlist.
+        /// Add a node to the allow list.
         ///
         /// May only be called from `T::AddOrigin`.
         ///
@@ -129,17 +129,17 @@ decl_module! {
         pub fn add_node(origin, node_id: T::NodeId) {
             T::AddOrigin::ensure_origin(origin)?;
 
-            let mut nodes = Self::get_allowlist();
+            let mut nodes = Self::get_allow_list();
             ensure!(nodes.len() < T::MaxAuthorizedNodes::get() as usize, Error::<T>::TooManyNodes);
 
             let location = nodes.binary_search(&node_id).err().ok_or(Error::<T>::AlreadyJoined)?;
             nodes.insert(location, node_id);
-            Self::put_allowlist(nodes);
+            Self::put_allow_list(nodes);
 
             Self::deposit_event(Event::NodeAdded);
         }
 
-        /// Remove a node from the allowlist.
+        /// Remove a node from the allow list.
         ///
         /// May only be called from `T::RemoveOrigin`.
         ///
@@ -148,11 +148,11 @@ decl_module! {
         pub fn remove_node(origin, node_id: T::NodeId) {
             T::RemoveOrigin::ensure_origin(origin)?;
 
-            let mut nodes = Self::get_allowlist();
+            let mut nodes = Self::get_allow_list();
 
             let location = nodes.binary_search(&node_id).ok().ok_or(Error::<T>::NotExist)?;
             nodes.remove(location);
-            Self::put_allowlist(nodes);
+            Self::put_allow_list(nodes);
 
             Self::deposit_event(Event::NodeRemoved);
         }
@@ -171,12 +171,12 @@ decl_module! {
 
             if remove == add { return Ok(()) }
             
-            let mut nodes = Self::get_allowlist();
+            let mut nodes = Self::get_allow_list();
             let remove_location = nodes.binary_search(&remove).ok().ok_or(Error::<T>::NotExist)?;
             nodes.remove(remove_location);
             let add_location = nodes.binary_search(&add).err().ok_or(Error::<T>::AlreadyJoined)?;
             nodes.insert(add_location, add);
-            Self::put_allowlist(nodes);
+            Self::put_allow_list(nodes);
 
             Self::deposit_event(Event::NodesSwapped);
         }
@@ -185,7 +185,7 @@ decl_module! {
         ///
         /// May only be called from `T::ResetOrigin`.
         ///
-        /// - `nodes`: the new nodes for the allowlist.
+        /// - `nodes`: the new nodes for the allow list.
         #[weight = (T::WeightInfo::reset_nodes(), DispatchClass::Operational)]
         pub fn reset_nodes(origin, nodes: Vec<T::NodeId>) {
             T::ResetOrigin::ensure_origin(origin)?;
@@ -193,7 +193,7 @@ decl_module! {
 
             let mut nodes = nodes;
             nodes.sort();
-            Self::put_allowlist(nodes);
+            Self::put_allow_list(nodes);
 
             Self::deposit_event(Event::NodesReset);
         }
@@ -201,11 +201,11 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-    fn get_allowlist() -> Vec<T::NodeId> {
+    fn get_allow_list() -> Vec<T::NodeId> {
         storage::unhashed::get_or_default(well_known_keys::NODE_ALLOW_LIST)
     }
 
-    fn put_allowlist(nodes: Vec<T::NodeId>) {
+    fn put_allow_list(nodes: Vec<T::NodeId>) {
         storage::unhashed::put(well_known_keys::NODE_ALLOW_LIST, &nodes);
     }
 }
@@ -300,7 +300,7 @@ mod tests {
             assert_noop!(NodeAuthorization::add_node(Origin::signed(1), 20), Error::<Test>::AlreadyJoined);
             
             assert_ok!(NodeAuthorization::add_node(Origin::signed(1), 15));
-            assert_eq!(NodeAuthorization::get_allowlist(), vec![10, 15, 20, 30]);
+            assert_eq!(NodeAuthorization::get_allow_list(), vec![10, 15, 20, 30]);
             
             assert_noop!(NodeAuthorization::add_node(Origin::signed(1), 25), Error::<Test>::TooManyNodes);
         });
@@ -313,7 +313,7 @@ mod tests {
             assert_noop!(NodeAuthorization::remove_node(Origin::signed(2), 40), Error::<Test>::NotExist);
             
             assert_ok!(NodeAuthorization::remove_node(Origin::signed(2), 20));
-            assert_eq!(NodeAuthorization::get_allowlist(), vec![10, 30]);
+            assert_eq!(NodeAuthorization::get_allow_list(), vec![10, 30]);
         });
     }
 
@@ -323,7 +323,7 @@ mod tests {
             assert_noop!(NodeAuthorization::swap_node(Origin::signed(4), 20, 5), BadOrigin);
             
             assert_ok!(NodeAuthorization::swap_node(Origin::signed(3), 20, 20));
-            assert_eq!(NodeAuthorization::get_allowlist(), vec![10, 20, 30]);
+            assert_eq!(NodeAuthorization::get_allow_list(), vec![10, 20, 30]);
 
             assert_noop!(NodeAuthorization::swap_node(Origin::signed(3), 15, 5), Error::<Test>::NotExist);
             assert_noop!(
@@ -332,7 +332,7 @@ mod tests {
             );
             
             assert_ok!(NodeAuthorization::swap_node(Origin::signed(3), 20, 5));
-            assert_eq!(NodeAuthorization::get_allowlist(), vec![5, 10, 30]);
+            assert_eq!(NodeAuthorization::get_allow_list(), vec![5, 10, 30]);
         });
     }
 
@@ -346,7 +346,7 @@ mod tests {
             );
             
             assert_ok!(NodeAuthorization::reset_nodes(Origin::signed(4), vec![15, 5, 20]));
-            assert_eq!(NodeAuthorization::get_allowlist(), vec![5, 15, 20]);
+            assert_eq!(NodeAuthorization::get_allow_list(), vec![5, 15, 20]);
         });
     }
 }
