@@ -597,6 +597,7 @@ chaos-weekly:
     - npm link
     - chaostest clean --namespace chaos-weekly 
     - chaostest spawn dev --image parity/substrate --namespace chaos-weekly
+  stage:                           chaos
   tags: 
     - parity-chaos
   variables:
