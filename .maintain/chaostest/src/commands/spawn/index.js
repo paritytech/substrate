@@ -37,6 +37,7 @@ class SpawnCommand extends Command {
         } else {
             errorExit('A chainspec is required to create customized chain, if not given, try dev or local')
         }
+        succeedExit()
     } catch (error) {
       logger.error(error)
       process.exit(1)

@@ -20,5 +20,11 @@ const insertKey = async (provider, key) => {
   console.log(data)
 }
 
-module.exports = { getApi, getChainBlockHeight }
+const getPeerId = async (provider) => {
+  const data = await provider.send('system_localPeerId', [])
+  return data
+}
+
+
+module.exports = { getApi, getChainBlockHeight, getPeerId }
 

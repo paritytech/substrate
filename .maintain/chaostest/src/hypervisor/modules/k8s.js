@@ -129,7 +129,7 @@ const startForwardServer = async (namespace, pod, port, onReady) => new Promise(
       logger.error('Error starting server')
       reject(err)
     }
-    logger.info('Forwarding server started, ready to connect')
+    logger.info(`Forwarding server to ${namespace}/${pod} on ${port} started, ready to connect`)
     resolve()
     // Optional onReady hook when server started
     if (onReady && isFunction(onReady)) {

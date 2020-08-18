@@ -80,7 +80,12 @@ exports.createAliceBobNodes = async function (options) {
 
 exports.createDevNode = async function (options) {
     const {image, port} = options
-  const substrateArgs = ['--dev', '--rpc-external', '--ws-external']
+  const substrateArgs = [
+    '--dev',
+    '--node-key',
+    '0000000000000000000000000000000000000000000000000000000000000001',
+    '--rpc-external',
+    '--ws-external']
   const nodeSpec = {
     nodeId: 'node-validator-0',
     image,
@@ -90,7 +95,6 @@ exports.createDevNode = async function (options) {
   nodeSpec.extraInfo = {
     nodeType: 'bootnode',
     chainspec: 'dev',
-    peerId: "12D3KooWQ2UejBfUdvXG5YEEKKFw2QivxgkCJNEic4wt7juTgtWu",
     image
   }
   await this.createNode(nodeSpec)
@@ -123,7 +127,6 @@ exports.createBootNode = async function(options) {
         extraInfo: {
             nodeType: 'bootnode',
             chainspec: options.chainspecFileName,
-            peerId: '12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp',
             image: options.image
           }
       }
@@ -198,10 +201,15 @@ exports.createNode = async function (nodeSpec) {
     port: nodeSpec.port
   }
   if (nodeSpec.extraInfo) {
+    if (nodeSpec.extraInfo.nodeType === 'bootnode') {
+      await this.startForwardServer(this.config.namespace, nodeSpec.nodeId, nodeSpec.port)
+      nodeSpec.extraInfo.peerId = await this.getPeerId('http://127.0.0.1', 9933)
+    }
     Object.assign(nodeInfo, nodeSpec.extraInfo)
   }
   logger.info(`${nodeSpec.nodeId} is created`)
   this.config.addNode(nodeInfo)
+  return
 }
 
 exports.cleanup = async function (namespace) {

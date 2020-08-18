@@ -14,3 +14,8 @@ exports.getChainBlockHeight = async function (url, port) {
   const api = await this.getApi(url + ':' + port)
   return chainApi.getChainBlockHeight(api)
 }
+
+exports.getPeerId = async function (url, port) {
+  const api = await this.getApi(url + ':' + port)
+  return chainApi.getPeerId(api)
+}

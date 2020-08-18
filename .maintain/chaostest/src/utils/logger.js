@@ -1,6 +1,7 @@
 const winston = require('winston')
 const fs = require('fs')
-const logDir = 'log' // Or read from a configuration
+const path = require('path')
+const logDir = path.join(__dirname, '../../log') // Or read from a configuration
 const { format, transports } = winston
 const env = process.env.NODE_ENV || 'development'
 const util = require('util')
@@ -42,7 +43,7 @@ const logger = winston.createLogger({
   ],
   exceptionHandlers: [
     new winston.transports.File({
-      filename: 'log/exceptions.log'
+      filename: logDir + '/exceptions.log'
     })
   ]
 })
