@@ -1,8 +1,8 @@
 (module
-	(import "env" "ext_rent_allowance" (func $ext_rent_allowance (param i32 i32)))
+	(import "seal0" "seal_rent_allowance" (func $seal_rent_allowance (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; [0, 8) reserved for $ext_rent_allowance output
+	;; [0, 8) reserved for $seal_rent_allowance output
 
 	;; [8, 16) length of the buffer
 	(data (i32.const 8) "\08")
@@ -22,7 +22,7 @@
 
 	(func (export "deploy")
 		;; fill the buffer with the rent allowance.
-		(call $ext_rent_allowance (i32.const 0) (i32.const 8))
+		(call $seal_rent_allowance (i32.const 0) (i32.const 8))
 
 		;; assert len == 8
 		(call $assert

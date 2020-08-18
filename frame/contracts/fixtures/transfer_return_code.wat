@@ -1,8 +1,8 @@
 ;; This transfers 100 balance to the zero account and copies the return code
 ;; of this transfer to the output buffer.
 (module
-	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
+	(import "seal0" "seal_transfer" (func $seal_transfer (param i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 8) zero-adress
@@ -18,7 +18,7 @@
 	(func (export "call")
 		(i32.store
 			(i32.const 16)
-			(call $ext_transfer
+			(call $seal_transfer
 				(i32.const 0) ;; ptr to destination address
 				(i32.const 8) ;; length of destination address
 				(i32.const 8) ;; ptr to value to transfer
@@ -26,6 +26,6 @@
 			)
 		)
 		;; exit with success and take transfer return code to the output buffer
-		(call $ext_return (i32.const 0) (i32.const 16) (i32.const 4))
+		(call $seal_return (i32.const 0) (i32.const 16) (i32.const 4))
 	)
 )

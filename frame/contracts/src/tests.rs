@@ -352,7 +352,7 @@ fn account_removal_does_not_remove_storage() {
 		//
 		// This does not remove the contract storage as we are not notified about a
 		// account removal. This cannot happen in reality because a contract can only
-		// remove itself by `ext_terminate`. There is no external event that can remove
+		// remove itself by `seal_terminate`. There is no external event that can remove
 		// the account appart from that.
 		assert_ok!(Balances::transfer(Origin::signed(ALICE), BOB, 20));
 
@@ -1540,7 +1540,7 @@ fn cannot_self_destruct_in_constructor() {
 			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
 
-			// Fail to instantiate the BOB because the contructor calls ext_terminate.
+			// Fail to instantiate the BOB because the contructor calls seal_terminate.
 			assert_err_ignore_postinfo!(
 				Contracts::instantiate(
 					Origin::signed(ALICE),

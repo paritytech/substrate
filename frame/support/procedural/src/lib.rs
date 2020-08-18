@@ -23,6 +23,7 @@
 
 mod storage;
 mod construct_runtime;
+mod transactional;
 
 use proc_macro::TokenStream;
 
@@ -288,4 +289,29 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
+}
+
+/// Execute the annotated function in a new storage transaction.
+///
+/// The return type of the annotated function must be `Result`. All changes to storage performed
+/// by the annotated function are discarded if it returns `Err`, or committed if `Ok`.
+///
+/// #Example
+///
+/// ```nocompile
+/// #[transactional]
+/// fn value_commits(v: u32) -> result::Result<u32, &'static str> {
+/// 	Value::set(v);
+/// 	Ok(v)
+/// }
+///
+/// #[transactional]
+/// fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
+/// 	Value::set(v);
+/// 	Err("nah")
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
+	transactional::transactional(attr, input)
 }

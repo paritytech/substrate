@@ -55,7 +55,7 @@ pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(Weight::max_value());
 }
 impl frame_system::Trait for Test {
 	type BaseCallFilter = TestBaseCallFilter;
@@ -116,6 +116,7 @@ type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
 type Utility = Module<Test>;
 
+use frame_system::Call as SystemCall;
 use pallet_balances::Call as BalancesCall;
 use pallet_balances::Error as BalancesError;
 
@@ -229,5 +230,22 @@ fn batch_early_exit_works() {
 		);
 		assert_eq!(Balances::free_balance(1), 5);
 		assert_eq!(Balances::free_balance(2), 15);
+	});
+}
+
+#[test]
+fn batch_weight_calculation_doesnt_overflow() {
+	new_test_ext().execute_with(|| {
+		let big_call = Call::System(SystemCall::fill_block(Perbill::from_percent(50)));
+		assert_eq!(big_call.get_dispatch_info().weight, Weight::max_value() / 2);
+
+		// 3 * 50% saturates to 100%
+		let batch_call = Call::Utility(crate::Call::batch(vec![
+			big_call.clone(),
+			big_call.clone(),
+			big_call.clone(),
+		]));
+
+		assert_eq!(batch_call.get_dispatch_info().weight, Weight::max_value());
 	});
 }

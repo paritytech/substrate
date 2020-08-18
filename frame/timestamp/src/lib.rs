@@ -93,6 +93,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
+mod default_weights;
 
 use sp_std::{result, cmp};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
@@ -116,13 +117,8 @@ use sp_timestamp::{
 };
 
 pub trait WeightInfo {
-	fn set(t: u32, ) -> Weight;
-	fn on_finalize(t: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn set(_t: u32, ) -> Weight { 1_000_000_000 }
-	fn on_finalize(_t: u32, ) -> Weight { 1_000_000_000 }
+	fn set() -> Weight;
+	fn on_finalize() -> Weight;
 }
 
 /// The module configuration trait
@@ -166,12 +162,9 @@ decl_module! {
 		/// - `O(T)` where `T` complexity of `on_timestamp_set`
 		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in `on_finalize`)
 		/// - 1 event handler `on_timestamp_set` `O(T)`.
-		/// - Benchmark: 7.678 (min squares analysis)
-		///   - NOTE: This benchmark was done for a runtime with insignificant `on_timestamp_set` handlers.
-		///     New benchmarking is needed when adding new handlers.
 		/// # </weight>
 		#[weight = (
-			T::DbWeight::get().reads_writes(2, 1) + 8_000_000,
+			T::WeightInfo::set(),
 			DispatchClass::Mandatory
 		)]
 		fn set(origin, #[compact] now: T::Moment) {
@@ -191,13 +184,12 @@ decl_module! {
 		/// dummy `on_initialize` to return the weight used in `on_finalize`.
 		fn on_initialize() -> Weight {
 			// weight of `on_finalize`
-			5_000_000
+			T::WeightInfo::on_finalize()
 		}
 
 		/// # <weight>
 		/// - `O(1)`
 		/// - 1 storage deletion (codec `O(1)`).
-		/// - Benchmark: 4.928 µs (min squares analysis)
 		/// # </weight>
 		fn on_finalize() {
 			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
