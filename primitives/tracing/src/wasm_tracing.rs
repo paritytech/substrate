@@ -86,7 +86,7 @@ mod inner {
 		}
 		pub fn enter(&self) -> Entered {
 			if self.0 != 0 {
-				crate::get_tracing_subscriber().map(|t|  t.enter(self.0));
+				crate::with_tracing_subscriber(|t|  t.enter(self.0));
 			}
 			Entered(self.0)
 		}
@@ -99,7 +99,7 @@ mod inner {
 	impl Entered {
 		pub fn exit(&mut self) {
 			if self.0 != 0 {
-				crate::get_tracing_subscriber().map(|t| t.exit(self.0));
+				crate::with_tracing_subscriber(|t| t.exit(self.0));
 			}
 		}
 	}
@@ -182,7 +182,7 @@ mod inner {
 					fields: $crate::fieldset!( $($fields)* ),
 				};
 				if $crate::is_enabled!(&metadata) {
-					$crate::get_tracing_subscriber().map(|t| t.event(
+					$crate::with_tracing_subscriber(|t| t.event(
 						Some($parent.0),
 						&metadata,
 						&$crate::valueset!(&metadata.fields, $($fields)*),
@@ -227,7 +227,7 @@ mod inner {
 					fields: $crate::fieldset!( $($fields)* )
 				};
 				if $crate::is_enabled!(&metadata) {
-					$crate::get_tracing_subscriber().map(|t| t.event(
+					$crate::with_tracing_subscriber(|t| t.event(
 						None,
 						&metadata,
 						&$crate::valueset!(&metadata.fields, $($fields)*),
@@ -392,7 +392,7 @@ mod inner {
 						fields: $crate::fieldset!( $($fields)* )
 					};
 					if $crate::is_enabled!(&metadata) {
-						let span_id = $crate::get_tracing_subscriber().map(move |t| t.new_span(
+						let span_id = $crate::with_tracing_subscriber(move |t| t.new_span(
 							WasmAttributes {
 								parent_id: Some($parent.0),
 								fields: $crate::valueset!(&metadata.fields, $($fields)*),
@@ -426,7 +426,7 @@ mod inner {
 						fields: $crate::fieldset!( $($fields)* )
 					};
 					if $crate::is_enabled!(&metadata) {
-						let span_id = $crate::get_tracing_subscriber().map(|t| t.new_span(
+						let span_id = $crate::with_tracing_subscriber(|t| t.new_span(
 							WasmAttributes {
 								parent_id: None,
 								metadata,
@@ -1964,7 +1964,7 @@ macro_rules! level_enabled {
 #[doc(hidden)]
 macro_rules! is_enabled {
 	($metadata:expr) => {{
-		$crate::get_tracing_subscriber().map(|t| t.enabled(&$metadata)).unwrap_or(false)
+		$crate::with_tracing_subscriber(|t| t.enabled(&$metadata)).unwrap_or(false)
 	}};
 }
 

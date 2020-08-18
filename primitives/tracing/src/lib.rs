@@ -30,7 +30,7 @@
 //! the associated Fields mentioned above.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(once_cell))]
+#![cfg_attr(not(feature = "std"), feature(const_fn))]
 
 mod types;
 
@@ -50,12 +50,6 @@ pub use tracing::{
 	span, event, Level,
 };
 
-#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
-use sp_std::boxed::Box;
-
-#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
-use core::lazy::OnceCell;
-
 pub use crate::types::{
 	WasmMetadata, WasmAttributes, WasmValuesSet, WasmValue, WasmFields, WasmEvent, WasmLevel, WasmFieldName
 };
@@ -66,15 +60,63 @@ pub type Level = WasmLevel;
 pub trait TracingSubscriber: Send + Sync {
 	fn enabled(&self, metadata: &WasmMetadata) -> bool;
 	fn new_span(&self, attrs: WasmAttributes) -> u64;
-	fn record(&self, span: u64, values: &WasmValuesSet);
 	fn event(&self, parent_id: Option<u64>, metadata: &WasmMetadata, values: &WasmValuesSet);
 	fn enter(&self, span: u64);
 	fn exit(&self, span: u64);
 }
 
-/// Instance of the native subscriber in use
+
 #[cfg(all(not(feature = "std"), feature = "with-tracing"))]
-static SUBSCRIBER_INSTANCE: OnceCell<Box<dyn TracingSubscriber>> = OnceCell::new();
+mod global_subscription {
+	// Having a global subscription for WASM
+	use crate::TracingSubscriber;
+	use sp_std::{
+		boxed::Box,
+		cell::UnsafeCell,
+	};
+
+	static SUBSCRIBER_INSTANCE: SubscriptionHolder = SubscriptionHolder::new();
+
+	struct SubscriptionHolder {
+		inner: UnsafeCell<Option<Box<dyn TracingSubscriber>>>
+	}
+
+	impl SubscriptionHolder {
+		const fn new() -> SubscriptionHolder {
+			SubscriptionHolder { inner: UnsafeCell::new(None) }
+		}
+	}
+
+	unsafe impl core::marker::Sync for SubscriptionHolder {}
+
+	/// NOTE:
+	/// theoretically this can panic when the subscriber instance is currently borrowed,
+	/// however this is guaranteed to not happen by us running in a threadless env
+	/// and never handing out the borrow
+	pub fn set_tracing_subscriber(subscriber: Box<dyn TracingSubscriber>)
+	{
+		unsafe {
+			// Safety: Safe due to `inner`'s invariant
+			*SUBSCRIBER_INSTANCE.inner.get() = Some(subscriber)
+		}
+	}
+
+	#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
+	pub fn with_tracing_subscriber<F, R>(f: F) -> Option<R>
+		where F: FnOnce(&Box<dyn TracingSubscriber>) -> R
+	{
+		unsafe {
+			// Safety: Safe due to `inner`'s invariant
+			match SUBSCRIBER_INSTANCE.inner.get().as_ref() {
+				Some(o) => o.as_ref().map(f),
+				_ => None
+			}
+		}
+	}
+}
+
+#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
+pub use global_subscription::{set_tracing_subscriber, with_tracing_subscriber};
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///
@@ -92,12 +134,12 @@ static SUBSCRIBER_INSTANCE: OnceCell<Box<dyn TracingSubscriber>> = OnceCell::new
 /// }
 ///
 /// sp_tracing::within_span! {
-///		sp_tracing::span!(sp_tracing::Level::WARN, "warn-span",  you_can_pass="any params");
+///		sp_tracing::span!(sp_tracing::Level::WARN, "warn-span",  yo/u_can_pass="any params");
 ///     1 + 1;
 ///     // some other complex code
 /// }
 /// ```
-#[cfg(any(feature = "std", not(feature = "with-tracing")))]
+#[cfg(any(feature = "std", feature = "with-tracing"))]
 #[macro_export]
 macro_rules! within_span {
 	(
@@ -143,8 +185,8 @@ macro_rules! within_span {
 #[cfg(all(not(feature = "std"), not(feature = "with-tracing")))]
 #[macro_export]
 macro_rules! enter_span {
-	( $lvl:expr, $name:expr ) => { },
-	( $name:expr ) => {  } // no-op
+	( $lvl:expr, $name:expr ) => ( );
+	( $name:expr ) => ( ) // no-op
 }
 
 /// Enter a span.
@@ -159,7 +201,7 @@ macro_rules! enter_span {
 /// sp_tracing::enter_span!(sp_tracing::span!(sp_tracing::Level::DEBUG, "debug-span",  params="value"));
 /// sp_tracing::enter_span!(sp_tracing::info_span!("info-span",  params="value"));
 /// ```
-#[cfg(any(feature = "std", not(feature = "with-tracing")))]
+#[cfg(any(feature = "std", feature = "with-tracing"))]
 #[macro_export]
 macro_rules! enter_span {
 	( $span:expr ) => {
@@ -170,25 +212,4 @@ macro_rules! enter_span {
 	( $lvl:expr, $name:expr ) => {
 		$crate::enter_span!($crate::span!($crate::Level::TRACE, $name))
 	};
-}
-
-#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
-pub fn set_tracing_subscriber(subscriber: Box<dyn TracingSubscriber>) {
-	let _ = SUBSCRIBER_INSTANCE.set(subscriber);
-}
-
-#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
-pub fn get_tracing_subscriber<'a>() -> Option<&'a Box<dyn TracingSubscriber>> {
-	SUBSCRIBER_INSTANCE.get()
-}
-
-
-#[cfg(all(not(feature = "std"), not(feature = "with-tracing")))]
-pub fn get_tracing_subscriber<'a>() -> Option<&'a Box<dyn TracingSubscriber>> {
-	None
-}
-
-#[cfg(all(not(feature = "std"), not(feature = "with-tracing")))]
-pub fn set_tracing_subscriber(_subscriber: Box<dyn TracingSubscriber>) {
-	unreachable!()
 }

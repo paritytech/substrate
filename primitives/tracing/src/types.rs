@@ -176,7 +176,7 @@ impl WasmFields {
 	}
 }
 
-#[derive(Encode, Decode, Debug)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub struct WasmValuesSet(Vec<(WasmFieldName, Option<WasmValue>)>);
 
 impl From<Vec<(WasmFieldName, Option<WasmValue>)>> for WasmValuesSet {
@@ -204,7 +204,7 @@ impl WasmValuesSet {
 }
 
 
-#[derive(Encode, Decode, Debug)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub struct WasmMetadata {
 	pub name: Vec<u8>,
 	pub target: Vec<u8>,
@@ -216,14 +216,14 @@ pub struct WasmMetadata {
 	pub fields: WasmFields,
 }
 
-#[derive(Encode, Decode, Debug)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub struct WasmAttributes {
 	pub parent_id: Option<u64>,
 	pub metadata: WasmMetadata,
 	pub fields: WasmValuesSet,
 }
 
-#[derive(Encode, Decode, Debug)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub struct WasmEvent {
 	pub parent_id: Option<u64>,
 	pub metadata: WasmMetadata,

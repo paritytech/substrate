@@ -1002,22 +1002,32 @@ pub trait Logging {
 }
 
 #[derive(Encode, Decode)]
+/// Crossing is a helper wrapping any Encode-Decodeable type
+/// for transferring over the wasm barrier.
 pub struct Crossing<T: Encode + Decode>(T);
+
 impl<T: Encode + Decode> PassBy for Crossing<T> {
 	type PassBy = sp_runtime_interface::pass_by::Codec<Self>;
 }
+
+impl<T: Encode + Decode> Crossing<T> {
+	pub fn into_inner(self) -> T {
+		self.0
+	}
+}
+
 
 /// Interface that provides tracing functions
 #[runtime_interface]
 pub trait WasmTracing {
 	fn enabled(&mut self, metadata: Crossing<sp_tracing::WasmMetadata>) -> bool {
-		let metadata : &tracing_core::metadata::Metadata<'static> = (&metadata.0).into();
+		let metadata : &tracing_core::metadata::Metadata<'static> = (&metadata.into_inner()).into();
 		tracing::dispatcher::get_default(|d| {
 			d.enabled(metadata)
 		})
 	}
 	fn new_span(&mut self, span: Crossing<sp_tracing::WasmAttributes>) -> u64 {
-		let span : tracing::Span = span.0.into();
+		let span : tracing::Span = span.into_inner().into();
 		match span.id() {
 			Some(id) => tracing::dispatcher::get_default(|d| {
 				// inform dispatch that we'll keep the ID around
@@ -1030,7 +1040,7 @@ pub trait WasmTracing {
 	}
 	
 	fn event(&mut self, event: Crossing<sp_tracing::WasmEvent>) {
-		event.0.emit();
+		event.into_inner().emit();
 	}
 
 	fn enter(&mut self, span: u64) {
@@ -1052,7 +1062,7 @@ pub struct PassingTracingSubsciber;
 #[cfg(not(feature="std"))]
 impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
 	fn enabled(&self, metadata: &sp_tracing::WasmMetadata) -> bool {
-		wasm_tracing::enabled(Crossing(*metadata))
+		wasm_tracing::enabled(Crossing(metadata.clone()))
 	}
 	fn new_span(&self, attrs: sp_tracing::WasmAttributes) -> u64 {
 		wasm_tracing::new_span(Crossing(attrs))
@@ -1060,12 +1070,12 @@ impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
 	fn event(&self,
 		parent_id: Option<u64>,
 		metadata: &sp_tracing::WasmMetadata, 
-		values: &sp_tracing::WasmValueSet
+		values: &sp_tracing::WasmValuesSet
 	) {
-		wasm_tracing::event(Crossing(WasmEvent {
+		wasm_tracing::event(Crossing(sp_tracing::WasmEvent {
 			parent_id,
 			metadata: metadata.clone(),
-			values: values.clone()
+			fields: values.clone()
 		}))
 	}
 	fn enter(&self, span: u64) {
@@ -1076,14 +1086,15 @@ impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
 	}
 }
 
-#[cfg(all(no_std, feature="with-tracing"))]
+#[cfg(all(not(feature="std"), feature="with-tracing"))]
 /// Initialize tracing of sp_tracing
 pub fn init_tracing() {
-	sp_tracing::set_tracing_subscriber(Box::new(PassingTracingSubsciber()));
+	use sp_std::boxed::Box;
+	sp_tracing::set_tracing_subscriber(Box::new(PassingTracingSubsciber {} ));
 }
 
-#[cfg(not(all(no_std, feature="with-tracing")))]
-/// Initialize tracing of sp_tracing – noop
+#[cfg(not(all(not(feature="std"), feature="with-tracing")))]
+/// Initialize tracing of sp_tracing  not necessary – noop
 pub fn init_tracing() { }
 
 /// Wasm-only interface that provides functions for interacting with the sandbox.
