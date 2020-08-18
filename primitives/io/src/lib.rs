@@ -1011,11 +1011,12 @@ impl<T: Encode + Decode> PassBy for Crossing<T> {
 }
 
 impl<T: Encode + Decode> Crossing<T> {
+
+	/// Convert into the inner type
 	pub fn into_inner(self) -> T {
 		self.0
 	}
 }
-
 
 /// Interface that provides tracing functions
 #[runtime_interface]

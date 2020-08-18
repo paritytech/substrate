@@ -392,11 +392,11 @@ mod inner {
 						fields: $crate::fieldset!( $($fields)* )
 					};
 					if $crate::is_enabled!(&metadata) {
-						let span_id = $crate::with_tracing_subscriber(move |t| t.new_span(
+						let span_id = $crate::with_tracing_subscriber(|t| t.new_span(
 							WasmAttributes {
 								parent_id: Some($parent.0),
 								fields: $crate::valueset!(&metadata.fields, $($fields)*),
-								metadata,
+								metadata: metadata.clone(),
 							})
 						).unwrap_or_default();
 						$crate::Span::new(span_id)
@@ -429,7 +429,7 @@ mod inner {
 						let span_id = $crate::with_tracing_subscriber(|t| t.new_span(
 							WasmAttributes {
 								parent_id: None,
-								metadata,
+								metadata: metadata.clone(),
 								fields: $crate::valueset!(&metadata.fields, $($fields)*)
 							})
 						).unwrap_or_default();

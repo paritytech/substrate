@@ -134,7 +134,7 @@ pub use global_subscription::{set_tracing_subscriber, with_tracing_subscriber};
 /// }
 ///
 /// sp_tracing::within_span! {
-///		sp_tracing::span!(sp_tracing::Level::WARN, "warn-span",  yo/u_can_pass="any params");
+///		sp_tracing::span!(sp_tracing::Level::WARN, "warn-span", you_can_pass="any params");
 ///     1 + 1;
 ///     // some other complex code
 /// }
@@ -198,7 +198,7 @@ macro_rules! enter_span {
 ///
 /// ```
 /// sp_tracing::enter_span!(sp_tracing::Level::TRACE, "test-span");
-/// sp_tracing::enter_span!(sp_tracing::span!(sp_tracing::Level::DEBUG, "debug-span",  params="value"));
+/// sp_tracing::enter_span!(sp_tracing::span!(sp_tracing::Level::DEBUG, "debug-span", params="value"));
 /// sp_tracing::enter_span!(sp_tracing::info_span!("info-span",  params="value"));
 /// ```
 #[cfg(any(feature = "std", feature = "with-tracing"))]
