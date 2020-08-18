@@ -93,8 +93,8 @@ fn create_tips<T: Trait>(t: u32, hash: T::Hash, value: BalanceOf<T>) -> Result<(
 
 // Create proposals that are approved for use in `on_initialize`.
 fn create_approved_proposals<T: Trait>(n: u32) -> Result<(), &'static str> {
-	for _ in 0 .. n {
-		let (caller, value, lookup) = setup_proposal::<T>(0);
+	for i in 0 .. n {
+		let (caller, value, lookup) = setup_proposal::<T>(i);
 		Treasury::<T>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
@@ -109,8 +109,8 @@ fn create_approved_proposals<T: Trait>(n: u32) -> Result<(), &'static str> {
 
 // Create bounties that are approved for use in `on_initialize`.
 fn create_approved_bounties<T: Trait>(n: u32) -> Result<(), &'static str> {
-	for _ in 0 .. n {
-		let (caller, _curator, _fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
+	for i in 0 .. n {
+		let (caller, _curator, _fee, value, reason) = setup_bounty::<T>(i, MAX_BYTES);
 		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::get() - 1;
 		Treasury::<T>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
@@ -120,7 +120,7 @@ fn create_approved_bounties<T: Trait>(n: u32) -> Result<(), &'static str> {
 }
 
 // Create the pre-requisite information needed to create a treasury `propose_bounty`.
-fn setup_bounty<T: Trait>(d: u32) -> (
+fn setup_bounty<T: Trait>(u: u32, d: u32) -> (
 	T::AccountId,
 	T::AccountId,
 	BalanceOf<T>,
@@ -142,7 +142,7 @@ fn create_bounty<T: Trait>() -> Result<(
 	<T::Lookup as StaticLookup>::Source,
 	BountyIndex,
 ), &'static str> {
-	let (caller, curator, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
+	let (caller, curator, fee, value, reason) = setup_bounty::<T>(0, MAX_BYTES);
 	let curator_lookup = T::Lookup::unlookup(curator.clone());
 	Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 	let bounty_id = BountyCount::get() - 1;
@@ -258,24 +258,24 @@ benchmarks! {
 	propose_bounty {
 		let d in 0 .. MAX_BYTES;
 
-		let (caller, curator, fee, value, description) = setup_bounty::<T>(d);
+		let (caller, curator, fee, value, description) = setup_bounty::<T>(0, d);
 	}: _(RawOrigin::Signed(caller), value, description)
 
 	reject_bounty {
-		let (caller, curator, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
+		let (caller, curator, fee, value, reason) = setup_bounty::<T>(0, MAX_BYTES);
 		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::get() - 1;
 	}: _(RawOrigin::Root, bounty_id)
 
 	approve_bounty {
-		let (caller, curator, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
+		let (caller, curator, fee, value, reason) = setup_bounty::<T>(0, MAX_BYTES);
 		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::get() - 1;
 	}: _(RawOrigin::Root, bounty_id)
 
 	assign_curator {
 		setup_pod_account::<T>();
-		let (caller, curator, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
+		let (caller, curator, fee, value, reason) = setup_bounty::<T>(0, MAX_BYTES);
 		let curator_lookup = T::Lookup::unlookup(curator.clone());
 		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::get() - 1;
@@ -285,7 +285,7 @@ benchmarks! {
 
 	unassign_curator {
 		setup_pod_account::<T>();
-		let (caller, curator, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
+		let (caller, curator, fee, value, reason) = setup_bounty::<T>(0, MAX_BYTES);
 		let curator_lookup = T::Lookup::unlookup(curator.clone());
 		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::get() - 1;
@@ -296,7 +296,7 @@ benchmarks! {
 
 	accept_curator {
 		setup_pod_account::<T>();
-		let (caller, curator, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
+		let (caller, curator, fee, value, reason) = setup_bounty::<T>(0, MAX_BYTES);
 		let curator_lookup = T::Lookup::unlookup(curator.clone());
 		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::get() - 1;
