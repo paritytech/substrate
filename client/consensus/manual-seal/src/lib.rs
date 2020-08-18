@@ -46,6 +46,8 @@ pub use self::{
 	rpc::{EngineCommand, CreatedBlock},
 };
 
+use tokio::time::{Duration, interval};
+
 /// The verifier for the manual seal engine; instantly finalizes.
 struct ManualSealVerifier;
 
@@ -174,6 +176,48 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 		.map(|_| {
 			EngineCommand::SealNewBlock {
 				create_empty: false,
+				finalize: false,
+				parent_hash: None,
+				sender: None,
+			}
+		});
+
+	run_manual_seal(
+		block_import,
+		env,
+		client,
+		pool,
+		commands_stream,
+		select_chain,
+		inherent_data_providers,
+	).await
+}
+
+/// runs the background authorship task for the instant seal engine.
+/// instant-seal creates a new block for every transaction imported into
+/// the transaction pool.
+pub async fn run_interval_seal<B, CB, E, C, A, SC, T>(
+	block_import: BoxBlockImport<B, T>,
+	env: E,
+	client: Arc<C>,
+	pool: Arc<txpool::Pool<A>>,
+	select_chain: SC,
+	inherent_data_providers: InherentDataProviders,
+)
+	where
+		A: txpool::ChainApi<Block=B> + 'static,
+		B: BlockT + 'static,
+		C: HeaderBackend<B> + Finalizer<B, CB> + 'static,
+		CB: ClientBackend<B> + 'static,
+		E: Environment<B> + 'static,
+		E::Error: std::fmt::Display,
+		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
+		SC: SelectChain<B> + 'static
+{
+	let commands_stream = interval(Duration::from_secs(2))
+		.map(|_| {
+			EngineCommand::SealNewBlock {
+				create_empty: true,
 				finalize: false,
 				parent_hash: None,
 				sender: None,
