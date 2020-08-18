@@ -1484,36 +1484,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fg-manual-finality"
-version = "0.8.0-rc5"
-dependencies = [
- "assert_matches",
- "derive_more",
- "env_logger 0.7.1",
- "futures 0.3.5",
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "log",
- "parking_lot 0.10.2",
- "sc-basic-authorship",
- "sc-client-api",
- "sc-transaction-pool",
- "serde",
- "sp-blockchain",
- "sp-consensus",
- "sp-core",
- "sp-inherents",
- "sp-runtime",
- "sp-transaction-pool",
- "substrate-prometheus-endpoint",
- "substrate-test-runtime-client",
- "substrate-test-runtime-transaction-pool",
- "tempfile",
- "tokio 0.2.21",
-]
-
-[[package]]
 name = "file-per-thread-logger"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3849,9 +3819,9 @@ dependencies = [
  "sc-cli",
  "sc-client-api",
  "sc-consensus",
- "sc-consensus-aura",
+ "sc-consensus-manual-seal",
  "sc-executor",
- "sc-finality-grandpa",
+ "sc-finality-manual",
  "sc-rpc",
  "sc-rpc-api",
  "sc-service",
@@ -3860,11 +3830,10 @@ dependencies = [
  "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
- "sp-consensus-aura",
  "sp-core",
- "sp-finality-grandpa",
  "sp-inherents",
  "sp-runtime",
+ "sp-timestamp",
  "sp-transaction-pool",
  "structopt",
  "substrate-build-script-utils",
@@ -6690,6 +6659,36 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "substrate-test-runtime-client",
+]
+
+[[package]]
+name = "sc-finality-manual"
+version = "0.8.0-rc5"
+dependencies = [
+ "assert_matches",
+ "derive_more",
+ "env_logger 0.7.1",
+ "futures 0.3.5",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "log",
+ "parking_lot 0.10.2",
+ "sc-basic-authorship",
+ "sc-client-api",
+ "sc-transaction-pool",
+ "serde",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-core",
+ "sp-inherents",
+ "sp-runtime",
+ "sp-transaction-pool",
+ "substrate-prometheus-endpoint",
+ "substrate-test-runtime-client",
+ "substrate-test-runtime-transaction-pool",
+ "tempfile",
+ "tokio 0.2.21",
 ]
 
 [[package]]
