@@ -226,9 +226,10 @@ pub trait Trait: frame_system::Trait {
 
 	/// Handler for withdrawing, refunding and depositing the transaction fee.
 	/// Transaction fees are withdrawen before the transaction is executed.
-	/// After the transaction was executed the transaction weight can be adjusted, depending on the used resources by
-	/// the transaction. If the transaction weight is lower than expected, parts of the transaction fee might be refunded.
-	/// In the end the fees can be deposited.
+	/// After the transaction was executed the transaction weight can be
+	/// adjusted, depending on the used resources by the transaction. If the
+	/// transaction weight is lower than expected, parts of the transaction fee
+	/// might be refunded. In the end the fees can be deposited.
 	type OnChargeTransaction: OnChargeTransaction<Self>;
 
 	/// The fee to be paid for making a transaction; the per-byte portion.
@@ -463,7 +464,7 @@ where
 
 		// Only mess with balances if fee is not zero.
 		if fee.is_zero() {
-			return Ok((fee, Default::default()));
+			Ok((fee, Default::default()))
 		} else {
 			<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::withdraw_fee(who, call, info, fee, tip)
 				.map(|i| (fee, i))

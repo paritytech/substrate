@@ -15,7 +15,8 @@ use sp_std::{fmt::Debug, marker::PhantomData};
 pub trait OnChargeTransaction<T: Trait> {
 	type LiquidityInfo: Default;
 
-	/// Before the transaction is executed the payment of the transaction fees need to be secured.
+	/// Before the transaction is executed the payment of the transaction fees
+	/// need to be secured.
 	fn withdraw_fee(
 		who: &T::AccountId,
 		call: &T::Call,
@@ -24,7 +25,8 @@ pub trait OnChargeTransaction<T: Trait> {
 		tip: T::Balance,
 	) -> Result<Self::LiquidityInfo, TransactionValidityError>;
 
-	/// After the transaction was executed and the correct fees where collected, the resulting funds can be spend here.
+	/// After the transaction was executed and the correct fees where collected,
+	/// the resulting funds can be spend here.
 	fn deposit_fee(
 		who: &T::AccountId,
 		dispatch_info: &DispatchInfoOf<T::Call>,
@@ -35,8 +37,9 @@ pub trait OnChargeTransaction<T: Trait> {
 	) -> Result<(), TransactionValidityError>;
 }
 
-/// Implements the transaction payment for a module implementing the `Currency` trait (eg. the pallet_balances) using an
-/// unbalance handler ( implementing `OnUnbalanced`).
+/// Implements the transaction payment for a module implementing the `Currency`
+/// trait (eg. the pallet_balances) using an unbalance handler (implementing
+/// `OnUnbalanced`).
 pub struct CurrencyAdapter<C, OU>(PhantomData<C>, PhantomData<OU>);
 
 /// Default implementation for a Currency and an OnUnbalanced handler.
@@ -78,8 +81,9 @@ where
 		}
 	}
 
-	/// Hand the fee and the tip over to the `[OnUnbalanced]` implementation. Since the predicted fee might have been
-	/// too high, parts of the fee may be refunded.
+	/// Hand the fee and the tip over to the `[OnUnbalanced]` implementation.
+	/// Since the predicted fee might have been too high, parts of the fee may
+	/// be refunded.
 	fn deposit_fee(
 		who: &T::AccountId,
 		_dispatch_info: &DispatchInfoOf<T::Call>,
@@ -91,8 +95,9 @@ where
 		if let Some(paid) = liquidity_info {
 			// Calculate how much refund we should return
 			let refund_amount = paid.peek().saturating_sub(fee);
-			// refund to the the account that paid the fees. If this fails, the account might have dropped below the
-			// existential balance. In that case we don't refund anything.
+			// refund to the the account that paid the fees. If this fails, the
+			// account might have dropped below the existential balance. In
+			// that case we don't refund anything.
 			let refund_imbalance =
 				C::deposit_into_existing(&who, refund_amount).unwrap_or_else(|_| C::PositiveImbalance::zero());
 			// merge the imbalance caused by paying the fees and refunding parts of it again.
