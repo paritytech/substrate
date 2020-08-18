@@ -17,6 +17,7 @@ name = "node-template"
 
 [dependencies]
 structopt = "0.3.8"
+futures = "0.3.4"
 
 sc-cli = { version = "0.8.0-rc5", path = "../../../client/cli", features = ["wasmtime"] }
 sp-core = { version = "2.0.0-rc5", path = "../../../primitives/core" }
@@ -25,14 +26,17 @@ sc-service = { version = "0.8.0-rc5", path = "../../../client/service", features
 sp-inherents = { version = "2.0.0-rc5", path = "../../../primitives/inherents" }
 sc-transaction-pool = { version = "2.0.0-rc5", path = "../../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0-rc5", path = "../../../primitives/transaction-pool" }
-sc-consensus-aura = { version = "0.8.0-rc5", path = "../../../client/consensus/aura" }
-sp-consensus-aura = { version = "0.8.0-rc5", path = "../../../primitives/consensus/aura" }
+# sc-consensus-aura = { version = "0.8.0-rc5", path = "../../../client/consensus/aura" }
+sc-consensus-manual-seal = { version = "0.8.0-rc5", path = "../../../client/consensus/manual-seal" }
+# sp-consensus-aura = { version = "0.8.0-rc5", path = "../../../primitives/consensus/aura" }
 sp-consensus = { version = "0.8.0-rc5", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.8.0-rc5", path = "../../../client/consensus/common" }
-sc-finality-grandpa = { version = "0.8.0-rc5", path = "../../../client/finality/grandpa" }
-sp-finality-grandpa = { version = "2.0.0-rc5", path = "../../../primitives/finality-grandpa" }
+# sc-finality-grandpa = { version = "0.8.0-rc5", path = "../../../client/finality/grandpa" }
+sc-finality-manual = { version = "0.8.0-rc5", path = "../../../client/finality/manual" }
+# sp-finality-grandpa = { version = "2.0.0-rc5", path = "../../../primitives/finality-grandpa" }
 sc-client-api = { version = "2.0.0-rc5", path = "../../../client/api" }
 sp-runtime = { version = "2.0.0-rc5", path = "../../../primitives/runtime" }
+sp-timestamp = { version = "2.0.0-rc5", path = "../../../primitives/timestamp" }
 
 # These dependencies are used for the node template's RPCs
 jsonrpc-core = "14.0.3"

@@ -33,8 +33,8 @@ use finalize_block::{finalize_block, FinalizeBlockParams};
 pub use error::Error;
 pub use rpc::FinalizeBlockCommand;
 
-/// Creates the background authorship task for the manual seal engine.
-pub async fn run_manual_seal<B, CB, C, S>(
+/// Creates the background task for the manual finality gadget.
+pub async fn run_manual_finality<B, CB, C, S>(
 	client: Arc<C>,
 	mut commands_stream: S,
 )

@@ -6,6 +6,8 @@
 #![warn(missing_docs)]
 
 use std::sync::Arc;
+use futures::Stream;
+
 
 use node_template_runtime::{opaque::Block, AccountId, Balance, Index};
 use sp_api::ProvideRuntimeApi;
@@ -13,6 +15,8 @@ use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
 use sp_block_builder::BlockBuilder;
 pub use sc_rpc_api::DenyUnsafe;
 use sp_transaction_pool::TransactionPool;
+use sc_finality_manual::rpc::{ManualFinalityApi, ManualFinality};
+use sc_finality_manual::FinalizeBlockCommand;
 
 
 /// Full client dependencies.
@@ -21,6 +25,8 @@ pub struct FullDeps<C, P> {
 	pub client: Arc<C>,
 	/// Transaction pool instance.
 	pub pool: Arc<P>,
+	/// The command stream for the manual finality gadget
+	pub finaliy_stream: Stream<Item = FinalizeBlockCommand>,
 	/// Whether to deny unsafe calls
 	pub deny_unsafe: DenyUnsafe,
 }
@@ -44,6 +50,7 @@ pub fn create_full<C, P>(
 	let FullDeps {
 		client,
 		pool,
+		finality_stream,
 		deny_unsafe,
 	} = deps;
 
@@ -59,6 +66,8 @@ pub fn create_full<C, P>(
 	// `YourRpcStruct` should have a reference to a client, which is needed
 	// to call into the runtime.
 	// `io.extend_with(YourRpcTrait::to_delegate(YourRpcStruct::new(ReferenceToClient, ...)));`
+
+	io.extend_with(ManualFinalityApi::to_delegate(ManualFinality::new(finality_stream)));
 
 	io
 }
