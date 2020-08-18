@@ -98,7 +98,7 @@ pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::
 fn run_until_exit<FUT, ERR>(
 	mut tokio_runtime: tokio::runtime::Runtime,
 	future: FUT,
-	mut task_manager: TaskManager,
+	task_manager: TaskManager,
 ) -> Result<()>
 where
 	FUT: Future<Output = std::result::Result<(), ERR>> + future::Future,
@@ -109,8 +109,7 @@ where
 
 	tokio_runtime.block_on(main(f)).map_err(|e| e.to_string())?;
 
-	task_manager.terminate();
-	drop(tokio_runtime);
+	task_manager.clean_shutdown();
 
 	Ok(())
 }
@@ -204,16 +203,11 @@ impl<C: SubstrateCli> Runner<C> {
 
 		match subcommand {
 			Subcommand::BuildSpec(cmd) => {
-				if cmd.export_sync_state {
-					let (client, backend, network_status_rx, task_manager) = light_builder(self.config)?;
-					run_until_exit(
-						self.tokio_runtime,
-						cmd.run_export_sync_state(chain_spec, network_config, client, backend, network_status_rx),
-						task_manager
-					)
-				} else {
-					cmd.run(chain_spec, network_config)
-				}
+				let (client, backend, network_status_rx, task_manager) = light_builder(self.config)?;
+				run_until_exit(self.tokio_runtime,
+					cmd.run(chain_spec, network_config, client, backend, network_status_rx),
+					task_manager,
+				)
 			},
 			Subcommand::ExportBlocks(cmd) => {
 				let (client, _, _, task_manager) = full_builder(self.config)?;

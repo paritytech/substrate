@@ -27,9 +27,9 @@ use structopt::StructOpt;
 use std::io::Write;
 use std::sync::Arc;
 use sp_runtime::traits::Block as BlockT;
-use sc_service::chain_ops::{MaybeChtRootStorageProvider, build_light_sync_state};
+use sc_service::chain_ops::{MaybeChtRootStorageProvider, build_light_sync_state, CHT_ROOT_ERROR};
 use sc_service::NetworkStatusSinks;
-use futures::stream::StreamExt;
+use futures::{FutureExt, StreamExt};
 use futures::future::ready;
 
 /// The `build-spec` command used to build a specification.
@@ -39,10 +39,15 @@ pub struct BuildSpecCmd {
 	#[structopt(long = "raw")]
 	pub raw: bool,
 
-	/// Sync the chain using a light client, and export the state in the chain spec so that other
-	/// light clients can sync faster.
+	/// Export the light client state in the chain spec so that other light clients can sync faster.
+	/// Generally called together with `--sync-light-client`.
 	#[structopt(long)]
 	pub export_sync_state: bool,
+
+	/// Sync the chain using a light client first. Does nothing unless `--export-sync-state` is also
+	/// called.
+	#[structopt(long)]
+	pub sync_light_client: bool,
 
 	/// Disable adding the default bootnode to the specification.
 	///
@@ -62,11 +67,34 @@ pub struct BuildSpecCmd {
 
 impl BuildSpecCmd {
 	/// Run the build-spec command
-	pub fn run(
+	pub async fn run<B, CL, BA>(
 		&self,
 		mut spec: Box<dyn ChainSpec>,
 		network_config: NetworkConfiguration,
-	) -> error::Result<()> {
+		client: Arc<CL>,
+		backend: Arc<BA>,
+		network_status_sinks: NetworkStatusSinks<B>,
+	) -> error::Result<()>
+		where
+			B: BlockT,
+			CL: sp_blockchain::HeaderBackend<B>,
+			BA: MaybeChtRootStorageProvider<B>,
+	{
+		if self.export_sync_state {
+			if backend.cht_root_storage().is_none() {
+				return Err(CHT_ROOT_ERROR.into());
+			}
+
+			if self.sync_light_client {
+				network_status_sinks.network_status(std::time::Duration::from_secs(1)).filter(|(status, _)| {
+					ready(status.sync_state == sc_network::SyncState::Idle && status.num_sync_peers > 0)
+				}).into_future().map(drop).await;
+			}
+
+			let light_sync_state = build_light_sync_state(client, backend)?;
+			spec.set_light_sync_state(light_sync_state.to_serializable());
+		}
+
 		info!("Building chain spec");
 		let raw_output = self.raw;
 
@@ -85,30 +113,6 @@ impl BuildSpecCmd {
 			let _ = std::io::stderr().write_all(b"Error writing to stdout\n");
 		}
 		Ok(())
-	}
-
-	/// Sync the light client, export the sync state and run the command as per normal.
-	pub async fn run_export_sync_state<B, CL, BA>(
-		&self,
-		mut spec: Box<dyn ChainSpec>,
-		network_config: NetworkConfiguration,
-		client: Arc<CL>,
-		backend: Arc<BA>,
-		network_status_sinks: NetworkStatusSinks<B>,
-	) -> error::Result<()>
-		where
-			B: BlockT,
-			CL: sp_blockchain::HeaderBackend<B>,
-			BA: MaybeChtRootStorageProvider<B>,
-	{
-		network_status_sinks.network_status(std::time::Duration::from_secs(1)).filter(|(status, _)| {
-			ready(status.sync_state == sc_network::SyncState::Idle && status.num_sync_peers > 0)
-		}).into_future().await;
-
-		let light_sync_state = build_light_sync_state(client, backend)?;
-		spec.set_light_sync_state(light_sync_state.to_serializable());
-
-		self.run(spec, network_config)
 	}
 }
 

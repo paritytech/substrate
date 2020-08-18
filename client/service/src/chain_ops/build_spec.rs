@@ -20,6 +20,10 @@ use crate::{TFullBackend, TLightBackend};
 use std::sync::Arc;
 use sp_runtime::generic::BlockId;
 
+/// An error for if this function is being called on a full node.
+pub const CHT_ROOT_ERROR: &str =
+	"Backend doesn't store CHT roots. Make sure you're calling this on a light client.";
+
 /// Something that might allow access to a `ChtRootStorage`.
 pub trait MaybeChtRootStorageProvider<Block> {
 	/// Potentially get a reference to a `ChtRootStorage`.
@@ -48,8 +52,7 @@ pub fn build_light_sync_state<TBl, TCl, TBackend>(
 		TCl: HeaderBackend<TBl>,
 		TBackend: MaybeChtRootStorageProvider<TBl>,
 {
-	let cht_root_error = "Backend doesn't store CHT roots. Make sure you're calling this on a light client.";
-	let storage = backend.cht_root_storage().ok_or(cht_root_error)?;
+	let storage = backend.cht_root_storage().ok_or(CHT_ROOT_ERROR)?;
 
 	let finalized_hash = client.info().finalized_hash;
 	let finalized_number = client.info().finalized_number;
