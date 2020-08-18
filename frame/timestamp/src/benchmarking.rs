@@ -36,7 +36,7 @@ benchmarks! {
 		let t in 1 .. MAX_TIME;
 		// Ignore write to `DidUpdate` since it transient.
 		let did_update_key = crate::DidUpdate::hashed_key().to_vec();
-		frame_benchmarking::benchmarking::add_whitelist(TrackedStorageKey {
+		frame_benchmarking::benchmarking::add_to_whitelist(TrackedStorageKey {
 			key: did_update_key,
 			has_been_read: false,
 			has_been_written: true,
@@ -52,7 +52,7 @@ benchmarks! {
 		ensure!(DidUpdate::exists(), "Time was not set.");
 		// Ignore read/write to `DidUpdate` since it is transient.
 		let did_update_key = crate::DidUpdate::hashed_key().to_vec();
-		frame_benchmarking::benchmarking::add_whitelist(did_update_key.into());
+		frame_benchmarking::benchmarking::add_to_whitelist(did_update_key.into());
 	}: { Timestamp::<T>::on_finalize(t.into()); }
 	verify {
 		ensure!(!DidUpdate::exists(), "Time was not removed.");
