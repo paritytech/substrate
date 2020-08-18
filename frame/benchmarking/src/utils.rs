@@ -183,9 +183,7 @@ pub trait Benchmarking<T> {
 ///
 /// Instance generic parameter is optional and can be used in order to capture unused generics for
 /// instantiable pallets.
-pub trait BenchmarkingSetup<T, I = ()>
-	where T: frame_system::Trait
-{
+pub trait BenchmarkingSetup<T, I = ()> {
 	/// Return the components and their ranges which should be tested in this benchmark.
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
 
