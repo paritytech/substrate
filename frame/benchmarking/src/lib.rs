@@ -1019,16 +1019,8 @@ macro_rules! impl_benchmark_test {
 /// ```
 ///
 /// The `whitelist` is a parameter you pass to control the DB read/write tracking.
-/// We use a vector of `TrackedStorageKey`, which is a simple struct used to set
-/// if a key has been read or written to:
-///
-/// ```ignore
-/// pub struct TrackedStorageKey {
-/// 	pub key: Vec<u8>,
-/// 	pub has_been_read: bool,
-/// 	pub has_been_written: bool,
-/// }
-/// ```
+/// We use a vector of [TrackedStorageKey](./struct.TrackedStorageKey.html), which is a simple struct used to set
+/// if a key has been read or written to.
 ///
 /// For values that should be skipped entirely, we can just pass `key.into()`. For example:
 ///
