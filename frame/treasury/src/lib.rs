@@ -215,8 +215,8 @@ pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
-	/// Handler for the unbalanced decrease when slashing for a rejected proposal.
-	type ProposalRejection: OnUnbalanced<NegativeImbalanceOf<Self>>;
+	/// Handler for the unbalanced decrease when slashing for a rejected proposal or bounty.
+	type OnSlash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// Fraction of a proposal's value that should be bonded in order to place the proposal.
 	/// An accepted proposal gets these back. A rejected proposal does not.
@@ -570,7 +570,7 @@ decl_module! {
 			let proposal = <Proposals<T>>::take(&proposal_id).ok_or(Error::<T>::InvalidIndex)?;
 			let value = proposal.bond;
 			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
-			T::ProposalRejection::on_unbalanced(imbalance);
+			T::OnSlash::on_unbalanced(imbalance);
 
 			Self::deposit_event(Event::<T>::Rejected(proposal_id, value));
 		}
@@ -828,7 +828,7 @@ decl_module! {
 
 				let value = bounty.bond;
 				let imbalance = T::Currency::slash_reserved(&bounty.proposer, value).0;
-				T::ProposalRejection::on_unbalanced(imbalance);
+				T::OnSlash::on_unbalanced(imbalance);
 
 				Self::deposit_event(Event::<T>::BountyRejected(bounty_id, value));
 
@@ -924,7 +924,8 @@ decl_module! {
 					},
 					BountyStatus::Active { ref curator, .. } | BountyStatus::PendingPayout { ref curator, .. } => {
 						ensure!(maybe_curator.map_or(true, |c| c == *curator), BadOrigin);
-						let _ = T::Currency::slash_reserved(curator, bounty.curator_deposit);
+						let imbalance = T::Currency::slash_reserved(curator, bounty.curator_deposit).0;
+						T::OnSlash::on_unbalanced(imbalance);
 						bounty.curator_deposit = 0.into();
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
@@ -1038,7 +1039,8 @@ decl_module! {
 
 		/// Cancel an active bounty. All the funds will be send to treasury.
 		///
-		/// The dispatch origin for this call must be the curator of this bounty.
+		/// Only curator is able to cancel active bounty.
+		/// Otherwise `T::RejectOrigin` is able to cancel funded bounty.
 		///
 		/// - `bounty_id`: Bounty ID to cancel.
 		#[weight = T::WeightInfo::cancel_bounty()]
@@ -1048,9 +1050,13 @@ decl_module! {
 
 				match &bounty.status {
 					BountyStatus::Funded |
-					BountyStatus::CuratorAssigned { .. } |
-					BountyStatus::PendingPayout { .. } => {
+					BountyStatus::CuratorAssigned { .. } => {
 						T::RejectOrigin::ensure_origin(origin)?;
+					},
+					BountyStatus::PendingPayout { curator, .. } => {
+						T::RejectOrigin::ensure_origin(origin)?;
+
+						let _ = T::Currency::unreserve(curator, bounty.curator_deposit);
 					},
 					BountyStatus::Active { curator, expires } => {
 						let signer = ensure_signed(origin)?;
@@ -1060,6 +1066,8 @@ decl_module! {
 							// only curator can cancel unexpired bounty
 							ensure!(signer == *curator, Error::<T>::RequireCurator);
 						}
+
+						let _ = T::Currency::unreserve(curator, bounty.curator_deposit);
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}

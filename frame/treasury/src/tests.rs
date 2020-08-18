@@ -150,7 +150,7 @@ impl Trait for Test {
 	type TipReportDepositBase = TipReportDepositBase;
 	type DataDepositPerByte = DataDepositPerByte;
 	type Event = Event;
-	type ProposalRejection = ();
+	type OnSlash = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
@@ -879,6 +879,9 @@ fn award_and_cancel() {
 		assert_ok!(Treasury::assign_curator(Origin::root(), 0, 0, 10));
 		assert_ok!(Treasury::accept_curator(Origin::signed(0), 0));
 
+		assert_eq!(Balances::free_balance(0), 95);
+		assert_eq!(Balances::reserved_balance(0), 5);
+
 		assert_ok!(Treasury::award_bounty(Origin::signed(0), 0, 3));
 
 		assert_ok!(Treasury::cancel_bounty(Origin::root(), 0));
@@ -886,7 +889,8 @@ fn award_and_cancel() {
 		assert_eq!(last_event(), RawEvent::BountyCanceled(0));
 
 		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 0);
-		assert_eq!(Balances::free_balance(0), 95); // slash 5
+		assert_eq!(Balances::free_balance(0), 100);
+		assert_eq!(Balances::reserved_balance(0), 0);
 
 		assert_eq!(Treasury::bounties(0), None);
 		assert_eq!(Treasury::bounty_descriptions(0), None);
@@ -941,14 +945,17 @@ fn extend_expiry() {
 		System::set_block_number(2);
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
-		assert_ok!(Treasury::assign_curator(Origin::root(), 0, 1, 10));
-		assert_ok!(Treasury::accept_curator(Origin::signed(1), 0));
+		assert_ok!(Treasury::assign_curator(Origin::root(), 0, 4, 10));
+		assert_ok!(Treasury::accept_curator(Origin::signed(4), 0));
+
+		assert_eq!(Balances::free_balance(4), 5);
+		assert_eq!(Balances::reserved_balance(4), 5);
 
 		System::set_block_number(10);
 		<Treasury as OnInitialize<u64>>::on_initialize(10);
 
 		assert_noop!(Treasury::extend_bounty_expiry(Origin::signed(0), 0, Vec::new()), Error::<Test>::RequireCurator);
-		assert_ok!(Treasury::extend_bounty_expiry(Origin::signed(1), 0, Vec::new()));
+		assert_ok!(Treasury::extend_bounty_expiry(Origin::signed(4), 0, Vec::new()));
 
 		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
 			proposer: 0,
@@ -956,10 +963,10 @@ fn extend_expiry() {
 			curator_deposit: 5,
 			value: 50,
 			bond: 85,
-			status: BountyStatus::Active { curator: 1, expires: 30 },
+			status: BountyStatus::Active { curator: 4, expires: 30 },
 		});
 
-		assert_ok!(Treasury::extend_bounty_expiry(Origin::signed(1), 0, Vec::new()));
+		assert_ok!(Treasury::extend_bounty_expiry(Origin::signed(4), 0, Vec::new()));
 
 		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
 			proposer: 0,
@@ -967,14 +974,17 @@ fn extend_expiry() {
 			curator_deposit: 5,
 			value: 50,
 			bond: 85,
-			status: BountyStatus::Active { curator: 1, expires: 30 }, // still the same
+			status: BountyStatus::Active { curator: 4, expires: 30 }, // still the same
 		});
 
 		System::set_block_number(25);
 		<Treasury as OnInitialize<u64>>::on_initialize(25);
 
 		assert_noop!(Treasury::cancel_bounty(Origin::signed(0), 0), Error::<Test>::RequireCurator);
-		assert_ok!(Treasury::cancel_bounty(Origin::signed(1), 0));
+		assert_ok!(Treasury::cancel_bounty(Origin::signed(4), 0));
+
+		assert_eq!(Balances::free_balance(4), 10);
+		assert_eq!(Balances::reserved_balance(4), 0);
 	});
 }
 

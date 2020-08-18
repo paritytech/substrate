@@ -613,7 +613,7 @@ impl pallet_treasury::Trait for Runtime {
 	type TipReportDepositBase = TipReportDepositBase;
 	type DataDepositPerByte = DataDepositPerByte;
 	type Event = Event;
-	type ProposalRejection = ();
+	type OnSlash = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
