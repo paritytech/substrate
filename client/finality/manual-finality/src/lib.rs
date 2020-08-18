@@ -20,50 +20,29 @@
 //! This is suitable for a testing or learning environment.
 
 use futures::prelude::*;
-use sp_consensus::{
-	Environment, Proposer, ForkChoiceStrategy, BlockImportParams, BlockOrigin, SelectChain,
-	import_queue::{BasicQueue, CacheKeyId, Verifier, BoxBlockImport},
-};
 use sp_blockchain::HeaderBackend;
-use sp_inherents::InherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justification};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
-use sc_transaction_pool::txpool;
 use std::{sync::Arc, marker::PhantomData};
-use prometheus_endpoint::Registry;
 
 mod error;
 mod finalize_block;
 pub mod rpc;
 
-use self::{
-	finalize_block::{finalize_block, FinalizeBlockParams},
-};
-pub use self::{
-	error::Error,
-	rpc::FinalizeBlockCommand,
-};
+use finalize_block::{finalize_block, FinalizeBlockParams};
+pub use error::Error;
+pub use rpc::FinalizeBlockCommand;
 
 /// Creates the background authorship task for the manual seal engine.
-pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
-	mut block_import: BoxBlockImport<B, T>,
-	mut env: E,
+pub async fn run_manual_seal<B, CB, C, S>(
 	client: Arc<C>,
-	pool: Arc<txpool::Pool<A>>,
 	mut commands_stream: S,
-	select_chain: SC,
-	inherent_data_providers: InherentDataProviders,
 )
 	where
-		A: txpool::ChainApi<Block=B> + 'static,
 		B: BlockT + 'static,
 		C: HeaderBackend<B> + Finalizer<B, CB> + 'static,
 		CB: ClientBackend<B> + 'static,
-		E: Environment<B> + 'static,
-		E::Error: std::fmt::Display,
-		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
 		S: Stream<Item=FinalizeBlockCommand<<B as BlockT>::Hash>> + Unpin + 'static,
-		SC: SelectChain<B> + 'static,
 {
 	while let Some(FinalizeBlockCommand { hash, sender, justification }) = commands_stream.next().await {
 		finalize_block(
