@@ -2804,8 +2804,7 @@ checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 [[package]]
 name = "libp2p"
 version = "0.24.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76c101edbb9c06955fd4085b77d2abc31cf3650134d77068b35c44967756ada8"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "atomic",
  "bytes 0.5.4",
@@ -2837,8 +2836,7 @@ dependencies = [
 [[package]]
 name = "libp2p-core"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17cea54ea4a846a7c47e4347db0fc7a4129dcb0fb57f07f57e473820edbfcbde"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "asn1_der",
  "bs58",
@@ -2871,8 +2869,7 @@ dependencies = [
 [[package]]
 name = "libp2p-core-derive"
 version = "0.20.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f753d9324cd3ec14bf04b8a8cd0d269c87f294153d6bf2a84497a63a5ad22213"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "quote",
  "syn",
@@ -2881,8 +2878,7 @@ dependencies = [
 [[package]]
 name = "libp2p-dns"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fce8769cfe677a567d2677dc02a9e5be27a24acf1ff78a59cef425caae009a6a"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "futures 0.3.5",
  "libp2p-core",
@@ -2892,8 +2888,7 @@ dependencies = [
 [[package]]
 name = "libp2p-identify"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41efcb5b521b65d2c45432a244ce6427cdd3649228cd192f397d1fa67682aef2"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "futures 0.3.5",
  "libp2p-core",
@@ -2908,8 +2903,7 @@ dependencies = [
 [[package]]
 name = "libp2p-kad"
 version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10e775dca5c51e016f4c2af1b321fed0b0557eb7ded7b2cd60081ec5278a5b52"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "arrayvec 0.5.1",
  "bytes 0.5.4",
@@ -2935,8 +2929,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mdns"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4fe5614c2c5af74ef5870aad0fce73c9e4707716c4ee7cdf06cf9a0376d3815"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "async-std",
  "data-encoding",
@@ -2957,8 +2950,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mplex"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df9e79541e71590846f773efce1b6d0538804992ee54ff2f407e05d63a9ddc23"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "bytes 0.5.4",
  "fnv",
@@ -2973,8 +2965,7 @@ dependencies = [
 [[package]]
 name = "libp2p-noise"
 version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0beba6459d06153f5f8e23da3df1d2183798b1f457c7c9468ff99760bcbcc60b"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "bytes 0.5.4",
  "curve25519-dalek",
@@ -2995,8 +2986,7 @@ dependencies = [
 [[package]]
 name = "libp2p-ping"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "670261ef938567b614746b078e049b03b55617538a8d415071c518f97532d043"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "futures 0.3.5",
  "libp2p-core",
@@ -3010,8 +3000,7 @@ dependencies = [
 [[package]]
 name = "libp2p-secio"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a04b320cc0394554e8d0adca21f4efd9f8c2da4930211d92e411a19a4dfd769e"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "aes-ctr",
  "ctr",
@@ -3040,8 +3029,7 @@ dependencies = [
 [[package]]
 name = "libp2p-swarm"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57e4a7e64156e9d1a2daae36b5d791f057b9c53c9364a8e75f7f9848b54f9d68"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "futures 0.3.5",
  "libp2p-core",
@@ -3055,8 +3043,7 @@ dependencies = [
 [[package]]
 name = "libp2p-tcp"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0f65400ccfbbf9a356733bceca6c519c9db0deb5fbcc0b81f89837c4cd53997"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "async-std",
  "futures 0.3.5",
@@ -3071,8 +3058,7 @@ dependencies = [
 [[package]]
 name = "libp2p-wasm-ext"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f2f7b06d80d036ac5763a811185b7fe6951ad71c00544b17cc378a9069bb7c2"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "futures 0.3.5",
  "js-sys",
@@ -3085,8 +3071,7 @@ dependencies = [
 [[package]]
 name = "libp2p-websocket"
 version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5b350db65cf0a7c83a539a596ea261caae1552c0df2245df0f916ed2fd04572"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "async-tls",
  "either",
@@ -3105,8 +3090,7 @@ dependencies = [
 [[package]]
 name = "libp2p-yamux"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3969ead4ce530efb6f304623924245caf410f3b0b0139bd7007f205933788aa"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "futures 0.3.5",
  "libp2p-core",
@@ -3443,8 +3427,7 @@ checksum = "d8883adfde9756c1d30b0f519c9b8c502a94b41ac62f696453c37c7fc0a958ce"
 [[package]]
 name = "multistream-select"
 version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9157e87afbc2ef0d84cc0345423d715f445edde00141c93721c162de35a05e5"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.5",
@@ -4968,8 +4951,7 @@ dependencies = [
 [[package]]
 name = "parity-multiaddr"
 version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc20af3143a62c16e7c9e92ea5c6ae49f7d271d97d4d8fe73afc28f0514a3d0f"
+source = "git+https://github.com/mxinden/rust-libp2p?branch=kad-into-usize#921aa9cd03a192d46f702c68674a7761f927d840"
 dependencies = [
  "arrayref",
  "bs58",
