@@ -207,7 +207,7 @@ pub trait SubstrateCli: Sized {
 	}
 
 	/// Only create a Configuration for the command provided in argument
-	fn create_configuration<T: CliConfiguration>(
+	fn create_configuration<T: CliConfiguration<DVC>, DVC: DefaultConfigurationValues>(
 		&self,
 		command: &T,
 		task_executor: TaskExecutor,
@@ -248,7 +248,7 @@ pub fn init_logger(
 		.add_directive("cranelife_wasm=warn".parse().expect("provided directive is valid"))
 		.add_directive("hyper=warn".parse().expect("provided directive is valid"))
 		// Always log the special target `sc_tracing`, overrides global level.
-		.add_directive("sc_tracing=info".parse().expect("provided directive is valid"))
+		.add_directive("sc_tracing=trace".parse().expect("provided directive is valid"))
 		// Enable info for others.
 		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
 

@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use sp_runtime::traits::Bounded;
 
 use crate::Module as Balances;
@@ -40,7 +40,7 @@ benchmarks! {
 	// * Transfer will create the recipient account.
 	transfer {
 		let existential_deposit = T::ExistentialDeposit::get();
-		let caller = account("caller", 0, SEED);
+		let caller = whitelisted_caller();
 
 		// Give some multiple of the existential deposit + creation fee + transfer fee
 		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
@@ -60,7 +60,7 @@ benchmarks! {
 	// * Both accounts exist and will continue to exist.
 	#[extra]
 	transfer_best_case {
-		let caller = account("caller", 0, SEED);
+		let caller = whitelisted_caller();
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 
@@ -80,7 +80,7 @@ benchmarks! {
 	// Benchmark `transfer_keep_alive` with the worst possible condition:
 	// * The recipient account is created.
 	transfer_keep_alive {
-		let caller = account("caller", 0, SEED);
+		let caller = whitelisted_caller();
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 
