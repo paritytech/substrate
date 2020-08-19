@@ -540,8 +540,7 @@ define_env!(Env, <E: Ext>,
 	// - Upon trying to set an empty storage entry (value length is 0).
 	seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
 		if value_len > ctx.ext.max_value_size() {
-			// Bail out if value length exceeds the set maximum value size.
-			return Err(sp_sandbox::HostError);
+			Err(store_err(ctx, Error::<E::T>::ValueTooLarge))?;
 		}
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
@@ -1078,6 +1077,10 @@ define_env!(Env, <E: Ext>,
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
 	seal_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
+		if data_len > ctx.ext.max_value_size() {
+			Err(store_err(ctx, Error::<E::T>::ValueTooLarge))?;
+		}
+
 		let mut topics: Vec::<TopicOf<<E as Ext>::T>> = match topics_len {
 			0 => Vec::new(),
 			_ => read_sandbox_memory_as(ctx, topics_ptr, topics_len)?,

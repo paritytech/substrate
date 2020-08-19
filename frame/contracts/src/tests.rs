@@ -460,6 +460,52 @@ fn instantiate_and_call_and_deposit_event() {
 }
 
 #[test]
+fn deposit_event_max_value_limit() {
+	let (wasm, code_hash) = compile_module::<Test>("event_size").unwrap();
+
+	ExtBuilder::default()
+		.existential_deposit(50)
+		.build()
+		.execute_with(|| {
+			// Create
+			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
+			assert_ok!(Contracts::instantiate(
+				Origin::signed(ALICE),
+				30_000,
+				GAS_LIMIT,
+				code_hash.into(),
+				vec![],
+			));
+
+			// Check creation
+			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
+
+			// Call contract with allowed storage value.
+			assert_ok!(Contracts::call(
+				Origin::signed(ALICE),
+				BOB,
+				0,
+				GAS_LIMIT * 2, // we are copying a huge buffer
+				Encode::encode(&self::MaxValueSize::get()),
+			));
+
+			// Call contract with too large a storage value.
+			assert_err_ignore_postinfo!(
+				Contracts::call(
+					Origin::signed(ALICE),
+					BOB,
+					0,
+					GAS_LIMIT,
+					Encode::encode(&(self::MaxValueSize::get() + 1)),
+				),
+				Error::<Test>::ValueTooLarge,
+			);
+		});
+}
+
+#[test]
 fn run_out_of_gas() {
 	let (wasm, code_hash) = compile_module::<Test>("run_out_of_gas").unwrap();
 
@@ -1321,7 +1367,7 @@ fn storage_max_value_limit() {
 					GAS_LIMIT,
 					Encode::encode(&(self::MaxValueSize::get() + 1)),
 				),
-				Error::<Test>::ContractTrapped,
+				Error::<Test>::ValueTooLarge,
 			);
 		});
 }

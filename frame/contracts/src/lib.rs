@@ -367,7 +367,7 @@ pub trait Trait: frame_system::Trait {
 	/// The maximum nesting level of a call/instantiate stack.
 	type MaxDepth: Get<u32>;
 
-	/// The maximum size of a storage value in bytes.
+	/// The maximum size of a storage value and event payload in bytes.
 	type MaxValueSize: Get<u32>;
 
 	/// Used to answer contracts's queries regarding the current weight price. This is **not**
@@ -445,6 +445,8 @@ decl_error! {
 		DecodingFailed,
 		/// Contract trapped during execution.
 		ContractTrapped,
+		/// The size defined in `T::MaxValueSize` was exceeded.
+		ValueTooLarge,
 	}
 }
 
