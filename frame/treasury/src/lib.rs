@@ -1040,36 +1040,42 @@ decl_module! {
 		}
 
 		/// Cancel an active bounty. All the funds will be send to treasury.
+		/// If cancel is not initiated by `T::RejectOrigin`, curator deposit will be slashed.
 		///
-		/// Only curator is able to cancel active bounty.
-		/// Otherwise `T::RejectOrigin` is able to cancel funded bounty.
+		/// Only curator or `T::RejectOrigin` is able to cancel bounty.
 		///
 		/// - `bounty_id`: Bounty ID to cancel.
 		#[weight = T::WeightInfo::cancel_bounty()]
 		fn cancel_bounty(origin, #[compact] bounty_id: BountyIndex) {
+			let maybe_curator = ensure_signed(origin.clone())
+				.map(Some)
+				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
+
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
 
 				match &bounty.status {
 					BountyStatus::Funded |
-					BountyStatus::CuratorAssigned { .. } => {
-						T::RejectOrigin::ensure_origin(origin)?;
-					},
+					BountyStatus::CuratorAssigned { .. } => {},
 					BountyStatus::PendingPayout { curator, .. } => {
-						T::RejectOrigin::ensure_origin(origin)?;
+						if let Some(signer) = maybe_curator {
+							ensure!(signer == *curator, Error::<T>::RequireCurator);
 
-						let _ = T::Currency::unreserve(curator, bounty.curator_deposit);
+							let imbalance = T::Currency::slash_reserved(curator, bounty.curator_deposit).0;
+							T::OnSlash::on_unbalanced(imbalance);
+						}
 					},
 					BountyStatus::Active { curator, expires } => {
-						let signer = ensure_signed(origin)?;
+						if let Some(signer) = maybe_curator {
+							let now = system::Module::<T>::block_number();
+							if *expires > now {
+								// only curator can cancel unexpired bounty
+								ensure!(signer == *curator, Error::<T>::RequireCurator);
+							}
 
-						let now = system::Module::<T>::block_number();
-						if *expires > now {
-							// only curator can cancel unexpired bounty
-							ensure!(signer == *curator, Error::<T>::RequireCurator);
+							let imbalance = T::Currency::slash_reserved(curator, bounty.curator_deposit).0;
+							T::OnSlash::on_unbalanced(imbalance);
 						}
-
-						let _ = T::Currency::unreserve(curator, bounty.curator_deposit);
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}
