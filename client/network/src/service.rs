@@ -1610,18 +1610,19 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							ConnectedPoint::Listener { .. } => "in",
 						};
 						let reason = match cause {
-							ConnectionError::IO(_) => "transport-error",
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+							Some(ConnectionError::IO(_)) => "transport-error",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::B(
-								EitherError::A(PingFailure::Timeout)))))))) => "ping-timeout",
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(PingFailure::Timeout))))))))) => "ping-timeout",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::Legacy(LegacyConnectionKillError)))))))) =>	"force-closed",
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+								NotifsHandlerError::Legacy(LegacyConnectionKillError))))))))) =>	"force-closed",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged))))))) => "sync-notifications-clogged",
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) => "protocol-error",
-							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) => "keep-alive-timeout",
+								NotifsHandlerError::SyncNotificationsClogged)))))))) => "sync-notifications-clogged",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) => "protocol-error",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout)) => "keep-alive-timeout",
+							None => "actively-closed",
 						};
 						metrics.connections_closed_total.with_label_values(&[direction, reason]).inc();
 
