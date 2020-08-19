@@ -209,7 +209,7 @@ pub trait SubstrateCli: Sized {
 	}
 
 	/// Only create a Configuration for the command provided in argument
-	fn create_configuration<T: CliConfiguration>(
+	fn create_configuration<T: CliConfiguration<DVC>, DVC: DefaultConfigurationValues>(
 		&self,
 		command: &T,
 		task_executor: TaskExecutor,
@@ -240,7 +240,7 @@ pub fn init_logger(pattern: &str) {
 	builder.filter(Some("hyper"), log::LevelFilter::Warn);
 	builder.filter(Some("cranelift_wasm"), log::LevelFilter::Warn);
 	// Always log the special target `sc_tracing`, overrides global level
-	builder.filter(Some("sc_tracing"), log::LevelFilter::Info);
+	builder.filter(Some("sc_tracing"), log::LevelFilter::Trace);
 	// Enable info for others.
 	builder.filter(None, log::LevelFilter::Info);
 

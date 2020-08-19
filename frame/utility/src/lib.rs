@@ -69,15 +69,11 @@ use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
 
 mod tests;
 mod benchmarking;
+mod default_weights;
 
 pub trait WeightInfo {
 	fn batch(c: u32, ) -> Weight;
-	fn as_derivative(u: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn batch(_c: u32, ) -> Weight { 1_000_000_000 }
-	fn as_derivative(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn as_derivative() -> Weight;
 }
 
 /// Configuration trait.
@@ -145,7 +141,8 @@ decl_module! {
 		#[weight = (
 			calls.iter()
 				.map(|call| call.get_dispatch_info().weight)
-				.fold(15_000_000, |a: Weight, n| a.saturating_add(n).saturating_add(1_000_000)),
+				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
+				.saturating_add(T::WeightInfo::batch(calls.len() as u32)),
 			{
 				let all_operational = calls.iter()
 					.map(|call| call.get_dispatch_info().class)
@@ -186,13 +183,9 @@ decl_module! {
 		/// NOTE: Prior to version *12, this was called `as_limited_sub`.
 		///
 		/// The dispatch origin for this call must be _Signed_.
-		///
-		/// # <weight>
-		/// - Base weight: 2.861 µs
-		/// - Plus the weight of the `call`
-		/// # </weight>
 		#[weight = (
-			call.get_dispatch_info().weight.saturating_add(3_000_000),
+			T::WeightInfo::as_derivative()
+				.saturating_add(call.get_dispatch_info().weight),
 			call.get_dispatch_info().class,
 		)]
 		fn as_derivative(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
