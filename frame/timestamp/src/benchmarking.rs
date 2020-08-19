@@ -23,7 +23,7 @@ use super::*;
 use sp_std::prelude::*;
 use frame_system::RawOrigin;
 use frame_support::{ensure, traits::OnFinalize};
-use frame_benchmarking::benchmarks;
+use frame_benchmarking::{benchmarks, TrackedStorageKey};
 
 use crate::Module as Timestamp;
 
@@ -34,8 +34,14 @@ benchmarks! {
 
 	set {
 		let t in 1 .. MAX_TIME;
+		// Ignore write to `DidUpdate` since it transient.
+		let did_update_key = crate::DidUpdate::hashed_key().to_vec();
+		frame_benchmarking::benchmarking::add_to_whitelist(TrackedStorageKey {
+			key: did_update_key,
+			has_been_read: false,
+			has_been_written: true,
+		});
 	}: _(RawOrigin::None, t.into())
-
 	verify {
 		ensure!(Timestamp::<T>::now() == t.into(), "Time was not set.");
 	}
@@ -44,8 +50,10 @@ benchmarks! {
 		let t in 1 .. MAX_TIME;
 		Timestamp::<T>::set(RawOrigin::None.into(), t.into())?;
 		ensure!(DidUpdate::exists(), "Time was not set.");
+		// Ignore read/write to `DidUpdate` since it is transient.
+		let did_update_key = crate::DidUpdate::hashed_key().to_vec();
+		frame_benchmarking::benchmarking::add_to_whitelist(did_update_key.into());
 	}: { Timestamp::<T>::on_finalize(t.into()); }
-
 	verify {
 		ensure!(!DidUpdate::exists(), "Time was not removed.");
 	}
