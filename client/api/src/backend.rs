@@ -273,7 +273,7 @@ pub trait AuxStore {
 /// Provides access to an header lookup database.
 pub trait HeaderLookupStore<Block: BlockT> {
 	/// Is the header lookup define for a given number.
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool>;
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool>;
 
 	/// Cleanup header mapping.
 	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()>;

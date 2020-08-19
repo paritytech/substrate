@@ -418,8 +418,8 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 }
 
 impl<Block: BlockT> backend::HeaderLookupStore<Block> for Blockchain<Block> {
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool> {
-		Ok(self.storage.read().hashes.get(number).is_some())
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		Ok(self.storage.read().hashes.get(number) == Some(hash))
 	}
 
 	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
@@ -630,8 +630,8 @@ impl<Block: BlockT> backend::AuxStore for Backend<Block> where Block::Hash: Ord 
 }
 
 impl<Block: BlockT> backend::HeaderLookupStore<Block> for Backend<Block> {
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool> {
-		self.blockchain.is_lookup_define_for_number(number)
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.blockchain.is_lookup_define_for_number(number, hash)
 	}
 
 	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {

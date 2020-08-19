@@ -114,8 +114,8 @@ impl<S: AuxStore, H: Hasher> AuxStore for Backend<S, H> {
 }
 
 impl<Block: BlockT, S: HeaderLookupStore<Block>, H: Hasher> HeaderLookupStore<Block> for Backend<S, H> {
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool> {
-		self.blockchain.storage().is_lookup_define_for_number(number)
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.blockchain.storage().is_lookup_define_for_number(number, hash)
 	}
 
 	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {

@@ -1371,9 +1371,17 @@ impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: Blo
 impl<Block> sc_client_api::backend::HeaderLookupStore<Block> for Backend<Block>
 	where Block: BlockT
 {
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool> {
-		utils::block_id_to_lookup_key::<Block>(&*self.storage.db, columns::KEY_LOOKUP, BlockId::Number(number.clone()))
-			.map(|r| r.is_some())
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		let lookup_key = utils::block_id_to_lookup_key::<Block>(
+			&*self.storage.db,
+			columns::KEY_LOOKUP,
+			BlockId::Number(number.clone()),
+		)?;
+		Ok(if let Some(lookup_key) = lookup_key {
+			utils::lookup_key_to_hash(lookup_key.as_ref())? == hash.as_ref()
+		} else {
+			false
+		})
 	}
 
 	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {

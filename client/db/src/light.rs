@@ -436,9 +436,13 @@ impl<Block> HeaderLookupStore<Block> for LightStorage<Block>
 	where Block: BlockT,
 {
 
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool> {
-		utils::block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Number(number.clone()))
-			.map(|r| r.is_some())
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		let lookup_key = utils::block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Number(number.clone()))?;
+		Ok(if let Some(lookup_key) = lookup_key {
+			utils::lookup_key_to_hash(lookup_key.as_ref())? == hash.as_ref()
+		} else {
+			false
+		})
 	}
 
 	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {

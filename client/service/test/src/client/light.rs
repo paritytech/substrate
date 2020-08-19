@@ -29,7 +29,7 @@ use sc_light::{
 use std::sync::Arc;
 use sp_runtime::{
 	traits::{BlakeTwo256, HashFor, NumberFor},
-	generic::BlockId, traits::{Block as _, Header as HeaderT}, Digest,
+	generic::BlockId, traits::{Block as BlockT, Header as HeaderT}, Digest,
 };
 use std::collections::HashMap;
 use parking_lot::Mutex;
@@ -143,7 +143,11 @@ impl AuxStore for DummyStorage {
 }
 
 impl HeaderLookupStore<Block> for DummyStorage {
-	fn is_lookup_define_for_number(&self, _number: &NumberFor<Block>) -> sp_blockchain::Result<bool> {
+	fn is_lookup_define_for_number(
+		&self,
+		_number: &NumberFor<Block>,
+		_hash: &<Block as BlockT>::Hash,
+	) -> sp_blockchain::Result<bool> {
 		Err(ClientError::Backend("Test error".into()))
 	}
 

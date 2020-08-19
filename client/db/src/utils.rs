@@ -134,6 +134,15 @@ pub fn lookup_key_to_number<N>(key: &[u8]) -> sp_blockchain::Result<N> where
 		| (key[3] as u32)).map(Into::into)
 }
 
+/// Convert block lookup key to its hash.
+pub fn lookup_key_to_hash(key: &[u8]) -> sp_blockchain::Result<&[u8]>
+{
+	if key.len() < 4 {
+		return Err(sp_blockchain::Error::Backend("Invalid block key".into()));
+	}
+	Ok(&key[4..])
+}
+
 /// Delete number to hash mapping in DB transaction.
 pub fn remove_number_to_key_mapping<N: TryInto<u32>>(
 	transaction: &mut Transaction<DbHash>,

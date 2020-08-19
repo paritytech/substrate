@@ -1996,8 +1996,8 @@ impl<B, E, Block, RA> sc_client_api::HeaderLookupStore<Block> for Client<B, E, B
 		Self: ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
 {
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool> {
-		sc_client_api::HeaderLookupStore::is_lookup_define_for_number(&*self.backend, number)
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		sc_client_api::HeaderLookupStore::is_lookup_define_for_number(&*self.backend, number, hash)
 	}
 
 	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
@@ -2013,8 +2013,8 @@ impl<B, E, Block, RA> sc_client_api::HeaderLookupStore<Block> for &Client<B, E, 
 		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
 		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
 {
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<bool> {
-		(**self).is_lookup_define_for_number(number)
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		(**self).is_lookup_define_for_number(number, hash)
 	}
 
 	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
