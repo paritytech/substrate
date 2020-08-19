@@ -916,7 +916,7 @@ decl_module! {
 		) {
 			let maybe_curator = ensure_signed(origin.clone())
 				.map(Some)
-				.or_else(|_| T::ApproveOrigin::ensure_origin(origin).map(|_| None))?;
+				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
