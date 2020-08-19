@@ -4537,6 +4537,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-mmr"
+version = "2.0.0-rc5"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde",
+ "sp-io",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-multisig"
 version = "2.0.0-rc5"
 dependencies = [
