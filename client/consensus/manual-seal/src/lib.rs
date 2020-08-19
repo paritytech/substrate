@@ -19,7 +19,7 @@
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
-use std::{sync::Arc, marker::PhantomData, pin::Pin};
+use std::{sync::Arc, marker::{PhantomData, Send}, pin::Pin};
 
 use futures::prelude::*;
 use futures::task::{Context, Poll};
@@ -76,12 +76,12 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 const HEARTBEAT_TIMEOUT: u64 = 5;
 
 struct HeartbeatStream<Hash> {
-	pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin>,
+	pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
 	delay: tokio::time::Delay,
 }
 
 impl<Hash> HeartbeatStream<Hash> {
-	pub fn new(pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin>) -> Self {
+	pub fn new(pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>) -> Self {
 		Self {
 			pool_stream,
 			delay: tokio::time::delay_for(Duration::from_secs(HEARTBEAT_TIMEOUT)),
@@ -93,15 +93,18 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 
 	type Item = EngineCommand<Hash>;
 
-	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		match self.pool_stream.poll_next_unpin(cx) {
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		let mut hbs = self.get_mut();
+		match hbs.pool_stream.poll_next_unpin(cx) {
 			Poll::Ready(Some(ec)) => {
-				self.delay = tokio::time::delay_for(Duration::from_secs(HEARTBEAT_TIMEOUT));
+				info!("poll_next: get extrinsics");
+				hbs.delay = tokio::time::delay_for(Duration::from_secs(HEARTBEAT_TIMEOUT));
 				Poll::Ready(Some(ec))
 			},
 
-			Poll::Pending if self.delay.is_elapsed() => {
-				self.delay = tokio::time::delay_for(Duration::from_secs(HEARTBEAT_TIMEOUT));
+			Poll::Pending if hbs.delay.is_elapsed() => {
+				info!("poll_next: is_elapsed");
+				hbs.delay = tokio::time::delay_for(Duration::from_secs(HEARTBEAT_TIMEOUT));
 				Poll::Ready(Some(EngineCommand::SealNewBlock {
 					create_empty: true, // heartbeat blocks are empty by definition
 					finalize: false,
@@ -110,7 +113,10 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 				}))
 			},
 
-			_ => Poll::Pending,
+			_ => {
+				info!("poll_next: misc");
+				Poll::Pending
+			},
 		}
 	}
 }
@@ -227,6 +233,8 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 				sender: None,
 			}
 		});
+
+	info!("run_instant_seal");
 
 	let heartbeat_stream = HeartbeatStream::new(Box::new(commands_stream));
 
