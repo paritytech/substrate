@@ -598,6 +598,11 @@ fn propose_bounty_validation_works() {
 		assert_eq!(Treasury::pot(), 100);
 
 		assert_noop!(
+			Treasury::propose_bounty(Origin::signed(1), 0, [0; 17_000].to_vec()),
+			Error::<Test>::ReasonTooBig
+		);
+
+		assert_noop!(
 			Treasury::propose_bounty(Origin::signed(1), 10, b"12345678901234567890".to_vec()),
 			Error::<Test>::InsufficientProposersBalance
 		);
@@ -614,6 +619,8 @@ fn reject_bounty_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_noop!(Treasury::reject_bounty(Origin::root(), 0), Error::<Test>::InvalidIndex);
+
 		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 10, b"12345".to_vec()));
 
 		assert_ok!(Treasury::reject_bounty(Origin::root(), 0));
@@ -626,6 +633,7 @@ fn reject_bounty_works() {
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
 		assert_eq!(Treasury::bounties(0), None);
+		assert!(!Bounties::<Test>::contains_key(0));
 		assert_eq!(Treasury::bounty_descriptions(0), None);
 	});
 }
@@ -635,6 +643,8 @@ fn approve_bounty_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_noop!(Treasury::approve_bounty(Origin::root(), 0), Error::<Test>::InvalidIndex);
+
 		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
 
 		assert_ok!(Treasury::approve_bounty(Origin::root(), 0));
@@ -653,7 +663,7 @@ fn approve_bounty_works() {
 
 		assert_noop!(Treasury::reject_bounty(Origin::root(), 0), Error::<Test>::UnexpectedStatus);
 
-		// deposit not return yet
+		// deposit not returned yet
 		assert_eq!(Balances::reserved_balance(0), deposit);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
@@ -681,6 +691,9 @@ fn assign_curator_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+
+		assert_noop!(Treasury::assign_curator(Origin::root(), 0, 4, 4), Error::<Test>::InvalidIndex);
+
 		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
 
 		assert_ok!(Treasury::approve_bounty(Origin::root(), 0));
