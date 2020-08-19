@@ -167,6 +167,28 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # fn main() {}
 /// ```
 ///
+/// ### Transactional Function Example
+///
+/// Transactional function discards all changes to storage if it returns `Err`, or commits if
+/// `Ok`, via the #\[transactional\] attribute. Note the attribute must be after #\[weight\].
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate frame_support;
+/// # use frame_support::transactional;
+/// # use frame_system::Trait;
+/// decl_module! {
+/// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+/// 		#[weight = 0]
+/// 		#[transactional]
+/// 		fn my_short_function(origin) {
+///				// Your implementation
+/// 		}
+/// 	}
+/// }
+/// # fn main() {}
+/// ```
+///
 /// ### Privileged Function Example
 ///
 /// A privileged function checks that the origin of the call is `ROOT`.
@@ -188,6 +210,14 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// }
 /// # fn main() {}
 /// ```
+///
+/// ### Attributes on Functions
+///
+/// Attributes on functions are supported, but must be in the order of:
+/// 1. Optional #\[doc\] attribute.
+/// 2. #\[weight\] attribute.
+/// 3. Optional function attributes, for instance #\[transactional\]. Those function attributes will be written
+/// only on the dispatchable functions implemented on `Module`, not on the `Call` enum variant.
 ///
 /// ## Multiple Module Instances Example
 ///
@@ -1015,6 +1045,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			$origin:ident $( , $(#[$codec_attr:ident])* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1039,6 +1070,7 @@ macro_rules! decl_module {
 				$( $dispatchables )*
 				$(#[doc = $doc_attr])*
 				#[weight = $weight]
+				$(#[$fn_attr])*
 				$fn_vis fn $fn_name(
 					$origin $( , $(#[$codec_attr])* $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
@@ -1066,6 +1098,7 @@ macro_rules! decl_module {
 		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			$from:ident $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1094,6 +1127,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			$origin:ident : T::Origin $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1121,6 +1155,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			origin : $origin:ty $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1148,6 +1183,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty ),* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1410,13 +1446,13 @@ macro_rules! decl_module {
 		$origin_ty:ty;
 		$error_type:ty;
 		$ignore:ident;
-		$(#[doc = $doc_attr:tt])*
+		$(#[$fn_attr:meta])*
 		$vis:vis fn $name:ident (
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) { $( $impl:tt )* }
 	) => {
-		$(#[doc = $doc_attr])*
 		#[allow(unreachable_code)]
+		$(#[$fn_attr])*
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
@@ -1432,12 +1468,12 @@ macro_rules! decl_module {
 		$origin_ty:ty;
 		$error_type:ty;
 		$ignore:ident;
-		$(#[doc = $doc_attr:tt])*
+		$(#[$fn_attr:meta])*
 		$vis:vis fn $name:ident (
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) -> $result:ty { $( $impl:tt )* }
 	) => {
-		$(#[doc = $doc_attr])*
+		$(#[$fn_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
 			$crate::sp_tracing::enter_span!(stringify!($name));
 			$( $impl )*
@@ -1569,6 +1605,7 @@ macro_rules! decl_module {
 			$(
 				$(#[doc = $doc_attr:tt])*
 				#[weight = $weight:expr]
+				$(#[$fn_attr:meta])*
 				$fn_vis:vis fn $fn_name:ident(
 					$from:ident $( , $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 				) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1654,6 +1691,7 @@ macro_rules! decl_module {
 					$(#[doc = $doc_attr])*
 					///
 					/// NOTE: Calling this function will bypass origin filters.
+					$(#[$fn_attr])*
 					$fn_vis fn $fn_name (
 						$from $(, $param_name : $param )*
 					) $( -> $result )* { $( $impl )* }

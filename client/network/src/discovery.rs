@@ -46,6 +46,7 @@
 //!
 
 use crate::config::ProtocolId;
+use crate::utils::LruHashSet;
 use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
@@ -63,9 +64,14 @@ use libp2p::swarm::toggle::Toggle;
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
-use std::{cmp, collections::{HashMap, HashSet, VecDeque}, io, time::Duration};
+use std::{cmp, collections::{HashMap, HashSet, VecDeque}, io, num::NonZeroUsize, time::Duration};
 use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
+
+/// Maximum number of known external addresses that we will cache.
+/// This only affects whether we will log whenever we (re-)discover
+/// a given address.
+const MAX_KNOWN_EXTERNAL_ADDRESSES: usize = 32;
 
 /// `DiscoveryBehaviour` configuration.
 ///
@@ -190,7 +196,11 @@ impl DiscoveryConfig {
 			} else {
 				None.into()
 			},
-			allow_non_globals_in_dht: self.allow_non_globals_in_dht
+			allow_non_globals_in_dht: self.allow_non_globals_in_dht,
+			known_external_addresses: LruHashSet::new(
+				NonZeroUsize::new(MAX_KNOWN_EXTERNAL_ADDRESSES)
+					.expect("value is a constant; constant is non-zero; qed.")
+			),
 		}
 	}
 }
@@ -221,7 +231,9 @@ pub struct DiscoveryBehaviour {
 	/// Number of active connections over which we interrupt the discovery process.
 	discovery_only_if_under_num: u64,
 	/// Should non-global addresses be added to the DHT?
-	allow_non_globals_in_dht: bool
+	allow_non_globals_in_dht: bool,
+	/// A cache of discovered external addresses. Only used for logging purposes.
+	known_external_addresses: LruHashSet<Multiaddr>,
 }
 
 impl DiscoveryBehaviour {
@@ -507,7 +519,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		let new_addr = addr.clone()
 			.with(Protocol::P2p(self.local_peer_id.clone().into()));
-		info!(target: "sub-libp2p", "🔍 Discovered new external address for our node: {}", new_addr);
+
+		// NOTE: we might re-discover the same address multiple times
+		// in which case we just want to refrain from logging.
+		if self.known_external_addresses.insert(new_addr.clone()) {
+			info!(target: "sub-libp2p",
+				"🔍 Discovered new external address for our node: {}",
+				new_addr,
+			);
+		}
+
 		for k in self.kademlias.values_mut() {
 			NetworkBehaviour::inject_new_external_addr(k, addr)
 		}
