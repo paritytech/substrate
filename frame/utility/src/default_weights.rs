@@ -1,4 +1,6 @@
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,10 +15,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A list of the different weight modules for our runtime.
+//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 2.0.0-rc5
 
-pub mod frame_system;
-pub mod pallet_balances;
-pub mod pallet_democracy;
-pub mod pallet_timestamp;
-pub mod pallet_utility;
+#![allow(unused_parens)]
+#![allow(unused_imports)]
+
+use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
+
+impl crate::WeightInfo for () {
+	fn batch(c: u32, ) -> Weight {
+		(16461000 as Weight)
+			.saturating_add((1982000 as Weight).saturating_mul(c as Weight))
+	}
+	// WARNING! Some components were not used: ["u"]
+	fn as_derivative() -> Weight {
+		(4086000 as Weight)
+	}
+}
