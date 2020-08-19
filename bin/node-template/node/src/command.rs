@@ -20,7 +20,7 @@ use crate::cli::Cli;
 use crate::service;
 use sc_cli::{SubstrateCli, RuntimeVersion, Role, ChainSpec};
 use sc_service::PartialComponents;
-use crate::service::{new_partial, new_light_base};
+use crate::service::new_partial;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -69,19 +69,11 @@ pub fn run() -> sc_cli::Result<()> {
 	match &cli.subcommand {
 		Some(subcommand) => {
 			let runner = cli.create_runner(subcommand)?;
-			runner.run_subcommand(
-				subcommand,
-				|config| {
-					let PartialComponents { client, backend, task_manager, import_queue, .. }
-						= new_partial(&config)?;
-					Ok((client, backend, import_queue, task_manager))
-				},
-				|config| {
-					let (task_manager, client, backend, network_status_sinks)
-						= new_light_base(config)?;
-					Ok((client, backend, network_status_sinks, task_manager))
-				},
-			)
+			runner.run_subcommand(subcommand, |config| {
+				let PartialComponents { client, backend, task_manager, import_queue, .. }
+					= new_partial(&config)?;
+				Ok((client, backend, import_queue, task_manager))
+			})
 		}
 		None => {
 			let runner = cli.create_runner(&cli.run)?;

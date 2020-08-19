@@ -10,7 +10,6 @@ use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::{FinalityProofProvider as GrandpaFinalityProofProvider, SharedVoterState};
-use sc_service::NetworkStatusSinks;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -22,8 +21,6 @@ native_executor_instance!(
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
 type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
-type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
-type LightBackend = sc_service::TLightBackend<Block>;
 
 pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponents<
 	FullClient, FullBackend, FullSelectChain,
@@ -223,12 +220,10 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	Ok(task_manager)
 }
 
-pub(crate) fn new_light_base(config: Configuration) -> Result<(
-	TaskManager,
-	Arc<LightClient>, Arc<LightBackend>, NetworkStatusSinks<Block>,
-), ServiceError> {
+/// Builds a new service for a light client.
+pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let (client, backend, keystore, mut task_manager, on_demand) =
-	sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
+		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
 	let transaction_pool = Arc::new(sc_transaction_pool::BasicPool::new_light(
 		config.transaction_pool.clone(),
@@ -288,21 +283,15 @@ pub(crate) fn new_light_base(config: Configuration) -> Result<(
 		rpc_extensions_builder: Box::new(|_, _| ()),
 		telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
 		config,
-		client: client.clone(),
+		client,
 		keystore,
-		backend: backend.clone(),
-		network: network.clone(),
-		network_status_sinks: network_status_sinks.clone(),
+		backend,
+		network,
+		network_status_sinks,
 		system_rpc_tx,
-	})?;
+	 })?;
 
-	network_starter.start_network();
+	 network_starter.start_network();
 
-	Ok((task_manager, client, backend, network_status_sinks))
-}
-
-/// Builds a new service for a light client.
-pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
-	let (task_manager, ..) = new_light_base(config)?;
-	Ok(task_manager)
+	 Ok(task_manager)
 }

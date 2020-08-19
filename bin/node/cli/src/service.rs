@@ -27,7 +27,7 @@ use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
 	config::{Role, Configuration}, error::{Error as ServiceError},
-	RpcHandlers, TaskManager, NetworkStatusSinks,
+	RpcHandlers, TaskManager,
 };
 use sp_inherents::InherentDataProviders;
 use sc_network::{Event, NetworkService};
@@ -43,7 +43,6 @@ type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
 type FullGrandpaBlockImport =
 	grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>;
 type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
-type LightBackend = sc_service::TLightBackend<Block>;
 
 pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponents<
 	FullClient, FullBackend, FullSelectChain,
@@ -343,8 +342,8 @@ pub fn new_full(config: Configuration)
 }
 
 pub fn new_light_base(config: Configuration) -> Result<(
-	TaskManager, Arc<LightClient>, Arc<LightBackend>,
-	RpcHandlers, NetworkStatusSinks<Block>,
+	TaskManager, RpcHandlers, Arc<LightClient>,
+	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
 	let (client, backend, keystore, mut task_manager, on_demand) =
@@ -428,21 +427,19 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			remote_blockchain: Some(backend.remote_blockchain()),
 			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
 			client: client.clone(),
-			backend: backend.clone(),
 			transaction_pool: transaction_pool.clone(),
-			network_status_sinks: network_status_sinks.clone(),
-			config, keystore, system_rpc_tx,
+			config, keystore, backend, network_status_sinks, system_rpc_tx,
 			network: network.clone(),
 			telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
 			task_manager: &mut task_manager,
 		})?;
 
-	Ok((task_manager, client, backend, rpc_handlers, network_status_sinks, transaction_pool))
+	Ok((task_manager, rpc_handlers, client, network, transaction_pool))
 }
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
-	new_light_base(config).map(|(task_manager, ..)| {
+	new_light_base(config).map(|(task_manager, _, _, _, _)| {
 		task_manager
 	})
 }
@@ -518,7 +515,7 @@ mod tests {
 				Ok((node, (inherent_data_providers, setup_handles.unwrap())))
 			},
 			|config| {
-				let (keep_alive, client, _, _, network, transaction_pool) = new_light_base(config)?;
+				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
 				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			},
 			|service, &mut (ref inherent_data_providers, (ref mut block_import, ref babe_link))| {
@@ -668,7 +665,7 @@ mod tests {
 				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			},
 			|config| {
-				let (keep_alive, client, _, _, network, transaction_pool) = new_light_base(config)?;
+				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
 				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			},
 			vec![

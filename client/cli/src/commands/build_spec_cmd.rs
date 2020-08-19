@@ -17,20 +17,14 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::{SharedParams, NetworkParams};
+use crate::params::NodeKeyParams;
+use crate::params::SharedParams;
 use crate::CliConfiguration;
-use crate::Role;
 use log::info;
 use sc_network::config::build_multiaddr;
 use sc_service::{config::{MultiaddrWithPeerId, NetworkConfiguration}, ChainSpec};
 use structopt::StructOpt;
 use std::io::Write;
-use std::sync::Arc;
-use sp_runtime::traits::Block as BlockT;
-use sc_service::chain_ops::{MaybeChtRootStorageProvider, build_light_sync_state, CHT_ROOT_ERROR};
-use sc_service::NetworkStatusSinks;
-use futures::{FutureExt, StreamExt};
-use futures::future::ready;
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt)]
@@ -38,15 +32,6 @@ pub struct BuildSpecCmd {
 	/// Force raw genesis storage output.
 	#[structopt(long = "raw")]
 	pub raw: bool,
-
-	/// Export the light client state in the chain spec so that other light clients can sync faster.
-	/// Generally called together with `--sync-light-client`.
-	#[structopt(long)]
-	pub export_sync_state: bool,
-
-	/// Sync the chain using a light client first.
-	#[structopt(long, requires = "export-sync-state")]
-	pub sync_light_client: bool,
 
 	/// Disable adding the default bootnode to the specification.
 	///
@@ -61,39 +46,16 @@ pub struct BuildSpecCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub network_params: NetworkParams,
+	pub node_key_params: NodeKeyParams,
 }
 
 impl BuildSpecCmd {
 	/// Run the build-spec command
-	pub async fn run<B, CL, BA>(
+	pub fn run(
 		&self,
 		mut spec: Box<dyn ChainSpec>,
 		network_config: NetworkConfiguration,
-		client: Arc<CL>,
-		backend: Arc<BA>,
-		network_status_sinks: NetworkStatusSinks<B>,
-	) -> error::Result<()>
-		where
-			B: BlockT,
-			CL: sp_blockchain::HeaderBackend<B>,
-			BA: MaybeChtRootStorageProvider<B>,
-	{
-		if self.export_sync_state {
-			if backend.cht_root_storage().is_none() {
-				return Err(CHT_ROOT_ERROR.into());
-			}
-
-			if self.sync_light_client {
-				network_status_sinks.network_status(std::time::Duration::from_secs(1)).filter(|(status, _)| {
-					ready(status.sync_state == sc_network::SyncState::Idle && status.num_sync_peers > 0)
-				}).into_future().map(drop).await;
-			}
-
-			let light_sync_state = build_light_sync_state(client, backend)?;
-			spec.set_light_sync_state(light_sync_state.to_serializable());
-		}
-
+	) -> error::Result<()> {
 		info!("Building chain spec");
 		let raw_output = self.raw;
 
@@ -120,11 +82,7 @@ impl CliConfiguration for BuildSpecCmd {
 		&self.shared_params
 	}
 
-	fn network_params(&self) -> Option<&NetworkParams> {
-		Some(&self.network_params)
-	}
-
-	fn role(&self, _is_dev: bool) -> error::Result<Role> {
-		Ok(Role::Light)
+	fn node_key_params(&self) -> Option<&NodeKeyParams> {
+		Some(&self.node_key_params)
 	}
 }

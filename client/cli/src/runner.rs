@@ -30,8 +30,6 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::{fmt::Debug, marker::PhantomData, str::FromStr, sync::Arc};
 use sc_client_api::{UsageProvider, BlockBackend, StorageProvider};
-use sp_blockchain::HeaderBackend;
-use sc_service::NetworkStatusSinks;
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -98,7 +96,7 @@ pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::
 fn run_until_exit<FUT, ERR>(
 	mut tokio_runtime: tokio::runtime::Runtime,
 	future: FUT,
-	task_manager: TaskManager,
+	mut task_manager: TaskManager,
 ) -> Result<()>
 where
 	FUT: Future<Output = std::result::Result<(), ERR>> + future::Future,
@@ -109,7 +107,8 @@ where
 
 	tokio_runtime.block_on(main(f)).map_err(|e| e.to_string())?;
 
-	task_manager.clean_shutdown();
+	task_manager.terminate();
+	drop(tokio_runtime);
 
 	Ok(())
 }
@@ -178,56 +177,45 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
 	/// `SIGTERM` or `SIGINT`.
-	pub fn run_subcommand<B, FBA, IQ, FCL, FB, LB, LCL, LBA>(
-		self, subcommand: &Subcommand, full_builder: FB, light_builder: LB,
-	) -> Result<()>
+	pub fn run_subcommand<BU, B, BA, IQ, CL>(self, subcommand: &Subcommand, builder: BU)
+		-> Result<()>
 	where
-		FB: FnOnce(Configuration)
-			-> sc_service::error::Result<(Arc<FCL>, Arc<FBA>, IQ, TaskManager)>,
-		LB: FnOnce(Configuration)
-			-> sc_service::error::Result<(Arc<LCL>, Arc<LBA>, NetworkStatusSinks<B>, TaskManager)>,
+		BU: FnOnce(Configuration)
+			-> sc_service::error::Result<(Arc<CL>, Arc<BA>, IQ, TaskManager)>,
 		B: BlockT + for<'de> serde::Deserialize<'de>,
-		FBA: sc_client_api::backend::Backend<B> + 'static,
+		BA: sc_client_api::backend::Backend<B> + 'static,
 		IQ: sc_service::ImportQueue<B> + 'static,
 		<B as BlockT>::Hash: FromStr,
 		<<B as BlockT>::Hash as FromStr>::Err: Debug,
 		<<<B as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
-		FCL: UsageProvider<B> + BlockBackend<B> + StorageProvider<B, FBA> + Send + Sync +
+		CL: UsageProvider<B> + BlockBackend<B> + StorageProvider<B, BA> + Send + Sync +
 		'static,
-		LCL: HeaderBackend<B>,
-		LBA: sc_service::chain_ops::MaybeChtRootStorageProvider<B>,
 	{
 		let chain_spec = self.config.chain_spec.cloned_box();
 		let network_config = self.config.network.clone();
 		let db_config = self.config.database.clone();
 
 		match subcommand {
-			Subcommand::BuildSpec(cmd) => {
-				let (client, backend, network_status_rx, task_manager) = light_builder(self.config)?;
-				run_until_exit(self.tokio_runtime,
-					cmd.run(chain_spec, network_config, client, backend, network_status_rx),
-					task_manager,
-				)
-			},
+			Subcommand::BuildSpec(cmd) => cmd.run(chain_spec, network_config),
 			Subcommand::ExportBlocks(cmd) => {
-				let (client, _, _, task_manager) = full_builder(self.config)?;
+				let (client, _, _, task_manager) = builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, db_config), task_manager)
 			}
 			Subcommand::ImportBlocks(cmd) => {
-				let (client, _, import_queue, task_manager) = full_builder(self.config)?;
+				let (client, _, import_queue, task_manager) = builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, import_queue), task_manager)
 			}
 			Subcommand::CheckBlock(cmd) => {
-				let (client, _, import_queue, task_manager) = full_builder(self.config)?;
+				let (client, _, import_queue, task_manager) = builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, import_queue), task_manager)
 			}
 			Subcommand::Revert(cmd) => {
-				let (client, backend, _, task_manager) = full_builder(self.config)?;
+				let (client, backend, _, task_manager) = builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, backend), task_manager)
 			},
 			Subcommand::PurgeChain(cmd) => cmd.run(db_config),
 			Subcommand::ExportState(cmd) => {
-				let (client, _, _, task_manager) = full_builder(self.config)?;
+				let (client, _, _, task_manager) = builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, chain_spec), task_manager)
 			},
 		}
