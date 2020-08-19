@@ -270,15 +270,6 @@ pub trait AuxStore {
 	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>>;
 }
 
-/// Provides access to an header lookup database.
-pub trait HeaderLookupStore<Block: BlockT> {
-	/// Is the header lookup define for a given number.
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool>;
-
-	/// Cleanup header mapping.
-	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()>;
-}
-
 /// An `Iterator` that iterates keys in a given block under a prefix.
 pub struct KeyIterator<'a, State, Block> {
 	state: State,
@@ -404,7 +395,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 ///
 /// The same applies for live `BlockImportOperation`s: while an import operation building on a
 /// parent `P` is alive, the state for `P` should not be pruned.
-pub trait Backend<Block: BlockT>: AuxStore + HeaderLookupStore<Block> + Send + Sync {
+pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation<Block, State = Self::State>;
 	/// Associated blockchain backend type.

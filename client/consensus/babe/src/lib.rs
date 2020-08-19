@@ -104,7 +104,7 @@ use sp_consensus::import_queue::{Verifier, BasicQueue, DefaultImportQueue, Cache
 use sc_client_api::{
 	backend::AuxStore,
 	BlockchainEvents, ProvideUncles,
-	SharedPruningRequirements, HeaderLookupStore,
+	SharedPruningRequirements,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use futures::channel::mpsc::{channel, Sender, Receiver};
@@ -1117,7 +1117,6 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
 	Inner::Error: Into<ConsensusError>,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>
-		+ HeaderLookupStore<Block>
 		+ AuxStore + ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync,
 	Client::Api: BabeApi<Block> + ApiExt<Block>,
 {
@@ -1375,7 +1374,6 @@ fn prune_finalized<Block, Client>(
 	Block: BlockT,
 	Client: HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
-		+ HeaderLookupStore<Block>,
 {
 	let info = client.info();
 
@@ -1436,7 +1434,6 @@ pub fn block_import<Client, Block: BlockT, I>(
 	shared_pruning_requirements: Option<&SharedPruningRequirements>,
 ) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)> where
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>
-		+ HeaderLookupStore<Block>,
 {
 	let epoch_changes = aux_schema::load_epoch_changes::<Block, _>(&*client, &config)?;
 	let link = BabeLink {

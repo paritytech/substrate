@@ -339,6 +339,15 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> sp_blockchain::Result<Option<Block::Hash>> {
 		Ok(self.id(BlockId::Number(number)))
 	}
+
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		Ok(self.storage.read().hashes.get(number) == Some(hash))
+	}
+
+	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
+		self.storage.write().hashes.remove(number);
+		Ok(())
+	}
 }
 
 impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
@@ -414,17 +423,6 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 
 	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		Ok(self.storage.read().aux.get(key).cloned())
-	}
-}
-
-impl<Block: BlockT> backend::HeaderLookupStore<Block> for Blockchain<Block> {
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		Ok(self.storage.read().hashes.get(number) == Some(hash))
-	}
-
-	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
-		self.storage.write().hashes.remove(number);
-		Ok(())
 	}
 }
 
@@ -626,16 +624,6 @@ impl<Block: BlockT> backend::AuxStore for Backend<Block> where Block::Hash: Ord 
 
 	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		self.blockchain.get_aux(key)
-	}
-}
-
-impl<Block: BlockT> backend::HeaderLookupStore<Block> for Backend<Block> {
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		self.blockchain.is_lookup_define_for_number(number, hash)
-	}
-
-	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
-		self.blockchain.clean_up_number_lookup(number)
 	}
 }
 

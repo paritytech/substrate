@@ -23,7 +23,7 @@ use std::convert::TryInto;
 use parking_lot::RwLock;
 
 use sc_client_api::{
-	cht, backend::{AuxStore, NewBlockState, HeaderLookupStore}, UsageInfo,
+	cht, backend::{AuxStore, NewBlockState}, UsageInfo,
 	blockchain::{
 		BlockStatus, Cache as BlockchainCache, Info as BlockchainInfo,
 	},
@@ -195,6 +195,29 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 
 	fn hash(&self, number: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
 		Ok(self.header(BlockId::Number(number))?.map(|header| header.hash().clone()))
+	}
+
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		let lookup_key = utils::block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Number(number.clone()))?;
+		Ok(if let Some(lookup_key) = lookup_key {
+			utils::lookup_key_to_hash(lookup_key.as_ref())? == hash.as_ref()
+		} else {
+			false
+		})
+	}
+
+	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
+		// TODO pass transaction as parameter?
+		let mut transaction = Transaction::new();
+		utils::remove_number_to_key_mapping(
+			&mut transaction,
+			columns::KEY_LOOKUP,
+			number.clone(),
+		)?;
+
+		self.db.commit(transaction)?;
+
+		Ok(())
 	}
 }
 
@@ -431,35 +454,6 @@ impl<Block> AuxStore for LightStorage<Block>
 		Ok(self.db.get(columns::AUX, key))
 	}
 }
-
-impl<Block> HeaderLookupStore<Block> for LightStorage<Block>
-	where Block: BlockT,
-{
-
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		let lookup_key = utils::block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Number(number.clone()))?;
-		Ok(if let Some(lookup_key) = lookup_key {
-			utils::lookup_key_to_hash(lookup_key.as_ref())? == hash.as_ref()
-		} else {
-			false
-		})
-	}
-
-	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
-		// TODO pass transaction as parameter?
-		let mut transaction = Transaction::new();
-		utils::remove_number_to_key_mapping(
-			&mut transaction,
-			columns::KEY_LOOKUP,
-			number.clone(),
-		)?;
-
-		self.db.commit(transaction)?;
-
-		Ok(())
-	}
-}
-
 
 impl<Block> Storage<Block> for LightStorage<Block>
 	where Block: BlockT,

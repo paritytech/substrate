@@ -450,6 +450,33 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 			None => Ok(None),
 		})
 	}
+
+	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		let lookup_key = utils::block_id_to_lookup_key::<Block>(
+			&*self.db,
+			columns::KEY_LOOKUP,
+			BlockId::Number(number.clone()),
+		)?;
+		Ok(if let Some(lookup_key) = lookup_key {
+			utils::lookup_key_to_hash(lookup_key.as_ref())? == hash.as_ref()
+		} else {
+			false
+		})
+	}
+
+	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
+		// TODO pass transaction as parameter?
+		let mut transaction = Transaction::new();
+		utils::remove_number_to_key_mapping(
+			&mut transaction,
+			columns::KEY_LOOKUP,
+			number.clone(),
+		)?;
+
+		self.db.commit(transaction)?;
+
+		Ok(())
+	}
 }
 
 impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
@@ -1364,38 +1391,6 @@ impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: Blo
 
 	fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		Ok(self.storage.db.get(columns::AUX, key))
-	}
-}
-
-
-impl<Block> sc_client_api::backend::HeaderLookupStore<Block> for Backend<Block>
-	where Block: BlockT
-{
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		let lookup_key = utils::block_id_to_lookup_key::<Block>(
-			&*self.storage.db,
-			columns::KEY_LOOKUP,
-			BlockId::Number(number.clone()),
-		)?;
-		Ok(if let Some(lookup_key) = lookup_key {
-			utils::lookup_key_to_hash(lookup_key.as_ref())? == hash.as_ref()
-		} else {
-			false
-		})
-	}
-
-	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
-		// TODO pass transaction as parameter?
-		let mut transaction = Transaction::new();
-		utils::remove_number_to_key_mapping(
-			&mut transaction,
-			columns::KEY_LOOKUP,
-			number.clone(),
-		)?;
-
-		self.storage.db.commit(transaction)?;
-
-		Ok(())
 	}
 }
 

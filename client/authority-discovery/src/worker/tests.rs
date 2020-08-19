@@ -150,6 +150,21 @@ impl<Block: BlockT> HeaderBackend<Block> for TestApi {
 	) -> std::result::Result<Option<Block::Hash>, sp_blockchain::Error> {
 		Ok(None)
 	}
+
+	fn is_lookup_define_for_number(
+		&self,
+		_number: &NumberFor<Block>,
+		_hash: &Block::Hash,
+	) -> std::result::Result<bool, sp_blockchain::Error> {
+		Ok(false)
+	}
+
+	fn clean_up_number_lookup(
+		&self,
+		number: &NumberFor<Block>,
+	) -> std::result::Result<(), sp_blockchain::Error> {
+		Ok(())
+	}
 }
 
 pub(crate) struct RuntimeApi {

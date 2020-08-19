@@ -46,7 +46,6 @@ use sc_client_api::{
 	AuxStore, Storage, CallExecutor, cht, ExecutionStrategy, StorageProof, BlockImportOperation,
 	RemoteCallRequest, StorageProvider, ChangesProof, RemoteBodyRequest, RemoteReadRequest,
 	RemoteChangesRequest, FetchChecker, RemoteReadChildRequest, RemoteHeaderRequest, BlockBackend,
-	HeaderLookupStore,
 };
 use sp_externalities::Extensions;
 use sc_block_builder::BlockBuilderProvider;
@@ -110,6 +109,18 @@ impl sp_blockchain::HeaderBackend<Block> for DummyStorage {
 			Err(ClientError::Backend("Test error".into()))
 		}
 	}
+
+	fn is_lookup_define_for_number(
+		&self,
+		_number: &NumberFor<Block>,
+		_hash: &<Block as BlockT>::Hash,
+	) -> sp_blockchain::Result<bool> {
+		Err(ClientError::Backend("Test error".into()))
+	}
+
+	fn clean_up_number_lookup(&self, _number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
+		Err(ClientError::Backend("Test error".into()))
+	}
 }
 
 impl sp_blockchain::HeaderMetadata<Block> for DummyStorage {
@@ -141,21 +152,6 @@ impl AuxStore for DummyStorage {
 		Ok(self.aux_store.lock().get(key).cloned())
 	}
 }
-
-impl HeaderLookupStore<Block> for DummyStorage {
-	fn is_lookup_define_for_number(
-		&self,
-		_number: &NumberFor<Block>,
-		_hash: &<Block as BlockT>::Hash,
-	) -> sp_blockchain::Result<bool> {
-		Err(ClientError::Backend("Test error".into()))
-	}
-
-	fn clean_up_number_lookup(&self, _number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
-		Err(ClientError::Backend("Test error".into()))
-	}
-}
-
 
 impl Storage<Block> for DummyStorage {
 	fn import_header(
