@@ -701,6 +701,8 @@ fn assign_curator_works() {
 		System::set_block_number(2);
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
+		assert_noop!(Treasury::assign_curator(Origin::root(), 0, 4, 50), Error::<Test>::InvalidFee);
+
 		assert_ok!(Treasury::assign_curator(Origin::root(), 0, 4, 4));
 
 		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
@@ -835,6 +837,43 @@ fn award_and_claim_bounty_works() {
 
 		assert_eq!(Balances::free_balance(4), 14); // initial 10 + fee 4
 		assert_eq!(Balances::free_balance(3), 56);
+		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 0);
+
+		assert_eq!(Treasury::bounties(0), None);
+		assert_eq!(Treasury::bounty_descriptions(0), None);
+	});
+}
+
+#[test]
+fn claim_handles_high_fee() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::make_free_balance_be(&4, 30);
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
+
+		assert_ok!(Treasury::approve_bounty(Origin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Treasury::assign_curator(Origin::root(), 0, 4, 49));
+		assert_ok!(Treasury::accept_curator(Origin::signed(4), 0));
+
+		assert_ok!(Treasury::award_bounty(Origin::signed(4), 0, 3));
+
+		System::set_block_number(5);
+		<Treasury as OnInitialize<u64>>::on_initialize(5);
+
+		// make fee > balance
+		let _ = Balances::slash(&Treasury::bounty_account_id(0), 10);
+
+		assert_ok!(Treasury::claim_bounty(Origin::signed(1), 0));
+
+		assert_eq!(last_event(), RawEvent::BountyClaimed(0, 0, 3));
+
+		assert_eq!(Balances::free_balance(4), 70); // 30 + 50 - 10
+		assert_eq!(Balances::free_balance(3), 0);
 		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 0);
 
 		assert_eq!(Treasury::bounties(0), None);

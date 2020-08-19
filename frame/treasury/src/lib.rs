@@ -430,19 +430,19 @@ decl_event!(
 		TipClosed(Hash, AccountId, Balance),
 		/// A tip suggestion has been retracted. [tip_hash]
 		TipRetracted(Hash),
-		/// New bounty proposal.
+		/// New bounty proposal. [index]
 		BountyProposed(BountyIndex),
-		/// A bounty proposal was rejected; funds were slashed.
+		/// A bounty proposal was rejected; funds were slashed. [index, bond]
 		BountyRejected(BountyIndex, Balance),
-		/// A bounty proposal is funded and became active.
+		/// A bounty proposal is funded and became active. [index]
 		BountyBecameActive(BountyIndex),
-		/// A bounty is awarded to a beneficiary.
+		/// A bounty is awarded to a beneficiary. [index, beneficiary]
 		BountyAwarded(BountyIndex, AccountId),
-		/// A bounty is claimed by beneficiary.
+		/// A bounty is claimed by beneficiary. [index, payout, beneficiary]
 		BountyClaimed(BountyIndex, Balance, AccountId),
-		/// A bounty is cancelled.
+		/// A bounty is cancelled. [index]
 		BountyCanceled(BountyIndex),
-		/// A bounty expiry is extended.
+		/// A bounty expiry is extended. [index]
 		BountyExtended(BountyIndex),
 	}
 );
@@ -890,6 +890,8 @@ decl_module! {
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				};
 
+				ensure!(fee < bounty.value, Error::<T>::InvalidFee);
+
 				bounty.status = BountyStatus::CuratorAssigned { curator };
 				bounty.fee = fee;
 
@@ -1020,7 +1022,7 @@ decl_module! {
 					ensure!(system::Module::<T>::block_number() >= unlock_at, Error::<T>::Premature);
 					let bounty_account = Self::bounty_account_id(bounty_id);
 					let balance = T::Currency::free_balance(&bounty_account);
-					let fee = bounty.fee;
+					let fee = bounty.fee.min(balance); // just to be safe
 					let payout = balance.saturating_sub(fee);
 					let _ = T::Currency::unreserve(&curator, bounty.curator_deposit);
 					let _ = T::Currency::transfer(&bounty_account, &curator, fee, AllowDeath); // should not fail
