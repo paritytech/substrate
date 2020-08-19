@@ -151,7 +151,7 @@ impl<Block: BlockT> HeaderBackend<Block> for TestApi {
 		Ok(None)
 	}
 
-	fn is_lookup_define_for_number(
+	fn pruned_header_was_canonical(
 		&self,
 		_number: &NumberFor<Block>,
 		_hash: &Block::Hash,
@@ -159,9 +159,9 @@ impl<Block: BlockT> HeaderBackend<Block> for TestApi {
 		Ok(false)
 	}
 
-	fn clean_up_number_lookup(
+	fn pruned_header_clean_up(
 		&self,
-		number: &NumberFor<Block>,
+		_number: &NumberFor<Block>,
 	) -> std::result::Result<(), sp_blockchain::Error> {
 		Ok(())
 	}

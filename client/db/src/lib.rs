@@ -451,7 +451,7 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 		})
 	}
 
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
 		let lookup_key = utils::block_id_to_lookup_key::<Block>(
 			&*self.db,
 			columns::KEY_LOOKUP,
@@ -464,8 +464,7 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 		})
 	}
 
-	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
-		// TODO pass transaction as parameter?
+	fn pruned_header_clean_up(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
 		let mut transaction = Transaction::new();
 		utils::remove_number_to_key_mapping(
 			&mut transaction,

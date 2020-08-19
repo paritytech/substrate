@@ -1549,12 +1549,12 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 		self.backend.blockchain().hash(number)
 	}
 
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		self.backend.blockchain().is_lookup_define_for_number(number, hash)
+	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.backend.blockchain().pruned_header_was_canonical(number, hash)
 	}
 
-	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
-		self.backend.blockchain().clean_up_number_lookup(number)
+	fn pruned_header_clean_up(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
+		self.backend.blockchain().pruned_header_clean_up(number)
 	}
 }
 
@@ -1601,12 +1601,12 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for &Client<B, E, Block, RA> whe
 		(**self).hash(number)
 	}
 
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		(**self).is_lookup_define_for_number(number, hash)
+	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		(**self).pruned_header_was_canonical(number, hash)
 	}
 
-	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
-		(**self).clean_up_number_lookup(number)
+	fn pruned_header_clean_up(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
+		(**self).pruned_header_clean_up(number)
 	}
 }
 

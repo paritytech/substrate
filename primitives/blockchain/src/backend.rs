@@ -79,11 +79,11 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 			))
 	}
 
-	/// Was this header stored a canonical (partially pruned). TODO pruned_header_previously_canonical
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> Result<bool>;
+	/// Was this header stored a canonical (partially pruned).
+	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> Result<bool>;
 
-	/// Cleanup partially pruned header. TODO pruned_header_clean_up
-	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> Result<()>;
+	/// Cleanup partially pruned header.
+	fn pruned_header_clean_up(&self, number: &NumberFor<Block>) -> Result<()>;
 }
 
 /// Blockchain database backend. Does not perform any validation.

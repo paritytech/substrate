@@ -197,7 +197,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		Ok(self.header(BlockId::Number(number))?.map(|header| header.hash().clone()))
 	}
 
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
 		let lookup_key = utils::block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Number(number.clone()))?;
 		Ok(if let Some(lookup_key) = lookup_key {
 			utils::lookup_key_to_hash(lookup_key.as_ref())? == hash.as_ref()
@@ -206,8 +206,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		})
 	}
 
-	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
-		// TODO pass transaction as parameter?
+	fn pruned_header_clean_up(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
 		let mut transaction = Transaction::new();
 		utils::remove_number_to_key_mapping(
 			&mut transaction,

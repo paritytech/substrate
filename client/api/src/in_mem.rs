@@ -340,11 +340,11 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 		Ok(self.id(BlockId::Number(number)))
 	}
 
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
 		Ok(self.storage.read().hashes.get(number) == Some(hash))
 	}
 
-	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
+	fn pruned_header_clean_up(&self, number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
 		self.storage.write().hashes.remove(number);
 		Ok(())
 	}

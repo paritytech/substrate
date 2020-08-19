@@ -1391,10 +1391,10 @@ fn prune_finalized<Block, Client>(
 
 	if prune_light {
 		let is_canonical = |hash: &Block::Hash, number: &NumberFor<Block>, finalized_number: &NumberFor<Block>| {
-			Ok(number <= finalized_number && client.is_lookup_define_for_number(number, hash)?)
+			Ok(number <= finalized_number && client.pruned_header_was_canonical(number, hash)?)
 		};
 		let clean_up = |number: &NumberFor<Block>| {
-			client.clean_up_number_lookup(number)?;
+			client.pruned_header_clean_up(number)?;
 			Ok(())
 		};
 

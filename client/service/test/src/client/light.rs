@@ -110,7 +110,7 @@ impl sp_blockchain::HeaderBackend<Block> for DummyStorage {
 		}
 	}
 
-	fn is_lookup_define_for_number(
+	fn pruned_header_was_canonical(
 		&self,
 		_number: &NumberFor<Block>,
 		_hash: &<Block as BlockT>::Hash,
@@ -118,7 +118,7 @@ impl sp_blockchain::HeaderBackend<Block> for DummyStorage {
 		Err(ClientError::Backend("Test error".into()))
 	}
 
-	fn clean_up_number_lookup(&self, _number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
+	fn pruned_header_clean_up(&self, _number: &NumberFor<Block>) -> sp_blockchain::Result<()> {
 		Err(ClientError::Backend("Test error".into()))
 	}
 }

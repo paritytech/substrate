@@ -87,12 +87,12 @@ impl<S, Block> BlockchainHeaderBackend<Block> for Blockchain<S> where Block: Blo
 		self.storage.hash(number)
 	}
 
-	fn is_lookup_define_for_number(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> ClientResult<bool> {
-		self.storage.is_lookup_define_for_number(number, hash)
+	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> ClientResult<bool> {
+		self.storage.pruned_header_was_canonical(number, hash)
 	}
 
-	fn clean_up_number_lookup(&self, number: &NumberFor<Block>) -> ClientResult<()> {
-		self.storage.clean_up_number_lookup(number)
+	fn pruned_header_clean_up(&self, number: &NumberFor<Block>) -> ClientResult<()> {
+		self.storage.pruned_header_clean_up(number)
 	}
 }
 
