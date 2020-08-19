@@ -114,87 +114,28 @@ impl<H, N, V> ForkTree<H, N, V> where
 			predicate,
 		)?;
 
-		let removed = if let Some(mut root_index) = new_root_index {
-			let mut old_roots = std::mem::take(&mut self.roots);
-
-			let mut root = None;
-			let mut cur_children = Some(&mut old_roots);
-
-			while let Some(cur_index) = root_index.pop() {
-				if let Some(children) = cur_children.take() {
-					if root_index.is_empty() {
-						root = Some(children.remove(cur_index));
-					} else {
-						cur_children = Some(&mut children[cur_index].children);
-					}
-				}
-			}
-
-			let mut root = root
-				.expect("find_node_index_where will return array with at least one index; \
-						 this results in at least one item in removed; qed");
-
-			let mut removed = old_roots;
-
-			// we found the deepest ancestor of the finalized block, so we prune
-			// out any children that don't include the finalized block.
-			let root_children = std::mem::take(&mut root.children);
-			let mut is_first = true;
-
-			for child in root_children {
-				if is_first &&
-					(child.number == *number && child.hash == *hash ||
-					 child.number < *number && is_descendent_of(&child.hash, hash).unwrap_or(false))
-				{
-					root.children.push(child);
-					// assuming that the tree is well formed only one child should pass this requirement
-					// due to ancestry restrictions (i.e. they must be different forks).
-					is_first = false;
-				} else {
-					removed.push(child);
-				}
-			}
-
-			self.roots = vec![root];
-
-			removed
-		} else {
-			Vec::new()
+		let is_canonical = |self_hash: &H, _number: &N, _final_number: &N| {
+			is_descendent_of(self_hash, hash)
 		};
-
-		self.rebalance();
-
-		Ok(RemovedIterator { stack: removed })
+	
+		self.prune_inner(
+			new_root_index,
+			hash,
+			number,
+			&is_canonical,
+		)
 	}
 
-	/// Prune the tree, removing all non-canonical nodes.
-	/// We remove roots that are non-canonical.
-	/// The given function `is_canonical` should return `true` if the given block
-	/// (hash and number input, and last finalized nubmer) is canonical, this only apply for block less than
-	/// the finalized one.
-	/// It apply recursively a clean up call back on branch.
-	///
-	/// Returns all pruned node data.
-	pub fn prune_light<F, E, P, C>(
+	fn prune_inner<F, E>(
 		&mut self,
+		new_root_index: Option<Vec<usize>>,
 		hash: &H,
 		number: &N,
 		is_canonical: &F,
-		predicate: &P,
-		clean_up: &C,
-	) -> Result<impl Iterator<Item=(H, N, V)>, Error<E>>
+	) -> Result<RemovedIterator<H, N, V>, Error<E>>
 		where E: std::error::Error,
 			  F: Fn(&H, &N, &N) -> Result<bool, E>,
-			  P: Fn(&V) -> bool,
-				C: Fn(&N) -> Result<(), E>,
 	{
-		let new_root_index = self.find_node_index_where_light(
-			hash,
-			number,
-			is_canonical,
-			predicate,
-		)?;
-
 		let removed = if let Some(mut root_index) = new_root_index {
 			let mut old_roots = std::mem::take(&mut self.roots);
 
@@ -245,11 +186,49 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 		self.rebalance();
 
-		for node in removed.iter() {
+		Ok(RemovedIterator { stack: removed })
+	}
+
+	/// Prune the tree, removing all non-canonical nodes.
+	/// We remove roots that are non-canonical.
+	/// The given function `is_canonical` should return `true` if the given block
+	/// (hash and number input, and last finalized nubmer) is canonical, this only apply for block less than
+	/// the finalized one.
+	/// It apply recursively a clean up call back on branch.
+	///
+	/// Returns all pruned node data.
+	pub fn prune_non_cannonical<F, E, P, C>(
+		&mut self,
+		hash: &H,
+		number: &N,
+		is_canonical: &F,
+		predicate: &P,
+		clean_up: &C,
+	) -> Result<impl Iterator<Item=(H, N, V)>, Error<E>>
+		where E: std::error::Error,
+			  F: Fn(&H, &N, &N) -> Result<bool, E>,
+			  P: Fn(&V) -> bool,
+				C: Fn(&N) -> Result<(), E>,
+	{
+		let new_root_index = self.find_node_index_where_canonical(
+			hash,
+			number,
+			is_canonical,
+			predicate,
+		)?;
+
+		let result = self.prune_inner(
+			new_root_index,
+			hash,
+			number,
+			is_canonical,
+		)?;
+
+		for node in result.stack.iter() {
 			node.clean_up(clean_up)?;
 		}
 
-		Ok(RemovedIterator { stack: removed })
+		Ok(result)
 	}
 }
 
@@ -445,7 +424,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 	/// Same as [`find_node_index_where`](ForkTree::find_node_where), but with a predicate
 	/// on canonical nature of block.
-	pub fn find_node_index_where_light<F, E, P>(
+	pub fn find_node_index_where_canonical<F, E, P>(
 		&self,
 		hash: &H,
 		number: &N,
@@ -458,7 +437,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 	{
 		// search for node starting from all roots
 		for (index, root) in self.roots.iter().enumerate() {
-			let node = root.find_node_index_where_light(hash, number, is_canonical, predicate)?;
+			let node = root.find_node_index_where_canonical(hash, number, is_canonical, predicate)?;
 
 			// found the node, early exit
 			if let FindOutcome::Found(mut node) = node {
@@ -867,53 +846,20 @@ mod node_implementation {
 				  F: Fn(&H, &H) -> Result<bool, E>,
 				  P: Fn(&V) -> bool,
 		{
-			// stop searching this branch
-			if *number < self.number {
-				return Ok(FindOutcome::Failure(false));
-			}
-
-			let mut known_descendent_of = false;
-
-			// continue depth-first search through all children
-			for (i, node) in self.children.iter().enumerate() {
-				// found node, early exit
-				match node.find_node_index_where(hash, number, is_descendent_of, predicate)? {
-					FindOutcome::Abort => return Ok(FindOutcome::Abort),
-					FindOutcome::Found(mut x) => {
-						x.push(i);
-						return Ok(FindOutcome::Found(x))
-					},
-					FindOutcome::Failure(true) => {
-						// if the block was a descendent of this child,
-						// then it cannot be a descendent of any others,
-						// so we don't search them.
-						known_descendent_of = true;
-						break;
-					},
-					FindOutcome::Failure(false) => {},
-				}
-			}
-
-			// node not found in any of the descendents, if the node we're
-			// searching for is a descendent of this node then we will stop the
-			// search here, since there aren't any more children and we found
-			// the correct node so we don't want to backtrack.
-			let is_descendent_of = known_descendent_of || is_descendent_of(&self.hash, hash)?;
-			if is_descendent_of {
-				// if the predicate passes we return the node
-				if predicate(&self.data) {
-					return Ok(FindOutcome::Found(Vec::new()));
-				}
-			}
-
-			// otherwise, tell our ancestor that we failed, and whether
-			// the block was a descendent.
-			Ok(FindOutcome::Failure(is_descendent_of))
+			let is_canonical = |self_hash: &H, _number: &N, _final_number: &N| {
+				is_descendent_of(self_hash, hash)
+			};
+			self.find_node_index_where_canonical(
+				hash,
+				number,
+				&is_canonical,
+				predicate,
+			)
 		}
 
 		/// Same as [`find_node_index_where`](Node::find_node_where), but with
 		/// a direct check on block being canonical.
-		pub fn find_node_index_where_light<F, P, E>(
+		pub fn find_node_index_where_canonical<F, P, E>(
 			&self,
 			hash: &H,
 			number: &N,
@@ -934,7 +880,7 @@ mod node_implementation {
 			// continue depth-first search through all children
 			for (i, node) in self.children.iter().enumerate() {
 				// found node, early exit
-				match node.find_node_index_where_light(
+				match node.find_node_index_where_canonical(
 					hash,
 					number,
 					is_canonical,

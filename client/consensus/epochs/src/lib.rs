@@ -443,7 +443,7 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 			PersistedEpochHeader::Regular(ref epoch_n) =>
 				slot >= epoch_n.end_slot,
 		};
-		let removed = self.inner.prune_light(
+		let removed = self.inner.prune_non_cannonical(
 			hash,
 			&number,
 			&is_canonical,
