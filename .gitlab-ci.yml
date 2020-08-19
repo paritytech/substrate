@@ -592,7 +592,6 @@ chaos-weekly:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
-    - git clone https://github.com/paritytech/substrate.git
     - cd ./substrate/.maintain/chaostest
     - npm link
     - chaostest clean --namespace chaos-weekly 
