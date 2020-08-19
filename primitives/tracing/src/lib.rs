@@ -30,7 +30,6 @@
 //! the associated Fields mentioned above.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(const_fn))]
 
 mod types;
 
@@ -75,17 +74,11 @@ mod global_subscription {
 		cell::UnsafeCell,
 	};
 
-	static SUBSCRIBER_INSTANCE: SubscriptionHolder = SubscriptionHolder::new();
-
 	struct SubscriptionHolder {
 		inner: UnsafeCell<Option<Box<dyn TracingSubscriber>>>
 	}
 
-	impl SubscriptionHolder {
-		const fn new() -> SubscriptionHolder {
-			SubscriptionHolder { inner: UnsafeCell::new(None) }
-		}
-	}
+	static SUBSCRIBER_INSTANCE: SubscriptionHolder = SubscriptionHolder { inner: UnsafeCell::new(None) };
 
 	unsafe impl core::marker::Sync for SubscriptionHolder {}
 
