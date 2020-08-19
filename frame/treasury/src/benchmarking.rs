@@ -127,12 +127,12 @@ fn setup_bounty<T: Trait>(u: u32, d: u32) -> (
 	BalanceOf<T>,
 	Vec<u8>,
 ) {
-	let caller = account("caller", 0, SEED);
+	let caller = account("caller", u, SEED);
 	let value: BalanceOf<T> = T::Currency::minimum_balance().saturating_mul(100.into());
 	let fee = T::Currency::minimum_balance().saturating_mul(2.into());
 	let deposit = T::BountyDepositBase::get() + T::DataDepositPerByte::get() * MAX_BYTES.into();
 	let _ = T::Currency::make_free_balance_be(&caller, deposit);
-	let curator = account("curator", 0, SEED);
+	let curator = account("curator", u, SEED);
 	let _ = T::Currency::make_free_balance_be(&curator, fee / 2.into());
 	let reason = vec![0; d as usize];
 	(caller, curator, fee, value, reason)
