@@ -590,7 +590,7 @@ decl_module! {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
 			ensure!(<Proposals<T>>::contains_key(proposal_id), Error::<T>::InvalidIndex);
-			Approvals::mutate(|v| v.push(proposal_id));
+			Approvals::append(proposal_id);
 		}
 
 		/// Report something `reason` that deserves a tip and claim any eventual the finder's fee.
@@ -858,7 +858,7 @@ decl_module! {
 
 				bounty.status = BountyStatus::Approved;
 
-				BountyApprovals::mutate(|v| v.push(bounty_id));
+				BountyApprovals::append(bounty_id);
 
 				Ok(())
 			})?;
