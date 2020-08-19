@@ -2907,9 +2907,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-kad"
-version = "0.22.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10e775dca5c51e016f4c2af1b321fed0b0557eb7ded7b2cd60081ec5278a5b52"
+checksum = "ca9b4ccc868863317af3f65eb241811ceadd971d133183040140f5496037e0ae"
 dependencies = [
  "arrayvec 0.5.1",
  "bytes 0.5.4",
