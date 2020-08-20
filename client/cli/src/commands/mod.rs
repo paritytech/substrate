@@ -64,7 +64,6 @@ pub enum Subcommand {
 	ExportState(ExportStateCmd),
 }
 
-// TODO: move to config.rs?
 /// Macro that helps implement CliConfiguration on an enum of subcommand automatically
 ///
 /// # Example
@@ -189,17 +188,24 @@ macro_rules! substrate_cli_subcommands {
 
 			fn network_config(
 				&self,
-				chain_spec: &::std::boxed::Box<dyn ::sc_service::ChainSpec>,
+				chain_spec: &std::boxed::Box<dyn sc_service::ChainSpec>,
 				is_dev: bool,
-				net_config_dir: ::std::path::PathBuf,
+				net_config_dir: std::path::PathBuf,
 				client_id: &str,
 				node_name: &str,
-				node_key: ::sc_service::config::NodeKeyConfig,
+				node_key: sc_service::config::NodeKeyConfig,
+				default_listen_port: u16,
 			) -> $crate::Result<::sc_service::config::NetworkConfiguration> {
 				match self {
 					$(
 						$enum::$variant(cmd) => cmd.network_config(
-							chain_spec, is_dev, net_config_dir, client_id, node_name, node_key
+							chain_spec,
+							is_dev,
+							net_config_dir,
+							client_id,
+							node_name,
+							node_key,
+							default_listen_port,
 						)
 					),*
 				}
@@ -291,15 +297,21 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn rpc_http(&self) -> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
+			fn rpc_http(
+				&self,
+				default_listen_port: u16,
+			) -> $crate::Result<std::option::Option<std::net::SocketAddr>> {
 				match self {
-					$($enum::$variant(cmd) => cmd.rpc_http()),*
+					$($enum::$variant(cmd) => cmd.rpc_http(default_listen_port)),*
 				}
 			}
 
-			fn rpc_ws(&self) -> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
+			fn rpc_ws(
+				&self,
+				default_listen_port: u16,
+			) -> $crate::Result<std::option::Option<std::net::SocketAddr>> {
 				match self {
-					$($enum::$variant(cmd) => cmd.rpc_ws()),*
+					$($enum::$variant(cmd) => cmd.rpc_ws(default_listen_port)),*
 				}
 			}
 
@@ -316,23 +328,23 @@ macro_rules! substrate_cli_subcommands {
 			}
 
 			fn rpc_cors(&self, is_dev: bool)
-			-> $crate::Result<::std::option::Option<::std::vec::Vec<String>>> {
+			-> $crate::Result<std::option::Option<std::vec::Vec<String>>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.rpc_cors(is_dev)),*
 				}
 			}
 
-			fn prometheus_config(&self)
-			-> $crate::Result<::std::option::Option<::sc_service::config::PrometheusConfig>> {
+			fn prometheus_config(&self, default_listen_port: u16)
+			-> $crate::Result<std::option::Option<sc_service::config::PrometheusConfig>> {
 				match self {
-					$($enum::$variant(cmd) => cmd.prometheus_config()),*
+					$($enum::$variant(cmd) => cmd.prometheus_config(default_listen_port)),*
 				}
 			}
 
 			fn telemetry_endpoints(
 				&self,
-				chain_spec: &Box<dyn ::sc_service::ChainSpec>,
-			) -> $crate::Result<::std::option::Option<::sc_service::config::TelemetryEndpoints>> {
+				chain_spec: &Box<dyn sc_service::ChainSpec>,
+			) -> $crate::Result<std::option::Option<sc_service::config::TelemetryEndpoints>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.telemetry_endpoints(chain_spec)),*
 				}

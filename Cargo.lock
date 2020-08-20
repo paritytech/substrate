@@ -1559,6 +1559,7 @@ version = "2.0.0-rc5"
 dependencies = [
  "frame-support",
  "frame-system",
+ "hex-literal",
  "linregress",
  "parity-scale-codec",
  "paste",
@@ -1567,6 +1568,7 @@ dependencies = [
  "sp-runtime",
  "sp-runtime-interface",
  "sp-std",
+ "sp-storage",
 ]
 
 [[package]]
@@ -8061,6 +8063,7 @@ dependencies = [
  "sp-runtime-interface-test-wasm",
  "sp-state-machine",
  "sp-std",
+ "sp-storage",
  "sp-tracing",
  "sp-wasm-interface",
  "static_assertions",
@@ -8190,6 +8193,7 @@ name = "sp-storage"
 version = "2.0.0-rc5"
 dependencies = [
  "impl-serde 0.2.3",
+ "parity-scale-codec",
  "ref-cast",
  "serde",
  "sp-debug-derive",

@@ -53,6 +53,7 @@ use parking_lot::Mutex;
 use prometheus_endpoint::{
 	register, Counter, CounterVec, Gauge, GaugeVec, Histogram, HistogramOpts, HistogramVec, Opts,
 	PrometheusError, Registry, U64,
+	SourcedCounter, MetricSource
 };
 use sc_peerset::PeersetHandle;
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
@@ -240,12 +241,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			local_peer_id_legacy
 		);
 
-		// Initialize the metrics.
-		let metrics = match &params.metrics_registry {
-			Some(registry) => Some(Metrics::register(&registry)?),
-			None => None
-		};
-
 		let checker = params.on_demand.as_ref()
 			.map(|od| od.checker().clone())
 			.unwrap_or_else(|| Arc::new(AlwaysBadChecker));
@@ -351,6 +346,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				builder = builder.executor(Box::new(SpawnImpl(spawner)));
 			}
 			(builder.build(), bandwidth)
+		};
+
+		// Initialize the metrics.
+		let metrics = match &params.metrics_registry {
+			Some(registry) => {
+				// Sourced metrics.
+				BandwidthCounters::register(registry, bandwidth.clone())?;
+				// Other (i.e. new) metrics.
+				Some(Metrics::register(registry)?)
+			}
+			None => None
 		};
 
 		// Listen on multiaddresses.
@@ -700,6 +706,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///                    +
 	///      Notifications should be dropped
 	///             if buffer is full
+	///
+	///
+	/// See also the [`gossip`](crate::gossip) module for a higher-level way to send
+	/// notifications.
 	///
 	pub fn notification_sender(
 		&self,
@@ -1154,9 +1164,6 @@ struct Metrics {
 	kbuckets_num_nodes: GaugeVec<U64>,
 	listeners_local_addresses: Gauge<U64>,
 	listeners_errors_total: Counter<U64>,
-	// Note: `network_bytes_total` is a monotonic gauge obtained by
-	// sampling an existing counter.
-	network_bytes_total: GaugeVec<U64>,
 	notifications_sizes: HistogramVec,
 	notifications_streams_closed_total: CounterVec<U64>,
 	notifications_streams_opened_total: CounterVec<U64>,
@@ -1168,6 +1175,35 @@ struct Metrics {
 	requests_in_total: HistogramVec,
 	requests_out_finished: HistogramVec,
 	requests_out_started_total: CounterVec<U64>,
+}
+
+/// The source for bandwidth metrics.
+#[derive(Clone)]
+struct BandwidthCounters(Arc<transport::BandwidthSinks>);
+
+impl BandwidthCounters {
+	fn register(registry: &Registry, sinks: Arc<transport::BandwidthSinks>)
+		-> Result<(), PrometheusError>
+	{
+		register(SourcedCounter::new(
+			&Opts::new(
+				"sub_libp2p_network_bytes_total",
+				"Total bandwidth usage"
+			).variable_label("direction"),
+			BandwidthCounters(sinks),
+		)?, registry)?;
+
+		Ok(())
+	}
+}
+
+impl MetricSource for BandwidthCounters {
+	type N = u64;
+
+	fn collect(&self, mut set: impl FnMut(&[&str], Self::N)) {
+		set(&[&"in"], self.0.total_inbound());
+		set(&[&"out"], self.0.total_outbound());
+	}
 }
 
 impl Metrics {
@@ -1273,13 +1309,6 @@ impl Metrics {
 				"sub_libp2p_listeners_errors_total",
 				"Total number of non-fatal errors reported by a listener"
 			)?, registry)?,
-			network_bytes_total: register(GaugeVec::new(
-				Opts::new(
-					"sub_libp2p_network_bytes_total",
-					"Total bandwidth usage"
-				),
-				&["direction"]
-			)?, registry)?,
 			notifications_sizes: register(HistogramVec::new(
 				HistogramOpts {
 					common_opts: Opts::new(
@@ -1382,7 +1411,22 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			}
 		}
 
+		// At the time of writing of this comment, due to a high volume of messages, the network
+		// worker sometimes takes a long time to process the loop below. When that happens, the
+		// rest of the polling is frozen. In order to avoid negative side-effects caused by this
+		// freeze, a limit to the number of iterations is enforced below. If the limit is reached,
+		// the task is interrupted then scheduled again.
+		//
+		// This allows for a more even distribution in the time taken by each sub-part of the
+		// polling.
+		let mut num_iterations = 0;
 		loop {
+			num_iterations += 1;
+			if num_iterations >= 100 {
+				cx.waker().wake_by_ref();
+				break;
+			}
+
 			// Process the next message coming from the `NetworkService`.
 			let msg = match this.from_service.poll_next_unpin(cx) {
 				Poll::Ready(Some(msg)) => msg,
@@ -1422,7 +1466,16 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			}
 		}
 
+		// `num_iterations` serves the same purpose as in the previous loop.
+		// See the previous loop for explanations.
+		let mut num_iterations = 0;
 		loop {
+			num_iterations += 1;
+			if num_iterations >= 1000 {
+				cx.waker().wake_by_ref();
+				break;
+			}
+
 			// Process the next action coming from the network.
 			let next_event = this.network_service.next_event();
 			futures::pin_mut!(next_event);
@@ -1727,8 +1780,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			metrics.network_bytes_total.with_label_values(&["in"]).set(this.service.bandwidth.total_inbound());
-			metrics.network_bytes_total.with_label_values(&["out"]).set(this.service.bandwidth.total_outbound());
 			metrics.is_major_syncing.set(is_major_syncing as u64);
 			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
 				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
