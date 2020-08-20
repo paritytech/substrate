@@ -1035,6 +1035,9 @@ decl_storage! {
 		/// Minimum number of staking participants before emergency conditions are imposed.
 		pub MinimumValidatorCount get(fn minimum_validator_count) config(): u32;
 
+		/// Maximum number of validators allowed to be selected.
+		pub MaximumValidatorCount get(fn maximum_validator_count) config(): u32;
+
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
 		/// easy to initialize and the performance hit is minimal (we expect no more than four
 		/// invulnerables) and restricted to testnets.
@@ -2894,8 +2897,10 @@ impl<T: Trait> Module<T> {
 
 			// Populate Stakers and write slot stake.
 			let mut total_stake: BalanceOf<T> = Zero::zero();
+			let mut exposure_totals = Vec::<BalanceOf<T>>::new();
 			exposures.into_iter().for_each(|(stash, exposure)| {
 				total_stake = total_stake.saturating_add(exposure.total);
+				exposure_totals.push(exposure.total);
 				<ErasStakers<T>>::insert(current_era, &stash, &exposure);
 
 				let mut exposure_clipped = exposure;
@@ -2906,6 +2911,12 @@ impl<T: Trait> Module<T> {
 				}
 				<ErasStakersClipped<T>>::insert(&current_era, &stash, exposure_clipped);
 			});
+
+			let new_validator_count = Self::update_target_validators(exposure_totals);
+			sp_std::if_std!{
+				println!("New validator count: {}", new_validator_count);
+			}
+			// ValidatorCount::put(new_validator_count);
 
 			// Insert current era staking information
 			<ErasTotalStake<T>>::insert(&current_era, total_stake);
@@ -3125,6 +3136,42 @@ impl<T: Trait> Module<T> {
 
 			*earliest = (*earliest).max(keep_from)
 		})
+	}
+
+	/// Use a damping function to update the target number of validators for the next selection.
+	fn update_target_validators(mut exposures: Vec<BalanceOf<T>>) -> u32 {
+		let average = |all: &[BalanceOf<T>]| -> BalanceOf<T> {
+			all.iter().fold(Zero::zero(), |total: BalanceOf<T>, x: &BalanceOf<T>| {
+				// `total` should never saturate since total issuance fits inside `Balance`
+				total.saturating_add(*x)
+			}) / BalanceOf::<T>::saturated_from(all.len() as u128)
+		};
+		// Current validator count should never be zero.
+		let current_validator_count = Self::validator_count().max(1);
+		let one_percent_count = (current_validator_count / 100).max(1);
+		let global_average = average(&exposures);
+		// Sort exposures by balance
+		exposures.sort();
+
+		// Rule 1: If the bottom 1% of validators (more precisely, ceil(0.01 k) validators) have an
+		// average staked value strictly above 40% of the global average, in the next era increase
+		// the number of active validators by 1%, i.e. k <-- min{max_limit, k + ceil(0.01 k)}.
+		let one_percent_average = average(&exposures[0..(one_percent_count as usize)]);
+		if one_percent_average > Percent::from_percent(40) * global_average {
+			return (current_validator_count + one_percent_count).min(MaximumValidatorCount::get())
+		} else {
+			let two_percent_count = (current_validator_count / 50).max(1);
+			let two_percent_average = average(&exposures[0..(two_percent_count as usize)]);
+			// Rule 2: If the bottom 2% of validators (more precisely, 2 ceil(0.01 k) validators) have
+			// an average stake value strictly below 20% of the global average, in the next era decrease
+			// the number of active validators by 1%, i.e. k <-- max{min_limit, k - ceil(0.01 k)}.
+			if two_percent_average < Percent::from_percent(20) * global_average {
+				return (current_validator_count - one_percent_count).max(MinimumValidatorCount::get())
+			}
+		}
+
+		// If neither condition is met, keep the validator count the same
+		return current_validator_count
 	}
 
 	/// Add reward points to validators using their stash account ID.
