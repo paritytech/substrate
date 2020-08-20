@@ -255,7 +255,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			local_peer_id.clone(),
 			params.chain.clone(),
 			params.transaction_pool,
-			params.finality_proof_provider.clone(),
 			params.finality_proof_request_builder,
 			params.protocol_id.clone(),
 			peerset_config,

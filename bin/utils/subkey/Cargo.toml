@@ -1,6 +1,6 @@
 [package]
 name = "subkey"
-version = "2.0.0-rc5"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -15,13 +15,13 @@ name = "subkey"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-node-runtime = { version = "2.0.0-rc5", path = "../../node/runtime" }
-node-primitives = { version = "2.0.0-rc5", path = "../../node/primitives" }
-sc-cli = { version = "0.8.0-rc5", path = "../../../client/cli" }
-substrate-frame-cli = { version = "2.0.0-rc5", path = "../../../utils/frame/frame-utilities-cli" }
+node-runtime = { version = "2.0.0-rc6", path = "../../node/runtime" }
+node-primitives = { version = "2.0.0-rc6", path = "../../node/primitives" }
+sc-cli = { version = "0.8.0-rc6", path = "../../../client/cli" }
+substrate-frame-cli = { version = "2.0.0-rc6", path = "../../../utils/frame/frame-utilities-cli" }
 structopt = "0.3.14"
-frame-system = { version = "2.0.0-rc5", path = "../../../frame/system" }
-sp-core = { version = "2.0.0-rc5", path = "../../../primitives/core" }
+frame-system = { version = "2.0.0-rc6", path = "../../../frame/system" }
+sp-core = { version = "2.0.0-rc6", path = "../../../primitives/core" }
 
 [features]
 bench = []
