@@ -19,7 +19,7 @@ error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for tr
 14 | |     }
 15 | | }
    | |_- type in trait
-16 | 
+16 |
 17 |   sp_api::impl_runtime_apis! {
    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `&u64`
    |
