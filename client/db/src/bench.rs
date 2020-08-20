@@ -509,7 +509,6 @@ mod test {
 
 	#[test]
 	fn read_to_main_and_child_tries() {
-
 		let bench_state = BenchmarkingState::<crate::tests::Block>::new(Default::default(), None)
 			.unwrap();
 
