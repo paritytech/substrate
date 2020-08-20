@@ -647,7 +647,8 @@ impl ProtocolsHandler for NotifsHandler {
 						..
 					}) => {
 						self.pending_legacy_handshake = Some(received_handshake);
-						break;
+						cx.waker().wake();
+						return Poll::Pending;
 					},
 					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { reason, .. }) => {
 						// We consciously drop the receivers despite notifications being potentially
