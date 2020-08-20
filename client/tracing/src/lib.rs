@@ -26,7 +26,6 @@
 
 use rustc_hash::FxHashMap;
 use std::fmt;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -43,28 +42,9 @@ use tracing::{
 use tracing_subscriber::CurrentSpan;
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_tracing::types::{
-	WasmLevel,
-	WasmFieldValue,
-	WasmFields,
-	WasmValues,
-	WasmMetadata,
-	WasmAttributes,
-	WasmEvent,
-};
+use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
-const UNABLE_TO_DECODE: &'static str = "Unable to decode";
-
-/// Responsible for assigning ids to new spans, which are not re-used.
-#[derive(Clone)]
-pub struct ProfilingSubscriber {
-	next_id: Arc<AtomicU64>,
-	targets: Arc<Mutex<Vec<(String, Level)>>>,
-	trace_handler: Arc<dyn TraceHandler>,
-	span_data: Arc<Mutex<FxHashMap<Id, SpanDatum>>>,
-	current_span: Arc<CurrentSpan>,
-}
 
 /// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingSubscriber {
@@ -142,8 +122,6 @@ pub struct Values {
 	pub u64_values: FxHashMap<String, u64>,
 	/// HashMap of `String` values
 	pub string_values: FxHashMap<String, String>,
-	/// HashMap of `String` values
-	pub encoded_values: FxHashMap<String, Vec<u8>>,
 }
 
 impl Values {
@@ -157,17 +135,7 @@ impl Values {
 		self.bool_values.is_empty() &&
 			self.i64_values.is_empty() &&
 			self.u64_values.is_empty() &&
-			self.string_values.is_empty() &&
-			self.encoded_values.is_empty()
-	}
-
-	/// Extend self with other
-	pub fn extend(&mut self, other: Values) {
-		self.bool_values.extend(other.bool_values.into_iter());
-		self.i64_values.extend(other.i64_values.into_iter());
-		self.u64_values.extend(other.u64_values.into_iter());
-		self.string_values.extend(other.string_values.into_iter());
-		self.encoded_values.extend(other.encoded_values.into_iter());
+			self.string_values.is_empty()
 	}
 }
 
@@ -221,13 +189,7 @@ impl fmt::Display for Values {
 		let i64_iter = self.i64_values.iter().map(|(k, v)| format!("{}={}", k, v));
 		let u64_iter = self.u64_values.iter().map(|(k, v)| format!("{}={}", k, v));
 		let string_iter = self.string_values.iter().map(|(k, v)| format!("{}=\"{}\"", k, v));
-		let encoded_iter = self.encoded_values.iter().map(|(k, v)| format!("{}={:?}", k, v));
-		let values = bool_iter
-			.chain(i64_iter)
-			.chain(u64_iter)
-			.chain(string_iter)
-			.chain(encoded_iter)
-			.collect::<Vec<String>>().join(", ");
+		let values = bool_iter.chain(i64_iter).chain(u64_iter).chain(string_iter).collect::<Vec<String>>().join(", ");
 		write!(f, "{}", values)
 	}
 }
@@ -260,9 +222,9 @@ impl ProfilingSubscriber {
 	/// wasm_tracing indicates whether to enable wasm traces
 	pub fn new(receiver: TracingReceiver, targets: &str) -> ProfilingSubscriber {
 		match receiver {
-			TracingReceiver::Log => Self::new_with_handler(Arc::new(LogTraceHandler), targets),
+			TracingReceiver::Log => Self::new_with_handler(Box::new(LogTraceHandler), targets),
 			TracingReceiver::Telemetry => Self::new_with_handler(
-				Arc::new(TelemetryTraceHandler),
+				Box::new(TelemetryTraceHandler),
 				targets,
 			),
 		}
@@ -273,13 +235,13 @@ impl ProfilingSubscriber {
 	/// either with a level, eg: "pallet=trace"
 	/// or without: "pallet" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
-	pub fn new_with_handler(trace_handler: Arc<dyn TraceHandler>, targets: &str)
-							-> ProfilingSubscriber
+	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str)
+		-> ProfilingSubscriber
 	{
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		ProfilingSubscriber {
-			next_id: Arc::new(AtomicU64::new(1)),
-			targets: Arc::new(Mutex::new(targets)),
+			next_id: AtomicU64::new(1),
+			targets,
 			trace_handler,
 			span_data: Mutex::new(FxHashMap::default()),
 			current_span: Default::default()
@@ -287,7 +249,7 @@ impl ProfilingSubscriber {
 	}
 
 	fn check_target(&self, target: &str, level: &Level) -> bool {
-		for t in &*self.targets.lock() {
+		for t in &self.targets {
 			if target.starts_with(t.0.as_str()) && level <= &t.1 {
 				return true;
 			}
@@ -313,37 +275,9 @@ fn parse_target(s: &str) -> (String, Level) {
 	}
 }
 
-impl From<WasmValues> for Values {
-	fn from(fields: WasmValues) -> Self {
-		let mut values = Values::default();
-		for (k, v) in fields {
-			if let Ok(key) = String::from_utf8(k) {
-				match v {
-					WasmFieldValue::Bool(v) => { values.bool_values.insert(key, v); }
-					WasmFieldValue::I64(v) => { values.i64_values.insert(key, v); },
-					WasmFieldValue::U64(v) => { values.u64_values.insert(key, v); },
-					WasmFieldValue::Str(v) => {
-						let s = String::from_utf8(v).unwrap_or_else(|_| UNABLE_TO_DECODE.to_owned());
-						values.string_values.insert(key, s);
-					}
-					WasmFieldValue::Debug(v) => {
-						let s = String::from_utf8(v).unwrap_or_else(|_| UNABLE_TO_DECODE.to_owned());
-						values.string_values.insert(key, s);
-					}
-					WasmFieldValue::Encoded(v) => {
-						values.encoded_values.insert(key, v);
-					}
-				}
-			}
-		}
-		values
-	}
-}
-
-
 impl Subscriber for ProfilingSubscriber {
 	fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-		if self.check_target(metadata.target(), metadata.level()) {
+		if metadata.target() == WASM_TRACE_IDENTIFIER || self.check_target(metadata.target(), metadata.level()) {
 			log::debug!(target: "tracing", "Enabled target: {}, level: {}", metadata.target(), metadata.level());
 			true
 		} else {
@@ -418,7 +352,7 @@ impl Subscriber for ProfilingSubscriber {
 	}
 
 	fn try_close(&self, span: Id) -> bool {
-		if let Some(span_datum) = {
+		let span_datum = {
 			let mut span_data = self.span_data.lock();
 			span_data.remove(&span)
 		};
@@ -548,7 +482,7 @@ mod tests {
 		};
 		let test_subscriber = ProfilingSubscriber::new_with_handler(
 			Box::new(handler),
-			"test_target",
+			"test_target"
 		);
 		(test_subscriber, spans, events)
 	}
