@@ -632,8 +632,8 @@ impl ProtocolsHandler for NotifsHandler {
 
 		// If `self.pending_legacy_handshake` is `Some`, we are in a state where the legacy
 		// substream is open but the user isn't aware yet of the substreams being open.
-		// When that is the case, the legacy substream shouldn't be polled, otherwise there is
-		// a risk of receiving messages from it.
+		// When that is the case, neither the legacy substream nor the incoming notifications
+		// substreams should be polled, otherwise there is a risk of receiving messages from them.
 		if self.pending_legacy_handshake.is_none() {
 			while let Poll::Ready(ev) = self.legacy.poll(cx) {
 				match ev {
@@ -673,42 +673,36 @@ impl ProtocolsHandler for NotifsHandler {
 						return Poll::Ready(ProtocolsHandlerEvent::Close(NotifsHandlerError::Legacy(err))),
 				}
 			}
-		}
 
-		for (handler_num, (handler, handshake_message)) in self.in_handlers.iter_mut().enumerate() {
-			while let Poll::Ready(ev) = handler.poll(cx) {
-				match ev {
-					ProtocolsHandlerEvent::OutboundSubstreamRequest { .. } =>
-						error!("Incoming substream handler tried to open a substream"),
-					ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
-					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest(_)) =>
-						match self.enabled {
-							EnabledState::Initial => self.pending_in.push(handler_num),
-							EnabledState::Enabled => {
-								// We create `handshake_message` on a separate line to be sure
-								// that the lock is released as soon as possible.
-								let handshake_message = handshake_message.read().clone();
-								handler.inject_event(NotifsInHandlerIn::Accept(handshake_message))
+			for (handler_num, (handler, handshake_message)) in self.in_handlers.iter_mut().enumerate() {
+				while let Poll::Ready(ev) = handler.poll(cx) {
+					match ev {
+						ProtocolsHandlerEvent::OutboundSubstreamRequest { .. } =>
+							error!("Incoming substream handler tried to open a substream"),
+						ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
+						ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest(_)) =>
+							match self.enabled {
+								EnabledState::Initial => self.pending_in.push(handler_num),
+								EnabledState::Enabled => {
+									// We create `handshake_message` on a separate line to be sure
+									// that the lock is released as soon as possible.
+									let handshake_message = handshake_message.read().clone();
+									handler.inject_event(NotifsInHandlerIn::Accept(handshake_message))
+								},
+								EnabledState::Disabled =>
+									handler.inject_event(NotifsInHandlerIn::Refuse),
 							},
-							EnabledState::Disabled =>
-								handler.inject_event(NotifsInHandlerIn::Refuse),
+						ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => {},
+						ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(message)) => {
+							if self.notifications_sink_rx.is_some() {
+								let msg = NotifsHandlerOut::Notification {
+									message,
+									protocol_name: handler.protocol_name().to_owned().into(),
+								};
+								return Poll::Ready(ProtocolsHandlerEvent::Custom(msg));
+							}
 						},
-					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => {},
-					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(message)) => {
-						// `notifications_sink_rx.is_some()` is how we know whether the user has
-						// been informed of the substreams being open.
-						// `notifications_sink_rx` containing `None` should only ever happen for
-						// the last few messages being received during a shutdown, or if the
-						// remote is impolite. In order to enforce API invariants, we have no other
-						// choice but to discard the message.
-						if self.notifications_sink_rx.is_some() {
-							let msg = NotifsHandlerOut::Notification {
-								message,
-								protocol_name: handler.protocol_name().to_owned().into(),
-							};
-							return Poll::Ready(ProtocolsHandlerEvent::Custom(msg));
-						}
-					},
+					}
 				}
 			}
 		}
