@@ -504,7 +504,7 @@ decl_module! {
 
 			let wipeout = {
 				let new_total = new_free + new_reserved;
-				
+
 				new_total < existential_deposit && T::OtherCurrencies::is_collectable(&who)
 			};
 			let new_free = if wipeout { Zero::zero() } else { new_free };
@@ -615,7 +615,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		new: AccountData<T::Balance>,
 	) -> Option<AccountData<T::Balance>> {
 		let total = new.total();
-		
+
 		if total < T::ExistentialDeposit::get() && T::OtherCurrencies::is_collectable(who) {
 			T::OtherCurrencies::collect(who);
 
@@ -623,7 +623,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
 				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
 			}
-			
+
 			None
 		} else {
 			Some(new)
@@ -1028,7 +1028,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
 				let allow_death = allow_death && system::Module::<T>::allow_death(transactor);
 				ensure!(
-					allow_death 
+					allow_death
 						|| from_account.free >= ed
 						|| !T::OtherCurrencies::is_collectable(transactor),
 					Error::<T, I>::KeepAlive
@@ -1106,8 +1106,8 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			// bail if not yet created and this operation wouldn't be enough to create it.
 			let ed = T::ExistentialDeposit::get();
 			ensure!(
-				value >= ed 
-					|| !is_new 
+				value >= ed
+					|| !is_new
 					|| !T::OtherCurrencies::is_collectable(who),
 				Self::PositiveImbalance::zero()
 			);
@@ -1172,7 +1172,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			ensure!(
 				value.saturating_add(account.reserved) >= ed
 					|| !is_new
-					|| !T::OtherCurrencies::is_collectable(who), 
+					|| !T::OtherCurrencies::is_collectable(who),
 				()
 			);
 
@@ -1391,11 +1391,7 @@ impl<T: Trait<I>, I: Instance> DustCollector<T::AccountId> for Module<T, I> {
 	fn is_collectable(who: &T::AccountId) -> bool {
 		let total = Self::total_balance(who);
 
-		if total < T::ExistentialDeposit::get() || total.is_zero() {
-			true
-		} else {
-			false
-		}
+		total < T::ExistentialDeposit::get() || total.is_zero()
 	}
 
 	fn collect(who: &T::AccountId) {
