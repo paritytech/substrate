@@ -6,6 +6,7 @@ edition = "2018"
 license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+description = "Substrate test utilities macros"
 
 [dependencies]
 quote = "1.0.6"
