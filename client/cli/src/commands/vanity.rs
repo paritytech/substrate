@@ -40,15 +40,15 @@ pub struct VanityCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub network_scheme: NetworkSchemeFlag,
+	network_scheme: NetworkSchemeFlag,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub output_scheme: OutputTypeFlag,
+	output_scheme: OutputTypeFlag,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub crypto_scheme: CryptoSchemeFlag,
+	crypto_scheme: CryptoSchemeFlag,
 }
 
 impl VanityCmd {
@@ -165,7 +165,7 @@ mod tests {
 
 	#[test]
 	fn vanity() {
-		let vanity = VanityCmd::from_iter(&["vanity", "--number", "1", "--pattern", "j"]);
+		let vanity = VanityCmd::from_iter(&["vanity", "--pattern", "j"]);
 		assert!(vanity.run().is_ok());
 	}
 
