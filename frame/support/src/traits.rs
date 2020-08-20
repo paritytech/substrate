@@ -1670,7 +1670,14 @@ pub trait Instance: 'static {
 /// into u64 and back from u128. (This conversion is used in election and other places where complex
 /// calculation over balance type is needed)
 ///
-/// Total issuance of the currency is passed in, but an implementation of this trait may or may not use it.
+/// Total issuance of the currency is passed in, but an implementation of this trait may or may not
+/// use it.
+///
+/// # WARNING
+///
+/// the total issuance being passed in implies that the implementation must be aware of the fact
+/// that its values can affect the outcome. This implies that if the vote value is dependent on the
+/// total issuance, it should never ber written to storage for later re-use.
 pub trait CurrencyToVote<B> {
 	/// Convert balance to u64.
 	fn to_vote(value: B, issuance: B) -> u64;
