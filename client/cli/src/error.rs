@@ -18,6 +18,8 @@
 
 //! Initialization errors.
 
+
+
 /// Result type alias for the CLI.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -32,6 +34,8 @@ pub enum Error {
 	Service(sc_service::Error),
 	/// Client error
 	Client(sp_blockchain::Error),
+	/// scale codec error
+	Codec(parity_scale_codec::Error),
 	/// Input error
 	#[from(ignore)]
 	Input(String),
@@ -65,6 +69,7 @@ impl std::error::Error for Error {
 			Error::Cli(ref err) => Some(err),
 			Error::Service(ref err) => Some(err),
 			Error::Client(ref err) => Some(err),
+			Error::Codec(ref err) => Some(err),
 			Error::Input(_) => None,
 			Error::InvalidListenMultiaddress => None,
 			Error::Other(_) => None,
