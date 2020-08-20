@@ -166,7 +166,7 @@ use frame_support::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
-		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status,
+		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status, DustCollector,
 	}
 };
 use sp_runtime::{
@@ -199,6 +199,8 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
+	type OtherCurrencies: DustCollector<Self::AccountId>;
+
 	/// Weight information for the extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -220,6 +222,8 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
+	type OtherCurrencies: DustCollector<Self::AccountId>;
+
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -228,6 +232,7 @@ impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
+	type OtherCurrencies = T::OtherCurrencies;
 	type WeightInfo = <T as Trait<I>>::WeightInfo;
 }
 
@@ -497,7 +502,11 @@ decl_module! {
 			let who = T::Lookup::lookup(who)?;
 			let existential_deposit = T::ExistentialDeposit::get();
 
-			let wipeout = new_free + new_reserved < existential_deposit;
+			let wipeout = {
+				let new_total = new_free + new_reserved;
+				
+				new_total < existential_deposit && T::OtherCurrencies::is_collectable(&who)
+			};
 			let new_free = if wipeout { Zero::zero() } else { new_free };
 			let new_reserved = if wipeout { Zero::zero() } else { new_reserved };
 
@@ -606,11 +615,15 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		new: AccountData<T::Balance>,
 	) -> Option<AccountData<T::Balance>> {
 		let total = new.total();
-		if total < T::ExistentialDeposit::get() {
+		
+		if total < T::ExistentialDeposit::get() && T::OtherCurrencies::is_collectable(who) {
+			T::OtherCurrencies::collect(who);
+
 			if !total.is_zero() {
 				T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
 				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
 			}
+			
 			None
 		} else {
 			Some(new)
@@ -900,6 +913,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type DustRemoval = ();
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
+	type OtherCurrencies = T::OtherCurrencies;
 	type WeightInfo = <T as Subtrait<I>>::WeightInfo;
 }
 
@@ -999,7 +1013,10 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 				to_account.free = to_account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 
 				let ed = T::ExistentialDeposit::get();
-				ensure!(to_account.total() >= ed, Error::<T, I>::ExistentialDeposit);
+				ensure!(
+					to_account.total() >= ed || !T::OtherCurrencies::is_collectable(dest),
+					Error::<T, I>::ExistentialDeposit
+				);
 
 				Self::ensure_can_withdraw(
 					transactor,
@@ -1010,7 +1027,12 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 
 				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
 				let allow_death = allow_death && system::Module::<T>::allow_death(transactor);
-				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
+				ensure!(
+					allow_death 
+						|| from_account.free >= ed
+						|| !T::OtherCurrencies::is_collectable(transactor),
+					Error::<T, I>::KeepAlive
+				);
 
 				Ok(())
 			})
@@ -1062,7 +1084,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		if value.is_zero() { return Ok(PositiveImbalance::zero()) }
 
 		Self::try_mutate_account(who, |account, is_new| -> Result<Self::PositiveImbalance, DispatchError> {
-			ensure!(!is_new, Error::<T, I>::DeadAccount);
+			ensure!(!is_new || !T::OtherCurrencies::is_collectable(who), Error::<T, I>::DeadAccount);
 			account.free = account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 			Ok(PositiveImbalance::new(value))
 		})
@@ -1083,7 +1105,12 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		Self::try_mutate_account(who, |account, is_new| -> Result<Self::PositiveImbalance, Self::PositiveImbalance> {
 			// bail if not yet created and this operation wouldn't be enough to create it.
 			let ed = T::ExistentialDeposit::get();
-			ensure!(value >= ed || !is_new, Self::PositiveImbalance::zero());
+			ensure!(
+				value >= ed 
+					|| !is_new 
+					|| !T::OtherCurrencies::is_collectable(who),
+				Self::PositiveImbalance::zero()
+			);
 
 			// defensive only: overflow should never happen, however in case it does, then this
 			// operation is a no-op.
@@ -1112,7 +1139,10 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 
 			// bail if we need to keep the account alive and this would kill it.
 			let ed = T::ExistentialDeposit::get();
-			let would_be_dead = new_free_account + account.reserved < ed;
+			let would_be_dead = {
+				let new_total = new_free_account + account.reserved;
+				new_total < ed && T::OtherCurrencies::is_collectable(who)
+			};
 			let would_kill = would_be_dead && account.free + account.reserved >= ed;
 			ensure!(liveness == AllowDeath || !would_kill, Error::<T, I>::KeepAlive);
 
@@ -1139,7 +1169,12 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			// equal and opposite cause (returned as an Imbalance), then in the
 			// instance that there's no other accounts on the system at all, we might
 			// underflow the issuance and our arithmetic will be off.
-			ensure!(value.saturating_add(account.reserved) >= ed || !is_new, ());
+			ensure!(
+				value.saturating_add(account.reserved) >= ed
+					|| !is_new
+					|| !T::OtherCurrencies::is_collectable(who), 
+				()
+			);
 
 			let imbalance = if account.free <= value {
 				SignedImbalance::Positive(PositiveImbalance::new(value - account.free))
@@ -1245,7 +1280,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 		}
 
 		let actual = Self::try_mutate_account(beneficiary, |to_account, is_new|-> Result<Self::Balance, DispatchError> {
-			ensure!(!is_new, Error::<T, I>::DeadAccount);
+			ensure!(!is_new || !T::OtherCurrencies::is_collectable(beneficiary), Error::<T, I>::DeadAccount);
 			Self::try_mutate_account(slashed, |from_account, _| -> Result<Self::Balance, DispatchError> {
 				let actual = cmp::min(from_account.reserved, value);
 				match status {
@@ -1271,7 +1306,7 @@ impl<T: Trait<I>, I: Instance> OnKilledAccount<T::AccountId> for Module<T, I> {
 	fn on_killed_account(who: &T::AccountId) {
 		Account::<T, I>::mutate_exists(who, |account| {
 			let total = account.as_ref().map(|acc| acc.total()).unwrap_or_default();
-			if !total.is_zero() {
+			if !total.is_zero() && T::OtherCurrencies::is_collectable(who) {
 				T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
 				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
 			}
@@ -1349,5 +1384,25 @@ impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I> wher
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		// this should always be exactly equivalent to `Self::account(who).total().is_zero()` if ExistentialDeposit > 0
 		!T::AccountStore::is_explicit(who)
+	}
+}
+
+impl<T: Trait<I>, I: Instance> DustCollector<T::AccountId> for Module<T, I> {
+	fn is_collectable(who: &T::AccountId) -> bool {
+		let total = Self::total_balance(who);
+
+		if total < T::ExistentialDeposit::get() || total.is_zero() {
+			true
+		} else {
+			false
+		}
+	}
+
+	fn collect(who: &T::AccountId) {
+		let dropped = Self::total_balance(who);
+
+		if !dropped.is_zero() {
+			T::DustRemoval::on_unbalanced(NegativeImbalance::new(dropped));
+		}
 	}
 }

@@ -1664,6 +1664,28 @@ pub trait Instance: 'static {
     const PREFIX: &'static str ;
 }
 
+pub trait DustCollector<AccountId> {
+	fn is_collectable(who: &AccountId) -> bool;
+
+	fn collect(who: &AccountId);
+}
+#[impl_for_tuples(30)]
+impl<AccountId> DustCollector<AccountId> for Currencies {
+	fn is_collectable(who: &AccountId) -> bool {
+		for_tuples!( #( 
+			if !Currencies::is_collectable(who) {
+				return false;
+			}
+		)* );
+
+		true
+	}
+
+	fn collect(who: &AccountId) {
+		for_tuples!( #( Currencies::collect(who); )* );
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

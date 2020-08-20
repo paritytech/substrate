@@ -30,7 +30,7 @@ use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use frame_support::traits::Get;
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use std::cell::RefCell;
-use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInfo};
+use crate::{GenesisConfig, Module, Trait, Instance0, decl_tests, tests::CallWithDispatchInfo};
 
 use frame_system as system;
 impl_outer_origin!{
@@ -38,13 +38,13 @@ impl_outer_origin!{
 }
 
 mod balances {
-	pub use crate::Event;
+	pub use crate::{Event, Instance0};
 }
 
 impl_outer_event! {
 	pub enum Event for Test {
 		system<T>,
-		balances<T>,
+		balances Instance0<T>,
 	}
 }
 
@@ -97,18 +97,19 @@ parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
 impl pallet_transaction_payment::Trait for Test {
-	type Currency = Module<Test>;
+	type Currency = Module<Test, Instance0>;
 	type OnTransactionPayment = ();
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }
-impl Trait for Test {
+impl Trait<Instance0> for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = system::Module<Test>;
+	type OtherCurrencies = ();
 	type WeightInfo = ();
 }
 
@@ -139,7 +140,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
+		GenesisConfig::<Test, Instance0> {
 			balances: if self.monied {
 				vec![
 					(1, 10 * self.existential_deposit),

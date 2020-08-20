@@ -30,7 +30,7 @@ use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use frame_support::traits::{Get, StorageMapShim};
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use std::cell::RefCell;
-use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInfo};
+use crate::{GenesisConfig, Module, Trait, Instance0, Instance1, decl_tests, tests::CallWithDispatchInfo};
 
 use frame_system as system;
 impl_outer_origin!{
@@ -38,13 +38,14 @@ impl_outer_origin!{
 }
 
 mod balances {
-	pub use crate::Event;
+	pub use crate::{Event, Instance0, Instance1};
 }
 
 impl_outer_event! {
 	pub enum Event for Test {
 		system<T>,
-		balances<T>,
+		balances Instance0<T>,
+		balances Instance1<T>,
 	}
 }
 
@@ -90,30 +91,45 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = super::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnKilledAccount = Module<Test>;
+	type OnKilledAccount = (Module<Test, Instance0>, Module<Test, Instance1>);
 	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
 impl pallet_transaction_payment::Trait for Test {
-	type Currency = Module<Test>;
+	type Currency = Module<Test, Instance0>;
 	type OnTransactionPayment = ();
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }
-impl Trait for Test {
+impl Trait<Instance0> for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = StorageMapShim<
-		super::Account<Test>,
+		super::Account<Test, Instance0>,
 		system::CallOnCreatedAccount<Test>,
 		system::CallKillAccount<Test>,
 		u64, super::AccountData<u64>
 	>;
+	type OtherCurrencies = (Module<Test, Instance1>,);
+	type WeightInfo = ();
+}
+impl Trait<Instance1> for Test {
+	type Balance = u64;
+	type DustRemoval = ();
+	type Event = Event;
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = StorageMapShim<
+		super::Account<Test, Instance1>,
+		system::CallOnCreatedAccount<Test>,
+		system::CallKillAccount<Test>,
+		u64, super::AccountData<u64>
+	>;
+	type OtherCurrencies = (Module<Test, Instance0>,);
 	type WeightInfo = ();
 }
 
@@ -147,7 +163,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
+		GenesisConfig::<Test, Instance0> {
 			balances: if self.monied {
 				vec![
 					(1, 10 * self.existential_deposit),
@@ -181,8 +197,8 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 				events(),
 				[
 					Event::system(system::RawEvent::NewAccount(1)),
-					Event::balances(RawEvent::Endowed(1, 100)),
-					Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+					Event::balances_Instance0(RawEvent::Endowed(1, 100)),
+					Event::balances_Instance0(RawEvent::BalanceSet(1, 100, 0)),
 				]
 			);
 
@@ -196,9 +212,72 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::balances(RawEvent::DustLost(1, 1)),
+					Event::balances_Instance0(RawEvent::DustLost(1, 1)),
 					Event::system(system::RawEvent::KilledAccount(1))
 				]
 			);
 		});
+}
+
+#[test]
+fn dust_collector_should_work () {
+	type AnotherBalance = Module<Test, Instance1>;
+
+	<ExtBuilder>::default()
+		.existential_deposit(100)
+		.build()
+		.execute_with(|| {
+			assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+
+			assert_eq!(
+				events(),
+				[
+					Event::system(system::RawEvent::NewAccount(1)),
+					Event::balances_Instance0(RawEvent::Endowed(1, 100)),
+					Event::balances_Instance0(RawEvent::BalanceSet(1, 100, 0)),
+				]
+			);
+
+			let _ = Balances::slash(&1, 1);
+
+			assert_eq!(
+				events(),
+				[
+					Event::balances_Instance0(RawEvent::DustLost(1, 99)),
+					Event::system(system::RawEvent::KilledAccount(1))
+				]
+			);
+
+			// ---
+
+			assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+			assert_ok!(AnotherBalance::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+
+			assert_eq!(
+				events(),
+				[
+					Event::system(system::RawEvent::NewAccount(1)),
+					Event::balances_Instance0(RawEvent::Endowed(1, 100)),
+					Event::balances_Instance0(RawEvent::BalanceSet(1, 100, 0)),
+					Event::system(system::RawEvent::NewAccount(1)),
+					Event::balances_Instance1(RawEvent::Endowed(1, 100)),
+					Event::balances_Instance1(RawEvent::BalanceSet(1, 100, 0)),
+				]
+			);
+
+			let _ = Balances::slash(&1, 1);
+
+			assert_eq!(events(), []);
+
+			let _ = AnotherBalance::slash(&1, 1);
+
+			assert_eq!(
+				events(),
+				[
+					Event::balances_Instance1(RawEvent::DustLost(1, 99)),
+					Event::balances_Instance0(RawEvent::DustLost(1, 99)),
+					Event::system(system::RawEvent::KilledAccount(1)),
+				]
+			);
+	});
 }

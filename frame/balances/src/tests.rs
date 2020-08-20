@@ -53,7 +53,7 @@ macro_rules! decl_tests {
 		const ID_2: LockIdentifier = *b"2       ";
 
 		pub type System = frame_system::Module<$test>;
-		pub type Balances = Module<$test>;
+		pub type Balances = Module<$test, Instance0>;
 
 		pub const CALL: &<$test as frame_system::Trait>::Call = &$crate::tests::CallWithDispatchInfo;
 
@@ -81,7 +81,7 @@ macro_rules! decl_tests {
 				Balances::set_lock(ID_1, &1, 9, WithdrawReasons::all());
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 5, AllowDeath),
-					Error::<$test, _>::LiquidityRestrictions
+					Error::<$test, Instance0>::LiquidityRestrictions
 				);
 			});
 		}
@@ -91,7 +91,7 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
 				assert_eq!(Balances::free_balance(1), 10);
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath));
-				assert!(!<<Test as Trait>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
+				assert!(!<<Test as Trait<Instance0>>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
 			});
 		}
 
@@ -145,17 +145,17 @@ macro_rules! decl_tests {
 				Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-					Error::<$test, _>::LiquidityRestrictions
+					Error::<$test, Instance0>::LiquidityRestrictions
 				);
 				Balances::extend_lock(ID_1, &1, 2, WithdrawReasons::all());
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-					Error::<$test, _>::LiquidityRestrictions
+					Error::<$test, Instance0>::LiquidityRestrictions
 				);
 				Balances::extend_lock(ID_1, &1, 8, WithdrawReasons::all());
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 3, AllowDeath),
-					Error::<$test, _>::LiquidityRestrictions
+					Error::<$test, Instance0>::LiquidityRestrictions
 				);
 			});
 		}
@@ -171,11 +171,11 @@ macro_rules! decl_tests {
 					Balances::set_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
 					assert_noop!(
 						<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
-						Error::<$test, _>::LiquidityRestrictions
+						Error::<$test, Instance0>::LiquidityRestrictions
 					);
 					assert_noop!(
 						<Balances as ReservableCurrency<_>>::reserve(&1, 1),
-						Error::<$test, _>::LiquidityRestrictions,
+						Error::<$test, Instance0>::LiquidityRestrictions,
 					);
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
@@ -218,18 +218,18 @@ macro_rules! decl_tests {
 				Balances::set_lock(ID_1, &1, 10, WithdrawReasons::all());
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-					Error::<$test, _>::LiquidityRestrictions
+					Error::<$test, Instance0>::LiquidityRestrictions
 				);
 				Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::all());
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-					Error::<$test, _>::LiquidityRestrictions
+					Error::<$test, Instance0>::LiquidityRestrictions
 				);
 				System::set_block_number(2);
 				Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::all());
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 3, AllowDeath),
-					Error::<$test, _>::LiquidityRestrictions
+					Error::<$test, Instance0>::LiquidityRestrictions
 				);
 			});
 		}
@@ -240,17 +240,17 @@ macro_rules! decl_tests {
 				Balances::set_lock(ID_1, &1, 10, WithdrawReason::Transfer.into());
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-					Error::<$test, _>::LiquidityRestrictions
+					Error::<$test, Instance0>::LiquidityRestrictions
 				);
 				Balances::extend_lock(ID_1, &1, 10, WithdrawReasons::none());
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-					Error::<$test, _>::LiquidityRestrictions
+					Error::<$test, Instance0>::LiquidityRestrictions
 				);
 				Balances::extend_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
 				assert_noop!(
 					<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
-					Error::<$test, _>::LiquidityRestrictions
+					Error::<$test, Instance0>::LiquidityRestrictions
 				);
 			});
 		}
@@ -267,7 +267,7 @@ macro_rules! decl_tests {
 					// ext_deposit is 10, value is 9, not satisfies for ext_deposit
 					assert_noop!(
 						Balances::transfer(Some(1).into(), 5, 9),
-						Error::<$test, _>::ExistentialDeposit,
+						Error::<$test, Instance0>::ExistentialDeposit,
 					);
 					assert_eq!(Balances::is_dead_account(&5), true); // account 5 should not exist
 					assert_eq!(Balances::free_balance(1), 100);
@@ -316,7 +316,7 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::total_balance(&1), 10);
 				assert_ok!(Balances::deposit_into_existing(&1, 10).map(drop));
 				assert_eq!(Balances::total_balance(&1), 20);
-				assert_eq!(<TotalIssuance<$test>>::get(), 120);
+				assert_eq!(<TotalIssuance<$test, Instance0>>::get(), 120);
 			});
 		}
 
@@ -399,7 +399,7 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::reserve(&1, 69));
 				assert_noop!(
 					Balances::transfer(Some(1).into(), 2, 69),
-					Error::<$test, _>::InsufficientBalance,
+					Error::<$test, Instance0>::InsufficientBalance,
 				);
 			});
 		}
@@ -432,7 +432,7 @@ macro_rules! decl_tests {
 				assert!(Balances::slash(&1, 69).1.is_zero());
 				assert_eq!(Balances::free_balance(1), 0);
 				assert_eq!(Balances::reserved_balance(1), 42);
-				assert_eq!(<TotalIssuance<$test>>::get(), 42);
+				assert_eq!(<TotalIssuance<$test, Instance0>>::get(), 42);
 			});
 		}
 
@@ -444,7 +444,7 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::slash(&1, 69).1, 27);
 				assert_eq!(Balances::free_balance(1), 0);
 				assert_eq!(Balances::reserved_balance(1), 0);
-				assert_eq!(<TotalIssuance<$test>>::get(), 0);
+				assert_eq!(<TotalIssuance<$test, Instance0>>::get(), 0);
 			});
 		}
 
@@ -467,7 +467,7 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::slash_reserved(&1, 42).1, 0);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
-				assert_eq!(<TotalIssuance<$test>>::get(), 69);
+				assert_eq!(<TotalIssuance<$test, Instance0>>::get(), 69);
 			});
 		}
 
@@ -479,7 +479,7 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::slash_reserved(&1, 69).1, 27);
 				assert_eq!(Balances::free_balance(1), 69);
 				assert_eq!(Balances::reserved_balance(1), 0);
-				assert_eq!(<TotalIssuance<$test>>::get(), 69);
+				assert_eq!(<TotalIssuance<$test, Instance0>>::get(), 69);
 			});
 		}
 
@@ -492,7 +492,7 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
 				assert_eq!(
 					last_event(),
-					Event::balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
+					Event::balances_Instance0(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
@@ -520,7 +520,7 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 111);
 				assert_ok!(Balances::reserve(&1, 111));
-				assert_noop!(Balances::repatriate_reserved(&1, &2, 42, Status::Free), Error::<$test, _>::DeadAccount);
+				assert_noop!(Balances::repatriate_reserved(&1, &2, 42, Status::Free), Error::<$test, Instance0>::DeadAccount);
 			});
 		}
 
@@ -546,7 +546,7 @@ macro_rules! decl_tests {
 
 				assert_err!(
 					Balances::transfer(Some(1).into(), 2, u64::max_value()),
-					Error::<$test, _>::Overflow,
+					Error::<$test, Instance0>::Overflow,
 				);
 
 				assert_eq!(Balances::free_balance(1), u64::max_value());
@@ -558,12 +558,12 @@ macro_rules! decl_tests {
 		fn account_create_on_free_too_low_with_other() {
 			<$ext_builder>::default().existential_deposit(100).build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 100);
-				assert_eq!(<TotalIssuance<$test>>::get(), 100);
+				assert_eq!(<TotalIssuance<$test, Instance0>>::get(), 100);
 
 				// No-op.
 				let _ = Balances::deposit_creating(&2, 50);
 				assert_eq!(Balances::free_balance(2), 0);
-				assert_eq!(<TotalIssuance<$test>>::get(), 100);
+				assert_eq!(<TotalIssuance<$test, Instance0>>::get(), 100);
 			})
 		}
 
@@ -573,14 +573,14 @@ macro_rules! decl_tests {
 				// No-op.
 				let _ = Balances::deposit_creating(&2, 50);
 				assert_eq!(Balances::free_balance(2), 0);
-				assert_eq!(<TotalIssuance<$test>>::get(), 0);
+				assert_eq!(<TotalIssuance<$test, Instance0>>::get(), 0);
 			})
 		}
 
 		#[test]
 		fn account_removal_on_free_too_low() {
 			<$ext_builder>::default().existential_deposit(100).build().execute_with(|| {
-				assert_eq!(<TotalIssuance<$test>>::get(), 0);
+				assert_eq!(<TotalIssuance<$test, Instance0>>::get(), 0);
 
 				// Setup two accounts with free balance above the existential threshold.
 				let _ = Balances::deposit_creating(&1, 110);
@@ -588,7 +588,7 @@ macro_rules! decl_tests {
 
 				assert_eq!(Balances::free_balance(1), 110);
 				assert_eq!(Balances::free_balance(2), 110);
-				assert_eq!(<TotalIssuance<$test>>::get(), 220);
+				assert_eq!(<TotalIssuance<$test, Instance0>>::get(), 220);
 
 				// Transfer funds from account 1 of such amount that after this transfer
 				// the balance of account 1 will be below the existential threshold.
@@ -600,7 +600,7 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::free_balance(2), 130);
 
 				// Verify that TotalIssuance tracks balance removal when free balance is too low.
-				assert_eq!(<TotalIssuance<$test>>::get(), 130);
+				assert_eq!(<TotalIssuance<$test, Instance0>>::get(), 130);
 			});
 		}
 
@@ -621,7 +621,7 @@ macro_rules! decl_tests {
 				let _ = Balances::deposit_creating(&1, 100);
 				assert_noop!(
 					Balances::transfer_keep_alive(Some(1).into(), 2, 100),
-					Error::<$test, _>::KeepAlive
+					Error::<$test, Instance0>::KeepAlive
 				);
 				assert_eq!(Balances::is_dead_account(&1), false);
 				assert_eq!(Balances::total_balance(&1), 100);
@@ -634,7 +634,7 @@ macro_rules! decl_tests {
 		fn cannot_set_genesis_value_below_ed() {
 			($existential_deposit).with(|v| *v.borrow_mut() = 11);
 			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>().unwrap();
-			let _ = GenesisConfig::<$test> {
+			let _ = GenesisConfig::<$test, Instance0> {
 				balances: vec![(1, 10)],
 			}.assimilate_storage(&mut t).unwrap();
 		}
@@ -704,7 +704,7 @@ macro_rules! decl_tests {
 
 					assert_eq!(
 						last_event(),
-						Event::balances(RawEvent::Reserved(1, 10)),
+						Event::balances_Instance0(RawEvent::Reserved(1, 10)),
 					);
 
 					System::set_block_number(3);
@@ -712,7 +712,7 @@ macro_rules! decl_tests {
 
 					assert_eq!(
 						last_event(),
-						Event::balances(RawEvent::Unreserved(1, 5)),
+						Event::balances_Instance0(RawEvent::Unreserved(1, 5)),
 					);
 
 					System::set_block_number(4);
@@ -721,7 +721,7 @@ macro_rules! decl_tests {
 					// should only unreserve 5
 					assert_eq!(
 						last_event(),
-						Event::balances(RawEvent::Unreserved(1, 5)),
+						Event::balances_Instance0(RawEvent::Unreserved(1, 5)),
 					);
 				});
 		}
@@ -738,8 +738,8 @@ macro_rules! decl_tests {
 						events(),
 						[
 							Event::system(system::RawEvent::NewAccount(1)),
-							Event::balances(RawEvent::Endowed(1, 100)),
-							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+							Event::balances_Instance0(RawEvent::Endowed(1, 100)),
+							Event::balances_Instance0(RawEvent::BalanceSet(1, 100, 0)),
 						]
 					);
 
@@ -748,7 +748,7 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::balances(RawEvent::DustLost(1, 99)),
+							Event::balances_Instance0(RawEvent::DustLost(1, 99)),
 							Event::system(system::RawEvent::KilledAccount(1))
 						]
 					);
@@ -767,8 +767,8 @@ macro_rules! decl_tests {
 						events(),
 						[
 							Event::system(system::RawEvent::NewAccount(1)),
-							Event::balances(RawEvent::Endowed(1, 100)),
-							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+							Event::balances_Instance0(RawEvent::Endowed(1, 100)),
+							Event::balances_Instance0(RawEvent::BalanceSet(1, 100, 0)),
 						]
 					);
 
