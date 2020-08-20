@@ -1672,7 +1672,7 @@ pub trait DustCollector<AccountId> {
 #[impl_for_tuples(30)]
 impl<AccountId> DustCollector<AccountId> for Currencies {
 	fn is_collectable(who: &AccountId) -> bool {
-		for_tuples!( #( 
+		for_tuples!( #(
 			if !Currencies::is_collectable(who) {
 				return false;
 			}

@@ -27,9 +27,8 @@ impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
 	type Info = frame_support::weights::DispatchInfo;
 	type PostInfo = frame_support::weights::PostDispatchInfo;
 
-	fn dispatch(self, _origin: Self::Origin)
-		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-			panic!("Do not use dummy implementation for dispatch.");
+	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+		panic!("Do not use dummy implementation for dispatch.");
 	}
 }
 
