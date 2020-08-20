@@ -647,7 +647,7 @@ impl ProtocolsHandler for NotifsHandler {
 						..
 					}) => {
 						self.pending_legacy_handshake = Some(received_handshake);
-						cx.waker().wake();
+						cx.waker().wake_by_ref();
 						return Poll::Pending;
 					},
 					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { reason, .. }) => {
