@@ -184,7 +184,7 @@ where
 		} else {
 			#[allow(deprecated)] // old validate_transaction
 			runtime_api.validate_transaction_before_version_2(&at, uxt)
-		};
+		}
 	});
 
 	res.map_err(|e| Error::RuntimeApi(e.to_string()))

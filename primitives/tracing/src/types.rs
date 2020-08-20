@@ -247,64 +247,66 @@ mod std_features {
 		fn metadata(&self) -> &tracing_core::Metadata { unimplemented!() }
 	}
 	static CALLSITE: WasmCallsite =  WasmCallsite;
-	static WASM_TRACING_NAME: &'static str = "wasm_tracing";
-	static GENERIC_FIELDS: &'static [&'static str] = &["target", "name", "file", "line", "module_path", "params"];
+	pub static WASM_TRACE_IDENTIFIER: &'static str = "wasm_tracing";
+	pub static WASM_NAME_KEY: &'static str = "name";
+	pub static WASM_TARGET_KEY: &'static str = "target";
+	pub static GENERIC_FIELDS: &'static [&'static str] = &[WASM_TARGET_KEY, WASM_NAME_KEY, "file", "line", "module_path", "params"];
 
 	static SPAN_ERROR_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACING_NAME, WASM_TRACING_NAME, tracing::Level::ERROR, None, None, None,
+		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::ERROR, None, None, None,
 		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
 		tracing_core::metadata::Kind::SPAN
 	);
 
 	static SPAN_WARN_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACING_NAME, WASM_TRACING_NAME, tracing::Level::WARN, None, None, None,
+		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::WARN, None, None, None,
 		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
 		tracing_core::metadata::Kind::SPAN
 	);
 	static SPAN_INFO_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACING_NAME, WASM_TRACING_NAME, tracing::Level::INFO, None, None, None,
+		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::INFO, None, None, None,
 		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
 		tracing_core::metadata::Kind::SPAN
 	);
 
 	static SPAN_DEBUG_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACING_NAME, WASM_TRACING_NAME, tracing::Level::DEBUG, None, None, None,
+		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::DEBUG, None, None, None,
 		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
 		tracing_core::metadata::Kind::SPAN
 	);
 
 	static SPAN_TRACE_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACING_NAME, WASM_TRACING_NAME, tracing::Level::TRACE, None, None, None,
+		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::TRACE, None, None, None,
 		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
 		tracing_core::metadata::Kind::SPAN
 	);
 
 	static EVENT_ERROR_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACING_NAME, WASM_TRACING_NAME, tracing::Level::ERROR, None, None, None,
+		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::ERROR, None, None, None,
 		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
 		tracing_core::metadata::Kind::EVENT
 	);
 
 	static EVENT_WARN_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACING_NAME, WASM_TRACING_NAME, tracing::Level::WARN, None, None, None,
+		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::WARN, None, None, None,
 		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
 		tracing_core::metadata::Kind::EVENT
 	);
 
 	static EVENT_INFO_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACING_NAME, WASM_TRACING_NAME, tracing::Level::INFO, None, None, None,
+		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::INFO, None, None, None,
 		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
 		tracing_core::metadata::Kind::EVENT
 	);
 
 	static EVENT_DEBUG_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACING_NAME, WASM_TRACING_NAME, tracing::Level::DEBUG, None, None, None,
+		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::DEBUG, None, None, None,
 		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
 		tracing_core::metadata::Kind::EVENT
 	);
 
 	static EVENT_TRACE_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACING_NAME, WASM_TRACING_NAME, tracing::Level::TRACE, None, None, None,
+		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::TRACE, None, None, None,
 		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
 		tracing_core::metadata::Kind::EVENT
 	);

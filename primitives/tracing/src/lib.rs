@@ -52,8 +52,15 @@ pub use tracing::{
 pub use crate::types::{
 	WasmMetadata, WasmAttributes, WasmValuesSet, WasmValue, WasmFields, WasmEvent, WasmLevel, WasmFieldName
 };
+
+#[cfg(feature = "std")]
+pub use crate::types::{
+	WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER
+};
+
 #[cfg(not(feature = "std"))]
 pub type Level = WasmLevel;
+
 
 #[cfg(not(feature = "std"))]
 pub trait TracingSubscriber: Send + Sync {

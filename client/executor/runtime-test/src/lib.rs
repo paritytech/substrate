@@ -254,11 +254,11 @@ sp_core::wasm_export_functions! {
 	}
 
 	fn test_enter_span() -> u64 {
-		wasm_tracing::enter_span("integration_test_span_target", "integration_test_span_name")
+		wasm_tracing::new_span("integration_test_span_target", "integration_test_span_name")
 	}
 
 	fn test_exit_span(span_id: u64) {
-		wasm_tracing::exit_span(span_id)
+		wasm_tracing::exit(span_id)
 	}
 
 	fn returns_mutable_static() -> u64 {
