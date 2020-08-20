@@ -20,7 +20,6 @@
 #![cfg(test)]
 
 use super::*;
-use codec::Decode;
 use sp_std::prelude::*;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::{H256, Header}};
 use frame_support::{
@@ -64,12 +63,10 @@ pub trait OtherTrait {
 	type OtherEvent;
 }
 
-pub trait Trait: OtherTrait where Self::OtherEvent: Into<Self::Event> {
+pub trait Trait: frame_system::Trait + OtherTrait
+	where Self::OtherEvent: Into<<Self as Trait>::Event>
+{
 	type Event;
-	type BlockNumber;
-	type AccountId: 'static + Default + Decode;
-	type Origin: From<frame_system::RawOrigin<Self::AccountId>> +
-		Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>;
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -101,9 +98,6 @@ impl frame_system::Trait for Test {
 
 impl Trait for Test {
 	type Event = ();
-	type BlockNumber = u32;
-	type Origin = Origin;
-	type AccountId = u64;
 }
 
 impl OtherTrait for Test {

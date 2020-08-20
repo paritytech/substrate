@@ -21,14 +21,14 @@
 
 use super::*;
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use sp_runtime::traits::Bounded;
 use crate::Module as Proxy;
 
 const SEED: u32 = 0;
 
 fn add_proxies<T: Trait>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(), &'static str> {
-	let caller = maybe_who.unwrap_or_else(|| account("caller", 0, SEED));
+	let caller = maybe_who.unwrap_or_else(|| whitelisted_caller());
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	for i in 0..n {
 		Proxy::<T>::add_proxy(
@@ -50,35 +50,35 @@ benchmarks! {
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		// ... and "real" is the traditional caller. This is not a typo.
-		let real: T::AccountId = account("caller", 0, SEED);
+		let real: T::AccountId = whitelisted_caller();
 		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
 	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
 
 	add_proxy {
 		let p in ...;
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), account("target", T::MaxProxies::get().into(), SEED), T::ProxyType::default())
 
 	remove_proxy {
 		let p in ...;
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), account("target", 0, SEED), T::ProxyType::default())
 
 	remove_proxies {
 		let p in ...;
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller))
 
 	anonymous {
 		let p in ...;
-	}: _(RawOrigin::Signed(account("caller", 0, SEED)), T::ProxyType::default(), 0)
+	}: _(RawOrigin::Signed(whitelisted_caller()), T::ProxyType::default(), 0)
 
 	kill_anonymous {
 		let p in 0 .. (T::MaxProxies::get() - 2).into();
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		Module::<T>::anonymous(RawOrigin::Signed(account("caller", 0, SEED)).into(), T::ProxyType::default(), 0)?;
+		Module::<T>::anonymous(RawOrigin::Signed(whitelisted_caller()).into(), T::ProxyType::default(), 0)?;
 		let height = system::Module::<T>::block_number();
 		let ext_index = system::Module::<T>::extrinsic_index().unwrap_or(0);
 		let anon = Module::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);

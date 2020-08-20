@@ -21,7 +21,9 @@ use sc_service::config::KeystoreConfig;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use sp_core::crypto::SecretString;
+use crate::error;
+use sp_core::crypto::{SecretString, Zeroize};
+use std::str::FromStr;
 
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
@@ -73,7 +75,6 @@ impl KeystoreParams {
 				let mut password = input_keystore_password()?;
 				let secret = std::str::FromStr::from_str(password.as_str())
 					.map_err(|()| "Error reading password")?;
-				use sp_core::crypto::Zeroize;
 				password.zeroize();
 				Some(secret)
 			}
@@ -84,7 +85,6 @@ impl KeystoreParams {
 				.map_err(|e| format!("{}", e))?;
 			let secret = std::str::FromStr::from_str(password.as_str())
 				.map_err(|()| "Error reading password")?;
-			use sp_core::crypto::Zeroize;
 			password.zeroize();
 			Some(secret)
 		} else {
@@ -97,6 +97,22 @@ impl KeystoreParams {
 			.unwrap_or_else(|| base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH));
 
 		Ok(KeystoreConfig::Path { path, password })
+	}
+
+	/// helper method to fetch password from `KeyParams` or read from stdin
+	pub fn read_password(&self) -> error::Result<Option<SecretString>> {
+		let (password_interactive, password) = (self.password_interactive, self.password.clone());
+
+		let pass = if password_interactive {
+			let mut password = rpassword::read_password_from_tty(Some("Key password: "))?;
+			let pass = Some(FromStr::from_str(&password).map_err(|()| "Error reading password")?);
+			password.zeroize();
+			pass
+		} else {
+			password
+		};
+
+		Ok(pass)
 	}
 }
 
