@@ -161,7 +161,7 @@ impl Analysis {
 			*rs = rs[ql..rs.len() - ql].to_vec();
 		}
 
-		let mut data = vec![("Y", results.iter().flat_map(|x| x.1.iter().map(|v| *v as f64)).collect())];
+		let mut data = vec![("Y", results.iter().flat_map(|y| y.1.iter().map(|v| *v as f64)).collect())];
 
 		let names = r[0].components.iter().map(|x| format!("{:?}", x.0)).collect::<Vec<_>>();
 		data.extend(names.iter()

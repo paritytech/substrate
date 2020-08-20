@@ -917,10 +917,24 @@ macro_rules! impl_benchmark {
 							// This is the value we will be testing for component `name`
 							let component_value = lowest + step_size * s;
 
-							// Select the max value for all the other components.
-							let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+							// Select the min value for all the other components.
+							let min_c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
 								.enumerate()
-								.map(|(idx, (n, _, h))|
+								.map(|(idx, (n, l, _h))|
+									if n == name {
+										(*n, component_value)
+									} else {
+										(*n, *lowest_range_values.get(idx).unwrap_or(l))
+									}
+								)
+								.collect();
+
+							repeat_benchmark(repeat, min_c, &mut results)?;
+
+							// Select the max value for all the other components.
+							let max_c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+								.enumerate()
+								.map(|(idx, (n, _l, h))|
 									if n == name {
 										(*n, component_value)
 									} else {
@@ -929,7 +943,7 @@ macro_rules! impl_benchmark {
 								)
 								.collect();
 
-							repeat_benchmark(repeat, c, &mut results)?;
+							repeat_benchmark(repeat, max_c, &mut results)?
 						}
 					}
 				}
