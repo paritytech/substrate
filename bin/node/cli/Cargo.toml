@@ -39,10 +39,11 @@ serde = { version = "1.0.102", features = ["derive"] }
 futures = { version = "0.3.1", features = ["compat"] }
 hex-literal = "0.2.1"
 jsonrpc-core = "14.2.0"
+jsonrpc-pubsub = "14.2.0"
 log = "0.4.8"
 rand = "0.7.2"
 structopt = { version = "0.3.8", optional = true }
-tracing = "0.1.10"
+tracing = "0.1.18"
 parking_lot = "0.10.0"
 
 # primitives
@@ -130,6 +131,7 @@ structopt = { version = "0.3.8", optional = true }
 node-inspect = { version = "0.8.0-rc5", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "2.0.0-rc5", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 substrate-build-script-utils = { version = "2.0.0-rc5", optional = true, path = "../../../utils/build-script-utils" }
+substrate-frame-cli = { version = "2.0.0-rc5", optional = true, path = "../../../utils/frame/frame-utilities-cli" }
 
 [build-dependencies.sc-cli]
 version = "0.8.0-rc5"
@@ -149,6 +151,7 @@ cli = [
 	"node-inspect",
 	"sc-cli",
 	"frame-benchmarking-cli",
+	"substrate-frame-cli",
 	"sc-service/db",
 	"structopt",
 	"substrate-build-script-utils",

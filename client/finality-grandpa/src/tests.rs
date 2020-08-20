@@ -19,10 +19,11 @@
 //! Tests and test helpers for GRANDPA.
 
 use super::*;
+use assert_matches::assert_matches;
 use environment::HasVoted;
 use sc_network_test::{
-	Block, Hash, TestNetFactory, BlockImportAdapter, Peer,
-	PeersClient, PassThroughVerifier, PeersFullClient,
+	Block, BlockImportAdapter, Hash, PassThroughVerifier, Peer, PeersClient, PeersFullClient,
+	TestClient, TestNetFactory,
 };
 use sc_network::config::{ProtocolConfig, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
@@ -53,16 +54,9 @@ use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
 
-type PeerData =
-	Mutex<
-		Option<
-			LinkHalf<
-				Block,
-				PeersFullClient,
-				LongestChain<substrate_test_runtime_client::Backend, Block>
-			>
-		>
-	>;
+type TestLinkHalf =
+	LinkHalf<Block, PeersFullClient, LongestChain<substrate_test_runtime_client::Backend, Block>>;
+type PeerData = Mutex<Option<TestLinkHalf>>;
 type GrandpaPeer = Peer<PeerData>;
 
 struct GrandpaTestNet {
@@ -1519,10 +1513,68 @@ fn voter_catches_up_to_latest_round_when_behind() {
 	);
 }
 
+type TestEnvironment<N, VR> = Environment<
+	substrate_test_runtime_client::Backend,
+	Block,
+	TestClient,
+	N,
+	LongestChain<substrate_test_runtime_client::Backend, Block>,
+	VR,
+>;
+
+fn test_environment<N, VR>(
+	link: &TestLinkHalf,
+	keystore: Option<BareCryptoStorePtr>,
+	network_service: N,
+	voting_rule: VR,
+) -> TestEnvironment<N, VR>
+where
+	N: NetworkT<Block>,
+	VR: VotingRule<Block, TestClient>,
+{
+	let PersistentData {
+		ref authority_set,
+		ref consensus_changes,
+		ref set_state,
+		..
+	} = link.persistent_data;
+
+	let config = Config {
+		gossip_duration: TEST_GOSSIP_DURATION,
+		justification_period: 32,
+		keystore,
+		name: None,
+		is_authority: true,
+		observer_enabled: true,
+	};
+
+	let network = NetworkBridge::new(
+		network_service.clone(),
+		config.clone(),
+		set_state.clone(),
+		None,
+	);
+
+	Environment {
+		authority_set: authority_set.clone(),
+		config: config.clone(),
+		consensus_changes: consensus_changes.clone(),
+		client: link.client.clone(),
+		select_chain: link.select_chain.clone(),
+		set_id: authority_set.set_id(),
+		voter_set_state: set_state.clone(),
+		voters: Arc::new(authority_set.current_authorities()),
+		network,
+		voting_rule,
+		metrics: None,
+		justification_sender: None,
+		_phantom: PhantomData,
+	}
+}
+
 #[test]
 fn grandpa_environment_respects_voting_rules() {
 	use finality_grandpa::Chain;
-	use sc_network_test::TestClient;
 
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
@@ -1532,63 +1584,28 @@ fn grandpa_environment_respects_voting_rules() {
 	let network_service = peer.network_service().clone();
 	let link = peer.data.lock().take().unwrap();
 
-	// create a voter environment with a given voting rule
-	let environment = |voting_rule: Box<dyn VotingRule<Block, TestClient>>| {
-		let PersistentData {
-			ref authority_set,
-			ref consensus_changes,
-			ref set_state,
-			..
-		} = link.persistent_data;
-
-		let config = Config {
-			gossip_duration: TEST_GOSSIP_DURATION,
-			justification_period: 32,
-			keystore: None,
-			name: None,
-			is_authority: true,
-			observer_enabled: true,
-		};
-
-		let network = NetworkBridge::new(
-			network_service.clone(),
-			config.clone(),
-			set_state.clone(),
-			None,
-		);
-
-		Environment {
-			authority_set: authority_set.clone(),
-			config: config.clone(),
-			consensus_changes: consensus_changes.clone(),
-			client: link.client.clone(),
-			select_chain: link.select_chain.clone(),
-			set_id: authority_set.set_id(),
-			voter_set_state: set_state.clone(),
-			voters: Arc::new(authority_set.current_authorities()),
-			network,
-			voting_rule,
-			metrics: None,
-			_phantom: PhantomData,
-		}
-	};
-
 	// add 21 blocks
 	peer.push_blocks(21, false);
 
 	// create an environment with no voting rule restrictions
-	let unrestricted_env = environment(Box::new(()));
+	let unrestricted_env = test_environment(&link, None, network_service.clone(), ());
 
 	// another with 3/4 unfinalized chain voting rule restriction
-	let three_quarters_env = environment(Box::new(
-		voting_rule::ThreeQuartersOfTheUnfinalizedChain
-	));
+	let three_quarters_env = test_environment(
+		&link,
+		None,
+		network_service.clone(),
+		voting_rule::ThreeQuartersOfTheUnfinalizedChain,
+	);
 
 	// and another restricted with the default voting rules: i.e. 3/4 rule and
 	// always below best block
-	let default_env = environment(Box::new(
-		VotingRulesBuilder::default().build()
-	));
+	let default_env = test_environment(
+		&link,
+		None,
+		network_service.clone(),
+		VotingRulesBuilder::default().build(),
+	);
 
 	// the unrestricted environment should just return the best block
 	assert_eq!(
@@ -1646,6 +1663,70 @@ fn grandpa_environment_respects_voting_rules() {
 		).unwrap().1,
 		21,
 	);
+}
+
+#[test]
+fn grandpa_environment_never_overwrites_round_voter_state() {
+	use finality_grandpa::voter::Environment;
+
+	let peers = &[Ed25519Keyring::Alice];
+	let voters = make_ids(peers);
+
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1);
+	let peer = net.peer(0);
+	let network_service = peer.network_service().clone();
+	let link = peer.data.lock().take().unwrap();
+
+	let (keystore, _keystore_path) = create_keystore(peers[0]);
+	let environment = test_environment(&link, Some(keystore), network_service.clone(), ());
+
+	let round_state = || finality_grandpa::round::State::genesis(Default::default());
+	let base = || Default::default();
+	let historical_votes = || finality_grandpa::HistoricalVotes::new();
+
+	let get_current_round = |n| {
+		let current_rounds = environment
+			.voter_set_state
+			.read()
+			.with_current_round(n)
+			.map(|(_, current_rounds)| current_rounds.clone())
+			.ok()?;
+
+		Some(current_rounds.get(&n).unwrap().clone())
+	};
+
+	// round 2 should not be tracked
+	assert_eq!(get_current_round(2), None);
+
+	// after completing round 1 we should start tracking round 2
+	environment
+		.completed(1, round_state(), base(), &historical_votes())
+		.unwrap();
+
+	assert_eq!(get_current_round(2).unwrap(), HasVoted::No);
+
+	let info = peer.client().info();
+
+	let prevote = finality_grandpa::Prevote {
+		target_hash: info.best_hash,
+		target_number: info.best_number,
+	};
+
+	// we prevote for round 2 which should lead to us updating the voter state
+	environment.prevoted(2, prevote.clone()).unwrap();
+
+	let has_voted = get_current_round(2).unwrap();
+
+	assert_matches!(has_voted, HasVoted::Yes(_, _));
+	assert_eq!(*has_voted.prevote().unwrap(), prevote);
+
+	// if we report round 1 as completed again we should not overwrite the
+	// voter state for round 2
+	environment
+		.completed(1, round_state(), base(), &historical_votes())
+		.unwrap();
+
+	assert_matches!(get_current_round(2).unwrap(), HasVoted::Yes(_, _));
 }
 
 #[test]

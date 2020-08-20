@@ -97,14 +97,14 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	) -> FutureResult<Option<Block::Hash>>;
 
 	/// Returns the size of a storage entry at a block's state.
+	///
+	/// If data is available at `key`, it is returned. Else, the sum of values who's key has `key`
+	/// prefix is returned, i.e. all the storage (double) maps that have this prefix.
 	fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
-	) -> FutureResult<Option<u64>> {
-		Box::new(self.storage(block, key)
-			.map(|x| x.map(|x| x.0.len() as u64)))
-	}
+	) -> FutureResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes>;
@@ -140,21 +140,21 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	/// New runtime version subscription
 	fn subscribe_runtime_version(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<RuntimeVersion>,
 	);
 
 	/// Unsubscribe from runtime version subscription
 	fn unsubscribe_runtime_version(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool>;
 
 	/// New storage subscription
 	fn subscribe_storage(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
 		keys: Option<Vec<StorageKey>>,
 	);
@@ -162,7 +162,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	/// Unsubscribe from storage subscription
 	fn unsubscribe_storage(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool>;
 }
@@ -230,7 +230,7 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		Block: BlockT + 'static,
 		Client: Send + Sync + 'static,
 {
-	type Metadata = crate::metadata::Metadata;
+	type Metadata = crate::Metadata;
 
 	fn call(&self, method: String, data: Bytes, block: Option<Block::Hash>) -> FutureResult<Bytes> {
 		self.backend.call(block, method, data)
@@ -390,7 +390,7 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 		Block: BlockT + 'static,
 		Client: Send + Sync + 'static,
 {
-	type Metadata = crate::metadata::Metadata;
+	type Metadata = crate::Metadata;
 
 	fn storage(
 		&self,

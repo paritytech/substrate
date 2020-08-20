@@ -130,9 +130,9 @@ benchmarks! {
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
 	// The size of the data has no influence on the costs of this extrinsic as long as the contract
-	// won't call `ext_input` in its constructor to copy the data to contract memory.
+	// won't call `seal_input` in its constructor to copy the data to contract memory.
 	// The dummy contract used here does not do this. The costs for the data copy is billed as
-	// part of `ext_input`.
+	// part of `seal_input`.
 	instantiate {
 		let data = vec![0u8; 128];
 		let endowment = Config::<T>::subsistence_threshold_uncached();
