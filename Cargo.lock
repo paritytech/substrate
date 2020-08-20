@@ -742,6 +742,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ckb-merkle-mountain-range"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e486fe53bb9f2ca0f58cb60e8679a5354fd6687a839942ef0a75967250289ca6"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "clang-sys"
 version = "0.29.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4813,11 +4822,13 @@ dependencies = [
 name = "pallet-mmr"
 version = "2.0.0-rc5"
 dependencies = [
+ "ckb-merkle-mountain-range",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
  "serde",
  "sp-io",
+ "sp-runtime",
  "sp-std",
 ]
 
@@ -9858,9 +9869,9 @@ dependencies = [
 
 [[package]]
 name = "wabt-sys"
-version = "0.7.2"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01c695f98f7eb81fd4e2f6b65301ccc916a950dc2265eeefc4d376b34ce666df"
+checksum = "23d7043ebb3e5d96fad7a8d3ca22ee9880748ff8c3e18092cfb2a49d3b8f9084"
 dependencies = [
  "cc",
  "cmake",
