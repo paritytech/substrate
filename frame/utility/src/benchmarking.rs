@@ -21,7 +21,7 @@
 
 use super::*;
 use frame_system::{RawOrigin, EventRecord};
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 
 const SEED: u32 = 0;
 
@@ -43,7 +43,7 @@ benchmarks! {
 			let call = frame_system::Call::remark(vec![]).into();
 			calls.push(call);
 		}
-		let caller = account("caller", 0, SEED);
+		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), calls)
 	verify {
 		assert_last_event::<T>(Event::BatchCompleted.into())
@@ -53,6 +53,9 @@ benchmarks! {
 		let u in 0 .. 1000;
 		let caller = account("caller", u, SEED);
 		let call = Box::new(frame_system::Call::remark(vec![]).into());
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), u as u16, call)
 }
 

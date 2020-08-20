@@ -24,7 +24,10 @@ use std::collections::HashMap;
 
 use hash_db::{Prefix, Hasher};
 use sp_trie::{MemoryDB, prefixed_key};
-use sp_core::{storage::ChildInfo, hexdisplay::HexDisplay};
+use sp_core::{
+	storage::{ChildInfo, TrackedStorageKey},
+	hexdisplay::HexDisplay
+};
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend, StorageCollection};
@@ -95,7 +98,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	shared_cache: SharedCache<B>, // shared cache is always empty
 	key_tracker: RefCell<HashMap<Vec<u8>, KeyTracker>>,
 	read_write_tracker: RefCell<ReadWriteTracker>,
-	whitelist: RefCell<Vec<Vec<u8>>>,
+	whitelist: RefCell<Vec<TrackedStorageKey>>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -155,15 +158,14 @@ impl<B: BlockT> BenchmarkingState<B> {
 	fn add_whitelist_to_tracker(&self) {
 		let mut key_tracker = self.key_tracker.borrow_mut();
 
-		let whitelisted = KeyTracker {
-			has_been_read: true,
-			has_been_written: true,
-		};
-
 		let whitelist = self.whitelist.borrow();
 
 		whitelist.iter().for_each(|key| {
-			key_tracker.insert(key.to_vec(), whitelisted);
+			let whitelisted = KeyTracker {
+				has_been_read: key.has_been_read,
+				has_been_written: key.has_been_written,
+			};
+			key_tracker.insert(key.key.clone(), whitelisted);
 		});
 	}
 
@@ -181,18 +183,21 @@ impl<B: BlockT> BenchmarkingState<B> {
 
 		let maybe_tracker = key_tracker.get(key);
 
-		let has_been_read = KeyTracker {
-			has_been_read: true,
-			has_been_written: false,
-		};
-
 		match maybe_tracker {
 			None => {
+				let has_been_read = KeyTracker {
+					has_been_read: true,
+					has_been_written: false,
+				};
 				key_tracker.insert(key.to_vec(), has_been_read);
 				read_write_tracker.add_read();
 			},
 			Some(tracker) => {
 				if !tracker.has_been_read {
+					let has_been_read = KeyTracker {
+						has_been_read: true,
+						has_been_written: tracker.has_been_written,
+					};
 					key_tracker.insert(key.to_vec(), has_been_read);
 					read_write_tracker.add_read();
 				} else {
@@ -426,7 +431,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.wipe_tracker()
 	}
 
-	fn set_whitelist(&self, new: Vec<Vec<u8>>) {
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		self.whitelist.borrow().to_vec()
+	}
+
+	fn set_whitelist(&self, new: Vec<TrackedStorageKey>) {
 		*self.whitelist.borrow_mut() = new;
 	}
 
