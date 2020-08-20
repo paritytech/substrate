@@ -21,6 +21,7 @@ sp-externalities = { version = "0.8.0-rc5", optional = true, path = "../external
 codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false }
 static_assertions = "1.0.0"
 primitive-types = { version = "0.7.0", default-features = false }
+sp-storage = { version = "2.0.0-rc5", default-features = false, path = "../storage" }
 
 [dev-dependencies]
 sp-runtime-interface-test-wasm = { version = "2.0.0-rc5", path = "test-wasm" }
