@@ -27,7 +27,7 @@ pallet-balances = { version = "2.0.0-rc6", path = "../balances" }
 pallet-scheduler = { version = "2.0.0-rc6", path = "../scheduler" }
 sp-storage = { version = "2.0.0-rc6", path = "../../primitives/storage" }
 substrate-test-utils = { version = "2.0.0-rc6", path = "../../test-utils" }
-hex-literal = "0.2.1"
+hex-literal = "0.3.1"
 
 [features]
 default = ["std"]
