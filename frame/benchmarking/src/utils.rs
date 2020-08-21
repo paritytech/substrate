@@ -202,8 +202,11 @@ pub trait BenchmarkingSetup<T, I = ()> {
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
 
 	/// Set up the storage, and prepare a closure to run the benchmark.
-	fn instance(&self, components: &[(BenchmarkParameter, u32)], verify: bool)
-		-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+	fn instance(
+		&self,
+		components: &[(BenchmarkParameter, u32)],
+		verify: bool
+	) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
 /// Grab an account, seeded by a name and index.

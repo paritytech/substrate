@@ -648,9 +648,11 @@ macro_rules! benchmark_backend {
 				]
 			}
 
-			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)], verify: bool)
-				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
-			{
+			fn instance(
+				&self,
+				components: &[($crate::BenchmarkParameter, u32)],
+				verify: bool
+			) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str> {
 				$(
 					let $common = $common_from;
 				)*
@@ -721,9 +723,11 @@ macro_rules! selected_benchmark {
 				}
 			}
 
-			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)], verify: bool)
-				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
-			{
+			fn instance(
+				&self,
+				components: &[($crate::BenchmarkParameter, u32)],
+				verify: bool
+			) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str> {
 				match self {
 					$(
 						Self::$bench => <
