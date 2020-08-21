@@ -55,10 +55,10 @@ impl<Block: BlockT> GrandpaJustificationSender<Block> {
 
 	/// Send out a notification to all subscribers that a new justification
 	/// is available for a block.
-	pub fn notify<F>(&self, justification: F) -> Result<(), Error>
-	where
-		F: FnOnce() -> Result<GrandpaJustification<Block>, Error>,
-	{
+	pub fn notify(
+		&self,
+		justification: impl FnOnce() -> Result<GrandpaJustification<Block>, Error>,
+	) -> Result<(), Error> {
 		let mut subscribers = self.subscribers.lock();
 
 		// do an initial prune on closed subscriptions

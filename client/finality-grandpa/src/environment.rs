@@ -1154,15 +1154,14 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 			}
 		}
 
-		// send a justification notification if a sender exists and in case of
-		// error log it. this is a macro because `justification` below is a
-		// closure, therefore we can't define this as a closure as well.
-		macro_rules! notify_justification {
-			( $justification:expr ) => {
-				if let Some(sender) = justification_sender {
-					if let Err(err) = sender.notify($justification) {
-						warn!(target: "afg", "Error creating justification for subscriber: {:?}", err);
-					}
+		// send a justification notification if a sender exists and in case of error log it.
+		fn notify_justification<Block: BlockT>(
+			justification_sender: &Option<GrandpaJustificationSender<Block>>,
+			justification: impl FnOnce() -> Result<GrandpaJustification<Block>, Error>,
+		) {
+			if let Some(sender) = justification_sender {
+				if let Err(err) = sender.notify(justification) {
+					warn!(target: "afg", "Error creating justification for subscriber: {:?}", err);
 				}
 			}
 		}
@@ -1175,7 +1174,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 		// syncing clients.
 		let justification = match justification_or_commit {
 			JustificationOrCommit::Justification(justification) => {
-				notify_justification!(|| Ok(justification.clone()));
+				notify_justification(justification_sender, || Ok(justification.clone()));
 				Some(justification.encode())
 			},
 			JustificationOrCommit::Commit((round_number, commit)) => {
@@ -1211,11 +1210,11 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 
 				if justification_required {
 					let justification = justification()?;
-					notify_justification!(|| Ok(justification.clone()));
+					notify_justification(justification_sender, || Ok(justification.clone()));
 
 					Some(justification.encode())
 				} else {
-					notify_justification!(justification);
+					notify_justification(justification_sender, justification);
 
 					None
 				}
