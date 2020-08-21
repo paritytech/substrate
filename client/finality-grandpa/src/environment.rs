@@ -1197,7 +1197,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 					}
 				}
 
-				// NOTE: the code below is a bit more complicated because we
+				// NOTE: the code below is a bit more verbose because we
 				// really want to avoid creating a justification if it isn't
 				// needed (e.g. if there's no subscribers), and also to avoid
 				// creating it twice. depending on the vote tree for the round,
