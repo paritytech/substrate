@@ -994,13 +994,15 @@ where
 				// the header is valid but let's check if there was something else already
 				// proposed at the same slot by the given author. if there was, we will
 				// report the equivocation to the runtime.
-				self.check_and_report_equivocation(
+				if let Err(err) = self.check_and_report_equivocation(
 					slot_now,
 					slot_number,
 					&header,
 					&verified_info.author,
 					&origin,
-				)?;
+				) {
+					warn!(target: "babe", "Error checking/reporting BABE equivocation: {:?}", err);
+				}
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
