@@ -34,7 +34,7 @@ pub struct WitnessExt<H: Hasher> {
 	/// The overlayed changes to write to.
 	pub overlay: OverlayedChanges<NoExtrinsics>,
 	/// The storage backend to read from.
-	pub backend: TrieBackend<MemoryDB<H>, H>, // TODO switch to a trie backend that do not produce tx !!!
+	pub backend: TrieBackend<MemoryDB<H>, H>,
 }
 
 impl<H: Hasher> WitnessExt<H>
