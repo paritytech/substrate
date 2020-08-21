@@ -918,7 +918,7 @@ macro_rules! impl_benchmark {
 								// If `--verify` is used, run the benchmark once to verify it would complete.
 								repeat_benchmark(1, Default::default(), &mut Vec::new(), true)?;
 							}
-							repeat_benchmark(repeat, c, &mut results, verify)?;
+							repeat_benchmark(repeat, c, &mut results, false)?;
 						}
 					}
 				}
