@@ -32,12 +32,12 @@
 
 use std::sync::Arc;
 
+use sp_core::traits::SyncCryptoStore;
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
 use sp_api::ProvideRuntimeApi;
 use sp_transaction_pool::TransactionPool;
 use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
 use sp_consensus::SelectChain;
-use sc_keystore::KeyStorePtr;
 use sp_consensus_babe::BabeApi;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_consensus_babe::{Config, Epoch};
@@ -66,7 +66,7 @@ pub struct BabeDeps {
 	/// BABE pending epoch changes.
 	pub shared_epoch_changes: SharedEpochChanges<Block, Epoch>,
 	/// The keystore that manages the keys of the node.
-	pub keystore: KeyStorePtr,
+	pub keystore: Arc<SyncCryptoStore>,
 }
 
 /// Extra dependencies for GRANDPA

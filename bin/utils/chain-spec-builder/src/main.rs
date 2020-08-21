@@ -139,7 +139,7 @@ fn generate_authority_keys_and_store(
 	keystore_path: &Path,
 ) -> Result<(), String> {
 	for (n, seed) in seeds.into_iter().enumerate() {
-		let keystore = Keystore::open(
+		let mut keystore = Keystore::open(
 			keystore_path.join(format!("auth-{}", n)),
 			None,
 		).map_err(|err| err.to_string())?;
@@ -147,8 +147,8 @@ fn generate_authority_keys_and_store(
 		let (_, _, grandpa, babe, im_online, authority_discovery) =
 			chain_spec::authority_keys_from_seed(seed);
 
-		let insert_key = |key_type, public| {
-			block_on(keystore.write().insert_unknown(
+		let mut insert_key = |key_type, public| {
+			block_on(keystore.insert_unknown(
 				key_type,
 				&format!("//{}", seed),
 				public,
