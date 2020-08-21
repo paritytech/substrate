@@ -418,7 +418,7 @@ mod tests {
 
 		let recv_sub_id: String =
 			serde_json::from_value(json_map["subscription"].take()).unwrap();
-		let recv_justification: Vec<u8> =
+		let recv_justification: sp_core::Bytes =
 			serde_json::from_value(json_map["result"].take()).unwrap();
 		let recv_justification: GrandpaJustification<Block> =
 			Decode::decode(&mut &recv_justification[..]).unwrap();
