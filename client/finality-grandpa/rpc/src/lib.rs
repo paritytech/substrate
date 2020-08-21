@@ -86,7 +86,6 @@ pub trait GrandpaApi<Notification, Hash> {
 	) -> jsonrpc_core::Result<bool>;
 
 	/// Prove finality for the hash, given a last known finalized hash.
-	// WIP: handle authorities_set_id changes?
 	#[rpc(name = "grandpa_proveFinality")]
 	fn prove_finality(
 		&self,
@@ -196,6 +195,7 @@ mod tests {
 	use sc_block_builder::BlockBuilder;
 	use sc_finality_grandpa::{
 		report, AuthorityId, GrandpaJustificationSender, GrandpaJustification,
+		FinalityProofFragment,
 	};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::RecordProof;
@@ -214,7 +214,7 @@ mod tests {
 	struct EmptyVoterState;
 
 	struct TestFinalityProofProvider {
-		finality_proofs: Vec<sc_finality_grandpa::FinalityProofFragment<Header>>,
+		finality_proofs: Vec<FinalityProofFragment<Header>>,
 	}
 
 	fn voters() -> HashSet<AuthorityId> {
@@ -245,7 +245,8 @@ mod tests {
 			number,
 			H256::from_low_u64_be(0),
 			H256::from_low_u64_be(0),
-			parent_hash, Default::default()
+			parent_hash,
+			Default::default(),
 		)
 	}
 
@@ -302,7 +303,7 @@ mod tests {
 
 	fn setup_io_handler_with_finality_proofs<VoterState>(
 		voter_state: VoterState,
-		finality_proofs: Vec<sc_finality_grandpa::FinalityProofFragment<Header>>,
+		finality_proofs: Vec<FinalityProofFragment<Header>>,
 	) -> (
 		jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
 		GrandpaJustificationSender<Block>,
@@ -510,7 +511,7 @@ mod tests {
 
 	#[test]
 	fn prove_finality_with_test_finality_proof_provider() {
-		let finality_proofs = vec![sc_finality_grandpa::FinalityProofFragment {
+		let finality_proofs = vec![FinalityProofFragment {
 			block: header(42).hash(),
 			justification: create_justification().encode(),
 			unknown_headers: vec![header(2)],
@@ -547,7 +548,7 @@ mod tests {
 
 		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
 		let result: Vec<u8> = serde_json::from_value(resp["result"].take()).unwrap();
-		let fragments: Vec<sc_finality_grandpa::FinalityProofFragment<Header>> =
+		let fragments: Vec<FinalityProofFragment<Header>> =
 			Decode::decode(&mut &result[..]).unwrap();
 		assert_eq!(fragments, finality_proofs);
 	}
