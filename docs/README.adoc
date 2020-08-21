@@ -523,7 +523,7 @@ include::CONTRIBUTING.adoc[]
 
 === Contributor Code of Conduct
 
-include::CODE_OF_CONDUCT.adoc[]
+include::CODE_OF_CONDUCT.md[]
 
 == License
 

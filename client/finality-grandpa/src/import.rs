@@ -18,7 +18,7 @@
 
 use std::{sync::Arc, collections::HashMap};
 
-use log::{debug, trace};
+use log::debug;
 use parity_scale_codec::Encode;
 use parking_lot::RwLockWriteGuard;
 
@@ -527,7 +527,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 			},
 			None => {
 				if needs_justification {
-					trace!(
+					debug!(
 						target: "afg",
 						"Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.",
 						number,

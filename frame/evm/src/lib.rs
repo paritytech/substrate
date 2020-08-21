@@ -32,14 +32,13 @@ use sp_std::vec::Vec;
 use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
-use frame_support::weights::Weight;
+use frame_support::{debug, ensure, decl_module, decl_storage, decl_event, decl_error};
+use frame_support::weights::{Weight, Pays};
 use frame_support::traits::{Currency, ExistenceRequirement, Get};
+use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_system::RawOrigin;
 use sp_core::{U256, H256, H160, Hasher};
-use sp_runtime::{
-	DispatchResult, AccountId32, traits::{UniqueSaturatedInto, SaturatedConversion, BadOrigin},
-};
+use sp_runtime::{AccountId32, traits::{UniqueSaturatedInto, SaturatedConversion, BadOrigin}};
 use sha3::{Digest, Keccak256};
 pub use evm::{ExitReason, ExitSucceed, ExitError, ExitRevert, ExitFatal};
 use evm::Config;
@@ -325,7 +324,7 @@ decl_module! {
 			gas_limit: u32,
 			gas_price: U256,
 			nonce: Option<U256>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
 			match Self::execute_call(
@@ -346,7 +345,7 @@ decl_module! {
 				},
 			}
 
-			Ok(())
+			Ok(Pays::No.into())
 		}
 
 		/// Issue an EVM create operation. This is similar to a contract creation transaction in
@@ -360,7 +359,7 @@ decl_module! {
 			gas_limit: u32,
 			gas_price: U256,
 			nonce: Option<U256>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
 			match Self::execute_create(
@@ -380,7 +379,7 @@ decl_module! {
 				},
 			}
 
-			Ok(())
+			Ok(Pays::No.into())
 		}
 
 		/// Issue an EVM create2 operation.
@@ -394,7 +393,7 @@ decl_module! {
 			gas_limit: u32,
 			gas_price: U256,
 			nonce: Option<U256>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
 			match Self::execute_create2(
@@ -415,7 +414,7 @@ decl_module! {
 				},
 			}
 
-			Ok(())
+			Ok(Pays::No.into())
 		}
 	}
 }
@@ -438,11 +437,11 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		if current.balance < new.balance {
-			let diff = new.balance - current.balance;
-			T::Currency::slash(&account_id, diff.low_u128().unique_saturated_into());
-		} else if current.balance > new.balance {
+		if current.balance > new.balance {
 			let diff = current.balance - new.balance;
+			T::Currency::slash(&account_id, diff.low_u128().unique_saturated_into());
+		} else if current.balance < new.balance {
+			let diff = new.balance - current.balance;
 			T::Currency::deposit_creating(&account_id, diff.low_u128().unique_saturated_into());
 		}
 	}
@@ -618,6 +617,16 @@ impl<T: Trait> Module<T> {
 
 		let used_gas = U256::from(executor.used_gas());
 		let actual_fee = executor.fee(gas_price);
+		debug::debug!(
+			target: "evm",
+			"Execution {:?} [source: {:?}, value: {}, gas_limit: {}, used_gas: {}, actual_fee: {}]",
+			retv,
+			source,
+			value,
+			gas_limit,
+			used_gas,
+			actual_fee
+		);
 		executor.deposit(source, total_fee.saturating_sub(actual_fee));
 
 		if apply_state {
