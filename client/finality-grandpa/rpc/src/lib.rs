@@ -171,7 +171,7 @@ where
 	) -> FutureResult<Option<Vec<u8>>> {
 		let result = self
 			.finality_proof_provider
-			.prove_finality_for_best_hash(last_finalized, authorities_set_id);
+			.prove_finality(last_finalized, authorities_set_id);
 		let future = async move { result }.boxed();
 		Box::new(
 			future
@@ -251,7 +251,7 @@ mod tests {
 	}
 
 	impl<Block: BlockT> RpcFinalityProofProvider<Block> for TestFinalityProofProvider {
-		fn prove_finality_for_best_hash(
+		fn prove_finality(
 			&self,
 			_last_finalized: Block::Hash,
 			_authoritites_set_id: Option<u64>,

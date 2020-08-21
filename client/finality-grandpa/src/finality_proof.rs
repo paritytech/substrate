@@ -186,7 +186,7 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 pub trait RpcFinalityProofProvider<Block: BlockT>: Send + Sync {
 	/// Return finality proofs for the given authorities set id, if it is provided, otherwise the
 	/// current one will be used.
-	fn prove_finality_for_best_hash(
+	fn prove_finality(
 		&self,
 		last_finalized: Block::Hash,
 		authorities_set_id: Option<u64>,
@@ -199,7 +199,7 @@ impl<B, Block> RpcFinalityProofProvider<Block> for FinalityProofProvider<B, Bloc
 		NumberFor<Block>: BlockNumberOps,
 		B: Backend<Block> + Send + Sync + 'static,
 {
-	fn prove_finality_for_best_hash(
+	fn prove_finality(
 		&self,
 		last_finalized: Block::Hash,
 		authorities_set_id: Option<u64>,
