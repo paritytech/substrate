@@ -19,6 +19,7 @@ use core::fmt::Debug;
 use sp_std::{
 	vec::Vec,
 };
+use sp_std::Writer;
 use codec::{Encode, Decode};
 
 #[derive(Clone, Encode, Decode, Debug)]
@@ -74,19 +75,11 @@ impl From<bool> for WasmValue {
 	}
 }
 
-struct DebugWriter(Vec<u8>);
-impl core::fmt::Write for DebugWriter {
-	fn write_str(&mut self, s: &str) -> core::result::Result<(), core::fmt::Error> {
-		self.0.extend_from_slice(s.as_bytes());
-		Ok(())
-	}
-}
-
 impl From<&core::fmt::Arguments<'_>> for WasmValue {
 	fn from(inp: &core::fmt::Arguments<'_>) -> WasmValue {
-		let mut buf = DebugWriter(Vec::new());
+		let mut buf = Writer::default();
 		core::fmt::write(&mut buf, *inp).expect("Writing of arguments doesn't fail");
-		WasmValue::Formatted(buf.0)
+		WasmValue::Formatted(buf.into_inner())
 	}
 }
 
