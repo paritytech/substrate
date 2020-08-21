@@ -57,9 +57,9 @@ sp-runtime-interface = { version = "2.0.0-rc6", default-features = false, path =
 [dev-dependencies]
 sp-serializer = { version = "2.0.0-rc6", path = "../serializer" }
 pretty_assertions = "0.6.1"
-hex-literal = "0.2.1"
+hex-literal = "0.3.1"
 rand = "0.7.2"
-criterion = "0.2.11"
+criterion = "0.3.3"
 serde_json = "1.0"
 rand_chacha = "0.2.2"
 

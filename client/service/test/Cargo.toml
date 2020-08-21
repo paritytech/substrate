@@ -12,7 +12,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-hex-literal = "0.2.1"
+hex-literal = "0.3.1"
 tempfile = "3.1.0"
 tokio = "0.1.22"
 futures01 = { package = "futures", version = "0.1.29" }
