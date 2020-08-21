@@ -63,7 +63,7 @@ use sp_runtime::{
 };
 use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
-use sp_core::{traits::BareCryptoStore, crypto::Pair};
+use sp_core::{traits::SyncCryptoStore, crypto::Pair};
 use sp_inherents::{InherentDataProviders, InherentData};
 use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
@@ -74,7 +74,6 @@ use sc_consensus_slots::{
 	CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
 };
 
-use sc_keystore::KeyStorePtr;
 use sp_api::ApiExt;
 
 pub use sp_consensus_aura::{
@@ -147,7 +146,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
-	keystore: KeyStorePtr,
+	keystore: Arc<SyncCryptoStore>,
 	can_author_with: CAW,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
@@ -192,7 +191,7 @@ struct AuraWorker<C, E, I, P, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
-	keystore: KeyStorePtr,
+	keystore: Arc<SyncCryptoStore>,
 	sync_oracle: SO,
 	force_authoring: bool,
 	_key_type: PhantomData<P>,
@@ -248,10 +247,15 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot_number, epoch_data);
 		expected_author.and_then(|p| {
-			self.keystore.read()
-				.key_pair_by_type::<P>(&p, sp_application_crypto::key_types::AURA).ok()
-		}).and_then(|p| {
-			Some(p.public())
+			let has_keys = self.keystore.has_keys(
+				&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
+			);
+			match has_keys {
+				true => {
+					Some(p.clone())
+				},
+				false => None
+			}
 		})
 	}
 
@@ -282,7 +286,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 			// add it to a digest item.
 			let public_type_pair = public.to_public_crypto_pair();
 			let public = public.to_raw_vec();
-			let signature = keystore.read()
+			let signature = keystore
 				.sign_with(
 					<AuthorityId<P> as AppKey>::ID,
 					&public_type_pair,
@@ -993,9 +997,9 @@ mod tests {
 			let client = peer.client().as_full().expect("full clients are created").clone();
 			let select_chain = peer.select_chain().expect("full client has a select chain");
 			let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-			let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore.");
+			let mut keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore.");
 
-			keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(&key.to_seed())
+			keystore.insert_ephemeral_from_seed::<AuthorityPair>(&key.to_seed())
 				.expect("Creates authority key");
 			keystore_paths.push(keystore_path);
 
@@ -1022,7 +1026,7 @@ mod tests {
 				DummyOracle,
 				inherent_data_providers,
 				false,
-				keystore,
+				keystore.into(),
 				sp_consensus::AlwaysCanAuthor,
 			).expect("Starts aura"));
 		}
@@ -1063,7 +1067,7 @@ mod tests {
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore.");
-		let my_key = keystore.write()
+		let my_key = keystore
 			.generate_by_type::<AuthorityPair>(AuthorityPair::ID)
 			.expect("Key should be created");
 		authorities.push(my_key.public());
@@ -1079,7 +1083,7 @@ mod tests {
 			client: client.clone(),
 			block_import: Arc::new(Mutex::new(client)),
 			env: environ,
-			keystore,
+			keystore: keystore.into(),
 			sync_oracle: DummyOracle.clone(),
 			force_authoring: false,
 			_key_type: PhantomData::<AuthorityPair>,
