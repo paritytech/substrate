@@ -86,6 +86,23 @@ arg_enum! {
 }
 
 arg_enum! {
+	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+	pub enum CryptoScheme {
+		Ed25519,
+		Sr25519,
+		Ecdsa,
+	}
+}
+
+arg_enum! {
+	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+	pub enum OutputType {
+		Json,
+		Text,
+	}
+}
+
+arg_enum! {
 	/// How to execute blocks
 	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 	pub enum ExecutionStrategy {
