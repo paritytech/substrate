@@ -66,13 +66,21 @@ pub struct BenchmarkResults {
 /// Configuration used to setup and run runtime benchmarks.
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
 pub struct BenchmarkConfig {
+	/// The encoded name of the pallet to benchmark.
 	pub pallet: Vec<u8>,
+	/// The encoded name of the benchmark/extrinsic to run.
 	pub benchmark: Vec<u8>,
+	/// An optional manual override to the lowest values used in the `steps` range.
 	pub lowest_range_values: Vec<u32>,
+	/// An optional manual override to the highest values used in the `steps` range.
 	pub highest_range_values: Vec<u32>,
+	/// The number of samples to take across the range of values for components.
 	pub steps: Vec<u32>,
+	/// The number of times to repeat a benchmark.
 	pub repeat: u32,
+	/// Enable an extra benchmark iteration which runs the verification logic for a benchmark.
 	pub verify: bool,
+	/// Enable benchmarking of "extra" extrinsics, i.e. those that are not directly used in a pallet.
 	pub extra: bool,
 }
 
