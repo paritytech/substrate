@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Integration tests for ecdsa
-
+use futures::executor::block_on;
 use sp_runtime::generic::BlockId;
 use sp_core::{
 	crypto::Pair,
@@ -36,7 +36,7 @@ fn ecdsa_works_in_runtime() {
 		.test_ecdsa_crypto(&BlockId::Number(0))
 		.expect("Tests `ecdsa` crypto.");
 
-	let supported_keys = keystore.read().keys(ECDSA).unwrap();
+	let supported_keys = block_on(keystore.read().keys(ECDSA)).unwrap();
 	assert!(supported_keys.contains(&public.clone().into()));
 	assert!(AppPair::verify(&signature, "ecdsa", &AppPublic::from(public)));
 }
