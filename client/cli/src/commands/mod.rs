@@ -21,19 +21,41 @@ mod export_blocks_cmd;
 mod export_state_cmd;
 mod import_blocks_cmd;
 mod purge_chain_cmd;
+mod sign;
+mod verify;
+mod vanity;
 mod revert_cmd;
 mod run_cmd;
+mod generate_node_key;
+mod generate;
+mod insert;
+mod inspect_node_key;
+mod inspect;
+mod key;
+pub mod utils;
 
-pub use self::build_spec_cmd::BuildSpecCmd;
-pub use self::check_block_cmd::CheckBlockCmd;
-pub use self::export_blocks_cmd::ExportBlocksCmd;
-pub use self::export_state_cmd::ExportStateCmd;
-pub use self::import_blocks_cmd::ImportBlocksCmd;
-pub use self::purge_chain_cmd::PurgeChainCmd;
-pub use self::revert_cmd::RevertCmd;
-pub use self::run_cmd::RunCmd;
 use std::fmt::Debug;
 use structopt::StructOpt;
+
+pub use self::{
+	build_spec_cmd::BuildSpecCmd,
+	check_block_cmd::CheckBlockCmd,
+	export_blocks_cmd::ExportBlocksCmd,
+	export_state_cmd::ExportStateCmd,
+	import_blocks_cmd::ImportBlocksCmd,
+	purge_chain_cmd::PurgeChainCmd,
+	sign::SignCmd,
+	generate::GenerateCmd,
+	insert::InsertCmd,
+	inspect::InspectCmd,
+	generate_node_key::GenerateNodeKeyCmd,
+	inspect_node_key::InspectNodeKeyCmd,
+	key::KeySubcommand,
+	vanity::VanityCmd,
+	verify::VerifyCmd,
+	revert_cmd::RevertCmd,
+	run_cmd::RunCmd,
+};
 
 /// All core commands that are provided by default.
 ///
@@ -54,14 +76,14 @@ pub enum Subcommand {
 	/// Validate a single block.
 	CheckBlock(CheckBlockCmd),
 
+	/// Export state as raw chain spec.
+	ExportState(ExportStateCmd),
+
 	/// Revert chain to the previous state.
 	Revert(RevertCmd),
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
-
-	/// Export state as raw chain spec.
-	ExportState(ExportStateCmd),
 }
 
 /// Macro that helps implement CliConfiguration on an enum of subcommand automatically
@@ -425,5 +447,12 @@ macro_rules! substrate_cli_subcommands {
 }
 
 substrate_cli_subcommands!(
-	Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain, ExportState
+	Subcommand =>
+		BuildSpec,
+		ExportBlocks,
+		ExportState,
+		ImportBlocks,
+		CheckBlock,
+		Revert,
+		PurgeChain
 );
