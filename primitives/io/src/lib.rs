@@ -30,7 +30,6 @@
 use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
-use futures::executor::block_on;
 
 #[cfg(feature = "std")]
 use sp_std::ops::Deref;
@@ -416,10 +415,9 @@ pub trait Misc {
 pub trait Crypto {
 	/// Returns all `ed25519` public keys for the given key id from the keystore.
 	fn ed25519_public_keys(&mut self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		let keystore = self.extension::<KeystoreExt>()
+		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
-			.read();
-		block_on(keystore.ed25519_public_keys(id))
+			.ed25519_public_keys(id)
 	}
 
 	/// Generate an `ed22519` key for the given key type using an optional `seed` and
@@ -430,10 +428,9 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn ed25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ed25519::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
-		let mut keystore = self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.write();
-		block_on(keystore.ed25519_generate_new(id, seed))
+		let keystore = self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		keystore.ed25519_generate_new(id, seed)
 			.expect("`ed25519_generate` failed")
 	}
 
@@ -447,9 +444,9 @@ pub trait Crypto {
 		pub_key: &ed25519::Public,
 		msg: &[u8],
 	) -> Option<ed25519::Signature> {
-		let keystore = self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		block_on(keystore.read().sign_with(id, &pub_key.into(), msg))
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.sign_with(id, &pub_key.into(), msg)
 			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
 			.ok()
 	}
@@ -545,10 +542,9 @@ pub trait Crypto {
 
 	/// Returns all `sr25519` public keys for the given key id from the keystore.
 	fn sr25519_public_keys(&mut self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		let keystore = self.extension::<KeystoreExt>()
+		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
-			.read();
-		block_on(keystore.sr25519_public_keys(id))
+			.sr25519_public_keys(id)
 	}
 
 	/// Generate an `sr22519` key for the given key type using an optional seed and
@@ -559,10 +555,9 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn sr25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> sr25519::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
-		let mut keystore = self.extension::<KeystoreExt>()
+		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
-			.write();
-		block_on(keystore.sr25519_generate_new(id, seed))
+			.sr25519_generate_new(id, seed)
 			.expect("`sr25519_generate` failed")
 	}
 
@@ -576,9 +571,9 @@ pub trait Crypto {
 		pub_key: &sr25519::Public,
 		msg: &[u8],
 	) -> Option<sr25519::Signature> {
-		let keystore = self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		block_on(keystore.read().sign_with(id, &pub_key.into(), msg))
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.sign_with(id, &pub_key.into(), msg)
 			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
 			.ok()
 	}
@@ -593,10 +588,9 @@ pub trait Crypto {
 
 	/// Returns all `ecdsa` public keys for the given key id from the keystore.
 	fn ecdsa_public_keys(&mut self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		let keystore = self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		block_on(keystore.read()
-			.ecdsa_public_keys(id))
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.ecdsa_public_keys(id)
 	}
 
 	/// Generate an `ecdsa` key for the given key type using an optional `seed` and
@@ -607,10 +601,9 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn ecdsa_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ecdsa::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
-		let keystore = self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		block_on(keystore.write()
-			.ecdsa_generate_new(id, seed))
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.ecdsa_generate_new(id, seed)
 			.expect("`ecdsa_generate` failed")
 	}
 
@@ -624,10 +617,9 @@ pub trait Crypto {
 		pub_key: &ecdsa::Public,
 		msg: &[u8],
 	) -> Option<ecdsa::Signature> {
-		let keystore = self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		block_on(keystore.read()
-			.sign_with(id, &pub_key.into(), msg))
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.sign_with(id, &pub_key.into(), msg)
 			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
 			.ok()
 	}
