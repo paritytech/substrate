@@ -54,16 +54,13 @@ pub fn read_uri(uri: Option<&String>) -> error::Result<String> {
 pub fn print_from_uri<Pair>(
 	uri: &str,
 	password: Option<SecretString>,
-	network_override: Ss58AddressFormat,
+	network_override: Option<Ss58AddressFormat>,
 	output: OutputType,
-)
-	where
-		Pair: sp_core::Pair,
-		Pair::Public: Into<MultiSigner>,
-{
+) where Pair: sp_core::Pair, Pair::Public: Into<MultiSigner>, {
 	let password = password.as_ref().map(|s| s.expose_secret().as_str());
 	if let Ok((pair, seed)) = Pair::from_phrase(uri, password.clone()) {
 		let public_key = pair.public();
+		let network_override = network_override.unwrap_or_default();
 
 		match output {
 			OutputType::Json => {
@@ -93,6 +90,7 @@ pub fn print_from_uri<Pair>(
 		}
 	} else if let Ok((pair, seed)) = Pair::from_string_with_seed(uri, password.clone()) {
 		let public_key = pair.public();
+		let network_override = network_override.unwrap_or_default();
 
 		match output {
 			OutputType::Json => {
@@ -120,7 +118,9 @@ pub fn print_from_uri<Pair>(
 				);
 			},
 		}
-	} else if let Ok(public_key) = Pair::Public::from_string_with_version(uri).map(|v| v.0) {
+	} else if let Ok((public_key, network)) = Pair::Public::from_string_with_version(uri) {
+		let network_override = network_override.unwrap_or(network);
+
 		match output {
 			OutputType::Json => {
 				let json = json!({

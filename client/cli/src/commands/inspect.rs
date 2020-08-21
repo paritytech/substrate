@@ -31,9 +31,11 @@ use structopt::StructOpt;
 pub struct InspectKeyCmd {
 	/// A Key URI to be inspected. May be a secret seed, secret URI
 	/// (with derivation paths and password), SS58 or public URI.
-	/// If the value is a file, the file content is used as URI.
-	/// If not given, you will be prompted for the URI.
-	#[structopt(long)]
+	///
+	/// If the give value is a file, the file content will be used
+	/// as URI.
+	///
+	/// If omitted, you will be prompted for the URI.
 	uri: Option<String>,
 
 	#[allow(missing_docs)]
@@ -65,7 +67,7 @@ impl InspectKeyCmd {
 			print_from_uri(
 				&uri,
 				password,
-				self.network_scheme.network.clone().unwrap_or_default(),
+				self.network_scheme.network.clone(),
 				self.output_scheme.output_type.clone()
 			)
 		);
@@ -76,7 +78,7 @@ impl InspectKeyCmd {
 
 #[cfg(test)]
 mod tests {
-	use super::InspectCmd;
+	use super::*;
 	use structopt::StructOpt;
 
 	#[test]

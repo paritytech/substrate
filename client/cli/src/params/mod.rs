@@ -153,6 +153,7 @@ pub struct NetworkSchemeFlag {
 	#[structopt(
 		long,
 		value_name = "NETWORK",
+		short = "n",
 		possible_values = &Ss58AddressFormat::all_names()[..],
 		parse(try_from_str = Ss58AddressFormat::try_from),
 		case_insensitive = true,

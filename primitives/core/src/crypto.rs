@@ -267,7 +267,6 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
-		println!("VERSION: {:?}", version);
 		let mut v = vec![version.into()];
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
