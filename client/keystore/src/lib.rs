@@ -21,7 +21,7 @@ use async_trait::async_trait;
 use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, ExposeSecret, SecretString, Public},
-	traits::{BareCryptoStore, Error as TraitError},
+	traits::{BareCryptoStore, Error as TraitError, SyncCryptoStore},
 	sr25519::{Public as Sr25519Public, Pair as Sr25519Pair},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 	Encode,
@@ -467,6 +467,12 @@ impl BareCryptoStore for Store {
 	}
 }
 
+impl Into<Arc<SyncCryptoStore>> for Store {
+    fn into(self) -> Arc<SyncCryptoStore> {
+        Arc::new(SyncCryptoStore::new(Arc::new(RwLock::new(self))))
+    }
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -480,23 +486,22 @@ mod tests {
 		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
-		assert!(store.read().public_keys::<ed25519::AppPublic>().unwrap().is_empty());
+		assert!(store.public_keys::<ed25519::AppPublic>().unwrap().is_empty());
 
-		let key: ed25519::AppPair = store.write().generate().unwrap();
-		let key2: ed25519::AppPair = store.read().key_pair(&key.public()).unwrap();
+		let key: ed25519::AppPair = store.generate().unwrap();
+		let key2: ed25519::AppPair = store.key_pair(&key.public()).unwrap();
 
 		assert_eq!(key.public(), key2.public());
 
-		assert_eq!(store.read().public_keys::<ed25519::AppPublic>().unwrap()[0], key.public());
+		assert_eq!(store.public_keys::<ed25519::AppPublic>().unwrap()[0], key.public());
 	}
 
 	#[test]
 	fn test_insert_ephemeral_from_seed() {
 		let temp_dir = TempDir::new().unwrap();
-		let store = Store::open(temp_dir.path(), None).unwrap();
+		let mut store = Store::open(temp_dir.path(), None).unwrap();
 
 		let pair: ed25519::AppPair = store
-			.write()
 			.insert_ephemeral_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc")
 			.unwrap();
 		assert_eq!(
@@ -507,7 +512,7 @@ mod tests {
 		drop(store);
 		let store = Store::open(temp_dir.path(), None).unwrap();
 		// Keys generated from seed should not be persisted!
-		assert!(store.read().key_pair::<ed25519::AppPair>(&pair.public()).is_err());
+		assert!(store.key_pair::<ed25519::AppPair>(&pair.public()).is_err());
 	}
 
 	#[test]
@@ -519,15 +524,15 @@ mod tests {
 			Some(FromStr::from_str(password.as_str()).unwrap()),
 		).unwrap();
 
-		let pair: ed25519::AppPair = store.write().generate().unwrap();
+		let pair: ed25519::AppPair = store.generate().unwrap();
 		assert_eq!(
 			pair.public(),
-			store.read().key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
+			store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
 		);
 
 		// Without the password the key should not be retrievable
 		let store = Store::open(temp_dir.path(), None).unwrap();
-		assert!(store.read().key_pair::<ed25519::AppPair>(&pair.public()).is_err());
+		assert!(store.key_pair::<ed25519::AppPair>(&pair.public()).is_err());
 
 		let store = Store::open(
 			temp_dir.path(),
@@ -535,28 +540,28 @@ mod tests {
 		).unwrap();
 		assert_eq!(
 			pair.public(),
-			store.read().key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
+			store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
 		);
 	}
 
 	#[test]
 	fn public_keys_are_returned() {
 		let temp_dir = TempDir::new().unwrap();
-		let store = Store::open(temp_dir.path(), None).unwrap();
+		let mut store = Store::open(temp_dir.path(), None).unwrap();
 
 		let mut public_keys = Vec::new();
 		for i in 0..10 {
-			public_keys.push(store.write().generate::<ed25519::AppPair>().unwrap().public());
-			public_keys.push(store.write().insert_ephemeral_from_seed::<ed25519::AppPair>(
+			public_keys.push(store.generate::<ed25519::AppPair>().unwrap().public());
+			public_keys.push(store.insert_ephemeral_from_seed::<ed25519::AppPair>(
 				&format!("0x3d97c819d68f9bafa7d6e79cb991eebcd7{}d966c5334c0b94d9e1fa7ad0869dc", i),
 			).unwrap().public());
 		}
 
 		// Generate a key of a different type
-		store.write().generate::<sr25519::AppPair>().unwrap();
+		store.generate::<sr25519::AppPair>().unwrap();
 
 		public_keys.sort();
-		let mut store_pubs = store.read().public_keys::<ed25519::AppPublic>().unwrap();
+		let mut store_pubs = store.public_keys::<ed25519::AppPublic>().unwrap();
 		store_pubs.sort();
 
 		assert_eq!(public_keys, store_pubs);
@@ -570,13 +575,13 @@ mod tests {
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::AppPair::from_string(secret_uri, None).expect("Generates key pair");
 
-		store.write().insert_unknown(
+		store.insert_unknown(
 			SR25519,
 			secret_uri,
 			key_pair.public().as_ref(),
 		).expect("Inserts unknown key");
 
-		let store_key_pair = store.read().key_pair_by_type::<sr25519::AppPair>(
+		let store_key_pair = store.key_pair_by_type::<sr25519::AppPair>(
 			&key_pair.public(),
 			SR25519,
 		).expect("Gets key pair from keystore");
@@ -593,7 +598,7 @@ mod tests {
 		fs::write(file_name, "test").expect("Invalid file is written");
 
 		assert!(
-			block_on(store.read().sr25519_public_keys(SR25519)).is_empty(),
+			block_on(store.sr25519_public_keys(SR25519)).is_empty(),
 		);
 	}
 }
