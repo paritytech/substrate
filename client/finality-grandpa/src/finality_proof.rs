@@ -182,9 +182,10 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	}
 }
 
-/// WIP: TODO
+/// Provide finality proofs to the RPC API
 pub trait RpcFinalityProofProvider<Block: BlockT>: Send + Sync {
-	/// WIP: TODO
+	/// Return finality proofs for the given authorities set id, if it is provided, otherwise the
+	/// current one will be used.
 	fn prove_finality_for_best_hash(
 		&self,
 		last_finalized: Block::Hash,
