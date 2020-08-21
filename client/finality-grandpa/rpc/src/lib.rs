@@ -406,7 +406,7 @@ mod tests {
 
 		// Notify with a header and justification
 		let justification = create_justification();
-		let _ = justification_sender.notify(justification.clone()).unwrap();
+		justification_sender.notify(|| Ok(justification.clone())).unwrap();
 
 		// Inspect what we received
 		let recv = receiver.take(1).wait().flatten().collect::<Vec<_>>();

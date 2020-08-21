@@ -20,9 +20,10 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use sp_runtime::traits::Block as BlockT;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
 use crate::justification::GrandpaJustification;
+use crate::Error;
 
 // Stream of justifications returned when subscribing.
 type JustificationStream<Block> = TracingUnboundedReceiver<GrandpaJustification<Block>>;
@@ -54,10 +55,22 @@ impl<Block: BlockT> GrandpaJustificationSender<Block> {
 
 	/// Send out a notification to all subscribers that a new justification
 	/// is available for a block.
-	pub fn notify(&self, notification: GrandpaJustification<Block>) -> Result<(), ()> {
-		self.subscribers.lock().retain(|n| {
-			!n.is_closed() && n.unbounded_send(notification.clone()).is_ok()
-		});
+	pub fn notify<F>(&self, justification: F) -> Result<(), Error>
+	where
+		F: FnOnce() -> Result<GrandpaJustification<Block>, Error>,
+	{
+		let mut subscribers = self.subscribers.lock();
+
+		// do an initial prune on closed subscriptions
+		subscribers.retain(|n| !n.is_closed());
+
+		// if there's no subscribers we avoid creating
+		// the justification which is a costly operation
+		if !subscribers.is_empty() {
+			let justification = justification()?;
+			subscribers.retain(|n| n.unbounded_send(justification.clone()).is_ok());
+		}
+
 		Ok(())
 	}
 }
