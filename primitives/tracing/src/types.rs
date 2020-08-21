@@ -179,7 +179,6 @@ impl From<Vec<(WasmFieldName, Option<WasmValue>)>> for WasmValuesSet {
 }
 impl From<Vec<(&&WasmFieldName, Option<WasmValue>)>> for WasmValuesSet {
 	fn from(v: Vec<(&&WasmFieldName, Option<WasmValue>)>) -> Self {
-		// FIXME: remove this clone!
 		WasmValuesSet(v.into_iter().map(|(k, v)| ((**k).clone(), v)).collect())
 	}
 }
