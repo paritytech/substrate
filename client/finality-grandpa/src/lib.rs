@@ -127,6 +127,7 @@ mod voting_rule;
 pub use authorities::SharedAuthoritySet;
 pub use finality_proof::{
 	FinalityProofProvider, StorageAndProofProvider, RpcFinalityProofProvider,
+	FinalityProofFragment,
 };
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::GrandpaBlockImport;

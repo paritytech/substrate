@@ -192,16 +192,18 @@ mod tests {
 	use std::{collections::HashSet, convert::TryInto, sync::Arc};
 	use jsonrpc_core::{Notification, Output, types::Params};
 
-	use parity_scale_codec::Decode;
+	use parity_scale_codec::{Encode, Decode};
 	use sc_block_builder::BlockBuilder;
-	use sc_finality_grandpa::{report, AuthorityId, GrandpaJustificationSender, GrandpaJustification};
+	use sc_finality_grandpa::{
+		report, AuthorityId, GrandpaJustificationSender, GrandpaJustification,
+	};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::RecordProof;
 	use sp_core::crypto::Public;
 	use sp_keyring::Ed25519Keyring;
 	use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 	use substrate_test_runtime_client::{
-		runtime::Block,
+		runtime::{Block, Header, H256},
 		DefaultTestClientBuilderExt,
 		TestClientBuilderExt,
 		TestClientBuilder,
@@ -211,7 +213,9 @@ mod tests {
 	struct TestVoterState;
 	struct EmptyVoterState;
 
-	struct EmptyFinalityProofProvider;
+	struct TestFinalityProofProvider {
+		finality_proofs: Vec<sc_finality_grandpa::FinalityProofFragment<Header>>,
+	}
 
 	fn voters() -> HashSet<AuthorityId> {
 		let voter_id_1 = AuthorityId::from_slice(&[1; 32]);
@@ -232,13 +236,26 @@ mod tests {
 		}
 	}
 
-	impl<Block: BlockT> RpcFinalityProofProvider<Block> for EmptyFinalityProofProvider {
+	fn header(number: u64) -> Header {
+		let parent_hash = match number {
+			0 => Default::default(),
+			_ => header(number - 1).hash(),
+		};
+		Header::new(
+			number,
+			H256::from_low_u64_be(0),
+			H256::from_low_u64_be(0),
+			parent_hash, Default::default()
+		)
+	}
+
+	impl<Block: BlockT> RpcFinalityProofProvider<Block> for TestFinalityProofProvider {
 		fn prove_finality_for_best_hash(
 			&self,
 			_last_finalized: Block::Hash,
 			_authoritites_set_id: Option<u64>,
 		) -> Result<Option<Vec<u8>>, sp_blockchain::Error> {
-			todo!();
+			Ok(Some(self.finality_proofs.encode()))
 		}
 	}
 
@@ -280,15 +297,28 @@ mod tests {
 	) where
 		VoterState: ReportVoterState + Send + Sync + 'static,
 	{
+		setup_io_handler_with_finality_proofs(voter_state, Default::default())
+	}
+
+	fn setup_io_handler_with_finality_proofs<VoterState>(
+		voter_state: VoterState,
+		finality_proofs: Vec<sc_finality_grandpa::FinalityProofFragment<Header>>,
+	) -> (
+		jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
+		GrandpaJustificationSender<Block>,
+	) where
+		VoterState: ReportVoterState + Send + Sync + 'static,
+	{
 		let (justification_sender, justification_stream) = GrandpaJustificationStream::channel();
 		let manager = SubscriptionManager::new(Arc::new(sc_rpc::testing::TaskExecutor));
+		let finality_proof_provider = Arc::new(TestFinalityProofProvider { finality_proofs });
 
 		let handler = GrandpaRpcHandler::new(
 			TestAuthoritySet,
 			voter_state,
 			justification_stream,
 			manager,
-			Arc::new(EmptyFinalityProofProvider),
+			finality_proof_provider,
 		);
 
 		let mut io = jsonrpc_core::MetaIoHandler::default();
@@ -479,17 +509,46 @@ mod tests {
 	}
 
 	#[test]
-	fn test_prove_finality() {
-		let (io,  _) = setup_io_handler(TestVoterState);
+	fn prove_finality_with_test_finality_proof_provider() {
+		let finality_proofs = vec![sc_finality_grandpa::FinalityProofFragment {
+			block: header(42).hash(),
+			justification: create_justification().encode(),
+			unknown_headers: vec![header(2)],
+			authorities_proof: None,
+		}];
+		let (io,  _) = setup_io_handler_with_finality_proofs(
+			TestVoterState,
+			finality_proofs.clone(),
+		);
 
 		let request = "{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_proveFinality\",\"params\":[\
 			\"0x0000000000000000000000000000000000000000000000000000000000000000\",\
-			\"0x0000000000000000000000000000000000000000000000000000000000000000\",\
 			42\
 		],\"id\":1}";
-		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not ready"},"id":1}"#;
+		let response = "{\"jsonrpc\":\"2.0\",\"result\":[\
+			4,130,100,253,46,137,220,14,213,229,74,246,107,63,105,84,82,3,229,255,64,239,\
+			205,252,81,42,182,86,255,23,139,214,0,233,2,1,0,0,0,0,0,0,0,169,96,2,156,106,\
+			88,215,93,172,162,191,86,187,255,138,227,123,240,44,147,110,145,99,200,3,136,\
+			200,174,177,252,38,4,1,0,0,0,0,0,0,0,4,169,96,2,156,106,88,215,93,172,162,191,\
+			86,187,255,138,227,123,240,44,147,110,145,99,200,3,136,200,174,177,252,38,4,1,\
+			0,0,0,0,0,0,0,131,2,35,74,166,100,120,130,13,44,11,231,205,157,118,166,130,215,\
+			241,219,234,52,238,163,35,21,41,36,176,43,215,49,219,27,180,158,131,150,4,104,\
+			201,22,172,233,249,88,122,242,200,25,243,99,46,198,254,180,166,145,152,16,2,141,\
+			179,0,136,220,52,23,213,5,142,196,180,80,62,12,18,234,26,10,137,190,32,15,233,137,\
+			34,66,61,67,52,1,79,166,176,238,0,4,185,226,146,135,126,116,181,99,47,249,203,114,\
+			83,32,76,136,16,147,43,236,75,71,19,160,58,65,197,75,11,36,94,4,8,0,0,0,0,0,0,0,0,\
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\
+			0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\
+		],\"id\":1}";
 
 		let meta = sc_rpc::Metadata::default();
-		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
+		let resp = io.handle_request_sync(request, meta);
+		assert_eq!(resp, Some(response.into()));
+
+		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
+		let result: Vec<u8> = serde_json::from_value(resp["result"].take()).unwrap();
+		let fragments: Vec<sc_finality_grandpa::FinalityProofFragment<Header>> =
+			Decode::decode(&mut &result[..]).unwrap();
+		assert_eq!(fragments, finality_proofs);
 	}
 }

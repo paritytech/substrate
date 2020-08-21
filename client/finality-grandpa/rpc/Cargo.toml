@@ -26,6 +26,7 @@ sc-network = { version = "0.8.0-rc5", path = "../../network" }
 
 [dev-dependencies]
 sc-block-builder = { version = "0.8.0-rc5", path = "../../block-builder" }
+sc-client-db = { version = "0.8.0-rc5", features = ["test-helpers"], path = "../../db" }
 sc-network-test = { version = "0.8.0-rc5", path = "../../network/test" }
 sc-rpc = { version = "2.0.0-rc5", path = "../../rpc", features = ["test-helpers"] }
 sp-blockchain = { version = "2.0.0-rc5", path = "../../../primitives/blockchain" }

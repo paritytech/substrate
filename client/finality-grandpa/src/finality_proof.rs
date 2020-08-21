@@ -270,8 +270,8 @@ pub struct FinalityEffects<Header: HeaderT> {
 /// 1) the justification for the descendant block F;
 /// 2) headers sub-chain (B; F] if B != F;
 /// 3) proof of GRANDPA::authorities() if the set changes at block F.
-#[derive(Debug, PartialEq, Encode, Decode)]
-pub(crate) struct FinalityProofFragment<Header: HeaderT> {
+#[derive(Debug, PartialEq, Encode, Decode, Clone)]
+pub struct FinalityProofFragment<Header: HeaderT> {
 	/// The hash of block F for which justification is provided.
 	pub block: Header::Hash,
 	/// Justification of the block F.
