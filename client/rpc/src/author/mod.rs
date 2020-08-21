@@ -30,12 +30,12 @@ use rpc::futures::{
 	Sink, Future,
 	future::result,
 };
-use futures::{StreamExt as _, compat::Compat, executor::block_on};
+use futures::{StreamExt as _, compat::Compat};
 use futures::future::{ready, FutureExt, TryFutureExt};
 use sc_rpc_api::DenyUnsafe;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use codec::{Encode, Decode};
-use sp_core::{Bytes, traits::BareCryptoStorePtr};
+use sp_core::{Bytes, traits::SyncCryptoStore};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::generic;
 use sp_transaction_pool::{
@@ -57,7 +57,7 @@ pub struct Author<P, Client> {
 	/// Subscriptions manager
 	subscriptions: SubscriptionManager,
 	/// The key store.
-	keystore: BareCryptoStorePtr,
+	keystore: Arc<SyncCryptoStore>,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 }
@@ -68,7 +68,7 @@ impl<P, Client> Author<P, Client> {
 		client: Arc<Client>,
 		pool: Arc<P>,
 		subscriptions: SubscriptionManager,
-		keystore: BareCryptoStorePtr,
+		keystore: Arc<SyncCryptoStore>,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
 		Author {
@@ -105,8 +105,7 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-		let mut keystore = self.keystore.write();
-		block_on(keystore.insert_unknown(key_type, &suri, &public[..]))
+		self.keystore.insert_unknown(key_type, &suri, &public[..])
 			.map_err(|_| Error::KeyStoreUnavailable)?;
 		Ok(())
 	}
@@ -131,14 +130,14 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 		).map_err(|e| Error::Client(Box::new(e)))?
 			.ok_or_else(|| Error::InvalidSessionKeys)?;
 
-		Ok(block_on(self.keystore.read().has_keys(&keys)))
+		Ok(self.keystore.has_keys(&keys))
 	}
 
 	fn has_key(&self, public_key: Bytes, key_type: String) -> Result<bool> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-		Ok(block_on(self.keystore.read().has_keys(&[(public_key.to_vec(), key_type)])))
+		Ok(self.keystore.has_keys(&[(public_key.to_vec(), key_type)]))
 	}
 
 	fn submit_extrinsic(&self, ext: Bytes) -> FutureResult<TxHash<P>> {

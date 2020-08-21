@@ -22,8 +22,9 @@ use std::{mem, sync::Arc};
 use assert_matches::assert_matches;
 use codec::Encode;
 use sp_core::{
+	ed25519, sr25519,
 	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore},
-	traits::BareCryptoStorePtr, ed25519, sr25519,
+	traits::{BareCryptoStorePtr, SyncCryptoStore},
 	crypto::{CryptoTypePublicPair, Pair, Public},
 };
 use rpc::futures::Stream as _;
@@ -82,7 +83,7 @@ impl TestSetup {
 			client: self.client.clone(),
 			pool: self.pool.clone(),
 			subscriptions: SubscriptionManager::new(Arc::new(crate::testing::TaskExecutor)),
-			keystore: self.keystore.clone(),
+			keystore: Arc::new(SyncCryptoStore::new(self.keystore.clone())),
 			deny_unsafe: DenyUnsafe::No,
 		}
 	}

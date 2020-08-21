@@ -25,7 +25,7 @@ use codec::Decode;
 use sp_core::{
 	ExecutionContext,
 	offchain::{self, OffchainExt, TransactionPoolExt},
-	traits::{BareCryptoStorePtr, KeystoreExt},
+	traits::{KeystoreExt, SyncCryptoStore},
 };
 use sp_runtime::{
 	generic::BlockId,
@@ -33,7 +33,6 @@ use sp_runtime::{
 };
 use sp_state_machine::{ExecutionStrategy, ExecutionManager, DefaultHandler};
 use sp_externalities::Extensions;
-use sc_keystore::proxy::KeystoreProxy;
 use parking_lot::RwLock;
 
 /// Execution strategies settings.
@@ -82,9 +81,7 @@ impl ExtensionsFactory for () {
 /// for each call, based on required `Capabilities`.
 pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
-	keystore: Option<BareCryptoStorePtr>,
-	#[allow(dead_code)]
-	keystore_proxy: Option<Arc<KeystoreProxy>>,
+	keystore: Option<Arc<SyncCryptoStore>>,
 	// FIXME: these two are only RwLock because of https://github.com/paritytech/substrate/issues/4587
 	//        remove when fixed.
 	// To break retain cycle between `Client` and `TransactionPool` we require this
@@ -100,7 +97,6 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 		Self {
 			strategies: Default::default(),
 			keystore: None,
-			keystore_proxy: None,
 			transaction_pool: RwLock::new(None),
 			extensions_factory: RwLock::new(Box::new(())),
 		}
@@ -111,15 +107,13 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	/// Create new `ExecutionExtensions` given a `keystore` and `ExecutionStrategies`.
 	pub fn new(
 		strategies: ExecutionStrategies,
-		keystore: Option<BareCryptoStorePtr>,
-		keystore_proxy: Option<Arc<KeystoreProxy>>,
+		keystore: Option<Arc<SyncCryptoStore>>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
 		let extensions_factory = Box::new(());
 		Self {
 			strategies,
 			keystore,
-			keystore_proxy,
 			extensions_factory: RwLock::new(extensions_factory),
 			transaction_pool,
 		}
@@ -172,7 +166,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		let mut extensions = self.extensions_factory.read().extensions_for(capabilities);
 
 		if capabilities.has(offchain::Capability::Keystore) {
-			if let Some(keystore) = self.keystore.as_ref() {
+			if let Some(ref keystore) = self.keystore {
 				extensions.register(KeystoreExt(keystore.clone()));
 			}
 		}
