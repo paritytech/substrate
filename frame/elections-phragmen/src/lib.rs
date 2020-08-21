@@ -987,7 +987,9 @@ impl<T: Trait> Module<T> {
 					.map(|(votes, who)| ((MAXIMUM_VOTE - votes) as u32, who))
 				{
 					if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
-						prime_votes[i].1 += stake * votes.into();
+						prime_votes[i].1 = prime_votes[i].1.saturating_add(
+							stake.saturating_mul(votes.into())
+						);
 					}
 				}
 			}
