@@ -645,7 +645,8 @@ pub(crate) fn ancestry<Block: BlockT, Client>(
 	client: &Arc<Client>,
 	base: Block::Hash,
 	block: Block::Hash,
-) -> Result<Vec<Block::Hash>, GrandpaError> where
+) -> Result<Vec<Block::Hash>, GrandpaError>
+where
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
 	if base == block { return Err(GrandpaError::NotDescendent) }
@@ -671,15 +672,14 @@ pub(crate) fn ancestry<Block: BlockT, Client>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, Block: BlockT, C, N, SC, VR>
-	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, Block, C, N, SC, VR>
+impl<B, Block: BlockT, C, N, SC, VR> voter::Environment<Block::Hash, NumberFor<Block>>
+	for Environment<B, Block, C, N, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block>,
 	C: crate::ClientForGrandpa<Block, B> + 'static,
 	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
- 	N: NetworkT<Block> + 'static + Send + Sync,
+	N: NetworkT<Block> + 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, C>,
 	NumberFor<Block>: BlockNumberOps,
@@ -1023,7 +1023,7 @@ where
 			number,
 			(round, commit).into(),
 			false,
-			&self.justification_sender,
+			self.justification_sender.as_ref(),
 		)
 	}
 
@@ -1088,9 +1088,10 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
-	justification_sender: &Option<GrandpaJustificationSender<Block>>,
-) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
-	Block:  BlockT,
+	justification_sender: Option<&GrandpaJustificationSender<Block>>,
+) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>
+where
+	Block: BlockT,
 	BE: Backend<Block>,
 	Client: crate::ClientForGrandpa<Block, BE>,
 {
@@ -1156,7 +1157,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 
 		// send a justification notification if a sender exists and in case of error log it.
 		fn notify_justification<Block: BlockT>(
-			justification_sender: &Option<GrandpaJustificationSender<Block>>,
+			justification_sender: Option<&GrandpaJustificationSender<Block>>,
 			justification: impl FnOnce() -> Result<GrandpaJustification<Block>, Error>,
 		) {
 			if let Some(sender) = justification_sender {
