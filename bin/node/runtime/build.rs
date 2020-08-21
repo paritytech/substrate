@@ -23,14 +23,5 @@ fn main() {
 		.with_wasm_builder_from_crates_or_path("2.0.0", "../../../utils/wasm-builder")
 		.export_heap_base()
 		.import_memory()
-		.build();
-
-	WasmBuilder::new()
-		.with_current_project()
-		.with_wasm_builder_from_crates_or_path("2.0.0", "../../../utils/wasm-builder")
-		.export_heap_base()
-		.import_memory()
-		.set_file_name("wasm_binary_with_tracing.rs")
-		.append_to_rust_flags("--cfg feature=\\\"with-tracing\\\"")
-		.build();
+		.build()
 }
