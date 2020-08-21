@@ -1,6 +1,6 @@
 [package]
 name = "sp-sandbox"
-version = "0.8.0-rc5"
+version = "0.8.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,10 +13,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 wasmi = { version = "0.6.2", optional = true }
-sp-core = { version = "2.0.0-rc5", default-features = false, path = "../core" }
-sp-std = { version = "2.0.0-rc5", default-features = false, path = "../std" }
-sp-io = { version = "2.0.0-rc5", default-features = false, path = "../io" }
-sp-wasm-interface = { version = "2.0.0-rc5", default-features = false, path = "../wasm-interface" }
+sp-core = { version = "2.0.0-rc6", default-features = false, path = "../core" }
+sp-std = { version = "2.0.0-rc6", default-features = false, path = "../std" }
+sp-io = { version = "2.0.0-rc6", default-features = false, path = "../io" }
+sp-wasm-interface = { version = "2.0.0-rc6", default-features = false, path = "../wasm-interface" }
 codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false }
 
 [dev-dependencies]

@@ -24,7 +24,7 @@ use std::{
 use crate::{Backend, StorageKey, StorageValue};
 use hash_db::Hasher;
 use sp_core::{
-	storage::ChildInfo,
+	storage::{ChildInfo, TrackedStorageKey},
 	traits::Externalities, Blake2Hasher,
 };
 use codec::Encode;
@@ -194,7 +194,11 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("reset_read_write_count is not supported in ReadOnlyExternalities")
 	}
 
-	fn set_whitelist(&mut self, _: Vec<Vec<u8>>) {
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		unimplemented!("get_whitelist is not supported in ReadOnlyExternalities")
+	}
+
+	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
 	}
 }
