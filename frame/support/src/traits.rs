@@ -1301,6 +1301,9 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 
 	/// Set the prime member.
 	fn set_prime(_prime: Option<AccountId>) {}
+
+	/// Get the last set prime.`
+	fn get_prime() -> Option<AccountId> { None }
 }
 
 impl<T: Clone + Ord> ChangeMembers<T> for () {

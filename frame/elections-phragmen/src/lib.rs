@@ -744,6 +744,7 @@ impl<T: Trait> Module<T> {
 	/// If replacement exists, this will read and write from/into both `Members` and `RunnersUp`.
 	fn remove_and_replace_member(who: &T::AccountId) -> Result<bool, DispatchError> {
 		let mut members_with_stake = Self::members();
+		let maybe_old_prime = T::ChangeMembers::get_prime();
 		if let Ok(index) = members_with_stake.binary_search_by(|(ref m, ref _s)| m.cmp(who)) {
 			members_with_stake.remove(index);
 
@@ -765,6 +766,14 @@ impl<T: Trait> Module<T> {
 				Some(new) => T::ChangeMembers::change_members_sorted(&[new], &old, &members),
 				None => T::ChangeMembers::change_members_sorted(&[], &old, &members),
 			}
+
+			// if the kicked member was not a prime, set it again.
+			if let Some(old_prime) = maybe_old_prime {
+				if old_prime != *who {
+					T::ChangeMembers::set_prime(Some(old_prime))
+				}
+			}
+
 			result
 		} else {
 			Err(Error::<T>::NotMember)?
@@ -904,14 +913,20 @@ impl<T: Trait> Module<T> {
 			to_votes(Self::locked_stake_of(who))
 		};
 
-		let voters_and_votes = Voting::<T>::iter()
-			.map(|(voter, (stake, targets))| { (voter, to_votes(stake), targets) })
+		// used for prime election.
+		let voters_and_stakes = Voting::<T>::iter()
+			.map(|(voter, (stake, targets))| { (voter, stake, targets) })
+			.collect::<Vec<_>>();
+		// used for phragmen.
+		let voters_and_votes = voters_and_stakes.iter()
+			.cloned()
+			.map(|(voter, stake, targets)| { (voter, to_votes(stake), targets)} )
 			.collect::<Vec<_>>();
 		let maybe_phragmen_result = sp_npos_elections::seq_phragmen::<T::AccountId, Perbill>(
 			num_to_elect,
 			0,
 			candidates,
-			voters_and_votes.clone(),
+			voters_and_votes,
 		);
 
 		if let Some(ElectionResult { winners, assignments }) = maybe_phragmen_result {
@@ -965,14 +980,14 @@ impl<T: Trait> Module<T> {
 			// save the members, sorted based on account id.
 			new_members.sort_by(|i, j| i.0.cmp(&j.0));
 
-			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, VoteWeight::zero())).collect();
-			for (_, stake, targets) in voters_and_votes.into_iter() {
+			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
+			for (_, stake, targets) in voters_and_stakes.into_iter() {
 				for (votes, who) in targets.iter()
 					.enumerate()
 					.map(|(votes, who)| ((MAXIMUM_VOTE - votes) as u32, who))
 				{
 					if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
-						prime_votes[i].1 += stake * votes as VoteWeight;
+						prime_votes[i].1 += stake * votes.into();
 					}
 				}
 			}
@@ -1217,6 +1232,10 @@ mod tests {
 
 		fn set_prime(who: Option<u64>) {
 			PRIME.with(|p| *p.borrow_mut() = who);
+		}
+
+		fn get_prime() -> Option<u64> {
+			PRIME.with(|p| *p.borrow())
 		}
 	}
 
@@ -2807,6 +2826,58 @@ mod tests {
 			assert_ok!(submit_candidacy(Origin::signed(3)));
 			// while we have only 3 candidates.
 			assert_ok!(Elections::renounce_candidacy(Origin::signed(4), Renouncing::Candidate(4)));
+		})
+	}
+
+	#[test]
+	fn renounce_non_prime_will_keep_prime() {
+		ExtBuilder::default().desired_runners_up(1).build_and_execute(|| {
+			assert_ok!(submit_candidacy(Origin::signed(5)));
+			assert_ok!(submit_candidacy(Origin::signed(4)));
+			assert_ok!(submit_candidacy(Origin::signed(3)));
+
+			assert_ok!(vote(Origin::signed(5), vec![5], 50));
+			assert_ok!(vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(vote(Origin::signed(3), vec![3], 30));
+
+			System::set_block_number(5);
+			Elections::end_block(System::block_number());
+
+			assert_eq!(Elections::members_ids(), vec![4, 5]);
+			assert_eq!(Elections::runners_up_ids(), vec![3]);
+			assert_eq!(TestChangeMembers::get_prime(), Some(5));
+
+			assert_ok!(Elections::renounce_candidacy(Origin::signed(4), Renouncing::Member));
+
+			assert_eq!(Elections::members_ids(), vec![3, 5]);
+			assert_eq!(Elections::runners_up_ids(), vec![]);
+			assert_eq!(TestChangeMembers::get_prime(), Some(5));
+		})
+	}
+
+	#[test]
+	fn renounce_prime_will_eject_prime() {
+		ExtBuilder::default().desired_runners_up(1).build_and_execute(|| {
+			assert_ok!(submit_candidacy(Origin::signed(5)));
+			assert_ok!(submit_candidacy(Origin::signed(4)));
+			assert_ok!(submit_candidacy(Origin::signed(3)));
+
+			assert_ok!(vote(Origin::signed(5), vec![5], 50));
+			assert_ok!(vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(vote(Origin::signed(3), vec![3], 30));
+
+			System::set_block_number(5);
+			Elections::end_block(System::block_number());
+
+			assert_eq!(Elections::members_ids(), vec![4, 5]);
+			assert_eq!(Elections::runners_up_ids(), vec![3]);
+			assert_eq!(TestChangeMembers::get_prime(), Some(5));
+
+			assert_ok!(Elections::renounce_candidacy(Origin::signed(5), Renouncing::Member));
+
+			assert_eq!(Elections::members_ids(), vec![3, 4]);
+			assert_eq!(Elections::runners_up_ids(), vec![]);
+			assert_eq!(TestChangeMembers::get_prime(), None);
 		})
 	}
 

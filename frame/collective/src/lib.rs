@@ -914,6 +914,10 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 	fn set_prime(prime: Option<T::AccountId>) {
 		Prime::<T, I>::set(prime);
 	}
+
+	fn get_prime() -> Option<T::AccountId> {
+		Prime::<T, I>::get()
+	}
 }
 
 impl<T: Trait<I>, I: Instance> InitializeMembers<T::AccountId> for Module<T, I> {
