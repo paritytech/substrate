@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::*;
-
+use std::sync::Arc;
 use codec::{Encode, Decode};
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types,
@@ -27,7 +27,7 @@ use sp_core::{
 	offchain::{OffchainExt, TransactionPoolExt, testing},
 	sr25519::Signature,
 	testing::KeyStore,
-	traits::KeystoreExt,
+	traits::{KeystoreExt, SyncCryptoStore},
 };
 use sp_runtime::{
 	Perbill, RuntimeAppPublic,
@@ -218,7 +218,7 @@ fn should_submit_signed_transaction_on_chain() {
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(keystore));
+	t.register_extension(KeystoreExt(Arc::new(SyncCryptoStore::new(keystore))));
 
 	price_oracle_response(&mut offchain_state.write());
 
@@ -250,7 +250,7 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(keystore.clone()));
+	t.register_extension(KeystoreExt(Arc::new(SyncCryptoStore::new(keystore.clone()))));
 
 	price_oracle_response(&mut offchain_state.write());
 
@@ -303,7 +303,7 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(keystore.clone()));
+	t.register_extension(KeystoreExt(Arc::new(SyncCryptoStore::new(keystore.clone()))));
 
 	price_oracle_response(&mut offchain_state.write());
 
@@ -350,7 +350,7 @@ fn should_submit_raw_unsigned_transaction_on_chain() {
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(keystore));
+	t.register_extension(KeystoreExt(Arc::new(SyncCryptoStore::new(keystore))));
 
 	price_oracle_response(&mut offchain_state.write());
 
