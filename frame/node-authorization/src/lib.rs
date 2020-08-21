@@ -213,8 +213,9 @@ mod tests {
         parameter_types, ord_parameter_types,
     };
     use frame_system::EnsureSignedBy;
-    use sp_core::H256;
+    use sp_core::{H256, ed25519::Public};
     use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
+    use hex_literal::hex;
 
     impl_outer_origin! {
         pub enum Origin for Test where system = frame_system {}
@@ -279,9 +280,19 @@ mod tests {
     type NodeAuthorization = Module<Test>;
 
     fn new_test_ext() -> sp_io::TestExternalities {
+        let pub10: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+            hex!("0000000000000000000000000000000000000000000000000000000000000009")
+        ));
+        let pub20: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+            hex!("0000000000000000000000000000000000000000000000000000000000000013")
+        ));
+        let pub30: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+            hex!("000000000000000000000000000000000000000000000000000000000000001d")
+        ));
+        
         let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-        GenesisConfig::<Test>{
-            nodes: vec![10, 20, 30],
+        GenesisConfig {
+            nodes: vec![pub10, pub20, pub30],
         }.assimilate_storage(&mut t).unwrap();
         t.into()
     }
@@ -289,57 +300,159 @@ mod tests {
     #[test]
     fn add_node_works() {
         new_test_ext().execute_with(|| {
-            assert_noop!(NodeAuthorization::add_node(Origin::signed(2), 15), BadOrigin);
-            assert_noop!(NodeAuthorization::add_node(Origin::signed(1), 20), Error::<Test>::AlreadyJoined);
+            let pub10: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("0000000000000000000000000000000000000000000000000000000000000009")
+            ));
+            let pub15: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("000000000000000000000000000000000000000000000000000000000000000e")
+            ));
+            let pub20: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("0000000000000000000000000000000000000000000000000000000000000013")
+            ));
+            let pub25: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("0000000000000000000000000000000000000000000000000000000000000018")
+            ));
+            let pub30: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("000000000000000000000000000000000000000000000000000000000000001d")
+            ));
+
+            assert_noop!(NodeAuthorization::add_node(Origin::signed(2), pub15.clone()), BadOrigin);
+            assert_noop!(
+                NodeAuthorization::add_node(Origin::signed(1), pub20.clone()),
+                Error::<Test>::AlreadyJoined
+            );
             
-            assert_ok!(NodeAuthorization::add_node(Origin::signed(1), 15));
-            assert_eq!(NodeAuthorization::get_allow_list(), vec![10, 15, 20, 30]);
+            assert_ok!(NodeAuthorization::add_node(Origin::signed(1), pub15.clone()));
+            assert_eq!(
+                NodeAuthorization::get_allow_list(),
+                vec![pub10.clone(), pub15.clone(), pub20.clone(), pub30.clone()]
+            );
             
-            assert_noop!(NodeAuthorization::add_node(Origin::signed(1), 25), Error::<Test>::TooManyNodes);
+            assert_noop!(
+                NodeAuthorization::add_node(Origin::signed(1), pub25.clone()),
+                Error::<Test>::TooManyNodes
+            );
         });
     }
 
     #[test]
     fn remove_node_works() {
         new_test_ext().execute_with(|| {
-            assert_noop!(NodeAuthorization::remove_node(Origin::signed(3), 20), BadOrigin);
-            assert_noop!(NodeAuthorization::remove_node(Origin::signed(2), 40), Error::<Test>::NotExist);
+            let pub10: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("0000000000000000000000000000000000000000000000000000000000000009")
+            ));
+            let pub20: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("0000000000000000000000000000000000000000000000000000000000000013")
+            ));
+            let pub30: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("000000000000000000000000000000000000000000000000000000000000001d")
+            ));
+            let pub40: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("0000000000000000000000000000000000000000000000000000000000000027")
+            ));
+
+            assert_noop!(
+                NodeAuthorization::remove_node(Origin::signed(3), pub20.clone()),
+                BadOrigin
+            );
+            assert_noop!(
+                NodeAuthorization::remove_node(Origin::signed(2), pub40.clone()),
+                Error::<Test>::NotExist
+            );
             
-            assert_ok!(NodeAuthorization::remove_node(Origin::signed(2), 20));
-            assert_eq!(NodeAuthorization::get_allow_list(), vec![10, 30]);
+            assert_ok!(NodeAuthorization::remove_node(Origin::signed(2), pub20.clone()));
+            assert_eq!(NodeAuthorization::get_allow_list(), vec![pub10.clone(), pub30.clone()]);
         });
     }
 
     #[test]
     fn swap_node_works() {
         new_test_ext().execute_with(|| {
-            assert_noop!(NodeAuthorization::swap_node(Origin::signed(4), 20, 5), BadOrigin);
+            let pub5: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("0000000000000000000000000000000000000000000000000000000000000004")
+            ));
+            let pub10: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("0000000000000000000000000000000000000000000000000000000000000009")
+            ));
+            let pub15: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("000000000000000000000000000000000000000000000000000000000000000e")
+            ));
+            let pub20: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("0000000000000000000000000000000000000000000000000000000000000013")
+            ));
+            let pub30: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("000000000000000000000000000000000000000000000000000000000000001d")
+            ));
             
-            assert_ok!(NodeAuthorization::swap_node(Origin::signed(3), 20, 20));
-            assert_eq!(NodeAuthorization::get_allow_list(), vec![10, 20, 30]);
-
-            assert_noop!(NodeAuthorization::swap_node(Origin::signed(3), 15, 5), Error::<Test>::NotExist);
             assert_noop!(
-                NodeAuthorization::swap_node(Origin::signed(3), 20, 30),
+                NodeAuthorization::swap_node(Origin::signed(4), pub20.clone(), pub5.clone()),
+                BadOrigin
+            );
+            
+            assert_ok!(NodeAuthorization::swap_node(Origin::signed(3), pub20.clone(), pub20.clone()));
+            assert_eq!(
+                NodeAuthorization::get_allow_list(),
+                vec![pub10.clone(), pub20.clone(), pub30.clone()]
+            );
+
+            assert_noop!(
+                NodeAuthorization::swap_node(Origin::signed(3), pub15.clone(), pub5.clone()),
+                Error::<Test>::NotExist
+            );
+            assert_noop!(
+                NodeAuthorization::swap_node(Origin::signed(3), pub20.clone(), pub30.clone()),
                 Error::<Test>::AlreadyJoined
             );
             
-            assert_ok!(NodeAuthorization::swap_node(Origin::signed(3), 20, 5));
-            assert_eq!(NodeAuthorization::get_allow_list(), vec![5, 10, 30]);
+            assert_ok!(NodeAuthorization::swap_node(Origin::signed(3), pub20.clone(), pub5.clone()));
+            assert_eq!(
+                NodeAuthorization::get_allow_list(),
+                vec![pub5.clone(), pub10.clone(), pub30.clone()]
+            );
         });
     }
 
     #[test]
     fn reset_nodes_works() {
         new_test_ext().execute_with(|| {
-            assert_noop!(NodeAuthorization::reset_nodes(Origin::signed(3), vec![15, 5, 20]), BadOrigin);
+            let pub5: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("0000000000000000000000000000000000000000000000000000000000000004")
+            ));
+            let pub15: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("000000000000000000000000000000000000000000000000000000000000000e")
+            ));
+            let pub20: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("0000000000000000000000000000000000000000000000000000000000000013")
+            ));
+            let pub25: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
+                hex!("0000000000000000000000000000000000000000000000000000000000000018")
+            ));
+
             assert_noop!(
-                NodeAuthorization::reset_nodes(Origin::signed(4), vec![15, 5, 20, 25]),
+                NodeAuthorization::reset_nodes(
+                    Origin::signed(3),
+                    vec![pub15.clone(), pub5.clone(), pub20.clone()]
+                ),
+                BadOrigin
+            );
+            assert_noop!(
+                NodeAuthorization::reset_nodes(
+                    Origin::signed(4),
+                    vec![pub15.clone(), pub5.clone(), pub20.clone(), pub25.clone()]
+                ),
                 Error::<Test>::TooManyNodes
             );
             
-            assert_ok!(NodeAuthorization::reset_nodes(Origin::signed(4), vec![15, 5, 20]));
-            assert_eq!(NodeAuthorization::get_allow_list(), vec![5, 15, 20]);
+            assert_ok!(
+                NodeAuthorization::reset_nodes(
+                    Origin::signed(4),
+                    vec![pub15.clone(), pub5.clone(), pub20.clone()]
+                )
+            );
+            assert_eq!(
+                NodeAuthorization::get_allow_list(),
+                vec![pub5.clone(), pub15.clone(), pub20.clone()]
+            );
         });
     }
 }

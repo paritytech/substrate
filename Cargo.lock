@@ -4575,6 +4575,7 @@ version = "2.0.0-rc5"
 dependencies = [
  "frame-support",
  "frame-system",
+ "hex-literal",
  "parity-scale-codec",
  "serde",
  "sp-core",

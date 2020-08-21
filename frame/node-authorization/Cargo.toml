@@ -21,6 +21,9 @@ sp-io = { version = "2.0.0-rc5", default-features = false, path = "../../primiti
 sp-runtime = { version = "2.0.0-rc5", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0-rc5", default-features = false, path = "../../primitives/std" }
 
+[dev-dependencies]
+hex-literal = "0.2.1"
+
 [features]
 default = ["std"]
 std = [
