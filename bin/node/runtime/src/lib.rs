@@ -83,6 +83,7 @@ use impls::{CurrencyToVoteHandler, Author};
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{time::*, currency::*};
+use sp_runtime::generic::Era;
 
 /// Weights for pallets used in the runtime.
 mod weights;
@@ -654,9 +655,9 @@ parameter_types! {
 	pub const StakingUnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
 }
 
-
-impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime where
-	Call: From<LocalCall>,
+impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
+	where
+		Call: From<LocalCall>,
 {
 	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
 		call: Call,
@@ -664,6 +665,7 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 		account: AccountId,
 		nonce: Index,
 	) -> Option<(Call, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
+		let tip = 0;
 		// take the biggest period possible.
 		let period = BlockHashCount::get()
 			.checked_next_power_of_two()
@@ -674,22 +676,25 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 			// The `System::block_number` is initialized with `n+1`,
 			// so the actual block number is `n`.
 			.saturating_sub(1);
-		let tip = 0;
-		let extra: SignedExtra = (
+		let era = Era::mortal(period, current_block);
+		let extra = (
 			frame_system::CheckSpecVersion::<Runtime>::new(),
 			frame_system::CheckTxVersion::<Runtime>::new(),
 			frame_system::CheckGenesis::<Runtime>::new(),
-			frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
+			frame_system::CheckEra::<Runtime>::from(era),
 			frame_system::CheckNonce::<Runtime>::from(nonce),
 			frame_system::CheckWeight::<Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 		);
-		let raw_payload = SignedPayload::new(call, extra).map_err(|e| {
-			debug::warn!("Unable to create signed payload: {:?}", e);
-		}).ok()?;
-		let signature = raw_payload.using_encoded(|payload| {
-			C::sign(payload, public)
-		})?;
+		let raw_payload = SignedPayload::new(call, extra)
+			.map_err(|e| {
+				debug::warn!("Unable to create signed payload: {:?}", e);
+			})
+			.ok()?;
+		let signature = raw_payload
+			.using_encoded(|payload| {
+				C::sign(payload, public)
+			})?;
 		let address = Indices::unlookup(account);
 		let (call, extra, _) = raw_payload.deconstruct();
 		Some((call, (address, signature.into(), extra)))
