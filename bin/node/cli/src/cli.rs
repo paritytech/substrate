@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sc_cli::RunCmd;
+use sc_cli::{RunCmd, KeySubcommand, SignCmd, VanityCmd, VerifyCmd};
 use structopt::StructOpt;
 
 /// An overarching CLI command definition.
@@ -37,6 +37,9 @@ pub enum Subcommand {
 	#[structopt(flatten)]
 	Base(sc_cli::Subcommand),
 
+	/// Key management cli utilities
+	Key(KeySubcommand),
+
 	/// The custom inspect subcommmand for decoding blocks and extrinsics.
 	#[structopt(
 		name = "inspect",
@@ -47,4 +50,13 @@ pub enum Subcommand {
 	/// The custom benchmark subcommmand benchmarking runtime pallets.
 	#[structopt(name = "benchmark", about = "Benchmark runtime pallets.")]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
+
+	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
+	Verify(VerifyCmd),
+
+	/// Generate a seed that provides a vanity address.
+	Vanity(VanityCmd),
+
+	/// Sign a message, with a given (secret) key.
+	Sign(SignCmd),
 }
