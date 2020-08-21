@@ -53,9 +53,9 @@ use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,
 pub use self::error::Error;
 pub use self::builder::{
 	new_full_client, new_client, new_full_parts, new_light_parts,
-	spawn_tasks, build_network, BuildNetworkParams, NetworkStarter, build_offchain_workers,
-	SpawnTasksParams, TFullClient, TLightClient, TFullBackend, TLightBackend,
-	TLightBackendWithHash, TLightClientWithBackend,
+	spawn_tasks, build_network, build_offchain_workers,
+	BuildNetworkParams, KeystoreParams, NetworkStarter, SpawnTasksParams, TFullClient, TLightClient,
+	TFullBackend, TLightBackend, TLightBackendWithHash, TLightClientWithBackend,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
 };
 pub use config::{
@@ -81,7 +81,7 @@ pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
 use sc_client_api::BlockchainEvents;
-pub use sc_keystore::KeyStorePtr as KeyStore;
+use sc_keystore::{Store as Keystore, proxy::KeystoreReceiver};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -162,7 +162,9 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	/// The chain task manager.
 	pub task_manager: TaskManager,
 	/// A shared keystore instance.
-	pub keystore: KeyStore,
+	pub keystore_params: KeystoreParams,
+	/// A shared keystore instance.
+	pub keystore_receiver: KeystoreReceiver<Keystore>,
 	/// A chain selection algorithm instance.
 	pub select_chain: SelectChain,
 	/// An import queue.

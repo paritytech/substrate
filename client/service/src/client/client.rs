@@ -32,7 +32,13 @@ use sp_core::{
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
 	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
 };
-use sc_keystore::proxy::proxy as keystore_proxy;
+#[cfg(feature="test-helpers")]
+use sp_core::traits::SyncCryptoStore;
+#[cfg(feature="test-helpers")]
+use sc_keystore::proxy::{
+	proxy as keystore_proxy,
+	KeystoreProxyAdapter,
+};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
 	Justification, BuildStorage,
@@ -145,10 +151,10 @@ impl<H> PrePostHeader<H> {
 
 /// Create an instance of in-memory client.
 #[cfg(feature="test-helpers")]
-pub fn new_in_mem<E, Block, S, RA>(
+pub fn new_in_mem<E, Block, S, RA, TStore>(
 	executor: E,
 	genesis_storage: &S,
-	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	keystore: Option<TStore>,
 	prometheus_registry: Option<Registry>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
@@ -161,6 +167,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	E: CodeExecutor + RuntimeInfo,
 	S: BuildStorage,
 	Block: BlockT,
+	TStore: sp_core::traits::BareCryptoStore + 'static,
 {
 	new_with_backend(
 		Arc::new(in_mem::Backend::new()),
@@ -185,11 +192,11 @@ pub struct ClientConfig {
 /// Create a client with the explicitly provided backend.
 /// This is useful for testing backend implementations.
 #[cfg(feature="test-helpers")]
-pub fn new_with_backend<B, E, Block, S, RA>(
+pub fn new_with_backend<B, E, Block, S, RA, TStore>(
 	backend: Arc<B>,
 	executor: E,
 	build_genesis_storage: &S,
-	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	keystore: Option<TStore>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
@@ -199,17 +206,21 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		S: BuildStorage,
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
+		TStore: sp_core::traits::BareCryptoStore + 'static,
 {
-	let keystore_proxy = match keystore.clone() {
+	let sync_keystore = match keystore {
 		Some(store) => {
-			let (keystore_proxy, _) = keystore_proxy(store.clone());
-			Some(Arc::new(keystore_proxy))
+			let (keystore_proxy, _) = keystore_proxy(store);
+			let keystore_proxy = Arc::new(keystore_proxy);
+			let keystore = Arc::new(RwLock::new(KeystoreProxyAdapter::new(keystore_proxy.clone())));
+			let sync_keystore = Arc::new(SyncCryptoStore::new(keystore.clone()));
+			Some(sync_keystore)
 		},
-		None => None,
+		None => None
 	};
 
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
-	let extensions = ExecutionExtensions::new(Default::default(), keystore, keystore_proxy);
+	let extensions = ExecutionExtensions::new(Default::default(), sync_keystore);
 	Client::new(
 		backend,
 		call_executor,
