@@ -33,7 +33,7 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring,
 	sr25519::Keyring as Sr25519Keyring,
 };
-pub use sp_core::traits::BareCryptoStorePtr;
+pub use sp_core::traits::{BareCryptoStorePtr, SyncCryptoStore};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
 pub use sc_service::{RpcHandlers, RpcSession, client};
@@ -208,6 +208,10 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			storage
 		};
 
+		let keystore = self.keystore.map(
+			|ks| Arc::new(SyncCryptoStore::new(ks))
+		);
+
 		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
@@ -216,7 +220,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			self.bad_blocks,
 			ExecutionExtensions::new(
 				self.execution_strategies,
-				self.keystore.clone(),
+				keystore,
 			),
 			None,
 			ClientConfig::default(),
