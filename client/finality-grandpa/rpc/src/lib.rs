@@ -169,6 +169,9 @@ where
 		last_finalized: Block::Hash,
 		authorities_set_id: Option<u64>,
 	) -> FutureResult<Option<Vec<u8>>> {
+		// If we are not provided a set_id, try with the current one.
+		let authorities_set_id = authorities_set_id
+			.unwrap_or_else(|| self.authority_set.get().0);
 		let result = self
 			.finality_proof_provider
 			.prove_finality(last_finalized, authorities_set_id);
@@ -254,7 +257,7 @@ mod tests {
 		fn prove_finality(
 			&self,
 			_last_finalized: Block::Hash,
-			_authoritites_set_id: Option<u64>,
+			_authoritites_set_id: u64,
 		) -> Result<Option<Vec<u8>>, sp_blockchain::Error> {
 			Ok(Some(self.finality_proofs.encode()))
 		}

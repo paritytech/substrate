@@ -189,7 +189,7 @@ pub trait RpcFinalityProofProvider<Block: BlockT>: Send + Sync {
 	fn prove_finality(
 		&self,
 		last_finalized: Block::Hash,
-		authorities_set_id: Option<u64>,
+		authorities_set_id: u64,
 	) -> Result<Option<Vec<u8>>, ClientError>;
 }
 
@@ -202,16 +202,9 @@ impl<B, Block> RpcFinalityProofProvider<Block> for FinalityProofProvider<B, Bloc
 	fn prove_finality(
 		&self,
 		last_finalized: Block::Hash,
-		authorities_set_id: Option<u64>,
+		authorities_set_id: u64,
 	) -> Result<Option<Vec<u8>>, ClientError> {
 		use sp_blockchain::HeaderBackend;
-
-		let authorities_set_id = if let Some(set_id) = authorities_set_id {
-			set_id
-		} else {
-			todo!();
-		};
-
 		prove_finality::<_, _, GrandpaJustification<Block>>(
 			&*self.backend.blockchain(),
 			&*self.authority_provider,
