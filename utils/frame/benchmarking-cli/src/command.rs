@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkSelector};
@@ -27,7 +28,7 @@ use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_core::{
 	testing::KeyStore,
-	traits::KeystoreExt,
+	traits::{KeystoreExt, SyncCryptoStore},
 	offchain::{OffchainExt, testing::TestOffchainExt},
 };
 use std::fmt::Debug;
@@ -57,7 +58,7 @@ impl BenchmarkCmd {
 		);
 
 		let mut extensions = Extensions::default();
-		extensions.register(KeystoreExt(KeyStore::new()));
+		extensions.register(KeystoreExt(Arc::new(SyncCryptoStore::new(KeyStore::new()))));
 		let (offchain, _) = TestOffchainExt::new();
 		extensions.register(OffchainExt::new(offchain));
 
