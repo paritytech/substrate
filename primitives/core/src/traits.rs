@@ -17,13 +17,14 @@
 
 //! Shareable Substrate traits.
 use async_trait::async_trait;
-use futures::future::join_all;
+use futures::{executor::block_on, future::join_all};
 
 use crate::{
 	crypto::{KeyTypeId, CryptoTypePublicPair},
 	vrf::{VRFTranscriptData, VRFSignature},
 	ed25519, sr25519, ecdsa,
 };
+
 use std::{
 	borrow::Cow,
 	fmt::{Debug, Display},
@@ -201,12 +202,133 @@ pub trait BareCryptoStore: Send + Sync {
 	) -> Result<VRFSignature, Error>;
 }
 
-/// A pointer to the key store.
+/// A wrapper around BareCryptoStore to be used in synchronous fashion.
+pub struct SyncCryptoStore(BareCryptoStorePtr);
+
+#[allow(dead_code)]
+#[allow(missing_docs)]
+impl SyncCryptoStore {
+	pub fn new(store: BareCryptoStorePtr) -> Self {
+		SyncCryptoStore(store)
+	}
+
+	pub fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
+		block_on(self.0.read().sr25519_public_keys(id))
+	}
+
+	pub fn sr25519_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<sr25519::Public, Error> {
+		block_on(self.0.write().sr25519_generate_new(id, seed))
+	}
+
+	pub fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
+		block_on(self.0.read().ed25519_public_keys(id))
+	}
+
+	pub fn ed25519_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ed25519::Public, Error> {
+		block_on(self.0.write().ed25519_generate_new(id, seed))
+	}
+
+	pub fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+		block_on(self.0.read().ecdsa_public_keys(id))
+	}
+
+	pub fn ecdsa_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ecdsa::Public, Error> {
+		block_on(self.0.write().ecdsa_generate_new(id, seed))
+	}
+
+	pub fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
+		block_on(self.0.write().insert_unknown(key_type, suri, public))
+	}
+
+	pub fn password(&self) -> Option<String> {
+		self.0.read().password().map(|s| s.to_string())
+	}
+
+	pub fn supported_keys(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>
+	) -> Result<Vec<CryptoTypePublicPair>, Error> {
+		block_on(self.0.read().supported_keys(id, keys))
+	}
+
+	pub fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
+		block_on(self.0.read().keys(id))
+	}
+
+	pub fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+		block_on(self.0.read().has_keys(public_keys))
+	}
+
+	pub fn sign_with(
+		&self,
+		id: KeyTypeId,
+		key: &CryptoTypePublicPair,
+		msg: &[u8],
+	) -> Result<Vec<u8>, Error> {
+		block_on(self.0.read().sign_with(id, key, msg))
+	}
+
+	pub fn sign_with_any(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+		msg: &[u8]
+	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
+		block_on(self.0.read().sign_with_any(id, keys, msg))
+	}
+
+	pub fn sign_with_all(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+		msg: &[u8],
+	) -> Result<Vec<Result<Vec<u8>, Error>>, ()> {
+		block_on(self.0.read().sign_with_all(id, keys, msg))
+	}
+
+	/// Generate VRF signature for given transcript data.
+	///
+	/// Receives KeyTypeId and Public key to be able to map
+	/// them to a private key that exists in the keystore which
+	/// is, in turn, used for signing the provided transcript.
+	///
+	/// Returns a result containing the signature data.
+	/// Namely, VRFOutput and VRFProof which are returned
+	/// inside the `VRFSignature` container struct.
+	///
+	/// This function will return an error in the cases where
+	/// the public key and key type provided do not match a private
+	/// key in the keystore. Or, in the context of remote signing
+	/// an error could be a network one.
+	pub fn sr25519_vrf_sign<'a>(
+		&'a self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		transcript_data: VRFTranscriptData,
+	) -> Result<VRFSignature, Error> {
+		block_on(self.0.read().sr25519_vrf_sign(key_type, public, transcript_data))
+	}
+}
+
+/// A pointer to the keystore.
 pub type BareCryptoStorePtr = Arc<parking_lot::RwLock<dyn BareCryptoStore>>;
 
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
-	pub struct KeystoreExt(BareCryptoStorePtr);
+	pub struct KeystoreExt(Arc<SyncCryptoStore>);
 }
 
 /// Code execution engine.
