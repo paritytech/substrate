@@ -76,7 +76,7 @@ use sp_inherents::InherentDataProviders;
 use sp_consensus::{SelectChain, BlockImport};
 use sp_core::{
 	crypto::Public,
-	traits::BareCryptoStorePtr,
+	traits::SyncCryptoStore,
 };
 use sp_application_crypto::AppKey;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
@@ -270,7 +270,7 @@ pub struct Config {
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
-	pub keystore: Option<BareCryptoStorePtr>,
+	pub keystore: Option<Arc<SyncCryptoStore>>,
 }
 
 impl Config {
@@ -594,7 +594,7 @@ fn global_communication<BE, Block: BlockT, C, N>(
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: Arc<C>,
 	network: &NetworkBridge<Block, N>,
-	keystore: Option<&BareCryptoStorePtr>,
+	keystore: Option<Arc<SyncCryptoStore>>,
 	metrics: Option<until_imported::Metrics>,
 ) -> (
 	impl Stream<
@@ -737,7 +737,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 			.for_each(move |_| {
 				let curr = authorities.current_authorities();
 				let mut auths = curr.iter().map(|(p, _)| p);
-				let maybe_authority_id = authority_id(&mut auths, conf.keystore.as_ref())
+				let maybe_authority_id = authority_id(&mut auths, conf.keystore.clone())
 					.unwrap_or_default();
 
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
@@ -873,7 +873,7 @@ where
 	fn rebuild_voter(&mut self) {
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
 
-		let authority_id = is_voter(&self.env.voters, self.env.config.keystore.as_ref())
+		let authority_id = is_voter(&self.env.voters, self.env.config.keystore.clone())
 			.unwrap_or_default();
 
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
@@ -908,7 +908,7 @@ where
 					&self.env.voters,
 					self.env.client.clone(),
 					&self.env.network,
-					self.env.config.keystore.as_ref(),
+					self.env.config.keystore.clone(),
 					self.metrics.as_ref().map(|m| m.until_imported.clone()),
 				);
 
@@ -1096,14 +1096,13 @@ pub fn setup_disabled_grandpa<Block: BlockT, Client, N>(
 /// Returns the key pair of the node that is being used in the current voter set or `None`.
 fn is_voter(
 	voters: &Arc<VoterSet<AuthorityId>>,
-	keystore: Option<&BareCryptoStorePtr>,
+	keystore: Option<Arc<SyncCryptoStore>>,
 ) -> Option<AuthorityId> {
 	match keystore {
 		Some(keystore) => voters
 			.iter()
 			.find(|(p, _)| {
-				keystore.read()
-					.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)])
+				keystore.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)])
 			})
 			.map(|(p, _)| p.clone()),
 		None => None,
@@ -1113,14 +1112,14 @@ fn is_voter(
 /// Returns the authority id of this node, if available.
 fn authority_id<'a, I>(
 	authorities: &mut I,
-	keystore: Option<&BareCryptoStorePtr>,
+	keystore: Option<Arc<SyncCryptoStore>>,
 ) -> Option<AuthorityId> where
 	I: Iterator<Item = &'a AuthorityId>,
 {
 	match keystore {
 		Some(keystore) => {
 			authorities
-				.find(|p| keystore.read().has_keys(&[(p.to_raw_vec(), AuthorityId::ID)]))
+				.find(|p| keystore.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)]))
 				.cloned()
 		},
 		None => None,

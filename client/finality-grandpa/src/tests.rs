@@ -26,7 +26,7 @@ use sc_network_test::{
 	TestClient, TestNetFactory,
 };
 use sc_network::config::{ProtocolConfig, BoxFinalityProofRequestBuilder};
-use parking_lot::Mutex;
+use parking_lot::{RwLock, Mutex};
 use futures_timer::Delay;
 use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
@@ -276,12 +276,13 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 
-fn create_keystore(authority: Ed25519Keyring) -> (BareCryptoStorePtr, tempfile::TempDir) {
+fn create_keystore(authority: Ed25519Keyring) -> (Arc<SyncCryptoStore>, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-	keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(&authority.to_seed())
+	let mut keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+	keystore.insert_ephemeral_from_seed::<AuthorityPair>(&authority.to_seed())
 		.expect("Creates authority key");
 
+	let keystore = Arc::new(SyncCryptoStore::new(Arc::new(RwLock::new(keystore))));
 	(keystore, keystore_path)
 }
 
@@ -1044,7 +1045,7 @@ fn voter_persists_its_votes() {
 			voter_rx: TracingUnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
-			keystore: BareCryptoStorePtr,
+			keystore: Arc<SyncCryptoStore>,
 		}
 
 		impl Future for ResettableVoter {
@@ -1524,7 +1525,7 @@ type TestEnvironment<N, VR> = Environment<
 
 fn test_environment<N, VR>(
 	link: &TestLinkHalf,
-	keystore: Option<BareCryptoStorePtr>,
+	keystore: Option<Arc<SyncCryptoStore>>,
 	network_service: N,
 	voting_rule: VR,
 ) -> TestEnvironment<N, VR>
