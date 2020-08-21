@@ -80,16 +80,7 @@ sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
 	pub trait Benchmark {
 		/// Dispatch the given benchmark.
-		fn dispatch_benchmark(
-			pallet: Vec<u8>,
-			benchmark: Vec<u8>,
-			lowest_range_values: Vec<u32>,
-			highest_range_values: Vec<u32>,
-			steps: Vec<u32>,
-			repeat: u32,
-			verify: bool,
-			extra: bool,
-		) -> Result<Vec<BenchmarkBatch>, RuntimeString>;
+		fn dispatch_benchmark(config: BenchmarkConfig) -> Result<Vec<BenchmarkBatch>, RuntimeString>;
 	}
 }
 

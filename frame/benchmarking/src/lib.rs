@@ -1004,7 +1004,7 @@ macro_rules! impl_benchmark_test {
 /// First create an object that holds in the input parameters for the benchmark:
 ///
 /// ```ignore
-/// let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat, &whitelist);
+/// let params = (&config, &whitelist);
 /// ```
 ///
 /// The `whitelist` is a parameter you pass to control the DB read/write tracking.
@@ -1048,16 +1048,17 @@ macro_rules! impl_benchmark_test {
 macro_rules! add_benchmark {
 	( $params:ident, $batches:ident, $name:ident, $( $location:tt )* ) => (
 		let name_string = stringify!($name).as_bytes();
-		let (pallet,
+		let (config, whitelist) = $params;
+		let $crate::BenchmarkConfig {
+			pallet,
 			benchmark,
 			lowest_range_values,
 			highest_range_values,
 			steps,
 			repeat,
-			whitelist,
 			verify,
 			extra,
-		) = $params;
+		} = config.clone();
 		if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
 				for benchmark in $( $location )*::benchmarks(extra).into_iter() {
