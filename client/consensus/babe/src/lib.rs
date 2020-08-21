@@ -82,14 +82,13 @@ use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
-use sp_core::{crypto::Public, traits::BareCryptoStore};
+use sp_core::{crypto::Public, traits::SyncCryptoStore};
 use sp_application_crypto::AppKey;
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
-use sc_keystore::KeyStorePtr;
 use parking_lot::Mutex;
 use sp_inherents::{InherentDataProviders, InherentData};
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
@@ -327,7 +326,7 @@ impl std::ops::Deref for Config {
 /// Parameters for BABE.
 pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	/// The keystore that manages the keys of the node.
-	pub keystore: KeyStorePtr,
+	pub keystore: Arc<SyncCryptoStore>,
 
 	/// The client to use
 	pub client: Arc<C>,
@@ -467,7 +466,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	env: E,
 	sync_oracle: SO,
 	force_authoring: bool,
-	keystore: KeyStorePtr,
+	keystore: Arc<SyncCryptoStore>,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
@@ -537,7 +536,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 				&epoch_descriptor,
 				|slot| Epoch::genesis(&self.config, slot)
 			)?.as_ref(),
-			&self.keystore,
+			self.keystore.clone(),
 		);
 
 		if s.is_some() {
@@ -596,7 +595,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 			// add it to a digest item.
 			let public_type_pair = public.clone().into();
 			let public = public.to_raw_vec();
-			let signature = keystore.read()
+			let signature = keystore
 				.sign_with(
 					<AuthorityId as AppKey>::ID,
 					&public_type_pair,
@@ -1472,7 +1471,7 @@ pub mod test_helpers {
 		slot_number: u64,
 		parent: &B::Header,
 		client: &C,
-		keystore: &KeyStorePtr,
+		keystore: Arc<SyncCryptoStore>,
 		link: &BabeLink<B>,
 	) -> Option<PreDigest> where
 		B: BlockT,
@@ -1494,7 +1493,7 @@ pub mod test_helpers {
 		authorship::claim_slot(
 			slot_number,
 			&epoch,
-			keystore,
+			keystore.into(),
 		).map(|(digest, _)| digest)
 	}
 }

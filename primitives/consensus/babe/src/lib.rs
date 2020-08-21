@@ -115,7 +115,7 @@ pub fn make_transcript_data(
 		items: vec![
 			("slot number", VRFTranscriptValue::U64(slot_number)),
 			("current epoch", VRFTranscriptValue::U64(epoch)),
-			("chain randomness", VRFTranscriptValue::Bytes(&randomness[..])),
+			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
 		]
 	}
 }

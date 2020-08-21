@@ -383,8 +383,8 @@ fn run_one_test(
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-		keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
+		let mut keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+		keystore.insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
 		let mut got_own = false;
@@ -427,7 +427,7 @@ fn run_one_test(
 			inherent_data_providers: data.inherent_data_providers.clone(),
 			force_authoring: false,
 			babe_link: data.link.clone(),
-			keystore,
+			keystore: keystore.into(),
 			can_author_with: sp_consensus::AlwaysCanAuthor,
 		}).expect("Starts babe"));
 	}
@@ -515,8 +515,8 @@ fn sig_is_not_pre_digest() {
 fn can_author_block() {
 	let _ = env_logger::try_init();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-	let pair = keystore.write().insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
+	let mut keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+	let pair = keystore.insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
 		.expect("Generates authority pair");
 
 	let mut i = 0;
@@ -541,8 +541,9 @@ fn can_author_block() {
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
 
+	let keystore: Arc<SyncCryptoStore> = keystore.into();
 	// with secondary slots enabled it should never be empty
-	match claim_slot(i, &epoch, &keystore) {
+	match claim_slot(i, &epoch, keystore.clone()) {
 		None => i += 1,
 		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
 	}
@@ -551,7 +552,7 @@ fn can_author_block() {
 	// of times.
 	config.allowed_slots = AllowedSlots::PrimarySlots;
 	loop {
-		match claim_slot(i, &epoch, &keystore) {
+		match claim_slot(i, &epoch, keystore.clone()) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
@@ -822,8 +823,8 @@ fn verify_slots_are_strictly_increasing() {
 fn babe_transcript_generation_match() {
 	let _ = env_logger::try_init();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-	let pair = keystore.write().insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
+	let mut keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+	let pair = keystore.insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
 		.expect("Generates authority pair");
 
 	let epoch = Epoch {

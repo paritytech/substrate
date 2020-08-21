@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! BABE authority selection and slot claiming.
-
+use std::sync::Arc;
 use sp_application_crypto::AppKey;
 use sp_consensus_babe::{
 	BABE_VRF_PREFIX,
@@ -28,13 +28,12 @@ use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::{U256, blake2_256, crypto::Public, traits::BareCryptoStore};
+use sp_core::{U256, blake2_256, crypto::Public, traits::SyncCryptoStore};
 use codec::Encode;
 use schnorrkel::{
 	keys::PublicKey,
 	vrf::VRFInOut,
 };
-use sc_keystore::KeyStorePtr;
 use super::Epoch;
 
 /// Calculates the primary selection threshold for a given authority, taking
@@ -131,7 +130,7 @@ fn claim_secondary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	keys: &[(AuthorityId, usize)],
-	keystore: &KeyStorePtr,
+	keystore: Arc<SyncCryptoStore>,
 	author_secondary_vrf: bool,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -154,7 +153,7 @@ fn claim_secondary_slot(
 					slot_number,
 					*epoch_index,
 				);
-				let result = keystore.read().sr25519_vrf_sign(
+				let result = keystore.sr25519_vrf_sign(
 					AuthorityId::ID,
 					authority_id.as_ref(),
 					transcript_data,
@@ -169,7 +168,7 @@ fn claim_secondary_slot(
 				} else {
 					None
 				}
-			} else if keystore.read().has_keys(&[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
+			} else if keystore.has_keys(&[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
 				Some(PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					slot_number,
 					authority_index: *authority_index as u32,
@@ -194,7 +193,7 @@ fn claim_secondary_slot(
 pub fn claim_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	keystore: &KeyStorePtr,
+	keystore: Arc<SyncCryptoStore>,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let authorities = epoch.authorities.iter()
 		.enumerate()
@@ -208,10 +207,10 @@ pub fn claim_slot(
 pub fn claim_slot_using_keys(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	keystore: &KeyStorePtr,
+	keystore: Arc<SyncCryptoStore>,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore, &keys)
+	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore.clone(), &keys)
 		.or_else(|| {
 			if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
 				epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
@@ -220,7 +219,7 @@ pub fn claim_slot_using_keys(
 					slot_number,
 					&epoch,
 					keys,
-					keystore,
+					keystore.clone(),
 					epoch.config.allowed_slots.is_secondary_vrf_slots_allowed(),
 				)
 			} else {
@@ -237,7 +236,7 @@ fn claim_primary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	c: (u64, u64),
-	keystore: &KeyStorePtr,
+	keystore: Arc<SyncCryptoStore>,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -259,7 +258,7 @@ fn claim_primary_slot(
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
 		let threshold = super::authorship::calculate_primary_threshold(c, authorities, *authority_index);
 
-		let result = keystore.read().sr25519_vrf_sign(
+		let result = keystore.sr25519_vrf_sign(
 			AuthorityId::ID,
 			authority_id.as_ref(),
 			transcript_data,
@@ -289,13 +288,14 @@ fn claim_primary_slot(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::{sr25519::Pair, crypto::Pair as _};
+	use std::sync::Arc;
+	use sp_core::{sr25519::Pair, crypto::Pair as _, traits::SyncCryptoStore};
 	use sp_consensus_babe::{AuthorityId, BabeEpochConfiguration, AllowedSlots};
 
 	#[test]
 	fn claim_secondary_plain_slot_works() {
-		let keystore = sc_keystore::Store::new_in_memory();
-		let valid_public_key = dbg!(keystore.write().sr25519_generate_new(
+		let keystore: Arc<SyncCryptoStore> = sc_keystore::Store::new_in_memory().into();
+		let valid_public_key = dbg!(keystore.sr25519_generate_new(
 			AuthorityId::ID,
 			Some(sp_core::crypto::DEV_PHRASE),
 		).unwrap());
@@ -317,9 +317,9 @@ mod tests {
 			},
 		};
 
-		assert!(claim_slot(10, &epoch, &keystore).is_none());
+		assert!(claim_slot(10, &epoch, keystore.clone()).is_none());
 
 		epoch.authorities.push((valid_public_key.clone().into(), 10));
-		assert_eq!(claim_slot(10, &epoch, &keystore).unwrap().1, valid_public_key.into());
+		assert_eq!(claim_slot(10, &epoch, keystore).unwrap().1, valid_public_key.into());
 	}
 }
