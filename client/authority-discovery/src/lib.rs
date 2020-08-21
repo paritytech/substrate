@@ -55,7 +55,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::task::{Context, Poll};
-use futures::{Future, FutureExt, ready, Stream, StreamExt, executor::block_on};
+use futures::{Future, FutureExt, ready, Stream, StreamExt};
 use futures_timer::Delay;
 
 use addr_cache::AddrCache;
@@ -76,7 +76,7 @@ use sc_network::{
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, Pair};
-use sp_core::traits::BareCryptoStorePtr;
+use sp_core::traits::SyncCryptoStore;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
 
@@ -104,7 +104,7 @@ const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
 /// Role an authority discovery module can run as.
 pub enum Role {
 	/// Actual authority as well as a reference to its key store.
-	Authority(BareCryptoStorePtr),
+	Authority(Arc<SyncCryptoStore>),
 	/// Sentry node that guards an authority.
 	///
 	/// No reference to its key store needed, as sentry nodes don't have an identity to sign
@@ -223,7 +223,7 @@ where
 
 	/// Publish either our own or if specified the public addresses of our sentry nodes.
 	fn publish_ext_addresses(&mut self) -> Result<()> {
-		let key_store = match &self.role {
+		let keystore = match &self.role {
 			Role::Authority(key_store) => key_store,
 			// Only authority nodes can put addresses (their own or the ones of their sentry nodes)
 			// on the Dht. Sentry nodes don't have a known identity to authenticate such addresses,
@@ -258,16 +258,15 @@ where
 			.map_err(Error::EncodingProto)?;
 
 		let keys = AuthorityDiscovery::get_own_public_keys_within_authority_set(
-			&key_store,
+			&keystore,
 			&self.client,
 		)?.into_iter().map(Into::into).collect::<Vec<_>>();
 
-		let keystore = key_store.read();
-		let signatures = block_on(keystore.sign_with_all(
+		let signatures = keystore.sign_with_all(
 			key_types::AUTHORITY_DISCOVERY,
 			keys.clone(),
 			serialized_addresses.as_slice(),
-		)).map_err(|_| Error::Signing)?;
+		).map_err(|_| Error::Signing)?;
 
 		for (sign_result, key) in signatures.into_iter().zip(keys) {
 			let mut signed_addresses = vec![];
@@ -303,10 +302,9 @@ where
 
 		let local_keys = match &self.role {
 			Role::Authority(key_store) => {
-				key_store.read()
-					.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
-					.into_iter()
-					.collect::<HashSet<_>>()
+				key_store.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
+						 .into_iter()
+						 .collect::<HashSet<_>>()
 			},
 			Role::Sentry => HashSet::new(),
 		};
@@ -498,11 +496,10 @@ where
 	// set with two keys. The function does not return all of the local authority discovery public
 	// keys, but only the ones intersecting with the current authority set.
 	fn get_own_public_keys_within_authority_set(
-		key_store: &BareCryptoStorePtr,
+		key_store: &SyncCryptoStore,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
-		let key_store = key_store.read();
-		let local_pub_keys = block_on(key_store.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY))
+		let local_pub_keys = key_store.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
 			.into_iter()
 			.collect::<HashSet<_>>();
 

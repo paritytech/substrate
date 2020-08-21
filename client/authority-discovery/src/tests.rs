@@ -27,7 +27,7 @@ use futures::poll;
 use libp2p::{kad, core::multiaddr, PeerId};
 
 use sp_api::{ProvideRuntimeApi, ApiRef};
-use sp_core::{crypto::Public, testing::KeyStore};
+use sp_core::{crypto::Public, testing::KeyStore, traits::SyncCryptoStore};
 use sp_runtime::traits::{Zero, Block as BlockT, NumberFor};
 use substrate_test_runtime_client::runtime::Block;
 
@@ -218,7 +218,7 @@ impl NetworkStateInfo for TestNetwork {
 fn new_registers_metrics() {
 	let (_dht_event_tx, dht_event_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = KeyStore::new();
+	let key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
 	let test_api = Arc::new(TestApi {
 		authorities: vec![],
 	});
@@ -251,7 +251,7 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 	});
 
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = KeyStore::new();
+	let key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
 
 	let mut authority_discovery = AuthorityDiscovery::new(
 		test_api,
@@ -286,10 +286,9 @@ fn publish_discover_cycle() {
 		))
 	};
 
-	let key_store = KeyStore::new();
-	let node_a_public = block_on(key_store
-		.write()
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
+	let key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
+	let node_a_public = key_store
+		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
 		.unwrap();
 	let test_api = Arc::new(TestApi {
 		authorities: vec![node_a_public.into()],
@@ -322,7 +321,7 @@ fn publish_discover_cycle() {
 		authorities: vec![node_a_public.into()],
 	});
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = KeyStore::new();
+	let key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
 
 	let mut authority_discovery = AuthorityDiscovery::new(
 		test_api,
@@ -362,7 +361,7 @@ fn publish_discover_cycle() {
 fn terminate_when_event_stream_terminates() {
 	let (dht_event_tx, dht_event_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = KeyStore::new();
+	let key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
 	let test_api = Arc::new(TestApi {
 		authorities: vec![],
 	});
@@ -402,7 +401,7 @@ fn dont_stop_polling_when_error_is_returned() {
 	let (mut dht_event_tx, dht_event_rx) = channel(1000);
 	let (mut discovery_update_tx, mut discovery_update_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = KeyStore::new();
+	let key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
 	let test_api = Arc::new(TestApi {
 		authorities: vec![],
 	});
@@ -467,9 +466,8 @@ fn dont_stop_polling_when_error_is_returned() {
 /// peerset "authority" priority group.
 #[test]
 fn never_add_own_address_to_priority_group() {
-	let validator_key_store = KeyStore::new();
+	let validator_key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
 	let validator_public = validator_key_store
-		.write()
 		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
 		.unwrap();
 
@@ -506,7 +504,7 @@ fn never_add_own_address_to_priority_group() {
 			.map_err(Error::EncodingProto)
 			.unwrap();
 
-		let signature = validator_key_store.read()
+		let signature = validator_key_store
 			.sign_with(
 				key_types::AUTHORITY_DISCOVERY,
 				&validator_public.clone().into(),
