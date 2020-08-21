@@ -800,6 +800,7 @@ macro_rules! impl_benchmark {
 					repeat: u32,
 					c: Vec<($crate::BenchmarkParameter, u32)>,
 					results: &mut Vec<$crate::BenchmarkResults>,
+					verify: bool,
 				| -> Result<(), &'static str> {
 					// Run the benchmark `repeat` times.
 					for _ in 0..repeat {
@@ -821,43 +822,49 @@ macro_rules! impl_benchmark {
 						// Reset the read/write counter so we don't count operations in the setup process.
 						$crate::benchmarking::reset_read_write_count();
 
-						// Time the extrinsic logic.
-						frame_support::debug::trace!(
-							target: "benchmark",
-							"Start Benchmark: {:?}", c
-						);
+						if verify {
+							closure_to_benchmark()?;
+						} else {
+							// Time the extrinsic logic.
+							frame_support::debug::trace!(
+								target: "benchmark",
+								"Start Benchmark: {:?}", c
+							);
 
-						let start_extrinsic = $crate::benchmarking::current_time();
-						closure_to_benchmark()?;
-						let finish_extrinsic = $crate::benchmarking::current_time();
-						let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
-						// Commit the changes to get proper write count
-						$crate::benchmarking::commit_db();
-						frame_support::debug::trace!(
-							target: "benchmark",
-							"End Benchmark: {} ns", elapsed_extrinsic
-						);
-						let read_write_count = $crate::benchmarking::read_write_count();
-						frame_support::debug::trace!(
-							target: "benchmark",
-							"Read/Write Count {:?}", read_write_count
-						);
+							let start_extrinsic = $crate::benchmarking::current_time();
 
-						// Time the storage root recalculation.
-						let start_storage_root = $crate::benchmarking::current_time();
-						$crate::storage_root();
-						let finish_storage_root = $crate::benchmarking::current_time();
-						let elapsed_storage_root = finish_storage_root - start_storage_root;
+							closure_to_benchmark()?;
 
-						results.push($crate::BenchmarkResults {
-							components: c.clone(),
-							extrinsic_time: elapsed_extrinsic,
-							storage_root_time: elapsed_storage_root,
-							reads: read_write_count.0,
-							repeat_reads: read_write_count.1,
-							writes: read_write_count.2,
-							repeat_writes: read_write_count.3,
-						});
+							let finish_extrinsic = $crate::benchmarking::current_time();
+							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
+							// Commit the changes to get proper write count
+							$crate::benchmarking::commit_db();
+							frame_support::debug::trace!(
+								target: "benchmark",
+								"End Benchmark: {} ns", elapsed_extrinsic
+							);
+							let read_write_count = $crate::benchmarking::read_write_count();
+							frame_support::debug::trace!(
+								target: "benchmark",
+								"Read/Write Count {:?}", read_write_count
+							);
+
+							// Time the storage root recalculation.
+							let start_storage_root = $crate::benchmarking::current_time();
+							$crate::storage_root();
+							let finish_storage_root = $crate::benchmarking::current_time();
+							let elapsed_storage_root = finish_storage_root - start_storage_root;
+
+							results.push($crate::BenchmarkResults {
+								components: c.clone(),
+								extrinsic_time: elapsed_extrinsic,
+								storage_root_time: elapsed_storage_root,
+								reads: read_write_count.0,
+								repeat_reads: read_write_count.1,
+								writes: read_write_count.2,
+								repeat_writes: read_write_count.3,
+							});
+						}
 
 						// Wipe the DB back to the genesis state.
 						$crate::benchmarking::wipe_db();
@@ -867,7 +874,11 @@ macro_rules! impl_benchmark {
 				};
 
 				if components.is_empty() {
-					repeat_benchmark(repeat, Default::default(), &mut results)?;
+					if verify {
+						// If `--verify` is used, run the benchmark once to verify it would complete.
+						repeat_benchmark(1, Default::default(), &mut Vec::new(), true)?;
+					}
+					repeat_benchmark(repeat, Default::default(), &mut results, false)?;
 				} else {
 					// Select the component we will be benchmarking. Each component will be benchmarked.
 					for (idx, (name, low, high)) in components.iter().enumerate() {
@@ -903,7 +914,11 @@ macro_rules! impl_benchmark {
 								)
 								.collect();
 
-							repeat_benchmark(repeat, c, &mut results)?;
+							if verify {
+								// If `--verify` is used, run the benchmark once to verify it would complete.
+								repeat_benchmark(1, Default::default(), &mut Vec::new(), true)?;
+							}
+							repeat_benchmark(repeat, c, &mut results, verify)?;
 						}
 					}
 				}
