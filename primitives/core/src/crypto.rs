@@ -681,6 +681,14 @@ impl sp_std::str::FromStr for AccountId32 {
 	}
 }
 
+/// Public key of node which can be used for network connection
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, crate::RuntimeDebug)]
+pub enum NodePublicKey {
+	/// An Ed25519 public key
+	Ed25519(ed25519::Public),
+}
+
 #[cfg(feature = "std")]
 pub use self::dummy::*;
 

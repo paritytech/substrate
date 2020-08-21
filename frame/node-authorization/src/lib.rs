@@ -24,12 +24,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_std::fmt::Debug;
-use sp_core::storage::well_known_keys;
-use sp_runtime::traits::{Member, MaybeSerializeDeserialize, MaybeDisplay};
+use sp_core::{NodePublicKey, storage::well_known_keys};
 use frame_support::{
     decl_module, decl_storage, decl_event, decl_error,
-    Parameter, storage, ensure,
+    storage, ensure,
     weights::{DispatchClass, Weight},
     traits::{Get, EnsureOrigin},
 };
@@ -51,14 +49,10 @@ impl WeightInfo for () {
 
 pub trait Trait: frame_system::Trait {
     /// The event type of this module.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 
     /// The maximum number of authorized nodes that are allowed to set
     type MaxAuthorizedNodes: Get<u32>;
-
-    /// The node identifier type for the runtime.
-    type NodePublicKey: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay
-        + Ord + Default;
 
     /// The origin which can add a authorized node.
     type AddOrigin: EnsureOrigin<Self::Origin>;
@@ -79,21 +73,21 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
     trait Store for Module<T: Trait> as NodeAuthorization {}
     add_extra_genesis {
-        config(nodes): Vec<T::NodePublicKey>;
-        build(|config: &GenesisConfig<T>| {
+        config(nodes): Vec<NodePublicKey>;
+        build(|config: &GenesisConfig| {
             sp_io::storage::set(well_known_keys::NODE_ALLOW_LIST, &config.nodes.encode());
         });
     }
 }
 
 decl_event!(
-    pub enum Event<T> where NodePublicKey = <T as Trait>::NodePublicKey {
+    pub enum Event {
         /// The given node was added.
         NodeAdded(NodePublicKey),
         /// The given node was removed.
         NodeRemoved(NodePublicKey),
         /// Two given nodes were swapped; first item is removed, the latter is added.
-        NodesSwapped(NodePublicKey, NodePublicKey),
+        NodeSwapped(NodePublicKey, NodePublicKey),
         /// The given nodes were reset.
         NodesReset(Vec<NodePublicKey>),
     }
@@ -126,7 +120,7 @@ decl_module! {
         ///
         /// - `node_public_key`: identifier of the node, it's likely the public key of ed25519 keypair.
         #[weight = (T::WeightInfo::add_node(), DispatchClass::Operational)]
-        pub fn add_node(origin, node_public_key: T::NodePublicKey) {
+        pub fn add_node(origin, node_public_key: NodePublicKey) {
             T::AddOrigin::ensure_origin(origin)?;
 
             let mut nodes = Self::get_allow_list();
@@ -136,7 +130,7 @@ decl_module! {
             nodes.insert(location, node_public_key.clone());
             Self::put_allow_list(&nodes);
 
-            Self::deposit_event(RawEvent::NodeAdded(node_public_key));
+            Self::deposit_event(Event::NodeAdded(node_public_key));
         }
 
         /// Remove a node from the allow list.
@@ -145,7 +139,7 @@ decl_module! {
         ///
         /// - `node_public_key`: identifier of the node, it's likely the public key of ed25519 keypair.
         #[weight = (T::WeightInfo::remove_node(), DispatchClass::Operational)]
-        pub fn remove_node(origin, node_public_key: T::NodePublicKey) {
+        pub fn remove_node(origin, node_public_key: NodePublicKey) {
             T::RemoveOrigin::ensure_origin(origin)?;
 
             let mut nodes = Self::get_allow_list();
@@ -154,7 +148,7 @@ decl_module! {
             nodes.remove(location);
             Self::put_allow_list(&nodes);
 
-            Self::deposit_event(RawEvent::NodeRemoved(node_public_key));
+            Self::deposit_event(Event::NodeRemoved(node_public_key));
         }
 
         /// Swap two nodes.
@@ -166,7 +160,7 @@ decl_module! {
         /// - `add`: the node which will be put in the list, it's likely the public key of ed25519
         /// keypair.
         #[weight = (T::WeightInfo::swap_node(), DispatchClass::Operational)]
-        pub fn swap_node(origin, remove: T::NodePublicKey, add: T::NodePublicKey) {
+        pub fn swap_node(origin, remove: NodePublicKey, add: NodePublicKey) {
             T::SwapOrigin::ensure_origin(origin)?;
 
             if remove == add { return Ok(()) }
@@ -178,7 +172,7 @@ decl_module! {
             nodes.insert(add_location, add.clone());
             Self::put_allow_list(&nodes);
 
-            Self::deposit_event(RawEvent::NodesSwapped(remove, add));
+            Self::deposit_event(Event::NodeSwapped(remove, add));
         }
         
         /// Reset all the authorized nodes in the list.
@@ -187,7 +181,7 @@ decl_module! {
         ///
         /// - `nodes`: the new nodes for the allow list.
         #[weight = (T::WeightInfo::reset_nodes(), DispatchClass::Operational)]
-        pub fn reset_nodes(origin, nodes: Vec<T::NodePublicKey>) {
+        pub fn reset_nodes(origin, nodes: Vec<NodePublicKey>) {
             T::ResetOrigin::ensure_origin(origin)?;
             ensure!(nodes.len() < T::MaxAuthorizedNodes::get() as usize, Error::<T>::TooManyNodes);
 
@@ -195,17 +189,17 @@ decl_module! {
             nodes.sort();
             Self::put_allow_list(&nodes);
 
-            Self::deposit_event(RawEvent::NodesReset(nodes));
+            Self::deposit_event(Event::NodesReset(nodes));
         }
     }
 }
 
 impl<T: Trait> Module<T> {
-    fn get_allow_list() -> Vec<T::NodePublicKey> {
+    fn get_allow_list() -> Vec<NodePublicKey> {
         storage::unhashed::get_or_default(well_known_keys::NODE_ALLOW_LIST)
     }
 
-    fn put_allow_list(nodes: &Vec<T::NodePublicKey>) {
+    fn put_allow_list(nodes: &Vec<NodePublicKey>) {
         storage::unhashed::put(well_known_keys::NODE_ALLOW_LIST, nodes);
     }
 }
@@ -275,7 +269,6 @@ mod tests {
     impl Trait for Test {
         type Event = ();
         type MaxAuthorizedNodes = MaxAuthorizedNodes;
-        type NodePublicKey = u64;
         type AddOrigin = EnsureSignedBy<One, u64>;
         type RemoveOrigin = EnsureSignedBy<Two, u64>;
         type SwapOrigin = EnsureSignedBy<Three, u64>;

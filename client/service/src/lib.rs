@@ -54,7 +54,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
 use sp_core::storage::{StorageKey, well_known_keys};
-use sp_core::ed25519::Public as NodePublic;
+use sp_core::NodePublicKey;
 use sc_client_api::backend::{Backend as BackendT, StorageProvider};
 use sc_client_api::blockchain::HeaderBackend;
 use sc_client_api::BlockchainEvents;
@@ -365,11 +365,15 @@ fn check_node_allow_list<
 	let id = BlockId::hash(client.info().best_hash);
 	let allow_list_storage = client.storage(&id, &StorageKey(well_known_keys::NODE_ALLOW_LIST.to_vec()));
 	if let Ok(Some(raw_allow_list)) = allow_list_storage {
-		let node_allow_list = Vec::<NodePublic>::decode_all(&mut &raw_allow_list.0[..]);
+		let node_allow_list = Vec::<NodePublicKey>::decode_all(&mut &raw_allow_list.0[..]);
 
 		if let Ok(node_allow_list) = node_allow_list {
 			let mut peer_ids: HashSet<PeerId> = node_allow_list.iter()
-				.filter_map(|pubkey| Ed25519PublicKey::decode(&pubkey.0).ok())
+				.filter_map(|node_public_key| {
+					match node_public_key {
+						NodePublicKey::Ed25519(pubkey) => Ed25519PublicKey::decode(&pubkey.0).ok()
+					}
+				})
 				.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
 				.collect();
 			peer_ids.remove(network.local_peer_id());

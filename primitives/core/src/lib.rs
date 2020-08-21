@@ -77,7 +77,7 @@ pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::{U256, U512};
 pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 #[cfg(feature = "full_crypto")]
-pub use crypto::{DeriveJunction, Pair, Public};
+pub use crypto::{DeriveJunction, Pair, Public, NodePublicKey};
 
 pub use hash_db::Hasher;
 #[cfg(feature = "std")]
