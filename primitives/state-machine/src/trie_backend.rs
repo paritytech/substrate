@@ -35,6 +35,12 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	pub (crate) essence: TrieBackendEssence<S, H>,
 }
 
+/// Patricia trie-based backend.
+/// This is a variant of `TrieBackend` that produce no transactions content.
+pub struct TrieBackendNoTransaction<S: TrieBackendStorage<H>, H: Hasher> (
+	pub TrieBackend<S, H>,
+)
+
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {

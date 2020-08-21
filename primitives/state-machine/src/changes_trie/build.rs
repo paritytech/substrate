@@ -25,7 +25,7 @@ use num_traits::One;
 use crate::{
 	StorageKey,
 	backend::Backend,
-	overlayed_changes::{OverlayedChanges, OverlayedValue as OverlayedValueInner, ChangeTrieOverlay},
+	overlayed_changes::{OverlayedChanges, OverlayedValue, ChangeTrieOverlay},
 	trie_backend_essence::TrieBackendEssence,
 	changes_trie::{
 		AnchorBlockId, ConfigurationRange, Storage, BlockNumber,
@@ -34,8 +34,6 @@ use crate::{
 	},
 };
 use sp_core::storage::{ChildInfo, PrefixedStorageKey};
-
-type OverlayedValue = OverlayedValueInner<crate::overlayed_changes::Extrinsics>;
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -136,7 +134,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number, CT>(
 	block: &Number,
 	overlay: &'a OverlayedChanges<CT>,
 	child_info: Option<ChildInfo>,
-	mut changes: impl Iterator<Item=(&'a StorageKey, &'a OverlayedValueInner<CT>)>
+	mut changes: impl Iterator<Item=(&'a StorageKey, &'a OverlayedValue<CT>)>
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
 	where
 		B: Backend<H>,

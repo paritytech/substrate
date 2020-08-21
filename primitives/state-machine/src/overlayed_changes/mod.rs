@@ -30,7 +30,7 @@ use self::changeset::OverlayedChangeSet;
 use crate::{
 	ChangesTrieTransaction,
 	changes_trie::{
-		NO_EXTRINSIC_INDEX, BlockNumber, build_changes_trie,
+		BlockNumber, build_changes_trie,
 		State as ChangesTrieState,
 	},
 };
@@ -48,6 +48,10 @@ use crate::DefaultError;
 
 pub use self::changeset::{OverlayedValue, NoOpenTransaction, AlreadyInRuntime, NotInRuntime};
 
+
+/// Changes that are made outside of extrinsics are marked with this index;
+pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
+
 /// Storage key.
 pub type StorageKey = Vec<u8>;
 
@@ -59,11 +63,6 @@ pub type StorageCollection = Vec<(StorageKey, Option<StorageValue>)>;
 
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection)>;
-
-/// `OverlayedChanges` without the capability to record
-/// change trie.
-#[cfg(not(feature = "std"))]
-pub(crate) type OverlayedChangesNoChangeTrie = OverlayedChanges<NoExtrinsics>;
 
 /// Technical trait that allows to disable child trie
 /// footprint when not needed.
@@ -82,8 +81,9 @@ pub trait ChangeTrieOverlay: Default {
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct Extrinsics(Vec<u32>);
 
+/// Skip registering extrinsics when using state machine.
 #[derive(Default)]
-pub(crate) struct NoExtrinsics;
+pub struct NoExtrinsics;
 
 impl ChangeTrieOverlay for NoExtrinsics {
 	const CHANGE_TRIE_CAPABLE: bool = false;
@@ -176,6 +176,7 @@ impl<Transaction, H: Hasher, N: BlockNumber> StorageChanges<Transaction, H, N> {
 /// The storage transaction are calculated as part of the `storage_root` and
 /// `changes_trie_storage_root`. These transactions can be reused for importing the block into the
 /// storage. So, we cache them to not require a recomputation of those transactions.
+#[cfg(feature = "std")]
 pub struct StorageTransactionCache<Transaction, H: Hasher, N: BlockNumber> {
 	/// Contains the changes for the main and the child storages as one transaction.
 	pub(crate) transaction: Option<Transaction>,
@@ -187,6 +188,7 @@ pub struct StorageTransactionCache<Transaction, H: Hasher, N: BlockNumber> {
 	pub(crate) changes_trie_transaction_storage_root: Option<Option<H::Out>>,
 }
 
+#[cfg(feature = "std")]
 impl<Transaction, H: Hasher, N: BlockNumber> StorageTransactionCache<Transaction, H, N> {
 	/// Reset the cached transactions.
 	pub fn reset(&mut self) {
@@ -194,6 +196,7 @@ impl<Transaction, H: Hasher, N: BlockNumber> StorageTransactionCache<Transaction
 	}
 }
 
+#[cfg(feature = "std")]
 impl<Transaction, H: Hasher, N: BlockNumber> Default for StorageTransactionCache<Transaction, H, N> {
 	fn default() -> Self {
 		Self {
@@ -253,7 +256,7 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 		key: &[u8],
 		init: impl Fn() -> StorageValue,
 	) -> &mut StorageValue {
-		let value = self.top.modify(key.to_owned(), init, self.extrinsic_index());
+		let value = self.top.modify(key.to_vec(), init, self.extrinsic_index());
 
 		// if the value was deleted initialise it back with an empty vec
 		value.get_or_insert_with(StorageValue::default)
@@ -298,7 +301,7 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 		let (changeset, info) = self.children.entry(storage_key).or_insert_with(||
 			(
 				top.spawn_child(),
-				child_info.to_owned()
+				child_info.clone()
 			)
 		);
 		let updatable = info.try_update(child_info);
@@ -319,7 +322,7 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 		let (changeset, info) = self.children.entry(storage_key).or_insert_with(||
 			(
 				top.spawn_child(),
-				child_info.to_owned()
+				child_info.clone()
 			)
 		);
 		let updatable = info.try_update(child_info);
@@ -348,7 +351,7 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 		let (changeset, info) = self.children.entry(storage_key).or_insert_with(||
 			(
 				top.spawn_child(),
-				child_info.to_owned()
+				child_info.clone()
 			)
 		);
 		let updatable = info.try_update(child_info);
@@ -385,7 +388,7 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 	/// there is no open transaction that can be rolled back.
 	pub fn rollback_transaction(&mut self) -> Result<(), NoOpenTransaction> {
 		self.top.rollback_transaction()?;
-		self.children.retain(|_, (changeset, _)| {
+		retain_map(&mut self.children, |_, (changeset, _)| {
 			changeset.rollback_transaction()
 				.expect("Top and children changesets are started in lockstep; qed");
 			!changeset.is_empty()
@@ -544,6 +547,9 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 	/// Changes that are made outside of extrinsics, are marked with
 	/// `NO_EXTRINSIC_INDEX` index.
 	fn extrinsic_index(&self) -> Option<u32> {
+		if !CT::CHANGE_TRIE_CAPABLE {
+			return None;
+		}
 		match self.collect_extrinsics {
 			true => Some(
 				self.storage(EXTRINSIC_INDEX)
@@ -557,6 +563,7 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 	/// as seen by the current transaction.
 	///
 	/// Returns the storage root and caches storage transaction in the given `cache`.
+	#[cfg(feature = "std")]
 	pub fn storage_root<H: Hasher, N: BlockNumber, B: Backend<H>>(
 		&self,
 		backend: &B,
@@ -578,6 +585,27 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 		root
 	}
 
+	/// Generate the storage root using `backend` and all changes
+	/// as seen by the current transaction.
+	///
+	/// Returns the storage root and do not cache.
+	pub fn storage_root_no_cache<H: Hasher, B: Backend<H>>(
+		&self,
+		backend: &B,
+	) -> H::Out
+		where H::Out: Ord + Encode,
+	{
+		let delta = self.changes().map(|(k, v)| (&k[..], v.value().map(|v| &v[..])));
+		let child_delta = self.children()
+			.map(|(changes, info)| (info, changes.map(
+				|(k, v)| (&k[..], v.value().map(|v| &v[..]))
+			)));
+
+		let (root, _transaction) = backend.full_storage_root(delta, child_delta);
+
+		root
+	}
+
 	/// Generate the changes trie root.
 	///
 	/// Returns the changes trie root and caches the storage transaction into the given `cache`.
@@ -585,6 +613,7 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 	/// # Panics
 	///
 	/// Panics on storage error, when `panic_on_storage_error` is set.
+	#[cfg(feature = "std")]
 	pub fn changes_trie_root<'a, H: Hasher, N: BlockNumber, B: Backend<H>>(
 		&self,
 		backend: &B,
@@ -631,6 +660,29 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 	}
 }
 
+#[cfg(feature = "std")]
+fn retain_map<K, V, F>(map: &mut Map<K, V>, f: F)
+	where
+		K: std::cmp::Eq + std::hash::Hash,
+		F: FnMut(&K, &mut V) -> bool,
+{
+	map.retain(f);
+}
+ 
+#[cfg(not(feature = "std"))]
+fn retain_map<K, V, F>(map: &mut Map<K, V>, mut f: F)
+	where
+		K: Ord,
+		F: FnMut(&K, &mut V) -> bool,
+{
+	let old = sp_std::mem::replace(map, Map::default());
+	for (k, mut v) in old.into_iter() {
+		if f(&k, &mut v) {
+			map.insert(k, v);
+		}
+	}
+}
+ 
 #[cfg(test)]
 mod tests {
 	use hex_literal::hex;

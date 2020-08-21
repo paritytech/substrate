@@ -33,12 +33,10 @@ use codec::Encode;
 use sp_std::boxed::Box;
 use sp_std::vec::Vec;
 
-#[cfg(feature = "std")]
-use std::fmt::format;
 #[cfg(not(feature = "std"))]
 macro_rules! format {
 	($($arg:tt)+) => (
-		()
+		crate::DefaultError
 	);
 }
 

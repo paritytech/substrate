@@ -145,7 +145,7 @@ pub enum Extrinsic {
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
-	WitnessBackend,
+	WitnessExt,
 }
 
 parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
@@ -174,8 +174,8 @@ impl BlindCheckable for Extrinsic {
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
 				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
-			Extrinsic::WitnessBackend =>
-				Ok(Extrinsic::WitnessBackend),
+			Extrinsic::WitnessExt =>
+				Ok(Extrinsic::WitnessExt),
 		}
 	}
 }

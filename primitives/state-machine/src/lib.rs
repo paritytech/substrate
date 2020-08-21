@@ -21,13 +21,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod backend;
-pub mod witness_backend;
+pub mod witness_ext;
 #[cfg(feature = "std")]
 mod in_memory_backend;
 #[cfg(feature = "std")]
 mod changes_trie;
 mod error;
-#[cfg(feature = "std")]
 mod ext;
 #[cfg(feature = "std")]
 mod testing;
@@ -50,10 +49,12 @@ pub use execution::*;
 
 
 #[cfg(feature = "std")]
-pub use log::{debug, warn};
+pub use log::{debug, warn, trace, error as log_error};
 
+/// In no_std we skip logs for state_machine, this macro
+/// is a noops.
 #[cfg(not(feature = "std"))]
-#[macro_export] // TODO try remove export
+#[macro_export]
 macro_rules! warn {
 	(target: $target:expr, $($arg:tt)+) => (
 		()
@@ -62,9 +63,38 @@ macro_rules! warn {
 		()
 	);
 }
+
+/// In no_std we skip logs for state_machine, this macro
+/// is a noops.
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! debug {
+	(target: $target:expr, $($arg:tt)+) => (
+		()
+	);
+	($($arg:tt)+) => (
+		()
+	);
+}
+
+/// In no_std we skip logs for state_machine, this macro
+/// is a noops.
+#[cfg(not(feature = "std"))]
+#[macro_export]
+macro_rules! trace {
+	(target: $target:expr, $($arg:tt)+) => (
+		()
+	);
+	($($arg:tt)+) => (
+		()
+	);
+}
+
+/// In no_std we skip logs for state_machine, this macro
+/// is a noops.
+#[cfg(not(feature = "std"))]
+#[macro_export]
+macro_rules! log_error {
 	(target: $target:expr, $($arg:tt)+) => (
 		()
 	);
@@ -78,11 +108,18 @@ macro_rules! debug {
 pub type DefaultError = String;
 /// Error type to use with state machine trie backend.
 #[cfg(not(feature = "std"))]
-pub type DefaultError = ();
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+pub struct DefaultError;
 
+#[cfg(not(feature = "std"))]
+impl sp_std::fmt::Display for DefaultError {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		write!(f, "Default Error")
+	}
+}
 
 pub use crate::overlayed_changes::{
-	OverlayedChanges, StorageTransactionCache, StorageKey, StorageValue,
+	OverlayedChanges, StorageKey, StorageValue,
 	StorageCollection, ChildStorageCollection,
 };
 pub use crate::backend::Backend;
@@ -93,7 +130,7 @@ pub use error::{Error, ExecutionError};
 
 #[cfg(feature = "std")]
 mod std_reexport {
-	pub use crate::overlayed_changes::StorageChanges;
+	pub use crate::overlayed_changes::{StorageChanges, StorageTransactionCache};
 	pub use sp_trie::{trie_types::{Layout, TrieDBMut}, StorageProof, TrieMut, DBValue, MemoryDB};
 	pub use crate::testing::TestExternalities;
 	pub use crate::basic::BasicExternalities;
@@ -369,7 +406,7 @@ mod execution {
 				Some(&mut self.extensions),
 			);
 
-			let id = ext.id;
+			let id = ext.id();
 			trace!(
 				target: "state", "{:04x}: Call {} at {:?}. Input={:?}",
 				id,

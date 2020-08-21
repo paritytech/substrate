@@ -150,8 +150,10 @@ impl<CT: ChangeTrieOverlay> OverlayedValue<CT> {
 			*self.value_mut() = value;
 		}
 
-		if let Some(extrinsic) = at_extrinsic {
-			self.transaction_extrinsics_mut().insert(extrinsic);
+		if CT::CHANGE_TRIE_CAPABLE {
+			if let Some(extrinsic) = at_extrinsic {
+				self.transaction_extrinsics_mut().insert(extrinsic);
+			}
 		}
 	}
 }
@@ -239,7 +241,7 @@ impl<CT: ChangeTrieOverlay> OverlayedChangeSet<CT> {
 		at_extrinsic: Option<u32>,
 	) {
 		for (key, val) in self.changes.iter_mut().filter(|(k, v)| predicate(k, v)) {
-			val.set(None, insert_dirty(&mut self.dirty_keys, key.to_owned()), at_extrinsic);
+			val.set(None, insert_dirty(&mut self.dirty_keys, key.clone()), at_extrinsic);
 		}
 	}
 
@@ -372,7 +374,9 @@ impl<CT: ChangeTrieOverlay> OverlayedChangeSet<CT> {
 				if has_predecessor {
 					let dropped_tx = overlayed.pop_transaction();
 					*overlayed.value_mut() = dropped_tx.value;
-					overlayed.transaction_extrinsics_mut().merge(dropped_tx.extrinsics);
+					if CT::CHANGE_TRIE_CAPABLE {
+						overlayed.transaction_extrinsics_mut().merge(dropped_tx.extrinsics);
+					}
 				}
 			}
 		}

@@ -103,7 +103,6 @@ impl UsageInfo {
 	/// Empty statistics.
 	///
 	/// Means no data was collected.
-	#[cfg(feature = "std")]
 	pub fn empty() -> Self {
 		Self {
 			reads: UsageUnit::default(),

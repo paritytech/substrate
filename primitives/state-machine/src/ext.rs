@@ -18,23 +18,29 @@
 //! Concrete externalities implementation.
 
 use crate::{
-	StorageKey, StorageValue, OverlayedChanges, StorageTransactionCache,
+	StorageKey, StorageValue, OverlayedChanges,
+	overlayed_changes::{ChangeTrieOverlay, Extrinsics},
 	backend::Backend,
-	changes_trie::State as ChangesTrieState,
 };
-
 use hash_db::Hasher;
 use sp_core::{
-	offchain::storage::OffchainOverlayedChanges,
 	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
-	traits::Externalities, hexdisplay::HexDisplay,
+	hexdisplay::HexDisplay,
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
-use sp_externalities::{Extensions, Extension};
+use sp_externalities::{Externalities, Extensions, Extension};
 use codec::{Decode, Encode, EncodeAppend};
 
-use std::{error, fmt, any::{Any, TypeId}};
-use log::{warn, trace};
+use sp_std::{fmt, any::{Any, TypeId}, vec::Vec, vec, boxed::Box};
+use crate::{warn, trace, log_error};
+#[cfg(feature = "std")]
+use sp_core::offchain::storage::OffchainOverlayedChanges;
+#[cfg(feature = "std")]
+use crate::changes_trie::State as ChangesTrieState;
+#[cfg(feature = "std")]
+use crate:: StorageTransactionCache;
+#[cfg(feature = "std")]
+use std::error;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 const BENCHMARKING_FN: &str = "\
@@ -42,7 +48,19 @@ const BENCHMARKING_FN: &str = "\
 	For that reason client started transactions before calling into runtime are not allowed.
 	Without client transactions the loop condition garantuees the success of the tx close.";
 
+
+#[cfg(feature = "std")]
+fn guard() -> sp_panic_handler::AbortGuard {
+	sp_panic_handler::AbortGuard::force_abort()
+}
+
+#[cfg(not(feature = "std"))]
+fn guard() -> () {
+	()
+}
+
 /// Errors that can occur when interacting with the externalities.
+#[cfg(feature = "std")]
 #[derive(Debug, Copy, Clone)]
 pub enum Error<B, E> {
 	/// Failure to load state data from the backend.
@@ -53,6 +71,7 @@ pub enum Error<B, E> {
 	Executor(E),
 }
 
+#[cfg(feature = "std")]
 impl<B: fmt::Display, E: fmt::Display> fmt::Display for Error<B, E> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match *self {
@@ -62,6 +81,7 @@ impl<B: fmt::Display, E: fmt::Display> fmt::Display for Error<B, E> {
 	}
 }
 
+#[cfg(feature = "std")]
 impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 	fn description(&self) -> &str {
 		match *self {
@@ -72,30 +92,61 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
+#[cfg(feature = "std")]
 pub struct Ext<'a, H, N, B>
 	where
 		H: Hasher,
 		B: 'a + Backend<H>,
 		N: crate::changes_trie::BlockNumber,
 {
-	/// The overlayed changes to write to.
-	overlay: &'a mut OverlayedChanges,
+	/// Inner Ext (change overlay and backend).
+	inner: ExtInnerMut<'a, H, B>,
 	/// The overlayed changes destined for the Offchain DB.
 	offchain_overlay: &'a mut OffchainOverlayedChanges,
-	/// The storage backend to read from.
-	backend: &'a B,
 	/// The cache for the storage transactions.
 	storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H, N>,
 	/// Changes trie state to read from.
 	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
-	/// Pseudo-unique id used for tracing.
-	pub id: u16,
 	/// Dummy usage of N arg.
 	_phantom: std::marker::PhantomData<N>,
 	/// Extensions registered with this instance.
 	extensions: Option<&'a mut Extensions>,
 }
 
+/// Basis implementation for `Externalities` trait.
+pub struct ExtInnerMut<'a, H, B, CT: ChangeTrieOverlay = Extrinsics>
+	where
+		H: Hasher,
+		B: Backend<H>,
+{
+	/// The overlayed changes to write to.
+	pub overlay: &'a mut OverlayedChanges<CT>,
+	/// The storage backend to read from.
+	pub backend: &'a B,
+	/// Pseudo-unique id used for tracing.
+	pub id: u16,
+	/// Dummy usage of H arg.
+	pub _phantom: sp_std::marker::PhantomData<H>,
+}
+
+/// Basis implementation for `Externalities` trait.
+pub struct ExtInner<'a, H, B, CT: ChangeTrieOverlay = Extrinsics>
+	where
+		H: Hasher,
+		B: Backend<H>,
+{
+	/// The overlayed changes to write to.
+	pub overlay: &'a OverlayedChanges<CT>,
+	/// The storage backend to read from.
+	pub backend: &'a B,
+	/// Pseudo-unique id used for tracing.
+	pub id: u16,
+	/// Dummy usage of H arg.
+	pub _phantom: sp_std::marker::PhantomData<H>,
+}
+
+
+#[cfg(feature = "std")]
 impl<'a, H, N, B> Ext<'a, H, N, B>
 where
 	H: Hasher,
@@ -103,7 +154,6 @@ where
 	B: 'a + Backend<H>,
 	N: crate::changes_trie::BlockNumber,
 {
-
 	/// Create a new `Ext` from overlayed changes and read-only backend
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
@@ -114,12 +164,15 @@ where
 		extensions: Option<&'a mut Extensions>,
 	) -> Self {
 		Self {
-			overlay,
+			inner: ExtInnerMut {
+				overlay,
+				backend,
+				id: rand::random(),
+				_phantom: Default::default(),
+			},
 			offchain_overlay,
-			backend,
 			changes_trie_state,
 			storage_transaction_cache,
-			id: rand::random(),
 			_phantom: Default::default(),
 			extensions,
 		}
@@ -136,6 +189,11 @@ where
 	pub fn get_offchain_storage_changes(&self) -> &OffchainOverlayedChanges {
 		&*self.offchain_overlay
 	}
+
+	/// Access internal random id.
+	pub fn id(&self) -> u16 {
+		self.inner.id
+	}
 }
 
 #[cfg(test)]
@@ -149,9 +207,9 @@ where
 	pub fn storage_pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		use std::collections::HashMap;
 
-		self.backend.pairs().iter()
+		self.inner.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned())))
+			.chain(self.inner.overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned())))
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -159,24 +217,15 @@ where
 	}
 }
 
-impl<'a, H, B, N> Externalities for Ext<'a, H, N, B>
+impl<'a, H, B, CT> ExtInner<'a, H, B, CT>
 where
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
-	B: 'a + Backend<H>,
-	N: crate::changes_trie::BlockNumber,
+	B: Backend<H>,
+	CT: ChangeTrieOverlay,
 {
-
-	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
-		use ::sp_core::offchain::STORAGE_PREFIX;
-		match value {
-			Some(value) => self.offchain_overlay.set(STORAGE_PREFIX, key, value),
-			None => self.offchain_overlay.remove(STORAGE_PREFIX, key),
-		}
-	}
-
-	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+	pub(crate) fn storage(&self, key: &[u8]) -> Option<StorageValue> {
+		let _guard = guard();
 		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
 		trace!(target: "state", "{:04x}: Get {}={:?}",
@@ -187,8 +236,8 @@ where
 		result
 	}
 
-	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+	pub(crate) fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
+		let _guard = guard();
 		let result = self.overlay
 			.storage(key)
 			.map(|x| x.map(|x| H::hash(x)))
@@ -202,12 +251,12 @@ where
 		result.map(|r| r.encode())
 	}
 
-	fn child_storage(
+	pub(crate) fn child_storage(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageValue> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+		let _guard = guard();
 		let result = self.overlay
 			.child_storage(child_info, key)
 			.map(|x| x.map(|x| x.to_vec()))
@@ -226,12 +275,12 @@ where
 		result
 	}
 
-	fn child_storage_hash(
+	pub(crate) fn child_storage_hash(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+		let _guard = guard();
 		let result = self.overlay
 			.child_storage(child_info, key)
 			.map(|x| x.map(|x| H::hash(x)))
@@ -250,8 +299,8 @@ where
 		result.map(|r| r.encode())
 	}
 
-	fn exists_storage(&self, key: &[u8]) -> bool {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+	pub(crate) fn exists_storage(&self, key: &[u8]) -> bool {
+		let _guard = guard();
 		let result = match self.overlay.storage(key) {
 			Some(x) => x.is_some(),
 			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
@@ -266,12 +315,12 @@ where
 		result
 	}
 
-	fn exists_child_storage(
+	pub(crate) fn exists_child_storage(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> bool {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+		let _guard = guard();
 
 		let result = match self.overlay.child_storage(child_info, key) {
 			Some(x) => x.is_some(),
@@ -289,7 +338,7 @@ where
 		result
 	}
 
-	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
+	pub(crate) fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
 		let next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
 
@@ -304,7 +353,7 @@ where
 		}
 	}
 
-	fn next_child_storage_key(
+	pub(crate) fn next_child_storage_key(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
@@ -331,23 +380,43 @@ where
 		}
 	}
 
-	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
+	pub(crate) fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		self.backend.read_write_count()
+	}
+}
+
+impl<'a, H, B, CT> ExtInnerMut<'a, H, B, CT>
+where
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H>,
+	CT: ChangeTrieOverlay,
+{
+	pub(crate) fn inner(&'a self) -> ExtInner<'a, H, B, CT> {
+		ExtInner {
+			overlay: self.overlay,
+			backend: self.backend,
+			id: self.id,
+			_phantom: Default::default(),
+		}
+	}
+
+	pub(crate) fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
 		trace!(target: "state", "{:04x}: Put {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
 			value.as_ref().map(HexDisplay::from)
 		);
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+		let _guard = guard();
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to directly set child storage key");
 			return;
 		}
 
-		self.mark_dirty();
 		self.overlay.set_storage(key, value);
 	}
 
-	fn place_child_storage(
+	pub(crate) fn place_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
 		key: StorageKey,
@@ -359,13 +428,12 @@ where
 			HexDisplay::from(&key),
 			value.as_ref().map(HexDisplay::from)
 		);
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+		let _guard = guard();
 
-		self.mark_dirty();
 		self.overlay.set_child_storage(child_info, key, value);
 	}
 
-	fn kill_child_storage(
+	pub(crate) fn kill_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
 	) {
@@ -373,34 +441,32 @@ where
 			self.id,
 			HexDisplay::from(&child_info.storage_key()),
 		);
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+		let _guard = guard();
 
-		self.mark_dirty();
 		self.overlay.clear_child_storage(child_info);
 		self.backend.for_keys_in_child_storage(child_info, |key| {
 			self.overlay.set_child_storage(child_info, key.to_vec(), None);
 		});
 	}
 
-	fn clear_prefix(&mut self, prefix: &[u8]) {
+	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
 		trace!(target: "state", "{:04x}: ClearPrefix {}",
 			self.id,
 			HexDisplay::from(&prefix),
 		);
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+		let _guard = guard();
 		if is_child_storage_key(prefix) {
 			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
 			return;
 		}
 
-		self.mark_dirty();
 		self.overlay.clear_prefix(prefix);
 		self.backend.for_keys_with_prefix(prefix, |key| {
 			self.overlay.set_storage(key.to_vec(), None);
 		});
 	}
 
-	fn clear_child_prefix(
+	pub(crate) fn clear_child_prefix(
 		&mut self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
@@ -410,16 +476,15 @@ where
 			HexDisplay::from(&child_info.storage_key()),
 			HexDisplay::from(&prefix),
 		);
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+		let _guard = guard();
 
-		self.mark_dirty();
 		self.overlay.clear_child_prefix(child_info, prefix);
 		self.backend.for_child_keys_with_prefix(child_info, prefix, |key| {
 			self.overlay.set_child_storage(child_info, key.to_vec(), None);
 		});
 	}
 
-	fn storage_append(
+	pub(crate) fn storage_append(
 		&mut self,
 		key: Vec<u8>,
 		value: Vec<u8>,
@@ -430,8 +495,7 @@ where
 			HexDisplay::from(&value),
 		);
 
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
-		self.mark_dirty();
+		let _guard = guard();
 
 		let backend = &mut self.backend;
 		let current_value = self.overlay.value_mut_or_insert_with(
@@ -441,22 +505,214 @@ where
 		StorageAppend::new(current_value).append(value);
 	}
 
+	pub(crate) fn storage_root(&mut self) -> Vec<u8> {
+		let _guard = guard();
+		let root = self.overlay.storage_root_no_cache(self.backend);
+		trace!(target: "state", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
+		root.encode()
+	}
+
+	pub(crate) fn child_storage_root(
+		&mut self,
+		child_info: &ChildInfo,
+	) -> Vec<u8> {
+		let _guard = guard();
+		let storage_key = child_info.storage_key();
+		let prefixed_storage_key = child_info.prefixed_storage_key();
+
+		let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
+			let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
+			Some(self.backend.child_storage_root(info, delta))
+		} else {
+			None
+		};
+
+		if let Some((root, is_empty, _)) = root {
+			let root = root.encode();
+			// We store update in the overlay in order to be able to use 'self.storage_transaction'
+			// cache. This is brittle as it rely on Ext only querying the trie backend for
+			// storage root.
+			// A better design would be to manage 'child_storage_transaction' in a
+			// similar way as 'storage_transaction' but for each child trie.
+			if is_empty {
+				self.overlay.set_storage(prefixed_storage_key.into_inner(), None);
+			} else {
+				self.overlay.set_storage(prefixed_storage_key.into_inner(), Some(root.clone()));
+			}
+
+			trace!(target: "state", "{:04x}: ChildRoot({}) {}",
+				self.id,
+				HexDisplay::from(&storage_key.as_ref()),
+				HexDisplay::from(&root.as_ref()),
+			);
+			root
+		} else {
+			// empty overlay
+			let root = self.inner()
+				.storage(prefixed_storage_key.as_slice())
+				.and_then(|k| Decode::decode(&mut &k[..]).ok())
+				.unwrap_or_else(
+					|| empty_child_trie_root::<Layout<H>>()
+				);
+			trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
+				self.id,
+				HexDisplay::from(&storage_key.as_ref()),
+				HexDisplay::from(&root.as_ref()),
+			);
+			root.encode()
+		}
+	}
+
+	pub(crate) fn storage_start_transaction(&mut self) {
+		self.overlay.start_transaction()
+	}
+
+	pub(crate) fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
+		self.overlay.rollback_transaction().map_err(|_| ())
+	}
+
+	pub(crate) fn storage_commit_transaction(&mut self) -> Result<(), ()> {
+		self.overlay.commit_transaction().map_err(|_| ())
+	}
+
+	pub(crate) fn reset_read_write_count(&mut self) {
+		self.backend.reset_read_write_count()
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a, H, B, N> Externalities for Ext<'a, H, N, B>
+where
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
+	B: 'a + Backend<H>,
+	N: crate::changes_trie::BlockNumber,
+{
+
+	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
+		use ::sp_core::offchain::STORAGE_PREFIX;
+		match value {
+			Some(value) => self.offchain_overlay.set(STORAGE_PREFIX, key, value),
+			None => self.offchain_overlay.remove(STORAGE_PREFIX, key),
+		}
+	}
+
+	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
+		self.inner.inner().storage(key)
+	}
+
+	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.inner.inner().storage_hash(key)
+	}
+
+	fn child_storage(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Option<StorageValue> {
+		self.inner.inner().child_storage(child_info, key)
+	}
+
+	fn child_storage_hash(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		self.inner.inner().child_storage_hash(child_info, key)
+	}
+
+	fn exists_storage(&self, key: &[u8]) -> bool {
+		self.inner.inner().exists_storage(key)
+	}
+
+	fn exists_child_storage(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> bool {
+		self.inner.inner().exists_child_storage(child_info, key)
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
+		self.inner.inner().next_storage_key(key)
+	}
+
+	fn next_child_storage_key(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Option<StorageKey> {
+		self.inner.inner().next_child_storage_key(child_info, key)
+	}
+
+	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
+		let result = self.inner.place_storage(key, value);
+		self.mark_dirty();
+		result
+	}
+
+	fn place_child_storage(
+		&mut self,
+		child_info: &ChildInfo,
+		key: StorageKey,
+		value: Option<StorageValue>,
+	) {
+		let result = self.inner.place_child_storage(child_info, key, value);
+		self.mark_dirty();
+		result
+	}
+
+	fn kill_child_storage(
+		&mut self,
+		child_info: &ChildInfo,
+	) {
+		let result = self.inner.kill_child_storage(child_info);
+		self.mark_dirty();
+		result
+	}
+
+	fn clear_prefix(&mut self, prefix: &[u8]) {
+		let result = self.inner.clear_prefix(prefix);
+		self.mark_dirty();
+		result
+	}
+
+	fn clear_child_prefix(
+		&mut self,
+		child_info: &ChildInfo,
+		prefix: &[u8],
+	) {
+		let result = self.inner.clear_child_prefix(child_info, prefix);
+		self.mark_dirty();
+		result
+	}
+
+	fn storage_append(
+		&mut self,
+		key: Vec<u8>,
+		value: Vec<u8>,
+	) {
+		let result = self.inner.storage_append(key, value);
+		self.mark_dirty();
+		result
+	}
+
 	fn chain_id(&self) -> u64 {
 		42
 	}
 
 	fn storage_root(&mut self) -> Vec<u8> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
 			trace!(target: "state", "{:04x}: Root(cached) {}",
-				self.id,
+				self.inner.id,
 				HexDisplay::from(&root.as_ref()),
 			);
 			return root.encode();
 		}
 
-		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
-		trace!(target: "state", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
+		let root = self.inner.overlay.storage_root(self.inner.backend, self.storage_transaction_cache);
+		trace!(target: "state", "{:04x}: Root {}", self.inner.id, HexDisplay::from(&root.as_ref()));
 		root.encode()
 	}
 
@@ -464,7 +720,7 @@ where
 		&mut self,
 		child_info: &ChildInfo,
 	) -> Vec<u8> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
+		let _guard = guard();
 		let storage_key = child_info.storage_key();
 		let prefixed_storage_key = child_info.prefixed_storage_key();
 		if self.storage_transaction_cache.transaction_storage_root.is_some() {
@@ -475,60 +731,20 @@ where
 					|| empty_child_trie_root::<Layout<H>>()
 				);
 			trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
-				self.id,
+				self.inner.id,
 				HexDisplay::from(&storage_key),
 				HexDisplay::from(&root.as_ref()),
 			);
 			root.encode()
 		} else {
-			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
-				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
-				Some(self.backend.child_storage_root(info, delta))
-			} else {
-				None
-			};
-
-			if let Some((root, is_empty, _)) = root {
-				let root = root.encode();
-				// We store update in the overlay in order to be able to use 'self.storage_transaction'
-				// cache. This is brittle as it rely on Ext only querying the trie backend for
-				// storage root.
-				// A better design would be to manage 'child_storage_transaction' in a
-				// similar way as 'storage_transaction' but for each child trie.
-				if is_empty {
-					self.overlay.set_storage(prefixed_storage_key.into_inner(), None);
-				} else {
-					self.overlay.set_storage(prefixed_storage_key.into_inner(), Some(root.clone()));
-				}
-
-				trace!(target: "state", "{:04x}: ChildRoot({}) {}",
-					self.id,
-					HexDisplay::from(&storage_key.as_ref()),
-					HexDisplay::from(&root.as_ref()),
-				);
-				root
-			} else {
-				// empty overlay
-				let root = self
-					.storage(prefixed_storage_key.as_slice())
-					.and_then(|k| Decode::decode(&mut &k[..]).ok())
-					.unwrap_or_else(
-						|| empty_child_trie_root::<Layout<H>>()
-					);
-				trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
-					self.id,
-					HexDisplay::from(&storage_key.as_ref()),
-					HexDisplay::from(&root.as_ref()),
-				);
-				root.encode()
-			}
+			self.inner.child_storage_root(child_info)
 		}
 	}
 
 	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		let _guard = sp_panic_handler::AbortGuard::force_abort();
-		let root = self.overlay.changes_trie_root(
-			self.backend,
+		let _guard = guard();
+		let root = self.inner.overlay.changes_trie_root(
+			self.inner.backend,
 			self.changes_trie_state.as_ref(),
 			Decode::decode(&mut &parent_hash[..]).map_err(|e|
 				trace!(
@@ -542,7 +758,7 @@ where
 		);
 
 		trace!(target: "state", "{:04x}: ChangesRoot({}) {:?}",
-			self.id,
+			self.inner.id,
 			HexDisplay::from(&parent_hash),
 			root,
 		);
@@ -551,73 +767,72 @@ where
 	}
 
 	fn storage_start_transaction(&mut self) {
-		self.overlay.start_transaction()
+		self.inner.storage_start_transaction()
 	}
 
 	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
 		self.mark_dirty();
-		self.overlay.rollback_transaction().map_err(|_| ())
+		self.inner.storage_rollback_transaction()
 	}
 
 	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
-		self.overlay.commit_transaction().map_err(|_| ())
+		self.inner.storage_commit_transaction()
 	}
 
 	fn wipe(&mut self) {
-		for _ in 0..self.overlay.transaction_depth() {
-			self.overlay.rollback_transaction().expect(BENCHMARKING_FN);
+		for _ in 0..self.inner.overlay.transaction_depth() {
+			self.inner.overlay.rollback_transaction().expect(BENCHMARKING_FN);
 		}
-		self.overlay.drain_storage_changes(
-			&self.backend,
+		self.inner.overlay.drain_storage_changes(
+			&self.inner.backend,
 			None,
 			Default::default(),
 			self.storage_transaction_cache,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
-		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL);
+		self.inner.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.mark_dirty();
-		self.overlay
+		self.inner.overlay
 			.enter_runtime()
 			.expect("We have reset the overlay above, so we can not be in the runtime; qed");
 	}
 
 	fn commit(&mut self) {
-		for _ in 0..self.overlay.transaction_depth() {
-			self.overlay.commit_transaction().expect(BENCHMARKING_FN);
+		for _ in 0..self.inner.overlay.transaction_depth() {
+			self.inner.overlay.commit_transaction().expect(BENCHMARKING_FN);
 		}
-		let changes = self.overlay.drain_storage_changes(
-			&self.backend,
+		let changes = self.inner.overlay.drain_storage_changes(
+			&self.inner.backend,
 			None,
 			Default::default(),
 			self.storage_transaction_cache,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
-		self.backend.commit(
+		self.inner.backend.commit(
 			changes.transaction_storage_root,
 			changes.transaction,
 			changes.main_storage_changes,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.mark_dirty();
-		self.overlay
+		self.inner.overlay
 			.enter_runtime()
 			.expect("We have reset the overlay above, so we can not be in the runtime; qed");
 	}
 
 	fn read_write_count(&self) -> (u32, u32, u32, u32) {
-		self.backend.read_write_count()
+		self.inner.backend.read_write_count()
 	}
 
 	fn reset_read_write_count(&mut self) {
-		self.backend.reset_read_write_count()
+		self.inner.backend.reset_read_write_count()
 	}
 
 	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
-		self.backend.get_whitelist()
+		self.inner.backend.get_whitelist()
 	}
 
 	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
-		self.backend.set_whitelist(new)
+		self.inner.backend.set_whitelist(new)
 	}
 }
-
 
 /// Implement `Encode` by forwarding the stored raw vec.
 struct EncodeOpaqueValue(Vec<u8>);
@@ -643,12 +858,12 @@ impl<'a> StorageAppend<'a> {
 	pub fn append(&mut self, value: Vec<u8>) {
 		let value = vec![EncodeOpaqueValue(value)];
 
-		let item = std::mem::take(self.0);
+		let item = sp_std::mem::take(self.0);
 
 		*self.0 = match Vec::<EncodeOpaqueValue>::append_or_new(item, &value) {
 			Ok(item) => item,
 			Err(_) => {
-				log::error!(
+				log_error!(
 					target: "runtime",
 					"Failed to append value, resetting storage item to `[value]`.",
 				);
@@ -658,6 +873,7 @@ impl<'a> StorageAppend<'a> {
 	}
 }
 
+#[cfg(feature = "std")]
 impl<'a, H, B, N> sp_externalities::ExtensionStore for Ext<'a, H, N, B>
 where
 	H: Hasher,

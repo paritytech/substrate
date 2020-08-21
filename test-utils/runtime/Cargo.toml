@@ -43,6 +43,7 @@ trie-db = { version = "0.22.0", default-features = false }
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
 sc-service = { version = "0.8.0-rc5", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
 sp-state-machine = { version = "0.8.0-rc5", default-features = false, path = "../../primitives/state-machine" }
+sp-externalities = { version = "0.8.0-rc5", default-features = false, path = "../../primitives/externalities" }
 
 # 3rd party
 cfg-if = "0.1.10"
@@ -84,6 +85,7 @@ std = [
 	"sp-session/std",
 	"sp-api/std",
 	"sp-runtime/std",
+	"sp-externalities/std",
 	"sp-state-machine/std",
 	"pallet-babe/std",
 	"frame-system-rpc-runtime-api/std",
