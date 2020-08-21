@@ -184,7 +184,7 @@ impl<H> Externalities for WitnessExt<H>
 	}
 
 	fn storage_changes_root(&mut self, _parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		unimplemented!("Unsupported");
+		Ok(None)
 	}
 
 	fn storage_start_transaction(&mut self) {

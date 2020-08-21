@@ -19,22 +19,10 @@
 
 #[cfg(feature = "std")]
 use std::time::{Instant, Duration};
-#[cfg(not(feature = "std"))]
-type Instant = ();
-#[cfg(not(feature = "std"))]
-use core::time::Duration;
 use sp_std::cell::RefCell;
 
-#[cfg(feature = "std")]
-fn now() -> Instant {
-	Instant::now()
-}
-#[cfg(not(feature = "std"))]
-fn now() -> Instant {
-	()
-}
-
 /// Measured count of operations and total bytes.
+#[cfg(feature = "std")]
 #[derive(Clone, Debug, Default)]
 pub struct UsageUnit {
 	/// Number of operations.
@@ -43,7 +31,13 @@ pub struct UsageUnit {
 	pub bytes: u64,
 }
 
+/// Ignore stat for no_std.
+#[cfg(not(feature = "std"))]
+#[derive(Clone, Debug, Default)]
+pub struct UsageUnit;
+
 /// Usage statistics for state backend.
+#[cfg(feature = "std")]
 #[derive(Clone, Debug)]
 pub struct UsageInfo {
 	/// Read statistics (total).
@@ -70,8 +64,13 @@ pub struct UsageInfo {
 	pub span: Duration,
 }
 
+#[cfg(not(feature = "std"))]
+#[derive(Clone, Debug, Default)]
+pub struct UsageInfo;
+
 /// Accumulated usage statistics specific to state machine
 /// crate.
+#[cfg(feature = "std")]
 #[derive(Debug, Default, Clone)]
 pub struct StateMachineStats {
 	/// Number of read query from runtime
@@ -89,6 +88,11 @@ pub struct StateMachineStats {
 	pub bytes_writes_overlay: RefCell<u64>,
 }
 
+#[cfg(not(feature = "std"))]
+#[derive(Clone, Debug, Default)]
+pub struct StateMachineStats;
+
+#[cfg(feature = "std")]
 impl StateMachineStats {
 	/// Accumulates some registered stats.
 	pub fn add(&self, other: &StateMachineStats) {
@@ -99,6 +103,7 @@ impl StateMachineStats {
 	}
 }
 
+#[cfg(feature = "std")]
 impl UsageInfo {
 	/// Empty statistics.
 	///
@@ -113,7 +118,8 @@ impl UsageInfo {
 			cache_reads: UsageUnit::default(),
 			modified_reads: UsageUnit::default(),
 			memory: 0,
-			started: now(),
+			started: Instant::now(),
+			#[cfg(feature = "std")]
 			span: Default::default(),
 		}
 	}
@@ -126,6 +132,19 @@ impl UsageInfo {
 	}
 }
 
+/// Ignore stat for no_std.
+#[cfg(not(feature = "std"))]
+impl UsageInfo {
+	/// Ignore stat for no_std.
+	pub fn empty() -> Self {
+		UsageInfo
+	}
+	/// Ignore stat for no_std.
+	pub fn include_state_machine_states(&mut self, _count: &StateMachineStats) {
+	}
+}
+
+#[cfg(feature = "std")]
 impl StateMachineStats {
 	/// Tally one read modified operation, of some length.
 	pub fn tally_read_modified(&self, data_bytes: u64) {
@@ -136,5 +155,15 @@ impl StateMachineStats {
 	pub fn tally_write_overlay(&self, data_bytes: u64) {
 		*self.writes_overlay.borrow_mut() += 1;
 		*self.bytes_writes_overlay.borrow_mut() += data_bytes;
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl StateMachineStats {
+	/// Ignore stat for no_std.
+	pub fn tally_read_modified(&self, _data_bytes: u64) {
+	}
+	/// Ignore stat for no_std.
+	pub fn tally_write_overlay(&self, _data_bytes: u64) {
 	}
 }

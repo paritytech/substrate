@@ -22,10 +22,7 @@
 //!
 //! It is required that each extension implements the [`Extension`] trait.
 
-#[cfg(feature = "std")]
-use std::{collections::HashMap as Map, collections::hash_map::Entry};
-#[cfg(not(feature = "std"))]
-use sp_std::collections::btree_map::{BTreeMap as Map, Entry};
+use sp_std::collections::btree_map::{BTreeMap, Entry};
 use sp_std::{any::{Any, TypeId}, ops::DerefMut, boxed::Box};
 use crate::Error;
 
@@ -108,7 +105,7 @@ pub trait ExtensionStore {
 /// Stores extensions that should be made available through the externalities.
 #[derive(Default)]
 pub struct Extensions {
-	extensions: Map<TypeId, Box<dyn Extension>>,
+	extensions: BTreeMap<TypeId, Box<dyn Extension>>,
 }
 
 #[cfg(feature = "std")]
