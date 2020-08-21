@@ -105,21 +105,21 @@ impl Store {
 	/// Open the store at the given path.
 	///
 	/// Optionally takes a password that will be used to encrypt/decrypt the keys.
-	pub fn open<T: Into<PathBuf>>(path: T, password: Option<SecretString>) -> Result<KeyStorePtr> {
+	pub fn open<T: Into<PathBuf>>(path: T, password: Option<SecretString>) -> Result<Self> {
 		let path = path.into();
 		fs::create_dir_all(&path)?;
 
 		let instance = Self { path: Some(path), additional: HashMap::new(), password };
-		Ok(Arc::new(RwLock::new(instance)))
+		Ok(instance)
 	}
 
 	/// Create a new in-memory store.
-	pub fn new_in_memory() -> KeyStorePtr {
-		Arc::new(RwLock::new(Self {
+	pub fn new_in_memory() -> Self {
+		Self {
 			path: None,
 			additional: HashMap::new(),
 			password: None
-		}))
+		}
 	}
 
 	/// Get the key phrase for the given public key and key type from the in-memory store.
@@ -439,7 +439,7 @@ impl BareCryptoStore for Store {
 		Store::insert_unknown(self, key_type, suri, public).map_err(|_| ())
 	}
 
-	async fn password(&self) -> Option<&str> {
+	fn password(&self) -> Option<&str> {
 		self.password.as_ref()
 			.map(|p| p.expose_secret())
 			.map(|p| p.as_str())
@@ -449,11 +449,11 @@ impl BareCryptoStore for Store {
 		public_keys.iter().all(|(p, t)| self.key_phrase_by_type(&p, *t).is_ok())
 	}
 
-	async fn sr25519_vrf_sign<'a>(
-		&'a self,
+	async fn sr25519_vrf_sign(
+		&self,
 		key_type: KeyTypeId,
 		public: &Sr25519Public,
-		transcript_data: VRFTranscriptData<'a>,
+		transcript_data: VRFTranscriptData,
 	) -> std::result::Result<VRFSignature, TraitError> {
 		let transcript = make_transcript(transcript_data);
 		let pair = self.key_pair_by_type::<Sr25519Pair>(public, key_type)
