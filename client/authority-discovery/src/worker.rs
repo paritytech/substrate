@@ -241,7 +241,12 @@ where
 				Either::Right(
 					self.network.external_addresses()
 						.into_iter()
-						.map(move |a| a.with(multiaddr::Protocol::P2p(peer_id.clone()))),
+						.map(move |a| {
+							if a.iter().any(|p| matches!(p, multiaddr::Protocol::P2p(_))) {
+								return a;
+							}
+							a.with(multiaddr::Protocol::P2p(peer_id.clone()))
+						}),
 				)
 			}
 		}
