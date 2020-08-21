@@ -261,6 +261,8 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 			execute_storage_change(key, value.as_ref().map(|v| &**v)),
 		Extrinsic::ChangesTrieConfigUpdate(ref new_config) =>
 			execute_changes_trie_config_update(new_config.clone()),
+		Extrinsic::WitnessBackend =>
+			execute_witness_backend(),
 	}
 }
 
@@ -302,6 +304,14 @@ fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyExtrinsicRes
 	}
 	Ok(Ok(()))
 }
+
+fn execute_witness_backend() -> ApplyExtrinsicResult {
+	use sp_state_machine::witness_backend::WitnessBackend;
+	let mut backend = WitnessBackend::<crate::Hashing>::new();
+	unimplemented!("make use of witness backend for no std");
+	Ok(Ok(()))
+}
+
 
 fn execute_changes_trie_config_update(new_config: Option<ChangesTrieConfiguration>) -> ApplyExtrinsicResult {
 	match new_config.clone() {

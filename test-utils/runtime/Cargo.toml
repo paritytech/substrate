@@ -42,6 +42,7 @@ sp-transaction-pool = { version = "2.0.0-rc5", default-features = false, path = 
 trie-db = { version = "0.22.0", default-features = false }
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
 sc-service = { version = "0.8.0-rc5", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
+sp-state-machine = { version = "0.8.0-rc5", default-features = false, path = "../../primitives/state-machine" }
 
 # 3rd party
 cfg-if = "0.1.10"
@@ -52,7 +53,6 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sc-block-builder = { version = "0.8.0-rc5", path = "../../client/block-builder" }
 sc-executor = { version = "0.8.0-rc5", path = "../../client/executor" }
 substrate-test-runtime-client = { version = "2.0.0-rc5", path = "./client" }
-sp-state-machine = { version = "0.8.0-rc5", path = "../../primitives/state-machine" }
 
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../utils/wasm-builder-runner" }
@@ -84,6 +84,7 @@ std = [
 	"sp-session/std",
 	"sp-api/std",
 	"sp-runtime/std",
+	"sp-state-machine/std",
 	"pallet-babe/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",

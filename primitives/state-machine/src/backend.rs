@@ -20,7 +20,6 @@
 use hash_db::Hasher;
 use codec::{Decode, Encode};
 use sp_core::{
-	traits::RuntimeCode,
 	storage::{ChildInfo, well_known_keys, TrackedStorageKey}
 };
 use crate::{
@@ -28,12 +27,15 @@ use crate::{
 	trie_backend_essence::TrieBackendStorage,
 	UsageInfo, StorageKey, StorageValue, StorageCollection,
 };
+use sp_std::vec::Vec;
+#[cfg(feature = "std")]
+use sp_core::traits::RuntimeCode;
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
 ///
 /// The clone operation (if implemented) should be cheap.
-pub trait Backend<H: Hasher>: std::fmt::Debug {
+pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
@@ -369,11 +371,13 @@ pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut sp_trie::MemoryDB<H>, input:
 }
 
 /// Wrapper to create a [`RuntimeCode`] from a type that implements [`Backend`].
+#[cfg(feature = "std")]
 pub struct BackendRuntimeCode<'a, B, H> {
 	backend: &'a B,
 	_marker: std::marker::PhantomData<H>,
 }
 
+#[cfg(feature = "std")]
 impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode for
 	BackendRuntimeCode<'a, B, H>
 {
@@ -382,6 +386,7 @@ impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode for
 	}
 }
 
+#[cfg(feature = "std")]
 impl<'a, B: Backend<H>, H: Hasher> BackendRuntimeCode<'a, B, H> where H::Out: Encode {
 	/// Create a new instance.
 	pub fn new(backend: &'a B) -> Self {

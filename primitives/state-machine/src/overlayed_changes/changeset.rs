@@ -17,19 +17,24 @@
 
 //! Houses the code that implements the transactional overlay storage.
 
-use super::{StorageKey, StorageValue};
+use super::{StorageKey, StorageValue, ChangeTrieOverlay};
 
-use itertools::Itertools;
-use std::collections::{HashSet, BTreeMap, BTreeSet};
+#[cfg(feature = "std")]
+use std::collections::HashSet as Set;
+#[cfg(not(feature = "std"))]
+use sp_std::collections::btree_set::BTreeSet as Set;
+
+use sp_std::collections::btree_map::BTreeMap;
+use sp_std::collections::btree_set::BTreeSet;
 use smallvec::SmallVec;
-use log::warn;
+use crate::warn;
 
 const PROOF_OVERLAY_NON_EMPTY: &str = "\
 	An OverlayValue is always created with at least one transaction and dropped as soon
 	as the last transaction is removed; qed";
 
-type DirtyKeysSets = SmallVec<[HashSet<StorageKey>; 5]>;
-type Transactions = SmallVec<[InnerValue; 5]>;
+type DirtyKeysSets = SmallVec<[Set<StorageKey>; 5]>;
+type Transactions<CT> = SmallVec<[InnerValue<CT>; 5]>;
 
 /// Error returned when trying to commit or rollback while no transaction is open or
 /// when the runtime is trying to close a transaction started by the client.
@@ -58,28 +63,28 @@ pub enum ExecutionMode {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
-struct InnerValue {
+struct InnerValue<CT: ChangeTrieOverlay> {
 	/// Current value. None if value has been deleted.
 	value: Option<StorageValue>,
 	/// The set of extrinsic indices where the values has been changed.
 	/// Is filled only if runtime has announced changes trie support.
-	extrinsics: BTreeSet<u32>,
+	extrinsics: CT,
 }
 
 /// An overlay that contains all versions of a value for a specific key.
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
-pub struct OverlayedValue {
+pub struct OverlayedValue<CT: ChangeTrieOverlay> {
 	/// The individual versions of that value.
 	/// One entry per transactions during that the value was actually written.
-	transactions: Transactions,
+	transactions: Transactions<CT>,
 }
 
 /// Holds a set of changes with the ability modify them using nested transactions.
 #[derive(Debug, Default, Clone)]
-pub struct OverlayedChangeSet {
+pub struct OverlayedChangeSet<CT: ChangeTrieOverlay> {
 	/// Stores the changes that this overlay constitutes.
-	changes: BTreeMap<StorageKey, OverlayedValue>,
+	changes: BTreeMap<StorageKey, OverlayedValue<CT>>,
 	/// Stores which keys are dirty per transaction. Needed in order to determine which
 	/// values to merge into the parent transaction on commit. The length of this vector
 	/// therefore determines how many nested transactions are currently open (depth).
@@ -98,15 +103,17 @@ impl Default for ExecutionMode {
 	}
 }
 
-impl OverlayedValue {
+impl<CT: ChangeTrieOverlay> OverlayedValue<CT> {
 	/// The value as seen by the current transaction.
 	pub fn value(&self) -> Option<&StorageValue> {
 		self.transactions.last().expect(PROOF_OVERLAY_NON_EMPTY).value.as_ref()
 	}
 
 	/// Unique list of extrinsic indices which modified the value.
-	pub fn extrinsics(&self) -> impl Iterator<Item=&u32> {
-		self.transactions.iter().flat_map(|t| t.extrinsics.iter()).unique()
+	pub fn extrinsics(&self) -> BTreeSet<u32> {
+		let mut set = BTreeSet::new();
+		self.transactions.iter().for_each(|t| t.extrinsics.flush_content(&mut set));
+		set
 	}
 
 	/// Mutable reference to the most recent version.
@@ -115,12 +122,12 @@ impl OverlayedValue {
 	}
 
 	/// Remove the last version and return it.
-	fn pop_transaction(&mut self) -> InnerValue {
+	fn pop_transaction(&mut self) -> InnerValue<CT> {
 		self.transactions.pop().expect(PROOF_OVERLAY_NON_EMPTY)
 	}
 
 	/// Mutable reference to the set which holds the indices for the **current transaction only**.
-	fn transaction_extrinsics_mut(&mut self) -> &mut BTreeSet<u32> {
+	fn transaction_extrinsics_mut(&mut self) -> &mut CT {
 		&mut self.transactions.last_mut().expect(PROOF_OVERLAY_NON_EMPTY).extrinsics
 	}
 
@@ -157,15 +164,15 @@ fn insert_dirty(set: &mut DirtyKeysSets, key: StorageKey) -> bool {
 	set.last_mut().map(|dk| dk.insert(key)).unwrap_or_default()
 }
 
-impl OverlayedChangeSet {
+impl<CT: ChangeTrieOverlay> OverlayedChangeSet<CT> {
 	/// Create a new changeset at the same transaction state but without any contents.
 	///
 	/// This changeset might be created when there are already open transactions.
 	/// We need to catch up here so that the child is at the same transaction depth.
 	pub fn spawn_child(&self) -> Self {
-		use std::iter::repeat;
+		use sp_std::iter::repeat;
 		Self {
-			dirty_keys: repeat(HashSet::new()).take(self.transaction_depth()).collect(),
+			dirty_keys: repeat(Set::new()).take(self.transaction_depth()).collect(),
 			num_client_transactions: self.num_client_transactions,
 			execution_mode: self.execution_mode,
 			.. Default::default()
@@ -178,7 +185,7 @@ impl OverlayedChangeSet {
 	}
 
 	/// Get an optional reference to the value stored for the specified key.
-	pub fn get(&self, key: &[u8]) -> Option<&OverlayedValue> {
+	pub fn get(&self, key: &[u8]) -> Option<&OverlayedValue<CT>> {
 		self.changes.get(key)
 	}
 
@@ -228,7 +235,7 @@ impl OverlayedChangeSet {
 	/// Can be rolled back or committed when called inside a transaction.
 	pub fn clear_where(
 		&mut self,
-		predicate: impl Fn(&[u8], &OverlayedValue) -> bool,
+		predicate: impl Fn(&[u8], &OverlayedValue<CT>) -> bool,
 		at_extrinsic: Option<u32>,
 	) {
 		for (key, val) in self.changes.iter_mut().filter(|(k, v)| predicate(k, v)) {
@@ -237,13 +244,13 @@ impl OverlayedChangeSet {
 	}
 
 	/// Get a list of all changes as seen by current transaction.
-	pub fn changes(&self) -> impl Iterator<Item=(&StorageKey, &OverlayedValue)> {
+	pub fn changes(&self) -> impl Iterator<Item=(&StorageKey, &OverlayedValue<CT>)> {
 		self.changes.iter()
 	}
 
 	/// Get the change that is next to the supplied key.
-	pub fn next_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
-		use std::ops::Bound;
+	pub fn next_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue<CT>)> {
+		use sp_std::ops::Bound;
 		let range = (Bound::Excluded(key), Bound::Unbounded);
 		self.changes.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v))
 	}
@@ -365,7 +372,7 @@ impl OverlayedChangeSet {
 				if has_predecessor {
 					let dropped_tx = overlayed.pop_transaction();
 					*overlayed.value_mut() = dropped_tx.value;
-					overlayed.transaction_extrinsics_mut().extend(dropped_tx.extrinsics);
+					overlayed.transaction_extrinsics_mut().merge(dropped_tx.extrinsics);
 				}
 			}
 		}
@@ -382,13 +389,15 @@ impl OverlayedChangeSet {
 mod test {
 	use super::*;
 	use pretty_assertions::assert_eq;
+	use crate::overlayed_changes::Extrinsics;
 
+	type OverlayedChangeSet = super::OverlayedChangeSet<Extrinsics>;
 	type Changes<'a> = Vec<(&'a [u8], (Option<&'a [u8]>, Vec<u32>))>;
 	type Drained<'a> = Vec<(&'a [u8], Option<&'a [u8]>)>;
 
 	fn assert_changes(is: &OverlayedChangeSet, expected: &Changes) {
 		let is: Changes = is.changes().map(|(k, v)| {
-			(k.as_ref(), (v.value().map(AsRef::as_ref), v.extrinsics().cloned().collect()))
+			(k.as_ref(), (v.value().map(AsRef::as_ref), v.extrinsics().into_iter().collect()))
 		}).collect();
 		assert_eq!(&is, expected);
 	}

@@ -25,7 +25,7 @@ use num_traits::One;
 use crate::{
 	StorageKey,
 	backend::Backend,
-	overlayed_changes::{OverlayedChanges, OverlayedValue},
+	overlayed_changes::{OverlayedChanges, OverlayedValue as OverlayedValueInner, ChangeTrieOverlay},
 	trie_backend_essence::TrieBackendEssence,
 	changes_trie::{
 		AnchorBlockId, ConfigurationRange, Storage, BlockNumber,
@@ -35,15 +35,17 @@ use crate::{
 };
 use sp_core::storage::{ChildInfo, PrefixedStorageKey};
 
+type OverlayedValue = OverlayedValueInner<crate::overlayed_changes::Extrinsics>;
+
 /// Prepare input pairs for building a changes trie of given block.
 ///
 /// Returns Err if storage error has occurred OR if storage haven't returned
 /// required data.
-pub(crate) fn prepare_input<'a, B, H, Number>(
+pub(crate) fn prepare_input<'a, B, H, Number, CT>(
 	backend: &'a B,
 	storage: &'a dyn Storage<H, Number>,
 	config: ConfigurationRange<'a, Number>,
-	overlay: &'a OverlayedChanges,
+	overlay: &'a OverlayedChanges<CT>,
 	parent: &'a AnchorBlockId<H::Out, Number>,
 ) -> Result<(
 		impl Iterator<Item=InputPair<Number>> + 'a,
@@ -55,6 +57,7 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 		H: Hasher + 'a,
 		H::Out: Encode,
 		Number: BlockNumber,
+		CT: ChangeTrieOverlay,
 {
 	let number = parent.number.clone() + One::one();
 	let (extrinsics_input, children_extrinsics_input) = prepare_extrinsics_input(
@@ -93,10 +96,10 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 	))
 }
 /// Prepare ExtrinsicIndex input pairs.
-fn prepare_extrinsics_input<'a, B, H, Number>(
+fn prepare_extrinsics_input<'a, B, H, Number, CT>(
 	backend: &'a B,
 	block: &Number,
-	overlay: &'a OverlayedChanges,
+	overlay: &'a OverlayedChanges<CT>,
 ) -> Result<(
 		impl Iterator<Item=InputPair<Number>> + 'a,
 		BTreeMap<ChildIndex<Number>, impl Iterator<Item=InputPair<Number>> + 'a>,
@@ -105,6 +108,7 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 		B: Backend<H>,
 		H: Hasher + 'a,
 		Number: BlockNumber,
+		CT: ChangeTrieOverlay,
 {
 	let mut children_result = BTreeMap::new();
 
@@ -127,55 +131,58 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 	Ok((top, children_result))
 }
 
-fn prepare_extrinsics_input_inner<'a, B, H, Number>(
+fn prepare_extrinsics_input_inner<'a, B, H, Number, CT>(
 	backend: &'a B,
 	block: &Number,
-	overlay: &'a OverlayedChanges,
+	overlay: &'a OverlayedChanges<CT>,
 	child_info: Option<ChildInfo>,
-	changes: impl Iterator<Item=(&'a StorageKey, &'a OverlayedValue)>
+	mut changes: impl Iterator<Item=(&'a StorageKey, &'a OverlayedValueInner<CT>)>
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
 	where
 		B: Backend<H>,
 		H: Hasher,
 		Number: BlockNumber,
+		CT: ChangeTrieOverlay,
 {
 	changes
-		.filter(|( _, v)| v.extrinsics().next().is_some())
 		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, v)| {
-			match map.entry(k) {
-				Entry::Vacant(entry) => {
-					// ignore temporary values (values that have null value at the end of operation
-					// AND are not in storage at the beginning of operation
-					if let Some(child_info) = child_info.as_ref() {
-						if !overlay.child_storage(child_info, k).map(|v| v.is_some()).unwrap_or_default() {
-							if !backend.exists_child_storage(&child_info, k)
-								.map_err(|e| format!("{}", e))? {
-								return Ok(map);
+			let extrinsics = v.extrinsics();
+			if !extrinsics.is_empty() {
+				match map.entry(k) {
+					Entry::Vacant(entry) => {
+						// ignore temporary values (values that have null value at the end of operation
+						// AND are not in storage at the beginning of operation
+						if let Some(child_info) = child_info.as_ref() {
+							if !overlay.child_storage(child_info, k).map(|v| v.is_some()).unwrap_or_default() {
+								if !backend.exists_child_storage(&child_info, k)
+									.map_err(|e| format!("{}", e))? {
+									return Ok(map);
+								}
 							}
-						}
-					} else {
-						if !overlay.storage(k).map(|v| v.is_some()).unwrap_or_default() {
-							if !backend.exists_storage(k).map_err(|e| format!("{}", e))? {
-								return Ok(map);
+						} else {
+							if !overlay.storage(k).map(|v| v.is_some()).unwrap_or_default() {
+								if !backend.exists_storage(k).map_err(|e| format!("{}", e))? {
+									return Ok(map);
+								}
 							}
-						}
-					};
+						};
 
-					let extrinsics = v.extrinsics().cloned().collect();
-					entry.insert((ExtrinsicIndex {
-						block: block.clone(),
-						key: k.to_vec(),
-					}, extrinsics));
-				},
-				Entry::Occupied(mut entry) => {
-					// we do not need to check for temporary values here, because entry is Occupied
-					// AND we are checking it before insertion
-					let extrinsics = &mut entry.get_mut().1;
-					extrinsics.extend(
-						v.extrinsics().cloned()
-					);
-					extrinsics.sort();
-				},
+						let extrinsics = extrinsics.into_iter().collect();
+						entry.insert((ExtrinsicIndex {
+							block: block.clone(),
+							key: k.to_vec(),
+						}, extrinsics));
+					},
+					Entry::Occupied(mut entry) => {
+						// we do not need to check for temporary values here, because entry is Occupied
+						// AND we are checking it before insertion
+						let entry_extrinsics = &mut entry.get_mut().1;
+						entry_extrinsics.extend(
+							extrinsics.into_iter()
+						);
+						entry_extrinsics.sort();
+					},
+				}
 			}
 
 			Ok(map)

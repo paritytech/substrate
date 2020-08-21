@@ -17,8 +17,22 @@
 
 //! Usage statistics for state db
 
+#[cfg(feature = "std")]
 use std::time::{Instant, Duration};
-use std::cell::RefCell;
+#[cfg(not(feature = "std"))]
+type Instant = ();
+#[cfg(not(feature = "std"))]
+use core::time::Duration;
+use sp_std::cell::RefCell;
+
+#[cfg(feature = "std")]
+fn now() -> Instant {
+	Instant::now()
+}
+#[cfg(not(feature = "std"))]
+fn now() -> Instant {
+	()
+}
 
 /// Measured count of operations and total bytes.
 #[derive(Clone, Debug, Default)]
@@ -89,6 +103,7 @@ impl UsageInfo {
 	/// Empty statistics.
 	///
 	/// Means no data was collected.
+	#[cfg(feature = "std")]
 	pub fn empty() -> Self {
 		Self {
 			reads: UsageUnit::default(),
@@ -99,7 +114,7 @@ impl UsageInfo {
 			cache_reads: UsageUnit::default(),
 			modified_reads: UsageUnit::default(),
 			memory: 0,
-			started: Instant::now(),
+			started: now(),
 			span: Default::default(),
 		}
 	}
