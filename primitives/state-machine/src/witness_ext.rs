@@ -24,7 +24,7 @@ use sp_std::{any::{TypeId, Any}};
 use sp_std::boxed::Box;
 use sp_std::vec::Vec;
 use sp_trie::MemoryDB;
-use crate::trie_backend::TrieBackend;
+use crate::trie_backend::{TrieBackend, TrieBackendNoTransaction};
 use crate::ext::{ExtInner, ExtInnerMut};
 use crate::overlayed_changes::{OverlayedChanges, NoExtrinsics};
 use crate::{StorageValue, StorageKey};
@@ -34,7 +34,7 @@ pub struct WitnessExt<H: Hasher> {
 	/// The overlayed changes to write to.
 	pub overlay: OverlayedChanges<NoExtrinsics>,
 	/// The storage backend to read from.
-	pub backend: TrieBackend<MemoryDB<H>, H>,
+	pub backend: TrieBackendNoTransaction<MemoryDB<H>, H>,
 }
 
 impl<H: Hasher> WitnessExt<H>
@@ -45,13 +45,13 @@ impl<H: Hasher> WitnessExt<H>
 	/// Create a new backend.
 	pub fn new(db: MemoryDB<H>, root: H::Out) -> Self {
 		WitnessExt {
-			backend: TrieBackend::new(db, root),
+			backend: TrieBackendNoTransaction(TrieBackend::new(db, root)),
 			overlay: OverlayedChanges::<NoExtrinsics>::default(),
 		}
 	}
 
 	/// Access methods for `ExtInnerMut`.
-	fn ext_inner_mut(&mut self) -> ExtInnerMut<H, TrieBackend<MemoryDB<H>, H>, NoExtrinsics> {
+	fn ext_inner_mut(&mut self) -> ExtInnerMut<H, TrieBackendNoTransaction<MemoryDB<H>, H>, NoExtrinsics> {
 		ExtInnerMut {
 			overlay: &mut self.overlay,
 			backend: &self.backend,
@@ -61,7 +61,7 @@ impl<H: Hasher> WitnessExt<H>
 	}
 
 	/// Access methods for `ExtInner`.
-	fn ext_inner(&self) -> ExtInner<H, TrieBackend<MemoryDB<H>, H>, NoExtrinsics> {
+	fn ext_inner(&self) -> ExtInner<H, TrieBackendNoTransaction<MemoryDB<H>, H>, NoExtrinsics> {
 		ExtInner {
 			overlay: &self.overlay,
 			backend: &self.backend,
