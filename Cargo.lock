@@ -6632,7 +6632,6 @@ dependencies = [
  "sc-block-builder",
  "sc-client-db",
  "sc-finality-grandpa",
- "sc-network",
  "sc-network-test",
  "sc-rpc",
  "serde",
