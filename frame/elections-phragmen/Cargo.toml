@@ -23,7 +23,7 @@ frame-benchmarking = { version = "2.0.0-rc6", default-features = false, path = "
 
 [dev-dependencies]
 sp-io = { version = "2.0.0-rc6", path = "../../primitives/io" }
-hex-literal = "0.2.1"
+hex-literal = "0.3.1"
 pallet-balances = { version = "2.0.0-rc6", path = "../balances" }
 sp-core = { version = "2.0.0-rc6", path = "../../primitives/core" }
 substrate-test-utils = { version = "2.0.0-rc6", path = "../../test-utils" }
