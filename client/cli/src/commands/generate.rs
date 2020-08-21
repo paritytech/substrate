@@ -62,7 +62,7 @@ impl GenerateCmd {
 		};
 		let mnemonic = Mnemonic::new(words, Language::English);
 		let password = self.keystore_params.read_password()?;
-		let maybe_network = self.network_scheme.network.clone();
+		let maybe_network = self.network_scheme.network.clone().unwrap_or_default();
 		let output = self.output_scheme.output_type.clone();
 
 		with_crypto_scheme!(

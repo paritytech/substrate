@@ -68,25 +68,26 @@ pub fn print_from_uri<Pair>(
 		match output {
 			OutputType::Json => {
 				let json = json!({
-						"secretPhrase": uri,
-						"secretSeed": format_seed::<Pair>(seed),
-						"publicKey": format_public_key::<Pair>(public_key.clone()),
-						"accountId": format_account_id::<Pair>(public_key),
-						"ss58Address": pair.public().into().into_account().to_ss58check(),
-					});
+					"secretPhrase": uri,
+					"secretSeed": format_seed::<Pair>(seed),
+					"publicKey": format_public_key::<Pair>(public_key.clone()),
+					"accountId": format_account_id::<Pair>(public_key),
+					"ss58Address": pair.public().into().into_account().to_ss58check_with_version(network_override),
+				});
 				println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
 			},
 			OutputType::Text => {
-				println!("Secret phrase `{}` is account:\n  \
-						Secret seed:      {}\n  \
-						Public key (hex): {}\n  \
-						Account ID:       {}\n  \
-						SS58 Address:     {}",
-						uri,
-						format_seed::<Pair>(seed),
-						format_public_key::<Pair>(public_key.clone()),
-						format_account_id::<Pair>(public_key),
-						pair.public().into().into_account().to_ss58check(),
+				println!(
+					"Secret phrase `{}` is account:\n  \
+					Secret seed:      {}\n  \
+					Public key (hex): {}\n  \
+					Account ID:       {}\n  \
+					SS58 Address:     {}",
+					uri,
+					format_seed::<Pair>(seed),
+					format_public_key::<Pair>(public_key.clone()),
+					format_account_id::<Pair>(public_key),
+					pair.public().into().into_account().to_ss58check_with_version(network_override),
 				);
 			},
 		}
@@ -96,53 +97,53 @@ pub fn print_from_uri<Pair>(
 		match output {
 			OutputType::Json => {
 				let json = json!({
-						"secretKeyUri": uri,
-						"secretSeed": if let Some(seed) = seed { format_seed::<Pair>(seed) } else { "n/a".into() },
-						"publicKey": format_public_key::<Pair>(public_key.clone()),
-						"accountId": format_account_id::<Pair>(public_key),
-						"ss58Address": pair.public().into().into_account().to_ss58check(),
-					});
+					"secretKeyUri": uri,
+					"secretSeed": if let Some(seed) = seed { format_seed::<Pair>(seed) } else { "n/a".into() },
+					"publicKey": format_public_key::<Pair>(public_key.clone()),
+					"accountId": format_account_id::<Pair>(public_key),
+					"ss58Address": pair.public().into().into_account().to_ss58check_with_version(network_override),
+				});
 				println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
 			},
 			OutputType::Text => {
-				println!("Secret Key URI `{}` is account:\n  \
-						Secret seed:      {}\n  \
-						Public key (hex): {}\n  \
-						Account ID:       {}\n  \
-						SS58 Address:     {}",
-						uri,
-						if let Some(seed) = seed { format_seed::<Pair>(seed) } else { "n/a".into() },
-						format_public_key::<Pair>(public_key.clone()),
-						format_account_id::<Pair>(public_key),
-						pair.public().into().into_account().to_ss58check(),
+				println!(
+					"Secret Key URI `{}` is account:\n  \
+					Secret seed:      {}\n  \
+					Public key (hex): {}\n  \
+					Account ID:       {}\n  \
+					SS58 Address:     {}",
+					uri,
+					if let Some(seed) = seed { format_seed::<Pair>(seed) } else { "n/a".into() },
+					format_public_key::<Pair>(public_key.clone()),
+					format_account_id::<Pair>(public_key),
+					pair.public().into().into_account().to_ss58check_with_version(network_override),
 				);
 			},
 		}
-	} else if let Ok((public_key, _v)) = Pair::Public::from_string_with_version(uri) {
-		let v = network_override;
-
+	} else if let Ok(public_key) = Pair::Public::from_string_with_version(uri).map(|v| v.0) {
 		match output {
 			OutputType::Json => {
 				let json = json!({
-						"publicKeyUri": uri,
-						"networkId": String::from(v),
-						"publicKey": format_public_key::<Pair>(public_key.clone()),
-						"accountId": format_account_id::<Pair>(public_key.clone()),
-						"ss58Address": public_key.to_ss58check_with_version(v),
-					});
+					"publicKeyUri": uri,
+					"networkId": String::from(network_override),
+					"publicKey": format_public_key::<Pair>(public_key.clone()),
+					"accountId": format_account_id::<Pair>(public_key.clone()),
+					"ss58Address": public_key.to_ss58check_with_version(network_override),
+				});
 				println!("{}", serde_json::to_string_pretty(&json).expect("Json pretty print failed"));
 			},
 			OutputType::Text => {
-				println!("Public Key URI `{}` is account:\n  \
-						Network ID/version: {}\n  \
-						Public key (hex):   {}\n  \
-						Account ID:         {}\n  \
-						SS58 Address:       {}",
+				println!(
+					"Public Key URI `{}` is account:\n  \
+					Network ID/version: {}\n  \
+					Public key (hex):   {}\n  \
+					Account ID:         {}\n  \
+					SS58 Address:       {}",
 					uri,
-					String::from(v),
+					String::from(network_override),
 					format_public_key::<Pair>(public_key.clone()),
 					format_account_id::<Pair>(public_key.clone()),
-					public_key.to_ss58check_with_version(v),
+					public_key.to_ss58check_with_version(network_override),
 				);
 			},
 		}

@@ -61,7 +61,7 @@ impl VanityCmd {
 			print_from_uri(
 				&formated_seed,
 				None,
-				self.network_scheme.network.clone(),
+				self.network_scheme.network.clone().unwrap_or_default(),
 				self.output_scheme.output_type.clone()
 			)
 		);

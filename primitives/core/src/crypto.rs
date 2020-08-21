@@ -265,18 +265,20 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	}
 
 	/// Return the ss58-check string for this key.
-
 	#[cfg(feature = "std")]
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
+		println!("VERSION: {:?}", version);
 		let mut v = vec![version.into()];
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
 		v.extend(&r.as_bytes()[0..2]);
 		v.to_base58()
 	}
+
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
 	fn to_ss58check(&self) -> String { self.to_ss58check_with_version(*DEFAULT_VERSION.lock()) }
+
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
 	#[cfg(feature = "std")]
@@ -377,7 +379,7 @@ macro_rules! ss58_address_format {
 							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(x)),
 							_ => Err(()),
 						}
-						
+
 						#[cfg(not(feature = "std"))]
 						Err(())
 					},

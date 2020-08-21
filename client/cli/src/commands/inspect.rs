@@ -28,7 +28,7 @@ use structopt::StructOpt;
 	name = "inspect-key",
 	about = "Gets a public key and a SS58 address from the provided Secret URI"
 )]
-pub struct InspectCmd {
+pub struct InspectKeyCmd {
 	/// A Key URI to be inspected. May be a secret seed, secret URI
 	/// (with derivation paths and password), SS58 or public URI.
 	/// If the value is a file, the file content is used as URI.
@@ -53,7 +53,7 @@ pub struct InspectCmd {
 	pub crypto_scheme: CryptoSchemeFlag,
 }
 
-impl InspectCmd {
+impl InspectKeyCmd {
 	/// Run the command
 	pub fn run(&self) -> Result<(), Error> {
 		let uri = utils::read_uri(self.uri.as_ref())?;
@@ -65,7 +65,7 @@ impl InspectCmd {
 			print_from_uri(
 				&uri,
 				password,
-				self.network_scheme.network.clone(),
+				self.network_scheme.network.clone().unwrap_or_default(),
 				self.output_scheme.output_type.clone()
 			)
 		);
