@@ -75,6 +75,7 @@ impl BenchmarkCmd {
 				self.highest_range_values.clone(),
 				self.steps.clone(),
 				self.repeat,
+				self.verify,
 				self.extra,
 			).encode(),
 			extensions,

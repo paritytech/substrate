@@ -72,6 +72,13 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub heap_pages: Option<u64>,
 
+	/// Run verification logic in addition to the benchmarks.
+	///
+	/// WARNING: The verification logic will be included as part of the extrinsic timing! This
+	/// should only be used for sanity checking your benchmarks are valid.
+	#[structopt(long)]
+	pub verify: bool,
+
 	/// Display and run extra benchmarks that would otherwise not be needed for weight construction.
 	#[structopt(long)]
 	pub extra: bool,

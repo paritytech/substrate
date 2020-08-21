@@ -63,6 +63,19 @@ pub struct BenchmarkResults {
 	pub repeat_writes: u32,
 }
 
+/// Configuration used to setup and run runtime benchmarks.
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct BenchmarkConfig {
+	pub pallet: Vec<u8>,
+	pub benchmark: Vec<u8>,
+	pub lowest_range_values: Vec<u32>,
+	pub highest_range_values: Vec<u32>,
+	pub steps: Vec<u32>,
+	pub repeat: u32,
+	pub verify: bool,
+	pub extra: bool,
+}
+
 sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
 	pub trait Benchmark {
@@ -74,6 +87,7 @@ sp_api::decl_runtime_apis! {
 			highest_range_values: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
+			verify: bool,
 			extra: bool,
 		) -> Result<Vec<BenchmarkBatch>, RuntimeString>;
 	}
@@ -175,7 +189,8 @@ pub trait Benchmarking<T> {
 		highest_range_values: &[u32],
 		steps: &[u32],
 		repeat: u32,
-		whitelist: &[TrackedStorageKey]
+		whitelist: &[TrackedStorageKey],
+		verify: bool,
 	) -> Result<Vec<T>, &'static str>;
 }
 
@@ -188,10 +203,8 @@ pub trait BenchmarkingSetup<T, I = ()> {
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
 
 	/// Set up the storage, and prepare a closure to run the benchmark.
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
-
-	/// Set up the storage, and prepare a closure to test and verify the benchmark
-	fn verify(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+	fn instance(&self, components: &[(BenchmarkParameter, u32)], verify: bool)
+		-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
 /// Grab an account, seeded by a name and index.

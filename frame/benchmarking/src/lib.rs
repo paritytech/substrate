@@ -648,7 +648,7 @@ macro_rules! benchmark_backend {
 				]
 			}
 
-			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)])
+			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)], verify: bool)
 				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
 			{
 				$(
@@ -666,28 +666,13 @@ macro_rules! benchmark_backend {
 				$( $param_instancer ; )*
 				$( $post )*
 
-				Ok(Box::new(move || -> Result<(), &'static str> { $eval; Ok(()) }))
-			}
-
-			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)])
-				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
-			{
-				$(
-					let $common = $common_from;
-				)*
-				$(
-					// Prepare instance
-					let $param = components.iter()
-						.find(|&c| c.0 == $crate::BenchmarkParameter::$param)
-						.unwrap().1;
-				)*
-				$(
-					let $pre_id : $pre_ty = $pre_ex;
-				)*
-				$( $param_instancer ; )*
-				$( $post )*
-
-				Ok(Box::new(move || -> Result<(), &'static str> { $eval; $postcode; Ok(()) }))
+				Ok(Box::new(move || -> Result<(), &'static str> {
+					$eval;
+					if verify {
+						$postcode;
+					}
+					Ok(())
+				}))
 			}
 		}
 	};
@@ -736,26 +721,14 @@ macro_rules! selected_benchmark {
 				}
 			}
 
-			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)])
+			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)], verify: bool)
 				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
 			{
 				match self {
 					$(
 						Self::$bench => <
 							$bench as $crate::BenchmarkingSetup<T $(, $bench_inst)? >
-						>::instance(&$bench, components),
-					)*
-				}
-			}
-
-			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)])
-				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
-			{
-				match self {
-					$(
-						Self::$bench => <
-							$bench as $crate::BenchmarkingSetup<T $(, $bench_inst)? >
-						>::verify(&$bench, components),
+						>::instance(&$bench, components, verify),
 					)*
 				}
 			}
@@ -791,7 +764,8 @@ macro_rules! impl_benchmark {
 				highest_range_values: &[u32],
 				steps: &[u32],
 				repeat: u32,
-				whitelist: &[$crate::TrackedStorageKey]
+				whitelist: &[$crate::TrackedStorageKey],
+				verify: bool,
 			) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
 				let extrinsic = sp_std::str::from_utf8(extrinsic)
@@ -833,7 +807,7 @@ macro_rules! impl_benchmark {
 						// benchmark.
 						let closure_to_benchmark = <
 							SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)?>
-						>::instance(&selected_benchmark, &c)?;
+						>::instance(&selected_benchmark, &c, verify)?;
 
 						// Set the block number to at least 1 so events are deposited.
 						if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
@@ -962,17 +936,17 @@ macro_rules! impl_benchmark_test {
 				let execute_benchmark = |
 					c: Vec<($crate::BenchmarkParameter, u32)>
 				| -> Result<(), &'static str> {
-					// Set up the verification state
+					// Set up the benchmark, return execution + verification function.
 					let closure_to_verify = <
 						SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
-					>::verify(&selected_benchmark, &c)?;
+					>::instance(&selected_benchmark, &c, true)?;
 
 					// Set the block number to at least 1 so events are deposited.
 					if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
 						frame_system::Module::<T>::set_block_number(1.into());
 					}
 
-					// Run verification
+					// Run execution + verification
 					closure_to_verify()?;
 
 					// Reset the state
@@ -1059,7 +1033,16 @@ macro_rules! impl_benchmark_test {
 macro_rules! add_benchmark {
 	( $params:ident, $batches:ident, $name:ident, $( $location:tt )* ) => (
 		let name_string = stringify!($name).as_bytes();
-		let (pallet, benchmark, lowest_range_values, highest_range_values, steps, repeat, whitelist, extra) = $params;
+		let (pallet,
+			benchmark,
+			lowest_range_values,
+			highest_range_values,
+			steps,
+			repeat,
+			whitelist,
+			verify,
+			extra,
+		) = $params;
 		if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
 				for benchmark in $( $location )*::benchmarks(extra).into_iter() {
@@ -1071,6 +1054,7 @@ macro_rules! add_benchmark {
 							&steps[..],
 							repeat,
 							whitelist,
+							verify,
 						)?,
 						pallet: name_string.to_vec(),
 						benchmark: benchmark.to_vec(),
@@ -1085,6 +1069,7 @@ macro_rules! add_benchmark {
 						&steps[..],
 						repeat,
 						whitelist,
+						verify,
 					)?,
 					pallet: name_string.to_vec(),
 					benchmark: benchmark.clone(),
