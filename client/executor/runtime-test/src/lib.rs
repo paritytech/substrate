@@ -253,8 +253,8 @@ sp_core::wasm_export_functions! {
 		sp_allocator::FreeingBumpHeapAllocator::new(0);
 	}
 
-	fn test_enter_span() -> u64 {
-		wasm_tracing::new_span("integration_test_span_target", "integration_test_span_name")
+	fn test_enter_span() {
+		wasm_tracing::enter(0)
 	}
 
 	fn test_exit_span(span_id: u64) {
