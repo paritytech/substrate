@@ -35,12 +35,6 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	pub (crate) essence: TrieBackendEssence<S, H>,
 }
 
-/// Patricia trie-based backend.
-/// This is a variant of `TrieBackend` that produce no transactions content.
-pub struct TrieBackendNoTransaction<S: TrieBackendStorage<H>, H: Hasher> (
-	pub TrieBackend<S, H>,
-);
-
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
@@ -78,12 +72,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 impl<S: TrieBackendStorage<H>, H: Hasher> sp_std::fmt::Debug for TrieBackend<S, H> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(f, "TrieBackend")
-	}
-}
-
-impl<S: TrieBackendStorage<H>, H: Hasher> sp_std::fmt::Debug for TrieBackendNoTransaction<S, H> {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
-		write!(f, "TrieBackendNoTransaction")
 	}
 }
 
@@ -257,102 +245,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn wipe(&self) -> Result<(), Self::Error> {
 		Ok(())
-	}
-}
-
-impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackendNoTransaction<S, H> where
-	H::Out: Ord + Codec,
-{
-	type Error = crate::DefaultError;
-	type Transaction = S::Overlay;
-	type TrieBackendStorage = S;
-
-	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
-		self.0.storage(key)
-	}
-
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Result<Option<StorageValue>, Self::Error> {
-		self.0.child_storage(child_info, key)
-	}
-
-	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
-		self.0.next_storage_key(key)
-	}
-
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Result<Option<StorageKey>, Self::Error> {
-		self.0.next_child_storage_key(child_info, key)
-	}
-
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.0.for_keys_with_prefix(prefix, f)
-	}
-
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.0.for_key_values_with_prefix(prefix, f)
-	}
-
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		f: F,
-	) {
-		self.0.for_keys_in_child_storage(child_info, f)
-	}
-
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-		f: F,
-	) {
-		self.0.for_child_keys_with_prefix(child_info, prefix, f)
-	}
-
-	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
-		self.0.pairs()
-	}
-
-	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
-		self.0.keys(prefix)
-	}
-
-	fn storage_root<'a>(
-		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-	) -> (H::Out, Self::Transaction) where H::Out: Ord {
-		self.0.storage_root(delta)
-	}
-
-	fn child_storage_root<'a>(
-		&self,
-		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
-		self.0.child_storage_root(child_info, delta)
-	}
-
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
-		self.0.as_trie_backend()
-	}
-
-	fn register_overlay_stats(&mut self, stats: &crate::stats::StateMachineStats) {
-		self.0.register_overlay_stats(stats)
-	}
-
-	fn usage_info(&self) -> crate::UsageInfo {
-		self.0.usage_info()
-	}
-
-	fn wipe(&self) -> Result<(), Self::Error> {
-		self.0.wipe()
 	}
 }
 
