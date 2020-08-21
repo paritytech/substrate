@@ -1058,19 +1058,19 @@ macro_rules! add_benchmark {
 			repeat,
 			verify,
 			extra,
-		} = config.clone();
+		} = config;
 		if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
-				for benchmark in $( $location )*::benchmarks(extra).into_iter() {
+				for benchmark in $( $location )*::benchmarks(*extra).into_iter() {
 					$batches.push($crate::BenchmarkBatch {
 						results: $( $location )*::run_benchmark(
 							benchmark,
 							&lowest_range_values[..],
 							&highest_range_values[..],
 							&steps[..],
-							repeat,
+							*repeat,
 							whitelist,
-							verify,
+							*verify,
 						)?,
 						pallet: name_string.to_vec(),
 						benchmark: benchmark.to_vec(),
@@ -1083,9 +1083,9 @@ macro_rules! add_benchmark {
 						&lowest_range_values[..],
 						&highest_range_values[..],
 						&steps[..],
-						repeat,
+						*repeat,
 						whitelist,
-						verify,
+						*verify,
 					)?,
 					pallet: name_string.to_vec(),
 					benchmark: benchmark.clone(),
