@@ -102,7 +102,7 @@ pub trait BareCryptoStore: Send + Sync {
 	async fn insert_unknown(&mut self, _key_type: KeyTypeId, _suri: &str, _public: &[u8]) -> Result<(), ()>;
 
 	/// Get the password for this store.
-	async fn password(&self) -> Option<&str>;
+	fn password(&self) -> Option<&str>;
 	/// Find intersection between provided keys and supported keys
 	///
 	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
@@ -115,7 +115,7 @@ pub trait BareCryptoStore: Send + Sync {
 	/// List all supported keys
 	///
 	/// Returns a set of public keys the signer supports.
-	async fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError>;
+	async fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error>;
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
@@ -166,13 +166,13 @@ pub trait BareCryptoStore: Send + Sync {
 	/// each key given that the key is supported.
 	///
 	/// Returns a list of `Result`s each representing the SCALE encoded
-	/// signature of each key or a BareCryptoStoreError for non-supported keys.
+	/// signature of each key or a Error for non-supported keys.
 	async fn sign_with_all(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8],
-	) -> Result<Vec<Result<Vec<u8>, BareCryptoStoreError>>, ()> {
+	) -> Result<Vec<Result<Vec<u8>, Error>>, ()> {
 		let futs = keys.iter()
 			.map(|k| self.sign_with(id, k, msg));
 
@@ -197,7 +197,7 @@ pub trait BareCryptoStore: Send + Sync {
 		&'a self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript_data: VRFTranscriptData<'a>,
+		transcript_data: VRFTranscriptData,
 	) -> Result<VRFSignature, Error>;
 }
 
