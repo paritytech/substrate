@@ -53,7 +53,7 @@ benchmarks! {
 	}: transfer(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount)
 	verify {
 		assert_eq!(Balances::<T>::free_balance(&caller), Zero::zero());
-		assert_eq!(Balances::<T>::free_balance(&recipient), Zero::zero());
+		assert_eq!(Balances::<T>::free_balance(&recipient), transfer_amount);
 	}
 
 	// Benchmark `transfer` with the best possible condition:
