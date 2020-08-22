@@ -971,9 +971,10 @@ impl<T: Trait> Module<T> {
 			// save the members, sorted based on account id.
 			new_members.sort_by(|i, j| i.0.cmp(&j.0));
 
-			// Now we select a prime member by weighing everyone's vote for that new member by a
-			// multiplier based on the order of the votes. i.e. the first person a voter votes for
-			// gets a 16x multiplier, the next person gets a 15x multiplier, an so on...
+			// Now we select a prime member using a [Borda count](https://en.wikipedia.org/wiki/Borda_count).
+			// We weigh everyone's vote for that new member by a multiplier based on the order
+			// of the votes. i.e. the first person a voter votes for gets a 16x multiplier,
+			// the next person gets a 15x multiplier, an so on... (assuming `MAXIMUM_VOTE` = 16)
 			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
 			for (_, stake, targets) in voters_and_stakes.into_iter() {
 				for (vote_multiplier, who) in targets.iter()
