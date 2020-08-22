@@ -976,13 +976,13 @@ impl<T: Trait> Module<T> {
 			// gets a 16x multiplier, the next person gets a 15x multiplier, an so on...
 			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
 			for (_, stake, targets) in voters_and_stakes.into_iter() {
-				for (votes, who) in targets.iter()
+				for (vote_multiplier, who) in targets.iter()
 					.enumerate()
-					.map(|(votes, who)| ((MAXIMUM_VOTE - votes) as u32, who))
+					.map(|(vote_position, who)| ((MAXIMUM_VOTE - vote_position) as u32, who))
 				{
 					if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
 						prime_votes[i].1 = prime_votes[i].1.saturating_add(
-							stake.saturating_mul(votes.into())
+							stake.saturating_mul(vote_multiplier.into())
 						);
 					}
 				}
