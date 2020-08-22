@@ -87,7 +87,7 @@ use codec::{Encode, Decode};
 use sp_std::prelude::*;
 use sp_runtime::{
 	DispatchError, RuntimeDebug, Perbill,
-	traits::{Zero, StaticLookup, Convert},
+	traits::{Zero, StaticLookup, Convert, Saturating},
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
@@ -904,14 +904,20 @@ impl<T: Trait> Module<T> {
 			to_votes(Self::locked_stake_of(who))
 		};
 
-		let voters_and_votes = Voting::<T>::iter()
-			.map(|(voter, (stake, targets))| { (voter, to_votes(stake), targets) })
+		// used for prime election.
+		let voters_and_stakes = Voting::<T>::iter()
+			.map(|(voter, (stake, targets))| { (voter, stake, targets) })
+			.collect::<Vec<_>>();
+		// used for phragmen.
+		let voters_and_votes = voters_and_stakes.iter()
+			.cloned()
+			.map(|(voter, stake, targets)| { (voter, to_votes(stake), targets)} )
 			.collect::<Vec<_>>();
 		let maybe_phragmen_result = sp_npos_elections::seq_phragmen::<T::AccountId, Perbill>(
 			num_to_elect,
 			0,
 			candidates,
-			voters_and_votes.clone(),
+			voters_and_votes,
 		);
 
 		if let Some(ElectionResult { winners, assignments }) = maybe_phragmen_result {
@@ -965,14 +971,16 @@ impl<T: Trait> Module<T> {
 			// save the members, sorted based on account id.
 			new_members.sort_by(|i, j| i.0.cmp(&j.0));
 
-			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, VoteWeight::zero())).collect();
-			for (_, stake, targets) in voters_and_votes.into_iter() {
+			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
+			for (_, stake, targets) in voters_and_stakes.into_iter() {
 				for (votes, who) in targets.iter()
 					.enumerate()
 					.map(|(votes, who)| ((MAXIMUM_VOTE - votes) as u32, who))
 				{
 					if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
-						prime_votes[i].1 += stake * votes as VoteWeight;
+						prime_votes[i].1 = prime_votes[i].1.saturating_add(
+							stake.saturating_mul(votes.into())
+						);
 					}
 				}
 			}
