@@ -767,7 +767,7 @@ impl<T: Trait> Module<T> {
 				None => T::ChangeMembers::change_members_sorted(&[], &old, &members),
 			}
 
-			// if the kicked member was not a prime, set it again.
+			// if the kicked member was not the prime, set it again.
 			if let Some(old_prime) = maybe_old_prime {
 				if old_prime != *who {
 					T::ChangeMembers::set_prime(Some(old_prime))
