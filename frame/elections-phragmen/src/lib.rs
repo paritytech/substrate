@@ -971,6 +971,9 @@ impl<T: Trait> Module<T> {
 			// save the members, sorted based on account id.
 			new_members.sort_by(|i, j| i.0.cmp(&j.0));
 
+			// Now we select a prime member by weighing everyone's vote for that new member by a
+			// multiplier based on the order of the votes. i.e. the first person a voter votes for
+			// gets a 16x multiplier, the next person gets a 15x multiplier, an so on...
 			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
 			for (_, stake, targets) in voters_and_stakes.into_iter() {
 				for (votes, who) in targets.iter()
@@ -984,6 +987,9 @@ impl<T: Trait> Module<T> {
 					}
 				}
 			}
+			// We then select the new member with the highest weighted stake. In the case of
+			// a tie, the last person in the list with the tied score is selected. This is
+			// the person with the "highest" account id based on the sort above.
 			let prime = prime_votes.into_iter().max_by_key(|x| x.1).map(|x| x.0.clone());
 
 			// new_members_ids is sorted by account id.
