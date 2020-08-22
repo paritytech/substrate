@@ -56,7 +56,7 @@ pub fn print_from_uri<Pair>(
 	password: Option<SecretString>,
 	network_override: Option<Ss58AddressFormat>,
 	output: OutputType,
-) where Pair: sp_core::Pair, Pair::Public: Into<MultiSigner>, {
+) where Pair: sp_core::Pair, Pair::Public: Into<MultiSigner> {
 	let password = password.as_ref().map(|s| s.expose_secret().as_str());
 	if let Ok((pair, seed)) = Pair::from_phrase(uri, password.clone()) {
 		let public_key = pair.public();
