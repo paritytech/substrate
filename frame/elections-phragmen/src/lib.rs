@@ -87,7 +87,7 @@ use codec::{Encode, Decode};
 use sp_std::prelude::*;
 use sp_runtime::{
 	DispatchError, RuntimeDebug, Perbill,
-	traits::{Zero, StaticLookup, Convert},
+	traits::{Zero, StaticLookup, Convert, Saturating},
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
