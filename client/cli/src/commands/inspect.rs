@@ -32,7 +32,7 @@ pub struct InspectKeyCmd {
 	/// A Key URI to be inspected. May be a secret seed, secret URI
 	/// (with derivation paths and password), SS58 or public URI.
 	///
-	/// If the give value is a file, the file content will be used
+	/// If the given value is a file, the file content will be used
 	/// as URI.
 	///
 	/// If omitted, you will be prompted for the URI.
