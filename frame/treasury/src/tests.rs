@@ -1035,7 +1035,7 @@ fn extend_expiry() {
 		assert_noop!(Treasury::cancel_bounty(Origin::signed(0), 0), Error::<Test>::RequireCurator);
 		assert_ok!(Treasury::cancel_bounty(Origin::signed(4), 0));
 
-		assert_eq!(Balances::free_balance(4), 10);
+		assert_eq!(Balances::free_balance(4), 5); // slashed 5
 		assert_eq!(Balances::reserved_balance(4), 0);
 	});
 }

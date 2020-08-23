@@ -1056,13 +1056,18 @@ decl_module! {
 
 				match &bounty.status {
 					BountyStatus::Funded |
-					BountyStatus::CuratorAssigned { .. } => {},
+					BountyStatus::CuratorAssigned { .. } => {
+						ensure!(maybe_curator.is_none(), BadOrigin);
+					},
 					BountyStatus::PendingPayout { curator, .. } => {
 						if let Some(signer) = maybe_curator {
 							ensure!(signer == *curator, Error::<T>::RequireCurator);
 
 							let imbalance = T::Currency::slash_reserved(curator, bounty.curator_deposit).0;
 							T::OnSlash::on_unbalanced(imbalance);
+						} else {
+							// Cancelled by council, refund deposit
+							let _ = T::Currency::unreserve(&curator, bounty.curator_deposit);
 						}
 					},
 					BountyStatus::Active { curator, expires } => {
@@ -1075,6 +1080,9 @@ decl_module! {
 
 							let imbalance = T::Currency::slash_reserved(curator, bounty.curator_deposit).0;
 							T::OnSlash::on_unbalanced(imbalance);
+						} else {
+							// Cancelled by council, refund deposit
+							let _ = T::Currency::unreserve(&curator, bounty.curator_deposit);
 						}
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
