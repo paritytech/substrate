@@ -105,7 +105,7 @@ benchmarks! {
 		let delegate: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&delegate, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
-		let real: T::AccountId = account("caller", 0, SEED);
+		let real: T::AccountId = whitelisted_caller();
 		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(delegate.clone()).into(),
@@ -125,7 +125,7 @@ benchmarks! {
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
-		let real: T::AccountId = account("caller", 0, SEED);
+		let real: T::AccountId = whitelisted_caller();
 		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -146,7 +146,7 @@ benchmarks! {
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
-		let real: T::AccountId = account("caller", 0, SEED);
+		let real: T::AccountId = whitelisted_caller();
 		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -167,7 +167,7 @@ benchmarks! {
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
-		let real: T::AccountId = account("caller", 0, SEED);
+		let real: T::AccountId = whitelisted_caller();
 		add_announcements::<T>(a, Some(caller.clone()), None)?;
 		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		let call_hash = T::CallHasher::hash_of(&call);
