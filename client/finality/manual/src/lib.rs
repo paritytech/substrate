@@ -21,7 +21,7 @@
 
 use futures::prelude::*;
 use sp_blockchain::HeaderBackend;
-use sp_runtime::{traits::Block as BlockT, Justification};
+use sp_runtime::{traits::Block as BlockT};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
 use std::{sync::Arc, marker::PhantomData};
 
@@ -56,6 +56,8 @@ pub async fn run_manual_finality<B, CB, C, S>(
 		).await
 	}
 }
+
+//TODO Should I Have a verifier here?
 
 #[cfg(test)]
 mod tests {
