@@ -66,8 +66,8 @@ impl SubstrateCli for Cli {
 pub fn run() -> sc_cli::Result<()> {
 	let cli = Cli::from_args();
 
-	match &cli.subcommand {
-		Some(subcommand) => {
+	match cli.subcommand {
+		Some(ref subcommand) => {
 			let runner = cli.create_runner(subcommand)?;
 			runner.run_subcommand(subcommand, |config| {
 				let PartialComponents { client, backend, task_manager, import_queue, .. }

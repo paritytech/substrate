@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use frame_support::traits::OnInitialize;
 
 use crate::Module as Treasury;
@@ -45,7 +45,7 @@ fn setup_proposal<T: Trait>(u: u32) -> (
 
 // Create the pre-requisite information needed to create a `report_awesome`.
 fn setup_awesome<T: Trait>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId) {
-	let caller = account("caller", 0, SEED);
+	let caller = whitelisted_caller();
 	let value = T::TipReportDepositBase::get()
 		+ T::DataDepositPerByte::get() * length.into()
 		+ T::Currency::minimum_balance();
@@ -166,7 +166,11 @@ benchmarks! {
 	_ { }
 
 	propose_spend {
-		let (caller, value, beneficiary_lookup) = setup_proposal::<T>(0);
+		let u in 0 .. 1000;
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T>(u);
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), value, beneficiary_lookup)
 
 	reject_proposal {
@@ -192,6 +196,9 @@ benchmarks! {
 	report_awesome {
 		let r in 0 .. MAX_BYTES;
 		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), reason, awesome_person)
 
 	retract_tip {
@@ -204,6 +211,9 @@ benchmarks! {
 		)?;
 		let reason_hash = T::Hashing::hash(&reason[..]);
 		let hash = T::Hashing::hash_of(&(&reason_hash, &awesome_person));
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), hash)
 
 	tip_new {
@@ -211,6 +221,9 @@ benchmarks! {
 		let t in 1 .. MAX_TIPPERS;
 
 		let (caller, reason, beneficiary, value) = setup_tip::<T>(r, t)?;
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), reason, beneficiary, value)
 
 	tip {
@@ -228,6 +241,9 @@ benchmarks! {
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
 		create_tips::<T>(t - 1, hash.clone(), value)?;
 		let caller = account("member", t - 1, SEED);
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), hash, value)
 
 	close_tip {
@@ -253,6 +269,9 @@ benchmarks! {
 		create_tips::<T>(t, hash.clone(), value)?;
 
 		let caller = account("caller", t, SEED);
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), hash)
 
 	propose_bounty {

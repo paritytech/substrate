@@ -21,6 +21,7 @@ use codec::{Encode, Decode};
 use sp_std::{vec::Vec, prelude::Box};
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeString;
+use sp_storage::TrackedStorageKey;
 
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
@@ -101,18 +102,51 @@ pub trait Benchmarking {
 		self.commit()
 	}
 
-	/// Get the read/write count
+	/// Get the read/write count.
 	fn read_write_count(&self) -> (u32, u32, u32, u32) {
 		self.read_write_count()
 	}
 
-	/// Reset the read/write count
+	/// Reset the read/write count.
 	fn reset_read_write_count(&mut self) {
 		self.reset_read_write_count()
 	}
 
-	fn set_whitelist(&mut self, new: Vec<Vec<u8>>) {
+	/// Get the DB whitelist.
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		self.get_whitelist()
+	}
+
+	/// Set the DB whitelist.
+	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
 		self.set_whitelist(new)
+	}
+
+	// Add a new item to the DB whitelist.
+	fn add_to_whitelist(&mut self, add: TrackedStorageKey) {
+		let mut whitelist = self.get_whitelist();
+		match whitelist.iter_mut().find(|x| x.key == add.key) {
+			// If we already have this key in the whitelist, update to be the most constrained value.
+			Some(item) => {
+				*item = TrackedStorageKey {
+					key: add.key,
+					has_been_read: item.has_been_read || add.has_been_read,
+					has_been_written: item.has_been_written || add.has_been_written,
+				}
+			},
+			// If the key does not exist, add it.
+			None => {
+				whitelist.push(add);
+			}
+		}
+		self.set_whitelist(whitelist);
+	}
+
+	// Remove an item from the DB whitelist.
+	fn remove_from_whitelist(&mut self, remove: Vec<u8>) {
+		let mut whitelist = self.get_whitelist();
+		whitelist.retain(|x| x.key != remove);
+		self.set_whitelist(whitelist);
 	}
 }
 
@@ -141,7 +175,7 @@ pub trait Benchmarking<T> {
 		highest_range_values: &[u32],
 		steps: &[u32],
 		repeat: u32,
-		whitelist: &[Vec<u8>]
+		whitelist: &[TrackedStorageKey]
 	) -> Result<Vec<T>, &'static str>;
 }
 
@@ -164,4 +198,9 @@ pub trait BenchmarkingSetup<T, I = ()> {
 pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed: u32) -> AccountId {
 	let entropy = (name, index, seed).using_encoded(blake2_256);
 	AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+}
+
+/// This caller account is automatically whitelisted for DB reads/writes by the benchmarking macro.
+pub fn whitelisted_caller<AccountId: Decode + Default>() -> AccountId {
+	account::<AccountId>("whitelisted_caller", 0, 0)
 }
