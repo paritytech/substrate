@@ -24,7 +24,6 @@ use futures::{
 	FutureExt,
 	SinkExt
 };
-use serde::{Deserialize, Serialize};
 use sp_runtime::Justification;
 pub use self::gen_client::Client as ManualSealClient;
 

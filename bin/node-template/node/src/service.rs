@@ -124,12 +124,13 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let rpc_extensions_builder = {
 		let client = client.clone();
 		let pool = transaction_pool.clone();
+		let finality_sink = finality_sink.clone();
 
 		Box::new(move |deny_unsafe, _| {
 			let deps = crate::rpc::FullDeps {
 				client: client.clone(),
 				pool: pool.clone(),
-				finality_stream,
+				finality_sink: finality_sink.clone(),
 				deny_unsafe,
 			};
 
@@ -187,7 +188,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		task_manager.spawn_essential_handle().spawn_blocking("instant-seal", authorship_future);
 
 		// Now the manual finality gadget.
-		let finality_future = sc_finality_manual::run_manual_finality(client, finality_sink);
+		let finality_future = sc_finality_manual::run_manual_finality(client, finality_stream);
 		task_manager.spawn_essential_handle().spawn_blocking("manual-finality", finality_future);
 	}
 
