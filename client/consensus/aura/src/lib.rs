@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Aura (Authority-round) consensus in substrate.
 //!
@@ -30,12 +32,13 @@
 #![forbid(missing_docs, unsafe_code)]
 use std::{
 	sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin,
-	collections::HashMap
+	collections::HashMap, convert::{TryFrom, TryInto},
 };
 
 use futures::prelude::*;
 use parking_lot::Mutex;
 use log::{debug, info, trace};
+use prometheus_endpoint::Registry;
 
 use codec::{Encode, Decode, Codec};
 
@@ -44,7 +47,7 @@ use sp_consensus::{
 	BlockOrigin, Error as ConsensusError, SelectChain, SlotData, BlockCheckParams, ImportResult
 };
 use sp_consensus::import_queue::{
-	Verifier, BasicQueue, BoxJustificationImport, BoxFinalityProofImport,
+	Verifier, BasicQueue, DefaultImportQueue, BoxJustificationImport, BoxFinalityProofImport,
 };
 use sc_client_api::{backend::AuxStore, BlockOf};
 use sp_blockchain::{
@@ -52,11 +55,15 @@ use sp_blockchain::{
 	ProvideCache, HeaderBackend,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, Justification};
+use sp_core::crypto::Public;
+use sp_application_crypto::{AppKey, AppPublic};
+use sp_runtime::{
+	generic::{BlockId, OpaqueDigestItemId},
+	Justification,
+};
 use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
-
-use sp_core::crypto::Pair;
+use sp_core::{traits::BareCryptoStore, crypto::Pair};
 use sp_inherents::{InherentDataProviders, InherentData};
 use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
@@ -150,15 +157,15 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	P: Pair + Send + Sync,
-	P::Public: Hash + Member + Encode + Decode,
-	P::Signature: Hash + Member + Encode + Decode,
+	P::Public: AppPublic + Hash + Member + Encode + Decode,
+	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	CAW: CanAuthorWith<B> + Send,
 {
 	let worker = AuraWorker {
-		client: client.clone(),
+		client,
 		block_import: Arc::new(Mutex::new(block_import)),
 		env,
 		keystore,
@@ -199,8 +206,8 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
-	P::Public: Member + Encode + Decode + Hash,
-	P::Signature: Member + Encode + Decode + Hash + Debug,
+	P::Public: AppPublic + Public + Member + Encode + Decode + Hash,
+	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
@@ -210,7 +217,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static
 	>>;
 	type Proposer = E::Proposer;
-	type Claim = P;
+	type Claim = P::Public;
 	type EpochData = Vec<AuthorityId<P>>;
 
 	fn logging_target(&self) -> &'static str {
@@ -240,10 +247,11 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot_number, epoch_data);
-
 		expected_author.and_then(|p| {
 			self.keystore.read()
 				.key_pair_by_type::<P>(&p, sp_application_crypto::key_types::AURA).ok()
+		}).and_then(|p| {
+			Some(p.public())
 		})
 	}
 
@@ -264,11 +272,30 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		StorageChanges<sp_api::TransactionFor<C, B>, B>,
 		Self::Claim,
 		Self::EpochData,
-	) -> sp_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>> + Send> {
-		Box::new(|header, header_hash, body, storage_changes, pair, _epoch| {
+	) -> Result<
+		sp_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>>,
+		sp_consensus::Error> + Send + 'static>
+	{
+		let keystore = self.keystore.clone();
+		Box::new(move |header, header_hash, body, storage_changes, public, _epoch| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
-			let signature = pair.sign(header_hash.as_ref());
+			let public_type_pair = public.to_public_crypto_pair();
+			let public = public.to_raw_vec();
+			let signature = keystore.read()
+				.sign_with(
+					<AuthorityId<P> as AppKey>::ID,
+					&public_type_pair,
+					header_hash.as_ref()
+				)
+				.map_err(|e| sp_consensus::Error::CannotSign(
+					public.clone(), e.to_string(),
+				))?;
+			let signature = signature.clone().try_into()
+				.map_err(|_| sp_consensus::Error::InvalidSignature(
+					signature, public
+				))?;
+
 			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
 
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
@@ -277,7 +304,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 			import_block.storage_changes = Some(storage_changes);
 			import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-			import_block
+			Ok(import_block)
 		})
 	}
 
@@ -331,8 +358,8 @@ impl<B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, 
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
-	P::Public: Member + Encode + Decode + Hash,
-	P::Signature: Member + Encode + Decode + Hash + Debug,
+	P::Public: AppPublic + Member + Encode + Decode + Hash,
+	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Sync + Clone,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
@@ -452,8 +479,8 @@ fn check_header<C, B: BlockT, P: Pair>(
 				info!(
 					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
 					slot_num,
-					equivocation_proof.fst_header().hash(),
-					equivocation_proof.snd_header().hash(),
+					equivocation_proof.first_header.hash(),
+					equivocation_proof.second_header.hash(),
 				);
 			}
 
@@ -465,14 +492,16 @@ fn check_header<C, B: BlockT, P: Pair>(
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, P> {
+pub struct AuraVerifier<C, P, CAW> {
 	client: Arc<C>,
 	phantom: PhantomData<P>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
+	can_author_with: CAW,
 }
 
-impl<C, P> AuraVerifier<C, P>
-	where P: Send + Sync + 'static
+impl<C, P, CAW> AuraVerifier<C, P, CAW> where
+	P: Send + Sync + 'static,
+	CAW: Send + Sync + 'static,
 {
 	fn check_inherents<B: BlockT>(
 		&self,
@@ -480,10 +509,21 @@ impl<C, P> AuraVerifier<C, P>
 		block_id: BlockId<B>,
 		inherent_data: InherentData,
 		timestamp_now: u64,
-	) -> Result<(), Error<B>>
-		where C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>
+	) -> Result<(), Error<B>> where
+		C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
+		CAW: CanAuthorWith<B>,
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
+
+		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
+			debug!(
+				target: "aura",
+				"Skipping `check_inherents` as authoring version is not compatible: {}",
+				e,
+			);
+
+			return Ok(())
+		}
 
 		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
@@ -526,7 +566,7 @@ impl<C, P> AuraVerifier<C, P>
 }
 
 #[forbid(deprecated)]
-impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
+impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 	C: ProvideRuntimeApi<B> +
 		Send +
 		Sync +
@@ -538,6 +578,7 @@ impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
+	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 {
 	fn verify(
 		&mut self,
@@ -686,9 +727,6 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 		.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet.into())
 }
 
-/// The Aura import queue type.
-pub type AuraImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
-
 /// Register the aura inherent data provider, if not registered already.
 fn register_aura_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
@@ -788,7 +826,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, I, C, P, S>(
+pub fn import_queue<B, I, C, P, S, CAW>(
 	slot_duration: SlotDuration,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<B>>,
@@ -796,7 +834,9 @@ pub fn import_queue<B, I, C, P, S>(
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
 	spawner: &S,
-) -> Result<AuraImportQueue<B, sp_api::TransactionFor<C, B>>, sp_consensus::Error> where
+	registry: Option<&Registry>,
+	can_author_with: CAW,
+) -> Result<DefaultImportQueue<B, C>, sp_consensus::Error> where
 	B: BlockT,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
 	C: 'static + ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,
@@ -805,15 +845,17 @@ pub fn import_queue<B, I, C, P, S>(
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
-	S: sp_core::traits::SpawnBlocking,
+	S: sp_core::traits::SpawnNamed,
+	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;
 
 	let verifier = AuraVerifier {
-		client: client.clone(),
+		client,
 		inherent_data_providers,
 		phantom: PhantomData,
+		can_author_with,
 	};
 
 	Ok(BasicQueue::new(
@@ -822,13 +864,14 @@ pub fn import_queue<B, I, C, P, S>(
 		justification_import,
 		finality_proof_import,
 		spawner,
+		registry,
 	))
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_consensus::{NoNetwork as DummyOracle, Proposal, RecordProof};
+	use sp_consensus::{NoNetwork as DummyOracle, Proposal, RecordProof, AlwaysCanAuthor};
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
 	use sc_network::config::ProtocolConfig;
@@ -836,8 +879,11 @@ mod tests {
 	use sp_keyring::sr25519::Keyring;
 	use sc_client_api::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
+	use sc_consensus_slots::SimpleSlotWorker;
 	use std::task::Poll;
 	use sc_block_builder::BlockBuilderProvider;
+	use sp_runtime::traits::Header as _;
+	use substrate_test_runtime_client::runtime::{Header, H256};
 
 	type Error = sp_blockchain::Error;
 
@@ -872,7 +918,7 @@ mod tests {
 		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction>, Error>>;
 
 		fn propose(
-			&mut self,
+			self,
 			_: InherentData,
 			digests: DigestFor<TestBlock>,
 			_: Duration,
@@ -895,7 +941,7 @@ mod tests {
 	}
 
 	impl TestNetFactory for AuraTestNet {
-		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair>;
+		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair, AlwaysCanAuthor>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -922,6 +968,7 @@ mod tests {
 						client,
 						inherent_data_providers,
 						phantom: Default::default(),
+						can_author_with: AlwaysCanAuthor,
 					}
 				},
 				PeersClient::Light(_, _) => unreachable!("No (yet) tests for light client + Aura"),
@@ -1020,5 +1067,56 @@ mod tests {
 			Keyring::Bob.public().into(),
 			Keyring::Charlie.public().into()
 		]);
+	}
+
+	#[test]
+	fn current_node_authority_should_claim_slot() {
+		let net = AuraTestNet::new(4);
+
+		let mut authorities = vec![
+			Keyring::Alice.public().into(),
+			Keyring::Bob.public().into(),
+			Keyring::Charlie.public().into()
+		];
+
+		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+		let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore.");
+		let my_key = keystore.write()
+			.generate_by_type::<AuthorityPair>(AuthorityPair::ID)
+			.expect("Key should be created");
+		authorities.push(my_key.public());
+
+		let net = Arc::new(Mutex::new(net));
+
+		let mut net = net.lock();
+		let peer = net.peer(3);
+		let client = peer.client().as_full().expect("full clients are created").clone();
+		let environ = DummyFactory(client.clone());
+
+		let worker = AuraWorker {
+			client: client.clone(),
+			block_import: Arc::new(Mutex::new(client)),
+			env: environ,
+			keystore,
+			sync_oracle: DummyOracle.clone(),
+			force_authoring: false,
+			_key_type: PhantomData::<AuthorityPair>,
+		};
+
+		let head = Header::new(
+			1,
+			H256::from_low_u64_be(0),
+			H256::from_low_u64_be(0),
+			Default::default(),
+			Default::default()
+		);
+		assert!(worker.claim_slot(&head, 0, &authorities).is_none());
+		assert!(worker.claim_slot(&head, 1, &authorities).is_none());
+		assert!(worker.claim_slot(&head, 2, &authorities).is_none());
+		assert!(worker.claim_slot(&head, 3, &authorities).is_some());
+		assert!(worker.claim_slot(&head, 4, &authorities).is_none());
+		assert!(worker.claim_slot(&head, 5, &authorities).is_none());
+		assert!(worker.claim_slot(&head, 6, &authorities).is_none());
+		assert!(worker.claim_slot(&head, 7, &authorities).is_some());
 	}
 }

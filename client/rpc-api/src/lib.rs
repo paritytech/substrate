@@ -22,12 +22,12 @@
 
 mod errors;
 mod helpers;
+mod metadata;
 mod policy;
-mod subscriptions;
 
-pub use jsonrpc_core::IoHandlerExtension as RpcExtension;
-pub use subscriptions::{Subscriptions, TaskExecutor};
 pub use helpers::Receiver;
+pub use jsonrpc_core::IoHandlerExtension as RpcExtension;
+pub use metadata::Metadata;
 pub use policy::DenyUnsafe;
 
 pub mod author;

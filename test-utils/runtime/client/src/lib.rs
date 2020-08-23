@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Client testing utilities.
 
@@ -34,12 +35,9 @@ use sp_core::{sr25519, ChangesTrieConfiguration};
 use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HashFor};
-use sc_service::client::{
-	light::fetcher::{
-		Fetcher,
-		RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
-		RemoteCallRequest, RemoteChangesRequest, RemoteBodyRequest,
-	},
+use sc_client_api::light::{
+	RemoteCallRequest, RemoteChangesRequest, RemoteBodyRequest,
+	Fetcher, RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
 };
 
 /// A prelude to import in tests.
@@ -77,10 +75,10 @@ pub type Executor = client::LocalCallExecutor<
 pub type LightBackend = substrate_test_client::LightBackend<substrate_test_runtime::Block>;
 
 /// Test client light executor.
-pub type LightExecutor = client::light::call_executor::GenesisCallExecutor<
+pub type LightExecutor = sc_light::GenesisCallExecutor<
 	LightBackend,
 	client::LocalCallExecutor<
-		client::light::backend::Backend<
+		sc_light::Backend<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
 			HashFor<substrate_test_runtime::Block>
 		>,
@@ -349,10 +347,15 @@ pub fn new_light() -> (
 ) {
 
 	let storage = sc_client_db::light::LightStorage::new_test();
-	let blockchain = Arc::new(client::light::blockchain::Blockchain::new(storage));
-	let backend = Arc::new(LightBackend::new(blockchain.clone()));
+	let blockchain = Arc::new(sc_light::Blockchain::new(storage));
+	let backend = Arc::new(LightBackend::new(blockchain));
 	let executor = new_native_executor();
-	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor, sp_core::tasks::executor(), Default::default());
+	let local_call_executor = client::LocalCallExecutor::new(
+		backend.clone(),
+		executor,
+		Box::new(sp_core::testing::TaskExecutor::new()),
+		Default::default(),
+	);
 	let call_executor = LightExecutor::new(
 		backend.clone(),
 		local_call_executor,

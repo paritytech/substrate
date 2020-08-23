@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::utils::{
 	generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
@@ -190,7 +191,8 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 				input: &I, error_desc: &'static str,
 			) -> std::result::Result<R, String>
 		{
-			<R as #crate_::Decode>::decode(
+			<R as #crate_::DecodeLimit>::decode_with_depth_limit(
+				#crate_::MAX_EXTRINSIC_DEPTH,
 				&mut &#crate_::Encode::encode(input)[..],
 			).map_err(|e| format!("{} {}", error_desc, e.what()))
 		}
@@ -250,7 +252,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 					}
 					FnArg::Typed(arg)
 				},
-				r => r.clone(),
+				r => r,
 			});
 
 		let (impl_generics, ty_generics, where_clause) = decl.generics.split_for_impl();
@@ -382,7 +384,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 			renames.push((version, prefix_function_with_trait(&trait_name, &old_name)));
 		}
 
-		renames.sort_unstable_by(|l, r| r.cmp(l));
+		renames.sort_by(|l, r| r.cmp(l));
 		let (versions, old_names) = renames.into_iter().fold(
 			(Vec::new(), Vec::new()),
 			|(mut versions, mut old_names), (version, old_name)| {

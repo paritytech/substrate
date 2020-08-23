@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Configuration of the networking layer.
 //!
@@ -270,8 +272,21 @@ pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 /// Splits a Multiaddress into a Multiaddress and PeerId.
 pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
-		Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
-			.map_err(|_| ParseErr::InvalidPeerId)?,
+		Some(multiaddr::Protocol::P2p(key)) => {
+			if !matches!(key.algorithm(), multiaddr::multihash::Code::Identity) {
+				// (note: this is the "person bowing" emoji)
+				log::warn!(
+					"🙇 You are using the peer ID {}. This peer ID uses a legacy, deprecated \
+					representation that will no longer be supported in the future. \
+					Please refresh it by performing a RPC query to the appropriate node, \
+					by looking at its logs, or by using `subkey inspect-node-key` on its \
+					private key.",
+					bs58::encode(key.as_bytes()).into_string()
+				);
+			}
+
+			PeerId::from_multihash(key).map_err(|_| ParseErr::InvalidPeerId)?
+		},
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
 
@@ -410,9 +425,6 @@ pub struct NetworkConfiguration {
 	pub max_parallel_downloads: u32,
 	/// Should we insert non-global addresses into the DHT?
 	pub allow_non_globals_in_dht: bool,
-	/// If true, uses the `/<chainid>/block-requests/<version>` experimental protocol rather than
-	/// the legacy substream. This option is meant to be hard-wired to `true` in the future.
-	pub use_new_block_requests_protocol: bool,
 }
 
 impl NetworkConfiguration {
@@ -444,7 +456,6 @@ impl NetworkConfiguration {
 			},
 			max_parallel_downloads: 5,
 			allow_non_globals_in_dht: false,
-			use_new_block_requests_protocol: true,
 		}
 	}
 }

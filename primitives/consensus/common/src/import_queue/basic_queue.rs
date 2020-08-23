@@ -1,31 +1,36 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::{mem, pin::Pin, time::Duration, marker::PhantomData};
 use futures::{prelude::*, task::Context, task::Poll};
 use futures_timer::Delay;
 use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
+use prometheus_endpoint::Registry;
 
-use crate::block_import::BlockOrigin;
-use crate::import_queue::{
-	BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
-	BoxJustificationImport, ImportQueue, Link, Origin,
-	IncomingBlock, import_single_block,
-	buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver}
+use crate::{
+	block_import::BlockOrigin,
+	import_queue::{
+		BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
+		BoxJustificationImport, ImportQueue, Link, Origin,
+		IncomingBlock, import_single_block_metered,
+		buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver},
+	},
+	metrics::Metrics,
 };
 
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate
@@ -56,15 +61,22 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
-		spawner: &impl sp_core::traits::SpawnBlocking,
+		spawner: &impl sp_core::traits::SpawnNamed,
+		prometheus_registry: Option<&Registry>,
 	) -> Self {
 		let (result_sender, result_port) = buffered_link::buffered_link();
+		let metrics = prometheus_registry.and_then(|r|
+			Metrics::register(r)
+			.map_err(|err| { log::warn!("Failed to register Prometheus metrics: {}", err); })
+			.ok()
+		);
 		let (future, worker_sender) = BlockImportWorker::new(
 			result_sender,
 			verifier,
 			block_import,
 			justification_import,
 			finality_proof_import,
+			metrics,
 		);
 
 		spawner.spawn_blocking("basic-block-import-worker", future.boxed());
@@ -84,7 +96,13 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		}
 
 		trace!(target: "sync", "Scheduling {} blocks for import", blocks.len());
-		let _ = self.sender.unbounded_send(ToWorkerMsg::ImportBlocks(origin, blocks));
+		let res = self.sender.unbounded_send(ToWorkerMsg::ImportBlocks(origin, blocks));
+		if res.is_err() {
+			log::error!(
+				target: "sync",
+				"import_blocks: Background import task is no longer alive"
+			);
+		}
 	}
 
 	fn import_justification(
@@ -94,10 +112,16 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		number: NumberFor<B>,
 		justification: Justification
 	) {
-		let _ = self.sender
+		let res = self.sender
 			.unbounded_send(
-				ToWorkerMsg::ImportJustification(who.clone(), hash, number, justification)
+				ToWorkerMsg::ImportJustification(who, hash, number, justification)
 			);
+		if res.is_err() {
+			log::error!(
+				target: "sync",
+				"import_justification: Background import task is no longer alive"
+			);
+		}
 	}
 
 	fn import_finality_proof(
@@ -108,14 +132,22 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		finality_proof: Vec<u8>,
 	) {
 		trace!(target: "sync", "Scheduling finality proof of {}/{} for import", number, hash);
-		let _ = self.sender
+		let res = self.sender
 			.unbounded_send(
 				ToWorkerMsg::ImportFinalityProof(who, hash, number, finality_proof)
 			);
+		if res.is_err() {
+			log::error!(
+				target: "sync",
+				"import_finality_proof: Background import task is no longer alive"
+			);
+		}
 	}
 
 	fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
-		self.result_port.poll_actions(cx, link);
+		if self.result_port.poll_actions(cx, link).is_err() {
+			log::error!(target: "sync", "poll_actions: Background import task is no longer alive");
+		}
 	}
 }
 
@@ -132,6 +164,7 @@ struct BlockImportWorker<B: BlockT, Transaction> {
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	delay_between_blocks: Duration,
+	metrics: Option<Metrics>,
 	_phantom: PhantomData<Transaction>,
 }
 
@@ -142,6 +175,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
+		metrics: Option<Metrics>,
 	) -> (impl Future<Output = ()> + Send, TracingUnboundedSender<ToWorkerMsg<B>>) {
 		let (sender, mut port) = tracing_unbounded("mpsc_block_import_worker");
 
@@ -150,6 +184,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 			justification_import,
 			finality_proof_import,
 			delay_between_blocks: Duration::new(0, 0),
+			metrics,
 			_phantom: PhantomData,
 		};
 
@@ -210,7 +245,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 						// a `Future` into `importing`.
 						let (bi, verif) = block_import_verifier.take()
 							.expect("block_import_verifier is always Some; qed");
-						importing = Some(worker.import_a_batch_of_blocks(bi, verif, origin, blocks));
+						importing = Some(worker.import_batch(bi, verif, origin, blocks));
 					},
 					ToWorkerMsg::ImportFinalityProof(who, hash, number, proof) => {
 						let (_, verif) = block_import_verifier.as_mut()
@@ -232,16 +267,17 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 	///
 	/// For lifetime reasons, the `BlockImport` implementation must be passed by value, and is
 	/// yielded back in the output once the import is finished.
-	fn import_a_batch_of_blocks<V: 'static + Verifier<B>>(
+	fn import_batch<V: 'static + Verifier<B>>(
 		&mut self,
 		block_import: BoxBlockImport<B, Transaction>,
 		verifier: V,
 		origin: BlockOrigin,
-		blocks: Vec<IncomingBlock<B>>
+		blocks: Vec<IncomingBlock<B>>,
 	) -> impl Future<Output = (BoxBlockImport<B, Transaction>, V)> {
 		let mut result_sender = self.result_sender.clone();
+		let metrics = self.metrics.clone();
 
-		import_many_blocks(block_import, origin, blocks, verifier, self.delay_between_blocks)
+		import_many_blocks(block_import, origin, blocks, verifier, self.delay_between_blocks, metrics)
 			.then(move |(imported, count, results, block_import, verifier)| {
 				result_sender.blocks_processed(imported, count, results);
 				future::ready((block_import, verifier))
@@ -312,6 +348,7 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 	blocks: Vec<IncomingBlock<B>>,
 	verifier: V,
 	delay_between_blocks: Duration,
+	metrics: Option<Metrics>,
 ) -> impl Future<
 	Output = (
 		usize,
@@ -361,9 +398,9 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 			None => {
 				// No block left to import, success!
 				let import_handle = import_handle.take()
-					.expect("Future polled again after it has finished");
+					.expect("Future polled again after it has finished (import handle is None)");
 				let verifier = verifier.take()
-					.expect("Future polled again after it has finished");
+					.expect("Future polled again after it has finished (verifier handle is None)");
 				let results = mem::replace(&mut results, Vec::new());
 				return Poll::Ready((imported, count, results, import_handle, verifier));
 			},
@@ -373,9 +410,9 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 		// therefore `import_handle` and `verifier` are always `Some` here. It is illegal to poll
 		// a `Future` again after it has ended.
 		let import_handle = import_handle.as_mut()
-			.expect("Future polled again after it has finished");
+			.expect("Future polled again after it has finished (import handle is None)");
 		let verifier = verifier.as_mut()
-			.expect("Future polled again after it has finished");
+			.expect("Future polled again after it has finished (verifier handle is None)");
 
 		let block_number = block.header.as_ref().map(|h| h.number().clone());
 		let block_hash = block.hash;
@@ -383,13 +420,18 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 			Err(BlockImportError::Cancelled)
 		} else {
 			// The actual import.
-			import_single_block(
+			import_single_block_metered(
 				&mut **import_handle,
 				blocks_origin.clone(),
 				block,
 				verifier,
+				metrics.clone(),
 			)
 		};
+
+		if let Some(metrics) = metrics.as_ref() {
+			metrics.report_import::<B>(&import_result);
+		}
 
 		if import_result.is_ok() {
 			trace!(target: "sync", "Block imported successfully {:?} ({})", block_number, block_hash);

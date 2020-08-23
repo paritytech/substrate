@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate Client
 
@@ -26,8 +28,9 @@ use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::Prefix;
 use sp_core::{
-	ChangesTrieConfiguration, convert_hash, NativeOrEncoded,
-	storage::{StorageKey, PrefixedStorageKey, StorageData, well_known_keys, ChildInfo},
+	convert_hash,
+	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
+	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
 };
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
@@ -78,25 +81,24 @@ use sc_client_api::{
 	KeyIterator, CallExecutor, ExecutorProvider, ProofProvider,
 	cht, UsageProvider
 };
-use sp_utils::mpsc::tracing_unbounded;
+use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
 use super::{
-	genesis,
-	light::{call_executor::prove_execution, fetcher::ChangesProof},
-	block_rules::{BlockRules, LookupResult as BlockLookupResult},
+	genesis, block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
-use futures::channel::mpsc;
+use sc_light::{call_executor::prove_execution, fetcher::ChangesProof};
+use rand::Rng;
 
 #[cfg(feature="test-helpers")]
 use {
-	sp_core::traits::CodeExecutor,
-	sc_client_api::{CloneableSpawn, in_mem},
+	sp_core::traits::{CodeExecutor, SpawnNamed},
+	sc_client_api::in_mem,
 	sc_executor::RuntimeInfo,
 	super::call_executor::LocalCallExecutor,
 };
 
-type NotificationSinks<T> = Mutex<Vec<mpsc::UnboundedSender<T>>>;
+type NotificationSinks<T> = Mutex<Vec<TracingUnboundedSender<T>>>;
 
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
@@ -147,7 +149,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
@@ -187,7 +189,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	executor: E,
 	build_genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
@@ -349,13 +351,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		self.executor.runtime_version(id)
-	}
-
-	/// Get block hash by number.
-	pub fn block_hash(&self,
-		block_number: <<Block as BlockT>::Header as HeaderT>::Number
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		self.backend.blockchain().hash(block_number)
 	}
 
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
@@ -661,8 +656,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		if let Ok(ImportResult::Imported(ref aux)) = result {
 			if aux.is_new_best {
-				use rand::Rng;
-
 				// don't send telemetry block import events during initial sync for every
 				// block to avoid spamming the telemetry server, these events will be randomly
 				// sent at a rate of 1/10.
@@ -753,11 +746,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				) = storage_changes.into_inner();
 
 				if self.config.offchain_indexing_api {
-					// if let Some(mut offchain_storage) = self.backend.offchain_storage() {
-					// 	offchain_sc.iter().for_each(|(k,v)| {
-					// 		offchain_storage.set(b"block-import-info", k,v)
-					// 	});
-					// }
 					operation.op.update_offchain_storage(offchain_sc)?;
 				}
 
@@ -786,15 +774,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			NewBlockState::Normal
 		};
 
-		let retracted = if is_new_best {
+		let tree_route = if is_new_best && info.best_hash != parent_hash {
 			let route_from_best = sp_blockchain::tree_route(
 				self.backend.blockchain(),
 				info.best_hash,
 				parent_hash,
 			)?;
-			route_from_best.retracted().iter().rev().map(|e| e.hash.clone()).collect()
+			Some(route_from_best)
 		} else {
-			Vec::default()
+			None
 		};
 
 		trace!(
@@ -825,7 +813,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				header: import_headers.into_post(),
 				is_new_best,
 				storage_changes,
-				retracted,
+				tree_route,
 			})
 		}
 
@@ -864,9 +852,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// block.
 			(true, ref mut storage_changes @ None, Some(ref body)) => {
 				let runtime_api = self.runtime_api();
+				let execution_context = if import_block.origin == BlockOrigin::NetworkInitialSync {
+					ExecutionContext::Syncing
+				} else {
+					ExecutionContext::Importing
+				};
 
-				runtime_api.execute_block(
+				runtime_api.execute_block_with_context(
 					&at,
+					execution_context,
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;
 
@@ -954,7 +948,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// we'll send notifications spuriously in that case.
 			const MAX_TO_NOTIFY: usize = 256;
 			let enacted = route_from_finalized.enacted();
-			let start = enacted.len() - ::std::cmp::min(enacted.len(), MAX_TO_NOTIFY);
+			let start = enacted.len() - std::cmp::min(enacted.len(), MAX_TO_NOTIFY);
 			for finalized in &enacted[start..] {
 				operation.notify_finalized.push(finalized.hash);
 			}
@@ -978,14 +972,27 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Ok(());
 		}
 
-		for finalized_hash in notify_finalized {
-			let header = self.header(&BlockId::Hash(finalized_hash))?
-				.expect("header already known to exist in DB because it is indicated in the tree route; qed");
+		// We assume the list is sorted and only want to inform the
+		// telemetry once about the finalized block.
+		if let Some(last) = notify_finalized.last() {
+			let header = self.header(&BlockId::Hash(*last))?
+				.expect(
+					"Header already known to exist in DB because it is \
+					 indicated in the tree route; qed"
+				);
 
 			telemetry!(SUBSTRATE_INFO; "notify.finalized";
 				"height" => format!("{}", header.number()),
-				"best" => ?finalized_hash,
+				"best" => ?last,
 			);
+		}
+
+		for finalized_hash in notify_finalized {
+			let header = self.header(&BlockId::Hash(finalized_hash))?
+				.expect(
+					"Header already known to exist in DB because it is \
+					 indicated in the tree route; qed"
+				);
 
 			let notification = FinalityNotification {
 				header,
@@ -1034,7 +1041,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			origin: notify_import.origin,
 			header: notify_import.header,
 			is_new_best: notify_import.is_new_best,
-			retracted: notify_import.retracted,
+			tree_route: notify_import.tree_route.map(Arc::new),
 		};
 
 		self.import_notification_sinks.lock()
@@ -1047,20 +1054,31 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// reverted past the last finalized block. Returns the number of blocks
 	/// that were successfully reverted.
 	pub fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n, false)?)
+		let (number, _) = self.backend.revert(n, false)?;
+		Ok(number)
 	}
 
-	/// Attempts to revert the chain by `n` blocks disregarding finality. This
-	/// method will revert any finalized blocks as requested and can potentially
-	/// leave the node in an inconsistent state. Other modules in the system that
-	/// persist data and that rely on finality (e.g. consensus parts) will be
-	/// unaffected by the revert. Use this method with caution and making sure
-	/// that no other data needs to be reverted for consistency aside from the
-	/// block data.
+	/// Attempts to revert the chain by `n` blocks disregarding finality. This method will revert
+	/// any finalized blocks as requested and can potentially leave the node in an inconsistent
+	/// state. Other modules in the system that persist data and that rely on finality
+	/// (e.g. consensus parts) will be unaffected by the revert. Use this method with caution and
+	/// making sure that no other data needs to be reverted for consistency aside from the block
+	/// data. If `blacklist` is set to true, will also blacklist reverted blocks from finalizing
+	/// again. The blacklist is reset upon client restart.
 	///
 	/// Returns the number of blocks that were successfully reverted.
-	pub fn unsafe_revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n, true)?)
+	pub fn unsafe_revert(
+		&mut self,
+		n: NumberFor<Block>,
+		blacklist: bool,
+	) -> sp_blockchain::Result<NumberFor<Block>> {
+		let (number, reverted) = self.backend.revert(n, true)?;
+		if blacklist {
+			for b in reverted {
+				self.block_rules.mark_bad(b);
+			}
+		}
+		Ok(number)
 	}
 
 	/// Get blockchain info.
@@ -1910,6 +1928,10 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 
 	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
 		self.backend.blockchain().justification(*id)
+	}
+
+	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
+		self.backend.blockchain().hash(number)
 	}
 }
 

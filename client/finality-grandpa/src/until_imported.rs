@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Helper stream for waiting until one or more blocks are imported before
 //! passing through inner items. This is done in a generic way to support
@@ -258,7 +260,7 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 				Poll::Ready(Some(notification)) => {
 					// new block imported. queue up all messages tied to that hash.
 					if let Some((_, _, messages)) = this.pending.remove(&notification.hash) {
-						let canon_number = notification.header.number().clone();
+						let canon_number = *notification.header.number();
 						let ready_messages = messages.into_iter()
 							.filter_map(|m| m.wait_completed(canon_number));
 
@@ -359,7 +361,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 			}
 		}
 
-		return Ok(DiscardWaitOrReady::Wait(vec![(target_hash, target_number, msg)]))
+		Ok(DiscardWaitOrReady::Wait(vec![(target_hash, target_number, msg)]))
 	}
 
 	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<Self::Blocked> {
@@ -430,7 +432,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 			let mut query_known = |target_hash, perceived_number| -> Result<bool, Error> {
 				// check integrity: all votes for same hash have same number.
 				let canon_number = match checked_hashes.entry(target_hash) {
-					Entry::Occupied(entry) => entry.get().number().clone(),
+					Entry::Occupied(entry) => *entry.get().number(),
 					Entry::Vacant(entry) => {
 						if let Some(number) = status_check.block_number(target_hash)? {
 							entry.insert(KnownOrUnknown::Known(number));
@@ -583,7 +585,7 @@ mod tests {
 				origin: BlockOrigin::File,
 				header,
 				is_new_best: false,
-				retracted: vec![],
+				tree_route: None,
 			}).unwrap();
 		}
 	}

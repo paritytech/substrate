@@ -28,7 +28,7 @@ use futures::{
 	StreamExt as _, TryStreamExt as _,
 };
 use hash_db::Hasher;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use log::warn;
 use parking_lot::Mutex;
 use rpc::{
@@ -38,7 +38,7 @@ use rpc::{
 	futures::stream::Stream,
 };
 
-use sc_rpc_api::{Subscriptions, state::ReadProof};
+use sc_rpc_api::state::ReadProof;
 use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sc_client_api::{
 	BlockchainEvents,
@@ -63,7 +63,7 @@ type StorageMap = HashMap<StorageKey, Option<StorageData>>;
 #[derive(Clone)]
 pub struct LightState<Block: BlockT, F: Fetcher<Block>, Client> {
 	client: Arc<Client>,
-	subscriptions: Subscriptions,
+	subscriptions: SubscriptionManager,
 	version_subscriptions: SimpleSubscriptions<Block::Hash, RuntimeVersion>,
 	storage_subscriptions: Arc<Mutex<StorageSubscriptions<Block>>>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
@@ -143,7 +143,7 @@ impl<Block: BlockT, F: Fetcher<Block> + 'static, Client> LightState<Block, F, Cl
 	/// Create new state API backend for light nodes.
 	pub fn new(
 		client: Arc<Client>,
-		subscriptions: Subscriptions,
+		subscriptions: SubscriptionManager,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 		fetcher: Arc<F>,
 	) -> Self {
@@ -211,6 +211,14 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		_count: u32,
 		_start_key: Option<StorageKey>,
 	) -> FutureResult<Vec<StorageKey>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
+	fn storage_size(
+		&self,
+		_: Option<Block::Hash>,
+		_: StorageKey,
+	) -> FutureResult<Option<u64>> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
@@ -289,7 +297,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn subscribe_storage(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
 		keys: Option<Vec<StorageKey>>
 	) {
@@ -384,7 +392,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn unsubscribe_storage(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		if !self.subscriptions.cancel(id.clone()) {
@@ -412,7 +420,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn subscribe_runtime_version(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<RuntimeVersion>,
 	) {
 		self.subscriptions.add(subscriber, move |sink| {
@@ -459,7 +467,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn unsubscribe_runtime_version(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
@@ -539,7 +547,7 @@ fn resolve_header<Block: BlockT, F: Fetcher<Block>>(
 
 	maybe_header.then(move |result|
 		ready(result.and_then(|maybe_header|
-			maybe_header.ok_or(ClientError::UnknownBlock(format!("{}", block)))
+			maybe_header.ok_or_else(|| ClientError::UnknownBlock(format!("{}", block)))
 		).map_err(client_err)),
 	)
 }

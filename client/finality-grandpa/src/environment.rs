@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
@@ -33,7 +35,6 @@ use finality_grandpa::{
 	voter, voter_set::VoterSet,
 };
 use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as ClientError};
-use sp_core::Pair;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
@@ -50,6 +51,7 @@ use sp_consensus::SelectChain;
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::communication::Network as NetworkT;
 use crate::consensus_changes::SharedConsensusChanges;
+use crate::notification::GrandpaJustificationSender;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
@@ -108,7 +110,7 @@ impl<Block: BlockT> Decode for CompletedRounds<Block> {
 	fn decode<I: parity_scale_codec::Input>(value: &mut I) -> Result<Self, parity_scale_codec::Error> {
 		<(Vec<CompletedRound<Block>>, SetId, Vec<AuthorityId>)>::decode(value)
 			.map(|(rounds, set_id, voters)| CompletedRounds {
-				rounds: rounds.into(),
+				rounds,
 				set_id,
 				voters,
 			})
@@ -248,14 +250,14 @@ impl<Block: BlockT> VoterSetState<Block> {
 	{
 		if let VoterSetState::Live { completed_rounds, current_rounds } = self {
 			if current_rounds.contains_key(&round) {
-				return Ok((completed_rounds, current_rounds));
+				Ok((completed_rounds, current_rounds))
 			} else {
 				let msg = "Voter acting on a live round we are not tracking.";
-				return Err(Error::Safety(msg.to_string()));
+				Err(Error::Safety(msg.to_string()))
 			}
 		} else {
 			let msg = "Voter acting while in paused state.";
-			return Err(Error::Safety(msg.to_string()));
+			Err(Error::Safety(msg.to_string()))
 		}
 	}
 }
@@ -389,7 +391,6 @@ impl Metrics {
 	}
 }
 
-
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	pub(crate) client: Arc<C>,
@@ -403,6 +404,7 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
 	pub(crate) metrics: Option<Metrics>,
+	pub(crate) justification_sender: Option<GrandpaJustificationSender<Block>>,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -514,12 +516,14 @@ where
 			equivocation,
 		);
 
-		self.client.runtime_api()
-			.submit_report_equivocation_extrinsic(
+		self.client
+			.runtime_api()
+			.submit_report_equivocation_unsigned_extrinsic(
 				&BlockId::Hash(best_header.hash()),
 				equivocation_proof,
 				key_owner_proof,
-			).map_err(Error::Client)?;
+			)
+			.map_err(Error::Client)?;
 
 		Ok(())
 	}
@@ -622,7 +626,7 @@ where
 						restricted_number >= base_header.number() &&
 							restricted_number < target_header.number()
 					})
-					.or(Some((target_header.hash(), *target_header.number())))
+					.or_else(|| Some((target_header.hash(), *target_header.number())))
 			},
 			Ok(None) => {
 				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
@@ -702,11 +706,11 @@ where
 		let prevote_timer = Delay::new(self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(self.config.gossip_duration * 4);
 
-		let local_key = crate::is_voter(&self.voters, &self.config.keystore);
+		let local_key = crate::is_voter(&self.voters, self.config.keystore.as_ref());
 
 		let has_voted = match self.voter_set_state.has_voted(round) {
 			HasVoted::Yes(id, vote) => {
-				if local_key.as_ref().map(|k| k.public() == id).unwrap_or(false) {
+				if local_key.as_ref().map(|k| k == &id).unwrap_or(false) {
 					HasVoted::Yes(id, vote)
 				} else {
 					HasVoted::No
@@ -715,11 +719,18 @@ where
 			HasVoted::No => HasVoted::No,
 		};
 
+		// we can only sign when we have a local key in the authority set
+		// and we have a reference to the keystore.
+		let keystore = match (local_key.as_ref(), self.config.keystore.as_ref()) {
+			(Some(id), Some(keystore)) => Some((id.clone(), keystore.clone()).into()),
+			_ => None,
+		};
+
 		let (incoming, outgoing) = self.network.round_communication(
+			keystore,
 			crate::communication::Round(round),
 			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
-			local_key.clone(),
 			has_voted,
 		);
 
@@ -738,7 +749,7 @@ where
 		let outgoing = Box::pin(outgoing.sink_err_into());
 
 		voter::RoundData {
-			voter_id: local_key.map(|pair| pair.public()),
+			voter_id: local_key,
 			prevote_timer: Box::pin(prevote_timer.map(Ok)),
 			precommit_timer: Box::pin(precommit_timer.map(Ok)),
 			incoming,
@@ -747,10 +758,10 @@ where
 	}
 
 	fn proposed(&self, round: RoundNumber, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
+		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
-			Some(id) => id.public(),
+			Some(id) => id,
 			None => return Ok(()),
 		};
 
@@ -786,10 +797,10 @@ where
 	}
 
 	fn prevoted(&self, round: RoundNumber, prevote: Prevote<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
+		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
-			Some(id) => id.public(),
+			Some(id) => id,
 			None => return Ok(()),
 		};
 
@@ -827,10 +838,10 @@ where
 	}
 
 	fn precommitted(&self, round: RoundNumber, precommit: Precommit<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
+		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
-			Some(id) => id.public(),
+			Some(id) => id,
 			None => return Ok(()),
 		};
 
@@ -920,7 +931,12 @@ where
 			// remove the round from live rounds and start tracking the next round
 			let mut current_rounds = current_rounds.clone();
 			current_rounds.remove(&round);
-			current_rounds.insert(round + 1, HasVoted::No);
+
+			// NOTE: this condition should always hold as GRANDPA rounds are always
+			// started in increasing order, still it's better to play it safe.
+			if !current_rounds.contains_key(&(round + 1)) {
+				current_rounds.insert(round + 1, HasVoted::No);
+			}
 
 			let set_state = VoterSetState::<Block>::Live {
 				completed_rounds,
@@ -1007,6 +1023,7 @@ where
 			number,
 			(round, commit).into(),
 			false,
+			&self.justification_sender,
 		)
 	}
 
@@ -1071,6 +1088,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
+	justification_sender: &Option<GrandpaJustificationSender<Block>>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
 	Block:  BlockT,
 	BE: Backend<Block>,
@@ -1082,6 +1100,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	let mut authority_set = authority_set.inner().write();
 
 	let status = client.info();
+
 	if number <= status.finalized_number && client.hash(number)? == Some(hash) {
 		// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
 		// the voter will be restarted at the median last finalized block, which can be lower than the local best
@@ -1142,7 +1161,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 		// justifications for transition blocks which will be requested by
 		// syncing clients.
 		let justification = match justification_or_commit {
-			JustificationOrCommit::Justification(justification) => Some(justification.encode()),
+			JustificationOrCommit::Justification(justification) => Some(justification),
 			JustificationOrCommit::Commit((round_number, commit)) => {
 				let mut justification_required =
 					// justification is always required when block that enacts new authorities
@@ -1169,12 +1188,21 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 						commit,
 					)?;
 
-					Some(justification.encode())
+					Some(justification)
 				} else {
 					None
 				}
 			},
 		};
+
+		// Notify any registered listeners in case we have a justification
+		if let Some(sender) = justification_sender {
+			if let Some(ref justification) = justification {
+				let _ = sender.notify(justification.clone());
+			}
+		}
+
+		let justification = justification.map(|j| j.encode());
 
 		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
 

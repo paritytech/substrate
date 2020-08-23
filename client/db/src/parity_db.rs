@@ -1,22 +1,23 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 /// A `Database` adapter for parity-db.
 
-use sp_database::{Database, Change, Transaction, ColumnId};
+use sp_database::{Database, Change, ColumnId, Transaction, error::DatabaseError};
 use crate::utils::NUM_COLUMNS;
 use crate::columns;
 
@@ -26,7 +27,7 @@ fn handle_err<T>(result: parity_db::Result<T>) -> T {
 	match result {
 		Ok(r) => r,
 		Err(e) =>  {
-			panic!("Critical database eror: {:?}", e);
+			panic!("Critical database error: {:?}", e);
 		}
 	}
 }
@@ -43,7 +44,7 @@ pub fn open<H: Clone>(path: &std::path::Path) -> parity_db::Result<std::sync::Ar
 }
 
 impl<H: Clone> Database<H> for DbAdapter {
-	fn commit(&self, transaction: Transaction<H>) {
+	fn commit(&self, transaction: Transaction<H>) -> Result<(), DatabaseError> {
 		handle_err(self.0.commit(transaction.0.into_iter().map(|change|
 			match change {
 				Change::Set(col, key, value) => (col as u8, key, Some(value)),
@@ -51,6 +52,8 @@ impl<H: Clone> Database<H> for DbAdapter {
 				_ => unimplemented!(),
 			}))
 		);
+
+		Ok(())
 	}
 
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {

@@ -1,9 +1,9 @@
 [package]
 name = "sp-database"
-version = "2.0.0-dev"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Substrate database trait."
@@ -11,4 +11,4 @@ documentation = "https://docs.rs/sp-database"
 
 [dependencies]
 parking_lot = "0.10.0"
-kvdb = "0.5.0"
+kvdb = "0.7.0"

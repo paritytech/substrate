@@ -13,6 +13,7 @@
 // limitations under the License.
 
 
+
 #[macro_use]
 extern crate criterion;
 
@@ -106,9 +107,29 @@ fn bench_sr25519(c: &mut Criterion) {
 	}, vec![32, 1024, 1024 * 1024]);
 }
 
+fn bench_ecdsa(c: &mut Criterion) {
+	c.bench_function_over_inputs("signing - ecdsa", |b, &msg_size| {
+		let msg = (0..msg_size)
+			.map(|_| rand::random::<u8>())
+			.collect::<Vec<_>>();
+		let key = sp_core::ecdsa::Pair::generate().0;
+		b.iter(|| key.sign(&msg))
+	}, vec![32, 1024, 1024 * 1024]);
+
+	c.bench_function_over_inputs("verifying - ecdsa", |b, &msg_size| {
+		let msg = (0..msg_size)
+			.map(|_| rand::random::<u8>())
+			.collect::<Vec<_>>();
+		let key = sp_core::ecdsa::Pair::generate().0;
+		let sig = key.sign(&msg);
+		let public = key.public();
+		b.iter(|| sp_core::ecdsa::Pair::verify(&sig, &msg, &public))
+	}, vec![32, 1024, 1024 * 1024]);
+}
+
 criterion_group!{
 	name = benches;
 	config = Criterion::default().warm_up_time(Duration::from_millis(500)).without_plots();
-	targets = bench_hash_128_fix_size, bench_hash_128_dyn_size, bench_ed25519, bench_sr25519
+	targets = bench_hash_128_fix_size, bench_hash_128_dyn_size, bench_ed25519, bench_sr25519, bench_ecdsa
 }
 criterion_main!(benches);

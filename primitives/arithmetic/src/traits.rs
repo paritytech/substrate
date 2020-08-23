@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Primitive traits for the runtime arithmetic.
 
@@ -20,8 +21,8 @@ use sp_std::{self, convert::{TryFrom, TryInto}};
 use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
-	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
-	CheckedShl, CheckedShr, checked_pow
+	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedNeg,
+	CheckedShl, CheckedShr, checked_pow, Signed, Unsigned,
 };
 use sp_std::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -77,6 +78,11 @@ impl<T:
 pub trait AtLeast32Bit: BaseArithmetic + From<u16> + From<u32> {}
 
 impl<T: BaseArithmetic + From<u16> + From<u32>> AtLeast32Bit for T {}
+
+/// A meta trait for arithmetic.  Same as [`AtLeast32Bit `], but also bounded to be unsigned.
+pub trait AtLeast32BitUnsigned: AtLeast32Bit + Unsigned {}
+
+impl<T: AtLeast32Bit + Unsigned> AtLeast32BitUnsigned for T {}
 
 /// Just like `From` except that if the source value is too big to fit into the destination type
 /// then it'll saturate the destination.
@@ -144,7 +150,15 @@ impl<T: Clone + Zero + One + PartialOrd + CheckedMul + Bounded + num_traits::Sat
 	}
 
 	fn saturating_pow(self, exp: usize) -> Self {
-		checked_pow(self, exp).unwrap_or_else(Bounded::max_value)
+		let neg = self < T::zero() && exp % 2 != 0;
+		checked_pow(self, exp)
+			.unwrap_or_else(||
+				if neg {
+					Bounded::min_value()
+				} else {
+					Bounded::max_value()
+				}
+			)
 	}
 }
 

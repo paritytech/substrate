@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # I'm online Module
 //!
@@ -43,7 +44,7 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_system::{self as system, ensure_signed};
+//! use frame_system::ensure_signed;
 //! use pallet_im_online::{self as im_online};
 //!
 //! pub trait Trait: im_online::Trait {}
@@ -81,7 +82,7 @@ use pallet_session::historical::IdentificationTuple;
 use sp_runtime::{
 	offchain::storage::StorageValueRef,
 	RuntimeDebug,
-	traits::{Convert, Member, Saturating, AtLeast32Bit}, Perbill,
+	traits::{Convert, Member, Saturating, AtLeast32BitUnsigned}, Perbill,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionSource,
 		TransactionPriority,
@@ -96,7 +97,7 @@ use frame_support::{
 	traits::Get,
 	weights::Weight,
 };
-use frame_system::{self as system, ensure_none};
+use frame_system::ensure_none;
 use frame_system::offchain::{
 	SendTransactionTypes,
 	SubmitTransaction,
@@ -159,7 +160,7 @@ struct HeartbeatStatus<BlockNumber> {
 	pub sent_at: BlockNumber,
 }
 
-impl<BlockNumber: PartialEq + AtLeast32Bit + Copy> HeartbeatStatus<BlockNumber> {
+impl<BlockNumber: PartialEq + AtLeast32BitUnsigned + Copy> HeartbeatStatus<BlockNumber> {
 	/// Returns true if heartbeat has been recently sent.
 	///
 	/// Parameters:
@@ -225,6 +226,18 @@ pub struct Heartbeat<BlockNumber>
 	pub validators_len: u32,
 }
 
+pub trait WeightInfo {
+	fn heartbeat(k: u32, e: u32, ) -> Weight;
+	fn validate_unsigned(k: u32, e: u32, ) -> Weight;
+	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn heartbeat(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn validate_unsigned(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn validate_unsigned_and_then_heartbeat(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
@@ -253,6 +266,9 @@ pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::
 	/// This is exposed so that it can be tuned for particular runtime, when
 	/// multiple pallets send unsigned transactions.
 	type UnsignedPriority: Get<TransactionPriority>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_event!(
@@ -260,11 +276,11 @@ decl_event!(
 		<T as Trait>::AuthorityId,
 		IdentificationTuple = IdentificationTuple<T>,
 	{
-		/// A new heartbeat was received from `AuthorityId`
+		/// A new heartbeat was received from `AuthorityId` [authority_id]
 		HeartbeatReceived(AuthorityId),
 		/// At the end of the session, no offence was committed.
 		AllGood,
-		/// At the end of the session, at least once validator was found to be offline.
+		/// At the end of the session, at least one validator was found to be [offline].
 		SomeOffline(Vec<IdentificationTuple>),
 	}
 );

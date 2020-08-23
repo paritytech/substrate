@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Session Module
 //!
@@ -112,7 +113,7 @@ use frame_support::{
 	dispatch::{self, DispatchResult, DispatchError},
 	weights::Weight,
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::ensure_signed;
 
 #[cfg(test)]
 mod mock;
@@ -170,6 +171,14 @@ impl<
 			offset
 		})
 	}
+
+	fn weight(_now: BlockNumber) -> Weight {
+		// Weight note: `estimate_next_session_rotation` has no storage reads and trivial computational overhead.
+		// There should be no risk to the chain having this weight value be zero for now.
+		// However, this value of zero was not properly calculated, and so it would be reasonable
+		// to come back here and properly calculate the weight of this function.
+		0
+	}
 }
 
 /// A trait for managing creation of new validator set.
@@ -210,7 +219,7 @@ pub trait SessionHandler<ValidatorId> {
 	/// All the key type ids this session handler can process.
 	///
 	/// The order must be the same as it expects them in
-	/// [`on_new_session`](Self::on_new_session) and [`on_genesis_session`](Self::on_genesis_session).
+	/// [`on_new_session`](Self::on_new_session<Ks>) and [`on_genesis_session`](Self::on_genesis_session<Ks>).
 	const KEY_TYPE_IDS: &'static [KeyTypeId];
 
 	/// The given validator set will be used for the genesis session.
@@ -342,6 +351,16 @@ impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
 	}
 }
 
+pub trait WeightInfo {
+	fn set_keys(n: u32, ) -> Weight;
+	fn purge_keys(n: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn set_keys(_n: u32, ) -> Weight { 1_000_000_000 }
+	fn purge_keys(_n: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
@@ -376,6 +395,9 @@ pub trait Trait: frame_system::Trait {
 	/// After the threshold is reached `disabled` method starts to return true,
 	/// which in combination with `pallet_staking` forces a new era.
 	type DisabledValidatorsThreshold: Get<Perbill>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -425,7 +447,7 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				system::Module::<T>::inc_ref(&account);
+				frame_system::Module::<T>::inc_ref(&account);
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
@@ -462,7 +484,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event {
-		/// New session has happened. Note that the argument is the session index, not the block
+		/// New session has happened. Note that the argument is the [session_index], not the block
 		/// number as the type might suggest.
 		NewSession(SessionIndex),
 	}
@@ -683,7 +705,7 @@ impl<T: Trait> Module<T> {
 
 		let old_keys = Self::inner_set_keys(&who, keys)?;
 		if old_keys.is_none() {
-			system::Module::<T>::inc_ref(&account);
+			frame_system::Module::<T>::inc_ref(&account);
 		}
 
 		Ok(())
@@ -731,7 +753,7 @@ impl<T: Trait> Module<T> {
 			let key_data = old_keys.get_raw(*id);
 			Self::clear_key_owner(*id, key_data);
 		}
-		system::Module::<T>::dec_ref(&account);
+		frame_system::Module::<T>::dec_ref(&account);
 
 		Ok(())
 	}
@@ -784,5 +806,9 @@ impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 	/// do a simple proxy and pass the function to next rotation.
 	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
+	}
+
+	fn weight(now: T::BlockNumber) -> Weight {
+		T::NextSessionRotation::weight(now)
 	}
 }

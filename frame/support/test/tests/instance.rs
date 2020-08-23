@@ -1,21 +1,23 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #![recursion_limit="128"]
 
+use codec::{Codec, EncodeLike, Encode, Decode};
 use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
 use frame_support::{
 	Parameter, traits::Get, parameter_types,
@@ -34,7 +36,6 @@ pub trait Currency {}
 
 // Test for:
 // * No default instance
-// * Custom InstantiableTrait
 // * Origin, Inherent, Event
 mod module1 {
 	use super::*;
@@ -43,12 +44,13 @@ mod module1 {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
-		type GenericType: Default + Clone + codec::Codec + codec::EncodeLike;
+		type GenericType: Default + Clone + Codec + EncodeLike;
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where
+		pub struct Module<T: Trait<I>, I: Instance> for enum Call where
 			origin: <T as system::Trait>::Origin,
+			system = system,
 			T::BlockNumber: From<u32>
 		{
 			fn offchain_worker() {}
@@ -64,7 +66,7 @@ mod module1 {
 	}
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait<I>, I: InstantiableThing> as Module1 where
+		trait Store for Module<T: Trait<I>, I: Instance> as Module1 where
 			T::BlockNumber: From<u32> + std::fmt::Display
 		{
 			pub Value config(value): T::GenericType;
@@ -86,7 +88,7 @@ mod module1 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode)]
 	pub enum Origin<T: Trait<I>, I> where T::BlockNumber: From<u32> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
@@ -94,7 +96,7 @@ mod module1 {
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
 
-	impl<T: Trait<I>, I: InstantiableThing> ProvideInherent for Module<T, I> where
+	impl<T: Trait<I>, I: Instance> ProvideInherent for Module<T, I> where
 		T::BlockNumber: From<u32>
 	{
 		type Call = Call<T, I>;
@@ -127,7 +129,8 @@ mod module2 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
-			origin: <T as system::Trait>::Origin
+			origin: <T as system::Trait>::Origin,
+			system = system
 		{
 			fn deposit_event() = default;
 		}
@@ -147,7 +150,7 @@ mod module2 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode)]
 	pub enum Origin<T: Trait<I>, I=DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
@@ -232,12 +235,14 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 
 impl system::Trait for Runtime {
+	type BaseCallFilter= ();
 	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
 	type ModuleToIndex = ();
+	type Call = Call;
 }
 
 frame_support::construct_runtime!(

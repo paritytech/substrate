@@ -1,5 +1,3 @@
-use substrate_test_runtime_client::runtime::Block;
-
 sp_api::decl_runtime_apis! {
 	pub trait Api {
 		fn test(data: u64);

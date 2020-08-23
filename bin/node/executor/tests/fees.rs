@@ -1,33 +1,33 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use codec::{Encode, Joiner};
 use frame_support::{
 	StorageValue, StorageMap,
 	traits::Currency,
-	weights::{GetDispatchInfo, constants::ExtrinsicBaseWeight},
+	weights::{GetDispatchInfo, constants::ExtrinsicBaseWeight, IdentityFee, WeightToFeePolynomial},
 };
-use sp_core::{NeverNativeValue, map, storage::Storage};
-use sp_runtime::{Fixed128, Perbill, traits::{Convert, BlakeTwo256}};
+use sp_core::NeverNativeValue;
+use sp_runtime::{Perbill, FixedPointNumber};
 use node_runtime::{
-	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment,
-	TransactionByteFee, WeightFeeCoefficient,
+	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment, Multiplier,
+	TransactionByteFee,
 	constants::currency::*,
 };
-use node_runtime::impls::LinearWeightToFee;
 use node_primitives::Balance;
 use node_testing::keyring::*;
 
@@ -36,16 +36,16 @@ use self::common::{*, sign};
 
 #[test]
 fn fee_multiplier_increases_and_decreases_on_big_weight() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 
-	// initial fee multiplier must be zero
-	let mut prev_multiplier = Fixed128::from_parts(0);
+	// initial fee multiplier must be one.
+	let mut prev_multiplier = Multiplier::one();
 
 	t.execute_with(|| {
 		assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
 	});
 
-	let mut tt = new_test_ext(COMPACT_CODE, false);
+	let mut tt = new_test_ext(compact_code_unwrap(), false);
 
 	// big one in terms of weight.
 	let block1 = construct_block(
@@ -59,7 +59,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
-				function: Call::System(frame_system::Call::fill_block(Perbill::from_percent(90))),
+				function: Call::System(frame_system::Call::fill_block(Perbill::from_percent(60))),
 			}
 		]
 	);
@@ -122,7 +122,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 }
 
 #[test]
-fn transaction_fee_is_correct_ultimate() {
+fn transaction_fee_is_correct() {
 	// This uses the exact values of substrate-node.
 	//
 	// weight of transfer call as of now: 1_000_000
@@ -130,21 +130,20 @@ fn transaction_fee_is_correct_ultimate() {
 	//   - 1 MILLICENTS in substrate node.
 	//   - 1 milli-dot based on current polkadot runtime.
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
-	let mut t = TestExternalities::<BlakeTwo256>::new_with_code(COMPACT_CODE, Storage {
-		top: map![
-			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 0u8, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
-			},
-			<frame_system::Account<Runtime>>::hashed_key_for(bob()) => {
-				(0u32, 0u8, 10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
-			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
-				(110 * DOLLARS).encode()
-			},
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-		],
-		children_default: map![],
-	});
+	let mut t = new_test_ext(compact_code_unwrap(), false);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		(0u32, 0u8, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+	);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
+		(0u32, 0u8, 10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+	);
+	t.insert(
+		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
+		(110 * DOLLARS).encode()
+	);
+	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
 	let tip = 1_000_000;
 	let xt = sign(CheckedExtrinsic {
@@ -181,13 +180,13 @@ fn transaction_fee_is_correct_ultimate() {
 		let mut balance_alice = (100 - 69) * DOLLARS;
 
 		let base_weight = ExtrinsicBaseWeight::get();
-		let base_fee = LinearWeightToFee::<WeightFeeCoefficient>::convert(base_weight);
+		let base_fee = IdentityFee::<Balance>::calc(&base_weight);
 
 		let length_fee = TransactionByteFee::get() * (xt.clone().encode().len() as Balance);
 		balance_alice -= length_fee;
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
-		let weight_fee = LinearWeightToFee::<WeightFeeCoefficient>::convert(weight);
+		let weight_fee = IdentityFee::<Balance>::calc(&weight);
 
 		// we know that weight to fee multiplier is effect-less in block 1.
 		// current weight of transfer = 200_000_000
@@ -210,9 +209,9 @@ fn block_weight_capacity_report() {
 	use node_primitives::Index;
 
 	// execution ext.
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	// setup ext.
-	let mut tt = new_test_ext(COMPACT_CODE, false);
+	let mut tt = new_test_ext(compact_code_unwrap(), false);
 
 	let factor = 50;
 	let mut time = 10;
@@ -277,9 +276,9 @@ fn block_length_capacity_report() {
 	use node_primitives::Index;
 
 	// execution ext.
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	// setup ext.
-	let mut tt = new_test_ext(COMPACT_CODE, false);
+	let mut tt = new_test_ext(compact_code_unwrap(), false);
 
 	let factor = 256 * 1024;
 	let mut time = 10;

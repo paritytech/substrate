@@ -1,54 +1,56 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Helpers for offchain worker election.
 
 use codec::Decode;
 use crate::{
 	Call, CompactAssignments, Module, NominatorIndex, OffchainAccuracy, Trait, ValidatorIndex,
+	ElectionSize,
 };
 use frame_system::offchain::SubmitTransaction;
-use sp_phragmen::{
-	build_support_map, evaluate_support, reduce, Assignment, ExtendedBalance, PhragmenResult,
-	PhragmenScore, equalize,
+use sp_npos_elections::{
+	build_support_map, evaluate_support, reduce, Assignment, ExtendedBalance, ElectionResult,
+	ElectionScore, balance_solution,
 };
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::{PerThing, RuntimeDebug, traits::{TrailingZeroInput, Zero}};
-use frame_support::{debug, traits::Get};
+use frame_support::traits::Get;
 use sp_std::{convert::TryInto, prelude::*};
 
 /// Error types related to the offchain election machinery.
 #[derive(RuntimeDebug)]
 pub enum OffchainElectionError {
-	/// Phragmen election returned None. This means less candidate that minimum number of needed
+	/// election returned None. This means less candidate that minimum number of needed
 	/// validators were present. The chain is in trouble and not much that we can do about it.
 	ElectionFailed,
 	/// Submission to the transaction pool failed.
 	PoolSubmissionFailed,
 	/// The snapshot data is not available.
 	SnapshotUnavailable,
-	/// Error from phragmen crate. This usually relates to compact operation.
-	PhragmenError(sp_phragmen::Error),
+	/// Error from npos-election crate. This usually relates to compact operation.
+	InternalElectionError(sp_npos_elections::Error),
 	/// One of the computed winners is invalid.
 	InvalidWinner,
 }
 
-impl From<sp_phragmen::Error> for OffchainElectionError {
-	fn from(e: sp_phragmen::Error) -> Self {
-		Self::PhragmenError(e)
+impl From<sp_npos_elections::Error> for OffchainElectionError {
+	fn from(e: sp_npos_elections::Error) -> Self {
+		Self::InternalElectionError(e)
 	}
 }
 
@@ -105,14 +107,14 @@ pub(crate) fn set_check_offchain_execution_status<T: Trait>(
 /// unsigned transaction, without any signature.
 pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElectionError> {
 	// compute raw solution. Note that we use `OffchainAccuracy`.
-	let PhragmenResult {
+	let ElectionResult {
 		winners,
 		assignments,
 	} = <Module<T>>::do_phragmen::<OffchainAccuracy>()
 		.ok_or(OffchainElectionError::ElectionFailed)?;
 
 	// process and prepare it for submission.
-	let (winners, compact, score) = prepare_submission::<T>(assignments, winners, true)?;
+	let (winners, compact, score, size) = prepare_submission::<T>(assignments, winners, true)?;
 
 	// defensive-only: current era can never be none except genesis.
 	let current_era = <Module<T>>::current_era().unwrap_or_default();
@@ -123,20 +125,27 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		compact,
 		score,
 		current_era,
+		size,
 	).into();
 
 	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
-/// Takes a phragmen result and spits out some data that can be submitted to the chain.
+
+/// Takes an election result and spits out some data that can be submitted to the chain.
 ///
 /// This does a lot of stuff; read the inline comments.
 pub fn prepare_submission<T: Trait>(
 	assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>>,
 	winners: Vec<(T::AccountId, ExtendedBalance)>,
 	do_reduce: bool,
-) -> Result<(Vec<ValidatorIndex>, CompactAssignments, PhragmenScore), OffchainElectionError> where
+) -> Result<(
+	Vec<ValidatorIndex>,
+	CompactAssignments,
+	ElectionScore,
+	ElectionSize,
+), OffchainElectionError> where
 	ExtendedBalance: From<<OffchainAccuracy as PerThing>::Inner>,
 {
 	// make sure that the snapshot is available.
@@ -160,26 +169,26 @@ pub fn prepare_submission<T: Trait>(
 	};
 
 	// Clean winners.
-	let winners = sp_phragmen::to_without_backing(winners);
+	let winners = sp_npos_elections::to_without_backing(winners);
 
 	// convert into absolute value and to obtain the reduced version.
-	let mut staked = sp_phragmen::assignment_ratio_to_staked(
+	let mut staked = sp_npos_elections::assignment_ratio_to_staked(
 		assignments,
 		<Module<T>>::slashable_balance_of_vote_weight,
 	);
 
 	let (mut support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
-	// equalize a random number of times.
+	// balance a random number of times.
 	let iterations_executed = match T::MaxIterations::get() {
 		0 => {
-			// Don't run equalize at all
+			// Don't run balance_solution at all
 			0
 		}
 		iterations @ _ => {
 			let seed = sp_io::offchain::random_seed();
 			let iterations = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
 				.expect("input is padded with zeroes; qed") % iterations.saturating_add(1);
-			equalize(
+			balance_solution(
 				&mut staked,
 				&mut support_map,
 				Zero::zero(),
@@ -194,7 +203,8 @@ pub fn prepare_submission<T: Trait>(
 	}
 
 	// Convert back to ratio assignment. This takes less space.
-	let low_accuracy_assignment = sp_phragmen::assignment_staked_to_ratio(staked);
+	let low_accuracy_assignment = sp_npos_elections::assignment_staked_to_ratio_normalized(staked)
+		.map_err(|e| OffchainElectionError::from(e))?;
 
 	// convert back to staked to compute the score in the receiver's accuracy. This can be done
 	// nicer, for now we do it as such since this code is not time-critical. This ensure that the
@@ -205,7 +215,7 @@ pub fn prepare_submission<T: Trait>(
 	// assignment set is also all multiples of this value. After reduce, this no longer holds. Hence
 	// converting to ratio thereafter is not trivially reversible.
 	let score = {
-		let staked = sp_phragmen::assignment_ratio_to_staked(
+		let staked = sp_npos_elections::assignment_ratio_to_staked(
 			low_accuracy_assignment.clone(),
 			<Module<T>>::slashable_balance_of_vote_weight,
 		);
@@ -234,12 +244,18 @@ pub fn prepare_submission<T: Trait>(
 		}
 	}
 
-	debug::native::debug!(
-		target: "staking",
+	// both conversions are safe; snapshots are not created if they exceed.
+	let size = ElectionSize {
+		validators: snapshot_validators.len() as ValidatorIndex,
+		nominators: snapshot_nominators.len() as NominatorIndex,
+	};
+
+	crate::log!(
+		info,
 		"prepared solution after {} equalization iterations with score {:?}",
 		iterations_executed,
 		score,
 	);
 
-	Ok((winners_indexed, compact, score))
+	Ok((winners_indexed, compact, score, size))
 }

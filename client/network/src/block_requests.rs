@@ -119,6 +119,7 @@ pub enum Event<B: Block> {
 #[derive(Debug, Clone)]
 pub struct Config {
 	max_block_data_response: u32,
+	max_block_body_bytes: usize,
 	max_request_len: usize,
 	max_response_len: usize,
 	inactivity_timeout: Duration,
@@ -137,6 +138,7 @@ impl Config {
 	pub fn new(id: &ProtocolId) -> Self {
 		let mut c = Config {
 			max_block_data_response: 128,
+			max_block_body_bytes: 8 * 1024 * 1024,
 			max_request_len: 1024 * 1024,
 			max_response_len: 16 * 1024 * 1024,
 			inactivity_timeout: Duration::from_secs(15),
@@ -168,6 +170,15 @@ impl Config {
 	/// Limit the max. duration the substream may remain inactive before closing it.
 	pub fn set_inactivity_timeout(&mut self, v: Duration) -> &mut Self {
 		self.inactivity_timeout = v;
+		self
+	}
+
+	/// Set the maximum total bytes of block bodies that are send in the response.
+	/// Note that at least one block is always sent regardless of the limit.
+	/// This should be lower than the value specified in `set_max_response_len`
+	/// accounting for headers, justifications and encoding overhead.
+	pub fn set_max_block_body_bytes(&mut self, v: usize) -> &mut Self {
+		self.max_block_body_bytes = v;
 		self
 	}
 
@@ -277,21 +288,13 @@ where
 			return SendRequestOutcome::NotConnected;
 		};
 
-		let protobuf_rq = schema::v1::BlockRequest {
-			fields: u32::from_be_bytes([req.fields.bits(), 0, 0, 0]),
-			from_block: match req.from {
-				message::FromBlock::Hash(h) =>
-					Some(schema::v1::block_request::FromBlock::Hash(h.encode())),
-				message::FromBlock::Number(n) =>
-					Some(schema::v1::block_request::FromBlock::Number(n.encode())),
-			},
-			to_block: req.to.map(|h| h.encode()).unwrap_or_default(),
-			direction: match req.direction {
-				message::Direction::Ascending => schema::v1::Direction::Ascending as i32,
-				message::Direction::Descending => schema::v1::Direction::Descending as i32,
-			},
-			max_blocks: req.max.unwrap_or(0),
-		};
+		let protobuf_rq = build_protobuf_block_request(
+			req.fields,
+			req.from.clone(),
+			req.to.clone(),
+			req.direction,
+			req.max,
+		);
 
 		let mut buf = Vec::with_capacity(protobuf_rq.encoded_len());
 		if let Err(err) = protobuf_rq.encode(&mut buf) {
@@ -386,27 +389,44 @@ where
 				return Err(io::Error::new(io::ErrorKind::Other, msg).into())
 			};
 
-		let attributes = BlockAttributes::decode(&mut request.fields.to_be_bytes().as_ref())?;
+		let attributes = BlockAttributes::from_be_u32(request.fields)?;
 		let get_header = attributes.contains(BlockAttributes::HEADER);
 		let get_body = attributes.contains(BlockAttributes::BODY);
 		let get_justification = attributes.contains(BlockAttributes::JUSTIFICATION);
 
 		let mut blocks = Vec::new();
 		let mut block_id = from_block_id;
+		let mut total_size = 0;
 		while let Some(header) = self.chain.header(block_id).unwrap_or(None) {
-			if blocks.len() >= max_blocks as usize {
+			if blocks.len() >= max_blocks as usize
+				|| (blocks.len() >= 1 && total_size > self.config.max_block_body_bytes)
+			{
 				break
 			}
 
-			let number = header.number().clone();
+			let number = *header.number();
 			let hash = header.hash();
-			let parent_hash = header.parent_hash().clone();
+			let parent_hash = *header.parent_hash();
 			let justification = if get_justification {
 				self.chain.justification(&BlockId::Hash(hash))?
 			} else {
 				None
 			};
 			let is_empty_justification = justification.as_ref().map(|j| j.is_empty()).unwrap_or(false);
+
+			let body = if get_body {
+				match self.chain.block_body(&BlockId::Hash(hash))? {
+					Some(mut extrinsics) => extrinsics.iter_mut()
+						.map(|extrinsic| extrinsic.encode())
+						.collect(),
+					None => {
+						log::trace!(target: "sync", "Missing data for block request.");
+						break;
+					}
+				}
+			} else {
+				Vec::new()
+			};
 
 			let block_data = schema::v1::BlockData {
 				hash: hash.encode(),
@@ -415,21 +435,14 @@ where
 				} else {
 					Vec::new()
 				},
-				body: if get_body {
-					self.chain.block_body(&BlockId::Hash(hash))?
-						.unwrap_or(Vec::new())
-						.iter_mut()
-						.map(|extrinsic| extrinsic.encode())
-						.collect()
-				} else {
-					Vec::new()
-				},
+				body,
 				receipt: Vec::new(),
 				message_queue: Vec::new(),
-				justification: justification.unwrap_or(Vec::new()),
+				justification: justification.unwrap_or_default(),
 				is_empty_justification,
 			};
 
+			total_size += block_data.body.len();
 			blocks.push(block_data);
 
 			match direction {
@@ -463,8 +476,8 @@ where
 			marker: PhantomData,
 		};
 		let mut cfg = OneShotHandlerConfig::default();
-		cfg.inactive_timeout = self.config.inactivity_timeout;
-		cfg.substream_timeout = self.config.request_timeout;
+		cfg.keep_alive_timeout = self.config.inactivity_timeout;
+		cfg.outbound_substream_timeout = self.config.request_timeout;
 		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
 	}
 
@@ -824,5 +837,30 @@ where
 					ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e))
 				})
 		}.boxed()
+	}
+}
+
+/// Build protobuf block request message.
+pub(crate) fn build_protobuf_block_request<Hash: Encode, Number: Encode>(
+	attributes: BlockAttributes,
+	from_block: message::FromBlock<Hash, Number>,
+	to_block: Option<Hash>,
+	direction: message::Direction,
+	max_blocks: Option<u32>,
+) -> schema::v1::BlockRequest {
+	schema::v1::BlockRequest {
+		fields: attributes.to_be_u32(),
+		from_block: match from_block {
+			message::FromBlock::Hash(h) =>
+				Some(schema::v1::block_request::FromBlock::Hash(h.encode())),
+			message::FromBlock::Number(n) =>
+				Some(schema::v1::block_request::FromBlock::Number(n.encode())),
+		},
+		to_block: to_block.map(|h| h.encode()).unwrap_or_default(),
+		direction: match direction {
+			message::Direction::Ascending => schema::v1::Direction::Ascending as i32,
+			message::Direction::Descending => schema::v1::Direction::Descending as i32,
+		},
+		max_blocks: max_blocks.unwrap_or(0),
 	}
 }

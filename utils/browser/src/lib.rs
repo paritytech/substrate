@@ -1,31 +1,32 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use futures01::sync::mpsc as mpsc01;
 use log::{debug, info};
-use std::sync::Arc;
 use sc_network::config::TransportConfig;
 use sc_service::{
-	AbstractService, RpcSession, Role, Configuration,
+	RpcSession, Role, Configuration, TaskManager, RpcHandlers,
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
 	GenericChainSpec, RuntimeGenesis
 };
 use wasm_bindgen::prelude::*;
-use futures::{prelude::*, channel::{oneshot, mpsc}, future::{poll_fn, ok}, compat::*};
-use std::task::Poll;
+use futures::{
+	prelude::*, channel::{oneshot, mpsc}, compat::*, future::{ready, ok, select}
+};
 use std::pin::Pin;
 use sc_chain_spec::Extension;
 use libp2p_wasm_ext::{ExtTransport, ffi};
@@ -63,7 +64,10 @@ where
 		network,
 		telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
 		chain_spec: Box::new(chain_spec),
-		task_executor: Arc::new(move |fut, _| wasm_bindgen_futures::spawn_local(fut)),
+		task_executor: (|fut, _| {
+			wasm_bindgen_futures::spawn_local(fut);
+			async {}
+		}).into(),
 		telemetry_external_transport: Some(transport),
 		role: Role::Light,
 		database: {
@@ -78,13 +82,14 @@ where
 		disable_grandpa: Default::default(),
 		execution_strategies: Default::default(),
 		force_authoring: Default::default(),
-		impl_name: "parity-substrate",
-		impl_version: "0.0.0",
+		impl_name: String::from("parity-substrate"),
+		impl_version: String::from("0.0.0"),
 		offchain_worker: Default::default(),
 		prometheus_config: Default::default(),
 		pruning: Default::default(),
 		rpc_cors: Default::default(),
 		rpc_http: Default::default(),
+		rpc_ipc: Default::default(),
 		rpc_ws: Default::default(),
 		rpc_ws_max_connections: Default::default(),
 		rpc_methods: Default::default(),
@@ -96,6 +101,11 @@ where
 		wasm_method: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
+		base_path: None,
+		informant_output_format: sc_informant::OutputFormat {
+			enable_color: false,
+			prefix: String::new(),
+		},
 	};
 
 	Ok(config)
@@ -114,36 +124,25 @@ struct RpcMessage {
 }
 
 /// Create a Client object that connects to a service.
-pub fn start_client(mut service: impl AbstractService) -> Client {
-	// Spawn informant
-	wasm_bindgen_futures::spawn_local(
-		sc_informant::build(&service, sc_informant::OutputFormat::Plain).map(drop)
-	);
-
+pub fn start_client(mut task_manager: TaskManager, rpc_handlers: RpcHandlers) -> Client {
 	// We dispatch a background task responsible for processing the service.
 	//
 	// The main action performed by the code below consists in polling the service with
 	// `service.poll()`.
 	// The rest consists in handling RPC requests.
-	let (rpc_send_tx, mut rpc_send_rx) = mpsc::unbounded::<RpcMessage>();
-	wasm_bindgen_futures::spawn_local(poll_fn(move |cx| {
-		loop {
-			match Pin::new(&mut rpc_send_rx).poll_next(cx) {
-				Poll::Ready(Some(message)) => {
-					let fut = service
-						.rpc_query(&message.session, &message.rpc_json)
-						.boxed();
-					let _ = message.send_back.send(fut);
-				},
-				Poll::Pending => break,
-				Poll::Ready(None) => return Poll::Ready(()),
-			}
-		}
-
-		Pin::new(&mut service)
-			.poll(cx)
-			.map(drop)
-	}));
+	let (rpc_send_tx, rpc_send_rx) = mpsc::unbounded::<RpcMessage>();
+	wasm_bindgen_futures::spawn_local(
+		select(
+			rpc_send_rx.for_each(move |message| {
+				let fut = rpc_handlers.rpc_query(&message.session, &message.rpc_json);
+				let _ = message.send_back.send(fut);
+				ready(())
+			}),
+			Box::pin(async move {
+				let _ = task_manager.future().await;
+			}),
+		).map(drop)
+	);
 
 	Client {
 		rpc_send_tx,

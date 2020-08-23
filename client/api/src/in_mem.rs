@@ -1,27 +1,29 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! In memory client backend
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::ptr;
 use std::sync::Arc;
 use parking_lot::RwLock;
-use sp_core::storage::well_known_keys;
-use sp_core::offchain::storage::{
-	InMemOffchainStorage as OffchainStorage
+use sp_core::{
+	storage::well_known_keys, offchain::storage::InMemOffchainStorage as OffchainStorage,
 };
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor};
@@ -112,11 +114,17 @@ pub struct Blockchain<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
 }
 
+impl<Block: BlockT> Default for Blockchain<Block> {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
 	fn clone(&self) -> Self {
 		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
 		Blockchain {
-			storage: storage.clone(),
+			storage,
 		}
 	}
 }
@@ -147,7 +155,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				aux: HashMap::new(),
 			}));
 		Blockchain {
-			storage: storage.clone(),
+			storage,
 		}
 	}
 
@@ -190,11 +198,19 @@ impl<Block: BlockT> Blockchain<Block> {
 
 	/// Compare this blockchain with another in-mem blockchain
 	pub fn equals_to(&self, other: &Self) -> bool {
+		// Check ptr equality first to avoid double read locks.
+		if ptr::eq(self, other) {
+			return true;
+		}
 		self.canon_equals_to(other) && self.storage.read().blocks == other.storage.read().blocks
 	}
 
 	/// Compare canonical chain to other canonical chain.
 	pub fn canon_equals_to(&self, other: &Self) -> bool {
+		// Check ptr equality first to avoid double read locks.
+		if ptr::eq(self, other) {
+			return true;
+		}
 		let this = self.storage.read();
 		let other = other.storage.read();
 			this.hashes == other.hashes
@@ -330,7 +346,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.header(BlockId::hash(hash))?.map(|header| CachedHeaderMetadata::from(&header))
-			.ok_or(sp_blockchain::Error::UnknownBlock(format!("header not found: {}", hash)))
+			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("header not found: {}", hash)))
 	}
 
 	fn insert_header_metadata(&self, _hash: Block::Hash, _metadata: CachedHeaderMetadata<Block>) {
@@ -517,13 +533,17 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
-		let child_delta = storage.children_default.into_iter()
+		let child_delta = storage.children_default.iter()
 			.map(|(_storage_key, child_content)|
-				(child_content.child_info, child_content.data.into_iter().map(|(k, v)| (k, Some(v)))));
+				 (
+					 &child_content.child_info,
+					 child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())))
+				 )
+			);
 
 		let (root, transaction) = self.old_state.full_storage_root(
-			storage.top.into_iter().map(|(k, v)| (k, Some(v))),
-			child_delta
+			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
+			child_delta,
 		);
 
 		self.new_state = Some(transaction);
@@ -626,7 +646,10 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		Ok(())
 	}
 
-	fn commit_operation(&self, operation: Self::BlockImportOperation) -> sp_blockchain::Result<()> {
+	fn commit_operation(
+		&self,
+		operation: Self::BlockImportOperation,
+	) -> sp_blockchain::Result<()> {
 		if !operation.finalized_blocks.is_empty() {
 			for (block, justification) in operation.finalized_blocks {
 				self.blockchain.finalize_header(block, justification)?;
@@ -702,8 +725,8 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		&self,
 		_n: NumberFor<Block>,
 		_revert_finalized: bool,
-	) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(Zero::zero())
+	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<Block::Hash>)> {
+		Ok((Zero::zero(), HashSet::new()))
 	}
 
 	fn get_import_lock(&self) -> &RwLock<()> {

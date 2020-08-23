@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Scheduler pallet benchmarking.
 
@@ -28,6 +29,7 @@ use crate::Module as Scheduler;
 use frame_system::Module as System;
 
 const MAX_SCHEDULED: u32 = 50;
+const BLOCK_NUMBER: u32 = 2;
 
 // Add `n` named items to the schedule
 fn fill_schedule<T: Trait> (when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
@@ -37,11 +39,12 @@ fn fill_schedule<T: Trait> (when: T::BlockNumber, n: u32) -> Result<(), &'static
 		// Named schedule is strictly heavier than anonymous
 		Scheduler::<T>::do_schedule_named(
 			i.encode(),
-			when,
+			DispatchTime::At(when),
 			// Add periodicity
 			Some((T::BlockNumber::one(), 100)),
 			// HARD_DEADLINE priority means it gets executed no matter what
 			0,
+			frame_system::RawOrigin::Root.into(),
 			call.clone().into(),
 		)?;
 	}
@@ -54,7 +57,7 @@ benchmarks! {
 
 	schedule {
 		let s in 0 .. MAX_SCHEDULED;
-		let when = T::BlockNumber::one();
+		let when = BLOCK_NUMBER.into();
 		let periodic = Some((T::BlockNumber::one(), 100));
 		let priority = 0;
 		// Essentially a no-op call.
@@ -71,7 +74,7 @@ benchmarks! {
 
 	cancel {
 		let s in 1 .. MAX_SCHEDULED;
-		let when: T::BlockNumber = 2.into();
+		let when = BLOCK_NUMBER.into();
 
 		fill_schedule::<T>(when, s)?;
 		assert_eq!(Agenda::<T>::get(when).len(), s as usize);
@@ -91,7 +94,7 @@ benchmarks! {
 	schedule_named {
 		let s in 0 .. MAX_SCHEDULED;
 		let id = s.encode();
-		let when = T::BlockNumber::one();
+		let when = BLOCK_NUMBER.into();
 		let periodic = Some((T::BlockNumber::one(), 100));
 		let priority = 0;
 		// Essentially a no-op call.
@@ -108,7 +111,7 @@ benchmarks! {
 
 	cancel_named {
 		let s in 1 .. MAX_SCHEDULED;
-		let when = T::BlockNumber::one();
+		let when = BLOCK_NUMBER.into();
 
 		fill_schedule::<T>(when, s)?;
 	}: _(RawOrigin::Root, 0.encode())
@@ -126,9 +129,9 @@ benchmarks! {
 
 	on_initialize {
 		let s in 0 .. MAX_SCHEDULED;
-		let when = T::BlockNumber::one();
+		let when = BLOCK_NUMBER.into();
 		fill_schedule::<T>(when, s)?;
-	}: { Scheduler::<T>::on_initialize(T::BlockNumber::one()); }
+	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
 	verify {
 		assert_eq!(System::<T>::event_count(), s);
 		// Next block should have all the schedules again

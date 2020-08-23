@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! RocksDB-based light client blockchain storage.
 
@@ -198,7 +200,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for LightStorage<Block> {
 					header_metadata.clone(),
 				);
 				header_metadata
-			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
+			}).ok_or_else(|| ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
 		}, Ok)
 	}
 
@@ -400,7 +402,8 @@ impl<Block> AuxStore for LightStorage<Block>
 		for k in delete {
 			transaction.remove(columns::AUX, k);
 		}
-		self.db.commit(transaction);
+		self.db.commit(transaction)?;
+
 		Ok(())
 	}
 
@@ -493,7 +496,7 @@ impl<Block> Storage<Block> for LightStorage<Block>
 
 			debug!("Light DB Commit {:?} ({})", hash, number);
 
-			self.db.commit(transaction);
+			self.db.commit(transaction)?;
 			cache.commit(cache_ops)
 				.expect("only fails if cache with given name isn't loaded yet;\
 						cache is already loaded because there are cache_ops; qed");
@@ -511,8 +514,9 @@ impl<Block> Storage<Block> for LightStorage<Block>
 
 			let mut transaction = Transaction::new();
 			self.set_head_with_transaction(&mut transaction, hash.clone(), (number.clone(), hash.clone()))?;
-			self.db.commit(transaction);
+			self.db.commit(transaction)?;
 			self.update_meta(hash, header.number().clone(), true, false);
+
 			Ok(())
 		} else {
 			Err(ClientError::UnknownBlock(format!("Cannot set head {:?}", id)))
@@ -550,7 +554,7 @@ impl<Block> Storage<Block> for LightStorage<Block>
 					)?
 					.into_ops();
 
-				self.db.commit(transaction);
+				self.db.commit(transaction)?;
 				cache.commit(cache_ops)
 					.expect("only fails if cache with given name isn't loaded yet;\
 							cache is already loaded because there are cache_ops; qed");

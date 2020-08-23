@@ -1,18 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{fmt, borrow::{Cow, ToOwned}};
 use serde::Serialize;
@@ -73,14 +75,14 @@ impl fmt::Display for NsFormatter {
 		}
 
 		if self.0 < 1_000_000 {
-			return write!(f, "{:.2} ms", v as f64 / 1_000_000.0)
+			return write!(f, "{:.4} ms", v as f64 / 1_000_000.0)
 		}
 
 		if self.0 < 100_000_000 {
-			return write!(f, "{} ms", v as f64 / 1_000_000.0)
+			return write!(f, "{:.1} ms", v as f64 / 1_000_000.0)
 		}
 
-		write!(f, "{:.2} s", v as f64 / 1_000_000_000.0)
+		write!(f, "{:.4} s", v as f64 / 1_000_000_000.0)
 	}
 }
 
@@ -91,26 +93,26 @@ pub enum Mode {
 }
 
 impl std::str::FromStr for Mode {
-    type Err = &'static str;
-    fn from_str(day: &str) -> Result<Self, Self::Err> {
-        match day {
-            "regular" => Ok(Mode::Regular),
-            "profile" => Ok(Mode::Profile),
-            _ => Err("Could not parse mode"),
-        }
-    }
+	type Err = &'static str;
+	fn from_str(day: &str) -> Result<Self, Self::Err> {
+		match day {
+			"regular" => Ok(Mode::Regular),
+			"profile" => Ok(Mode::Profile),
+			_ => Err("Could not parse mode"),
+		}
+	}
 }
 
 impl fmt::Display for BenchmarkOutput {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(
 			f,
 			"{}: avg {}, w_avg {}",
 			self.name,
 			NsFormatter(self.raw_average),
 			NsFormatter(self.average),
 		)
-    }
+	}
 }
 
 pub fn run_benchmark(

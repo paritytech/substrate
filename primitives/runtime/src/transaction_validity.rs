@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Transaction validity interface.
 
@@ -43,12 +44,21 @@ pub enum InvalidTransaction {
 	/// General error to do with the transaction being outdated (e.g. nonce too low).
 	Stale,
 	/// General error to do with the transaction's proofs (e.g. signature).
+	///
+	/// # Possible causes
+	///
+	/// When using a signed extension that provides additional data for signing, it is required
+	/// that the signing and the verifying side use the same additional data. Additional
+	/// data will only be used to generate the signature, but will not be part of the transaction
+	/// itself. As the verifying side does not know which additional data was used while signing
+	/// it will only be able to assume a bad signature and cannot express a more meaningful error.
 	BadProof,
 	/// The transaction birth block is ancient.
 	AncientBirthBlock,
 	/// The transaction would exhaust the resources of current block.
 	///
-	/// The transaction might be valid, but there are not enough resources left in the current block.
+	/// The transaction might be valid, but there are not enough resources
+	/// left in the current block.
 	ExhaustsResources,
 	/// Any other custom invalid validity that is not covered by this enum.
 	Custom(u8),
@@ -94,7 +104,7 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::BadMandatory =>
 				"A call was labelled as mandatory, but resulted in an Error.",
 			InvalidTransaction::MandatoryDispatch =>
-				"Tranaction dispatch is mandatory; transactions may not have mandatory dispatches.",
+				"Transaction dispatch is mandatory; transactions may not have mandatory dispatches.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 		}
 	}

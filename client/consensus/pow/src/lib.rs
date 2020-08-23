@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Proof of work consensus for Substrate.
 //!
@@ -53,6 +55,7 @@ use sp_consensus::import_queue::{
 	BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport, BoxFinalityProofImport,
 };
 use codec::{Encode, Decode};
+use prometheus_endpoint::Registry;
 use sc_client_api;
 use log::*;
 use sp_timestamp::{InherentError as TIError, TimestampInherentData};
@@ -85,10 +88,13 @@ pub enum Error<B: BlockT> {
 	CreateInherents(sp_inherents::Error),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
+	#[display(fmt = "Multiple pre-runtime digests")]
+	MultiplePreRuntimeDigests,
 	Client(sp_blockchain::Error),
 	Codec(codec::Error),
 	Environment(String),
-	Runtime(RuntimeString)
+	Runtime(RuntimeString),
+	Other(String),
 }
 
 impl<B: BlockT> std::convert::From<Error<B>> for String {
@@ -169,6 +175,7 @@ pub trait PowAlgorithm<B: BlockT> {
 		&self,
 		parent: &BlockId<B>,
 		pre_hash: &B::Hash,
+		pre_digest: Option<&[u8]>,
 		seal: &Seal,
 		difficulty: Self::Difficulty,
 	) -> Result<bool, Error<B>>;
@@ -177,22 +184,26 @@ pub trait PowAlgorithm<B: BlockT> {
 		&self,
 		parent: &BlockId<B>,
 		pre_hash: &B::Hash,
+		pre_digest: Option<&[u8]>,
 		difficulty: Self::Difficulty,
 		round: u32,
 	) -> Result<Option<Seal>, Error<B>>;
 }
 
 /// A block importer for PoW.
-pub struct PowBlockImport<B: BlockT, I, C, S, Algorithm> {
+pub struct PowBlockImport<B: BlockT, I, C, S, Algorithm, CAW> {
 	algorithm: Algorithm,
 	inner: I,
 	select_chain: Option<S>,
 	client: Arc<C>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
+	can_author_with: CAW,
 }
 
-impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone> Clone for PowBlockImport<B, I, C, S, Algorithm> {
+impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone, CAW: Clone> Clone
+	for PowBlockImport<B, I, C, S, Algorithm, CAW>
+{
 	fn clone(&self) -> Self {
 		Self {
 			algorithm: self.algorithm.clone(),
@@ -201,17 +212,19 @@ impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone> Clone for PowBlockImpor
 			client: self.client.clone(),
 			inherent_data_providers: self.inherent_data_providers.clone(),
 			check_inherents_after: self.check_inherents_after.clone(),
+			can_author_with: self.can_author_with.clone(),
 		}
 	}
 }
 
-impl<B, I, C, S, Algorithm> PowBlockImport<B, I, C, S, Algorithm> where
+impl<B, I, C, S, Algorithm, CAW> PowBlockImport<B, I, C, S, Algorithm, CAW> where
 	B: BlockT,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
 	Algorithm: PowAlgorithm<B>,
+	CAW: CanAuthorWith<B>,
 {
 	/// Create a new block import suitable to be used in PoW
 	pub fn new(
@@ -221,9 +234,17 @@ impl<B, I, C, S, Algorithm> PowBlockImport<B, I, C, S, Algorithm> where
 		check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
 		select_chain: Option<S>,
 		inherent_data_providers: sp_inherents::InherentDataProviders,
+		can_author_with: CAW,
 	) -> Self {
-		Self { inner, client, algorithm, check_inherents_after,
-			   select_chain, inherent_data_providers }
+		Self {
+			inner,
+			client,
+			algorithm,
+			check_inherents_after,
+			select_chain,
+			inherent_data_providers,
+			can_author_with,
+		}
 	}
 
 	fn check_inherents(
@@ -236,6 +257,16 @@ impl<B, I, C, S, Algorithm> PowBlockImport<B, I, C, S, Algorithm> where
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
 		if *block.header().number() < self.check_inherents_after {
+			return Ok(())
+		}
+
+		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
+			debug!(
+				target: "pow",
+				"Skipping `check_inherents` as authoring version is not compatible: {}",
+				e,
+			);
+
 			return Ok(())
 		}
 
@@ -267,7 +298,7 @@ impl<B, I, C, S, Algorithm> PowBlockImport<B, I, C, S, Algorithm> where
 	}
 }
 
-impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algorithm> where
+impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, Algorithm, CAW> where
 	B: BlockT,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
@@ -276,6 +307,7 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
 	Algorithm: PowAlgorithm<B>,
 	Algorithm::Difficulty: 'static,
+	CAW: CanAuthorWith<B>,
 {
 	type Error = ConsensusError;
 	type Transaction = sp_api::TransactionFor<C, B>;
@@ -341,9 +373,11 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 		};
 
 		let pre_hash = block.header.hash();
+		let pre_digest = find_pre_digest::<B>(&block.header)?;
 		if !self.algorithm.verify(
 			&BlockId::hash(parent_hash),
 			&pre_hash,
+			pre_digest.as_ref().map(|v| &v[..]),
 			&inner_seal,
 			difficulty,
 		)? {
@@ -463,7 +497,8 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
-	spawner: &impl sp_core::traits::SpawnBlocking,
+	spawner: &impl sp_core::traits::SpawnNamed,
+	registry: Option<&Registry>,
 ) -> Result<
 	PowImportQueue<B, Transaction>,
 	sp_consensus::Error
@@ -482,6 +517,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 		justification_import,
 		finality_proof_import,
 		spawner,
+		registry,
 	))
 }
 
@@ -490,7 +526,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 /// However, it's not recommended to use background threads in the rest of the
 /// codebase.
 ///
-/// `preruntime` is a parameter that allows a custom additional pre-runtime
+/// `pre_runtime` is a parameter that allows a custom additional pre-runtime
 /// digest to be inserted for blocks being built. This can encode authorship
 /// information, or just be a graffiti. `round` is for number of rounds the
 /// CPU miner runs each time. This parameter should be tweaked so that each
@@ -500,7 +536,7 @@ pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 	client: Arc<C>,
 	algorithm: Algorithm,
 	mut env: E,
-	preruntime: Option<Vec<u8>>,
+	pre_runtime: Option<Vec<u8>>,
 	round: u32,
 	mut sync_oracle: SO,
 	build_time: std::time::Duration,
@@ -528,7 +564,7 @@ pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 				client.as_ref(),
 				&algorithm,
 				&mut env,
-				preruntime.as_ref(),
+				pre_runtime.as_ref(),
 				round,
 				&mut sync_oracle,
 				build_time.clone(),
@@ -552,7 +588,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 	client: &C,
 	algorithm: &Algorithm,
 	env: &mut E,
-	preruntime: Option<&Vec<u8>>,
+	pre_runtime: Option<&Vec<u8>>,
 	round: u32,
 	sync_oracle: &mut SO,
 	build_time: std::time::Duration,
@@ -605,14 +641,14 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			continue 'outer
 		}
 
-		let mut proposer = futures::executor::block_on(env.init(&best_header))
+		let proposer = futures::executor::block_on(env.init(&best_header))
 			.map_err(|e| Error::Environment(format!("{:?}", e)))?;
 
 		let inherent_data = inherent_data_providers
 			.create_inherent_data().map_err(Error::CreateInherents)?;
 		let mut inherent_digest = Digest::default();
-		if let Some(preruntime) = &preruntime {
-			inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, preruntime.to_vec()));
+		if let Some(pre_runtime) = &pre_runtime {
+			inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, pre_runtime.to_vec()));
 		}
 		let proposal = futures::executor::block_on(proposer.propose(
 			inherent_data,
@@ -629,6 +665,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 				let seal = algorithm.mine(
 					&BlockId::Hash(best_hash),
 					&header.hash(),
+					pre_runtime.map(|v| &v[..]),
 					difficulty,
 					round,
 				)?;
@@ -642,6 +679,8 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 				}
 			}
 		};
+
+		log::info!("✅ Successfully mined block: {}", best_hash);
 
 		let (hash, seal) = {
 			let seal = DigestItem::Seal(POW_ENGINE_ID, seal);
@@ -670,4 +709,23 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 		block_import.import_block(import_block, HashMap::default())
 			.map_err(|e| Error::BlockBuiltError(best_hash, e))?;
 	}
+}
+
+/// Find PoW pre-runtime.
+fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Error<B>> {
+	let mut pre_digest: Option<_> = None;
+	for log in header.digest().logs() {
+		trace!(target: "pow", "Checking log {:?}, looking for pre runtime digest", log);
+		match (log, pre_digest.is_some()) {
+			(DigestItem::PreRuntime(POW_ENGINE_ID, _), true) => {
+				return Err(Error::MultiplePreRuntimeDigests)
+			},
+			(DigestItem::PreRuntime(POW_ENGINE_ID, v), false) => {
+				pre_digest = Some(v.clone());
+			},
+			(_, _) => trace!(target: "pow", "Ignoring digest not meant for us"),
+		}
+	}
+
+	Ok(pre_digest)
 }

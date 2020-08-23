@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Primitives for the runtime modules.
 
@@ -33,8 +34,8 @@ use crate::transaction_validity::{
 };
 use crate::generic::{Digest, DigestItem};
 pub use sp_arithmetic::traits::{
-	AtLeast32Bit, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
-	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
+	AtLeast32Bit, AtLeast32BitUnsigned, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating,
+	SaturatedConversion, Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
 	CheckedShl, CheckedShr, IntegerSquareRoot
 };
 use sp_application_crypto::AppKey;
@@ -143,7 +144,7 @@ impl<
 }
 
 /// An error type that indicates that the origin is invalid.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, RuntimeDebug)]
 pub struct BadOrigin;
 
 impl From<BadOrigin> for &'static str {
@@ -375,6 +376,33 @@ impl Hash for BlakeTwo256 {
 	}
 }
 
+/// Keccak-256 Hash implementation.
+#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct Keccak256;
+
+impl Hasher for Keccak256 {
+	type Out = sp_core::H256;
+	type StdHasher = hash256_std_hasher::Hash256StdHasher;
+	const LENGTH: usize = 32;
+
+	fn hash(s: &[u8]) -> Self::Out {
+		sp_io::hashing::keccak_256(s).into()
+	}
+}
+
+impl Hash for Keccak256 {
+	type Output = sp_core::H256;
+
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
+		sp_io::trie::keccak_256_root(input)
+	}
+
+	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
+		sp_io::trie::keccak_256_ordered_root(input)
+	}
+}
+
 /// Something that can be checked for equality and printed out to a debug channel if bad.
 pub trait CheckEqual {
 	/// Perform the equality check.
@@ -462,9 +490,8 @@ pub trait Header:
 	MaybeMallocSizeOf + 'static
 {
 	/// Header number.
-	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ Copy + MaybeDisplay + AtLeast32Bit + Codec + sp_std::str::FromStr
-		+ MaybeMallocSizeOf;
+	type Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Copy +
+		MaybeDisplay + AtLeast32BitUnsigned + Codec + sp_std::str::FromStr + MaybeMallocSizeOf;
 	/// Header hash type
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>
@@ -891,7 +918,7 @@ pub trait Applyable: Sized + Send + Sync {
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
-	) -> crate::ApplyExtrinsicResult;
+	) -> crate::ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>>;
 }
 
 /// A marker trait for something that knows the type of the runtime block.
@@ -1129,6 +1156,7 @@ macro_rules! impl_opaque_keys {
 		$( #[ $attr:meta ] )*
 		pub struct $name:ident {
 			$(
+				$( #[ $inner_attr:meta ] )*
 				pub $field:ident: $type:ty,
 			)*
 		}
@@ -1143,6 +1171,7 @@ macro_rules! impl_opaque_keys {
 		#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
 		pub struct $name {
 			$(
+				$( #[ $inner_attr ] )*
 				pub $field: <$type as $crate::BoundToRuntimeAppPublic>::Public,
 			)*
 		}

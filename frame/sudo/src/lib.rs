@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Sudo Module
 //!
@@ -52,7 +53,7 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_system::{self as system, ensure_root};
+//! use frame_system::ensure_root;
 //!
 //! pub trait Trait: frame_system::Trait {}
 //!
@@ -87,20 +88,29 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{DispatchResult, traits::{StaticLookup, Dispatchable}};
+use sp_runtime::{DispatchResult, traits::StaticLookup};
 
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
-use frame_support::weights::{Weight, GetDispatchInfo, FunctionOf, Pays};
-use frame_system::{self as system, ensure_signed};
+use frame_support::{
+	weights::{Weight, GetDispatchInfo, Pays},
+	traits::UnfilteredDispatchable,
+	dispatch::DispatchResultWithPostInfo,
+};
+use frame_system::ensure_signed;
+
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// A sudo-able call.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
+	type Call: Parameter + UnfilteredDispatchable<Origin=Self::Origin> + GetDispatchInfo;
 }
 
 decl_module! {
@@ -120,18 +130,16 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().weight + 10_000,
-			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().class,
-			Pays::Yes,
-		)]
-		fn sudo(origin, call: Box<<T as Trait>::Call>) {
+		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
+		fn sudo(origin, call: Box<<T as Trait>::Call>) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
-			let res = call.dispatch(frame_system::RawOrigin::Root.into());
+			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+			// Sudo user does not pay a fee.
+			Ok(Pays::No.into())
 		}
 
 		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
@@ -144,18 +152,16 @@ decl_module! {
 		/// - O(1).
 		/// - The weight of this call is defined by the caller.
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, &weight): (&Box<<T as Trait>::Call>,&Weight,)| weight,
-			|(call, _): (&Box<<T as Trait>::Call>,&Weight,)| call.get_dispatch_info().class,
-			Pays::Yes,
-		)]
-		fn sudo_unchecked_weight(origin, call: Box<<T as Trait>::Call>, _weight: Weight) {
+		#[weight = (*_weight, call.get_dispatch_info().class)]
+		fn sudo_unchecked_weight(origin, call: Box<<T as Trait>::Call>, _weight: Weight) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
-			let res = call.dispatch(frame_system::RawOrigin::Root.into());
+			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+			// Sudo user does not pay a fee.
+			Ok(Pays::No.into())
 		}
 
 		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.
@@ -168,7 +174,7 @@ decl_module! {
 		/// - One DB change.
 		/// # </weight>
 		#[weight = 0]
-		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
+		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
@@ -176,6 +182,8 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
 			<Key<T>>::put(new);
+			// Sudo user does not pay a fee.
+			Ok(Pays::No.into())
 		}
 
 		/// Authenticates the sudo key and dispatches a function call with `Signed` origin from
@@ -189,23 +197,18 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&<T::Lookup as StaticLookup>::Source, &Box<<T as Trait>::Call>,)| {
-				args.1.get_dispatch_info().weight + 10_000
-			},
-			|args: (&<T::Lookup as StaticLookup>::Source, &Box<<T as Trait>::Call>,)| {
-				args.1.get_dispatch_info().class
-			},
-			Pays::Yes,
-		)]
-		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, call: Box<<T as Trait>::Call>) {
+		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
+		fn sudo_as(origin,
+			who: <T::Lookup as StaticLookup>::Source,
+			call: Box<<T as Trait>::Call>
+		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let who = T::Lookup::lookup(who)?;
 
-			let res = match call.dispatch(frame_system::RawOrigin::Signed(who).into()) {
+			let res = match call.dispatch_bypass_filter(frame_system::RawOrigin::Signed(who).into()) {
 				Ok(_) => true,
 				Err(e) => {
 					sp_runtime::print(e);
@@ -214,17 +217,19 @@ decl_module! {
 			};
 
 			Self::deposit_event(RawEvent::SudoAsDone(res));
+			// Sudo user does not pay a fee.
+			Ok(Pays::No.into())
 		}
 	}
 }
 
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
-		/// A sudo just took place.
+		/// A sudo just took place. [result]
 		Sudid(DispatchResult),
-		/// The sudoer just switched identity; the old key is supplied.
+		/// The [sudoer] just switched identity; the old key is supplied.
 		KeyChanged(AccountId),
-		/// A sudo just took place.
+		/// A sudo just took place. [result]
 		SudoAsDone(bool),
 	}
 );

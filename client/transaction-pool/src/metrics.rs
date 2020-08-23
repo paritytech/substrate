@@ -1,18 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Transaction pool Prometheus metrics.
 
@@ -43,11 +45,55 @@ impl MetricsLink {
 
 /// Transaction pool Prometheus metrics.
 pub struct Metrics {
+	pub submitted_transactions: Counter<U64>,
+	pub validations_invalid: Counter<U64>,
+	pub block_transactions_pruned: Counter<U64>,
+	pub block_transactions_resubmitted: Counter<U64>,
+}
+
+impl Metrics {
+	pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			submitted_transactions: register(
+				Counter::new(
+					"sub_txpool_submitted_transactions",
+					"Total number of transactions submitted",
+				)?,
+				registry,
+			)?,
+			validations_invalid: register(
+				Counter::new(
+					"sub_txpool_validations_invalid",
+					"Total number of transactions that were removed from the pool as invalid",
+				)?,
+				registry,
+			)?,
+			block_transactions_pruned: register(
+				Counter::new(
+					"sub_txpool_block_transactions_pruned",
+					"Total number of transactions that was requested to be pruned by block events",
+				)?,
+				registry,
+			)?,
+			block_transactions_resubmitted: register(
+				Counter::new(
+					"sub_txpool_block_transactions_resubmitted",
+					"Total number of transactions that was requested to be resubmitted by block events",
+				)?,
+				registry,
+			)?,
+		})
+	}
+}
+
+/// Transaction pool api Prometheus metrics.
+pub struct ApiMetrics {
 	pub validations_scheduled: Counter<U64>,
 	pub validations_finished: Counter<U64>,
 }
 
-impl Metrics {
+impl ApiMetrics {
+	/// Register the metrics at the given Prometheus registry.
 	pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			validations_scheduled: register(
@@ -65,5 +111,19 @@ impl Metrics {
 				registry,
 			)?,
 		})
+	}
+}
+
+/// An extension trait for [`ApiMetrics`].
+pub trait ApiMetricsExt {
+	/// Report an event to the metrics.
+	fn report(&self, report: impl FnOnce(&ApiMetrics));
+}
+
+impl ApiMetricsExt for Option<Arc<ApiMetrics>> {
+	fn report(&self, report: impl FnOnce(&ApiMetrics)) {
+		if let Some(metrics) = self.as_ref() {
+			report(metrics)
+		}
 	}
 }

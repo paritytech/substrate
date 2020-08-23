@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{
 	collections::{HashMap, HashSet, BTreeSet},
@@ -23,15 +25,17 @@ use std::{
 
 use serde::Serialize;
 use log::trace;
-use parking_lot::RwLock;
 use sp_runtime::traits::Member;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
 use sp_transaction_pool::error;
 
-use crate::future::WaitingTransaction;
-use crate::base_pool::Transaction;
+use crate::{
+	base_pool::Transaction,
+	future::WaitingTransaction,
+	tracked_map::{self, ReadOnlyTrackedMap, TrackedMap},
+};
 
 /// An in-pool transaction reference.
 ///
@@ -111,9 +115,15 @@ pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// tags that are provided by Ready transactions
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
-	ready: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
+	ready: TrackedMap<Hash, ReadyTx<Hash, Ex>>,
 	/// Best transactions that are ready to be included to the block without any other previous transaction.
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
+}
+
+impl<Hash, Ex> tracked_map::Size for ReadyTx<Hash, Ex> {
+	fn size(&self) -> usize {
+		self.transaction.transaction.bytes
+	}
 }
 
 impl<Hash: hash::Hash + Eq, Ex> Default for ReadyTransactions<Hash, Ex> {
@@ -265,12 +275,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	) -> Vec<Arc<Transaction<Hash, Ex>>> {
 		let mut removed = vec![];
 		let mut ready = self.ready.write();
-		loop {
-			let hash = match to_remove.pop() {
-				Some(hash) => hash,
-				None => return removed,
-			};
-
+		while let Some(hash) = to_remove.pop() {
 			if let Some(mut tx) = ready.remove(&hash) {
 				let invalidated = tx.transaction.transaction.provides
 					.iter()
@@ -309,6 +314,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				removed.push(tx.transaction.transaction);
 			}
 		}
+
+		removed
 	}
 
 	/// Removes transactions that provide given tag.
@@ -320,17 +327,16 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		let mut removed = vec![];
 		let mut to_remove = vec![tag];
 
-		loop {
-			let tag = match to_remove.pop() {
-				Some(tag) => tag,
-				None => return removed,
-			};
-
+		while let Some(tag) = to_remove.pop() {
 			let res = self.provided_tags.remove(&tag)
-					.and_then(|hash| self.ready.write().remove(&hash));
+				.and_then(|hash| self.ready.write().remove(&hash));
 
 			if let Some(tx) = res {
 				let unlocks = tx.unlocks;
+
+				// Make sure we remove it from best txs
+				self.best.remove(&tx.transaction);
+
 				let tx = tx.transaction.transaction;
 
 				// prune previous transactions as well
@@ -393,6 +399,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				removed.push(tx);
 			}
 		}
+
+		removed
 	}
 
 	/// Checks if the transaction is providing the same tags as other transactions.
@@ -466,18 +474,18 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 	/// Returns number of transactions in this queue.
 	pub fn len(&self) -> usize {
-		self.ready.read().len()
+		self.ready.len()
 	}
 
 	/// Returns sum of encoding lengths of all transactions in this queue.
 	pub fn bytes(&self) -> usize {
-		self.ready.read().values().fold(0, |acc, tx| acc + tx.transaction.transaction.bytes)
+		self.ready.bytes()
 	}
 }
 
 /// Iterator of ready transactions ordered by priority.
 pub struct BestIterator<Hash, Ex> {
-	all: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
+	all: ReadOnlyTrackedMap<Hash, ReadyTx<Hash, Ex>>,
 	awaiting: HashMap<Hash, (usize, TransactionRef<Hash, Ex>)>,
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
@@ -530,7 +538,7 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 				}
 			}
 
-			return Some(best.transaction.clone())
+			return Some(best.transaction)
 		}
 	}
 }

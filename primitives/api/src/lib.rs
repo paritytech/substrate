@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Substrate runtime api
 //!
@@ -57,7 +58,7 @@ pub use sp_runtime::{
 		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HashFor, NumberFor,
 		Header as HeaderT, Hash as HashT,
 	},
-	generic::BlockId, transaction_validity::TransactionValidity, RuntimeString,
+	generic::BlockId, transaction_validity::TransactionValidity, RuntimeString, TransactionOutcome,
 };
 #[doc(hidden)]
 pub use sp_core::{offchain, ExecutionContext};
@@ -68,10 +69,13 @@ pub use sp_std::{slice, mem};
 #[cfg(feature = "std")]
 use sp_std::result;
 #[doc(hidden)]
-pub use codec::{Encode, Decode};
+pub use codec::{Encode, Decode, DecodeLimit};
 use sp_core::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::{panic::UnwindSafe, cell::RefCell};
+
+/// Maximum nesting level for extrinsics.
+pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 
 /// Declares given traits as runtime apis.
 ///
@@ -352,15 +356,15 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	/// The state backend that is used to store the block states.
 	type StateBackend: StateBackend<HashFor<Block>>;
 
-	/// The given closure will be called with api instance. Inside the closure any api call is
-	/// allowed. After doing the api call, the closure is allowed to map the `Result` to a
-	/// different `Result` type. This can be important, as the internal data structure that keeps
-	/// track of modifications to the storage, discards changes when the `Result` is an `Err`.
-	/// On `Ok`, the structure commits the changes to an internal buffer.
-	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
+	/// Execute the given closure inside a new transaction.
+	///
+	/// Depending on the outcome of the closure, the transaction is committed or rolled-back.
+	///
+	/// The internal result of the closure is returned afterwards.
+	fn execute_in_transaction<F: FnOnce(&Self) -> TransactionOutcome<R>, R>(
 		&self,
-		map_call: F,
-	) -> result::Result<R, E> where Self: Sized;
+		call: F,
+	) -> R where Self: Sized;
 
 	/// Checks if the given api is implemented and versions match.
 	fn has_api<A: RuntimeApiInfo + ?Sized>(

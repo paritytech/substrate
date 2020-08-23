@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Stuff to do with the runtime's storage.
 
@@ -20,6 +21,7 @@ use sp_std::{prelude::*, marker::PhantomData};
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::hash::{Twox128, StorageHasher};
 use sp_runtime::generic::{Digest, DigestItem};
+pub use sp_runtime::TransactionOutcome;
 
 pub mod unhashed;
 pub mod hashed;
@@ -27,6 +29,25 @@ pub mod child;
 #[doc(hidden)]
 pub mod generator;
 pub mod migration;
+
+/// Execute the supplied function in a new storage transaction.
+///
+/// All changes to storage performed by the supplied function are discarded if the returned
+/// outcome is `TransactionOutcome::Rollback`.
+///
+/// Transactions can be nested to any depth. Commits happen to the parent transaction.
+pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
+	use sp_io::storage::{
+		start_transaction, commit_transaction, rollback_transaction,
+	};
+	use TransactionOutcome::*;
+
+	start_transaction();
+	match f() {
+		Commit(res) => { commit_transaction(); res },
+		Rollback(res) => { rollback_transaction(); res },
+	}
+}
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
@@ -344,6 +365,20 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		F: FnOnce(&mut Self::Query) -> Result<R, E>;
+
+	/// Mutate the value under the given keys. Deletes the item if mutated to a `None`.
+	fn mutate_exists<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		F: FnOnce(&mut Option<V>) -> R;
+
+	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	fn try_mutate_exists<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		F: FnOnce(&mut Option<V>) -> Result<R, E>;
 
 	/// Append the given item to the value in the storage.
 	///

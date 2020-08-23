@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
 
@@ -20,7 +22,8 @@ use sc_network::{self, PeerId};
 use sc_network::config::Role;
 use substrate_test_runtime_client::runtime::Block;
 use assert_matches::assert_matches;
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
+use sp_utils::mpsc::tracing_unbounded;
 use std::thread;
 
 struct Status {
@@ -44,7 +47,7 @@ impl Default for Status {
 fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 	let status = sync.into().unwrap_or_default();
 	let should_have_peers = !status.is_dev;
-	let (tx, rx) = mpsc::unbounded();
+	let (tx, rx) = tracing_unbounded("rpc_system_tests");
 	thread::spawn(move || {
 		futures::executor::block_on(rx.for_each(move |request| {
 			match request {
@@ -84,8 +87,8 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						external_addresses: Default::default(),
 						connected_peers: Default::default(),
 						not_connected_peers: Default::default(),
-						average_download_per_sec: 0,
-						average_upload_per_sec: 0,
+						total_bytes_inbound: 0,
+						total_bytes_outbound: 0,
 						peerset: serde_json::Value::Null,
 					}).unwrap());
 				},
@@ -279,8 +282,8 @@ fn system_network_state() {
 			external_addresses: Default::default(),
 			connected_peers: Default::default(),
 			not_connected_peers: Default::default(),
-			average_download_per_sec: 0,
-			average_upload_per_sec: 0,
+			total_bytes_inbound: 0,
+			total_bytes_outbound: 0,
 			peerset: serde_json::Value::Null,
 		}
 	);

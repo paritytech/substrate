@@ -1,24 +1,25 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 /// A wrapper around `kvdb::Database` that implements `sp_database::Database` trait
 
 use ::kvdb::{DBTransaction, KeyValueDB};
 
-use crate::{Database, Change, Transaction, ColumnId};
+use crate::{Database, Change, ColumnId, Transaction, error};
 
 struct DbAdapter<D: KeyValueDB + 'static>(D);
 
@@ -37,7 +38,7 @@ pub fn as_database<D: KeyValueDB + 'static, H: Clone>(db: D) -> std::sync::Arc<d
 }
 
 impl<D: KeyValueDB, H: Clone> Database<H> for DbAdapter<D> {
-	fn commit(&self, transaction: Transaction<H>) {
+	fn commit(&self, transaction: Transaction<H>) -> error::Result<()> {
 		let mut tx = DBTransaction::new();
 		for change in transaction.0.into_iter() {
 			match change {
@@ -46,7 +47,7 @@ impl<D: KeyValueDB, H: Clone> Database<H> for DbAdapter<D> {
 				_ => unimplemented!(),
 			}
 		}
-		handle_err(self.0.write(tx));
+		self.0.write(tx).map_err(|e| error::DatabaseError(Box::new(e)))
 	}
 
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {

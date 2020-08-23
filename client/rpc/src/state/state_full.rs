@@ -21,10 +21,10 @@ use std::sync::Arc;
 use std::ops::Range;
 use futures::{future, StreamExt as _, TryStreamExt as _};
 use log::warn;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use rpc::{Result as RpcResult, futures::{stream, Future, Sink, Stream, future::result}};
 
-use sc_rpc_api::{Subscriptions, state::ReadProof};
+use sc_rpc_api::state::ReadProof;
 use sc_client_api::backend::Backend;
 use sp_blockchain::{Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata, HeaderBackend};
 use sc_client_api::BlockchainEvents;
@@ -60,7 +60,7 @@ struct QueryStorageRange<Block: BlockT> {
 /// State API backend for full nodes.
 pub struct FullState<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
-	subscriptions: Subscriptions,
+	subscriptions: SubscriptionManager,
 	_phantom: PhantomData<(BE, Block)>
 }
 
@@ -72,7 +72,7 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 		Block: BlockT + 'static,
 {
 	/// Create new state API backend for full nodes.
-	pub fn new(client: Arc<Client>, subscriptions: Subscriptions) -> Self {
+	pub fn new(client: Arc<Client>, subscriptions: SubscriptionManager) -> Self {
 		Self { client, subscriptions, _phantom: PhantomData }
 	}
 
@@ -298,6 +298,36 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 				.map_err(client_err)))
 	}
 
+	fn storage_size(
+		&self,
+		block: Option<Block::Hash>,
+		key: StorageKey,
+	) -> FutureResult<Option<u64>> {
+		let block = match self.block_or_best(block) {
+			Ok(b) => b,
+			Err(e) => return Box::new(result(Err(client_err(e)))),
+		};
+
+		match self.client.storage(&BlockId::Hash(block), &key) {
+			Ok(Some(d)) => return Box::new(result(Ok(Some(d.0.len() as u64)))),
+			Err(e) => return Box::new(result(Err(client_err(e)))),
+			Ok(None) => {},
+		}
+
+		Box::new(result(
+			self.client.storage_pairs(&BlockId::Hash(block), &key)
+				.map(|kv| {
+					let item_sum = kv.iter().map(|(_, v)| v.0.len() as u64).sum::<u64>();
+					if item_sum > 0 {
+						Some(item_sum)
+					} else {
+						None
+					}
+				})
+				.map_err(client_err)
+		))
+	}
+
 	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,
@@ -373,7 +403,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 
 	fn subscribe_runtime_version(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<RuntimeVersion>,
 	) {
 		let stream = match self.client.storage_changes_notification_stream(
@@ -424,7 +454,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 
 	fn unsubscribe_runtime_version(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
@@ -432,7 +462,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 
 	fn subscribe_storage(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
 		keys: Option<Vec<StorageKey>>,
 	) {
@@ -484,7 +514,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 
 	fn unsubscribe_storage(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))

@@ -169,7 +169,7 @@ impl<BE, Block: BlockT, Client> FinalityProofImport<Block>
 			if *pending_number > chain_info.finalized_number
 				&& *pending_number <= chain_info.best_number
 			{
-				out.push((pending_hash.clone(), *pending_number));
+				out.push((*pending_hash, *pending_number));
 			}
 		}
 
@@ -253,7 +253,7 @@ fn do_import_block<B, C, Block: BlockT, J>(
 		J: ProvableJustification<Block::Header>,
 {
 	let hash = block.post_hash();
-	let number = block.header.number().clone();
+	let number = *block.header.number();
 
 	// we don't want to finalize on `inner.import_block`
 	let justification = block.justification.take();
@@ -263,7 +263,7 @@ fn do_import_block<B, C, Block: BlockT, J>(
 	let mut imported_aux = match import_result {
 		Ok(ImportResult::Imported(aux)) => aux,
 		Ok(r) => return Ok(r),
-		Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
+		Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 	};
 
 	match justification {
@@ -435,7 +435,7 @@ fn do_import_justification<B, C, Block: BlockT, J>(
 				hash,
 			);
 
-			return Err(ConsensusError::ClientImport(e.to_string()).into());
+			return Err(ConsensusError::ClientImport(e.to_string()));
 		},
 		Ok(justification) => {
 			trace!(
@@ -573,7 +573,7 @@ pub mod tests {
 	use sp_consensus::{import_queue::CacheKeyId, ForkChoiceStrategy, BlockImport};
 	use sp_finality_grandpa::AuthorityId;
 	use sp_core::{H256, crypto::Public};
-	use sc_client_api::{in_mem::Blockchain as InMemoryAuxStore, StorageProof};
+	use sc_client_api::{in_mem::Blockchain as InMemoryAuxStore, StorageProof, BlockBackend};
 	use substrate_test_runtime_client::runtime::{Block, Header};
 	use crate::tests::TestApi;
 	use crate::finality_proof::{

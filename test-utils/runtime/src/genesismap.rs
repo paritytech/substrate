@@ -1,24 +1,25 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Tool for creating the genesis block.
 
 use std::collections::BTreeMap;
 use sp_io::hashing::{blake2_256, twox_128};
-use super::{AuthorityId, AccountId, WASM_BINARY, system};
+use super::{AuthorityId, AccountId, wasm_binary_unwrap, system};
 use codec::{Encode, KeyedVec, Joiner};
 use sp_core::{ChangesTrieConfiguration, map};
 use sp_core::storage::{well_known_keys, Storage};
@@ -46,7 +47,7 @@ impl GenesisConfig {
 	) -> Self {
 		GenesisConfig {
 			changes_trie_config,
-			authorities: authorities.clone(),
+			authorities: authorities,
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 			heap_pages_override,
 			extra_storage,
@@ -54,7 +55,7 @@ impl GenesisConfig {
 	}
 
 	pub fn genesis_map(&self) -> Storage {
-		let wasm_runtime = WASM_BINARY.to_vec();
+		let wasm_runtime = wasm_binary_unwrap().to_vec();
 		let mut map: BTreeMap<Vec<u8>, Vec<u8>> = self.balances.iter()
 			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
 			.map(|(k, v)| (blake2_256(&k[..])[..].to_vec(), v.to_vec()))

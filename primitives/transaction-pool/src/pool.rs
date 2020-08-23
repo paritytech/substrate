@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Transaction pool primitives types & Runtime API.
 
@@ -22,9 +23,8 @@ use std::{
 	sync::Arc,
 	pin::Pin,
 };
-use futures::{Future, Stream,};
+use futures::{Future, Stream};
 use serde::{Deserialize, Serialize};
-use sp_utils::mpsc;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
@@ -130,7 +130,7 @@ pub enum TransactionStatus<Hash, BlockHash> {
 pub type TransactionStatusStream<Hash, BlockHash> = dyn Stream<Item=TransactionStatus<Hash, BlockHash>> + Send + Unpin;
 
 /// The import notification event stream.
-pub type ImportNotificationStream<H> = mpsc::TracingUnboundedReceiver<H>;
+pub type ImportNotificationStream<H> = futures::channel::mpsc::Receiver<H>;
 
 /// Transaction hash type for a pool.
 pub type TxHash<P> = <P as TransactionPool>::Hash;
@@ -140,6 +140,8 @@ pub type BlockHash<P> = <<P as TransactionPool>::Block as BlockT>::Hash;
 pub type TransactionFor<P> = <<P as TransactionPool>::Block as BlockT>::Extrinsic;
 /// Type of transactions event stream for a pool.
 pub type TransactionStatusStreamFor<P> = TransactionStatusStream<TxHash<P>, BlockHash<P>>;
+/// Transaction type for a local pool.
+pub type LocalTransactionFor<P> = <<P as LocalTransactionPool>::Block as BlockT>::Extrinsic;
 
 /// Typical future type used in transaction pool api.
 pub type PoolFuture<T, E> = std::pin::Pin<Box<dyn Future<Output=Result<T, E>> + Send>>;
@@ -161,7 +163,7 @@ pub trait InPoolTransaction {
 	/// Get priority of the transaction.
 	fn priority(&self) -> &TransactionPriority;
 	/// Get longevity of the transaction.
-	fn longevity(&self) ->&TransactionLongevity;
+	fn longevity(&self) -> &TransactionLongevity;
 	/// Get transaction dependencies.
 	fn requires(&self) -> &[TransactionTag];
 	/// Get tags that transaction provides.
@@ -246,16 +248,14 @@ pub trait TransactionPool: Send + Sync {
 
 /// Events that the transaction pool listens for.
 pub enum ChainEvent<B: BlockT> {
-	/// New blocks have been added to the chain
-	NewBlock {
-		/// Is this the new best block.
-		is_new_best: bool,
-		/// Id of the just imported block.
-		id: BlockId<B>,
-		/// Header of the just imported block
-		header: B::Header,
-		/// List of retracted blocks ordered by block number.
-		retracted: Vec<B::Hash>,
+	/// New best block have been added to the chain
+	NewBestBlock {
+		/// Hash of the block.
+		hash: B::Hash,
+		/// Tree route from old best to new best parent that was calculated on import.
+		///
+		/// If `None`, no re-org happened on import.
+		tree_route: Option<Arc<sp_blockchain::TreeRoute<B>>>,
 	},
 	/// An existing block has been finalized.
 	Finalized {
@@ -268,6 +268,28 @@ pub enum ChainEvent<B: BlockT> {
 pub trait MaintainedTransactionPool: TransactionPool {
 	/// Perform maintenance
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>>;
+}
+
+/// Transaction pool interface for submitting local transactions that exposes a
+/// blocking interface for submission.
+pub trait LocalTransactionPool: Send + Sync {
+	/// Block type.
+	type Block: BlockT;
+	/// Transaction hash type.
+	type Hash: Hash + Eq + Member + Serialize;
+	/// Error type.
+	type Error: From<crate::error::Error> + crate::error::IntoPoolError;
+
+	/// Submits the given local unverified transaction to the pool blocking the
+	/// current thread for any necessary pre-verification.
+	/// NOTE: It MUST NOT be used for transactions that originate from the
+	/// network or RPC, since the validation is performed with
+	/// `TransactionSource::Local`.
+	fn submit_local(
+		&self,
+		at: &BlockId<Self::Block>,
+		xt: LocalTransactionFor<Self>,
+	) -> Result<Self::Hash, Self::Error>;
 }
 
 /// An abstraction for transaction pool.
@@ -288,7 +310,7 @@ pub trait OffchainSubmitTransaction<Block: BlockT>: Send + Sync {
 	) -> Result<(), ()>;
 }
 
-impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
+impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 	fn submit_at(
 		&self,
 		at: &BlockId<TPool::Block>,
@@ -300,15 +322,14 @@ impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 			extrinsic
 		);
 
-		let result = futures::executor::block_on(self.submit_one(
-				&at, TransactionSource::Local, extrinsic,
-		));
+		let result = self.submit_local(&at, extrinsic);
 
-		result.map(|_| ())
-			.map_err(|e| log::warn!(
+		result.map(|_| ()).map_err(|e| {
+			log::warn!(
 				target: "txpool",
 				"(offchain call) Error submitting a transaction to the pool: {:?}",
 				e
-			))
+			)
+		})
 	}
 }

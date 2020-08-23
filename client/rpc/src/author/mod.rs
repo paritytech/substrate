@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate block-author/full-node API.
 
@@ -30,8 +32,8 @@ use rpc::futures::{
 };
 use futures::{StreamExt as _, compat::Compat};
 use futures::future::{ready, FutureExt, TryFutureExt};
-use sc_rpc_api::{DenyUnsafe, Subscriptions};
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use sc_rpc_api::DenyUnsafe;
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use codec::{Encode, Decode};
 use sp_core::{Bytes, traits::BareCryptoStorePtr};
 use sp_api::ProvideRuntimeApi;
@@ -53,7 +55,7 @@ pub struct Author<P, Client> {
 	/// Transactions pool
 	pool: Arc<P>,
 	/// Subscriptions manager
-	subscriptions: Subscriptions,
+	subscriptions: SubscriptionManager,
 	/// The key store.
 	keystore: BareCryptoStorePtr,
 	/// Whether to deny unsafe calls
@@ -65,7 +67,7 @@ impl<P, Client> Author<P, Client> {
 	pub fn new(
 		client: Arc<Client>,
 		pool: Arc<P>,
-		subscriptions: Subscriptions,
+		subscriptions: SubscriptionManager,
 		keystore: BareCryptoStorePtr,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
@@ -78,7 +80,6 @@ impl<P, Client> Author<P, Client> {
 		}
 	}
 }
-
 
 /// Currently we treat all RPC transactions as externals.
 ///
@@ -93,7 +94,7 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 		Client: HeaderBackend<P::Block> + ProvideRuntimeApi<P::Block> + Send + Sync + 'static,
 		Client::Api: SessionKeys<P::Block, Error = ClientError>,
 {
-	type Metadata = crate::metadata::Metadata;
+	type Metadata = crate::Metadata;
 
 	fn insert_key(
 		&self,

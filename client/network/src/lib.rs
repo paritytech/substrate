@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #![warn(unused_extern_crates)]
 #![warn(missing_docs)]
@@ -76,7 +78,7 @@
 //! - WebSockets for addresses of the form `/ip4/1.2.3.4/tcp/5/ws`. A TCP/IP connection is open and
 //! the WebSockets protocol is negotiated on top. Communications then happen inside WebSockets data
 //! frames. Encryption and multiplexing are additionally negotiated again inside this channel.
-//! - DNS for addresses of the form `/dns4/example.com/tcp/5` or `/dns4/example.com/tcp/5/ws`. A
+//! - DNS for addresses of the form `/dns/example.com/tcp/5` or `/dns/example.com/tcp/5/ws`. A
 //! node's address can contain a domain name.
 //! - (All of the above using IPv6 instead of IPv4.)
 //!
@@ -196,13 +198,14 @@
 //! handshake message can be of length 0, in which case the sender has to send a single `0`.
 //! - The receiver then either immediately closes the substream, or answers with its own
 //! LEB128-prefixed protocol-specific handshake response. The message can be of length 0, in which
-//! case a single `0` has to be sent back. The receiver is then encouraged to close its sending
-//! side.
+//! case a single `0` has to be sent back.
 //! - Once the handshake has completed, the notifications protocol is unidirectional. Only the
 //! node which initiated the substream can push notifications. If the remote wants to send
 //! notifications as well, it has to open its own undirectional substream.
 //! - Each notification must be prefixed with an LEB128-encoded length. The encoding of the
 //! messages is specific to each protocol.
+//! - Either party can signal that it doesn't want a notifications substream anymore by closing
+//! its writing side. The other party should respond by closing its own writing side soon after.
 //!
 //! The API of `sc-network` allows one to register user-defined notification protocols.
 //! `sc-network` automatically tries to open a substream towards each node for which the legacy
@@ -244,7 +247,7 @@
 mod behaviour;
 mod block_requests;
 mod chain;
-mod debug_info;
+mod peer_info;
 mod discovery;
 mod finality_requests;
 mod light_client_handler;
@@ -257,6 +260,7 @@ mod utils;
 
 pub mod config;
 pub mod error;
+pub mod gossip;
 pub mod network_state;
 
 pub use service::{NetworkService, NetworkWorker};
@@ -268,6 +272,7 @@ pub use libp2p::{Multiaddr, PeerId};
 pub use libp2p::multiaddr;
 
 pub use sc_peerset::ReputationChange;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// The maximum allowed number of established connections per peer.
 ///
@@ -284,26 +289,6 @@ pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync 
 impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
 {}
 
-/// A cloneable handle for reporting cost/benefits of peers.
-#[derive(Clone)]
-pub struct ReportHandle {
-	inner: sc_peerset::PeersetHandle, // wraps it so we don't have to worry about breaking API.
-}
-
-impl From<sc_peerset::PeersetHandle> for ReportHandle {
-	fn from(peerset_handle: sc_peerset::PeersetHandle) -> Self {
-		ReportHandle { inner: peerset_handle }
-	}
-}
-
-impl ReportHandle {
-	/// Report a given peer as either beneficial (+) or costly (-) according to the
-	/// given scalar.
-	pub fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
-		self.inner.report_peer(who, cost_benefit);
-	}
-}
-
 /// Trait for providing information about the local network state
 pub trait NetworkStateInfo {
 	/// Returns the local external addresses.
@@ -311,4 +296,23 @@ pub trait NetworkStateInfo {
 
 	/// Returns the local Peer ID.
 	fn local_peer_id(&self) -> PeerId;
+}
+
+/// Overview status of the network.
+#[derive(Clone)]
+pub struct NetworkStatus<B: BlockT> {
+	/// Current global sync state.
+	pub sync_state: SyncState,
+	/// Target sync block number.
+	pub best_seen_block: Option<NumberFor<B>>,
+	/// Number of peers participating in syncing.
+	pub num_sync_peers: u32,
+	/// Total number of connected peers
+	pub num_connected_peers: usize,
+	/// Total number of active peers.
+	pub num_active_peers: usize,
+	/// The total number of bytes received.
+	pub total_bytes_inbound: u64,
+	/// The total number of bytes sent.
+	pub total_bytes_outbound: u64,
 }

@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Primitive types for storage related stuff.
 
@@ -24,6 +25,7 @@ use sp_debug_derive::RuntimeDebug;
 
 use sp_std::{vec::Vec, ops::{Deref, DerefMut}};
 use ref_cast::RefCast;
+use codec::{Encode, Decode};
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -32,6 +34,26 @@ pub struct StorageKey(
 	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
 	pub Vec<u8>,
 );
+
+/// Storage key with read/write tracking information.
+#[derive(PartialEq, Eq, RuntimeDebug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Hash, PartialOrd, Ord))]
+pub struct TrackedStorageKey {
+	pub key: Vec<u8>,
+	pub has_been_read: bool,
+	pub has_been_written: bool,
+}
+
+// Easily convert a key to a `TrackedStorageKey` that has been read and written to.
+impl From<Vec<u8>> for TrackedStorageKey {
+	fn from(key: Vec<u8>) -> Self {
+		Self {
+			key: key,
+			has_been_read: true,
+			has_been_written: true,
+		}
+	}
+}
 
 /// Storage key of a child trie, it contains the prefix to the key.
 #[derive(PartialEq, Eq, RuntimeDebug)]

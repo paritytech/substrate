@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Benchmarking module.
 //!
@@ -48,17 +50,16 @@ use node_runtime::{
 	AccountId,
 	Signature,
 };
-use sp_core::{ExecutionContext, blake2_256, traits::CloneableSpawn};
+use sp_core::{ExecutionContext, blake2_256, traits::SpawnNamed, Pair, Public, sr25519, ed25519};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_inherents::InherentData;
 use sc_client_api::{
-	ExecutionStrategy,
+	ExecutionStrategy, BlockBackend,
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 };
-use sp_core::{Pair, Public, sr25519, ed25519};
 use sc_block_builder::BlockBuilderProvider;
-use futures::{executor, task};
+use futures::executor;
 
 /// Keyring full of accounts for benching.
 ///
@@ -116,7 +117,6 @@ impl Clone for BenchDb {
 			.map(|f_result|
 				f_result.expect("failed to read file in seed db")
 					.path()
-					.clone()
 			).collect();
 		fs_extra::copy_items(
 			&seed_db_files,
@@ -132,11 +132,28 @@ impl Clone for BenchDb {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BlockType {
 	/// Bunch of random transfers.
-	RandomTransfersKeepAlive(usize),
+	RandomTransfersKeepAlive,
 	/// Bunch of random transfers that drain all of the source balance.
-	RandomTransfersReaping(usize),
+	RandomTransfersReaping,
 	/// Bunch of "no-op" calls.
-	Noop(usize),
+	Noop,
+}
+
+impl BlockType {
+	/// Create block content description with specified number of transactions.
+	pub fn to_content(self, size: Option<usize>) -> BlockContent {
+		BlockContent {
+			block_type: self,
+			size,
+		}
+	}
+}
+
+/// Content of the generated block.
+#[derive(Clone, Debug)]
+pub struct BlockContent {
+	block_type: BlockType,
+	size: Option<usize>,
 }
 
 /// Type of backend database.
@@ -162,15 +179,6 @@ impl DatabaseType {
 	}
 }
 
-impl BlockType {
-	/// Number of transactions for this block type.
-	pub fn transactions(&self) -> usize {
-		match self {
-			Self::RandomTransfersKeepAlive(v) | Self::RandomTransfersReaping(v) | Self::Noop(v) => *v,
-		}
-	}
-}
-
 /// Benchmarking task executor.
 ///
 /// Uses multiple threads as the regular executable.
@@ -188,23 +196,107 @@ impl TaskExecutor {
 	}
 }
 
-impl task::Spawn for TaskExecutor {
-	fn spawn_obj(&self, future: task::FutureObj<'static, ()>)
-	-> Result<(), task::SpawnError> {
-		self.pool.spawn_obj(future)
+impl SpawnNamed for TaskExecutor {
+	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		self.pool.spawn_ok(future);
+	}
+
+	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		self.pool.spawn_ok(future);
 	}
 }
 
-impl CloneableSpawn for TaskExecutor {
-	fn clone(&self) -> Box<dyn CloneableSpawn> {
-		Box::new(Clone::clone(self))
+/// Iterator for block content.
+pub struct BlockContentIterator<'a> {
+	iteration: usize,
+	content: BlockContent,
+	runtime_version: sc_executor::RuntimeVersion,
+	genesis_hash: node_primitives::Hash,
+	keyring: &'a BenchKeyring,
+}
+
+impl<'a> BlockContentIterator<'a> {
+	fn new(content: BlockContent, keyring: &'a BenchKeyring, client: &Client) -> Self {
+		let runtime_version = client.runtime_version_at(&BlockId::number(0))
+			.expect("There should be runtime version at 0");
+
+		let genesis_hash = client.block_hash(Zero::zero())
+			.expect("Database error?")
+			.expect("Genesis block always exists; qed")
+			.into();
+
+		BlockContentIterator {
+			iteration: 0,
+			content,
+			keyring,
+			runtime_version,
+			genesis_hash,
+		}
+	}
+}
+
+impl<'a> Iterator for BlockContentIterator<'a> {
+	type Item = OpaqueExtrinsic;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		if self.content.size.map(|size| size <= self.iteration).unwrap_or(false) {
+			return None;
+		}
+
+		let sender = self.keyring.at(self.iteration);
+		let receiver = get_account_id_from_seed::<sr25519::Public>(
+			&format!("random-user//{}", self.iteration)
+		);
+
+		let signed = self.keyring.sign(
+			CheckedExtrinsic {
+				signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
+				function: match self.content.block_type {
+					BlockType::RandomTransfersKeepAlive => {
+						Call::Balances(
+							BalancesCall::transfer_keep_alive(
+								pallet_indices::address::Address::Id(receiver),
+								node_runtime::ExistentialDeposit::get() + 1,
+							)
+						)
+					},
+					BlockType::RandomTransfersReaping => {
+						Call::Balances(
+							BalancesCall::transfer(
+								pallet_indices::address::Address::Id(receiver),
+								// Transfer so that ending balance would be 1 less than existential deposit
+								// so that we kill the sender account.
+								100*DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
+							)
+						)
+					},
+					BlockType::Noop => {
+						Call::System(
+							SystemCall::remark(Vec::new())
+						)
+					},
+				},
+			},
+			self.runtime_version.spec_version,
+			self.runtime_version.transaction_version,
+			self.genesis_hash.into(),
+		);
+
+		let encoded = Encode::encode(&signed);
+
+		let opaque = OpaqueExtrinsic::decode(&mut &encoded[..])
+			.expect("Failed  to decode opaque");
+
+		self.iteration += 1;
+
+		Some(opaque)
 	}
 }
 
 impl BenchDb {
 	/// New immutable benchmarking database.
 	///
-	/// See [`new`] method documentation for more information about the purpose
+	/// See [`BenchDb::new`] method documentation for more information about the purpose
 	/// of this structure.
 	pub fn with_key_types(
 		database_type: DatabaseType,
@@ -270,8 +362,33 @@ impl BenchDb {
 		(client, backend)
 	}
 
-	/// Generate new block using this database.
-	pub fn generate_block(&mut self, block_type: BlockType) -> Block {
+	/// Generate list of required inherents.
+	///
+	/// Uses already instantiated Client.
+	pub fn generate_inherents(&mut self, client: &Client) -> Vec<OpaqueExtrinsic> {
+		let mut inherent_data = InherentData::new();
+		let timestamp = 1 * MinimumPeriod::get();
+
+		inherent_data.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
+			.expect("Put timestamp failed");
+		inherent_data.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &0)
+			.expect("Put finality tracker failed");
+
+		client.runtime_api()
+			.inherent_extrinsics_with_context(
+				&BlockId::number(0),
+				ExecutionContext::BlockConstruction,
+				inherent_data,
+			).expect("Get inherents failed")
+	}
+
+	/// Iterate over some block content with transaction signed using this database keyring.
+	pub fn block_content(&self, content: BlockContent, client: &Client) -> BlockContentIterator {
+		BlockContentIterator::new(content, &self.keyring, client)
+	}
+
+	/// Get cliet for this database operations.
+	pub fn client(&mut self) -> Client {
 		let (client, _backend) = Self::bench_client(
 			self.database_type,
 			self.directory_guard.path(),
@@ -279,84 +396,23 @@ impl BenchDb {
 			&self.keyring,
 		);
 
-		let version = client.runtime_version_at(&BlockId::number(0))
-			.expect("There should be runtime version at 0")
-			.spec_version;
+		client
+	}
 
-		let genesis_hash = client.block_hash(Zero::zero())
-			.expect("Database error?")
-			.expect("Genesis block always exists; qed")
-			.into();
+	/// Generate new block using this database.
+	pub fn generate_block(&mut self, content: BlockContent) -> Block {
+		let client = self.client();
 
 		let mut block = client
 			.new_block(Default::default())
 			.expect("Block creation failed");
 
-		let timestamp = 1 * MinimumPeriod::get();
-
-		let mut inherent_data = InherentData::new();
-		inherent_data.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
-			.expect("Put timestamp failed");
-		inherent_data.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &0)
-			.expect("Put finality tracker failed");
-
-		for extrinsic in client.runtime_api()
-			.inherent_extrinsics_with_context(
-				&BlockId::number(0),
-				ExecutionContext::BlockConstruction,
-				inherent_data,
-			).expect("Get inherents failed")
-		{
+		for extrinsic in self.generate_inherents(&client) {
 			block.push(extrinsic).expect("Push inherent failed");
 		}
 
-		let mut iteration = 0;
 		let start = std::time::Instant::now();
-		for _ in 0..block_type.transactions() {
-
-			let sender = self.keyring.at(iteration);
-			let receiver = get_account_id_from_seed::<sr25519::Public>(
-				&format!("random-user//{}", iteration)
-			);
-
-			let signed = self.keyring.sign(
-				CheckedExtrinsic {
-					signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
-					function: match block_type {
-						BlockType::RandomTransfersKeepAlive(_) => {
-							Call::Balances(
-								BalancesCall::transfer_keep_alive(
-									pallet_indices::address::Address::Id(receiver),
-									node_runtime::ExistentialDeposit::get() + 1,
-								)
-							)
-						},
-						BlockType::RandomTransfersReaping(_) => {
-							Call::Balances(
-								BalancesCall::transfer(
-									pallet_indices::address::Address::Id(receiver),
-									// Transfer so that ending balance would be 1 less than existential deposit
-									// so that we kill the sender account.
-									100*DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
-								)
-							)
-						},
-						BlockType::Noop(_) => {
-							Call::System(
-								SystemCall::remark(Vec::new())
-							)
-						},
-					},
-				},
-				version,
-				genesis_hash,
-			);
-
-			let encoded = Encode::encode(&signed);
-
-			let opaque = OpaqueExtrinsic::decode(&mut &encoded[..])
-				.expect("Failed  to decode opaque");
-
+		for opaque in self.block_content(content, &client) {
 			match block.push(opaque) {
 				Err(sp_blockchain::Error::ApplyExtrinsicFailed(
 						sp_blockchain::ApplyExtrinsicFailed::Validity(e)
@@ -366,8 +422,8 @@ impl BenchDb {
 				Err(err) => panic!("Error pushing transaction: {:?}", err),
 				Ok(_) => {},
 			}
-			iteration += 1;
-		}
+		};
+
 		let block = block.build().expect("Block build failed").block;
 
 		log::info!(
@@ -395,7 +451,9 @@ impl BenchDb {
 		);
 
 		BenchContext {
-			client, backend, db_guard: directory_guard,
+			client: Arc::new(client),
+			db_guard: directory_guard,
+			backend,
 		}
 	}
 }
@@ -446,10 +504,16 @@ impl BenchKeyring {
 	}
 
 	/// Sign transaction with keypair from this keyring.
-	pub fn sign(&self, xt: CheckedExtrinsic, version: u32, genesis_hash: [u8; 32]) -> UncheckedExtrinsic {
+	pub fn sign(
+		&self,
+		xt: CheckedExtrinsic,
+		spec_version: u32,
+		tx_version: u32,
+		genesis_hash: [u8; 32]
+	) -> UncheckedExtrinsic {
 		match xt.signed {
 			Some((signed, extra)) => {
-				let payload = (xt.function, extra.clone(), version, genesis_hash, genesis_hash);
+				let payload = (xt.function, extra.clone(), spec_version, tx_version, genesis_hash, genesis_hash);
 				let key = self.accounts.get(&signed).expect("Account id not found in keyring");
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
@@ -474,7 +538,7 @@ impl BenchKeyring {
 	pub fn generate_genesis(&self) -> node_runtime::GenesisConfig {
 		crate::genesis::config_endowed(
 			false,
-			Some(node_runtime::WASM_BINARY),
+			Some(node_runtime::wasm_binary_unwrap()),
 			self.collect_account_ids(),
 		)
 	}
@@ -521,7 +585,7 @@ impl Guard {
 /// Benchmarking/test context holding instantiated client and backend references.
 pub struct BenchContext {
 	/// Node client.
-	pub client: Client,
+	pub client: Arc<Client>,
 	/// Node backend.
 	pub backend: Arc<Backend>,
 

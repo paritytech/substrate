@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use parity_scale_codec::{Encode, Decode, Joiner};
 use sc_executor::native_executor_instance;
@@ -38,8 +40,7 @@ use sp_runtime::traits::{
 use substrate_test_runtime::TestAPI;
 use sp_state_machine::backend::Backend as _;
 use sp_api::{ProvideRuntimeApi, OffchainOverlayedChanges};
-use sp_core::tasks::executor as tasks_executor;
-use sp_core::{H256, ChangesTrieConfiguration, blake2_256};
+use sp_core::{H256, ChangesTrieConfiguration, blake2_256, testing::TaskExecutor};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use sp_consensus::{
@@ -163,6 +164,7 @@ fn construct_block(
 	let mut offchain_overlay = OffchainOverlayedChanges::default();
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
+	let task_executor = Box::new(TaskExecutor::new());
 
 	StateMachine::new(
 		backend,
@@ -174,7 +176,7 @@ fn construct_block(
 		&header.encode(),
 		Default::default(),
 		&runtime_code,
-		tasks_executor(),
+		task_executor.clone() as Box<_>,
 	).execute(
 		ExecutionStrategy::NativeElseWasm,
 	).unwrap();
@@ -190,7 +192,7 @@ fn construct_block(
 			&tx.encode(),
 			Default::default(),
 			&runtime_code,
-			tasks_executor(),
+			task_executor.clone() as Box<_>,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -206,7 +208,7 @@ fn construct_block(
 		&[],
 		Default::default(),
 		&runtime_code,
-		tasks_executor(),
+		task_executor.clone() as Box<_>,
 	).execute(
 		ExecutionStrategy::NativeElseWasm,
 	).unwrap();
@@ -260,7 +262,7 @@ fn construct_genesis_should_work_with_native() {
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		tasks_executor(),
+		TaskExecutor::new(),
 	).execute(
 		ExecutionStrategy::NativeElseWasm,
 	).unwrap();
@@ -296,7 +298,7 @@ fn construct_genesis_should_work_with_wasm() {
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		tasks_executor(),
+		TaskExecutor::new(),
 	).execute(
 		ExecutionStrategy::AlwaysWasm,
 	).unwrap();
@@ -332,7 +334,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		tasks_executor(),
+		TaskExecutor::new(),
 	).execute(
 		ExecutionStrategy::NativeElseWasm,
 	);
@@ -1741,7 +1743,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
 			None,
 			None,
-			sp_core::tasks::executor(),
+			Box::new(TaskExecutor::new()),
 			Default::default(),
 		)
 			.unwrap();

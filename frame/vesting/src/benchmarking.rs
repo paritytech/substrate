@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Vesting pallet benchmarking.
 
@@ -21,7 +22,7 @@
 use super::*;
 
 use frame_system::{RawOrigin, Module as System};
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use sp_runtime::traits::Bounded;
 
 use crate::Module as Vesting;
@@ -63,7 +64,7 @@ benchmarks! {
 	vest_locked {
 		let l in 0 .. MAX_LOCKS;
 
-		let caller = account("caller", 0, SEED);
+		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		add_locks::<T>(&caller, l as u8);
 		add_vesting_schedule::<T>(&caller)?;
@@ -87,7 +88,7 @@ benchmarks! {
 	vest_unlocked {
 		let l in 0 .. MAX_LOCKS;
 
-		let caller = account("caller", 0, SEED);
+		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		add_locks::<T>(&caller, l as u8);
 		add_vesting_schedule::<T>(&caller)?;
@@ -124,7 +125,7 @@ benchmarks! {
 			"Vesting schedule not added",
 		);
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 	}: vest_other(RawOrigin::Signed(caller.clone()), other_lookup)
 	verify {
 		// Nothing happened since everything is still vested.
@@ -151,7 +152,7 @@ benchmarks! {
 			"Vesting schedule still active",
 		);
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 	}: vest_other(RawOrigin::Signed(caller.clone()), other_lookup)
 	verify {
 		// Vesting schedule is removed!
@@ -165,7 +166,7 @@ benchmarks! {
 	vested_transfer {
 		let l in 0 .. MAX_LOCKS;
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());

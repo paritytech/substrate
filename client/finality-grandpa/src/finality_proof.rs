@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! GRANDPA block finality proof generation and check.
 //!
@@ -147,7 +149,7 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 }
 
 /// Finality proof provider for serving network requests.
-pub struct FinalityProofProvider<B,  Block: BlockT> {
+pub struct FinalityProofProvider<B, Block: BlockT> {
 	backend: Arc<B>,
 	authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 }
@@ -167,6 +169,18 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	{
 		FinalityProofProvider { backend, authority_provider: Arc::new(authority_provider) }
 	}
+
+	/// Create new finality proof provider for the service using:
+	///
+	/// - backend for accessing blockchain data;
+	/// - storage_and_proof_provider, which is generally a client.
+	pub fn new_for_service(
+		backend: Arc<B>,
+		storage_and_proof_provider: Arc<dyn StorageAndProofProvider<Block, B>>,
+	) -> Arc<Self> {
+		Arc::new(Self::new(backend, storage_and_proof_provider))
+	}
+
 }
 
 impl<B, Block> sc_network::config::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
@@ -183,7 +197,7 @@ impl<B, Block> sc_network::config::FinalityProofProvider<Block> for FinalityProo
 		let request: FinalityProofRequest<Block::Hash> = Decode::decode(&mut &request[..])
 			.map_err(|e| {
 				warn!(target: "afg", "Unable to decode finality proof request: {}", e.what());
-				ClientError::Backend(format!("Invalid finality proof request"))
+				ClientError::Backend("Invalid finality proof request".to_string())
 			})?;
 		match request {
 			FinalityProofRequest::Original(request) => prove_finality::<_, _, GrandpaJustification<Block>>(
@@ -397,7 +411,7 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 		}
 
 		// else search for the next justification
-		current_number = current_number + One::one();
+		current_number += One::one();
 	}
 
 	if finality_proof.is_empty() {
@@ -513,7 +527,7 @@ fn check_finality_proof_fragment<Block: BlockT, B, J>(
 			new_authorities_proof,
 		)?;
 
-		current_set_id = current_set_id + 1;
+		current_set_id += 1;
 	}
 
 	Ok(AuthoritiesOrEffects::Effects(FinalityEffects {

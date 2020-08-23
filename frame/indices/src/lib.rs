@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! An index is a short form of an address. This module handles allocation
 //! of indices for a newly created accounts.
@@ -27,15 +28,33 @@ use sp_runtime::traits::{
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
+use frame_support::weights::{Weight, constants::WEIGHT_PER_MICROS};
 use frame_system::{ensure_signed, ensure_root};
 use self::address::Address as RawAddress;
 
 mod mock;
 pub mod address;
 mod tests;
+mod benchmarking;
 
 pub type Address<T> = RawAddress<<T as frame_system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
+pub trait WeightInfo {
+	fn claim(i: u32, ) -> Weight;
+	fn transfer(i: u32, ) -> Weight;
+	fn free(i: u32, ) -> Weight;
+	fn force_transfer(i: u32, ) -> Weight;
+	fn freeze(i: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn claim(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn transfer(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn free(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn force_transfer(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn freeze(_i: u32, ) -> Weight { 1_000_000_000 }
+}
 
 /// The module's config trait.
 pub trait Trait: frame_system::Trait {
@@ -51,6 +70,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -59,9 +81,9 @@ decl_storage! {
 		pub Accounts build(|config: &GenesisConfig<T>|
 			config.indices.iter()
 				.cloned()
-				.map(|(a, b)| (a, (b, Zero::zero())))
+				.map(|(a, b)| (a, (b, Zero::zero(), false)))
 				.collect::<Vec<_>>()
-		): map hasher(blake2_128_concat) T::AccountIndex => Option<(T::AccountId, BalanceOf<T>)>;
+		): map hasher(blake2_128_concat) T::AccountIndex => Option<(T::AccountId, BalanceOf<T>, bool)>;
 	}
 	add_extra_genesis {
 		config(indices): Vec<(T::AccountIndex, T::AccountId)>;
@@ -73,10 +95,12 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as Trait>::AccountIndex
 	{
-		/// A account index was assigned.
+		/// A account index was assigned. [who, index]
 		IndexAssigned(AccountId, AccountIndex),
-		/// A account index has been freed up (unassigned).
+		/// A account index has been freed up (unassigned). [index]
 		IndexFreed(AccountIndex),
+		/// A account index has been frozen to its current account ID. [who, index]
+		IndexFrozen(AccountIndex, AccountId),
 	}
 );
 
@@ -90,6 +114,8 @@ decl_error! {
 		InUse,
 		/// The source and destination accounts are identical.
 		NotTransfer,
+		/// The index is permanent and may not be freed/changed.
+		Permanent,
 	}
 }
 
@@ -112,14 +138,17 @@ decl_module! {
 		/// - One storage mutation (codec `O(1)`).
 		/// - One reserve operation.
 		/// - One event.
+		/// -------------------
+		/// - Base Weight: 28.69 µs
+		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[weight = 0]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 30 * WEIGHT_PER_MICROS]
 		fn claim(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
 			Accounts::<T>::try_mutate(index, |maybe_value| {
 				ensure!(maybe_value.is_none(), Error::<T>::InUse);
-				*maybe_value = Some((who.clone(), T::Deposit::get()));
+				*maybe_value = Some((who.clone(), T::Deposit::get(), false));
 				T::Currency::reserve(&who, T::Deposit::get())
 			})?;
 			Self::deposit_event(RawEvent::IndexAssigned(who, index));
@@ -140,17 +169,23 @@ decl_module! {
 		/// - One storage mutation (codec `O(1)`).
 		/// - One transfer operation.
 		/// - One event.
+		/// -------------------
+		/// - Base Weight: 33.74 µs
+		/// - DB Weight:
+		///    - Reads: Indices Accounts, System Account (recipient)
+		///    - Writes: Indices Accounts, System Account (recipient)
 		/// # </weight>
-		#[weight = 0]
+		#[weight = T::DbWeight::get().reads_writes(2, 2) + 35 * WEIGHT_PER_MICROS]
 		fn transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
-				let (account, amount) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
+				let (account, amount, perm) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
+				ensure!(!perm, Error::<T>::Permanent);
 				ensure!(&account == &who, Error::<T>::NotOwner);
 				let lost = T::Currency::repatriate_reserved(&who, &new, amount, Reserved)?;
-				*maybe_value = Some((new.clone(), amount.saturating_sub(lost)));
+				*maybe_value = Some((new.clone(), amount.saturating_sub(lost), false));
 				Ok(())
 			})?;
 			Self::deposit_event(RawEvent::IndexAssigned(new, index));
@@ -171,13 +206,17 @@ decl_module! {
 		/// - One storage mutation (codec `O(1)`).
 		/// - One reserve operation.
 		/// - One event.
+		/// -------------------
+		/// - Base Weight: 25.53 µs
+		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[weight = 0]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 25 * WEIGHT_PER_MICROS]
 		fn free(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
-				let (account, amount) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
+				let (account, amount, perm) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
+				ensure!(!perm, Error::<T>::Permanent);
 				ensure!(&account == &who, Error::<T>::NotOwner);
 				T::Currency::unreserve(&who, amount);
 				Ok(())
@@ -192,6 +231,7 @@ decl_module! {
 		///
 		/// - `index`: the index to be (re-)assigned.
 		/// - `new`: the new owner of the index. This function is a no-op if it is equal to sender.
+		/// - `freeze`: if set to `true`, will freeze the index so it cannot be transferred.
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
@@ -200,18 +240,56 @@ decl_module! {
 		/// - One storage mutation (codec `O(1)`).
 		/// - Up to one reserve operation.
 		/// - One event.
+		/// -------------------
+		/// - Base Weight: 26.83 µs
+		/// - DB Weight:
+		///    - Reads: Indices Accounts, System Account (original owner)
+		///    - Writes: Indices Accounts, System Account (original owner)
 		/// # </weight>
-		#[weight = 0]
-		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex) {
+		#[weight = T::DbWeight::get().reads_writes(2, 2) + 25 * WEIGHT_PER_MICROS]
+		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex, freeze: bool) {
 			ensure_root(origin)?;
 
 			Accounts::<T>::mutate(index, |maybe_value| {
-				if let Some((account, amount)) = maybe_value.take() {
+				if let Some((account, amount, _)) = maybe_value.take() {
 					T::Currency::unreserve(&account, amount);
 				}
-				*maybe_value = Some((new.clone(), Zero::zero()));
+				*maybe_value = Some((new.clone(), Zero::zero(), freeze));
 			});
 			Self::deposit_event(RawEvent::IndexAssigned(new, index));
+		}
+
+		/// Freeze an index so it will always point to the sender account. This consumes the deposit.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the signing account must have a
+		/// non-frozen account `index`.
+		///
+		/// - `index`: the index to be frozen in place.
+		///
+		/// Emits `IndexFrozen` if successful.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One storage mutation (codec `O(1)`).
+		/// - Up to one slash operation.
+		/// - One event.
+		/// -------------------
+		/// - Base Weight: 30.86 µs
+		/// - DB Weight: 1 Read/Write (Accounts)
+		/// # </weight>
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 30 * WEIGHT_PER_MICROS]
+		fn freeze(origin, index: T::AccountIndex) {
+			let who = ensure_signed(origin)?;
+
+			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
+				let (account, amount, perm) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
+				ensure!(!perm, Error::<T>::Permanent);
+				ensure!(&account == &who, Error::<T>::NotOwner);
+				T::Currency::slash_reserved(&who, amount);
+				*maybe_value = Some((account, Zero::zero(), true));
+				Ok(())
+			})?;
+			Self::deposit_event(RawEvent::IndexFrozen(index, who));
 		}
 	}
 }

@@ -1,22 +1,23 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Contains the `Node` struct, which handles communications with a single telemetry endpoint.
 
-use bytes::BytesMut;
 use futures::prelude::*;
 use futures_timer::Delay;
 use libp2p::Multiaddr;
@@ -55,7 +56,7 @@ struct NodeSocketConnected<TTrans: Transport> {
 	/// Where to send data.
 	sink: TTrans::Output,
 	/// Queue of packets to send.
-	pending: VecDeque<BytesMut>,
+	pending: VecDeque<Vec<u8>>,
 	/// If true, we need to flush the sink.
 	need_flush: bool,
 	/// A timeout for the socket to write data.
@@ -101,15 +102,15 @@ impl<TTrans: Transport> Node<TTrans> {
 
 impl<TTrans: Transport, TSinkErr> Node<TTrans>
 where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
-	TTrans::Output: Sink<BytesMut, Error = TSinkErr>
-		+ Stream<Item=Result<BytesMut, TSinkErr>>
+	TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
+		+ Stream<Item=Result<Vec<u8>, TSinkErr>>
 		+ Unpin,
 	TSinkErr: fmt::Debug
 {
 	/// Sends a WebSocket frame to the node. Returns an error if we are not connected to the node.
 	///
 	/// After calling this method, you should call `poll` in order for it to be properly processed.
-	pub fn send_message(&mut self, payload: impl Into<BytesMut>) -> Result<(), ()> {
+	pub fn send_message(&mut self, payload: impl Into<Vec<u8>>) -> Result<(), ()> {
 		if let NodeSocket::Connected(NodeSocketConnected { pending, .. }) = &mut self.socket {
 			if pending.len() <= MAX_PENDING {
 				trace!(target: "telemetry", "Adding log entry to queue for {:?}", self.addr);
@@ -201,8 +202,8 @@ fn gen_rand_reconnect_delay() -> Delay {
 }
 
 impl<TTrans: Transport, TSinkErr> NodeSocketConnected<TTrans>
-where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
-	+ Stream<Item=Result<BytesMut, TSinkErr>>
+where TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
+	+ Stream<Item=Result<Vec<u8>, TSinkErr>>
 	+ Unpin
 {
 	/// Processes the queue of messages for the connected socket.

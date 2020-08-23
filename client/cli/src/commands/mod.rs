@@ -1,45 +1,68 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 mod build_spec_cmd;
 mod check_block_cmd;
 mod export_blocks_cmd;
 mod export_state_cmd;
 mod import_blocks_cmd;
 mod purge_chain_cmd;
+mod sign;
+mod verify;
+mod vanity;
 mod revert_cmd;
 mod run_cmd;
+mod generate_node_key;
+mod generate;
+mod insert;
+mod inspect_node_key;
+mod inspect;
+mod key;
+pub mod utils;
 
-pub use self::build_spec_cmd::BuildSpecCmd;
-pub use self::check_block_cmd::CheckBlockCmd;
-pub use self::export_blocks_cmd::ExportBlocksCmd;
-pub use self::import_blocks_cmd::ImportBlocksCmd;
-pub use self::purge_chain_cmd::PurgeChainCmd;
-pub use self::revert_cmd::RevertCmd;
-pub use self::run_cmd::RunCmd;
-pub use self::export_state_cmd::ExportStateCmd;
 use std::fmt::Debug;
 use structopt::StructOpt;
+
+pub use self::{
+	build_spec_cmd::BuildSpecCmd,
+	check_block_cmd::CheckBlockCmd,
+	export_blocks_cmd::ExportBlocksCmd,
+	export_state_cmd::ExportStateCmd,
+	import_blocks_cmd::ImportBlocksCmd,
+	purge_chain_cmd::PurgeChainCmd,
+	sign::SignCmd,
+	generate::GenerateCmd,
+	insert::InsertCmd,
+	inspect::InspectKeyCmd,
+	generate_node_key::GenerateNodeKeyCmd,
+	inspect_node_key::InspectNodeKeyCmd,
+	key::KeySubcommand,
+	vanity::VanityCmd,
+	verify::VerifyCmd,
+	revert_cmd::RevertCmd,
+	run_cmd::RunCmd,
+};
 
 /// All core commands that are provided by default.
 ///
 /// The core commands are split into multiple subcommands and `Run` is the default subcommand. From
 /// the CLI user perspective, it is not visible that `Run` is a subcommand. So, all parameters of
 /// `Run` are exported as main executable parameters.
-#[derive(Debug, Clone, StructOpt)]
+#[derive(Debug, StructOpt)]
 pub enum Subcommand {
 	/// Build a spec.json file, outputs to stdout.
 	BuildSpec(BuildSpecCmd),
@@ -53,17 +76,16 @@ pub enum Subcommand {
 	/// Validate a single block.
 	CheckBlock(CheckBlockCmd),
 
+	/// Export state as raw chain spec.
+	ExportState(ExportStateCmd),
+
 	/// Revert chain to the previous state.
 	Revert(RevertCmd),
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
-
-	/// Export state as raw chain spec.
-	ExportState(ExportStateCmd),
 }
 
-// TODO: move to config.rs?
 /// Macro that helps implement CliConfiguration on an enum of subcommand automatically
 ///
 /// # Example
@@ -161,7 +183,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn base_path(&self) -> $crate::Result<::std::option::Option<::std::path::PathBuf>> {
+			fn base_path(&self) -> $crate::Result<::std::option::Option<sc_service::config::BasePath>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*
 				}
@@ -188,17 +210,24 @@ macro_rules! substrate_cli_subcommands {
 
 			fn network_config(
 				&self,
-				chain_spec: &::std::boxed::Box<dyn ::sc_service::ChainSpec>,
+				chain_spec: &std::boxed::Box<dyn sc_service::ChainSpec>,
 				is_dev: bool,
-				net_config_dir: ::std::path::PathBuf,
+				net_config_dir: std::path::PathBuf,
 				client_id: &str,
 				node_name: &str,
-				node_key: ::sc_service::config::NodeKeyConfig,
+				node_key: sc_service::config::NodeKeyConfig,
+				default_listen_port: u16,
 			) -> $crate::Result<::sc_service::config::NetworkConfiguration> {
 				match self {
 					$(
 						$enum::$variant(cmd) => cmd.network_config(
-							chain_spec, is_dev, net_config_dir, client_id, node_name, node_key
+							chain_spec,
+							is_dev,
+							net_config_dir,
+							client_id,
+							node_name,
+							node_key,
+							default_listen_port,
 						)
 					),*
 				}
@@ -277,22 +306,34 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn execution_strategies(&self, is_dev: bool)
+			fn execution_strategies(&self, is_dev: bool, is_validator: bool)
 			-> $crate::Result<::sc_client_api::execution_extensions::ExecutionStrategies> {
 				match self {
-					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev)),*
+					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev, is_validator)),*
 				}
 			}
 
-			fn rpc_http(&self) -> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
+			fn rpc_ipc(&self) -> $crate::Result<::std::option::Option<::std::string::String>> {
 				match self {
-					$($enum::$variant(cmd) => cmd.rpc_http()),*
+					$($enum::$variant(cmd) => cmd.rpc_ipc()),*
 				}
 			}
 
-			fn rpc_ws(&self) -> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
+			fn rpc_http(
+				&self,
+				default_listen_port: u16,
+			) -> $crate::Result<std::option::Option<std::net::SocketAddr>> {
 				match self {
-					$($enum::$variant(cmd) => cmd.rpc_ws()),*
+					$($enum::$variant(cmd) => cmd.rpc_http(default_listen_port)),*
+				}
+			}
+
+			fn rpc_ws(
+				&self,
+				default_listen_port: u16,
+			) -> $crate::Result<std::option::Option<std::net::SocketAddr>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.rpc_ws(default_listen_port)),*
 				}
 			}
 
@@ -309,23 +350,23 @@ macro_rules! substrate_cli_subcommands {
 			}
 
 			fn rpc_cors(&self, is_dev: bool)
-			-> $crate::Result<::std::option::Option<::std::vec::Vec<String>>> {
+			-> $crate::Result<std::option::Option<std::vec::Vec<String>>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.rpc_cors(is_dev)),*
 				}
 			}
 
-			fn prometheus_config(&self)
-			-> $crate::Result<::std::option::Option<::sc_service::config::PrometheusConfig>> {
+			fn prometheus_config(&self, default_listen_port: u16)
+			-> $crate::Result<std::option::Option<sc_service::config::PrometheusConfig>> {
 				match self {
-					$($enum::$variant(cmd) => cmd.prometheus_config()),*
+					$($enum::$variant(cmd) => cmd.prometheus_config(default_listen_port)),*
 				}
 			}
 
 			fn telemetry_endpoints(
 				&self,
-				chain_spec: &Box<dyn ::sc_service::ChainSpec>,
-			) -> $crate::Result<::std::option::Option<::sc_service::config::TelemetryEndpoints>> {
+				chain_spec: &Box<dyn sc_service::ChainSpec>,
+			) -> $crate::Result<std::option::Option<sc_service::config::TelemetryEndpoints>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.telemetry_endpoints(chain_spec)),*
 				}
@@ -406,6 +447,12 @@ macro_rules! substrate_cli_subcommands {
 }
 
 substrate_cli_subcommands!(
-	Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain, ExportState
+	Subcommand =>
+		BuildSpec,
+		ExportBlocks,
+		ExportState,
+		ImportBlocks,
+		CheckBlock,
+		Revert,
+		PurgeChain
 );
-

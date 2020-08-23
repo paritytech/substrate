@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Assets Module
 //!
@@ -86,7 +87,7 @@
 //! ```rust,ignore
 //! use pallet_assets as assets;
 //! use frame_support::{decl_module, dispatch, ensure};
-//! use frame_system::{self as system, ensure_signed};
+//! use frame_system::ensure_signed;
 //!
 //! pub trait Trait: assets::Trait { }
 //!
@@ -133,8 +134,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure};
-use sp_runtime::traits::{Member, AtLeast32Bit, Zero, StaticLookup};
-use frame_system::{self as system, ensure_signed};
+use sp_runtime::traits::{Member, AtLeast32Bit, AtLeast32BitUnsigned, Zero, StaticLookup};
+use frame_system::ensure_signed;
 use sp_runtime::traits::One;
 
 /// The module configuration trait.
@@ -143,7 +144,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The units in which we record balances.
-	type Balance: Member + Parameter + AtLeast32Bit + Default + Copy;
+	type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy;
 
 	/// The arithmetic type of asset identifier.
 	type AssetId: Parameter + AtLeast32Bit + Default + Copy;
@@ -229,11 +230,11 @@ decl_event! {
 		<T as Trait>::Balance,
 		<T as Trait>::AssetId,
 	{
-		/// Some assets were issued.
+		/// Some assets were issued. [asset_id, owner, total_supply]
 		Issued(AssetId, AccountId, Balance),
-		/// Some assets were transferred.
+		/// Some assets were transferred. [asset_id, from, to, amount]
 		Transferred(AssetId, AccountId, AccountId, Balance),
-		/// Some assets were destroyed.
+		/// Some assets were destroyed. [asset_id, owner, balance]
 		Destroyed(AssetId, AccountId, Balance),
 	}
 }
@@ -256,6 +257,8 @@ decl_storage! {
 		/// The next asset identifier up for grabs.
 		NextAssetId get(fn next_asset_id): T::AssetId;
 		/// The total unit supply of an asset.
+		///
+		/// TWOX-NOTE: `AssetId` is trusted, so this is safe.
 		TotalSupply: map hasher(twox_64_concat) T::AssetId => T::Balance;
 	}
 }
@@ -281,17 +284,12 @@ mod tests {
 
 	use frame_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, weights::Weight};
 	use sp_core::H256;
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
-	// For testing the pallet, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -301,6 +299,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type Call = ();
@@ -316,6 +315,7 @@ mod tests {
 		type DbWeight = ();
 		type BlockExecutionWeight = ();
 		type ExtrinsicBaseWeight = ();
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
@@ -323,6 +323,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -331,8 +332,6 @@ mod tests {
 	}
 	type Assets = Module<Test>;
 
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}

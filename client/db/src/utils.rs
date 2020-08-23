@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
@@ -34,7 +36,7 @@ use crate::{DatabaseSettings, DatabaseSettingsSrc, Database, DbHash};
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
-#[cfg(any(feature = "kvdb-rocksdb", feature = "test-helpers", test))]
+#[cfg(any(feature = "with-kvdb-rocksdb", feature = "with-parity-db", feature = "test-helpers", test))]
 pub const NUM_COLUMNS: u32 = 11;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: u32 = 0;
@@ -179,8 +181,8 @@ pub fn insert_hash_to_key_mapping<N: TryInto<u32>, H: AsRef<[u8]> + Clone>(
 ) -> sp_blockchain::Result<()> {
 	transaction.set_from_vec(
 		key_lookup_col,
-		hash.clone().as_ref(),
-		number_and_hash_to_lookup_key(number, hash)?,
+		hash.as_ref(),
+		number_and_hash_to_lookup_key(number, hash.clone())?,
 	);
 	Ok(())
 }
@@ -210,8 +212,14 @@ pub fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
 	db_type: DatabaseType,
 ) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
+	let db_open_error = |feat| Err(
+		sp_blockchain::Error::Backend(
+			format!("`{}` feature not enabled, database can not be opened", feat),
+		),
+	);
+
 	let db: Arc<dyn Database<DbHash>> = match &config.source {
-		#[cfg(any(feature = "kvdb-rocksdb", test))]
+		#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 		DatabaseSettingsSrc::RocksDb { path, cache_size } => {
 			// first upgrade database to required version
 			crate::upgrade::upgrade_db::<Block>(&path, db_type)?;
@@ -247,21 +255,29 @@ pub fn open_database<Block: BlockT>(
 				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?;
 			sp_database::as_database(db)
 		},
-		#[cfg(feature = "subdb")]
+		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
+		DatabaseSettingsSrc::RocksDb { .. } => {
+			return db_open_error("with-kvdb-rocksdb");
+		},
+		#[cfg(feature = "with-subdb")]
 		DatabaseSettingsSrc::SubDb { path } => {
 			crate::subdb::open(&path, NUM_COLUMNS)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
-		#[cfg(feature = "parity-db")]
+		#[cfg(not(feature = "with-subdb"))]
+		DatabaseSettingsSrc::SubDb { .. } => {
+			return db_open_error("with-subdb");
+		},
+		#[cfg(feature = "with-parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
 			crate::parity_db::open(&path)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
-		DatabaseSettingsSrc::Custom(db) => db.clone(),
-		_ => {
-			let msg = "Trying to open a unsupported database".into();
-			return Err(sp_blockchain::Error::Backend(msg));
+		#[cfg(not(feature = "with-parity-db"))]
+		DatabaseSettingsSrc::ParityDb { .. } => {
+			return db_open_error("with-parity-db");
 		},
+		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};
 
 	check_database_type(&*db, db_type)?;
@@ -281,7 +297,7 @@ pub fn check_database_type(db: &dyn Database<DbHash>, db_type: DatabaseType) -> 
 		None => {
 			let mut transaction = Transaction::new();
 			transaction.set(COLUMN_META, meta_keys::TYPE, db_type.as_str().as_bytes());
-			db.commit(transaction)
+			db.commit(transaction)?;
 		},
 	}
 

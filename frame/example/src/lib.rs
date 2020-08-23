@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Example Pallet
 //!
@@ -255,11 +256,11 @@
 
 use sp_std::marker::PhantomData;
 use frame_support::{
-	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
+	dispatch::{DispatchResult, IsSubType}, decl_module, decl_storage, decl_event,
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
 };
 use sp_std::prelude::*;
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{
@@ -608,14 +609,13 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
+impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T>
+where
+	<T as frame_system::Trait>::Call: IsSubType<Call<T>>,
+{
 	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;
-	// Note that this could also be assigned to the top-level call enum. It is passed into the
-	// Balances Pallet directly and since `Trait: pallet_balances::Trait`, you could also use `T::Call`.
-	// In that case, you would have had access to all call variants and could match on variants from
-	// other pallets.
-	type Call = Call<T>;
+	type Call = <T as frame_system::Trait>::Call;
 	type AdditionalSigned = ();
 	type Pre = ();
 
@@ -634,8 +634,8 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 		}
 
 		// check for `set_dummy`
-		match call {
-			Call::set_dummy(..) => {
+		match call.is_sub_type() {
+			Some(Call::set_dummy(..)) => {
 				sp_runtime::print("set_dummy was received.");
 
 				let mut valid_tx = ValidTransaction::default();
@@ -710,8 +710,8 @@ mod tests {
 	use super::*;
 
 	use frame_support::{
-		assert_ok, impl_outer_origin, parameter_types, weights::{DispatchInfo, GetDispatchInfo},
-		traits::{OnInitialize, OnFinalize}
+		assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch,
+		weights::{DispatchInfo, GetDispatchInfo}, traits::{OnInitialize, OnFinalize}
 	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -723,7 +723,13 @@ mod tests {
 	};
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
+	}
+
+	impl_outer_dispatch! {
+		pub enum OuterCall for Test where origin: Origin {
+			self::Example,
+		}
 	}
 
 	// For testing the pallet, we construct most of a mock runtime. This means
@@ -738,11 +744,12 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = ();
+		type Call = OuterCall;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
@@ -753,6 +760,7 @@ mod tests {
 		type DbWeight = ();
 		type BlockExecutionWeight = ();
 		type ExtrinsicBaseWeight = ();
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -760,6 +768,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
@@ -770,6 +779,7 @@ mod tests {
 		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -825,7 +835,7 @@ mod tests {
 	#[test]
 	fn signed_ext_watch_dummy_works() {
 		new_test_ext().execute_with(|| {
-			let call = <Call<Test>>::set_dummy(10);
+			let call = <Call<Test>>::set_dummy(10).into();
 			let info = DispatchInfo::default();
 
 			assert_eq!(

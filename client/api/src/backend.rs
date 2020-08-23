@@ -1,23 +1,25 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate Client data backend
 
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use sp_core::ChangesTrieConfigurationRange;
 use sp_core::offchain::{OffchainStorage,storage::OffchainOverlayedChanges};
 use sp_runtime::{generic::BlockId, Justification, Storage};
@@ -65,8 +67,10 @@ pub struct ImportSummary<Block: BlockT> {
 	pub is_new_best: bool,
 	/// Optional storage changes.
 	pub storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
-	/// Blocks that got retracted because of this one got imported.
-	pub retracted: Vec<Block::Hash>,
+	/// Tree route from old best to new best.
+	///
+	/// If `None`, there was no re-org while importing.
+	pub tree_route: Option<sp_blockchain::TreeRoute<Block>>,
 }
 
 /// Import operation wrapper
@@ -414,7 +418,10 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	) -> sp_blockchain::Result<()>;
 
 	/// Commit block insertion.
-	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> sp_blockchain::Result<()>;
+	fn commit_operation(
+		&self,
+		transaction: Self::BlockImportOperation,
+	) -> sp_blockchain::Result<()>;
 
 	/// Finalize block with given Id.
 	///
@@ -445,16 +452,17 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State>;
 
-	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set
-	/// it will attempt to revert past any finalized block, this is unsafe and
-	/// can potentially leave the node in an inconsistent state.
+	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set it will attempt to
+	/// revert past any finalized block, this is unsafe and can potentially leave the node in an
+	/// inconsistent state.
 	///
-	/// Returns the number of blocks that were successfully reverted.
+	/// Returns the number of blocks that were successfully reverted and the list of finalized
+	/// blocks that has been reverted.
 	fn revert(
 		&self,
 		n: NumberFor<Block>,
 		revert_finalized: bool,
-	) -> sp_blockchain::Result<NumberFor<Block>>;
+	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<Block::Hash>)>;
 
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<

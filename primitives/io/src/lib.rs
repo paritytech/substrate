@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! I/O host interface for substrate runtime.
 
@@ -41,7 +42,7 @@ use sp_core::{
 };
 
 use sp_core::{
-	crypto::KeyTypeId, ed25519, sr25519, H256, LogLevel,
+	crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
@@ -133,7 +134,7 @@ pub trait Storage {
 	///
 	/// The hashing algorithm is defined by the `Block`.
 	///
-	/// Returns the SCALE encoded hash.
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
 		self.storage_root()
 	}
@@ -143,7 +144,7 @@ pub trait Storage {
 	///
 	/// The hashing algorithm is defined by the `Block`.
 	///
-	/// Returns an `Some(_)` which holds the SCALE encoded hash or `None` when
+	/// Returns `Some(Vec<u8>)` which holds the SCALE encoded hash or `None` when
 	/// changes trie is disabled.
 	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
 		self.storage_changes_root(parent_hash)
@@ -154,13 +155,52 @@ pub trait Storage {
 	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		self.next_storage_key(&key)
 	}
+
+	/// Start a new nested transaction.
+	///
+	/// This allows to either commit or roll back all changes that are made after this call.
+	/// For every transaction there must be a matching call to either `rollback_transaction`
+	/// or `commit_transaction`. This is also effective for all values manipulated using the
+	/// `DefaultChildStorage` API.
+	///
+	/// # Warning
+	///
+	/// This is a low level API that is potentially dangerous as it can easily result
+	/// in unbalanced transactions. For example, FRAME users should use high level storage
+	/// abstractions.
+	fn start_transaction(&mut self) {
+		self.storage_start_transaction();
+	}
+
+	/// Rollback the last transaction started by `start_transaction`.
+	///
+	/// Any changes made during that transaction are discarded.
+	///
+	/// # Panics
+	///
+	/// Will panic if there is no open transaction.
+	fn rollback_transaction(&mut self) {
+		self.storage_rollback_transaction()
+			.expect("No open transaction that can be rolled back.");
+	}
+
+	/// Commit the last transaction started by `start_transaction`.
+	///
+	/// Any changes made during that transaction are committed.
+	///
+	/// # Panics
+	///
+	/// Will panic if there is no open transaction.
+	fn commit_transaction(&mut self) {
+		self.storage_commit_transaction()
+			.expect("No open transaction that can be committed.");
+	}
 }
 
 /// Interface for accessing the child storage for default child trie,
 /// from within the runtime.
 #[runtime_interface]
 pub trait DefaultChildStorage {
-
 	/// Get a default child storage value for a given key.
 	///
 	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the parent trie.
@@ -215,7 +255,7 @@ pub trait DefaultChildStorage {
 	/// Clear a child storage key.
 	///
 	/// For the default child storage at `storage_key`, clear value at `key`.
-	fn clear (
+	fn clear(
 		&mut self,
 		storage_key: &[u8],
 		key: &[u8],
@@ -265,7 +305,7 @@ pub trait DefaultChildStorage {
 	/// "Commit" all existing operations and compute the resulting child storage root.
 	/// The hashing algorithm is defined by the `Block`.
 	///
-	/// Returns the SCALE encoded hash.
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(
 		&mut self,
 		storage_key: &[u8],
@@ -299,6 +339,16 @@ pub trait Trie {
 	fn blake2_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
 		Layout::<sp_core::Blake2Hasher>::ordered_trie_root(input)
 	}
+
+	/// A trie root formed from the iterated items.
+	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
+		Layout::<sp_core::KeccakHasher>::trie_root(input)
+	}
+
+	/// A trie root formed from the enumerated items.
+	fn keccak_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
+		Layout::<sp_core::KeccakHasher>::ordered_trie_root(input)
+	}
 }
 
 /// Interface that provides miscellaneous functions for communicating between the runtime and the node.
@@ -328,7 +378,8 @@ pub trait Misc {
 
 	/// Extract the runtime version of the given wasm blob by calling `Core_version`.
 	///
-	/// Returns the SCALE encoded runtime version and `None` if the call failed.
+	/// Returns `None` if calling the function failed for any reason or `Some(Vec<u8>)` where
+	/// the `Vec<u8>` holds the SCALE encoded runtime version.
 	///
 	/// # Performance
 	///
@@ -403,68 +454,63 @@ pub trait Crypto {
 
 	/// Verify `ed25519` signature.
 	///
-	/// Returns `true` when the verification is either successful or batched.
-	/// If no batching verification extension registered, this will return the result
-	/// of verification immediately. If batching verification extension is registered
-	/// caller should call `crypto::finish_batch_verify` to actualy check all submitted
-	/// signatures.
+	/// Returns `true` when the verification was successful.
 	fn ed25519_verify(
 		sig: &ed25519::Signature,
 		msg: &[u8],
 		pub_key: &ed25519::Public,
 	) -> bool {
-		// TODO: see #5554, this is used outside of externalities context/runtime, thus this manual
-		// `with_externalities`.
-		//
-		// This `with_externalities(..)` block returns Some(Some(result)) if signature verification was successfully
-		// batched, everything else (Some(None)/None) means it was not batched and needs to be verified.
-		let evaluated = sp_externalities::with_externalities(|mut instance|
-			instance.extension::<VerificationExt>().map(
-				|extension| extension.push_ed25519(
-					sig.clone(),
-					pub_key.clone(),
-					msg.to_vec(),
-				)
-			)
-		);
+		ed25519::Pair::verify(sig, msg, pub_key)
+	}
 
-		match evaluated {
-			Some(Some(val)) => val,
-			_ => ed25519::Pair::verify(sig, msg, pub_key),
-		}
+	/// Register a `ed25519` signature for batch verification.
+	///
+	/// Batch verification must be enabled by calling [`start_batch_verify`].
+	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// To get the result of the batch verification, [`finish_batch_verify`]
+	/// needs to be called.
+	///
+	/// Returns `true` when the verification is either successful or batched.
+	fn ed25519_batch_verify(
+		&mut self,
+		sig: &ed25519::Signature,
+		msg: &[u8],
+		pub_key: &ed25519::Public,
+	) -> bool {
+		self.extension::<VerificationExt>().map(
+			|extension| extension.push_ed25519(sig.clone(), pub_key.clone(), msg.to_vec())
+		).unwrap_or_else(|| ed25519_verify(sig, msg, pub_key))
 	}
 
 	/// Verify `sr25519` signature.
 	///
-	/// Returns `true` when the verification is either successful or batched.
-	/// If no batching verification extension registered, this will return the result
-	/// of verification immediately. If batching verification extension is registered,
-	/// caller should call `crypto::finish_batch_verify` to actualy check all submitted
+	/// Returns `true` when the verification was successful.
 	#[version(2)]
 	fn sr25519_verify(
 		sig: &sr25519::Signature,
 		msg: &[u8],
 		pub_key: &sr25519::Public,
 	) -> bool {
-		// TODO: see #5554, this is used outside of externalities context/runtime, thus this manual
-		// `with_externalities`.
-		//
-		// This `with_externalities(..)` block returns Some(Some(result)) if signature verification was successfully
-		// batched, everything else (Some(None)/None) means it was not batched and needs to be verified.
-		let evaluated = sp_externalities::with_externalities(|mut instance|
-			instance.extension::<VerificationExt>().map(
-				|extension| extension.push_sr25519(
-					sig.clone(),
-					pub_key.clone(),
-					msg.to_vec(),
-				)
-			)
-		);
+		sr25519::Pair::verify(sig, msg, pub_key)
+	}
 
-		match evaluated {
-			Some(Some(val)) => val,
-			_ => sr25519::Pair::verify(sig, msg, pub_key),
-		}
+	/// Register a `sr25519` signature for batch verification.
+	///
+	/// Batch verification must be enabled by calling [`start_batch_verify`].
+	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// To get the result of the batch verification, [`finish_batch_verify`]
+	/// needs to be called.
+	///
+	/// Returns `true` when the verification is either successful or batched.
+	fn sr25519_batch_verify(
+		&mut self,
+		sig: &sr25519::Signature,
+		msg: &[u8],
+		pub_key: &sr25519::Public,
+	) -> bool {
+		self.extension::<VerificationExt>().map(
+			|extension| extension.push_sr25519(sig.clone(), pub_key.clone(), msg.to_vec())
+		).unwrap_or_else(|| sr25519_verify(sig, msg, pub_key))
 	}
 
 	/// Start verification extension.
@@ -542,6 +588,77 @@ pub trait Crypto {
 	/// signature version.
 	fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pubkey: &sr25519::Public) -> bool {
 		sr25519::Pair::verify_deprecated(sig, msg, pubkey)
+	}
+
+	/// Returns all `ecdsa` public keys for the given key id from the keystore.
+	fn ecdsa_public_keys(&mut self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.read()
+			.ecdsa_public_keys(id)
+	}
+
+	/// Generate an `ecdsa` key for the given key type using an optional `seed` and
+	/// store it in the keystore.
+	///
+	/// The `seed` needs to be a valid utf8.
+	///
+	/// Returns the public key.
+	fn ecdsa_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ecdsa::Public {
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.write()
+			.ecdsa_generate_new(id, seed)
+			.expect("`ecdsa_generate` failed")
+	}
+
+	/// Sign the given `msg` with the `ecdsa` key that corresponds to the given public key and
+	/// key type in the keystore.
+	///
+	/// Returns the signature.
+	fn ecdsa_sign(
+		&mut self,
+		id: KeyTypeId,
+		pub_key: &ecdsa::Public,
+		msg: &[u8],
+	) -> Option<ecdsa::Signature> {
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.read()
+			.sign_with(id, &pub_key.into(), msg)
+			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
+			.ok()
+	}
+
+	/// Verify `ecdsa` signature.
+	///
+	/// Returns `true` when the verification was successful.
+	fn ecdsa_verify(
+		sig: &ecdsa::Signature,
+		msg: &[u8],
+		pub_key: &ecdsa::Public,
+	) -> bool {
+		ecdsa::Pair::verify(sig, msg, pub_key)
+	}
+
+	/// Register a `ecdsa` signature for batch verification.
+	///
+	/// Batch verification must be enabled by calling [`start_batch_verify`].
+	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// To get the result of the batch verification, [`finish_batch_verify`]
+	/// needs to be called.
+	///
+	/// Returns `true` when the verification is either successful or batched.
+	fn ecdsa_batch_verify(
+		&mut self,
+		sig: &ecdsa::Signature,
+		msg: &[u8],
+		pub_key: &ecdsa::Public,
+	) -> bool {
+		self.extension::<VerificationExt>().map(
+			|extension| extension.push_ecdsa(sig.clone(), pub_key.clone(), msg.to_vec())
+		).unwrap_or_else(|| ecdsa_verify(sig, msg, pub_key))
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
@@ -711,6 +828,16 @@ pub trait Offchain {
 			.local_storage_set(kind, key, value)
 	}
 
+	/// Remove a value from the local storage.
+	///
+	/// Note this storage is not part of the consensus, it's only accessible by
+	/// offchain worker tasks running on the same machine. It IS persisted between runs.
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		self.extension::<OffchainExt>()
+			.expect("local_storage_clear can be called only in the offchain worker context")
+			.local_storage_clear(kind, key)
+	}
+
 	/// Sets a value in the local storage if it matches current value.
 	///
 	/// Since multiple offchain workers may be running concurrently, to prevent
@@ -870,6 +997,55 @@ pub trait Logging {
 	}
 }
 
+#[cfg(feature = "std")]
+sp_externalities::decl_extension! {
+	/// Extension to allow running traces in wasm via Proxy
+	pub struct TracingProxyExt(sp_tracing::proxy::TracingProxy);
+}
+
+/// Interface that provides functions for profiling the runtime.
+#[runtime_interface]
+pub trait WasmTracing {
+	/// To create and enter a `tracing` span, using `sp_tracing::proxy`
+	/// Returns 0 value to indicate that no further traces should be attempted
+	fn enter_span(&mut self, target: &str, name: &str) -> u64 {
+		if sp_tracing::wasm_tracing_enabled() {
+			match self.extension::<TracingProxyExt>() {
+				Some(proxy) => return proxy.enter_span(target, name),
+				None => {
+					if self.register_extension(TracingProxyExt(sp_tracing::proxy::TracingProxy::new())).is_ok() {
+						if let Some(proxy) = self.extension::<TracingProxyExt>() {
+							return proxy.enter_span(target, name);
+						}
+					} else {
+						log::warn!(
+							target: "tracing",
+							"Unable to register extension: TracingProxyExt"
+						);
+					}
+				}
+			}
+		}
+		log::debug!(
+			target: "tracing",
+			"Notify to runtime that tracing is disabled."
+		);
+		0
+	}
+
+	/// Exit a `tracing` span, using `sp_tracing::proxy`
+	fn exit_span(&mut self, id: u64) {
+		if let Some(proxy) = self.extension::<TracingProxyExt>() {
+			proxy.exit_span(id)
+		} else {
+			log::warn!(
+				target: "tracing",
+				"Unable to load extension: TracingProxyExt"
+			);
+		}
+	}
+}
+
 /// Wasm-only interface that provides functions for interacting with the sandbox.
 #[runtime_interface(wasm_only)]
 pub trait Sandbox {
@@ -1016,6 +1192,7 @@ pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
 	default_child_storage::HostFunctions,
 	misc::HostFunctions,
+	wasm_tracing::HostFunctions,
 	offchain::HostFunctions,
 	crypto::HostFunctions,
 	hashing::HostFunctions,
@@ -1029,9 +1206,10 @@ pub type SubstrateHostFunctions = (
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::map;
 	use sp_state_machine::BasicExternalities;
-	use sp_core::storage::Storage;
+	use sp_core::{
+		storage::Storage, map, traits::TaskExecutorExt, testing::TaskExecutor,
+	};
 	use std::any::TypeId;
 
 	#[test]
@@ -1096,8 +1274,10 @@ mod tests {
 	}
 
 	#[test]
-	fn dynamic_extensions_work() {
-		let mut ext = BasicExternalities::with_tasks_executor();
+	fn batch_verify_start_finish_works() {
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
+
 		ext.execute_with(|| {
 			crypto::start_batch_verify();
 		});
@@ -1105,7 +1285,7 @@ mod tests {
 		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_some());
 
 		ext.execute_with(|| {
-			crypto::finish_batch_verify();
+			assert!(crypto::finish_batch_verify());
 		});
 
 		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_none());
@@ -1113,18 +1293,19 @@ mod tests {
 
 	#[test]
 	fn long_sr25519_batching() {
-		let mut ext = BasicExternalities::with_tasks_executor();
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 		ext.execute_with(|| {
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
 			crypto::start_batch_verify();
 			for it in 0..70 {
 				let msg = format!("Schnorrkel {}!", it);
 				let signature = pair.sign(msg.as_bytes());
-				crypto::sr25519_verify(&signature, msg.as_bytes(), &pair.public());
+				crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair.public());
 			}
 
 			// push invlaid
-			crypto::sr25519_verify(
+			crypto::sr25519_batch_verify(
 				&Default::default(),
 				&Vec::new(),
 				&Default::default(),
@@ -1135,7 +1316,7 @@ mod tests {
 			for it in 0..70 {
 				let msg = format!("Schnorrkel {}!", it);
 				let signature = pair.sign(msg.as_bytes());
-				crypto::sr25519_verify(&signature, msg.as_bytes(), &pair.public());
+				crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair.public());
 			}
 			assert!(crypto::finish_batch_verify());
 		});
@@ -1143,11 +1324,12 @@ mod tests {
 
 	#[test]
 	fn batching_works() {
-		let mut ext = BasicExternalities::with_tasks_executor();
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 		ext.execute_with(|| {
 			// invalid ed25519 signature
 			crypto::start_batch_verify();
-			crypto::ed25519_verify(
+			crypto::ed25519_batch_verify(
 				&Default::default(),
 				&Vec::new(),
 				&Default::default(),
@@ -1160,12 +1342,12 @@ mod tests {
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Important message";
 			let signature = pair.sign(msg);
-			crypto::ed25519_verify(&signature, msg, &pair.public());
+			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
 
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Even more important message";
 			let signature = pair.sign(msg);
-			crypto::ed25519_verify(&signature, msg, &pair.public());
+			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
 
 			assert!(crypto::finish_batch_verify());
 
@@ -1175,9 +1357,9 @@ mod tests {
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Important message";
 			let signature = pair.sign(msg);
-			crypto::ed25519_verify(&signature, msg, &pair.public());
+			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
 
-			crypto::ed25519_verify(
+			crypto::ed25519_batch_verify(
 				&Default::default(),
 				&Vec::new(),
 				&Default::default(),
@@ -1191,17 +1373,17 @@ mod tests {
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Ed25519 batching";
 			let signature = pair.sign(msg);
-			crypto::ed25519_verify(&signature, msg, &pair.public());
+			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
 
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Schnorrkel rules";
 			let signature = pair.sign(msg);
-			crypto::sr25519_verify(&signature, msg, &pair.public());
+			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
 
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Schnorrkel batches!";
 			let signature = pair.sign(msg);
-			crypto::sr25519_verify(&signature, msg, &pair.public());
+			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
 
 			assert!(crypto::finish_batch_verify());
 
@@ -1211,9 +1393,9 @@ mod tests {
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Schnorrkcel!";
 			let signature = pair.sign(msg);
-			crypto::sr25519_verify(&signature, msg, &pair.public());
+			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
 
-			crypto::sr25519_verify(
+			crypto::sr25519_batch_verify(
 				&Default::default(),
 				&Vec::new(),
 				&Default::default(),

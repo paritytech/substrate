@@ -16,14 +16,17 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{Schedule, Trait, CodeHash, BalanceOf};
+use crate::{Schedule, Trait, CodeHash, BalanceOf, Error};
 use crate::exec::{
-	Ext, ExecResult, ExecError, ExecReturnValue, StorageKey, TopicOf, STATUS_SUCCESS,
+	Ext, ExecResult, ExecReturnValue, StorageKey, TopicOf, ReturnFlags, ExecError
 };
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult};
+use crate::wasm::env_def::ConvertibleToWasm;
 use sp_sandbox;
+use parity_wasm::elements::ValueType;
 use frame_system;
-use sp_std::{prelude::*, mem, convert::TryInto};
+use frame_support::dispatch::DispatchError;
+use sp_std::prelude::*;
 use codec::{Decode, Encode};
 use sp_runtime::traits::{Bounded, SaturatedConversion};
 use sp_io::hashing::{
@@ -32,35 +35,94 @@ use sp_io::hashing::{
 	blake2_128,
 	sha2_256,
 };
-use frame_support::weights::GetDispatchInfo;
 
-/// The value returned from ext_call and ext_instantiate contract external functions if the call or
-/// instantiation traps. This value is chosen as if the execution does not trap, the return value
-/// will always be an 8-bit integer, so 0x0100 is the smallest value that could not be returned.
-const TRAP_RETURN_CODE: u32 = 0x0100;
+/// Every error that can be returned to a contract when it calls any of the host functions.
+#[repr(u32)]
+pub enum ReturnCode {
+	/// API call successful.
+	Success = 0,
+	/// The called function trapped and has its state changes reverted.
+	/// In this case no output buffer is returned.
+	CalleeTrapped = 1,
+	/// The called function ran to completion but decided to revert its state.
+	/// An output buffer is returned when one was supplied.
+	CalleeReverted = 2,
+	/// The passed key does not exist in storage.
+	KeyNotFound = 3,
+	/// Transfer failed because it would have brought the sender's total balance below the
+	/// subsistence threshold.
+	BelowSubsistenceThreshold = 4,
+	/// Transfer failed for other reasons. Most probably reserved or locked balance of the
+	/// sender prevents the transfer.
+	TransferFailed = 5,
+	/// The newly created contract is below the subsistence threshold after executing
+	/// its constructor.
+	NewContractNotFunded = 6,
+	/// No code could be found at the supplied code hash.
+	CodeNotFound = 7,
+	/// The contract that was called is either no contract at all (a plain account)
+	/// or is a tombstone.
+	NotCallable = 8,
+}
 
-/// Enumerates all possible *special* trap conditions.
+impl ConvertibleToWasm for ReturnCode {
+	type NativeType = Self;
+	const VALUE_TYPE: ValueType = ValueType::I32;
+	fn to_typed_value(self) -> sp_sandbox::Value {
+		sp_sandbox::Value::I32(self as i32)
+	}
+	fn from_typed_value(_: sp_sandbox::Value) -> Option<Self> {
+		debug_assert!(false, "We will never receive a ReturnCode but only send it to wasm.");
+		None
+	}
+}
+
+impl From<ExecReturnValue> for ReturnCode {
+	fn from(from: ExecReturnValue) -> Self {
+		if from.flags.contains(ReturnFlags::REVERT) {
+			Self::CalleeReverted
+		} else {
+			Self::Success
+		}
+	}
+}
+
+/// The data passed through when a contract uses `seal_return`.
+struct ReturnData {
+	/// The flags as passed through by the contract. They are still unchecked and
+	/// will later be parsed into a `ReturnFlags` bitflags struct.
+	flags: u32,
+	/// The output buffer passed by the contract as return data.
+	data: Vec<u8>,
+}
+
+/// Enumerates all possible reasons why a trap was generated.
 ///
-/// In this runtime traps used not only for signaling about errors but also
-/// to just terminate quickly in some cases.
-enum SpecialTrap {
-	/// Signals that trap was generated in response to call `ext_return` host function.
-	Return(Vec<u8>),
-	/// Signals that trap was generated because the contract exhausted its gas limit.
-	OutOfGas,
-	/// Signals that a trap was generated in response to a succesful call to the
-	/// `ext_terminate` host function.
+/// This is either used to supply the caller with more information about why an error
+/// occurred (the SupervisorError variant).
+/// The other case is where the trap does not constitute an error but rather was invoked
+/// as a quick way to terminate the application (all other variants).
+enum TrapReason {
+	/// The supervisor trapped the contract because of an error condition occurred during
+	/// execution in privileged code.
+	SupervisorError(DispatchError),
+	/// Signals that trap was generated in response to call `seal_return` host function.
+	Return(ReturnData),
+	/// Signals that a trap was generated in response to a successful call to the
+	/// `seal_terminate` host function.
 	Termination,
+	/// Signals that a trap was generated because of a successful restoration.
+	Restoration,
 }
 
 /// Can only be used for one call.
 pub(crate) struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
-	scratch_buf: Vec<u8>,
+	input_data: Option<Vec<u8>>,
 	schedule: &'a Schedule,
 	memory: sp_sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
-	special_trap: Option<SpecialTrap>,
+	trap_reason: Option<TrapReason>,
 }
 impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	pub(crate) fn new(
@@ -72,61 +134,59 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	) -> Self {
 		Runtime {
 			ext,
-			// Put the input data into the scratch buffer immediately.
-			scratch_buf: input_data,
+			input_data: Some(input_data),
 			schedule,
 			memory,
 			gas_meter,
-			special_trap: None,
+			trap_reason: None,
 		}
 	}
 }
 
+/// Converts the sandbox result and the runtime state into the execution outcome.
+///
+/// It evaluates information stored in the `trap_reason` variable of the runtime and
+/// bases the outcome on the value if this variable. Only if `trap_reason` is `None`
+/// the result of the sandbox is evaluated.
 pub(crate) fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
 	sandbox_result: Result<sp_sandbox::ReturnValue, sp_sandbox::Error>,
 ) -> ExecResult {
-	match runtime.special_trap {
-		// The trap was the result of the execution `return` host function.
-		Some(SpecialTrap::Return(data)) => {
-			return Ok(ExecReturnValue {
-				status: STATUS_SUCCESS,
-				data,
-			})
-		},
-		Some(SpecialTrap::Termination) => {
-			return Ok(ExecReturnValue {
-				status: STATUS_SUCCESS,
-				data: Vec::new(),
-			})
-		},
-		Some(SpecialTrap::OutOfGas) => {
-			return Err(ExecError {
-				reason: "ran out of gas during contract execution".into(),
-				buffer: runtime.scratch_buf,
-			})
-		},
-		None => (),
+	// If a trap reason is set we base our decision solely on that.
+	if let Some(trap_reason) = runtime.trap_reason {
+		return match trap_reason {
+			// The trap was the result of the execution `return` host function.
+			TrapReason::Return(ReturnData{ flags, data }) => {
+				let flags = ReturnFlags::from_bits(flags).ok_or_else(||
+					"used reserved bit in return flags"
+				)?;
+				Ok(ExecReturnValue {
+					flags,
+					data,
+				})
+			},
+			TrapReason::Termination => {
+				Ok(ExecReturnValue {
+					flags: ReturnFlags::empty(),
+					data: Vec::new(),
+				})
+			},
+			TrapReason::Restoration => {
+				Ok(ExecReturnValue {
+					flags: ReturnFlags::empty(),
+					data: Vec::new(),
+				})
+			},
+			TrapReason::SupervisorError(error) => Err(error)?,
+		}
 	}
 
 	// Check the exact type of the error.
 	match sandbox_result {
 		// No traps were generated. Proceed normally.
-		Ok(sp_sandbox::ReturnValue::Unit) => {
-			let mut buffer = runtime.scratch_buf;
-			buffer.clear();
-			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: buffer })
+		Ok(_) => {
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() })
 		}
-		Ok(sp_sandbox::ReturnValue::Value(sp_sandbox::Value::I32(exit_code))) => {
-			let status = (exit_code & 0xFF).try_into()
-				.expect("exit_code is masked into the range of a u8; qed");
-			Ok(ExecReturnValue { status, data: runtime.scratch_buf })
-		}
-		// This should never happen as the return type of exported functions should have been
-		// validated by the code preparation process. However, because panics are really
-		// undesirable in the runtime code, we treat this as a trap for now. Eventually, we might
-		// want to revisit this.
-		Ok(_) => Err(ExecError { reason: "return type error".into(), buffer: runtime.scratch_buf }),
 		// `Error::Module` is returned only if instantiation or linking failed (i.e.
 		// wasm binary tried to import a function that is not provided by the host).
 		// This shouldn't happen because validation process ought to reject such binaries.
@@ -134,10 +194,10 @@ pub(crate) fn to_execution_result<E: Ext>(
 		// Because panics are really undesirable in the runtime code, we treat this as
 		// a trap for now. Eventually, we might want to revisit this.
 		Err(sp_sandbox::Error::Module) =>
-			Err(ExecError { reason: "validation error".into(), buffer: runtime.scratch_buf }),
+			Err("validation error")?,
 		// Any other kind of a trap should result in a failure.
 		Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-			Err(ExecError { reason: "contract trapped during execution".into(), buffer: runtime.scratch_buf }),
+			Err(Error::<E::T>::ContractTrapped)?
 	}
 }
 
@@ -154,8 +214,6 @@ pub enum RuntimeToken {
 	/// The given number of bytes is read from the sandbox memory and
 	/// is returned as the return data buffer of the call.
 	ReturnData(u32),
-	/// Dispatched a call with the given weight.
-	DispatchWithWeight(Gas),
 	/// (topic_count, data_bytes): A buffer of the given size is posted as an event indexed with the
 	/// given number of topics.
 	DepositEvent(u32, u32),
@@ -196,7 +254,6 @@ impl<T: Trait> Token<T> for RuntimeToken {
 						data_and_topics_cost.checked_add(metadata.event_base_cost)
 					)
 			},
-			DispatchWithWeight(gas) => gas.checked_add(metadata.dispatch_base_cost),
 		};
 
 		value.unwrap_or_else(|| Bounded::max_value())
@@ -209,13 +266,13 @@ impl<T: Trait> Token<T> for RuntimeToken {
 fn charge_gas<T: Trait, Tok: Token<T>>(
 	gas_meter: &mut GasMeter<T>,
 	metadata: &Tok::Metadata,
-	special_trap: &mut Option<SpecialTrap>,
+	trap_reason: &mut Option<TrapReason>,
 	token: Tok,
 ) -> Result<(), sp_sandbox::HostError> {
 	match gas_meter.charge(metadata, token) {
 		GasMeterResult::Proceed => Ok(()),
 		GasMeterResult::OutOfGas =>  {
-			*special_trap = Some(SpecialTrap::OutOfGas);
+			*trap_reason = Some(TrapReason::SupervisorError(Error::<T>::OutOfGas.into()));
 			Err(sp_sandbox::HostError)
 		},
 	}
@@ -237,38 +294,14 @@ fn read_sandbox_memory<E: Ext>(
 	charge_gas(
 		ctx.gas_meter,
 		ctx.schedule,
-		&mut ctx.special_trap,
+		&mut ctx.trap_reason,
 		RuntimeToken::ReadMemory(len),
 	)?;
 
 	let mut buf = vec![0u8; len as usize];
-	ctx.memory.get(ptr, buf.as_mut_slice()).map_err(|_| sp_sandbox::HostError)?;
+	ctx.memory.get(ptr, buf.as_mut_slice())
+		.map_err(|_| store_err(ctx, Error::<E::T>::OutOfBounds))?;
 	Ok(buf)
-}
-
-/// Read designated chunk from the sandbox memory into the scratch buffer, consuming an
-/// appropriate amount of gas. Resizes the scratch buffer to the specified length on success.
-///
-/// Returns `Err` if one of the following conditions occurs:
-///
-/// - calculating the gas cost resulted in overflow.
-/// - out of gas
-/// - requested buffer is not within the bounds of the sandbox memory.
-fn read_sandbox_memory_into_scratch<E: Ext>(
-	ctx: &mut Runtime<E>,
-	ptr: u32,
-	len: u32,
-) -> Result<(), sp_sandbox::HostError> {
-	charge_gas(
-		ctx.gas_meter,
-		ctx.schedule,
-		&mut ctx.special_trap,
-		RuntimeToken::ReadMemory(len),
-	)?;
-
-	ctx.scratch_buf.resize(len as usize, 0);
-	ctx.memory.get(ptr, ctx.scratch_buf.as_mut_slice()).map_err(|_| sp_sandbox::HostError)?;
-	Ok(())
 }
 
 /// Read designated chunk from the sandbox memory into the supplied buffer, consuming
@@ -287,11 +320,11 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 	charge_gas(
 		ctx.gas_meter,
 		ctx.schedule,
-		&mut ctx.special_trap,
+		&mut ctx.trap_reason,
 		RuntimeToken::ReadMemory(buf.len() as u32),
 	)?;
 
-	ctx.memory.get(ptr, buf).map_err(Into::into)
+	ctx.memory.get(ptr, buf).map_err(|_| store_err(ctx, Error::<E::T>::OutOfBounds))
 }
 
 /// Read designated chunk from the sandbox memory, consuming an appropriate amount of
@@ -309,7 +342,7 @@ fn read_sandbox_memory_as<E: Ext, D: Decode>(
 	len: u32,
 ) -> Result<D, sp_sandbox::HostError> {
 	let buf = read_sandbox_memory(ctx, ptr, len)?;
-	D::decode(&mut &buf[..]).map_err(|_| sp_sandbox::HostError)
+	D::decode(&mut &buf[..]).map_err(|_| store_err(ctx, Error::<E::T>::DecodingFailed))
 }
 
 /// Write the given buffer to the designated location in the sandbox memory, consuming
@@ -320,24 +353,144 @@ fn read_sandbox_memory_as<E: Ext, D: Decode>(
 /// - calculating the gas cost resulted in overflow.
 /// - out of gas
 /// - designated area is not within the bounds of the sandbox memory.
-fn write_sandbox_memory<T: Trait>(
-	schedule: &Schedule,
-	special_trap: &mut Option<SpecialTrap>,
-	gas_meter: &mut GasMeter<T>,
-	memory: &sp_sandbox::Memory,
+fn write_sandbox_memory<E: Ext>(
+	ctx: &mut Runtime<E>,
 	ptr: u32,
 	buf: &[u8],
 ) -> Result<(), sp_sandbox::HostError> {
 	charge_gas(
-		gas_meter,
-		schedule,
-		special_trap,
+		ctx.gas_meter,
+		ctx.schedule,
+		&mut ctx.trap_reason,
 		RuntimeToken::WriteMemory(buf.len() as u32),
 	)?;
 
-	memory.set(ptr, buf)?;
+	ctx.memory.set(ptr, buf)
+		.map_err(|_| store_err(ctx, Error::<E::T>::OutOfBounds))
+}
+
+/// Write the given buffer and its length to the designated locations in sandbox memory.
+//
+/// `out_ptr` is the location in sandbox memory where `buf` should be written to.
+/// `out_len_ptr` is an in-out location in sandbox memory. It is read to determine the
+/// lenght of the buffer located at `out_ptr`. If that buffer is large enough the actual
+/// `buf.len()` is written to this location.
+///
+/// If `out_ptr` is set to the sentinel value of `u32::max_value()`  and `allow_skip` is true the
+/// operation is skipped and `Ok` is returned. This is supposed to help callers to make copying
+/// output optional. For example to skip copying back the output buffer of an `seal_call`
+/// when the caller is not interested in the result.
+///
+/// In addition to the error conditions of `write_sandbox_memory` this functions returns
+/// `Err` if the size of the buffer located at `out_ptr` is too small to fit `buf`.
+fn write_sandbox_output<E: Ext>(
+	ctx: &mut Runtime<E>,
+	out_ptr: u32,
+	out_len_ptr: u32,
+	buf: &[u8],
+	allow_skip: bool,
+) -> Result<(), sp_sandbox::HostError> {
+	if allow_skip && out_ptr == u32::max_value() {
+		return Ok(());
+	}
+
+	let buf_len = buf.len() as u32;
+	let len: u32 = read_sandbox_memory_as(ctx, out_len_ptr, 4)?;
+
+	if len < buf_len {
+		Err(store_err(ctx, Error::<E::T>::OutputBufferTooSmall))?
+	}
+
+	charge_gas(
+		ctx.gas_meter,
+		ctx.schedule,
+		&mut ctx.trap_reason,
+		RuntimeToken::WriteMemory(buf_len.saturating_add(4)),
+	)?;
+
+	ctx.memory.set(out_ptr, buf)?;
+	ctx.memory.set(out_len_ptr, &buf_len.encode())?;
 
 	Ok(())
+}
+
+/// Stores a DispatchError returned from an Ext function into the trap_reason.
+///
+/// This allows through supervisor generated errors to the caller.
+fn store_err<E, Error>(ctx: &mut Runtime<E>, err: Error) -> sp_sandbox::HostError where
+	E: Ext,
+	Error: Into<DispatchError>,
+{
+	ctx.trap_reason = Some(TrapReason::SupervisorError(err.into()));
+	sp_sandbox::HostError
+}
+
+/// Fallible conversion of `DispatchError` to `ReturnCode`.
+fn err_into_return_code<T: Trait>(from: DispatchError) -> Result<ReturnCode, DispatchError> {
+	use ReturnCode::*;
+
+	let below_sub = Error::<T>::BelowSubsistenceThreshold.into();
+	let transfer_failed = Error::<T>::TransferFailed.into();
+	let not_funded = Error::<T>::NewContractNotFunded.into();
+	let no_code = Error::<T>::CodeNotFound.into();
+	let invalid_contract = Error::<T>::NotCallable.into();
+
+	match from {
+		x if x == below_sub => Ok(BelowSubsistenceThreshold),
+		x if x == transfer_failed => Ok(TransferFailed),
+		x if x == not_funded => Ok(NewContractNotFunded),
+		x if x == no_code => Ok(CodeNotFound),
+		x if x == invalid_contract => Ok(NotCallable),
+		err => Err(err)
+	}
+}
+
+/// Fallible conversion of a `ExecResult` to `ReturnCode`.
+fn exec_into_return_code<T: Trait>(from: ExecResult) -> Result<ReturnCode, DispatchError> {
+	use crate::exec::ErrorOrigin::Callee;
+
+	let ExecError { error, origin } = match from {
+		Ok(retval) => return Ok(retval.into()),
+		Err(err) => err,
+	};
+
+	match (error, origin) {
+		(_, Callee) => Ok(ReturnCode::CalleeTrapped),
+		(err, _) => err_into_return_code::<T>(err)
+	}
+}
+
+/// Used by Runtime API that calls into other contracts.
+///
+/// Those need to transform the the `ExecResult` returned from the execution into
+/// a `ReturnCode`. If this conversion fails because the `ExecResult` constitutes a
+/// a fatal error then this error is stored in the `ExecutionContext` so it can be
+/// extracted for display in the UI.
+fn map_exec_result<E: Ext>(ctx: &mut Runtime<E>, result: ExecResult)
+	-> Result<ReturnCode, sp_sandbox::HostError>
+{
+	match exec_into_return_code::<E::T>(result) {
+		Ok(code) => Ok(code),
+		Err(err) => Err(store_err(ctx, err)),
+	}
+}
+
+/// Try to convert an error into a `ReturnCode`.
+///
+/// Used to decide between fatal and non-fatal errors.
+fn map_dispatch_result<T, E: Ext>(ctx: &mut Runtime<E>, result: Result<T, DispatchError>)
+	-> Result<ReturnCode, sp_sandbox::HostError>
+{
+	let err = if let Err(err) = result {
+		err
+	} else {
+		return Ok(ReturnCode::Success)
+	};
+
+	match err_into_return_code::<E::T>(err) {
+		Ok(code) => Ok(code),
+		Err(err) => Err(store_err(ctx, err)),
+	}
 }
 
 // ***********************************************************
@@ -346,6 +499,12 @@ fn write_sandbox_memory<T: Trait>(
 
 // Define a function `fn init_env<E: Ext>() -> HostFunctionSet<E>` that returns
 // a function set which can be imported by an executed contract.
+//
+// # Note
+//
+// Any input that leads to a out of bound error (reading or writing) or failing to decode
+// data passed to the supervisor will lead to a trap. This is not documented explicitly
+// for every function.
 define_env!(Env, <E: Ext>,
 
 	// Account for used gas. Traps if gas used is greater than gas limit.
@@ -358,7 +517,7 @@ define_env!(Env, <E: Ext>,
 		charge_gas(
 			&mut ctx.gas_meter,
 			ctx.schedule,
-			&mut ctx.special_trap,
+			&mut ctx.trap_reason,
 			RuntimeToken::Explicit(amount)
 		)?;
 		Ok(())
@@ -375,11 +534,11 @@ define_env!(Env, <E: Ext>,
 	// - `value_ptr`: pointer into the linear memory where the value to set is placed.
 	// - `value_len`: the length of the value in bytes.
 	//
-	// # Errors
+	// # Traps
 	//
 	// - If value length exceeds the configured maximum value length of a storage entry.
 	// - Upon trying to set an empty storage entry (value length is 0).
-	ext_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
+	seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
 		if value_len > ctx.ext.max_value_size() {
 			// Bail out if value length exceeds the set maximum value size.
 			return Err(sp_sandbox::HostError);
@@ -387,7 +546,7 @@ define_env!(Env, <E: Ext>,
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		let value = Some(read_sandbox_memory(ctx, value_ptr, value_len)?);
-		ctx.ext.set_storage(key, value).map_err(|_| sp_sandbox::HostError)?;
+		ctx.ext.set_storage(key, value);
 		Ok(())
 	},
 
@@ -396,36 +555,39 @@ define_env!(Env, <E: Ext>,
 	// # Parameters
 	//
 	// - `key_ptr`: pointer into the linear memory where the location to clear the value is placed.
-	ext_clear_storage(ctx, key_ptr: u32) => {
+	seal_clear_storage(ctx, key_ptr: u32) => {
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
-		ctx.ext.set_storage(key, None).map_err(|_| sp_sandbox::HostError)?;
+		ctx.ext.set_storage(key, None);
 		Ok(())
 	},
 
-	// Retrieve the value under the given key from the storage and return 0.
-	// If there is no entry under the given key then this function will return 1 and
-	// clear the scratch buffer.
+	// Retrieve the value under the given key from storage.
 	//
-	// - key_ptr: pointer into the linear memory where the key
-	//   of the requested value is placed.
-	ext_get_storage(ctx, key_ptr: u32) -> u32 => {
+	// # Parameters
+	//
+	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
+	// - `out_ptr`: pointer to the linear memory where the value is written to.
+	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
+	//   is read from and the value length is written to.
+	//
+	// # Errors
+	//
+	// `ReturnCode::KeyNotFound`
+	seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		if let Some(value) = ctx.ext.get_storage(&key) {
-			ctx.scratch_buf = value;
-			Ok(0)
+			write_sandbox_output(ctx, out_ptr, out_len_ptr, &value, false)?;
+			Ok(ReturnCode::Success)
 		} else {
-			ctx.scratch_buf.clear();
-			Ok(1)
+			Ok(ReturnCode::KeyNotFound)
 		}
 	},
 
 	// Transfer some value to another account.
 	//
-	// If the value transfer was succesful zero is returned. Otherwise one is returned.
-	// The scratch buffer is not touched. The receiver can be a plain account or
-	// a contract.
+	// # Parameters
 	//
 	// - account_ptr: a pointer to the address of the beneficiary account
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
@@ -433,38 +595,34 @@ define_env!(Env, <E: Ext>,
 	// - value_ptr: a pointer to the buffer with value, how much value to send.
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
 	// - value_len: length of the value buffer.
-	ext_transfer(
+	//
+	// # Errors
+	//
+	// `ReturnCode::BelowSubsistenceThreshold`
+	// `ReturnCode::TransferFailed`
+	seal_transfer(
 		ctx,
 		account_ptr: u32,
 		account_len: u32,
 		value_ptr: u32,
 		value_len: u32
-	) -> u32 => {
+	) -> ReturnCode => {
 		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
 			read_sandbox_memory_as(ctx, account_ptr, account_len)?;
 		let value: BalanceOf<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 
-		match ctx.ext.transfer(&callee, value, ctx.gas_meter) {
-			Ok(_) => Ok(0),
-			Err(_) => Ok(1),
-		}
+		let result = ctx.ext.transfer(&callee, value, ctx.gas_meter);
+		map_dispatch_result(ctx, result)
 	},
 
 	// Make a call to another contract.
 	//
-	// If the called contract runs to completion, then this returns the status code the callee
-	// returns on exit in the bottom 8 bits of the return value. The top 24 bits are 0s. A status
-	// code of 0 indicates success, and any other code indicates a failure. On failure, any state
-	// changes made by the called contract are reverted. The scratch buffer is filled with the
-	// output data returned by the called contract, even in the case of a failure status.
+	// The callees output buffer is copied to `output_ptr` and its length to `output_len_ptr`.
+	// The copy of the output buffer can be skipped by supplying the sentinel value
+	// of `u32::max_value()` to `output_ptr`.
 	//
-	// This call fails if it would bring the calling contract below the existential deposit.
-	// In order to destroy a contract `ext_terminate` must be used.
-	//
-	// If the contract traps during execution or otherwise fails to complete successfully, then
-	// this function clears the scratch buffer and returns 0x0100. As with a failure status, any
-	// state changes made by the called contract are reverted.
+	// # Parameters
 	//
 	// - callee_ptr: a pointer to the address of the callee contract.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
@@ -475,7 +633,21 @@ define_env!(Env, <E: Ext>,
 	// - value_len: length of the value buffer.
 	// - input_data_ptr: a pointer to a buffer to be used as input data to the callee.
 	// - input_data_len: length of the input data buffer.
-	ext_call(
+	// - output_ptr: a pointer where the output buffer is copied to.
+	// - output_len_ptr: in-out pointer to where the length of the buffer is read from
+	//   and the actual length is written to.
+	//
+	// # Errors
+	//
+	// An error means that the call wasn't successful output buffer is returned unless
+	// stated otherwise.
+	//
+	// `ReturnCode::CalleeReverted`: Output buffer is returned.
+	// `ReturnCode::CalleeTrapped`
+	// `ReturnCode::BelowSubsistenceThreshold`
+	// `ReturnCode::TransferFailed`
+	// `ReturnCode::NotCallable`
+	seal_call(
 		ctx,
 		callee_ptr: u32,
 		callee_len: u32,
@@ -483,16 +655,14 @@ define_env!(Env, <E: Ext>,
 		value_ptr: u32,
 		value_len: u32,
 		input_data_ptr: u32,
-		input_data_len: u32
-	) -> u32 => {
+		input_data_len: u32,
+		output_ptr: u32,
+		output_len_ptr: u32
+	) -> ReturnCode => {
 		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
 			read_sandbox_memory_as(ctx, callee_ptr, callee_len)?;
-		let value: BalanceOf<<E as Ext>::T> =
-			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
-
-		// Read input data into the scratch buffer, then take ownership of it.
-		read_sandbox_memory_into_scratch(ctx, input_data_ptr, input_data_len)?;
-		let input_data = mem::replace(&mut ctx.scratch_buf, Vec::new());
+		let value: BalanceOf<<E as Ext>::T> = read_sandbox_memory_as(ctx, value_ptr, value_len)?;
+		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
@@ -509,52 +679,31 @@ define_env!(Env, <E: Ext>,
 						nested_meter,
 						input_data,
 					)
-					.map_err(|err| err.buffer)
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(input_data),
+				None => Err(Error::<<E as Ext>::T>::OutOfGas.into()),
 			}
 		});
 
-		match call_outcome {
-			Ok(output) => {
-				ctx.scratch_buf = output.data;
-				Ok(output.status.into())
-			},
-			Err(buffer) => {
-				ctx.scratch_buf = buffer;
-				ctx.scratch_buf.clear();
-				Ok(TRAP_RETURN_CODE)
-			},
+		if let Ok(output) = &call_outcome {
+			write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true)?;
 		}
+		map_exec_result(ctx, call_outcome)
 	},
 
 	// Instantiate a contract with the specified code hash.
 	//
 	// This function creates an account and executes the constructor defined in the code specified
-	// by the code hash.
+	// by the code hash. The address of this new account is copied to `address_ptr` and its length
+	// to `address_len_ptr`. The constructors output buffer is copied to `output_ptr` and its
+	// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
+	// supplying the sentinel value of `u32::max_value()` to `output_ptr` or `address_ptr`.
 	//
-	// If the constructor runs to completion, then this returns the status code that the newly
-	// instantiated contract returns on exit in the bottom 8 bits of the return value. The top 24
-	// bits are 0s. A status code of 0 indicates success, and any other code indicates a failure.
-	// On failure, any state changes made by the called contract are reverted and the contract is
-	// not instantiated. On a success status, the scratch buffer is filled with the encoded address
-	// of the newly instantiated contract. In the case of a failure status, the scratch buffer is
-	// cleared.
+	// After running the constructor it is verfied that the contract account holds at
+	// least the subsistence threshold. If that is not the case the instantion fails and
+	// the contract is not created.
 	//
-	// This call fails if it would bring the calling contract below the existential deposit.
-	// In order to destroy a contract `ext_terminate` must be used.
-	//
-	// If the contract traps during execution or otherwise fails to complete successfully, then
-	// this function clears the scratch buffer and returns 0x0100. As with a failure status, any
-	// state changes made by the called contract are reverted.
-
-	// This function creates an account and executes initializer code. After the execution,
-	// the returned buffer is saved as the code of the created account.
-	//
-	// Returns 0 on the successful contract instantiation and puts the address of the instantiated
-	// contract into the scratch buffer. Otherwise, returns non-zero value and clears the scratch
-	// buffer.
+	// # Parameters
 	//
 	// - code_hash_ptr: a pointer to the buffer that contains the initializer code.
 	// - code_hash_len: length of the initializer code buffer.
@@ -564,7 +713,28 @@ define_env!(Env, <E: Ext>,
 	// - value_len: length of the value buffer.
 	// - input_data_ptr: a pointer to a buffer to be used as input data to the initializer code.
 	// - input_data_len: length of the input data buffer.
-	ext_instantiate(
+	// - address_ptr: a pointer where the new account's address is copied to.
+	// - address_len_ptr: in-out pointer to where the length of the buffer is read from
+	//		and the actual length is written to.
+	// - output_ptr: a pointer where the output buffer is copied to.
+	// - output_len_ptr: in-out pointer to where the length of the buffer is read from
+	//   and the actual length is written to.
+	//
+	// # Errors
+	//
+	// Please consult the `ReturnCode` enum declaration for more information on those
+	// errors. Here we only note things specific to this function.
+	//
+	// An error means that the account wasn't created and no address or output buffer
+	// is returned unless stated otherwise.
+	//
+	// `ReturnCode::CalleeReverted`: Output buffer is returned.
+	// `ReturnCode::CalleeTrapped`
+	// `ReturnCode::BelowSubsistenceThreshold`
+	// `ReturnCode::TransferFailed`
+	// `ReturnCode::NewContractNotFunded`
+	// `ReturnCode::CodeNotFound`
+	seal_instantiate(
 		ctx,
 		code_hash_ptr: u32,
 		code_hash_len: u32,
@@ -572,16 +742,16 @@ define_env!(Env, <E: Ext>,
 		value_ptr: u32,
 		value_len: u32,
 		input_data_ptr: u32,
-		input_data_len: u32
-	) -> u32 => {
+		input_data_len: u32,
+		address_ptr: u32,
+		address_len_ptr: u32,
+		output_ptr: u32,
+		output_len_ptr: u32
+	) -> ReturnCode => {
 		let code_hash: CodeHash<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, code_hash_ptr, code_hash_len)?;
-		let value: BalanceOf<<E as Ext>::T> =
-			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
-
-		// Read input data into the scratch buffer, then take ownership of it.
-		read_sandbox_memory_into_scratch(ctx, input_data_ptr, input_data_len)?;
-		let input_data = mem::replace(&mut ctx.scratch_buf, Vec::new());
+		let value: BalanceOf<<E as Ext>::T> = read_sandbox_memory_as(ctx, value_ptr, value_len)?;
+		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
@@ -598,29 +768,20 @@ define_env!(Env, <E: Ext>,
 						nested_meter,
 						input_data
 					)
-					.map_err(|err| err.buffer)
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(input_data),
+				None => Err(Error::<<E as Ext>::T>::OutOfGas.into()),
 			}
 		});
-		match instantiate_outcome {
-			Ok((address, output)) => {
-				let is_success = output.is_success();
-				ctx.scratch_buf = output.data;
-				ctx.scratch_buf.clear();
-				if is_success {
-					// Write the address to the scratch buffer.
-					address.encode_to(&mut ctx.scratch_buf);
-				}
-				Ok(output.status.into())
-			},
-			Err(buffer) => {
-				ctx.scratch_buf = buffer;
-				ctx.scratch_buf.clear();
-				Ok(TRAP_RETURN_CODE)
-			},
+		if let Ok((address, output)) = &instantiate_outcome {
+			if !output.flags.contains(ReturnFlags::REVERT) {
+				write_sandbox_output(
+					ctx, address_ptr, address_len_ptr, &address.encode(), true
+				)?;
+			}
+			write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true)?;
 		}
+		map_exec_result(ctx, instantiate_outcome.map(|(_id, retval)| retval))
 	},
 
 	// Remove the calling account and transfer remaining balance.
@@ -633,7 +794,11 @@ define_env!(Env, <E: Ext>,
 	//   where all remaining funds of the caller are transfered.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
 	// - beneficiary_len: length of the address buffer.
-	ext_terminate(
+	//
+	// # Traps
+	//
+	// - The contract is live i.e is already on the call stack.
+	seal_terminate(
 		ctx,
 		beneficiary_ptr: u32,
 		beneficiary_len: u32
@@ -642,27 +807,48 @@ define_env!(Env, <E: Ext>,
 			read_sandbox_memory_as(ctx, beneficiary_ptr, beneficiary_len)?;
 
 		if let Ok(_) = ctx.ext.terminate(&beneficiary, ctx.gas_meter) {
-			ctx.special_trap = Some(SpecialTrap::Termination);
+			ctx.trap_reason = Some(TrapReason::Termination);
 		}
 		Err(sp_sandbox::HostError)
 	},
 
-	// Save a data buffer as a result of the execution, terminate the execution and return a
-	// successful result to the caller.
+	seal_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
+		if let Some(input) = ctx.input_data.take() {
+			write_sandbox_output(ctx, buf_ptr, buf_len_ptr, &input, false)
+		} else {
+			Err(sp_sandbox::HostError)
+		}
+	},
+
+	// Cease contract execution and save a data buffer as a result of the execution.
 	//
-	// This is the only way to return a data buffer to the caller.
-	ext_return(ctx, data_ptr: u32, data_len: u32) => {
+	// This function never retuns as it stops execution of the caller.
+	// This is the only way to return a data buffer to the caller. Returning from
+	// execution without calling this function is equivalent to calling:
+	// ```
+	// seal_return(0, 0, 0);
+	// ```
+	//
+	// The flags argument is a bitfield that can be used to signal special return
+	// conditions to the supervisor:
+	// --- lsb ---
+	// bit 0      : REVERT - Revert all storage changes made by the caller.
+	// bit [1, 31]: Reserved for future use.
+	// --- msb ---
+	//
+	// Using a reserved bit triggers a trap.
+	seal_return(ctx, flags: u32, data_ptr: u32, data_len: u32) => {
 		charge_gas(
 			ctx.gas_meter,
 			ctx.schedule,
-			&mut ctx.special_trap,
+			&mut ctx.trap_reason,
 			RuntimeToken::ReturnData(data_len)
 		)?;
 
-		read_sandbox_memory_into_scratch(ctx, data_ptr, data_len)?;
-		let output_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
-
-		ctx.special_trap = Some(SpecialTrap::Return(output_buf));
+		ctx.trap_reason = Some(TrapReason::Return(ReturnData {
+			flags,
+			data: read_sandbox_memory(ctx, data_ptr, data_len)?,
+		}));
 
 		// The trap mechanism is used to immediately terminate the execution.
 		// This trap should be handled appropriately before returning the result
@@ -670,98 +856,131 @@ define_env!(Env, <E: Ext>,
 		Err(sp_sandbox::HostError)
 	},
 
-	// Stores the address of the caller into the scratch buffer.
+	// Stores the address of the caller into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// If this is a top-level call (i.e. initiated by an extrinsic) the origin address of the
 	// extrinsic will be returned. Otherwise, if this call is initiated by another contract then the
-	// address of the contract will be returned.
-	ext_caller(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.caller().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	// address of the contract will be returned. The value is encoded as T::AccountId.
+	seal_caller(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.caller().encode(), false)
 	},
 
-	// Stores the address of the current contract into the scratch buffer.
-	ext_address(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.address().encode_to(&mut ctx.scratch_buf);
-		Ok(())
-	},
-
-	// Stores the gas price for the current transaction into the scratch buffer.
+	// Stores the address of the current contract into the supplied buffer.
 	//
-	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
-	ext_gas_price(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.get_weight_price().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	seal_address(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.address().encode(), false)
 	},
 
-	// Stores the amount of gas left into the scratch buffer.
+	// Stores the price for the specified amount of gas into the supplied buffer.
 	//
-	// The data is encoded as Gas. The current contents of the scratch buffer are overwritten.
-	ext_gas_left(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.gas_meter.gas_left().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as T::Balance.
+	//
+	// # Note
+	//
+	// It is recommended to avoid specifying very small values for `gas` as the prices for a single
+	// gas can be smaller than one.
+	seal_weight_to_fee(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(
+			ctx, out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode(), false
+		)
 	},
 
-	// Stores the balance of the current account into the scratch buffer.
+	// Stores the amount of gas left into the supplied buffer.
 	//
-	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
-	ext_balance(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.balance().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as Gas.
+	seal_gas_left(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.gas_meter.gas_left().encode(), false)
 	},
 
-	// Stores the value transferred along with this call or as endowment into the scratch buffer.
+	// Stores the balance of the current account into the supplied buffer.
 	//
-	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
-	ext_value_transferred(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.value_transferred().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as T::Balance.
+	seal_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.balance().encode(), false)
 	},
 
-	// Stores the random number for the current block for the given subject into the scratch
-	// buffer.
+	// Stores the value transferred along with this call or as endowment into the supplied buffer.
 	//
-	// The data is encoded as T::Hash. The current contents of the scratch buffer are
-	// overwritten.
-	ext_random(ctx, subject_ptr: u32, subject_len: u32) => {
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as T::Balance.
+	seal_value_transferred(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(
+			ctx, out_ptr, out_len_ptr, &ctx.ext.value_transferred().encode(), false
+		)
+	},
+
+	// Stores a random number for the current block and the given subject into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as T::Hash.
+	seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		// The length of a subject can't exceed `max_subject_len`.
 		if subject_len > ctx.schedule.max_subject_len {
 			return Err(sp_sandbox::HostError);
 		}
-
 		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
-		ctx.scratch_buf.clear();
-		ctx.ext.random(&subject_buf).encode_to(&mut ctx.scratch_buf);
-		Ok(())
+		write_sandbox_output(
+			ctx, out_ptr, out_len_ptr, &ctx.ext.random(&subject_buf).encode(), false
+		)
 	},
 
-	// Load the latest block timestamp into the scratch buffer
-	ext_now(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.now().encode_to(&mut ctx.scratch_buf);
-		Ok(())
-	},
-
-	// Stores the minimum balance (a.k.a. existential deposit) into the scratch buffer.
+	// Load the latest block timestamp into the supplied buffer
 	//
-	// The data is encoded as T::Balance. The current contents of the scratch buffer are
-	// overwritten.
-	ext_minimum_balance(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.minimum_balance().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	seal_now(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.now().encode(), false)
 	},
 
-	// Stores the tombstone deposit into the scratch buffer.
+	// Stores the minimum balance (a.k.a. existential deposit) into the supplied buffer.
 	//
-	// The data is encoded as T::Balance. The current contents of the scratch
-	// buffer are overwritten.
+	// The data is encoded as T::Balance.
+	seal_minimum_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.minimum_balance().encode(), false)
+	},
+
+	// Stores the tombstone deposit into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as T::Balance.
 	//
 	// # Note
 	//
@@ -769,47 +988,24 @@ define_env!(Env, <E: Ext>,
 	// a contract to leave a tombstone the balance of the contract must not go
 	// below the sum of existential deposit and the tombstone deposit. The sum
 	// is commonly referred as subsistence threshold in code.
-	ext_tombstone_deposit(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.tombstone_deposit().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	seal_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(
+			ctx, out_ptr, out_len_ptr, &ctx.ext.tombstone_deposit().encode(), false
+		)
 	},
 
-	// Decodes the given buffer as a `T::Call` and adds it to the list
-	// of to-be-dispatched calls.
+	// Try to restore the given destination contract sacrificing the caller.
 	//
-	// All calls made it to the top-level context will be dispatched before
-	// finishing the execution of the calling extrinsic.
-	ext_dispatch_call(ctx, call_ptr: u32, call_len: u32) => {
-		let call: <<E as Ext>::T as Trait>::Call =
-			read_sandbox_memory_as(ctx, call_ptr, call_len)?;
-
-		// We already deducted the len costs when reading from the sandbox.
-		// Bill on the actual weight of the dispatched call.
-		let info = call.get_dispatch_info();
-		charge_gas(
-			&mut ctx.gas_meter,
-			ctx.schedule,
-			&mut ctx.special_trap,
-			RuntimeToken::DispatchWithWeight(info.weight)
-		)?;
-
-		ctx.ext.note_dispatch_call(call);
-
-		Ok(())
-	},
-
-	// Record a request to restore the caller contract to the specified contract.
+	// This function will compute a tombstone hash from the caller's storage and the given code hash
+	// and if the hash matches the hash found in the tombstone at the specified address - kill
+	// the caller contract and restore the destination contract and set the specified `rent_allowance`.
+	// All caller's funds are transfered to the destination.
 	//
-	// At the finalization stage, i.e. when all changes from the extrinsic that invoked this
-	// contract are committed, this function will compute a tombstone hash from the caller's
-	// storage and the given code hash and if the hash matches the hash found in the tombstone at
-	// the specified address - kill the caller contract and restore the destination contract and set
-	// the specified `rent_allowance`. All caller's funds are transferred to the destination.
+	// If there is no tombstone at the destination address, the hashes don't match or this contract
+	// instance is already present on the contract call stack, a trap is generated.
 	//
-	// This function doesn't perform restoration right away but defers it to the end of the
-	// transaction. If there is no tombstone in the destination address or if the hashes don't match
-	// then restoration is cancelled and no changes are made.
+	// Otherwise, the destination contract is restored. This function is diverging and stops execution
+	// even on success.
 	//
 	// `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
 	// with the address of the to be restored contract.
@@ -819,7 +1015,12 @@ define_env!(Env, <E: Ext>,
 	// encodes the rent allowance that must be set in the case of successful restoration.
 	// `delta_ptr` is the pointer to the start of a buffer that has `delta_count` storage keys
 	// laid out sequentially.
-	ext_restore_to(
+	//
+	// # Traps
+	//
+	// - Tombstone hashes do not match
+	// - Calling cantract is live i.e is already on the call stack.
+	seal_restore_to(
 		ctx,
 		dest_ptr: u32,
 		dest_len: u32,
@@ -857,62 +1058,15 @@ define_env!(Env, <E: Ext>,
 			delta
 		};
 
-		ctx.ext.note_restore_to(
+		if let Ok(()) = ctx.ext.restore_to(
 			dest,
 			code_hash,
 			rent_allowance,
 			delta,
-		);
-
-		Ok(())
-	},
-
-	// Returns the size of the scratch buffer.
-	//
-	// For more details on the scratch buffer see `ext_scratch_read`.
-	ext_scratch_size(ctx) -> u32 => {
-		Ok(ctx.scratch_buf.len() as u32)
-	},
-
-	// Copy data from the scratch buffer starting from `offset` with length `len` into the contract
-	// memory. The region at which the data should be put is specified by `dest_ptr`.
-	//
-	// In order to get size of the scratch buffer use `ext_scratch_size`. At the start of contract
-	// execution, the scratch buffer is filled with the input data. Whenever a contract calls
-	// function that uses the scratch buffer the contents of the scratch buffer are overwritten.
-	ext_scratch_read(ctx, dest_ptr: u32, offset: u32, len: u32) => {
-		let offset = offset as usize;
-		if offset > ctx.scratch_buf.len() {
-			// Offset can't be larger than scratch buffer length.
-			return Err(sp_sandbox::HostError);
+		) {
+			ctx.trap_reason = Some(TrapReason::Restoration);
 		}
-
-		// This can't panic since `offset <= ctx.scratch_buf.len()`.
-		let src = &ctx.scratch_buf[offset..];
-		if src.len() != len as usize {
-			return Err(sp_sandbox::HostError);
-		}
-
-		// Finally, perform the write.
-		write_sandbox_memory(
-			ctx.schedule,
-			&mut ctx.special_trap,
-			ctx.gas_meter,
-			&ctx.memory,
-			dest_ptr,
-			src,
-		)?;
-
-		Ok(())
-	},
-
-	// Copy data from contract memory starting from `src_ptr` with length `len` into the scratch
-	// buffer. This overwrites the entire scratch buffer and resizes to `len`. Specifying a `len`
-	// of zero clears the scratch buffer.
-	//
-	// This should be used before exiting a call or instantiation in order to set the return data.
-	ext_scratch_write(ctx, src_ptr: u32, len: u32) => {
-		read_sandbox_memory_into_scratch(ctx, src_ptr, len)
+		Err(sp_sandbox::HostError)
 	},
 
 	// Deposit a contract event with the data buffer and optional list of topics. There is a limit
@@ -923,7 +1077,7 @@ define_env!(Env, <E: Ext>,
 	// - topics_len - the length of the topics buffer. Pass 0 if you want to pass an empty vector.
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
-	ext_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
+	seal_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
 		let mut topics: Vec::<TopicOf<<E as Ext>::T>> = match topics_len {
 			0 => Vec::new(),
 			_ => read_sandbox_memory_as(ctx, topics_ptr, topics_len)?,
@@ -944,7 +1098,7 @@ define_env!(Env, <E: Ext>,
 		charge_gas(
 			ctx.gas_meter,
 			ctx.schedule,
-			&mut ctx.special_trap,
+			&mut ctx.trap_reason,
 			RuntimeToken::DepositEvent(topics.len() as u32, data_len)
 		)?;
 		ctx.ext.deposit_event(topics, event_data);
@@ -957,7 +1111,7 @@ define_env!(Env, <E: Ext>,
 	// - value_ptr: a pointer to the buffer with value, how much to allow for rent
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
 	// - value_len: length of the value buffer.
-	ext_set_rent_allowance(ctx, value_ptr: u32, value_len: u32) => {
+	seal_set_rent_allowance(ctx, value_ptr: u32, value_len: u32) => {
 		let value: BalanceOf<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 		ctx.ext.set_rent_allowance(value);
@@ -965,20 +1119,22 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Stores the rent allowance into the scratch buffer.
+	// Stores the rent allowance into the supplied buffer.
 	//
-	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
-	ext_rent_allowance(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.rent_allowance().encode_to(&mut ctx.scratch_buf);
-
-		Ok(())
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as T::Balance.
+	seal_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.rent_allowance().encode(), false)
 	},
 
 	// Prints utf8 encoded string from the data buffer.
 	// Only available on `--dev` chains.
 	// This function may be removed at any time, superseded by a more general contract debugging feature.
-	ext_println(ctx, str_ptr: u32, str_len: u32) => {
+	seal_println(ctx, str_ptr: u32, str_len: u32) => {
 		let data = read_sandbox_memory(ctx, str_ptr, str_len)?;
 		if let Ok(utf8) = core::str::from_utf8(&data) {
 			sp_runtime::print(utf8);
@@ -986,37 +1142,14 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Stores the current block number of the current contract into the scratch buffer.
-	ext_block_number(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.block_number().encode_to(&mut ctx.scratch_buf);
-		Ok(())
-	},
-
-	// Retrieve the value under the given key from the **runtime** storage and return 0.
-	// If there is no entry under the given key then this function will return 1 and
-	// clear the scratch buffer.
+	// Stores the current block number of the current contract into the supplied buffer.
 	//
-	// - key_ptr: the pointer into the linear memory where the requested value is placed.
-	// - key_len: the length of the key in bytes.
-	ext_get_runtime_storage(ctx, key_ptr: u32, key_len: u32) -> u32 => {
-		// Steal the scratch buffer so that we hopefully save an allocation for the `key_buf`.
-		read_sandbox_memory_into_scratch(ctx, key_ptr, key_len)?;
-		let key_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
-
-		match ctx.ext.get_runtime_storage(&key_buf) {
-			Some(value_buf) => {
-				// The given value exists.
-				ctx.scratch_buf = value_buf;
-				Ok(0)
-			}
-			None => {
-				// Put back the `key_buf` and allow its allocation to be reused.
-				ctx.scratch_buf = key_buf;
-				ctx.scratch_buf.clear();
-				Ok(1)
-			}
-		}
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	seal_block_number(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.block_number().encode(), false)
 	},
 
 	// Computes the SHA2 256-bit hash on the given input buffer.
@@ -1039,7 +1172,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	ext_hash_sha2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	seal_hash_sha2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		compute_hash_on_intermediate_buffer(ctx, sha2_256, input_ptr, input_len, output_ptr)
 	},
 
@@ -1063,7 +1196,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	ext_hash_keccak_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	seal_hash_keccak_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		compute_hash_on_intermediate_buffer(ctx, keccak_256, input_ptr, input_len, output_ptr)
 	},
 
@@ -1087,7 +1220,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	ext_hash_blake2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	seal_hash_blake2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		compute_hash_on_intermediate_buffer(ctx, blake2_256, input_ptr, input_len, output_ptr)
 	},
 
@@ -1111,12 +1244,12 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	ext_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	seal_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		compute_hash_on_intermediate_buffer(ctx, blake2_128, input_ptr, input_len, output_ptr)
 	},
 );
 
-/// Computes the given hash function on the scratch buffer.
+/// Computes the given hash function on the supplied input.
 ///
 /// Reads from the sandboxed input buffer into an intermediate buffer.
 /// Returns the result directly to the output buffer of the sandboxed memory.
@@ -1140,17 +1273,13 @@ where
 	F: FnOnce(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	// Copy the input buffer directly into the scratch buffer to avoid
-	// heap allocations.
+	// Copy input into supervisor memory.
 	let input = read_sandbox_memory(ctx, input_ptr, input_len)?;
-	// Compute the hash on the scratch buffer using the given hash function.
+	// Compute the hash on the input buffer using the given hash function.
 	let hash = hash_fn(&input);
 	// Write the resulting hash back into the sandboxed output buffer.
 	write_sandbox_memory(
-		ctx.schedule,
-		&mut ctx.special_trap,
-		ctx.gas_meter,
-		&ctx.memory,
+		ctx,
 		output_ptr,
 		hash.as_ref(),
 	)?;
@@ -1163,7 +1292,7 @@ where
 /// the order of items is not preserved.
 fn has_duplicates<T: PartialEq + AsRef<[u8]>>(items: &mut Vec<T>) -> bool {
 	// Sort the vector
-	items.sort_unstable_by(|a, b| {
+	items.sort_by(|a, b| {
 		Ord::cmp(a.as_ref(), b.as_ref())
 	});
 	// And then find any two consecutive equal elements.

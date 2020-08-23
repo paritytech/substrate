@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Helper for managing the set of available leaves in the chain for DB implementations.
 
@@ -312,7 +314,7 @@ mod tests {
 		let mut tx = Transaction::new();
 
 		set.prepare_transaction(&mut tx, 0, PREFIX);
-		db.commit(tx);
+		db.commit(tx).unwrap();
 
 		let set2 = LeafSet::read_from_db(&*db, 0, PREFIX).unwrap();
 		assert_eq!(set, set2);
@@ -346,12 +348,12 @@ mod tests {
 
 		let mut tx = Transaction::new();
 		set.prepare_transaction(&mut tx, 0, PREFIX);
-		db.commit(tx);
+		db.commit(tx).unwrap();
 
 		let _ = set.finalize_height(11);
 		let mut tx = Transaction::new();
 		set.prepare_transaction(&mut tx, 0, PREFIX);
-		db.commit(tx);
+		db.commit(tx).unwrap();
 
 		assert!(set.contains(11, 11_1));
 		assert!(set.contains(11, 11_2));

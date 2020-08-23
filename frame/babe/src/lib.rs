@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Consensus extension module for BABE consensus. Collects on-chain randomness
 //! from VRF outputs and manages epoch transitions.
@@ -20,37 +21,44 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
 
-use pallet_timestamp;
-
-use sp_std::{result, prelude::*};
+use codec::{Decode, Encode};
 use frame_support::{
-	decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT},
+	decl_error, decl_module, decl_storage,
+	traits::{FindAuthor, Get, KeyOwnerProofSystem, Randomness as RandomnessT},
 	weights::Weight,
+	Parameter,
 };
-use sp_timestamp::OnTimestampSet;
-use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
-use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash, One};
-use sp_staking::{
-	SessionIndex,
-	offence::{Offence, Kind},
-};
+use frame_system::{ensure_none, ensure_signed};
 use sp_application_crypto::Public;
+use sp_runtime::{
+	generic::DigestItem,
+	traits::{Hash, IsMember, One, SaturatedConversion, Saturating},
+	ConsensusEngineId, KeyTypeId,
+};
+use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_std::{prelude::*, result};
+use sp_timestamp::OnTimestampSet;
 
-use codec::{Encode, Decode};
-use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_babe::{
-	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber,
-	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
-	digests::{NextEpochDescriptor, PreDigest},
+	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
+	inherents::{BabeInherentData, INHERENT_IDENTIFIER},
+	BabeAuthorityWeight, ConsensusLog, EquivocationProof, SlotNumber, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
-pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH, PUBLIC_KEY_LENGTH};
+use sp_inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent};
 
+pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
+
+mod equivocation;
+
+#[cfg(any(feature = "runtime-benchmarks", test))]
+mod benchmarking;
+#[cfg(all(feature = "std", test))]
+mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
-#[cfg(all(feature = "std", test))]
-mod mock;
+pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquivocation};
 
 pub trait Trait: pallet_timestamp::Trait {
 	/// The amount of time, in slots, that each epoch should last.
@@ -69,6 +77,30 @@ pub trait Trait: pallet_timestamp::Trait {
 	/// Typically, the `ExternalTrigger` type should be used. An internal trigger should only be used
 	/// when no other module is responsible for changing authority set.
 	type EpochChangeTrigger: EpochChangeTrigger;
+
+	/// The proof of key ownership, used for validating equivocation reports.
+	/// The proof must include the session index and validator count of the
+	/// session at which the equivocation occurred.
+	type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+	/// The identification of a key owner, used when reporting equivocations.
+	type KeyOwnerIdentification: Parameter;
+
+	/// A system for proving ownership of keys, i.e. that a given key was part
+	/// of a validator set, needed for validating equivocation reports.
+	type KeyOwnerProofSystem: KeyOwnerProofSystem<
+		(KeyTypeId, AuthorityId),
+		Proof = Self::KeyOwnerProof,
+		IdentificationTuple = Self::KeyOwnerIdentification,
+	>;
+
+	/// The equivocation handling subsystem, defines methods to report an
+	/// offence (after the equivocation has been validated) and for submitting a
+	/// transaction to report an equivocation (from an offchain context).
+	/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
+	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
+	/// definition.
+	type HandleEquivocation: HandleEquivocation<Self>;
 }
 
 /// Trigger an epoch change, if any should take place.
@@ -105,6 +137,17 @@ const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 
 type MaybeRandomness = Option<schnorrkel::Randomness>;
 
+decl_error! {
+	pub enum Error for Module<T: Trait> {
+		/// An equivocation proof provided as part of an equivocation report is invalid.
+		InvalidEquivocationProof,
+		/// A key ownership proof provided as part of an equivocation report is invalid.
+		InvalidKeyOwnershipProof,
+		/// A given equivocation report is valid but already previously reported.
+		DuplicateOffenceReport,
+	}
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
 		/// Current epoch index.
@@ -135,6 +178,9 @@ decl_storage! {
 		// variable to its underlying value.
 		pub Randomness get(fn randomness): schnorrkel::Randomness;
 
+		/// Next epoch configuration, if changed.
+		NextEpochConfig: Option<NextConfigDescriptor>;
+
 		/// Next epoch randomness.
 		NextRandomness: schnorrkel::Randomness;
 
@@ -148,6 +194,8 @@ decl_storage! {
 		/// We reset all segments and return to `0` at the beginning of every
 		/// epoch.
 		SegmentIndex build(|_| 0): u32;
+
+		/// TWOX-NOTE: `SegmentIndex` is an increasing integer, so this is okay.
 		UnderConstruction: map hasher(twox_64_concat) u32 => Vec<schnorrkel::Randomness>;
 
 		/// Temporary value (cleared at block finalization) which is `Some`
@@ -202,6 +250,69 @@ decl_module! {
 			// remove temporary "environment" entry from storage
 			Lateness::<T>::kill();
 		}
+
+		/// Report authority equivocation/misbehavior. This method will verify
+		/// the equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence will
+		/// be reported.
+		#[weight = weight::weight_for_report_equivocation::<T>()]
+		fn report_equivocation(
+			origin,
+			equivocation_proof: EquivocationProof<T::Header>,
+			key_owner_proof: T::KeyOwnerProof,
+		) {
+			let reporter = ensure_signed(origin)?;
+
+			Self::do_report_equivocation(
+				Some(reporter),
+				equivocation_proof,
+				key_owner_proof,
+			)?;
+		}
+
+		/// Report authority equivocation/misbehavior. This method will verify
+		/// the equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence will
+		/// be reported.
+		/// This extrinsic must be called unsigned and it is expected that only
+		/// block authors will call it (validated in `ValidateUnsigned`), as such
+		/// if the block author is defined it will be defined as the equivocation
+		/// reporter.
+		#[weight = weight::weight_for_report_equivocation::<T>()]
+		fn report_equivocation_unsigned(
+			origin,
+			equivocation_proof: EquivocationProof<T::Header>,
+			key_owner_proof: T::KeyOwnerProof,
+		) {
+			ensure_none(origin)?;
+
+			Self::do_report_equivocation(
+				T::HandleEquivocation::block_author(),
+				equivocation_proof,
+				key_owner_proof,
+			)?;
+		}
+	}
+}
+
+mod weight {
+	use frame_support::{
+		traits::Get,
+		weights::{constants::WEIGHT_PER_MICROS, Weight},
+	};
+
+	pub fn weight_for_report_equivocation<T: super::Trait>() -> Weight {
+		// checking membership proof
+		(35 * WEIGHT_PER_MICROS)
+			.saturating_add(T::DbWeight::get().reads(5))
+			// check equivocation proof
+			.saturating_add(110 * WEIGHT_PER_MICROS)
+			// report offence
+			.saturating_add(110 * WEIGHT_PER_MICROS)
+			// worst case we are considering is that the given offender
+			// is backed by 200 nominators
+			.saturating_add(T::DbWeight::get().reads(14 + 3 * 200))
+			.saturating_add(T::DbWeight::get().writes(10 + 3 * 200))
 	}
 }
 
@@ -268,51 +379,6 @@ impl<T: Trait> pallet_session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	}
 }
 
-/// A BABE equivocation offence report.
-///
-/// When a validator released two or more blocks at the same slot.
-pub struct BabeEquivocationOffence<FullIdentification> {
-	/// A babe slot number in which this incident happened.
-	pub slot: u64,
-	/// The session index in which the incident happened.
-	pub session_index: SessionIndex,
-	/// The size of the validator set at the time of the offence.
-	pub validator_set_count: u32,
-	/// The authority that produced the equivocation.
-	pub offender: FullIdentification,
-}
-
-impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocationOffence<FullIdentification> {
-	const ID: Kind = *b"babe:equivocatio";
-	type TimeSlot = u64;
-
-	fn offenders(&self) -> Vec<FullIdentification> {
-		vec![self.offender.clone()]
-	}
-
-	fn session_index(&self) -> SessionIndex {
-		self.session_index
-	}
-
-	fn validator_set_count(&self) -> u32 {
-		self.validator_set_count
-	}
-
-	fn time_slot(&self) -> Self::TimeSlot {
-		self.slot
-	}
-
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill {
-		// the formula is min((3k / n)^2, 1)
-		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
-		// _ ^ 2
-		x.square()
-	}
-}
-
 impl<T: Trait> Module<T> {
 	/// Determine the BABE slot duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
@@ -349,6 +415,9 @@ impl<T: Trait> Module<T> {
 	// -------------- IMPORTANT NOTE --------------
 	// This implementation is linked to how [`should_epoch_change`] is working. This might need to
 	// be updated accordingly, if the underlying mechanics of slot and epochs change.
+	//
+	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you update
+	// this function, you must also update the corresponding weight.
 	pub fn next_expected_epoch_change(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		next_slot
@@ -358,6 +427,15 @@ impl<T: Trait> Module<T> {
 				let blocks_remaining: T::BlockNumber = slots_remaining.saturated_into();
 				now.saturating_add(blocks_remaining)
 			})
+	}
+
+	/// Plan an epoch config change. The epoch config change is recorded and will be enacted on the
+	/// next call to `enact_epoch_change`. The config will be activated one epoch after. Multiple calls to this
+	/// method will replace any existing planned config change that had not been enacted yet.
+	pub fn plan_config_change(
+		config: NextConfigDescriptor,
+	) {
+		NextEpochConfig::put(config);
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
@@ -395,12 +473,15 @@ impl<T: Trait> Module<T> {
 		// so that nodes can track changes.
 		let next_randomness = NextRandomness::get();
 
-		let next = NextEpochDescriptor {
+		let next_epoch = NextEpochDescriptor {
 			authorities: next_authorities,
 			randomness: next_randomness,
 		};
+		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
-		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
+		if let Some(next_config) = NextEpochConfig::take() {
+			Self::deposit_consensus(ConsensusLog::NextConfigData(next_config));
+		}
 	}
 
 	// finds the start slot of the current epoch. only guaranteed to
@@ -540,6 +621,69 @@ impl<T: Trait> Module<T> {
 			Authorities::put(authorities);
 		}
 	}
+
+	fn do_report_equivocation(
+		reporter: Option<T::AccountId>,
+		equivocation_proof: EquivocationProof<T::Header>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> Result<(), Error<T>> {
+		let offender = equivocation_proof.offender.clone();
+		let slot_number = equivocation_proof.slot_number;
+
+		// validate the equivocation proof
+		if !sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
+			return Err(Error::InvalidEquivocationProof.into());
+		}
+
+		let validator_set_count = key_owner_proof.validator_count();
+		let session_index = key_owner_proof.session();
+
+		let epoch_index = (slot_number.saturating_sub(GenesisSlot::get()) / T::EpochDuration::get())
+			.saturated_into::<u32>();
+
+		// check that the slot number is consistent with the session index
+		// in the key ownership proof (i.e. slot is for that epoch)
+		if epoch_index != session_index {
+			return Err(Error::InvalidKeyOwnershipProof.into());
+		}
+
+		// check the membership proof and extract the offender's id
+		let key = (sp_consensus_babe::KEY_TYPE, offender);
+		let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof)
+			.ok_or(Error::InvalidKeyOwnershipProof)?;
+
+		let offence = BabeEquivocationOffence {
+			slot: slot_number,
+			validator_set_count,
+			offender,
+			session_index,
+		};
+
+		let reporters = match reporter {
+			Some(id) => vec![id],
+			None => vec![],
+		};
+
+		T::HandleEquivocation::report_offence(reporters, offence)
+			.map_err(|_| Error::DuplicateOffenceReport)?;
+
+		Ok(())
+	}
+
+	/// Submits an extrinsic to report an equivocation. This method will create
+	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
+	/// will push the transaction to the pool. Only useful in an offchain
+	/// context.
+	pub fn submit_unsigned_equivocation_report(
+		equivocation_proof: EquivocationProof<T::Header>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> Option<()> {
+		T::HandleEquivocation::submit_unsigned_equivocation_report(
+			equivocation_proof,
+			key_owner_proof,
+		)
+		.ok()
+	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
@@ -549,6 +693,12 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
 	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		Self::next_expected_epoch_change(now)
+	}
+
+	// The validity of this weight depends on the implementation of `estimate_next_session_rotation`
+	fn weight(_now: T::BlockNumber) -> Weight {
+		// Read: Current Slot, Epoch Index, Genesis Slot
+		T::DbWeight::get().reads(3)
 	}
 }
 

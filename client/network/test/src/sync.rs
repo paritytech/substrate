@@ -1,23 +1,27 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use sp_consensus::BlockOrigin;
 use std::time::Duration;
 use futures::executor::block_on;
 use super::*;
+use sp_consensus::block_validation::Validation;
+use substrate_test_runtime::Header;
 
 fn test_ancestor_search_when_common_is(n: usize) {
 	let _ = ::env_logger::try_init();
@@ -580,10 +584,10 @@ fn can_sync_explicit_forks() {
 
 #[test]
 fn syncs_header_only_forks() {
-	let _ = ::env_logger::try_init();
+	let _ = env_logger::try_init();
 	let mut net = TestNet::new(0);
-	net.add_full_peer_with_states(None);
-	net.add_full_peer_with_states(Some(3));
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(FullPeerConfig { keep_blocks: Some(3), ..Default::default() });
 	net.peer(0).push_blocks(2, false);
 	net.peer(1).push_blocks(2, false);
 
@@ -671,17 +675,17 @@ fn imports_stale_once() {
 	// check that NEW block is imported from announce message
 	let new_hash = net.peer(0).push_blocks(1, false);
 	import_with_announce(&mut net, new_hash);
-	assert_eq!(net.peer(1).num_processed_blocks(), 1);
+	assert_eq!(net.peer(1).num_downloaded_blocks(), 1);
 
 	// check that KNOWN STALE block is imported from announce message
 	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
 	import_with_announce(&mut net, known_stale_hash);
-	assert_eq!(net.peer(1).num_processed_blocks(), 2);
+	assert_eq!(net.peer(1).num_downloaded_blocks(), 2);
 }
 
 #[test]
 fn can_sync_to_peers_with_wrong_common_block() {
-	let _ = ::env_logger::try_init();
+	let _ = env_logger::try_init();
 	let mut net = TestNet::new(2);
 
 	net.peer(0).push_blocks(2, true);
@@ -708,3 +712,41 @@ fn can_sync_to_peers_with_wrong_common_block() {
 	assert!(net.peer(1).client().header(&BlockId::Hash(final_hash)).unwrap().is_some());
 }
 
+/// Returns `is_new_best = true` for each validated announcement.
+struct NewBestBlockAnnounceValidator;
+
+impl BlockAnnounceValidator<Block> for NewBestBlockAnnounceValidator {
+	fn validate(
+		&mut self,
+		_: &Header,
+		_: &[u8],
+	) -> Result<Validation, Box<dyn std::error::Error + Send>> {
+		Ok(Validation::Success { is_new_best: true })
+	}
+}
+
+#[test]
+fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
+	let _ = env_logger::try_init();
+	log::trace!(target: "sync", "Test");
+	let mut net = TestNet::with_fork_choice(ForkChoiceStrategy::Custom(false));
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(FullPeerConfig {
+		block_announce_validator: Some(Box::new(NewBestBlockAnnounceValidator)),
+		..Default::default()
+	});
+
+	net.block_until_connected();
+
+	let block_hash = net.peer(0).push_blocks(1, false);
+
+	while !net.peer(2).has_block(&block_hash) {
+		net.block_until_idle();
+	}
+
+	// Peer1 should not have the block, because peer 0 did not reported the block
+	// as new best. However, peer2 has a special block announcement validator
+	// that flags all blocks as `is_new_best` and thus, it should have synced the blocks.
+	assert!(!net.peer(1).has_block(&block_hash));
+}

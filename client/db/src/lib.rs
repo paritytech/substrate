@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Client backend that is backed by a database.
 //!
@@ -29,27 +31,26 @@
 pub mod light;
 pub mod offchain;
 
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 pub mod bench;
 
 mod children;
 mod cache;
 mod changes_tries_storage;
 mod storage_cache;
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 mod upgrade;
 mod utils;
 mod stats;
-#[cfg(feature = "parity-db")]
+#[cfg(feature = "with-parity-db")]
 mod parity_db;
-#[cfg(feature = "subdb")]
+#[cfg(feature = "with-subdb")]
 mod subdb;
 
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
 use std::io;
-use std::collections::HashMap;
-
+use std::collections::{HashMap, HashSet};
 
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
@@ -68,6 +69,7 @@ use parking_lot::RwLock;
 use sp_core::ChangesTrieConfiguration;
 use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
+use sp_arithmetic::traits::Saturating;
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion, HashFor,
@@ -89,7 +91,7 @@ use log::{trace, debug, warn};
 pub use sp_database::Database;
 pub use sc_state_db::PruningMode;
 
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 pub use bench::BenchmarkingState;
 
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
@@ -210,21 +212,18 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction)
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
+	fn storage_root<'a>(
+		&self,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
-		delta: I,
-	) -> (B::Hash, bool, Self::Transaction)
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-	{
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
 		self.state.child_storage_root(child_info, delta)
 	}
 
@@ -272,7 +271,7 @@ pub struct DatabaseSettings {
 }
 
 /// Where to find the database..
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum DatabaseSettingsSrc {
 	/// Load a RocksDB database from a given path. Recommended for most uses.
 	RocksDb {
@@ -513,7 +512,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 					header_metadata.clone(),
 				);
 				header_metadata
-			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
+			}).ok_or_else(|| ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
 		}, Ok)
 	}
 
@@ -545,7 +544,12 @@ pub struct BlockImportOperation<Block: BlockT> {
 
 impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_offchain(&mut self, transaction: &mut Transaction<DbHash>) {
-		for (key, value_operation) in self.offchain_storage_updates.drain() {
+		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain() {
+			let key: Vec<u8> = prefix
+				.into_iter()
+				.chain(sp_core::sp_std::iter::once(b'/'))
+				.chain(key.into_iter())
+				.collect();
 			match value_operation {
 				OffchainOverlayedChange::SetValue(val) => transaction.set_from_vec(columns::OFFCHAIN, &key, val),
 				OffchainOverlayedChange::Remove => transaction.remove(columns::OFFCHAIN, &key),
@@ -603,26 +607,25 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		&mut self,
 		storage: Storage,
 	) -> ClientResult<Block::Hash> {
-
-		if storage.top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
+		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
 			return Err(sp_blockchain::Error::GenesisInvalid.into());
 		}
 
-		let child_delta = storage.children_default.into_iter().map(|(_storage_key, child_content)|(
-			child_content.child_info,
-			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
+		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)|(
+			&child_content.child_info,
+			child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
 		));
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
 		let (root, transaction) = self.old_state.full_storage_root(
-			storage.top.into_iter().map(|(k, v)| {
-				if k == well_known_keys::CHANGES_TRIE_CONFIG {
+			storage.top.iter().map(|(k, v)| {
+				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
 					changes_trie_config = Some(
 						Decode::decode(&mut &v[..])
 							.expect("changes trie configuration is encoded properly at genesis")
 					);
 				}
-				(k, Some(v))
+				(&k[..], Some(&v[..]))
 			}),
 			child_delta
 		);
@@ -959,6 +962,7 @@ impl<Block: BlockT> Backend<Block> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
+
 		self.note_finalized(
 			transaction,
 			false,
@@ -1012,9 +1016,10 @@ impl<Block: BlockT> Backend<Block> {
 		Ok(())
 	}
 
-	fn try_commit_operation(&self, mut operation: BlockImportOperation<Block>)
-		-> ClientResult<()>
-	{
+	fn try_commit_operation(
+		&self,
+		mut operation: BlockImportOperation<Block>,
+	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let mut finalization_displaced_leaves = None;
 
@@ -1240,7 +1245,7 @@ impl<Block: BlockT> Backend<Block> {
 			None
 		};
 
-		self.storage.db.commit(transaction);
+		self.storage.db.commit(transaction)?;
 
 		if let Some((
 			number,
@@ -1353,7 +1358,7 @@ impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: Blo
 		for k in delete {
 			transaction.remove(columns::AUX, k);
 		}
-		self.storage.db.commit(transaction);
+		self.storage.db.commit(transaction)?;
 		Ok(())
 	}
 
@@ -1401,7 +1406,10 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok(())
 	}
 
-	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
+	fn commit_operation(
+		&self,
+		operation: Self::BlockImportOperation,
+	) -> ClientResult<()> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
 
@@ -1417,9 +1425,11 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		}
 	}
 
-	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>)
-		-> ClientResult<()>
-	{
+	fn finalize_block(
+		&self,
+		block: BlockId<Block>,
+		justification: Option<Justification>,
+	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
 		let header = self.blockchain.expect_header(block)?;
@@ -1435,7 +1445,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			&mut changes_trie_cache_ops,
 			&mut displaced,
 		)?;
-		self.storage.db.commit(transaction);
+		self.storage.db.commit(transaction)?;
 		self.blockchain.update_meta(hash, number, is_best, is_finalized);
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 		Ok(())
@@ -1485,7 +1495,13 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		})
 	}
 
-	fn revert(&self, n: NumberFor<Block>, revert_finalized: bool) -> ClientResult<NumberFor<Block>> {
+	fn revert(
+		&self,
+		n: NumberFor<Block>,
+		revert_finalized: bool,
+	) -> ClientResult<(NumberFor<Block>, HashSet<Block::Hash>)> {
+		let mut reverted_finalized = HashSet::new();
+
 		let mut best_number = self.blockchain.info().best_number;
 		let mut best_hash = self.blockchain.info().best_hash;
 
@@ -1504,18 +1520,28 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					return Ok(c.saturated_into::<NumberFor<Block>>())
 				}
 				let mut transaction = Transaction::new();
+				let removed_number = best_number;
+				let removed = self.blockchain.header(BlockId::Number(best_number))?.ok_or_else(
+					|| sp_blockchain::Error::UnknownBlock(
+						format!("Error reverting to {}. Block hash not found.", best_number)))?;
+				let removed_hash = removed.hash();
+
+				let prev_number = best_number.saturating_sub(One::one());
+				let prev_hash = self.blockchain.hash(prev_number)?.ok_or_else(
+					|| sp_blockchain::Error::UnknownBlock(
+						format!("Error reverting to {}. Block hash not found.", best_number))
+				)?;
+
+				if !self.have_state_at(&prev_hash, prev_number) {
+					return Ok(c.saturated_into::<NumberFor<Block>>())
+				}
+
 				match self.storage.state_db.revert_one() {
 					Some(commit) => {
 						apply_state_commit(&mut transaction, commit);
-						let removed_number = best_number;
-						let removed = self.blockchain.header(BlockId::Number(best_number))?.ok_or_else(
-							|| sp_blockchain::Error::UnknownBlock(
-								format!("Error reverting to {}. Block hash not found.", best_number)))?;
 
-						best_number -= One::one();	// prev block
-						best_hash = self.blockchain.hash(best_number)?.ok_or_else(
-							|| sp_blockchain::Error::UnknownBlock(
-								format!("Error reverting to {}. Block hash not found.", best_number)))?;
+						best_number = prev_number;
+						best_hash = prev_hash;
 
 						let update_finalized = best_number < finalized;
 
@@ -1528,12 +1554,17 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 							),
 						)?;
 						if update_finalized {
-							transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, key.clone());
+							transaction.set_from_vec(
+								columns::META,
+								meta_keys::FINALIZED_BLOCK,
+								key.clone()
+							);
+							reverted_finalized.insert(removed_hash);
 						}
 						transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, key);
 						transaction.remove(columns::KEY_LOOKUP, removed.hash().as_ref());
 						children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, best_hash);
-						self.storage.db.commit(transaction);
+						self.storage.db.commit(transaction)?;
 						self.changes_tries_storage.post_commit(Some(changes_trie_cache_ops));
 						self.blockchain.update_meta(best_hash, best_number, true, update_finalized);
 					}
@@ -1552,14 +1583,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 			leaves.revert(best_hash, best_number);
 			leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
-			self.storage.db.commit(transaction);
+			self.storage.db.commit(transaction)?;
 
 			Ok(())
 		};
 
 		revert_leaves()?;
 
-		Ok(reverted)
+		Ok((reverted, reverted_finalized))
 	}
 
 	fn blockchain(&self) -> &BlockchainDb<Block> {
@@ -1808,13 +1839,12 @@ pub(crate) mod tests {
 
 			header.state_root = op.old_state.storage_root(storage
 				.iter()
-				.cloned()
-				.map(|(x, y)| (x, Some(y)))
+				.map(|(x, y)| (&x[..], Some(&y[..])))
 			).0.into();
 			let hash = header.hash();
 
 			op.reset_storage(Storage {
-				top: storage.iter().cloned().collect(),
+				top: storage.into_iter().collect(),
 				children_default: Default::default(),
 			}).unwrap();
 			op.set_block_data(
@@ -1851,7 +1881,10 @@ pub(crate) mod tests {
 				(vec![5, 5, 5], Some(vec![4, 5, 6])),
 			];
 
-			let (root, overlay) = op.old_state.storage_root(storage.iter().cloned());
+			let (root, overlay) = op.old_state.storage_root(
+				storage.iter()
+					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+			);
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 
@@ -1890,17 +1923,11 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			let storage: Vec<(_, _)> = vec![];
-
-			header.state_root = op.old_state.storage_root(storage
-				.iter()
-				.cloned()
-				.map(|(x, y)| (x, Some(y)))
-			).0.into();
+			header.state_root = op.old_state.storage_root(std::iter::empty()).0.into();
 			let hash = header.hash();
 
 			op.reset_storage(Storage {
-				top: storage.iter().cloned().collect(),
+				top: Default::default(),
 				children_default: Default::default(),
 			}).unwrap();
 
@@ -1986,7 +2013,6 @@ pub(crate) mod tests {
 			).unwrap();
 
 			backend.commit_operation(op).unwrap();
-
 
 			assert!(backend.storage.db.get(
 				columns::STATE,

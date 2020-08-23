@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use node_runtime::{
 	Executive, Indices, Runtime, UncheckedExtrinsic,
@@ -40,7 +41,7 @@ use self::common::*;
 
 #[test]
 fn should_submit_unsigned_transaction() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -66,7 +67,7 @@ const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put c
 
 #[test]
 fn should_submit_signed_transaction() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -91,7 +92,7 @@ fn should_submit_signed_transaction() {
 
 #[test]
 fn should_submit_signed_twice_from_the_same_account() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -122,7 +123,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		let s = state.read();
 		fn nonce(tx: UncheckedExtrinsic) -> frame_system::CheckNonce<Runtime> {
 			let extra = tx.signature.unwrap().2;
-			extra.3
+			extra.4
 		}
 		let nonce1 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[0]).unwrap());
 		let nonce2 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[1]).unwrap());
@@ -135,7 +136,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 
 #[test]
 fn should_submit_signed_twice_from_all_accounts() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -170,7 +171,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 		let s = state.read();
 		fn nonce(tx: UncheckedExtrinsic) -> frame_system::CheckNonce<Runtime> {
 			let extra = tx.signature.unwrap().2;
-			extra.3
+			extra.4
 		}
 		let nonce1 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[0]).unwrap());
 		let nonce2 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[1]).unwrap());
@@ -191,10 +192,10 @@ fn should_submit_signed_twice_from_all_accounts() {
 fn submitted_transaction_should_be_valid() {
 	use codec::Encode;
 	use frame_support::storage::StorageMap;
-	use sp_runtime::transaction_validity::{ValidTransaction, TransactionSource};
+	use sp_runtime::transaction_validity::{TransactionSource, TransactionTag};
 	use sp_runtime::traits::StaticLookup;
 
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -215,7 +216,7 @@ fn submitted_transaction_should_be_valid() {
 	// check that transaction is valid, but reset environment storage,
 	// since CreateTransaction increments the nonce
 	let tx0 = state.read().transactions[0].clone();
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.execute_with(|| {
 		let source = TransactionSource::External;
 		let extrinsic = UncheckedExtrinsic::decode(&mut &*tx0).unwrap();
@@ -227,14 +228,12 @@ fn submitted_transaction_should_be_valid() {
 		<frame_system::Account<Runtime>>::insert(&address, account);
 
 		// check validity
-		let res = Executive::validate_transaction(source, extrinsic);
+		let res = Executive::validate_transaction(source, extrinsic).unwrap();
 
-		assert_eq!(res.unwrap(), ValidTransaction {
-			priority: 1_410_710_000_000,
-			requires: vec![],
-			provides: vec![(address, 0).encode()],
-			longevity: 128,
-			propagate: true,
-		});
+		// We ignore res.priority since this number can change based on updates to weights and such.
+		assert_eq!(res.requires, Vec::<TransactionTag>::new());
+		assert_eq!(res.provides, vec![(address, 0).encode()]);
+		assert_eq!(res.longevity, 2048);
+		assert_eq!(res.propagate, true);
 	});
 }

@@ -48,6 +48,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion, Hash, HashFor}
 };
+use sp_arithmetic::traits::Saturating;
 use std::{fmt, ops::Range, collections::{HashMap, HashSet, VecDeque}, sync::Arc};
 
 mod blocks;
@@ -189,8 +190,8 @@ pub struct ChainSync<B: BlockT> {
 	block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	max_parallel_downloads: u32,
-	/// Total number of processed blocks (imported or failed).
-	processed_blocks: usize,
+	/// Total number of downloaded blocks.
+	downloaded_blocks: usize,
 }
 
 /// All the data we have about a Peer that we are trying to sync with
@@ -375,7 +376,7 @@ impl<B: BlockT> ChainSync<B> {
 			pending_requests: Default::default(),
 			block_announce_validator,
 			max_parallel_downloads,
-			processed_blocks: 0,
+			downloaded_blocks: 0,
 		}
 	}
 
@@ -388,7 +389,7 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Returns the current sync status.
 	pub fn status(&self) -> Status<B> {
-		let best_seen = self.peers.values().max_by_key(|p| p.best_number).map(|p| p.best_number);
+		let best_seen = self.peers.values().map(|p| p.best_number).max();
 		let sync_state =
 			if let Some(n) = best_seen {
 				// A chain is classified as downloading if the provided best block is
@@ -415,9 +416,9 @@ impl<B: BlockT> ChainSync<B> {
 		self.fork_targets.len()
 	}
 
-	/// Number of processed blocks.
-	pub fn num_processed_blocks(&self) -> usize {
-		self.processed_blocks
+	/// Number of downloaded blocks.
+	pub fn num_downloaded_blocks(&self) -> usize {
+		self.downloaded_blocks
 	}
 
 	/// Handle a new connected peer.
@@ -513,10 +514,10 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Signal that `best_header` has been queued for import and update the
+	/// Signal that a new best block has been imported.
 	/// `ChainSync` state with that information.
-	pub fn update_chain_info(&mut self, best_header: &B::Header) {
-		self.on_block_queued(&best_header.hash(), *best_header.number())
+	pub fn update_chain_info(&mut self, best_hash: &B::Hash, best_number: NumberFor<B>) {
+		self.on_block_queued(best_hash, best_number);
 	}
 
 	/// Schedule a justification request for the given block.
@@ -574,7 +575,7 @@ impl<B: BlockT> ChainSync<B> {
 
 				if number > peer.best_number {
 					peer.best_number = number;
-					peer.best_hash = hash.clone();
+					peer.best_hash = *hash;
 				}
 				self.pending_requests.add(peer_id);
 			}
@@ -639,7 +640,7 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	/// Get an iterator over all block requests of all peers.
-	pub fn block_requests(&mut self) -> impl Iterator<Item = (PeerId, BlockRequest<B>)> + '_ {
+	pub fn block_requests(&mut self) -> impl Iterator<Item = (&PeerId, BlockRequest<B>)> + '_ {
 		if self.pending_requests.is_empty() {
 			return Either::Left(std::iter::empty())
 		}
@@ -651,7 +652,6 @@ impl<B: BlockT> ChainSync<B> {
 		let blocks = &mut self.blocks;
 		let attrs = &self.required_block_attributes;
 		let fork_targets = &mut self.fork_targets;
-		let mut have_requests = false;
 		let last_finalized = self.client.info().finalized_number;
 		let best_queued = self.best_queued_number;
 		let client = &self.client;
@@ -681,8 +681,7 @@ impl<B: BlockT> ChainSync<B> {
 					peer.common_number,
 					req,
 				);
-				have_requests = true;
-				Some((id.clone(), req))
+				Some((id, req))
 			} else if let Some((hash, req)) = fork_sync_request(
 				id,
 				fork_targets,
@@ -697,8 +696,7 @@ impl<B: BlockT> ChainSync<B> {
 			) {
 				trace!(target: "sync", "Downloading fork {:?} from {}", hash, id);
 				peer.state = PeerSyncState::DownloadingStale(hash);
-				have_requests = true;
-				Some((id.clone(), req))
+				Some((id, req))
 			} else {
 				None
 			}
@@ -713,24 +711,28 @@ impl<B: BlockT> ChainSync<B> {
 	///
 	/// If this corresponds to a valid block, this outputs the block that
 	/// must be imported in the import queue.
-	pub fn on_block_data
-		(&mut self, who: PeerId, request: Option<BlockRequest<B>>, response: BlockResponse<B>) -> Result<OnBlockData<B>, BadPeer>
-	{
+	pub fn on_block_data(
+		&mut self,
+		who: &PeerId,
+		request: Option<BlockRequest<B>>,
+		response: BlockResponse<B>
+	) -> Result<OnBlockData<B>, BadPeer> {
+		self.downloaded_blocks += response.blocks.len();
 		let mut new_blocks: Vec<IncomingBlock<B>> =
-			if let Some(peer) = self.peers.get_mut(&who) {
+			if let Some(peer) = self.peers.get_mut(who) {
 				let mut blocks = response.blocks;
 				if request.as_ref().map_or(false, |r| r.direction == message::Direction::Descending) {
 					trace!(target: "sync", "Reversing incoming block list");
 					blocks.reverse()
 				}
-				self.pending_requests.add(&who);
+				self.pending_requests.add(who);
 				if request.is_some() {
 					match &mut peer.state {
 						PeerSyncState::DownloadingNew(start_block) => {
-							self.blocks.clear_peer_download(&who);
+							self.blocks.clear_peer_download(who);
 							let start_block = *start_block;
 							peer.state = PeerSyncState::Available;
-							validate_blocks::<B>(&blocks, &who)?;
+							validate_blocks::<B>(&blocks, who)?;
 							self.blocks.insert(start_block, blocks, who.clone());
 							self.blocks
 								.drain(self.best_queued_number + One::one())
@@ -751,9 +753,9 @@ impl<B: BlockT> ChainSync<B> {
 							peer.state = PeerSyncState::Available;
 							if blocks.is_empty() {
 								debug!(target: "sync", "Empty block response from {}", who);
-								return Err(BadPeer(who, rep::NO_BLOCK));
+								return Err(BadPeer(who.clone(), rep::NO_BLOCK));
 							}
-							validate_blocks::<B>(&blocks, &who)?;
+							validate_blocks::<B>(&blocks, who)?;
 							blocks.into_iter().map(|b| {
 								IncomingBlock {
 									hash: b.hash,
@@ -774,11 +776,11 @@ impl<B: BlockT> ChainSync<B> {
 								},
 								(None, _) => {
 									debug!(target: "sync", "Invalid response when searching for ancestor from {}", who);
-									return Err(BadPeer(who, rep::UNKNOWN_ANCESTOR))
+									return Err(BadPeer(who.clone(), rep::UNKNOWN_ANCESTOR))
 								},
 								(_, Err(e)) => {
 									info!("❌ Error answering legitimate blockchain query: {:?}", e);
-									return Err(BadPeer(who, rep::BLOCKCHAIN_READ_ERROR))
+									return Err(BadPeer(who.clone(), rep::BLOCKCHAIN_READ_ERROR))
 								}
 							};
 							if matching_hash.is_some() {
@@ -794,7 +796,7 @@ impl<B: BlockT> ChainSync<B> {
 							}
 							if matching_hash.is_none() && current.is_zero() {
 								trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
-								return Err(BadPeer(who, rep::GENESIS_MISMATCH))
+								return Err(BadPeer(who.clone(), rep::GENESIS_MISMATCH))
 							}
 							if let Some((next_state, next_num)) = handle_ancestor_search_state(state, *current, matching_hash.is_some()) {
 								peer.state = PeerSyncState::AncestorSearch {
@@ -802,7 +804,7 @@ impl<B: BlockT> ChainSync<B> {
 									start: *start,
 									state: next_state,
 								};
-								return Ok(OnBlockData::Request(who, ancestry_request::<B>(next_num)))
+								return Ok(OnBlockData::Request(who.clone(), ancestry_request::<B>(next_num)))
 							} else {
 								// Ancestry search is complete. Check if peer is on a stale fork unknown to us and
 								// add it to sync targets if necessary.
@@ -838,7 +840,7 @@ impl<B: BlockT> ChainSync<B> {
 					}
 				} else {
 					// When request.is_none() this is a block announcement. Just accept blocks.
-					validate_blocks::<B>(&blocks, &who)?;
+					validate_blocks::<B>(&blocks, who)?;
 					blocks.into_iter().map(|b| {
 						IncomingBlock {
 							hash: b.hash,
@@ -869,7 +871,7 @@ impl<B: BlockT> ChainSync<B> {
 			// So the only way this can happen is when peers lie about the
 			// common block.
 			debug!(target: "sync", "Ignoring known blocks from {}", who);
-			return Err(BadPeer(who, rep::KNOWN_BLOCK));
+			return Err(BadPeer(who.clone(), rep::KNOWN_BLOCK));
 		}
 		let orig_len = new_blocks.len();
 		new_blocks.retain(|b| !self.queue_blocks.contains(&b.hash));
@@ -1001,8 +1003,6 @@ impl<B: BlockT> ChainSync<B> {
 		for (_, hash) in &results {
 			self.queue_blocks.remove(&hash);
 		}
-		self.processed_blocks += results.len();
-
 		for (result, hash) in results {
 			if has_error {
 				continue;
@@ -1124,7 +1124,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// Updates our internal state for best queued block and then goes
 	/// through all peers to update our view of their state as well.
 	fn on_block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		if let Some(_) = self.fork_targets.remove(&hash) {
+		if self.fork_targets.remove(&hash).is_some() {
 			trace!(target: "sync", "Completed fork sync {:?}", hash);
 		}
 		if number > self.best_queued_number {
@@ -1162,7 +1162,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// header (call `on_block_data`). The network request isn't sent
 	/// in this case. Both hash and header is passed as an optimization
 	/// to avoid rehashing the header.
-	pub fn on_block_announce(&mut self, who: PeerId, hash: B::Hash, announce: &BlockAnnounce<B::Header>, is_best: bool)
+	pub fn on_block_announce(&mut self, who: &PeerId, hash: B::Hash, announce: &BlockAnnounce<B::Header>, is_best: bool)
 		-> OnBlockAnnounce
 	{
 		let header = &announce.header;
@@ -1177,7 +1177,7 @@ impl<B: BlockT> ChainSync<B> {
 		let ancient_parent = parent_status == BlockStatus::InChainPruned;
 
 		let known = self.is_known(&hash);
-		let peer = if let Some(peer) = self.peers.get_mut(&who) {
+		let peer = if let Some(peer) = self.peers.get_mut(who) {
 			peer
 		} else {
 			error!(target: "sync", "💔 Called on_block_announce with a bad peer ID");
@@ -1187,6 +1187,21 @@ impl<B: BlockT> ChainSync<B> {
 			peer.recently_announced.pop_front();
 		}
 		peer.recently_announced.push_back(hash.clone());
+
+		// Let external validator check the block announcement.
+		let assoc_data = announce.data.as_ref().map_or(&[][..], |v| v.as_slice());
+		let is_best = match self.block_announce_validator.validate(&header, assoc_data) {
+			Ok(Validation::Success { is_new_best }) => is_new_best || is_best,
+			Ok(Validation::Failure) => {
+				debug!(target: "sync", "Block announcement validation of block {} from {} failed", hash, who);
+				return OnBlockAnnounce::Nothing
+			}
+			Err(e) => {
+				error!(target: "sync", "💔 Block announcement validation errored: {}", e);
+				return OnBlockAnnounce::Nothing
+			}
+		};
+
 		if is_best {
 			// update their best block
 			peer.best_number = number;
@@ -1206,29 +1221,15 @@ impl<B: BlockT> ChainSync<B> {
 				peer.common_number = number - One::one();
 			}
 		}
-		self.pending_requests.add(&who);
+		self.pending_requests.add(who);
 
 		// known block case
 		if known || self.is_already_downloading(&hash) {
 			trace!(target: "sync", "Known block announce from {}: {}", who, hash);
 			if let Some(target) = self.fork_targets.get_mut(&hash) {
-				target.peers.insert(who);
+				target.peers.insert(who.clone());
 			}
 			return OnBlockAnnounce::Nothing
-		}
-
-		// Let external validator check the block announcement.
-		let assoc_data = announce.data.as_ref().map_or(&[][..], |v| v.as_slice());
-		match self.block_announce_validator.validate(&header, assoc_data) {
-			Ok(Validation::Success) => (),
-			Ok(Validation::Failure) => {
-				debug!(target: "sync", "Block announcement validation of block {} from {} failed", hash, who);
-				return OnBlockAnnounce::Nothing
-			}
-			Err(e) => {
-				error!(target: "sync", "💔 Block announcement validation errored: {}", e);
-				return OnBlockAnnounce::Nothing
-			}
 		}
 
 		if ancient_parent {
@@ -1251,27 +1252,26 @@ impl<B: BlockT> ChainSync<B> {
 				.entry(hash.clone())
 				.or_insert_with(|| ForkTarget {
 					number,
-					parent_hash: Some(header.parent_hash().clone()),
+					parent_hash: Some(*header.parent_hash()),
 					peers: Default::default(),
 				})
-				.peers.insert(who);
+				.peers.insert(who.clone());
 		}
 
 		OnBlockAnnounce::Nothing
 	}
 
 	/// Call when a peer has disconnected.
-	pub fn peer_disconnected(&mut self, who: PeerId) {
-		self.blocks.clear_peer_download(&who);
-		self.peers.remove(&who);
-		self.extra_justifications.peer_disconnected(&who);
-		self.extra_finality_proofs.peer_disconnected(&who);
+	pub fn peer_disconnected(&mut self, who: &PeerId) {
+		self.blocks.clear_peer_download(who);
+		self.peers.remove(who);
+		self.extra_justifications.peer_disconnected(who);
+		self.extra_finality_proofs.peer_disconnected(who);
 		self.pending_requests.set_all();
 	}
 
 	/// Restart the sync process.
 	fn restart<'a>(&'a mut self) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a {
-		self.processed_blocks = 0;
 		self.blocks.clear();
 		let info = self.client.info();
 		self.best_queued_hash = info.best_hash;
@@ -1430,14 +1430,24 @@ fn peer_block_request<B: BlockT>(
 		max_parallel_downloads,
 		MAX_DOWNLOAD_AHEAD,
 	) {
+		// The end is not part of the range.
+		let last = range.end.saturating_sub(One::one());
+
+		let from = if peer.best_number == last {
+			message::FromBlock::Hash(peer.best_hash)
+		} else {
+			message::FromBlock::Number(last)
+		};
+
 		let request = message::generic::BlockRequest {
 			id: 0,
 			fields: attrs.clone(),
-			from: message::FromBlock::Number(range.start),
+			from,
 			to: None,
-			direction: message::Direction::Ascending,
+			direction: message::Direction::Descending,
 			max: Some((range.end - range.start).saturated_into::<u32>())
 		};
+
 		Some((range, request))
 	} else {
 		None
@@ -1471,11 +1481,12 @@ fn fork_sync_request<B: BlockT>(
 		}
 		if r.number <= best_num {
 			let parent_status = r.parent_hash.as_ref().map_or(BlockStatus::Unknown, check_block);
-			let mut count = (r.number - finalized).saturated_into::<u32>(); // up to the last finalized block
-			if parent_status != BlockStatus::Unknown {
+			let count = if parent_status == BlockStatus::Unknown {
+				(r.number - finalized).saturated_into::<u32>() // up to the last finalized block
+			} else {
 				// request only single block
-				count = 1;
-			}
+				1
+			};
 			trace!(target: "sync", "Downloading requested fork {:?} from {}, {} blocks", hash, id, count);
 			return Some((hash.clone(), message::generic::BlockRequest {
 				id: 0,
@@ -1559,7 +1570,7 @@ mod test {
 
 		let client = Arc::new(TestClientBuilder::new().build());
 		let info = client.info();
-		let block_announce_validator = Box::new(DefaultBlockAnnounceValidator::new(client.clone()));
+		let block_announce_validator = Box::new(DefaultBlockAnnounceValidator);
 		let peer_id = PeerId::random();
 
 		let mut sync = ChainSync::new(

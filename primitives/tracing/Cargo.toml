@@ -1,7 +1,7 @@
 [package]
 name = "sp-tracing"
-version = "2.0.0-dev"
-license = "GPL-3.0"
+version = "2.0.0-rc6"
+license = "Apache-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
@@ -12,8 +12,10 @@ description = "Instrumentation primitives and macros for Substrate."
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-tracing = { version = "0.1.13", optional = true }
+tracing = { version = "0.1.18", optional = true }
+rental = { version = "0.5.5", optional = true }
+log = { version = "0.4.8", optional = true }
 
 [features]
 default = [ "std" ]
-std = [ "tracing" ]
+std = [ "tracing", "rental", "log" ]

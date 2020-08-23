@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Implementation of the trait instance and the instance structures implementing it.
 //! (For not instantiable traits there is still the inherent instance implemented).
@@ -23,7 +24,6 @@ use super::DeclStorageDefExt;
 
 const NUMBER_OF_INSTANCE: usize = 16;
 pub(crate) const INHERENT_INSTANCE_NAME: &str = "__InherentHiddenInstance";
-pub(crate) const DEFAULT_INSTANTIABLE_TRAIT_NAME: &str = "__GeneratedInstantiable";
 
 // Used to generate an instance implementation.
 struct InstanceDef {
@@ -35,7 +35,7 @@ struct InstanceDef {
 pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
 	let mut impls = TokenStream::new();
 
-	impls.extend(create_instance_trait(def));
+	impls.extend(reexport_instance_trait(scrate, def));
 
 	// Implementation of instances.
 	if let Some(module_instance) = &def.module_instance {
@@ -69,6 +69,8 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 		.and_then(|i| i.instance_default.as_ref())
 	{
 		impls.extend(quote! {
+			/// Hidden instance generated to be internally used when module is used without
+			/// instance.
 			#[doc(hidden)]
 			pub type #inherent_instance = #default_instance;
 		});
@@ -76,7 +78,11 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 		let instance_def = InstanceDef {
 			prefix: String::new(),
 			instance_struct: inherent_instance,
-			doc: quote!(#[doc(hidden)]),
+			doc: quote!(
+				/// Hidden instance generated to be internally used when module is used without
+				/// instance.
+				#[doc(hidden)]
+			),
 		};
 		impls.extend(create_and_impl_instance_struct(scrate, &instance_def, def));
 	}
@@ -84,27 +90,19 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 	impls
 }
 
-fn create_instance_trait(
+fn reexport_instance_trait(
+	scrate: &TokenStream,
 	def: &DeclStorageDefExt,
 ) -> TokenStream {
-	let instance_trait = def.module_instance.as_ref().map(|i| i.instance_trait.clone())
-		.unwrap_or_else(|| syn::Ident::new(DEFAULT_INSTANTIABLE_TRAIT_NAME, Span::call_site()));
-
-	let optional_hide = if def.module_instance.is_some() {
-		quote!()
+	if let Some(i) = def.module_instance.as_ref() {
+		let instance_trait = &i.instance_trait;
+		quote!(
+			/// Local import of frame_support::traits::Instance
+			// This import is not strictly needed but made in order not to have breaking change.
+			use #scrate::traits::Instance as #instance_trait;
+		)
 	} else {
-		quote!(#[doc(hidden)])
-	};
-
-	quote! {
-		/// Tag a type as an instance of a module.
-		///
-		/// Defines storage prefixes, they must be unique.
-		#optional_hide
-		pub trait #instance_trait: 'static {
-			/// The prefix used by any storage entry of an instance.
-			const PREFIX: &'static str;
-		}
+		quote!()
 	}
 }
 
@@ -113,8 +111,7 @@ fn create_and_impl_instance_struct(
 	instance_def: &InstanceDef,
 	def: &DeclStorageDefExt,
 ) -> TokenStream {
-	let instance_trait = def.module_instance.as_ref().map(|i| i.instance_trait.clone())
-		.unwrap_or_else(|| syn::Ident::new(DEFAULT_INSTANTIABLE_TRAIT_NAME, Span::call_site()));
+	let instance_trait = quote!( #scrate::traits::Instance );
 
 	let instance_struct = &instance_def.instance_struct;
 	let prefix = format!("{}{}", instance_def.prefix, def.crate_name.to_string());

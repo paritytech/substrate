@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Runtime Modules shared primitive types.
 
@@ -70,8 +71,8 @@ pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	Perquintill, Perbill, Permill, Percent, PerU16, Rational128, Fixed64, Fixed128,
-	PerThing, traits::SaturatedConversion,
+	PerThing, traits::SaturatedConversion, Perquintill, Perbill, Permill, Percent, PerU16, InnerOf,
+	Rational128, FixedI64, FixedI128, FixedU128, FixedPointNumber, FixedPointOperand,
 };
 /// Re-export 128 bit helpers.
 pub use sp_arithmetic::helpers_128bit;
@@ -79,6 +80,8 @@ pub use sp_arithmetic::helpers_128bit;
 pub use sp_arithmetic::biguint;
 
 pub use random_number_generator::RandomNumberGenerator;
+
+pub use either::Either;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -156,7 +159,7 @@ impl BuildStorage for () {
 	fn assimilate_storage(
 		&self,
 		_: &mut sp_core::storage::Storage,
-	)-> Result<(), String> {
+	) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `()`".into())
 	}
 }
@@ -373,16 +376,16 @@ impl From<DispatchError> for DispatchOutcome {
 	}
 }
 
-/// This is the legacy return type of `Dispatchable`. It is still exposed for compatibilty
-/// reasons. The new return type is `DispatchResultWithInfo`.
-/// FRAME runtimes should use frame_support::dispatch::DispatchResult
+/// This is the legacy return type of `Dispatchable`. It is still exposed for compatibility reasons.
+/// The new return type is `DispatchResultWithInfo`. FRAME runtimes should use
+/// `frame_support::dispatch::DispatchResult`.
 pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 
 /// Return type of a `Dispatchable` which contains the `DispatchResult` and additional information
 /// about the `Dispatchable` that is only known post dispatch.
 pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
-/// Reason why a dispatch call failed
+/// Reason why a dispatch call failed.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
 pub enum DispatchError {
@@ -392,11 +395,11 @@ pub enum DispatchError {
 	CannotLookup,
 	/// A bad origin.
 	BadOrigin,
-	/// A custom error in a module
+	/// A custom error in a module.
 	Module {
-		/// Module index, matching the metadata module index
+		/// Module index, matching the metadata module index.
 		index: u8,
-		/// Module specific error value
+		/// Module specific error value.
 		error: u8,
 		/// Optional error message.
 		#[codec(skip)]
@@ -404,15 +407,15 @@ pub enum DispatchError {
 	},
 }
 
-/// Result of a `Dispatchable` which contains the `DispatchResult` and additional information
-/// about the `Dispatchable` that is only known post dispatch.
+/// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
+/// the `Dispatchable` that is only known post dispatch.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub struct DispatchErrorWithPostInfo<Info> where
 	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
 {
-	/// Addditional information about the `Dispatchable` which is only known post dispatch.
+	/// Additional information about the `Dispatchable` which is only known post dispatch.
 	pub post_info: Info,
-	/// The actual `DispatchResult` indicating whether the dispatch was succesfull.
+	/// The actual `DispatchResult` indicating whether the dispatch was successful.
 	pub error: DispatchError,
 }
 
@@ -534,6 +537,10 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 ///   a transaction in the block doesn't make sense.
 /// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
 pub type ApplyExtrinsicResult = Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
+
+/// Same as `ApplyExtrinsicResult` but augmented with `PostDispatchInfo` on success.
+pub type ApplyExtrinsicResultWithInfo<T> =
+	Result<DispatchResultWithInfo<T>, transaction_validity::TransactionValidityError>;
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
@@ -707,7 +714,14 @@ macro_rules! assert_eq_error_rate {
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-pub struct OpaqueExtrinsic(pub Vec<u8>);
+pub struct OpaqueExtrinsic(Vec<u8>);
+
+impl OpaqueExtrinsic {
+	/// Convert an encoded extrinsic to an `OpaqueExtrinsic`.
+	pub fn from_bytes(mut bytes: &[u8]) -> Result<Self, codec::Error> {
+		OpaqueExtrinsic::decode(&mut bytes)
+	}
+}
 
 #[cfg(feature = "std")]
 impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
@@ -787,6 +801,23 @@ impl Drop for SignatureBatching {
 	}
 }
 
+/// Describes on what should happen with a storage transaction.
+pub enum TransactionOutcome<R> {
+	/// Commit the transaction.
+	Commit(R),
+	/// Rollback the transaction.
+	Rollback(R),
+}
+
+impl<R> TransactionOutcome<R> {
+	/// Convert into the inner type.
+	pub fn into_inner(self) -> R {
+		match self {
+			Self::Commit(r) => r,
+			Self::Rollback(r) => r,
+		}
+	}
+}
 
 #[cfg(test)]
 mod tests {
@@ -840,7 +871,11 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Signature verification has not been called")]
 	fn batching_still_finishes_when_not_called_directly() {
-		let mut ext = sp_state_machine::BasicExternalities::with_tasks_executor();
+		let mut ext = sp_state_machine::BasicExternalities::default();
+		ext.register_extension(
+			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
+		);
+
 		ext.execute_with(|| {
 			let _batching = SignatureBatching::start();
 			sp_io::crypto::sr25519_verify(

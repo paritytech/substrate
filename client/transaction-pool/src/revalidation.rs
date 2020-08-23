@@ -1,24 +1,26 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Pool periodic revalidation.
 
 use std::{sync::Arc, pin::Pin, collections::{HashMap, HashSet, BTreeMap}};
 
-use sc_transaction_graph::{ChainApi, Pool, ExHash, NumberFor, ValidatedTransaction};
+use sc_transaction_graph::{ChainApi, Pool, ExtrinsicHash, NumberFor, ValidatedTransaction};
 use sp_runtime::traits::{Zero, SaturatedConversion};
 use sp_runtime::generic::BlockId;
 use sp_runtime::transaction_validity::TransactionValidityError;
@@ -32,12 +34,12 @@ const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(200);
 #[cfg(test)]
 pub const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(1);
 
-const BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
+const MIN_BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
 
 /// Payload from queue to worker.
 struct WorkerPayload<Api: ChainApi> {
 	at: NumberFor<Api>,
-	transactions: Vec<ExHash<Api>>,
+	transactions: Vec<ExtrinsicHash<Api>>,
 }
 
 /// Async revalidation worker.
@@ -47,8 +49,8 @@ struct RevalidationWorker<Api: ChainApi> {
 	api: Arc<Api>,
 	pool: Arc<Pool<Api>>,
 	best_block: NumberFor<Api>,
-	block_ordered: BTreeMap<NumberFor<Api>, HashSet<ExHash<Api>>>,
-	members: HashMap<ExHash<Api>, NumberFor<Api>>,
+	block_ordered: BTreeMap<NumberFor<Api>, HashSet<ExtrinsicHash<Api>>>,
+	members: HashMap<ExtrinsicHash<Api>, NumberFor<Api>>,
 }
 
 impl<Api: ChainApi> Unpin for RevalidationWorker<Api> {}
@@ -61,18 +63,22 @@ async fn batch_revalidate<Api: ChainApi>(
 	pool: Arc<Pool<Api>>,
 	api: Arc<Api>,
 	at: NumberFor<Api>,
-	batch: impl IntoIterator<Item=ExHash<Api>>,
+	batch: impl IntoIterator<Item=ExtrinsicHash<Api>>,
 ) {
 	let mut invalid_hashes = Vec::new();
 	let mut revalidated = HashMap::new();
 
-	for ext_hash in batch {
-		let ext = match pool.validated_pool().ready_by_hash(&ext_hash) {
-			Some(ext) => ext,
-			None => continue,
-		};
+	let validation_results = futures::future::join_all(
+		batch.into_iter().filter_map(|ext_hash| {
+			pool.validated_pool().ready_by_hash(&ext_hash).map(|ext| {
+				api.validate_transaction(&BlockId::Number(at), ext.source, ext.data.clone())
+					.map(move |validation_result| (validation_result, ext_hash, ext))
+			})
+		})
+	).await;
 
-		match api.validate_transaction(&BlockId::Number(at), ext.source, ext.data.clone()).await {
+	for (validation_result, ext_hash, ext) in validation_results {
+		match validation_result {
 			Ok(Err(TransactionValidityError::Invalid(err))) => {
 				log::debug!(target: "txpool", "[{:?}]: Revalidation: invalid {:?}", ext_hash, err);
 				invalid_hashes.push(ext_hash);
@@ -127,22 +133,22 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 		}
 	}
 
-	fn prepare_batch(&mut self) -> Vec<ExHash<Api>> {
+	fn prepare_batch(&mut self) -> Vec<ExtrinsicHash<Api>> {
 		let mut queued_exts = Vec::new();
-		let mut left = BACKGROUND_REVALIDATION_BATCH_SIZE;
+		let mut left = std::cmp::max(MIN_BACKGROUND_REVALIDATION_BATCH_SIZE, self.members.len() / 4);
 
 		// Take maximum of count transaction by order
 		// which they got into the pool
 		while left > 0 {
 			let first_block = match self.block_ordered.keys().next().cloned() {
-			  Some(bn) => bn,
-			  None => break,
+				Some(bn) => bn,
+				None => break,
 			};
 			let mut block_drained = false;
 			if let Some(extrinsics) = self.block_ordered.get_mut(&first_block) {
 				let to_queue = extrinsics.iter().take(left).cloned().collect::<Vec<_>>();
 				if to_queue.len() == extrinsics.len() {
-				   block_drained = true;
+					block_drained = true;
 				} else {
 					for xt in &to_queue {
 						extrinsics.remove(xt);
@@ -153,7 +159,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 			}
 
 			if block_drained {
-			  self.block_ordered.remove(&first_block);
+				self.block_ordered.remove(&first_block);
 			}
 		}
 
@@ -176,7 +182,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 		for ext_hash in transactions {
 			// we don't add something that already scheduled for revalidation
 			if self.members.contains_key(&ext_hash) {
-				log::debug!(
+				log::trace!(
 					target: "txpool",
 					"[{:?}] Skipped adding for revalidation: Already there.",
 					ext_hash,
@@ -205,8 +211,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 		mut self,
 		from_queue: TracingUnboundedReceiver<WorkerPayload<Api>>,
 		interval: R,
-	) where R: Send, R::Guard: Send
-	{
+	) where R: Send, R::Guard: Send {
 		let interval = interval.into_stream().fuse();
 		let from_queue = from_queue.fuse();
 		futures::pin_mut!(interval, from_queue);
@@ -243,6 +248,16 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 						Some(worker_payload) => {
 							this.best_block = worker_payload.at;
 							this.push(worker_payload);
+
+							if this.members.len() > 0 {
+								log::debug!(
+									target: "txpool",
+									"Updated revalidation queue at {:?}. Transactions: {:?}",
+									this.best_block,
+									this.members,
+								);
+							}
+
 							continue;
 						},
 						// R.I.P. worker!
@@ -282,9 +297,7 @@ where
 		api: Arc<Api>,
 		pool: Arc<Pool<Api>>,
 		interval: R,
-	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>)
-	where R: Send + 'static, R::Guard: Send
-	{
+	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>) where R: Send + 'static, R::Guard: Send {
 		let (to_worker, from_queue) = tracing_unbounded("mpsc_revalidation_queue");
 
 		let worker = RevalidationWorker::new(api.clone(), pool.clone());
@@ -322,16 +335,22 @@ where
 	/// If queue configured with background worker, this will return immediately.
 	/// If queue configured without background worker, this will resolve after
 	/// revalidation is actually done.
-	pub async fn revalidate_later(&self, at: NumberFor<Api>, transactions: Vec<ExHash<Api>>) {
+	pub async fn revalidate_later(
+		&self,
+		at: NumberFor<Api>,
+		transactions: Vec<ExtrinsicHash<Api>>,
+	) {
 		if transactions.len() > 0 {
-			log::debug!(target: "txpool", "Added {} transactions to revalidation queue", transactions.len());
+			log::debug!(
+				target: "txpool", "Sent {} transactions to revalidation queue",
+				transactions.len(),
+			);
 		}
 
 		if let Some(ref to_worker) = self.background {
 			if let Err(e) = to_worker.unbounded_send(WorkerPayload { at, transactions }) {
 				log::warn!(target: "txpool", "Failed to update background worker: {:?}", e);
 			}
-			return;
 		} else {
 			let pool = self.pool.clone();
 			let api = self.api.clone();
@@ -347,9 +366,7 @@ mod tests {
 	use sp_transaction_pool::TransactionSource;
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use futures::executor::block_on;
-	use substrate_test_runtime_client::{
-		AccountKeyring::*,
-	};
+	use substrate_test_runtime_client::AccountKeyring::*;
 
 	fn setup() -> (Arc<TestApi>, Pool<TestApi>) {
 		let test_api = Arc::new(TestApi::empty());

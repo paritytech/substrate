@@ -1,13 +1,5 @@
 error: Two traits with the same name detected! The trait name is used to generate its ID. Please rename one trait at the declaration!
-  --> $DIR/impl_two_traits_with_same_name.rs:32:15
+  --> $DIR/impl_two_traits_with_same_name.rs:30:15
    |
-32 |     impl second::Api<Block> for Runtime {
+30 |     impl second::Api<Block> for Runtime {
    |                  ^^^
-
-warning: unused import: `super::*`
-  --> $DIR/impl_two_traits_with_same_name.rs:18:6
-   |
-18 |     use super::*;
-   |         ^^^^^^^^
-   |
-   = note: `#[warn(unused_imports)]` on by default

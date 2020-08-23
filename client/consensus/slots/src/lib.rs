@@ -20,7 +20,6 @@
 //! time during which certain events can and/or must occur.  This crate
 //! provides generic functionality for slots.
 
-#![deny(warnings)]
 #![forbid(unsafe_code, missing_docs)]
 
 mod slots;
@@ -105,6 +104,15 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim>;
 
+	/// Notifies the given slot. Similar to `claim_slot`, but will be called no matter whether we
+	/// need to author blocks or not.
+	fn notify_slot(
+		&self,
+		_header: &B::Header,
+		_slot_number: u64,
+		_epoch_data: &Self::EpochData,
+	) { }
+
 	/// Return the pre digest data to include in a block authored with the given claim.
 	fn pre_digest_data(
 		&self,
@@ -121,11 +129,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 			Self::Claim,
 			Self::EpochData,
-		) -> sp_consensus::BlockImportParams<
-			B,
-			<Self::BlockImport as BlockImport<B>>::Transaction
-		>
-		+ Send
+		) -> Result<
+				sp_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+				sp_consensus::Error
+			> + Send + 'static
 	>;
 
 	/// Whether to force authoring if offline.
@@ -193,6 +200,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			}
 		};
 
+		self.notify_slot(&chain_head, slot_number, &epoch_data);
+
 		let authorities_len = self.authorities_len(&epoch_data);
 
 		if !self.force_authoring() &&
@@ -240,7 +249,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let logs = self.pre_digest_data(slot_number, &claim);
 
 		// deadline our production to approx. the end of the slot
-		let proposing = awaiting_proposer.and_then(move |mut proposer| proposer.propose(
+		let proposing = awaiting_proposer.and_then(move |proposer| proposer.propose(
 			slot_info.inherent_data,
 			sp_runtime::generic::Digest {
 				logs,
@@ -273,7 +282,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let block_import = self.block_import();
 		let logging_target = self.logging_target();
 
-		Box::pin(proposal_work.map_ok(move |(proposal, claim)| {
+		Box::pin(proposal_work.and_then(move |(proposal, claim)| {
 			let (header, body) = proposal.block.deconstruct();
 			let header_num = *header.number();
 			let header_hash = header.hash();
@@ -287,6 +296,11 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				claim,
 				epoch_data,
 			);
+
+			let block_import_params = match block_import_params {
+				Ok(params) => params,
+				Err(e) => return future::err(e),
+			};
 
 			info!(
 				"🔖 Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
@@ -312,6 +326,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					"hash" => ?parent_hash, "err" => ?err,
 				);
 			}
+			future::ready(Ok(()))
 		}))
 	}
 }
@@ -451,7 +466,7 @@ impl<T: Clone> SlotDuration<T> {
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> sp_blockchain::Result<T>,
 		T: SlotData + Encode + Decode + Debug,
 	{
-		match client.get_aux(T::SLOT_KEY)? {
+		let slot_duration = match client.get_aux(T::SLOT_KEY)? {
 			Some(v) => <T as codec::Decode>::decode(&mut &v[..])
 				.map(SlotDuration)
 				.map_err(|_| {
@@ -467,7 +482,7 @@ impl<T: Clone> SlotDuration<T> {
 
 				info!(
 					"⏱  Loaded block-time = {:?} milliseconds from genesis on first-launch",
-					genesis_slot_duration
+					genesis_slot_duration.slot_duration()
 				);
 
 				genesis_slot_duration
@@ -475,7 +490,15 @@ impl<T: Clone> SlotDuration<T> {
 
 				Ok(SlotDuration(genesis_slot_duration))
 			}
+		}?;
+
+		if slot_duration.slot_duration() == 0 {
+			return Err(sp_blockchain::Error::Msg(
+				"Invalid value for slot_duration: the value must be greater than 0.".into(),
+			))
 		}
+
+		Ok(slot_duration)
 	}
 
 	/// Returns slot data value.

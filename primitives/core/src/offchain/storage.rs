@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! In-memory implementation of offchain workers database.
 
@@ -48,6 +49,11 @@ impl OffchainStorage for InMemOffchainStorage {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		let key = prefix.iter().chain(key).cloned().collect();
 		self.storage.insert(key, value.to_vec());
+	}
+
+	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
+		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+		self.storage.remove(&key);
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
@@ -95,8 +101,9 @@ pub enum OffchainOverlayedChange {
 pub enum OffchainOverlayedChanges {
 	/// Writing overlay changes to the offchain worker database is disabled by configuration.
 	Disabled,
-	/// Overlay changes can be recorded using the inner collection of this variant.
-	Enabled(HashMap<Vec<u8>, OffchainOverlayedChange>),
+	/// Overlay changes can be recorded using the inner collection of this variant,
+	/// where the identifier is the tuple of `(prefix, key)`.
+	Enabled(HashMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange>),
 }
 
 impl Default for OffchainOverlayedChanges {
@@ -134,23 +141,21 @@ impl OffchainOverlayedChanges {
 	/// Remove a key and its associated value from the offchain database.
 	pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
 		if let Self::Enabled(ref mut storage) = self {
-			let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-			let _ = storage.insert(key, OffchainOverlayedChange::Remove);
+			let _ = storage.insert((prefix.to_vec(), key.to_vec()), OffchainOverlayedChange::Remove);
 		}
 	}
 
 	/// Set the value associated with a key under a prefix to the value provided.
 	pub fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		if let Self::Enabled(ref mut storage) = self {
-			let key = prefix.iter().chain(key).cloned().collect();
-			let _ = storage.insert(key, OffchainOverlayedChange::SetValue(value.to_vec()));
+			let _ = storage.insert((prefix.to_vec(), key.to_vec()), OffchainOverlayedChange::SetValue(value.to_vec()));
 		}
 	}
 
 	/// Obtain a associated value to the given key in storage with prefix.
 	pub fn get(&self, prefix: &[u8], key: &[u8]) -> Option<OffchainOverlayedChange> {
 		if let Self::Enabled(ref storage) = self {
-			let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+			let key = (prefix.to_vec(), key.to_vec());
 			storage.get(&key).cloned()
 		} else {
 			None
@@ -162,11 +167,11 @@ use std::collections::hash_map;
 
 /// Iterate by reference over the prepared offchain worker storage changes.
 pub struct OffchainOverlayedChangesIter<'i> {
-	inner: Option<hash_map::Iter<'i, Vec<u8>, OffchainOverlayedChange>>,
+	inner: Option<hash_map::Iter<'i, (Vec<u8>, Vec<u8>), OffchainOverlayedChange>>,
 }
 
 impl<'i> Iterator for OffchainOverlayedChangesIter<'i> {
-	type Item = (&'i Vec<u8>, &'i OffchainOverlayedChange);
+	type Item = (&'i (Vec<u8>, Vec<u8>), &'i OffchainOverlayedChange);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(ref mut iter) = self.inner {
 			iter.next()
@@ -191,11 +196,11 @@ impl<'i> OffchainOverlayedChangesIter<'i> {
 
 /// Iterate by value over the prepared offchain worker storage changes.
 pub struct OffchainOverlayedChangesIntoIter {
-	inner: Option<hash_map::IntoIter<Vec<u8>,OffchainOverlayedChange>>,
+	inner: Option<hash_map::IntoIter<(Vec<u8>,Vec<u8>),OffchainOverlayedChange>>,
 }
 
 impl Iterator for OffchainOverlayedChangesIntoIter {
-	type Item = (Vec<u8>, OffchainOverlayedChange);
+	type Item = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(ref mut iter) = self.inner {
 			iter.next()
@@ -219,11 +224,11 @@ impl OffchainOverlayedChangesIntoIter {
 
 /// Iterate over all items while draining them from the collection.
 pub struct OffchainOverlayedChangesDrain<'d> {
-	inner: Option<hash_map::Drain<'d, Vec<u8>,OffchainOverlayedChange>>,
+	inner: Option<hash_map::Drain<'d, (Vec<u8>, Vec<u8>), OffchainOverlayedChange>>,
 }
 
 impl<'d> Iterator for OffchainOverlayedChangesDrain<'d> {
-	type Item = (Vec<u8>, OffchainOverlayedChange);
+	type Item = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(ref mut iter) = self.inner {
 			iter.next()
@@ -280,9 +285,13 @@ mod test {
 
 		ooc.set(STORAGE_PREFIX, b"ppp", b"rrr");
 		let mut iter = ooc.into_iter();
-		let mut k = STORAGE_PREFIX.to_vec();
-		k.extend_from_slice(&b"ppp"[..]);
-		assert_eq!(iter.next(), Some((k, OffchainOverlayedChange::SetValue(b"rrr".to_vec()))));
+		assert_eq!(
+			iter.next(),
+			Some(
+				((STORAGE_PREFIX.to_vec(), b"ppp".to_vec()),
+				OffchainOverlayedChange::SetValue(b"rrr".to_vec()))
+			)
+		);
 		assert_eq!(iter.next(), None);
 	}
 }

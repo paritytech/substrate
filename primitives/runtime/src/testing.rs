@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Testing utilities.
 
@@ -21,10 +22,10 @@ use std::{fmt::{self, Debug}, ops::Deref, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
-	SignedExtension, Dispatchable, DispatchInfoOf,
+	SignedExtension, Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
 };
 use crate::traits::ValidateUnsigned;
-use crate::{generic, KeyTypeId, CryptoTypeId, ApplyExtrinsicResult};
+use crate::{generic, KeyTypeId, CryptoTypeId, ApplyExtrinsicResultWithInfo};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError, TransactionSource};
@@ -159,74 +160,18 @@ pub type DigestItem = generic::DigestItem<H256>;
 pub type Digest = generic::Digest<H256>;
 
 /// Block Header
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, Default, parity_util_mem::MallocSizeOf)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct Header {
-	/// Parent hash
-	pub parent_hash: H256,
-	/// Block Number
-	pub number: u64,
-	/// Post-execution state trie root
-	pub state_root: H256,
-	/// Merkle root of block's extrinsics
-	pub extrinsics_root: H256,
-	/// Digest items
-	pub digest: Digest,
-}
-
-impl traits::Header for Header {
-	type Number = u64;
-	type Hashing = BlakeTwo256;
-	type Hash = H256;
-
-	fn number(&self) -> &Self::Number { &self.number }
-	fn set_number(&mut self, num: Self::Number) { self.number = num }
-
-	fn extrinsics_root(&self) -> &Self::Hash { &self.extrinsics_root }
-	fn set_extrinsics_root(&mut self, root: Self::Hash) { self.extrinsics_root = root }
-
-	fn state_root(&self) -> &Self::Hash { &self.state_root }
-	fn set_state_root(&mut self, root: Self::Hash) { self.state_root = root }
-
-	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
-	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
-
-	fn digest(&self) -> &Digest { &self.digest }
-	fn digest_mut(&mut self) -> &mut Digest { &mut self.digest }
-
-	fn new(
-		number: Self::Number,
-		extrinsics_root: Self::Hash,
-		state_root: Self::Hash,
-		parent_hash: Self::Hash,
-		digest: Digest,
-	) -> Self {
-		Header {
-			number,
-			extrinsics_root,
-			state_root,
-			parent_hash,
-			digest,
-		}
-	}
-}
+pub type Header = generic::Header<u64, BlakeTwo256>;
 
 impl Header {
 	/// A new header with the given number and default hash for all other fields.
 	pub fn new_from_number(number: <Self as traits::Header>::Number) -> Self {
 		Self {
 			number,
-			..Default::default()
+			extrinsics_root: Default::default(),
+			state_root: Default::default(),
+			parent_hash: Default::default(),
+			digest: Default::default(),
 		}
-	}
-}
-
-impl<'a> Deserialize<'a> for Header {
-	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
-		let r = <Vec<u8>>::deserialize(de)?;
-		Decode::decode(&mut &r[..])
-			.map_err(|e| DeError::custom(format!("Invalid value passed into decode: {}", e.what())))
 	}
 }
 
@@ -381,7 +326,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
-	) -> ApplyExtrinsicResult {
+	) -> ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>> {
 		let maybe_who = if let Some((who, extra)) = self.signature {
 			Extra::pre_dispatch(extra, &who, &self.call, info, len)?;
 			Some(who)
@@ -390,6 +335,6 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 			None
 		};
 
-		Ok(self.call.dispatch(maybe_who.into()).map(|_| ()).map_err(|e| e.error))
+		Ok(self.call.dispatch(maybe_who.into()))
 	}
 }
