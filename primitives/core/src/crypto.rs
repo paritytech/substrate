@@ -328,7 +328,13 @@ macro_rules! ss58_address_format {
 		#[cfg(feature = "std")]
 		impl std::fmt::Display for Ss58AddressFormat {
 			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-				write!(f, "{:?}", self)
+				match self {
+					$(
+						Ss58AddressFormat::$identifier => write!(f, "{}", $name),
+					)*
+					Ss58AddressFormat::Custom(x) => write!(f, "{}", x),
+				}
+
 			}
 		}
 
@@ -419,10 +425,7 @@ macro_rules! ss58_address_format {
 		#[cfg(feature = "std")]
 		impl From<Ss58AddressFormat> for String {
 			fn from(x: Ss58AddressFormat) -> String {
-				match x {
-					$(Ss58AddressFormat::$identifier => $name.into()),*,
-					Ss58AddressFormat::Custom(x) => x.to_string(),
-				}
+				x.to_string()
 			}
 		}
 	)
