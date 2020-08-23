@@ -928,7 +928,7 @@ decl_module! {
 						ensure!(maybe_curator.map_or(true, |c| c == *curator), BadOrigin);
 						let imbalance = T::Currency::slash_reserved(curator, bounty.curator_deposit).0;
 						T::OnSlash::on_unbalanced(imbalance);
-						bounty.curator_deposit = 0.into();
+						bounty.curator_deposit = Zero::zero();
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				};
