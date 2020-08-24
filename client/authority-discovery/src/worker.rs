@@ -243,9 +243,10 @@ where
 						.into_iter()
 						.map(move |a| {
 							if a.iter().any(|p| matches!(p, multiaddr::Protocol::P2p(_))) {
-								return a;
+								a
+							} else {
+								a.with(multiaddr::Protocol::P2p(peer_id.clone()))
 							}
-							a.with(multiaddr::Protocol::P2p(peer_id.clone()))
 						}),
 				)
 			}
