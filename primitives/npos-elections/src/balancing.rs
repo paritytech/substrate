@@ -59,7 +59,7 @@ pub fn balance<AccountId: IdentifierT>(
 ) -> usize {
 	if iterations == 0 { return 0; }
 
-	let mut iter = 0 ;
+	let mut iter = 0;
 	loop {
 		let mut max_diff = 0;
 		for voter in voters.iter_mut() {
