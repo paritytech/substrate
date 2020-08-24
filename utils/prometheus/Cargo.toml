@@ -1,7 +1,7 @@
 [package]
 description = "Endpoint to expose Prometheus metrics"
 name = "substrate-prometheus-endpoint"
-version = "0.8.0-rc5"
+version = "0.8.0-rc6"
 license = "Apache-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -13,7 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 log = "0.4.8"
-prometheus = "0.8"
+prometheus = { version = "0.9", default-features = false }
 futures-util = { version = "0.3.1", default-features = false, features = ["io"] }
 derive_more = "0.99"
 

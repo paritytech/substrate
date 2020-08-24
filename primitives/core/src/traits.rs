@@ -352,26 +352,21 @@ impl CallInWasmExt {
 	}
 }
 
-/// Something that can spawn tasks and also can be cloned.
-pub trait CloneableSpawn: futures::task::Spawn + Send + Sync {
-	/// Clone as heap-allocated handle.
-	fn clone(&self) -> Box<dyn CloneableSpawn>;
-}
-
 sp_externalities::decl_extension! {
 	/// Task executor extension.
-	pub struct TaskExecutorExt(Box<dyn CloneableSpawn>);
+	pub struct TaskExecutorExt(Box<dyn SpawnNamed>);
 }
 
 impl TaskExecutorExt {
 	/// New instance of task executor extension.
-	pub fn new(spawn_handle: Box<dyn CloneableSpawn>) -> Self {
-		Self(spawn_handle)
+	pub fn new(spawn_handle: impl SpawnNamed + Send + 'static) -> Self {
+		Self(Box::new(spawn_handle))
 	}
 }
 
-/// Something that can spawn futures (blocking and non-blocking) with am assigned name.
-pub trait SpawnNamed {
+/// Something that can spawn futures (blocking and non-blocking) with an assigned name.
+#[dyn_clonable::clonable]
+pub trait SpawnNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
@@ -380,4 +375,14 @@ pub trait SpawnNamed {
 	///
 	/// The given `name` is used to identify the future in tracing.
 	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+}
+
+impl SpawnNamed for Box<dyn SpawnNamed> {
+	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		(**self).spawn_blocking(name, future)
+	}
+
+	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		(**self).spawn(name, future)
+	}
 }

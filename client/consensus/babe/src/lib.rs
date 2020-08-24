@@ -100,12 +100,14 @@ use sp_consensus::{
 };
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
-use sp_consensus::import_queue::{Verifier, BasicQueue, CacheKeyId};
+use sp_consensus::import_queue::{Verifier, BasicQueue, DefaultImportQueue, CacheKeyId};
 use sc_client_api::{
 	backend::AuxStore,
 	BlockchainEvents, ProvideUncles,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
+use futures::channel::mpsc::{channel, Sender, Receiver};
+use retain_mut::RetainMut;
 
 use futures::prelude::*;
 use log::{debug, info, log, trace, warn};
@@ -370,7 +372,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	babe_link,
 	can_author_with,
 }: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
-	impl futures::Future<Output=()>,
+	BabeWorker<B>,
 	sp_consensus::Error,
 > where
 	B: BlockT,
@@ -378,16 +380,18 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync + 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
-	E: Environment<B, Error = Error> + Send + Sync,
+	E: Environment<B, Error = Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send
 		+ Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
-	SO: SyncOracle + Send + Sync + Clone,
-	CAW: CanAuthorWith<B> + Send,
+	SO: SyncOracle + Send + Sync + Clone + 'static,
+	CAW: CanAuthorWith<B> + Send + 'static,
 {
 	let config = babe_link.config;
-	let worker = BabeWorker {
+	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
+
+	let worker = BabeSlotWorker {
 		client: client.clone(),
 		block_import: Arc::new(Mutex::new(block_import)),
 		env,
@@ -395,6 +399,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		force_authoring,
 		keystore,
 		epoch_changes: babe_link.epoch_changes.clone(),
+		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: config.clone(),
 	};
 
@@ -406,7 +411,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	)?;
 
 	info!(target: "babe", "👶 Starting BABE Authorship worker");
-	Ok(sc_consensus_slots::start_slot_worker(
+	let inner = sc_consensus_slots::start_slot_worker(
 		config.0,
 		select_chain,
 		worker,
@@ -414,10 +419,49 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		inherent_data_providers,
 		babe_link.time_source,
 		can_author_with,
-	))
+	);
+	Ok(BabeWorker {
+		inner: Box::pin(inner),
+		slot_notification_sinks,
+	})
 }
 
-struct BabeWorker<B: BlockT, C, E, I, SO> {
+/// Worker for Babe which implements `Future<Output=()>`. This must be polled.
+#[must_use]
+pub struct BabeWorker<B: BlockT> {
+	inner: Pin<Box<dyn futures::Future<Output=()> + Send + 'static>>,
+	slot_notification_sinks: Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
+}
+
+impl<B: BlockT> BabeWorker<B> {
+	/// Return an event stream of notifications for when new slot happens, and the corresponding
+	/// epoch descriptor.
+	pub fn slot_notification_stream(
+		&self
+	) -> Receiver<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)> {
+		const CHANNEL_BUFFER_SIZE: usize = 1024;
+
+		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
+		self.slot_notification_sinks.lock().push(sink);
+		stream
+	}
+}
+
+impl<B: BlockT> futures::Future for BabeWorker<B> {
+	type Output = ();
+
+	fn poll(
+		mut self: Pin<&mut Self>,
+		cx: &mut futures::task::Context
+	) -> futures::task::Poll<Self::Output> {
+		self.inner.as_mut().poll(cx)
+	}
+}
+
+/// Slot notification sinks.
+type SlotNotificationSinks<B> = Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>>;
+
+struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
@@ -425,10 +469,11 @@ struct BabeWorker<B: BlockT, C, E, I, SO> {
 	force_authoring: bool,
 	keystore: KeyStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
+	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
 }
 
-impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
+impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> +
 		ProvideCache<B> +
@@ -500,6 +545,28 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		}
 
 		s
+	}
+
+	fn notify_slot(
+		&self,
+		_parent_header: &B::Header,
+		slot_number: SlotNumber,
+		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+	) {
+		self.slot_notification_sinks.lock()
+			.retain_mut(|sink| {
+				match sink.try_send((slot_number, epoch_descriptor.clone())) {
+					Ok(()) => true,
+					Err(e) => {
+						if e.is_full() {
+							warn!(target: "babe", "Trying to notify a slot but the channel is full");
+							true
+						} else {
+							false
+						}
+					},
+				}
+			});
 	}
 
 	fn pre_digest_data(
@@ -599,7 +666,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	}
 }
 
-impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
+impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> +
 		ProvideCache<B> +
@@ -720,22 +787,24 @@ impl<Block: BlockT> BabeLink<Block> {
 }
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<Block: BlockT, Client, SelectChain> {
+pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW> {
 	client: Arc<Client>,
 	select_chain: SelectChain,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	config: Config,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	time_source: TimeSource,
+	can_author_with: CAW,
 }
 
-impl<Block, Client, SelectChain> BabeVerifier<Block, Client, SelectChain>
+impl<Block, Client, SelectChain, CAW> BabeVerifier<Block, Client, SelectChain, CAW>
 where
 	Block: BlockT,
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
 	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
 		+ BabeApi<Block, Error = sp_blockchain::Error>,
 	SelectChain: sp_consensus::SelectChain<Block>,
+	CAW: CanAuthorWith<Block>,
 {
 	fn check_inherents(
 		&self,
@@ -743,6 +812,16 @@ where
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
 	) -> Result<(), Error<Block>> {
+		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
+			debug!(
+				target: "babe",
+				"Skipping `check_inherents` as authoring version is not compatible: {}",
+				e,
+			);
+
+			return Ok(())
+		}
+
 		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
 			block,
@@ -841,13 +920,15 @@ where
 	}
 }
 
-impl<Block, Client, SelectChain> Verifier<Block> for BabeVerifier<Block, Client, SelectChain>
+impl<Block, Client, SelectChain, CAW> Verifier<Block>
+	for BabeVerifier<Block, Client, SelectChain, CAW>
 where
 	Block: BlockT,
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + AuxStore + ProvideCache<Block>,
 	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error> + BabeApi<Block, Error = sp_blockchain::Error>,
 	SelectChain: sp_consensus::SelectChain<Block>,
+	CAW: CanAuthorWith<Block> + Send + Sync,
 {
 	fn verify(
 		&mut self,
@@ -913,13 +994,15 @@ where
 				// the header is valid but let's check if there was something else already
 				// proposed at the same slot by the given author. if there was, we will
 				// report the equivocation to the runtime.
-				self.check_and_report_equivocation(
+				if let Err(err) = self.check_and_report_equivocation(
 					slot_now,
 					slot_number,
 					&header,
 					&verified_info.author,
 					&origin,
-				)?;
+				) {
+					warn!(target: "babe", "Error checking/reporting BABE equivocation: {:?}", err);
+				}
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
@@ -966,9 +1049,6 @@ where
 		}
 	}
 }
-
-/// The BABE import queue type.
-pub type BabeImportQueue<B, Client> = BasicQueue<B, sp_api::TransactionFor<Client, B>>;
 
 /// Register the babe inherent data provider, if not registered already.
 fn register_babe_inherent_data_provider(
@@ -1358,7 +1438,7 @@ pub fn block_import<Client, Block: BlockT, I>(
 ///
 /// The block import object provided must be the `BabeBlockImport` or a wrapper
 /// of it, otherwise crucial import logic will be omitted.
-pub fn import_queue<Block: BlockT, Client, SelectChain, Inner>(
+pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	babe_link: BabeLink<Block>,
 	block_import: Inner,
 	justification_import: Option<BoxJustificationImport<Block>>,
@@ -1368,13 +1448,15 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner>(
 	inherent_data_providers: InherentDataProviders,
 	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
-) -> ClientResult<BabeImportQueue<Block, Client>> where
+	can_author_with: CAW,
+) -> ClientResult<DefaultImportQueue<Block, Client>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
 	Client: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
+	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
 
@@ -1385,6 +1467,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner>(
 		config: babe_link.config,
 		epoch_changes: babe_link.epoch_changes,
 		time_source: babe_link.time_source,
+		can_author_with,
 	};
 
 	Ok(BasicQueue::new(

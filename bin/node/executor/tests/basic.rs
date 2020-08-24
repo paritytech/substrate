@@ -312,6 +312,9 @@ fn full_native_block_import_works() {
 	let mut alice_last_known_balance: Balance = Default::default();
 	let mut fees = t.execute_with(|| transfer_fee(&xt()));
 
+	let transfer_weight = default_transfer_call().get_dispatch_info().weight;
+	let timestamp_weight = pallet_timestamp::Call::set::<Runtime>(Default::default()).get_dispatch_info().weight;
+
 	executor_call::<NeverNativeValue, fn() -> _>(
 		&mut t,
 		"Core_execute_block",
@@ -327,9 +330,8 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				// timestamp set call with weight 8_000_000 + 2 read + 1 write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 8_000_000 + 2 * 25_000_000 + 1 * 100_000_000, class: DispatchClass::Mandatory, ..Default::default() }
+					DispatchInfo { weight: timestamp_weight, class: DispatchClass::Mandatory, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -349,9 +351,8 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				// Balance Transfer 70_000_000 + 1 Read + 1 Write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 70_000_000 + 25_000_000 + 100_000_000, ..Default::default() }
+					DispatchInfo { weight: transfer_weight, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -381,9 +382,8 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				// timestamp set call with weight 8_000_000 + 2 read + 1 write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 8_000_000 + 2 * 25_000_000 + 1 * 100_000_000, class: DispatchClass::Mandatory, ..Default::default() }
+					DispatchInfo { weight: timestamp_weight, class: DispatchClass::Mandatory, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -405,9 +405,8 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				// Balance Transfer 70_000_000 + 1 Read + 1 Write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 70_000_000 + 25_000_000 + 100_000_000, ..Default::default() }
+					DispatchInfo { weight: transfer_weight, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -429,9 +428,8 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				// Balance Transfer 70_000_000 + 1 Read + 1 Write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 70_000_000 + 25_000_000 + 100_000_000, ..Default::default() }
+					DispatchInfo { weight: transfer_weight, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -487,7 +485,7 @@ fn full_wasm_block_import_works() {
 
 const CODE_TRANSFER: &str = r#"
 (module
-;; ext_call(
+;; seal_call(
 ;;    callee_ptr: u32,
 ;;    callee_len: u32,
 ;;    gas: u64,
@@ -498,15 +496,15 @@ const CODE_TRANSFER: &str = r#"
 ;;    output_ptr: u32,
 ;;    output_len_ptr: u32
 ;; ) -> u32
-(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
-(import "env" "ext_input" (func $ext_input (param i32 i32)))
+(import "seal0" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 (import "env" "memory" (memory 1 1))
 (func (export "deploy")
 )
 (func (export "call")
 	(block $fail
 		;; Load input data to contract memory
-		(call $ext_input
+		(call $seal_input
 			(i32.const 0)
 			(i32.const 52)
 		)
@@ -545,7 +543,7 @@ const CODE_TRANSFER: &str = r#"
 		)
 
 		(drop
-			(call $ext_call
+			(call $seal_call
 				(i32.const 4)  ;; Pointer to "callee" address.
 				(i32.const 32)  ;; Length of "callee" address.
 				(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.
@@ -591,6 +589,8 @@ fn deploying_wasm_contract_should_work() {
 		&charlie(),
 	);
 
+	let subsistence = pallet_contracts::Config::<Runtime>::subsistence_threshold_uncached();
+
 	let b = construct_block(
 		&mut new_test_ext(compact_code_unwrap(), false),
 		1,
@@ -610,7 +610,7 @@ fn deploying_wasm_contract_should_work() {
 				signed: Some((charlie(), signed_extra(1, 0))),
 				function: Call::Contracts(
 					pallet_contracts::Call::instantiate::<Runtime>(
-						1 * DOLLARS,
+						1 * DOLLARS + subsistence,
 						500_000_000,
 						transfer_ch,
 						Vec::new()

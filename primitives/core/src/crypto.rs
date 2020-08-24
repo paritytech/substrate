@@ -265,7 +265,6 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	}
 
 	/// Return the ss58-check string for this key.
-
 	#[cfg(feature = "std")]
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
 		let mut v = vec![version.into()];
@@ -274,9 +273,11 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		v.extend(&r.as_bytes()[0..2]);
 		v.to_base58()
 	}
+
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
 	fn to_ss58check(&self) -> String { self.to_ss58check_with_version(*DEFAULT_VERSION.lock()) }
+
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
 	#[cfg(feature = "std")]
@@ -317,8 +318,7 @@ lazy_static::lazy_static! {
 macro_rules! ss58_address_format {
 	( $( $identifier:tt => ($number:expr, $name:expr, $desc:tt) )* ) => (
 		/// A known address (sub)format/network ID for SS58.
-		#[derive(Copy, Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+		#[derive(Copy, Clone, PartialEq, Eq, crate::RuntimeDebug)]
 		pub enum Ss58AddressFormat {
 			$(#[doc = $desc] $identifier),*,
 			/// Use a manually provided numeric value.
@@ -328,7 +328,13 @@ macro_rules! ss58_address_format {
 		#[cfg(feature = "std")]
 		impl std::fmt::Display for Ss58AddressFormat {
 			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-				write!(f, "{:?}", self)
+				match self {
+					$(
+						Ss58AddressFormat::$identifier => write!(f, "{}", $name),
+					)*
+					Ss58AddressFormat::Custom(x) => write!(f, "{}", x),
+				}
+
 			}
 		}
 
@@ -337,6 +343,12 @@ macro_rules! ss58_address_format {
 		];
 
 		impl Ss58AddressFormat {
+			/// names of all address formats
+			pub fn all_names() -> &'static [&'static str] {
+				&[
+					$($name),*,
+				]
+			}
 			/// All known address formats.
 			pub fn all() -> &'static [Ss58AddressFormat] {
 				&ALL_SS58_ADDRESS_FORMATS
@@ -366,19 +378,40 @@ macro_rules! ss58_address_format {
 			fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
 				match x {
 					$($number => Ok(Ss58AddressFormat::$identifier)),*,
-					_ => Err(()),
+					_ => {
+						#[cfg(feature = "std")]
+						match Ss58AddressFormat::default() {
+							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(x)),
+							_ => Err(()),
+						}
+
+						#[cfg(not(feature = "std"))]
+						Err(())
+					},
 				}
 			}
 		}
 
-		impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
-			type Error = ();
+		/// Error encountered while parsing `Ss58AddressFormat` from &'_ str
+		/// unit struct for now.
+		#[derive(Copy, Clone, PartialEq, Eq, crate::RuntimeDebug)]
+		pub struct ParseError;
 
-			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, ()> {
+		impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
+			type Error = ParseError;
+
+			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, Self::Error> {
 				match x {
 					$($name => Ok(Ss58AddressFormat::$identifier)),*,
-					a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ()),
+					a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ParseError),
 				}
+			}
+		}
+
+		#[cfg(feature = "std")]
+		impl std::fmt::Display for ParseError {
+			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+				write!(f, "failed to parse network value as u8")
 			}
 		}
 
@@ -392,10 +425,7 @@ macro_rules! ss58_address_format {
 		#[cfg(feature = "std")]
 		impl From<Ss58AddressFormat> for String {
 			fn from(x: Ss58AddressFormat) -> String {
-				match x {
-					$(Ss58AddressFormat::$identifier => $name.into()),*,
-					Ss58AddressFormat::Custom(x) => x.to_string(),
-				}
+				x.to_string()
 			}
 		}
 	)
@@ -437,6 +467,12 @@ ss58_address_format!(
 		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
 	StafiAccount =>
 		(20, "stafi", "Stafi mainnet, standard account (*25519).")
+	ShiftNrg =>
+		(23, "shift", "ShiftNrg mainnet, standard account (*25519).")
+	SubsocialAccount =>
+		(28, "subsocial", "Subsocial network, standard account (*25519).")
+	PhalaAccount =>
+		(30, "phala", "Phala Network, standard account (*25519).")
 	RobonomicsAccount =>
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>

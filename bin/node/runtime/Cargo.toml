@@ -1,6 +1,6 @@
 [package]
 name = "node-runtime"
-version = "2.0.0-rc5"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
@@ -14,77 +14,77 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 
 # third-party dependencies
-codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
 integer-sqrt = { version = "0.1.2" }
 serde = { version = "1.0.102", optional = true }
 static_assertions = "1.1.0"
-hex-literal = { version = "0.2.1", optional = true }
+hex-literal = { version = "0.3.1", optional = true }
 
 # primitives
-sp-authority-discovery = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/authority-discovery" }
-sp-consensus-babe = { version = "0.8.0-rc5", default-features = false, path = "../../../primitives/consensus/babe" }
-sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "2.0.0-rc5"}
-sp-inherents = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/inherents" }
-node-primitives = { version = "2.0.0-rc5", default-features = false, path = "../primitives" }
-sp-offchain = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/offchain" }
-sp-core = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/core" }
-sp-std = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/std" }
-sp-api = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/api" }
-sp-runtime = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/runtime" }
-sp-staking = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/staking" }
-sp-keyring = { version = "2.0.0-rc5", optional = true, path = "../../../primitives/keyring" }
-sp-session = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/session" }
-sp-transaction-pool = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/transaction-pool" }
-sp-version = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/version" }
+sp-authority-discovery = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/authority-discovery" }
+sp-consensus-babe = { version = "0.8.0-rc6", default-features = false, path = "../../../primitives/consensus/babe" }
+sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "2.0.0-rc6"}
+sp-inherents = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/inherents" }
+node-primitives = { version = "2.0.0-rc6", default-features = false, path = "../primitives" }
+sp-offchain = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/offchain" }
+sp-core = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/core" }
+sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/std" }
+sp-api = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/api" }
+sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/runtime" }
+sp-staking = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/staking" }
+sp-keyring = { version = "2.0.0-rc6", optional = true, path = "../../../primitives/keyring" }
+sp-session = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/session" }
+sp-transaction-pool = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/transaction-pool" }
+sp-version = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/version" }
 
 # frame dependencies
-frame-executive = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/executive" }
-frame-benchmarking = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/benchmarking", optional = true }
-frame-support = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/support" }
-frame-system = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/system" }
-frame-system-benchmarking = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
-frame-system-rpc-runtime-api = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
-pallet-authority-discovery = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/authority-discovery" }
-pallet-authorship = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/authorship" }
-pallet-babe = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/babe" }
-pallet-balances = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/balances" }
-pallet-collective = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/collective" }
-pallet-contracts = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/contracts" }
-pallet-contracts-primitives = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/contracts/common/" }
-pallet-contracts-rpc-runtime-api = { version = "0.8.0-rc5", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
-pallet-democracy = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/democracy" }
-pallet-elections-phragmen = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/elections-phragmen" }
-pallet-finality-tracker = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/finality-tracker" }
-pallet-grandpa = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/grandpa" }
-pallet-im-online = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/im-online" }
-pallet-indices = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/indices" }
-pallet-identity = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/identity" }
-pallet-membership = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/membership" }
-pallet-multisig = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/multisig" }
-pallet-offences = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/offences" }
-pallet-offences-benchmarking = { version = "2.0.0-rc5", path = "../../../frame/offences/benchmarking", default-features = false, optional = true }
-pallet-proxy = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/proxy" }
-pallet-randomness-collective-flip = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/randomness-collective-flip" }
-pallet-recovery = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/recovery" }
-pallet-session = { version = "2.0.0-rc5", features = ["historical"], path = "../../../frame/session", default-features = false }
-pallet-session-benchmarking = { version = "2.0.0-rc5", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
-pallet-staking = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/staking" }
-pallet-staking-reward-curve = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/staking/reward-curve" }
-pallet-scheduler = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/scheduler" }
-pallet-society = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/society" }
-pallet-sudo = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/sudo" }
-pallet-timestamp = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/timestamp" }
-pallet-treasury = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/treasury" }
-pallet-utility = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/utility" }
-pallet-transaction-payment = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/transaction-payment" }
-pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
-pallet-vesting = { version = "2.0.0-rc5", default-features = false, path = "../../../frame/vesting" }
+frame-executive = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/executive" }
+frame-benchmarking = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/benchmarking", optional = true }
+frame-support = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/support" }
+frame-system = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/system" }
+frame-system-benchmarking = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
+frame-system-rpc-runtime-api = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
+pallet-authority-discovery = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/authority-discovery" }
+pallet-authorship = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/authorship" }
+pallet-babe = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/babe" }
+pallet-balances = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/balances" }
+pallet-collective = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/collective" }
+pallet-contracts = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/contracts" }
+pallet-contracts-primitives = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/contracts/common/" }
+pallet-contracts-rpc-runtime-api = { version = "0.8.0-rc6", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
+pallet-democracy = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/democracy" }
+pallet-elections-phragmen = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/elections-phragmen" }
+pallet-finality-tracker = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/finality-tracker" }
+pallet-grandpa = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/grandpa" }
+pallet-im-online = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/im-online" }
+pallet-indices = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/indices" }
+pallet-identity = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/identity" }
+pallet-membership = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/membership" }
+pallet-multisig = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/multisig" }
+pallet-offences = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/offences" }
+pallet-offences-benchmarking = { version = "2.0.0-rc6", path = "../../../frame/offences/benchmarking", default-features = false, optional = true }
+pallet-proxy = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/proxy" }
+pallet-randomness-collective-flip = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/randomness-collective-flip" }
+pallet-recovery = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/recovery" }
+pallet-session = { version = "2.0.0-rc6", features = ["historical"], path = "../../../frame/session", default-features = false }
+pallet-session-benchmarking = { version = "2.0.0-rc6", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
+pallet-staking = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/staking" }
+pallet-staking-reward-curve = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/staking/reward-curve" }
+pallet-scheduler = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/scheduler" }
+pallet-society = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/society" }
+pallet-sudo = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/sudo" }
+pallet-timestamp = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/timestamp" }
+pallet-treasury = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/treasury" }
+pallet-utility = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/utility" }
+pallet-transaction-payment = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/transaction-payment" }
+pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
+pallet-vesting = { version = "2.0.0-rc6", default-features = false, path = "../../../frame/vesting" }
 
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
 
 [dev-dependencies]
-sp-io = { version = "2.0.0-rc5", path = "../../../primitives/io" }
+sp-io = { version = "2.0.0-rc6", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]
@@ -152,6 +152,7 @@ runtime-benchmarks = [
 	"pallet-babe/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",
+	"pallet-contracts/runtime-benchmarks",
 	"pallet-democracy/runtime-benchmarks",
 	"pallet-elections-phragmen/runtime-benchmarks",
 	"pallet-grandpa/runtime-benchmarks",

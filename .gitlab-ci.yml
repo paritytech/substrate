@@ -219,8 +219,6 @@ cargo-check-subkey:
   stage:                           test
   <<:                              *docker-env
   <<:                              *docker-env-only
-  except:
-    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
     - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
@@ -229,6 +227,7 @@ cargo-check-subkey:
 test-deterministic-wasm:
   stage:                           test
   <<:                              *docker-env
+  <<:                              *docker-env-only
   variables:
     <<:                            *default-vars
   except:
@@ -264,6 +263,7 @@ test-linux-stable:                 &test-linux
   script:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
+    - WASM_BUILD_NO_COLOR=1 SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - sccache -s
 
 unleash-check:
@@ -301,8 +301,6 @@ test-frame-examples-compile-to-wasm:
 test-linux-stable-int:
   <<:                              *test-linux
   except:
-    refs:
-      - /^v[0-9]+\.[0-9]+.*$/      # i.e. v1.0, v2.1rc1
     variables:
       - $DEPLOY_TAG
   script:
@@ -326,8 +324,6 @@ check-web-wasm:
   stage:                           test
   <<:                              *docker-env
   <<:                              *docker-env-only
-  except:
-    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
     # WASM support is in progress. As more and more crates support WASM, we
     # should add entries here. See https://github.com/paritytech/substrate/issues/2416
@@ -452,6 +448,7 @@ build-linux-subkey:                &build-subkey
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
+  <<:                              *docker-env-only
   <<:                              *build-only
   needs:
     - job:                         cargo-check-subkey
@@ -731,7 +728,7 @@ deploy-kubernetes-alerting-rules:
     RULES:                         .maintain/monitoring/alerting-rules/alerting-rules.yaml
   script:
     - echo "deploying prometheus alerting rules"
-    - kubectl -n ${NAMESPACE} patch prometheusrule ${PROMETHEUSRULE} 
+    - kubectl -n ${NAMESPACE} patch prometheusrule ${PROMETHEUSRULE}
         --type=merge --patch "$(sed 's/^/  /;1s/^/spec:\n/' ${RULES})"
   only:
     refs:

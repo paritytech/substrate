@@ -1,6 +1,6 @@
 [package]
 name = "pallet-offences-benchmarking"
-version = "2.0.0-rc5"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -12,28 +12,27 @@ description = "FRAME offences pallet benchmarking"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false }
-frame-benchmarking = { version = "2.0.0-rc5", default-features = false, path = "../../benchmarking" }
-frame-support = { version = "2.0.0-rc5", default-features = false, path = "../../support" }
-frame-system = { version = "2.0.0-rc5", default-features = false, path = "../../system" }
-pallet-babe = { version = "2.0.0-rc5", default-features = false, path = "../../babe" }
-pallet-balances = { version = "2.0.0-rc5", default-features = false, path = "../../balances" }
-pallet-grandpa = { version = "2.0.0-rc5", default-features = false, path = "../../grandpa" }
-pallet-im-online = { version = "2.0.0-rc5", default-features = false, path = "../../im-online" }
-pallet-offences = { version = "2.0.0-rc5", default-features = false, features = ["runtime-benchmarks"], path = "../../offences" }
-pallet-session = { version = "2.0.0-rc5", default-features = false, path = "../../session" }
-pallet-staking = { version = "2.0.0-rc5", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
-sp-runtime = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/runtime" }
-sp-staking = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/staking" }
-sp-std = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/std" }
+codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false }
+frame-benchmarking = { version = "2.0.0-rc6", default-features = false, path = "../../benchmarking" }
+frame-support = { version = "2.0.0-rc6", default-features = false, path = "../../support" }
+frame-system = { version = "2.0.0-rc6", default-features = false, path = "../../system" }
+pallet-babe = { version = "2.0.0-rc6", default-features = false, path = "../../babe" }
+pallet-balances = { version = "2.0.0-rc6", default-features = false, path = "../../balances" }
+pallet-grandpa = { version = "2.0.0-rc6", default-features = false, path = "../../grandpa" }
+pallet-im-online = { version = "2.0.0-rc6", default-features = false, path = "../../im-online" }
+pallet-offences = { version = "2.0.0-rc6", default-features = false, features = ["runtime-benchmarks"], path = "../../offences" }
+pallet-session = { version = "2.0.0-rc6", default-features = false, path = "../../session" }
+pallet-staking = { version = "2.0.0-rc6", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
+sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/runtime" }
+sp-staking = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/staking" }
+sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.1", features = ["derive"] }
-pallet-staking-reward-curve = { version = "2.0.0-rc5", path = "../../staking/reward-curve" }
-pallet-timestamp = { version = "2.0.0-rc5", path = "../../timestamp" }
+pallet-staking-reward-curve = { version = "2.0.0-rc6", path = "../../staking/reward-curve" }
+pallet-timestamp = { version = "2.0.0-rc6", path = "../../timestamp" }
 serde = { version = "1.0.101" }
-sp-core = { version = "2.0.0-rc5", path = "../../../primitives/core" }
-sp-io = { version = "2.0.0-rc5", path = "../../../primitives/io" }
+sp-core = { version = "2.0.0-rc6", path = "../../../primitives/core" }
+sp-io = { version = "2.0.0-rc6", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]
@@ -51,4 +50,5 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"sp-std/std",
+	"codec/std",
 ]

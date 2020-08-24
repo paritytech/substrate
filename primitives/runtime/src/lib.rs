@@ -159,7 +159,7 @@ impl BuildStorage for () {
 	fn assimilate_storage(
 		&self,
 		_: &mut sp_core::storage::Storage,
-	)-> Result<(), String> {
+	) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `()`".into())
 	}
 }
@@ -871,7 +871,11 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Signature verification has not been called")]
 	fn batching_still_finishes_when_not_called_directly() {
-		let mut ext = sp_state_machine::BasicExternalities::with_tasks_executor();
+		let mut ext = sp_state_machine::BasicExternalities::default();
+		ext.register_extension(
+			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
+		);
+
 		ext.execute_with(|| {
 			let _batching = SignatureBatching::start();
 			sp_io::crypto::sr25519_verify(

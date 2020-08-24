@@ -60,8 +60,22 @@ pub use codec;
 #[doc(hidden)]
 pub use sp_arithmetic;
 
+/// Simple Extension trait to easily convert `None` from index closures to `Err`.
+///
+/// This is only generated and re-exported for the compact solution code to use.
+#[doc(hidden)]
+pub trait __OrInvalidIndex<T> {
+	fn or_invalid_index(self) -> Result<T, Error>;
+}
+
+impl<T> __OrInvalidIndex<T> for Option<T> {
+	fn or_invalid_index(self) -> Result<T, Error> {
+		self.ok_or(Error::CompactInvalidIndex)
+	}
+}
+
 // re-export the compact solution type.
-pub use sp_npos_elections_compact::generate_compact_solution_type;
+pub use sp_npos_elections_compact::generate_solution_type;
 
 /// A trait to limit the number of votes per voter. The generated compact type will implement this.
 pub trait VotingLimit {
@@ -749,7 +763,7 @@ fn do_balancing<AccountId>(
 		e.1 = 0;
 	});
 
-	elected_edges.sort_unstable_by_key(|e|
+	elected_edges.sort_by_key(|e|
 		if let Some(e) = support_map.get(&e.0) { e.total } else { Zero::zero() }
 	);
 

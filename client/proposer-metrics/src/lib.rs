@@ -41,8 +41,8 @@ impl MetricsLink {
 /// Authorship metrics.
 #[derive(Clone)]
 pub struct Metrics {
-    pub block_constructed: Histogram,
-    pub number_of_transactions: Gauge<U64>,
+	pub block_constructed: Histogram,
+	pub number_of_transactions: Gauge<U64>,
 }
 
 impl Metrics {
@@ -54,14 +54,14 @@ impl Metrics {
 					"Histogram of time taken to construct new block",
 				))?,
 				registry,
-            )?,
-            number_of_transactions: register(
-                Gauge::new(
-                    "proposer_number_of_transactions",
-                    "Number of transactions included in block",
-                )?,
-                registry,
-            )?,
+			)?,
+			number_of_transactions: register(
+				Gauge::new(
+					"proposer_number_of_transactions",
+					"Number of transactions included in block",
+				)?,
+				registry,
+			)?,
 		})
-    }
+	}
 }

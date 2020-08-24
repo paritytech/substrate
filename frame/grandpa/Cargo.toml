@@ -1,6 +1,6 @@
 [package]
 name = "pallet-grandpa"
-version = "2.0.0-rc5"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,31 +13,31 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
-sp-application-crypto = { version = "2.0.0-rc5", default-features = false, path = "../../primitives/application-crypto" }
-sp-core = { version = "2.0.0-rc5", default-features = false, path = "../../primitives/core" }
-sp-finality-grandpa = { version = "2.0.0-rc5", default-features = false, path = "../../primitives/finality-grandpa" }
-sp-session = { version = "2.0.0-rc5", default-features = false, path = "../../primitives/session" }
-sp-std = { version = "2.0.0-rc5", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "2.0.0-rc5", default-features = false, path = "../../primitives/runtime" }
-sp-staking = { version = "2.0.0-rc5", default-features = false, path = "../../primitives/staking" }
-frame-benchmarking = { version = "2.0.0-rc5", default-features = false, path = "../benchmarking", optional = true }
-frame-support = { version = "2.0.0-rc5", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0-rc5", default-features = false, path = "../system" }
-pallet-authorship = { version = "2.0.0-rc5", default-features = false, path = "../authorship" }
-pallet-session = { version = "2.0.0-rc5", default-features = false, path = "../session" }
-pallet-finality-tracker = { version = "2.0.0-rc5", default-features = false, path = "../finality-tracker" }
+codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
+sp-application-crypto = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/application-crypto" }
+sp-core = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/core" }
+sp-finality-grandpa = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/finality-grandpa" }
+sp-session = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/session" }
+sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/runtime" }
+sp-staking = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/staking" }
+frame-benchmarking = { version = "2.0.0-rc6", default-features = false, path = "../benchmarking", optional = true }
+frame-support = { version = "2.0.0-rc6", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-rc6", default-features = false, path = "../system" }
+pallet-authorship = { version = "2.0.0-rc6", default-features = false, path = "../authorship" }
+pallet-session = { version = "2.0.0-rc6", default-features = false, path = "../session" }
+pallet-finality-tracker = { version = "2.0.0-rc6", default-features = false, path = "../finality-tracker" }
 
 [dev-dependencies]
-frame-benchmarking = { version = "2.0.0-rc5", path = "../benchmarking" }
+frame-benchmarking = { version = "2.0.0-rc6", path = "../benchmarking" }
 grandpa = { package = "finality-grandpa", version = "0.12.3", features = ["derive-codec"] }
-sp-io = { version = "2.0.0-rc5", path = "../../primitives/io" }
-sp-keyring = { version = "2.0.0-rc5", path = "../../primitives/keyring" }
-pallet-balances = { version = "2.0.0-rc5", path = "../balances" }
-pallet-offences = { version = "2.0.0-rc5", path = "../offences" }
-pallet-staking = { version = "2.0.0-rc5", path = "../staking" }
-pallet-staking-reward-curve = { version = "2.0.0-rc5", path = "../staking/reward-curve" }
-pallet-timestamp = { version = "2.0.0-rc5", path = "../timestamp" }
+sp-io = { version = "2.0.0-rc6", path = "../../primitives/io" }
+sp-keyring = { version = "2.0.0-rc6", path = "../../primitives/keyring" }
+pallet-balances = { version = "2.0.0-rc6", path = "../balances" }
+pallet-offences = { version = "2.0.0-rc6", path = "../offences" }
+pallet-staking = { version = "2.0.0-rc6", path = "../staking" }
+pallet-staking-reward-curve = { version = "2.0.0-rc6", path = "../staking/reward-curve" }
+pallet-timestamp = { version = "2.0.0-rc6", path = "../timestamp" }
 
 [features]
 default = ["std"]

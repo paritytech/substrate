@@ -334,7 +334,7 @@ mod tests {
 
 		// Compare.
 		assert!(timestamp.unix_millis() > 0);
-		assert_eq!(timestamp.unix_millis(), d);
+		assert!(timestamp.unix_millis() >= d);
 	}
 
 	#[test]

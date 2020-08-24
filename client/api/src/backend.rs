@@ -19,7 +19,7 @@
 //! Substrate Client data backend
 
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use sp_core::ChangesTrieConfigurationRange;
 use sp_core::offchain::{OffchainStorage,storage::OffchainOverlayedChanges};
 use sp_runtime::{generic::BlockId, Justification, Storage};
@@ -418,7 +418,10 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	) -> sp_blockchain::Result<()>;
 
 	/// Commit block insertion.
-	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> sp_blockchain::Result<()>;
+	fn commit_operation(
+		&self,
+		transaction: Self::BlockImportOperation,
+	) -> sp_blockchain::Result<()>;
 
 	/// Finalize block with given Id.
 	///
@@ -449,16 +452,17 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State>;
 
-	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set
-	/// it will attempt to revert past any finalized block, this is unsafe and
-	/// can potentially leave the node in an inconsistent state.
+	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set it will attempt to
+	/// revert past any finalized block, this is unsafe and can potentially leave the node in an
+	/// inconsistent state.
 	///
-	/// Returns the number of blocks that were successfully reverted.
+	/// Returns the number of blocks that were successfully reverted and the list of finalized
+	/// blocks that has been reverted.
 	fn revert(
 		&self,
 		n: NumberFor<Block>,
 		revert_finalized: bool,
-	) -> sp_blockchain::Result<NumberFor<Block>>;
+	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<Block::Hash>)>;
 
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<
@@ -531,4 +535,22 @@ pub fn changes_tries_state_at_block<'a, Block: BlockT>(
 		Some(config) => Ok(Some(ChangesTrieState::new(config, config_range.zero.0, storage.storage()))),
 		None => Ok(None),
 	}
+}
+
+/// Provide CHT roots. These are stored on a light client and generated dynamically on a full
+/// client.
+pub trait ProvideChtRoots<Block: BlockT> {
+	/// Get headers CHT root for given block. Returns None if the block is not a part of any CHT.
+	fn header_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> sp_blockchain::Result<Option<Block::Hash>>;
+
+	/// Get changes trie CHT root for given block. Returns None if the block is not a part of any CHT.
+	fn changes_trie_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> sp_blockchain::Result<Option<Block::Hash>>;
 }
