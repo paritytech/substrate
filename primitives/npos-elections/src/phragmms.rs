@@ -231,6 +231,8 @@ mod tests {
 
 	#[test]
 	fn basic_election_manual_works() {
+		//! Manually run the internal steps of phragmms. In each round we select a new winner by
+		//! `max_score`, then apply this change by `apply_elected`, and finally do a `balance` round.
 		let candidates = vec![1, 2, 3];
 		let voters = vec![
 			(10, 10, vec![1, 2]),

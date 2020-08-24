@@ -232,7 +232,9 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 
 
 /// Light client blockchain storage.
-pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError> {
+pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block>
+	+ HeaderMetadata<Block, Error=ClientError> + ChtRootStorage<Block>
+{
 	/// Store new header. Should refuse to revert any finalized blocks.
 	///
 	/// Takes new authorities, the leaf state of the new block, and
@@ -254,6 +256,15 @@ pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetada
 	/// Get last finalized header.
 	fn last_finalized(&self) -> ClientResult<Block::Hash>;
 
+	/// Get storage cache.
+	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>>;
+
+	/// Get storage usage statistics.
+	fn usage_info(&self) -> Option<UsageInfo>;
+}
+
+/// Light client CHT root storage.
+pub trait ChtRootStorage<Block: BlockT> {
 	/// Get headers CHT root for given block. Returns None if the block is not pruned (not a part of any CHT).
 	fn header_cht_root(
 		&self,
@@ -267,12 +278,6 @@ pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetada
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
 	) -> ClientResult<Option<Block::Hash>>;
-
-	/// Get storage cache.
-	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>>;
-
-	/// Get storage usage statistics.
-	fn usage_info(&self) -> Option<UsageInfo>;
 }
 
 /// Remote header.

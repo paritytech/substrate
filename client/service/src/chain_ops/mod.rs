@@ -21,9 +21,11 @@ mod export_blocks;
 mod export_raw_state;
 mod import_blocks;
 mod revert_chain;
+mod build_spec;
 
 pub use check_block::*;
 pub use export_blocks::*;
 pub use export_raw_state::*;
 pub use import_blocks::*;
 pub use revert_chain::*;
+pub use build_spec::*;

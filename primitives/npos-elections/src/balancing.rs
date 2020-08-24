@@ -139,7 +139,7 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 		edge.weight = 0;
 	}
 
-	elected_edges.sort_unstable_by_key(|e| e.candidate.borrow().backed_stake);
+	elected_edges.sort_by_key(|e| e.candidate.borrow().backed_stake);
 
 	let mut cumulative_backed_stake = Zero::zero();
 	let mut last_index = elected_edges.len() - 1;

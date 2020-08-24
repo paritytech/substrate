@@ -90,7 +90,7 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing>(
 		.collect::<Vec<_>>();
 
 	// sort winners based on desirability.
-	winners.sort_unstable_by_key(|c_ptr| c_ptr.borrow().round);
+	winners.sort_by_key(|c_ptr| c_ptr.borrow().round);
 
 	let mut assignments = voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
 	let _ = assignments.iter_mut().map(|a| a.try_normalize()).collect::<Result<(), _>>()?;
