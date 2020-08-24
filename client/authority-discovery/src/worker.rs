@@ -67,6 +67,9 @@ const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
 
+/// Maximum number of addresses cached per authority. Additional addresses are discarded.
+const MAX_ADDRESSES_PER_AUTHORITY: usize = 10;
+
 /// Role an authority discovery module can run as.
 pub enum Role {
 	/// Actual authority as well as a reference to its key store.
@@ -496,6 +499,7 @@ where
 
 				false // `protocol` is not a [`Protocol::P2p`], let's keep looking.
 			}))
+			.take(MAX_ADDRESSES_PER_AUTHORITY)
 			.collect();
 
 		if !remote_addresses.is_empty() {
