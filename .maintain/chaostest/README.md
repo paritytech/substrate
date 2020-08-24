@@ -53,7 +53,7 @@ USAGE
 Spawn a testnet based on your local k8s configuration. Could be either a dev node, a two node alicebob chain or a customized chain with various validators/fullnodes.
 
 Namespace is essential here (default to ```substrate-ci```)
-Recommand to set your own namespace in environment BEFORE run ```chaostest spawn``` to not conflict with others:
+It is recommended to set your own namespace as an environment variable BEFORE running ```chaostest spawn``` to not conflict with others:
 ```
 export NAMESPACE=YOUR_OWN_NAMESPACE (ex: harry-chaos-test)
 ```
