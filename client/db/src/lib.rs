@@ -405,6 +405,14 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			meta.finalized_hash = hash;
 		}
 	}
+
+	// Get block changes trie root, if available.
+	fn changes_trie_root(&self, block: BlockId<Block>) -> ClientResult<Option<Block::Hash>> {
+		self.header(block)
+			.map(|header| header.and_then(|header|
+				header.digest().log(DigestItem::as_changes_trie_root)
+					.cloned()))
+	}
 }
 
 impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
@@ -572,12 +580,7 @@ impl<Block: BlockT> ProvideChtRoots<Block> for BlockchainDb<Block> {
 		cht::compute_root::<Block::Header, HashFor<Block>, _>(
 			cht::size(),
 			cht_number,
-			cht_range
-				.map(|num| self.header(BlockId::Number(num))
-					.map(|header| header.and_then(|header| {
-						header.digest().log(DigestItem::as_changes_trie_root).cloned()
-					}))
-				)
+			cht_range.map(|num| self.changes_trie_root(BlockId::Number(num))),
 		).map(Some)
 	}
 }
