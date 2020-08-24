@@ -41,7 +41,7 @@ AddCommand.description = 'Add nodes to a spawned testnet'
 
 AddCommand.flags = {
   port: flags.integer({ char: 'p', description: 'port to deploy on' }),
-  name: flags.string({ description: 'node name to specify (also this would be the seed of the node)' }),
+  name: flags.string({ description: 'node name to specify (also this is used as the seed for the node's key)' }),
   number: flags.string({ char: 'n', description: 'number of nodes to deploy (default to 1 if not specified or a node name is given)' }),
   chainspec: flags.string({ char: 'c', description: 'specify a chainspec to use to deploy' })
 }
