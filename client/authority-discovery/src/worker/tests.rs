@@ -678,7 +678,7 @@ fn limit_number_of_addresses_added_to_cache_per_authority() {
 
 	worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
 	assert_eq!(
-		10,
+		MAX_ADDRESSES_PER_AUTHORITY,
 		worker.addr_cache.get_addresses_by_authority_id(&remote_public.into()).unwrap().len(),
 	);
 }
