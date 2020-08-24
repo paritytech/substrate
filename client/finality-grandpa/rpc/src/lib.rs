@@ -35,8 +35,8 @@ mod error;
 mod notification;
 mod report;
 
-use sc_finality_grandpa::{RpcFinalityProofProvider, GrandpaJustificationStream};
-use sp_runtime::traits::Block as BlockT;
+use sc_finality_grandpa::{FinalityProofProvider, GrandpaJustificationStream};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 use notification::JustificationNotification;
@@ -128,7 +128,7 @@ where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
 	Block: BlockT,
-	ProofProvider: RpcFinalityProofProvider<Block> + 'static,
+	ProofProvider: RpcFinalityProofProvider<Block> + Send + Sync + 'static,
 {
 	type Metadata = sc_rpc::Metadata;
 
@@ -174,7 +174,7 @@ where
 			.unwrap_or_else(|| self.authority_set.get().0);
 		let result = self
 			.finality_proof_provider
-			.prove_finality(last_finalized, authorities_set_id);
+			.rpc_prove_finality(last_finalized, authorities_set_id);
 		let future = async move { result }.boxed();
 		Box::new(
 			future
@@ -185,6 +185,32 @@ where
 				.map_err(jsonrpc_core::Error::from)
 				.compat()
 		)
+	}
+}
+
+/// Local trait mainly to allow mocking in tests.
+pub trait RpcFinalityProofProvider<Block: BlockT> {
+	/// Return finality proofs for the given authorities set id, if it is provided, otherwise the
+	/// current one will be used.
+	fn rpc_prove_finality(
+		&self,
+		last_finalized: Block::Hash,
+		authorities_set_id: u64,
+	) -> Result<Option<Vec<u8>>, sp_blockchain::Error>;
+}
+
+impl<B, Block> RpcFinalityProofProvider<Block> for FinalityProofProvider<B, Block>
+where
+	Block: BlockT,
+	NumberFor<Block>: finality_grandpa::BlockNumberOps,
+	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
+{
+	fn rpc_prove_finality(
+		&self,
+		last_finalized: Block::Hash,
+		authorities_set_id: u64,
+	) -> Result<Option<Vec<u8>>, sp_blockchain::Error> {
+		self.prove_finality(last_finalized, authorities_set_id)
 	}
 }
 
@@ -254,7 +280,7 @@ mod tests {
 	}
 
 	impl<Block: BlockT> RpcFinalityProofProvider<Block> for TestFinalityProofProvider {
-		fn prove_finality(
+		fn rpc_prove_finality(
 			&self,
 			_last_finalized: Block::Hash,
 			_authoritites_set_id: u64,

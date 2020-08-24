@@ -182,24 +182,15 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	}
 }
 
-/// Provide finality proofs to the RPC API
-pub trait RpcFinalityProofProvider<Block: BlockT>: Send + Sync {
-	/// Return finality proofs for the given authorities set id, if it is provided, otherwise the
-	/// current one will be used.
-	fn prove_finality(
-		&self,
-		last_finalized: Block::Hash,
-		authorities_set_id: u64,
-	) -> Result<Option<Vec<u8>>, ClientError>;
-}
-
-impl<B, Block> RpcFinalityProofProvider<Block> for FinalityProofProvider<B, Block>
+impl<B, Block> FinalityProofProvider<B, Block>
 	where
 		Block: BlockT,
 		NumberFor<Block>: BlockNumberOps,
 		B: Backend<Block> + Send + Sync + 'static,
 {
-	fn prove_finality(
+	/// Return finality proofs for the given authorities set id, if it is provided, otherwise the
+	/// current one will be used.
+	pub fn prove_finality(
 		&self,
 		last_finalized: Block::Hash,
 		authorities_set_id: u64,

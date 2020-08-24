@@ -6840,6 +6840,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "sc-block-builder",
+ "sc-client-api",
  "sc-finality-grandpa",
  "sc-network-test",
  "sc-rpc",
