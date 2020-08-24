@@ -192,7 +192,7 @@ impl log::Log for RuntimeLogger {
 		sp_io::logging::log(
 			record.level().into(),
 			record.target(),
-			&w.inner(),
+			w.inner(),
 		);
 	}
 

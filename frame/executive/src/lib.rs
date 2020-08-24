@@ -419,21 +419,21 @@ where
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
 	) -> TransactionValidity {
-		use sp_tracing::within_span;
+		use sp_tracing::{enter_span, within_span};
 
-		within_span!{ sp_tracing::Level::TRACE, "validate_transaction"; {
-			
-			let encoded_len = within_span!{ sp_tracing::Level::TRACE, "using_encoded"; uxt.using_encoded(|d| d.len()) };
+		enter_span!{ sp_tracing::Level::TRACE, "validate_transaction" };
 
-			let xt = within_span!{ sp_tracing::Level::TRACE, "check"; uxt.check(&Default::default())? };
+		let encoded_len = within_span!{ sp_tracing::Level::TRACE, "using_encoded"; uxt.using_encoded(|d| d.len()) };
 
-			let dispatch_info = within_span!{ sp_tracing::Level::TRACE, "dispatch_info"; xt.get_dispatch_info() };
+		let xt = within_span!{ sp_tracing::Level::TRACE, "check"; uxt.check(&Default::default())? };
 
-			within_span! {
-				sp_tracing::Level::TRACE, "validate";
-				xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
+		let dispatch_info = within_span!{ sp_tracing::Level::TRACE, "dispatch_info"; xt.get_dispatch_info() };
+
+		within_span! {
+			sp_tracing::Level::TRACE, "validate";
+			xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
 			}
-		} }
+		}
 	}
 
 	/// Start an offchain worker and generate extrinsics.
