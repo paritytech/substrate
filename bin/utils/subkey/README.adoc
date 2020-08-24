@@ -31,7 +31,7 @@ OUTPUT:
 `subkey` expects a message to come in on STDIN, one way to sign a message would look like this:
 
 ```bash
-echo -n <msg> | subkey sign <seed,mnemonic>
+echo -n <msg> | subkey sign --suri <seed,mnemonic>
 
 OUTPUT:
 a69da4a6ccbf81dbbbfad235fa12cf8528c18012b991ae89214de8d20d29c1280576ced6eb38b7406d1b7e03231df6dd4a5257546ddad13259356e1c3adfb509
@@ -72,7 +72,7 @@ Will output a signed and encoded `UncheckedMortalCompactExtrinsic` as hex.
 === Inspecting a module ID
 
 ```bash
-subkey --network kusama moduleid "py/trsry"
+subkey module-id "py/trsry" --network kusama
 
 OUTPUT:
 Public Key URI `F3opxRbN5ZbjJNU511Kj2TLuzFcDq9BGduA9TgiECafpg29` is account:

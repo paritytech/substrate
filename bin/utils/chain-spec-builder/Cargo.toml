@@ -1,6 +1,6 @@
 [package]
 name = "chain-spec-builder"
-version = "2.0.0-rc5"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
@@ -13,9 +13,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 ansi_term = "0.12.1"
-sc-keystore = { version = "2.0.0-rc5", path = "../../../client/keystore" }
-sc-chain-spec = { version = "2.0.0-rc5", path = "../../../client/chain-spec" }
-node-cli = { version = "2.0.0-rc5", path = "../../node/cli" }
-sp-core = { version = "2.0.0-rc5", path = "../../../primitives/core" }
+sc-keystore = { version = "2.0.0-rc6", path = "../../../client/keystore" }
+sc-chain-spec = { version = "2.0.0-rc6", path = "../../../client/chain-spec" }
+node-cli = { version = "2.0.0-rc6", path = "../../node/cli" }
+sp-core = { version = "2.0.0-rc6", path = "../../../primitives/core" }
 rand = "0.7.2"
 structopt = "0.3.8"

@@ -255,7 +255,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			local_peer_id.clone(),
 			params.chain.clone(),
 			params.transaction_pool,
-			params.finality_proof_provider.clone(),
 			params.finality_proof_request_builder,
 			params.protocol_id.clone(),
 			peerset_config,
@@ -1405,7 +1404,22 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			}
 		}
 
+		// At the time of writing of this comment, due to a high volume of messages, the network
+		// worker sometimes takes a long time to process the loop below. When that happens, the
+		// rest of the polling is frozen. In order to avoid negative side-effects caused by this
+		// freeze, a limit to the number of iterations is enforced below. If the limit is reached,
+		// the task is interrupted then scheduled again.
+		//
+		// This allows for a more even distribution in the time taken by each sub-part of the
+		// polling.
+		let mut num_iterations = 0;
 		loop {
+			num_iterations += 1;
+			if num_iterations >= 100 {
+				cx.waker().wake_by_ref();
+				break;
+			}
+
 			// Process the next message coming from the `NetworkService`.
 			let msg = match this.from_service.poll_next_unpin(cx) {
 				Poll::Ready(Some(msg)) => msg,
@@ -1445,7 +1459,16 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			}
 		}
 
+		// `num_iterations` serves the same purpose as in the previous loop.
+		// See the previous loop for explanations.
+		let mut num_iterations = 0;
 		loop {
+			num_iterations += 1;
+			if num_iterations >= 1000 {
+				cx.waker().wake_by_ref();
+				break;
+			}
+
 			// Process the next action coming from the network.
 			let next_event = this.network_service.next_event();
 			futures::pin_mut!(next_event);
@@ -1610,18 +1633,19 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							ConnectedPoint::Listener { .. } => "in",
 						};
 						let reason = match cause {
-							ConnectionError::IO(_) => "transport-error",
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+							Some(ConnectionError::IO(_)) => "transport-error",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::B(
-								EitherError::A(PingFailure::Timeout)))))))) => "ping-timeout",
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(PingFailure::Timeout))))))))) => "ping-timeout",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::Legacy(LegacyConnectionKillError)))))))) =>	"force-closed",
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+								NotifsHandlerError::Legacy(LegacyConnectionKillError))))))))) =>	"force-closed",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged))))))) => "sync-notifications-clogged",
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) => "protocol-error",
-							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) => "keep-alive-timeout",
+								NotifsHandlerError::SyncNotificationsClogged)))))))) => "sync-notifications-clogged",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) => "protocol-error",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout)) => "keep-alive-timeout",
+							None => "actively-closed",
 						};
 						metrics.connections_closed_total.with_label_values(&[direction, reason]).inc();
 

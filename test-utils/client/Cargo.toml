@@ -1,6 +1,6 @@
 [package]
 name = "substrate-test-client"
-version = "2.0.0-rc5"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -19,15 +19,15 @@ hash-db = "0.15.2"
 hex = "0.4"
 serde = "1.0.55"
 serde_json = "1.0.55"
-sc-client-api = { version = "2.0.0-rc5", path = "../../client/api" }
-sc-client-db = { version = "0.8.0-rc5", features = ["test-helpers"], path = "../../client/db" }
-sc-consensus = { version = "0.8.0-rc5", path = "../../client/consensus/common" }
-sc-executor = { version = "0.8.0-rc5", path = "../../client/executor" }
-sc-light = { version = "2.0.0-rc5", path = "../../client/light" }
-sc-service = { version = "0.8.0-rc5", default-features = false, features = ["test-helpers"],  path = "../../client/service" }
-sp-blockchain = { version = "2.0.0-rc5", path = "../../primitives/blockchain" }
-sp-consensus = { version = "0.8.0-rc5", path = "../../primitives/consensus/common" }
-sp-core = { version = "2.0.0-rc5", path = "../../primitives/core" }
-sp-keyring = { version = "2.0.0-rc5", path = "../../primitives/keyring" }
-sp-runtime = { version = "2.0.0-rc5", path = "../../primitives/runtime" }
-sp-state-machine = { version = "0.8.0-rc5", path = "../../primitives/state-machine" }
+sc-client-api = { version = "2.0.0-rc6", path = "../../client/api" }
+sc-client-db = { version = "0.8.0-rc6", features = ["test-helpers"], path = "../../client/db" }
+sc-consensus = { version = "0.8.0-rc6", path = "../../client/consensus/common" }
+sc-executor = { version = "0.8.0-rc6", path = "../../client/executor" }
+sc-light = { version = "2.0.0-rc6", path = "../../client/light" }
+sc-service = { version = "0.8.0-rc6", default-features = false, features = ["test-helpers"],  path = "../../client/service" }
+sp-blockchain = { version = "2.0.0-rc6", path = "../../primitives/blockchain" }
+sp-consensus = { version = "0.8.0-rc6", path = "../../primitives/consensus/common" }
+sp-core = { version = "2.0.0-rc6", path = "../../primitives/core" }
+sp-keyring = { version = "2.0.0-rc6", path = "../../primitives/keyring" }
+sp-runtime = { version = "2.0.0-rc6", path = "../../primitives/runtime" }
+sp-state-machine = { version = "0.8.0-rc6", path = "../../primitives/state-machine" }

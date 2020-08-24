@@ -121,6 +121,9 @@ decl_error! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
+		/// The deposit needed for reserving an index.
+		const Deposit: BalanceOf<T> = T::Deposit::get();
+
 		fn deposit_event() = default;
 
 		/// Assign an previously unassigned index.
