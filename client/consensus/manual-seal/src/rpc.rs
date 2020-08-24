@@ -25,7 +25,6 @@ use futures::{
 	SinkExt
 };
 use serde::{Deserialize, Serialize};
-use sp_runtime::Justification;
 pub use self::gen_client::Client as ManualSealClient;
 
 /// Future's type for jsonrpc
@@ -33,34 +32,17 @@ type FutureResult<T> = Box<dyn jsonrpc_core::futures::Future<Item = T, Error = E
 /// sender passed to the authorship task to report errors or successes.
 pub type Sender<T> = Option<oneshot::Sender<std::result::Result<T, crate::Error>>>;
 
-/// Message sent to the background authorship task, usually by RPC.
-pub enum EngineCommand<Hash> {
-	/// Tells the engine to propose a new block
-	///
-	/// if create_empty == true, it will create empty blocks if there are no transactions
-	/// in the transaction pool.
-	///
-	/// if finalize == true, the block will be instantly finalized.
-	SealNewBlock {
-		/// if true, empty blocks(without extrinsics) will be created.
-		/// otherwise, will return Error::EmptyTransactionPool.
-		create_empty: bool,
-		/// instantly finalize this block?
-		finalize: bool,
-		/// specify the parent hash of the about-to-created block
-		parent_hash: Option<Hash>,
-		/// sender to report errors/success to the rpc.
-		sender: Sender<CreatedBlock<Hash>>,
-	},
-	/// Tells the engine to finalize the block with the supplied hash
-	FinalizeBlock {
-		/// hash of the block
-		hash: Hash,
-		/// sender to report errors/success to the rpc.
-		sender: Sender<()>,
-		/// finalization justification
-		justification: Option<Justification>,
-	}
+/// Message sent to the background authorship task. Tells the engine to propose a new block.
+pub struct CreateBlockCommand<Hash> {
+		/// If set, author an empty block when there are no transactions in the ppol.
+		/// If not set, Error::EmptyTransactionPool is returned.
+		pub create_empty: bool,
+		/// Whether to instantly finalize the created block.
+		pub finalize: bool,
+		/// The parent hash of the about-to-be-created block. If `None` use the best block.
+		pub parent_hash: Option<Hash>,
+		/// Sender to report errors/success to the caller.
+		pub sender: Sender<CreatedBlock<Hash>>,
 }
 
 /// RPC trait that provides methods for interacting with the manual-seal authorship task over rpc.
@@ -74,19 +56,11 @@ pub trait ManualSealApi<Hash> {
 		finalize: bool,
 		parent_hash: Option<Hash>
 	) -> FutureResult<CreatedBlock<Hash>>;
-
-	/// Instructs the manual-seal authorship task to finalize a block
-	#[rpc(name = "engine_finalizeBlock")]
-	fn finalize_block(
-		&self,
-		hash: Hash,
-		justification: Option<Justification>
-	) -> FutureResult<bool>;
 }
 
 /// A struct that implements the [`ManualSealApi`].
 pub struct ManualSeal<Hash> {
-	import_block_channel: mpsc::Sender<EngineCommand<Hash>>,
+	import_block_channel: mpsc::Sender<CreateBlockCommand<Hash>>,
 }
 
 /// return type of `engine_createBlock`
@@ -100,7 +74,7 @@ pub struct CreatedBlock<Hash> {
 
 impl<Hash> ManualSeal<Hash> {
 	/// Create new `ManualSeal` with the given reference to the client.
-	pub fn new(import_block_channel: mpsc::Sender<EngineCommand<Hash>>) -> Self {
+	pub fn new(import_block_channel: mpsc::Sender<CreateBlockCommand<Hash>>) -> Self {
 		Self { import_block_channel }
 	}
 }
@@ -115,7 +89,7 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 		let mut sink = self.import_block_channel.clone();
 		let future = async move {
 			let (sender, receiver) = oneshot::channel();
-			let command = EngineCommand::SealNewBlock {
+			let command = CreateBlockCommand {
 				create_empty,
 				finalize,
 				parent_hash,
@@ -126,20 +100,6 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 		}.boxed();
 
 		Box::new(future.map_err(Error::from).compat())
-	}
-
-	fn finalize_block(&self, hash: Hash, justification: Option<Justification>) -> FutureResult<bool> {
-		let mut sink = self.import_block_channel.clone();
-		let future = async move {
-			let (sender, receiver) = oneshot::channel();
-			sink.send(
-				EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification }
-			).await?;
-
-			receiver.await?.map(|_| true)
-		};
-
-		Box::new(future.boxed().map_err(Error::from).compat())
 	}
 }
 

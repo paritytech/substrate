@@ -29,21 +29,17 @@ use sp_inherents::InherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justification};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
 use sc_transaction_pool::txpool;
-use std::{sync::Arc, marker::PhantomData};
+use std::sync::Arc;
 use prometheus_endpoint::Registry;
 
 mod error;
-mod finalize_block;
 mod seal_new_block;
 pub mod rpc;
 
-use self::{
-	finalize_block::{finalize_block, FinalizeBlockParams},
-	seal_new_block::{seal_new_block, SealBlockParams},
-};
+use self::seal_new_block::{seal_new_block, SealBlockParams};
 pub use self::{
 	error::Error,
-	rpc::{EngineCommand, CreatedBlock},
+	rpc::{CreateBlockCommand, CreatedBlock},
 };
 
 /// The verifier for the manual seal engine; instantly finalizes.
@@ -105,44 +101,24 @@ pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
 		E: Environment<B> + 'static,
 		E::Error: std::fmt::Display,
 		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
-		S: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
+		S: Stream<Item=CreateBlockCommand<<B as BlockT>::Hash>> + Unpin + 'static,
 		SC: SelectChain<B> + 'static,
 {
-	while let Some(command) = commands_stream.next().await {
-		match command {
-			EngineCommand::SealNewBlock {
-				create_empty,
-				finalize,
-				parent_hash,
+	while let Some(CreateBlockCommand{create_empty, finalize, parent_hash, sender}) = commands_stream.next().await {
+		seal_new_block(
+			SealBlockParams {
 				sender,
-			} => {
-				seal_new_block(
-					SealBlockParams {
-						sender,
-						parent_hash,
-						finalize,
-						create_empty,
-						env: &mut env,
-						select_chain: &select_chain,
-						block_import: &mut block_import,
-						inherent_data_provider: &inherent_data_providers,
-						pool: pool.clone(),
-						client: client.clone(),
-					}
-				).await;
+				parent_hash,
+				finalize,
+				create_empty,
+				env: &mut env,
+				select_chain: &select_chain,
+				block_import: &mut block_import,
+				inherent_data_provider: &inherent_data_providers,
+				pool: pool.clone(),
+				client: client.clone(),
 			}
-			EngineCommand::FinalizeBlock { hash, sender, justification } => {
-				finalize_block(
-					FinalizeBlockParams {
-						hash,
-						sender,
-						justification,
-						finalizer: client.clone(),
-						_phantom: PhantomData,
-					}
-				).await
-			}
-		}
+		).await;
 	}
 }
 
@@ -172,7 +148,7 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 	let commands_stream = pool.validated_pool()
 		.import_notification_stream()
 		.map(|_| {
-			EngineCommand::SealNewBlock {
+			CreateBlockCommand {
 				create_empty: false,
 				finalize: false,
 				parent_hash: None,
@@ -238,7 +214,7 @@ mod tests {
 				// we're only going to submit one tx so this fn will only be called once.
 				let mut_sender =  Arc::get_mut(&mut sender).unwrap();
 				let sender = std::mem::take(mut_sender);
-				EngineCommand::SealNewBlock {
+				CreateBlockCommand {
 					create_empty: false,
 					finalize: true,
 					parent_hash: None,
@@ -319,7 +295,7 @@ mod tests {
 		// assert that it was successfully imported
 		assert!(result.is_ok());
 		let (tx, rx) = futures::channel::oneshot::channel();
-		sink.send(EngineCommand::SealNewBlock {
+		sink.send(CreateBlockCommand {
 			parent_hash: None,
 			sender: Some(tx),
 			create_empty: false,
