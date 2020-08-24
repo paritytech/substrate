@@ -26,13 +26,13 @@ use sp_std::vec::Vec;
 use sp_trie::MemoryDB;
 use crate::trie_backend::TrieBackend;
 use crate::ext::{ExtInner, ExtInnerMut};
-use crate::overlayed_changes::{OverlayedChanges, NoExtrinsics};
+use crate::overlayed_changes::OverlayedChanges;
 use crate::{StorageValue, StorageKey};
 
 /// The backend runnig on a trie proof.
 pub struct WitnessExt<H: Hasher> {
 	/// The overlayed changes to write to.
-	pub overlay: OverlayedChanges<NoExtrinsics>,
+	pub overlay: OverlayedChanges,
 	/// The storage backend to read from.
 	pub backend: TrieBackend<MemoryDB<H>, H>,
 }
@@ -46,12 +46,12 @@ impl<H: Hasher> WitnessExt<H>
 	pub fn new(db: MemoryDB<H>, root: H::Out) -> Self {
 		WitnessExt {
 			backend: TrieBackend::new(db, root),
-			overlay: OverlayedChanges::<NoExtrinsics>::default(),
+			overlay: OverlayedChanges::default(),
 		}
 	}
 
 	/// Access methods for `ExtInnerMut`.
-	fn ext_inner_mut(&mut self) -> ExtInnerMut<H, TrieBackend<MemoryDB<H>, H>, NoExtrinsics> {
+	fn ext_inner_mut(&mut self) -> ExtInnerMut<H, TrieBackend<MemoryDB<H>, H>> {
 		ExtInnerMut {
 			overlay: &mut self.overlay,
 			backend: &self.backend,
@@ -61,7 +61,7 @@ impl<H: Hasher> WitnessExt<H>
 	}
 
 	/// Access methods for `ExtInner`.
-	fn ext_inner(&self) -> ExtInner<H, TrieBackend<MemoryDB<H>, H>, NoExtrinsics> {
+	fn ext_inner(&self) -> ExtInner<H, TrieBackend<MemoryDB<H>, H>> {
 		ExtInner {
 			overlay: &self.overlay,
 			backend: &self.backend,

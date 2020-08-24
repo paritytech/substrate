@@ -48,7 +48,6 @@ use crate::DefaultError;
 
 pub use self::changeset::{OverlayedValue, NoOpenTransaction, AlreadyInRuntime, NotInRuntime};
 
-
 /// Changes that are made outside of extrinsics are marked with this index;
 pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
 
@@ -64,46 +63,24 @@ pub type StorageCollection = Vec<(StorageKey, Option<StorageValue>)>;
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection)>;
 
-/// Technical trait that allows to disable child trie
-/// footprint when not needed.
-pub trait ChangeTrieOverlay: Default {
-	/// If define to false we will skip change trie specifics.
-	const CHANGE_TRIE_CAPABLE: bool = true;
-	/// Extracts extrinsics into a `BTreeSets`.
-	fn flush_content(&self, dest: &mut BTreeSet<u32>);
-	/// Add an extrinsics.
-	fn insert(&mut self, ext: u32);
-	/// Merge two extrinsics sets.
-	fn merge(&mut self, other: Self);
-}
-
-/// Default implementation of ChangeTrieOverlay.
-#[derive(Debug, Default, Eq, PartialEq)]
+/// Keep trace of extrinsics index for a modified value.
+#[derive(Debug, Default, Eq, PartialEq, Clone)]
 pub struct Extrinsics(Vec<u32>);
 
-/// Skip registering extrinsics when using state machine.
-#[derive(Default)]
-pub struct NoExtrinsics;
-
-impl ChangeTrieOverlay for NoExtrinsics {
-	const CHANGE_TRIE_CAPABLE: bool = false;
-	fn flush_content(&self, _dest: &mut BTreeSet<u32>) {
-	}
-	fn insert(&mut self, _ext: u32) {
-	}
-	fn merge(&mut self, _other: Self) {
-	}
-}
-
-impl ChangeTrieOverlay for Extrinsics {
+impl Extrinsics {
+	/// Extracts extrinsics into a `BTreeSets`.
 	fn flush_content(&self, dest: &mut BTreeSet<u32>) {
 		dest.extend(self.0.iter())
 	}
+
+	/// Add an extrinsics.
 	fn insert(&mut self, ext: u32) {
 		if Some(&ext) != self.0.last() {
 			self.0.push(ext);
 		}
 	}
+
+	///Merge two extrinsics sets.
 	fn merge(&mut self, other: Self) {
 		self.0.extend(other.0.into_iter());
 	}
@@ -113,11 +90,11 @@ impl ChangeTrieOverlay for Extrinsics {
 ///
 /// It allows changes to be modified using nestable transactions.
 #[derive(Debug, Default, Clone)]
-pub struct OverlayedChanges<CT: ChangeTrieOverlay = Extrinsics>  {
+pub struct OverlayedChanges  {
 	/// Top level storage changes.
-	top: OverlayedChangeSet<CT>,
+	top: OverlayedChangeSet,
 	/// Child storage changes. The map key is the child storage key without the common prefix.
-	children: Map<StorageKey, (OverlayedChangeSet<CT>, ChildInfo)>,
+	children: Map<StorageKey, (OverlayedChangeSet, ChildInfo)>,
 	/// True if extrinsics stats must be collected.
 	collect_extrinsics: bool,
 	/// Collect statistic on this execution.
@@ -222,7 +199,7 @@ impl<Transaction: Default, H: Hasher, N: BlockNumber> Default for StorageChanges
 	}
 }
 
-impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
+impl OverlayedChanges {
 	/// Whether no changes are contained in the top nor in any of the child changes.
 	pub fn is_empty(&self) -> bool {
 		self.top.is_empty() && self.children.is_empty()
@@ -459,18 +436,18 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 
 	/// Get an iterator over all child changes as seen by the current transaction.
 	pub fn children(&self)
-		-> impl Iterator<Item=(impl Iterator<Item=(&StorageKey, &OverlayedValue<CT>)>, &ChildInfo)> {
+		-> impl Iterator<Item=(impl Iterator<Item=(&StorageKey, &OverlayedValue)>, &ChildInfo)> {
 		self.children.iter().map(|(_, v)| (v.0.changes(), &v.1))
 	}
 
 	/// Get an iterator over all top changes as been by the current transaction.
-	pub fn changes(&self) -> impl Iterator<Item=(&StorageKey, &OverlayedValue<CT>)> {
+	pub fn changes(&self) -> impl Iterator<Item=(&StorageKey, &OverlayedValue)> {
 		self.top.changes()
 	}
 
 	/// Get an optional iterator over all child changes stored under the supplied key.
 	pub fn child_changes(&self, key: &[u8])
-		-> Option<(impl Iterator<Item=(&StorageKey, &OverlayedValue<CT>)>, &ChildInfo)> {
+		-> Option<(impl Iterator<Item=(&StorageKey, &OverlayedValue)>, &ChildInfo)> {
 		self.children.get(key).map(|(overlay, info)| (overlay.changes(), info))
 	}
 
@@ -547,9 +524,6 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 	/// Changes that are made outside of extrinsics, are marked with
 	/// `NO_EXTRINSIC_INDEX` index.
 	fn extrinsic_index(&self) -> Option<u32> {
-		if !CT::CHANGE_TRIE_CAPABLE {
-			return None;
-		}
 		match self.collect_extrinsics {
 			true => Some(
 				self.storage(EXTRINSIC_INDEX)
@@ -622,10 +596,7 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 		panic_on_storage_error: bool,
 		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
 	) -> Result<Option<H::Out>, ()> where H::Out: Ord + Encode + 'static {
-		if !CT::CHANGE_TRIE_CAPABLE {
-			return Ok(None);
-		}
-		build_changes_trie::<_, H, N, CT>(
+		build_changes_trie::<_, H, N>(
 			backend,
 			changes_trie_state,
 			self,
@@ -641,7 +612,7 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 
 	/// Returns the next (in lexicographic order) storage key in the overlayed alongside its value.
 	/// If no value is next then `None` is returned.
-	pub fn next_storage_key_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue<CT>)> {
+	pub fn next_storage_key_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
 		self.top.next_change(key)
 	}
 
@@ -651,7 +622,7 @@ impl<CT: ChangeTrieOverlay> OverlayedChanges<CT> {
 		&self,
 		storage_key: &[u8],
 		key: &[u8]
-	) -> Option<(&[u8], &OverlayedValue<CT>)> {
+	) -> Option<(&[u8], &OverlayedValue)> {
 		self.children
 			.get(storage_key)
 			.and_then(|(overlay, _)|
@@ -692,10 +663,8 @@ mod tests {
 	use super::*;
 	use std::collections::BTreeMap;
 
-	type OverlayedChanges = super::OverlayedChanges<super::Extrinsics>;
-
 	fn assert_extrinsics(
-		overlay: &OverlayedChangeSet<Extrinsics>,
+		overlay: &OverlayedChangeSet,
 		key: impl AsRef<[u8]>,
 		expected: Vec<u32>,
 	) {

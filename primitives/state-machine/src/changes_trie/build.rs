@@ -25,7 +25,7 @@ use num_traits::One;
 use crate::{
 	StorageKey,
 	backend::Backend,
-	overlayed_changes::{OverlayedChanges, OverlayedValue, ChangeTrieOverlay},
+	overlayed_changes::{OverlayedChanges, OverlayedValue},
 	trie_backend_essence::TrieBackendEssence,
 	changes_trie::{
 		AnchorBlockId, ConfigurationRange, Storage, BlockNumber,
@@ -39,11 +39,11 @@ use sp_core::storage::{ChildInfo, PrefixedStorageKey};
 ///
 /// Returns Err if storage error has occurred OR if storage haven't returned
 /// required data.
-pub(crate) fn prepare_input<'a, B, H, Number, CT>(
+pub(crate) fn prepare_input<'a, B, H, Number>(
 	backend: &'a B,
 	storage: &'a dyn Storage<H, Number>,
 	config: ConfigurationRange<'a, Number>,
-	overlay: &'a OverlayedChanges<CT>,
+	overlay: &'a OverlayedChanges,
 	parent: &'a AnchorBlockId<H::Out, Number>,
 ) -> Result<(
 		impl Iterator<Item=InputPair<Number>> + 'a,
@@ -55,7 +55,6 @@ pub(crate) fn prepare_input<'a, B, H, Number, CT>(
 		H: Hasher + 'a,
 		H::Out: Encode,
 		Number: BlockNumber,
-		CT: ChangeTrieOverlay,
 {
 	let number = parent.number.clone() + One::one();
 	let (extrinsics_input, children_extrinsics_input) = prepare_extrinsics_input(
@@ -94,10 +93,10 @@ pub(crate) fn prepare_input<'a, B, H, Number, CT>(
 	))
 }
 /// Prepare ExtrinsicIndex input pairs.
-fn prepare_extrinsics_input<'a, B, H, Number, CT>(
+fn prepare_extrinsics_input<'a, B, H, Number>(
 	backend: &'a B,
 	block: &Number,
-	overlay: &'a OverlayedChanges<CT>,
+	overlay: &'a OverlayedChanges,
 ) -> Result<(
 		impl Iterator<Item=InputPair<Number>> + 'a,
 		BTreeMap<ChildIndex<Number>, impl Iterator<Item=InputPair<Number>> + 'a>,
@@ -106,7 +105,6 @@ fn prepare_extrinsics_input<'a, B, H, Number, CT>(
 		B: Backend<H>,
 		H: Hasher + 'a,
 		Number: BlockNumber,
-		CT: ChangeTrieOverlay,
 {
 	let mut children_result = BTreeMap::new();
 
@@ -129,18 +127,17 @@ fn prepare_extrinsics_input<'a, B, H, Number, CT>(
 	Ok((top, children_result))
 }
 
-fn prepare_extrinsics_input_inner<'a, B, H, Number, CT>(
+fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	backend: &'a B,
 	block: &Number,
-	overlay: &'a OverlayedChanges<CT>,
+	overlay: &'a OverlayedChanges,
 	child_info: Option<ChildInfo>,
-	mut changes: impl Iterator<Item=(&'a StorageKey, &'a OverlayedValue<CT>)>
+	mut changes: impl Iterator<Item=(&'a StorageKey, &'a OverlayedValue)>
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
 	where
 		B: Backend<H>,
 		H: Hasher,
 		Number: BlockNumber,
-		CT: ChangeTrieOverlay,
 {
 	changes
 		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, v)| {

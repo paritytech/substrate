@@ -19,7 +19,6 @@
 
 use crate::{
 	StorageKey, StorageValue, OverlayedChanges,
-	overlayed_changes::{ChangeTrieOverlay, Extrinsics},
 	backend::Backend,
 };
 use hash_db::Hasher;
@@ -114,13 +113,13 @@ pub struct Ext<'a, H, N, B>
 }
 
 /// Basis implementation for `Externalities` trait.
-pub struct ExtInnerMut<'a, H, B, CT: ChangeTrieOverlay = Extrinsics>
+pub struct ExtInnerMut<'a, H, B>
 	where
 		H: Hasher,
 		B: Backend<H>,
 {
 	/// The overlayed changes to write to.
-	pub overlay: &'a mut OverlayedChanges<CT>,
+	pub overlay: &'a mut OverlayedChanges,
 	/// The storage backend to read from.
 	pub backend: &'a B,
 	/// Pseudo-unique id used for tracing.
@@ -130,13 +129,13 @@ pub struct ExtInnerMut<'a, H, B, CT: ChangeTrieOverlay = Extrinsics>
 }
 
 /// Basis implementation for `Externalities` trait.
-pub struct ExtInner<'a, H, B, CT: ChangeTrieOverlay = Extrinsics>
+pub struct ExtInner<'a, H, B>
 	where
 		H: Hasher,
 		B: Backend<H>,
 {
 	/// The overlayed changes to write to.
-	pub overlay: &'a OverlayedChanges<CT>,
+	pub overlay: &'a OverlayedChanges,
 	/// The storage backend to read from.
 	pub backend: &'a B,
 	/// Pseudo-unique id used for tracing.
@@ -217,12 +216,11 @@ where
 	}
 }
 
-impl<'a, H, B, CT> ExtInner<'a, H, B, CT>
+impl<'a, H, B> ExtInner<'a, H, B>
 where
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
 	B: Backend<H>,
-	CT: ChangeTrieOverlay,
 {
 	pub(crate) fn storage(&self, key: &[u8]) -> Option<StorageValue> {
 		let _guard = guard();
@@ -385,14 +383,13 @@ where
 	}
 }
 
-impl<'a, H, B, CT> ExtInnerMut<'a, H, B, CT>
+impl<'a, H, B> ExtInnerMut<'a, H, B>
 where
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
 	B: Backend<H>,
-	CT: ChangeTrieOverlay,
 {
-	pub(crate) fn inner(&'a self) -> ExtInner<'a, H, B, CT> {
+	pub(crate) fn inner(&'a self) -> ExtInner<'a, H, B> {
 		ExtInner {
 			overlay: self.overlay,
 			backend: self.backend,

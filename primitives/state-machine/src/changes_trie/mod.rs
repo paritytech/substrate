@@ -78,7 +78,7 @@ use sp_trie::trie_types::TrieDBMut;
 use crate::{
 	StorageKey,
 	backend::Backend,
-	overlayed_changes::{OverlayedChanges, ChangeTrieOverlay},
+	overlayed_changes::OverlayedChanges,
 	changes_trie::{
 		build::prepare_input,
 		build_cache::{IncompleteCachedBuildData, IncompleteCacheAction},
@@ -220,19 +220,16 @@ pub fn disabled_state<'a, H, Number>() -> Option<State<'a, H, Number>> {
 /// Returns Err(()) if unknown `parent_hash` has been passed.
 /// Returns Ok(None) if there's no data to perform computation.
 /// Panics if background storage returns an error OR if insert to MemoryDB fails.
-pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber, CT: ChangeTrieOverlay>(
+pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 	backend: &B,
 	state: Option<&'a State<'a, H, Number>>,
-	changes: &OverlayedChanges<CT>,
+	changes: &OverlayedChanges,
 	parent_hash: H::Out,
 	panic_on_storage_error: bool,
 ) -> Result<Option<(MemoryDB<H>, H::Out, CacheAction<H::Out, Number>)>, ()>
 	where
 		H::Out: Ord + 'static + Encode,
 {
-	if !CT::CHANGE_TRIE_CAPABLE {
-		return Ok(None);
-	}
 	/// Panics when `res.is_err() && panic`, otherwise it returns `Err(())` on an error.
 	fn maybe_panic<R, E: std::fmt::Debug>(
 		res: std::result::Result<R, E>,
@@ -271,7 +268,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber, CT:
 
 	// storage errors are considered fatal (similar to situations when runtime fetches values from storage)
 	let (input_pairs, child_input_pairs, digest_input_blocks) = maybe_panic(
-		prepare_input::<B, H, Number, CT>(
+		prepare_input::<B, H, Number>(
 			backend,
 			state.storage,
 			config_range.clone(),
