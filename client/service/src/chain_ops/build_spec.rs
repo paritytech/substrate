@@ -16,31 +16,9 @@
 
 use sp_runtime::traits::{Block as BlockT, NumberFor, Saturating, One};
 use sp_blockchain::HeaderBackend;
-use crate::{TFullBackend, TLightBackend};
 use std::sync::Arc;
 use sp_runtime::generic::BlockId;
-
-/// An error for if this function is being called on a full node.
-pub const CHT_ROOT_ERROR: &str =
-	"Backend doesn't store CHT roots. Make sure you're calling this on a light client.";
-
-/// Something that might allow access to a `ChtRootStorage`.
-pub trait MaybeChtRootStorageProvider<Block> {
-	/// Potentially get a reference to a `ChtRootStorage`.
-	fn cht_root_storage(&self) -> Option<&dyn sc_client_api::light::ChtRootStorage<Block>>;
-}
-
-impl<Block: BlockT> MaybeChtRootStorageProvider<Block> for TFullBackend<Block> {
-	fn cht_root_storage(&self) -> Option<&dyn sc_client_api::light::ChtRootStorage<Block>> {
-		None
-	}
-}
-
-impl<Block: BlockT> MaybeChtRootStorageProvider<Block> for TLightBackend<Block> {
-	fn cht_root_storage(&self) -> Option<&dyn sc_client_api::light::ChtRootStorage<Block>> {
-		Some(self.blockchain().storage())
-	}
-}
+use sc_client_api::ProvideChtRoots;
 
 /// Build a `LightSyncState` from the CHT roots stored in a backend.
 pub fn build_light_sync_state<TBl, TCl, TBackend>(
@@ -50,9 +28,10 @@ pub fn build_light_sync_state<TBl, TCl, TBackend>(
 	where
 		TBl: BlockT,
 		TCl: HeaderBackend<TBl>,
-		TBackend: MaybeChtRootStorageProvider<TBl>,
+		TBackend: sc_client_api::Backend<TBl>,
+		<TBackend as sc_client_api::Backend<TBl>>::Blockchain: ProvideChtRoots<TBl>,
 {
-	let storage = backend.cht_root_storage().ok_or(CHT_ROOT_ERROR)?;
+	let cht_root_provider = backend.blockchain();
 
 	let finalized_hash = client.info().finalized_hash;
 	let finalized_number = client.info().finalized_number;
@@ -67,7 +46,7 @@ pub fn build_light_sync_state<TBl, TCl, TBackend>(
 	let mut number = NumberFor::<TBl>::one();
 
 	while number <= finalized_number.saturating_sub(cht_size_x_2) {
-		match storage.header_cht_root(cht::size(), number)? {
+		match cht_root_provider.header_cht_root(cht::size(), number)? {
 			Some(cht_root) => chts.push(cht_root),
 			None => log::error!("No CHT found for block {}", number),
 		}
