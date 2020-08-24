@@ -6324,6 +6324,7 @@ name = "sc-chain-spec"
 version = "2.0.0-rc6"
 dependencies = [
  "impl-trait-for-tuples",
+ "parity-scale-codec",
  "sc-chain-spec-derive",
  "sc-network",
  "sc-telemetry",
