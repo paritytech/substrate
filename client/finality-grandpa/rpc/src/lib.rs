@@ -32,12 +32,14 @@ use jsonrpc_core::futures::{
 };
 
 mod error;
+mod finality;
 mod notification;
 mod report;
 
-use sc_finality_grandpa::{FinalityProofProvider, GrandpaJustificationStream};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sc_finality_grandpa::GrandpaJustificationStream;
+use sp_runtime::traits::Block as BlockT;
 
+use finality::{EncodedFinalityProofs, RpcFinalityProofProvider};
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 use notification::JustificationNotification;
 
@@ -91,7 +93,7 @@ pub trait GrandpaApi<Notification, Hash> {
 		&self,
 		last_finalized: Hash,
 		authorities_set_id: Option<u64>,
-	) -> FutureResult<Option<Vec<u8>>>;
+	) -> FutureResult<Option<EncodedFinalityProofs>>;
 }
 
 /// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
@@ -168,7 +170,7 @@ where
 		&self,
 		last_finalized: Block::Hash,
 		authorities_set_id: Option<u64>,
-	) -> FutureResult<Option<Vec<u8>>> {
+	) -> FutureResult<Option<EncodedFinalityProofs>> {
 		// If we are not provided a set_id, try with the current one.
 		let authorities_set_id = authorities_set_id
 			.unwrap_or_else(|| self.authority_set.get().0);
@@ -185,32 +187,6 @@ where
 				.map_err(jsonrpc_core::Error::from)
 				.compat()
 		)
-	}
-}
-
-/// Local trait mainly to allow mocking in tests.
-pub trait RpcFinalityProofProvider<Block: BlockT> {
-	/// Return finality proofs for the given authorities set id, if it is provided, otherwise the
-	/// current one will be used.
-	fn rpc_prove_finality(
-		&self,
-		last_finalized: Block::Hash,
-		authorities_set_id: u64,
-	) -> Result<Option<Vec<u8>>, sp_blockchain::Error>;
-}
-
-impl<B, Block> RpcFinalityProofProvider<Block> for FinalityProofProvider<B, Block>
-where
-	Block: BlockT,
-	NumberFor<Block>: finality_grandpa::BlockNumberOps,
-	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-{
-	fn rpc_prove_finality(
-		&self,
-		last_finalized: Block::Hash,
-		authorities_set_id: u64,
-	) -> Result<Option<Vec<u8>>, sp_blockchain::Error> {
-		self.prove_finality(last_finalized, authorities_set_id)
 	}
 }
 
@@ -284,8 +260,8 @@ mod tests {
 			&self,
 			_last_finalized: Block::Hash,
 			_authoritites_set_id: u64,
-		) -> Result<Option<Vec<u8>>, sp_blockchain::Error> {
-			Ok(Some(self.finality_proofs.encode()))
+		) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
+			Ok(Some(EncodedFinalityProofs(self.finality_proofs.encode().into())))
 		}
 	}
 
@@ -559,7 +535,7 @@ mod tests {
 		let meta = sc_rpc::Metadata::default();
 		let resp = io.handle_request_sync(request, meta);
 		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
-		let result: Vec<u8> = serde_json::from_value(resp["result"].take()).unwrap();
+		let result: sp_core::Bytes = serde_json::from_value(resp["result"].take()).unwrap();
 		let fragments: Vec<FinalityProofFragment<Header>> =
 			Decode::decode(&mut &result[..]).unwrap();
 		assert_eq!(fragments, finality_proofs);
