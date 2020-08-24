@@ -1,6 +1,6 @@
 [package]
 name = "sp-runtime"
-version = "2.0.0-rc5"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -16,16 +16,16 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
-sp-core = { version = "2.0.0-rc5", default-features = false, path = "../core" }
-sp-application-crypto = { version = "2.0.0-rc5", default-features = false, path = "../application-crypto" }
-sp-arithmetic = { version = "2.0.0-rc5", default-features = false, path = "../arithmetic" }
-sp-std = { version = "2.0.0-rc5", default-features = false, path = "../std" }
-sp-io = { version = "2.0.0-rc5", default-features = false, path = "../io" }
+sp-core = { version = "2.0.0-rc6", default-features = false, path = "../core" }
+sp-application-crypto = { version = "2.0.0-rc6", default-features = false, path = "../application-crypto" }
+sp-arithmetic = { version = "2.0.0-rc6", default-features = false, path = "../arithmetic" }
+sp-std = { version = "2.0.0-rc6", default-features = false, path = "../std" }
+sp-io = { version = "2.0.0-rc6", default-features = false, path = "../io" }
 log = { version = "0.4.8", optional = true }
 paste = "0.1.6"
 rand = { version = "0.7.2", optional = true }
 impl-trait-for-tuples = "0.1.3"
-sp-inherents = { version = "2.0.0-rc5", default-features = false, path = "../inherents" }
+sp-inherents = { version = "2.0.0-rc6", default-features = false, path = "../inherents" }
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
 hash256-std-hasher = { version = "0.15.2", default-features = false }
 either = { version = "1.5", default-features = false }
@@ -33,7 +33,7 @@ either = { version = "1.5", default-features = false }
 [dev-dependencies]
 serde_json = "1.0.41"
 rand = "0.7.2"
-sp-state-machine = { version = "0.8.0-rc5", path = "../../primitives/state-machine" }
+sp-state-machine = { version = "0.8.0-rc6", path = "../../primitives/state-machine" }
 
 [features]
 bench = []

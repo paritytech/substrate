@@ -1,6 +1,6 @@
 [package]
 name = "node-rpc"
-version = "2.0.0-rc5"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -11,25 +11,25 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-client-api = { version = "2.0.0-rc5", path = "../../../client/api" }
-sc-rpc = { version = "2.0.0-rc5", path = "../../../client/rpc" }
 jsonrpc-core = "14.2.0"
-node-primitives = { version = "2.0.0-rc5", path = "../primitives" }
-node-runtime = { version = "2.0.0-rc5", path = "../runtime" }
-sp-runtime = { version = "2.0.0-rc5", path = "../../../primitives/runtime" }
-sp-api = { version = "2.0.0-rc5", path = "../../../primitives/api" }
-pallet-contracts-rpc = { version = "0.8.0-rc5", path = "../../../frame/contracts/rpc/" }
-pallet-transaction-payment-rpc = { version = "2.0.0-rc5", path = "../../../frame/transaction-payment/rpc/" }
-substrate-frame-rpc-system = { version = "2.0.0-rc5", path = "../../../utils/frame/rpc/system" }
-sp-transaction-pool = { version = "2.0.0-rc5", path = "../../../primitives/transaction-pool" }
-sc-consensus-babe = { version = "0.8.0-rc5", path = "../../../client/consensus/babe" }
-sc-consensus-babe-rpc = { version = "0.8.0-rc5", path = "../../../client/consensus/babe/rpc" }
-sp-consensus-babe = { version = "0.8.0-rc5", path = "../../../primitives/consensus/babe" }
-sc-keystore = { version = "2.0.0-rc5", path = "../../../client/keystore" }
-sc-consensus-epochs = { version = "0.8.0-rc5", path = "../../../client/consensus/epochs" }
-sp-consensus = { version = "0.8.0-rc5", path = "../../../primitives/consensus/common" }
-sp-blockchain = { version = "2.0.0-rc5", path = "../../../primitives/blockchain" }
-sc-finality-grandpa = { version = "0.8.0-rc5", path = "../../../client/finality-grandpa" }
-sc-finality-grandpa-rpc = { version = "0.8.0-rc5", path = "../../../client/finality-grandpa/rpc" }
-sc-rpc-api = { version = "0.8.0-rc5", path = "../../../client/rpc-api" }
-sp-block-builder = { version = "2.0.0-rc5", path = "../../../primitives/block-builder" }
+jsonrpc-pubsub = "14.2.0"
+node-primitives = { version = "2.0.0-rc6", path = "../primitives" }
+node-runtime = { version = "2.0.0-rc6", path = "../runtime" }
+pallet-contracts-rpc = { version = "0.8.0-rc6", path = "../../../frame/contracts/rpc/" }
+pallet-transaction-payment-rpc = { version = "2.0.0-rc6", path = "../../../frame/transaction-payment/rpc/" }
+sc-client-api = { version = "2.0.0-rc6", path = "../../../client/api" }
+sc-consensus-babe = { version = "0.8.0-rc6", path = "../../../client/consensus/babe" }
+sc-consensus-babe-rpc = { version = "0.8.0-rc6", path = "../../../client/consensus/babe/rpc" }
+sc-consensus-epochs = { version = "0.8.0-rc6", path = "../../../client/consensus/epochs" }
+sc-finality-grandpa = { version = "0.8.0-rc6", path = "../../../client/finality-grandpa" }
+sc-finality-grandpa-rpc = { version = "0.8.0-rc6", path = "../../../client/finality-grandpa/rpc" }
+sc-keystore = { version = "2.0.0-rc6", path = "../../../client/keystore" }
+sc-rpc-api = { version = "0.8.0-rc6", path = "../../../client/rpc-api" }
+sc-rpc = { version = "2.0.0-rc6", path = "../../../client/rpc" }
+sp-api = { version = "2.0.0-rc6", path = "../../../primitives/api" }
+sp-block-builder = { version = "2.0.0-rc6", path = "../../../primitives/block-builder" }
+sp-blockchain = { version = "2.0.0-rc6", path = "../../../primitives/blockchain" }
+sp-consensus = { version = "0.8.0-rc6", path = "../../../primitives/consensus/common" }
+sp-consensus-babe = { version = "0.8.0-rc6", path = "../../../primitives/consensus/babe" }
+sp-transaction-pool = { version = "2.0.0-rc6", path = "../../../primitives/transaction-pool" }
+substrate-frame-rpc-system = { version = "2.0.0-rc6", path = "../../../utils/frame/rpc/system" }

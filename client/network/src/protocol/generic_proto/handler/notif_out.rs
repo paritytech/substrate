@@ -203,6 +203,22 @@ impl NotifsOutHandler {
 		}
 	}
 
+	/// Returns `true` if there has been an attempt to open the substream, but the remote refused
+	/// the substream.
+	///
+	/// Always returns `false` if the handler is in a disabled state.
+	pub fn is_refused(&self) -> bool {
+		match &self.state {
+			State::Disabled => false,
+			State::DisabledOpening => false,
+			State::DisabledOpen(_) => false,
+			State::Opening { .. } => false,
+			State::Refused => true,
+			State::Open { .. } => false,
+			State::Poisoned => false,
+		}
+	}
+
 	/// Returns the name of the protocol that we negotiate.
 	pub fn protocol_name(&self) -> &[u8] {
 		&self.protocol_name

@@ -356,8 +356,9 @@ where
 			.take_while(|c| c.effective_number() <= best_number) // to prevent iterating too far
 			.filter(|c| c.effective_number() == best_number)
 		{
-			// check if the given best block is in the same branch as the block that signaled the change.
-			if is_descendent_of(&change.canon_hash, &best_hash)? {
+			// check if the given best block is in the same branch as
+			// the block that signaled the change.
+			if change.canon_hash == best_hash || is_descendent_of(&change.canon_hash, &best_hash)? {
 				// apply this change: make the set canonical
 				afg_log!(initial_sync,
 					"👴 Applying authority set change forced at block #{:?}",
@@ -981,6 +982,43 @@ mod tests {
 				pending_standard_changes: ForkTree::new(),
 				pending_forced_changes: Vec::new(),
 			}),
+		);
+	}
+
+	#[test]
+	fn forced_changes_with_no_delay() {
+		// NOTE: this is a regression test
+		let mut authorities = AuthoritySet {
+			current_authorities: Vec::new(),
+			set_id: 0,
+			pending_standard_changes: ForkTree::new(),
+			pending_forced_changes: Vec::new(),
+		};
+
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
+
+		// we create a forced change with no delay
+		let change_a = PendingChange {
+			next_authorities: set_a.clone(),
+			delay: 0,
+			canon_height: 5,
+			canon_hash: "hash_a",
+			delay_kind: DelayKind::Best {
+				median_last_finalized: 0,
+			},
+		};
+
+		// and import it
+		authorities
+			.add_pending_change(change_a, &static_is_descendent_of(false))
+			.unwrap();
+
+		// it should be enacted at the same block that signaled it
+		assert!(
+			authorities
+				.apply_forced_changes("hash_a", 5, &static_is_descendent_of(false), false)
+				.unwrap()
+				.is_some()
 		);
 	}
 

@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+## 2.0.0-rc5 -> 2.0.0-rc6 – Rock Hyrax
+
+Runtime
+-------
+
+* Custom Codec Implenetation for NPoS Election (#6720)
+* Successful `note_imminent_preimage` is free (#6793)
+* pallet-democracy use of weightinfo (#6783)
+* Update Balances Pallet to use `WeightInfo` (#6610)
+* pallet-evm: add builtin support for the four basic Ethereum precompiles (#6743)
+* Allow `PostDispatchInfo` to disable fees (#6749)
+* pallet-evm: add support for tuple-based precompile declarations (#6681)
+* grandpa: allow noting that the set has stalled (#6725)
+
+Client
+------
+
+* Merge Subkey into sc-cli (#4954)
+* RpcHandlers Refactorings (#6846)
+* client/authority-discovery: Introduce AuthorityDiscoveryService (#6760)
+* Implement tracing::Event handling & parent_id for spans and events (#6672)
+* Move to upstream wasmtime, refactor globals snapshot  (#6759)
+* Revalidate transactions only on latest best block (#6824)
+* Allow task manager to have children (#6771)
+* client/network: Expose DHT query duration to Prometheus (#6784)
+* client/network: Add peers to DHT only if protocols match (#6549)
+* Name all the tasks! (#6726)
+* Child nodes can be handled by adding a child `TaskManager` to the parent's `TaskManager` (#6771)
+
+API
+---
+
+* pow: add access to pre-digest for algorithm verifiers (#6900)
+* babe, aura, pow: only call check_inherents if authoring version is compatible (#6862)
+* Implement 'transactional' annotation for runtime functions. (#6763)
+* seal: Change prefix and module name from "ext_" to "seal_" for contract callable functions (#6798)
+* Add Subscription RPC for Grandpa Finality (#5732)
+* seal: Fix and improve error reporting (#6773)
+* Allow blacklisting blocks from being finalized again after block revert (#6301)
+* BABE slot and epoch event notifications (#6563)
+* Add `memory-tracker` feature to `sp-trie` to fix wasm panic (#6745)
+
 ## 2.0.0-rc4 -> 2.0.0-rc5 – River Dolphin
 
 Runtime

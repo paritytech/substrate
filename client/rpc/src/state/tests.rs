@@ -53,6 +53,9 @@ fn should_return_storage() {
 	let client = TestClientBuilder::new()
 		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
 		.add_extra_child_storage(&child_info, KEY.to_vec(), CHILD_VALUE.to_vec())
+		// similar to a map with two keys
+		.add_extra_storage(b":map:acc1".to_vec(), vec![1, 2])
+		.add_extra_storage(b":map:acc2".to_vec(), vec![1, 2, 3])
 		.build();
 	let genesis_hash = client.genesis_hash();
 	let (client, child) = new_full(Arc::new(client), SubscriptionManager::new(Arc::new(TaskExecutor)));
@@ -73,6 +76,10 @@ fn should_return_storage() {
 		VALUE.len(),
 	);
 	assert_eq!(
+		client.storage_size(StorageKey(b":map".to_vec()), None).wait().unwrap().unwrap() as usize,
+		2 + 3,
+	);
+	assert_eq!(
 		executor::block_on(
 			child.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
 				.map(|x| x.map(|x| x.0.len()))
@@ -80,7 +87,6 @@ fn should_return_storage() {
 		).unwrap().unwrap() as usize,
 		CHILD_VALUE.len(),
 	);
-
 }
 
 #[test]
