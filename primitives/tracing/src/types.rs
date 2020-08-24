@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/// Types for wasm based tracing. Loosly inspired by `tracing-core` but
+/// optimised for the specific use case.
+
 use core::fmt::Debug;
 use sp_std::{
 	vec::Vec,
@@ -22,15 +25,22 @@ use sp_std::{
 use sp_std::Writer;
 use codec::{Encode, Decode};
 
+/// The Tracing Level – the user can filter by this
 #[derive(Clone, Encode, Decode, Debug)]
 pub enum WasmLevel {
+	/// This is a fatal errors
 	ERROR,
+	/// This is a warning you should be aware of
 	WARN,
+	/// Nice to now info
 	INFO,
+	/// Further information for debugging purposes
 	DEBUG,
+	/// The lowest level, keeping track of minute detail
 	TRACE
 }
 
+/// A paramter value provided to the span/event
 #[derive(Encode, Decode, Clone, Debug)]
 pub enum WasmValue {
 	U8(u8),
@@ -41,7 +51,10 @@ pub enum WasmValue {
 	U64(u64),
 	Bool(bool),
 	Str(Vec<u8>),
+	/// Debug or Display call, this is most-likely a print-able UTF8 String
 	Formatted(Vec<u8>),
+	/// SCALE CODEC encoded object – the name should allow the received to know
+	/// how to decode this.
 	Encoded(Vec<u8>),
 }
 
@@ -125,6 +138,10 @@ impl From<i64> for WasmValue {
 	}
 }
 
+/// The name of a field provided as the argument name when contstructing an
+/// `event!` or `span!`.
+/// Generally generated automaticaly via `stringify` from an `'static &str`.
+/// Likely print-able.
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct WasmFieldName(Vec<u8>);
 
@@ -141,7 +158,7 @@ impl From<&str> for WasmFieldName {
 	}
 }
 
-
+/// A list of `WasmFieldName`s in the order provided
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct WasmFields(Vec<WasmFieldName>);
 
@@ -164,11 +181,15 @@ impl From<Vec<&str>> for WasmFields {
 }
 
 impl WasmFields {
+	/// Create an empty entry
 	pub fn empty() -> Self {
 		WasmFields(Vec::with_capacity(0))
 	}
 }
 
+
+/// A list of `WasmFieldName`s with the given `WasmValue` (if provided)
+/// in the order specified.
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct WasmValuesSet(Vec<(WasmFieldName, Option<WasmValue>)>);
 
@@ -190,42 +211,44 @@ impl From<Vec<(&&str, Option<WasmValue>)>> for WasmValuesSet {
 }
 
 impl WasmValuesSet {
+	/// Create an empty entry
 	pub fn empty() -> Self {
 		WasmValuesSet(Vec::with_capacity(0))
 	}
 }
 
-
+/// Metadata provides generic information about the specifc location of the
+/// `span!` or `event!` call on the wasm-side.
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct WasmMetadata {
+	/// The name given to `event!`/`span!`, `&'static str` converted to bytes
 	pub name: Vec<u8>,
+	/// The given target to `event!`/`span!` – or module-name, `&'static str` converted to bytes
 	pub target: Vec<u8>,
+	/// The level of this entry
 	pub level: WasmLevel,
+	/// The file this was emitted from – useful for debugging;  `&'static str` converted to bytes
 	pub file: Vec<u8>,
+	/// The specific line number in the file – useful for debugging
 	pub line: u32,
+	/// The module path;  `&'static str` converted to bytes
 	pub module_path: Vec<u8>,
+	/// Whether this is a call  to `span!` or `event!`
 	pub is_span: bool,
+	/// The list of fields specified in the call
 	pub fields: WasmFields,
 }
 
+/// Span or Event Attributes
 #[derive(Encode, Decode, Clone, Debug)]
-pub struct WasmAttributes {
+pub struct WasmEntryAttributes {
+	/// the parent, if directly specified – otherwise assume most inner span
 	pub parent_id: Option<u64>,
+	/// the metadata of the location
 	pub metadata: WasmMetadata,
+	/// the Values provided
 	pub fields: WasmValuesSet,
 }
-
-#[derive(Encode, Decode, Clone, Debug)]
-pub struct WasmEvent {
-	pub parent_id: Option<u64>,
-	pub metadata: WasmMetadata,
-	pub fields: WasmValuesSet,
-}
-
-// TODO - Do we need this when we have WasmValuesSet ?
-// #[derive(Encode, Decode)]
-// pub struct WasmRecord;
-
 
 #[cfg(feature = "std")]
 mod std_features {
@@ -233,16 +256,27 @@ mod std_features {
 	use tracing_core::callsite;
 	use tracing;
 
+	/// Static entry use for wasm-originated metadata.
 	pub struct WasmCallsite;
 	impl callsite::Callsite for WasmCallsite {
 		fn set_interest(&self, _: tracing_core::Interest) { unimplemented!() }
 		fn metadata(&self) -> &tracing_core::Metadata { unimplemented!() }
 	}
 	static CALLSITE: WasmCallsite =  WasmCallsite;
+	/// The identifier we are using to inject the wasm events in the generic `tracing` system
 	pub static WASM_TRACE_IDENTIFIER: &'static str = "wasm_tracing";
+	/// The fieldname for the wasm-originated name
 	pub static WASM_NAME_KEY: &'static str = "name";
+	/// The fieldname for the wasm-originated target
 	pub static WASM_TARGET_KEY: &'static str = "target";
+	/// The the list of all static field names we construct from the given metadata
 	pub static GENERIC_FIELDS: &'static [&'static str] = &[WASM_TARGET_KEY, WASM_NAME_KEY, "file", "line", "module_path", "params"];
+
+	// Implementation Note:
+	// the original `tracing` crate generates these static metadata entries at every `span!` and
+	// `event!` location to allow for highly optimised filtering. For us to allow level-based emitting
+	// of wasm events we need these static metadata entries to inject into that system. We then provide
+	// generic `From`-implementations picking the right metadata to refer to.
 
 	static SPAN_ERROR_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
 		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::ERROR, None, None, None,
@@ -320,8 +354,8 @@ mod std_features {
 		}
 	}
 
-	impl From<crate::WasmAttributes> for tracing::Span {
-		fn from(a: crate::WasmAttributes) -> tracing::Span {
+	impl From<crate::WasmEntryAttributes> for tracing::Span {
+		fn from(a: crate::WasmEntryAttributes) -> tracing::Span {
 			let name = std::str::from_utf8(&a.metadata.name).unwrap_or_default();
 			let target = std::str::from_utf8(&a.metadata.target).unwrap_or_default();
 			let file = std::str::from_utf8(&a.metadata.file).unwrap_or_default();
@@ -331,15 +365,16 @@ mod std_features {
 			let metadata : &tracing_core::metadata::Metadata<'static> = (&a.metadata).into();
 
 			tracing::span::Span::child_of(
-				a.parent_id.map(|i|tracing_core::span::Id::from_u64(i)), 
+				a.parent_id.map(|i|tracing_core::span::Id::from_u64(i)),
 				&metadata,
 				&tracing::valueset!{ metadata.fields(), target, name, file, line, module_path, ?params }
 			)
 		}
 	}
 
-	impl crate::WasmEvent {
-		pub fn emit(self: crate::WasmEvent) {
+	impl crate::WasmEntryAttributes {
+		/// convert the given Attributes to an event and emit it using `tracing_core`.
+		pub fn emit(self: crate::WasmEntryAttributes) {
 			let name = std::str::from_utf8(&self.metadata.name).unwrap_or_default();
 			let target = std::str::from_utf8(&self.metadata.target).unwrap_or_default();
 			let file = std::str::from_utf8(&self.metadata.file).unwrap_or_default();
@@ -349,7 +384,7 @@ mod std_features {
 			let metadata : &tracing_core::metadata::Metadata<'static> = (&self.metadata).into();
 
 			tracing_core::Event::child_of(
-				self.parent_id.map(|i|tracing_core::span::Id::from_u64(i)), 
+				self.parent_id.map(|i|tracing_core::span::Id::from_u64(i)),
 				&metadata,
 				&tracing::valueset!{ metadata.fields(), target, name, file, line, module_path, ?params }
 			)

@@ -31,6 +31,62 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+/// Tracing facilities and helpers.
+///
+/// This is modeled after the `tracing`/`tracing-core` interface and uses that more or
+/// less directly for the native side. Because of certain optimisations the these crates
+/// have done, the wasm implementation diverges slightly and is optimised for thtat use
+/// case (like being able to cross the wasm/native boundary via scale codecs).
+///
+/// One of said optimisations is that all macros will yield to a `noop` in non-std unless
+/// the `with-tracing` feature is explicitly activated. This allows you to just use the
+/// tracing wherever you deem fit and without any performance impact by default. Only if
+/// the specific `with-tracing`-feature is activated on this crate will it actually include
+/// the tracing code in the non-std environment.
+///
+/// Because of that optimisation, you should not use the `span!` and `span_*!` macros
+/// directly as they yield nothing without the feature present. Instead you should use
+/// `enter_span!` and `within_span!` – which would strip away even any parameter conversion
+/// you do within the span-definition (and thus optimise your performance). For your
+/// convineience you directly specify the `Level` and name of the span or use the full
+/// feature set of `span!`/`span_*!` on it:
+///
+/// # Example
+///
+/// ```rust
+/// sp_tracing::enter_span!(sp_tracing::Level::TRACE, "fn wide span");
+/// {
+///		sp_tracing::enter_span!(sp_tracing::trace_span!("outer-span"));
+///		{
+///			sp_tracing::enter_span!(sp_tracing::Level::TRACE, "inner-span");
+///			// ..
+///		}  // inner span exists here
+///	} // outer span exists here
+///
+/// sp_tracing::within_span! {
+///		sp_tracing::debug_span!("debug-span", you_can_pass="any params");
+///     1 + 1;
+///     // some other complex code
+/// } // debug span ends here
+///
+/// ```
+///
+///
+/// # Setup
+///
+/// This project only provides the macros and facilities to manage tracing
+/// it doesn't implement the tracing subscriber or backend directly – that is
+/// up to the developer integrating it into a specific environment. In native
+/// this can and must be done through the regular `tracing`-facitilies, please
+/// see their documentation for details.
+///
+/// On the wasm-side we've adopted a similar approach of having a global
+/// `TracingSubscriber` that the macros call and that does the actual work
+/// of tracking. To provide your tracking, you must implement `TracingSubscriber`
+/// and call `set_tracing_subscriber` at the very beginning of your execution –
+/// the default subscriber is doing nothing, so any spans or events happening before
+/// will not be recorded!
+
 mod types;
 
 #[cfg(not(feature = "std"))]
@@ -50,7 +106,7 @@ pub use tracing::{
 };
 
 pub use crate::types::{
-	WasmMetadata, WasmAttributes, WasmValuesSet, WasmValue, WasmFields, WasmEvent, WasmLevel, WasmFieldName
+	WasmMetadata, WasmEntryAttributes, WasmValuesSet, WasmValue, WasmFields, WasmLevel, WasmFieldName
 };
 
 #[cfg(feature = "std")]
@@ -61,13 +117,30 @@ pub use crate::types::{
 #[cfg(not(feature = "std"))]
 pub type Level = WasmLevel;
 
-
+/// Defines the interface for the  wasm-side tracing subcriber. This is
+/// very much modeled after the `tracing_core::Subscriber`, but adapted
+/// to be feasible to cross the wasm-native boundary.
+///
+/// This is generally expected to be a proxy that moves the data over to
+/// the native side as tracking within `wasm` is probably ineffecient. However
+/// any implementation may do internal optimisations for performance.
+///
 #[cfg(not(feature = "std"))]
 pub trait TracingSubscriber: Send + Sync {
+	/// Give the `WasmMetadata`, should we even continue recording this span/event
+	/// or stop execution before.
+	/// This may or may not be implemented wasm- and/or native side or have optimisations
+	/// added.
 	fn enabled(&self, metadata: &WasmMetadata) -> bool;
-	fn new_span(&self, attrs: WasmAttributes) -> u64;
+	/// Create a new `Span` with the given `WasmEntryAttributes`, return the u64 tracking ID for
+	/// it. Will only be called if `attrs.metadata` was found to be enabled.
+	fn new_span(&self, attrs: WasmEntryAttributes) -> u64;
+	/// Record the `WasmValueSet` for `WasMetadata` as a new event. Willl only be called if
+	/// `WasmMetadata` was found to be enabled;
 	fn event(&self, parent_id: Option<u64>, metadata: &WasmMetadata, values: &WasmValuesSet);
+	/// Mark the given `span` to be entered. A span may not be entered twice.
 	fn enter(&self, span: u64);
+	/// Exit the given span. You can discard the span info now.
 	fn exit(&self, span: u64);
 }
 
@@ -89,10 +162,14 @@ mod global_subscription {
 
 	unsafe impl core::marker::Sync for SubscriptionHolder {}
 
-	/// NOTE:
-	/// theoretically this can panic when the subscriber instance is currently borrowed,
-	/// however this is guaranteed to not happen by us running in a threadless env
-	/// and never handing out the borrow
+	/// Set the given `TracingSubscriber` as target for the tracing spans.
+	/// This should happen first, any span and event calls run before are not recorded.
+	///
+	/// **IMPORTANT**:
+	/// This uses unsafe features to provide a lazily-set instance-wide global. This is not
+	/// thread-safe and will panic if called from withina `with_tracing_subscriber`-call.
+	///
+	/// See module index documentation for how to set the system up properly.
 	pub fn set_tracing_subscriber(subscriber: Box<dyn TracingSubscriber>)
 	{
 		unsafe {
@@ -101,6 +178,10 @@ mod global_subscription {
 		}
 	}
 
+	/// Gain access to the globally set `TracingSubscriber`.
+	/// Used to record events and spans.
+	/// *IMPORTANT*: do not call `set_tracing_subscriber` from within. That will lead
+	/// to undefined behaviour.
 	#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
 	pub fn with_tracing_subscriber<F, R>(f: F) -> Option<R>
 		where F: FnOnce(&Box<dyn TracingSubscriber>) -> R
@@ -120,14 +201,14 @@ pub use global_subscription::{set_tracing_subscriber, with_tracing_subscriber};
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///
-/// If tracing is not enabled, the code is still executed. Pass in level and name before followed
-/// by `;` and the code to execute, or use any valid `sp_tracing::Span`.
+/// If tracing is not enabled, the code is still executed. Pass in level and name or
+/// use any valid `sp_tracing::Span`followe by `;` and the code to execute,
 ///
 /// # Example
 ///
 /// ```
 /// sp_tracing::within_span! {
-///		sp_tracing::Level::TRACE, 
+///		sp_tracing::Level::TRACE,
 ///     "test-span";
 ///     1 + 1;
 ///     // some other complex code
@@ -135,6 +216,12 @@ pub use global_subscription::{set_tracing_subscriber, with_tracing_subscriber};
 ///
 /// sp_tracing::within_span! {
 ///		sp_tracing::span!(sp_tracing::Level::WARN, "warn-span", you_can_pass="any params");
+///     1 + 1;
+///     // some other complex code
+/// }
+///
+/// sp_tracing::within_span! {
+///		sp_tracing::debug_span!("debug-span", you_can_pass="any params");
 ///     1 + 1;
 ///     // some other complex code
 /// }
@@ -192,7 +279,11 @@ macro_rules! enter_span {
 /// Enter a span.
 ///
 /// The span will be valid, until the scope is left. Use either level and name
-/// or pass in any valid `sp_tracing::Span` for extended usage.
+/// or pass in any valid `sp_tracing::Span` for extended usage. The span will
+/// be exited on drop – which is at the end of the block or to the next
+/// `enter_span!` calls, as this overwrites the local variable. For nested
+/// usage or to ensure the span closes at certain time either put it into a block
+/// or use `within_span!`
 ///
 /// # Example
 ///
@@ -200,6 +291,15 @@ macro_rules! enter_span {
 /// sp_tracing::enter_span!(sp_tracing::Level::TRACE, "test-span");
 /// sp_tracing::enter_span!(sp_tracing::span!(sp_tracing::Level::DEBUG, "debug-span", params="value"));
 /// sp_tracing::enter_span!(sp_tracing::info_span!("info-span",  params="value"));
+///
+/// {
+///		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "outer-span");
+///		{
+///			sp_tracing::enter_span!(sp_tracing::Level::TRACE, "inner-span");
+///			// ..
+///		}  // inner span exists here
+///	} // outer span exists here
+///
 /// ```
 #[cfg(any(feature = "std", feature = "with-tracing"))]
 #[macro_export]

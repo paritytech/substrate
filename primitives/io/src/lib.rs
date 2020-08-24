@@ -1027,7 +1027,7 @@ pub trait WasmTracing {
 			d.enabled(metadata)
 		})
 	}
-	fn new_span(&mut self, span: Crossing<sp_tracing::WasmAttributes>) -> u64 {
+	fn new_span(&mut self, span: Crossing<sp_tracing::WasmEntryAttributes>) -> u64 {
 		let span : tracing::Span = span.into_inner().into();
 		match span.id() {
 			Some(id) => tracing::dispatcher::get_default(|d| {
@@ -1039,8 +1039,8 @@ pub trait WasmTracing {
 			}
 		}
 	}
-	
-	fn event(&mut self, event: Crossing<sp_tracing::WasmEvent>) {
+
+	fn event(&mut self, event: Crossing<sp_tracing::WasmEntryAttributes>) {
 		event.into_inner().emit();
 	}
 
@@ -1065,15 +1065,15 @@ impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
 	fn enabled(&self, metadata: &sp_tracing::WasmMetadata) -> bool {
 		wasm_tracing::enabled(Crossing(metadata.clone()))
 	}
-	fn new_span(&self, attrs: sp_tracing::WasmAttributes) -> u64 {
+	fn new_span(&self, attrs: sp_tracing::WasmEntryAttributes) -> u64 {
 		wasm_tracing::new_span(Crossing(attrs))
 	}
 	fn event(&self,
 		parent_id: Option<u64>,
-		metadata: &sp_tracing::WasmMetadata, 
+		metadata: &sp_tracing::WasmMetadata,
 		values: &sp_tracing::WasmValuesSet
 	) {
-		wasm_tracing::event(Crossing(sp_tracing::WasmEvent {
+		wasm_tracing::event(Crossing(sp_tracing::WasmEntryAttributes {
 			parent_id,
 			metadata: metadata.clone(),
 			fields: values.clone()

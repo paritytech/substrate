@@ -93,7 +93,7 @@ mod inner {
 		pub fn in_scope<F: FnOnce() -> T, T>(&self, f: F) -> T {
 			let _enter = self.enter();
 			f()
-		}    
+		}
 	}
 
 	impl Entered {
@@ -104,7 +104,7 @@ mod inner {
 		}
 	}
 
-	impl Drop for Entered { 
+	impl Drop for Entered {
 		fn drop(&mut self) {
 			self.exit();
 		}
@@ -164,7 +164,7 @@ mod inner {
 			if $crate::level_enabled!($lvl) {
 				#[allow(unused_imports)]
 				use $crate::{
-					WasmMetadata, WasmAttributes, WasmEvent, WasmFields, WasmFieldName, WasmValuesSet
+					WasmMetadata, WasmEntryAttributes, WasmFields, WasmFieldName, WasmValuesSet
 				};
 				let metadata = WasmMetadata {
 					name: concat!(
@@ -209,7 +209,7 @@ mod inner {
 			if $crate::level_enabled!($lvl) {
 				#[allow(unused_imports)]
 				use $crate::{
-					WasmMetadata, WasmAttributes, WasmEvent, WasmFields, WasmFieldName, WasmValuesSet
+					WasmMetadata, WasmEntryAttributes, WasmFields, WasmFieldName, WasmValuesSet
 				};
 				let metadata = WasmMetadata {
 					name: concat!(
@@ -379,7 +379,7 @@ mod inner {
 				if $crate::level_enabled!($lvl) {
 					#[allow(unused_imports)]
 					use $crate::{
-						WasmMetadata, WasmAttributes, WasmEvent, WasmFields, WasmFieldName, WasmValuesSet
+						WasmMetadata, WasmEntryAttributes, WasmFields, WasmFieldName, WasmValuesSet
 					};
 					let metadata = WasmMetadata {
 						name: $name.as_bytes().to_vec(),
@@ -393,7 +393,7 @@ mod inner {
 					};
 					if $crate::is_enabled!(&metadata) {
 						let span_id = $crate::with_tracing_subscriber(|t| t.new_span(
-							WasmAttributes {
+							WasmEntryAttributes {
 								parent_id: Some($parent.0),
 								fields: $crate::valueset!(&metadata.fields, $($fields)*),
 								metadata: metadata.clone(),
@@ -413,7 +413,7 @@ mod inner {
 				if $crate::level_enabled!($lvl) {
 					#[allow(unused_imports)]
 					use $crate::{
-						WasmMetadata, WasmAttributes, WasmEvent, WasmFields, WasmFieldName, WasmValuesSet
+						WasmMetadata, WasmEntryAttributes, WasmFields, WasmFieldName, WasmValuesSet
 					};
 					let metadata = WasmMetadata {
 						name: $name.as_bytes().to_vec(),
@@ -427,7 +427,7 @@ mod inner {
 					};
 					if $crate::is_enabled!(&metadata) {
 						let span_id = $crate::with_tracing_subscriber(|t| t.new_span(
-							WasmAttributes {
+							WasmEntryAttributes {
 								parent_id: None,
 								metadata: metadata.clone(),
 								fields: $crate::valueset!(&metadata.fields, $($fields)*)
@@ -1955,7 +1955,7 @@ macro_rules! level_enabled {
 		// FIXME: use the runtime interface to figure this out
 		true
 		// $crate::dispatcher::has_been_set() && $lvl <= $crate::level_filters::STATIC_MAX_LEVEL
-		
+
 	};
 }
 
@@ -2082,7 +2082,7 @@ macro_rules! valueset {
 	};
 	($fields:expr,) => (
 			WasmValuesSet::empty()
-		
+
 	);
 }
 
