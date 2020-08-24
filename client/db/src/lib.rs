@@ -539,7 +539,7 @@ impl<Block: BlockT> ProvideChtRoots<Block> for BlockchainDb<Block> {
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		let cht_number = match cht::is_build_required(cht_size, block) {
+		let cht_number = match cht::block_to_cht_number(cht_size, block) {
 			Some(number) => number,
 			None => return Ok(None),
 		};
@@ -563,7 +563,7 @@ impl<Block: BlockT> ProvideChtRoots<Block> for BlockchainDb<Block> {
 		cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		let cht_number = match cht::is_build_required(cht_size, block) {
+		let cht_number = match cht::block_to_cht_number(cht_size, block) {
 			Some(number) => number,
 			None => return Ok(None),
 		};
@@ -2388,5 +2388,27 @@ pub(crate) mod tests {
 			op.mark_finalized(BlockId::Hash(block2), None).unwrap();
 			backend.commit_operation(op).unwrap_err();
 		}
+	}
+
+	#[test]
+	fn header_cht_root_works() {
+		use sc_client_api::ProvideChtRoots;
+
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		// insert 1 + SIZE + SIZE + 1 blocks so that CHT#0 is created
+		let mut prev_hash = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let cht_size: u64 = cht::size();
+		for i in 1..1 + cht_size + cht_size + 1 {
+			prev_hash = insert_header(&backend, i, prev_hash, None, Default::default());
+		}
+
+		let blockchain = backend.blockchain();
+
+		let cht_root_1 = blockchain.header_cht_root(cht_size, cht::start_number(cht_size, 0)).unwrap().unwrap();
+		let cht_root_2 = blockchain.header_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2).unwrap().unwrap();
+		let cht_root_3 = blockchain.header_cht_root(cht_size, cht::end_number(cht_size, 0)).unwrap().unwrap();
+		assert_eq!(cht_root_1, cht_root_2);
+		assert_eq!(cht_root_2, cht_root_3);
 	}
 }
