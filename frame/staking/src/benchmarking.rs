@@ -715,7 +715,8 @@ mod tests {
 			let closure_to_benchmark =
 				<SelectedBenchmark as frame_benchmarking::BenchmarkingSetup<Test>>::instance(
 					&selected_benchmark,
-					&c
+					&c,
+					true
 				).unwrap();
 
 			assert_ok!(closure_to_benchmark());
