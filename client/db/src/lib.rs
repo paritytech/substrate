@@ -2405,9 +2405,12 @@ pub(crate) mod tests {
 
 		let blockchain = backend.blockchain();
 
-		let cht_root_1 = blockchain.header_cht_root(cht_size, cht::start_number(cht_size, 0)).unwrap().unwrap();
-		let cht_root_2 = blockchain.header_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2).unwrap().unwrap();
-		let cht_root_3 = blockchain.header_cht_root(cht_size, cht::end_number(cht_size, 0)).unwrap().unwrap();
+		let cht_root_1 = blockchain.header_cht_root(cht_size, cht::start_number(cht_size, 0))
+			.unwrap().unwrap();
+		let cht_root_2 = blockchain.header_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2)
+			.unwrap().unwrap();
+		let cht_root_3 = blockchain.header_cht_root(cht_size, cht::end_number(cht_size, 0))
+			.unwrap().unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
 	}
