@@ -47,7 +47,7 @@ pub use self::{
 	sign::SignCmd,
 	generate::GenerateCmd,
 	insert::InsertCmd,
-	inspect::InspectCmd,
+	inspect::InspectKeyCmd,
 	generate_node_key::GenerateNodeKeyCmd,
 	inspect_node_key::InspectNodeKeyCmd,
 	key::KeySubcommand,

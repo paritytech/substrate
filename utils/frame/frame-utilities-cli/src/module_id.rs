@@ -44,9 +44,8 @@ pub struct ModuleIdCmd {
 		possible_values = &Ss58AddressFormat::all_names()[..],
 		parse(try_from_str = Ss58AddressFormat::try_from),
 		case_insensitive = true,
-		default_value = "substrate"
 	)]
-	pub network: Ss58AddressFormat,
+	pub network: Option<Ss58AddressFormat>,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -78,14 +77,13 @@ impl ModuleIdCmd {
 			.map_err(|_| "Cannot convert argument to moduleid: argument should be 8-character string")?;
 
 		let account_id: R::AccountId = ModuleId(id_fixed_array).into_account();
-		let network = self.network;
 
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,
 			print_from_uri(
-				&account_id.to_ss58check_with_version(network),
+				&account_id.to_ss58check_with_version(self.network.clone().unwrap_or_default()),
 				password,
-				network,
+				self.network,
 				self.output_scheme.output_type.clone()
 			)
 		);
