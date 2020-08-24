@@ -618,6 +618,72 @@ fn never_add_own_address_to_priority_group() {
 }
 
 #[test]
+fn limit_number_of_addresses_added_to_cache_per_authority() {
+	let remote_key_store = KeyStore::new();
+	let remote_public = remote_key_store
+		.write()
+		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+		.unwrap();
+
+	let dht_event = {
+		let addresses = (0..100).map(|_| {
+			let peer_id = PeerId::random();
+			let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
+			address.with(multiaddr::Protocol::P2p(
+				peer_id.into(),
+			)).to_vec()
+		}).collect();
+
+		let mut serialized_addresses = vec![];
+		schema::AuthorityAddresses { addresses }
+		.encode(&mut serialized_addresses)
+			.map_err(Error::EncodingProto)
+			.unwrap();
+
+		let signature = remote_key_store.read()
+			.sign_with(
+				key_types::AUTHORITY_DISCOVERY,
+				&remote_public.clone().into(),
+				serialized_addresses.as_slice(),
+			)
+			.map_err(|_| Error::Signing)
+			.unwrap();
+
+		let mut signed_addresses = vec![];
+		schema::SignedAuthorityAddresses {
+			addresses: serialized_addresses.clone(),
+			signature,
+		}
+			.encode(&mut signed_addresses)
+			.map_err(Error::EncodingProto)
+			.unwrap();
+
+		let key = hash_authority_id(&remote_public.to_raw_vec());
+		let value = signed_addresses;
+		(key, value)
+	};
+
+	let (_dht_event_tx, dht_event_rx) = channel(1);
+
+	let (_to_worker, from_service) = mpsc::channel(0);
+	let mut worker = Worker::new(
+		from_service,
+		Arc::new(TestApi { authorities: vec![remote_public.into()] }),
+		Arc::new(TestNetwork::default()),
+		vec![],
+		dht_event_rx.boxed(),
+		Role::Sentry,
+		None,
+	);
+
+	worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
+	assert_eq!(
+		MAX_ADDRESSES_PER_AUTHORITY,
+		worker.addr_cache.get_addresses_by_authority_id(&remote_public.into()).unwrap().len(),
+	);
+}
+
+#[test]
 fn do_not_cache_addresses_without_peer_id() {
 	let remote_key_store = KeyStore::new();
 	let remote_public = remote_key_store
