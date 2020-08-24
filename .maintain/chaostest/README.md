@@ -82,7 +82,7 @@ _See code: [src/commands/spawn/index.js](https://github.com/paritytech/substrate
 
 ## `chaostest add`
 
-Only use after you spawned a network, if you want to add various numbers of validators/peers to the network you just deployed.
+Add various numbers of validator / peer nodes to the network. Only use after you spawned the network.
 
 ```
 USAGE
