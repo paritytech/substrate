@@ -260,7 +260,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn manual_seal_and_finalization() {
+	async fn manual_seal_works() {
 		let builder = TestClientBuilder::new();
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
@@ -319,15 +319,7 @@ mod tests {
 			}
 		);
 		// assert that there's a new block in the db.
-		let header = client.header(&BlockId::Number(1)).unwrap().unwrap();
-		let (tx, rx) = futures::channel::oneshot::channel();
-		sink.send(EngineCommand::FinalizeBlock {
-			sender: Some(tx),
-			hash: header.hash(),
-			justification: None
-		}).await.unwrap();
-		// assert that the background task returns ok
-		assert_eq!(rx.await.unwrap().unwrap(), ());
+		assert!(client.header(&BlockId::Number(1)).unwrap().is_some());
 	}
 
 	#[tokio::test]
@@ -368,7 +360,7 @@ mod tests {
 		assert!(result.is_ok());
 
 		let (tx, rx) = futures::channel::oneshot::channel();
-		sink.send(EngineCommand::SealNewBlock {
+		sink.send(CreateBlockCommand {
 			parent_hash: None,
 			sender: Some(tx),
 			create_empty: false,
@@ -403,7 +395,7 @@ mod tests {
 		}).await;
 
 		let (tx1, rx1) = futures::channel::oneshot::channel();
-		assert!(sink.send(EngineCommand::SealNewBlock {
+		assert!(sink.send(CreateBlockCommand {
 			parent_hash: Some(created_block.hash),
 			sender: Some(tx1),
 			create_empty: false,
@@ -419,7 +411,7 @@ mod tests {
 
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 2)).await.is_ok());
 		let (tx2, rx2) = futures::channel::oneshot::channel();
-		assert!(sink.send(EngineCommand::SealNewBlock {
+		assert!(sink.send(CreateBlockCommand {
 			parent_hash: Some(created_block.hash),
 			sender: Some(tx2),
 			create_empty: false,
