@@ -447,6 +447,16 @@ impl<Block: BlockT> light::Storage<Block> for Blockchain<Block>
 		Blockchain::finalize_header(self, id, None)
 	}
 
+	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
+		None
+	}
+
+	fn usage_info(&self) -> Option<UsageInfo> {
+		None
+	}
+}
+
+impl<Block: BlockT> light::ChtRootStorage<Block> for Blockchain<Block> {
 	fn header_cht_root(
 		&self,
 		_cht_size: NumberFor<Block>,
@@ -465,14 +475,6 @@ impl<Block: BlockT> light::Storage<Block> for Blockchain<Block>
 		self.storage.read().changes_trie_cht_roots.get(&block).cloned()
 			.ok_or_else(|| sp_blockchain::Error::Backend(format!("Changes trie CHT for block {} not exists", block)))
 			.map(Some)
-	}
-
-	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
-		None
-	}
-
-	fn usage_info(&self) -> Option<UsageInfo> {
-		None
 	}
 }
 
