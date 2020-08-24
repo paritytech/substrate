@@ -18,7 +18,7 @@ A cli for chaos testing on substrate
 To use this CLI tool.
 You need: 
 ```
-kubectl cli [installed and connect to a cluster](https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl)
+kubectl cli [installed and connected to a cluster](https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl)
 node js 8+ [installed](https://nodesource.com/blog/installing-node-js-tutorial-using-nvm-on-mac-os-x-and-ubuntu/)
 ```
 https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl
