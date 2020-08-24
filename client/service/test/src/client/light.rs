@@ -42,7 +42,7 @@ use sc_executor::{NativeExecutor, WasmExecutionMethod, RuntimeVersion, NativeVer
 use sp_core::{H256, NativeOrEncoded, testing::TaskExecutor};
 use sc_client_api::{
 	blockchain::Info, backend::NewBlockState, Backend as ClientBackend, ProofProvider,
-	in_mem::{Backend as InMemBackend, Blockchain as InMemoryBlockchain}, ChtRootStorage,
+	in_mem::{Backend as InMemBackend, Blockchain as InMemoryBlockchain}, ProvideChtRoots,
 	AuxStore, Storage, CallExecutor, cht, ExecutionStrategy, StorageProof, BlockImportOperation,
 	RemoteCallRequest, StorageProvider, ChangesProof, RemoteBodyRequest, RemoteReadRequest,
 	RemoteChangesRequest, FetchChecker, RemoteReadChildRequest, RemoteHeaderRequest, BlockBackend,
@@ -173,7 +173,7 @@ impl Storage<Block> for DummyStorage {
 	}
 }
 
-impl ChtRootStorage<Block> for DummyStorage {
+impl ProvideChtRoots<Block> for DummyStorage {
 	fn header_cht_root(&self, _cht_size: u64, _block: u64) -> ClientResult<Option<Hash>> {
 		Err(ClientError::Backend("Test error".into()))
 	}
