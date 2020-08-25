@@ -573,7 +573,7 @@ where
 	}
 
 	fn storage_changes_root(&mut self, _parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		unimplemented!("Unsupported")
+		Ok(None)
 	}
 
 	fn wipe(&mut self) {
