@@ -292,7 +292,7 @@ where
 	pub fn execute_block(block: Block) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
-			sp_tracing::info_span!(target: "executive", "execute_block", ?block);
+			sp_tracing::info_span!( "execute_block", ?block);
 		{
 			Self::initialize_block(block.header());
 
@@ -365,11 +365,8 @@ where
 		to_note: Option<Vec<u8>>,
 	) -> ApplyExtrinsicResult {
 		sp_tracing::enter_span!(
-			sp_tracing::info_span!(
-				target: "executive",
-				"apply_extrinsic",
-				ext=?sp_core::hexdisplay::HexDisplay::from(&uxt.encode())
-			)
+			sp_tracing::info_span!("apply_extrinsic",
+				ext=?sp_core::hexdisplay::HexDisplay::from(&uxt.encode()))
 		);
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
@@ -385,7 +382,6 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
-		sp_tracing::event!(target: "executive", sp_tracing::Level::INFO, ?dispatch_info.weight);
 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
 		<frame_system::Module<System>>::note_applied_extrinsic(&r, dispatch_info);
