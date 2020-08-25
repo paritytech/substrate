@@ -1,13 +1,13 @@
 // Library shortcuts
 
 use std::{pin::Pin};
-use futures::prelude::*;
-use futures::task::{Context, Poll};
+use futures::{
+	prelude::*,
+	task::{Context, Poll},
+};
 use tokio::time::Duration;
 
-use crate::rpc::{
-	EngineCommand,
-};
+use crate::rpc::{EngineCommand};
 
 // ---
 // Constant Definition
@@ -42,6 +42,8 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 				Poll::Ready(Some(ec))
 			},
 
+			Poll::Ready(None) => Poll::Ready(None),
+
 			Poll::Pending => {
 				if let Poll::Ready(_) = hbs.delay.poll_unpin(cx) {
 					hbs.delay = tokio::time::delay_for(Duration::from_secs(HEARTBEAT_TIMEOUT));
@@ -52,11 +54,9 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 						sender: None,
 					}));
 				}
-
 				Poll::Pending
 			},
 
-			_ => Poll::Pending,
 		}
 	}
 }
