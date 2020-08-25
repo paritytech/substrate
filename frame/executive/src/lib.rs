@@ -365,7 +365,11 @@ where
 		to_note: Option<Vec<u8>>,
 	) -> ApplyExtrinsicResult {
 		sp_tracing::enter_span!(
-			sp_tracing::trace_span!(target: "executive", "apply_extrinsic", extrinsic=?uxt)
+			sp_tracing::info_span!(
+				target: "executive",
+				"apply_extrinsic",
+				ext=?sp_core::hexdisplay::HexDisplay::from(&uxt.encode())
+			)
 		);
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
@@ -381,6 +385,7 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
+		sp_tracing::event!(target: "executive", sp_tracing::Level::INFO, ?dispatch_info.weight);
 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
 		<frame_system::Module<System>>::note_applied_extrinsic(&r, dispatch_info);

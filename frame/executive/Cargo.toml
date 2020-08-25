@@ -20,10 +20,10 @@ sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../pr
 sp-tracing = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/tracing" }
 sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/io" }
+sp-core = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/core" }
 
 [dev-dependencies]
 hex-literal = "0.2.1"
-sp-core = { version = "2.0.0-rc6", path = "../../primitives/core" }
 sp-io ={ version = "2.0.0-rc6", path = "../../primitives/io" }
 pallet-indices = { version = "2.0.0-rc6", path = "../indices" }
 pallet-balances = { version = "2.0.0-rc6", path = "../balances" }
@@ -40,6 +40,7 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"serde",
+	"sp-core/std",
 	"sp-runtime/std",
 	"sp-tracing/std",
 	"sp-std/std",
