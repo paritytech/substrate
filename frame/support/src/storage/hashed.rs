@@ -28,6 +28,8 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::TRACE, fun="get", key=?key);
 	unhashed::get(&hash(key).as_ref())
 }
 
@@ -39,6 +41,8 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::TRACE, fun="get_or_default", key=?key);
 	unhashed::get_or_default(&hash(key).as_ref())
 }
 
@@ -50,6 +54,8 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::TRACE, fun="get_or", key=?key);
 	unhashed::get_or(&hash(key).as_ref(), default_value)
 }
 
@@ -62,6 +68,8 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::TRACE, fun="get_or_else", key=?key);
 	unhashed::get_or_else(&hash(key).as_ref(), default_value)
 }
 
@@ -72,6 +80,8 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::INFO, fun="put", key=?key, value=?value.encode());
 	unhashed::put(&hash(key).as_ref(), value)
 }
 
@@ -82,6 +92,8 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::TRACE, fun="take", key=?key);
 	unhashed::take(&hash(key).as_ref())
 }
 
@@ -93,6 +105,8 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::TRACE, fun="take_or_default", key=?key);
 	unhashed::take_or_default(&hash(key).as_ref())
 }
 
@@ -104,6 +118,8 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::TRACE, fun="take_or", key=?key);
 	unhashed::take_or(&hash(key).as_ref(), default_value)
 }
 
@@ -116,6 +132,8 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::TRACE, fun="take_or_else", key=?key);
 	unhashed::take_or_else(&hash(key).as_ref(), default_value)
 }
 
@@ -125,6 +143,8 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::TRACE, fun="exists", key=?key);
 	unhashed::exists(&hash(key).as_ref())
 }
 
@@ -134,6 +154,8 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::INFO, fun="kill", key=?key);
 	unhashed::kill(&hash(key).as_ref())
 }
 
@@ -143,6 +165,8 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::TRACE, fun="get_raw", key=?key);
 	unhashed::get_raw(&hash(key).as_ref())
 }
 
@@ -152,5 +176,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
+	sp_tracing::event!(target: "frame_storage",
+		sp_tracing::Level::INFO, fun="put_raw", key=?key, value=?value.encode());
 	unhashed::put_raw(&hash(key).as_ref(), value)
 }
