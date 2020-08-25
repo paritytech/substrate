@@ -21,7 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod backend;
-pub mod witness_ext;
 #[cfg(feature = "std")]
 mod in_memory_backend;
 #[cfg(feature = "std")]
@@ -127,6 +126,7 @@ pub use crate::trie_backend_essence::{TrieBackendStorage, Storage};
 pub use crate::trie_backend::TrieBackend;
 pub use crate::stats::{UsageInfo, UsageUnit, StateMachineStats};
 pub use error::{Error, ExecutionError};
+pub use crate::ext::ExtInner;
 
 #[cfg(feature = "std")]
 mod std_reexport {

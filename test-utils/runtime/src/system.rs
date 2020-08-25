@@ -306,14 +306,16 @@ fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyExtrinsicRes
 }
 
 fn execute_witness_backend() -> ApplyExtrinsicResult {
-	use sp_state_machine::witness_ext::WitnessExt;
 	use sp_externalities::Externalities;
-	let mut backend = WitnessExt::<crate::Hashing>::new(
-		Default::default(),
+	let db = sp_trie::MemoryDB::<crate::Hashing>::default();
+	let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(
+		db,
 		Default::default(),
 	);
-	backend.place_storage(vec![0], Some(vec![1]));
-	assert!(backend.storage(&[0]).is_some());
+	let mut overlay = sp_state_machine::OverlayedChanges::default();
+	let mut ext = sp_state_machine::ExtInner::new(&mut overlay, &backend);
+	ext.place_storage(vec![0], Some(vec![1]));
+	assert!(ext.storage(&[0]).is_some());
 	Ok(Ok(()))
 }
 

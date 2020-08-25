@@ -27,7 +27,8 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
-use sp_externalities::{Externalities, Extensions, Extension};
+use sp_externalities::{Externalities, Extensions, Extension,
+	ExtensionStore, Error as ExtensionError};
 use codec::{Decode, Encode, EncodeAppend};
 
 use sp_std::{fmt, any::{Any, TypeId}, vec::Vec, vec, boxed::Box};
@@ -99,7 +100,7 @@ pub struct Ext<'a, H, N, B>
 		N: crate::changes_trie::BlockNumber,
 {
 	/// Inner Ext (change overlay and backend).
-	inner: ExtInnerMut<'a, H, B>,
+	inner: ExtInner<'a, H, B>,
 	/// The overlayed changes destined for the Offchain DB.
 	offchain_overlay: &'a mut OffchainOverlayedChanges,
 	/// The cache for the storage transactions.
@@ -113,38 +114,42 @@ pub struct Ext<'a, H, N, B>
 }
 
 /// Basis implementation for `Externalities` trait.
-pub struct ExtInnerMut<'a, H, B>
-	where
-		H: Hasher,
-		B: Backend<H>,
-{
-	/// The overlayed changes to write to.
-	pub overlay: &'a mut OverlayedChanges,
-	/// The storage backend to read from.
-	pub backend: &'a B,
-	/// Pseudo-unique id used for tracing.
-	pub id: u16,
-	/// Dummy usage of H arg.
-	pub _phantom: sp_std::marker::PhantomData<H>,
-}
-
-/// Basis implementation for `Externalities` trait.
 pub struct ExtInner<'a, H, B>
 	where
 		H: Hasher,
 		B: Backend<H>,
 {
 	/// The overlayed changes to write to.
-	pub overlay: &'a OverlayedChanges,
+	overlay: &'a mut OverlayedChanges,
 	/// The storage backend to read from.
-	pub backend: &'a B,
+	backend: &'a B,
 	/// Pseudo-unique id used for tracing.
-	pub id: u16,
+	id: u16,
 	/// Dummy usage of H arg.
-	pub _phantom: sp_std::marker::PhantomData<H>,
+	_phantom: sp_std::marker::PhantomData<H>,
 }
 
-
+impl<'a, H, B> ExtInner<'a, H, B>
+	where
+		H: Hasher,
+		B: Backend<H>,
+{
+	/// Create a new `ExtInner`. Warning, this
+	/// do not init its inner id with a random
+	/// value.
+	pub fn new(
+		overlay: &'a mut OverlayedChanges,
+		backend: &'a B,
+	) -> Self {
+		ExtInner {
+			overlay,
+			backend,
+			id: 0,
+			_phantom: Default::default(),
+		}
+	}
+}
+	
 #[cfg(feature = "std")]
 impl<'a, H, N, B> Ext<'a, H, N, B>
 where
@@ -163,7 +168,7 @@ where
 		extensions: Option<&'a mut Extensions>,
 	) -> Self {
 		Self {
-			inner: ExtInnerMut {
+			inner: ExtInner {
 				overlay,
 				backend,
 				id: rand::random(),
@@ -216,13 +221,13 @@ where
 	}
 }
 
-impl<'a, H, B> ExtInner<'a, H, B>
+impl<'a, H, B> Externalities for ExtInner<'a, H, B>
 where
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
 	B: Backend<H>,
 {
-	pub(crate) fn storage(&self, key: &[u8]) -> Option<StorageValue> {
+	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
 		let _guard = guard();
 		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
@@ -234,7 +239,7 @@ where
 		result
 	}
 
-	pub(crate) fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = guard();
 		let result = self.overlay
 			.storage(key)
@@ -249,7 +254,7 @@ where
 		result.map(|r| r.encode())
 	}
 
-	pub(crate) fn child_storage(
+	fn child_storage(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
@@ -273,7 +278,7 @@ where
 		result
 	}
 
-	pub(crate) fn child_storage_hash(
+	fn child_storage_hash(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
@@ -297,7 +302,7 @@ where
 		result.map(|r| r.encode())
 	}
 
-	pub(crate) fn exists_storage(&self, key: &[u8]) -> bool {
+	fn exists_storage(&self, key: &[u8]) -> bool {
 		let _guard = guard();
 		let result = match self.overlay.storage(key) {
 			Some(x) => x.is_some(),
@@ -313,7 +318,7 @@ where
 		result
 	}
 
-	pub(crate) fn exists_child_storage(
+	fn exists_child_storage(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
@@ -336,7 +341,7 @@ where
 		result
 	}
 
-	pub(crate) fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
+	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
 		let next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
 
@@ -351,7 +356,7 @@ where
 		}
 	}
 
-	pub(crate) fn next_child_storage_key(
+	fn next_child_storage_key(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
@@ -378,27 +383,11 @@ where
 		}
 	}
 
-	pub(crate) fn read_write_count(&self) -> (u32, u32, u32, u32) {
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
 		self.backend.read_write_count()
 	}
-}
 
-impl<'a, H, B> ExtInnerMut<'a, H, B>
-where
-	H: Hasher,
-	H::Out: Ord + 'static + codec::Codec,
-	B: Backend<H>,
-{
-	pub(crate) fn inner(&'a self) -> ExtInner<'a, H, B> {
-		ExtInner {
-			overlay: self.overlay,
-			backend: self.backend,
-			id: self.id,
-			_phantom: Default::default(),
-		}
-	}
-
-	pub(crate) fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
+	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
 		trace!(target: "state", "{:04x}: Put {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -413,7 +402,7 @@ where
 		self.overlay.set_storage(key, value);
 	}
 
-	pub(crate) fn place_child_storage(
+	fn place_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
 		key: StorageKey,
@@ -430,7 +419,7 @@ where
 		self.overlay.set_child_storage(child_info, key, value);
 	}
 
-	pub(crate) fn kill_child_storage(
+	fn kill_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
 	) {
@@ -446,7 +435,7 @@ where
 		});
 	}
 
-	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
+	fn clear_prefix(&mut self, prefix: &[u8]) {
 		trace!(target: "state", "{:04x}: ClearPrefix {}",
 			self.id,
 			HexDisplay::from(&prefix),
@@ -463,7 +452,7 @@ where
 		});
 	}
 
-	pub(crate) fn clear_child_prefix(
+	fn clear_child_prefix(
 		&mut self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
@@ -481,7 +470,7 @@ where
 		});
 	}
 
-	pub(crate) fn storage_append(
+	fn storage_append(
 		&mut self,
 		key: Vec<u8>,
 		value: Vec<u8>,
@@ -502,14 +491,14 @@ where
 		StorageAppend::new(current_value).append(value);
 	}
 
-	pub(crate) fn storage_root(&mut self) -> Vec<u8> {
+	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = guard();
 		let root = self.overlay.storage_root_no_cache(self.backend);
 		trace!(target: "state", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
 		root.encode()
 	}
 
-	pub(crate) fn child_storage_root(
+	fn child_storage_root(
 		&mut self,
 		child_info: &ChildInfo,
 	) -> Vec<u8> {
@@ -545,7 +534,7 @@ where
 			root
 		} else {
 			// empty overlay
-			let root = self.inner()
+			let root = self
 				.storage(prefixed_storage_key.as_slice())
 				.and_then(|k| Decode::decode(&mut &k[..]).ok())
 				.unwrap_or_else(
@@ -560,20 +549,69 @@ where
 		}
 	}
 
-	pub(crate) fn storage_start_transaction(&mut self) {
+	fn storage_start_transaction(&mut self) {
 		self.overlay.start_transaction()
 	}
 
-	pub(crate) fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
 		self.overlay.rollback_transaction().map_err(|_| ())
 	}
 
-	pub(crate) fn storage_commit_transaction(&mut self) -> Result<(), ()> {
+	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
 		self.overlay.commit_transaction().map_err(|_| ())
 	}
 
-	pub(crate) fn reset_read_write_count(&mut self) {
+	fn reset_read_write_count(&mut self) {
 		self.backend.reset_read_write_count()
+	}
+
+	fn chain_id(&self) -> u64 {
+		42
+	}
+
+	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {
+	}
+
+	fn storage_changes_root(&mut self, _parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
+		unimplemented!("Unsupported")
+	}
+
+	fn wipe(&mut self) {
+		unimplemented!("Unsupported")
+	}
+
+	fn commit(&mut self) {
+		unimplemented!("Unsupported")
+	}
+
+	fn set_whitelist(&mut self, _new: Vec<Vec<u8>>) {
+		unimplemented!("Unsupported")
+	}
+}
+
+impl<'a, H, B> ExtensionStore for ExtInner<'a, H, B>
+where
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H>,
+{
+	fn extension_by_type_id(&mut self, _type_id: TypeId) -> Option<&mut dyn Any> {
+		None
+	}
+
+	fn register_extension_with_type_id(
+		&mut self,
+		_type_id: TypeId,
+		_extension: Box<dyn Extension>,
+	) -> Result<(), ExtensionError> {
+		Err(ExtensionError::ExtensionsAreNotSupported)
+	}
+
+	fn deregister_extension_by_type_id(
+		&mut self,
+		_type_id: TypeId,
+	) -> Result<(), ExtensionError> {
+		Err(ExtensionError::ExtensionsAreNotSupported)
 	}
 }
 
@@ -595,11 +633,11 @@ where
 	}
 
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
-		self.inner.inner().storage(key)
+		self.inner.storage(key)
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.inner.inner().storage_hash(key)
+		self.inner.storage_hash(key)
 	}
 
 	fn child_storage(
@@ -607,7 +645,7 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageValue> {
-		self.inner.inner().child_storage(child_info, key)
+		self.inner.child_storage(child_info, key)
 	}
 
 	fn child_storage_hash(
@@ -615,11 +653,11 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		self.inner.inner().child_storage_hash(child_info, key)
+		self.inner.child_storage_hash(child_info, key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
-		self.inner.inner().exists_storage(key)
+		self.inner.exists_storage(key)
 	}
 
 	fn exists_child_storage(
@@ -627,11 +665,11 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> bool {
-		self.inner.inner().exists_child_storage(child_info, key)
+		self.inner.exists_child_storage(child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		self.inner.inner().next_storage_key(key)
+		self.inner.next_storage_key(key)
 	}
 
 	fn next_child_storage_key(
@@ -639,7 +677,7 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageKey> {
-		self.inner.inner().next_child_storage_key(child_info, key)
+		self.inner.next_child_storage_key(child_info, key)
 	}
 
 	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {

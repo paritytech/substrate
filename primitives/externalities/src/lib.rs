@@ -31,12 +31,10 @@ use sp_std::boxed::Box;
 
 use sp_storage::{ChildInfo, TrackedStorageKey};
 
-#[cfg(feature = "std")]
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
 pub use extensions::{Extension, Extensions, ExtensionStore};
 
 mod extensions;
-#[cfg(feature = "std")]
 mod scope_limited;
 
 /// Externalities error.
