@@ -23,5 +23,7 @@ fn main() {
 		.with_wasm_builder_from_crates_or_path("2.0.0", "../../../utils/wasm-builder")
 		.export_heap_base()
 		.import_memory()
+		// Uncomment the following to enable wasm-based tracing
+		// .append_to_rust_flags("--cfg feature=\\\"with-tracing\\\"")
 		.build()
 }
