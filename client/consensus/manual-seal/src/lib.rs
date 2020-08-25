@@ -46,7 +46,7 @@ pub mod rpc;
 use crate::{
 	finalize_block::{finalize_block, FinalizeBlockParams},
 	seal_new_block::{seal_new_block, SealBlockParams},
-	heartbeat_stream::{HeartbeatStream},
+	heartbeat_stream::{HeartbeatStream, HeartbeatOptions},
 };
 
 pub use crate::{
@@ -164,6 +164,8 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 	pool: Arc<txpool::Pool<A>>,
 	select_chain: SC,
 	inherent_data_providers: InherentDataProviders,
+	finalize: bool,
+	heartbeat_opts_opt: Option<HeartbeatOptions>,
 )
 	where
 		A: txpool::ChainApi<Block=B> + 'static,
@@ -179,23 +181,26 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 	// into the transaction pool.
 	let commands_stream = pool.validated_pool()
 		.import_notification_stream()
-		.map(|_| {
+		.map(move |_| {
 			EngineCommand::SealNewBlock {
 				create_empty: false,
-				finalize: false,
+				finalize,
 				parent_hash: None,
 				sender: None,
 			}
 		});
 
-	let heartbeat_stream = HeartbeatStream::new(Box::new(commands_stream));
+	let stream: Box<dyn Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + Send> = match heartbeat_opts_opt {
+		Some(hbo) => Box::new(HeartbeatStream::new(Box::new(commands_stream), hbo)),
+		None => Box::new(commands_stream),
+	};
 
 	run_manual_seal(
 		block_import,
 		env,
 		client,
 		pool,
-		heartbeat_stream,
+		stream,
 		select_chain,
 		inherent_data_providers,
 	).await
