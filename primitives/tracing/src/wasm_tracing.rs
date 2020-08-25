@@ -16,10 +16,6 @@
 
 #![no_std]
 
-use sp_std::{
-	vec
-};
-
 #[cfg(not(feature = "with-tracing"))]
 mod inner {
 	// we are no-op
@@ -1974,7 +1970,7 @@ macro_rules! valueset {
 
 	// === base case ===
 	(@ { $(,)* $($val:expr),* $(,)* }, $next:expr $(,)*) => {
-		WasmValuesSet::from(vec![ $($val),* ])
+		WasmValuesSet::from(sp_std::vec![ $($val),* ])
 	};
 
 	// === recursive case (more tts) ===
@@ -2091,7 +2087,7 @@ macro_rules! valueset {
 macro_rules! fieldset {
 	// == base case ==
 	(@ { $(,)* $($out:expr),* $(,)* } $(,)*) => {
-		WasmFields::from(vec![ $($out),* ] as Vec<&str>)
+		WasmFields::from(sp_std::vec![ $($out),* ] as sp_std::vec::Vec<&str>)
 	};
 
 	// == recursive cases (more tts) ==
