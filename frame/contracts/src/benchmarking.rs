@@ -138,7 +138,9 @@ benchmarks! {
 		let endowment = Config::<T>::subsistence_threshold_uncached();
 		let caller = create_funded_user::<T>("caller", 0);
 		let (binary, hash) = load_module!("dummy");
-		Contracts::<T>::put_code(RawOrigin::Signed(caller.clone()).into(), binary.to_vec())?;
+		Contracts::<T>::put_code(RawOrigin::Signed(caller.clone()).into(), binary.to_vec())
+			.unwrap();
+
 	}: _(
 			RawOrigin::Signed(caller.clone()),
 			endowment,
@@ -162,14 +164,15 @@ benchmarks! {
 		let caller = create_funded_user::<T>("caller", 0);
 		let (binary, hash) = load_module!("dummy");
 		let addr = T::DetermineContractAddress::contract_address_for(&hash, &[], &caller);
-		Contracts::<T>::put_code(RawOrigin::Signed(caller.clone()).into(), binary.to_vec())?;
+		Contracts::<T>::put_code(RawOrigin::Signed(caller.clone()).into(), binary.to_vec())
+			.unwrap();
 		Contracts::<T>::instantiate(
 			RawOrigin::Signed(caller.clone()).into(),
 			endowment,
 			Weight::max_value(),
 			hash,
 			vec![],
-		)?;
+		).unwrap();
 	}: _(
 			RawOrigin::Signed(caller.clone()),
 			T::Lookup::unlookup(addr),
@@ -184,7 +187,7 @@ benchmarks! {
 		)
 	}
 
-	// We benchmark the costs for successfully evicting an empty contract.
+	// We benchmark the costs for sucessfully evicting an empty contract.
 	// The actual costs are depending on how many storage items the evicted contract
 	// does have. However, those costs are not to be payed by the sender but
 	// will be distributed over multiple blocks using a scheduler. Otherwise there is
@@ -196,18 +199,18 @@ benchmarks! {
 		let caller = create_funded_user::<T>("caller", 0);
 		let (binary, hash) = load_module!("dummy");
 		let addr = T::DetermineContractAddress::contract_address_for(&hash, &[], &caller);
-		Contracts::<T>::put_code(RawOrigin::Signed(caller.clone()).into(), binary.to_vec())?;
+		Contracts::<T>::put_code(RawOrigin::Signed(caller.clone()).into(), binary.to_vec())
+			.unwrap();
 		Contracts::<T>::instantiate(
 			RawOrigin::Signed(caller.clone()).into(),
 			endowment,
 			Weight::max_value(),
 			hash,
 			vec![],
-		)?;
+		).unwrap();
 
 		// instantiate should leave us with an alive contract
-		let contract_info = ContractInfoOf::<T>::get(addr.clone()).ok_or("Could not get contract info")?;
-		contract_info.get_alive().ok_or("Could not verify alive")?;
+		ContractInfoOf::<T>::get(addr.clone()).unwrap().get_alive().unwrap();
 
 		// generate some rent
 		advance_block::<T>(<T as Trait>::SignedClaimHandicap::get() + 1.into());
@@ -215,8 +218,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller.clone()), addr.clone(), None)
 	verify {
 		// the claim surcharge should have evicted the contract
-		let contract_info = ContractInfoOf::<T>::get(addr.clone()).ok_or("Could not get contract info.")?;
-		let _tombstone = contract_info.get_tombstone().ok_or("Could not get tombstone.")?;
+		ContractInfoOf::<T>::get(addr.clone()).unwrap().get_tombstone().unwrap();
 
 		// the caller should get the reward for being a good snitch
 		assert_eq!(
