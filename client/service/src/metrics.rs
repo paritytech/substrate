@@ -18,14 +18,20 @@
 
 use std::{convert::TryFrom, time::SystemTime};
 
-use crate::{NetworkStatus, config::Configuration};
+use crate::{NetworkStatus, NetworkState, NetworkStatusSinks, config::Configuration};
+use futures::future::{FutureExt, poll_fn};
+use futures_timer::Delay;
 use prometheus_endpoint::{register, Gauge, U64, Registry, PrometheusError, Opts, GaugeVec};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
+use sp_api::ProvideRuntimeApi;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
-use sp_transaction_pool::PoolStatus;
+use sp_transaction_pool::{PoolStatus, MaintainedTransactionPool};
 use sp_utils::metrics::register_globals;
-use sc_client_api::ClientInfo;
+use sp_utils::mpsc::TracingUnboundedReceiver;
+use sc_client_api::{ClientInfo, UsageProvider};
 use sc_network::config::Role;
+use std::sync::Arc;
+use std::time::Duration;
 use wasm_timer::Instant;
 
 struct PrometheusMetrics {
@@ -99,6 +105,9 @@ impl PrometheusMetrics {
 	}
 }
 
+/// A `MetricsService` periodically sends general client and
+/// network state to the telemetry as well as (optionally)
+/// a Prometheus endpoint.
 pub struct MetricsService {
 	metrics: Option<PrometheusMetrics>,
 	last_update: Instant,
@@ -107,6 +116,8 @@ pub struct MetricsService {
 }
 
 impl MetricsService {
+	/// Creates a `MetricsService` that only sends information
+	/// to the telemetry.
 	pub fn new() -> Self {
 		MetricsService {
 			metrics: None,
@@ -116,6 +127,8 @@ impl MetricsService {
 		}
 	}
 
+	/// Creates a `MetricsService` that sends metrics
+	/// to prometheus alongside the telemetry.
 	pub fn with_prometheus(
 		registry: &Registry,
 		config: &Configuration,
@@ -141,59 +154,108 @@ impl MetricsService {
 		})
 	}
 
-	pub fn tick<T: Block>(
+	/// Returns a never-ending `Future` that performs the
+	/// metric and telemetry updates with information from
+	/// the given sources.
+	pub async fn run<TBl, TExPool, TCl>(
+		mut self,
+		client: Arc<TCl>,
+		transactions: Arc<TExPool>,
+		network: NetworkStatusSinks<TBl>,
+	) where
+		TBl: Block,
+		TCl: ProvideRuntimeApi<TBl> + UsageProvider<TBl>,
+		TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as Block>::Hash>,
+	{
+		let mut timer = Delay::new(Duration::from_secs(0));
+		let timer_interval = Duration::from_secs(5);
+
+		// Metric and telemetry update interval.
+		let net_status_interval = timer_interval;
+		let net_state_interval = Duration::from_secs(30);
+
+		// Source of network information.
+		let mut net_status_rx = Some(network.status_stream(net_status_interval));
+		let mut net_state_rx = Some(network.state_stream(net_state_interval));
+
+		loop {
+			// Wait for the next tick of the timer.
+			poll_fn(|cx| timer.poll_unpin(cx)).await;
+
+			// Try to get the latest network information.
+			let mut net_status = None;
+			let mut net_state = None;
+			if let Some(rx) = net_status_rx.as_mut() {
+				match Self::latest(rx) {
+					Ok(status) => { net_status = status; }
+					Err(()) => { net_status_rx = None; }
+				}
+			}
+			if let Some(rx) = net_state_rx.as_mut() {
+				match Self::latest(rx) {
+					Ok(state) => { net_state = state; }
+					Err(()) => { net_state_rx = None; }
+				}
+			}
+
+			// Update / Send the metrics.
+			self.update(
+				&client.usage_info(),
+				&transactions.status(),
+				net_status,
+				net_state,
+			);
+
+			// Schedule next tick.
+			timer.reset(timer_interval);
+		}
+	}
+
+	// Try to get the latest value from a receiver, dropping intermediate values.
+	fn latest<T>(rx: &mut TracingUnboundedReceiver<T>) -> Result<Option<T>, ()> {
+		let mut value = None;
+
+		while let Ok(next) = rx.try_next() {
+			match next {
+				Some(v) => {
+					value = Some(v)
+				}
+				None => {
+					log::error!("Receiver closed unexpectedly.");
+					return Err(())
+				}
+			}
+		}
+
+		Ok(value)
+	}
+
+	fn update<T: Block>(
 		&mut self,
 		info: &ClientInfo<T>,
 		txpool_status: &PoolStatus,
-		net_status: &NetworkStatus<T>,
+		net_status: Option<NetworkStatus<T>>,
+		net_state: Option<NetworkState>,
 	) {
 		let now = Instant::now();
 		let elapsed = (now - self.last_update).as_secs();
+		self.last_update = now;
 
 		let best_number = info.chain.best_number.saturated_into::<u64>();
 		let best_hash = info.chain.best_hash;
-		let num_peers = net_status.num_connected_peers;
 		let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
-		let total_bytes_inbound = net_status.total_bytes_inbound;
-		let total_bytes_outbound = net_status.total_bytes_outbound;
-		let best_seen_block = net_status
-			.best_seen_block
-			.map(|num: NumberFor<T>| num.unique_saturated_into() as u64);
 
-		let diff_bytes_inbound = total_bytes_inbound - self.last_total_bytes_inbound;
-		let diff_bytes_outbound = total_bytes_outbound - self.last_total_bytes_outbound;
-		let (avg_bytes_per_sec_inbound, avg_bytes_per_sec_outbound) =
-			if elapsed > 0 {
-				self.last_total_bytes_inbound = total_bytes_inbound;
-				self.last_total_bytes_outbound = total_bytes_outbound;
-				(diff_bytes_inbound / elapsed, diff_bytes_outbound / elapsed)
-			} else {
-				(diff_bytes_inbound, diff_bytes_outbound)
-			};
-		self.last_update = now;
-
+		// Update/send metrics that are always available.
 		telemetry!(
 			SUBSTRATE_INFO;
 			"system.interval";
-			"peers" => num_peers,
 			"height" => best_number,
 			"best" => ?best_hash,
 			"txcount" => txpool_status.ready,
 			"finalized_height" => finalized_number,
 			"finalized_hash" => ?info.chain.finalized_hash,
-			"bandwidth_download" => avg_bytes_per_sec_inbound,
-			"bandwidth_upload" => avg_bytes_per_sec_outbound,
 			"used_state_cache_size" => info.usage.as_ref()
 				.map(|usage| usage.memory.state_cache.as_bytes())
-				.unwrap_or(0),
-			"used_db_cache_size" => info.usage.as_ref()
-				.map(|usage| usage.memory.database_cache.as_bytes())
-				.unwrap_or(0),
-			"disk_read_per_sec" => info.usage.as_ref()
-				.map(|usage| usage.io.bytes_read)
-				.unwrap_or(0),
-			"disk_write_per_sec" => info.usage.as_ref()
-				.map(|usage| usage.io.bytes_written)
 				.unwrap_or(0),
 		);
 
@@ -213,10 +275,6 @@ impl MetricsService {
 
 			metrics.ready_transactions_number.set(txpool_status.ready as u64);
 
-			if let Some(best_seen_block) = best_seen_block {
-				metrics.block_height.with_label_values(&["sync_target"]).set(best_seen_block);
-			}
-
 			if let Some(info) = info.usage.as_ref() {
 				metrics.database_cache.set(info.memory.database_cache.as_bytes() as u64);
 				metrics.state_cache.set(info.memory.state_cache.as_bytes() as u64);
@@ -231,6 +289,51 @@ impl MetricsService {
 					info.memory.state_db.pinned.as_bytes() as u64,
 				);
 			}
+		}
+
+		// Update/send network status information, if any.
+		if let Some(net_status) = net_status {
+			let num_peers = net_status.num_connected_peers;
+			let total_bytes_inbound = net_status.total_bytes_inbound;
+			let total_bytes_outbound = net_status.total_bytes_outbound;
+
+			let diff_bytes_inbound = total_bytes_inbound - self.last_total_bytes_inbound;
+			let diff_bytes_outbound = total_bytes_outbound - self.last_total_bytes_outbound;
+			let (avg_bytes_per_sec_inbound, avg_bytes_per_sec_outbound) =
+				if elapsed > 0 {
+					self.last_total_bytes_inbound = total_bytes_inbound;
+					self.last_total_bytes_outbound = total_bytes_outbound;
+					(diff_bytes_inbound / elapsed, diff_bytes_outbound / elapsed)
+				} else {
+					(diff_bytes_inbound, diff_bytes_outbound)
+				};
+
+			telemetry!(
+				SUBSTRATE_INFO;
+				"system.interval";
+				"peers" => num_peers,
+				"bandwidth_download" => avg_bytes_per_sec_inbound,
+				"bandwidth_upload" => avg_bytes_per_sec_outbound,
+			);
+
+			if let Some(metrics) = self.metrics.as_ref() {
+				let best_seen_block = net_status
+					.best_seen_block
+					.map(|num: NumberFor<T>| num.unique_saturated_into() as u64);
+
+				if let Some(best_seen_block) = best_seen_block {
+					metrics.block_height.with_label_values(&["sync_target"]).set(best_seen_block);
+				}
+			}
+		}
+
+		// Send network state information, if any.
+		if let Some(net_state) = net_state {
+			telemetry!(
+				SUBSTRATE_INFO;
+				"system.network_state";
+				"state" => net_state,
+			);
 		}
 	}
 }
