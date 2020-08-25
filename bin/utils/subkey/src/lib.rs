@@ -19,7 +19,7 @@
 use structopt::StructOpt;
 use sc_cli::{
 	Error, VanityCmd, SignCmd, VerifyCmd, InsertCmd,
-	GenerateNodeKeyCmd, GenerateCmd, InspectCmd, InspectNodeKeyCmd
+	GenerateNodeKeyCmd, GenerateCmd, InspectKeyCmd, InspectNodeKeyCmd
 };
 use substrate_frame_cli::ModuleIdCmd;
 use sp_core::crypto::Ss58Codec;
@@ -38,7 +38,7 @@ pub enum Subkey {
 	Generate(GenerateCmd),
 
 	/// Gets a public key and a SS58 address from the provided Secret URI
-	InspectKey(InspectCmd),
+	InspectKey(InspectKeyCmd),
 
 	/// Print the peer ID corresponding to the node key in the given file
 	InspectNodeKey(InspectNodeKeyCmd),

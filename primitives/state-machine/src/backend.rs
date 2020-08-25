@@ -25,7 +25,7 @@ use sp_core::{
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
-	UsageInfo, StorageKey, StorageValue, StorageCollection,
+	UsageInfo, StorageKey, StorageValue, StorageCollection, ChildStorageCollection,
 };
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
@@ -217,7 +217,13 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 
 	/// Commit given transaction to storage.
-	fn commit(&self, _: H::Out, _: Self::Transaction, _: StorageCollection) -> Result<(), Self::Error> {
+	fn commit(
+		&self,
+		_: H::Out,
+		_: Self::Transaction,
+		_: StorageCollection,
+		_: ChildStorageCollection,
+	) -> Result<(), Self::Error> {
 		unimplemented!()
 	}
 

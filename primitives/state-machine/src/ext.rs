@@ -807,6 +807,7 @@ where
 			changes.transaction_storage_root,
 			changes.transaction,
 			changes.main_storage_changes,
+			changes.child_storage_changes,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.mark_dirty();
 		self.inner.overlay

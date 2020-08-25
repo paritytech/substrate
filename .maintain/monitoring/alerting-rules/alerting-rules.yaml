@@ -110,6 +110,19 @@ groups:
       than 15 minutes'
 
   ##############################################################################
+  # System
+  ##############################################################################
+
+  - alert: HighNumberOfFileDescriptors
+    expr: 'node_filefd_allocated{domain=~"kusama|polkadot"} > 10000'
+    for: 3m
+    labels:
+      severity: warning
+    annotations:
+      message: 'The node {{ $labels.instance }} has more than 10_000 file
+      descriptors allocated for more than 3 minutes'
+
+  ##############################################################################
   # Others
   ##############################################################################
 
