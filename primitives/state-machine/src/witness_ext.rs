@@ -69,6 +69,12 @@ impl<H: Hasher> WitnessExt<H>
 			_phantom: Default::default(),
 		}
 	}
+
+	/// Retrieve the value for the given key only if modified.
+	pub fn modified(&self, key: &[u8]) -> Option<Option<Vec<u8>>> {
+		self.overlay.storage(key)
+			.map(|x| x.map(|x| x.to_vec()))
+	}
 }
 
 impl<H> Externalities for WitnessExt<H>
