@@ -194,7 +194,8 @@ mod execution {
 	/// Strategy for executing a call into the runtime.
 	#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 	pub enum ExecutionStrategy {
-		/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
+		/// Execute with the native equivalent if it is compatible with the given wasm module;
+		/// otherwise fall back to the wasm.
 		NativeWhenPossible,
 		/// Use the given wasm module.
 		AlwaysWasm,

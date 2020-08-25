@@ -461,7 +461,8 @@ impl OverlayedChanges {
 		changes_trie_state: Option<&ChangesTrieState<H, N>>,
 		parent_hash: H::Out,
 		mut cache: StorageTransactionCache<B::Transaction, H, N>,
-	) -> Result<StorageChanges<B::Transaction, H, N>, DefaultError> where H::Out: Ord + Encode + 'static {
+	) -> Result<StorageChanges<B::Transaction, H, N>, DefaultError>
+		where H::Out: Ord + Encode + 'static {
 		self.drain_storage_changes(backend, changes_trie_state, parent_hash, &mut cache)
 	}
 
@@ -473,7 +474,8 @@ impl OverlayedChanges {
 		changes_trie_state: Option<&ChangesTrieState<H, N>>,
 		parent_hash: H::Out,
 		mut cache: &mut StorageTransactionCache<B::Transaction, H, N>,
-	) -> Result<StorageChanges<B::Transaction, H, N>, DefaultError> where H::Out: Ord + Encode + 'static {
+	) -> Result<StorageChanges<B::Transaction, H, N>, DefaultError>
+		where H::Out: Ord + Encode + 'static {
 		// If the transaction does not exist, we generate it.
 		if cache.transaction.is_none() {
 			self.storage_root(backend, &mut cache);
