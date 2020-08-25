@@ -854,7 +854,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 				);
 				DEFAULT_PROTOCOL_ID
 			}
-		}.as_bytes();
+		};
 		sc_network::config::ProtocolId::from(protocol_id_full)
 	};
 

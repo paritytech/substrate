@@ -80,7 +80,7 @@ pub enum BehaviourOut<B: BlockT> {
 		/// Peer which sent us a request.
 		peer: PeerId,
 		/// Protocol name of the request.
-		protocol: Vec<u8>,
+		protocol: String,
 		/// Time it took to build the response.
 		build_time: Duration,
 	},
@@ -88,14 +88,14 @@ pub enum BehaviourOut<B: BlockT> {
 	RequestStarted {
 		peer: PeerId,
 		/// Protocol name of the request.
-		protocol: Vec<u8>,
+		protocol: String,
 	},
 	/// Finished, successfully or not, a previously-started request.
 	RequestFinished {
 		/// Who we were requesting.
 		peer: PeerId,
 		/// Protocol name of the request.
-		protocol: Vec<u8>,
+		protocol: String,
 		/// How long before the response came or the request got cancelled.
 		request_duration: Duration,
 	},
@@ -300,18 +300,18 @@ Behaviour<B, H> {
 					block_requests::SendRequestOutcome::Ok => {
 						self.events.push_back(BehaviourOut::RequestStarted {
 							peer: target,
-							protocol: self.block_requests.protocol_name().to_vec(),
+							protocol: self.block_requests.protocol_name().to_owned(),
 						});
 					},
 					block_requests::SendRequestOutcome::Replaced { request_duration, .. } => {
 						self.events.push_back(BehaviourOut::RequestFinished {
 							peer: target.clone(),
-							protocol: self.block_requests.protocol_name().to_vec(),
+							protocol: self.block_requests.protocol_name().to_owned(),
 							request_duration,
 						});
 						self.events.push_back(BehaviourOut::RequestStarted {
 							peer: target,
-							protocol: self.block_requests.protocol_name().to_vec(),
+							protocol: self.block_requests.protocol_name().to_owned(),
 						});
 					}
 					block_requests::SendRequestOutcome::NotConnected |
@@ -364,14 +364,14 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 			block_requests::Event::AnsweredRequest { peer, total_handling_time } => {
 				self.events.push_back(BehaviourOut::AnsweredRequest {
 					peer,
-					protocol: self.block_requests.protocol_name().to_vec(),
+					protocol: self.block_requests.protocol_name().to_owned(),
 					build_time: total_handling_time,
 				});
 			},
 			block_requests::Event::Response { peer, original_request: _, response, request_duration } => {
 				self.events.push_back(BehaviourOut::RequestFinished {
 					peer: peer.clone(),
-					protocol: self.block_requests.protocol_name().to_vec(),
+					protocol: self.block_requests.protocol_name().to_owned(),
 					request_duration,
 				});
 				let ev = self.substrate.on_block_response(peer, response);
@@ -383,7 +383,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 				// we process them by disconnecting the node.
 				self.events.push_back(BehaviourOut::RequestFinished {
 					peer: peer.clone(),
-					protocol: self.block_requests.protocol_name().to_vec(),
+					protocol: self.block_requests.protocol_name().to_owned(),
 					request_duration,
 				});
 				self.substrate.on_block_request_failed(&peer);
