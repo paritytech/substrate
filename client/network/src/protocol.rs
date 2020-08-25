@@ -256,6 +256,10 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: Arc<HashSet<PeerId>>,
+	/// All the block announcement pre-validations that are currently active.
+	block_announce_pre_validation: FuturesUnordered<
+		Box<dyn Future<Output = sync::PreValidateBlockAnnounce<B::Header>> + Send + Unpin>
+	>,
 }
 
 #[derive(Default)]
@@ -466,6 +470,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				None
 			},
 			boot_node_ids,
+			block_announce_pre_validation: FuturesUnordered::new(),
 		};
 
 		Ok((protocol, peerset_handle))
@@ -554,7 +559,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn update_chain(&mut self) {
 		let info = self.context_data.chain.info();
 		self.sync.update_chain_info(&info.best_hash, info.best_number);
-		self.behaviour.set_legacy_handshake_message(build_status_message(&self.config, &self.context_data.chain));
+		self.behaviour.set_legacy_handshake_message(
+			build_status_message(&self.config, &self.context_data.chain),
+		);
 		self.behaviour.set_notif_protocol_handshake(
 			&self.block_announces_protocol,
 			BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
@@ -585,11 +592,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		who: PeerId,
 		data: BytesMut,
 	) -> CustomMessageOutcome<B> {
-
 		let message = match <Message<B> as Decode>::decode(&mut &data[..]) {
 			Ok(message) => message,
 			Err(err) => {
-				debug!(target: "sync", "Couldn't decode packet sent by {}: {:?}: {}", who, data, err.what());
+				debug!(
+					target: "sync",
+					"Couldn't decode packet sent by {}: {:?}: {}",
+					who,
+					data,
+					err.what(),
+				);
 				self.peerset_handle.report_peer(who, rep::BAD_MESSAGE);
 				return CustomMessageOutcome::None;
 			}
@@ -609,9 +621,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				return outcome
 			},
 			GenericMessage::BlockAnnounce(announce) => {
-				let outcome = self.on_block_announce(who.clone(), announce);
-				self.update_peer_info(&who);
-				return outcome;
+				self.pre_validate_block_announce(who.clone(), announce);
 			},
 			GenericMessage::Transactions(m) =>
 				self.on_transactions(who, m),
@@ -1300,42 +1310,62 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	fn on_block_announce(
+	/// Pre-validate the given block announcement.
+	///
+	/// The pre-validation is an async operation that will be run asyncly
+	/// until it is finished. After finishing the pre-validation it will
+	/// call the [`Protocol::process_block_announce_pre_validation`].
+	fn pre_validate_block_announce(
 		&mut self,
 		who: PeerId,
 		announce: BlockAnnounce<B::Header>,
-	) -> CustomMessageOutcome<B> {
+	) {
 		let hash = announce.header.hash();
-		let number = *announce.header.number();
 
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
 			peer.known_blocks.insert(hash.clone());
 		}
 
-		let is_their_best = match announce.state.unwrap_or(message::BlockState::Best) {
+		let is_best = match announce.state.unwrap_or(message::BlockState::Best) {
 			message::BlockState::Best => true,
 			message::BlockState::Normal => false,
 		};
 
-		match self.sync.on_block_announce(&who, hash, &announce, is_their_best) {
-			sync::OnBlockAnnounce::Nothing => {
+		let future = self.sync.pre_validate_block_announce(who, &hash, announce, is_best);
+		self.block_announce_pre_validation.push(Box::new(future));
+	}
+
+	/// Process the result of the pre-validation of a block announcement.
+	fn process_block_announce_pre_validation(
+		&mut self,
+		pre_validation_result: sync::PreValidateBlockAnnounce<B::Header>,
+	) -> CustomMessageOutcome<B> {
+		let (header, is_best, who) = match self.sync.process_block_announce_pre_validation(pre_validation_result) {
+			sync::BlockAnnounceResult::Nothing { is_best, who, header } => {
+				self.update_peer_info(&who);
+
 				// `on_block_announce` returns `OnBlockAnnounce::ImportHeader`
 				// when we have all data required to import the block
 				// in the BlockAnnounce message. This is only when:
 				// 1) we're on light client;
 				// AND
 				// 2) parent block is already imported and not pruned.
-				if is_their_best {
-					return CustomMessageOutcome::PeerNewBest(who, number);
+				if is_best {
+					return CustomMessageOutcome::PeerNewBest(who, *header.number())
 				} else {
-					return CustomMessageOutcome::None;
+					return CustomMessageOutcome::None
 				}
 			}
-			sync::OnBlockAnnounce::ImportHeader => () // We proceed with the import.
-		}
+			sync::BlockAnnounceResult::ImportHeader { header, is_best, who } => {
+				self.update_peer_info(&who);
+				(header, is_best, who)
+			}
+		};
 
-		// to import header from announced block let's construct response to request that normally would have
-		// been sent over network (but it is not in our case)
+		let number = *header.number();
+
+		// to import header from announced block let's construct response to request that normally
+		// would have been sent over network (but it is not in our case)
 		let blocks_to_import = self.sync.on_block_data(
 			&who,
 			None,
@@ -1343,8 +1373,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				id: 0,
 				blocks: vec![
 					message::generic::BlockData {
-						hash: hash,
-						header: Some(announce.header),
+						hash: header.hash(),
+						header: Some(header),
 						body: None,
 						receipt: None,
 						message_queue: None,
@@ -1354,8 +1384,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			},
 		);
 
-		if is_their_best {
-			self.pending_messages.push_back(CustomMessageOutcome::PeerNewBest(who, number));
+		if is_best {
+			self.pending_messages.push_back(
+				CustomMessageOutcome::PeerNewBest(who, number),
+			);
 		}
 
 		match blocks_to_import {
@@ -1786,13 +1818,12 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					}
 					Some(Fallback::BlockAnnounce) => {
 						if let Ok(announce) = message::BlockAnnounce::decode(&mut message.as_ref()) {
-							let outcome = self.on_block_announce(peer_id.clone(), announce);
-							self.update_peer_info(&peer_id);
-							outcome
+							self.pre_validate_block_announce(peer_id, announce);
 						} else {
 							warn!(target: "sub-libp2p", "Failed to decode block announce");
-							CustomMessageOutcome::None
 						}
+
+						CustomMessageOutcome::None
 					}
 					None => {
 						error!(target: "sub-libp2p", "Received notification from unknown protocol {:?}", protocol_name);
@@ -1802,6 +1833,14 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		};
 
 		if let CustomMessageOutcome::None = outcome {
+			// Check if any pre-validations are ready to be processed.
+			while let Poll::Ready(Some(result)) = self.block_announce_pre_validation.poll_next_unpin(cx) {
+				match self.process_block_announce_pre_validation(result) {
+					CustomMessageOutcome::None => continue,
+					outcome => return Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
+				}
+			}
+
 			Poll::Pending
 		} else {
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))

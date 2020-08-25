@@ -18,7 +18,8 @@
 
 use crate::BlockStatus;
 use sp_runtime::{generic::BlockId, traits::Block};
-use std::{error::Error, sync::Arc};
+use std::{error::Error, sync::Arc, future::Future};
+use futures::FutureExt;
 
 /// A type which provides access to chain information.
 pub trait Chain<B: Block> {
@@ -47,7 +48,11 @@ pub enum Validation {
 /// Type which checks incoming block announcements.
 pub trait BlockAnnounceValidator<B: Block> {
 	/// Validate the announced header and its associated data.
-	fn validate(&mut self, header: &B::Header, data: &[u8]) -> Result<Validation, Box<dyn Error + Send>>;
+	fn validate(
+		&mut self,
+		header: &B::Header,
+		data: &[u8],
+	) -> Box<dyn Future<Output = Result<Validation, Box<dyn Error + Send>>> + Send + Unpin>;
 }
 
 /// Default implementation of `BlockAnnounceValidator`.
@@ -55,7 +60,11 @@ pub trait BlockAnnounceValidator<B: Block> {
 pub struct DefaultBlockAnnounceValidator;
 
 impl<B: Block> BlockAnnounceValidator<B> for DefaultBlockAnnounceValidator {
-	fn validate(&mut self, _h: &B::Header, _d: &[u8]) -> Result<Validation, Box<dyn Error + Send>> {
-		Ok(Validation::Success { is_new_best: false })
+	fn validate(
+		&mut self,
+		_: &B::Header,
+		_: &[u8],
+	) -> Box<dyn Future<Output = Result<Validation, Box<dyn Error + Send>>> + Send + Unpin> {
+		Box::new(async { Ok(Validation::Success { is_new_best: false }) }.boxed())
 	}
 }
