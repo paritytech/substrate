@@ -41,7 +41,7 @@ pub enum WasmLevel {
 }
 
 /// A paramter value provided to the span/event
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Clone)]
 pub enum WasmValue {
 	U8(u8),
 	I8(i8),
@@ -56,6 +56,48 @@ pub enum WasmValue {
 	/// SCALE CODEC encoded object – the name should allow the received to know
 	/// how to decode this.
 	Encoded(Vec<u8>),
+}
+
+impl core::fmt::Debug for WasmValue {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+		match self {
+			WasmValue::U8(ref i) => {
+				f.write_fmt(format_args!("{}_u8", i))
+			}
+			WasmValue::I8(ref i) => {
+				f.write_fmt(format_args!("{}_i8", i))
+			}
+			WasmValue::U32(ref i) => {
+				f.write_fmt(format_args!("{}_u32", i))
+			}
+			WasmValue::I32(ref i) => {
+				f.write_fmt(format_args!("{}_i32", i))
+			}
+			WasmValue::I64(ref i) => {
+				f.write_fmt(format_args!("{}_i64", i))
+			}
+			WasmValue::U64(ref i) => {
+				f.write_fmt(format_args!("{}_u64", i))
+			}
+			WasmValue::Bool(ref i) => {
+				f.write_fmt(format_args!("{}_bool", i))
+			}
+			WasmValue::Formatted(ref i) | WasmValue::Str(ref i) => {
+				if let Ok(v) = core::str::from_utf8(i) {
+					f.write_fmt(format_args!("{}", v))
+				} else {
+					f.write_fmt(format_args!("{:?}", i))
+				}
+			}
+			WasmValue::Encoded(ref v) => {
+				f.write_str("Scale(")?;
+					for byte in v {
+						f.write_fmt(format_args!("{:02x}", byte))?;
+					}
+				f.write_str(")")
+			}
+		}
+	}
 }
 
 impl From<u8> for WasmValue {
@@ -142,9 +184,21 @@ impl From<i64> for WasmValue {
 /// `event!` or `span!`.
 /// Generally generated automaticaly via `stringify` from an `'static &str`.
 /// Likely print-able.
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Clone)]
 pub struct WasmFieldName(Vec<u8>);
 
+impl core::fmt::Debug for WasmFieldName {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+		if let Ok(v) = core::str::from_utf8(&self.0) {
+			f.write_fmt(format_args!("{}", v))
+		} else {
+			for byte in self.0.iter() {
+				f.write_fmt(format_args!("{:02x}", byte))?;
+			}
+			Ok(())
+		}
+	}
+}
 
 impl From<Vec<u8>> for WasmFieldName {
 	fn from(v: Vec<u8>) -> Self {
@@ -163,6 +217,7 @@ impl From<&str> for WasmFieldName {
 pub struct WasmFields(Vec<WasmFieldName>);
 
 impl WasmFields {
+	/// Iterate over the fields
 	pub fn iter(&self) -> core::slice::Iter<'_, WasmFieldName> {
 		self.0.iter()
 	}
@@ -190,8 +245,34 @@ impl WasmFields {
 
 /// A list of `WasmFieldName`s with the given `WasmValue` (if provided)
 /// in the order specified.
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Clone)]
 pub struct WasmValuesSet(Vec<(WasmFieldName, Option<WasmValue>)>);
+
+impl core::fmt::Debug for WasmValuesSet {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+		let mut wrt = f.debug_struct("");
+		let mut non_str = false;
+		for (f, v) in self.0.iter() {
+			if let Ok(s) = core::str::from_utf8(&f.0) {
+				match v {
+					Some(ref i) => wrt.field(s, i),
+					None => wrt.field(s, &(None as Option<WasmValue>)),
+				};
+			} else {
+				non_str = true;
+			}
+		}
+
+		// FIXME: replace with using `finish_non_exhaustive()` once stable
+		//        https://github.com/rust-lang/rust/issues/67364
+		if non_str {
+			wrt.field("..", &"..");
+		}
+
+		wrt.finish()
+	}
+}
+
 
 impl From<Vec<(WasmFieldName, Option<WasmValue>)>> for WasmValuesSet {
 	fn from(v: Vec<(WasmFieldName, Option<WasmValue>)>) -> Self {
