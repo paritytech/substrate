@@ -432,7 +432,6 @@ where
 		within_span! {
 			sp_tracing::Level::TRACE, "validate";
 			xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
-			}
 		}
 	}
 
