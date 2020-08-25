@@ -19,6 +19,8 @@
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
+#![allow(dead_code)]
+
 use std::{sync::Arc, marker::{PhantomData, Send}};
 use futures::prelude::*;
 
@@ -41,17 +43,18 @@ mod error;
 mod finalize_block;
 mod seal_new_block;
 mod heartbeat_stream;
-pub mod rpc;
+mod rpc;
 
 use crate::{
 	finalize_block::{finalize_block, FinalizeBlockParams},
 	seal_new_block::{seal_new_block, SealBlockParams},
-	heartbeat_stream::{HeartbeatStream, HeartbeatOptions},
+	heartbeat_stream::{HeartbeatStream},
 };
 
 pub use crate::{
 	error::Error,
 	rpc::{EngineCommand, CreatedBlock},
+	heartbeat_stream::{HeartbeatOptions},
 };
 
 /// The verifier for the manual seal engine; instantly finalizes.

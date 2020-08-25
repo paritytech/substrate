@@ -5,7 +5,7 @@ use futures::{
 	prelude::*,
 	task::{Context, Poll},
 };
-use tokio::time::Duration;
+use tokio::time::{Duration, Instant, Delay};
 
 use crate::rpc::{EngineCommand};
 
@@ -35,7 +35,8 @@ impl Default for HeartbeatOptions {
 
 pub struct HeartbeatStream<Hash> {
 	pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
-	delay: tokio::time::Delay,
+	delay: Delay,
+	instant: Instant,
 	opts: HeartbeatOptions,
 }
 
@@ -47,6 +48,7 @@ impl<Hash> HeartbeatStream<Hash> {
 		Self {
 			pool_stream,
 			delay: tokio::time::delay_for(Duration::from_secs(opts.timeout)),
+			instant: Instant::now(),
 			opts
 		}
 	}
@@ -60,8 +62,14 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 		let mut hbs = self.get_mut();
 		match hbs.pool_stream.poll_next_unpin(cx) {
 			Poll::Ready(Some(ec)) => {
-				// A new EngineCommand comes in
+				// Ensure we are not producing block too frequently, based on `min_blocktime` setting
+				if Instant::now() - hbs.instant < Duration::from_secs(hbs.opts.min_blocktime) {
+					return Poll::Pending;
+				}
+
+				// reset the timer and delay future
 				hbs.delay = tokio::time::delay_for(Duration::from_secs(hbs.opts.timeout));
+				hbs.instant = Instant::now();
 				Poll::Ready(Some(ec))
 			},
 
@@ -71,7 +79,10 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 			Poll::Pending => {
 				// We check if the delay for heartbeat has reached
 				if let Poll::Ready(_) = hbs.delay.poll_unpin(cx) {
+					// reset the timer and delay future
 					hbs.delay = tokio::time::delay_for(Duration::from_secs(hbs.opts.timeout));
+					hbs.instant = Instant::now();
+
 					return Poll::Ready(Some(EngineCommand::SealNewBlock {
 						create_empty: true, // heartbeat blocks are empty by definition
 						finalize: hbs.opts.finalize,
@@ -81,7 +92,6 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 				}
 				Poll::Pending
 			},
-
 		}
 	}
 }

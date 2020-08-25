@@ -167,7 +167,9 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			client.clone(),
 			transaction_pool.pool().clone(),
 			select_chain,
-			inherent_data_providers
+			inherent_data_providers,
+			false,
+			Some(sc_consensus_manual_seal::HeartbeatOptions::default()),
 		);
 
 		// the AURA authoring task is considered essential, i.e. if it
