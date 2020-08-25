@@ -6250,6 +6250,7 @@ version = "0.8.0-rc6"
 dependencies = [
  "bytes 0.5.6",
  "derive_more",
+ "either",
  "env_logger",
  "futures 0.3.5",
  "futures-timer 3.0.2",
@@ -6323,6 +6324,7 @@ name = "sc-chain-spec"
 version = "2.0.0-rc6"
 dependencies = [
  "impl-trait-for-tuples",
+ "parity-scale-codec",
  "sc-chain-spec-derive",
  "sc-network",
  "sc-telemetry",
@@ -9393,9 +9395,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.9"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0693bf8d6f2bf22c690fc61a9d21ac69efdbb894a17ed596b9af0f01e64b84b"
+checksum = "80e0ccfc3378da0cce270c946b676a376943f5cd16aeba64568e7939806f4ada"
 dependencies = [
  "proc-macro2",
  "quote",
