@@ -18,9 +18,9 @@ const DEFAULT_FINALIZE: bool = false;
 
 // ---
 pub struct HeartbeatOptions {
-	timeout: u64,
-	min_blocktime: u64,
-	finalize: bool,
+	pub timeout: u64,
+	pub min_blocktime: u64,
+	pub finalize: bool,
 }
 
 impl Default for HeartbeatOptions {
