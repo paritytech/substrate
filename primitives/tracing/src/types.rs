@@ -300,7 +300,7 @@ impl WasmValuesSet {
 
 /// Metadata provides generic information about the specifc location of the
 /// `span!` or `event!` call on the wasm-side.
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Clone)]
 pub struct WasmMetadata {
 	/// The name given to `event!`/`span!`, `&'static str` converted to bytes
 	pub name: Vec<u8>,
@@ -318,6 +318,25 @@ pub struct WasmMetadata {
 	pub is_span: bool,
 	/// The list of fields specified in the call
 	pub fields: WasmFields,
+}
+
+impl core::fmt::Debug for WasmMetadata {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		f.debug_struct("WasmMetadata")
+			.field("name", &decode_field(&self.name))
+			.field("target", &decode_field(&self.target))
+			.field("level", &self.level)
+			.field("file", &decode_field(&self.file))
+			.field("line", &self.line)
+			.field("module_path", &decode_field(&self.module_path))
+			.field("is_span", &self.is_span)
+			.field("fields", &self.fields)
+			.finish()
+	}
+}
+
+fn decode_field(field: &[u8]) -> &str {
+	core::str::from_utf8(field).unwrap_or_default()
 }
 
 /// Span or Event Attributes
