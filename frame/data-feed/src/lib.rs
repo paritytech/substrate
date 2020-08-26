@@ -61,9 +61,9 @@
 //! ### Dispatchable Functions
 //!
 //! * `register_storage_key` - Register a storage key whose value can be modified within
-//!     oracle pallet.
+//!     data feed pallet.
 //! * `remove_storage_key` - Remove a storage key whose value can no longer be touched by
-//!    oracle pallet.
+//!    data feed pallet.
 //! * `set_url` - Set a url under a specific key whose value can be querried from
 //! * `feed_data` - Submit a piece of data on chain with a signed transaction
 //! * `add_provider` - Add a whitelisted account that is able to submit data on chain
@@ -79,7 +79,7 @@
 //! The Example `template module` uses two way to get the datas which are feeded by this data-feed module
 //! we use template module as the example to show how to use data-feed
 //! 1. first way: the storage defined in template module.
-//! ```
+//! ```nocompile
 //! // in template module:
 //! use pallet_data_feed::DataType;
 //! pub trait Trait: frame_system::Trait {
@@ -102,7 +102,7 @@
 //! // 4. template module could use `Something` to get data and use.
 //! ```
 //! 2. second way: the storage defined in runtime
-//! ```
+//! ```nocompile
 //! // in template module:
 //! pub trait Trait: frame_system::Trait {
 //! 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -144,3 +144,561 @@
 //!
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(test)]
+mod tests;
+
+use codec::{Decode, Encode};
+use lite_json::json::{JsonValue, NumberValue};
+
+use sp_core::crypto::KeyTypeId;
+use sp_runtime::{
+	offchain::{http, Duration},
+	traits::{CheckedDiv, Saturating, StaticLookup, Zero},
+	DispatchError, DispatchResult, FixedPointNumber, FixedU128, RuntimeDebug,
+};
+use sp_std::{prelude::*, str::Chars};
+
+use frame_support::{
+	debug, decl_error, decl_event, decl_module, decl_storage,
+	traits::{Contains, EnsureOrigin},
+	IterableStorageDoubleMap, IterableStorageMap,
+};
+use frame_system::{
+	ensure_root, ensure_signed,
+	offchain::{AppCrypto, CreateSignedTransaction, SendSignedTransaction, Signer},
+};
+
+/// The identifier for data-feed-specific crypto keys
+pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"dafe");
+pub const RING_BUF_LEN: usize = 8;
+pub const MAX_KEY_LEN: usize = 8;
+pub const MAX_PROVIDER_LEN: usize = 8;
+pub type StorageKey = Vec<u8>;
+
+pub mod crypto {
+	use super::KEY_TYPE;
+	use sp_core::sr25519::Signature as Sr25519Signature;
+	use sp_runtime::{
+		app_crypto::{app_crypto, sr25519},
+		traits::Verify,
+	};
+	app_crypto!(sr25519, KEY_TYPE);
+
+	pub type AuthoritySignature = Signature;
+	pub type AuthorityId = Public;
+
+	pub struct DataFeedAuthId;
+	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
+		for DataFeedAuthId
+	{
+		type RuntimeAppPublic = AuthorityId;
+		type GenericSignature = sp_core::sr25519::Signature;
+		type GenericPublic = sp_core::sr25519::Public;
+	}
+}
+
+/// The operation type that specifies how we calculate the data
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub enum Operations {
+	Average,
+	Sum,
+}
+
+/// A "generic" numeric data type, which can be used in other pallets
+/// as a storage value. `lite_json:json::NumberValue` can be converted into
+/// DataType with helper functions.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub enum DataType {
+	U128(u128),
+	FixedU128(FixedU128),
+}
+
+impl From<u128> for DataType {
+	fn from(n: u128) -> Self {
+		DataType::U128(n)
+	}
+}
+
+impl From<FixedU128> for DataType {
+	fn from(f: FixedU128) -> Self {
+		DataType::FixedU128(f)
+	}
+}
+
+impl DataType {
+	pub fn number_type(&self) -> NumberType {
+		match self {
+			DataType::U128(_) => NumberType::U128,
+			DataType::FixedU128(_) => NumberType::FixedU128,
+		}
+	}
+
+	pub fn into_fixed_u128(self) -> Option<FixedU128> {
+		match self {
+			DataType::FixedU128(f) => Some(f),
+			_ => None,
+		}
+	}
+
+	pub fn from_number_value(val: NumberValue, target_type: NumberType) -> Option<Self> {
+		match target_type {
+			NumberType::U128 => {
+				if val.integer < 0 {
+					return None;
+				}
+				Some(DataType::U128(val.integer as u128))
+			}
+			NumberType::FixedU128 => {
+				if val.integer < 0 {
+					return None;
+				}
+				let decimal_point = -(val.fraction_length as i32) + val.exponent;
+				let (n, d) = if decimal_point >= 0 {
+					// e.g. 1.35 * 10^3
+					// integer part is (1 * 10^2 + 35) * 10^(-2+3)
+					// decimal part is 1
+					let n = (val.integer * 10_i64.pow(val.fraction_length) + val.fraction as i64)
+						* 10_i64.pow(decimal_point as u32);
+					let d = 1;
+					(n, d)
+				} else {
+					// e.g. 1.35 * 10^-2
+					// integer part is (1 * 10^2 + 35)
+					// decimal part is 10^(|-2-2|)
+					let n = val.integer * 10_i64.pow(val.fraction_length) + val.fraction as i64;
+					// let d = decimal_point.abs();
+					let d = 10_i64.pow(decimal_point.abs() as u32);
+					(n, d)
+				};
+				let res = FixedU128::from((n, d));
+				Some(DataType::FixedU128(res))
+			}
+		}
+	}
+}
+
+/// Types of DataType
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub enum NumberType {
+	U128,
+	FixedU128,
+}
+
+impl Default for DataType {
+	fn default() -> Self {
+		DataType::U128(0)
+	}
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug)]
+pub struct Info<BlockNumber> {
+	/// the key of what we want from the json callback
+	key_str: Vec<u8>,
+	number_type: NumberType,
+	operation: Operations,
+	schedule: BlockNumber,
+}
+
+impl<BlockNumber> Info<BlockNumber> {
+	fn key_str(&self) -> &[u8] {
+		&self.key_str
+	}
+
+	fn number_type(&self) -> NumberType {
+		self.number_type
+	}
+}
+
+pub trait Trait: CreateSignedTransaction<Call<Self>> {
+	/// The identifier type for an offchain worker.
+	type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+	/// Because this pallet emits events, it depends on the runtime's definition of an event.
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	/// The overarching dispatch call type.
+	type Call: From<Call<Self>>;
+	/// The origin that can schedule an update
+	type DispatchOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+}
+
+decl_event!(
+	pub enum Event<T>
+	where
+		AccountId = <T as frame_system::Trait>::AccountId,
+	{
+		/// Register a storage key
+		RegisterStorageKey(StorageKey),
+		/// Remove a storage key
+		RemoveStorageKey(StorageKey),
+		/// Add a provider accountid
+		AddProvider(AccountId),
+		/// Remove a provider accountid
+		RemoveProvider(AccountId),
+		/// Set url for a key, which would be used in offchain
+		SetUrl(StorageKey, Vec<u8>),
+		/// New data stored on blockchain
+		FeedData(AccountId, StorageKey, DataType),
+		/// Set calculated data
+		SetData(StorageKey, DataType),
+	}
+);
+
+// Errors inform users that something went wrong.
+decl_error! {
+	pub enum Error for Module<T: Trait> {
+		/// If the storage key already registered
+		ExistedKey,
+		/// You can not put data under the key that is not registered
+		InvalidKey,
+		/// If the data type does not match the one specified in Infos
+		InvalidValue,
+		/// user is not allowed to feed data onto the blockchain
+		NotAllowed,
+		/// provider count of key count exceed limit
+		ExceedLimit,
+	}
+}
+
+decl_storage! {
+	trait Store for Module<T: Trait> as DataFeed {
+		/// A set of storage keys
+		/// A storage key in this set refers to a storage value in other pallets,
+		pub ActiveParamTypes get(fn all_keys): Vec<StorageKey>;
+
+		/// A set of accounts
+		/// Any one can submit data on chain, while only the data submitted by
+		/// the provider in this set is valid, and will be calculated later.
+		pub ActiveProviders get(fn all_providers): Vec<T::AccountId>;
+
+		/// Data Attributes.
+		/// It defines the type of the data, how to extract the data we want
+		/// from a json blob
+		pub Infos get(fn infos): map hasher(twox_64_concat) StorageKey => Option<Info<T::BlockNumber>>;
+
+		/// permissioned URL that could be used to fetch data
+		pub Url get(fn url): map hasher(twox_64_concat) StorageKey => Option<Vec<u8>>;
+
+		pub DataFeeds get(fn feeded_data): double_map hasher(blake2_128_concat) StorageKey,
+			hasher(blake2_128_concat) T::AccountId => Option<[DataType; RING_BUF_LEN]>;
+	}
+}
+
+impl<T: Trait> Contains<T::AccountId> for Module<T> {
+	fn sorted_members() -> Vec<T::AccountId> {
+		Self::all_providers()
+	}
+}
+
+decl_module! {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+		fn deposit_event() = default;
+
+		/// Register a storage key under which the value can be modified
+		/// by this data feed pallet with some rules
+		#[weight = 0]
+		pub fn register_storage_key(origin, key: StorageKey, info: Info<T::BlockNumber>) -> DispatchResult {
+			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+			// parse origin
+			ActiveParamTypes::try_mutate::<_, DispatchError, _>(|v| {
+				if v.contains(&key) {
+					Err(Error::<T>::ExistedKey)?;
+				}
+				if v.len() + 1 > MAX_KEY_LEN {
+					Err(Error::<T>::ExceedLimit)?
+				}
+
+				v.push(key.clone());
+				Ok(())
+			})?;
+			Infos::<T>::insert(&key, info);
+			Self::deposit_event(RawEvent::RegisterStorageKey(key));
+			Ok(())
+		}
+
+		/// remove the storage key from the limited set so the data feed pallet no longer
+		/// can change the corresponding value afterwards.
+		#[weight = 0]
+		pub fn remove_storage_key(origin, key: StorageKey) -> DispatchResult {
+			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+			ActiveParamTypes::mutate(|v| {
+				// remove key
+				v.retain(|k| k != &key);
+			});
+			Infos::<T>::remove(&key);
+			DataFeeds::<T>::remove_prefix(&key);
+			Self::deposit_event(RawEvent::RemoveStorageKey(key));
+			Ok(())
+		}
+
+		#[weight = 0]
+		pub fn set_url(origin, key: StorageKey, url: Vec<u8>) -> DispatchResult {
+			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+			Url::insert(&key, &url);
+			Self::deposit_event(RawEvent::SetUrl(key, url));
+			Ok(())
+		}
+
+		/// Submit a new data under the specific storage key.
+		#[weight = 0]
+		pub fn feed_data(origin, key: StorageKey, value: DataType) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::feed_data_impl(who, key, value)
+		}
+
+		#[weight = 0]
+		pub fn add_provider(origin, new_one: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+			let new_one = T::Lookup::lookup(new_one)?;
+
+			ActiveProviders::<T>::try_mutate(|v| -> DispatchResult {
+				if !v.contains(&new_one) {
+					if v.len() + 1 > MAX_KEY_LEN {
+						Err(Error::<T>::ExceedLimit)?
+					}
+
+					v.push(new_one.clone());
+				}
+				Ok(())
+			})?;
+			Self::deposit_event(RawEvent::AddProvider(new_one));
+			Ok(())
+		}
+
+		#[weight = 0]
+		pub fn remove_provider(origin, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+			let who = T::Lookup::lookup(who)?;
+
+			ActiveProviders::<T>::mutate(|v| {
+				v.retain(|accountid| accountid != &who);
+			});
+			Self::deposit_event(RawEvent::RemoveProvider(who));
+			Ok(())
+		}
+
+		fn on_finalize(_n: T::BlockNumber) {
+			for (key, info) in Infos::<T>::iter() {
+				if  _n % info.schedule == Zero::zero() {
+					Self::calc(key, info);
+				}
+			}
+		}
+
+		fn offchain_worker(block_number: T::BlockNumber) {
+			debug::native::info!("Initialize offchain workers!");
+
+			for key in Self::all_keys() {
+				let res = Self::fetch_and_send_signed(&key);
+				if let Err(e) = res {
+					debug::error!("Error: {}", e);
+				}
+			}
+		}
+	}
+}
+
+impl<T: Trait> Module<T> {
+	fn feed_data_impl(who: T::AccountId, key: StorageKey, value: DataType) -> DispatchResult {
+		if !Self::all_keys().contains(&key) {
+			Err(Error::<T>::InvalidKey)?
+		}
+		let info: Info<_> = Self::infos(&key).ok_or(Error::<T>::InvalidKey)?;
+		if value.number_type() != info.number_type {
+			Err(Error::<T>::InvalidValue)?
+		}
+		debug::info!("Feeding data to {:?}", key);
+		DataFeeds::<T>::try_mutate_exists(key.clone(), who.clone(), |data| {
+			match data {
+				Some(data) => {
+					let mut new_data = [Default::default(); RING_BUF_LEN];
+					new_data[0] = value;
+					// move data buf to new_data buf, and drop last item
+					new_data[1..].copy_from_slice(&data[0..(data.len() - 2)]);
+					*data = new_data;
+				}
+				None => {
+					*data = Some([value; RING_BUF_LEN]);
+				}
+			}
+			Self::deposit_event(RawEvent::FeedData(who, key, value));
+			Ok(())
+		})
+	}
+
+	fn calc_impl<N: Saturating + CheckedDiv + Copy, F: FnOnce(usize) -> N>(
+		numbers: &[N],
+		zero: N,
+		convert: F,
+		op: Operations,
+	) -> N {
+		match op {
+			Operations::Sum => {
+				let sum = numbers.iter().fold(zero, |a, b| a.saturating_add(*b));
+				sum
+			}
+			Operations::Average => {
+				if numbers.is_empty() {
+					zero
+				} else {
+					let sum = numbers.iter().fold(zero, |a, b| a.saturating_add(*b));
+					// let n = N::from(numbers.len() as u128);
+					let n = convert(numbers.len());
+					sum.checked_div(&n).unwrap_or(zero)
+				}
+			}
+		}
+	}
+
+	fn calc(key: StorageKey, info: Info<T::BlockNumber>) {
+		// calc result would drain all old data
+		let data: Vec<DataType> =
+			DataFeeds::<T>::drain_prefix(&key).fold(Vec::new(), |mut src, (who, datas)| {
+				// filter if account not in providers now
+				if Self::all_providers().contains(&who) {
+					src.extend(&datas);
+				}
+				src
+			});
+		if data.is_empty() {
+			debug::warn!(
+				"do not receive data feed from outside for this key: {:?}",
+				key
+			);
+			return;
+		}
+
+		let result = match info.number_type {
+			NumberType::U128 => {
+				let numbers = data
+					.into_iter()
+					.filter_map(|num: DataType| match num {
+						DataType::U128(a) => Some(a),
+						DataType::FixedU128(_) => None,
+					})
+					.collect::<Vec<u128>>();
+
+				let res: u128 =
+					Self::calc_impl(&numbers, 0_u128, |len| len as u128, info.operation);
+				// DataType::from_u32_value(res, info.number_type)
+				DataType::U128(res)
+			}
+			NumberType::FixedU128 => {
+				let numbers = data
+					.into_iter()
+					.filter_map(|num: DataType| match num {
+						DataType::U128(_) => None,
+						DataType::FixedU128(a) => Some(a),
+					})
+					.collect::<Vec<FixedU128>>();
+
+				let res = Self::calc_impl(
+					&numbers,
+					FixedU128::zero(),
+					|len| FixedU128::from(len as u128),
+					info.operation,
+				);
+				DataType::FixedU128(res)
+			}
+		};
+
+		Self::set_storage_value(key, result);
+	}
+
+	fn set_storage_value(key: StorageKey, value: DataType) {
+		frame_support::storage::unhashed::put(&key, &value);
+		Self::deposit_event(RawEvent::SetData(key, value));
+	}
+}
+
+// offchain
+impl<T: Trait> Module<T> {
+	fn fetch_and_send_signed(storage_key: &StorageKey) -> Result<(), &'static str> {
+		let signer = Signer::<T, T::AuthorityId>::all_accounts();
+		if !signer.can_sign() {
+			return Err(
+				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
+			)?;
+		}
+		let data = Self::fetch_data(storage_key)?;
+
+		let results =
+			signer.send_signed_transaction(|_account| Call::feed_data(storage_key.to_vec(), data));
+
+		for (acc, res) in &results {
+			match res {
+				Ok(()) => debug::info!("[{:?}] Submitted data: {:?}", acc.id, data),
+				Err(e) => debug::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
+			}
+		}
+
+		Ok(())
+	}
+
+	fn fetch_data(storage_key: &StorageKey) -> Result<DataType, &'static str> {
+		// We want to keep the offchain worker execution time reasonable, so we set a hard-coded
+		// deadline to 2s to complete the external call.
+		// You can also wait idefinitely for the response, however you may still get a timeout
+		// coming from the host machine.
+		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(2_000));
+		let url = Self::url(storage_key).ok_or("no url for this storage key")?;
+
+		let request =
+			http::Request::get(core::str::from_utf8(&url).map_err(|_| "parse url error")?);
+
+		// to alter request headers or stream body content in case of non-GET requests.
+		let pending = request
+			.deadline(deadline)
+			.send()
+			.map_err(|_| "Request had timed out.")?;
+
+		let response = pending
+			.try_wait(deadline)
+			.map_err(|_| "Deadline has been reached")?
+			.map_err(|_| "http error")?;
+		// Let's check the status code before we proceed to reading the response.
+		if response.code != 200 {
+			debug::warn!("Unexpected status code: {}", response.code);
+			Err("Unknown error has been encountered.")?;
+		}
+
+		let body = response.body().collect::<Vec<u8>>();
+		let info = Self::infos(&storage_key).ok_or("storage key not exist")?;
+		let number_type = info.number_type();
+
+		// Create a str slice from the body.
+		let body_str = sp_std::str::from_utf8(&body).map_err(|_| {
+			debug::warn!("No UTF8 body");
+			"Unknown error has been encountered."
+		})?;
+		let key_str = core::str::from_utf8(info.key_str())
+			.map_err(|_| "json key is invalid")?
+			.chars();
+		let data = match Self::parse_data(key_str, number_type, body_str) {
+			Some(data) => Ok(data),
+			None => {
+				debug::warn!("Unable to extract price from the response: {:?}", body_str);
+				Err("Unknown error has been encountered.")
+			}
+		}?;
+		//		debug::warn!("Got Data: {}", data);
+		Ok(data)
+	}
+
+	fn parse_data(key_str: Chars, number_type: NumberType, data: &str) -> Option<DataType> {
+		let mut key_str = key_str;
+		let val = lite_json::parse_json(data);
+		let output = val.ok().and_then(|v| match v {
+			JsonValue::Object(obj) => obj
+				.into_iter()
+				.find(|(k, _)| k.iter().all(|k| Some(*k) == key_str.next()))
+				.and_then(|v| match v.1 {
+					JsonValue::Number(number) => Some(number),
+					_ => None,
+				}),
+			_ => None,
+		})?;
+
+		DataType::from_number_value(output, number_type)
+	}
+}

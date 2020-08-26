@@ -4468,8 +4468,15 @@ dependencies = [
 name = "pallet-data-feed"
 version = "2.0.0-rc6"
 dependencies = [
+ "frame-support",
+ "frame-system",
+ "lite-json",
  "parity-scale-codec",
  "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
