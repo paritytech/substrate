@@ -752,7 +752,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 // `DiscoveryBehaviour::new_handler` is still correct.
 fn protocol_name_from_protocol_id(id: &ProtocolId) -> Vec<u8> {
 	let mut v = vec![b'/'];
-	v.extend_from_slice(id.as_bytes());
+	v.extend_from_slice(id.as_ref().as_bytes());
 	v.extend_from_slice(b"/kad");
 	v
 }
@@ -773,7 +773,7 @@ mod tests {
 	#[test]
 	fn discovery_working() {
 		let mut first_swarm_peer_id_and_addr = None;
-		let protocol_id = ProtocolId::from(b"dot".as_ref());
+		let protocol_id = ProtocolId::from("dot");
 
 		// Build swarms whose behaviour is `DiscoveryBehaviour`, each aware of
 		// the first swarm via `with_user_defined`.
@@ -877,8 +877,8 @@ mod tests {
 
 	#[test]
 	fn discovery_ignores_peers_with_unknown_protocols() {
-		let supported_protocol_id = ProtocolId::from(b"a".as_ref());
-		let unsupported_protocol_id = ProtocolId::from(b"b".as_ref());
+		let supported_protocol_id = ProtocolId::from("a");
+		let unsupported_protocol_id = ProtocolId::from("b");
 
 		let mut discovery = {
 			let keypair = Keypair::generate_ed25519();
@@ -929,8 +929,8 @@ mod tests {
 
 	#[test]
 	fn discovery_adds_peer_to_kademlia_of_same_protocol_only() {
-		let protocol_a = ProtocolId::from(b"a".as_ref());
-		let protocol_b = ProtocolId::from(b"b".as_ref());
+		let protocol_a = ProtocolId::from("a");
+		let protocol_b = ProtocolId::from("b");
 
 		let mut discovery = {
 			let keypair = Keypair::generate_ed25519();
