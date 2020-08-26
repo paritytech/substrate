@@ -166,7 +166,7 @@ fn main() {
 							DispatchError::Module {
 								index: 0,
 								error: 16,
-								message: Some("PhragmenWeakSubmission"),
+								message: Some("OffchainElectionWeakSubmission"),
 							},
 						);
 					},

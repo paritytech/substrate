@@ -1,6 +1,6 @@
 [package]
 name = "sc-runtime-test"
-version = "2.0.0-rc5"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
@@ -13,12 +13,12 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-std = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/std" }
-sp-io = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/io" }
-sp-sandbox = { version = "0.8.0-rc5", default-features = false, path = "../../../primitives/sandbox" }
-sp-core = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/core" }
-sp-runtime = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/runtime" }
-sp-allocator = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/allocator" }
+sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/std" }
+sp-io = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/io" }
+sp-sandbox = { version = "0.8.0-rc6", default-features = false, path = "../../../primitives/sandbox" }
+sp-core = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/runtime" }
+sp-allocator = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/allocator" }
 
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }

@@ -48,6 +48,7 @@ use std::{
 	io::{self, Write},
 	net::Ipv4Addr,
 	path::{Path, PathBuf},
+	str,
 	sync::Arc,
 };
 use zeroize::Zeroize;
@@ -233,20 +234,26 @@ impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransaction
 	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
 }
 
-/// Name of a protocol, transmitted on the wire. Should be unique for each chain.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
 
-impl<'a> From<&'a [u8]> for ProtocolId {
-	fn from(bytes: &'a [u8]) -> ProtocolId {
-		ProtocolId(bytes.into())
+impl<'a> From<&'a str> for ProtocolId {
+	fn from(bytes: &'a str) -> ProtocolId {
+		ProtocolId(bytes.as_bytes().into())
 	}
 }
 
-impl ProtocolId {
-	/// Exposes the `ProtocolId` as bytes.
-	pub fn as_bytes(&self) -> &[u8] {
-		self.0.as_ref()
+impl AsRef<str> for ProtocolId {
+	fn as_ref(&self) -> &str {
+		str::from_utf8(&self.0[..])
+			.expect("the only way to build a ProtocolId is through a UTF-8 String; qed")
+	}
+}
+
+impl fmt::Debug for ProtocolId {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Debug::fmt(self.as_ref(), f)
 	}
 }
 

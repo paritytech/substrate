@@ -124,7 +124,7 @@ pub struct Config {
 	max_response_len: usize,
 	inactivity_timeout: Duration,
 	request_timeout: Duration,
-	protocol: Bytes,
+	protocol: String,
 }
 
 impl Config {
@@ -143,7 +143,7 @@ impl Config {
 			max_response_len: 16 * 1024 * 1024,
 			inactivity_timeout: Duration::from_secs(15),
 			request_timeout: Duration::from_secs(40),
-			protocol: Bytes::new(),
+			protocol: String::new(),
 		};
 		c.set_protocol(id);
 		c
@@ -184,11 +184,11 @@ impl Config {
 
 	/// Set protocol to use for upgrade negotiation.
 	pub fn set_protocol(&mut self, id: &ProtocolId) -> &mut Self {
-		let mut v = Vec::new();
-		v.extend_from_slice(b"/");
-		v.extend_from_slice(id.as_bytes());
-		v.extend_from_slice(b"/sync/2");
-		self.protocol = v.into();
+		let mut s = String::new();
+		s.push_str("/");
+		s.push_str(id.as_ref());
+		s.push_str("/sync/2");
+		self.protocol = s;
 		self
 	}
 }
@@ -258,7 +258,7 @@ where
 	}
 
 	/// Returns the libp2p protocol name used on the wire (e.g. `/foo/sync/2`).
-	pub fn protocol_name(&self) -> &[u8] {
+	pub fn protocol_name(&self) -> &str {
 		&self.config.protocol
 	}
 
@@ -322,7 +322,7 @@ where
 				request: buf,
 				original_request: req,
 				max_response_size: self.config.max_response_len,
-				protocol: self.config.protocol.clone(),
+				protocol: self.config.protocol.as_bytes().to_vec().into(),
 			},
 		});
 
@@ -472,7 +472,7 @@ where
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		let p = InboundProtocol {
 			max_request_len: self.config.max_request_len,
-			protocol: self.config.protocol.clone(),
+			protocol: self.config.protocol.as_bytes().to_owned().into(),
 			marker: PhantomData,
 		};
 		let mut cfg = OneShotHandlerConfig::default();
