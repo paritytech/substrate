@@ -270,7 +270,7 @@ pub fn new_full_base(
 			prometheus_registry.clone(),
 		);
 
-		task_manager.spawn_handle().spawn("authority-discovery", authority_discovery);
+		task_manager.spawn_handle().spawn("authority-discovery", authority_discovery.run());
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't

@@ -45,7 +45,6 @@ use sc_keystore::{
 		proxy as keystore_proxy,
 		KeystoreProxy,
 		KeystoreReceiver,
-		KeystoreProxyAdapter,
 	},
 };
 use log::{info, warn, error};
@@ -202,8 +201,7 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 
 /// Construct and hold different layers of Keystore wrappers
 pub struct KeystoreParams {
-	keystore: Arc<RwLock<KeystoreProxyAdapter>>,
-	proxy: Arc<KeystoreProxy>,
+	keystore: Arc<RwLock<KeystoreProxy>>,
 	sync_keystore: Arc<SyncCryptoStore>,
 }
 
@@ -218,25 +216,18 @@ impl KeystoreParams {
 			KeystoreConfig::InMemory => Keystore::new_in_memory(),
 		};
 		let (keystore_proxy, keystore_receiver) = keystore_proxy(keystore);
-		let keystore_proxy = Arc::new(keystore_proxy);
-		let keystore = Arc::new(RwLock::new(KeystoreProxyAdapter::new(keystore_proxy.clone())));
+		let keystore = Arc::new(RwLock::new(keystore_proxy));
 		let sync_keystore = Arc::new(SyncCryptoStore::new(keystore.clone()));
 
 		Ok((Self {
 			keystore,
 			sync_keystore,
-			proxy: keystore_proxy,
 		}, keystore_receiver))
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `BareCryptoStore`
-	pub fn keystore(&self) -> Arc<RwLock<KeystoreProxyAdapter>> {
+	pub fn keystore(&self) -> Arc<RwLock<KeystoreProxy>> {
 		self.keystore.clone()
-	}
-
-	/// Returns the asynchronous keystore proxy
-	pub fn proxy(&self) -> Arc<KeystoreProxy> {
-		self.proxy.clone()
 	}
 
 	/// Returns the synchrnous keystore wrapper
