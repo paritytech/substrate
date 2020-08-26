@@ -104,7 +104,7 @@ impl PeersetHandle {
 		let _ = self.tx.unbounded_send(Action::SetReservedOnly(reserved));
 	}
 	
-	/// Set reserved peers to the new peers.
+	/// Set reserved peers to the new set.
 	pub fn set_reserved_peers(&self, peer_ids: HashSet<PeerId>) {
 		let _ = self.tx.unbounded_send(Action::SetReservedPeers(peer_ids));
 	}

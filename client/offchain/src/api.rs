@@ -17,7 +17,7 @@
 use std::{
 	str::FromStr,
 	sync::Arc,
-	convert::TryFrom,
+	convert::{TryFrom, TryInto},
 	thread::sleep,
 	collections::HashSet,
 };
@@ -35,7 +35,7 @@ use sp_core::offchain::{
 	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
-use sp_core::NodePublicKey;
+use sp_core::{NodePublicKey, ed25519};
 pub use sp_offchain::STORAGE_PREFIX;
 pub use http::SharedClient;
 
@@ -185,6 +185,12 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError> {
 		self.http.response_read_body(request_id, buffer, deadline)
+	}
+
+	fn get_node_public_key(&mut self) -> NodePublicKey {
+		let peer_id = self.network_state.local_peer_id();
+
+		NodePublicKey::Ed25519(ed25519::Public(peer_id.as_bytes().try_into().expect("slice with incorrect length")))
 	}
 
 	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {

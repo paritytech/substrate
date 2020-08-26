@@ -496,6 +496,9 @@ pub trait Externalities: Send {
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError>;
 
+	/// Get public key of the node
+	fn get_node_public_key(&mut self) -> NodePublicKey;
+
 	/// Set the reserved nodes
 	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>);
 }
@@ -575,6 +578,10 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
+	}
+
+	fn get_node_public_key(&mut self) -> NodePublicKey {
+		(&mut **self).get_node_public_key()
 	}
 
 	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {
@@ -697,6 +704,11 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	) -> Result<usize, HttpError> {
 		self.check(Capability::Http, "http_response_read_body");
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
+	}
+
+	fn get_node_public_key(&mut self) -> NodePublicKey {
+		self.check(Capability::NetworkState, "get_node_public_key");
+		self.externalities.get_node_public_key()
 	}
 
 	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {

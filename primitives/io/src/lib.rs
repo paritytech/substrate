@@ -961,6 +961,13 @@ pub trait Offchain {
 			.map(|r| r as u32)
 	}
 
+	/// Get public key of the local node.
+	fn get_node_public_key(&mut self) -> NodePublicKey {
+		self.extension::<OffchainExt>()
+			.expect("get_node_public_key can be called only in the offchain worker context")
+			.get_node_public_key()
+	}
+
 	/// Set the reserved peers
 	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {
 		self.extension::<OffchainExt>()

@@ -39,7 +39,7 @@ use base58::{FromBase58, ToBase58};
 use crate::hexdisplay::HexDisplay;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
-use sp_runtime_interface::pass_by::PassByInner;
+use sp_runtime_interface::pass_by::{PassByInner, PassByCodec};
 /// Trait to zeroize a memory buffer.
 pub use zeroize::Zeroize;
 /// Trait for accessing reference to `SecretString`.
@@ -706,7 +706,7 @@ impl sp_std::str::FromStr for AccountId32 {
 
 /// Public key of node which can be used for network connection
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, crate::RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, crate::RuntimeDebug, PassByCodec)]
 pub enum NodePublicKey {
 	/// An Ed25519 public key
 	Ed25519(ed25519::Public),
