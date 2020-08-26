@@ -29,6 +29,7 @@ rand = "0.7.2"
 sp-runtime = { version = "2.0.0-rc6", path = "../../primitives/runtime" }
 sp-utils = { version = "2.0.0-rc6", path = "../../primitives/utils" }
 sc-network = { version = "0.8.0-rc6", path = "../network" }
+sc-peerset = { version = "2.0.0-rc6", path = "../peerset" }
 sc-keystore = { version = "2.0.0-rc6", path = "../keystore" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]

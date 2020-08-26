@@ -45,6 +45,7 @@ const FORGET_AFTER: Duration = Duration::from_secs(3600);
 enum Action {
 	AddReservedPeer(PeerId),
 	RemoveReservedPeer(PeerId),
+	SetReservedPeers(HashSet<PeerId>),
 	SetReservedOnly(bool),
 	ReportPeer(PeerId, ReputationChange),
 	SetPriorityGroup(String, HashSet<PeerId>),
@@ -101,6 +102,11 @@ impl PeersetHandle {
 	/// Sets whether or not the peerset only has connections .
 	pub fn set_reserved_only(&self, reserved: bool) {
 		let _ = self.tx.unbounded_send(Action::SetReservedOnly(reserved));
+	}
+	
+	/// Set reserved peers to the new peers.
+	pub fn set_reserved_peers(&self, peer_ids: HashSet<PeerId>) {
+		let _ = self.tx.unbounded_send(Action::SetReservedPeers(peer_ids));
 	}
 
 	/// Reports an adjustment to the reputation of the given peer.
@@ -245,6 +251,10 @@ impl Peerset {
 
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
 		self.on_remove_from_priority_group(RESERVED_NODES, peer_id);
+	}
+	
+	fn on_set_reserved_peers(&mut self, peer_ids: HashSet<PeerId>) {
+		self.on_set_priority_group(RESERVED_NODES, peer_ids);
 	}
 
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
@@ -655,6 +665,8 @@ impl Stream for Peerset {
 					self.on_add_reserved_peer(peer_id),
 				Action::RemoveReservedPeer(peer_id) =>
 					self.on_remove_reserved_peer(peer_id),
+				Action::SetReservedPeers(peer_ids) =>
+					self.on_set_reserved_peers(peer_ids),
 				Action::SetReservedOnly(reserved) =>
 					self.on_set_reserved_only(reserved),
 				Action::ReportPeer(peer_id, score_diff) =>

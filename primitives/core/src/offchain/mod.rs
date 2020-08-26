@@ -19,7 +19,7 @@
 
 use codec::{Encode, Decode};
 use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
-use crate::RuntimeDebug;
+use crate::{RuntimeDebug, NodePublicKey};
 use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
@@ -495,6 +495,9 @@ pub trait Externalities: Send {
 		buffer: &mut [u8],
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError>;
+
+	/// Set the reserved nodes
+	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>);
 }
 
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
@@ -572,6 +575,10 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
+	}
+
+	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {
+		(&mut **self).set_reserved_nodes(nodes)
 	}
 }
 
@@ -690,6 +697,11 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	) -> Result<usize, HttpError> {
 		self.check(Capability::Http, "http_response_read_body");
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
+	}
+
+	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {
+		self.check(Capability::NetworkState, "set_reserved_nodes");
+		self.externalities.set_reserved_nodes(nodes)
 	}
 }
 

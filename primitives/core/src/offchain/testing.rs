@@ -36,6 +36,7 @@ use crate::offchain::{
 	TransactionPool,
 	OffchainStorage,
 };
+use crate::NodePublicKey;
 
 use parking_lot::RwLock;
 
@@ -374,6 +375,9 @@ impl offchain::Externalities for TestOffchainExt {
 		} else {
 			Err(HttpError::IoError)
 		}
+	}
+
+	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {
 	}
 }
 

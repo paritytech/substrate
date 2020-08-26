@@ -7030,6 +7030,7 @@ dependencies = [
  "sc-client-db",
  "sc-keystore",
  "sc-network",
+ "sc-peerset",
  "sc-transaction-pool",
  "sp-api",
  "sp-core",

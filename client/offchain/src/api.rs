@@ -19,17 +19,23 @@ use std::{
 	sync::Arc,
 	convert::TryFrom,
 	thread::sleep,
+	collections::HashSet,
 };
 
 use sp_core::offchain::OffchainStorage;
 use futures::Future;
 use log::error;
 use sc_network::{PeerId, Multiaddr, NetworkStateInfo};
+use sc_network::config::identity::{
+	ed25519::PublicKey as Ed25519PublicKey,
+	PublicKey
+};
 use codec::{Encode, Decode};
 use sp_core::offchain::{
 	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
+use sp_core::NodePublicKey;
 pub use sp_offchain::STORAGE_PREFIX;
 pub use http::SharedClient;
 
@@ -179,6 +185,24 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError> {
 		self.http.response_read_body(request_id, buffer, deadline)
+	}
+
+	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {
+		let mut peer_ids: HashSet<PeerId> = nodes.iter()
+			.filter_map(|node| {
+				match node {
+					NodePublicKey::Ed25519(pubkey) => Ed25519PublicKey::decode(&pubkey.0).ok()
+				}
+			})
+			.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
+			.collect();
+		
+		peer_ids.remove(&self.network_state.local_peer_id());
+
+		let peerset = self.network_state.peerset();
+		peerset.set_reserved_peers(peer_ids);
+		// Respect reserved peers from runtime, ignore CLI flags for now.
+		peerset.set_reserved_only(true);
 	}
 }
 

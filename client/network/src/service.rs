@@ -20,7 +20,7 @@
 //!
 //! There are two main structs in this module: [`NetworkWorker`] and [`NetworkService`].
 //! The [`NetworkWorker`] *is* the network and implements the `Future` trait. It must be polled in
-//! order fo the network to advance.
+//! order for the network to advance.
 //! The [`NetworkService`] is merely a shared version of the [`NetworkWorker`]. You can obtain an
 //! `Arc<NetworkService>` by calling [`NetworkWorker::service`].
 //!
@@ -999,6 +999,11 @@ impl<B, H> NetworkStateInfo for NetworkService<B, H>
 	/// Returns the local Peer ID.
 	fn local_peer_id(&self) -> PeerId {
 		self.local_peer_id.clone()
+	}
+
+	/// Returns the peerset.
+	fn peerset(&self) -> PeersetHandle {
+		self.peerset.clone()
 	}
 }
 
