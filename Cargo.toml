@@ -71,6 +71,7 @@ members = [
 	"frame/contracts",
 	"frame/contracts/rpc",
 	"frame/contracts/rpc/runtime-api",
+	"frame/data-feed",
 	"frame/democracy",
 	"frame/elections-phragmen",
 	"frame/elections",
