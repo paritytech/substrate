@@ -14,9 +14,9 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-npos-elections = { version = "2.0.0-rc5", path = ".." }
-sp-std = { version = "2.0.0-rc5", path = "../../std" }
-sp-runtime = { version = "2.0.0-rc5", path = "../../runtime" }
+sp-npos-elections = { version = "2.0.0-rc6", path = ".." }
+sp-std = { version = "2.0.0-rc6", path = "../../std" }
+sp-runtime = { version = "2.0.0-rc6", path = "../../runtime" }
 honggfuzz = "0.5"
 rand = { version = "0.7.3", features = ["std", "small_rng"] }
 

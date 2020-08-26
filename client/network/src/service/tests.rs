@@ -151,6 +151,7 @@ fn build_nodes_one_proto()
 	(node1, events_stream1, node2, events_stream2)
 }
 
+#[ignore]
 #[test]
 fn notifications_state_consistent() {
 	// Runs two nodes and ensures that events are propagated out of the API in a consistent
@@ -345,9 +346,7 @@ fn lots_of_incoming_peers_works() {
 	});
 }
 
-// TODO: this test is at the moment ignored because of https://github.com/paritytech/substrate/issues/6766
 #[test]
-#[ignore]
 fn notifications_back_pressure() {
 	// Node 1 floods node 2 with notifications. Random sleeps are done on node 2 to simulate the
 	// node being busy. We make sure that all notifications are received.

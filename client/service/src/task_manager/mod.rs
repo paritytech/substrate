@@ -18,7 +18,7 @@ use exit_future::Signal;
 use log::{debug, error};
 use futures::{
 	Future, FutureExt, StreamExt,
-	future::{select, Either, BoxFuture},
+	future::{select, Either, BoxFuture, join_all, try_join_all, pending},
 	sink::SinkExt,
 };
 use prometheus_endpoint::{
@@ -214,8 +214,14 @@ pub struct TaskManager {
 	essential_failed_rx: TracingUnboundedReceiver<()>,
 	/// Things to keep alive until the task manager is dropped.
 	keep_alive: Box<dyn std::any::Any + Send + Sync>,
+	/// A sender to a stream of background tasks. This is used for the completion future.
 	task_notifier: TracingUnboundedSender<JoinFuture>,
+	/// This future will complete when all the tasks are joined and the stream is closed.
 	completion_future: JoinFuture,
+	/// A list of other `TaskManager`'s to terminate and gracefully shutdown when the parent
+	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
+	/// task fails.
+	children: Vec<TaskManager>,
 }
 
 impl TaskManager {
@@ -251,6 +257,7 @@ impl TaskManager {
 			keep_alive: Box::new(()),
 			task_notifier,
 			completion_future,
+			children: Vec::new(),
 		})
 	}
 
@@ -271,12 +278,21 @@ impl TaskManager {
 
 	/// Send the signal for termination, prevent new tasks to be created, await for all the existing
 	/// tasks to be finished and drop the object. You can consider this as an async drop.
+	///
+	/// It's always better to call and await this function before exiting the process as background
+	/// tasks may be running in the background. If the process exit and the background tasks are not
+	/// cancelled, this will lead to objects not getting dropped properly.
+	///
+	/// This is an issue in some cases as some of our dependencies do require that we drop all the
+	/// objects properly otherwise it triggers a SIGABRT on exit.
 	pub fn clean_shutdown(mut self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
 		self.terminate();
+		let children_shutdowns = self.children.into_iter().map(|x| x.clean_shutdown());
 		let keep_alive = self.keep_alive;
 		let completion_future = self.completion_future;
 
 		Box::pin(async move {
+			join_all(children_shutdowns).await;
 			completion_future.await;
 			drop(keep_alive);
 		})
@@ -293,10 +309,17 @@ impl TaskManager {
 		Box::pin(async move {
 			let mut t1 = self.essential_failed_rx.next().fuse();
 			let mut t2 = self.on_exit.clone().fuse();
+			let mut t3 = try_join_all(
+				self.children.iter_mut().map(|x| x.future())
+					// Never end this future if there is no error because if there is no children,
+					// it must not stop
+					.chain(std::iter::once(pending().boxed()))
+			).fuse();
 
 			futures::select! {
 				_ = t1 => Err(Error::Other("Essential task failed.".into())),
 				_ = t2 => Ok(()),
+				res = t3 => Err(res.map(|_| ()).expect_err("this future never ends; qed")),
 			}
 		})
 	}
@@ -305,14 +328,27 @@ impl TaskManager {
 	pub fn terminate(&mut self) {
 		if let Some(signal) = self.signal.take() {
 			let _ = signal.fire();
-			// NOTE: task will prevent new tasks to be spawned
+			// NOTE: this will prevent new tasks to be spawned
 			self.task_notifier.close_channel();
+			for child in self.children.iter_mut() {
+				child.terminate();
+			}
 		}
 	}
 
-	/// Set what the task manager should keep alivei
-	pub(super) fn keep_alive<T: 'static + Send + Sync>(&mut self, to_keep_alive: T) {
-		self.keep_alive = Box::new(to_keep_alive);
+	/// Set what the task manager should keep alive, can be called multiple times.
+	pub fn keep_alive<T: 'static + Send + Sync>(&mut self, to_keep_alive: T) {
+		// allows this fn to safely called multiple times.
+		use std::mem;
+		let old = mem::replace(&mut self.keep_alive, Box::new(()));
+		self.keep_alive = Box::new((to_keep_alive, old));
+	}
+
+	/// Register another TaskManager to terminate and gracefully shutdown when the parent
+	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
+	/// task fails. (But don't end the parent if a child's normal task fails.)
+	pub fn add_child(&mut self, child: TaskManager) {
+		self.children.push(child);
 	}
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "sc-finality-grandpa-rpc"
-version = "0.8.0-rc5"
+version = "0.8.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "RPC extensions for the GRANDPA finality gadget"
 repository = "https://github.com/paritytech/substrate/"
@@ -8,16 +8,30 @@ edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 
 [dependencies]
-sc-finality-grandpa = { version = "0.8.0-rc5", path = "../" }
+sc-finality-grandpa = { version = "0.8.0-rc6", path = "../" }
+sc-rpc = { version = "2.0.0-rc6", path = "../../rpc" }
+sp-core = { version = "2.0.0-rc6", path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0-rc6", path = "../../../primitives/runtime" }
 finality-grandpa = { version = "0.12.3", features = ["derive-codec"] }
 jsonrpc-core = "14.2.0"
 jsonrpc-core-client = "14.2.0"
 jsonrpc-derive = "14.2.1"
+jsonrpc-pubsub = "14.2.0"
 futures = { version = "0.3.4", features = ["compat"] }
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = "1.0.50"
 log = "0.4.8"
 derive_more = "0.99.2"
+parity-scale-codec = { version = "1.3.0", features = ["derive"] }
 
 [dev-dependencies]
-sp-core = { version = "2.0.0-rc5", path = "../../../primitives/core" }
+sc-block-builder = { version = "0.8.0-rc6", path = "../../block-builder" }
+sc-network-test = { version = "0.8.0-rc6", path = "../../network/test" }
+sc-rpc = { version = "2.0.0-rc6", path = "../../rpc", features = ["test-helpers"] }
+sp-blockchain = { version = "2.0.0-rc6", path = "../../../primitives/blockchain" }
+sp-consensus = { version = "0.8.0-rc6", path = "../../../primitives/consensus/common" }
+sp-core = { version = "2.0.0-rc6", path = "../../../primitives/core" }
+sp-finality-grandpa = { version = "2.0.0-rc6", path = "../../../primitives/finality-grandpa" }
+sp-keyring = { version = "2.0.0-rc6", path = "../../../primitives/keyring" }
+substrate-test-runtime-client = { version = "2.0.0-rc6",  path = "../../../test-utils/runtime/client" }
+lazy_static = "1.4"

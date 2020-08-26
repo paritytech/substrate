@@ -40,6 +40,7 @@ use crate::{
 use crate::authorities::SharedAuthoritySet;
 use crate::communication::{Network as NetworkT, NetworkBridge};
 use crate::consensus_changes::SharedConsensusChanges;
+use crate::notification::GrandpaJustificationSender;
 use sp_finality_grandpa::AuthorityId;
 use std::marker::{PhantomData, Unpin};
 
@@ -69,14 +70,14 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	voters: &Arc<VoterSet<AuthorityId>>,
+	justification_sender: &Option<GrandpaJustificationSender<Block>>,
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
-) -> impl Future<Output=Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> where
+) -> impl Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>>
+where
 	NumberFor<Block>: BlockNumberOps,
-	S: Stream<
-		Item = Result<CommunicationIn<Block>, CommandOrError<Block::Hash, NumberFor<Block>>>,
-	>,
+	S: Stream<Item = Result<CommunicationIn<Block>, CommandOrError<Block::Hash, NumberFor<Block>>>>,
 	F: Fn(u64),
 	BE: Backend<Block>,
 	Client: crate::ClientForGrandpa<Block, BE>,
@@ -85,6 +86,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	let consensus_changes = consensus_changes.clone();
 	let client = client.clone();
 	let voters = voters.clone();
+	let justification_sender = justification_sender.clone();
 
 	let observer = commits.try_fold(last_finalized_number, move |last_finalized_number, global| {
 		let (round, commit, callback) = match global {
@@ -127,6 +129,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 				finalized_number,
 				(round, commit).into(),
 				false,
+				justification_sender.as_ref(),
 			) {
 				Ok(_) => {},
 				Err(e) => return future::err(e),
@@ -177,6 +180,7 @@ where
 		select_chain: _,
 		persistent_data,
 		voter_commands_rx,
+		justification_sender,
 		..
 	} = link;
 
@@ -192,7 +196,8 @@ where
 		network,
 		persistent_data,
 		config.keystore,
-		voter_commands_rx
+		voter_commands_rx,
+		Some(justification_sender),
 	);
 
 	let observer_work = observer_work
@@ -213,6 +218,7 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
 	persistent_data: PersistentData<B>,
 	keystore: Option<BareCryptoStorePtr>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
+	justification_sender: Option<GrandpaJustificationSender<B>>,
 	_phantom: PhantomData<BE>,
 }
 
@@ -230,6 +236,7 @@ where
 		persistent_data: PersistentData<B>,
 		keystore: Option<BareCryptoStorePtr>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
+		justification_sender: Option<GrandpaJustificationSender<B>>,
 	) -> Self {
 
 		let mut work = ObserverWork {
@@ -241,6 +248,7 @@ where
 			persistent_data,
 			keystore: keystore.clone(),
 			voter_commands_rx,
+			justification_sender,
 			_phantom: PhantomData,
 		};
 		work.rebuild_observer();
@@ -287,6 +295,7 @@ where
 			&self.persistent_data.authority_set,
 			&self.persistent_data.consensus_changes,
 			&voters,
+			&self.justification_sender,
 			last_finalized_number,
 			global_in,
 			note_round,
@@ -422,12 +431,14 @@ mod tests {
 		).unwrap();
 
 		let (_tx, voter_command_rx) = tracing_unbounded("");
+
 		let observer = ObserverWork::new(
 			client,
 			tester.net_handle.clone(),
 			persistent_data,
 			None,
 			voter_command_rx,
+			None,
 		);
 
 		// Trigger a reputation change through the gossip validator.

@@ -26,7 +26,7 @@ use crate::{
 use hash_db::Hasher;
 use sp_core::{
 	offchain::storage::OffchainOverlayedChanges,
-	storage::{well_known_keys::is_child_storage_key, ChildInfo},
+	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
 	traits::Externalities, hexdisplay::HexDisplay,
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
@@ -594,6 +594,7 @@ where
 			changes.transaction_storage_root,
 			changes.transaction,
 			changes.main_storage_changes,
+			changes.child_storage_changes,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.mark_dirty();
 		self.overlay
@@ -609,7 +610,11 @@ where
 		self.backend.reset_read_write_count()
 	}
 
-	fn set_whitelist(&mut self, new: Vec<Vec<u8>>) {
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		self.backend.get_whitelist()
+	}
+
+	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
 		self.backend.set_whitelist(new)
 	}
 }
