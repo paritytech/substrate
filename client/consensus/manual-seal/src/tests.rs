@@ -1,3 +1,6 @@
+use std::thread;
+use std::time::Duration;
+
 use super::*;
 use substrate_test_runtime_client::{
 	DefaultTestClientBuilderExt,
@@ -59,7 +62,7 @@ async fn instant_seal() {
 		select_chain,
 		inherent_data_providers,
 	);
-	std::thread::spawn(|| {
+	thread::spawn(|| {
 		let mut rt = tokio::runtime::Runtime::new().unwrap();
 		// spawn the background authorship task
 		rt.block_on(future);
@@ -114,7 +117,7 @@ async fn manual_seal_and_finalization() {
 		select_chain,
 		inherent_data_providers,
 	);
-	std::thread::spawn(|| {
+	thread::spawn(|| {
 		let mut rt = tokio::runtime::Runtime::new().unwrap();
 		// spawn the background authorship task
 		rt.block_on(future);
@@ -186,7 +189,7 @@ async fn manual_seal_fork_blocks() {
 		select_chain,
 		inherent_data_providers,
 	);
-	std::thread::spawn(|| {
+	thread::spawn(|| {
 		let mut rt = tokio::runtime::Runtime::new().unwrap();
 		// spawn the background authorship task
 		rt.block_on(future);
@@ -257,4 +260,76 @@ async fn manual_seal_fork_blocks() {
 	let imported = rx2.await.unwrap().unwrap();
 	// assert that fork block is in the db
 	assert!(client.header(&BlockId::Hash(imported.hash)).unwrap().is_some())
+}
+
+#[tokio::test]
+async fn heartbeat_stream_produce_block_regularly() {
+	let builder = TestClientBuilder::new();
+	let (client, select_chain) = builder.build_with_longest_chain();
+	let client = Arc::new(client);
+	let inherent_data_providers = InherentDataProviders::new();
+	let spawner = sp_core::testing::TaskExecutor::new();
+	let pool = Arc::new(BasicPool::with_revalidation_type(
+		txpool::Options::default(), api(), None, RevalidationType::Full, spawner
+	));
+	let env = ProposerFactory::new(
+		client.clone(),
+		pool.clone(),
+		None,
+	);
+
+	let (sender, receiver) = futures::channel::oneshot::channel();
+	let mut sender = Arc::new(Some(sender));
+	let cmds_stream = pool.pool().validated_pool().import_notification_stream()
+		.map(move |_| {
+			let mut_sender = Arc::get_mut(&mut sender).unwrap();
+			let sender = std::mem::take(mut_sender);
+			// Create a heartbeat_stream
+			EngineCommand::<()>::SealNewBlock {
+				create_empty: false,
+				finalize: true,
+				parent_hash: None,
+				sender
+			}
+		});
+
+	const BLOCK_TIMEOUT: u64 = 2;
+
+	let hbo = HeartbeatOptions {
+		timeout: BLOCK_TIMEOUT,
+		min_blocktime: 1,
+		finalize: false,
+	};
+
+	println!("get 10");
+
+	let future = run_instant_seal(
+		Box::new(client.clone()),
+		env,
+		client.clone(),
+		pool.pool().clone(),
+		select_chain,
+		inherent_data_providers,
+		false,
+		Some(hbo)
+	);
+
+	println!("get 20");
+
+	let sender = thread::spawn(|| {
+		let mut rt = tokio::runtime::Runtime::new().unwrap();
+		rt.block_on(future);
+	});
+
+	println!("get 30");
+
+	// let created_block = receiver.await.unwrap().unwrap();
+	// println!("{:?}", created_block);
+	thread::sleep(Duration::from_secs(BLOCK_TIMEOUT));
+
+	println!("get 35");
+
+	let res = sender.join();
+
+	println!("get 40");
 }
