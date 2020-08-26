@@ -588,7 +588,7 @@ where
 		unimplemented!("Unsupported")
 	}
 
-	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
+	fn set_whitelist(&mut self, _new: Vec<TrackedStorageKey>) {
 		unimplemented!("Unsupported")
 	}
 }
