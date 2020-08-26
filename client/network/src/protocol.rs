@@ -423,7 +423,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let transactions_protocol: Cow<'static, [u8]> = Cow::from({
 			let mut proto = b"/".to_vec();
-			proto.extend(protocol_id.as_bytes());
+			proto.extend(protocol_id.as_ref().as_bytes());
 			proto.extend(b"/transactions/1");
 			proto
 		});
@@ -432,7 +432,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let block_announces_protocol: Cow<'static, [u8]> = Cow::from({
 			let mut proto = b"/".to_vec();
-			proto.extend(protocol_id.as_bytes());
+			proto.extend(protocol_id.as_ref().as_bytes());
 			proto.extend(b"/block-announces/1");
 			proto
 		});
