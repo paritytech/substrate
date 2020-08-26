@@ -969,10 +969,10 @@ pub trait Offchain {
 	}
 
 	/// Set the reserved peers
-	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {
+	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool) {
 		self.extension::<OffchainExt>()
 			.expect("set_reserved_nodes can be called only in the offchain worker context")
-			.set_reserved_nodes(nodes)
+			.set_reserved_nodes(nodes, reserved_only)
 	}
 }
 

@@ -27,8 +27,8 @@ use futures::Future;
 use log::error;
 use sc_network::{PeerId, Multiaddr, NetworkStateInfo};
 use sc_network::config::identity::{
-	ed25519::PublicKey as Ed25519PublicKey,
-	PublicKey
+	ed25519::PublicKey as Ed25519PeerPublicKey,
+	PublicKey as PeerPublicKey
 };
 use codec::{Encode, Decode};
 use sp_core::offchain::{
@@ -192,14 +192,17 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		peer_id.as_bytes().try_into()
 	}
 
-	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {
+	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool) {
 		let mut peer_ids: HashSet<PeerId> = nodes.iter()
-			.filter_map(|node| {
+			.filter_map(|node|
 				match node {
-					NodePublicKey::Ed25519(pubkey) => Ed25519PublicKey::decode(&pubkey.0).ok()
+					NodePublicKey::Ed25519(public) =>
+						Ed25519PeerPublicKey::decode(&public.0).ok()
 				}
-			})
-			.map(|pubkey| PublicKey::Ed25519(pubkey).into_peer_id())
+			)
+			.map(|public|
+				PeerPublicKey::Ed25519(public).into_peer_id()
+			)
 			.collect();
 		
 		peer_ids.remove(&self.network_state.local_peer_id());
@@ -207,7 +210,7 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		let peerset = self.network_state.peerset();
 		peerset.set_reserved_peers(peer_ids);
 		// Respect reserved peers from runtime, ignore CLI flags for now.
-		peerset.set_reserved_only(true);
+		peerset.set_reserved_only(reserved_only);
 	}
 }
 

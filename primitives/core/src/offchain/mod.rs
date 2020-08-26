@@ -500,7 +500,7 @@ pub trait Externalities: Send {
 	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()>;
 
 	/// Set the reserved nodes
-	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>);
+	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool);
 }
 
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
@@ -584,8 +584,8 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).get_node_public_key()
 	}
 
-	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {
-		(&mut **self).set_reserved_nodes(nodes)
+	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool) {
+		(&mut **self).set_reserved_nodes(nodes, reserved_only)
 	}
 }
 
@@ -711,9 +711,9 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.externalities.get_node_public_key()
 	}
 
-	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {
+	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool) {
 		self.check(Capability::NetworkState, "set_reserved_nodes");
-		self.externalities.set_reserved_nodes(nodes)
+		self.externalities.set_reserved_nodes(nodes, reserved_only)
 	}
 }
 
