@@ -470,15 +470,21 @@ fn compact_wasm_file(
 	cargo_manifest: &Path,
 	wasm_workspace: &Path,
 ) -> (WasmBinary, WasmBinaryBloaty) {
-	let target = if is_release_build() { "release" } else { "debug" };
+	let is_release_build = is_release_build();
+	let target = if is_release_build { "release" } else { "debug" };
 	let wasm_binary = get_wasm_binary_name(cargo_manifest);
 	let wasm_file = wasm_workspace.join("target/wasm32-unknown-unknown")
 		.join(target)
 		.join(format!("{}.wasm", wasm_binary));
 	let wasm_compact_file = project.join(format!("{}.compact.wasm", wasm_binary));
 
-	wasm_gc::garbage_collect_file(&wasm_file, &wasm_compact_file)
-		.expect("Failed to compact generated WASM binary.");
+	if is_release_build {
+		wasm_gc::garbage_collect_file(&wasm_file, &wasm_compact_file)
+			.expect("Failed to compact generated WASM binary.");
+	} else {
+		fs::copy(&wasm_file, &wasm_compact_file)
+			.expect("Failed to compact generated WASM binary.");
+	}
 
 	(WasmBinary(wasm_compact_file), WasmBinaryBloaty(wasm_file))
 }
