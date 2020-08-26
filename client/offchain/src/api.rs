@@ -35,7 +35,7 @@ use sp_core::offchain::{
 	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
-use sp_core::{NodePublicKey, ed25519};
+use sp_core::NodePublicKey;
 pub use sp_offchain::STORAGE_PREFIX;
 pub use http::SharedClient;
 
@@ -187,10 +187,9 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		self.http.response_read_body(request_id, buffer, deadline)
 	}
 
-	fn get_node_public_key(&mut self) -> NodePublicKey {
+	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()> {
 		let peer_id = self.network_state.local_peer_id();
-
-		NodePublicKey::Ed25519(ed25519::Public(peer_id.as_bytes().try_into().expect("slice with incorrect length")))
+		peer_id.as_bytes().try_into()
 	}
 
 	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>) {

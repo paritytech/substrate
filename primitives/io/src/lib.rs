@@ -962,7 +962,7 @@ pub trait Offchain {
 	}
 
 	/// Get public key of the local node.
-	fn get_node_public_key(&mut self) -> NodePublicKey {
+	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()> {
 		self.extension::<OffchainExt>()
 			.expect("get_node_public_key can be called only in the offchain worker context")
 			.get_node_public_key()

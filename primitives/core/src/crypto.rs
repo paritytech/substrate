@@ -712,6 +712,19 @@ pub enum NodePublicKey {
 	Ed25519(ed25519::Public),
 }
 
+impl TryFrom<&[u8]> for NodePublicKey {
+	type Error = ();
+
+	fn try_from(x: &[u8]) -> Result<NodePublicKey, ()> {
+		if x.len() != 32 {
+			return Err(());
+		}
+		let mut public = ed25519::Public::default();
+		public.0.copy_from_slice(&x[0..32]);
+		Ok(NodePublicKey::Ed25519(public))
+	}
+}
+
 #[cfg(feature = "std")]
 pub use self::dummy::*;
 
