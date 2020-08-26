@@ -16,20 +16,26 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{iter::FromIterator, sync::{Arc, Mutex}};
+use std::{
+	iter::FromIterator,
+	sync::{Arc, Mutex},
+	time::Duration,
+};
 
 use futures::channel::mpsc::channel;
 use futures::executor::{block_on, LocalPool};
-use futures::future::{poll_fn, FutureExt};
+use futures::future::FutureExt;
 use futures::sink::SinkExt;
 use futures::task::LocalSpawn;
-use futures::poll;
+use futures::join;
+use futures_timer::Delay;
 use libp2p::{kad, core::multiaddr, PeerId};
 
 use sp_api::{ProvideRuntimeApi, ApiRef};
-use sp_core::{crypto::Public, testing::KeyStore, traits::SyncCryptoStore};
+use sp_core::{Public, traits::BareCryptoStore, testing::KeyStore};
 use sp_runtime::traits::{Zero, Block as BlockT, NumberFor};
 use substrate_test_runtime_client::runtime::Block;
+use sc_keystore::proxy::adapter as keystore_adapter;
 
 use super::*;
 
@@ -218,7 +224,7 @@ impl NetworkStateInfo for TestNetwork {
 fn new_registers_metrics() {
 	let (_dht_event_tx, dht_event_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
+	let (key_store, _) = keystore_adapter(KeyStore::new());
 	let test_api = Arc::new(TestApi {
 		authorities: vec![],
 	});
@@ -251,7 +257,7 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 	});
 
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
+	let (key_store, _) = keystore_adapter::<KeyStore>(KeyStore::new().into());
 
 	let mut authority_discovery = AuthorityDiscovery::new(
 		test_api,
@@ -262,7 +268,7 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 		None,
 	);
 
-	authority_discovery.request_addresses_of_others().unwrap();
+	block_on(authority_discovery.request_addresses_of_others()).unwrap();
 
 	// Expect authority discovery to request new records from the dht.
 	assert_eq!(network.get_value_call.lock().unwrap().len(), 2);
@@ -271,6 +277,8 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 #[test]
 fn publish_discover_cycle() {
 	let _ = ::env_logger::try_init();
+
+	let pool = LocalPool::new();
 
 	// Node A publishing its address.
 
@@ -286,58 +294,64 @@ fn publish_discover_cycle() {
 		))
 	};
 
-	let key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
-	let node_a_public = key_store
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-		.unwrap();
-	let test_api = Arc::new(TestApi {
-		authorities: vec![node_a_public.into()],
-	});
+	let (key_store, keystore_receiver) = keystore_adapter::<KeyStore>(KeyStore::new().into());
+	let _ = pool.spawner().spawn_local_obj(async move {
+		keystore_receiver.await
+	}.boxed_local().into());
 
-	let mut authority_discovery = AuthorityDiscovery::new(
-		test_api,
-		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
-		None,
-	);
+	let _ = pool.spawner().spawn_local_obj(async move {
+		let node_a_public = key_store.write()
+			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+			.await
+			.unwrap();
 
-	authority_discovery.publish_ext_addresses().unwrap();
+		let test_api = Arc::new(TestApi {
+			authorities: vec![node_a_public.into()],
+		});
 
-	// Expect authority discovery to put a new record onto the dht.
-	assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
+		let mut authority_discovery = AuthorityDiscovery::new(
+			test_api,
+			network.clone(),
+			vec![],
+			dht_event_rx.boxed(),
+			Role::Authority(key_store),
+			None,
+		);
 
-	let dht_event = {
-		let (key, value) = network.put_value_call.lock().unwrap().pop().unwrap();
-		sc_network::DhtEvent::ValueFound(vec![(key, value)])
-	};
+		authority_discovery.publish_ext_addresses().await.unwrap();
 
-	// Node B discovering node A's address.
+		// Expect authority discovery to put a new record onto the dht.
+		assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
 
-	let (mut dht_event_tx, dht_event_rx) = channel(1000);
-	let test_api = Arc::new(TestApi {
-		// Make sure node B identifies node A as an authority.
-		authorities: vec![node_a_public.into()],
-	});
-	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
+		let dht_event = {
+			let (key, value) = network.put_value_call.lock().unwrap().pop().unwrap();
+			sc_network::DhtEvent::ValueFound(vec![(key, value)])
+		};
 
-	let mut authority_discovery = AuthorityDiscovery::new(
-		test_api,
-		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
-		None,
-	);
+		// Node B discovering node A's address.
 
-	dht_event_tx.try_send(dht_event).unwrap();
+		let (mut dht_event_tx, dht_event_rx) = channel(1000);
+		let test_api = Arc::new(TestApi {
+			// Make sure node B identifies node A as an authority.
+			authorities: vec![node_a_public.into()],
+		});
+		let network: Arc<TestNetwork> = Arc::new(Default::default());
+		let (key_store, _) = keystore_adapter::<KeyStore>(KeyStore::new().into());
 
-	let f = |cx: &mut Context<'_>| -> Poll<()> {
+		let mut authority_discovery = AuthorityDiscovery::new(
+			test_api,
+			network.clone(),
+			vec![],
+			dht_event_rx.boxed(),
+			Role::Authority(key_store),
+			None,
+		);
+
+		dht_event_tx.try_send(dht_event).unwrap();
+
 		// Make authority discovery handle the event.
-		if let Poll::Ready(e) = authority_discovery.handle_dht_events(cx) {
-			panic!("Unexpected error: {:?}", e);
+		if !authority_discovery.handle_dht_events().await {
+			panic!("Unexpected error");
 		}
 
 		// Expect authority discovery to set the priority set.
@@ -350,18 +364,14 @@ fn publish_discover_cycle() {
 				HashSet::from_iter(vec![node_a_multiaddr.clone()].into_iter())
 			)
 		);
-
-		Poll::Ready(())
-	};
-
-	let _ = block_on(poll_fn(f));
+	}.boxed_local().into());
 }
 
 #[test]
 fn terminate_when_event_stream_terminates() {
 	let (dht_event_tx, dht_event_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
+	let (key_store, _) = keystore_adapter::<KeyStore>(KeyStore::new().into());
 	let test_api = Arc::new(TestApi {
 		authorities: vec![],
 	});
@@ -375,18 +385,25 @@ fn terminate_when_event_stream_terminates() {
 		None,
 	);
 
-	block_on(async {
-		assert_eq!(Poll::Pending, poll!(&mut authority_discovery));
-
+	let timer = async {
+		Delay::new(Duration::from_secs(1)).await;
 		// Simulate termination of the network through dropping the sender side of the dht event
 		// channel.
 		drop(dht_event_tx);
+	};
+
+	let discovery_future = async {
+		let result = authority_discovery.run().await;
 
 		assert_eq!(
-			Poll::Ready(()), poll!(&mut authority_discovery),
+			(), result,
 			"Expect the authority discovery module to terminate once the sending side of the dht \
 			event channel is terminated.",
 		);
+	};
+
+	block_on(async {
+		join!(timer, discovery_future)
 	});
 }
 
@@ -401,7 +418,7 @@ fn dont_stop_polling_when_error_is_returned() {
 	let (mut dht_event_tx, dht_event_rx) = channel(1000);
 	let (mut discovery_update_tx, mut discovery_update_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
+	let (key_store, _) = keystore_adapter::<KeyStore>(KeyStore::new().into());
 	let test_api = Arc::new(TestApi {
 		authorities: vec![],
 	});
@@ -420,19 +437,15 @@ fn dont_stop_polling_when_error_is_returned() {
 	//
 	// As this is a local pool, only one future at a time will have the CPU and
 	// can make progress until the future returns `Pending`.
-	pool.spawner().spawn_local_obj(
-		futures::future::poll_fn(move |ctx| {
-			match std::pin::Pin::new(&mut authority_discovery).poll(ctx) {
-				Poll::Ready(()) => {},
-				Poll::Pending => {
-					discovery_update_tx.send(Event::Processed).now_or_never();
-					return Poll::Pending;
-				},
-			}
-			let _ = discovery_update_tx.send(Event::End).now_or_never().unwrap();
-			Poll::Ready(())
-		}).boxed_local().into(),
-	).expect("Spawns authority discovery");
+	let _ = pool.spawner().spawn_local_obj(async move {
+		authority_discovery.run().await
+	}.boxed_local().into());
+	let _ = pool.spawner().spawn_local_obj(async move {
+		Delay::new(Duration::from_secs(1)).await;
+		discovery_update_tx.send(Event::Processed).now_or_never();
+		Delay::new(Duration::from_secs(1)).await;
+		let _ = discovery_update_tx.send(Event::End).now_or_never().unwrap();
+	}.boxed_local().into());
 
 	pool.run_until(
 		// The future that drives the event stream
@@ -466,95 +479,105 @@ fn dont_stop_polling_when_error_is_returned() {
 /// peerset "authority" priority group.
 #[test]
 fn never_add_own_address_to_priority_group() {
-	let validator_key_store = Arc::new(SyncCryptoStore::new(KeyStore::new()));
-	let validator_public = validator_key_store
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-		.unwrap();
+	let pool = LocalPool::new();
+	let (validator_key_store, keystore_receiver) = keystore_adapter::<KeyStore>(KeyStore::new().into());
+	let _ = pool.spawner().spawn_local_obj(async move {
+		keystore_receiver.await
+	}.boxed_local().into());
 
-	let sentry_network: Arc<TestNetwork> = Arc::new(Default::default());
+	let _ = pool.spawner().spawn_local_obj(async move {
 
-	let sentry_multiaddr = {
-		let peer_id = sentry_network.local_peer_id();
-		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse().unwrap();
-
-		address.with(multiaddr::Protocol::P2p(
-			peer_id.into(),
-		))
-	};
-
-	// Address of some other sentry node of `validator`.
-	let random_multiaddr = {
-		let peer_id = PeerId::random();
-		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
-
-		address.with(multiaddr::Protocol::P2p(
-			peer_id.into(),
-		))
-	};
-
-	let dht_event = {
-		let addresses = vec![
-			sentry_multiaddr.to_vec(),
-			random_multiaddr.to_vec(),
-		];
-
-		let mut serialized_addresses = vec![];
-		schema::AuthorityAddresses { addresses }
-		.encode(&mut serialized_addresses)
-			.map_err(Error::EncodingProto)
+		let validator_public = validator_key_store.write()
+			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+			.await
 			.unwrap();
 
-		let signature = validator_key_store
-			.sign_with(
-				key_types::AUTHORITY_DISCOVERY,
-				&validator_public.clone().into(),
-				serialized_addresses.as_slice(),
-			)
-			.map_err(|_| Error::Signing)
-			.unwrap();
+		let sentry_network: Arc<TestNetwork> = Arc::new(Default::default());
 
-		let mut signed_addresses = vec![];
-		schema::SignedAuthorityAddresses {
-			addresses: serialized_addresses.clone(),
-			signature,
-		}
-			.encode(&mut signed_addresses)
-			.map_err(Error::EncodingProto)
-			.unwrap();
+		let sentry_multiaddr = {
+			let peer_id = sentry_network.local_peer_id();
+			let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse().unwrap();
 
-		let key = hash_authority_id(&validator_public.to_raw_vec());
-		let value = signed_addresses;
-		(key, value)
-	};
+			address.with(multiaddr::Protocol::P2p(
+				peer_id.into(),
+			))
+		};
 
-	let (_dht_event_tx, dht_event_rx) = channel(1);
-	let sentry_test_api = Arc::new(TestApi {
-		// Make sure the sentry node identifies its validator as an authority.
-		authorities: vec![validator_public.into()],
-	});
+		// Address of some other sentry node of `validator`.
+		let random_multiaddr = {
+			let peer_id = PeerId::random();
+			let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
 
-	let mut sentry_authority_discovery = AuthorityDiscovery::new(
-		sentry_test_api,
-		sentry_network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Sentry,
-		None,
-	);
+			address.with(multiaddr::Protocol::P2p(
+				peer_id.into(),
+			))
+		};
 
-	sentry_authority_discovery.handle_dht_value_found_event(vec![dht_event]).unwrap();
+		let dht_event = {
+			let addresses = vec![
+				sentry_multiaddr.to_vec(),
+				random_multiaddr.to_vec(),
+			];
 
-	assert_eq!(
-		sentry_network.set_priority_group_call.lock().unwrap().len(), 1,
-		"Expect authority discovery to set the priority set.",
-	);
+			let mut serialized_addresses = vec![];
+			schema::AuthorityAddresses { addresses }
+			.encode(&mut serialized_addresses)
+				.map_err(Error::EncodingProto)
+				.unwrap();
 
-	assert_eq!(
-		sentry_network.set_priority_group_call.lock().unwrap()[0],
-		(
-			"authorities".to_string(),
-			HashSet::from_iter(vec![random_multiaddr.clone()].into_iter(),)
-		),
-		"Expect authority discovery to only add `random_multiaddr`."
-	);
+			let signature = validator_key_store.read()
+				.sign_with(
+					key_types::AUTHORITY_DISCOVERY,
+					&validator_public.clone().into(),
+					serialized_addresses.as_slice(),
+				)
+				.await
+				.map_err(|_| Error::Signing)
+				.unwrap();
+
+			let mut signed_addresses = vec![];
+			schema::SignedAuthorityAddresses {
+				addresses: serialized_addresses.clone(),
+				signature,
+			}
+				.encode(&mut signed_addresses)
+				.map_err(Error::EncodingProto)
+				.unwrap();
+
+			let key = hash_authority_id(&validator_public.to_raw_vec());
+			let value = signed_addresses;
+			(key, value)
+		};
+
+		let (_dht_event_tx, dht_event_rx) = channel(1);
+		let sentry_test_api = Arc::new(TestApi {
+			// Make sure the sentry node identifies its validator as an authority.
+			authorities: vec![validator_public.into()],
+		});
+
+		let mut sentry_authority_discovery = AuthorityDiscovery::new(
+			sentry_test_api,
+			sentry_network.clone(),
+			vec![],
+			dht_event_rx.boxed(),
+			Role::Sentry,
+			None,
+		);
+
+		sentry_authority_discovery.handle_dht_value_found_event(vec![dht_event]).unwrap();
+
+		assert_eq!(
+			sentry_network.set_priority_group_call.lock().unwrap().len(), 1,
+			"Expect authority discovery to set the priority set.",
+		);
+
+		assert_eq!(
+			sentry_network.set_priority_group_call.lock().unwrap()[0],
+			(
+				"authorities".to_string(),
+				HashSet::from_iter(vec![random_multiaddr.clone()].into_iter(),)
+			),
+			"Expect authority discovery to only add `random_multiaddr`."
+		);
+	}.boxed_local().into());
 }

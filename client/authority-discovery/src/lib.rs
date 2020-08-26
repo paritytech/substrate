@@ -54,8 +54,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use futures::task::{Context, Poll};
-use futures::{Future, FutureExt, ready, Stream, StreamExt};
+use futures::{FutureExt, Stream, StreamExt};
 use futures_timer::Delay;
 
 use addr_cache::AddrCache;
@@ -75,8 +74,7 @@ use sc_network::{
 	PeerId,
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
-use sp_core::crypto::{key_types, Pair};
-use sp_core::traits::SyncCryptoStore;
+use sp_core::{crypto::{key_types, Pair}, traits::BareCryptoStorePtr};
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
 
@@ -104,7 +102,7 @@ const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
 /// Role an authority discovery module can run as.
 pub enum Role {
 	/// Actual authority as well as a reference to its key store.
-	Authority(Arc<SyncCryptoStore>),
+	Authority(BareCryptoStorePtr),
 	/// Sentry node that guards an authority.
 	///
 	/// No reference to its key store needed, as sentry nodes don't have an identity to sign
@@ -153,9 +151,7 @@ where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api:
-		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
-	Self: Future<Output = ()>,
+	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
 {
 	/// Return a new authority discovery.
 	///
@@ -221,8 +217,41 @@ where
 		}
 	}
 
+	async fn run(&mut self) {
+		loop {
+			// Process incoming events.
+			if !self.handle_dht_events().await {
+				// `handle_dht_events` returns `Poll::Ready(())` when the Dht event stream terminated.
+				// Termination of the Dht event stream implies that the underlying network terminated,
+				// thus authority discovery should terminate as well.
+				return ();
+			}
+
+
+			// Publish own addresses.
+			self.publish_interval.next().await;
+
+			if let Err(e) = self.publish_ext_addresses().await {
+				error!(
+					target: LOG_TARGET,
+					"Failed to publish external addresses: {:?}", e,
+				);
+			}
+
+			// Request addresses of authorities.
+			self.query_interval.next().await;
+
+			if let Err(e) = self.request_addresses_of_others().await {
+				error!(
+					target: LOG_TARGET,
+					"Failed to request addresses of authorities: {:?}", e,
+				);
+			}
+		}
+	}
+
 	/// Publish either our own or if specified the public addresses of our sentry nodes.
-	fn publish_ext_addresses(&mut self) -> Result<()> {
+	async fn publish_ext_addresses(&mut self) -> Result<()> {
 		let keystore = match &self.role {
 			Role::Authority(key_store) => key_store,
 			// Only authority nodes can put addresses (their own or the ones of their sentry nodes)
@@ -257,16 +286,16 @@ where
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		let keys = AuthorityDiscovery::get_own_public_keys_within_authority_set(
-			&keystore,
-			&self.client,
-		)?.into_iter().map(Into::into).collect::<Vec<_>>();
+		let keys = AuthorityDiscovery::<Client, Network, Block>::get_own_public_keys_within_authority_set(
+			keystore.clone(),
+			self.client.as_ref(),
+		).await?.into_iter().map(Into::into).collect::<Vec<_>>();
 
-		let signatures = keystore.sign_with_all(
+		let signatures = keystore.read().sign_with_all(
 			key_types::AUTHORITY_DISCOVERY,
 			keys.clone(),
 			serialized_addresses.as_slice(),
-		).map_err(|_| Error::Signing)?;
+		).await.map_err(|_| Error::Signing)?;
 
 		for (sign_result, key) in signatures.into_iter().zip(keys) {
 			let mut signed_addresses = vec![];
@@ -291,7 +320,7 @@ where
 		Ok(())
 	}
 
-	fn request_addresses_of_others(&mut self) -> Result<()> {
+	async fn request_addresses_of_others(&mut self) -> Result<()> {
 		let id = BlockId::hash(self.client.info().best_hash);
 
 		let authorities = self
@@ -302,7 +331,7 @@ where
 
 		let local_keys = match &self.role {
 			Role::Authority(key_store) => {
-				key_store.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
+				key_store.read().sr25519_public_keys(key_types::AUTHORITY_DISCOVERY).await
 						 .into_iter()
 						 .collect::<HashSet<_>>()
 			},
@@ -329,9 +358,9 @@ where
 	/// Returns either:
 	///   - Poll::Pending when there are no more events to handle or
 	///   - Poll::Ready(()) when the dht event stream terminated.
-	fn handle_dht_events(&mut self, cx: &mut Context) -> Poll<()>{
+	async fn handle_dht_events(&mut self) -> bool {
 		loop {
-			match ready!(self.dht_event_rx.poll_next_unpin(cx)) {
+			match self.dht_event_rx.next().await {
 				Some(DhtEvent::ValueFound(v)) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_found"]).inc();
@@ -388,7 +417,7 @@ where
 				},
 				None => {
 					debug!(target: LOG_TARGET, "Dht event stream terminated.");
-					return Poll::Ready(());
+					return false;
 				},
 			}
 		}
@@ -495,11 +524,11 @@ where
 	// one for the upcoming session. In addition it could be participating in the current authority
 	// set with two keys. The function does not return all of the local authority discovery public
 	// keys, but only the ones intersecting with the current authority set.
-	fn get_own_public_keys_within_authority_set(
-		key_store: &SyncCryptoStore,
+	async fn get_own_public_keys_within_authority_set(
+		key_store: BareCryptoStorePtr,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
-		let local_pub_keys = key_store.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
+		let local_pub_keys = key_store.read().sr25519_public_keys(key_types::AUTHORITY_DISCOVERY).await
 			.into_iter()
 			.collect::<HashSet<_>>();
 
@@ -539,56 +568,6 @@ where
 			.map_err(Error::SettingPeersetPriorityGroup)?;
 
 		Ok(())
-	}
-}
-
-impl<Client, Network, Block> Future for AuthorityDiscovery<Client, Network, Block>
-where
-	Block: BlockT + Unpin + 'static,
-	Network: NetworkProvider,
-	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api:
-		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
-{
-	type Output = ();
-
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		// Process incoming events.
-		if let Poll::Ready(()) = self.handle_dht_events(cx) {
-			// `handle_dht_events` returns `Poll::Ready(())` when the Dht event stream terminated.
-			// Termination of the Dht event stream implies that the underlying network terminated,
-			// thus authority discovery should terminate as well.
-			return Poll::Ready(());
-		}
-
-
-		// Publish own addresses.
-		if let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {
-			// Register waker of underlying task for next interval.
-			while let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {}
-
-			if let Err(e) = self.publish_ext_addresses() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to publish external addresses: {:?}", e,
-				);
-			}
-		}
-
-		// Request addresses of authorities.
-		if let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {
-			// Register waker of underlying task for next interval.
-			while let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {}
-
-			if let Err(e) = self.request_addresses_of_others() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to request addresses of authorities: {:?}", e,
-				);
-			}
-		}
-
-		Poll::Pending
 	}
 }
 
