@@ -320,7 +320,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = (
 			T::WeightInfo::execute(
-				*length_bound as u32, // B
+				*length_bound, // B
 				MAX_MEMBERS, // M
 			).saturating_add(proposal.get_dispatch_info().weight), // P
 			DispatchClass::Operational
