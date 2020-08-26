@@ -356,6 +356,9 @@ benchmarks_instance! {
 			approve,
 		)?;
 
+		// Whitelist voter account from further DB operations.
+		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
+		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
 	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
 	verify {
 		// The last proposal is removed.
