@@ -84,7 +84,7 @@ mod tests {
 			label: b"My label",
 			items: vec![
 				("one", VRFTranscriptValue::U64(1)),
-				("two", VRFTranscriptValue::Bytes("test".as_bytes())),
+				("two", VRFTranscriptValue::Bytes("test".as_bytes().to_vec())),
 			],
 		});
 		let test = |t: Transcript| -> [u8; 16] {

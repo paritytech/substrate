@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(missing_docs)]
 use async_trait::async_trait;
+use parking_lot::RwLock;
 use futures::{
 	channel::{
 		oneshot,
@@ -109,118 +110,12 @@ impl KeystoreProxy {
 
 		request_receiver.await
 	}
-
-	pub async fn sr25519_public_keys(
-		&self,
-		id: KeyTypeId,
-	) -> Result<KeystoreResponse, oneshot::Canceled> {
-		self.send_request(RequestMethod::Sr25519PublicKeys(id)).await
-	}
-
-	pub async fn sr25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<String>,
-	) -> Result<KeystoreResponse, oneshot::Canceled> {
-		self.send_request(RequestMethod::Sr25519GenerateNew(id, seed)).await
-	}
-
-	pub async fn sr25519_vrf_sign(
-		&self,
-		id: KeyTypeId,
-		public: sr25519::Public,
-		data: sp_core::vrf::VRFTranscriptData,
-	) -> Result<KeystoreResponse, oneshot::Canceled> {
-		self.send_request(RequestMethod::Sr25519VrfSign(id, public, data)).await
-	}
-
-	pub async fn ed25519_public_keys(
-		&self,
-		id: KeyTypeId,
-	) -> Result<KeystoreResponse, oneshot::Canceled> {
-		self.send_request(RequestMethod::Ed25519PublicKeys(id)).await
-	}
-
-	pub async fn ed25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<String>,
-	) -> Result<KeystoreResponse, oneshot::Canceled> {
-		self.send_request(RequestMethod::Ed25519GenerateNew(id, seed)).await
-	}
-
-	pub async fn ecdsa_public_keys(
-		&self,
-		id: KeyTypeId,
-	) -> Result<KeystoreResponse, oneshot::Canceled> {
-		self.send_request(RequestMethod::EcdsaPublicKeys(id)).await
-	}
-
-	pub async fn ecdsa_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<String>,
-	) -> Result<KeystoreResponse, oneshot::Canceled> {
-		self.send_request(RequestMethod::EcdsaGenerateNew(id, seed)).await
-	}
-
-	pub async fn sign_with(
-		&self,
-		id: KeyTypeId,
-		key: &CryptoTypePublicPair,
-		msg: &[u8],
-	) -> Result<KeystoreResponse, oneshot::Canceled> {
-		self.send_request(RequestMethod::SignWith(id, key.clone(), msg.to_vec())).await
-	}
-
-	pub async fn has_keys(
-		&self,
-		public_keys: &[(Vec<u8>, KeyTypeId)]
-	) -> Result<KeystoreResponse, oneshot::Canceled> {
-		self.send_request(RequestMethod::HasKeys(public_keys.to_vec())).await
-	}
-
-	pub async fn keys(
-		&self,
-		id: KeyTypeId,
-	) -> Result<KeystoreResponse, oneshot::Canceled> {
-		self.send_request(RequestMethod::Keys(id)).await
-	}
-
-	pub async fn supported_keys(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>
-	) -> Result<KeystoreResponse, oneshot::Canceled> {
-		self.send_request(RequestMethod::SupportedKeys(id, keys)).await
-	}
-
-	pub async fn insert_unknown(
-		&self,
-		key_type: KeyTypeId,
-		suri: &str,
-		public: &[u8]
-	) -> Result<KeystoreResponse, oneshot::Canceled> {
-		self.send_request(RequestMethod::InsertUnknown(
-			key_type,
-			suri.to_string(),
-			public.to_vec(),
-		)).await
-	}
-}
-
-pub struct KeystoreProxyAdapter(Arc<KeystoreProxy>);
-
-impl KeystoreProxyAdapter {
-	pub fn new(store: Arc<KeystoreProxy>) -> Self {
-		Self(store)
-	}
 }
 
 #[async_trait]
-impl BareCryptoStore for KeystoreProxyAdapter {
+impl BareCryptoStore for KeystoreProxy {
     async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sp_application_crypto::sr25519::Public> {
-        let response = self.0.sr25519_public_keys(id).await;
+		let response = self.send_request(RequestMethod::Sr25519PublicKeys(id)).await;
 		match response {
 			Ok(KeystoreResponse::Sr25519PublicKeys(keys)) => keys,
 			_ => vec![],
@@ -232,7 +127,9 @@ impl BareCryptoStore for KeystoreProxyAdapter {
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<sp_application_crypto::sr25519::Public, BareCryptoStoreError> {
-		let response = self.0.sr25519_generate_new(id, seed.map(|s| s.to_string())).await;
+		let response = self.send_request(
+			RequestMethod::Sr25519GenerateNew(id, seed.map(|s| s.to_string()))
+		).await;
 		match response {
 			Ok(KeystoreResponse::Sr25519GenerateNew(result)) => result,
 			_ => Err(BareCryptoStoreError::Unavailable),
@@ -240,7 +137,7 @@ impl BareCryptoStore for KeystoreProxyAdapter {
     }
 
     async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<sp_application_crypto::ed25519::Public> {
-        let response = self.0.ed25519_public_keys(id).await;
+		let response = self.send_request(RequestMethod::Ed25519PublicKeys(id)).await;
 		match response {
 			Ok(KeystoreResponse::Ed25519PublicKeys(keys)) => keys,
 			_ => vec![],
@@ -252,7 +149,9 @@ impl BareCryptoStore for KeystoreProxyAdapter {
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<sp_application_crypto::ed25519::Public, BareCryptoStoreError> {
-		let response = self.0.ed25519_generate_new(id, seed.map(|s| s.to_string())).await;
+		let response = self.send_request(
+			RequestMethod::Ed25519GenerateNew(id, seed.map(|s| s.to_string()))
+		).await;
 		match response {
 			Ok(KeystoreResponse::Ed25519GenerateNew(result)) => result,
 			_ => Err(BareCryptoStoreError::Unavailable),
@@ -260,7 +159,7 @@ impl BareCryptoStore for KeystoreProxyAdapter {
     }
 
     async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<sp_application_crypto::ecdsa::Public> {
-        let response = self.0.ecdsa_public_keys(id).await;
+		let response = self.send_request(RequestMethod::EcdsaPublicKeys(id)).await;
 		match response {
 			Ok(KeystoreResponse::EcdsaPublicKeys(keys)) => keys,
 			_ => vec![],
@@ -272,7 +171,9 @@ impl BareCryptoStore for KeystoreProxyAdapter {
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<sp_application_crypto::ecdsa::Public, BareCryptoStoreError> {
-		let response = self.0.ecdsa_generate_new(id, seed.map(|s| s.to_string())).await;
+		let response = self.send_request(
+			RequestMethod::EcdsaGenerateNew(id, seed.map(|s| s.to_string()))
+		).await;
 		match response {
 			Ok(KeystoreResponse::EcdsaGenerateNew(result)) => result,
 			_ => Err(BareCryptoStoreError::Unavailable),
@@ -280,7 +181,7 @@ impl BareCryptoStore for KeystoreProxyAdapter {
     }
 
     async fn insert_unknown(&mut self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
-		self.0.insert_unknown(key_type, suri, public).await
+		self.send_request(RequestMethod::InsertUnknown(key_type, suri.to_string(), public.to_vec())).await
 			.map(|_| ())
 			.map_err(|_| ())
     }
@@ -294,7 +195,7 @@ impl BareCryptoStore for KeystoreProxyAdapter {
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
 	) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
-		let response = self.0.supported_keys(id, keys).await;
+		let response = self.send_request(RequestMethod::SupportedKeys(id, keys)).await;
 		match response {
 			Ok(KeystoreResponse::SupportedKeys(keys)) => keys,
 			_ => Ok(vec![])
@@ -302,7 +203,7 @@ impl BareCryptoStore for KeystoreProxyAdapter {
     }
 
     async fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
-		let response = self.0.keys(id).await;
+		let response = self.send_request(RequestMethod::Keys(id)).await;
 		match response {
 			Ok(KeystoreResponse::Keys(keys)) => keys,
 			_ => Ok(vec![])
@@ -310,7 +211,7 @@ impl BareCryptoStore for KeystoreProxyAdapter {
     }
 
     async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		let response = self.0.has_keys(public_keys).await;
+		let response = self.send_request(RequestMethod::HasKeys(public_keys.to_vec())).await;
 		match response {
 			Ok(KeystoreResponse::HasKeys(exists)) => exists,
 			_ => false
@@ -323,7 +224,7 @@ impl BareCryptoStore for KeystoreProxyAdapter {
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
 	) -> Result<Vec<u8>, BareCryptoStoreError> {
-		let response = self.0.sign_with(id, key, msg).await;
+		let response = self.send_request(RequestMethod::SignWith(id, key.clone(), msg.to_vec())).await;
 		match response {
 			Ok(KeystoreResponse::SignWith(result)) => result,
 			_ => Err(BareCryptoStoreError::Unavailable)
@@ -336,7 +237,7 @@ impl BareCryptoStore for KeystoreProxyAdapter {
 		public: &sp_application_crypto::sr25519::Public,
 		transcript_data: sp_core::vrf::VRFTranscriptData,
 	) -> Result<sp_core::vrf::VRFSignature, BareCryptoStoreError> {
-		let response = self.0.sr25519_vrf_sign(key_type, *public, transcript_data).await;
+		let response = self.send_request(RequestMethod::Sr25519VrfSign(key_type, *public, transcript_data)).await;
 		match response {
 			Ok(KeystoreResponse::Sr25519VrfSign(result)) => result,
 			_ => Err(BareCryptoStoreError::Unavailable)
@@ -518,4 +419,9 @@ sp_externalities::decl_extension! {
 pub fn proxy<Store: BareCryptoStore + 'static>(store: Store) -> (KeystoreProxy, KeystoreReceiver<Store>) {
 	let (sender, receiver) = channel::<KeystoreRequest>(CHANNEL_SIZE);
 	(KeystoreProxy::new(sender), KeystoreReceiver::new(store, receiver))
+}
+
+pub fn adapter<Store: BareCryptoStore + 'static>(store: Store) -> (Arc<RwLock<KeystoreProxy>>, KeystoreReceiver<Store>) {
+	let (keystore_proxy, keystore_receiver) = proxy(store);
+	(Arc::new(RwLock::new(keystore_proxy)), keystore_receiver)
 }

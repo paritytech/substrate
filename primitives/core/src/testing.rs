@@ -22,7 +22,7 @@ use crate::crypto::KeyTypeId;
 use crate::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
-	traits::Error,
+	traits::{BareCryptoStorePtr, Error},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
 #[cfg(feature = "std")]
@@ -48,8 +48,8 @@ pub struct KeyStore {
 #[cfg(feature = "std")]
 impl KeyStore {
 	/// Creates a new instance of `Self`.
-	pub fn new() -> crate::traits::BareCryptoStorePtr {
-		std::sync::Arc::new(parking_lot::RwLock::new(Self::default()))
+	pub fn new() -> Self {
+		Self::default()
 	}
 
 	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
@@ -262,6 +262,12 @@ impl crate::traits::BareCryptoStore for KeyStore {
 	}
 }
 
+#[cfg(feature = "std")]
+impl Into<BareCryptoStorePtr> for KeyStore {
+    fn into(self) -> BareCryptoStorePtr {
+		std::sync::Arc::new(parking_lot::RwLock::new(self))
+    }
+}
 /// Macro for exporting functions from wasm in with the expected signature for using it with the
 /// wasm executor. This is useful for tests where you need to call a function in wasm.
 ///
@@ -399,7 +405,7 @@ mod tests {
 
 	#[test]
 	fn store_key_and_extract() {
-		let store = KeyStore::new();
+		let store: BareCryptoStorePtr = KeyStore::new().into();
 
 		let public = block_on(store.write().ed25519_generate_new(ED25519, None))
 			.expect("Generates key");
@@ -411,7 +417,7 @@ mod tests {
 
 	#[test]
 	fn store_unknown_and_extract_it() {
-		let store = KeyStore::new();
+		let store: BareCryptoStorePtr = KeyStore::new().into();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
@@ -429,7 +435,7 @@ mod tests {
 
 	#[test]
 	fn vrf_sign() {
-		let store = KeyStore::new();
+		let store: BareCryptoStorePtr = KeyStore::new().into();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
@@ -439,7 +445,7 @@ mod tests {
 			items: vec![
 				("one", VRFTranscriptValue::U64(1)),
 				("two", VRFTranscriptValue::U64(2)),
-				("three", VRFTranscriptValue::Bytes("test".as_bytes())),
+				("three", VRFTranscriptValue::Bytes("test".as_bytes().to_vec())),
 			]
 		};
 
