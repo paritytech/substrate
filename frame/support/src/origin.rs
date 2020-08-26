@@ -65,7 +65,7 @@ macro_rules! impl_outer_origin {
 		$runtime:ident;
 		$system:ident;
 		Modules {
-			$module:ident $instance:ident <T>
+			$( #[codec(index = $index:tt)] )? $module:ident $instance:ident <T>
 			$(, $( $rest_module:tt )* )?
 		};
 		$( $parsed:tt )*
@@ -77,7 +77,7 @@ macro_rules! impl_outer_origin {
 			$runtime;
 			$system;
 			Modules { $( $( $rest_module )* )? };
-			$( $parsed )* $module <$runtime> { $instance },
+			$( $parsed )* $module <$runtime> { $instance } index { $( $index )? },
 		);
 	};
 
@@ -89,7 +89,7 @@ macro_rules! impl_outer_origin {
 		$runtime:ident;
 		$system:ident;
 		Modules {
-			$module:ident $instance:ident
+			$( #[codec(index = $index:tt )] )? $module:ident $instance:ident
 			$(, $rest_module:tt )*
 		};
 		$( $parsed:tt )*
@@ -101,7 +101,7 @@ macro_rules! impl_outer_origin {
 			$runtime;
 			$system;
 			Modules { $( $rest_module )* };
-			$( $parsed )* $module { $instance },
+			$( $parsed )* $module { $instance } index { $( $index )? },
 		);
 	};
 
@@ -113,7 +113,7 @@ macro_rules! impl_outer_origin {
 		$runtime:ident;
 		$system:ident;
 		Modules {
-			$module:ident <T>
+			$( #[codec(index = $index:tt )] )? $module:ident <T>
 			$(, $( $rest_module:tt )* )?
 		};
 		$( $parsed:tt )*
@@ -125,7 +125,7 @@ macro_rules! impl_outer_origin {
 			$runtime;
 			$system;
 			Modules { $( $( $rest_module )* )? };
-			$( $parsed )* $module <$runtime>,
+			$( $parsed )* $module <$runtime> index { $( $index )? },
 		);
 	};
 
@@ -137,7 +137,7 @@ macro_rules! impl_outer_origin {
 		$runtime:ident;
 		$system:ident;
 		Modules {
-			$module:ident
+			$( #[codec(index = $index:tt )] )? $module:ident
 			$(, $( $rest_module:tt )* )?
 		};
 		$( $parsed:tt )*
@@ -149,7 +149,7 @@ macro_rules! impl_outer_origin {
 			$runtime;
 			$system;
 			Modules { $( $( $rest_module )* )? };
-			$( $parsed )* $module,
+			$( $parsed )* $module index { $( $index )? },
 		);
 	};
 
@@ -161,7 +161,12 @@ macro_rules! impl_outer_origin {
 		$runtime:ident;
 		$system:ident;
 		Modules { };
-		$( $module:ident $( < $generic:ident > )? $( { $generic_instance:ident } )? ,)*
+		$(
+			$module:ident
+			$( < $generic:ident > )?
+			$( { $generic_instance:ident } )?
+			index { $( $index:tt )? },
+		)*
 	) => {
 		// WARNING: All instance must hold the filter `frame_system::Trait::BaseCallFilter`, except
 		// when caller is system Root. One can use `OriginTrait::reset_filter` to do so.
@@ -233,8 +238,10 @@ macro_rules! impl_outer_origin {
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
 			pub enum $caller_name {
+				#[codec(index = "0")]
 				system($system::Origin<$runtime>),
 				$(
+					$( #[codec(index = $index )] )?
 					[< $module $( _ $generic_instance )? >]
 					($module::Origin < $( $generic, )? $( $module::$generic_instance )? > ),
 				)*

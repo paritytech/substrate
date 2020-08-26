@@ -1899,7 +1899,7 @@ macro_rules! impl_outer_dispatch {
 		$(#[$attr:meta])*
 		pub enum $call_type:ident for $runtime:ident where origin: $origin:ty {
 			$(
-				$module:ident::$camelcase:ident,
+				$( #[codec(index = $index:tt)] )? $module:ident::$camelcase:ident,
 			)*
 		}
 	) => {
@@ -1912,6 +1912,7 @@ macro_rules! impl_outer_dispatch {
 		)]
 		pub enum $call_type {
 			$(
+				$( #[codec(index = $index)] )?
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase, $runtime> )
 			,)*
 		}

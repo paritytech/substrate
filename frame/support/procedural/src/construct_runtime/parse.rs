@@ -36,6 +36,7 @@ mod keyword {
 	syn::custom_keyword!(Origin);
 	syn::custom_keyword!(Inherent);
 	syn::custom_keyword!(ValidateUnsigned);
+	syn::custom_keyword!(deprecated_system_non_zero);
 }
 
 #[derive(Debug)]
@@ -44,12 +45,24 @@ pub struct RuntimeDefinition {
 	pub enum_token: Token![enum],
 	pub name: Ident,
 	pub where_section: WhereSection,
+	pub deprecated_system_non_zero: bool,
 	pub modules: ext::Braces<ext::Punctuated<ModuleDeclaration, Token![,]>>,
 }
 
 impl Parse for RuntimeDefinition {
 	fn parse(input: ParseStream) -> Result<Self> {
+		let mut deprecated_system_non_zero = false;
+
+		if input.peek(Token![#]) {
+			input.parse::<Token![#]>()?;
+			let attr_content;
+			syn::bracketed!(attr_content in input);
+			attr_content.parse::<keyword::deprecated_system_non_zero>()?;
+			deprecated_system_non_zero = true;
+		}
+
 		Ok(Self {
+			deprecated_system_non_zero,
 			visibility_token: input.parse()?,
 			enum_token: input.parse()?,
 			name: input.parse()?,
@@ -149,9 +162,10 @@ impl Parse for WhereDefinition {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ModuleDeclaration {
 	pub name: Ident,
+	pub index: Option<u8>,
 	pub module: Ident,
 	pub instance: Option<Ident>,
 	pub module_parts: Vec<ModulePart>,
@@ -175,11 +189,21 @@ impl Parse for ModuleDeclaration {
 		let _: Token![::] = input.parse()?;
 		let module_parts = parse_module_parts(input)?;
 
+		let index = if input.peek(Token![=]) {
+			input.parse::<Token![=]>()?;
+			let index = input.parse::<syn::LitInt>()?;
+			let index = index.base10_parse::<u8>()?;
+			Some(index)
+		} else {
+			None
+		};
+
 		let parsed = Self {
 			name,
 			module,
 			instance,
 			module_parts,
+			index,
 		};
 
 		Ok(parsed)

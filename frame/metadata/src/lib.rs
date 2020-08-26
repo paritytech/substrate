@@ -362,8 +362,10 @@ pub enum RuntimeMetadata {
 	V9(RuntimeMetadataDeprecated),
 	/// Version 10 for runtime metadata. No longer used.
 	V10(RuntimeMetadataDeprecated),
-	/// Version 11 for runtime metadata.
-	V11(RuntimeMetadataV11),
+	/// Version 11 for runtime metadata. No longer used.
+	V11(RuntimeMetadataDeprecated),
+	/// Version 12 for runtime metadata.
+	V12(RuntimeMetadataV12),
 }
 
 /// Enum that should fail.
@@ -387,7 +389,7 @@ impl Decode for RuntimeMetadataDeprecated {
 /// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-pub struct RuntimeMetadataV11 {
+pub struct RuntimeMetadataV12 {
 	/// Metadata of all the modules.
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
 	/// Metadata of the extrinsic.
@@ -395,7 +397,7 @@ pub struct RuntimeMetadataV11 {
 }
 
 /// The latest version of the metadata.
-pub type RuntimeMetadataLastVersion = RuntimeMetadataV11;
+pub type RuntimeMetadataLastVersion = RuntimeMetadataV12;
 
 /// All metadata about an runtime module.
 #[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
@@ -407,6 +409,7 @@ pub struct ModuleMetadata {
 	pub event: ODFnA<EventMetadata>,
 	pub constants: DFnA<ModuleConstantMetadata>,
 	pub errors: DFnA<ErrorMetadata>,
+	pub fixed_index: Option<u8>,
 }
 
 type ODFnA<T> = Option<DFnA<T>>;
@@ -420,6 +423,6 @@ impl Into<sp_core::OpaqueMetadata> for RuntimeMetadataPrefixed {
 
 impl Into<RuntimeMetadataPrefixed> for RuntimeMetadataLastVersion {
 	fn into(self) -> RuntimeMetadataPrefixed {
-		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V11(self))
+		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V12(self))
 	}
 }

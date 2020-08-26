@@ -21,7 +21,7 @@ use frame_support_procedural_tools::syn_ext as ext;
 use frame_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
 use parse::{ModuleDeclaration, RuntimeDefinition, WhereSection};
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{TokenStream as TokenStream2, Span};
 use quote::quote;
 use syn::{Ident, Result, TypePath};
 
@@ -38,6 +38,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
 	let RuntimeDefinition {
 		name,
+		deprecated_system_non_zero,
 		where_section: WhereSection {
 			block,
 			node_block,
@@ -51,40 +52,34 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 			},
 		..
 	} = definition;
+	let modules = modules.into_iter().collect::<Vec<_>>();
 
-	// Assert we have system module declared
-	let system_module = match find_system_module(modules.iter()) {
-		Some(sm) => sm,
-		None => {
-			return Err(syn::Error::new(
-				modules_token.span,
-				"`System` module declaration is missing. \
-				 Please add this line: `System: frame_system::{Module, Call, Storage, Config, Event<T>},`",
-			))
-		}
-	};
+	let system_module = check_modules(deprecated_system_non_zero, &modules, modules_token.span)?;
+
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "frame-support");
 
-	let all_but_system_modules = modules.iter().filter(|module| module.name != SYSTEM_MODULE_NAME);
+	let all_but_system_modules = modules.clone().into_iter()
+		.filter(|module| module.name != SYSTEM_MODULE_NAME)
+		.collect::<Vec<_>>();
 
 	let outer_event = decl_outer_event(
 		&name,
-		modules.iter(),
+		&modules,
 		&scrate,
 	)?;
 
 	let outer_origin = decl_outer_origin(
 		&name,
-		all_but_system_modules.clone(),
+		&all_but_system_modules,
 		&system_module,
 		&scrate,
 	)?;
 	let all_modules = decl_all_modules(&name, modules.iter());
-	let module_to_index = decl_module_to_index(modules.iter(), modules.len(), &scrate);
+	let module_to_index = decl_module_to_index(&modules, &scrate);
 
-	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
+	let dispatch = decl_outer_dispatch(&name, &modules, &scrate);
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate, &unchecked_extrinsic);
 	let outer_config = decl_outer_config(&name, modules.iter(), &scrate);
 	let inherent = decl_outer_inherent(
@@ -238,7 +233,12 @@ fn decl_runtime_metadata<'a>(
 				.as_ref()
 				.map(|name| quote!(<#name>))
 				.into_iter();
-			quote!(#module::Module #(#instance)* as #name with #(#filtered_names)* ,)
+
+			let index = module_declaration.index.map(|index| quote::quote!( { index #index } ));
+
+			quote!(
+				#module::Module #(#instance)* as #name with #(#filtered_names)* #index,
+			)
 		});
 	quote!(
 		#scrate::impl_runtime_metadata!{
@@ -250,16 +250,23 @@ fn decl_runtime_metadata<'a>(
 
 fn decl_outer_dispatch<'a>(
 	runtime: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: &Vec<ModuleDeclaration>,
 	scrate: &'a TokenStream2,
 ) -> TokenStream2 {
-	let modules_tokens = module_declarations
+	let mut available_indices = get_available_indices(module_declarations);
+	let modules_tokens = module_declarations.iter()
 		.filter(|module_declaration| module_declaration.exists_part("Call"))
 		.map(|module_declaration| {
 			let module = &module_declaration.module;
 			let name = &module_declaration.name;
-			quote!(#module::#name)
+			let index = match module_declaration.index {
+				Some(index) => index,
+				None => available_indices.remove(0),
+			};
+			let index_string = syn::LitStr::new(&format!("{}", index), Span::call_site());
+			quote!(#[codec(index = #index_string)] #module::#name)
 		});
+
 	quote!(
 		#scrate::impl_outer_dispatch! {
 			pub enum Call for #runtime where origin: Origin {
@@ -271,12 +278,14 @@ fn decl_outer_dispatch<'a>(
 
 fn decl_outer_origin<'a>(
 	runtime_name: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	modules_except_system: &Vec<ModuleDeclaration>,
 	system_name: &'a Ident,
 	scrate: &'a TokenStream2,
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
-	for module_declaration in module_declarations {
+	let mut available_indices = get_available_indices(modules_except_system);
+	available_indices.retain(|i| *i != 0); // index 0 is reserved for system in origin
+	for module_declaration in modules_except_system {
 		match module_declaration.find_part("Origin") {
 			Some(module_entry) => {
 				let module = &module_declaration.module;
@@ -290,7 +299,15 @@ fn decl_outer_origin<'a>(
 					);
 					return Err(syn::Error::new(module_declaration.name.span(), msg));
 				}
-				let tokens = quote!(#module #instance #generics ,);
+				let index = match module_declaration.index {
+					Some(index) => {
+						assert!(index != 0, "Internal error, some origin is at index 0");
+						index
+					},
+					None => available_indices.remove(0),
+				};
+				let index_string = syn::LitStr::new(&format!("{}", index), Span::call_site());
+				let tokens = quote!(#[codec(index = #index_string)] #module #instance #generics ,);
 				modules_tokens.extend(tokens);
 			}
 			None => {}
@@ -308,10 +325,11 @@ fn decl_outer_origin<'a>(
 
 fn decl_outer_event<'a>(
 	runtime_name: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: &Vec<ModuleDeclaration>,
 	scrate: &'a TokenStream2,
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
+	let mut available_indices = get_available_indices(module_declarations);
 	for module_declaration in module_declarations {
 		match module_declaration.find_part("Event") {
 			Some(module_entry) => {
@@ -326,7 +344,13 @@ fn decl_outer_event<'a>(
 					);
 					return Err(syn::Error::new(module_declaration.name.span(), msg));
 				}
-				let tokens = quote!(#module #instance #generics ,);
+
+				let index = match module_declaration.index {
+					Some(index) => index,
+					None => available_indices.remove(0),
+				};
+				let index_string = syn::LitStr::new(&format!("{}", index), Span::call_site());
+				let tokens = quote!(#[codec(index = #index_string)] #module #instance #generics,);
 				modules_tokens.extend(tokens);
 			}
 			None => {}
@@ -377,12 +401,18 @@ fn decl_all_modules<'a>(
 }
 
 fn decl_module_to_index<'a>(
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
-	num_modules: usize,
+	module_declarations: &Vec<ModuleDeclaration>,
 	scrate: &TokenStream2,
 ) -> TokenStream2 {
-	let names = module_declarations.map(|d| &d.name);
-	let indices = 0..num_modules;
+	let names = module_declarations.iter().map(|d| &d.name);
+	let mut available_indices = get_available_indices(module_declarations);
+	let indices = module_declarations.iter()
+		.map(|module| {
+			match module.index {
+				Some(index) => index as usize,
+				None => available_indices.remove(0) as usize,
+			}
+		});
 
 	quote!(
 		/// Provides an implementation of `ModuleToIndex` to map a module
@@ -404,14 +434,6 @@ fn decl_module_to_index<'a>(
 	)
 }
 
-fn find_system_module<'a>(
-	mut module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
-) -> Option<&'a Ident> {
-	module_declarations
-		.find(|decl| decl.name == SYSTEM_MODULE_NAME)
-		.map(|decl| &decl.module)
-}
-
 fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 	quote!(
 		#[cfg(test)]
@@ -424,4 +446,94 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 			}
 		}
 	)
+}
+
+fn get_available_indices(modules: &Vec<ModuleDeclaration>) -> Vec<u8> {
+	let reserved_indices = modules.iter()
+		.filter_map(|module| module.index)
+		.collect::<Vec<_>>();
+
+	(0..u8::max_value())
+	.filter(|i| !reserved_indices.contains(i))
+	.collect::<Vec<_>>()
+}
+
+/// Check:
+/// * check system module is defined
+/// * there is less than 256 modules
+/// * no module use index 0 or except system
+/// * system module index is 0 (either explicitly or implicitly).
+/// * module indices don't conflict.
+///
+/// returns system module ident
+fn check_modules(
+	deprecated_system_non_zero: bool,
+	modules: &Vec<ModuleDeclaration>,
+	modules_span: proc_macro2::Span,
+) -> Result<syn::Ident> {
+	// Assert we have system module declared
+	let system_module = modules.iter()
+		.find(|decl| decl.name == SYSTEM_MODULE_NAME)
+		.ok_or_else(|| syn::Error::new(
+			modules_span,
+			"`System` module declaration is missing. \
+			 Please add this line: `System: frame_system::{Module, Call, Storage, Config, Event<T>},`",
+		))?;
+
+	if modules.len() > u8::max_value() as usize {
+		let msg = "Too many modules defined, only 256 modules is currently allowed";
+		return Err(syn::Error::new(modules_span, msg));
+	}
+
+	// No module use index 0
+	if let Some(module) = modules.iter()
+		.find(|module| {
+			module.index.map_or(false, |i| i == 0) && module.name != SYSTEM_MODULE_NAME
+		})
+	{
+		let msg = format!(
+			"Only system module is allowed to be defined at index `0`",
+		);
+		return Err(syn::Error::new(module.name.span(), msg));
+	}
+
+	if !deprecated_system_non_zero {
+		if let Some(index) = system_module.index {
+			// System module is at index 0 explicitly
+			if index != 0 {
+				let msg = "System module must be defined at index `0`";
+				return Err(syn::Error::new(system_module.module.span(), msg));
+			}
+		} else {
+			// System module is at index 0 implicitly
+			let first_implicit_module = modules.iter().filter(|m| m.index.is_none()).next()
+				.expect("At least system module exists; qed");
+
+			if first_implicit_module.name != SYSTEM_MODULE_NAME {
+				let msg = format!(
+					"System module must be defined at index `0`, instead {} is found. (this check \
+					is to avoid confusion for generation of origin_caller, (where system is \
+					forced to be at index 0 anyway), to bypass this check use attribute \
+					`#[deprecated_system_non_zero]` as \
+					`construct_runtime!(#[deprecated_system_non_zero] ... )`).",
+					first_implicit_module.name,
+				);
+				return Err(syn::Error::new(first_implicit_module.module.span(), msg));
+			}
+		}
+	}
+
+	// No module indices conflicts
+	let mut indices = vec![];
+	for module in modules {
+		if let Some(index) = module.index {
+			if indices.contains(&index) {
+				return Err(syn::Error::new(module.module.span(), "module index is already used"));
+			} else {
+				indices.push(index)
+			}
+		}
+	}
+
+	Ok(system_module.module.clone())
 }
