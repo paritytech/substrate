@@ -61,19 +61,16 @@ pub struct BuildSyncSpecCmd {
 
 impl BuildSyncSpecCmd {
 	/// Run the build-sync-spec command
-	pub async fn run<B, CL, BA>(
+	pub async fn run<B, CL>(
 		&self,
 		mut spec: Box<dyn ChainSpec>,
 		network_config: NetworkConfiguration,
 		client: Arc<CL>,
-		backend: Arc<BA>,
 		network_status_sinks: NetworkStatusSinks<B>,
 	) -> error::Result<()>
 		where
 			B: BlockT,
 			CL: sp_blockchain::HeaderBackend<B>,
-			BA: sc_client_api::Backend<B>,
-			<BA as sc_client_api::Backend<B>>::Blockchain: sc_client_api::ProvideChtRoots<B>,
 	{
         if self.sync_first {
             network_status_sinks.network_status(std::time::Duration::from_secs(1)).filter(|(status, _)| {
@@ -81,7 +78,7 @@ impl BuildSyncSpecCmd {
             }).into_future().map(drop).await;
         }
 
-        let light_sync_state = build_light_sync_state(client, backend)?;
+        let light_sync_state = build_light_sync_state(client)?;
         spec.set_light_sync_state(light_sync_state.to_serializable());
 
 		info!("Building chain spec");

@@ -106,10 +106,10 @@ pub fn run() -> Result<()> {
 			runner.async_run(|config| {
 				let chain_spec = config.chain_spec.cloned_box();
 				let network_config = config.network.clone();
-				let NewFullBase { task_manager, client, backend, network_status_sinks, .. }
+				let NewFullBase { task_manager, client, network_status_sinks, .. }
 					= new_full_base(config, |_, _| ())?;
 
-				Ok((cmd.run(chain_spec, network_config, client, backend, network_status_sinks), task_manager))
+				Ok((cmd.run(chain_spec, network_config, client, network_status_sinks), task_manager))
 			})
 		},
 		Some(Subcommand::CheckBlock(cmd)) => {

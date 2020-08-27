@@ -155,7 +155,6 @@ pub struct NewFullBase {
 	pub task_manager: TaskManager,
 	pub inherent_data_providers: InherentDataProviders,
 	pub client: Arc<FullClient>,
-	pub backend: Arc<FullBackend>,
 	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	pub network_status_sinks: sc_service::NetworkStatusSinks<Block>,
 	pub transaction_pool: Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
@@ -337,7 +336,7 @@ pub fn new_full_base(
 
 	network_starter.start_network();
 	Ok(NewFullBase {
-		task_manager, inherent_data_providers, client, backend, network, network_status_sinks,
+		task_manager, inherent_data_providers, client, network, network_status_sinks,
 		transaction_pool,
 	})
 }

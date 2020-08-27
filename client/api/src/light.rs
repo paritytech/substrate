@@ -32,7 +32,7 @@ use sp_blockchain::{
 	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
 	Error as ClientError, Result as ClientResult,
 };
-use crate::{backend::{AuxStore, NewBlockState}, UsageInfo, ProvideChtRoots};
+use crate::{backend::{AuxStore, NewBlockState}, UsageInfo};
 
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -232,9 +232,7 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 
 
 /// Light client blockchain storage.
-pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block>
-	+ HeaderMetadata<Block, Error=ClientError> + ProvideChtRoots<Block>
-{
+pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError> {
 	/// Store new header. Should refuse to revert any finalized blocks.
 	///
 	/// Takes new authorities, the leaf state of the new block, and
@@ -255,6 +253,20 @@ pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block>
 
 	/// Get last finalized header.
 	fn last_finalized(&self) -> ClientResult<Block::Hash>;
+
+	/// Get headers CHT root for given block. Returns None if the block is not pruned (not a part of any CHT).
+	fn header_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Option<Block::Hash>>;
+
+	/// Get changes trie CHT root for given block. Returns None if the block is not pruned (not a part of any CHT).
+	fn changes_trie_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Option<Block::Hash>>;
 
 	/// Get storage cache.
 	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>>;

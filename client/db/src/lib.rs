@@ -54,8 +54,8 @@ use std::collections::{HashMap, HashSet};
 
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
-	backend::{NewBlockState, PrunableStateChangesTrieStorage, ProvideChtRoots},
-	leaves::{LeafSet, FinalizationDisplaced}, cht,
+	backend::{NewBlockState, PrunableStateChangesTrieStorage},
+	leaves::{LeafSet, FinalizationDisplaced},
 };
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
@@ -70,7 +70,7 @@ use sp_core::ChangesTrieConfiguration;
 use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::{generic::{DigestItem, BlockId}, Justification, Storage};
+use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion, HashFor,
 };
@@ -405,14 +405,6 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			meta.finalized_hash = hash;
 		}
 	}
-
-	// Get block changes trie root, if available.
-	fn changes_trie_root(&self, block: BlockId<Block>) -> ClientResult<Option<Block::Hash>> {
-		self.header(block)
-			.map(|header| header.and_then(|header|
-				header.digest().log(DigestItem::as_changes_trie_root)
-					.cloned()))
-	}
 }
 
 impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
@@ -530,58 +522,6 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 
 	fn remove_header_metadata(&self, hash: Block::Hash) {
 		self.header_metadata_cache.remove_header_metadata(hash);
-	}
-}
-
-impl<Block: BlockT> ProvideChtRoots<Block> for BlockchainDb<Block> {
-	fn header_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		let cht_number = match cht::block_to_cht_number(cht_size, block) {
-			Some(number) => number,
-			None => return Ok(None),
-		};
-
-		let cht_start: NumberFor<Block> = cht::start_number(cht::size(), cht_number);
-
-		let mut current_num = cht_start;
-		let cht_range = ::std::iter::from_fn(|| {
-			let old_current_num = current_num;
-			current_num = current_num + One::one();
-			Some(old_current_num)
-		});
-
-		cht::compute_root::<Block::Header, HashFor<Block>, _>(
-			cht::size(), cht_number, cht_range.map(|num| self.hash(num))
-		).map(Some)
-	}
-
-	fn changes_trie_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		let cht_number = match cht::block_to_cht_number(cht_size, block) {
-			Some(number) => number,
-			None => return Ok(None),
-		};
-
-		let cht_start: NumberFor<Block> = cht::start_number(cht::size(), cht_number);
-
-		let mut current_num = cht_start;
-		let cht_range = ::std::iter::from_fn(|| {
-			let old_current_num = current_num;
-			current_num = current_num + One::one();
-			Some(old_current_num)
-		});
-
-		cht::compute_root::<Block::Header, HashFor<Block>, _>(
-			cht::size(),
-			cht_number,
-			cht_range.map(|num| self.changes_trie_root(BlockId::Number(num))),
-		).map(Some)
 	}
 }
 
