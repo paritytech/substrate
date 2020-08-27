@@ -585,3 +585,26 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		);
 	});
 }
+
+#[test]
+fn report_equivocation_has_valid_weight() {
+	// the weight depends on the size of the validator set,
+	// but there's a lower bound of 100 validators.
+	assert!(
+		(1..=100)
+			.map(weight_for::report_equivocation::<Test>)
+			.collect::<Vec<_>>()
+			.windows(2)
+			.all(|w| w[0] == w[1])
+	);
+
+	// after 100 validators the weight should keep increasing
+	// with every extra validator.
+	assert!(
+		(100..=1000)
+			.map(weight_for::report_equivocation::<Test>)
+			.collect::<Vec<_>>()
+			.windows(2)
+			.all(|w| w[0] < w[1])
+	);
+}
