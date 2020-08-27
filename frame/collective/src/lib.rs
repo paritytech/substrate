@@ -628,7 +628,6 @@ decl_module! {
 		///
 		/// # <weight>
 		/// Complexity: O(P) where P is the number of max proposals
-		/// Base Weight: .49 * P
 		/// DB Weight:
 		/// * Reads: Proposals
 		/// * Writes: Voting, Proposals, ProposalOf
