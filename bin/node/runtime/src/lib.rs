@@ -569,7 +569,7 @@ impl pallet_collective::Trait<TechnicalCollective> for Runtime {
 	type MotionDuration = TechnicalMotionDuration;
 	type MaxProposals = TechnicalMaxProposals;
 	type MaxMembers = TechnicalMaxMembers;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_collective::WeightInfo;
 }
 
 type EnsureRootOrHalfCouncil = EnsureOneOf<
