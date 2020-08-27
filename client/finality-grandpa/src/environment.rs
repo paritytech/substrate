@@ -39,7 +39,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
-use sc_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Precommit, Prevote,
@@ -59,7 +59,7 @@ use sp_finality_grandpa::{
 	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof,
 	GrandpaApi, RoundNumber, SetId,
 };
-use prometheus_endpoint::{Gauge, U64, register, PrometheusError};
+use prometheus_endpoint::{register, Counter, Gauge, PrometheusError, U64};
 
 type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -378,14 +378,32 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 #[derive(Clone)]
 pub(crate) struct Metrics {
 	finality_grandpa_round: Gauge<U64>,
+	finality_grandpa_prevotes: Counter<U64>,
+	finality_grandpa_precommits: Counter<U64>,
 }
 
 impl Metrics {
-	pub(crate) fn register(registry: &prometheus_endpoint::Registry) -> Result<Self, PrometheusError> {
+	pub(crate) fn register(
+		registry: &prometheus_endpoint::Registry,
+	) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			finality_grandpa_round: register(
 				Gauge::new("finality_grandpa_round", "Highest completed GRANDPA round.")?,
-				registry
+				registry,
+			)?,
+			finality_grandpa_prevotes: register(
+				Counter::new(
+					"finality_grandpa_prevotes",
+					"Total number of GRANDPA prevotes cast locally.",
+				)?,
+				registry,
+			)?,
+			finality_grandpa_precommits: register(
+				Counter::new(
+					"finality_grandpa_precommits",
+					"Total number of GRANDPA precommits cast locally.",
+				)?,
+				registry,
 			)?,
 		})
 	}
@@ -804,9 +822,22 @@ where
 			None => return Ok(()),
 		};
 
+		let report_prevote_metrics = |prevote: &Prevote<Block>| {
+			telemetry!(CONSENSUS_DEBUG; "afg.prevote_issued";
+				"round" => round,
+				"target_number" => ?prevote.target_number,
+				"target_hash" => ?prevote.target_hash,
+			);
+
+			if let Some(metrics) = self.metrics.as_ref() {
+				metrics.finality_grandpa_prevotes.inc();
+			}
+		};
+
 		self.update_voter_set_state(|voter_set_state| {
 			let (completed_rounds, current_rounds) = voter_set_state.with_current_round(round)?;
-			let current_round = current_rounds.get(&round)
+			let current_round = current_rounds
+				.get(&round)
 				.expect("checked in with_current_round that key exists; qed.");
 
 			if !current_round.can_prevote() {
@@ -815,6 +846,9 @@ where
 				// state
 				return Ok(None);
 			}
+
+			// report to telemetry and prometheus
+			report_prevote_metrics(&prevote);
 
 			let propose = current_round.propose();
 
@@ -837,7 +871,11 @@ where
 		Ok(())
 	}
 
-	fn precommitted(&self, round: RoundNumber, precommit: Precommit<Block>) -> Result<(), Self::Error> {
+	fn precommitted(
+		&self,
+		round: RoundNumber,
+		precommit: Precommit<Block>,
+	) -> Result<(), Self::Error> {
 		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
@@ -845,9 +883,22 @@ where
 			None => return Ok(()),
 		};
 
+		let report_precommit_metrics = |precommit: &Precommit<Block>| {
+			telemetry!(CONSENSUS_DEBUG; "afg.precommit_issued";
+				"round" => round,
+				"target_number" => ?precommit.target_number,
+				"target_hash" => ?precommit.target_hash,
+			);
+
+			if let Some(metrics) = self.metrics.as_ref() {
+				metrics.finality_grandpa_precommits.inc();
+			}
+		};
+
 		self.update_voter_set_state(|voter_set_state| {
 			let (completed_rounds, current_rounds) = voter_set_state.with_current_round(round)?;
-			let current_round = current_rounds.get(&round)
+			let current_round = current_rounds
+				.get(&round)
 				.expect("checked in with_current_round that key exists; qed.");
 
 			if !current_round.can_precommit() {
@@ -857,13 +908,16 @@ where
 				return Ok(None);
 			}
 
+			// report to telemetry and prometheus
+			report_precommit_metrics(&precommit);
+
 			let propose = current_round.propose();
 			let prevote = match current_round {
 				HasVoted::Yes(_, Vote::Prevote(_, prevote)) => prevote,
 				_ => {
 					let msg = "Voter precommitting before prevoting.";
 					return Err(Error::Safety(msg.to_string()));
-				},
+				}
 			};
 
 			let mut current_rounds = current_rounds.clone();
