@@ -6914,6 +6914,7 @@ version = "0.8.0-rc6"
 dependencies = [
  "assert_matches",
  "async-std",
+ "async-trait",
  "bitflags",
  "bs58",
  "bytes 0.5.6",
