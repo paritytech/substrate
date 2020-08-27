@@ -30,7 +30,8 @@ pub trait RpcFinalityProofProvider<Block: BlockT> {
 	/// current one will be used.
 	fn rpc_prove_finality(
 		&self,
-		last_finalized: Block::Hash,
+		begin: Block::Hash,
+		end: Block::Hash,
 		authorities_set_id: u64,
 	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error>;
 }
@@ -43,10 +44,11 @@ where
 {
 	fn rpc_prove_finality(
 		&self,
-		last_finalized: Block::Hash,
+		begin: Block::Hash,
+		end: Block::Hash,
 		authorities_set_id: u64,
 	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
-		self.prove_finality(last_finalized, authorities_set_id)
+		self.prove_finality(begin, end, authorities_set_id)
 			.map(|x| x.map(|y| EncodedFinalityProofs(y.into())))
 	}
 }

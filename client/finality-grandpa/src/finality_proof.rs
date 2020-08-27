@@ -192,16 +192,16 @@ impl<B, Block> FinalityProofProvider<B, Block>
 	/// current one will be used.
 	pub fn prove_finality(
 		&self,
-		last_finalized: Block::Hash,
+		begin: Block::Hash,
+		end: Block::Hash,
 		authorities_set_id: u64,
 	) -> Result<Option<Vec<u8>>, ClientError> {
-		use sp_blockchain::HeaderBackend;
 		prove_finality::<_, _, GrandpaJustification<Block>>(
 			&*self.backend.blockchain(),
 			&*self.authority_provider,
 			authorities_set_id,
-			last_finalized.clone(),
-			self.backend.blockchain().info().best_hash,
+			begin,
+			end,
 		)
 	}
 }

@@ -82,11 +82,13 @@ pub trait GrandpaApi<Notification, Hash> {
 		id: SubscriptionId
 	) -> jsonrpc_core::Result<bool>;
 
-	/// Prove finality for the hash, given a last known finalized hash.
+	/// Prove finality for the range (begin; end] hash. Returns None if there are no finalized blocks
+	/// unknown in the range. If no authorities set is provided, the current one will be attempted.
 	#[rpc(name = "grandpa_proveFinality")]
 	fn prove_finality(
 		&self,
-		last_finalized: Hash,
+		begin: Hash,
+		end: Hash,
 		authorities_set_id: Option<u64>,
 	) -> FutureResult<Option<EncodedFinalityProofs>>;
 }
@@ -163,7 +165,8 @@ where
 
 	fn prove_finality(
 		&self,
-		last_finalized: Block::Hash,
+		begin: Block::Hash,
+		end: Block::Hash,
 		authorities_set_id: Option<u64>,
 	) -> FutureResult<Option<EncodedFinalityProofs>> {
 		// If we are not provided a set_id, try with the current one.
@@ -171,7 +174,7 @@ where
 			.unwrap_or_else(|| self.authority_set.get().0);
 		let result = self
 			.finality_proof_provider
-			.rpc_prove_finality(last_finalized, authorities_set_id);
+			.rpc_prove_finality(begin, end, authorities_set_id);
 		let future = async move { result }.boxed();
 		Box::new(
 			future
@@ -253,7 +256,8 @@ mod tests {
 	impl<Block: BlockT> RpcFinalityProofProvider<Block> for TestFinalityProofProvider {
 		fn rpc_prove_finality(
 			&self,
-			_last_finalized: Block::Hash,
+			_begin: Block::Hash,
+			_end: Block::Hash,
 			_authoritites_set_id: u64,
 		) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
 			Ok(Some(EncodedFinalityProofs(self.finality_proofs.encode().into())))
