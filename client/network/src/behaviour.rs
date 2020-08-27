@@ -18,7 +18,7 @@ use crate::{
 	config::{ProtocolId, Role}, block_requests, light_client_handler, finality_requests,
 	peer_info, request_responses, discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	protocol::{message::{self, Roles}, CustomMessageOutcome, NotificationsSink, Protocol},
-	service::maybe_utf8_bytes_to_string, ObservedRole, DhtEvent, ExHashT,
+	ObservedRole, DhtEvent, ExHashT,
 };
 
 use bytes::Bytes;
@@ -109,7 +109,7 @@ pub enum BehaviourOut<B: BlockT> {
 	OpaqueRequestStarted {
 		peer: PeerId,
 		/// Protocol name of the request.
-		protocol: Vec<u8>,
+		protocol: String,
 	},
 	/// Finished, successfully or not, a previously-started request.
 	///
@@ -119,7 +119,7 @@ pub enum BehaviourOut<B: BlockT> {
 		/// Who we were requesting.
 		peer: PeerId,
 		/// Protocol name of the request.
-		protocol: Vec<u8>,
+		protocol: String,
 		/// How long before the response came or the request got cancelled.
 		request_duration: Duration,
 	},
@@ -337,18 +337,18 @@ Behaviour<B, H> {
 					block_requests::SendRequestOutcome::Ok => {
 						self.events.push_back(BehaviourOut::OpaqueRequestStarted {
 							peer: target,
-							protocol: self.block_requests.protocol_name().to_vec(),
+							protocol: self.block_requests.protocol_name().to_owned(),
 						});
 					},
 					block_requests::SendRequestOutcome::Replaced { request_duration, .. } => {
 						self.events.push_back(BehaviourOut::OpaqueRequestFinished {
 							peer: target.clone(),
-							protocol: self.block_requests.protocol_name().to_vec(),
+							protocol: self.block_requests.protocol_name().to_owned(),
 							request_duration,
 						});
 						self.events.push_back(BehaviourOut::OpaqueRequestStarted {
 							peer: target,
-							protocol: self.block_requests.protocol_name().to_vec(),
+							protocol: self.block_requests.protocol_name().to_owned(),
 						});
 					}
 					block_requests::SendRequestOutcome::NotConnected |
@@ -420,18 +420,16 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 	fn inject_event(&mut self, event: block_requests::Event<B>) {
 		match event {
 			block_requests::Event::AnsweredRequest { peer, total_handling_time } => {
-				let protocol = maybe_utf8_bytes_to_string(&self.block_requests.protocol_name())
-					.into_owned();
 				self.events.push_back(BehaviourOut::InboundRequest {
 					peer,
-					protocol: From::from(protocol),
+					protocol: self.block_requests.protocol_name().to_owned().into(),
 					result: Ok(total_handling_time),
 				});
 			},
 			block_requests::Event::Response { peer, original_request: _, response, request_duration } => {
 				self.events.push_back(BehaviourOut::OpaqueRequestFinished {
 					peer: peer.clone(),
-					protocol: self.block_requests.protocol_name().to_vec(),
+					protocol: self.block_requests.protocol_name().to_owned(),
 					request_duration,
 				});
 				let ev = self.substrate.on_block_response(peer, response);
@@ -443,7 +441,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 				// we process them by disconnecting the node.
 				self.events.push_back(BehaviourOut::OpaqueRequestFinished {
 					peer: peer.clone(),
-					protocol: self.block_requests.protocol_name().to_vec(),
+					protocol: self.block_requests.protocol_name().to_owned(),
 					request_duration,
 				});
 				self.substrate.on_block_request_failed(&peer);

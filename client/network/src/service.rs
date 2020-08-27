@@ -1661,21 +1661,21 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestStarted { protocol, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.requests_out_started_total
-							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+							.with_label_values(&[&protocol])
 							.inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestFinished { protocol, request_duration, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.requests_out_success_total
-							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+							.with_label_values(&[&protocol])
 							.observe(request_duration.as_secs_f64());
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(protocol))) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.kademlia_random_queries_total
-							.with_label_values(&[&maybe_utf8_bytes_to_string(protocol.as_bytes())])
+							.with_label_values(&[&protocol.as_ref()])
 							.inc();
 					}
 				},
@@ -1933,16 +1933,13 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		if let Some(metrics) = this.metrics.as_ref() {
 			metrics.is_major_syncing.set(is_major_syncing as u64);
 			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
-				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
-				metrics.kbuckets_num_nodes.with_label_values(&[&proto]).set(num_entries as u64);
+				metrics.kbuckets_num_nodes.with_label_values(&[&proto.as_ref()]).set(num_entries as u64);
 			}
 			for (proto, num_entries) in this.network_service.num_kademlia_records() {
-				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
-				metrics.kademlia_records_count.with_label_values(&[&proto]).set(num_entries as u64);
+				metrics.kademlia_records_count.with_label_values(&[&proto.as_ref()]).set(num_entries as u64);
 			}
 			for (proto, num_entries) in this.network_service.kademlia_records_total_size() {
-				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
-				metrics.kademlia_records_sizes_total.with_label_values(&[&proto]).set(num_entries as u64);
+				metrics.kademlia_records_sizes_total.with_label_values(&[&proto.as_ref()]).set(num_entries as u64);
 			}
 			metrics.peers_count.set(num_connected_peers as u64);
 			metrics.peerset_num_discovered.set(this.network_service.user_protocol().num_discovered_peers() as u64);
