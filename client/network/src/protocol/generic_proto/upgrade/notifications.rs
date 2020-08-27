@@ -50,7 +50,7 @@ const MAX_HANDSHAKE_SIZE: usize = 1024;
 #[derive(Debug, Clone)]
 pub struct NotificationsIn {
 	/// Protocol name to use when negotiating the substream.
-	protocol_name: Cow<'static, [u8]>,
+	protocol_name: Cow<'static, str>,
 }
 
 /// Upgrade that opens a substream, waits for the remote to accept by sending back a status
@@ -58,7 +58,7 @@ pub struct NotificationsIn {
 #[derive(Debug, Clone)]
 pub struct NotificationsOut {
 	/// Protocol name to use when negotiating the substream.
-	protocol_name: Cow<'static, [u8]>,
+	protocol_name: Cow<'static, str>,
 	/// Message to send when we start the handshake.
 	initial_message: Vec<u8>,
 }
@@ -100,24 +100,25 @@ pub struct NotificationsOutSubstream<TSubstream> {
 
 impl NotificationsIn {
 	/// Builds a new potential upgrade.
-	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>) -> Self {
+	pub fn new(protocol_name: impl Into<Cow<'static, str>>) -> Self {
 		NotificationsIn {
 			protocol_name: protocol_name.into(),
 		}
 	}
 
 	/// Returns the name of the protocol that we accept.
-	pub fn protocol_name(&self) -> &[u8] {
+	pub fn protocol_name(&self) -> &Cow<'static, str> {
 		&self.protocol_name
 	}
 }
 
 impl UpgradeInfo for NotificationsIn {
-	type Info = Cow<'static, [u8]>;
+	type Info = Vec<u8>;
 	type InfoIter = iter::Once<Self::Info>;
 
 	fn protocol_info(&self) -> Self::InfoIter {
-		iter::once(self.protocol_name.clone())
+		// TODO: Can we do better?
+		iter::once(self.protocol_name.as_bytes().to_vec())
 	}
 }
 
@@ -244,7 +245,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 
 impl NotificationsOut {
 	/// Builds a new potential upgrade.
-	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>, initial_message: impl Into<Vec<u8>>) -> Self {
+	pub fn new(protocol_name: impl Into<Cow<'static, str>>, initial_message: impl Into<Vec<u8>>) -> Self {
 		let initial_message = initial_message.into();
 		if initial_message.len() > MAX_HANDSHAKE_SIZE {
 			error!(target: "sub-libp2p", "Outbound networking handshake is above allowed protocol limit");
@@ -258,11 +259,12 @@ impl NotificationsOut {
 }
 
 impl UpgradeInfo for NotificationsOut {
-	type Info = Cow<'static, [u8]>;
+	type Info = Vec<u8>;
 	type InfoIter = iter::Once<Self::Info>;
 
 	fn protocol_info(&self) -> Self::InfoIter {
-		iter::once(self.protocol_name.clone())
+		// TODO: Can we do better?
+		iter::once(self.protocol_name.as_bytes().to_vec())
 	}
 }
 
@@ -378,10 +380,11 @@ mod tests {
 	use async_std::net::{TcpListener, TcpStream};
 	use futures::{prelude::*, channel::oneshot};
 	use libp2p::core::upgrade;
+	use std::borrow::Cow;
 
 	#[test]
 	fn basic_works() {
-		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
+		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -420,7 +423,7 @@ mod tests {
 	fn empty_handshake() {
 		// Check that everything still works when the handshake messages are empty.
 
-		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
+		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -457,7 +460,7 @@ mod tests {
 
 	#[test]
 	fn refused() {
-		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
+		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -495,7 +498,7 @@ mod tests {
 
 	#[test]
 	fn large_initial_message_refused() {
-		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
+		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -526,7 +529,7 @@ mod tests {
 
 	#[test]
 	fn large_handshake_refused() {
-		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
+		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {

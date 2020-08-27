@@ -102,7 +102,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ConsensusEngineId), NotificationsSink>>>,
 	/// For each legacy gossiping engine ID, the corresponding new protocol name.
-	protocol_name_by_engine: Mutex<HashMap<ConsensusEngineId, Cow<'static, [u8]>>>,
+	protocol_name_by_engine: Mutex<HashMap<ConsensusEngineId, Cow<'static, str>>>,
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
 	notifications_sizes_metric: Option<HistogramVec>,
@@ -630,7 +630,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 				})
 			});
 
-			sink.send_sync_notification(&protocol_name, fallback, message);
+			sink.send_sync_notification(protocol_name, fallback, message);
 		} else {
 			return;
 		}
@@ -774,7 +774,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub fn register_notifications_protocol(
 		&self,
 		engine_id: ConsensusEngineId,
-		protocol_name: impl Into<Cow<'static, [u8]>>,
+		protocol_name: impl Into<Cow<'static, str>>,
 	) {
 		let protocol_name = protocol_name.into();
 		self.protocol_name_by_engine.lock().insert(engine_id, protocol_name.clone());
@@ -1008,7 +1008,7 @@ pub struct NotificationSender {
 	sink: NotificationsSink,
 
 	/// Name of the protocol on the wire.
-	protocol_name: Cow<'static, [u8]>,
+	protocol_name: Cow<'static, str>,
 
 	/// Engine ID used for the fallback message.
 	engine_id: ConsensusEngineId,
@@ -1022,7 +1022,7 @@ impl NotificationSender {
 	/// Returns a future that resolves when the `NotificationSender` is ready to send a notification.
 	pub async fn ready<'a>(&'a self) -> Result<NotificationSenderReady<'a>, NotificationSenderError> {
 		Ok(NotificationSenderReady {
-			ready: match self.sink.reserve_notification(&self.protocol_name).await {
+			ready: match self.sink.reserve_notification(self.protocol_name.clone()).await {
 				Ok(r) => r,
 				Err(()) => return Err(NotificationSenderError::Closed),
 			},
@@ -1098,7 +1098,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	EventStream(out_events::Sender),
 	RegisterNotifProtocol {
 		engine_id: ConsensusEngineId,
-		protocol_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, str>,
 	},
 	DisconnectPeer(PeerId),
 	UpdateChain,

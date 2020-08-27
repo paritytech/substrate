@@ -413,7 +413,7 @@ pub struct NetworkConfiguration {
 	pub node_key: NodeKeyConfig,
 	/// List of notifications protocols that the node supports. Must also include a
 	/// `ConsensusEngineId` for backwards-compatibility.
-	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, [u8]>)>,
+	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
 	/// Maximum allowed number of incoming connections.
 	pub in_peers: u32,
 	/// Number of outgoing connections we're trying to maintain.
