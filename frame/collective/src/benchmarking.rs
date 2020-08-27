@@ -277,6 +277,9 @@ benchmarks_instance! {
 		// Voter switches vote to nay, but does not kill the vote, just updates + inserts
 		let approve = false;
 
+		// Whitelist voter account from further DB operations.
+		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
+		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
 	}: _(SystemOrigin::Signed(voter), last_hash.clone(), index, approve)
 	verify {
 		// All proposals exist and the last proposal has just been updated.
