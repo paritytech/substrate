@@ -408,8 +408,10 @@ fn write_sandbox_output<E: Ext>(
 		RuntimeToken::WriteMemory(buf_len.saturating_add(4)),
 	)?;
 
-	ctx.memory.set(out_ptr, buf)?;
-	ctx.memory.set(out_len_ptr, &buf_len.encode())?;
+	ctx.memory.set(out_ptr, buf).and_then(|_| {
+		ctx.memory.set(out_len_ptr, &buf_len.encode())
+	})
+	.map_err(|_| store_err(ctx, Error::<E::T>::OutOfBounds))?;
 
 	Ok(())
 }
