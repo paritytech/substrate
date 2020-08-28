@@ -109,7 +109,7 @@ pub enum NotifsInHandlerOut {
 impl NotifsInHandlerProto {
 	/// Builds a new `NotifsInHandlerProto`.
 	pub fn new(
-		protocol_name: impl Into<Cow<'static, [u8]>>
+		protocol_name: impl Into<Cow<'static, str>>
 	) -> Self {
 		NotifsInHandlerProto {
 			in_protocol: NotificationsIn::new(protocol_name),
@@ -136,7 +136,7 @@ impl IntoProtocolsHandler for NotifsInHandlerProto {
 
 impl NotifsInHandler {
 	/// Returns the name of the protocol that we accept.
-	pub fn protocol_name(&self) -> &[u8] {
+	pub fn protocol_name(&self) -> &Cow<'static, str> {
 		self.in_protocol.protocol_name()
 	}
 

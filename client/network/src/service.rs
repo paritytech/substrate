@@ -105,7 +105,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ConsensusEngineId), NotificationsSink>>>,
 	/// For each legacy gossiping engine ID, the corresponding new protocol name.
-	protocol_name_by_engine: Mutex<HashMap<ConsensusEngineId, Cow<'static, [u8]>>>,
+	protocol_name_by_engine: Mutex<HashMap<ConsensusEngineId, Cow<'static, str>>>,
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
 	notifications_sizes_metric: Option<HistogramVec>,
@@ -635,7 +635,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		// Determine the wire protocol name corresponding to this `engine_id`.
 		let protocol_name = self.protocol_name_by_engine.lock().get(&engine_id).cloned();
 		if let Some(protocol_name) = protocol_name {
-			sink.send_sync_notification(&protocol_name, message);
+			sink.send_sync_notification(protocol_name, message);
 		} else {
 			return;
 		}
@@ -816,7 +816,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub fn register_notifications_protocol(
 		&self,
 		engine_id: ConsensusEngineId,
-		protocol_name: impl Into<Cow<'static, [u8]>>,
+		protocol_name: impl Into<Cow<'static, str>>,
 	) {
 		let protocol_name = protocol_name.into();
 		self.protocol_name_by_engine.lock().insert(engine_id, protocol_name.clone());
@@ -1050,7 +1050,7 @@ pub struct NotificationSender {
 	sink: NotificationsSink,
 
 	/// Name of the protocol on the wire.
-	protocol_name: Cow<'static, [u8]>,
+	protocol_name: Cow<'static, str>,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1061,7 +1061,7 @@ impl NotificationSender {
 	/// Returns a future that resolves when the `NotificationSender` is ready to send a notification.
 	pub async fn ready<'a>(&'a self) -> Result<NotificationSenderReady<'a>, NotificationSenderError> {
 		Ok(NotificationSenderReady {
-			ready: match self.sink.reserve_notification(&self.protocol_name).await {
+			ready: match self.sink.reserve_notification(self.protocol_name.clone()).await {
 				Ok(r) => r,
 				Err(()) => return Err(NotificationSenderError::Closed),
 			},
@@ -1129,7 +1129,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	},
 	RegisterNotifProtocol {
 		engine_id: ConsensusEngineId,
-		protocol_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, str>,
 	},
 	DisconnectPeer(PeerId),
 	UpdateChain,
