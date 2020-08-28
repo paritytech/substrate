@@ -39,7 +39,7 @@ use futures::prelude::*;
 use futures_codec::Framed;
 use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade};
 use log::error;
-use std::{borrow::Cow, io, iter, mem, pin::Pin, task::{Context, Poll}};
+use std::{borrow::Cow, convert::Infallible, io, iter, mem, pin::Pin, task::{Context, Poll}};
 use unsigned_varint::codec::UviBytes;
 
 /// Maximum allowed size of the two handshake messages, in bytes.
@@ -158,7 +158,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 }
 
 impl<TSubstream> NotificationsInSubstream<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite,
+where TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	/// Sends the handshake in order to inform the remote that we accept the substream.
 	pub fn send_handshake(&mut self, message: impl Into<Vec<u8>>) {
@@ -168,6 +168,48 @@ where TSubstream: AsyncRead + AsyncWrite,
 		}
 
 		self.handshake = NotificationsInSubstreamHandshake::PendingSend(message.into());
+	}
+
+	/// Equivalent to `Stream::poll_next`, except that it only drives the handshake and is
+	/// guaranteed to not generate any notification.
+	pub fn poll_process(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<Infallible, io::Error>> {
+		let mut this = self.project();
+
+		loop {
+			match mem::replace(this.handshake, NotificationsInSubstreamHandshake::Sent) {
+				NotificationsInSubstreamHandshake::PendingSend(msg) =>
+					match Sink::poll_ready(this.socket.as_mut(), cx) {
+						Poll::Ready(_) => {
+							*this.handshake = NotificationsInSubstreamHandshake::Flush;
+							match Sink::start_send(this.socket.as_mut(), io::Cursor::new(msg)) {
+								Ok(()) => {},
+								Err(err) => return Poll::Ready(Err(err)),
+							}
+						},
+						Poll::Pending => {
+							*this.handshake = NotificationsInSubstreamHandshake::PendingSend(msg);
+							return Poll::Pending
+						}
+					},
+				NotificationsInSubstreamHandshake::Flush =>
+					match Sink::poll_flush(this.socket.as_mut(), cx)? {
+						Poll::Ready(()) =>
+							*this.handshake = NotificationsInSubstreamHandshake::Sent,
+						Poll::Pending => {
+							*this.handshake = NotificationsInSubstreamHandshake::Flush;
+							return Poll::Pending
+						}
+					},
+
+				st @ NotificationsInSubstreamHandshake::NotSent |
+				st @ NotificationsInSubstreamHandshake::Sent |
+				st @ NotificationsInSubstreamHandshake::ClosingInResponseToRemote |
+				st @ NotificationsInSubstreamHandshake::BothSidesClosed => {
+					*this.handshake = st;
+					return Poll::Pending;
+				}
+			}
+		}
 	}
 }
 

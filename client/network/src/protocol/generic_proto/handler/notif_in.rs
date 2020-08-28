@@ -37,7 +37,7 @@ use libp2p::swarm::{
 	NegotiatedSubstream,
 };
 use log::{error, warn};
-use std::{borrow::Cow, collections::VecDeque, fmt, pin::Pin, task::{Context, Poll}};
+use std::{borrow::Cow, collections::VecDeque, convert::Infallible, fmt, pin::Pin, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -138,6 +138,24 @@ impl NotifsInHandler {
 	/// Returns the name of the protocol that we accept.
 	pub fn protocol_name(&self) -> &[u8] {
 		self.in_protocol.protocol_name()
+	}
+
+	/// Equivalent to the `poll` method of `ProtocolsHandler`, except that it only drives the
+	/// handshake process.
+	///
+	/// Use this method in situations where it is not desirable to receive events but still
+	/// necessary to drive any potential incoming handshake or request.
+	pub fn poll_process(&mut self, cx: &mut Context) -> Poll<Infallible> {
+		match self.substream.as_mut().map(|s| NotificationsInSubstream::poll_process(Pin::new(s), cx)) {
+			None | Some(Poll::Pending) => {},
+			Some(Poll::Ready(Ok(v))) => match v {},
+			Some(Poll::Ready(Err(_))) => {
+				self.substream = None;
+				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed));
+			},
+		}
+
+		Poll::Pending
 	}
 }
 
