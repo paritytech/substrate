@@ -35,7 +35,7 @@ use sp_api::{ProvideRuntimeApi, ApiRef};
 use sp_core::{Public, traits::BareCryptoStore, testing::KeyStore};
 use sp_runtime::traits::{Zero, Block as BlockT, NumberFor};
 use substrate_test_runtime_client::runtime::Block;
-use sc_keystore::proxy::adapter as keystore_adapter;
+use sc_keystore::proxy::proxy as keystore_proxy;
 
 use super::*;
 
@@ -224,7 +224,7 @@ impl NetworkStateInfo for TestNetwork {
 fn new_registers_metrics() {
 	let (_dht_event_tx, dht_event_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let (key_store, _) = keystore_adapter(KeyStore::new());
+	let (key_store, _) = keystore_proxy(KeyStore::new());
 	let test_api = Arc::new(TestApi {
 		authorities: vec![],
 	});
@@ -257,7 +257,7 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 	});
 
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let (key_store, _) = keystore_adapter::<KeyStore>(KeyStore::new().into());
+	let (key_store, _) = keystore_proxy::<KeyStore>(KeyStore::new().into());
 
 	let mut authority_discovery = AuthorityDiscovery::new(
 		test_api,
@@ -294,7 +294,7 @@ fn publish_discover_cycle() {
 		))
 	};
 
-	let (key_store, keystore_receiver) = keystore_adapter::<KeyStore>(KeyStore::new().into());
+	let (key_store, keystore_receiver) = keystore_proxy::<KeyStore>(KeyStore::new().into());
 	let _ = pool.spawner().spawn_local_obj(async move {
 		keystore_receiver.await
 	}.boxed_local().into());
@@ -336,7 +336,7 @@ fn publish_discover_cycle() {
 			authorities: vec![node_a_public.into()],
 		});
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
-		let (key_store, _) = keystore_adapter::<KeyStore>(KeyStore::new().into());
+		let (key_store, _) = keystore_proxy::<KeyStore>(KeyStore::new().into());
 
 		let mut authority_discovery = AuthorityDiscovery::new(
 			test_api,
@@ -371,7 +371,7 @@ fn publish_discover_cycle() {
 fn terminate_when_event_stream_terminates() {
 	let (dht_event_tx, dht_event_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let (key_store, _) = keystore_adapter::<KeyStore>(KeyStore::new().into());
+	let (key_store, _) = keystore_proxy::<KeyStore>(KeyStore::new().into());
 	let test_api = Arc::new(TestApi {
 		authorities: vec![],
 	});
@@ -418,7 +418,7 @@ fn dont_stop_polling_when_error_is_returned() {
 	let (mut dht_event_tx, dht_event_rx) = channel(1000);
 	let (mut discovery_update_tx, mut discovery_update_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let (key_store, _) = keystore_adapter::<KeyStore>(KeyStore::new().into());
+	let (key_store, _) = keystore_proxy::<KeyStore>(KeyStore::new().into());
 	let test_api = Arc::new(TestApi {
 		authorities: vec![],
 	});
@@ -480,7 +480,7 @@ fn dont_stop_polling_when_error_is_returned() {
 #[test]
 fn never_add_own_address_to_priority_group() {
 	let pool = LocalPool::new();
-	let (validator_key_store, keystore_receiver) = keystore_adapter::<KeyStore>(KeyStore::new().into());
+	let (validator_key_store, keystore_receiver) = keystore_proxy::<KeyStore>(KeyStore::new().into());
 	let _ = pool.spawner().spawn_local_obj(async move {
 		keystore_receiver.await
 	}.boxed_local().into());

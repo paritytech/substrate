@@ -74,9 +74,10 @@ use sc_network::{
 	PeerId,
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
-use sp_core::{crypto::{key_types, Pair}, traits::BareCryptoStorePtr};
+use sp_core::{crypto::{key_types, Pair}, traits::BareCryptoStore};
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
+use sc_keystore::proxy::KeystoreProxy;
 
 #[cfg(test)]
 mod tests;
@@ -102,7 +103,7 @@ const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
 /// Role an authority discovery module can run as.
 pub enum Role {
 	/// Actual authority as well as a reference to its key store.
-	Authority(BareCryptoStorePtr),
+	Authority(Arc<KeystoreProxy>),
 	/// Sentry node that guards an authority.
 	///
 	/// No reference to its key store needed, as sentry nodes don't have an identity to sign
@@ -217,7 +218,8 @@ where
 		}
 	}
 
-	async fn run(&mut self) {
+	/// Run authority discovery
+	pub async fn run(&mut self) {
 		loop {
 			// Process incoming events.
 			if !self.handle_dht_events().await {
@@ -291,7 +293,7 @@ where
 			self.client.as_ref(),
 		).await?.into_iter().map(Into::into).collect::<Vec<_>>();
 
-		let signatures = keystore.read().sign_with_all(
+		let signatures = keystore.sign_with_all(
 			key_types::AUTHORITY_DISCOVERY,
 			keys.clone(),
 			serialized_addresses.as_slice(),
@@ -331,7 +333,7 @@ where
 
 		let local_keys = match &self.role {
 			Role::Authority(key_store) => {
-				key_store.read().sr25519_public_keys(key_types::AUTHORITY_DISCOVERY).await
+				key_store.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY).await
 						 .into_iter()
 						 .collect::<HashSet<_>>()
 			},
@@ -525,10 +527,10 @@ where
 	// set with two keys. The function does not return all of the local authority discovery public
 	// keys, but only the ones intersecting with the current authority set.
 	async fn get_own_public_keys_within_authority_set(
-		key_store: BareCryptoStorePtr,
+		key_store: Arc<KeystoreProxy>,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
-		let local_pub_keys = key_store.read().sr25519_public_keys(key_types::AUTHORITY_DISCOVERY).await
+		let local_pub_keys = key_store.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY).await
 			.into_iter()
 			.collect::<HashSet<_>>();
 
