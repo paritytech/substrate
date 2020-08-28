@@ -23,11 +23,10 @@
 //! the communication is allowed.
 //! * users can claim the ownership for nodes, and manage the communication for the node.
 //!
-//! A node is optionally to have an owner. If exists, the owner can make additional
-//! adaptive change for the connection of the node. If not exists, the node can only
-//! participate in the network as a well known node.
-//! Only one user can `claim` a specific node. To eliminate falsely claim, the maintainer
-//! of the node should claim it before even start the node.
+//! A node must have an owner. The owner then can make additional adaptive adaptive
+//! change for the connection of the node. Only one user can `claim` a specific node.
+//! To eliminate falsely claim, the maintainer of the node should claim it before
+//! even start the node.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -92,6 +91,19 @@ decl_storage! {
         pub AdditionalConnection get(fn additional_connection):
             map hasher(blake2_128_concat) NodePublicKey => Vec<NodePublicKey>;
     }
+    add_extra_genesis {
+        config(nodes): Vec<(NodePublicKey, T::AccountId)>;
+        build(|config: &GenesisConfig<T>| {
+            WellKnownNodes::put(
+                config.nodes.iter()
+                    .map(|item| item.0.clone())
+                    .collect::<Vec<NodePublicKey>>()
+            );
+            for (node, who) in config.nodes.iter() {
+                Owners::<T>::insert(node, who);
+			}
+        })
+    }
 }
 
 decl_event! {
@@ -108,7 +120,8 @@ decl_event! {
         WellKnownNodesReset(Vec<(NodePublicKey, AccountId)>),
         /// The given node was claimed by a user.
         NodeClaimed(NodePublicKey, AccountId),
-        ConnectionAdded(NodePublicKey, Vec<NodePublicKey>),
+        /// New connections were added to a node.
+        ConnectionsAdded(NodePublicKey, Vec<NodePublicKey>),
     }
 }
 
@@ -132,7 +145,7 @@ decl_error! {
 
 decl_module! {
     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-        /// The maximum number of authorized nodes
+        /// The maximum number of authorized well known nodes
         const MaxWellKnownNodes: u32 = T::MaxWellKnownNodes::get();
 
         type Error = Error<T>;
@@ -155,7 +168,7 @@ decl_module! {
             nodes.insert(location, node_public_key.clone());
             
             WellKnownNodes::put(&nodes);
-            <Owners<T>>::insert(node_public_key.clone(), owner.clone());
+            <Owners<T>>::insert(&node_public_key, &owner);
 
             Self::deposit_event(RawEvent::WellKnownNodeAdded(node_public_key, owner));
         }
@@ -232,7 +245,7 @@ decl_module! {
                 Error::<T>::AlreadyClaimed
             );
 
-            Owners::<T>::insert(&node_public_key, sender.clone());
+            Owners::<T>::insert(&node_public_key, &sender);
             Self::deposit_event(RawEvent::NodeClaimed(node_public_key, sender));
         }
 
@@ -261,8 +274,10 @@ decl_module! {
             nodes.extend(connections.clone());
             nodes.sort();
             nodes.dedup();
+            
+            AdditionalConnection::insert(&node_public_key, nodes);
 
-            Self::deposit_event(RawEvent::ConnectionAdded(node_public_key, connections));
+            Self::deposit_event(RawEvent::ConnectionsAdded(node_public_key, connections));
         }
 
         fn offchain_worker(now: T::BlockNumber) {
@@ -277,7 +292,7 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
     fn authorize_nodes(node: NodePublicKey) {
-        let mut nodes = AdditionalConnection::get(node.clone());
+        let mut nodes = AdditionalConnection::get(&node);
         
         let well_known_nodes = WellKnownNodes::get();
         if well_known_nodes.binary_search(&node).is_ok() {

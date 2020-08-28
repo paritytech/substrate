@@ -17,7 +17,7 @@
 use std::{
 	str::FromStr,
 	sync::Arc,
-	convert::{TryFrom, TryInto},
+	convert::TryFrom,
 	thread::sleep,
 	collections::HashSet,
 };
@@ -188,8 +188,11 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 	}
 
 	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()> {
-		let peer_id = self.network_state.local_peer_id();
-		peer_id.as_bytes().try_into()
+		let public_key = self.network_state.local_public_key();
+		match public_key {
+			PeerPublicKey::Ed25519(public) => Ok(public.encode().into()),
+			_ => Err(()),
+		}
 	}
 
 	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool) {

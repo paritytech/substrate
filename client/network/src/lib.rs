@@ -274,6 +274,7 @@ pub use libp2p::multiaddr;
 pub use sc_peerset::ReputationChange;
 use sc_peerset::PeersetHandle;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
+use config::identity::PublicKey;
 
 /// The maximum allowed number of established connections per peer.
 ///
@@ -297,6 +298,9 @@ pub trait NetworkStateInfo {
 
 	/// Returns the local Peer ID.
 	fn local_peer_id(&self) -> PeerId;
+
+	/// Returns the local Peer PublicKey.
+	fn local_public_key(&self) -> PublicKey;
 
 	/// Returns the peerset
 	fn peerset(&self) -> PeersetHandle;
