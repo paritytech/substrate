@@ -26,6 +26,7 @@ use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_ok,
 	traits::{Currency, OnFinalize},
+	weights::{GetDispatchInfo, Pays},
 };
 use frame_system::{EventRecord, Phase};
 use pallet_session::OneSessionHandler;
@@ -864,4 +865,68 @@ fn report_equivocation_has_valid_weight() {
 			.windows(2)
 			.all(|w| w[0] < w[1])
 	);
+}
+
+#[test]
+fn valid_equivocation_reports_dont_pay_fees() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let equivocation_key = &Grandpa::grandpa_authorities()[0].0;
+		let equivocation_keyring = extract_keyring(equivocation_key);
+		let set_id = Grandpa::current_set_id();
+
+		// generate an equivocation proof.
+		let equivocation_proof = generate_equivocation_proof(
+			set_id,
+			(1, H256::random(), 10, &equivocation_keyring),
+			(1, H256::random(), 10, &equivocation_keyring),
+		);
+
+		// create the key ownership proof.
+		let key_owner_proof =
+			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+
+		// check the dispatch info for the call.
+		let info = Call::<Test>::report_equivocation_unsigned(
+			equivocation_proof.clone(),
+			key_owner_proof.clone(),
+		)
+		.get_dispatch_info();
+
+		// it should have non-zero weight and the fee has to be paid.
+		assert!(info.weight > 0);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// report the equivocation.
+		let post_info = Grandpa::report_equivocation_unsigned(
+			Origin::none(),
+			equivocation_proof.clone(),
+			key_owner_proof.clone(),
+		)
+		.unwrap();
+
+		// the original weight should be kept, but given that the report
+		// is valid the fee is waived.
+		assert!(post_info.actual_weight.is_none());
+		assert_eq!(post_info.pays_fee, Pays::No);
+
+		// report the equivocation again which is invalid now since it is
+		// duplicate.
+		// let call =
+		let post_info = Grandpa::report_equivocation_unsigned(
+			Origin::none(),
+			equivocation_proof,
+			key_owner_proof,
+		)
+		.err()
+		.unwrap()
+		.post_info;
+
+		// the fee is not waived and the original weight is kept.
+		assert!(post_info.actual_weight.is_none());
+		assert_eq!(post_info.pays_fee, Pays::Yes);
+	})
 }
