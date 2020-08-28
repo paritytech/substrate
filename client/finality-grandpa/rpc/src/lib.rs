@@ -102,7 +102,9 @@ pub struct GrandpaRpcHandler<AuthoritySet, VoterState, Block: BlockT, ProofProvi
 	finality_proof_provider: Arc<ProofProvider>,
 }
 
-impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider> GrandpaRpcHandler<AuthoritySet, VoterState, Block, ProofProvider> {
+impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
+	GrandpaRpcHandler<AuthoritySet, VoterState, Block, ProofProvider>
+{
 	/// Creates a new GrandpaRpcHandler instance.
 	pub fn new(
 		authority_set: AuthoritySet,
