@@ -113,12 +113,15 @@ impl NotificationsIn {
 }
 
 impl UpgradeInfo for NotificationsIn {
-	type Info = Vec<u8>;
+	type Info = Cow<'static, [u8]>;
 	type InfoIter = iter::Once<Self::Info>;
 
 	fn protocol_info(&self) -> Self::InfoIter {
-		// TODO: Can we do better?
-		iter::once(self.protocol_name.as_bytes().to_vec())
+		let bytes: Cow<'static, [u8]> = match &self.protocol_name {
+			Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+			Cow::Owned(s) => Cow::Owned(s.as_bytes().to_vec())
+		};
+		iter::once(bytes)
 	}
 }
 
@@ -259,12 +262,15 @@ impl NotificationsOut {
 }
 
 impl UpgradeInfo for NotificationsOut {
-	type Info = Vec<u8>;
+	type Info = Cow<'static, [u8]>;
 	type InfoIter = iter::Once<Self::Info>;
 
 	fn protocol_info(&self) -> Self::InfoIter {
-		// TODO: Can we do better?
-		iter::once(self.protocol_name.as_bytes().to_vec())
+		let bytes: Cow<'static, [u8]> = match &self.protocol_name {
+			Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+			Cow::Owned(s) => Cow::Owned(s.as_bytes().to_vec())
+		};
+		iter::once(bytes)
 	}
 }
 
