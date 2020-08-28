@@ -58,7 +58,7 @@ struct TestSetup {
 
 impl Default for TestSetup {
 	fn default() -> Self {
-		let keystore = KeyStore::new();
+		let keystore: BareCryptoStorePtr = KeyStore::new().into();
 		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
 		let client = Arc::new(client_builder.set_keystore(keystore.clone()).build());
 

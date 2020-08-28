@@ -21,6 +21,7 @@ use futures::executor::block_on;
 use sp_runtime::generic::BlockId;
 use sp_core::{
 	crypto::Pair,
+	traits::BareCryptoStorePtr,
 	testing::{KeyStore, SR25519},
 };
 use substrate_test_runtime_client::{
@@ -32,7 +33,7 @@ use sp_application_crypto::sr25519::{AppPair, AppPublic};
 
 #[test]
 fn sr25519_works_in_runtime() {
-	let keystore = KeyStore::new();
+	let keystore: BareCryptoStorePtr = KeyStore::new().into();
 	let test_client = TestClientBuilder::new().set_keystore(keystore.clone()).build();
 	let (signature, public) = test_client.runtime_api()
 		.test_sr25519_crypto(&BlockId::Number(0))
