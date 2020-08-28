@@ -915,7 +915,6 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// report the equivocation again which is invalid now since it is
 		// duplicate.
-		// let call =
 		let post_info = Grandpa::report_equivocation_unsigned(
 			Origin::none(),
 			equivocation_proof,
