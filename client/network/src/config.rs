@@ -23,6 +23,7 @@
 
 pub use crate::chain::{Client, FinalityProofProvider};
 pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
+pub use crate::request_responses::{IncomingRequest, ProtocolConfig as RequestResponseConfig};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -34,9 +35,10 @@ use crate::ExHashT;
 
 use core::{fmt, iter};
 use futures::future;
-use libp2p::identity::{ed25519, Keypair};
-use libp2p::wasm_ext;
-use libp2p::{multiaddr, Multiaddr, PeerId};
+use libp2p::{
+	identity::{ed25519, Keypair},
+	multiaddr, wasm_ext, Multiaddr, PeerId,
+};
 use prometheus_endpoint::Registry;
 use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
@@ -414,6 +416,8 @@ pub struct NetworkConfiguration {
 	/// List of notifications protocols that the node supports. Must also include a
 	/// `ConsensusEngineId` for backwards-compatibility.
 	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
+	/// List of request-response protocols that the node supports.
+	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// Maximum allowed number of incoming connections.
 	pub in_peers: u32,
 	/// Number of outgoing connections we're trying to maintain.
@@ -449,6 +453,7 @@ impl NetworkConfiguration {
 			boot_nodes: Vec::new(),
 			node_key,
 			notifications_protocols: Vec::new(),
+			request_response_protocols: Vec::new(),
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
@@ -465,9 +470,7 @@ impl NetworkConfiguration {
 			allow_non_globals_in_dht: false,
 		}
 	}
-}
 
-impl NetworkConfiguration {
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new(
