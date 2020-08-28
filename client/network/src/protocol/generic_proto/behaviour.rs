@@ -553,7 +553,6 @@ impl GenericProto {
 		target: &PeerId,
 		protocol_name: Cow<'static, [u8]>,
 		message: impl Into<Vec<u8>>,
-		encoded_fallback_message: Vec<u8>,
 	) {
 		let notifs_sink = match self.peers.get(target).and_then(|p| p.get_open()) {
 			None => {
@@ -574,31 +573,8 @@ impl GenericProto {
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 		notifs_sink.send_sync_notification(
 			&protocol_name,
-			encoded_fallback_message,
 			message
 		);
-	}
-
-	/// Sends a message to a peer.
-	///
-	/// Has no effect if the custom protocol is not open with the given peer.
-	///
-	/// Also note that even we have a valid open substream, it may in fact be already closed
-	/// without us knowing, in which case the packet will not be received.
-	pub fn send_packet(&mut self, target: &PeerId, message: Vec<u8>) {
-		let notifs_sink = match self.peers.get(target).and_then(|p| p.get_open()) {
-			None => {
-				debug!(target: "sub-libp2p",
-					"Tried to sent packet to {:?} without an open channel.",
-					target);
-				return
-			}
-			Some(sink) => sink
-		};
-
-		trace!(target: "sub-libp2p", "External API => Packet for {:?}", target);
-		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
-		notifs_sink.send_legacy(message);
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
