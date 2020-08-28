@@ -23,15 +23,15 @@ parking_lot = "0.10.0"
 serde = { version = "1.0", features=["derive"] }
 tokio = { version = "0.2", features=["full"] }
 
-sc-client-api = { path = "../../../client/api", version = "2.0.0-rc5" }
-sc-transaction-pool = { path = "../../transaction-pool", version = "2.0.0-rc5" }
-sp-blockchain = { path = "../../../primitives/blockchain", version = "2.0.0-rc5" }
-sp-consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common", version = "0.8.0-rc5" }
-sp-inherents = { path = "../../../primitives/inherents", version = "2.0.0-rc5" }
-sp-runtime = {  path = "../../../primitives/runtime", version = "2.0.0-rc5" }
-sp-core = {  path = "../../../primitives/core", version = "2.0.0-rc5" }
-sp-transaction-pool = { path = "../../../primitives/transaction-pool", version = "2.0.0-rc5" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0-rc5" }
+sc-client-api = { path = "../../../client/api", version = "2.0.0-rc6" }
+sc-transaction-pool = { path = "../../transaction-pool", version = "2.0.0-rc6" }
+sp-blockchain = { path = "../../../primitives/blockchain", version = "2.0.0-rc6" }
+sp-consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common", version = "0.8.0-rc6" }
+sp-inherents = { path = "../../../primitives/inherents", version = "2.0.0-rc6" }
+sp-runtime = {  path = "../../../primitives/runtime", version = "2.0.0-rc6" }
+sp-core = {  path = "../../../primitives/core", version = "2.0.0-rc6" }
+sp-transaction-pool = { path = "../../../primitives/transaction-pool", version = "2.0.0-rc6" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0-rc6" }
 
 [dev-dependencies]
 sc-basic-authorship = { path = "../../basic-authorship", version = "0.8.0-rc6" }
