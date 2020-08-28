@@ -168,17 +168,30 @@ pub fn build_project_with_default_rustflags(
 		default_rustflags,
 	);
 
-	write_file_if_changed(
-		file_name.into(),
-		format!(
-			r#"
-				pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
-				pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
-			"#,
-			wasm_binary = wasm_binary.wasm_binary_path_escaped(),
-			wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path_escaped(),
-		),
-	);
+	if let Some(wasm_binary) = wasm_binary {
+		write_file_if_changed(
+			file_name.into(),
+			format!(
+				r#"
+					pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
+					pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
+				"#,
+				wasm_binary = wasm_binary.wasm_binary_path_escaped(),
+				wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path_escaped(),
+			),
+		);
+	} else {
+		write_file_if_changed(
+			file_name.into(),
+			format!(
+				r#"
+					pub const WASM_BINARY: Option<&[u8]> = WASM_BINARY_BLOATY;
+					pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
+				"#,
+				wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path_escaped(),
+			),
+		);
+	}
 }
 
 /// Checks if the build of the WASM binary should be skipped.
