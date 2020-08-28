@@ -74,7 +74,7 @@ use sc_network::{
 	PeerId,
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
-use sp_core::{crypto::{key_types, Pair}, traits::BareCryptoStore};
+use sp_core::{crypto::{key_types, Pair}, traits::CryptoStore};
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
 use sc_keystore::proxy::KeystoreProxy;

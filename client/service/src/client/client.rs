@@ -164,7 +164,7 @@ pub fn new_in_mem<E, Block, S, RA, TStore>(
 	E: CodeExecutor + RuntimeInfo,
 	S: BuildStorage,
 	Block: BlockT,
-	TStore: sp_core::traits::BareCryptoStore + 'static,
+	TStore: sp_core::traits::CryptoStore + 'static,
 {
 	new_with_backend(
 		Arc::new(in_mem::Backend::new()),
@@ -203,7 +203,7 @@ pub fn new_with_backend<B, E, Block, S, RA, TStore>(
 		S: BuildStorage,
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
-		TStore: sp_core::traits::BareCryptoStore + 'static,
+		TStore: sp_core::traits::CryptoStore + 'static,
 {
 	let sync_keystore = match keystore {
 		Some(store) => {

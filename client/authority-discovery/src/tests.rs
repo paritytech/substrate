@@ -32,7 +32,7 @@ use futures_timer::Delay;
 use libp2p::{kad, core::multiaddr, PeerId};
 
 use sp_api::{ProvideRuntimeApi, ApiRef};
-use sp_core::{Public, traits::BareCryptoStore, testing::KeyStore};
+use sp_core::{Public, traits::CryptoStore, testing::KeyStore};
 use sp_runtime::traits::{Zero, Block as BlockT, NumberFor};
 use substrate_test_runtime_client::runtime::Block;
 use sc_keystore::proxy::proxy as keystore_proxy;

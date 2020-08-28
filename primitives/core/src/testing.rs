@@ -22,7 +22,7 @@ use crate::crypto::KeyTypeId;
 use crate::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
-	traits::{BareCryptoStorePtr, Error},
+	traits::{CryptoStorePtr, Error},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
 #[cfg(feature = "std")]
@@ -80,7 +80,7 @@ impl KeyStore {
 
 #[cfg(feature = "std")]
 #[async_trait]
-impl crate::traits::BareCryptoStore for KeyStore {
+impl crate::traits::CryptoStore for KeyStore {
 	async fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
 		self.keys
 			.get(&id)
@@ -263,8 +263,8 @@ impl crate::traits::BareCryptoStore for KeyStore {
 }
 
 #[cfg(feature = "std")]
-impl Into<BareCryptoStorePtr> for KeyStore {
-    fn into(self) -> BareCryptoStorePtr {
+impl Into<CryptoStorePtr> for KeyStore {
+    fn into(self) -> CryptoStorePtr {
 		std::sync::Arc::new(parking_lot::RwLock::new(self))
     }
 }
@@ -405,7 +405,7 @@ mod tests {
 
 	#[test]
 	fn store_key_and_extract() {
-		let store: BareCryptoStorePtr = KeyStore::new().into();
+		let store: CryptoStorePtr = KeyStore::new().into();
 
 		let public = block_on(store.write().ed25519_generate_new(ED25519, None))
 			.expect("Generates key");
@@ -417,7 +417,7 @@ mod tests {
 
 	#[test]
 	fn store_unknown_and_extract_it() {
-		let store: BareCryptoStorePtr = KeyStore::new().into();
+		let store: CryptoStorePtr = KeyStore::new().into();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
@@ -435,7 +435,7 @@ mod tests {
 
 	#[test]
 	fn vrf_sign() {
-		let store: BareCryptoStorePtr = KeyStore::new().into();
+		let store: CryptoStorePtr = KeyStore::new().into();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");

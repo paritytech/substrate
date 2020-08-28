@@ -34,7 +34,7 @@ use std::{
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
-/// BareCryptoStore error
+/// CryptoStore error
 #[derive(Debug, derive_more::Display)]
 pub enum Error {
 	/// Public key type is not supported
@@ -56,7 +56,7 @@ pub enum Error {
 
 /// Something that generates, stores and provides access to keys.
 #[async_trait]
-pub trait BareCryptoStore: Send + Sync {
+pub trait CryptoStore: Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
 	async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
 	/// Generate a new sr25519 key pair for the given key type and an optional seed.
@@ -202,13 +202,13 @@ pub trait BareCryptoStore: Send + Sync {
 	) -> Result<VRFSignature, Error>;
 }
 
-/// A wrapper around BareCryptoStore to be used in synchronous fashion.
-pub struct SyncCryptoStore(BareCryptoStorePtr);
+/// A wrapper around CryptoStore to be used in synchronous fashion.
+pub struct SyncCryptoStore(CryptoStorePtr);
 
 #[allow(dead_code)]
 #[allow(missing_docs)]
 impl SyncCryptoStore {
-	pub fn new(store: BareCryptoStorePtr) -> Self {
+	pub fn new(store: CryptoStorePtr) -> Self {
 		SyncCryptoStore(store)
 	}
 
@@ -324,7 +324,7 @@ impl SyncCryptoStore {
 }
 
 /// A pointer to the keystore.
-pub type BareCryptoStorePtr = Arc<parking_lot::RwLock<dyn BareCryptoStore>>;
+pub type CryptoStorePtr = Arc<parking_lot::RwLock<dyn CryptoStore>>;
 
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.

@@ -21,7 +21,7 @@ use async_trait::async_trait;
 use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, ExposeSecret, SecretString, Public},
-	traits::{BareCryptoStore, Error as TraitError, SyncCryptoStore},
+	traits::{CryptoStore, Error as TraitError, SyncCryptoStore},
 	sr25519::{Public as Sr25519Public, Pair as Sr25519Pair},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 	Encode,
@@ -304,7 +304,7 @@ impl Store {
 }
 
 #[async_trait]
-impl BareCryptoStore for Store {
+impl CryptoStore for Store {
 	async fn keys(
 		&self,
 		id: KeyTypeId

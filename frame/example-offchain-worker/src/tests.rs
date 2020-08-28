@@ -27,7 +27,7 @@ use sp_core::{
 	offchain::{OffchainExt, TransactionPoolExt, testing},
 	sr25519::Signature,
 	testing::KeyStore,
-	traits::{KeystoreExt, BareCryptoStore, SyncCryptoStore},
+	traits::{KeystoreExt, CryptoStore, SyncCryptoStore},
 };
 use sp_runtime::{
 	Perbill, RuntimeAppPublic,

@@ -225,8 +225,8 @@ impl KeystoreParams {
 		}, keystore_receiver))
 	}
 
-	/// Returns an adapter to the asynchronous keystore that implements `BareCryptoStore`
 	pub fn keystore(&self) -> Arc<RwLock<KeystoreProxy>> {
+	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
 		self.keystore.clone()
 	}
 

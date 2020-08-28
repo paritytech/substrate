@@ -24,7 +24,7 @@ use structopt::StructOpt;
 
 use sc_keystore::{Store as Keystore};
 use node_cli::chain_spec::{self, AccountId};
-use sp_core::{sr25519, crypto::{Public, Ss58Codec}, traits::BareCryptoStore};
+use sp_core::{sr25519, crypto::{Public, Ss58Codec}, traits::CryptoStore};
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.

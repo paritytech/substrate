@@ -25,8 +25,8 @@ use sp_core::{
 	ed25519,
 	sr25519,
 	traits::{
-		BareCryptoStore,
-		Error as BareCryptoStoreError,
+		CryptoStore,
+		Error as CryptoStoreError,
 	},
 };
 pub use sp_externalities::{Externalities, ExternalitiesExt};
@@ -61,25 +61,25 @@ pub struct KeystoreRequest {
 pub enum KeystoreResponse {
 	Sr25519PublicKeys(Vec<sr25519::Public>),
 	Sr25519GenerateNew(
-		Result<sp_application_crypto::sr25519::Public, BareCryptoStoreError>
+		Result<sp_application_crypto::sr25519::Public, CryptoStoreError>
 	),
 	Sr25519VrfSign(
-		Result<sp_core::vrf::VRFSignature, BareCryptoStoreError>
+		Result<sp_core::vrf::VRFSignature, CryptoStoreError>
 	),
 	Ed25519PublicKeys(Vec<ed25519::Public>),
 	Ed25519GenerateNew(
-		Result<sp_application_crypto::ed25519::Public, BareCryptoStoreError>
+		Result<sp_application_crypto::ed25519::Public, CryptoStoreError>
 	),
 	EcdsaPublicKeys(Vec<ecdsa::Public>),
 	EcdsaGenerateNew(
-		Result<sp_application_crypto::ecdsa::Public, BareCryptoStoreError>
+		Result<sp_application_crypto::ecdsa::Public, CryptoStoreError>
 	),
 	InsertUnknown(Result<(), ()>),
 	Password(Option<String>),
-	SupportedKeys(Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError>),
-	Keys(Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError>),
+	SupportedKeys(Result<Vec<CryptoTypePublicPair>, CryptoStoreError>),
+	Keys(Result<Vec<CryptoTypePublicPair>, CryptoStoreError>),
 	HasKeys(bool),
-	SignWith(Result<Vec<u8>, BareCryptoStoreError>),
+	SignWith(Result<Vec<u8>, CryptoStoreError>),
 }
 
 pub struct KeystoreProxy {
