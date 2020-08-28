@@ -19,7 +19,7 @@ Will output a mnemonic phrase and give you the seed, public key, and address of 
 You can inspect a given URI (mnemonic, seed, public key, or address) and recover the public key and the address.
 
 ```bash
-subkey inspect <mnemonic,seed,pubkey,address>
+subkey inspect-key <mnemonic,seed,pubkey,address>
 
 OUTPUT:
   Public key (hex): 0x461edcf1ba99e43f50dec4bdeb3d1a2cf521ad7c3cd0eeee5cd3314e50fd424c
