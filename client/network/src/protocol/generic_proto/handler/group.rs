@@ -706,6 +706,16 @@ impl ProtocolsHandler for NotifsHandler {
 					}
 				}
 			}
+
+		} else {
+			// If `self.pending_legacy_handshake` is `None`, we don't want to accept events from
+			// the ingoing notifications substreams, but still want handshakes to go forward.
+			for (handler, _) in &mut self.in_handlers {
+				match handler.poll_process(cx) {
+					Poll::Pending => {},
+					Poll::Ready(v) => match v {}
+				}
+			}
 		}
 
 		for (handler_num, (handler, _)) in self.out_handlers.iter_mut().enumerate() {
