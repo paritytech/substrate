@@ -246,7 +246,7 @@ pub fn new_full_base(
 			sc_service::config::Role::Authority { ref sentry_nodes } => (
 				sentry_nodes.clone(),
 				sc_authority_discovery::Role::Authority (
-					keystore_params.sync_keystore(),
+					keystore_params.keystore(),
 				),
 			),
 			sc_service::config::Role::Sentry {..} => (
