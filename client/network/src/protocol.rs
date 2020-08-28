@@ -245,13 +245,13 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: GenericProto,
 	/// For each legacy gossiping engine ID, the corresponding new protocol name.
-	protocol_name_by_engine: HashMap<ConsensusEngineId, Cow<'static, [u8]>>,
+	protocol_name_by_engine: HashMap<ConsensusEngineId, Cow<'static, str>>,
 	/// For each protocol name, the legacy equivalent.
-	legacy_equiv_by_name: HashMap<Cow<'static, [u8]>, Fallback>,
+	legacy_equiv_by_name: HashMap<Cow<'static, str>, Fallback>,
 	/// Name of the protocol used for transactions.
-	transactions_protocol: Cow<'static, [u8]>,
+	transactions_protocol: Cow<'static, str>,
 	/// Name of the protocol used for block announces.
-	block_announces_protocol: Cow<'static, [u8]>,
+	block_announces_protocol: Cow<'static, str>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
@@ -421,19 +421,21 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let mut legacy_equiv_by_name = HashMap::new();
 
-		let transactions_protocol: Cow<'static, [u8]> = Cow::from({
-			let mut proto = b"/".to_vec();
-			proto.extend(protocol_id.as_ref().as_bytes());
-			proto.extend(b"/transactions/1");
+		let transactions_protocol: Cow<'static, str> = Cow::from({
+			let mut proto = String::new();
+			proto.push_str("/");
+			proto.push_str(protocol_id.as_ref());
+			proto.push_str("/transactions/1");
 			proto
 		});
 		behaviour.register_notif_protocol(transactions_protocol.clone(), Vec::new());
 		legacy_equiv_by_name.insert(transactions_protocol.clone(), Fallback::Transactions);
 
-		let block_announces_protocol: Cow<'static, [u8]> = Cow::from({
-			let mut proto = b"/".to_vec();
-			proto.extend(protocol_id.as_ref().as_bytes());
-			proto.extend(b"/block-announces/1");
+		let block_announces_protocol: Cow<'static, str> = Cow::from({
+			let mut proto = String::new();
+			proto.push_str("/");
+			proto.push_str(protocol_id.as_ref());
+			proto.push_str("/block-announces/1");
 			proto
 		});
 		behaviour.register_notif_protocol(
@@ -689,7 +691,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	fn send_message(
 		&mut self,
 		who: &PeerId,
-		message: Option<(Cow<'static, [u8]>, Vec<u8>)>,
+		message: Option<(Cow<'static, str>, Vec<u8>)>,
 		legacy: Message<B>,
 	) {
 		send_message::<B>(
@@ -1086,7 +1088,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn register_notifications_protocol<'a>(
 		&'a mut self,
 		engine_id: ConsensusEngineId,
-		protocol_name: impl Into<Cow<'static, [u8]>>,
+		protocol_name: impl Into<Cow<'static, str>>,
 		handshake_message: Vec<u8>,
 	) -> impl Iterator<Item = (&'a PeerId, Roles, &'a NotificationsSink)> + 'a {
 		let protocol_name = protocol_name.into();
@@ -1639,7 +1641,7 @@ fn send_message<B: BlockT>(
 	behaviour: &mut GenericProto,
 	stats: &mut HashMap<&'static str, PacketStats>,
 	who: &PeerId,
-	message: Option<(Cow<'static, [u8]>, Vec<u8>)>,
+	message: Option<(Cow<'static, str>, Vec<u8>)>,
 	legacy_message: Message<B>,
 ) {
 	let encoded = legacy_message.encode();
