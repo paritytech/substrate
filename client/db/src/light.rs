@@ -23,11 +23,11 @@ use std::convert::TryInto;
 use parking_lot::RwLock;
 
 use sc_client_api::{
-	cht, backend::{AuxStore, NewBlockState}, UsageInfo,
+	cht, backend::{AuxStore, NewBlockState, ProvideChtRoots}, UsageInfo,
 	blockchain::{
 		BlockStatus, Cache as BlockchainCache, Info as BlockchainInfo,
 	},
-	Storage
+	Storage,
 };
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
@@ -523,22 +523,6 @@ impl<Block> Storage<Block> for LightStorage<Block>
 		}
 	}
 
-	fn header_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> ClientResult<Option<Block::Hash>> {
-		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
-	}
-
-	fn changes_trie_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> ClientResult<Option<Block::Hash>> {
-		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
-	}
-
 	fn finalize_header(&self, id: BlockId<Block>) -> ClientResult<()> {
 		if let Some(header) = self.header(id)? {
 			let mut transaction = Transaction::new();
@@ -609,6 +593,26 @@ impl<Block> Storage<Block> for LightStorage<Block>
 	#[cfg(target_os = "unknown")]
 	fn usage_info(&self) -> Option<UsageInfo> {
 		None
+	}
+}
+
+impl<Block> ProvideChtRoots<Block> for LightStorage<Block>
+	where Block: BlockT,
+{
+	fn header_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Option<Block::Hash>> {
+		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
+	}
+
+	fn changes_trie_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Option<Block::Hash>> {
+		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
 	}
 }
 

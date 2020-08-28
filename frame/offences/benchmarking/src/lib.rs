@@ -125,7 +125,7 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<Offender<T>, &'s
 			RawOrigin::Signed(nominator_stash.clone()).into(),
 			nominator_controller_lookup.clone(),
 			amount.clone(),
-			reward_destination,
+			reward_destination.clone(),
 		)?;
 
 		let selected_validators: Vec<LookupSourceOf<T>> = vec![controller_lookup.clone()];
