@@ -16,6 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 prost-build = "0.6.1"
 
 [dependencies]
+async-trait = "0.1"
 async-std = { version = "1.6.2", features = ["unstable"] }
 bitflags = "1.2.0"
 bs58 = "0.3.1"
@@ -64,7 +65,7 @@ zeroize = "1.0.0"
 [dependencies.libp2p]
 version = "0.24.0"
 default-features = false
-features = ["identify", "kad", "mdns-async-std", "mplex", "noise", "ping", "tcp-async-std", "websocket", "yamux"]
+features = ["identify", "kad", "mdns-async-std", "mplex", "noise", "ping", "request-response", "tcp-async-std", "websocket", "yamux"]
 
 [dev-dependencies]
 assert_matches = "1.3"
