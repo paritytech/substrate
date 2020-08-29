@@ -20,10 +20,10 @@ sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primit
 sp-io = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/runtime" }
 sp-core = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/core" }
-#sp-application-crypto = { version = "2.0.0-rc6", default-features = false, path = "../system"  }
 
 frame-support = { version = "2.0.0-rc6", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-rc6", default-features = false, path = "../system" }
+frame-benchmarking = { version = "2.0.0-rc6", default-features = false, path = "../benchmarking", optional = true }
 
 [features]
 default = ["std"]
@@ -36,8 +36,9 @@ std = [
 	"sp-std/std",
 	"sp-core/std",
 	"sp-runtime/std",
-#	"sp-application-crypto/std",
-	
+
 	"frame-support/std",
 	"frame-system/std",
+	"frame-benchmarking/std",
 ]
+runtime-benchmarks = ["frame-benchmarking"]

@@ -95,21 +95,33 @@ where
 	}
 }
 parameter_types! {
-	pub const OperatorAccount: u128 = 1;
-
 	pub storage StorageArgument: DataType = DataType::U128(0);
 }
 
 impl Trait for Test {
 	type Event = TestEvent;
-	type AuthorityId = crypto::DataFeedAuthId;
+	type AuthorityId = crypto::Sr25519DataFeedAuthId;
 	type Call = Call<Test>;
 	// frame_system::EnsureSignedBy<DataFeed, AccountId>; use this in runtime/lib.rs
 	type DispatchOrigin = frame_system::EnsureSigned<AccountId>;
+	type WeightInfo = ()
 }
 
 pub type System = frame_system::Module<Test>;
 pub type DataFeed = Module<Test>;
+
+#[derive(Default)]
+pub struct ExtBuilder;
+impl ExtBuilder {
+	pub fn build(self) -> sp_io::TestExternalities {
+		let t = frame_system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
+	}
+}
 
 #[test]
 fn should_submit_signed_data_on_chain() {
@@ -127,7 +139,7 @@ fn should_submit_signed_data_on_chain() {
 		)
 		.unwrap();
 
-	let mut t = sp_io::TestExternalities::default();
+	let mut t = ExtBuilder::default().build();
 	t.register_extension(OffchainExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
 	t.register_extension(KeystoreExt(keystore.clone()));

@@ -145,6 +145,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
+mod default_weight;
 #[cfg(test)]
 mod tests;
 
@@ -162,6 +164,7 @@ use sp_std::{prelude::*, str::Chars};
 use frame_support::{
 	debug, decl_error, decl_event, decl_module, decl_storage,
 	traits::{Contains, EnsureOrigin},
+	weights::Weight,
 	IterableStorageDoubleMap, IterableStorageMap,
 };
 use frame_system::{
@@ -188,9 +191,9 @@ pub mod crypto {
 	pub type AuthoritySignature = Signature;
 	pub type AuthorityId = Public;
 
-	pub struct DataFeedAuthId;
+	pub struct Sr25519DataFeedAuthId;
 	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
-		for DataFeedAuthId
+		for Sr25519DataFeedAuthId
 	{
 		type RuntimeAppPublic = AuthorityId;
 		type GenericSignature = sp_core::sr25519::Signature;
@@ -310,15 +313,25 @@ impl<BlockNumber> Info<BlockNumber> {
 	}
 }
 
+pub trait WeightInfo {
+	fn register_storage_key(l: u32) -> Weight;
+	fn remove_storage_key(l: u32) -> Weight;
+	fn set_url(l: u32, n: u32) -> Weight;
+	fn feed_data(l: u32) -> Weight;
+	fn add_provider() -> Weight;
+	fn remove_provider() -> Weight;
+}
+
 pub trait Trait: CreateSignedTransaction<Call<Self>> {
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// The identifier type for an offchain worker.
 	type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
-	/// Because this pallet emits events, it depends on the runtime's definition of an event.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// The overarching dispatch call type.
 	type Call: From<Call<Self>>;
 	/// The origin that can schedule an update
 	type DispatchOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+	/// WeightInfo
+	type WeightInfo: WeightInfo;
 }
 
 decl_event!(
@@ -375,7 +388,7 @@ decl_storage! {
 		/// from a json blob
 		pub Infos get(fn infos): map hasher(twox_64_concat) StorageKey => Option<Info<T::BlockNumber>>;
 
-		/// permissioned URL that could be used to fetch data
+		/// Permissible URL that could be used to fetch data
 		pub Url get(fn url): map hasher(twox_64_concat) StorageKey => Option<Vec<u8>>;
 
 		pub DataFeeds get(fn feeded_data): double_map hasher(blake2_128_concat) StorageKey,
@@ -396,7 +409,7 @@ decl_module! {
 
 		/// Register a storage key under which the value can be modified
 		/// by this data feed pallet with some rules
-		#[weight = 0]
+		#[weight = T::WeightInfo::register_storage_key(key.len() as u32)]
 		pub fn register_storage_key(origin, key: StorageKey, info: Info<T::BlockNumber>) -> DispatchResult {
 			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
 			// parse origin
@@ -418,7 +431,7 @@ decl_module! {
 
 		/// remove the storage key from the limited set so the data feed pallet no longer
 		/// can change the corresponding value afterwards.
-		#[weight = 0]
+		#[weight = T::WeightInfo::remove_storage_key(key.len() as u32)]
 		pub fn remove_storage_key(origin, key: StorageKey) -> DispatchResult {
 			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
 			ActiveParamTypes::mutate(|v| {
@@ -426,12 +439,14 @@ decl_module! {
 				v.retain(|k| k != &key);
 			});
 			Infos::<T>::remove(&key);
+			Url::remove(&key);
 			DataFeeds::<T>::remove_prefix(&key);
 			Self::deposit_event(RawEvent::RemoveStorageKey(key));
 			Ok(())
 		}
 
-		#[weight = 0]
+		/// Set a url for a key which used in offchain to fetch data from this url.
+		#[weight = T::WeightInfo::set_url(key.len() as u32, url.len() as u32)]
 		pub fn set_url(origin, key: StorageKey, url: Vec<u8>) -> DispatchResult {
 			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
 			Url::insert(&key, &url);
@@ -440,13 +455,14 @@ decl_module! {
 		}
 
 		/// Submit a new data under the specific storage key.
-		#[weight = 0]
+		#[weight = T::WeightInfo::feed_data(key.len() as u32)]
 		pub fn feed_data(origin, key: StorageKey, value: DataType) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::feed_data_impl(who, key, value)
 		}
 
-		#[weight = 0]
+		/// Add a provider to current provider collection.
+		#[weight = T::WeightInfo::add_provider()]
 		pub fn add_provider(origin, new_one: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
 			let new_one = T::Lookup::lookup(new_one)?;
@@ -465,7 +481,8 @@ decl_module! {
 			Ok(())
 		}
 
-		#[weight = 0]
+		/// Remove a provider from current provider collection.
+		#[weight = T::WeightInfo::remove_provider()]
 		pub fn remove_provider(origin, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
 			let who = T::Lookup::lookup(who)?;
