@@ -463,6 +463,8 @@ ss58_address_format!(
 		(13, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
 	KulupuAccount =>
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
+	DarkAccount =>
+		(17, "dark", "Dark mainnet, standard account (*25519).")
 	DarwiniaAccount =>
 		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
 	StafiAccount =>
