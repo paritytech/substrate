@@ -101,10 +101,9 @@ parameter_types! {
 impl Trait for Test {
 	type Event = TestEvent;
 	type AuthorityId = crypto::Sr25519DataFeedAuthId;
-	type Call = Call<Test>;
 	// frame_system::EnsureSignedBy<DataFeed, AccountId>; use this in runtime/lib.rs
 	type DispatchOrigin = frame_system::EnsureSigned<AccountId>;
-	type WeightInfo = ()
+	type WeightInfo = ();
 }
 
 pub type System = frame_system::Module<Test>;
@@ -205,7 +204,7 @@ fn should_submit_signed_data_on_chain() {
 }
 
 pub fn register_info() {
-	let data_info = super::Info {
+	let data_info = super::FeededDataInfo {
 		key_str: "USD".as_bytes().to_vec(),
 		number_type: NumberType::FixedU128,
 		operation: Operations::Average,
@@ -222,5 +221,11 @@ pub fn register_info() {
 		Origin::signed(AccountId::default()),
 		StorageArgument::key().to_vec(),
 		b"https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".to_vec()
+	));
+
+	assert_ok!(DataFeed::set_offchain_period(
+		Origin::signed(AccountId::default()),
+		StorageArgument::key().to_vec(),
+		Some(1),
 	));
 }

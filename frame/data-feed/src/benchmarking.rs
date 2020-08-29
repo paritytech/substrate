@@ -38,7 +38,7 @@ fn add_tmp_provider<T: Trait>(provider: T::AccountId) {
 
 fn add_data_info<T: Trait>(key: StorageKey, provider: T::AccountId) {
 	add_tmp_provider::<T>(provider.clone());
-	let data_info = super::Info {
+	let data_info = super::FeededDataInfo {
 		key_str: "USD".as_bytes().to_vec(),
 		number_type: NumberType::FixedU128,
 		operation: Operations::Average,
@@ -49,8 +49,8 @@ fn add_data_info<T: Trait>(key: StorageKey, provider: T::AccountId) {
 
 benchmarks! {
 	_ {
-		let l in 1 .. 64 => (); // we think key bytes lengh should not more than 64
-		let n in 1 .. 2048 => (); // we think max url lenght should not more than 2048
+		let l in 1 .. 64 => (); // we think key bytes length should not more than 64
+		let n in 1 .. 2048 => (); // we think max url length should not more than 2048
 	}
 
 	register_storage_key {
@@ -60,7 +60,7 @@ benchmarks! {
 		add_tmp_provider::<T>(provider.clone());
 
 		let key = StorageArgument::key().to_vec();
-		let data_info = super::Info {
+		let data_info = super::FeededDataInfo {
 			key_str: "USD".as_bytes().to_vec(),
 			number_type: NumberType::FixedU128,
 			operation: Operations::Average,
@@ -68,7 +68,7 @@ benchmarks! {
 		};
 	}: _(RawOrigin::Signed(provider.clone()), key.clone(), data_info.clone())
 	verify {
-		assert_eq!(DataFeed::<T>::infos(&key), Some(data_info));
+		assert_eq!(DataFeed::<T>::data_infos(&key), Some(data_info));
 	}
 
 	remove_storage_key {
@@ -79,7 +79,7 @@ benchmarks! {
 		let _ = DataFeed::<T>::set_url(RawOrigin::Root.into(), key.clone(), b"https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".to_vec());
 	}: _(RawOrigin::Signed(provider.clone()), key.clone())
 	verify {
-		assert_eq!(DataFeed::<T>::infos(&key), None);
+		assert_eq!(DataFeed::<T>::data_infos(&key), None);
 	}
 
 	set_url {
@@ -92,6 +92,18 @@ benchmarks! {
 	}: _(RawOrigin::Signed(provider.clone()), key.clone(), url.clone())
 	verify {
 		assert_eq!(DataFeed::<T>::url(&key), Some(url));
+	}
+
+	set_offchain_period {
+		let l in ...;
+		let provider: T::AccountId = whitelisted_caller();
+		let key = StorageArgument::key().to_vec();
+		add_data_info::<T>(key.clone(), provider.clone());
+		let _ = DataFeed::<T>::set_url(RawOrigin::Root.into(), key.clone(), b"https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".to_vec());
+		let period = Some(100.into());
+	}: _(RawOrigin::Signed(provider.clone()), key.clone(), period)
+	verify {
+		assert_eq!(DataFeed::<T>::offchain_period(&key), period);
 	}
 
 	feed_data {
@@ -130,13 +142,44 @@ mod tests {
 	use frame_support::assert_ok;
 
 	#[test]
-	fn test_benchmarks() {
+	fn benchmark_register_storage_key() {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(test_benchmark_register_storage_key::<Test>());
+		});
+	}
+	#[test]
+	fn benchmark_remove_storage_key() {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(test_benchmark_remove_storage_key::<Test>());
+		});
+	}
+	#[test]
+	fn benchmark_set_url() {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(test_benchmark_set_url::<Test>());
+		});
+	}
+	#[test]
+	fn benchmark_set_offchain_period() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(test_benchmark_set_offchain_period::<Test>());
+		});
+	}
+	#[test]
+	fn benchmark_feed_data() {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(test_benchmark_feed_data::<Test>());
+		});
+	}
+	#[test]
+	fn benchmark_add_provider() {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(test_benchmark_add_provider::<Test>());
+		});
+	}
+	#[test]
+	fn benchmark_remove_provider() {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(test_benchmark_remove_provider::<Test>());
 		});
 	}

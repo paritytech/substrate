@@ -65,6 +65,9 @@
 //! * `remove_storage_key` - Remove a storage key whose value can no longer be touched by
 //!    data feed pallet.
 //! * `set_url` - Set a url under a specific key whose value can be querried from
+//! * `set_offchain_period` - Set a period for a specific key that the offchain would be called for
+//!    the period interval. Note only set a period for a key, the offchain would submit related data,
+//!    otherwise, the offchain would not work for this key.
 //! * `feed_data` - Submit a piece of data on chain with a signed transaction
 //! * `add_provider` - Add a whitelisted account that is able to submit data on chain
 //! * `remove_provider` - An account removed from the whitelist still can submit data on chain
@@ -97,7 +100,7 @@
 //! //      1. use extrinsic to call `register_storage_key`
 //! //      2. the param: `key: StorageKey` is a bytes from template module using
 //! //            `template::Something::hashed_key()`
-//! //      3. the param: `info: Info<T::BlockNumber>` would contain operation type, schedule block interval and so no.
+//! //      3. the param: `info: FeededDataInfo<T::BlockNumber>` would contain operation type, schedule block interval and so no.
 //! // 3. use offchain worker or a program beside the chain to submit `feed_data` extrinsic to feed data.
 //! // 4. template module could use `Something` to get data and use.
 //! ```
@@ -133,10 +136,41 @@
 //! //      1. use extrinsic to call `register_storage_key`
 //! //      2. the param: `key: StorageKey` is a bytes from template module using `:StorageArgument:`
 //! //      (which is generated from macro `parameter_types`, if developer use other method for storage, use that storage key)
-//! //      3. the param: `info: Info<T::BlockNumber>` would contain operation type, schedule block interval and so no.
+//! //      3. the param: `info: FeededDataInfo<T::BlockNumber>` would contain operation type, schedule block interval and so no.
 //! // 3. use offchain worker or a program beside the chain to submit `feed_data` extrinsic to feed data.
 //! // 4. template module could use T::Data::get() to use the feeded data.
 //! ```
+//!
+//! And this module implemented the offchain, which could submit extrinsic to feed data for a existed key.
+//! If a data for a key need to submit from offchain, should do following thing:
+//! 1. implement `AuthorityId` for current pallet `trait`
+//! 	refer to example in `example-offchain-worker`, developer could implement like this in runtime/lib.rs
+//! 	```nocompile
+//!		pub struct DataFeedId;
+//! 	impl frame_system::offchain::AppCrypto<<Signature as sp_runtime::traits::Verify>::Signer, Signature> for DataFeedId {
+//! 		type RuntimeAppPublic = pallet_data_feed::crypto::AuthorityId;
+//! 		type GenericSignature = sp_core::sr25519::Signature;
+//! 		type GenericPublic = sp_core::sr25519::Public;
+//! 	}
+//! 	impl pallet_data_feed::Trait for Runtime {
+//! 		type Event = Event;
+//! 		type AuthorityId = DataFeedId;
+//! 		type DispatchOrigin = frame_system::EnsureSignedBy<DataFeed, AccountId>;
+//! 		type WeightInfo = ();
+//! 	}
+//! 	```
+//! 2. after register a `StorageKey`, user should set a url for this `StorageKey`
+//! 	```nocompile
+//! 	// submit a extrinsic to call `Call::set_url(...)`
+//! 	```
+//! 3. after set url for a key, user need to set offchain period for this `StorageKey`
+//! 	note, if pass `None` for `period` parameter, would remove the period for this `StorageKey`.
+//! 	and if the period not existed for a `StorageKey`(OffchainPeriod::get(key).is_none()),
+//! 	the offchain would not work for this `StorageKey`.
+//! 	```nocompile
+//! 	// submit a extrinsic to call `Call::set_offchain_period(...)`
+//! 	```
+//! 4. then, the offchain could auto work.
 //!
 //! ## Genesis config
 //!
@@ -155,7 +189,7 @@ use lite_json::json::{JsonValue, NumberValue};
 
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
-	offchain::{http, Duration},
+	offchain::{http, storage::StorageValueRef, Duration},
 	traits::{CheckedDiv, Saturating, StaticLookup, Zero},
 	DispatchError, DispatchResult, FixedPointNumber, FixedU128, RuntimeDebug,
 };
@@ -295,7 +329,7 @@ impl Default for DataType {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug)]
-pub struct Info<BlockNumber> {
+pub struct FeededDataInfo<BlockNumber> {
 	/// the key of what we want from the json callback
 	key_str: Vec<u8>,
 	number_type: NumberType,
@@ -303,7 +337,7 @@ pub struct Info<BlockNumber> {
 	schedule: BlockNumber,
 }
 
-impl<BlockNumber> Info<BlockNumber> {
+impl<BlockNumber> FeededDataInfo<BlockNumber> {
 	fn key_str(&self) -> &[u8] {
 		&self.key_str
 	}
@@ -314,10 +348,11 @@ impl<BlockNumber> Info<BlockNumber> {
 }
 
 pub trait WeightInfo {
-	fn register_storage_key(l: u32) -> Weight;
-	fn remove_storage_key(l: u32) -> Weight;
-	fn set_url(l: u32, n: u32) -> Weight;
-	fn feed_data(l: u32) -> Weight;
+	fn register_storage_key(l: u32, ) -> Weight;
+	fn remove_storage_key(l: u32, ) -> Weight;
+	fn set_url(l: u32, n: u32, ) -> Weight;
+	fn set_offchain_period(l: u32, ) -> Weight;
+	fn feed_data(l: u32, ) -> Weight;
 	fn add_provider() -> Weight;
 	fn remove_provider() -> Weight;
 }
@@ -326,8 +361,6 @@ pub trait Trait: CreateSignedTransaction<Call<Self>> {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// The identifier type for an offchain worker.
 	type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
-	/// The overarching dispatch call type.
-	type Call: From<Call<Self>>;
 	/// The origin that can schedule an update
 	type DispatchOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
 	/// WeightInfo
@@ -338,6 +371,7 @@ decl_event!(
 	pub enum Event<T>
 	where
 		AccountId = <T as frame_system::Trait>::AccountId,
+		BlockNumber = <T as frame_system::Trait>::BlockNumber,
 	{
 		/// Register a storage key
 		RegisterStorageKey(StorageKey),
@@ -353,6 +387,8 @@ decl_event!(
 		FeedData(AccountId, StorageKey, DataType),
 		/// Set calculated data
 		SetData(StorageKey, DataType),
+		/// Set offchain
+		SetOffchainPeriod(StorageKey, Option<BlockNumber>),
 	}
 );
 
@@ -363,12 +399,14 @@ decl_error! {
 		ExistedKey,
 		/// You can not put data under the key that is not registered
 		InvalidKey,
-		/// If the data type does not match the one specified in Infos
+		/// If the data type does not match the one specified in DataInfos
 		InvalidValue,
-		/// user is not allowed to feed data onto the blockchain
+		/// User is not allowed to feed data onto the blockchain
 		NotAllowed,
-		/// provider count of key count exceed limit
+		/// Provider count of key count exceed limit
 		ExceedLimit,
+		/// Not allow to use offchain to submit.
+		NotAllowOffchain,
 	}
 }
 
@@ -386,13 +424,20 @@ decl_storage! {
 		/// Data Attributes.
 		/// It defines the type of the data, how to extract the data we want
 		/// from a json blob
-		pub Infos get(fn infos): map hasher(twox_64_concat) StorageKey => Option<Info<T::BlockNumber>>;
+		pub DataInfos get(fn data_infos): map hasher(twox_64_concat) StorageKey => Option<FeededDataInfo<T::BlockNumber>>;
 
 		/// Permissible URL that could be used to fetch data
 		pub Url get(fn url): map hasher(twox_64_concat) StorageKey => Option<Vec<u8>>;
 
-		pub DataFeeds get(fn feeded_data): double_map hasher(blake2_128_concat) StorageKey,
-			hasher(blake2_128_concat) T::AccountId => Option<[DataType; RING_BUF_LEN]>;
+		/// Feeded Data stored in a ring buffer, which MUST ALWAYS be full of valid values.
+		/// when receive new data, if would drop first old data and receive new one.
+		pub DataFeeds get(fn feeded_data):
+			double_map hasher(twox_64_concat) StorageKey, hasher(blake2_128_concat) T::AccountId => Option<[DataType; RING_BUF_LEN]>;
+
+		/// Scheduled interval height for submitting data from a offchain call. If not set this,
+		/// the offchain call would not auto work.
+		pub OffchainPeriod get(fn offchain_period):
+			map hasher(twox_64_concat) StorageKey => Option<T::BlockNumber>;
 	}
 }
 
@@ -410,7 +455,7 @@ decl_module! {
 		/// Register a storage key under which the value can be modified
 		/// by this data feed pallet with some rules
 		#[weight = T::WeightInfo::register_storage_key(key.len() as u32)]
-		pub fn register_storage_key(origin, key: StorageKey, info: Info<T::BlockNumber>) -> DispatchResult {
+		pub fn register_storage_key(origin, key: StorageKey, info: FeededDataInfo<T::BlockNumber>) -> DispatchResult {
 			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
 			// parse origin
 			ActiveParamTypes::try_mutate::<_, DispatchError, _>(|v| {
@@ -424,7 +469,7 @@ decl_module! {
 				v.push(key.clone());
 				Ok(())
 			})?;
-			Infos::<T>::insert(&key, info);
+			DataInfos::<T>::insert(&key, info);
 			Self::deposit_event(RawEvent::RegisterStorageKey(key));
 			Ok(())
 		}
@@ -438,7 +483,7 @@ decl_module! {
 				// remove key
 				v.retain(|k| k != &key);
 			});
-			Infos::<T>::remove(&key);
+			DataInfos::<T>::remove(&key);
 			Url::remove(&key);
 			DataFeeds::<T>::remove_prefix(&key);
 			Self::deposit_event(RawEvent::RemoveStorageKey(key));
@@ -449,8 +494,30 @@ decl_module! {
 		#[weight = T::WeightInfo::set_url(key.len() as u32, url.len() as u32)]
 		pub fn set_url(origin, key: StorageKey, url: Vec<u8>) -> DispatchResult {
 			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+			let _ = Self::data_infos(&key).ok_or(Error::<T>::InvalidKey)?;
+
 			Url::insert(&key, &url);
 			Self::deposit_event(RawEvent::SetUrl(key, url));
+			Ok(())
+		}
+
+		/// Set a offchain period for a key, if `period` is None, would remove this period.
+		/// The offchain worker can only work after the period be set, if not set a period for a key,
+		/// the offchain worker would not submmit data for this key.
+		#[weight = T::WeightInfo::set_offchain_period(key.len() as u32)]
+		pub fn set_offchain_period(origin, key: StorageKey, period: Option<T::BlockNumber>) -> DispatchResult {
+			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+
+			match period {
+				Some(p) => {
+					let _ = Self::data_infos(&key).ok_or(Error::<T>::InvalidKey)?;
+					// if not set url, we do not allow to set period for offchain
+					let _ = Self::url(&key).ok_or(Error::<T>::NotAllowOffchain)?;
+					OffchainPeriod::<T>::insert(&key, p);
+				},
+				None => OffchainPeriod::<T>::remove(&key),
+			}
+			Self::deposit_event(RawEvent::SetOffchainPeriod(key, period));
 			Ok(())
 		}
 
@@ -495,7 +562,7 @@ decl_module! {
 		}
 
 		fn on_finalize(_n: T::BlockNumber) {
-			for (key, info) in Infos::<T>::iter() {
+			for (key, info) in DataInfos::<T>::iter() {
 				if  _n % info.schedule == Zero::zero() {
 					Self::calc(key, info);
 				}
@@ -506,9 +573,13 @@ decl_module! {
 			debug::native::info!("Initialize offchain workers!");
 
 			for key in Self::all_keys() {
-				let res = Self::fetch_and_send_signed(&key);
-				if let Err(e) = res {
-					debug::error!("Error: {}", e);
+				if let Some(period) = Self::offchain_period(&key) {
+					if Self::check_period(&key, block_number, period) {
+						let res = Self::fetch_and_send_signed(&key);
+						if let Err(e) = res {
+							debug::error!("Error: {}", e);
+						}
+					}
 				}
 			}
 		}
@@ -520,7 +591,7 @@ impl<T: Trait> Module<T> {
 		if !Self::all_keys().contains(&key) {
 			Err(Error::<T>::InvalidKey)?
 		}
-		let info: Info<_> = Self::infos(&key).ok_or(Error::<T>::InvalidKey)?;
+		let info: FeededDataInfo<_> = Self::data_infos(&key).ok_or(Error::<T>::InvalidKey)?;
 		if value.number_type() != info.number_type {
 			Err(Error::<T>::InvalidValue)?
 		}
@@ -567,7 +638,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn calc(key: StorageKey, info: Info<T::BlockNumber>) {
+	fn calc(key: StorageKey, info: FeededDataInfo<T::BlockNumber>) {
 		// calc result would drain all old data
 		let data: Vec<DataType> =
 			DataFeeds::<T>::drain_prefix(&key).fold(Vec::new(), |mut src, (who, datas)| {
@@ -630,13 +701,40 @@ impl<T: Trait> Module<T> {
 
 // offchain
 impl<T: Trait> Module<T> {
+	fn check_period(
+		storage_key: &StorageKey,
+		block_number: T::BlockNumber,
+		period: T::BlockNumber,
+	) -> bool {
+		let mut ref_key = b"data_feed::period:".to_vec();
+		ref_key.extend_from_slice(&storage_key);
+		let val = StorageValueRef::persistent(&ref_key);
+
+		const RECENTLY_SENT: () = ();
+		match val.mutate(
+			|last_send: Option<Option<T::BlockNumber>>| match last_send {
+				Some(Some(block)) if block_number < block + period => Err(RECENTLY_SENT),
+				_ => Ok(block_number),
+			},
+		) {
+			// in the period or failed to write the block number (acquire a lock)
+			Err(RECENTLY_SENT) | Ok(Err(_)) => false,
+			Ok(Ok(_)) => true,
+		}
+	}
+
 	fn fetch_and_send_signed(storage_key: &StorageKey) -> Result<(), &'static str> {
-		let signer = Signer::<T, T::AuthorityId>::all_accounts();
+		// TODO need offchain to provide a method to filter accountid
+		// (`with_filter` just allow `Public` not `AccountId`, and on the other hand,
+		// there is no way to get all keys to handle them),
+		// currently could not do it, just peek one key to sign and submit
+		let signer = Signer::<T, T::AuthorityId>::any_account();
 		if !signer.can_sign() {
 			return Err(
 				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
 			)?;
 		}
+
 		let data = Self::fetch_data(storage_key)?;
 
 		let results =
@@ -680,7 +778,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		let body = response.body().collect::<Vec<u8>>();
-		let info = Self::infos(&storage_key).ok_or("storage key not exist")?;
+		let info = Self::data_infos(&storage_key).ok_or("storage key not exist")?;
 		let number_type = info.number_type();
 
 		// Create a str slice from the body.
@@ -698,7 +796,6 @@ impl<T: Trait> Module<T> {
 				Err("Unknown error has been encountered.")
 			}
 		}?;
-		//		debug::warn!("Got Data: {}", data);
 		Ok(data)
 	}
 
