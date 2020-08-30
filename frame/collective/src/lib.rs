@@ -109,7 +109,7 @@ impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
 	fn default_vote(
 		prime_voted_aye: bool,
 		yes_votes: MemberCount,
-		no_votes: MemberCount,
+		_no_votes: MemberCount,
 		len: MemberCount,
 	) -> bool {
 		let more_than_majority = yes_votes * 2 > len;
@@ -997,6 +997,7 @@ mod tests {
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
+		type DefaultVote = PrimeDefaultVote;
 		type WeightInfo = ();
 	}
 	impl Trait for Test {
@@ -1006,6 +1007,7 @@ mod tests {
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
+		type DefaultVote = PrimeDefaultVote;
 		type WeightInfo = ();
 	}
 
