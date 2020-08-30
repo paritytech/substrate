@@ -19,13 +19,13 @@
 //!
 //! This pallet manages a configurable set of nodes for a permissioned network.
 //! It provides two ways to authorize a node,
-//! * a set of the well known nodes across different organizations in which
-//! the communication is allowed.
-//! * users can claim the ownership for nodes, and manage the communication for the node.
+//! * a set of well known nodes across different organizations in which
+//! the connections are allowed.
+//! * users can claim the ownership for each node, then manage the connection of the node.
 //!
-//! A node must have an owner. The owner then can make additional adaptive adaptive
-//! change for the connection of the node. Only one user can `claim` a specific node.
-//! To eliminate falsely claim, the maintainer of the node should claim it before
+//! A node must have an owner. The owner can make additional adaptive change for
+//! the connection of the node. Only one user can `claim` a specific node.
+//! To eliminate false claim, the maintainer of the node should claim it before
 //! even start the node.
 
 // Ensure we're `no_std` when compiling for Wasm.
@@ -61,19 +61,19 @@ pub trait Trait: frame_system::Trait {
     /// The event type of this module.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
-    /// The maximum number of authorized nodes that are allowed to set
+    /// The maximum number of well known nodes that are allowed to set
     type MaxWellKnownNodes: Get<u32>;
 
-    /// The origin which can add a authorized node.
+    /// The origin which can add a well known node.
     type AddOrigin: EnsureOrigin<Self::Origin>;
 
-    /// The origin which can remove a authorized node.
+    /// The origin which can remove a well known node.
     type RemoveOrigin: EnsureOrigin<Self::Origin>;
 
-    /// The origin which can swap the authorized nodes.
+    /// The origin which can swap the well known nodes.
     type SwapOrigin: EnsureOrigin<Self::Origin>;
 
-    /// The origin which can reset the authorized nodes.
+    /// The origin which can reset the well known nodes.
     type ResetOrigin: EnsureOrigin<Self::Origin>;
 
     /// Weight information for extrinsics in this pallet.
@@ -82,13 +82,13 @@ pub trait Trait: frame_system::Trait {
 
 decl_storage! {
     trait Store for Module<T: Trait> as NodeAuthorization {
-        /// The current well known nodes. This is stored sorted (just by value).
+        /// The set of well known nodes. This is stored sorted (just by value).
         pub WellKnownNodes get(fn well_known_nodes): Vec<NodePublicKey>;
         /// A map that maintains the ownership of each node.
         pub Owners get(fn owners):
             map hasher(blake2_128_concat) NodePublicKey => T::AccountId;
-        /// The additional adapative connection for a node.
-        pub AdditionalConnection get(fn additional_connection):
+        /// The additional adapative connections of a node.
+        pub AdditionalConnections get(fn additional_connection):
             map hasher(blake2_128_concat) NodePublicKey => Vec<NodePublicKey>;
     }
     add_extra_genesis {
@@ -110,14 +110,15 @@ decl_event! {
     pub enum Event<T> where
         <T as frame_system::Trait>::AccountId,
     {
-        /// The given node was added.
-        WellKnownNodeAdded(NodePublicKey, AccountId),
-        /// The given node was removed.
-        WellKnownNodeRemoved(NodePublicKey),
-        /// Two given nodes were swapped; first item is removed, the latter is added.
-        WellKnownNodeSwapped(NodePublicKey, NodePublicKey, AccountId),
-        /// The given nodes were reset.
-        WellKnownNodesReset(Vec<(NodePublicKey, AccountId)>),
+        /// The given well known node was added.
+        NodeAdded(NodePublicKey, AccountId),
+        /// The given well known node was removed.
+        NodeRemoved(NodePublicKey),
+        /// Two given well known node were swapped; first item is removed,
+        /// the latter is added.
+        NodeSwapped(NodePublicKey, NodePublicKey),
+        /// The given well known nodes were reset.
+        NodesReset(Vec<(NodePublicKey, AccountId)>),
         /// The given node was claimed by a user.
         NodeClaimed(NodePublicKey, AccountId),
         /// New connections were added to a node.
@@ -128,7 +129,7 @@ decl_event! {
 decl_error! {
     /// Error for the node authorization module.
     pub enum Error for Module<T: Trait> {
-        /// Too many authorized nodes.
+        /// Too many well known nodes.
         TooManyNodes,
         /// The node is already joined in the list.
         AlreadyJoined,
@@ -152,86 +153,89 @@ decl_module! {
 
         fn deposit_event() = default;
 
-        /// Add a node to the set of well known nodes.
+        /// Add a node to the set of well known nodes. If the node is already claimed, the owner
+        /// will be updated and keep the existing additional connection unchanged.
         ///
         /// May only be called from `T::AddOrigin`.
         ///
-        /// - `node_public_key`: identifier of the node.
+        /// - `node`: identifier of the node.
         #[weight = (T::WeightInfo::add_well_known_node(), DispatchClass::Operational)]
-        pub fn add_well_known_node(origin, node_public_key: NodePublicKey, owner: T::AccountId) {
+        pub fn add_well_known_node(origin, node: NodePublicKey, owner: T::AccountId) {
             T::AddOrigin::ensure_origin(origin)?;
 
             let mut nodes = WellKnownNodes::get();
             ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
 
-            let location = nodes.binary_search(&node_public_key).err().ok_or(Error::<T>::AlreadyJoined)?;
-            nodes.insert(location, node_public_key.clone());
+            let location = nodes.binary_search(&node).err().ok_or(Error::<T>::AlreadyJoined)?;
+            nodes.insert(location, node.clone());
             
             WellKnownNodes::put(&nodes);
-            <Owners<T>>::insert(&node_public_key, &owner);
+            <Owners<T>>::insert(&node, &owner);
 
-            Self::deposit_event(RawEvent::WellKnownNodeAdded(node_public_key, owner));
+            Self::deposit_event(RawEvent::NodeAdded(node, owner));
         }
 
-        /// Remove a node from the set of well known nodes.
+        /// Remove a node from the set of well known nodes. The ownership and additional
+        /// connections of the node will also be removed.
         ///
         /// May only be called from `T::RemoveOrigin`.
         ///
-        /// - `node_public_key`: identifier of the node.
+        /// - `node`: identifier of the node.
         #[weight = (T::WeightInfo::remove_well_known_node(), DispatchClass::Operational)]
-        pub fn remove_well_known_node(origin, node_public_key: NodePublicKey) {
+        pub fn remove_well_known_node(origin, node: NodePublicKey) {
             T::RemoveOrigin::ensure_origin(origin)?;
 
             let mut nodes = WellKnownNodes::get();
 
-            let location = nodes.binary_search(&node_public_key).ok().ok_or(Error::<T>::NotExist)?;
+            let location = nodes.binary_search(&node).ok().ok_or(Error::<T>::NotExist)?;
             nodes.remove(location);
             
             WellKnownNodes::put(&nodes);
-            <Owners<T>>::remove(&node_public_key);
-            AdditionalConnection::remove(&node_public_key);
+            <Owners<T>>::remove(&node);
+            AdditionalConnections::remove(&node);
 
-            Self::deposit_event(RawEvent::WellKnownNodeRemoved(node_public_key));
+            Self::deposit_event(RawEvent::NodeRemoved(node));
         }
 
-        /// Swap two nodes.
+        /// Swap one well know node to another. Both the ownership and additonal connections
+        /// stay untouched.
         ///
         /// May only be called from `T::SwapOrigin`.
         ///
         /// - `remove`: the node which will be moved out from the list.
         /// - `add`: the node which will be put in the list.
-        // #[weight = (T::WeightInfo::swap_well_known_node(), DispatchClass::Operational)]
-        // pub fn swap_well_known_node(origin, remove: NodePublicKey, add: NodePublicKey) {
-        //     T::SwapOrigin::ensure_origin(origin)?;
+        #[weight = (T::WeightInfo::swap_well_known_node(), DispatchClass::Operational)]
+        pub fn swap_well_known_node(origin, remove: NodePublicKey, add: NodePublicKey) {
+            T::SwapOrigin::ensure_origin(origin)?;
 
-        //     if remove == add { return Ok(()) }
+            if remove == add { return Ok(()) }
             
-        //     let mut nodes = Self::get_allow_list();
-        //     let remove_location = nodes.binary_search(&remove).ok().ok_or(Error::<T>::NotExist)?;
-        //     nodes.remove(remove_location);
-        //     let add_location = nodes.binary_search(&add).err().ok_or(Error::<T>::AlreadyJoined)?;
-        //     nodes.insert(add_location, add.clone());
-        //     Self::put_allow_list(&nodes);
+            let mut nodes = WellKnownNodes::get();
+            let remove_location = nodes.binary_search(&remove).ok().ok_or(Error::<T>::NotExist)?;
+            nodes.remove(remove_location);
+            let add_location = nodes.binary_search(&add).err().ok_or(Error::<T>::AlreadyJoined)?;
+            nodes.insert(add_location, add.clone());
+            WellKnownNodes::put(&nodes);
 
-        //     Self::deposit_event(Event::NodeSwapped(remove, add));
-        // }
+            Self::deposit_event(RawEvent::NodeSwapped(remove, add));
+        }
         
-        /// Reset all the authorized nodes in the list.
+        /// Reset all the well known nodes. This will not remove the ownership and additional
+        /// connections for the removed nodes. The node owner can perform furthur cleaning if
+        /// they decide to leave the network.
         ///
         /// May only be called from `T::ResetOrigin`.
         ///
         /// - `nodes`: the new nodes for the allow list.
-        // #[weight = (T::WeightInfo::reset_well_known_nodes(), DispatchClass::Operational)]
-        // pub fn reset_well_known_nodes(origin, nodes: Vec<NodePublicKey>) {
-        //     T::ResetOrigin::ensure_origin(origin)?;
-        //     ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
+        #[weight = (T::WeightInfo::reset_well_known_nodes(), DispatchClass::Operational)]
+        pub fn reset_well_known_nodes(origin, nodes: Vec<(NodePublicKey, T::AccountId)>) {
+            T::ResetOrigin::ensure_origin(origin)?;
+            ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
 
-        //     let mut nodes = nodes;
-        //     nodes.sort();
-        //     Self::put_allow_list(&nodes);
+            Self::initialize_nodes(nodes.clone());
 
-        //     Self::deposit_event(Event::NodesReset(nodes));
-        // }
+            Self::deposit_event(RawEvent::NodesReset(nodes));
+        }
 
         /// Send a transaction to claim the node.
         ///
@@ -270,12 +274,12 @@ decl_module! {
                 Error::<T>::NotOwner
             );
 
-            let mut nodes = AdditionalConnection::get(&node_public_key);
+            let mut nodes = AdditionalConnections::get(&node_public_key);
             nodes.extend(connections.clone());
             nodes.sort();
             nodes.dedup();
             
-            AdditionalConnection::insert(&node_public_key, nodes);
+            AdditionalConnections::insert(&node_public_key, nodes);
 
             Self::deposit_event(RawEvent::ConnectionsAdded(node_public_key, connections));
         }
@@ -291,8 +295,20 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+    fn initialize_nodes(nodes: Vec<(NodePublicKey, T::AccountId)>) {
+        let mut node_public_keys = nodes.iter()
+            .map(|item| item.0.clone())
+            .collect::<Vec<NodePublicKey>>();
+        node_public_keys.sort();
+        WellKnownNodes::put(&node_public_keys);
+
+        for (node, who) in nodes.iter() {
+            Owners::<T>::insert(node, who);
+        }
+    }
+
     fn authorize_nodes(node: NodePublicKey) {
-        let mut nodes = AdditionalConnection::get(&node);
+        let mut nodes = AdditionalConnections::get(&node);
         
         let well_known_nodes = WellKnownNodes::get();
         if well_known_nodes.binary_search(&node).is_ok() {
