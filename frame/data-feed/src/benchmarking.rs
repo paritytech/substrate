@@ -48,14 +48,9 @@ fn add_data_info<T: Trait>(key: StorageKey, provider: T::AccountId) {
 }
 
 benchmarks! {
-	_ {
-		let l in 1 .. 64 => (); // we think key bytes length should not more than 64
-		let n in 1 .. 2048 => (); // we think max url length should not more than 2048
-	}
+	_ {	}
 
 	register_storage_key {
-		let l in ...;
-
 		let provider: T::AccountId = whitelisted_caller();
 		add_tmp_provider::<T>(provider.clone());
 
@@ -72,7 +67,6 @@ benchmarks! {
 	}
 
 	remove_storage_key {
-		let l in ...;
 		let provider: T::AccountId = whitelisted_caller();
 		let key = StorageArgument::key().to_vec();
 		add_data_info::<T>(key.clone(), provider.clone());
@@ -83,8 +77,6 @@ benchmarks! {
 	}
 
 	set_url {
-		let l in ...;
-		let n in ...;
 		let provider: T::AccountId = whitelisted_caller();
 		let key = StorageArgument::key().to_vec();
 		add_data_info::<T>(key.clone(), provider.clone());
@@ -95,7 +87,6 @@ benchmarks! {
 	}
 
 	set_offchain_period {
-		let l in ...;
 		let provider: T::AccountId = whitelisted_caller();
 		let key = StorageArgument::key().to_vec();
 		add_data_info::<T>(key.clone(), provider.clone());
@@ -107,7 +98,6 @@ benchmarks! {
 	}
 
 	feed_data {
-		let l in ...;
 		let provider: T::AccountId = whitelisted_caller();
 		let key = StorageArgument::key().to_vec();
 		add_data_info::<T>(key.clone(), provider.clone());
