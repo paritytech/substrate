@@ -71,6 +71,52 @@ pub type ProposalIndex = u32;
 /// vote exactly once, therefore also the number of votes for any given motion.
 pub type MemberCount = u32;
 
+/// Default voting strategy when a member is inactive.
+pub trait DefaultVote {
+	/// Get the default voting strategy, given:
+	///
+	/// - Whether the prime member voted Aye.
+	/// - Raw number of yes votes.
+	/// - Raw number of no votes.
+	/// - Total number of member count.
+	fn default_vote(
+		prime_voted_aye: bool,
+		yes_votes: MemberCount,
+		no_votes: MemberCount,
+		len: MemberCount,
+	) -> bool;
+}
+
+/// Set the prime member's vote as the default vote.
+pub struct PrimeDefaultVote;
+
+impl DefaultVote for PrimeDefaultVote {
+	fn default_vote(
+		prime_voted_aye: bool,
+		_yes_votes: MemberCount,
+		_no_votes: MemberCount,
+		_len: MemberCount,
+	) -> bool {
+		prime_voted_aye
+	}
+}
+
+/// First see if yes vote are over majority of the whole collective. If so, set the default vote
+/// as yes. Otherwise, use the prime meber's vote as the default vote.
+pub struct MoreThanMajorityThenPrimeDefaultVote;
+
+impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
+	fn default_vote(
+		prime_voted_aye: bool,
+		yes_votes: MemberCount,
+		no_votes: MemberCount,
+		len: MemberCount,
+	) -> bool {
+		let more_than_majority = yes_votes * 2 > len;
+		more_than_majority || prime_voted_aye
+	}
+}
+
 pub trait WeightInfo {
 	fn set_members(m: u32, n: u32, p: u32, ) -> Weight;
 	fn execute(b: u32, m: u32, ) -> Weight;
@@ -109,6 +155,9 @@ pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	/// + Benchmarks will need to be re-run and weights adjusted if this changes.
 	/// + This pallet assumes that dependents keep to the limit without enforcing it.
 	type MaxMembers: Get<MemberCount>;
+
+	/// Default vote strategy of this collective.
+	type DefaultVote: DefaultVote;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -587,8 +636,11 @@ decl_module! {
 			// Only allow actual closing of the proposal after the voting period has ended.
 			ensure!(system::Module::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 
-			// default to true only if there's a prime and they voted in favour.
-			let default = Self::prime().map_or(false, |who| voting.ayes.iter().any(|a| a == &who));
+			let prime_voted_aye = Self::prime()
+				.map_or(false, |who| voting.ayes.iter().any(|a| a == &who));
+
+			// default voting strategy.
+			let default = T::DefaultVote::default_vote(prime_voted_aye, yes_votes, no_votes, seats);
 
 			let abstentions = seats - (yes_votes + no_votes);
 			match default {
