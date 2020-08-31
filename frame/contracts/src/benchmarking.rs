@@ -22,6 +22,7 @@
 use crate::*;
 use crate::Module as Contracts;
 use crate::exec::StorageKey;
+use crate::schedule::API_BENCHMARK_BATCH_SIZE;
 
 use frame_benchmarking::{benchmarks, account};
 use frame_system::{Module as System, RawOrigin};
@@ -31,11 +32,6 @@ use sp_std::{default::Default, convert::{TryFrom, TryInto}};
 
 /// How many batches we do per API benchmark. 
 const API_BENCHMARK_BATCHES: u32 = 20;
-
-/// How many API calls are executed in a single batch. The reason for increasing the amount
-/// of API calls in batches (per benchmark component increase) is so that the linear regression
-/// has an easier time determining the contribution of that component.
-const API_BENCHMARK_BATCH_SIZE: u32 = 100;
 
 #[derive(Clone)]
 struct WasmModule<T:Trait> {
