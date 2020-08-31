@@ -1,4 +1,4 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 //! # DataFeed Module
 //!
-//! The DataFeed module provides a way to feed data from external word to runtime.
+//! The DataFeed module provides a way to feed data from external world to runtime.
 //! This module is designed for a general data feed purpose, to make feeding data a
 //! User-friendly service for those who do not have in-depth knowledge of the
 //! offchain worker. With this pallet, you can fetch the offchain data and feed it
@@ -29,7 +29,7 @@
 //! ## Overview
 //!
 //! In this data-feed pallet, we can specify a very limited set of storage keys and
-//! data providers(also very limited set). Only a permitted account(listed in the
+//!data providers (also very limited set). Only a permitted account (listed in thethe
 //! provider set) is allowed to feed data onto the chain.
 //!
 //! These fetched data will be used to modify the value under the specified storage
@@ -314,18 +314,17 @@ impl DataType {
 		}
 	}
 }
+impl Default for DataType {
+	fn default() -> Self {
+		DataType::U128(0)
+	}
+}
 
 /// Types of DataType
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum NumberType {
 	U128,
 	FixedU128,
-}
-
-impl Default for DataType {
-	fn default() -> Self {
-		DataType::U128(0)
-	}
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug)]
@@ -396,15 +395,15 @@ decl_event!(
 decl_error! {
 	pub enum Error for Module<T: Trait> {
 		/// If the storage key already registered
-		ExistedKey,
+		ExistingKey,
 		/// You can not put data under the key that is not registered
 		InvalidKey,
-		/// If the data type does not match the one specified in DataInfos
+		/// If the data type does not match the one specified in DataInfo
 		InvalidValue,
 		/// User is not allowed to feed data onto the blockchain
 		NotAllowed,
 		/// Provider count of key count exceed limit
-		ExceedLimit,
+		ExceededLimit,
 		/// Not allow to use offchain to submit.
 		NotAllowOffchain,
 	}
@@ -424,13 +423,13 @@ decl_storage! {
 		/// Data Attributes.
 		/// It defines the type of the data, how to extract the data we want
 		/// from a json blob
-		pub DataInfos get(fn data_infos): map hasher(twox_64_concat) StorageKey => Option<FeededDataInfo<T::BlockNumber>>;
+		pub DataInfo get(fn data_info): map hasher(twox_64_concat) StorageKey => Option<FeededDataInfo<T::BlockNumber>>;
 
 		/// Permissible URL that could be used to fetch data
 		pub Url get(fn url): map hasher(twox_64_concat) StorageKey => Option<Vec<u8>>;
 
 		/// Feeded Data stored in a ring buffer, which MUST ALWAYS be full of valid values.
-		/// when receive new data, if would drop first old data and receive new one.
+		/// when receive new data, if would drop last old data and receive new one in front of buffer.
 		pub DataFeeds get(fn feeded_data):
 			double_map hasher(twox_64_concat) StorageKey, hasher(blake2_128_concat) T::AccountId => Option<[DataType; RING_BUF_LEN]>;
 
@@ -460,16 +459,16 @@ decl_module! {
 			// parse origin
 			ActiveParamTypes::try_mutate::<_, DispatchError, _>(|v| {
 				if v.contains(&key) {
-					Err(Error::<T>::ExistedKey)?;
+					Err(Error::<T>::ExistingKey)?;
 				}
 				if v.len() + 1 > MAX_KEY_LEN {
-					Err(Error::<T>::ExceedLimit)?
+					Err(Error::<T>::ExceededLimit)?
 				}
 
 				v.push(key.clone());
 				Ok(())
 			})?;
-			DataInfos::<T>::insert(&key, info);
+			DataInfo::<T>::insert(&key, info);
 			Self::deposit_event(RawEvent::RegisterStorageKey(key));
 			Ok(())
 		}
@@ -483,7 +482,7 @@ decl_module! {
 				// remove key
 				v.retain(|k| k != &key);
 			});
-			DataInfos::<T>::remove(&key);
+			DataInfo::<T>::remove(&key);
 			Url::remove(&key);
 			DataFeeds::<T>::remove_prefix(&key);
 			Self::deposit_event(RawEvent::RemoveStorageKey(key));
@@ -494,7 +493,7 @@ decl_module! {
 		#[weight = T::WeightInfo::set_url()]
 		pub fn set_url(origin, key: StorageKey, url: Vec<u8>) -> DispatchResult {
 			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
-			let _ = Self::data_infos(&key).ok_or(Error::<T>::InvalidKey)?;
+			let _ = Self::data_info(&key).ok_or(Error::<T>::InvalidKey)?;
 
 			Url::insert(&key, &url);
 			Self::deposit_event(RawEvent::SetUrl(key, url));
@@ -510,7 +509,7 @@ decl_module! {
 
 			match period {
 				Some(p) => {
-					let _ = Self::data_infos(&key).ok_or(Error::<T>::InvalidKey)?;
+					let _ = Self::data_info(&key).ok_or(Error::<T>::InvalidKey)?;
 					// if not set url, we do not allow to set period for offchain
 					let _ = Self::url(&key).ok_or(Error::<T>::NotAllowOffchain)?;
 					OffchainPeriod::<T>::insert(&key, p);
@@ -537,7 +536,7 @@ decl_module! {
 			ActiveProviders::<T>::try_mutate(|v| -> DispatchResult {
 				if !v.contains(&new_one) {
 					if v.len() + 1 > MAX_KEY_LEN {
-						Err(Error::<T>::ExceedLimit)?
+						Err(Error::<T>::ExceededLimit)?
 					}
 
 					v.push(new_one.clone());
@@ -561,9 +560,9 @@ decl_module! {
 			Ok(())
 		}
 
-		fn on_finalize(_n: T::BlockNumber) {
-			for (key, info) in DataInfos::<T>::iter() {
-				if  _n % info.schedule == Zero::zero() {
+		fn on_finalize(n: T::BlockNumber) {
+			for (key, info) in DataInfo::<T>::iter() {
+				if  n % info.schedule == Zero::zero() {
 					Self::calc(key, info);
 				}
 			}
@@ -591,7 +590,7 @@ impl<T: Trait> Module<T> {
 		if !Self::all_keys().contains(&key) {
 			Err(Error::<T>::InvalidKey)?
 		}
-		let info: FeededDataInfo<_> = Self::data_infos(&key).ok_or(Error::<T>::InvalidKey)?;
+		let info: FeededDataInfo<_> = Self::data_info(&key).ok_or(Error::<T>::InvalidKey)?;
 		if value.number_type() != info.number_type {
 			Err(Error::<T>::InvalidValue)?
 		}
@@ -778,7 +777,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		let body = response.body().collect::<Vec<u8>>();
-		let info = Self::data_infos(&storage_key).ok_or("storage key not exist")?;
+		let info = Self::data_info(&storage_key).ok_or("storage key not exist")?;
 		let number_type = info.number_type();
 
 		// Create a str slice from the body.

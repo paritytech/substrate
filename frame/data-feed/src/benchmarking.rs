@@ -63,7 +63,7 @@ benchmarks! {
 		};
 	}: _(RawOrigin::Signed(provider.clone()), key.clone(), data_info.clone())
 	verify {
-		assert_eq!(DataFeed::<T>::data_infos(&key), Some(data_info));
+		assert_eq!(DataFeed::<T>::data_info(&key), Some(data_info));
 	}
 
 	remove_storage_key {
@@ -73,7 +73,7 @@ benchmarks! {
 		let _ = DataFeed::<T>::set_url(RawOrigin::Root.into(), key.clone(), b"https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".to_vec());
 	}: _(RawOrigin::Signed(provider.clone()), key.clone())
 	verify {
-		assert_eq!(DataFeed::<T>::data_infos(&key), None);
+		assert_eq!(DataFeed::<T>::data_info(&key), None);
 	}
 
 	set_url {
