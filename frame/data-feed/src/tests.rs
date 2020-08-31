@@ -1,4 +1,4 @@
-use crate as oracle;
+use crate as datafeed;
 use crate::*;
 use codec::{Decode, Encode};
 use frame_support::{
@@ -26,7 +26,7 @@ impl_outer_origin! {
 impl_outer_event! {
 	pub enum TestEvent for Test {
 		frame_system<T>,
-		oracle<T>,
+		datafeed<T>,
 	}
 }
 
@@ -137,7 +137,7 @@ fn should_submit_signed_data_on_chain() {
 	keystore
 		.write()
 		.sr25519_generate_new(
-			oracle::crypto::Public::ID,
+			datafeed::crypto::Public::ID,
 			Some(&format!("{}/hunter1", PHRASE)),
 		)
 		.unwrap();
@@ -149,7 +149,7 @@ fn should_submit_signed_data_on_chain() {
 
 	let public_key = keystore
 		.read()
-		.sr25519_public_keys(oracle::crypto::Public::ID)
+		.sr25519_public_keys(datafeed::crypto::Public::ID)
 		.get(0)
 		.unwrap()
 		.clone();

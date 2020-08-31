@@ -170,7 +170,9 @@
 //! 	```nocompile
 //! 	// submit a extrinsic to call `Call::set_offchain_period(...)`
 //! 	```
-//! 4. then, the offchain could auto work.
+//! 4. after register provider, the provider could add his private key into node through rpc
+//! 	`author_insertKey`, the identity is the string value of `crate::KEY_TYPE`
+//! 5. then, the offchain could auto work.
 //!
 //! ## Genesis config
 //!
