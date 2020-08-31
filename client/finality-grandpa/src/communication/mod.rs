@@ -69,7 +69,7 @@ mod periodic;
 pub(crate) mod tests;
 
 pub use sp_finality_grandpa::GRANDPA_ENGINE_ID;
-pub const GRANDPA_PROTOCOL_NAME: &[u8] = b"/paritytech/grandpa/1";
+pub const GRANDPA_PROTOCOL_NAME: &'static str = "/paritytech/grandpa/1";
 
 // cost scalars for reporting peers.
 mod cost {

@@ -220,8 +220,8 @@ fn ensure_children_tasks_ends_when_task_manager_terminated() {
 	let spawn_handle_child_1 = child_1.spawn_handle();
 	let child_2 = TaskManager::new(task_executor.clone(), None).unwrap();
 	let spawn_handle_child_2 = child_2.spawn_handle();
-	task_manager.add_children(child_1);
-	task_manager.add_children(child_2);
+	task_manager.add_child(child_1);
+	task_manager.add_child(child_2);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
 	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
@@ -250,8 +250,8 @@ fn ensure_task_manager_future_ends_with_error_when_childs_essential_task_fails()
 	let spawn_essential_handle_child_1 = child_1.spawn_essential_handle();
 	let child_2 = TaskManager::new(task_executor.clone(), None).unwrap();
 	let spawn_handle_child_2 = child_2.spawn_handle();
-	task_manager.add_children(child_1);
-	task_manager.add_children(child_2);
+	task_manager.add_child(child_1);
+	task_manager.add_child(child_2);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
 	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
@@ -280,8 +280,8 @@ fn ensure_task_manager_future_continues_when_childs_not_essential_task_fails() {
 	let spawn_handle_child_1 = child_1.spawn_handle();
 	let child_2 = TaskManager::new(task_executor.clone(), None).unwrap();
 	let spawn_handle_child_2 = child_2.spawn_handle();
-	task_manager.add_children(child_1);
-	task_manager.add_children(child_2);
+	task_manager.add_child(child_1);
+	task_manager.add_child(child_2);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
 	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));

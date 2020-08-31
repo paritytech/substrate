@@ -159,7 +159,7 @@ impl BuildStorage for () {
 	fn assimilate_storage(
 		&self,
 		_: &mut sp_core::storage::Storage,
-	)-> Result<(), String> {
+	) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `()`".into())
 	}
 }

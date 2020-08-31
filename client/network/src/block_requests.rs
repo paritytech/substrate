@@ -119,11 +119,12 @@ pub enum Event<B: Block> {
 #[derive(Debug, Clone)]
 pub struct Config {
 	max_block_data_response: u32,
+	max_block_body_bytes: usize,
 	max_request_len: usize,
 	max_response_len: usize,
 	inactivity_timeout: Duration,
 	request_timeout: Duration,
-	protocol: Bytes,
+	protocol: String,
 }
 
 impl Config {
@@ -137,11 +138,12 @@ impl Config {
 	pub fn new(id: &ProtocolId) -> Self {
 		let mut c = Config {
 			max_block_data_response: 128,
+			max_block_body_bytes: 8 * 1024 * 1024,
 			max_request_len: 1024 * 1024,
 			max_response_len: 16 * 1024 * 1024,
 			inactivity_timeout: Duration::from_secs(15),
 			request_timeout: Duration::from_secs(40),
-			protocol: Bytes::new(),
+			protocol: String::new(),
 		};
 		c.set_protocol(id);
 		c
@@ -171,13 +173,22 @@ impl Config {
 		self
 	}
 
+	/// Set the maximum total bytes of block bodies that are send in the response.
+	/// Note that at least one block is always sent regardless of the limit.
+	/// This should be lower than the value specified in `set_max_response_len`
+	/// accounting for headers, justifications and encoding overhead.
+	pub fn set_max_block_body_bytes(&mut self, v: usize) -> &mut Self {
+		self.max_block_body_bytes = v;
+		self
+	}
+
 	/// Set protocol to use for upgrade negotiation.
 	pub fn set_protocol(&mut self, id: &ProtocolId) -> &mut Self {
-		let mut v = Vec::new();
-		v.extend_from_slice(b"/");
-		v.extend_from_slice(id.as_bytes());
-		v.extend_from_slice(b"/sync/2");
-		self.protocol = v.into();
+		let mut s = String::new();
+		s.push_str("/");
+		s.push_str(id.as_ref());
+		s.push_str("/sync/2");
+		self.protocol = s;
 		self
 	}
 }
@@ -247,7 +258,7 @@ where
 	}
 
 	/// Returns the libp2p protocol name used on the wire (e.g. `/foo/sync/2`).
-	pub fn protocol_name(&self) -> &[u8] {
+	pub fn protocol_name(&self) -> &str {
 		&self.config.protocol
 	}
 
@@ -311,7 +322,7 @@ where
 				request: buf,
 				original_request: req,
 				max_response_size: self.config.max_response_len,
-				protocol: self.config.protocol.clone(),
+				protocol: self.config.protocol.as_bytes().to_vec().into(),
 			},
 		});
 
@@ -385,8 +396,11 @@ where
 
 		let mut blocks = Vec::new();
 		let mut block_id = from_block_id;
+		let mut total_size = 0;
 		while let Some(header) = self.chain.header(block_id).unwrap_or(None) {
-			if blocks.len() >= max_blocks as usize {
+			if blocks.len() >= max_blocks as usize
+				|| (blocks.len() >= 1 && total_size > self.config.max_block_body_bytes)
+			{
 				break
 			}
 
@@ -400,6 +414,20 @@ where
 			};
 			let is_empty_justification = justification.as_ref().map(|j| j.is_empty()).unwrap_or(false);
 
+			let body = if get_body {
+				match self.chain.block_body(&BlockId::Hash(hash))? {
+					Some(mut extrinsics) => extrinsics.iter_mut()
+						.map(|extrinsic| extrinsic.encode())
+						.collect(),
+					None => {
+						log::trace!(target: "sync", "Missing data for block request.");
+						break;
+					}
+				}
+			} else {
+				Vec::new()
+			};
+
 			let block_data = schema::v1::BlockData {
 				hash: hash.encode(),
 				header: if get_header {
@@ -407,21 +435,14 @@ where
 				} else {
 					Vec::new()
 				},
-				body: if get_body {
-					self.chain.block_body(&BlockId::Hash(hash))?
-						.unwrap_or_default()
-						.iter_mut()
-						.map(|extrinsic| extrinsic.encode())
-						.collect()
-				} else {
-					Vec::new()
-				},
+				body,
 				receipt: Vec::new(),
 				message_queue: Vec::new(),
 				justification: justification.unwrap_or_default(),
 				is_empty_justification,
 			};
 
+			total_size += block_data.body.len();
 			blocks.push(block_data);
 
 			match direction {
@@ -451,7 +472,7 @@ where
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		let p = InboundProtocol {
 			max_request_len: self.config.max_request_len,
-			protocol: self.config.protocol.clone(),
+			protocol: self.config.protocol.as_bytes().to_owned().into(),
 			marker: PhantomData,
 		};
 		let mut cfg = OneShotHandlerConfig::default();
