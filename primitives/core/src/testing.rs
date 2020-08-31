@@ -26,7 +26,9 @@ use crate::{
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
 #[cfg(feature = "std")]
-use std::collections::HashSet;
+use std::{collections::{HashMap, HashSet}, sync::Arc};
+#[cfg(feature = "std")]
+use parking_lot::RwLock;
 
 use async_trait::async_trait;
 
@@ -42,7 +44,7 @@ pub const ECDSA: KeyTypeId = KeyTypeId(*b"ecds");
 #[derive(Default)]
 pub struct KeyStore {
 	/// `KeyTypeId` maps to public keys and public keys map to private keys.
-	keys: std::collections::HashMap<KeyTypeId, std::collections::HashMap<Vec<u8>, String>>,
+	keys: Arc<RwLock<HashMap<KeyTypeId, HashMap<Vec<u8>, String>>>>,
 }
 
 #[cfg(feature = "std")]
@@ -53,7 +55,7 @@ impl KeyStore {
 	}
 
 	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
-		self.keys.get(&id)
+		self.keys.read().get(&id)
 			.and_then(|inner|
 				inner.get(pub_key.as_slice())
 					.map(|s| sr25519::Pair::from_string(s, None).expect("`sr25519` seed slice is valid"))
@@ -61,7 +63,7 @@ impl KeyStore {
 	}
 
 	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
-		self.keys.get(&id)
+		self.keys.read().get(&id)
 			.and_then(|inner|
 				inner.get(pub_key.as_slice())
 					.map(|s| ed25519::Pair::from_string(s, None).expect("`ed25519` seed slice is valid"))
@@ -69,7 +71,7 @@ impl KeyStore {
 	}
 
 	fn ecdsa_key_pair(&self, id: KeyTypeId, pub_key: &ecdsa::Public) -> Option<ecdsa::Pair> {
-		self.keys.get(&id)
+		self.keys.read().get(&id)
 			.and_then(|inner|
 				inner.get(pub_key.as_slice())
 					.map(|s| ecdsa::Pair::from_string(s, None).expect("`ecdsa` seed slice is valid"))
@@ -82,7 +84,7 @@ impl KeyStore {
 #[async_trait]
 impl crate::traits::CryptoStore for KeyStore {
 	async fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
-		self.keys
+		self.keys.read()
 			.get(&id)
 			.map(|map| {
 				Ok(map.keys()
@@ -97,7 +99,7 @@ impl crate::traits::CryptoStore for KeyStore {
 	}
 
 	async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		self.keys.get(&id)
+		self.keys.read().get(&id)
 			.map(|keys|
 				keys.values()
 					.map(|s| sr25519::Pair::from_string(s, None).expect("`sr25519` seed slice is valid"))
@@ -108,7 +110,7 @@ impl crate::traits::CryptoStore for KeyStore {
 	}
 
 	async fn sr25519_generate_new(
-		&mut self,
+		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<sr25519::Public, Error> {
@@ -116,19 +118,19 @@ impl crate::traits::CryptoStore for KeyStore {
 			Some(seed) => {
 				let pair = sr25519::Pair::from_string(seed, None)
 					.map_err(|_| Error::ValidationError("Generates an `sr25519` pair.".to_owned()))?;
-				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
+				self.keys.write().entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
 				Ok(pair.public())
 			},
 			None => {
 				let (pair, phrase, _) = sr25519::Pair::generate_with_phrase(None);
-				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), phrase);
+				self.keys.write().entry(id).or_default().insert(pair.public().to_raw_vec(), phrase);
 				Ok(pair.public())
 			}
 		}
 	}
 
 	async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		self.keys.get(&id)
+		self.keys.read().get(&id)
 			.map(|keys|
 				keys.values()
 					.map(|s| ed25519::Pair::from_string(s, None).expect("`ed25519` seed slice is valid"))
@@ -139,7 +141,7 @@ impl crate::traits::CryptoStore for KeyStore {
 	}
 
 	async fn ed25519_generate_new(
-		&mut self,
+		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<ed25519::Public, Error> {
@@ -147,19 +149,19 @@ impl crate::traits::CryptoStore for KeyStore {
 			Some(seed) => {
 				let pair = ed25519::Pair::from_string(seed, None)
 					.map_err(|_| Error::ValidationError("Generates an `ed25519` pair.".to_owned()))?;
-				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
+				self.keys.write().entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
 				Ok(pair.public())
 			},
 			None => {
 				let (pair, phrase, _) = ed25519::Pair::generate_with_phrase(None);
-				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), phrase);
+				self.keys.write().entry(id).or_default().insert(pair.public().to_raw_vec(), phrase);
 				Ok(pair.public())
 			}
 		}
 	}
 
 	async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		self.keys.get(&id)
+		self.keys.read().get(&id)
 			.map(|keys|
 				keys.values()
 					.map(|s| ecdsa::Pair::from_string(s, None).expect("`ecdsa` seed slice is valid"))
@@ -170,7 +172,7 @@ impl crate::traits::CryptoStore for KeyStore {
 	}
 
 	async fn ecdsa_generate_new(
-		&mut self,
+		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<ecdsa::Public, Error> {
@@ -178,28 +180,24 @@ impl crate::traits::CryptoStore for KeyStore {
 			Some(seed) => {
 				let pair = ecdsa::Pair::from_string(seed, None)
 					.map_err(|_| Error::ValidationError("Generates an `ecdsa` pair.".to_owned()))?;
-				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
+				self.keys.write().entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
 				Ok(pair.public())
 			},
 			None => {
 				let (pair, phrase, _) = ecdsa::Pair::generate_with_phrase(None);
-				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), phrase);
+				self.keys.write().entry(id).or_default().insert(pair.public().to_raw_vec(), phrase);
 				Ok(pair.public())
 			}
 		}
 	}
 
-	async fn insert_unknown(&mut self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
-		self.keys.entry(id).or_default().insert(public.to_owned(), suri.to_string());
+	async fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
+		self.keys.write().entry(id).or_default().insert(public.to_owned(), suri.to_string());
 		Ok(())
 	}
 
-	fn password(&self) -> Option<&str> {
-		None
-	}
-
 	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		public_keys.iter().all(|(k, t)| self.keys.get(&t).and_then(|s| s.get(k)).is_some())
+		public_keys.iter().all(|(k, t)| self.keys.read().get(&t).and_then(|s| s.get(k)).is_some())
 	}
 
 	async fn supported_keys(
@@ -265,7 +263,7 @@ impl crate::traits::CryptoStore for KeyStore {
 #[cfg(feature = "std")]
 impl Into<CryptoStorePtr> for KeyStore {
     fn into(self) -> CryptoStorePtr {
-		std::sync::Arc::new(parking_lot::RwLock::new(self))
+		std::sync::Arc::new(self)
     }
 }
 /// Macro for exporting functions from wasm in with the expected signature for using it with the

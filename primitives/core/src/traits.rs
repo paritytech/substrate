@@ -65,7 +65,7 @@ pub trait CryptoStore: Send + Sync {
 	///
 	/// Returns the public key of the generated key pair.
 	async fn sr25519_generate_new(
-		&mut self,
+		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<sr25519::Public, Error>;
@@ -77,7 +77,7 @@ pub trait CryptoStore: Send + Sync {
 	///
 	/// Returns the public key of the generated key pair.
 	async fn ed25519_generate_new(
-		&mut self,
+		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<ed25519::Public, Error>;
@@ -89,7 +89,7 @@ pub trait CryptoStore: Send + Sync {
 	///
 	/// Returns the public key of the generated key pair.
 	async fn ecdsa_generate_new(
-		&mut self,
+		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<ecdsa::Public, Error>;
@@ -100,7 +100,7 @@ pub trait CryptoStore: Send + Sync {
 	/// Places it into the file system store.
 	///
 	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
-	async fn insert_unknown(&mut self, _key_type: KeyTypeId, _suri: &str, _public: &[u8]) -> Result<(), ()>;
+	async fn insert_unknown(&self, _key_type: KeyTypeId, _suri: &str, _public: &[u8]) -> Result<(), ()>;
 
 	/// Get the password for this store.
 	fn password(&self) -> Option<&str>;
@@ -324,7 +324,7 @@ impl SyncCryptoStore {
 }
 
 /// A pointer to the keystore.
-pub type CryptoStorePtr = Arc<parking_lot::RwLock<dyn CryptoStore>>;
+pub type CryptoStorePtr = Arc<dyn CryptoStore>;
 
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
