@@ -82,6 +82,9 @@
 //! The Example `template module` uses two way to get the datas which are feeded by this data-feed module
 //! we use template module as the example to show how to use data-feed
 //! 1. first way: the storage defined in template module.
+//! Note: when calculate exceed data limit, data-feed would delete this storage. Using this way,
+//! developer could get `None` from the storage. (But due to NumberType is u128, rarely case would
+//! meet this situation)
 //! ```nocompile
 //! // in template module:
 //! use pallet_data_feed::DataType;
@@ -105,6 +108,10 @@
 //! // 4. template module could use `Something` to get data and use.
 //! ```
 //! 2. second way: the storage defined in runtime
+//! Note: when calculate exceed data limit, data-feed would delete this storage. However macro
+//! `parameter_types` would return default value for this case, so using this way, we suggest
+//! developer could judge by whether the data is default to decide other thing.
+//! (But due to NumberType is u128, rarely case would meet this situation)
 //! ```nocompile
 //! // in template module:
 //! pub trait Trait: frame_system::Trait {
@@ -192,7 +199,7 @@ use lite_json::json::{JsonValue, NumberValue};
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
 	offchain::{http, storage::StorageValueRef, Duration},
-	traits::{CheckedDiv, Saturating, StaticLookup, Zero},
+	traits::{CheckedAdd, CheckedDiv, StaticLookup, Zero},
 	DispatchError, DispatchResult, FixedPointNumber, FixedU128, RuntimeDebug,
 };
 use sp_std::{prelude::*, str::Chars};
@@ -387,7 +394,7 @@ decl_event!(
 		/// New data stored on blockchain
 		FeedData(AccountId, StorageKey, DataType),
 		/// Set calculated data
-		SetData(StorageKey, DataType),
+		SetData(StorageKey, Option<DataType>),
 		/// Set offchain
 		SetOffchainPeriod(StorageKey, Option<BlockNumber>),
 	}
@@ -620,25 +627,32 @@ impl<T: Trait> Module<T> {
 		})
 	}
 
-	fn calc_impl<N: Saturating + CheckedDiv + Copy, F: FnOnce(usize) -> N>(
+	fn calc_impl<N: CheckedAdd + CheckedDiv + Copy, F: FnOnce(usize) -> N>(
 		numbers: &[N],
 		zero: N,
 		convert: F,
 		op: Operations,
-	) -> N {
-		match op {
-			Operations::Sum => {
-				let sum = numbers.iter().fold(zero, |a, b| a.saturating_add(*b));
-				sum
+	) -> Option<N> {
+		let sum_func = |numbers: &[N]| -> Option<N> {
+			let mut sum = zero;
+			for n in numbers.iter() {
+				sum = match sum.checked_add(n) {
+					Some(n) => n,
+					None => return None,
+				};
 			}
+			Some(sum)
+		};
+
+		match op {
+			Operations::Sum => sum_func(numbers),
 			Operations::Average => {
 				if numbers.is_empty() {
-					zero
+					None
 				} else {
-					let sum = numbers.iter().fold(zero, |a, b| a.saturating_add(*b));
-					// let n = N::from(numbers.len() as u128);
+					let sum = sum_func(numbers)?;
 					let n = convert(numbers.len());
-					sum.checked_div(&n).unwrap_or(zero)
+					sum.checked_div(&n)
 				}
 			}
 		}
@@ -672,10 +686,9 @@ impl<T: Trait> Module<T> {
 					})
 					.collect::<Vec<u128>>();
 
-				let res: u128 =
+				let res: Option<u128> =
 					Self::calc_impl(&numbers, 0_u128, |len| len as u128, info.operation);
-				// DataType::from_u32_value(res, info.number_type)
-				DataType::U128(res)
+				res.map(DataType::U128)
 			}
 			NumberType::FixedU128 => {
 				let numbers = data
@@ -692,15 +705,19 @@ impl<T: Trait> Module<T> {
 					|len| FixedU128::from(len as u128),
 					info.operation,
 				);
-				DataType::FixedU128(res)
+				res.map(DataType::FixedU128)
 			}
 		};
 
 		Self::set_storage_value(key, result);
 	}
 
-	fn set_storage_value(key: StorageKey, value: DataType) {
-		frame_support::storage::unhashed::put(&key, &value);
+	fn set_storage_value(key: StorageKey, value: Option<DataType>) {
+		use frame_support::storage::unhashed;
+		match value {
+			Some(v) => unhashed::put(&key, &v),
+			None => unhashed::kill(&key),
+		}
 		Self::deposit_event(RawEvent::SetData(key, value));
 	}
 }
