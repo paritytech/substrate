@@ -29,19 +29,19 @@
 //! ## Overview
 //!
 //! In this data-feed pallet, we can specify a very limited set of storage keys and
-//!data providers (also very limited set). Only a permitted account (listed in thethe
+//! data providers (also very limited set). Only a permitted account (listed in the
 //! provider set) is allowed to feed data onto the chain.
 //!
 //! These fetched data will be used to modify the value under the specified storage
 //! key after some operations.
 //! The DataFeed module provides functions for:
 //!
-//! - Setting a collections of data providers(AccountId).
+//! - Setting a set of data providers (AccountId).
 //! - Setting StorageKey to a limited list.
 //! - Feeding data from a call from outside.
 //! - Providing Sum and Average type to calculate feeded data, the computational process would be
 //! called at intervals of blocks by setting.
-//! - Using offchain worker to submit data
+//! - Using offchain worker to submit data.
 //!
 //! ### Terminology
 //!
@@ -386,7 +386,7 @@ decl_event!(
 		/// Remove a storage key
 		RemoveStorageKey(StorageKey),
 		/// Add a provider accountid
-		AddProvider(AccountId),
+		ProviderAdded(AccountId),
 		/// Remove a provider accountid
 		RemoveProvider(AccountId),
 		/// Set url for a key, which would be used in offchain
@@ -557,7 +557,7 @@ decl_module! {
 				}
 				Ok(())
 			})?;
-			Self::deposit_event(RawEvent::AddProvider(new_one));
+			Self::deposit_event(RawEvent::ProviderAdded(new_one));
 			Ok(())
 		}
 
