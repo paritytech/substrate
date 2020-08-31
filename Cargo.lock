@@ -1569,7 +1569,7 @@ version = "2.0.0-rc6"
 dependencies = [
  "frame-support",
  "frame-system",
- "hex-literal 0.3.1",
+ "hex-literal",
  "linregress",
  "parity-scale-codec",
  "paste",
@@ -1604,7 +1604,7 @@ version = "2.0.0-rc6"
 dependencies = [
  "frame-support",
  "frame-system",
- "hex-literal 0.3.1",
+ "hex-literal",
  "pallet-balances",
  "pallet-indices",
  "pallet-transaction-payment",
@@ -2230,28 +2230,9 @@ checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
 
 [[package]]
 name = "hex-literal"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "961de220ec9a91af2e1e5bd80d02109155695e516771762381ef8581317066e0"
-dependencies = [
- "hex-literal-impl",
- "proc-macro-hack",
-]
-
-[[package]]
-name = "hex-literal"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5af1f635ef1bc545d78392b136bfe1c9809e029023c84a3638a864a10b8819c8"
-
-[[package]]
-name = "hex-literal-impl"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "853f769599eb31de176303197b7ba4973299c38c7a7604a6bc88c3eef05b9b46"
-dependencies = [
- "proc-macro-hack",
-]
 
 [[package]]
 name = "hex_fmt"
@@ -3740,7 +3721,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "futures 0.3.5",
- "hex-literal 0.3.1",
+ "hex-literal",
  "jsonrpc-core",
  "jsonrpc-pubsub",
  "log",
@@ -3756,7 +3737,6 @@ dependencies = [
  "pallet-grandpa",
  "pallet-im-online",
  "pallet-indices",
- "pallet-node-authorization",
  "pallet-staking",
  "pallet-timestamp",
  "pallet-transaction-payment",
@@ -3923,7 +3903,7 @@ dependencies = [
  "frame-system",
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
- "hex-literal 0.3.1",
+ "hex-literal",
  "integer-sqrt",
  "node-primitives",
  "pallet-authority-discovery",
@@ -3943,7 +3923,6 @@ dependencies = [
  "pallet-indices",
  "pallet-membership",
  "pallet-multisig",
- "pallet-node-authorization",
  "pallet-offences",
  "pallet-offences-benchmarking",
  "pallet-proxy",
@@ -4408,7 +4387,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal 0.3.1",
+ "hex-literal",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
@@ -4427,7 +4406,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal 0.3.1",
+ "hex-literal",
  "pallet-balances",
  "pallet-contracts-primitives",
  "pallet-randomness-collective-flip",
@@ -4492,7 +4471,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal 0.3.1",
+ "hex-literal",
  "pallet-balances",
  "pallet-scheduler",
  "parity-scale-codec",
@@ -4511,7 +4490,7 @@ version = "2.0.0-rc6"
 dependencies = [
  "frame-support",
  "frame-system",
- "hex-literal 0.3.1",
+ "hex-literal",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
@@ -4528,7 +4507,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal 0.3.1",
+ "hex-literal",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
@@ -4757,7 +4736,6 @@ version = "2.0.0-rc6"
 dependencies = [
  "frame-support",
  "frame-system",
- "hex-literal 0.2.1",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -5139,7 +5117,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal 0.3.1",
+ "hex-literal",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
@@ -6438,7 +6416,7 @@ dependencies = [
  "fnv",
  "futures 0.3.5",
  "hash-db",
- "hex-literal 0.3.1",
+ "hex-literal",
  "kvdb",
  "kvdb-memorydb",
  "lazy_static",
@@ -6736,7 +6714,7 @@ version = "0.8.0-rc6"
 dependencies = [
  "assert_matches",
  "derive_more",
- "hex-literal 0.3.1",
+ "hex-literal",
  "lazy_static",
  "libsecp256k1",
  "log",
@@ -7264,7 +7242,7 @@ dependencies = [
  "fdlimit",
  "futures 0.1.29",
  "futures 0.3.5",
- "hex-literal 0.3.1",
+ "hex-literal",
  "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
@@ -8076,7 +8054,7 @@ dependencies = [
  "hash-db",
  "hash256-std-hasher",
  "hex",
- "hex-literal 0.3.1",
+ "hex-literal",
  "impl-serde",
  "lazy_static",
  "libsecp256k1",
@@ -8404,7 +8382,7 @@ name = "sp-state-machine"
 version = "0.8.0-rc6"
 dependencies = [
  "hash-db",
- "hex-literal 0.3.1",
+ "hex-literal",
  "itertools 0.9.0",
  "log",
  "num-traits",
@@ -8492,7 +8470,7 @@ version = "2.0.0-rc6"
 dependencies = [
  "criterion",
  "hash-db",
- "hex-literal 0.3.1",
+ "hex-literal",
  "memory-db",
  "parity-scale-codec",
  "sp-core",

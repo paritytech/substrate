@@ -18,11 +18,10 @@ frame-support = { version = "2.0.0-rc6", default-features = false, path = "../su
 frame-system = { version = "2.0.0-rc6", default-features = false, path = "../system" }
 sp-core = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-hex-literal = "0.2.1"
+sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/runtime" }
 
 [features]
 default = ["std"]
@@ -33,6 +32,5 @@ std = [
 	"frame-system/std",
 	"sp-core/std",
 	"sp-io/std",
-	"sp-runtime/std",
 	"sp-std/std",
 ]

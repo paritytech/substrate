@@ -395,7 +395,6 @@ mod tests {
     use frame_system::EnsureSignedBy;
     use sp_core::{H256, ed25519::Public};
     use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
-    use hex_literal::hex;
 
     impl_outer_origin! {
         pub enum Origin for Test where system = frame_system {}
