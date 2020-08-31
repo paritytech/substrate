@@ -634,46 +634,48 @@ impl ProtocolsHandler for NotifsHandler {
 						return Poll::Ready(ProtocolsHandlerEvent::Close(NotifsHandlerError::Legacy(err))),
 				}
 			}
+		}
 
-			for (handler_num, (handler, handshake_message)) in self.in_handlers.iter_mut().enumerate() {
-				while let Poll::Ready(ev) = handler.poll(cx) {
-					match ev {
-						ProtocolsHandlerEvent::OutboundSubstreamRequest { .. } =>
-							error!("Incoming substream handler tried to open a substream"),
-						ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
-						ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest(_)) =>
-							match self.enabled {
-								EnabledState::Initial => self.pending_in.push(handler_num),
-								EnabledState::Enabled => {
-									// We create `handshake_message` on a separate line to be sure
-									// that the lock is released as soon as possible.
-									let handshake_message = handshake_message.read().clone();
-									handler.inject_event(NotifsInHandlerIn::Accept(handshake_message))
-								},
-								EnabledState::Disabled =>
-									handler.inject_event(NotifsInHandlerIn::Refuse),
+		for (handler_num, (handler, handshake_message)) in self.in_handlers.iter_mut().enumerate() {
+			loop {
+				let poll = if self.pending_legacy_handshake.is_none() {
+					handler.poll(cx)
+				} else {
+					handler.poll_process(cx)
+				};
+
+				let ev = match poll {
+					Poll::Ready(e) => e,
+					Poll::Pending => break,
+				};
+
+				match ev {
+					ProtocolsHandlerEvent::OutboundSubstreamRequest { .. } =>
+						error!("Incoming substream handler tried to open a substream"),
+					ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
+					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest(_)) =>
+						match self.enabled {
+							EnabledState::Initial => self.pending_in.push(handler_num),
+							EnabledState::Enabled => {
+								// We create `handshake_message` on a separate line to be sure
+								// that the lock is released as soon as possible.
+								let handshake_message = handshake_message.read().clone();
+								handler.inject_event(NotifsInHandlerIn::Accept(handshake_message))
 							},
-						ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => {},
-						ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(message)) => {
-							if self.notifications_sink_rx.is_some() {
-								let msg = NotifsHandlerOut::Notification {
-									message,
-									protocol_name: handler.protocol_name().clone(),
-								};
-								return Poll::Ready(ProtocolsHandlerEvent::Custom(msg));
-							}
+							EnabledState::Disabled =>
+								handler.inject_event(NotifsInHandlerIn::Refuse),
 						},
-					}
-				}
-			}
-
-		} else {
-			// If `self.pending_legacy_handshake` is `None`, we don't want to accept events from
-			// the ingoing notifications substreams, but still want handshakes to go forward.
-			for (handler, _) in &mut self.in_handlers {
-				match handler.poll_process(cx) {
-					Poll::Pending => {},
-					Poll::Ready(v) => match v {}
+					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => {},
+					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(message)) => {
+						debug_assert!(self.pending_legacy_handshake.is_none());
+						if self.notifications_sink_rx.is_some() {
+							let msg = NotifsHandlerOut::Notification {
+								message,
+								protocol_name: handler.protocol_name().clone(),
+							};
+							return Poll::Ready(ProtocolsHandlerEvent::Custom(msg));
+						}
+					},
 				}
 			}
 		}
