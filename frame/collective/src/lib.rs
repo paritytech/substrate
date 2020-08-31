@@ -71,6 +71,16 @@ pub type ProposalIndex = u32;
 /// vote exactly once, therefore also the number of votes for any given motion.
 pub type MemberCount = u32;
 
+/// Event handler when a member missing motion voting.
+pub trait OnAbsentation<AccountId> {
+	/// Called when a member missed motion voting.
+	fn on_absentation(member: &AccountId);
+}
+
+impl<AccountId> OnAbsentation<AccountId> for () {
+	fn on_absentation(_member: &AccountId) { }
+}
+
 pub trait WeightInfo {
 	fn set_members(m: u32, n: u32, p: u32, ) -> Weight;
 	fn execute(b: u32, m: u32, ) -> Weight;
@@ -96,6 +106,9 @@ pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 
 	/// The outer event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
+
+	/// Event hanlder when a member missing motion voting.
+	type OnAbsentation: OnAbsentation<Self::AccountId>;
 
 	/// The time-out for council motions.
 	type MotionDuration: Get<Self::BlockNumber>;
@@ -559,7 +572,8 @@ decl_module! {
 
 			let mut no_votes = voting.nays.len() as MemberCount;
 			let mut yes_votes = voting.ayes.len() as MemberCount;
-			let seats = Self::members().len() as MemberCount;
+			let members = Self::members();
+			let seats = members.len() as MemberCount;
 			let approved = yes_votes >= voting.threshold;
 			let disapproved = seats.saturating_sub(no_votes) < voting.threshold;
 			// Allow (dis-)approving the proposal as soon as there are enough votes.
@@ -597,12 +611,23 @@ decl_module! {
 			}
 			let approved = yes_votes >= voting.threshold;
 
+			let absentation_members = members.into_iter()
+				.filter(|m| {
+					let not_in_ayes = !voting.ayes.contains(&m);
+					let not_in_nays = !voting.nays.contains(&m);
+					not_in_ayes && not_in_nays
+				});
+
 			if approved {
 				let (proposal, len) = Self::validate_and_get_proposal(
 					&proposal_hash,
 					length_bound,
 					proposal_weight_bound
 				)?;
+
+				for member in absentation_members {
+					T::OnAbsentation::on_absentation(&member);
+				}
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
@@ -611,6 +636,9 @@ decl_module! {
 						.saturating_add(proposal_weight)
 				).into());
 			} else {
+				for member in absentation_members {
+					T::OnAbsentation::on_absentation(&member);
+				}
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 				return Ok(Some(
@@ -942,6 +970,7 @@ mod tests {
 		type Origin = Origin;
 		type Proposal = Call;
 		type Event = Event;
+		type OnAbsentation = ();
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
@@ -951,6 +980,7 @@ mod tests {
 		type Origin = Origin;
 		type Proposal = Call;
 		type Event = Event;
+		type OnAbsentation = ();
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
