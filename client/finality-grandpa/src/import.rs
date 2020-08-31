@@ -18,7 +18,7 @@
 
 use std::{sync::Arc, collections::HashMap};
 
-use log::{debug, trace};
+use log::debug;
 use parity_scale_codec::Encode;
 use parking_lot::RwLockWriteGuard;
 
@@ -527,7 +527,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 			},
 			None => {
 				if needs_justification {
-					trace!(
+					debug!(
 						target: "afg",
 						"Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.",
 						number,
@@ -619,7 +619,6 @@ where
 	Client: crate::ClientForGrandpa<Block, BE>,
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 {
-
 	/// Import a block justification and finalize the block.
 	///
 	/// If `enacts_change` is set to true, then finalizing this block *must*
@@ -653,7 +652,7 @@ where
 			number,
 			justification.into(),
 			initial_sync,
-			&Some(self.justification_sender.clone()),
+			Some(&self.justification_sender),
 		);
 
 		match result {

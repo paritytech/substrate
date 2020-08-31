@@ -19,15 +19,20 @@
 use futures::executor::block_on;
 use super::*;
 use std::ops::Range;
+use tiny_multihash::StatefulHasher;
+use tiny_multihash::MultihashDigest;
 
-fn generate_block_and_cid(string: &str) -> (&[u8], cid::Cid) {
+fn generate_block_and_cid(string: &str) -> (&[u8], tiny_cid::Cid) {
 	let block = string.as_bytes();
-	let hash = multihash::Code::Sha2_256.digest(block);
-	let cid = cid::Cid::new_v1(cid::Codec::Raw, hash);
+	let mut hasher = tiny_multihash::Sha2_256::default();
+	hasher.update(block);
+	let hash = tiny_multihash::Multihash::Sha2_256(hasher.finalize());
+	let hash = hash.to_raw().unwrap();
+	let cid = tiny_cid::Cid::new_v1(tiny_cid::RAW, hash);
 	(block, cid)
 }
 
-fn wait_until_x_peers_want_cid(net: &mut TestNet, x: usize, peers: Range<usize>, cid: &cid::Cid) {
+fn wait_until_x_peers_want_cid(net: &mut TestNet, x: usize, peers: Range<usize>, cid: &tiny_cid::Cid) {
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		for peer in peers.clone() {

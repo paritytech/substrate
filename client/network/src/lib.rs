@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 #![warn(unused_extern_crates)]
 #![warn(missing_docs)]
 
@@ -252,6 +253,7 @@ mod finality_requests;
 mod light_client_handler;
 mod on_demand_layer;
 mod protocol;
+mod request_responses;
 mod schema;
 mod service;
 mod transport;
@@ -259,16 +261,14 @@ mod utils;
 
 pub mod config;
 pub mod error;
+pub mod gossip;
 pub mod network_state;
 
-pub use service::{NetworkService, NetworkWorker};
-pub use protocol::PeerInfo;
-pub use protocol::event::{Event, DhtEvent, ObservedRole};
-pub use protocol::sync::SyncState;
-pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]
-pub use libp2p::multiaddr;
+pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use behaviour::BitswapEvent;
+pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
+pub use service::{NetworkService, NetworkWorker, RequestFailure, OutboundFailure};
 
 pub use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -310,8 +310,8 @@ pub struct NetworkStatus<B: BlockT> {
 	pub num_connected_peers: usize,
 	/// Total number of active peers.
 	pub num_active_peers: usize,
-	/// Downloaded bytes per second averaged over the past few seconds.
-	pub average_download_per_sec: u64,
-	/// Uploaded bytes per second averaged over the past few seconds.
-	pub average_upload_per_sec: u64,
+	/// The total number of bytes received.
+	pub total_bytes_inbound: u64,
+	/// The total number of bytes sent.
+	pub total_bytes_outbound: u64,
 }

@@ -46,6 +46,7 @@
 //!
 
 use crate::config::ProtocolId;
+use crate::utils::LruHashSet;
 use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
@@ -63,9 +64,14 @@ use libp2p::swarm::toggle::Toggle;
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
-use std::{cmp, collections::{HashMap, HashSet, VecDeque}, io, time::Duration};
+use std::{cmp, collections::{HashMap, HashSet, VecDeque}, io, num::NonZeroUsize, time::Duration};
 use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
+
+/// Maximum number of known external addresses that we will cache.
+/// This only affects whether we will log whenever we (re-)discover
+/// a given address.
+const MAX_KNOWN_EXTERNAL_ADDRESSES: usize = 32;
 
 /// `DiscoveryBehaviour` configuration.
 ///
@@ -190,7 +196,11 @@ impl DiscoveryConfig {
 			} else {
 				None.into()
 			},
-			allow_non_globals_in_dht: self.allow_non_globals_in_dht
+			allow_non_globals_in_dht: self.allow_non_globals_in_dht,
+			known_external_addresses: LruHashSet::new(
+				NonZeroUsize::new(MAX_KNOWN_EXTERNAL_ADDRESSES)
+					.expect("value is a constant; constant is non-zero; qed.")
+			),
 		}
 	}
 }
@@ -221,7 +231,9 @@ pub struct DiscoveryBehaviour {
 	/// Number of active connections over which we interrupt the discovery process.
 	discovery_only_if_under_num: u64,
 	/// Should non-global addresses be added to the DHT?
-	allow_non_globals_in_dht: bool
+	allow_non_globals_in_dht: bool,
+	/// A cache of discovered external addresses. Only used for logging purposes.
+	known_external_addresses: LruHashSet<Multiaddr>,
 }
 
 impl DiscoveryBehaviour {
@@ -507,7 +519,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		let new_addr = addr.clone()
 			.with(Protocol::P2p(self.local_peer_id.clone().into()));
-		info!(target: "sub-libp2p", "🔍 Discovered new external address for our node: {}", new_addr);
+
+		// NOTE: we might re-discover the same address multiple times
+		// in which case we just want to refrain from logging.
+		if self.known_external_addresses.insert(new_addr.clone()) {
+			info!(target: "sub-libp2p",
+				"🔍 Discovered new external address for our node: {}",
+				new_addr,
+			);
+		}
+
 		for k in self.kademlias.values_mut() {
 			NetworkBehaviour::inject_new_external_addr(k, addr)
 		}
@@ -731,7 +752,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 // `DiscoveryBehaviour::new_handler` is still correct.
 fn protocol_name_from_protocol_id(id: &ProtocolId) -> Vec<u8> {
 	let mut v = vec![b'/'];
-	v.extend_from_slice(id.as_bytes());
+	v.extend_from_slice(id.as_ref().as_bytes());
 	v.extend_from_slice(b"/kad");
 	v
 }
@@ -752,7 +773,7 @@ mod tests {
 	#[test]
 	fn discovery_working() {
 		let mut first_swarm_peer_id_and_addr = None;
-		let protocol_id = ProtocolId::from(b"dot".as_ref());
+		let protocol_id = ProtocolId::from("dot");
 
 		// Build swarms whose behaviour is `DiscoveryBehaviour`, each aware of
 		// the first swarm via `with_user_defined`.
@@ -856,8 +877,8 @@ mod tests {
 
 	#[test]
 	fn discovery_ignores_peers_with_unknown_protocols() {
-		let supported_protocol_id = ProtocolId::from(b"a".as_ref());
-		let unsupported_protocol_id = ProtocolId::from(b"b".as_ref());
+		let supported_protocol_id = ProtocolId::from("a");
+		let unsupported_protocol_id = ProtocolId::from("b");
 
 		let mut discovery = {
 			let keypair = Keypair::generate_ed25519();
@@ -908,8 +929,8 @@ mod tests {
 
 	#[test]
 	fn discovery_adds_peer_to_kademlia_of_same_protocol_only() {
-		let protocol_a = ProtocolId::from(b"a".as_ref());
-		let protocol_b = ProtocolId::from(b"b".as_ref());
+		let protocol_a = ProtocolId::from("a");
+		let protocol_b = ProtocolId::from("b");
 
 		let mut discovery = {
 			let keypair = Keypair::generate_ed25519();

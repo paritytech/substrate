@@ -87,7 +87,7 @@ pub trait Network<B: BlockT> {
 	fn register_notifications_protocol(
 		&self,
 		engine_id: ConsensusEngineId,
-		protocol_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, str>,
 	);
 
 	/// Notify everyone we're connected to that we have the given block.
@@ -117,7 +117,7 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 	fn register_notifications_protocol(
 		&self,
 		engine_id: ConsensusEngineId,
-		protocol_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, str>,
 	) {
 		NetworkService::register_notifications_protocol(self, engine_id, protocol_name)
 	}

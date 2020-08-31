@@ -60,7 +60,7 @@ use futures::{
 	prelude::*,
 	StreamExt,
 };
-use log::{debug, info};
+use log::{debug, error, info};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
 	LockImportRun, BlockchainEvents, CallExecutor,
@@ -787,8 +787,12 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		justification_sender,
 	);
 
-	let voter_work = voter_work
-		.map(|_| ());
+	let voter_work = voter_work.map(|res| match res {
+		Ok(()) => error!(target: "afg",
+			"GRANDPA voter future has concluded naturally, this should be unreachable."
+		),
+		Err(e) => error!(target: "afg", "GRANDPA voter error: {:?}", e),
+	});
 
 	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
 	let telemetry_task = telemetry_task
@@ -1052,7 +1056,9 @@ where
 			Poll::Pending => {}
 			Poll::Ready(Ok(())) => {
 				// voters don't conclude naturally
-				return Poll::Ready(Err(Error::Safety("GRANDPA voter has concluded.".into())))
+				return Poll::Ready(
+					Err(Error::Safety("finality-grandpa inner voter has concluded.".into()))
+				)
 			}
 			Poll::Ready(Err(CommandOrError::Error(e))) => {
 				// return inner observer error
@@ -1069,7 +1075,9 @@ where
 			Poll::Pending => {}
 			Poll::Ready(None) => {
 				// the `voter_commands_rx` stream should never conclude since it's never closed.
-				return Poll::Ready(Ok(()))
+				return Poll::Ready(
+					Err(Error::Safety("`voter_commands_rx` was closed.".into()))
+				)
 			}
 			Poll::Ready(Some(command)) => {
 				// some command issued externally

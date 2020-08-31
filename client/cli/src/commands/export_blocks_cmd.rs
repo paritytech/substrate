@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::{BlockNumber, DatabaseParams, PruningParams, SharedParams};
+use crate::params::{GenericNumber, DatabaseParams, PruningParams, SharedParams};
 use crate::CliConfiguration;
 use log::info;
 use sc_service::{
@@ -44,13 +44,13 @@ pub struct ExportBlocksCmd {
 	///
 	/// Default is 1.
 	#[structopt(long = "from", value_name = "BLOCK")]
-	pub from: Option<BlockNumber>,
+	pub from: Option<GenericNumber>,
 
 	/// Specify last block number.
 	///
 	/// Default is best block.
 	#[structopt(long = "to", value_name = "BLOCK")]
-	pub to: Option<BlockNumber>,
+	pub to: Option<GenericNumber>,
 
 	/// Use binary output rather than JSON.
 	#[structopt(long)]

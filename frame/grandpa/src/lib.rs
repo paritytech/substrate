@@ -376,7 +376,7 @@ mod weight_for {
 	pub fn report_equivocation<T: super::Trait>(validator_count: u32) -> Weight {
 		// we take the validator set count from the membership proof to
 		// calculate the weight but we set a floor of 100 validators.
-		let validator_count = validator_count.min(100) as u64;
+		let validator_count = validator_count.max(100) as u64;
 
 		// worst case we are considering is that the given offender
 		// is backed by 200 nominators

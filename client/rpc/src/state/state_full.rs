@@ -298,6 +298,36 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 				.map_err(client_err)))
 	}
 
+	fn storage_size(
+		&self,
+		block: Option<Block::Hash>,
+		key: StorageKey,
+	) -> FutureResult<Option<u64>> {
+		let block = match self.block_or_best(block) {
+			Ok(b) => b,
+			Err(e) => return Box::new(result(Err(client_err(e)))),
+		};
+
+		match self.client.storage(&BlockId::Hash(block), &key) {
+			Ok(Some(d)) => return Box::new(result(Ok(Some(d.0.len() as u64)))),
+			Err(e) => return Box::new(result(Err(client_err(e)))),
+			Ok(None) => {},
+		}
+
+		Box::new(result(
+			self.client.storage_pairs(&BlockId::Hash(block), &key)
+				.map(|kv| {
+					let item_sum = kv.iter().map(|(_, v)| v.0.len() as u64).sum::<u64>();
+					if item_sum > 0 {
+						Some(item_sum)
+					} else {
+						None
+					}
+				})
+				.map_err(client_err)
+		))
+	}
+
 	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,

@@ -734,7 +734,7 @@ pub trait TestNetFactory: Sized {
 			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
-			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
+			protocol_id: ProtocolId::from("test-protocol-name"),
 			import_queue,
 			block_announce_validator: config.block_announce_validator
 				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
@@ -823,7 +823,7 @@ pub trait TestNetFactory: Sized {
 			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
-			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
+			protocol_id: ProtocolId::from("test-protocol-name"),
 			import_queue,
 			block_announce_validator: Box::new(DefaultBlockAnnounceValidator),
 			metrics_registry: None,
