@@ -46,6 +46,8 @@ use rand_chacha::{
 	rand_core::SeedableRng,
 	ChaChaRng,
 };
+use sc_keystore::{Keystore, local::LocalKeystore};
+use sp_application_crypto::key_types::BABE;
 
 type Item = DigestItem<Hash>;
 
@@ -383,8 +385,9 @@ fn run_one_test(
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let mut keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-		keystore.insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
+		let local_keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore");
+		let keystore: SyncCryptoStore = Keystore::new(Box::new(local_keystore)).into();
+		keystore.ed25519_generate_new(BABE, Some(seed)).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
 		let mut got_own = false;
@@ -427,7 +430,7 @@ fn run_one_test(
 			inherent_data_providers: data.inherent_data_providers.clone(),
 			force_authoring: false,
 			babe_link: data.link.clone(),
-			keystore: keystore.into(),
+			keystore: Arc::new(keystore),
 			can_author_with: sp_consensus::AlwaysCanAuthor,
 		}).expect("Starts babe"));
 	}
@@ -514,15 +517,15 @@ fn sig_is_not_pre_digest() {
 #[test]
 fn can_author_block() {
 	let _ = env_logger::try_init();
-	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let mut keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-	let pair = keystore.insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
+	let local_keystore = LocalKeystore::in_memory();
+	let keystore: SyncCryptoStore= Keystore::new(Box::new(local_keystore)).into();
+	let public = keystore.sr25519_generate_new(BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 
 	let mut i = 0;
 	let epoch = Epoch {
 		start_slot: 0,
-		authorities: vec![(pair.public(), 1)],
+		authorities: vec![(public.into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
@@ -541,7 +544,7 @@ fn can_author_block() {
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
 
-	let keystore: Arc<SyncCryptoStore> = keystore.into();
+	let keystore = Arc::new(keystore);
 	// with secondary slots enabled it should never be empty
 	match claim_slot(i, &epoch, keystore.clone()) {
 		None => i += 1,
@@ -823,13 +826,14 @@ fn verify_slots_are_strictly_increasing() {
 fn babe_transcript_generation_match() {
 	let _ = env_logger::try_init();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let mut keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-	let pair = keystore.insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
+	let local_keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore");
+	let keystore: SyncCryptoStore= Keystore::new(Box::new(local_keystore)).into();
+	let public = keystore.sr25519_generate_new(BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 
 	let epoch = Epoch {
 		start_slot: 0,
-		authorities: vec![(pair.public(), 1)],
+		authorities: vec![(public.into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,

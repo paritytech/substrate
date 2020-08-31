@@ -460,9 +460,10 @@ mod tests {
 	use sp_keyring::AccountKeyring;
 	use sc_service_test::TestNetNode;
 	use crate::service::{new_full_base, new_light_base};
-	use sp_runtime::traits::IdentifyAccount;
+	use sp_runtime::{key_types::BABE, traits::IdentifyAccount, RuntimeAppPublic};
 	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 	use sc_client_api::BlockBackend;
+	use sc_keystore::{Keystore, local::LocalKeystore};
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
@@ -472,10 +473,11 @@ mod tests {
 	#[ignore]
 	fn test_sync() {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let mut keystore = sc_keystore::Store::open(keystore_path.path(), None)
+		let local_keystore = LocalKeystore::open(keystore_path.path(), None)
 			.expect("Creates keystore");
-		let alice = keystore.insert_ephemeral_from_seed::<sc_consensus_babe::AuthorityPair>("//Alice")
-			.expect("Creates authority pair");
+		let keystore: Arc<SyncCryptoStore> = Arc::new(Keystore::new(Box::new(local_keystore)).into());
+		let alice: sp_consensus_babe::AuthorityId = keystore.sr25519_generate_new(BABE, Some("//Alice"))
+			.expect("Creates authority pair").into();
 
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
 
@@ -487,7 +489,6 @@ mod tests {
 		let charlie = Arc::new(AccountKeyring::Charlie.pair());
 		let mut index = 0;
 
-		let keystore: Arc<SyncCryptoStore> = keystore.into();
 		sc_service_test::sync(
 			chain_spec,
 			|config| {
@@ -582,9 +583,9 @@ mod tests {
 				// sign the pre-sealed hash of the block and then
 				// add it to a digest item.
 				let to_sign = pre_hash.encode();
-				let signature = alice.sign(&to_sign[..]);
+				let signature = alice.sign(&to_sign).unwrap();
 				let item = <DigestItem as CompatibleDigestItem>::babe_seal(
-					signature.into(),
+					signature,
 				);
 				slot_num += 1;
 

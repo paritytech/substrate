@@ -22,7 +22,7 @@ use crate::crypto::KeyTypeId;
 use crate::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
-	traits::{CryptoStorePtr, Error},
+	traits::{CryptoStorePtr, Error, SyncCryptoStore},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
 #[cfg(feature = "std")]
@@ -266,6 +266,13 @@ impl Into<CryptoStorePtr> for KeyStore {
 		std::sync::Arc::new(self)
     }
 }
+
+#[cfg(feature = "std")]
+impl Into<SyncCryptoStore> for KeyStore {
+    fn into(self) -> SyncCryptoStore {
+		SyncCryptoStore::new(Arc::new(self))
+    }
+}
 /// Macro for exporting functions from wasm in with the expected signature for using it with the
 /// wasm executor. This is useful for tests where you need to call a function in wasm.
 ///
@@ -398,42 +405,42 @@ mod tests {
 	use super::*;
 	use crate::sr25519;
 	use crate::testing::{ED25519, SR25519};
+	use crate::traits::SyncCryptoStore;
 	use crate::vrf::VRFTranscriptValue;
-	use futures::executor::block_on;
 
 	#[test]
 	fn store_key_and_extract() {
-		let store: CryptoStorePtr = KeyStore::new().into();
+		let store: SyncCryptoStore = KeyStore::new().into();
 
-		let public = block_on(store.write().ed25519_generate_new(ED25519, None))
+		let public = store.ed25519_generate_new(ED25519, None)
 			.expect("Generates key");
 
-		let public_keys = block_on(store.read().keys(ED25519)).unwrap();
+		let public_keys = store.keys(ED25519).unwrap();
 
 		assert!(public_keys.contains(&public.into()));
 	}
 
 	#[test]
 	fn store_unknown_and_extract_it() {
-		let store: CryptoStorePtr = KeyStore::new().into();
+		let store: SyncCryptoStore = KeyStore::new().into();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		block_on(store.write().insert_unknown(
+		store.insert_unknown(
 			SR25519,
 			secret_uri,
 			key_pair.public().as_ref(),
-		)).expect("Inserts unknown key");
+		).expect("Inserts unknown key");
 
-		let public_keys = block_on(store.read().keys(SR25519)).unwrap();
+		let public_keys = store.keys(SR25519).unwrap();
 
 		assert!(public_keys.contains(&key_pair.public().into()));
 	}
 
 	#[test]
 	fn vrf_sign() {
-		let store: CryptoStorePtr = KeyStore::new().into();
+		let store: SyncCryptoStore = KeyStore::new().into();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
@@ -447,24 +454,24 @@ mod tests {
 			]
 		};
 
-		let result = block_on(store.read().sr25519_vrf_sign(
+		let result = store.sr25519_vrf_sign(
 			SR25519,
 			&key_pair.public(),
 			transcript_data.clone(),
-		));
+		);
 		assert!(result.is_err());
 
-		block_on(store.write().insert_unknown(
+		store.insert_unknown(
 			SR25519,
 			secret_uri,
 			key_pair.public().as_ref(),
-		)).expect("Inserts unknown key");
+		).expect("Inserts unknown key");
 
-		let result = block_on(store.read().sr25519_vrf_sign(
+		let result = store.sr25519_vrf_sign(
 			SR25519,
 			&key_pair.public(),
 			transcript_data,
-		));
+		);
 
 		assert!(result.is_ok());
 	}

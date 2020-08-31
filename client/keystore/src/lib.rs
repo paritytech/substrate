@@ -18,10 +18,10 @@
 
 #![warn(missing_docs)]
 use async_trait::async_trait;
-use std::io;
+use std::{sync::Arc, io};
 use sp_core::{
 	crypto::{CryptoTypePublicPair, KeyTypeId},
-	traits::{CryptoStore, Error as TraitError},
+	traits::{CryptoStore, Error as TraitError, SyncCryptoStore},
 	sr25519::Public as Sr25519Public,
 	vrf::{VRFTranscriptData, VRFSignature},
 };
@@ -175,18 +175,27 @@ impl CryptoStore for Keystore {
     }
 }
 
+impl Into<SyncCryptoStore> for Keystore {
+    fn into(self) -> SyncCryptoStore {
+		SyncCryptoStore::new(Arc::new(self))
+    }
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use tempfile::TempDir;
-	use sp_core::{testing::SR25519, crypto::Ss58Codec};
-	use std::str::FromStr;
+	use sp_core::{Pair, testing::SR25519, crypto::Ss58Codec};
+	use sp_application_crypto::sr25519;
 	use futures::executor::block_on;
-
+	use std::{
+		fs,
+		str::FromStr,
+	};
 	#[test]
 	fn basic_store() {
 		let temp_dir = TempDir::new().unwrap();
-		let store = Store::open(temp_dir.path(), None).unwrap();
+		let store = local::KeystoreInner::open(temp_dir.path(), None).unwrap();
 
 		assert!(store.public_keys::<ed25519::AppPublic>().unwrap().is_empty());
 
@@ -201,7 +210,7 @@ mod tests {
 	#[test]
 	fn test_insert_ephemeral_from_seed() {
 		let temp_dir = TempDir::new().unwrap();
-		let mut store = Store::open(temp_dir.path(), None).unwrap();
+		let mut store = local::KeystoreInner::open(temp_dir.path(), None).unwrap();
 
 		let pair: ed25519::AppPair = store
 			.insert_ephemeral_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc")
@@ -212,7 +221,7 @@ mod tests {
 		);
 
 		drop(store);
-		let store = Store::open(temp_dir.path(), None).unwrap();
+		let store = local::KeystoreInner::open(temp_dir.path(), None).unwrap();
 		// Keys generated from seed should not be persisted!
 		assert!(store.key_pair::<ed25519::AppPair>(&pair.public()).is_err());
 	}
@@ -221,7 +230,7 @@ mod tests {
 	fn password_being_used() {
 		let password = String::from("password");
 		let temp_dir = TempDir::new().unwrap();
-		let store = Store::open(
+		let store = local::KeystoreInner::open(
 			temp_dir.path(),
 			Some(FromStr::from_str(password.as_str()).unwrap()),
 		).unwrap();
@@ -233,10 +242,10 @@ mod tests {
 		);
 
 		// Without the password the key should not be retrievable
-		let store = Store::open(temp_dir.path(), None).unwrap();
+		let store = local::KeystoreInner::open(temp_dir.path(), None).unwrap();
 		assert!(store.key_pair::<ed25519::AppPair>(&pair.public()).is_err());
 
-		let store = Store::open(
+		let store = local::KeystoreInner::open(
 			temp_dir.path(),
 			Some(FromStr::from_str(password.as_str()).unwrap()),
 		).unwrap();
@@ -249,7 +258,7 @@ mod tests {
 	#[test]
 	fn public_keys_are_returned() {
 		let temp_dir = TempDir::new().unwrap();
-		let mut store = Store::open(temp_dir.path(), None).unwrap();
+		let mut store = local::KeystoreInner::open(temp_dir.path(), None).unwrap();
 
 		let mut public_keys = Vec::new();
 		for i in 0..10 {
@@ -272,7 +281,7 @@ mod tests {
 	#[test]
 	fn store_unknown_and_extract_it() {
 		let temp_dir = TempDir::new().unwrap();
-		let store = Store::open(temp_dir.path(), None).unwrap();
+		let store = local::KeystoreInner::open(temp_dir.path(), None).unwrap();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::AppPair::from_string(secret_uri, None).expect("Generates key pair");
@@ -294,7 +303,7 @@ mod tests {
 	#[test]
 	fn store_ignores_files_with_invalid_name() {
 		let temp_dir = TempDir::new().unwrap();
-		let store = Store::open(temp_dir.path(), None).unwrap();
+		let store = local::LocalKeystore::open(temp_dir.path(), None).unwrap();
 
 		let file_name = temp_dir.path().join(hex::encode(&SR25519.0[..2]));
 		fs::write(file_name, "test").expect("Invalid file is written");

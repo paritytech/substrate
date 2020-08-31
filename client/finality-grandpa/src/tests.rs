@@ -42,7 +42,7 @@ use std::{collections::{HashMap, HashSet}, pin::Pin};
 use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
-use sp_core::{H256, crypto::Public};
+use sp_core::{H256, crypto::Public, traits::CryptoStore};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
@@ -53,6 +53,9 @@ use finality_proof::{
 use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
+use sc_keystore::{Keystore, local::LocalKeystore};
+use futures::executor::block_on;
+use sp_application_crypto::key_types::GRANDPA;
 
 type TestLinkHalf =
 	LinkHalf<Block, PeersFullClient, LongestChain<substrate_test_runtime_client::Backend, Block>>;
@@ -278,11 +281,12 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 
 fn create_keystore(authority: Ed25519Keyring) -> (Arc<SyncCryptoStore>, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let mut keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-	keystore.insert_ephemeral_from_seed::<AuthorityPair>(&authority.to_seed())
+	let local_keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore");
+	let keystore = Keystore::new(Box::new(local_keystore));
+	block_on(keystore.ed25519_generate_new(GRANDPA, Some(&authority.to_seed())))
 		.expect("Creates authority key");
 
-	let keystore = Arc::new(SyncCryptoStore::new(Arc::new(RwLock::new(keystore))));
+	let keystore = Arc::new(SyncCryptoStore::new(Arc::new(keystore)));
 	(keystore, keystore_path)
 }
 

@@ -317,6 +317,12 @@ impl SyncCryptoStore {
 	}
 }
 
+impl From<Arc<dyn CryptoStore>> for SyncCryptoStore {
+    fn from(store: Arc<dyn CryptoStore>) -> Self {
+		SyncCryptoStore::new(store)
+    }
+}
+
 /// A pointer to the keystore.
 pub type CryptoStorePtr = Arc<dyn CryptoStore>;
 

@@ -288,14 +288,16 @@ fn claim_primary_slot(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::sync::Arc;
-	use sp_core::{sr25519::Pair, crypto::Pair as _, traits::SyncCryptoStore};
+	use sp_core::{sr25519::Pair, crypto::Pair as _};
 	use sp_consensus_babe::{AuthorityId, BabeEpochConfiguration, AllowedSlots};
+	use sc_keystore::{Keystore, local::LocalKeystore};
 
 	#[test]
 	fn claim_secondary_plain_slot_works() {
-		let keystore: Arc<SyncCryptoStore> = sc_keystore::Store::new_in_memory().into();
-		let valid_public_key = dbg!(keystore.sr25519_generate_new(
+		let local_keystore = LocalKeystore::in_memory();
+		let keystore = Arc::new(Keystore::new(Box::new(local_keystore)));
+		let sync_keystore = Arc::new(SyncCryptoStore::new(keystore));
+		let valid_public_key = dbg!(sync_keystore.sr25519_generate_new(
 			AuthorityId::ID,
 			Some(sp_core::crypto::DEV_PHRASE),
 		).unwrap());
@@ -317,9 +319,9 @@ mod tests {
 			},
 		};
 
-		assert!(claim_slot(10, &epoch, keystore.clone()).is_none());
+		assert!(claim_slot(10, &epoch, sync_keystore.clone()).is_none());
 
 		epoch.authorities.push((valid_public_key.clone().into(), 10));
-		assert_eq!(claim_slot(10, &epoch, keystore).unwrap().1, valid_public_key.into());
+		assert_eq!(claim_slot(10, &epoch, sync_keystore).unwrap().1, valid_public_key.into());
 	}
 }

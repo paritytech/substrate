@@ -208,7 +208,7 @@ fn should_submit_signed_transaction_on_chain() {
 
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
-	let mut keystore = KeyStore::new();
+	let keystore = KeyStore::new();
 	block_on(keystore.sr25519_generate_new(
 		crate::crypto::Public::ID,
 		Some(&format!("{}/hunter1", PHRASE))
@@ -240,7 +240,7 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 
-	let mut keystore = KeyStore::new();
+	let keystore = KeyStore::new();
 
 	block_on(keystore.sr25519_generate_new(
 		crate::crypto::Public::ID,
@@ -293,7 +293,7 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 
-	let mut keystore = KeyStore::new();
+	let keystore = KeyStore::new();
 
 	block_on(keystore.sr25519_generate_new(
 		crate::crypto::Public::ID,

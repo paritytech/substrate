@@ -201,7 +201,7 @@ impl KeystoreParams {
 	/// Construct KeystoreParams
 	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
 		let local_keystore = match config {
-			KeystoreConfig::Path { path, password } => LocalKeystore::from_filesystem(
+			KeystoreConfig::Path { path, password } => LocalKeystore::open(
 				path.clone(),
 				password.clone()
 			)?,

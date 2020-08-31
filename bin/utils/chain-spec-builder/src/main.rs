@@ -139,7 +139,7 @@ fn generate_authority_keys_and_store(
 	keystore_path: &Path,
 ) -> Result<(), String> {
 	for (n, seed) in seeds.into_iter().enumerate() {
-		let local_keystore = LocalKeystore::from_filesystem(
+		let local_keystore = LocalKeystore::open(
 			keystore_path.join(format!("auth-{}", n)),
 			None,
 		).map_err(|err| err.to_string())?;
