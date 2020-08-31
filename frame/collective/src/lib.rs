@@ -618,32 +618,33 @@ decl_module! {
 					not_in_ayes && not_in_nays
 				});
 
-			if approved {
+			let weight = if approved {
 				let (proposal, len) = Self::validate_and_get_proposal(
 					&proposal_hash,
 					length_bound,
 					proposal_weight_bound
 				)?;
-				for member in absentation_members {
-					T::OnAbsentation::on_absentation(&member);
-				}
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
-				return Ok(Some(
-					T::WeightInfo::close_approved(len as u32, seats, proposal_count)
-						.saturating_add(proposal_weight)
-				).into());
+
+				T::WeightInfo::close_approved(len as u32, seats, proposal_count)
+					.saturating_add(proposal_weight)
 			} else {
 				for member in absentation_members {
 					T::OnAbsentation::on_absentation(&member);
 				}
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
-				return Ok(Some(
-					T::WeightInfo::close_disapproved(seats, proposal_count)
-				).into());
+
+				T::WeightInfo::close_disapproved(seats, proposal_count)
+			};
+
+			for member in absentation_members {
+				T::OnAbsentation::on_absentation(&member);
 			}
+
+			Ok(Some(weight).into())
 		}
 
 		/// Disapprove a proposal, close, and remove it from the system, regardless of its current state.
