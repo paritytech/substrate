@@ -49,7 +49,7 @@ impl RegisteredProtocol {
 		-> Self {
 		let protocol = protocol.into();
 		let mut base_name = b"/substrate/".to_vec();
-		base_name.extend_from_slice(protocol.as_bytes());
+		base_name.extend_from_slice(protocol.as_ref().as_bytes());
 		base_name.extend_from_slice(b"/");
 
 		RegisteredProtocol {

@@ -30,7 +30,8 @@ use futures_timer::Delay;
 
 use addr_cache::AddrCache;
 use codec::Decode;
-use libp2p::core::multiaddr;
+use either::Either;
+use libp2p::{core::multiaddr, multihash::Multihash};
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
 use prost::Message;
@@ -65,6 +66,9 @@ const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 /// Name of the Substrate peerset priority group for authorities discovered through the authority
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
+
+/// Maximum number of addresses cached per authority. Additional addresses are discarded.
+const MAX_ADDRESSES_PER_AUTHORITY: usize = 10;
 
 /// Role an authority discovery module can run as.
 pub enum Role {
@@ -232,6 +236,26 @@ where
 		}
 	}
 
+	fn addresses_to_publish(&self) -> impl ExactSizeIterator<Item = Multiaddr> {
+		match &self.sentry_nodes {
+			Some(addrs) => Either::Left(addrs.clone().into_iter()),
+			None => {
+				let peer_id: Multihash = self.network.local_peer_id().into();
+				Either::Right(
+					self.network.external_addresses()
+						.into_iter()
+						.map(move |a| {
+							if a.iter().any(|p| matches!(p, multiaddr::Protocol::P2p(_))) {
+								a
+							} else {
+								a.with(multiaddr::Protocol::P2p(peer_id.clone()))
+							}
+						}),
+				)
+			}
+		}
+	}
+
 	/// Publish either our own or if specified the public addresses of our sentry nodes.
 	fn publish_ext_addresses(&mut self) -> Result<()> {
 		let key_store = match &self.role {
@@ -242,29 +266,15 @@ where
 			Role::Sentry => return Ok(()),
 		};
 
-		if let Some(metrics) = &self.metrics {
-			metrics.publish.inc()
-		}
-
-		let addresses: Vec<_> = match &self.sentry_nodes {
-			Some(addrs) => addrs.clone().into_iter()
-				.map(|a| a.to_vec())
-				.collect(),
-			None => self.network.external_addresses()
-				.into_iter()
-				.map(|a| a.with(multiaddr::Protocol::P2p(
-					self.network.local_peer_id().into(),
-				)))
-				.map(|a| a.to_vec())
-				.collect(),
-		};
+		let addresses = self.addresses_to_publish();
 
 		if let Some(metrics) = &self.metrics {
+			metrics.publish.inc();
 			metrics.amount_last_published.set(addresses.len() as u64);
 		}
 
 		let mut serialized_addresses = vec![];
-		schema::AuthorityAddresses { addresses }
+		schema::AuthorityAddresses { addresses: addresses.map(|a| a.to_vec()).collect() }
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
@@ -489,6 +499,7 @@ where
 
 				false // `protocol` is not a [`Protocol::P2p`], let's keep looking.
 			}))
+			.take(MAX_ADDRESSES_PER_AUTHORITY)
 			.collect();
 
 		if !remote_addresses.is_empty() {

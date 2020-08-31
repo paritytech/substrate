@@ -619,7 +619,6 @@ where
 	Client: crate::ClientForGrandpa<Block, BE>,
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 {
-
 	/// Import a block justification and finalize the block.
 	///
 	/// If `enacts_change` is set to true, then finalizing this block *must*
@@ -653,7 +652,7 @@ where
 			number,
 			justification.into(),
 			initial_sync,
-			&Some(self.justification_sender.clone()),
+			Some(&self.justification_sender),
 		);
 
 		match result {
