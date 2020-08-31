@@ -711,7 +711,7 @@ impl ProtocolsHandler for NotifsHandler {
 						if self.notifications_sink_rx.is_some() {
 							let msg = NotifsHandlerOut::Notification {
 								message,
-								protocol_name: handler.protocol_name().clone(),
+								protocol_name: handler.protocol_name().to_owned().into(),
 							};
 							return Poll::Ready(ProtocolsHandlerEvent::Custom(msg));
 						}
