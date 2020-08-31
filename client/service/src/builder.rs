@@ -15,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
-
+use parking_lot::RwLock;
 use crate::{
 	NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
 	TelemetryConnectionSinks, RpcHandlers, NetworkStatusSinks,
@@ -44,13 +44,13 @@ use sc_keystore::{
 	proxy::{
 		proxy as keystore_proxy,
 		KeystoreProxy,
+		KeystoreProxyAdapter,
 		KeystoreReceiver,
 	},
 };
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 use sc_network::NetworkService;
-use parking_lot::RwLock;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo,
@@ -201,7 +201,8 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 
 /// Construct and hold different layers of Keystore wrappers
 pub struct KeystoreParams {
-	keystore: Arc<RwLock<KeystoreProxy>>,
+	keystore: Arc<RwLock<KeystoreProxyAdapter>>,
+	proxy: Arc<KeystoreProxy>,
 	sync_keystore: Arc<SyncCryptoStore>,
 }
 
@@ -216,18 +217,24 @@ impl KeystoreParams {
 			KeystoreConfig::InMemory => Keystore::new_in_memory(),
 		};
 		let (keystore_proxy, keystore_receiver) = keystore_proxy(keystore);
-		let keystore = Arc::new(RwLock::new(keystore_proxy));
+		let keystore = Arc::new(RwLock::new(KeystoreProxyAdapter::new(keystore_proxy.clone())));
 		let sync_keystore = Arc::new(SyncCryptoStore::new(keystore.clone()));
 
 		Ok((Self {
 			keystore,
 			sync_keystore,
+			proxy: keystore_proxy,
 		}, keystore_receiver))
 	}
 
-	pub fn keystore(&self) -> Arc<RwLock<KeystoreProxy>> {
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
+	pub fn keystore(&self) -> Arc<RwLock<KeystoreProxyAdapter>> {
 		self.keystore.clone()
+	}
+
+	/// Returns the asynchronous keystore proxy
+	pub fn proxy(&self) -> Arc<KeystoreProxy> {
+		self.proxy.clone()
 	}
 
 	/// Returns the synchrnous keystore wrapper
