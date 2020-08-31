@@ -120,7 +120,7 @@ pub struct GenericProto {
 	/// Notification protocols. Entries are only ever added and not removed.
 	/// Contains, for each protocol, the protocol name and the message to send as part of the
 	/// initial handshake.
-	notif_protocols: Vec<(Cow<'static, [u8]>, Arc<RwLock<Vec<u8>>>)>,
+	notif_protocols: Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -322,7 +322,7 @@ pub enum GenericProtoOut {
 		/// Id of the peer the message came from.
 		peer_id: PeerId,
 		/// Engine corresponding to the message.
-		protocol_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, str>,
 		/// Message that has been received.
 		message: BytesMut,
 	},
@@ -360,7 +360,7 @@ impl GenericProto {
 	/// will retain the protocols that were registered then, and not any new one.
 	pub fn register_notif_protocol(
 		&mut self,
-		protocol_name: impl Into<Cow<'static, [u8]>>,
+		protocol_name: impl Into<Cow<'static, str>>,
 		handshake_msg: impl Into<Vec<u8>>
 	) {
 		self.notif_protocols.push((protocol_name.into(), Arc::new(RwLock::new(handshake_msg.into()))));
@@ -371,10 +371,10 @@ impl GenericProto {
 	/// Has no effect if the protocol is unknown.
 	pub fn set_notif_protocol_handshake(
 		&mut self,
-		protocol_name: &[u8],
+		protocol_name: &str,
 		handshake_message: impl Into<Vec<u8>>
 	) {
-		if let Some(protocol) = self.notif_protocols.iter_mut().find(|(name, _)| name == &protocol_name) {
+		if let Some(protocol) = self.notif_protocols.iter_mut().find(|(name, _)| name == protocol_name) {
 			*protocol.1.write() = handshake_message.into();
 		}
 	}
@@ -551,7 +551,7 @@ impl GenericProto {
 	pub fn write_notification(
 		&mut self,
 		target: &PeerId,
-		protocol_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, str>,
 		message: impl Into<Vec<u8>>,
 		encoded_fallback_message: Vec<u8>,
 	) {
@@ -569,11 +569,11 @@ impl GenericProto {
 			target: "sub-libp2p",
 			"External API => Notification({:?}, {:?})",
 			target,
-			str::from_utf8(&protocol_name)
+			protocol_name,
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 		notifs_sink.send_sync_notification(
-			&protocol_name,
+			protocol_name,
 			encoded_fallback_message,
 			message
 		);
@@ -1374,7 +1374,7 @@ impl NetworkBehaviour for GenericProto {
 					target: "sub-libp2p",
 					"Handler({:?}) => Notification({:?})",
 					source,
-					str::from_utf8(&protocol_name)
+					protocol_name,
 				);
 				trace!(target: "sub-libp2p", "External API <= Message({:?}, {:?})", protocol_name, source);
 				let event = GenericProtoOut::Notification {
