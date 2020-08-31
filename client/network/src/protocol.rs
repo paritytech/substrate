@@ -1797,7 +1797,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						}
 					}
 					None => {
-						error!(target: "sub-libp2p", "Received notification from unknown protocol {:?}", protocol_name);
+						debug!(target: "sub-libp2p", "Received notification from unknown protocol {:?}", protocol_name);
 						CustomMessageOutcome::None
 					}
 				}
