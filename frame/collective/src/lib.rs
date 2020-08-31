@@ -616,7 +616,8 @@ decl_module! {
 					let not_in_ayes = !voting.ayes.contains(&m);
 					let not_in_nays = !voting.nays.contains(&m);
 					not_in_ayes && not_in_nays
-				});
+				})
+				.collect::<Vec<_>>();
 
 			let weight = if approved {
 				let (proposal, len) = Self::validate_and_get_proposal(
@@ -631,9 +632,6 @@ decl_module! {
 				T::WeightInfo::close_approved(len as u32, seats, proposal_count)
 					.saturating_add(proposal_weight)
 			} else {
-				for member in absentation_members {
-					T::OnAbsentation::on_absentation(&member);
-				}
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 
