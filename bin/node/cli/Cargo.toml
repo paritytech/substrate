@@ -106,7 +106,7 @@ wasm-bindgen = { version = "0.2.57", optional = true }
 wasm-bindgen-futures = { version = "0.4.7", optional = true }
 browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.8.0-rc6"}
 # `async-std` for wasm doesn't compile with `-Z features=itarget` without this feature
-async-std = { version = "1.6.2", optional = true, features = ["unstable"] }
+async-std = { version = "1.6.3", optional = true, features = ["unstable"] }
 
 [target.'cfg(target_arch="x86_64")'.dependencies]
 node-executor = { version = "2.0.0-rc6", path = "../executor", features = [ "wasmtime" ] }

@@ -318,8 +318,7 @@ dependencies = [
 [[package]]
 name = "async-std"
 version = "1.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46c8da367da62b8ff2313c406c9ac091c1b31d67a165becdd2de380d846260f7"
+source = "git+https://github.com/expenses/async-std?branch=wasm-join-handle-future#552c2a1f946b556f49209df7e38074320d2fb83a"
 dependencies = [
  "async-attributes",
  "async-executor",
