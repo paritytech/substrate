@@ -19,8 +19,8 @@
 //!
 //! This pallet manages a configurable set of nodes for a permissioned network.
 //! It provides two ways to authorize a node,
-//! * a set of well known nodes across different organizations in which
-//! the connections are allowed.
+//! * a set of well known nodes across different organizations in which the
+//! connections are allowed.
 //! * users can claim the ownership for each node, then manage the connection of the node.
 //!
 //! A node must have an owner. The owner can make additional adaptive change for
@@ -47,6 +47,10 @@ pub trait WeightInfo {
     fn swap_well_known_node() -> Weight;
     fn reset_well_known_nodes() -> Weight;
     fn claim_node() -> Weight;
+    fn remove_claim() -> Weight;
+    fn transfer_node() -> Weight;
+    fn add_connections() -> Weight;
+    fn remove_connections() -> Weight;
 }
 
 impl WeightInfo for () {
@@ -55,6 +59,10 @@ impl WeightInfo for () {
     fn swap_well_known_node() -> Weight { 50_000_000 }
     fn reset_well_known_nodes() -> Weight { 50_000_000 }
     fn claim_node() -> Weight { 50_000_000 }
+    fn remove_claim() -> Weight { 50_000_000 }
+    fn transfer_node() -> Weight { 50_000_000 }
+    fn add_connections() -> Weight { 50_000_000 }
+    fn remove_connections() -> Weight { 50_000_000 }
 }
 
 pub trait Trait: frame_system::Trait {
@@ -94,14 +102,7 @@ decl_storage! {
     add_extra_genesis {
         config(nodes): Vec<(NodePublicKey, T::AccountId)>;
         build(|config: &GenesisConfig<T>| {
-            WellKnownNodes::put(
-                config.nodes.iter()
-                    .map(|item| item.0.clone())
-                    .collect::<Vec<NodePublicKey>>()
-            );
-            for (node, who) in config.nodes.iter() {
-                Owners::<T>::insert(node, who);
-			}
+            <Module<T>>::initialize_nodes(&config.nodes)
         })
     }
 }
@@ -121,8 +122,14 @@ decl_event! {
         NodesReset(Vec<(NodePublicKey, AccountId)>),
         /// The given node was claimed by a user.
         NodeClaimed(NodePublicKey, AccountId),
-        /// New connections were added to a node.
+        /// The given claim was remove by its owner.
+        ClaimRemoved(NodePublicKey, AccountId),
+        /// The node was transferred to another account.
+        NodeTransferred(NodePublicKey, AccountId, AccountId),
+        /// The allowed connections were added to a node.
         ConnectionsAdded(NodePublicKey, Vec<NodePublicKey>),
+        /// The allowed connections were removed from a node.
+        ConnectionsRemoved(NodePublicKey, Vec<NodePublicKey>),
     }
 }
 
@@ -141,6 +148,8 @@ decl_error! {
         NotClaimed,
         /// You are not the owner of the node.
         NotOwner,
+        /// No permisson to perform specific operation.
+        PermissionDenied,
     }
 }
 
@@ -215,7 +224,10 @@ decl_module! {
             nodes.remove(remove_location);
             let add_location = nodes.binary_search(&add).err().ok_or(Error::<T>::AlreadyJoined)?;
             nodes.insert(add_location, add.clone());
+            
             WellKnownNodes::put(&nodes);
+            Owners::<T>::swap(&remove, &add);
+            AdditionalConnections::swap(&remove, &add);
 
             Self::deposit_event(RawEvent::NodeSwapped(remove, add));
         }
@@ -232,70 +244,123 @@ decl_module! {
             T::ResetOrigin::ensure_origin(origin)?;
             ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
 
-            Self::initialize_nodes(nodes.clone());
+            Self::initialize_nodes(&nodes);
 
             Self::deposit_event(RawEvent::NodesReset(nodes));
         }
 
-        /// Send a transaction to claim the node.
+        /// A given node can be claimed by anyone. The owner should be the first to know its   
+        /// public key, so claim it right away!
         ///
-        /// - `node_public_key`: identifier of the node.
+        /// - `node`: identifier of the node.
         #[weight = T::WeightInfo::claim_node()]
-        pub fn claim_node(origin, node_public_key: NodePublicKey) {
+        pub fn claim_node(origin, node: NodePublicKey) {
             let sender = ensure_signed(origin)?;
+            ensure!(!Owners::<T>::contains_key(&node),Error::<T>::AlreadyClaimed);
 
-            ensure!(
-                !Owners::<T>::contains_key(&node_public_key),
-                Error::<T>::AlreadyClaimed
-            );
-
-            Owners::<T>::insert(&node_public_key, &sender);
-            Self::deposit_event(RawEvent::NodeClaimed(node_public_key, sender));
+            Owners::<T>::insert(&node, &sender);
+            Self::deposit_event(RawEvent::NodeClaimed(node, sender));
         }
 
-        /// Send a transaction to claim the node.
+        /// A claim can be removed by its owner and get back the reservation. The additional
+        /// connections are also removed. You can't remove a claim on well known nodes, as it
+        /// needs to reach consensus among the network participants.
         ///
-        /// - `node_public_key`: identifier of the node.
-        #[weight = T::WeightInfo::claim_node()]
-        pub fn add_connection(
+        /// - `node`: identifier of the node.
+        #[weight = T::WeightInfo::remove_claim()]
+        pub fn remove_claim(origin, node: NodePublicKey) {
+            let sender = ensure_signed(origin)?;
+            ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
+            ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
+            ensure!(!WellKnownNodes::get().contains(&node), Error::<T>::PermissionDenied);
+
+            Owners::<T>::remove(&node);
+            AdditionalConnections::remove(&node);
+
+            Self::deposit_event(RawEvent::ClaimRemoved(node, sender));
+        }
+
+        /// A node can be transferred to a new owner.
+        ///
+        /// - `node`: identifier of the node.
+        /// - `owner`: new owner of the node.
+        #[weight = T::WeightInfo::transfer_node()]
+        pub fn transfer_node(origin, node: NodePublicKey, owner: T::AccountId) {
+            let sender = ensure_signed(origin)?;
+            ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
+            ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
+
+            Owners::<T>::insert(&node, &owner);
+
+            Self::deposit_event(RawEvent::NodeTransferred(node, sender, owner));
+        }
+
+        /// Add additional connections to a given node.
+        ///
+        /// - `node`: identifier of the node.
+        /// - `connections`: additonal nodes from which the connections are allowed.
+        #[weight = T::WeightInfo::add_connections()]
+        pub fn add_connections(
             origin,
-            node_public_key: NodePublicKey,
+            node: NodePublicKey,
             connections: Vec<NodePublicKey>
         ) {
             let sender = ensure_signed(origin)?;
+            ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
+            ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
 
-            ensure!(
-                Owners::<T>::contains_key(&node_public_key),
-                Error::<T>::NotClaimed
-            );
+            let mut nodes = AdditionalConnections::get(&node);
 
-            ensure!(
-                Owners::<T>::get(&node_public_key) == sender,
-                Error::<T>::NotOwner
-            );
-
-            let mut nodes = AdditionalConnections::get(&node_public_key);
-            nodes.extend(connections.clone());
-            nodes.sort();
-            nodes.dedup();
+            for add_node in connections.iter() {
+                if let Err(add_location) = nodes.binary_search(&add_node) {
+                    nodes.insert(add_location, add_node.clone());
+                }
+            }
             
-            AdditionalConnections::insert(&node_public_key, nodes);
+            AdditionalConnections::insert(&node, nodes);
 
-            Self::deposit_event(RawEvent::ConnectionsAdded(node_public_key, connections));
+            Self::deposit_event(RawEvent::ConnectionsAdded(node, connections));
+        }
+
+        /// Remove additional connections of a given node.
+        ///
+        /// - `node`: identifier of the node.
+        /// - `connections`: additonal nodes from which the connections are not allowed anymore.
+        #[weight = T::WeightInfo::remove_connections()]
+        pub fn remove_connections(
+            origin,
+            node: NodePublicKey,
+            connections: Vec<NodePublicKey>
+        ) {
+            let sender = ensure_signed(origin)?;
+            ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
+            ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
+
+            let mut nodes = AdditionalConnections::get(&node);
+
+            for remove_node in connections.iter() {
+                if let Ok(remove_location) = nodes.binary_search(&remove_node) {
+                    nodes.remove(remove_location);
+                }
+            }
+            
+            AdditionalConnections::insert(&node, nodes);
+
+            Self::deposit_event(RawEvent::ConnectionsRemoved(node, connections));
         }
 
         fn offchain_worker(now: T::BlockNumber) {
             let node_public_key = sp_io::offchain::get_node_public_key();
             match node_public_key {
                 Err(_) => debug::error!("Error: failed to get public key of node at {:?}", now),
-                Ok(node) => Self::authorize_nodes(node),
+                Ok(node) => Self::authorize_nodes(&node),
             }
         }
     }
 }
 
 impl<T: Trait> Module<T> {
-    fn initialize_nodes(nodes: Vec<(NodePublicKey, T::AccountId)>) {
+    fn initialize_nodes(nodes: &Vec<(NodePublicKey, T::AccountId)>) {
         let mut node_public_keys = nodes.iter()
             .map(|item| item.0.clone())
             .collect::<Vec<NodePublicKey>>();
@@ -307,11 +372,11 @@ impl<T: Trait> Module<T> {
         }
     }
 
-    fn authorize_nodes(node: NodePublicKey) {
-        let mut nodes = AdditionalConnections::get(&node);
+    fn authorize_nodes(node: &NodePublicKey) {
+        let mut nodes = AdditionalConnections::get(node);
         
         let well_known_nodes = WellKnownNodes::get();
-        if well_known_nodes.binary_search(&node).is_ok() {
+        if well_known_nodes.binary_search(node).is_ok() {
             nodes.extend(well_known_nodes);
         }
 
@@ -319,255 +384,355 @@ impl<T: Trait> Module<T> {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     use frame_support::{
-//         assert_ok, assert_noop, impl_outer_origin, weights::Weight,
-//         parameter_types, ord_parameter_types,
-//     };
-//     use frame_system::EnsureSignedBy;
-//     use sp_core::{H256, ed25519::Public};
-//     use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
-//     use hex_literal::hex;
+    use frame_support::{
+        assert_ok, assert_noop, impl_outer_origin, weights::Weight,
+        parameter_types, ord_parameter_types,
+    };
+    use frame_system::EnsureSignedBy;
+    use sp_core::{H256, ed25519::Public};
+    use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
+    use hex_literal::hex;
 
-//     impl_outer_origin! {
-//         pub enum Origin for Test where system = frame_system {}
-//     }
+    impl_outer_origin! {
+        pub enum Origin for Test where system = frame_system {}
+    }
 
-//     #[derive(Clone, Eq, PartialEq)]
-//     pub struct Test;
+    #[derive(Clone, Eq, PartialEq)]
+    pub struct Test;
 
-//     parameter_types! {
-// 		pub const BlockHashCount: u64 = 250;
-// 		pub const MaximumBlockWeight: Weight = 1024;
-// 		pub const MaximumBlockLength: u32 = 2 * 1024;
-// 		pub const AvailableBlockRatio: Perbill = Perbill::one();
-// 	}
-// 	impl frame_system::Trait for Test {
-// 		type BaseCallFilter = ();
-// 		type Origin = Origin;
-// 		type Index = u64;
-// 		type BlockNumber = u64;
-// 		type Hash = H256;
-// 		type Call = ();
-// 		type Hashing = BlakeTwo256;
-// 		type AccountId = u64;
-// 		type Lookup = IdentityLookup<Self::AccountId>;
-// 		type Header = Header;
-// 		type Event = ();
-// 		type BlockHashCount = BlockHashCount;
-// 		type MaximumBlockWeight = MaximumBlockWeight;
-// 		type DbWeight = ();
-// 		type BlockExecutionWeight = ();
-// 		type ExtrinsicBaseWeight = ();
-// 		type MaximumExtrinsicWeight = MaximumBlockWeight;
-// 		type MaximumBlockLength = MaximumBlockLength;
-// 		type AvailableBlockRatio = AvailableBlockRatio;
-// 		type Version = ();
-// 		type ModuleToIndex = ();
-// 		type AccountData = ();
-// 		type OnNewAccount = ();
-// 		type OnKilledAccount = ();
-// 		type SystemWeightInfo = ();
-// 	}
+    parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: Weight = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
+	}
+	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
+		type Origin = Origin;
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = H256;
+		type Call = ();
+		type Hashing = BlakeTwo256;
+		type AccountId = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type Header = Header;
+		type Event = ();
+		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
+		type MaximumBlockLength = MaximumBlockLength;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type Version = ();
+		type ModuleToIndex = ();
+		type AccountData = ();
+		type OnNewAccount = ();
+		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
+	}
 
-//     ord_parameter_types! {
-// 		pub const One: u64 = 1;
-// 		pub const Two: u64 = 2;
-// 		pub const Three: u64 = 3;
-// 		pub const Four: u64 = 4;
-// 	}
-//     parameter_types! {
-//         pub const MaxWellKnownNodes: u32 = 4;
-//     }
-//     impl Trait for Test {
-//         type Event = ();
-//         type MaxWellKnownNodes = MaxWellKnownNodes;
-//         type AddOrigin = EnsureSignedBy<One, u64>;
-//         type RemoveOrigin = EnsureSignedBy<Two, u64>;
-//         type SwapOrigin = EnsureSignedBy<Three, u64>;
-//         type ResetOrigin = EnsureSignedBy<Four, u64>;
-//         type WeightInfo = ();
-//     }
+    ord_parameter_types! {
+		pub const One: u64 = 1;
+		pub const Two: u64 = 2;
+		pub const Three: u64 = 3;
+		pub const Four: u64 = 4;
+	}
+    parameter_types! {
+        pub const MaxWellKnownNodes: u32 = 4;
+    }
+    impl Trait for Test {
+        type Event = ();
+        type MaxWellKnownNodes = MaxWellKnownNodes;
+        type AddOrigin = EnsureSignedBy<One, u64>;
+        type RemoveOrigin = EnsureSignedBy<Two, u64>;
+        type SwapOrigin = EnsureSignedBy<Three, u64>;
+        type ResetOrigin = EnsureSignedBy<Four, u64>;
+        type WeightInfo = ();
+    }
 
-//     type NodeAuthorization = Module<Test>;
+    type NodeAuthorization = Module<Test>;
 
-//     fn new_test_ext() -> sp_io::TestExternalities {
-//         let pub10: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//             hex!("0000000000000000000000000000000000000000000000000000000000000009")
-//         ));
-//         let pub20: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//             hex!("0000000000000000000000000000000000000000000000000000000000000013")
-//         ));
-//         let pub30: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//             hex!("000000000000000000000000000000000000000000000000000000000000001d")
-//         ));
-        
-//         let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-//         GenesisConfig {
-//             nodes: vec![pub10, pub20, pub30],
-//         }.assimilate_storage(&mut t).unwrap();
-//         t.into()
-//     }
+    fn test_node(id: u8) -> NodePublicKey {
+        let mut arr = [0u8; 32];
+        arr[31] = id;
+        NodePublicKey::Ed25519(Public::from_raw(arr))
+    }
 
-//     #[test]
-//     fn add_node_works() {
-//         new_test_ext().execute_with(|| {
-//             let pub10: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("0000000000000000000000000000000000000000000000000000000000000009")
-//             ));
-//             let pub15: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("000000000000000000000000000000000000000000000000000000000000000e")
-//             ));
-//             let pub20: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("0000000000000000000000000000000000000000000000000000000000000013")
-//             ));
-//             let pub25: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("0000000000000000000000000000000000000000000000000000000000000018")
-//             ));
-//             let pub30: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("000000000000000000000000000000000000000000000000000000000000001d")
-//             ));
+    fn new_test_ext() -> sp_io::TestExternalities {
+        let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+        GenesisConfig::<Test> {
+            nodes: vec![(test_node(10), 10), (test_node(20), 20), (test_node(30), 30)],
+        }.assimilate_storage(&mut t).unwrap();
+        t.into()
+    }
 
-//             assert_noop!(NodeAuthorization::add_well_known_node(Origin::signed(2), pub15.clone()), BadOrigin);
-//             assert_noop!(
-//                 NodeAuthorization::add_well_known_node(Origin::signed(1), pub20.clone()),
-//                 Error::<Test>::AlreadyJoined
-//             );
+    #[test]
+    fn add_well_known_node_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(
+                NodeAuthorization::add_well_known_node(Origin::signed(2), test_node(15), 15),
+                BadOrigin
+            );
+            assert_noop!(
+                NodeAuthorization::add_well_known_node(Origin::signed(1), test_node(20), 20),
+                Error::<Test>::AlreadyJoined
+            );
             
-//             assert_ok!(NodeAuthorization::add_well_known_node(Origin::signed(1), pub15.clone()));
-//             assert_eq!(
-//                 NodeAuthorization::get_allow_list(),
-//                 vec![pub10.clone(), pub15.clone(), pub20.clone(), pub30.clone()]
-//             );
+            assert_ok!(
+                NodeAuthorization::add_well_known_node(Origin::signed(1), test_node(15), 15)
+            );
+            assert_eq!(
+                WellKnownNodes::get(),
+                vec![test_node(10), test_node(15), test_node(20), test_node(30)]
+            );
+            assert_eq!(Owners::<Test>::get(test_node(10)), 10);
+            assert_eq!(Owners::<Test>::get(test_node(20)), 20);
+            assert_eq!(Owners::<Test>::get(test_node(30)), 30);
+            assert_eq!(Owners::<Test>::get(test_node(15)), 15);
             
-//             assert_noop!(
-//                 NodeAuthorization::add_well_known_node(Origin::signed(1), pub25.clone()),
-//                 Error::<Test>::TooManyNodes
-//             );
-//         });
-//     }
+            assert_noop!(
+                NodeAuthorization::add_well_known_node(Origin::signed(1), test_node(25), 25),
+                Error::<Test>::TooManyNodes
+            );
+        });
+    }
 
-//     #[test]
-//     fn remove_node_works() {
-//         new_test_ext().execute_with(|| {
-//             let pub10: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("0000000000000000000000000000000000000000000000000000000000000009")
-//             ));
-//             let pub20: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("0000000000000000000000000000000000000000000000000000000000000013")
-//             ));
-//             let pub30: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("000000000000000000000000000000000000000000000000000000000000001d")
-//             ));
-//             let pub40: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("0000000000000000000000000000000000000000000000000000000000000027")
-//             ));
-
-//             assert_noop!(
-//                 NodeAuthorization::remove_well_known_node(Origin::signed(3), pub20.clone()),
-//                 BadOrigin
-//             );
-//             assert_noop!(
-//                 NodeAuthorization::remove_well_known_node(Origin::signed(2), pub40.clone()),
-//                 Error::<Test>::NotExist
-//             );
+    #[test]
+    fn remove_well_known_node_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(
+                NodeAuthorization::remove_well_known_node(Origin::signed(3), test_node(20)),
+                BadOrigin
+            );
+            assert_noop!(
+                NodeAuthorization::remove_well_known_node(Origin::signed(2), test_node(40)),
+                Error::<Test>::NotExist
+            );
             
-//             assert_ok!(NodeAuthorization::remove_well_known_node(Origin::signed(2), pub20.clone()));
-//             assert_eq!(NodeAuthorization::get_allow_list(), vec![pub10.clone(), pub30.clone()]);
-//         });
-//     }
+            AdditionalConnections::insert(test_node(20), vec![test_node(40)]);
+            assert!(AdditionalConnections::contains_key(test_node(20)));
 
-//     #[test]
-//     fn swap_node_works() {
-//         new_test_ext().execute_with(|| {
-//             let pub5: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("0000000000000000000000000000000000000000000000000000000000000004")
-//             ));
-//             let pub10: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("0000000000000000000000000000000000000000000000000000000000000009")
-//             ));
-//             let pub15: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("000000000000000000000000000000000000000000000000000000000000000e")
-//             ));
-//             let pub20: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("0000000000000000000000000000000000000000000000000000000000000013")
-//             ));
-//             let pub30: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("000000000000000000000000000000000000000000000000000000000000001d")
-//             ));
-            
-//             assert_noop!(
-//                 NodeAuthorization::swap_well_known_node(Origin::signed(4), pub20.clone(), pub5.clone()),
-//                 BadOrigin
-//             );
-            
-//             assert_ok!(NodeAuthorization::swap_well_known_node(Origin::signed(3), pub20.clone(), pub20.clone()));
-//             assert_eq!(
-//                 NodeAuthorization::get_allow_list(),
-//                 vec![pub10.clone(), pub20.clone(), pub30.clone()]
-//             );
+            assert_ok!(
+                NodeAuthorization::remove_well_known_node(Origin::signed(2), test_node(20))
+            );
+            assert_eq!(WellKnownNodes::get(), vec![test_node(10), test_node(30)]);
+            assert!(!Owners::<Test>::contains_key(test_node(20)));
+            assert!(!AdditionalConnections::contains_key(test_node(20)));
+        });
+    }
 
-//             assert_noop!(
-//                 NodeAuthorization::swap_well_known_node(Origin::signed(3), pub15.clone(), pub5.clone()),
-//                 Error::<Test>::NotExist
-//             );
-//             assert_noop!(
-//                 NodeAuthorization::swap_well_known_node(Origin::signed(3), pub20.clone(), pub30.clone()),
-//                 Error::<Test>::AlreadyJoined
-//             );
+    #[test]
+    fn swap_well_known_node_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(
+                NodeAuthorization::swap_well_known_node(
+                    Origin::signed(4), test_node(20), test_node(5)
+                ),
+                BadOrigin
+            );
             
-//             assert_ok!(NodeAuthorization::swap_well_known_node(Origin::signed(3), pub20.clone(), pub5.clone()));
-//             assert_eq!(
-//                 NodeAuthorization::get_allow_list(),
-//                 vec![pub5.clone(), pub10.clone(), pub30.clone()]
-//             );
-//         });
-//     }
+            assert_ok!(
+                NodeAuthorization::swap_well_known_node(
+                    Origin::signed(3), test_node(20), test_node(20)
+                )
+            );
+            assert_eq!(
+                WellKnownNodes::get(),
+                vec![test_node(10), test_node(20), test_node(30)]
+            );
 
-//     #[test]
-//     fn reset_nodes_works() {
-//         new_test_ext().execute_with(|| {
-//             let pub5: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("0000000000000000000000000000000000000000000000000000000000000004")
-//             ));
-//             let pub15: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("000000000000000000000000000000000000000000000000000000000000000e")
-//             ));
-//             let pub20: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("0000000000000000000000000000000000000000000000000000000000000013")
-//             ));
-//             let pub25: NodePublicKey = NodePublicKey::Ed25519(Public::from_raw(
-//                 hex!("0000000000000000000000000000000000000000000000000000000000000018")
-//             ));
-
-//             assert_noop!(
-//                 NodeAuthorization::reset_well_known_nodes(
-//                     Origin::signed(3),
-//                     vec![pub15.clone(), pub5.clone(), pub20.clone()]
-//                 ),
-//                 BadOrigin
-//             );
-//             assert_noop!(
-//                 NodeAuthorization::reset_well_known_nodes(
-//                     Origin::signed(4),
-//                     vec![pub15.clone(), pub5.clone(), pub20.clone(), pub25.clone()]
-//                 ),
-//                 Error::<Test>::TooManyNodes
-//             );
+            assert_noop!(
+                NodeAuthorization::swap_well_known_node(
+                    Origin::signed(3), test_node(15), test_node(5)
+                ),
+                Error::<Test>::NotExist
+            );
+            assert_noop!(
+                NodeAuthorization::swap_well_known_node(
+                    Origin::signed(3), test_node(20), test_node(30)
+                ),
+                Error::<Test>::AlreadyJoined
+            );
             
-//             assert_ok!(
-//                 NodeAuthorization::reset_well_known_nodes(
-//                     Origin::signed(4),
-//                     vec![pub15.clone(), pub5.clone(), pub20.clone()]
-//                 )
-//             );
-//             assert_eq!(
-//                 NodeAuthorization::get_allow_list(),
-//                 vec![pub5.clone(), pub15.clone(), pub20.clone()]
-//             );
-//         });
-//     }
-// }
+            AdditionalConnections::insert(test_node(20), vec![test_node(15)]);
+            assert_ok!(
+                NodeAuthorization::swap_well_known_node(
+                    Origin::signed(3), test_node(20), test_node(5)
+                )
+            );
+            assert_eq!(
+                WellKnownNodes::get(),
+                vec![test_node(5), test_node(10), test_node(30)]
+            );
+            assert!(!Owners::<Test>::contains_key(test_node(20)));
+            assert_eq!(Owners::<Test>::get(test_node(5)), 20);
+            assert!(!AdditionalConnections::contains_key(test_node(20)));
+            assert_eq!(AdditionalConnections::get(test_node(5)), vec![test_node(15)]);
+        });
+    }
+
+    #[test]
+    fn reset_well_known_nodes_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(
+                NodeAuthorization::reset_well_known_nodes(
+                    Origin::signed(3),
+                    vec![(test_node(15), 15), (test_node(5), 5), (test_node(20), 20)]
+                ),
+                BadOrigin
+            );
+            assert_noop!(
+                NodeAuthorization::reset_well_known_nodes(
+                    Origin::signed(4),
+                    vec![
+                        (test_node(15), 15),
+                        (test_node(5), 5),
+                        (test_node(20), 20),
+                        (test_node(25), 25),
+                    ]
+                ),
+                Error::<Test>::TooManyNodes
+            );
+            
+            assert_ok!(
+                NodeAuthorization::reset_well_known_nodes(
+                    Origin::signed(4),
+                    vec![(test_node(15), 15), (test_node(5), 5), (test_node(20), 20)]
+                )
+            );
+            assert_eq!(
+                WellKnownNodes::get(),
+                vec![test_node(5), test_node(15), test_node(20)]
+            );
+            assert_eq!(Owners::<Test>::get(test_node(5)), 5);
+            assert_eq!(Owners::<Test>::get(test_node(15)), 15);
+            assert_eq!(Owners::<Test>::get(test_node(20)), 20);
+        });
+    }
+
+    #[test]
+    fn claim_node_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(
+                NodeAuthorization::claim_node(Origin::signed(1), test_node(20)),
+                Error::<Test>::AlreadyClaimed
+            );
+            
+            assert_ok!(NodeAuthorization::claim_node(Origin::signed(15), test_node(15)));
+            assert_eq!(Owners::<Test>::get(test_node(15)), 15);
+        });
+    }
+
+    #[test]
+    fn remove_claim_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(
+                NodeAuthorization::remove_claim(Origin::signed(15), test_node(15)),
+                Error::<Test>::NotClaimed
+            );
+
+            assert_noop!(
+                NodeAuthorization::remove_claim(Origin::signed(15), test_node(20)),
+                Error::<Test>::NotOwner
+            );
+
+            assert_noop!(
+                NodeAuthorization::remove_claim(Origin::signed(20), test_node(20)),
+                Error::<Test>::PermissionDenied
+            );
+            
+            Owners::<Test>::insert(test_node(15), 15);
+            AdditionalConnections::insert(test_node(15), vec![test_node(20)]);
+            assert_ok!(NodeAuthorization::remove_claim(Origin::signed(15), test_node(15)));
+            assert!(!Owners::<Test>::contains_key(test_node(15)));
+            assert!(!AdditionalConnections::contains_key(test_node(15)));
+        });
+    }
+
+    #[test]
+    fn transfer_node_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(
+                NodeAuthorization::transfer_node(Origin::signed(15), test_node(15), 10),
+                Error::<Test>::NotClaimed
+            );
+
+            assert_noop!(
+                NodeAuthorization::transfer_node(Origin::signed(15), test_node(20), 10),
+                Error::<Test>::NotOwner
+            );
+
+            assert_ok!(NodeAuthorization::transfer_node(Origin::signed(20), test_node(20), 15));
+            assert_eq!(Owners::<Test>::get(test_node(20)), 15);
+        });
+    }
+
+    #[test]
+    fn add_connections_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(
+                NodeAuthorization::add_connections(
+                    Origin::signed(15), test_node(15), vec![test_node(5)]
+                ),
+                Error::<Test>::NotClaimed
+            );
+
+            assert_noop!(
+                NodeAuthorization::add_connections(
+                    Origin::signed(15), test_node(20), vec![test_node(5)]
+                ),
+                Error::<Test>::NotOwner
+            );
+
+            assert_ok!(
+                NodeAuthorization::add_connections(
+                    Origin::signed(20),
+                    test_node(20),
+                    vec![test_node(15), test_node(5), test_node(25)]
+                )
+            );
+            assert_eq!(
+                AdditionalConnections::get(test_node(20)),
+                vec![test_node(5), test_node(15), test_node(25)]
+            );
+        });
+    }
+
+    #[test]
+    fn remove_connections_works() {
+        new_test_ext().execute_with(|| {
+            assert_noop!(
+                NodeAuthorization::remove_connections(
+                    Origin::signed(15), test_node(15), vec![test_node(5)]
+                ),
+                Error::<Test>::NotClaimed
+            );
+
+            assert_noop!(
+                NodeAuthorization::remove_connections(
+                    Origin::signed(15), test_node(20), vec![test_node(5)]
+                ),
+                Error::<Test>::NotOwner
+            );
+
+            AdditionalConnections::insert(
+                test_node(20), vec![test_node(5), test_node(15), test_node(25)]
+            );
+            assert_ok!(
+                NodeAuthorization::remove_connections(
+                    Origin::signed(20),
+                    test_node(20),
+                    vec![test_node(15), test_node(5)]
+                )
+            );
+            assert_eq!(AdditionalConnections::get(test_node(20)), vec![test_node(25)]);
+        });
+    }
+}
