@@ -2588,6 +2588,7 @@ impl<T: Trait> Module<T> {
 	) -> DispatchResultWithPostInfo {
 		// Do the basic checks. era, claimed score and window open.
 		Self::pre_dispatch_checks(claimed_score, era)?;
+
 		// the weight that we will refund in case of a correct submission. We compute this now
 		// because the data needed for it will be consumed further down.
 		let adjusted_weight = weight::weight_for_correct_submit_solution::<T>(
@@ -2743,8 +2744,8 @@ impl<T: Trait> Module<T> {
 		// write new results.
 		<QueuedElected<T>>::put(ElectionResult {
 			elected_stashes: winners,
-			compute,
 			exposures,
+			compute,
 		});
 		QueuedScore::put(submitted_score);
 
