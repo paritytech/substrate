@@ -576,11 +576,33 @@ impl ProtocolsHandler for NotifsHandler {
 						protocol_name,
 						message
 					} => {
+						let mut found_any_with_name = false;
+
 						for (handler, _) in &mut self.out_handlers {
-							if *handler.protocol_name() == protocol_name && handler.is_open() {
-								handler.send_or_discard(message);
-								continue 'poll_notifs_sink;
+							if *handler.protocol_name() == protocol_name {
+								found_any_with_name = true;
+								if handler.is_open() {
+									handler.send_or_discard(message);
+									continue 'poll_notifs_sink;
+								}
 							}
+						}
+
+						// If this code is reached, there exists two possibilities:
+						//
+						// - User tried to send a notification on a non-existing protocol. This
+						// most likely relates to https://github.com/paritytech/substrate/issues/6827
+						// - User tried to send a notification to a peer we're not or no longer
+						// connected to. This happens in a normal scenario due to the racy nature
+						// of connections and disconnections, and is benign.
+						//
+						// We print a warning in the former condition.
+						if !found_any_with_name {
+							log::warn!(
+								target: "sub-libp2p",
+								"Tried to send a notification on non-registered protocol: {:?}",
+								protocol_name
+							);
 						}
 					}
 					NotificationsSinkMessage::ForceClose => {
