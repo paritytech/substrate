@@ -74,10 +74,9 @@ use sc_network::{
 	PeerId,
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
-use sp_core::{crypto::{key_types, Pair}, traits::CryptoStore};
+use sp_core::{crypto::{key_types, Pair}, traits::CryptoStorePtr};
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
-use sc_keystore::proxy::KeystoreProxy;
 
 #[cfg(test)]
 mod tests;
@@ -103,7 +102,7 @@ const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
 /// Role an authority discovery module can run as.
 pub enum Role {
 	/// Actual authority as well as a reference to its key store.
-	Authority(Arc<KeystoreProxy>),
+	Authority(CryptoStorePtr),
 	/// Sentry node that guards an authority.
 	///
 	/// No reference to its key store needed, as sentry nodes don't have an identity to sign
@@ -219,7 +218,7 @@ where
 	}
 
 	/// Run authority discovery
-	pub async fn run(&mut self) {
+	pub async fn run(mut self) {
 		loop {
 			// Process incoming events.
 			if !self.handle_dht_events().await {
@@ -527,7 +526,7 @@ where
 	// set with two keys. The function does not return all of the local authority discovery public
 	// keys, but only the ones intersecting with the current authority set.
 	async fn get_own_public_keys_within_authority_set(
-		key_store: Arc<KeystoreProxy>,
+		key_store: CryptoStorePtr,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
 		let local_pub_keys = key_store.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY).await

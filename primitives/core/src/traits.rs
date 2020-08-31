@@ -102,8 +102,6 @@ pub trait CryptoStore: Send + Sync {
 	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
 	async fn insert_unknown(&self, _key_type: KeyTypeId, _suri: &str, _public: &[u8]) -> Result<(), ()>;
 
-	/// Get the password for this store.
-	fn password(&self) -> Option<&str>;
 	/// Find intersection between provided keys and supported keys
 	///
 	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
@@ -194,8 +192,8 @@ pub trait CryptoStore: Send + Sync {
 	/// the public key and key type provided do not match a private
 	/// key in the keystore. Or, in the context of remote signing
 	/// an error could be a network one.
-	async fn sr25519_vrf_sign<'a>(
-		&'a self,
+	async fn sr25519_vrf_sign(
+		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
@@ -213,7 +211,7 @@ impl SyncCryptoStore {
 	}
 
 	pub fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		block_on(self.0.read().sr25519_public_keys(id))
+		block_on(self.0.sr25519_public_keys(id))
 	}
 
 	pub fn sr25519_generate_new(
@@ -221,11 +219,11 @@ impl SyncCryptoStore {
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<sr25519::Public, Error> {
-		block_on(self.0.write().sr25519_generate_new(id, seed))
+		block_on(self.0.sr25519_generate_new(id, seed))
 	}
 
 	pub fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		block_on(self.0.read().ed25519_public_keys(id))
+		block_on(self.0.ed25519_public_keys(id))
 	}
 
 	pub fn ed25519_generate_new(
@@ -233,11 +231,11 @@ impl SyncCryptoStore {
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<ed25519::Public, Error> {
-		block_on(self.0.write().ed25519_generate_new(id, seed))
+		block_on(self.0.ed25519_generate_new(id, seed))
 	}
 
 	pub fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		block_on(self.0.read().ecdsa_public_keys(id))
+		block_on(self.0.ecdsa_public_keys(id))
 	}
 
 	pub fn ecdsa_generate_new(
@@ -245,15 +243,11 @@ impl SyncCryptoStore {
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<ecdsa::Public, Error> {
-		block_on(self.0.write().ecdsa_generate_new(id, seed))
+		block_on(self.0.ecdsa_generate_new(id, seed))
 	}
 
 	pub fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
-		block_on(self.0.write().insert_unknown(key_type, suri, public))
-	}
-
-	pub fn password(&self) -> Option<String> {
-		self.0.read().password().map(|s| s.to_string())
+		block_on(self.0.insert_unknown(key_type, suri, public))
 	}
 
 	pub fn supported_keys(
@@ -261,15 +255,15 @@ impl SyncCryptoStore {
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
 	) -> Result<Vec<CryptoTypePublicPair>, Error> {
-		block_on(self.0.read().supported_keys(id, keys))
+		block_on(self.0.supported_keys(id, keys))
 	}
 
 	pub fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
-		block_on(self.0.read().keys(id))
+		block_on(self.0.keys(id))
 	}
 
 	pub fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		block_on(self.0.read().has_keys(public_keys))
+		block_on(self.0.has_keys(public_keys))
 	}
 
 	pub fn sign_with(
@@ -278,7 +272,7 @@ impl SyncCryptoStore {
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
 	) -> Result<Vec<u8>, Error> {
-		block_on(self.0.read().sign_with(id, key, msg))
+		block_on(self.0.sign_with(id, key, msg))
 	}
 
 	pub fn sign_with_any(
@@ -287,7 +281,7 @@ impl SyncCryptoStore {
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8]
 	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
-		block_on(self.0.read().sign_with_any(id, keys, msg))
+		block_on(self.0.sign_with_any(id, keys, msg))
 	}
 
 	pub fn sign_with_all(
@@ -296,7 +290,7 @@ impl SyncCryptoStore {
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8],
 	) -> Result<Vec<Result<Vec<u8>, Error>>, ()> {
-		block_on(self.0.read().sign_with_all(id, keys, msg))
+		block_on(self.0.sign_with_all(id, keys, msg))
 	}
 
 	/// Generate VRF signature for given transcript data.
@@ -313,13 +307,13 @@ impl SyncCryptoStore {
 	/// the public key and key type provided do not match a private
 	/// key in the keystore. Or, in the context of remote signing
 	/// an error could be a network one.
-	pub fn sr25519_vrf_sign<'a>(
-		&'a self,
+	pub fn sr25519_vrf_sign(
+		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
 	) -> Result<VRFSignature, Error> {
-		block_on(self.0.read().sr25519_vrf_sign(key_type, public, transcript_data))
+		block_on(self.0.sr25519_vrf_sign(key_type, public, transcript_data))
 	}
 }
 

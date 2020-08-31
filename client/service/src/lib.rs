@@ -81,7 +81,6 @@ pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
 use sc_client_api::BlockchainEvents;
-use sc_keystore::{Store as Keystore, proxy::KeystoreReceiver};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -163,8 +162,6 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	pub task_manager: TaskManager,
 	/// A shared keystore instance.
 	pub keystore_params: KeystoreParams,
-	/// A shared keystore instance.
-	pub keystore_receiver: KeystoreReceiver<Keystore>,
 	/// A chain selection algorithm instance.
 	pub select_chain: SelectChain,
 	/// An import queue.

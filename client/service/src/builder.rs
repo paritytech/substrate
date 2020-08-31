@@ -15,7 +15,6 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
-use parking_lot::RwLock;
 use crate::{
 	NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
 	TelemetryConnectionSinks, RpcHandlers, NetworkStatusSinks,
@@ -40,13 +39,8 @@ use futures::{
 	channel::oneshot,
 };
 use sc_keystore::{
-	Store as Keystore,
-	proxy::{
-		proxy as keystore_proxy,
-		KeystoreProxy,
-		KeystoreProxyAdapter,
-		KeystoreReceiver,
-	},
+	Keystore,
+	local::LocalKeystore,
 };
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
@@ -169,7 +163,6 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 	TFullClient<TBl, TRtApi, TExecDisp>,
 	Arc<TFullBackend<TBl>>,
 	KeystoreParams,
-	KeystoreReceiver<Keystore>,
 	TaskManager,
 );
 
@@ -177,7 +170,6 @@ type TLightParts<TBl, TRtApi, TExecDisp> = (
 	Arc<TLightClient<TBl, TRtApi, TExecDisp>>,
 	Arc<TLightBackend<TBl>>,
 	KeystoreParams,
-	KeystoreReceiver<Keystore>,
 	TaskManager,
 	Arc<OnDemand<TBl>>,
 );
@@ -201,40 +193,32 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 
 /// Construct and hold different layers of Keystore wrappers
 pub struct KeystoreParams {
-	keystore: Arc<RwLock<KeystoreProxyAdapter>>,
-	proxy: Arc<KeystoreProxy>,
+	keystore: Arc<Keystore>,
 	sync_keystore: Arc<SyncCryptoStore>,
 }
 
 impl KeystoreParams {
 	/// Construct KeystoreParams
-	pub fn new(config: &KeystoreConfig) -> Result<(Self, KeystoreReceiver<Keystore>), Error> {
-		let keystore = match config {
-			KeystoreConfig::Path { path, password } => Keystore::open(
+	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
+		let local_keystore = match config {
+			KeystoreConfig::Path { path, password } => LocalKeystore::from_filesystem(
 				path.clone(),
 				password.clone()
 			)?,
-			KeystoreConfig::InMemory => Keystore::new_in_memory(),
+			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		};
-		let (keystore_proxy, keystore_receiver) = keystore_proxy(keystore);
-		let keystore = Arc::new(RwLock::new(KeystoreProxyAdapter::new(keystore_proxy.clone())));
+		let keystore = Arc::new(Keystore::new(Box::new(local_keystore)));
 		let sync_keystore = Arc::new(SyncCryptoStore::new(keystore.clone()));
 
-		Ok((Self {
+		Ok(Self {
 			keystore,
 			sync_keystore,
-			proxy: keystore_proxy,
-		}, keystore_receiver))
+		})
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
-	pub fn keystore(&self) -> Arc<RwLock<KeystoreProxyAdapter>> {
+	pub fn keystore(&self) -> Arc<Keystore> {
 		self.keystore.clone()
-	}
-
-	/// Returns the asynchronous keystore proxy
-	pub fn proxy(&self) -> Arc<KeystoreProxy> {
-		self.proxy.clone()
 	}
 
 	/// Returns the synchrnous keystore wrapper
@@ -260,7 +244,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	let (keystore_container, keystore_receiver) = KeystoreParams::new(&config.keystore)?;
+	let keystore_container = KeystoreParams::new(&config.keystore)?;
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
@@ -316,7 +300,6 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		client,
 		backend,
 		keystore_container,
-		keystore_receiver,
 		task_manager
 	))
 }
@@ -334,7 +317,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
-	let (keystore_params, keystore_receiver) = KeystoreParams::new(&config.keystore)?;
+	let keystore_params = KeystoreParams::new(&config.keystore)?;
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
@@ -370,7 +353,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 	)?);
 
-	Ok((client, backend, keystore_params, keystore_receiver, task_manager, on_demand))
+	Ok((client, backend, keystore_params, task_manager, on_demand))
 }
 
 /// Create an instance of db-backed client.

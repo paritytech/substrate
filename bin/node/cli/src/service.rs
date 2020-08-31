@@ -57,7 +57,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		grandpa::SharedVoterState,
 	)
 >, ServiceError> {
-	let (client, backend, keystore_params, keystore_receiver, task_manager) =
+	let (client, backend, keystore_params, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
 
@@ -137,7 +137,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	};
 
 	Ok(sc_service::PartialComponents {
-		client, backend, task_manager, keystore_params, keystore_receiver,
+		client, backend, task_manager, keystore_params,
 		select_chain, import_queue, transaction_pool, inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup)
 	})
@@ -156,12 +156,10 @@ pub fn new_full_base(
 	Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
 ), ServiceError> {
 	let sc_service::PartialComponents {
-		client, backend, mut task_manager, import_queue, keystore_params, keystore_receiver,
+		client, backend, mut task_manager, import_queue, keystore_params,
 		select_chain, transaction_pool, inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup),
 	} = new_partial(&config)?;
-
-	task_manager.spawn_essential_handle().spawn("keystore", keystore_receiver);
 
 	let finality_proof_provider =
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
@@ -340,10 +338,8 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
-	let (client, backend, keystore_params, keystore_receiver, mut task_manager, on_demand) =
+	let (client, backend, keystore_params, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
-
-	task_manager.spawn_essential_handle().spawn("keystore", keystore_receiver);
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 

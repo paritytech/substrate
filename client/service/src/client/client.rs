@@ -34,8 +34,6 @@ use sp_core::{
 };
 #[cfg(feature="test-helpers")]
 use sp_core::traits::SyncCryptoStore;
-#[cfg(feature="test-helpers")]
-use sc_keystore::proxy::{proxy as keystore_proxy, KeystoreProxyAdapter};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
 	Justification, BuildStorage,
@@ -207,9 +205,7 @@ pub fn new_with_backend<B, E, Block, S, RA, TStore>(
 {
 	let sync_keystore = match keystore {
 		Some(store) => {
-			let (keystore_proxy, _) = keystore_proxy(store);
-			let keystore = Arc::new(RwLock::new(KeystoreProxyAdapter::new(keystore_proxy.clone())));
-			let sync_keystore = Arc::new(SyncCryptoStore::new(keystore));
+			let sync_keystore = Arc::new(SyncCryptoStore::new(Arc::new(store)));
 			Some(sync_keystore)
 		},
 		None => None

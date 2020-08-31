@@ -22,7 +22,7 @@ use futures::executor::block_on;
 use rand::{Rng, distributions::Alphanumeric, rngs::OsRng};
 use structopt::StructOpt;
 
-use sc_keystore::{Store as Keystore};
+use sc_keystore::{Keystore, local::LocalKeystore};
 use node_cli::chain_spec::{self, AccountId};
 use sp_core::{sr25519, crypto::{Public, Ss58Codec}, traits::CryptoStore};
 
@@ -139,15 +139,16 @@ fn generate_authority_keys_and_store(
 	keystore_path: &Path,
 ) -> Result<(), String> {
 	for (n, seed) in seeds.into_iter().enumerate() {
-		let mut keystore = Keystore::open(
+		let local_keystore = LocalKeystore::from_filesystem(
 			keystore_path.join(format!("auth-{}", n)),
 			None,
 		).map_err(|err| err.to_string())?;
+		let keystore = Keystore::new(Box::new(local_keystore));
 
 		let (_, _, grandpa, babe, im_online, authority_discovery) =
 			chain_spec::authority_keys_from_seed(seed);
 
-		let mut insert_key = |key_type, public| {
+		let insert_key = |key_type, public| {
 			block_on(keystore.insert_unknown(
 				key_type,
 				&format!("//{}", seed),

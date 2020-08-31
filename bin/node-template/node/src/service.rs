@@ -33,7 +33,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 >, ServiceError> {
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
-	let (client, backend, keystore_params, keystore_receiver, task_manager) =
+	let (client, backend, keystore_params, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
 
@@ -66,7 +66,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	)?;
 
 	Ok(sc_service::PartialComponents {
-		client, backend, task_manager, import_queue, keystore_params, keystore_receiver,
+		client, backend, task_manager, import_queue, keystore_params,
 		select_chain, transaction_pool, inherent_data_providers,
 		other: (grandpa_block_import, grandpa_link),
 	})
@@ -75,12 +75,10 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
-		client, backend, mut task_manager, import_queue, keystore_params, keystore_receiver,
+		client, backend, mut task_manager, import_queue, keystore_params,
 		select_chain, transaction_pool, inherent_data_providers,
 		other: (block_import, grandpa_link),
 	} = new_partial(&config)?;
-
-	task_manager.spawn_essential_handle().spawn("keystore", keystore_receiver);
 
 	let finality_proof_provider =
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
@@ -223,10 +221,8 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
-	let (client, backend, keystore, keystore_receiver, mut task_manager, on_demand) =
+	let (client, backend, keystore, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
-
-	task_manager.spawn_essential_handle().spawn("keystore", keystore_receiver);
 
 	let transaction_pool = Arc::new(sc_transaction_pool::BasicPool::new_light(
 		config.transaction_pool.clone(),
