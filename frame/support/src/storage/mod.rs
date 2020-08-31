@@ -17,10 +17,10 @@
 
 //! Stuff to do with the runtime's storage.
 
-use sp_std::{prelude::*, marker::PhantomData};
+use sp_std::{prelude::*, marker::PhantomData, convert::TryFrom};
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::hash::{Twox128, StorageHasher};
-use sp_runtime::generic::{Digest, DigestItem};
+use sp_runtime::{RuntimeDebug, generic::{Digest, DigestItem}};
 pub use sp_runtime::TransactionOutcome;
 
 pub mod unhashed;
@@ -46,6 +46,45 @@ pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
 	match f() {
 		Commit(res) => { commit_transaction(); res },
 		Rollback(res) => { rollback_transaction(); res },
+	}
+}
+
+/// Struct to store the version of a pallet.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+pub struct PalletVersion {
+	pub major: u16,
+	pub minor: u16,
+	pub patch: u16,
+}
+
+impl<U16> From<(U16, U16, U16)> for PalletVersion
+where U16: Into<u16>
+{
+	fn from((ma, mi, pa): (U16, U16, U16)) -> Self {
+		let major = ma.into();
+		let minor = mi.into();
+		let patch = pa.into();
+		PalletVersion { major, minor, patch }
+	}
+}
+
+#[derive(Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum VersionParseError {
+	ParsingFailed(sp_std::num::ParseIntError),
+	NoMajor,
+	NoMinor,
+	NoPatch,
+}
+
+impl TryFrom<&str> for PalletVersion {
+	type Error = VersionParseError;
+
+	fn try_from(string: &str) -> Result<Self, Self::Error> {
+		let mut it = string.split(".");
+		let major = it.next().ok_or(Self::Error::NoMajor)?.parse::<u16>().map_err(|e| Self::Error::ParsingFailed(e))?;
+		let minor = it.next().ok_or(Self::Error::NoMinor)?.parse::<u16>().map_err(|e| Self::Error::ParsingFailed(e))?;
+		let patch = it.next().ok_or(Self::Error::NoPatch)?.split(|c| !char::is_numeric(c)).next().ok_or(Self::Error::NoPatch)?.parse::<u16>().map_err(|e| Self::Error::ParsingFailed(e))?;
+		Ok(PalletVersion { major, minor, patch })
 	}
 }
 
