@@ -272,9 +272,9 @@ pub use libp2p::{Multiaddr, PeerId};
 pub use libp2p::multiaddr;
 
 pub use sc_peerset::ReputationChange;
+use config::identity::PublicKey;
 use sc_peerset::PeersetHandle;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use config::identity::PublicKey;
 
 /// The maximum allowed number of established connections per peer.
 ///

@@ -19,14 +19,17 @@
 //!
 //! This pallet manages a configurable set of nodes for a permissioned network.
 //! It provides two ways to authorize a node,
-//! * a set of well known nodes across different organizations in which the
-//! connections are allowed.
-//! * users can claim the ownership for each node, then manage the connection of the node.
 //!
-//! A node must have an owner. The owner can make additional adaptive change for
-//! the connection of the node. Only one user can `claim` a specific node.
-//! To eliminate false claim, the maintainer of the node should claim it before
-//! even start the node.
+//! - a set of well known nodes across different organizations in which the
+//! connections are allowed.
+//! - users can claim the ownership for each node, then manage the connections of
+//! the node.
+//!
+//! A node must have an owner. The owner can additionally change the connections
+//! for the node. Only one user is allowed to claim a specific node. To eliminate
+//! false claim, the maintainer of the node should claim it before even start the
+//! node. This pallet use offchain work to set reserved nodes, if the node is not
+//! an authority, make sure to enable offchain worker with the right CLI flag.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -95,7 +98,7 @@ decl_storage! {
         /// A map that maintains the ownership of each node.
         pub Owners get(fn owners):
             map hasher(blake2_128_concat) NodePublicKey => T::AccountId;
-        /// The additional adapative connections of a node.
+        /// The additional adapative connections of each node.
         pub AdditionalConnections get(fn additional_connection):
             map hasher(blake2_128_concat) NodePublicKey => Vec<NodePublicKey>;
     }
@@ -115,14 +118,14 @@ decl_event! {
         NodeAdded(NodePublicKey, AccountId),
         /// The given well known node was removed.
         NodeRemoved(NodePublicKey),
-        /// Two given well known node were swapped; first item is removed,
-        /// the latter is added.
+        /// The given well known node was swapped; first item was removed,
+        /// the latter was added.
         NodeSwapped(NodePublicKey, NodePublicKey),
         /// The given well known nodes were reset.
         NodesReset(Vec<(NodePublicKey, AccountId)>),
         /// The given node was claimed by a user.
         NodeClaimed(NodePublicKey, AccountId),
-        /// The given claim was remove by its owner.
+        /// The given claim was removed by its owner.
         ClaimRemoved(NodePublicKey, AccountId),
         /// The node was transferred to another account.
         NodeTransferred(NodePublicKey, AccountId, AccountId),
@@ -206,7 +209,7 @@ decl_module! {
             Self::deposit_event(RawEvent::NodeRemoved(node));
         }
 
-        /// Swap one well know node to another. Both the ownership and additonal connections
+        /// Swap a well known node to another. Both the ownership and additional connections
         /// stay untouched.
         ///
         /// May only be called from `T::SwapOrigin`.
@@ -233,7 +236,7 @@ decl_module! {
         }
         
         /// Reset all the well known nodes. This will not remove the ownership and additional
-        /// connections for the removed nodes. The node owner can perform furthur cleaning if
+        /// connections for the removed nodes. The node owner can perform further cleaning if
         /// they decide to leave the network.
         ///
         /// May only be called from `T::ResetOrigin`.
@@ -349,6 +352,8 @@ decl_module! {
             Self::deposit_event(RawEvent::ConnectionsRemoved(node, connections));
         }
 
+        /// Set reserved node every block. If may not be enabled depends on the offchain
+        /// worker CLI flag.
         fn offchain_worker(now: T::BlockNumber) {
             let node_public_key = sp_io::offchain::get_node_public_key();
             match node_public_key {
@@ -408,8 +413,8 @@ mod tests {
 		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
-	}
-	impl frame_system::Trait for Test {
+    }
+    impl frame_system::Trait for Test {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
@@ -434,15 +439,15 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
-		type SystemWeightInfo = ();
-	}
-
+        type SystemWeightInfo = ();
+    }
+    
     ord_parameter_types! {
 		pub const One: u64 = 1;
 		pub const Two: u64 = 2;
 		pub const Three: u64 = 3;
-		pub const Four: u64 = 4;
-	}
+        pub const Four: u64 = 4;
+    }
     parameter_types! {
         pub const MaxWellKnownNodes: u32 = 4;
     }
@@ -455,7 +460,7 @@ mod tests {
         type ResetOrigin = EnsureSignedBy<Four, u64>;
         type WeightInfo = ();
     }
-
+    
     type NodeAuthorization = Module<Test>;
 
     fn test_node(id: u8) -> NodePublicKey {

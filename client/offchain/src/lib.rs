@@ -208,7 +208,8 @@ pub async fn notification_future<Client, Storage, Block, Spawner>(
 mod tests {
 	use super::*;
 	use std::sync::Arc;
-	use sc_network::{Multiaddr, PeerId};
+	use sc_network::{Multiaddr, PeerId, config::identity};
+	use sc_peerset::{Peerset, PeersetConfig, PeersetHandle};
 	use substrate_test_runtime_client::{TestClient, runtime::Block};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_transaction_pool::{TransactionPool, InPoolTransaction};
@@ -222,6 +223,20 @@ mod tests {
 
 		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
+		}
+
+		fn local_public_key(&self) -> identity::PublicKey {
+			identity::Keypair::generate_ed25519().public()
+		}
+
+		fn peerset(&self) -> PeersetHandle {
+			Peerset::from_config(PeersetConfig {
+				in_peers: 25,
+				out_peers: 25,
+				bootnodes: vec![],
+				reserved_only: false,
+				priority_groups: vec![],
+			}).1
 		}
 	}
 

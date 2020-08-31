@@ -25,11 +25,7 @@ use std::{
 use sp_core::offchain::OffchainStorage;
 use futures::Future;
 use log::error;
-use sc_network::{PeerId, Multiaddr, NetworkStateInfo};
-use sc_network::config::identity::{
-	ed25519::PublicKey as Ed25519PeerPublicKey,
-	PublicKey as PeerPublicKey
-};
+use sc_network::{config::identity, PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};
 use sp_core::offchain::{
 	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
@@ -190,7 +186,8 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()> {
 		let public_key = self.network_state.local_public_key();
 		match public_key {
-			PeerPublicKey::Ed25519(public) => Ok(public.encode().into()),
+			identity::PublicKey::Ed25519(public) =>
+				Ok(public.encode().into()),
 			_ => Err(()),
 		}
 	}
@@ -200,11 +197,11 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 			.filter_map(|node|
 				match node {
 					NodePublicKey::Ed25519(public) =>
-						Ed25519PeerPublicKey::decode(&public.0).ok()
+						identity::ed25519::PublicKey::decode(&public.0).ok()
 				}
 			)
 			.map(|public|
-				PeerPublicKey::Ed25519(public).into_peer_id()
+				identity::PublicKey::Ed25519(public).into_peer_id()
 			)
 			.collect();
 		
@@ -212,7 +209,6 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 
 		let peerset = self.network_state.peerset();
 		peerset.set_reserved_peers(peer_ids);
-		// Respect reserved peers from runtime, ignore CLI flags for now.
 		peerset.set_reserved_only(reserved_only);
 	}
 }
@@ -327,7 +323,7 @@ mod tests {
 	use super::*;
 	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
 	use sc_client_db::offchain::LocalStorage;
-	use sc_network::PeerId;
+	use sc_peerset::{Peerset, PeersetConfig, PeersetHandle};
 
 	struct MockNetworkStateInfo();
 
@@ -338,6 +334,20 @@ mod tests {
 
 		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
+		}
+
+		fn local_public_key(&self) -> identity::PublicKey {
+			identity::Keypair::generate_ed25519().public()
+		}
+
+		fn peerset(&self) -> PeersetHandle {
+			Peerset::from_config(PeersetConfig {
+				in_peers: 25,
+				out_peers: 25,
+				bootnodes: vec![],
+				reserved_only: false,
+				priority_groups: vec![],
+			}).1
 		}
 	}
 
