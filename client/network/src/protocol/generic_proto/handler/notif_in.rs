@@ -160,7 +160,7 @@ impl NotifsInHandler {
 			Some(Poll::Ready(Ok(v))) => match v {},
 			Some(Poll::Ready(Err(_))) => {
 				self.substream = None;
-				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed));
+				return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed));
 			},
 		}
 
