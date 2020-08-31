@@ -39,7 +39,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit="128"]
 
-use sp_std::{prelude::*, result};
+use sp_std::{prelude::*, result, convert::TryInto};
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
 use sp_runtime::{RuntimeDebug, traits::Hash};
@@ -52,6 +52,7 @@ use frame_support::{
 		PostDispatchInfo,
 	},
 	ensure,
+	storage::PalletVersion,
 	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
 	weights::{DispatchClass, GetDispatchInfo, Weight},
 };
@@ -160,6 +161,11 @@ decl_storage! {
 		/// The member who provides the default vote for any other members that do not vote before
 		/// the timeout. If None, then no member has that privilege.
 		pub Prime get(fn prime): Option<T::AccountId>;
+
+		pub StorageVersion get(fn storage_version) build(|_| {
+			env!("CARGO_PKG_VERSION").try_into()
+				.unwrap_or((0, 0, 1u16).into())
+		}): PalletVersion;
 	}
 	add_extra_genesis {
 		config(phantom): sp_std::marker::PhantomData<I>;
@@ -241,6 +247,11 @@ decl_module! {
 		type Error = Error<T, I>;
 
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() -> Weight {
+
+			0
+		}
 
 		/// Set the collective's membership.
 		///
@@ -982,6 +993,19 @@ mod tests {
 		}.build_storage().unwrap().into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext
+	}
+
+	#[test]
+	fn storage_version_parsing_test() {
+		use sp_std::convert::TryInto;
+		let pkg_version = env!("CARGO_PKG_VERSION");
+		let cargo_based_version: PalletVersion = pkg_version.try_into().unwrap();
+		assert_eq!(
+			cargo_based_version, PalletVersion { major: 2, minor: 0, patch: 0 }
+		);
+		new_test_ext().execute_with(|| {
+			assert_eq!(Collective::storage_version(), cargo_based_version);
+		});
 	}
 
 	#[test]
