@@ -148,7 +148,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			let mut initial_message = vec![0u8; initial_message_len];
 			if !initial_message.is_empty() {
-				socket.read(&mut initial_message).await?;
+				socket.read_exact(&mut initial_message).await?;
 			}
 
 			let substream = NotificationsInSubstream {
@@ -300,7 +300,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			let mut handshake = vec![0u8; handshake_len];
 			if !handshake.is_empty() {
-				socket.read(&mut handshake).await?;
+				socket.read_exact(&mut handshake).await?;
 			}
 
 			Ok((handshake, NotificationsOutSubstream {
