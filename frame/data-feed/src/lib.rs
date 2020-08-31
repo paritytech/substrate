@@ -196,13 +196,13 @@ use sp_runtime::{
 use sp_std::{prelude::*, str::Chars};
 
 use frame_support::{
-	debug, decl_error, decl_event, decl_module, decl_storage,
+	debug, decl_error, decl_event, decl_module, decl_storage, ensure,
 	traits::{Contains, EnsureOrigin},
 	weights::Weight,
 	IterableStorageDoubleMap, IterableStorageMap,
 };
 use frame_system::{
-	ensure_root, ensure_signed,
+	ensure_signed,
 	offchain::{AppCrypto, CreateSignedTransaction, SendSignedTransaction, Signer},
 };
 
@@ -360,8 +360,8 @@ pub trait Trait: CreateSignedTransaction<Call<Self>> {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// The identifier type for an offchain worker.
 	type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
-	/// The origin that can schedule an update
-	type DispatchOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+	/// The origin that can control `StorageKey`, control `ActiveProviders` and other key information
+	type DataFeedOrigin: EnsureOrigin<Self::Origin>;
 	/// WeightInfo
 	type WeightInfo: WeightInfo;
 }
@@ -455,7 +455,7 @@ decl_module! {
 		/// by this data feed pallet with some rules
 		#[weight = T::WeightInfo::register_storage_key()]
 		pub fn register_storage_key(origin, key: StorageKey, info: FeededDataInfo<T::BlockNumber>) -> DispatchResult {
-			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+			T::DataFeedOrigin::ensure_origin(origin)?;
 			// parse origin
 			ActiveParamTypes::try_mutate::<_, DispatchError, _>(|v| {
 				if v.contains(&key) {
@@ -477,7 +477,7 @@ decl_module! {
 		/// can change the corresponding value afterwards.
 		#[weight = T::WeightInfo::remove_storage_key()]
 		pub fn remove_storage_key(origin, key: StorageKey) -> DispatchResult {
-			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+			T::DataFeedOrigin::ensure_origin(origin)?;
 			ActiveParamTypes::mutate(|v| {
 				// remove key
 				v.retain(|k| k != &key);
@@ -492,7 +492,7 @@ decl_module! {
 		/// Set a url for a key which used in offchain to fetch data from this url.
 		#[weight = T::WeightInfo::set_url()]
 		pub fn set_url(origin, key: StorageKey, url: Vec<u8>) -> DispatchResult {
-			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+			T::DataFeedOrigin::ensure_origin(origin)?;
 			let _ = Self::data_info(&key).ok_or(Error::<T>::InvalidKey)?;
 
 			Url::insert(&key, &url);
@@ -505,7 +505,7 @@ decl_module! {
 		/// the offchain worker would not submmit data for this key.
 		#[weight = T::WeightInfo::set_offchain_period()]
 		pub fn set_offchain_period(origin, key: StorageKey, period: Option<T::BlockNumber>) -> DispatchResult {
-			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+			T::DataFeedOrigin::ensure_origin(origin)?;
 
 			match period {
 				Some(p) => {
@@ -523,14 +523,19 @@ decl_module! {
 		/// Submit a new data under the specific storage key.
 		#[weight = T::WeightInfo::feed_data()]
 		pub fn feed_data(origin, key: StorageKey, value: DataType) -> DispatchResult {
+			// use `enusre_signed` rather than `T::DataFeedOrigin::ensure_origin`
+			// for `T::DataFeedOrigin` may not same as `ActiveProviders`
 			let who = ensure_signed(origin)?;
+			// make sure the caller is a provider
+			ensure!(Self::all_providers().contains(&who), Error::<T>::NotAllowed);
+
 			Self::feed_data_impl(who, key, value)
 		}
 
 		/// Add a provider to current provider collection.
 		#[weight = T::WeightInfo::add_provider()]
 		pub fn add_provider(origin, new_one: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
-			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+			T::DataFeedOrigin::ensure_origin(origin)?;
 			let new_one = T::Lookup::lookup(new_one)?;
 
 			ActiveProviders::<T>::try_mutate(|v| -> DispatchResult {
@@ -550,7 +555,7 @@ decl_module! {
 		/// Remove a provider from current provider collection.
 		#[weight = T::WeightInfo::remove_provider()]
 		pub fn remove_provider(origin, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
-			T::DispatchOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
+			T::DataFeedOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
 			ActiveProviders::<T>::mutate(|v| {

@@ -5,6 +5,7 @@ use frame_support::{
 	assert_ok, impl_outer_event, impl_outer_origin, parameter_types, traits::OnFinalize,
 	weights::Weight,
 };
+use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
 use sp_core::{
 	offchain::{testing, OffchainExt, TransactionPoolExt},
 	sr25519::Signature,
@@ -98,11 +99,14 @@ parameter_types! {
 	pub storage StorageArgument: DataType = DataType::U128(0);
 }
 
+type DataFeedOrigin =
+	EnsureOneOf<AccountId, EnsureSignedBy<DataFeed, AccountId>, EnsureRoot<AccountId>>;
+
 impl Trait for Test {
 	type Event = TestEvent;
 	type AuthorityId = crypto::Sr25519DataFeedAuthId;
 	// frame_system::EnsureSignedBy<DataFeed, AccountId>; use this in runtime/lib.rs
-	type DispatchOrigin = frame_system::EnsureSigned<AccountId>;
+	type DataFeedOrigin = DataFeedOrigin;
 	type WeightInfo = ();
 }
 
@@ -187,7 +191,7 @@ fn should_submit_signed_data_on_chain() {
 		);
 		let (k, data) = match tx.call {
 			Call::feed_data(a, b) => (a, b),
-			_ => unreachable!(""),
+			_ => unreachable!("must be feed_data call"),
 		};
 
 		// execute call
@@ -218,13 +222,13 @@ pub fn register_info() {
 	));
 
 	assert_ok!(DataFeed::set_url(
-		Origin::signed(AccountId::default()),
+		frame_system::RawOrigin::Root.into(),
 		StorageArgument::key().to_vec(),
 		b"https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".to_vec()
 	));
 
 	assert_ok!(DataFeed::set_offchain_period(
-		Origin::signed(AccountId::default()),
+		frame_system::RawOrigin::Root.into(),
 		StorageArgument::key().to_vec(),
 		Some(1),
 	));
