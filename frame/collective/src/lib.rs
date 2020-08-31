@@ -624,7 +624,6 @@ decl_module! {
 					length_bound,
 					proposal_weight_bound
 				)?;
-
 				for member in absentation_members {
 					T::OnAbsentation::on_absentation(&member);
 				}
