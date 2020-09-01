@@ -168,26 +168,28 @@ where
 	Client::Api: TaggedTransactionQueue<Block>,
 	sp_api::ApiErrorFor<Client, Block>: Send + std::fmt::Display,
 {
-	sp_tracing::enter_span!(sp_tracing::Level::TRACE, "validate_transaction");
-	let runtime_api = client.runtime_api();
-	let has_v2 = sp_tracing::within_span! { sp_tracing::Level::TRACE, "check_version";
-		runtime_api
-			.has_api_with::<dyn TaggedTransactionQueue<Block, Error=()>, _>(&at, |v| v >= 2)
-			.unwrap_or_default()
-	};
-
-	let res = sp_tracing::within_span!(
-		sp_tracing::Level::TRACE, "runtime::validate_transaction";
+	sp_tracing::within_span!(sp_tracing::Level::TRACE, "validate_transaction";
 	{
-		if has_v2 {
-			runtime_api.validate_transaction(&at, source, uxt)
-		} else {
-			#[allow(deprecated)] // old validate_transaction
-			runtime_api.validate_transaction_before_version_2(&at, uxt)
-		}
-	});
+		let runtime_api = client.runtime_api();
+		let has_v2 = sp_tracing::within_span! { sp_tracing::Level::TRACE, "check_version";
+			runtime_api
+				.has_api_with::<dyn TaggedTransactionQueue<Block, Error=()>, _>(&at, |v| v >= 2)
+				.unwrap_or_default()
+		};
 
-	res.map_err(|e| Error::RuntimeApi(e.to_string()))
+		let res = sp_tracing::within_span!(
+			sp_tracing::Level::TRACE, "runtime::validate_transaction";
+		{
+			if has_v2 {
+				runtime_api.validate_transaction(&at, source, uxt)
+			} else {
+				#[allow(deprecated)] // old validate_transaction
+				runtime_api.validate_transaction_before_version_2(&at, uxt)
+			}
+		});
+
+		res.map_err(|e| Error::RuntimeApi(e.to_string()))
+	})
 }
 
 impl<Client, Block> FullChainApi<Client, Block>
