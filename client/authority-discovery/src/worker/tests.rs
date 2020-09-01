@@ -411,9 +411,7 @@ fn terminate_when_event_stream_terminates() {
 		);
 	};
 
-	block_on(async {
-		join!(timer, discovery_future)
-	});
+	block_on(join!(timer, discovery_future));
 }
 
 #[test]
