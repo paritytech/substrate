@@ -224,7 +224,7 @@ pub enum NotifsHandlerOut {
 	/// Received a message on a custom protocol substream.
 	Notification {
 		/// Name of the protocol of the message.
-		protocol_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, str>,
 
 		/// Message that has been received.
 		message: BytesMut,
@@ -270,7 +270,7 @@ enum NotificationsSinkMessage {
 	/// Message emitted by [`NotificationsSink::reserve_notification`] and
 	/// [`NotificationsSink::write_notification_now`].
 	Notification {
-		protocol_name: Vec<u8>,
+		protocol_name: Cow<'static, str>,
 		encoded_fallback_message: Vec<u8>,
 		message: Vec<u8>,
 	},
@@ -311,13 +311,13 @@ impl NotificationsSink {
 	/// This method will be removed in a future version.
 	pub fn send_sync_notification<'a>(
 		&'a self,
-		protocol_name: &[u8],
+		protocol_name: Cow<'static, str>,
 		encoded_fallback_message: impl Into<Vec<u8>>,
 		message: impl Into<Vec<u8>>
 	) {
 		let mut lock = self.inner.sync_channel.lock();
 		let result = lock.try_send(NotificationsSinkMessage::Notification {
-			protocol_name: protocol_name.to_owned(),
+			protocol_name: protocol_name,
 			encoded_fallback_message: encoded_fallback_message.into(),
 			message: message.into()
 		});
@@ -336,12 +336,12 @@ impl NotificationsSink {
 	///
 	/// The protocol name is expected to be checked ahead of calling this method. It is a logic
 	/// error to send a notification using an unknown protocol.
-	pub async fn reserve_notification<'a>(&'a self, protocol_name: &[u8]) -> Result<Ready<'a>, ()> {
+	pub async fn reserve_notification<'a>(&'a self, protocol_name: Cow<'static, str>) -> Result<Ready<'a>, ()> {
 		let mut lock = self.inner.async_channel.lock().await;
 
 		let poll_ready = future::poll_fn(|cx| lock.poll_ready(cx)).await;
 		if poll_ready.is_ok() {
-			Ok(Ready { protocol_name: protocol_name.to_owned(), lock })
+			Ok(Ready { protocol_name: protocol_name, lock })
 		} else {
 			Err(())
 		}
@@ -355,7 +355,7 @@ pub struct Ready<'a> {
 	/// Guarded channel. The channel inside is guaranteed to not be full.
 	lock: FuturesMutexGuard<'a, mpsc::Sender<NotificationsSinkMessage>>,
 	/// Name of the protocol. Should match one of the protocols passed at initialization.
-	protocol_name: Vec<u8>,
+	protocol_name: Cow<'static, str>,
 }
 
 impl<'a> Ready<'a> {
@@ -392,7 +392,7 @@ impl NotifsHandlerProto {
 	/// ourselves or respond to handshake from the remote.
 	pub fn new(
 		legacy: RegisteredProtocol,
-		list: impl Into<Vec<(Cow<'static, [u8]>, Arc<RwLock<Vec<u8>>>)>>,
+		list: impl Into<Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>>,
 	) -> Self {
 		let list = list.into();
 
@@ -613,7 +613,7 @@ impl ProtocolsHandler for NotifsHandler {
 						message
 					} => {
 						for (handler, _) in &mut self.out_handlers {
-							if handler.protocol_name() == &protocol_name[..] && handler.is_open() {
+							if *handler.protocol_name() == protocol_name && handler.is_open() {
 								handler.send_or_discard(message);
 								continue 'poll_notifs_sink;
 							}
@@ -698,7 +698,7 @@ impl ProtocolsHandler for NotifsHandler {
 							if self.notifications_sink_rx.is_some() {
 								let msg = NotifsHandlerOut::Notification {
 									message,
-									protocol_name: handler.protocol_name().to_owned().into(),
+									protocol_name: handler.protocol_name().clone(),
 								};
 								return Poll::Ready(ProtocolsHandlerEvent::Custom(msg));
 							}
