@@ -129,7 +129,7 @@ impl Config {
 	pub fn set_protocol(&mut self, id: &ProtocolId) -> &mut Self {
 		let mut v = Vec::new();
 		v.extend_from_slice(b"/");
-		v.extend_from_slice(id.as_bytes());
+		v.extend_from_slice(id.as_ref().as_bytes());
 		v.extend_from_slice(b"/finality-proof/1");
 		self.protocol = v.into();
 		self
