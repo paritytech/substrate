@@ -20,7 +20,7 @@
 use crate::{new_worker_and_service, worker::{tests::{TestApi, TestNetwork}, Role}};
 
 use std::sync::Arc;
-use futures::{prelude::*, channel::mpsc::channel, executor::LocalPool, task::LocalSpawn};
+use futures::{channel::mpsc::channel, executor::LocalPool, task::LocalSpawn};
 use libp2p::core::{multiaddr::{Multiaddr, Protocol}, PeerId};
 
 use sp_authority_discovery::AuthorityId;
@@ -57,7 +57,7 @@ fn get_addresses_and_authority_id() {
 		test_api,
 		network.clone(),
 		vec![],
-		dht_event_rx.boxed(),
+		Box::pin(dht_event_rx),
 		Role::Authority(key_store.into()),
 		None,
 	);

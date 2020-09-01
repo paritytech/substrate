@@ -45,7 +45,7 @@ pub(crate) struct TestNetwork {
 }
 
 impl sc_network_gossip::Network<Block> for TestNetwork {
-	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
+	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send + Sync>> {
 		let (tx, rx) = tracing_unbounded("test");
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::pin(rx)

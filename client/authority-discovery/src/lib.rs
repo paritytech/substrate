@@ -49,7 +49,7 @@ pub fn new_worker_and_service<Client, Network, Block>(
 	client: Arc<Client>,
 	network: Arc<Network>,
 	sentry_nodes: Vec<MultiaddrWithPeerId>,
-	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send + Sync>>,
 	role: Role,
 	prometheus_registry: Option<prometheus_endpoint::Registry>,
 ) -> (Worker<Client, Network, Block>, Service)

@@ -132,7 +132,7 @@ where
 	//   - Some(vec![a, b, c, ...]): Valid addresses were specified.
 	sentry_nodes: Option<Vec<Multiaddr>>,
 	/// Channel we receive Dht events on.
-	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send + Sync>>,
 
 	/// Interval to be proactive, publishing own addresses.
 	publish_interval: Interval,
@@ -168,7 +168,7 @@ where
 		client: Arc<Client>,
 		network: Arc<Network>,
 		sentry_nodes: Vec<MultiaddrWithPeerId>,
-		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send + Sync>>,
 		role: Role,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 	) -> Self {

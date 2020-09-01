@@ -238,7 +238,7 @@ fn new_registers_metrics() {
 		test_api,
 		network.clone(),
 		vec![],
-		dht_event_rx.boxed(),
+		Box::pin(dht_event_rx),
 		Role::Authority(key_store.into()),
 		Some(registry.clone()),
 	);
@@ -269,7 +269,7 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 		test_api,
 		network.clone(),
 		vec![],
-		dht_event_rx.boxed(),
+		Box::pin(dht_event_rx),
 		Role::Authority(key_store.into()),
 		None,
 	);
@@ -316,7 +316,7 @@ fn publish_discover_cycle() {
 			test_api,
 			network.clone(),
 			vec![],
-			dht_event_rx.boxed(),
+			Box::pin(dht_event_rx),
 			Role::Authority(key_store.into()),
 			None,
 		);
@@ -347,7 +347,7 @@ fn publish_discover_cycle() {
 			test_api,
 			network.clone(),
 			vec![],
-			dht_event_rx.boxed(),
+			Box::pin(dht_event_rx),
 			Role::Authority(key_store.into()),
 			None,
 		);
@@ -387,7 +387,7 @@ fn terminate_when_event_stream_terminates() {
 		test_api,
 		network.clone(),
 		vec![],
-		dht_event_rx.boxed(),
+		Box::pin(dht_event_rx),
 		Role::Authority(key_store.into()),
 		None,
 	);
@@ -437,7 +437,7 @@ fn dont_stop_polling_when_error_is_returned() {
 		test_api,
 		network.clone(),
 		vec![],
-		dht_event_rx.boxed(),
+		Box::pin(dht_event_rx),
 		Role::Authority(Arc::new(key_store)),
 		None,
 	);
@@ -559,7 +559,7 @@ fn never_add_own_address_to_priority_group() {
 		sentry_test_api,
 		sentry_network.clone(),
 		vec![],
-		dht_event_rx.boxed(),
+		Box::pin(dht_event_rx),
 		Role::Sentry,
 		None,
 	);
@@ -635,7 +635,7 @@ fn limit_number_of_addresses_added_to_cache_per_authority() {
 		Arc::new(TestApi { authorities: vec![remote_public.into()] }),
 		Arc::new(TestNetwork::default()),
 		vec![],
-		dht_event_rx.boxed(),
+		Box::pin(dht_event_rx),
 		Role::Sentry,
 		None,
 	);
@@ -712,7 +712,7 @@ fn do_not_cache_addresses_without_peer_id() {
 		local_test_api,
 		local_network.clone(),
 		vec![],
-		dht_event_rx.boxed(),
+		Box::pin(dht_event_rx),
 		Role::Authority(Arc::new(local_key_store)),
 		None,
 	);
@@ -744,7 +744,7 @@ fn addresses_to_publish_adds_p2p() {
 		}),
 		network.clone(),
 		vec![],
-		dht_event_rx.boxed(),
+		Box::pin(dht_event_rx),
 		Role::Authority(Arc::new(KeyStore::new())),
 		Some(prometheus_endpoint::Registry::new()),
 	);
@@ -779,7 +779,7 @@ fn addresses_to_publish_respects_existing_p2p_protocol() {
 		}),
 		network.clone(),
 		vec![],
-		dht_event_rx.boxed(),
+		Box::pin(dht_event_rx),
 		Role::Authority(Arc::new(KeyStore::new())),
 		Some(prometheus_endpoint::Registry::new()),
 	);
