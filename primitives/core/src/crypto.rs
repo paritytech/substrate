@@ -712,13 +712,6 @@ pub enum NodePublicKey {
 	Ed25519(ed25519::Public),
 }
 
-impl From<[u8; 32]> for NodePublicKey {
-	fn from(x: [u8; 32]) -> NodePublicKey {
-		let public = ed25519::Public(x);
-		NodePublicKey::Ed25519(public)
-	}
-}
-
 #[cfg(feature = "std")]
 pub use self::dummy::*;
 

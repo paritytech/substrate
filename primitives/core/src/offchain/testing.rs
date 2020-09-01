@@ -381,7 +381,9 @@ impl offchain::Externalities for TestOffchainExt {
 		Ok(NodePublicKey::Ed25519(ed25519::Public([0u8; 32])))
 	}
 
-	fn set_reserved_nodes(&mut self, _nodes: Vec<NodePublicKey>, _reserved_only: bool) { unimplemented!() }
+	fn set_reserved_nodes(&mut self, _nodes: Vec<NodePublicKey>, _reserved_only: bool) {
+		unimplemented!()
+	}
 }
 
 /// The internal state of the fake transaction pool.

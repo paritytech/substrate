@@ -31,7 +31,7 @@ use sp_core::offchain::{
 	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
-use sp_core::NodePublicKey;
+use sp_core::{NodePublicKey, ed25519};
 pub use sp_offchain::STORAGE_PREFIX;
 pub use http::SharedClient;
 
@@ -187,7 +187,7 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		let public_key = self.network_state.local_public_key();
 		match public_key {
 			identity::PublicKey::Ed25519(public) =>
-				Ok(public.encode().into()),
+				Ok(NodePublicKey::Ed25519(ed25519::Public(public.encode()))),
 			_ => Err(()),
 		}
 	}
