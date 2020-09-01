@@ -71,7 +71,6 @@ mod inner {
 	// just a simplistic holder for span and entered spans
 	// that exits on drop
 	pub struct Span(u64);     // 0 means no item
-	pub struct Entered(u64);  // 0 means no item
 
 	impl Span {
 		pub fn new(v: u64) -> Self {
@@ -80,29 +79,12 @@ mod inner {
 		pub fn none() -> Self {
 			Span::new(0)
 		}
-		pub fn enter(&self) -> Entered {
-			if self.0 != 0 {
-				crate::with_tracing_subscriber(|t|  t.enter(self.0));
-			}
-			Entered(self.0)
-		}
-		pub fn in_scope<F: FnOnce() -> T, T>(&self, f: F) -> T {
-			let _enter = self.enter();
-			f()
-		}
-	}
-
-	impl Entered {
-		pub fn exit(&mut self) {
+		pub fn in_scope<F: FnOnce() -> T, T>(self, f: F) -> T {
+			let x = f();
 			if self.0 != 0 {
 				crate::with_tracing_subscriber(|t| t.exit(self.0));
 			}
-		}
-	}
-
-	impl Drop for Entered {
-		fn drop(&mut self) {
-			self.exit();
+			x
 		}
 	}
 
@@ -388,7 +370,7 @@ mod inner {
 						fields: $crate::fieldset!( $($fields)* )
 					};
 					if $crate::is_enabled!(&metadata) {
-						let span_id = $crate::with_tracing_subscriber(|t| t.new_span(
+						let span_id = $crate::with_tracing_subscriber(|t| t.enter_span(
 							WasmEntryAttributes {
 								parent_id: Some($parent.0),
 								fields: $crate::valueset!(&metadata.fields, $($fields)*),
@@ -422,7 +404,7 @@ mod inner {
 						fields: $crate::fieldset!( $($fields)* )
 					};
 					if $crate::is_enabled!(&metadata) {
-						let span_id = $crate::with_tracing_subscriber(|t| t.new_span(
+						let span_id = $crate::with_tracing_subscriber(|t| t.enter_span(
 							WasmEntryAttributes {
 								parent_id: None,
 								metadata: metadata.clone(),

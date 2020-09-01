@@ -17,8 +17,7 @@
 
 //! Substrate tracing primitives and macros.
 //!
-//! To trace functions or invidual code in Substrate, this crate provides [`within_span`]
-//! and [`enter_span`]. See the individual docs for how to use these macros.
+//! To trace functions or invidual code in Substrate, this crate provides [`within_span`].
 //!
 //! Note that to allow traces from wasm execution environment there are
 //! 2 reserved identifiers for tracing `Field` recording, stored in the consts:
@@ -45,24 +44,15 @@
 /// the tracing code in the non-std environment.
 ///
 /// Because of that optimisation, you should not use the `span!` and `span_*!` macros
-/// directly as they yield nothing without the feature present. Instead you should use
-/// `enter_span!` and `within_span!` – which would strip away even any parameter conversion
+/// directly as they yield nothing without the feature present. Instead you must use
+/// `within_span!` – which would strip away even any parameter conversion
 /// you do within the span-definition (and thus optimise your performance). For your
-/// convineience you directly specify the `Level` and name of the span or use the full
+/// convinience you directly specify the `Level` and name of the span or use the full
 /// feature set of `span!`/`span_*!` on it:
 ///
 /// # Example
 ///
 /// ```rust
-/// sp_tracing::enter_span!(sp_tracing::Level::TRACE, "fn wide span");
-/// {
-///		sp_tracing::enter_span!(sp_tracing::trace_span!("outer-span"));
-///		{
-///			sp_tracing::enter_span!(sp_tracing::Level::TRACE, "inner-span");
-///			// ..
-///		}  // inner span exists here
-///	} // outer span exists here
-///
 /// sp_tracing::within_span! {
 ///		sp_tracing::debug_span!("debug-span", you_can_pass="any params");
 ///     1 + 1;
@@ -139,14 +129,12 @@ pub trait TracingSubscriber: Send + Sync {
 	/// This may or may not be implemented wasm- and/or native side or have optimisations
 	/// added.
 	fn enabled(&self, metadata: &WasmMetadata) -> bool;
-	/// Create a new `Span` with the given `WasmEntryAttributes`, return the u64 tracking ID for
-	/// it. Will only be called if `attrs.metadata` was found to be enabled.
-	fn new_span(&self, attrs: WasmEntryAttributes) -> u64;
+	/// Enter a new `Span` with the given `WasmEntryAttributes`, return the u64 tracking ID for
+	/// it or 0 if not. Will only be called if `attrs.metadata` was found to be enabled.
+	fn enter_span(&self, attrs: WasmEntryAttributes) -> u64;
 	/// Record the `WasmValueSet` for `WasMetadata` as a new event. Willl only be called if
 	/// `WasmMetadata` was found to be enabled;
 	fn event(&self, parent_id: Option<u64>, metadata: &WasmMetadata, values: &WasmValuesSet);
-	/// Mark the given `span` to be entered. A span may not be entered twice.
-	fn enter(&self, span: u64);
 	/// Exit the given span. You can discard the span info now.
 	fn exit(&self, span: u64);
 }
@@ -270,52 +258,5 @@ macro_rules! within_span {
 		$( $code:tt )*
 	) => {
 		$( $code )*
-	};
-}
-
-
-/// Enter a span - noop for `no_std` without `with-tracing`
-#[cfg(all(not(feature = "std"), not(feature = "with-tracing")))]
-#[macro_export]
-macro_rules! enter_span {
-	( $lvl:expr, $name:expr ) => ( );
-	( $name:expr ) => ( ) // no-op
-}
-
-/// Enter a span.
-///
-/// The span will be valid, until the scope is left. Use either level and name
-/// or pass in any valid `sp_tracing::Span` for extended usage. The span will
-/// be exited on drop – which is at the end of the block or to the next
-/// `enter_span!` calls, as this overwrites the local variable. For nested
-/// usage or to ensure the span closes at certain time either put it into a block
-/// or use `within_span!`
-///
-/// # Example
-///
-/// ```
-/// sp_tracing::enter_span!(sp_tracing::Level::TRACE, "test-span");
-/// sp_tracing::enter_span!(sp_tracing::span!(sp_tracing::Level::DEBUG, "debug-span", params="value"));
-/// sp_tracing::enter_span!(sp_tracing::info_span!("info-span",  params="value"));
-///
-/// {
-///		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "outer-span");
-///		{
-///			sp_tracing::enter_span!(sp_tracing::Level::TRACE, "inner-span");
-///			// ..
-///		}  // inner span exists here
-///	} // outer span exists here
-///
-/// ```
-#[cfg(any(feature = "std", feature = "with-tracing"))]
-#[macro_export]
-macro_rules! enter_span {
-	( $span:expr ) => {
-		// FIXME: this could be clashing, make the local variable based on name to prevent that
-		let __within_span__ = $span;
-		let __tracing_guard__ = __within_span__.enter();
-	};
-	( $lvl:expr, $name:expr ) => {
-		$crate::enter_span!($crate::span!($crate::Level::TRACE, $name))
 	};
 }

@@ -1044,12 +1044,15 @@ pub trait WasmTracing {
 	/// and then calls `clone_span` with the ID to signal that we are keeping it around on the wasm-
 	/// side even after the local span is dropped. The resulting ID is then handed over to the waasm-
 	/// side.
-	fn new_span(&mut self, span: Crossing<sp_tracing::WasmEntryAttributes>) -> u64 {
+	fn enter_span(&mut self, span: Crossing<sp_tracing::WasmEntryAttributes>) -> u64 {
 		let span : tracing::Span = span.into_inner().into();
 		match span.id() {
 			Some(id) => tracing::dispatcher::get_default(|d| {
 				// inform dispatch that we'll keep the ID around
-				d.clone_span(&id).into_u64()
+				// then enter it immediately
+				let final_id = d.clone_span(&id);
+				d.enter(&final_id);
+				final_id.into_u64()
 			}),
 			_ => {
 				0
@@ -1062,19 +1065,13 @@ pub trait WasmTracing {
 		event.into_inner().emit();
 	}
 
-	/// Signal that a given span-id has been entered. On native, this directly
-	/// proxies this to the global dispatcher.
-	fn enter(&mut self, span: u64) {
-		tracing::dispatcher::get_default(|d| {
-			d.enter(&tracing_core::span::Id::from_u64(span))
-		});
-	}
-
 	/// Signal that a given span-id has been exited. On native, this directly
 	/// proxies this to the global dispatcher.
 	fn exit(&mut self, span: u64) {
 		tracing::dispatcher::get_default(|d| {
-			d.exit(&tracing_core::span::Id::from_u64(span))
+			let id = tracing_core::span::Id::from_u64(span);
+			d.exit(&id);
+			d.try_close(id);
 		});
 	}
 }
@@ -1088,8 +1085,8 @@ impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
 	fn enabled(&self, metadata: &sp_tracing::WasmMetadata) -> bool {
 		wasm_tracing::enabled(Crossing(metadata.clone()))
 	}
-	fn new_span(&self, attrs: sp_tracing::WasmEntryAttributes) -> u64 {
-		wasm_tracing::new_span(Crossing(attrs))
+	fn enter_span(&self, attrs: sp_tracing::WasmEntryAttributes) -> u64 {
+		wasm_tracing::enter_span(Crossing(attrs))
 	}
 	fn event(&self,
 		parent_id: Option<u64>,
@@ -1102,11 +1099,8 @@ impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
 			fields: values.clone()
 		}))
 	}
-	fn enter(&self, span: u64) {
-		wasm_tracing::enter(span)
-	}
 	fn exit(&self, span: u64) {
-		wasm_tracing::enter(span)
+		wasm_tracing::exit(span)
 	}
 }
 
