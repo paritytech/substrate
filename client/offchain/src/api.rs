@@ -205,8 +205,6 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 			)
 			.collect();
 		
-		peer_ids.remove(&self.network_state.local_peer_id());
-
 		let peerset = self.network_state.peerset();
 		peerset.set_reserved_peers(peer_ids);
 		peerset.set_reserved_only(reserved_only);
@@ -473,5 +471,15 @@ mod tests {
 		let seed = api.random_seed();
 		// then
 		assert_ne!(seed, [0; 32]);
+	}
+
+	#[test]
+	fn should_get_node_public_key() {
+		// given
+		let mut api = offchain_api().0;
+		let node_public_key = api.get_node_public_key();
+
+		// then
+		assert!(node_public_key.is_ok());
 	}
 }

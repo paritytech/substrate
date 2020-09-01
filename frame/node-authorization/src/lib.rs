@@ -315,7 +315,10 @@ decl_module! {
             let mut nodes = AdditionalConnections::get(&node);
 
             for add_node in connections.iter() {
-                if let Err(add_location) = nodes.binary_search(&add_node) {
+                if *add_node == node {
+                    continue;
+                }
+                if let Err(add_location) = nodes.binary_search(add_node) {
                     nodes.insert(add_location, add_node.clone());
                 }
             }
@@ -342,7 +345,7 @@ decl_module! {
             let mut nodes = AdditionalConnections::get(&node);
 
             for remove_node in connections.iter() {
-                if let Ok(remove_location) = nodes.binary_search(&remove_node) {
+                if let Ok(remove_location) = nodes.binary_search(remove_node) {
                     nodes.remove(remove_location);
                 }
             }
@@ -358,7 +361,9 @@ decl_module! {
             let node_public_key = sp_io::offchain::get_node_public_key();
             match node_public_key {
                 Err(_) => debug::error!("Error: failed to get public key of node at {:?}", now),
-                Ok(node) => Self::authorize_nodes(&node),
+                Ok(node) => sp_io::offchain::set_reserved_nodes(
+                    Self::get_authorized_nodes(&node), true
+                ),
             }
         }
     }
@@ -377,15 +382,16 @@ impl<T: Trait> Module<T> {
         }
     }
 
-    fn authorize_nodes(node: &NodePublicKey) {
+    fn get_authorized_nodes(node: &NodePublicKey) -> Vec<NodePublicKey> {
         let mut nodes = AdditionalConnections::get(node);
         
-        let well_known_nodes = WellKnownNodes::get();
-        if well_known_nodes.binary_search(node).is_ok() {
+        let mut well_known_nodes = WellKnownNodes::get();
+        if let Ok(location) = well_known_nodes.binary_search(node) {
+            well_known_nodes.remove(location);
             nodes.extend(well_known_nodes);
         }
 
-        sp_io::offchain::set_reserved_nodes(nodes, true)
+        nodes
     }
 }
 
@@ -699,7 +705,7 @@ mod tests {
                 NodeAuthorization::add_connections(
                     Origin::signed(20),
                     test_node(20),
-                    vec![test_node(15), test_node(5), test_node(25)]
+                    vec![test_node(15), test_node(5), test_node(25), test_node(20)]
                 )
             );
             assert_eq!(
@@ -737,6 +743,19 @@ mod tests {
                 )
             );
             assert_eq!(AdditionalConnections::get(test_node(20)), vec![test_node(25)]);
+        });
+    }
+
+    #[test]
+    fn get_authorize_nodes_worker() {
+        new_test_ext().execute_with(|| {
+            AdditionalConnections::insert(
+                test_node(20), vec![test_node(5), test_node(15), test_node(25)]
+            );
+            assert_eq!(
+                Module::<Test>::get_authorized_nodes(&test_node(20)),
+                vec![test_node(5), test_node(15), test_node(25), test_node(10), test_node(30)]
+            );
         });
     }
 }

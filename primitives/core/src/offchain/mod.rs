@@ -277,6 +277,8 @@ pub enum Capability {
 	OffchainWorkerDbRead = 32,
 	/// Access to offchain worker DB (writes).
 	OffchainWorkerDbWrite = 64,
+	/// Manage the reserved nodes
+	NodesReservation = 128,
 }
 
 /// A set of capabilities
@@ -707,12 +709,12 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	}
 
 	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()> {
-		self.check(Capability::NetworkState, "get_node_public_key");
+		self.check(Capability::NodesReservation, "get_node_public_key");
 		self.externalities.get_node_public_key()
 	}
 
 	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool) {
-		self.check(Capability::NetworkState, "set_reserved_nodes");
+		self.check(Capability::NodesReservation, "set_reserved_nodes");
 		self.externalities.set_reserved_nodes(nodes, reserved_only)
 	}
 }
