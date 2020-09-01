@@ -357,59 +357,44 @@ impl Subscriber for ProfilingSubscriber {
 	}
 
 	fn clone_span(&self, span: &Id) -> Id {
-		println!("{:?}: cloning", span);
 		if let Some(mut s) = self.span_data.lock().get_mut(&span) {
-			println!("counted");
 			s.ref_count = s.ref_count.saturating_add(1);
-		} else {
-			println!("no clone");
 		}
 		span.clone()
 	}
 
 	fn enter(&self, span: &Id) {
-		println!("{:?}: enter", span);
 		if let Some(mut s) = self.span_data.lock().get_mut(&span) {
-			println!("entered");
 			self.current_span.enter(span.clone());
 			s.start_time = Instant::now();
-		} else {
-			println!("no enter");
 		}
 	}
 
 	fn exit(&self, span: &Id) {
-		println!("{:?}: exit", span);
 		let end_time = Instant::now();
 		let mut span_data = self.span_data.lock();
 		if let Some(mut s) = span_data.get_mut(&span) {
-			if s.ref_count != 0 {
-				println!("no exit");
+			if s.ref_count > 1 {
 				return // this isn't the last cloned span, ignore
 			}
-			println!("exiting");
 			self.current_span.exit();
 			s.overall_time = end_time - s.start_time + s.overall_time;
 		}
 	}
 
 	fn try_close(&self, span: Id) -> bool {
-		println!("{:?}: try close", span);
 		let mut span_datum = {
 			let mut span_data = self.span_data.lock();
 			match span_data.entry(span).and_modify(|d| {
 				d.ref_count = d.ref_count.saturating_sub(1);
 			}) {
 				Entry::Vacant(_) => {
-					println!("unkown");
 					return false;
 				}
 				Entry::Occupied(o) => {
 					if o.get().ref_count != 0 {
-						println!("not closing");
 						return false;
 					}
-					println!("closing");
 					o.remove()
 				}
 			}
