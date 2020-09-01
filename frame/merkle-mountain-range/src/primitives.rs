@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(codec::Encode, codec::Decode)]
+use frame_support::RuntimeDebug;
+
+#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq)]
 pub struct Leaf<Hash, Data> {
 	pub hash: Hash,
 	pub data: Data,

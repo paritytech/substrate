@@ -23,18 +23,31 @@
 //!
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Encode, Decode};
+use codec::Encode;
 use frame_support::{
-	debug, decl_module, decl_storage,
+	debug, decl_module, decl_storage, RuntimeDebug,
 	dispatch::Parameter,
 	weights::Weight,
 };
 use sp_runtime::traits;
-use sp_std::marker::PhantomData;
+use sp_std::{fmt, marker::PhantomData};
 
 mod primitives;
 #[cfg(test)]
 mod tests;
+
+/// A provider of the MMR's leaf data.
+pub trait LeafDataProvider {
+	/// A type that should end up in the leaf of MMR.
+	type LeafData: Parameter;
+
+	/// The method to return leaf data that should be placed
+	/// in the leaf node appended MMR at this block.
+	///
+	/// This is being called by the `on_initialize` method of
+	/// this pallet at the very beginning of each block.
+	fn leaf_data() -> Self::LeafData;
+}
 
 /// This pallet's configuration trait
 pub trait Trait: frame_system::Trait {
@@ -47,37 +60,136 @@ pub trait Trait: frame_system::Trait {
 	///
 	/// Then we create a tuple of these two hashes, SCALE-encode it (concatenate) and
 	/// hash, to obtain a new MMR inner node - the new peak.
-	type Hashing: traits::Hash;
+	type Hashing: traits::Hash<Output = <Self as Trait>::Hash>;
+
+	/// The hashing output type.
+	///
+	/// This type is actually going to be stored in the MMR.
+	/// Required to be provided again, to satisfy trait bounds for storage items.
+	type Hash: traits::Member + traits::MaybeSerializeDeserialize + sp_std::fmt::Debug
+		+ sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + codec::Codec
+		+ codec::EncodeLike;
 
 	/// Data stored in the leaf nodes.
 	///
 	/// By default every leaf node will always include a (parent) block hash and
 	/// any additional `LeafData` defined by this type.
-	type LeafData: Parameter;
+	type LeafData: LeafDataProvider;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as MerkleMountainRange {
+		/// Latest MMR Root hash.
+		pub RootHash get(fn mmr_root_hash): <T as Trait>::Hash;
+
+		/// Current size of the MMR (number of nodes).
+		pub Size get(fn mmr_size): u64;
+
+		/// Hashes of the nodes in the MMR.
+		///
+		/// Note this collection only contains MMR peaks, the inner nodes (and leaves)
+		/// are pruned and only stored in the Offchain DB.
+		pub Nodes get(fn mmr_peak): map hasher(identity) u64 => Option<<T as Trait>::Hash>;
+
+		// TODO [ToDr] Populate initial MMR?
 	}
 }
 
 decl_module! {
 	/// A public part of the pallet.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn on_initialize(block_number: T::BlockNumber) -> Weight {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			debug::native::info!("Hello World from MMR");
-			todo!()
+
+			let hash = <frame_system::Module<T>>::parent_hash();
+			let data = T::LeafData::leaf_data();
+			let mut mmr = MMR::<T, _>::new(Self::mmr_size());
+			mmr.push(primitives::Leaf { hash, data })
+				.expect("MMR push never fails.");
+
+			// update the size
+			let (size, root) = mmr.finalize()
+				.expect("MMR finalize never fails.");
+			<Size>::put(size);
+			<RootHash<T>>::put(root);
+
+			Self::prune_non_peaks();
+
+			// TODO [ToDr] Calculate weight
+			0
 		}
 	}
 }
 
 impl<T: Trait> Module<T> {
+	fn prune_non_peaks() {
+		debug::native::info!("Pruning MMR of size: {:?}", Self::mmr_size());
+	}
 }
 
-#[derive(Debug, codec::Encode, codec::Decode)]
+/// A node stored in the MMR.
+#[derive(RuntimeDebug, Clone, PartialEq, codec::Encode, codec::Decode)]
 pub enum MMRNode<H: traits::Hash, L> {
 	Leaf(L),
 	Inner(H::Output),
+}
+
+/// MMRNode type for runtime `T`.
+pub type MMRNodeOf<T, L> = MMRNode<<T as Trait>::Hashing, L>;
+
+/// TODO [ToDr] Move to a separate module.
+///
+/// A wrapper around a MMR library to expose limited functionality that works
+/// with non-peak nodes pruned.
+pub struct MMR<T: Trait, L: codec::Codec + fmt::Debug> {
+	mmr: mmr::MMR<
+		MMRNodeOf<T, L>,
+		MMRHasher<<T as Trait>::Hashing, L>,
+		MMRIndexer<T, L>
+	>,
+}
+
+impl<T: Trait, L: codec::Codec + PartialEq + fmt::Debug + Clone> MMR<T, L> {
+	/// Create a pointer to an existing MMR with given size.
+	pub fn new(size: u64) -> Self {
+		Self {
+			mmr: mmr::MMR::new(size, Default::default()),
+		}
+	}
+
+	/// Push another item to the MMR.
+	///
+	/// Returns element position (index) in the MMR.
+	pub fn push(&mut self, leaf: L) -> Option<u64> {
+		self.mmr.push(MMRNode::Leaf(leaf)).map_err(|e| {
+			debug::native::error!("Error while pushing MMR node: {:?}", e);
+			()
+		}).map_err(|e| Error::Push.debug(e)).ok()
+	}
+
+	/// Commit the changes to underlying storage and calculate MMR's size & root hash.
+	pub fn finalize(self) -> Result<(u64, <T as Trait>::Hash), Error> {
+		let size = self.mmr.mmr_size();
+		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.debug(e))?;
+		self.mmr.commit().map_err(|e| Error::Commit.debug(e))?;
+		Ok((size, root.hash()))
+	}
+}
+
+/// Error during MMR
+#[derive(RuntimeDebug)]
+pub enum Error {
+	Push,
+	GetRoot,
+	Commit
+}
+
+impl Error {
+	/// Replace given error `e` with `self` and generate a log entry with error details.
+	pub(crate) fn debug(self, e: impl fmt::Debug) -> Self {
+		debug::native::error!("[{:?}] MMR error: {:?}", self, e);
+		self
+	}
 }
 
 impl<H: traits::Hash, L: codec::Encode> MMRNode<H, L> {
@@ -94,14 +206,38 @@ impl<H: traits::Hash, L: codec::Encode> MMRNode<H, L> {
 }
 
 /// A storage layer for MMR.
-pub struct MMRIndexer<H, L>(PhantomData<(H, L)>);
+pub struct MMRIndexer<T, L>(PhantomData<(T, L)>);
 
-impl<H: traits::Hash, L: codec::Codec> mmr::MMRStore<MMRNode<H, L>> for MMRIndexer<H, L> {
-	fn get_elem(&self, pos: u64) -> mmr::Result<Option<MMRNode<H, L>>> {
-		todo!()
+impl<T, L> Default for MMRIndexer<T, L> {
+	fn default() -> Self {
+		Self(Default::default())
 	}
-	fn append(&mut self, pos: u64, elems: Vec<MMRNode<H, L>>) -> mmr::Result<()> {
-		todo!()
+}
+
+impl<T: Trait, L: codec::Codec + fmt::Debug> mmr::MMRStore<MMRNodeOf<T, L>> for MMRIndexer<T, L> {
+	fn get_elem(&self, pos: u64) -> mmr::Result<Option<MMRNodeOf<T, L>>> {
+		Ok(<Nodes<T>>::get(pos)
+			.map(MMRNode::Inner)
+		)
+	}
+
+	fn append(&mut self, pos: u64, elems: Vec<MMRNodeOf<T, L>>) -> mmr::Result<()> {
+		let mut size = Size::get();
+		if pos != size {
+			return Err(mmr::Error::InconsistentStore);
+		}
+
+		for elem in elems {
+			<Nodes<T>>::insert(size, elem.hash());
+			println!("Inserting node: {:?}", elem);
+			// Indexing API used to store the full leaf content.
+			elem.using_encoded(|elem| sp_io::offchain_index::set(b"mmr", elem));
+			size += 1;
+		}
+
+		Size::put(size);
+
+		Ok(())
 	}
 }
 

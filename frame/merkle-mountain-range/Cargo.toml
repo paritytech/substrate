@@ -23,6 +23,10 @@ sp-io = { version = "2.0.0-rc5", default-features = false, path = "../../primiti
 sp-std = { version = "2.0.0-rc5", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "2.0.0-rc5", default-features = false, path = "../../primitives/runtime" }
 
+[dev-dependencies]
+sp-core = { version = "2.0.0-rc5", default-features = false, path = "../../primitives/core" }
+env_logger = "0.5"
+
 [features]
 default = ["std"]
 std = [

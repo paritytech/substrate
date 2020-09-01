@@ -16,27 +16,23 @@
 // limitations under the License.
 
 use crate::*;
+use crate::primitives::Leaf;
 
 use codec::{Encode, Decode};
 use frame_support::{
-	assert_ok, impl_outer_origin, parameter_types,
+	impl_outer_origin, parameter_types,
+	traits::OnInitialize,
 	weights::Weight,
 };
-use sp_core::{
-	H256,
-	offchain::{OffchainExt, TransactionPoolExt, testing},
-	sr25519::Signature,
-	testing::KeyStore,
-	traits::KeystoreExt,
-};
+use sp_core::H256;
 use sp_runtime::{
-	Perbill, RuntimeAppPublic,
-	testing::{Header, TestXt},
+	Perbill,
+	testing::Header,
 	traits::{
-		BlakeTwo256, IdentityLookup, Extrinsic as ExtrinsicT,
-		IdentifyAccount, Verify,
+		BlakeTwo256, Keccak256, IdentityLookup,
 	},
 };
+use std::cell::RefCell;
 
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
@@ -79,11 +75,150 @@ impl frame_system::Trait for Test {
 }
 
 impl Trait for Test {
+	type Hashing = Keccak256;
+	type Hash = H256;
+	type LeafData = LeafData;
 }
 
-type Example = Module<Test>;
+#[derive(Encode, Decode, Clone, Default, Eq, PartialEq, Debug)]
+pub struct LeafData {
+	pub a: u64,
+	pub b: String,
+}
+
+impl LeafData {
+	fn new(a: u64) -> Self {
+		Self {
+			a,
+			b: Default::default(),
+		}
+	}
+}
+
+thread_local! {
+	pub static LEAF_DATA: RefCell<LeafData> = RefCell::new(Default::default());
+}
+
+impl crate::LeafDataProvider for LeafData {
+	type LeafData = Self;
+
+	fn leaf_data() -> Self::LeafData {
+		LEAF_DATA.with(|r| r.borrow().clone())
+	}
+}
+
+type MMR = Module<Test>;
+
+fn new_test_ext() -> sp_io::TestExternalities {
+	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+}
+
+fn new_block() -> u64 {
+	let number = frame_system::Module::<Test>::block_number() + 1;
+	let hash = H256::repeat_byte(number as u8);
+	LEAF_DATA.with(|r| r.borrow_mut().a = number);
+
+	frame_system::Module::<Test>::initialize(
+		&number,
+		&hash,
+		&Default::default(),
+		&Default::default(),
+		frame_system::InitKind::Full,
+	);
+	MMR::on_initialize(number)
+}
+
+fn hex(s: &str) -> H256 {
+	s.parse().unwrap()
+}
+
+fn decode_node(v: Vec<u8>) -> crate::MMRNode<
+	<Test as Trait>::Hashing,
+	Leaf<H256, LeafData>,
+> {
+	codec::Decode::decode(&mut &v[..]).unwrap()
+}
 
 #[test]
-fn should_have_some_tests() {
-	assert_eq!(true, false)
+fn should_start_empty() {
+	env_logger::try_init();
+	new_test_ext().execute_with(|| {
+		// given
+		assert_eq!(
+			crate::RootHash::<Test>::get(),
+			"0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap()
+		);
+		assert_eq!(crate::Size::get(), 0);
+		assert_eq!(crate::Nodes::<Test>::get(0), None);
+
+		// when
+		let weight = new_block();
+
+		// then
+		assert_eq!(crate::Size::get(), 1);
+		assert_eq!(crate::Nodes::<Test>::get(0),
+			Some(hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")));
+		assert_eq!(
+			crate::RootHash::<Test>::get(),
+			hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")
+		);
+		assert!(weight != 0);
+	});
+}
+
+#[test]
+fn should_append_to_mmr_when_on_initialize_is_called() {
+	env_logger::try_init();
+	let mut ext = new_test_ext();
+	ext.execute_with(|| {
+		// when
+		new_block();
+		new_block();
+
+		// then
+		assert_eq!(crate::Size::get(), 3);
+		assert_eq!(crate::Nodes::<Test>::get(0),
+			Some(hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")));
+		assert_eq!(crate::Nodes::<Test>::get(1),
+			Some(hex("037ff5a3903a59630e03b84cda912c26bf19442efe2cd30c2a25547e06ded385")));
+		assert_eq!(crate::Nodes::<Test>::get(2),
+			Some(hex("21b847809cbb535ba771e7bb25b33985b5259f1f3fc9cae81bc097f56efbbd36")));
+		assert_eq!(
+			crate::RootHash::<Test>::get(),
+			hex("21b847809cbb535ba771e7bb25b33985b5259f1f3fc9cae81bc097f56efbbd36")
+		);
+	});
+
+	// make sure the leaves end up in the offchain DB
+	ext.persist_offchain_overlay();
+	let odb = ext.offchain_db();
+	assert_eq!(odb.get(b"mmr-1").map(decode_node), Some(MMRNode::Leaf(Leaf {
+		hash: H256::repeat_byte(1),
+		data: LeafData::new(1),
+	})));
+}
+
+#[test]
+fn should_construct_larger_mmr_correctly() {
+	env_logger::try_init();
+	new_test_ext().execute_with(|| {
+		// when
+		for _ in 0..7 {
+			new_block();
+		}
+
+		// then
+		assert_eq!(crate::Size::get(), 11);
+		assert_eq!(crate::Nodes::<Test>::get(0),
+			Some(hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")));
+		assert_eq!(crate::Nodes::<Test>::get(10),
+			Some(hex("32d44b4a8e8a3046b9c02315847eb091678a59f136226e70d66f3a82bd836ce1")));
+		assert_eq!(
+			crate::RootHash::<Test>::get(),
+			hex("3106f5c4ee095d996b61283b4d7b524c0c2acb4c9eaff90da0c216709b8bd1b7")
+		);
+
+		// TODO [ToDr] Check that proving works.
+		// TODO [ToDr] Prune non-peaks.
+	});
 }
