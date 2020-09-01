@@ -352,12 +352,11 @@ fn publish_discover_cycle() {
 			None,
 		);
 
-		dht_event_tx.try_send(dht_event).unwrap();
+		dht_event_tx.try_send(dht_event.clone()).unwrap();
 
 		// Make authority discovery handle the event.
-		if !worker.handle_dht_events().await {
-			panic!("Unexpected error");
-		}
+		worker.handle_dht_event(dht_event).await;
+
 		worker.set_priority_group().unwrap();
 
 		// Expect authority discovery to set the priority set.

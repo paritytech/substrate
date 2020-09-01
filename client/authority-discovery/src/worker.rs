@@ -236,66 +236,64 @@ where
 
 	/// Start the worker
 	pub async fn run(mut self) {
-		futures::select! {
-			// Process incoming events.
-			_ = self.handle_dht_events().fuse() => {
-				// `handle_dht_events` returns when the Dht event stream terminated.
-				// Termination of the Dht event stream implies that the underlying network terminated,
-				// thus authority discovery should terminate as well.
-				return ();
-			},
-			_ = self.run_publish().fuse() => {
-				// do nothing
+		loop {
+			futures::select! {
+				// Process incoming events.
+				event = self.dht_event_rx.next().fuse() => {
+					if let Some(event) = event {
+						self.handle_dht_event(event).await;
+					} else {
+						return;
+					}
+				},
+				// Handle messages from [`Service`].
+				msg = self.from_service.next().fuse() => {
+					if let Some(msg) = msg {
+						self.process_message_from_service(msg).await;
+					}
+				},
+				// Set peerset priority group to a new random set of addresses.
+				_ = self.priority_group_set_interval.next().fuse() => {
+					if let Err(e) = self.set_priority_group() {
+						error!(
+							target: LOG_TARGET,
+							"Failed to set priority group: {:?}", e,
+						);
+					}
+				},
+				// Publish own addresses.
+				_ = self.publish_interval.next().fuse() => {
+					if let Err(e) = self.publish_ext_addresses().await {
+						error!(
+							target: LOG_TARGET,
+							"Failed to publish external addresses: {:?}", e,
+						);
+					}
+				},
+				// Request addresses of authorities.
+				_ = self.query_interval.next().fuse() => {
+					if let Err(e) = self.request_addresses_of_others().await {
+						error!(
+							target: LOG_TARGET,
+							"Failed to request addresses of authorities: {:?}", e,
+						);
+					}
+				},
 			}
 		}
 	}
 
-	async fn run_publish(&mut self) {
-		loop {
-			// Publish own addresses.
-			self.publish_interval.next().await;
-
-			if let Err(e) = self.publish_ext_addresses().await {
-				error!(
-					target: LOG_TARGET,
-					"Failed to publish external addresses: {:?}", e,
+	async fn process_message_from_service(&self, msg: ServicetoWorkerMsg) {
+		match msg {
+			ServicetoWorkerMsg::GetAddressesByAuthorityId(authority, sender) => {
+				let _ = sender.send(
+					self.addr_cache.get_addresses_by_authority_id(&authority).map(Clone::clone),
 				);
 			}
-
-			// Request addresses of authorities.
-			self.query_interval.next().await;
-
-			if let Err(e) = self.request_addresses_of_others().await {
-				error!(
-					target: LOG_TARGET,
-					"Failed to request addresses of authorities: {:?}", e,
+			ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, sender) => {
+				let _ = sender.send(
+					self.addr_cache.get_authority_id_by_peer_id(&peer_id).map(Clone::clone),
 				);
-			}
-
-			// Set peerset priority group to a new random set of addresses.
-			self.priority_group_set_interval.next().await;
-
-			if let Err(e) = self.set_priority_group() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to set priority group: {:?}", e,
-				);
-			}
-
-			// Handle messages from [`Service`].
-			while let Some(msg) = self.from_service.next().await {
-				match msg {
-					ServicetoWorkerMsg::GetAddressesByAuthorityId(authority, sender) => {
-						let _ = sender.send(
-							self.addr_cache.get_addresses_by_authority_id(&authority).map(Clone::clone),
-						);
-					}
-					ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, sender) => {
-						let _ = sender.send(
-							self.addr_cache.get_authority_id_by_peer_id(&peer_id).map(Clone::clone),
-						);
-					}
-				}
 			}
 		}
 	}
@@ -415,71 +413,61 @@ where
 	}
 
 	/// Handle incoming Dht events.
-	///
-	/// Returns either:
-	///   - Poll::Pending when there are no more events to handle or
-	///   - Poll::Ready(()) when the dht event stream terminated.
-	async fn handle_dht_events(&mut self) -> bool {
-		loop {
-			match self.dht_event_rx.next().await {
-				Some(DhtEvent::ValueFound(v)) => {
-					if let Some(metrics) = &self.metrics {
-						metrics.dht_event_received.with_label_values(&["value_found"]).inc();
-					}
-
-					if log_enabled!(log::Level::Debug) {
-						let hashes = v.iter().map(|(hash, _value)| hash.clone());
-						debug!(
-							target: LOG_TARGET,
-							"Value for hash '{:?}' found on Dht.", hashes,
-						);
-					}
-
-					if let Err(e) = self.handle_dht_value_found_event(v) {
-						if let Some(metrics) = &self.metrics {
-							metrics.handle_value_found_event_failure.inc();
-						}
-
-						debug!(
-							target: LOG_TARGET,
-							"Failed to handle Dht value found event: {:?}", e,
-						);
-					}
+	async fn handle_dht_event(&mut self, event: DhtEvent) {
+		match event {
+			DhtEvent::ValueFound(v) => {
+				if let Some(metrics) = &self.metrics {
+					metrics.dht_event_received.with_label_values(&["value_found"]).inc();
 				}
-				Some(DhtEvent::ValueNotFound(hash)) => {
+
+				if log_enabled!(log::Level::Debug) {
+					let hashes = v.iter().map(|(hash, _value)| hash.clone());
+					debug!(
+						target: LOG_TARGET,
+						"Value for hash '{:?}' found on Dht.", hashes,
+					);
+				}
+
+				if let Err(e) = self.handle_dht_value_found_event(v) {
 					if let Some(metrics) = &self.metrics {
-						metrics.dht_event_received.with_label_values(&["value_not_found"]).inc();
+						metrics.handle_value_found_event_failure.inc();
 					}
 
 					debug!(
 						target: LOG_TARGET,
-						"Value for hash '{:?}' not found on Dht.", hash
-					)
-				},
-				Some(DhtEvent::ValuePut(hash)) => {
-					if let Some(metrics) = &self.metrics {
-						metrics.dht_event_received.with_label_values(&["value_put"]).inc();
-					}
+						"Failed to handle Dht value found event: {:?}", e,
+					);
+				}
+			}
+			DhtEvent::ValueNotFound(hash) => {
+				if let Some(metrics) = &self.metrics {
+					metrics.dht_event_received.with_label_values(&["value_not_found"]).inc();
+				}
 
-					debug!(
-						target: LOG_TARGET,
-						"Successfully put hash '{:?}' on Dht.", hash,
-					)
-				},
-				Some(DhtEvent::ValuePutFailed(hash)) => {
-					if let Some(metrics) = &self.metrics {
-						metrics.dht_event_received.with_label_values(&["value_put_failed"]).inc();
-					}
+				debug!(
+					target: LOG_TARGET,
+					"Value for hash '{:?}' not found on Dht.", hash
+				)
+			},
+			DhtEvent::ValuePut(hash) => {
+				if let Some(metrics) = &self.metrics {
+					metrics.dht_event_received.with_label_values(&["value_put"]).inc();
+				}
 
-					debug!(
-						target: LOG_TARGET,
-						"Failed to put hash '{:?}' on Dht.", hash
-					)
-				},
-				None => {
-					debug!(target: LOG_TARGET, "Dht event stream terminated.");
-					return false;
-				},
+				debug!(
+					target: LOG_TARGET,
+					"Successfully put hash '{:?}' on Dht.", hash,
+				)
+			},
+			DhtEvent::ValuePutFailed(hash) => {
+				if let Some(metrics) = &self.metrics {
+					metrics.dht_event_received.with_label_values(&["value_put_failed"]).inc();
+				}
+
+				debug!(
+					target: LOG_TARGET,
+					"Failed to put hash '{:?}' on Dht.", hash
+				)
 			}
 		}
 	}
