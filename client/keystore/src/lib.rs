@@ -86,8 +86,8 @@ impl std::error::Error for Error {
 mod tests {
 	use super::*;
 	use tempfile::TempDir;
-	use sp_core::{Pair, testing::SR25519, crypto::Ss58Codec};
-	use sp_application_crypto::sr25519;
+	use sp_core::{Pair, testing::SR25519, crypto::Ss58Codec, traits::CryptoStore};
+	use sp_application_crypto::{ed25519, sr25519};
 	use futures::executor::block_on;
 	use std::{
 		fs,
