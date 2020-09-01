@@ -734,6 +734,7 @@ deploy-kubernetes-alerting-rules:
     refs:
       - master
     changes:
+      - .gitlab-ci.yml
       - .maintain/monitoring/alerting-rules/alerting-rules.yaml
 
 
