@@ -651,15 +651,18 @@ where
 
 			let wasmtime_engine = wasmtime::Engine::new(&config);
 			let wasmtime_store = wasmtime::Store::new(&wasmtime_engine);
-
 			let wasmtime_module = wasmtime::Module::new(&wasmtime_engine, wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
 
 			let module_imports: Vec<_> = wasmtime_module
 				.imports()
 				.filter_map(|import| {
 					if let wasmtime::ExternType::Func(func_ty) = import.ty() {
-						let guest_func_index = guest_env.imports
-							.func_by_name(import.module(), import.name()).expect("missing import");
+						let guest_func_index = if let Some(index) = guest_env.imports.func_by_name(import.module(), import.name()) {
+							index
+						} else {
+							// Missing import
+							return None;
+						};
 
 						let supervisor_func_index = guest_env.guest_to_supervisor_mapping
 							.func_by_guest_index(guest_func_index).expect("missing guest to host mapping");
@@ -751,7 +754,13 @@ where
 				})
 				.collect();
 
-			let wasmtime_instance = wasmtime::Instance::new(&wasmtime_store, &wasmtime_module, &module_imports).map_err(|_| InstantiationError::Instantiation)?;
+			let wasmtime_instance = wasmtime::Instance::new(&wasmtime_store, &wasmtime_module, &module_imports).map_err(|error|
+				if let Ok(trap) = error.downcast::<wasmtime::Trap>() {
+					InstantiationError::StartTrapped
+				} else {
+					InstantiationError::Instantiation
+				}
+			)?;
 
 			Rc::new(SandboxInstance {
 				backend_instance: BackendInstance::Wasmtime(wasmtime_instance),
