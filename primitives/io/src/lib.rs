@@ -1210,6 +1210,38 @@ pub type SubstrateHostFunctions = (
 	offchain_index::HostFunctions,
 );
 
+/// Handle for forked runtime execution.
+#[cfg(feature = "std")]
+pub struct DataJoinHandle {
+	receiver: std::sync::mpsc::Receiver<Vec<u8>>,
+}
+
+#[cfg(feature = "std")]
+impl DataJoinHandle {
+	/// Join handle returned by `fork` function
+	pub fn join(self) -> Vec<u8> {
+		self.receiver.recv().expect("Essntial task failure: forked runtime terminated before sending result.")
+	}
+}
+
+/// Fork runtime execution into separate thread.
+#[cfg(feature = "std")]
+pub fn fork(entry_point: fn(Vec<u8>) -> Vec<u8>, data: Vec<u8>) -> Result<DataJoinHandle, &'static str> {
+	let scheduler = sp_externalities::with_externalities(|mut ext| ext.extension::<TaskExecutorExt>()
+		.expect("No task executor associated with the current context!")
+		.0
+		.clone()
+	).ok_or("Fork called outside of externalities context!")?;
+
+	let (sender, receiver) = std::sync::mpsc::channel();
+	scheduler.spawn("forked runtime invoke", Box::pin(async move {
+		let result = entry_point(data);
+		let _ = sender.send(result);
+	}));
+
+	Ok(DataJoinHandle { receiver })
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
