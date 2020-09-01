@@ -301,7 +301,11 @@ fn decl_outer_origin<'a>(
 				}
 				let index = match module_declaration.index {
 					Some(index) => {
-						assert!(index != 0, "Internal error, some origin is at index 0");
+						assert!(
+							index != 0,
+							"Internal error, some origin is at index 0, but it is reserved to \
+							system"
+						);
 						index
 					},
 					None => available_indices.remove(0),
@@ -480,12 +484,13 @@ fn check_modules(
 			 Please add this line: `System: frame_system::{Module, Call, Storage, Config, Event<T>},`",
 		))?;
 
+	// Assert no more than 256 modules
 	if modules.len() > u8::max_value() as usize {
 		let msg = "Too many modules defined, only 256 modules is currently allowed";
 		return Err(syn::Error::new(modules_span, msg));
 	}
 
-	// No module use index 0
+	// No module use index 0 explicity (or it is system)
 	if let Some(module) = modules.iter()
 		.find(|module| {
 			module.index.map_or(false, |i| i == 0) && module.name != SYSTEM_MODULE_NAME
@@ -498,14 +503,15 @@ fn check_modules(
 	}
 
 	if !deprecated_system_non_zero {
+		// Assert system module index is 0 (either explicitly or implicitly).
 		if let Some(index) = system_module.index {
-			// System module is at index 0 explicitly
+			// Assert system module is at index 0 explicitly
 			if index != 0 {
 				let msg = "System module must be defined at index `0`";
 				return Err(syn::Error::new(system_module.module.span(), msg));
 			}
 		} else {
-			// System module is at index 0 implicitly
+			// Assert system module is at index 0 implicitly
 			let first_implicit_module = modules.iter().filter(|m| m.index.is_none()).next()
 				.expect("At least system module exists; qed");
 
@@ -514,8 +520,8 @@ fn check_modules(
 					"System module must be defined at index `0`, instead {} is found. (this check \
 					is to avoid confusion for generation of origin_caller, (where system is \
 					forced to be at index 0 anyway), to bypass this check use attribute \
-					`#[deprecated_system_non_zero]` as \
-					`construct_runtime!(#[deprecated_system_non_zero] ... )`).",
+					`#[deprecated_system_non_zero]` as in \
+					`construct_runtime! {{ #[deprecated_system_non_zero] ... }}`).",
 					first_implicit_module.name,
 				);
 				return Err(syn::Error::new(first_implicit_module.module.span(), msg));

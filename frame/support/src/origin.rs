@@ -244,6 +244,7 @@ macro_rules! impl_outer_origin {
 					$( #[codec(index = $index )] )?
 					[< $module $( _ $generic_instance )? >]
 					($module::Origin < $( $generic, )? $( $module::$generic_instance )? > ),
+
 				)*
 				#[allow(dead_code)]
 				Void($crate::Void)
@@ -449,6 +450,13 @@ mod tests {
 		pub enum OriginEmpty for TestRuntime where system = frame_system {}
 	);
 
+	impl_outer_origin!(
+		pub enum OriginIndices for TestRuntime {
+			origin_with_generic<T>,
+			#[codec(index = "10")] origin_without_generic,
+		}
+	);
+
 	#[test]
 	fn test_default_filter() {
 		assert_eq!(OriginWithSystem::root().filter_call(&0), true);
@@ -478,5 +486,21 @@ mod tests {
 		origin.reset_filter();
 		assert_eq!(origin.filter_call(&0), true);
 		assert_eq!(origin.filter_call(&1), false);
+	}
+
+	#[test]
+	fn test_codec() {
+		use codec::Encode;
+		assert_eq!(OriginIndices::root().caller.encode()[0], 0);
+		let without_generic_variant = OriginIndicesCaller::origin_without_generic(
+			origin_without_generic::Origin
+		);
+		assert_eq!(without_generic_variant.encode()[0], 10);
+
+		assert_eq!(OriginWithoutSystem::root().caller.encode()[0], 0);
+		let without_generic_variant = OriginWithoutSystemCaller::origin_without_generic(
+			origin_without_generic::Origin
+		);
+		assert_eq!(without_generic_variant.encode()[0], 1);
 	}
 }

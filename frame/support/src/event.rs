@@ -705,7 +705,7 @@ mod tests {
 		pub enum TestEventSystemRenamed for TestRuntime2 {
 			system_renamed,
 			event_module<T>,
-			event_module2<T>,
+			#[codec(index = "5")] event_module2<T>,
 			event_module3,
 		}
 	}
@@ -803,5 +803,18 @@ mod tests {
 	#[test]
 	fn outer_event_metadata() {
 		assert_eq!(EXPECTED_METADATA, TestRuntime::outer_event_metadata());
+	}
+
+	#[test]
+	fn test_codec() {
+		let runtime_1_event_module_2 = TestEvent::event_module2(
+			event_module2::Event::<TestRuntime>::TestEvent(3)
+		);
+		assert_eq!(runtime_1_event_module_2.encode()[0], 2);
+
+		let runtime_2_event_module_2 = TestEventSystemRenamed::event_module2(
+			event_module2::Event::<TestRuntime2>::TestEvent(3)
+		);
+		assert_eq!(runtime_2_event_module_2.encode()[0], 5);
 	}
 }

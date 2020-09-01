@@ -45,6 +45,7 @@ pub struct RuntimeDefinition {
 	pub enum_token: Token![enum],
 	pub name: Ident,
 	pub where_section: WhereSection,
+	/// Optional attribute `#[deprecated_system_non_zero]`
 	pub deprecated_system_non_zero: bool,
 	pub modules: ext::Braces<ext::Punctuated<ModuleDeclaration, Token![,]>>,
 }
@@ -53,6 +54,8 @@ impl Parse for RuntimeDefinition {
 	fn parse(input: ParseStream) -> Result<Self> {
 		let mut deprecated_system_non_zero = false;
 
+		// check for optional attribute `#[deprecated_system_non_zero]`
+		// (no other attribute are allowed.)
 		if input.peek(Token![#]) {
 			input.parse::<Token![#]>()?;
 			let attr_content;
@@ -165,6 +168,7 @@ impl Parse for WhereDefinition {
 #[derive(Debug, Clone)]
 pub struct ModuleDeclaration {
 	pub name: Ident,
+	/// Optional fixed index (e.g. `MyPallet ...  = 3,`)
 	pub index: Option<u8>,
 	pub module: Ident,
 	pub instance: Option<Ident>,
