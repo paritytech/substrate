@@ -465,7 +465,6 @@ fn get_available_indices(modules: &Vec<ModuleDeclaration>) -> Vec<u8> {
 /// * check system module is defined
 /// * there is less than 256 modules
 /// * no module use index 0 or except system
-/// * system module index is 0 (either explicitly or implicitly).
 /// * module indices don't conflict.
 ///
 /// returns system module ident
