@@ -315,7 +315,7 @@ mod tests {
 	}
 
 	impl<B: BlockT> Network<B> for TestNetwork {
-		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send + Sync>> {
+		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
 			let (tx, rx) = unbounded();
 			self.inner.lock().unwrap().event_senders.push(tx);
 

@@ -767,7 +767,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// The name passed is used to identify the channel in the Prometheus metrics. Note that the
 	/// parameter is a `&'static str`, and not a `String`, in order to avoid accidentally having
 	/// an unbounded set of Prometheus metrics, which would be quite bad in terms of memory
-	pub fn event_stream(&self, name: &'static str) -> impl Stream<Item = Event> + Sync + Send {
+	pub fn event_stream(&self, name: &'static str) -> impl Stream<Item = Event> {
 		let (tx, rx) = out_events::channel(name);
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		rx
