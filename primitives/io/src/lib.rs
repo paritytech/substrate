@@ -1020,7 +1020,7 @@ impl<T: Encode + Decode> Crossing<T> {
 
 /// Interface to providing tracing facilities for wasm. Modeled after tokios `tracing`-crate
 /// interfaces. See `sp-tracing` for more information.
-#[runtime_interface]
+#[runtime_interface(wasm_only,no_tracing)]
 pub trait WasmTracing {
 	/// Given the crossing over `WasmMetadata`, return whether this should be handled or not.
 	/// On the host converts into a static Metadata and checks against the global `tracing` dispatcher.
