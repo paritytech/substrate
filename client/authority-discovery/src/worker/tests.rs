@@ -22,14 +22,14 @@ use std::{iter::FromIterator, sync::{Arc, Mutex}};
 
 use futures::channel::mpsc::channel;
 use futures::executor::{block_on, LocalPool};
-use futures::future::{poll_fn, FutureExt};
+use futures::future::FutureExt;
 use futures::sink::SinkExt;
 use futures::task::LocalSpawn;
-use futures::poll;
+use futures::join;
 use libp2p::{kad, core::multiaddr, PeerId};
 
 use sp_api::{ProvideRuntimeApi, ApiRef};
-use sp_core::{crypto::Public, testing::KeyStore};
+use sp_core::{crypto::Public, testing::KeyStore, traits::CryptoStore};
 use sp_runtime::traits::{Zero, Block as BlockT, NumberFor};
 use substrate_test_runtime_client::runtime::Block;
 
@@ -239,7 +239,7 @@ fn new_registers_metrics() {
 		network.clone(),
 		vec![],
 		dht_event_rx.boxed(),
-		Role::Authority(key_store),
+		Role::Authority(key_store.into()),
 		Some(registry.clone()),
 	);
 
@@ -270,11 +270,11 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 		network.clone(),
 		vec![],
 		dht_event_rx.boxed(),
-		Role::Authority(key_store),
+		Role::Authority(key_store.into()),
 		None,
 	);
 
-	worker.request_addresses_of_others().unwrap();
+	block_on(worker.request_addresses_of_others()).unwrap();
 
 	// Expect authority discovery to request new records from the dht.
 	assert_eq!(network.get_value_call.lock().unwrap().len(), 2);
@@ -283,6 +283,8 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 #[test]
 fn publish_discover_cycle() {
 	let _ = ::env_logger::try_init();
+
+	let pool = LocalPool::new();
 
 	// Node A publishing its address.
 
@@ -299,62 +301,62 @@ fn publish_discover_cycle() {
 	};
 
 	let key_store = KeyStore::new();
-	let node_a_public = key_store
-		.write()
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-		.unwrap();
-	let test_api = Arc::new(TestApi {
-		authorities: vec![node_a_public.into()],
-	});
 
-	let (_to_worker, from_service) = mpsc::channel(0);
-	let mut worker = Worker::new(
-		from_service,
-		test_api,
-		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
-		None,
-	);
+	let _ = pool.spawner().spawn_local_obj(async move {
+		let node_a_public = block_on(key_store
+			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
+			.unwrap();
+		let test_api = Arc::new(TestApi {
+			authorities: vec![node_a_public.into()],
+		});
 
-	worker.publish_ext_addresses().unwrap();
+		let (_to_worker, from_service) = mpsc::channel(0);
+		let mut worker = Worker::new(
+			from_service,
+			test_api,
+			network.clone(),
+			vec![],
+			dht_event_rx.boxed(),
+			Role::Authority(key_store.into()),
+			None,
+		);
 
-	// Expect authority discovery to put a new record onto the dht.
-	assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
+		block_on(worker.publish_ext_addresses()).unwrap();
 
-	let dht_event = {
-		let (key, value) = network.put_value_call.lock().unwrap().pop().unwrap();
-		sc_network::DhtEvent::ValueFound(vec![(key, value)])
-	};
+		// Expect authority discovery to put a new record onto the dht.
+		assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
 
-	// Node B discovering node A's address.
+		let dht_event = {
+			let (key, value) = network.put_value_call.lock().unwrap().pop().unwrap();
+			sc_network::DhtEvent::ValueFound(vec![(key, value)])
+		};
 
-	let (mut dht_event_tx, dht_event_rx) = channel(1000);
-	let test_api = Arc::new(TestApi {
-		// Make sure node B identifies node A as an authority.
-		authorities: vec![node_a_public.into()],
-	});
-	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = KeyStore::new();
+		// Node B discovering node A's address.
 
-	let (_to_worker, from_service) = mpsc::channel(0);
-	let mut worker = Worker::new(
-		from_service,
-		test_api,
-		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
-		None,
-	);
+		let (mut dht_event_tx, dht_event_rx) = channel(1000);
+		let test_api = Arc::new(TestApi {
+			// Make sure node B identifies node A as an authority.
+			authorities: vec![node_a_public.into()],
+		});
+		let network: Arc<TestNetwork> = Arc::new(Default::default());
+		let key_store = KeyStore::new();
 
-	dht_event_tx.try_send(dht_event).unwrap();
+		let (_to_worker, from_service) = mpsc::channel(0);
+		let mut worker = Worker::new(
+			from_service,
+			test_api,
+			network.clone(),
+			vec![],
+			dht_event_rx.boxed(),
+			Role::Authority(key_store.into()),
+			None,
+		);
 
-	let f = |cx: &mut Context<'_>| -> Poll<()> {
+		dht_event_tx.try_send(dht_event).unwrap();
+
 		// Make authority discovery handle the event.
-		if let Poll::Ready(e) = worker.handle_dht_events(cx) {
-			panic!("Unexpected error: {:?}", e);
+		if !worker.handle_dht_events().await {
+			panic!("Unexpected error");
 		}
 		worker.set_priority_group().unwrap();
 
@@ -368,11 +370,7 @@ fn publish_discover_cycle() {
 				HashSet::from_iter(vec![node_a_multiaddr.clone()].into_iter())
 			)
 		);
-
-		Poll::Ready(())
-	};
-
-	let _ = block_on(poll_fn(f));
+	}.boxed_local().into());
 }
 
 #[test]
@@ -385,62 +383,35 @@ fn terminate_when_event_stream_terminates() {
 	});
 
 	let (_to_worker, from_service) = mpsc::channel(0);
-	let mut worker = Worker::new(
+	let worker = Worker::new(
 		from_service,
 		test_api,
 		network.clone(),
 		vec![],
 		dht_event_rx.boxed(),
-		Role::Authority(key_store),
+		Role::Authority(key_store.into()),
 		None,
 	);
 
-	block_on(async {
-		assert_eq!(Poll::Pending, poll!(&mut worker));
-
+	let timer = async {
+		Delay::new(Duration::from_secs(1)).await;
 		// Simulate termination of the network through dropping the sender side of the dht event
 		// channel.
 		drop(dht_event_tx);
+	};
+
+	let discovery_future = async {
+		let result = worker.run().await;
 
 		assert_eq!(
-			Poll::Ready(()), poll!(&mut worker),
+			(), result,
 			"Expect the authority discovery module to terminate once the sending side of the dht \
 			event channel is terminated.",
 		);
-	});
-}
-
-#[test]
-fn continue_operating_when_service_channel_is_dropped() {
-	let (_dht_event_tx, dht_event_rx) = channel(0);
-	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = KeyStore::new();
-	let test_api = Arc::new(TestApi {
-		authorities: vec![],
-	});
-
-	let (to_worker, from_service) = mpsc::channel(0);
-	let mut worker = Worker::new(
-		from_service,
-		test_api,
-		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
-		None,
-	);
+	};
 
 	block_on(async {
-		assert_eq!(Poll::Pending, poll!(&mut worker));
-
-		drop(to_worker);
-
-		for _ in 0..100 {
-			assert_eq!(
-				Poll::Pending, poll!(&mut worker),
-				"Expect authority discovery `Worker` not to panic when service channel is dropped.",
-			);
-		}
+		join!(timer, discovery_future)
 	});
 }
 
@@ -462,13 +433,13 @@ fn dont_stop_polling_when_error_is_returned() {
 	let mut pool = LocalPool::new();
 
 	let (_to_worker, from_service) = mpsc::channel(0);
-	let mut worker = Worker::new(
+	let worker = Worker::new(
 		from_service,
 		test_api,
 		network.clone(),
 		vec![],
 		dht_event_rx.boxed(),
-		Role::Authority(key_store),
+		Role::Authority(Arc::new(key_store)),
 		None,
 	);
 
@@ -476,19 +447,15 @@ fn dont_stop_polling_when_error_is_returned() {
 	//
 	// As this is a local pool, only one future at a time will have the CPU and
 	// can make progress until the future returns `Pending`.
-	pool.spawner().spawn_local_obj(
-		futures::future::poll_fn(move |ctx| {
-			match std::pin::Pin::new(&mut worker).poll(ctx) {
-				Poll::Ready(()) => {},
-				Poll::Pending => {
-					discovery_update_tx.send(Event::Processed).now_or_never();
-					return Poll::Pending;
-				},
-			}
-			let _ = discovery_update_tx.send(Event::End).now_or_never().unwrap();
-			Poll::Ready(())
-		}).boxed_local().into(),
-	).expect("Spawns authority discovery");
+	let _ = pool.spawner().spawn_local_obj(async move {
+		worker.run().await
+	}.boxed_local().into());
+	let _ = pool.spawner().spawn_local_obj(async move {
+		Delay::new(Duration::from_secs(1)).await;
+		discovery_update_tx.send(Event::Processed).now_or_never();
+		Delay::new(Duration::from_secs(1)).await;
+		let _ = discovery_update_tx.send(Event::End).now_or_never().unwrap();
+	}.boxed_local().into());
 
 	pool.run_until(
 		// The future that drives the event stream
@@ -523,9 +490,8 @@ fn dont_stop_polling_when_error_is_returned() {
 #[test]
 fn never_add_own_address_to_priority_group() {
 	let validator_key_store = KeyStore::new();
-	let validator_public = validator_key_store
-		.write()
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+	let validator_public = block_on(validator_key_store
+		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
 		.unwrap();
 
 	let sentry_network: Arc<TestNetwork> = Arc::new(Default::default());
@@ -559,12 +525,12 @@ fn never_add_own_address_to_priority_group() {
 			.map_err(Error::EncodingProto)
 			.unwrap();
 
-		let signature = validator_key_store.read()
+		let signature = block_on(validator_key_store
 			.sign_with(
 				key_types::AUTHORITY_DISCOVERY,
 				&validator_public.clone().into(),
 				serialized_addresses.as_slice(),
-			)
+			))
 			.map_err(|_| Error::Signing)
 			.unwrap();
 
@@ -620,9 +586,8 @@ fn never_add_own_address_to_priority_group() {
 #[test]
 fn limit_number_of_addresses_added_to_cache_per_authority() {
 	let remote_key_store = KeyStore::new();
-	let remote_public = remote_key_store
-		.write()
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+	let remote_public = block_on(remote_key_store
+		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
 		.unwrap();
 
 	let dht_event = {
@@ -640,12 +605,12 @@ fn limit_number_of_addresses_added_to_cache_per_authority() {
 			.map_err(Error::EncodingProto)
 			.unwrap();
 
-		let signature = remote_key_store.read()
+		let signature = block_on(remote_key_store
 			.sign_with(
 				key_types::AUTHORITY_DISCOVERY,
 				&remote_public.clone().into(),
 				serialized_addresses.as_slice(),
-			)
+			))
 			.map_err(|_| Error::Signing)
 			.unwrap();
 
@@ -686,9 +651,8 @@ fn limit_number_of_addresses_added_to_cache_per_authority() {
 #[test]
 fn do_not_cache_addresses_without_peer_id() {
 	let remote_key_store = KeyStore::new();
-	let remote_public = remote_key_store
-		.write()
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+	let remote_public = block_on(remote_key_store
+		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
 		.unwrap();
 
 	let multiaddr_with_peer_id = {
@@ -712,12 +676,12 @@ fn do_not_cache_addresses_without_peer_id() {
 			.map_err(Error::EncodingProto)
 			.unwrap();
 
-		let signature = remote_key_store.read()
+		let signature = block_on(remote_key_store
 			.sign_with(
 				key_types::AUTHORITY_DISCOVERY,
 				&remote_public.clone().into(),
 				serialized_addresses.as_slice(),
-			)
+			))
 			.map_err(|_| Error::Signing)
 			.unwrap();
 
@@ -750,7 +714,7 @@ fn do_not_cache_addresses_without_peer_id() {
 		local_network.clone(),
 		vec![],
 		dht_event_rx.boxed(),
-		Role::Authority(local_key_store),
+		Role::Authority(Arc::new(local_key_store)),
 		None,
 	);
 
@@ -782,7 +746,7 @@ fn addresses_to_publish_adds_p2p() {
 		network.clone(),
 		vec![],
 		dht_event_rx.boxed(),
-		Role::Authority(KeyStore::new()),
+		Role::Authority(Arc::new(KeyStore::new())),
 		Some(prometheus_endpoint::Registry::new()),
 	);
 
@@ -817,7 +781,7 @@ fn addresses_to_publish_respects_existing_p2p_protocol() {
 		network.clone(),
 		vec![],
 		dht_event_rx.boxed(),
-		Role::Authority(KeyStore::new()),
+		Role::Authority(Arc::new(KeyStore::new())),
 		Some(prometheus_endpoint::Registry::new()),
 	);
 

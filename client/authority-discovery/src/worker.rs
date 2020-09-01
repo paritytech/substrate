@@ -24,8 +24,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::channel::mpsc;
-use futures::task::{Context, Poll};
-use futures::{Future, FutureExt, ready, Stream, StreamExt, stream::Fuse};
+use futures::{FutureExt, Stream, StreamExt, stream::Fuse};
 use futures_timer::Delay;
 
 use addr_cache::AddrCache;
@@ -46,7 +45,7 @@ use sc_network::{
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, Pair};
-use sp_core::traits::BareCryptoStorePtr;
+use sp_core::traits::CryptoStorePtr;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
 
@@ -73,7 +72,7 @@ const MAX_ADDRESSES_PER_AUTHORITY: usize = 10;
 /// Role an authority discovery module can run as.
 pub enum Role {
 	/// Actual authority as well as a reference to its key store.
-	Authority(BareCryptoStorePtr),
+	Authority(CryptoStorePtr),
 	/// Sentry node that guards an authority.
 	///
 	/// No reference to its key store needed, as sentry nodes don't have an identity to sign
@@ -159,7 +158,6 @@ where
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api:
 		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
-	Self: Future<Output = ()>,
 {
 	/// Return a new [`Worker`].
 	///
@@ -236,6 +234,65 @@ where
 		}
 	}
 
+	/// Start the worker
+	pub async fn run(mut self) {
+		loop {
+			// Process incoming events.
+			if !self.handle_dht_events().await {
+				// `handle_dht_events` returns `Poll::Ready(())` when the Dht event stream terminated.
+				// Termination of the Dht event stream implies that the underlying network terminated,
+				// thus authority discovery should terminate as well.
+				return ();
+			}
+
+			// Publish own addresses.
+			self.publish_interval.next().await;
+
+			if let Err(e) = self.publish_ext_addresses().await {
+				error!(
+					target: LOG_TARGET,
+					"Failed to publish external addresses: {:?}", e,
+				);
+			}
+
+			// Request addresses of authorities.
+			self.query_interval.next().await;
+
+			if let Err(e) = self.request_addresses_of_others().await {
+				error!(
+					target: LOG_TARGET,
+					"Failed to request addresses of authorities: {:?}", e,
+				);
+			}
+
+			// Set peerset priority group to a new random set of addresses.
+			self.priority_group_set_interval.next().await;
+
+			if let Err(e) = self.set_priority_group() {
+				error!(
+					target: LOG_TARGET,
+					"Failed to set priority group: {:?}", e,
+				);
+			}
+
+			// Handle messages from [`Service`].
+			while let Some(msg) = self.from_service.next().await {
+				match msg {
+					ServicetoWorkerMsg::GetAddressesByAuthorityId(authority, sender) => {
+						let _ = sender.send(
+							self.addr_cache.get_addresses_by_authority_id(&authority).map(Clone::clone),
+						);
+					}
+					ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, sender) => {
+						let _ = sender.send(
+							self.addr_cache.get_authority_id_by_peer_id(&peer_id).map(Clone::clone),
+						);
+					}
+				}
+			}
+		}
+	}
+
 	fn addresses_to_publish(&self) -> impl ExactSizeIterator<Item = Multiaddr> {
 		match &self.sentry_nodes {
 			Some(addrs) => Either::Left(addrs.clone().into_iter()),
@@ -257,7 +314,7 @@ where
 	}
 
 	/// Publish either our own or if specified the public addresses of our sentry nodes.
-	fn publish_ext_addresses(&mut self) -> Result<()> {
+	async fn publish_ext_addresses(&mut self) -> Result<()> {
 		let key_store = match &self.role {
 			Role::Authority(key_store) => key_store,
 			// Only authority nodes can put addresses (their own or the ones of their sentry nodes)
@@ -278,17 +335,18 @@ where
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		let keys = Worker::get_own_public_keys_within_authority_set(
-			&key_store,
-			&self.client,
-		)?.into_iter().map(Into::into).collect::<Vec<_>>();
+		let keys = Worker::<Client, Network, Block>::get_own_public_keys_within_authority_set(
+			key_store.clone(),
+			self.client.as_ref(),
+		).await?.into_iter().map(Into::into).collect::<Vec<_>>();
 
-		let signatures = key_store.read()
+		let signatures = key_store
 			.sign_with_all(
 				key_types::AUTHORITY_DISCOVERY,
 				keys.clone(),
 				serialized_addresses.as_slice(),
 			)
+			.await
 			.map_err(|_| Error::Signing)?;
 
 		for (sign_result, key) in signatures.into_iter().zip(keys) {
@@ -314,7 +372,7 @@ where
 		Ok(())
 	}
 
-	fn request_addresses_of_others(&mut self) -> Result<()> {
+	async fn request_addresses_of_others(&mut self) -> Result<()> {
 		let id = BlockId::hash(self.client.info().best_hash);
 
 		let authorities = self
@@ -325,8 +383,9 @@ where
 
 		let local_keys = match &self.role {
 			Role::Authority(key_store) => {
-				key_store.read()
+				key_store
 					.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
+					.await
 					.into_iter()
 					.collect::<HashSet<_>>()
 			},
@@ -353,9 +412,9 @@ where
 	/// Returns either:
 	///   - Poll::Pending when there are no more events to handle or
 	///   - Poll::Ready(()) when the dht event stream terminated.
-	fn handle_dht_events(&mut self, cx: &mut Context) -> Poll<()>{
+	async fn handle_dht_events(&mut self) -> bool {
 		loop {
-			match ready!(self.dht_event_rx.poll_next_unpin(cx)) {
+			match self.dht_event_rx.next().await {
 				Some(DhtEvent::ValueFound(v)) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_found"]).inc();
@@ -412,7 +471,7 @@ where
 				},
 				None => {
 					debug!(target: LOG_TARGET, "Dht event stream terminated.");
-					return Poll::Ready(());
+					return false;
 				},
 			}
 		}
@@ -520,12 +579,13 @@ where
 	// one for the upcoming session. In addition it could be participating in the current authority
 	// set with two keys. The function does not return all of the local authority discovery public
 	// keys, but only the ones intersecting with the current authority set.
-	fn get_own_public_keys_within_authority_set(
-		key_store: &BareCryptoStorePtr,
+	async fn get_own_public_keys_within_authority_set(
+		key_store: CryptoStorePtr,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
-		let local_pub_keys = key_store.read()
+		let local_pub_keys = key_store
 			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
+			.await
 			.into_iter()
 			.collect::<HashSet<_>>();
 
@@ -575,84 +635,6 @@ where
 			.map_err(Error::SettingPeersetPriorityGroup)?;
 
 		Ok(())
-	}
-}
-
-impl<Client, Network, Block> Future for Worker<Client, Network, Block>
-where
-	Block: BlockT + Unpin + 'static,
-	Network: NetworkProvider,
-	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api:
-		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
-{
-	type Output = ();
-
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		// Process incoming events.
-		if let Poll::Ready(()) = self.handle_dht_events(cx) {
-			// `handle_dht_events` returns `Poll::Ready(())` when the Dht event stream terminated.
-			// Termination of the Dht event stream implies that the underlying network terminated,
-			// thus authority discovery should terminate as well.
-			return Poll::Ready(());
-		}
-
-		// Publish own addresses.
-		if let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {
-			// Register waker of underlying task for next interval.
-			while let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {}
-
-			if let Err(e) = self.publish_ext_addresses() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to publish external addresses: {:?}", e,
-				);
-			}
-		}
-
-		// Request addresses of authorities.
-		if let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {
-			// Register waker of underlying task for next interval.
-			while let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {}
-
-			if let Err(e) = self.request_addresses_of_others() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to request addresses of authorities: {:?}", e,
-				);
-			}
-		}
-
-		// Set peerset priority group to a new random set of addresses.
-		if let Poll::Ready(_) = self.priority_group_set_interval.poll_next_unpin(cx) {
-			// Register waker of underlying task for next interval.
-			while let Poll::Ready(_) = self.priority_group_set_interval.poll_next_unpin(cx) {}
-
-			if let Err(e) = self.set_priority_group() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to set priority group: {:?}", e,
-				);
-			}
-		}
-
-		// Handle messages from [`Service`].
-		while let Poll::Ready(Some(msg)) = self.from_service.poll_next_unpin(cx) {
-			match msg {
-				ServicetoWorkerMsg::GetAddressesByAuthorityId(authority, sender) => {
-					let _ = sender.send(
-						self.addr_cache.get_addresses_by_authority_id(&authority).map(Clone::clone),
-					);
-				}
-				ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, sender) => {
-					let _ = sender.send(
-						self.addr_cache.get_authority_id_by_peer_id(&peer_id).map(Clone::clone),
-					);
-				}
-			}
-		}
-
-		Poll::Pending
 	}
 }
 
