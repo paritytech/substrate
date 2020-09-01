@@ -734,7 +734,7 @@ deploy-kubernetes-alerting-rules:
     refs:
       - master
     changes:
-      - "${RULES}"
+      - .maintain/monitoring/alerting-rules/alerting-rules.yaml
 
 
 
