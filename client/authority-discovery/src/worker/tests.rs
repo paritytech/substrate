@@ -284,7 +284,7 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 fn publish_discover_cycle() {
 	let _ = ::env_logger::try_init();
 
-	let pool = LocalPool::new();
+	let mut pool = LocalPool::new();
 
 	// Node A publishing its address.
 
@@ -321,7 +321,7 @@ fn publish_discover_cycle() {
 			None,
 		);
 
-		block_on(worker.publish_ext_addresses()).unwrap();
+		worker.publish_ext_addresses().await.unwrap();
 
 		// Expect authority discovery to put a new record onto the dht.
 		assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
@@ -370,6 +370,8 @@ fn publish_discover_cycle() {
 			)
 		);
 	}.boxed_local().into());
+
+	pool.run();
 }
 
 #[test]
@@ -451,7 +453,7 @@ fn dont_stop_polling_when_error_is_returned() {
 	}.boxed_local().into());
 	let _ = pool.spawner().spawn_local_obj(async move {
 		Delay::new(Duration::from_secs(1)).await;
-		discovery_update_tx.send(Event::Processed).now_or_never();
+		discovery_update_tx.send(Event::Processed).now_or_never().unwrap();
 		Delay::new(Duration::from_secs(1)).await;
 		let _ = discovery_update_tx.send(Event::End).now_or_never().unwrap();
 	}.boxed_local().into());

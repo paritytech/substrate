@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-
 use crate::{new_worker_and_service, worker::{tests::{TestApi, TestNetwork}, Role}};
 
 use std::sync::Arc;

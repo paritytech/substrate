@@ -219,7 +219,7 @@ pub fn claim_slot_using_keys(
 					slot_number,
 					&epoch,
 					keys,
-					keystore.clone(),
+					keystore,
 					epoch.config.allowed_slots.is_secondary_vrf_slots_allowed(),
 				)
 			} else {

@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #![warn(missing_docs)]
-#![recursion_limit = "2048"]
+#![recursion_limit = "1024"]
 //! Substrate authority discovery.
 //!
 //! This crate enables Substrate authorities to discover and directly connect to

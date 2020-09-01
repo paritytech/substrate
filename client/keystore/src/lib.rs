@@ -27,9 +27,7 @@ use sp_core::{
 };
 use sp_application_crypto::{ed25519, ecdsa};
 
-/// Proxy module
-//pub mod proxy;
-
+/// Local keystore implementation
 pub mod local;
 
 /// Keystore error.

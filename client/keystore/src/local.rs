@@ -191,6 +191,7 @@ impl CryptoStore for LocalKeystore {
 		})
 	}
 }
+
 /// A local key store.
 ///
 /// Stores key pairs in a file system store + short lived key pairs in memory.
