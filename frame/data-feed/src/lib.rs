@@ -189,9 +189,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-mod default_weight;
 #[cfg(test)]
 mod tests;
+mod weight_info;
 
 use codec::{Decode, Encode};
 use lite_json::json::{JsonValue, NumberValue};
@@ -207,13 +207,14 @@ use sp_std::{prelude::*, str::Chars};
 use frame_support::{
 	debug, decl_error, decl_event, decl_module, decl_storage, ensure,
 	traits::{Contains, EnsureOrigin},
-	weights::Weight,
 	IterableStorageDoubleMap, IterableStorageMap,
 };
 use frame_system::{
 	ensure_signed,
 	offchain::{AppCrypto, CreateSignedTransaction, SendSignedTransaction, Signer},
 };
+
+use weight_info::WeightInfo;
 
 /// The identifier for data-feed-specific crypto keys
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"dafe");
@@ -355,16 +356,6 @@ impl<BlockNumber> FeededDataInfo<BlockNumber> {
 	}
 }
 
-pub trait WeightInfo {
-	fn register_storage_key() -> Weight;
-	fn remove_storage_key() -> Weight;
-	fn set_url() -> Weight;
-	fn set_offchain_period() -> Weight;
-	fn feed_data() -> Weight;
-	fn add_provider() -> Weight;
-	fn remove_provider() -> Weight;
-}
-
 pub trait Trait: CreateSignedTransaction<Call<Self>> {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// The identifier type for an offchain worker.
@@ -462,7 +453,7 @@ decl_module! {
 
 		/// Register a storage key under which the value can be modified
 		/// by this data feed pallet with some rules
-		#[weight = T::WeightInfo::register_storage_key()]
+		#[weight = T::WeightInfo::register_storage_key(key.len() as u32)]
 		pub fn register_storage_key(origin, key: StorageKey, info: FeededDataInfo<T::BlockNumber>) -> DispatchResult {
 			T::DataFeedOrigin::ensure_origin(origin)?;
 			// parse origin
@@ -484,7 +475,7 @@ decl_module! {
 
 		/// remove the storage key from the limited set so the data feed pallet no longer
 		/// can change the corresponding value afterwards.
-		#[weight = T::WeightInfo::remove_storage_key()]
+		#[weight = T::WeightInfo::remove_storage_key(key.len() as u32)]
 		pub fn remove_storage_key(origin, key: StorageKey) -> DispatchResult {
 			T::DataFeedOrigin::ensure_origin(origin)?;
 			ActiveParamTypes::mutate(|v| {
@@ -499,7 +490,7 @@ decl_module! {
 		}
 
 		/// Set a url for a key which used in offchain to fetch data from this url.
-		#[weight = T::WeightInfo::set_url()]
+		#[weight = T::WeightInfo::set_url(key.len() as u32, url.len() as u32)]
 		pub fn set_url(origin, key: StorageKey, url: Vec<u8>) -> DispatchResult {
 			T::DataFeedOrigin::ensure_origin(origin)?;
 			let _ = Self::data_info(&key).ok_or(Error::<T>::InvalidKey)?;
@@ -512,7 +503,7 @@ decl_module! {
 		/// Set a offchain period for a key, if `period` is None, would remove this period.
 		/// The offchain worker can only work after the period be set, if not set a period for a key,
 		/// the offchain worker would not submmit data for this key.
-		#[weight = T::WeightInfo::set_offchain_period()]
+		#[weight = T::WeightInfo::set_offchain_period(key.len() as u32)]
 		pub fn set_offchain_period(origin, key: StorageKey, period: Option<T::BlockNumber>) -> DispatchResult {
 			T::DataFeedOrigin::ensure_origin(origin)?;
 
@@ -530,7 +521,7 @@ decl_module! {
 		}
 
 		/// Submit a new data under the specific storage key.
-		#[weight = T::WeightInfo::feed_data()]
+		#[weight = T::WeightInfo::feed_data(key.len() as u32)]
 		pub fn feed_data(origin, key: StorageKey, value: DataType) -> DispatchResult {
 			// use `enusre_signed` rather than `T::DataFeedOrigin::ensure_origin`
 			// for `T::DataFeedOrigin` may not same as `ActiveProviders`

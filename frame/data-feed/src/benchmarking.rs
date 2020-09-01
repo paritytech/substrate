@@ -47,10 +47,18 @@ fn add_data_info<T: Trait>(key: StorageKey, provider: T::AccountId) {
 	let _ = DataFeed::<T>::register_storage_key(RawOrigin::Signed(provider).into(), key, data_info);
 }
 
+const MAX_STORAGE_KEY_LEN: u32 = 64;
+const MAX_URL_LEN: u32 = 8192; // the max length for apache server could receive.
+
 benchmarks! {
-	_ {	}
+	_ {
+		let n in 1 .. MAX_STORAGE_KEY_LEN => ();
+		let l in 1 .. MAX_URL_LEN => ();
+	}
 
 	register_storage_key {
+		let n in ...;
+
 		let provider: T::AccountId = whitelisted_caller();
 		add_tmp_provider::<T>(provider.clone());
 
@@ -67,6 +75,8 @@ benchmarks! {
 	}
 
 	remove_storage_key {
+		let n in ...;
+
 		let provider: T::AccountId = whitelisted_caller();
 		let key = StorageArgument::key().to_vec();
 		add_data_info::<T>(key.clone(), provider.clone());
@@ -77,6 +87,9 @@ benchmarks! {
 	}
 
 	set_url {
+		let n in ...;
+		let l in ...;
+
 		let provider: T::AccountId = whitelisted_caller();
 		let key = StorageArgument::key().to_vec();
 		add_data_info::<T>(key.clone(), provider.clone());
@@ -87,6 +100,8 @@ benchmarks! {
 	}
 
 	set_offchain_period {
+		let n in ...;
+
 		let provider: T::AccountId = whitelisted_caller();
 		let key = StorageArgument::key().to_vec();
 		add_data_info::<T>(key.clone(), provider.clone());
@@ -98,6 +113,8 @@ benchmarks! {
 	}
 
 	feed_data {
+		let n in ...;
+
 		let provider: T::AccountId = whitelisted_caller();
 		let key = StorageArgument::key().to_vec();
 		add_data_info::<T>(key.clone(), provider.clone());
