@@ -46,7 +46,7 @@ use std::iter;
 
 /// Generate one bare function per trait method. The name of the bare function is equal to the name
 /// of the trait method.
-pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
+pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool, tracing: bool) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
 	let runtime_interface = get_runtime_interface(trait_def)?;
 
@@ -63,7 +63,7 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream
 	// earlier versions compatibility dispatch (only std variant)
 	let result: Result<TokenStream> = runtime_interface.all_versions().try_fold(token_stream?, |mut t, (version, method)|
 	{
-		t.extend(function_std_impl(trait_name, method, version, is_wasm_only)?);
+		t.extend(function_std_impl(trait_name, method, version, is_wasm_only, tracing)?);
 		Ok(t)
 	});
 
@@ -145,6 +145,7 @@ fn function_std_impl(
 	method: &TraitItemMethod,
 	version: u32,
 	is_wasm_only: bool,
+	tracing: bool,
 ) -> Result<TokenStream> {
 	let function_name = create_function_ident_with_version(&method.sig.ident, version);
 	let function_name_str = function_name.to_string();
@@ -168,13 +169,21 @@ fn function_std_impl(
 	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
 	// Don't make the function public accessible when this is a wasm only interface.
 	let call_to_trait = generate_call_to_trait(trait_name, method, version, is_wasm_only);
+	let call_to_trait = if ! tracing {
+		call_to_trait
+	} else {
+		parse_quote!(
+			#crate_::sp_tracing::within_span! { #crate_::sp_tracing::trace_span!(#function_name_str);
+				#call_to_trait
+			}
+		)
+	};
 
 	Ok(
 		quote_spanned! { method.span() =>
 			#[cfg(feature = "std")]
 			#( #attrs )*
 			fn #function_name( #( #args, )* ) #return_value {
-				#crate_::sp_tracing::enter_span!(#crate_::sp_tracing::Level::Trace, #function_name_str);
 				#call_to_trait
 			}
 		}
@@ -186,7 +195,7 @@ fn generate_call_to_trait(
 	trait_name: &Ident,
 	method: &TraitItemMethod,
 	version: u32,
-	is_wasm_only: bool,
+	is_wasm_only: bool
 ) -> TokenStream {
 	let crate_ = generate_crate_access();
 	let method_name = create_function_ident_with_version(&method.sig.ident, version);
