@@ -90,6 +90,23 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	pub changes_trie_transaction: Option<ChangesTrieTransaction<H, N>>,
 }
 
+impl<Transaction, H: Hasher, N: BlockNumber> Clone for StorageChanges<Transaction, H, N>
+where
+    H::Out: Clone,
+    Transaction: Clone,
+{
+    fn clone(&self) -> Self {
+        StorageChanges {
+            main_storage_changes: self.main_storage_changes.clone(),
+            child_storage_changes: self.child_storage_changes.clone(),
+            offchain_storage_changes: self.offchain_storage_changes.clone(),
+            transaction: self.transaction.clone(),
+            transaction_storage_root: self.transaction_storage_root.clone(),
+            changes_trie_transaction: None,
+        }
+    }
+}
+
 impl<Transaction, H: Hasher, N: BlockNumber> StorageChanges<Transaction, H, N> {
 	/// Deconstruct into the inner values
 	pub fn into_inner(self) -> (
