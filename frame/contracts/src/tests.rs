@@ -261,7 +261,7 @@ impl ExtBuilder {
 			balances: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		GenesisConfig {
-			current_schedule: Schedule {
+			current_schedule: Schedule::<Test> {
 				enable_println: true,
 				..Default::default()
 			},
@@ -290,7 +290,8 @@ where
 
 // Perform a call to a plain account.
 // The actual transfer fails because we can only call contracts.
-// Then we check that only the base costs are returned as actual costs.
+// Then we check that no gas was used because the base costs for calling are either charged
+// as part of the `call` extrinsic or by `seal_call`.
 #[test]
 fn calling_plain_account_fails() {
 	ExtBuilder::default().build().execute_with(|| {
@@ -302,7 +303,7 @@ fn calling_plain_account_fails() {
 				DispatchErrorWithPostInfo {
 					error: Error::<Test>::NotCallable.into(),
 					post_info: PostDispatchInfo {
-						actual_weight: Some(67500000),
+						actual_weight: Some(0),
 						pays_fee: Default::default(),
 					},
 				}

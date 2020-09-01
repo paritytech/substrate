@@ -20,7 +20,7 @@
 
 use crate::wasm::env_def::ImportSatisfyCheck;
 use crate::wasm::PrefabWasmModule;
-use crate::Schedule;
+use crate::{Schedule, Trait};
 
 use parity_wasm::elements::{self, Internal, External, MemoryType, Type, ValueType};
 use pwasm_utils;
@@ -36,20 +36,20 @@ pub const IMPORT_MODULE_FN: &str = "seal0";
 /// compiler toolchains might not support specifying other modules than "env" for memory imports.
 pub const IMPORT_MODULE_MEMORY: &str = "env";
 
-struct ContractModule<'a> {
+struct ContractModule<'a, T: Trait> {
 	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).
 	module: elements::Module,
-	schedule: &'a Schedule,
+	schedule: &'a Schedule<T>,
 }
 
-impl<'a> ContractModule<'a> {
+impl<'a, T: Trait> ContractModule<'a, T> {
 	/// Creates a new instance of `ContractModule`.
 	///
 	/// Returns `Err` if the `original_code` couldn't be decoded or
 	/// if it contains an invalid module.
 	fn new(
 		original_code: &[u8],
-		schedule: &'a Schedule,
+		schedule: &'a Schedule<T>,
 	) -> Result<Self, &'static str> {
 		use wasmi_validation::{validate_module, PlainValidator};
 
@@ -148,10 +148,10 @@ impl<'a> ContractModule<'a> {
 	fn inject_gas_metering(self) -> Result<Self, &'static str> {
 		let gas_rules =
 			rules::Set::new(
-				self.schedule.regular_op_cost.clone().saturated_into(),
+				self.schedule.op_cost_regular.clone().saturated_into(),
 				Default::default(),
 			)
-			.with_grow_cost(self.schedule.grow_mem_cost.clone().saturated_into())
+			.with_grow_cost(self.schedule.op_cost_grow_mem.clone().saturated_into())
 			.with_forbidden_floats();
 
 		let contract_module = pwasm_utils::inject_gas_counter(
@@ -333,7 +333,7 @@ impl<'a> ContractModule<'a> {
 	}
 }
 
-fn get_memory_limits(module: Option<&MemoryType>, schedule: &Schedule)
+fn get_memory_limits<T: Trait>(module: Option<&MemoryType>, schedule: &Schedule<T>)
 	-> Result<(u32, u32), &'static str>
 {
 	if let Some(memory_type) = module {
@@ -374,9 +374,9 @@ fn get_memory_limits(module: Option<&MemoryType>, schedule: &Schedule)
 /// - all imported functions from the external environment matches defined by `env` module,
 ///
 /// The preprocessing includes injecting code for gas metering and metering the height of stack.
-pub fn prepare_contract<C: ImportSatisfyCheck>(
+pub fn prepare_contract<C: ImportSatisfyCheck, T: Trait>(
 	original_code: &[u8],
-	schedule: &Schedule,
+	schedule: &Schedule<T>,
 ) -> Result<PrefabWasmModule, &'static str> {
 	let mut contract_module = ContractModule::new(original_code, schedule)?;
 	contract_module.scan_exports()?;
@@ -406,7 +406,9 @@ pub fn prepare_contract<C: ImportSatisfyCheck>(
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking {
-	use super::{ContractModule, PrefabWasmModule, ImportSatisfyCheck, Schedule, get_memory_limits};
+	use super::{
+		Trait, ContractModule, PrefabWasmModule, ImportSatisfyCheck, Schedule, get_memory_limits
+	};
 	use parity_wasm::elements::FunctionType;
 
 	impl ImportSatisfyCheck for () {
@@ -416,7 +418,7 @@ pub mod benchmarking {
 	}
 
 	/// Prepare function that neither checks nor instruments the passed in code.
-	pub fn prepare_contract(original_code: &[u8], schedule: &Schedule)
+	pub fn prepare_contract<T: Trait>(original_code: &[u8], schedule: &Schedule<T>)
 		-> Result<PrefabWasmModule, &'static str>
 	{
 		let contract_module = ContractModule::new(original_code, schedule)?;
@@ -463,7 +465,7 @@ mod tests {
 			fn $name() {
 				let wasm = wat::parse_str($wat).unwrap();
 				let schedule = Schedule::default();
-				let r = prepare_contract::<TestEnv>(wasm.as_ref(), &schedule);
+				let r = prepare_contract::<TestEnv, crate::tests::Test>(wasm.as_ref(), &schedule);
 				assert_matches!(r, $($expected)*);
 			}
 		};
@@ -491,7 +493,7 @@ mod tests {
 		// Tests below assumes that maximum page number is configured to a certain number.
 		#[test]
 		fn assume_memory_size() {
-			assert_eq!(Schedule::default().max_memory_pages, 16);
+			assert_eq!(<Schedule<crate::tests::Test>>::default().max_memory_pages, 16);
 		}
 
 		prepare_test!(memory_with_one_page,
@@ -620,7 +622,7 @@ mod tests {
 		// Tests below assumes that maximum table size is configured to a certain number.
 		#[test]
 		fn assume_table_size() {
-			assert_eq!(Schedule::default().max_table_size, 16384);
+			assert_eq!(<Schedule<crate::tests::Test>>::default().max_table_size, 16384);
 		}
 
 		prepare_test!(no_tables,
@@ -789,7 +791,7 @@ mod tests {
 			).unwrap();
 			let mut schedule = Schedule::default();
 			schedule.enable_println = true;
-			let r = prepare_contract::<TestEnv>(wasm.as_ref(), &schedule);
+			let r = prepare_contract::<TestEnv, crate::tests::Test>(wasm.as_ref(), &schedule);
 			assert_matches!(r, Ok(_));
 		}
 	}
