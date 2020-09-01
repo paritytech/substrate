@@ -28,6 +28,7 @@ use rustc_hash::FxHashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+use std::collections::hash_map::Entry;
 
 use parking_lot::Mutex;
 use serde::ser::{Serialize, Serializer, SerializeMap};
@@ -109,6 +110,9 @@ pub struct SpanDatum {
 	pub overall_time: Duration,
 	/// Values recorded to this span
 	pub values: Values,
+	/// Count how many times this has been cloned, only
+	/// exit when this was the last reference.
+	pub ref_count: usize
 }
 
 /// Holds associated values for a tracing span
@@ -308,6 +312,7 @@ impl Subscriber for ProfilingSubscriber {
 			line: attrs.metadata().line().unwrap_or(0),
 			start_time: Instant::now(),
 			overall_time: ZERO_DURATION,
+			ref_count: 1,
 			values,
 		};
 		self.span_data.lock().insert(id.clone(), span_datum);
@@ -351,45 +356,78 @@ impl Subscriber for ProfilingSubscriber {
 		self.trace_handler.handle_event(trace_event);
 	}
 
+	fn clone_span(&self, span: &Id) -> Id {
+		println!("{:?}: cloning", span);
+		if let Some(mut s) = self.span_data.lock().get_mut(&span) {
+			println!("counted");
+			s.ref_count = s.ref_count.saturating_add(1);
+		} else {
+			println!("no clone");
+		}
+		span.clone()
+	}
+
 	fn enter(&self, span: &Id) {
-		self.current_span.enter(span.clone());
-		let mut span_data = self.span_data.lock();
-		let start_time = Instant::now();
-		if let Some(mut s) = span_data.get_mut(&span) {
-			s.start_time = start_time;
+		println!("{:?}: enter", span);
+		if let Some(mut s) = self.span_data.lock().get_mut(&span) {
+			println!("entered");
+			self.current_span.enter(span.clone());
+			s.start_time = Instant::now();
+		} else {
+			println!("no enter");
 		}
 	}
 
 	fn exit(&self, span: &Id) {
-		self.current_span.exit();
+		println!("{:?}: exit", span);
 		let end_time = Instant::now();
 		let mut span_data = self.span_data.lock();
 		if let Some(mut s) = span_data.get_mut(&span) {
+			if s.ref_count != 0 {
+				println!("no exit");
+				return // this isn't the last cloned span, ignore
+			}
+			println!("exiting");
+			self.current_span.exit();
 			s.overall_time = end_time - s.start_time + s.overall_time;
 		}
 	}
 
 	fn try_close(&self, span: Id) -> bool {
-		let span_datum = {
+		println!("{:?}: try close", span);
+		let mut span_datum = {
 			let mut span_data = self.span_data.lock();
-			span_data.remove(&span)
-		};
-		if let Some(mut span_datum) = span_datum {
-			if span_datum.name == WASM_TRACE_IDENTIFIER {
-				span_datum.values.bool_values.insert("wasm".to_owned(), true);
-				if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
-					span_datum.name = n;
+			match span_data.entry(span).and_modify(|d| {
+				d.ref_count = d.ref_count.saturating_sub(1);
+			}) {
+				Entry::Vacant(_) => {
+					println!("unkown");
+					return false;
 				}
-				if let Some(t) = span_datum.values.string_values.remove(WASM_TARGET_KEY) {
-					span_datum.target = t;
+				Entry::Occupied(o) => {
+					if o.get().ref_count != 0 {
+						println!("not closing");
+						return false;
+					}
+					println!("closing");
+					o.remove()
 				}
-				if self.check_target(&span_datum.target, &span_datum.level) {
-					self.trace_handler.handle_span(span_datum);
-				}
-			} else {
-				self.trace_handler.handle_span(span_datum);
 			}
 		};
+		if span_datum.name == WASM_TRACE_IDENTIFIER {
+			span_datum.values.bool_values.insert("wasm".to_owned(), true);
+			if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
+				span_datum.name = n;
+			}
+			if let Some(t) = span_datum.values.string_values.remove(WASM_TARGET_KEY) {
+				span_datum.target = t;
+			}
+			if self.check_target(&span_datum.target, &span_datum.level) {
+				self.trace_handler.handle_span(span_datum);
+			}
+		} else {
+			self.trace_handler.handle_span(span_datum);
+		}
 		true
 	}
 }
