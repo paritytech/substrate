@@ -31,21 +31,15 @@
 #![warn(missing_docs)]
 
 use std::sync::Arc;
+use jsonrpc_pubsub::manager::SubscriptionManager;
 
 use sp_core::traits::SyncCryptoStore;
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
-use sp_api::ProvideRuntimeApi;
-use sp_transaction_pool::TransactionPool;
-use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
-use sp_consensus::SelectChain;
-use sp_consensus_babe::BabeApi;
-use sc_consensus_epochs::SharedEpochChanges;
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet, GrandpaJustificationStream};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
-use sc_keystore::KeyStorePtr;
 pub use sc_rpc_api::DenyUnsafe;
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;

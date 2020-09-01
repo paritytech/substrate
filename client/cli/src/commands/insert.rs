@@ -19,10 +19,10 @@
 
 use crate::{Error, KeystoreParams, CryptoSchemeFlag, SharedParams, utils, with_crypto_scheme};
 use structopt::StructOpt;
-use sp_core::{crypto::KeyTypeId, traits::BareCryptoStore};
+use sp_core::{crypto::KeyTypeId, traits::SyncCryptoStore};
 use std::convert::TryFrom;
 use sc_service::config::KeystoreConfig;
-use sc_keystore::Store as KeyStore;
+use sc_keystore::{Keystore, local::LocalKeystore};
 use sp_core::crypto::SecretString;
 
 /// The `insert` command
@@ -68,8 +68,9 @@ impl InsertCmd {
 					self.crypto_scheme.scheme,
 					to_vec(&suri, password.clone())
 				)?;
-				let keystore = KeyStore::open(path, password)
+				let local_keystore = LocalKeystore::open(path, password)
 					.map_err(|e| format!("{}", e))?;
+				let keystore: SyncCryptoStore = Keystore::new(Box::new(local_keystore)).into();
 				(keystore, public)
 			},
 			_ => unreachable!("keystore_config always returns path and password; qed")
@@ -80,7 +81,7 @@ impl InsertCmd {
 				Error::Other("Cannot convert argument to keytype: argument should be 4-character string".into())
 			})?;
 
-		keystore.write()
+		keystore
 			.insert_unknown(key_type, &suri, &public[..])
 			.map_err(|e| Error::Other(format!("{:?}", e)))?;
 
