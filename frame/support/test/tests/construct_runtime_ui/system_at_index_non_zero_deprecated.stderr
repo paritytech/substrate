@@ -1,5 +1,0 @@
-error: System module must be defined at index `0`, instead Balance is found. (this check is to avoid confusion for generation of origin_caller, (where system is forced to be at index 0 anyway), to bypass this check use attribute `#[deprecated_system_non_zero]` as in `construct_runtime! { #[deprecated_system_non_zero] ... }`).
- --> $DIR/system_at_index_non_zero_deprecated.rs:9:12
-  |
-9 |         Balance: balances::{Config, Call, Origin<T>},
-  |                  ^^^^^^^^

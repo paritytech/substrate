@@ -38,7 +38,6 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
 	let RuntimeDefinition {
 		name,
-		deprecated_system_non_zero,
 		where_section: WhereSection {
 			block,
 			node_block,
@@ -54,7 +53,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	} = definition;
 	let modules = modules.into_iter().collect::<Vec<_>>();
 
-	let system_module = check_modules(deprecated_system_non_zero, &modules, modules_token.span)?;
+	let system_module = check_modules(&modules, modules_token.span)?;
 
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
@@ -471,7 +470,6 @@ fn get_available_indices(modules: &Vec<ModuleDeclaration>) -> Vec<u8> {
 ///
 /// returns system module ident
 fn check_modules(
-	deprecated_system_non_zero: bool,
 	modules: &Vec<ModuleDeclaration>,
 	modules_span: proc_macro2::Span,
 ) -> Result<syn::Ident> {
@@ -497,36 +495,10 @@ fn check_modules(
 		})
 	{
 		let msg = format!(
-			"Only system module is allowed to be defined at index `0`",
+			"Only system module is allowed to be defined at index `0`, this is because of origin \
+			encoding",
 		);
 		return Err(syn::Error::new(module.name.span(), msg));
-	}
-
-	if !deprecated_system_non_zero {
-		// Assert system module index is 0 (either explicitly or implicitly).
-		if let Some(index) = system_module.index {
-			// Assert system module is at index 0 explicitly
-			if index != 0 {
-				let msg = "System module must be defined at index `0`";
-				return Err(syn::Error::new(system_module.module.span(), msg));
-			}
-		} else {
-			// Assert system module is at index 0 implicitly
-			let first_implicit_module = modules.iter().filter(|m| m.index.is_none()).next()
-				.expect("At least system module exists; qed");
-
-			if first_implicit_module.name != SYSTEM_MODULE_NAME {
-				let msg = format!(
-					"System module must be defined at index `0`, instead {} is found. (this check \
-					is to avoid confusion for generation of origin_caller, (where system is \
-					forced to be at index 0 anyway), to bypass this check use attribute \
-					`#[deprecated_system_non_zero]` as in \
-					`construct_runtime! {{ #[deprecated_system_non_zero] ... }}`).",
-					first_implicit_module.name,
-				);
-				return Err(syn::Error::new(first_implicit_module.module.span(), msg));
-			}
-		}
 	}
 
 	// No module indices conflicts

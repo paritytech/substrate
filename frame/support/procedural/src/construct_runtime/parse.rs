@@ -36,7 +36,6 @@ mod keyword {
 	syn::custom_keyword!(Origin);
 	syn::custom_keyword!(Inherent);
 	syn::custom_keyword!(ValidateUnsigned);
-	syn::custom_keyword!(deprecated_system_non_zero);
 }
 
 #[derive(Debug)]
@@ -45,27 +44,12 @@ pub struct RuntimeDefinition {
 	pub enum_token: Token![enum],
 	pub name: Ident,
 	pub where_section: WhereSection,
-	/// Optional attribute `#[deprecated_system_non_zero]`
-	pub deprecated_system_non_zero: bool,
 	pub modules: ext::Braces<ext::Punctuated<ModuleDeclaration, Token![,]>>,
 }
 
 impl Parse for RuntimeDefinition {
 	fn parse(input: ParseStream) -> Result<Self> {
-		let mut deprecated_system_non_zero = false;
-
-		// check for optional attribute `#[deprecated_system_non_zero]`
-		// (no other attribute are allowed.)
-		if input.peek(Token![#]) {
-			input.parse::<Token![#]>()?;
-			let attr_content;
-			syn::bracketed!(attr_content in input);
-			attr_content.parse::<keyword::deprecated_system_non_zero>()?;
-			deprecated_system_non_zero = true;
-		}
-
 		Ok(Self {
-			deprecated_system_non_zero,
 			visibility_token: input.parse()?,
 			enum_token: input.parse()?,
 			name: input.parse()?,

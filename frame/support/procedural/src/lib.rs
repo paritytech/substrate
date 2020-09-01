@@ -254,13 +254,13 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         NodeBlock = runtime::Block,
 ///         UncheckedExtrinsic = UncheckedExtrinsic
 ///     {
-///         System: system::{Module, Call, Event<T>, Config<T>},
-///         Test: test::{Module, Call},
-///         Test2: test_with_long_module::{Module},
+///         System: system::{Module, Call, Event<T>, Config<T>} = 0,
+///         Test: test::{Module, Call} = 1,
+///         Test2: test_with_long_module::{Module, Event<T>},
 ///
 ///         // Module with instances
 ///         Test3_Instance1: test3::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
-///         Test3_DefaultInstance: test3::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>},
+///         Test3_DefaultInstance: test3::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
 ///     }
 /// )
 /// ```
@@ -280,6 +280,14 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// - `Config` or `Config<T>` (if the config is generic)
 /// - `Inherent` - If the module provides/can check inherents.
 /// - `ValidateUnsigned` - If the module validates unsigned extrinsics.
+///
+/// `= $n` is an optional part allowing to define at which index the module variants in
+/// `OriginCaller`, `Call` and `Event` are encoded, and to define the ModuleToIndex value.
+///
+/// Call and Event encodes its variant using the index provided or with the first available index.
+/// OriginCaller encodes system as variant of index 0 and then using the index provided or with the
+/// first available index. (E.g. In the above example `Call::Test3_Instance1` is encoded at index
+/// 2, `Event::Test3_Instance1 is encoded at index 3).
 ///
 /// # Note
 ///
