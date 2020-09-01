@@ -193,7 +193,7 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 	}
 
 	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool) {
-		let mut peer_ids: HashSet<PeerId> = nodes.iter()
+		let peer_ids: HashSet<PeerId> = nodes.iter()
 			.filter_map(|node|
 				match node {
 					NodePublicKey::Ed25519(public) =>
