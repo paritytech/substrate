@@ -235,8 +235,8 @@ mod tests {
 	};
 	use sp_application_crypto::AppPair;
 	use sp_keyring::Ed25519Keyring;
-	use sp_core::crypto::key_types::BABE;
-	use sc_keystore::{Keystore, local::LocalKeystore};
+	use sp_core::{crypto::key_types::BABE, traits::SyncCryptoStore};
+	use sc_keystore::LocalKeystore;
 
 	use std::sync::Arc;
 	use sc_consensus_babe::{Config, block_import, AuthorityPair};
@@ -245,8 +245,7 @@ mod tests {
 	/// creates keystore backed by a temp file
 	fn create_temp_keystore<P: AppPair>(authority: Ed25519Keyring) -> (Arc<SyncCryptoStore>, tempfile::TempDir) {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let local_keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore");
-		let keystore: SyncCryptoStore = Keystore::new(Box::new(local_keystore)).into();
+		let keystore: SyncCryptoStore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore").into();
 		keystore.ed25519_generate_new(BABE, Some(&authority.to_seed()))
 			.expect("Creates authority key");
 

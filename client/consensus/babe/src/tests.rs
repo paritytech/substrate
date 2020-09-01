@@ -46,7 +46,7 @@ use rand_chacha::{
 	rand_core::SeedableRng,
 	ChaChaRng,
 };
-use sc_keystore::{Keystore, local::LocalKeystore};
+use sc_keystore::LocalKeystore;
 use sp_application_crypto::key_types::BABE;
 
 type Item = DigestItem<Hash>;
@@ -386,8 +386,7 @@ fn run_one_test(
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let local_keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore");
-		let keystore: SyncCryptoStore = Keystore::new(Box::new(local_keystore)).into();
+		let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore").into();
 		keystore.ed25519_generate_new(BABE, Some(seed)).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
@@ -518,8 +517,7 @@ fn sig_is_not_pre_digest() {
 #[test]
 fn can_author_block() {
 	let _ = env_logger::try_init();
-	let local_keystore = LocalKeystore::in_memory();
-	let keystore: SyncCryptoStore= Keystore::new(Box::new(local_keystore)).into();
+	let keystore = LocalKeystore::new_in_memory().into();
 	let public = keystore.sr25519_generate_new(BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 
@@ -827,8 +825,7 @@ fn verify_slots_are_strictly_increasing() {
 fn babe_transcript_generation_match() {
 	let _ = env_logger::try_init();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let local_keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore");
-	let keystore: SyncCryptoStore= Keystore::new(Box::new(local_keystore)).into();
+	let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore").into();
 	let public = keystore.sr25519_generate_new(BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 

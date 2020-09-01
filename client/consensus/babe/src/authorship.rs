@@ -290,13 +290,12 @@ mod tests {
 	use super::*;
 	use sp_core::{sr25519::Pair, crypto::Pair as _};
 	use sp_consensus_babe::{AuthorityId, BabeEpochConfiguration, AllowedSlots};
-	use sc_keystore::{Keystore, local::LocalKeystore};
+	use sc_keystore::LocalKeystore;
 
 	#[test]
 	fn claim_secondary_plain_slot_works() {
-		let local_keystore = LocalKeystore::in_memory();
-		let keystore = Arc::new(Keystore::new(Box::new(local_keystore)));
-		let sync_keystore = Arc::new(SyncCryptoStore::new(keystore));
+		let keystore = LocalKeystore::in_memory();
+		let sync_keystore = Arc::new(keystore.into());
 		let valid_public_key = dbg!(sync_keystore.sr25519_generate_new(
 			AuthorityId::ID,
 			Some(sp_core::crypto::DEV_PHRASE),

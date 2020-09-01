@@ -50,7 +50,7 @@ use sp_consensus::{
 use sp_storage::StorageKey;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 use sp_runtime::{generic::BlockId, DigestItem};
-use sc_keystore::Keystore;
+use sc_keystore::LocalKeystore;
 use hex_literal::hex;
 
 mod light;
@@ -1739,7 +1739,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 			substrate_test_runtime_client::runtime::Block,
 			_,
 			substrate_test_runtime_client::runtime::RuntimeApi,
-			Keystore,
+			LocalKeystore,
 		>(
 			substrate_test_runtime_client::new_native_executor(),
 			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),

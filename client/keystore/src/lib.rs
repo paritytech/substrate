@@ -17,18 +17,15 @@
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
 
 #![warn(missing_docs)]
-use async_trait::async_trait;
-use std::{sync::Arc, io};
+use std::io;
 use sp_core::{
-	crypto::{CryptoTypePublicPair, KeyTypeId},
-	traits::{CryptoStore, Error as TraitError, SyncCryptoStore},
-	sr25519::Public as Sr25519Public,
-	vrf::{VRFTranscriptData, VRFSignature},
+	crypto::KeyTypeId,
+	traits::Error as TraitError,
 };
-use sp_application_crypto::{ed25519, ecdsa};
 
 /// Local keystore implementation
 pub mod local;
+pub use local::LocalKeystore;
 
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -83,100 +80,6 @@ impl std::error::Error for Error {
 			_ => None,
 		}
 	}
-}
-
-/// A keystore implementation which uses a backend
-/// that is either local or remote.
-pub struct Keystore(Box<dyn CryptoStore>);
-
-impl Keystore {
-	/// Create an instance of keystore
-	pub fn new(backend: Box<dyn CryptoStore>) -> Self {
-		Keystore(backend)
-	}
-}
-
-#[async_trait]
-impl CryptoStore for Keystore {
-    async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<Sr25519Public> {
-		self.0.sr25519_public_keys(id).await
-    }
-
-    async fn sr25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> std::result::Result<Sr25519Public, TraitError> {
-		self.0.sr25519_generate_new(id, seed).await
-    }
-
-    async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		self.0.ed25519_public_keys(id).await
-    }
-
-    async fn ed25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> std::result::Result<ed25519::Public, TraitError> {
-		self.0.ed25519_generate_new(id, seed).await
-    }
-
-    async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		self.0.ecdsa_public_keys(id).await
-    }
-
-    async fn ecdsa_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> std::result::Result<ecdsa::Public, TraitError> {
-		self.0.ecdsa_generate_new(id, seed).await
-    }
-
-    async fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> std::result::Result<(), ()> {
-		self.0.insert_unknown(key_type, suri, public).await
-    }
-
-    async fn supported_keys(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>
-	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
-		self.0.supported_keys(id, keys).await
-    }
-
-    async fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
-		self.0.keys(id).await
-    }
-
-    async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		self.0.has_keys(public_keys).await
-    }
-
-    async fn sign_with(
-		&self,
-		id: KeyTypeId,
-		key: &CryptoTypePublicPair,
-		msg: &[u8],
-	) -> std::result::Result<Vec<u8>, TraitError> {
-		self.0.sign_with(id, key, msg).await
-    }
-
-    async fn sr25519_vrf_sign<'a>(
-		&'a self,
-		key_type: KeyTypeId,
-		public: &Sr25519Public,
-		transcript_data: VRFTranscriptData,
-	) -> std::result::Result<VRFSignature, TraitError> {
-		self.0.sr25519_vrf_sign(key_type, public, transcript_data).await
-    }
-}
-
-impl Into<SyncCryptoStore> for Keystore {
-    fn into(self) -> SyncCryptoStore {
-		SyncCryptoStore::new(Arc::new(self))
-    }
 }
 
 #[cfg(test)]

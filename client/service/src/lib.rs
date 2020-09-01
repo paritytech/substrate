@@ -54,7 +54,7 @@ pub use self::error::Error;
 pub use self::builder::{
 	new_full_client, new_client, new_full_parts, new_light_parts,
 	spawn_tasks, build_network, build_offchain_workers,
-	BuildNetworkParams, KeystoreParams, NetworkStarter, SpawnTasksParams, TFullClient, TLightClient,
+	BuildNetworkParams, KeystoreContainer, NetworkStarter, SpawnTasksParams, TFullClient, TLightClient,
 	TFullBackend, TLightBackend, TLightBackendWithHash, TLightClientWithBackend,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
 };
@@ -167,7 +167,7 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	/// The chain task manager.
 	pub task_manager: TaskManager,
 	/// A shared keystore instance.
-	pub keystore_params: KeystoreParams,
+	pub keystore_params: KeystoreContainer,
 	/// A chain selection algorithm instance.
 	pub select_chain: SelectChain,
 	/// An import queue.

@@ -471,7 +471,7 @@ mod tests {
 	use sp_runtime::{key_types::BABE, traits::IdentifyAccount, RuntimeAppPublic};
 	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 	use sc_client_api::BlockBackend;
-	use sc_keystore::{Keystore, local::LocalKeystore};
+	use sc_keystore::LocalKeystore;
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
@@ -481,9 +481,9 @@ mod tests {
 	#[ignore]
 	fn test_sync() {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let local_keystore = LocalKeystore::open(keystore_path.path(), None)
-			.expect("Creates keystore");
-		let keystore: Arc<SyncCryptoStore> = Arc::new(Keystore::new(Box::new(local_keystore)).into());
+		let keystore: Arc<SyncCryptoStore> = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+			.expect("Creates keystore")
+			.into());
 		let alice: sp_consensus_babe::AuthorityId = keystore.sr25519_generate_new(BABE, Some("//Alice"))
 			.expect("Creates authority pair").into();
 

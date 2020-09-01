@@ -22,9 +22,9 @@ use futures::executor::block_on;
 use rand::{Rng, distributions::Alphanumeric, rngs::OsRng};
 use structopt::StructOpt;
 
-use sc_keystore::{Keystore, local::LocalKeystore};
+use sc_keystore::LocalKeystore;
 use node_cli::chain_spec::{self, AccountId};
-use sp_core::{sr25519, crypto::{Public, Ss58Codec}, traits::CryptoStore};
+use sp_core::{sr25519, crypto::{Public, Ss58Codec}, traits::SyncCryptoStore};
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
@@ -139,21 +139,20 @@ fn generate_authority_keys_and_store(
 	keystore_path: &Path,
 ) -> Result<(), String> {
 	for (n, seed) in seeds.into_iter().enumerate() {
-		let local_keystore = LocalKeystore::open(
+		let keystore: SyncCryptoStore = LocalKeystore::open(
 			keystore_path.join(format!("auth-{}", n)),
 			None,
 		).map_err(|err| err.to_string())?;
-		let keystore = Keystore::new(Box::new(local_keystore));
 
 		let (_, _, grandpa, babe, im_online, authority_discovery) =
 			chain_spec::authority_keys_from_seed(seed);
 
 		let insert_key = |key_type, public| {
-			block_on(keystore.insert_unknown(
+			keystore.insert_unknown(
 				key_type,
 				&format!("//{}", seed),
 				public,
-			)).map_err(|_| format!("Failed to insert key: {}", grandpa))
+			).map_err(|_| format!("Failed to insert key: {}", grandpa))
 		};
 
 		insert_key(

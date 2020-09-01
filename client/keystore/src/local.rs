@@ -4,12 +4,13 @@ use std::{
 	fs::{self, File},
 	io::Write,
 	path::PathBuf,
+	sync::Arc,
 };
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, ExposeSecret, SecretString, Public},
-	traits::{CryptoStore, Error as TraitError},
+	traits::{CryptoStore, Error as TraitError, SyncCryptoStore},
 	sr25519::{Public as Sr25519Public, Pair as Sr25519Pair},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 	Encode,
@@ -190,6 +191,12 @@ impl CryptoStore for LocalKeystore {
 			proof,
 		})
 	}
+}
+
+impl Into<SyncCryptoStore> for LocalKeystore {
+    fn into(self) -> SyncCryptoStore {
+		SyncCryptoStore::new(Arc::new(self))
+    }
 }
 
 /// A local key store.

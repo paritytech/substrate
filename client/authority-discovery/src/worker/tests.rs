@@ -453,7 +453,7 @@ fn dont_stop_polling_when_error_is_returned() {
 	}.boxed_local().into());
 	let _ = pool.spawner().spawn_local_obj(async move {
 		Delay::new(Duration::from_secs(1)).await;
-		discovery_update_tx.send(Event::Processed).now_or_never().unwrap();
+		let _ = discovery_update_tx.send(Event::Processed).now_or_never().unwrap();
 		Delay::new(Duration::from_secs(1)).await;
 		let _ = discovery_update_tx.send(Event::End).now_or_never().unwrap();
 	}.boxed_local().into());

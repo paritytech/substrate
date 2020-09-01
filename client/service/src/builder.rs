@@ -38,10 +38,7 @@ use futures::{
 	future::ready,
 	channel::oneshot,
 };
-use sc_keystore::{
-	Keystore,
-	local::LocalKeystore,
-};
+use sc_keystore::LocalKeystore;
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 use sc_network::NetworkService;
@@ -57,7 +54,7 @@ use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::MaintainedTransactionPool;
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
-use sp_core::traits::{CodeExecutor, SpawnNamed, SyncCryptoStore};
+use sp_core::traits::{CodeExecutor, SpawnNamed, CryptoStore, CryptoStorePtr, SyncCryptoStore};
 use sp_runtime::BuildStorage;
 use sc_client_api::{
 	BlockBackend, BlockchainEvents,
@@ -162,14 +159,14 @@ pub type TLightCallExecutor<TBl, TExecDisp> = sc_light::GenesisCallExecutor<
 type TFullParts<TBl, TRtApi, TExecDisp> = (
 	TFullClient<TBl, TRtApi, TExecDisp>,
 	Arc<TFullBackend<TBl>>,
-	KeystoreParams,
+	KeystoreContainer,
 	TaskManager,
 );
 
 type TLightParts<TBl, TRtApi, TExecDisp> = (
 	Arc<TLightClient<TBl, TRtApi, TExecDisp>>,
 	Arc<TLightBackend<TBl>>,
-	KeystoreParams,
+	KeystoreContainer,
 	TaskManager,
 	Arc<OnDemand<TBl>>,
 );
@@ -192,23 +189,22 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 >;
 
 /// Construct and hold different layers of Keystore wrappers
-pub struct KeystoreParams {
-	keystore: Arc<Keystore>,
+pub struct KeystoreContainer {
+	keystore: Arc<dyn CryptoStore>,
 	sync_keystore: Arc<SyncCryptoStore>,
 }
 
-impl KeystoreParams {
-	/// Construct KeystoreParams
+impl KeystoreContainer {
+	/// Construct KeystoreContainer
 	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
-		let local_keystore = match config {
+		let keystore = Arc::new(match config {
 			KeystoreConfig::Path { path, password } => LocalKeystore::open(
 				path.clone(),
 				password.clone()
 			)?,
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
-		};
-		let keystore = Arc::new(Keystore::new(Box::new(local_keystore)));
-		let sync_keystore = Arc::new(SyncCryptoStore::new(keystore.clone()));
+		});
+		let sync_keystore = Arc::new((keystore.clone() as CryptoStorePtr).into());
 
 		Ok(Self {
 			keystore,
@@ -217,7 +213,7 @@ impl KeystoreParams {
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
-	pub fn keystore(&self) -> Arc<Keystore> {
+	pub fn keystore(&self) -> Arc<dyn CryptoStore> {
 		self.keystore.clone()
 	}
 
@@ -244,7 +240,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	let keystore_container = KeystoreParams::new(&config.keystore)?;
+	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
@@ -317,7 +313,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
-	let keystore_params = KeystoreParams::new(&config.keystore)?;
+	let keystore_params = KeystoreContainer::new(&config.keystore)?;
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,

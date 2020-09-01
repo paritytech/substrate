@@ -888,7 +888,7 @@ mod tests {
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_runtime::traits::Header as _;
 	use substrate_test_runtime_client::runtime::{Header, H256};
-	use sc_keystore::{Keystore, local::LocalKeystore};
+	use sc_keystore::LocalKeystore;
 	use sp_application_crypto::key_types::AURA;
 
 	type Error = sp_blockchain::Error;
@@ -1017,8 +1017,7 @@ mod tests {
 			let client = peer.client().as_full().expect("full clients are created").clone();
 			let select_chain = peer.select_chain().expect("full client has a select chain");
 			let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-			let local_keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.");
-			let keystore: SyncCryptoStore = Keystore::new(Box::new(local_keystore)).into();
+			let keystore: SyncCryptoStore= LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.").into();
 
 
 			keystore.sr25519_generate_new(AURA, Some(&key.to_seed()))
@@ -1088,8 +1087,7 @@ mod tests {
 		];
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let local_keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.");
-		let keystore: SyncCryptoStore = Keystore::new(Box::new(local_keystore)).into();
+		let keystore: SyncCryptoStore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.").into();
 		let public = keystore.sr25519_generate_new(AuthorityPair::ID, None)
 			.expect("Key should be created");
 		authorities.push(public.into());

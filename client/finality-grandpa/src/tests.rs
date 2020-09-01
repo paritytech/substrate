@@ -53,7 +53,7 @@ use finality_proof::{
 use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
-use sc_keystore::{Keystore, local::LocalKeystore};
+use sc_keystore::LocalKeystore;
 use futures::executor::block_on;
 use sp_application_crypto::key_types::GRANDPA;
 
@@ -281,12 +281,11 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 
 fn create_keystore(authority: Ed25519Keyring) -> (Arc<SyncCryptoStore>, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let local_keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore");
-	let keystore = Keystore::new(Box::new(local_keystore));
+	let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore");
 	block_on(keystore.ed25519_generate_new(GRANDPA, Some(&authority.to_seed())))
 		.expect("Creates authority key");
 
-	let keystore = Arc::new(SyncCryptoStore::new(Arc::new(keystore)));
+	let keystore: Arc<SyncCryptoStore> = Arc::new(keystore.into());
 	(keystore, keystore_path)
 }
 
