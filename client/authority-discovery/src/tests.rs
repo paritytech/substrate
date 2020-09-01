@@ -63,9 +63,7 @@ fn get_addresses_and_authority_id() {
 	);
 	worker.inject_addresses(remote_authority_id.clone(), vec![remote_addr.clone()]);
 
-	let _ = pool.spawner().spawn_local_obj(async move {
-		worker.run().await
-	}.boxed_local().into());
+	pool.spawner().spawn_local_obj(Box::pin(worker.run()).into()).unwrap();
 
 	pool.run_until(async {
 		assert_eq!(

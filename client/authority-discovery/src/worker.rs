@@ -236,15 +236,22 @@ where
 
 	/// Start the worker
 	pub async fn run(mut self) {
-		loop {
+		futures::select! {
 			// Process incoming events.
-			if !self.handle_dht_events().await {
-				// `handle_dht_events` returns `Poll::Ready(())` when the Dht event stream terminated.
+			_ = self.handle_dht_events().fuse() => {
+				// `handle_dht_events` returns when the Dht event stream terminated.
 				// Termination of the Dht event stream implies that the underlying network terminated,
 				// thus authority discovery should terminate as well.
 				return ();
+			},
+			_ = self.run_publish().fuse() => {
+				// do nothing
 			}
+		}
+	}
 
+	async fn run_publish(&mut self) {
+		loop {
 			// Publish own addresses.
 			self.publish_interval.next().await;
 
