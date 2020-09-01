@@ -28,7 +28,7 @@
 //! A node must have an owner. The owner can additionally change the connections
 //! for the node. Only one user is allowed to claim a specific node. To eliminate
 //! false claim, the maintainer of the node should claim it before even starting the
-//! node. This pallet use offchain work to set reserved nodes, if the node is not
+//! node. This pallet uses offchain worker to set reserved nodes, if the node is not
 //! an authority, make sure to enable offchain worker with the right CLI flag.
 
 // Ensure we're `no_std` when compiling for Wasm.
