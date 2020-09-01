@@ -240,10 +240,9 @@ macro_rules! within_span {
 		$span:expr;
 		$( $code:tt )*
 	) => {
-		{
-			$crate::enter_span!($span);
+		$span.in_scope(||
 			$( $code )*
-		}
+		)
 	};
 	(
 		$lvl:expr,
