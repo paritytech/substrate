@@ -259,7 +259,7 @@ decl_module! {
         #[weight = T::WeightInfo::claim_node()]
         pub fn claim_node(origin, node: NodePublicKey) {
             let sender = ensure_signed(origin)?;
-            ensure!(!Owners::<T>::contains_key(&node),Error::<T>::AlreadyClaimed);
+            ensure!(!Owners::<T>::contains_key(&node), Error::<T>::AlreadyClaimed);
 
             Owners::<T>::insert(&node, &sender);
             Self::deposit_event(RawEvent::NodeClaimed(node, sender));
