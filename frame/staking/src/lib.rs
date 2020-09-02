@@ -2175,7 +2175,8 @@ decl_module! {
 		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators, Stash Account, Locks
 		/// - Writes Each: SpanSlash * S
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(4, 7)
+		#[weight =
+			T::DbWeight::get().reads_writes(4, 7)
 			.saturating_add(76 * WEIGHT_PER_MICROS)
 			.saturating_add(
 				WEIGHT_PER_MICROS.saturating_mul(2).saturating_mul(Weight::from(*num_slashing_spans))

@@ -280,13 +280,18 @@ benchmarks! {
 		let validator = create_validator_with_nominators::<T>(n, T::MaxNominatorRewardedPerValidator::get() as u32, true)?;
 
 		let current_era = CurrentEra::get().unwrap();
+		// set the commission for this particular era as well.
+		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), <Staking<T>>::validators(&validator));
+
 		let caller = whitelisted_caller();
 		let balance_before = T::Currency::free_balance(&validator);
 	}: _(RawOrigin::Signed(caller), validator.clone(), current_era)
 	verify {
-		// Validator has been paid!
 		let balance_after = T::Currency::free_balance(&validator);
-		assert!(balance_before < balance_after);
+		assert!(
+			balance_before < balance_after,
+			"Balance of stash {:?} should have increased after payout.", validator,
+		);
 	}
 
 	payout_stakers_alive_controller {
@@ -294,13 +299,18 @@ benchmarks! {
 		let validator = create_validator_with_nominators::<T>(n, T::MaxNominatorRewardedPerValidator::get() as u32, false)?;
 
 		let current_era = CurrentEra::get().unwrap();
+		// set the commission for this particular era as well.
+		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), <Staking<T>>::validators(&validator));
+
 		let caller = whitelisted_caller();
 		let balance_before = T::Currency::free_balance(&validator);
 	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era)
 	verify {
-		// Validator has been paid!
 		let balance_after = T::Currency::free_balance(&validator);
-		assert!(balance_before < balance_after);
+		assert!(
+			balance_before < balance_after,
+			"Balance of stash {:?} should have increased after payout.", validator,
+		);
 	}
 
 	rebond {
