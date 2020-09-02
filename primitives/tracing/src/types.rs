@@ -403,7 +403,8 @@ mod std_features {
 	/// The fieldname for the wasm-originated target
 	pub static WASM_TARGET_KEY: &'static str = "target";
 	/// The the list of all static field names we construct from the given metadata
-	pub static GENERIC_FIELDS: &'static [&'static str] = &[WASM_TARGET_KEY, WASM_NAME_KEY, "file", "line", "module_path", "params"];
+	pub static GENERIC_FIELDS: &'static [&'static str] = &[WASM_TARGET_KEY, WASM_NAME_KEY,
+		"file", "line", "module_path", "params"];
 
 	// Implementation Note:
 	// the original `tracing` crate generates these static metadata entries at every `span!` and
