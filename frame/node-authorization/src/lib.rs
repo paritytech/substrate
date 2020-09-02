@@ -79,6 +79,9 @@ pub trait Trait: frame_system::Trait {
 	/// The maximum number of well known nodes that are allowed to set
 	type MaxWellKnownNodes: Get<u32>;
 
+	/// The maximum length in bytes of PeerId
+	type MaxPeerIdLength: Get<u32>;
+
 	/// The origin which can add a well known node.
 	type AddOrigin: EnsureOrigin<Self::Origin>;
 
@@ -143,6 +146,8 @@ decl_event! {
 decl_error! {
 	/// Error for the node authorization module.
 	pub enum Error for Module<T: Trait> {
+		/// The PeerId is too long.
+		PeerIdTooLong,
 		/// Too many well known nodes.
 		TooManyNodes,
 		/// The node is already joined in the list.
@@ -165,6 +170,9 @@ decl_module! {
 		/// The maximum number of authorized well known nodes
 		const MaxWellKnownNodes: u32 = T::MaxWellKnownNodes::get();
 
+		/// The maximum length in bytes of PeerId
+		const MaxPeerIdLength: u32 = T::MaxPeerIdLength::get();
+
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -178,6 +186,7 @@ decl_module! {
 		#[weight = (T::WeightInfo::add_well_known_node(), DispatchClass::Operational)]
 		pub fn add_well_known_node(origin, node: PeerId, owner: T::AccountId) {
 			T::AddOrigin::ensure_origin(origin)?;
+			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 
 			let mut nodes = WellKnownNodes::get();
 			ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
@@ -200,6 +209,7 @@ decl_module! {
 		#[weight = (T::WeightInfo::remove_well_known_node(), DispatchClass::Operational)]
 		pub fn remove_well_known_node(origin, node: PeerId) {
 			T::RemoveOrigin::ensure_origin(origin)?;
+			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 
 			let mut nodes = WellKnownNodes::get();
 
@@ -223,6 +233,8 @@ decl_module! {
 		#[weight = (T::WeightInfo::swap_well_known_node(), DispatchClass::Operational)]
 		pub fn swap_well_known_node(origin, remove: PeerId, add: PeerId) {
 			T::SwapOrigin::ensure_origin(origin)?;
+			ensure!(remove.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			ensure!(add.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 
 			if remove == add { return Ok(()) }
 
@@ -250,7 +262,7 @@ decl_module! {
 		pub fn reset_well_known_nodes(origin, nodes: Vec<(PeerId, T::AccountId)>) {
 			T::ResetOrigin::ensure_origin(origin)?;
 			ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
-
+	
 			Self::initialize_nodes(&nodes);
 
 			Self::deposit_event(RawEvent::NodesReset(nodes));
@@ -263,6 +275,8 @@ decl_module! {
 		#[weight = T::WeightInfo::claim_node()]
 		pub fn claim_node(origin, node: PeerId) {
 			let sender = ensure_signed(origin)?;
+			
+			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(!Owners::<T>::contains_key(&node),Error::<T>::AlreadyClaimed);
 
 			Owners::<T>::insert(&node, &sender);
@@ -277,6 +291,8 @@ decl_module! {
 		#[weight = T::WeightInfo::remove_claim()]
 		pub fn remove_claim(origin, node: PeerId) {
 			let sender = ensure_signed(origin)?;
+
+			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
 			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
 			ensure!(!WellKnownNodes::get().contains(&node), Error::<T>::PermissionDenied);
@@ -294,6 +310,8 @@ decl_module! {
 		#[weight = T::WeightInfo::transfer_node()]
 		pub fn transfer_node(origin, node: PeerId, owner: T::AccountId) {
 			let sender = ensure_signed(origin)?;
+
+			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
 			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
 
@@ -313,6 +331,8 @@ decl_module! {
 			connections: Vec<PeerId>
 		) {
 			let sender = ensure_signed(origin)?;
+
+			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
 			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
 
@@ -343,6 +363,8 @@ decl_module! {
 			connections: Vec<PeerId>
 		) {
 			let sender = ensure_signed(origin)?;
+
+			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
 			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
 
@@ -461,10 +483,12 @@ mod tests {
 	}
 	parameter_types! {
 		pub const MaxWellKnownNodes: u32 = 4;
+		pub const MaxPeerIdLength: u32 = 2;
 	}
 	impl Trait for Test {
 		type Event = ();
 		type MaxWellKnownNodes = MaxWellKnownNodes;
+		type MaxPeerIdLength = MaxPeerIdLength;
 		type AddOrigin = EnsureSignedBy<One, u64>;
 		type RemoveOrigin = EnsureSignedBy<Two, u64>;
 		type SwapOrigin = EnsureSignedBy<Three, u64>;
@@ -492,6 +516,10 @@ mod tests {
 			assert_noop!(
 				NodeAuthorization::add_well_known_node(Origin::signed(2), test_node(15), 15),
 				BadOrigin
+			);
+			assert_noop!(
+				NodeAuthorization::add_well_known_node(Origin::signed(1), vec![1, 2, 3], 15),
+				Error::<Test>::PeerIdTooLong
 			);
 			assert_noop!(
 				NodeAuthorization::add_well_known_node(Origin::signed(1), test_node(20), 20),
@@ -525,6 +553,10 @@ mod tests {
 				BadOrigin
 			);
 			assert_noop!(
+				NodeAuthorization::remove_well_known_node(Origin::signed(2), vec![1, 2, 3]),
+				Error::<Test>::PeerIdTooLong
+			);
+			assert_noop!(
 				NodeAuthorization::remove_well_known_node(Origin::signed(2), test_node(40)),
 				Error::<Test>::NotExist
 			);
@@ -549,6 +581,18 @@ mod tests {
 					Origin::signed(4), test_node(20), test_node(5)
 				),
 				BadOrigin
+			);
+			assert_noop!(
+				NodeAuthorization::swap_well_known_node(
+					Origin::signed(3), vec![1, 2, 3], test_node(20)
+				),
+				Error::<Test>::PeerIdTooLong
+			);
+			assert_noop!(
+				NodeAuthorization::swap_well_known_node(
+					Origin::signed(3), test_node(20), vec![1, 2, 3]
+				),
+				Error::<Test>::PeerIdTooLong
 			);
 
 			assert_ok!(
@@ -634,6 +678,10 @@ mod tests {
 	fn claim_node_works() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
+				NodeAuthorization::claim_node(Origin::signed(1), vec![1, 2, 3]),
+				Error::<Test>::PeerIdTooLong
+			);
+			assert_noop!(
 				NodeAuthorization::claim_node(Origin::signed(1), test_node(20)),
 				Error::<Test>::AlreadyClaimed
 			);
@@ -646,6 +694,10 @@ mod tests {
 	#[test]
 	fn remove_claim_works() {
 		new_test_ext().execute_with(|| {
+			assert_noop!(
+				NodeAuthorization::remove_claim(Origin::signed(15), vec![1, 2, 3]),
+				Error::<Test>::PeerIdTooLong
+			);
 			assert_noop!(
 				NodeAuthorization::remove_claim(Origin::signed(15), test_node(15)),
 				Error::<Test>::NotClaimed
@@ -673,6 +725,10 @@ mod tests {
 	fn transfer_node_works() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
+				NodeAuthorization::transfer_node(Origin::signed(15), vec![1, 2, 3], 10),
+				Error::<Test>::PeerIdTooLong
+			);
+			assert_noop!(
 				NodeAuthorization::transfer_node(Origin::signed(15), test_node(15), 10),
 				Error::<Test>::NotClaimed
 			);
@@ -690,6 +746,12 @@ mod tests {
 	#[test]
 	fn add_connections_works() {
 		new_test_ext().execute_with(|| {
+			assert_noop!(
+				NodeAuthorization::add_connections(
+					Origin::signed(15), vec![1, 2, 3], vec![test_node(5)]
+				),
+				Error::<Test>::PeerIdTooLong
+			);
 			assert_noop!(
 				NodeAuthorization::add_connections(
 					Origin::signed(15), test_node(15), vec![test_node(5)]
@@ -721,6 +783,12 @@ mod tests {
 	#[test]
 	fn remove_connections_works() {
 		new_test_ext().execute_with(|| {
+			assert_noop!(
+				NodeAuthorization::remove_connections(
+					Origin::signed(15), vec![1, 2, 3], vec![test_node(5)]
+				),
+				Error::<Test>::PeerIdTooLong
+			);
 			assert_noop!(
 				NodeAuthorization::remove_connections(
 					Origin::signed(15), test_node(15), vec![test_node(5)]
