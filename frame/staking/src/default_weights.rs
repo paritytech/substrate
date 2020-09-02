@@ -224,7 +224,7 @@ impl crate::WeightInfo for () {
 	fn withdraw_unbonded_update(_s: u32, ) -> Weight { 1_000_000_000 }
 	fn withdraw_unbonded_kill(_s: u32, ) -> Weight { 1_000_000_000 }
 	fn validate() -> Weight { 1_000_000_000 }
-	fn nominate(n: u32) -> Weight { 1_000_000_000 }
+	fn nominate(_n: u32) -> Weight { 1_000_000_000 }
 	fn chill() -> Weight { 1_000_000_000 }
 	fn set_payee() -> Weight { 1_000_000_000 }
 	fn set_controller() -> Weight { 1_000_000_000 }
