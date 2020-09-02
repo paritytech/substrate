@@ -295,6 +295,7 @@ macro_rules! enter_span {
 ///
 /// ```
 /// sp_tracing::enter_span!(sp_tracing::Level::TRACE, "test-span");
+/// // previous will be dropped here
 /// sp_tracing::enter_span!(sp_tracing::span!(sp_tracing::Level::DEBUG, "debug-span", params="value"));
 /// sp_tracing::enter_span!(sp_tracing::info_span!("info-span",  params="value"));
 ///
@@ -311,7 +312,8 @@ macro_rules! enter_span {
 #[macro_export]
 macro_rules! enter_span {
 	( $span:expr ) => {
-		// FIXME: this could be clashing, make the local variable based on name to prevent that
+		// Calling this twice in a row will overwrite (and drop) the earlier
+		// that is a _documented feature_!
 		let __within_span__ = $span;
 		let __tracing_guard__ = __within_span__.enter();
 	};
