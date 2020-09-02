@@ -660,7 +660,8 @@ macro_rules! benchmark_backend {
 					// Prepare instance
 					let $param = components.iter()
 						.find(|&c| c.0 == $crate::BenchmarkParameter::$param)
-						.unwrap().1;
+						.ok_or("Could not find component in benchmark preparation.")?
+						.1;
 				)*
 				$(
 					let $pre_id : $pre_ty = $pre_ex;
@@ -778,6 +779,10 @@ macro_rules! impl_benchmark {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
 					_ => return Err("Could not find extrinsic."),
 				};
+				let mut results: Vec<$crate::BenchmarkResults> = Vec::new();
+				if repeat == 0 {
+					return Ok(results);
+				}
 
 				// Add whitelist to DB including whitelisted caller
 				let mut whitelist = whitelist.to_vec();
@@ -795,14 +800,13 @@ macro_rules! impl_benchmark {
 				let components = <
 					SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)?>
 				>::components(&selected_benchmark);
-				let mut results: Vec<$crate::BenchmarkResults> = Vec::new();
 
 				// Default number of steps for a component.
 				let mut prev_steps = 10;
 
 				let repeat_benchmark = |
 					repeat: u32,
-					c: Vec<($crate::BenchmarkParameter, u32)>,
+					c: &[($crate::BenchmarkParameter, u32)],
 					results: &mut Vec<$crate::BenchmarkResults>,
 					verify: bool,
 				| -> Result<(), &'static str> {
@@ -812,7 +816,7 @@ macro_rules! impl_benchmark {
 						// benchmark.
 						let closure_to_benchmark = <
 							SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)?>
-						>::instance(&selected_benchmark, &c, verify)?;
+						>::instance(&selected_benchmark, c, verify)?;
 
 						// Set the block number to at least 1 so events are deposited.
 						if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
@@ -860,7 +864,7 @@ macro_rules! impl_benchmark {
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
 
 							results.push($crate::BenchmarkResults {
-								components: c.clone(),
+								components: c.to_vec(),
 								extrinsic_time: elapsed_extrinsic,
 								storage_root_time: elapsed_storage_root,
 								reads: read_write_count.0,
@@ -920,9 +924,9 @@ macro_rules! impl_benchmark {
 
 							if verify {
 								// If `--verify` is used, run the benchmark once to verify it would complete.
-								repeat_benchmark(1, Default::default(), &mut Vec::new(), true)?;
+								repeat_benchmark(1, &c, &mut Vec::new(), true)?;
 							}
-							repeat_benchmark(repeat, c, &mut results, false)?;
+							repeat_benchmark(repeat, &c, &mut results, false)?;
 						}
 					}
 				}
