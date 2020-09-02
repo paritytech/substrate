@@ -97,7 +97,7 @@ pub enum Role {
 ///
 /// 2. **Discovers other authorities**
 ///
-///    1. Retrieves the current set of authorities.
+///    1. Retrieves the current and next set of authorities.
 ///
 ///    2. Starts DHT queries for the ids of the authorities.
 ///
@@ -501,7 +501,7 @@ where
 				.collect::<HashMap<_, _>>()
 		};
 
-		// Check if the event origins from an authority in the current authority set.
+		// Check if the event origins from an authority in the current or next authority set.
 		let authority_id: &AuthorityId = authorities
 			.get(&remote_key)
 			.ok_or(Error::MatchingHashedAuthorityIdWithAuthorityId)?;
@@ -568,12 +568,12 @@ where
 		Ok(())
 	}
 
-	/// Retrieve our public keys within the current authority set.
+	/// Retrieve our public keys within the current and next authority set.
 	//
 	// A node might have multiple authority discovery keys within its keystore, e.g. an old one and
-	// one for the upcoming session. In addition it could be participating in the current authority
-	// set with two keys. The function does not return all of the local authority discovery public
-	// keys, but only the ones intersecting with the current authority set.
+	// one for the upcoming session. In addition it could be participating in the current and (/ or)
+	// next authority set with two keys. The function does not return all of the local authority
+	// discovery public keys, but only the ones intersecting with the current or next authority set.
 	async fn get_own_public_keys_within_authority_set(
 		key_store: CryptoStorePtr,
 		client: &Client,
@@ -585,14 +585,14 @@ where
 			.collect::<HashSet<_>>();
 
 		let id = BlockId::hash(client.info().best_hash);
-		let current_authorities = client.runtime_api()
+		let authorities = client.runtime_api()
 			.authorities(&id)
 			.map_err(Error::CallingRuntime)?
 			.into_iter()
 			.map(std::convert::Into::into)
 			.collect::<HashSet<_>>();
 
-		let intersection = local_pub_keys.intersection(&current_authorities)
+		let intersection = local_pub_keys.intersection(&authorities)
 			.cloned()
 			.map(std::convert::Into::into)
 			.collect();
