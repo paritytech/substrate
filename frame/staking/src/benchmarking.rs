@@ -441,13 +441,13 @@ benchmarks! {
 	// It builds a solution with `w` winners composed of nominated validators randomly nominated,
 	// `a` assignment with MAX_NOMINATIONS.
 	submit_solution_initial {
-		// number of validator intent
-		let v in 1000 .. 2000;
-		// number of nominator intent
-		let n in 1000 .. 2000;
+		// number of validator intention.
+		let v in 200 .. 400;
+		// number of nominator intention.
+		let n in 500 .. 1000;
 		// number of assignments. Basically, number of active nominators.
-		let a in 200 .. 500;
-		// number of winners, also ValidatorCount
+		let a in 200 .. 400;
+		// number of winners, also ValidatorCount.
 		let w in 16 .. 100;
 
 		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
@@ -503,13 +503,13 @@ benchmarks! {
 
 	// same as submit_solution_initial but we place a very weak solution on chian first.
 	submit_solution_better {
-		// number of validator intent
-		let v in 1000 .. 2000;
-		// number of nominator intent
-		let n in 1000 .. 2000;
+		// number of validator intention.
+		let v in 200 .. 400;
+		// number of nominator intention.
+		let n in 500 .. 1000;
 		// number of assignments. Basically, number of active nominators.
-		let a in 200 .. 500;
-		// number of winners, also ValidatorCount
+		let a in 200 .. 400;
+		// number of winners, also ValidatorCount.
 		let w in 16 .. 100;
 
 		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
@@ -587,10 +587,10 @@ benchmarks! {
 
 	// This will be early rejected based on the score.
 	submit_solution_weaker {
-		// number of validator intent
-		let v in 1000 .. 2000;
-		// number of nominator intent
-		let n in 1000 .. 2000;
+		// number of validator intention.
+		let v in 200 .. 400;
+		// number of nominator intention.
+		let n in 500 .. 1000;
 
 		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 
