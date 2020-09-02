@@ -40,7 +40,6 @@ use threadpool::ThreadPool;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use futures::future::Future;
 use log::{debug, warn};
-use sc_network::NetworkStateInfo;
 use sc_network::NetworkService;
 use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext, traits::SpawnNamed};
 use sp_runtime::{generic::BlockId, traits::{self, Header}};
@@ -99,7 +98,6 @@ impl<Client, Storage, Block> OffchainWorkers<
 	pub fn on_block_imported(
 		&self,
 		header: &Block::Header,
-		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		network_service: Arc<NetworkService<Block, <Block as traits::Block>::Hash>>,
 		is_validator: bool,
 	) -> impl Future<Output = ()> {
@@ -124,7 +122,6 @@ impl<Client, Storage, Block> OffchainWorkers<
 		if version > 0 {
 			let (api, runner) = api::AsyncApi::new(
 				self.db.clone(),
-				network_state.clone(),
 				network_service,
 				is_validator,
 				self.shared_client.clone(),
@@ -176,7 +173,6 @@ pub async fn notification_future<Client, Storage, Block, Spawner>(
 	client: Arc<Client>,
 	offchain: Arc<OffchainWorkers<Client, Storage, Block>>,
 	spawner: Spawner,
-	network_state_info: Arc<dyn NetworkStateInfo + Send + Sync>,
 	network_service: Arc<NetworkService<Block, <Block as traits::Block>::Hash>>,
 )
 	where
@@ -192,7 +188,6 @@ pub async fn notification_future<Client, Storage, Block, Spawner>(
 				"offchain-on-block",
 				offchain.on_block_imported(
 					&n.header,
-					network_state_info.clone(),
 					network_service.clone(),
 					is_validator,
 				).boxed(),
@@ -213,22 +208,9 @@ pub async fn notification_future<Client, Storage, Block, Spawner>(
 mod tests {
 	use super::*;
 	use std::sync::Arc;
-	use sc_network::{Multiaddr, PeerId};
 	use substrate_test_runtime_client::{TestClient, runtime::Block};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_transaction_pool::{TransactionPool, InPoolTransaction};
-
-	struct MockNetworkStateInfo();
-
-	impl NetworkStateInfo for MockNetworkStateInfo {
-		fn external_addresses(&self) -> Vec<Multiaddr> {
-			Vec::new()
-		}
-
-		fn local_peer_id(&self) -> PeerId {
-			PeerId::random()
-		}
-	}
 
 	struct TestPool(
 		Arc<BasicPool<FullChainApi<TestClient, Block>, Block>>
@@ -260,7 +242,6 @@ mod tests {
 			client.clone(),
 		));
 		let db = sc_client_db::offchain::LocalStorage::new_test();
-		let network_state = Arc::new(MockNetworkStateInfo());
 		let header = client.header(&BlockId::number(0)).unwrap().unwrap();
 
 		// when
@@ -268,7 +249,6 @@ mod tests {
 		futures::executor::block_on(
 			offchain.on_block_imported(
 				&header,
-				network_state,
 				substrate_test_runtime_network::build_network_service(),
 				false
 			)

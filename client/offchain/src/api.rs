@@ -52,8 +52,6 @@ mod timestamp;
 pub(crate) struct Api<Block: BlockT, Storage> {
 	/// Offchain Workers database.
 	db: Storage,
-	/// A NetworkState provider.
-	network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	/// A NetworkService provider.
 	network_service: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	/// Is this node a potential validator?
@@ -78,10 +76,10 @@ impl<Block: BlockT, Storage: OffchainStorage> OffchainExt for Api<Block, Storage
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		let external_addresses = self.network_state.external_addresses();
+		let external_addresses = self.network_service.external_addresses();
 
 		let state = NetworkState::new(
-			self.network_state.local_peer_id(),
+			self.network_service.local_peer_id().clone(),
 			external_addresses,
 		);
 		Ok(OpaqueNetworkState::from(state))
@@ -289,7 +287,6 @@ impl AsyncApi {
 	/// Creates new Offchain extensions API implementation  an the asynchronous processing part.
 	pub fn new<B: BlockT, S: OffchainStorage>(
 		db: S,
-		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		network_service: Arc<NetworkService<B, <B as BlockT>::Hash>>,
 		is_validator: bool,
 		shared_client: SharedClient,
@@ -298,7 +295,6 @@ impl AsyncApi {
 
 		let api = Api {
 			db,
-			network_state,
 			network_service,
 			is_validator,
 			http: http_api,
@@ -325,27 +321,13 @@ mod tests {
 	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
 	use sc_client_db::offchain::LocalStorage;
 
-	struct MockNetworkStateInfo();
-
-	impl NetworkStateInfo for MockNetworkStateInfo {
-		fn external_addresses(&self) -> Vec<Multiaddr> {
-			Vec::new()
-		}
-
-		fn local_peer_id(&self) -> PeerId {
-			PeerId::random()
-		}
-	}
-
 	fn offchain_api() -> (Api<substrate_test_runtime_client::runtime::Block, LocalStorage>, AsyncApi) {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
-		let mock = Arc::new(MockNetworkStateInfo());
 		let shared_client = SharedClient::new();
 
 		AsyncApi::new(
 			db,
-			mock,
 			substrate_test_runtime_network::build_network_service(),
 			false,
 			shared_client,
