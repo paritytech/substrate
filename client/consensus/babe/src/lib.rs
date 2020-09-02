@@ -126,7 +126,7 @@ use schnorrkel::SignatureError;
 use codec::{Encode, Decode};
 use sp_api::ApiExt;
 
-mod aux_schema;
+pub mod aux_schema;
 mod verification;
 mod migration;
 pub mod authorship;
@@ -1051,7 +1051,7 @@ where
 }
 
 /// Register the babe inherent data provider, if not registered already.
-fn register_babe_inherent_data_provider(
+pub fn register_babe_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 	slot_duration: u64,
 ) -> Result<(), sp_consensus::Error> {
