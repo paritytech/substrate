@@ -635,18 +635,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		// Determine the wire protocol name corresponding to this `engine_id`.
 		let protocol_name = self.protocol_name_by_engine.lock().get(&engine_id).cloned();
 		if let Some(protocol_name) = protocol_name {
-			// For backwards-compatibility reason, we have to duplicate the message and pass it
-			// in the situation where the remote still uses the legacy substream.
-			let fallback = codec::Encode::encode(&{
-				protocol::message::generic::Message::<(), (), (), ()>::Consensus({
-					protocol::message::generic::ConsensusMessage {
-						engine_id,
-						data: message.clone(),
-					}
-				})
-			});
-
-			sink.send_sync_notification(protocol_name, fallback, message);
+			sink.send_sync_notification(protocol_name, message);
 		} else {
 			return;
 		}
@@ -751,7 +740,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		Ok(NotificationSender {
 			sink,
 			protocol_name,
-			engine_id,
 			notification_size_metric: self.notifications_sizes_metric.as_ref().map(|histogram| {
 				histogram.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
 			}),
@@ -1064,9 +1052,6 @@ pub struct NotificationSender {
 	/// Name of the protocol on the wire.
 	protocol_name: Cow<'static, str>,
 
-	/// Engine ID used for the fallback message.
-	engine_id: ConsensusEngineId,
-
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
 	notification_size_metric: Option<Histogram>,
@@ -1080,7 +1065,6 @@ impl NotificationSender {
 				Ok(r) => r,
 				Err(()) => return Err(NotificationSenderError::Closed),
 			},
-			engine_id: self.engine_id,
 			notification_size_metric: self.notification_size_metric.clone(),
 		})
 	}
@@ -1090,9 +1074,6 @@ impl NotificationSender {
 #[must_use]
 pub struct NotificationSenderReady<'a> {
 	ready: Ready<'a>,
-
-	/// Engine ID used for the fallback message.
-	engine_id: ConsensusEngineId,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1108,18 +1089,8 @@ impl<'a> NotificationSenderReady<'a> {
 			notification_size_metric.observe(notification.len() as f64);
 		}
 
-		// For backwards-compatibility reason, we have to duplicate the message and pass it
-		// in the situation where the remote still uses the legacy substream.
-		let fallback = codec::Encode::encode(&{
-			protocol::message::generic::Message::<(), (), (), ()>::Consensus({
-				protocol::message::generic::ConsensusMessage {
-					engine_id: self.engine_id,
-					data: notification.clone(),
-				}
-			})
-		});
-
-		self.ready.send(fallback, notification)
+		self.ready
+			.send(notification)
 			.map_err(|()| NotificationSenderError::Closed)
 	}
 }
