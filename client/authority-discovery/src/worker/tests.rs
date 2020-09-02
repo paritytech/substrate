@@ -28,8 +28,6 @@ use futures::task::LocalSpawn;
 use futures::poll;
 use libp2p::{kad, core::multiaddr, PeerId};
 
-use sc_network::config::identity;
-use sc_peerset::{Peerset, PeersetConfig, PeersetHandle};
 use sp_api::{ProvideRuntimeApi, ApiRef};
 use sp_core::{crypto::Public, testing::KeyStore};
 use sp_runtime::traits::{Zero, Block as BlockT, NumberFor};
@@ -220,20 +218,6 @@ impl NetworkStateInfo for TestNetwork {
 
 	fn external_addresses(&self) -> Vec<Multiaddr> {
 		self.external_addresses.clone()
-	}
-
-	fn local_public_key(&self) -> identity::PublicKey {
-		identity::Keypair::generate_ed25519().public()
-	}
-
-	fn peerset(&self) -> PeersetHandle {
-		Peerset::from_config(PeersetConfig {
-			in_peers: 25,
-			out_peers: 25,
-			bootnodes: vec![],
-			reserved_only: false,
-			priority_groups: vec![],
-		}).1
 	}
 }
 

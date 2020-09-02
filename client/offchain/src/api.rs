@@ -25,13 +25,14 @@ use std::{
 use sp_core::offchain::OffchainStorage;
 use futures::Future;
 use log::error;
-use sc_network::{config::identity, PeerId, Multiaddr, NetworkStateInfo};
+use sc_network::{config::identity, PeerId, Multiaddr, NetworkService, NetworkStateInfo};
 use codec::{Encode, Decode};
 use sp_core::offchain::{
 	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
 use sp_core::{NodePublicKey, ed25519};
+use sp_runtime::traits::Block as BlockT;
 pub use sp_offchain::STORAGE_PREFIX;
 pub use http::SharedClient;
 
@@ -48,11 +49,13 @@ mod timestamp;
 /// Asynchronous offchain API.
 ///
 /// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
-pub(crate) struct Api<Storage> {
+pub(crate) struct Api<Block: BlockT, Storage> {
 	/// Offchain Workers database.
 	db: Storage,
 	/// A NetworkState provider.
 	network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
+	/// A NetworkService provider.
+	network_service: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	/// Is this node a potential validator?
 	is_validator: bool,
 	/// Everything HTTP-related is handled by a different struct.
@@ -69,7 +72,7 @@ fn unavailable_yet<R: Default>(name: &str) -> R {
 
 const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
 
-impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
+impl<Block: BlockT, Storage: OffchainStorage> OffchainExt for Api<Block, Storage> {
 	fn is_validator(&self) -> bool {
 		self.is_validator
 	}
@@ -184,7 +187,7 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 	}
 
 	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()> {
-		let public_key = self.network_state.local_public_key();
+		let public_key = self.network_service.local_public_key();
 		match public_key {
 			identity::PublicKey::Ed25519(public) =>
 				Ok(NodePublicKey::Ed25519(ed25519::Public(public.encode()))),
@@ -205,9 +208,7 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 			)
 			.collect();
 		
-		let peerset = self.network_state.peerset();
-		peerset.set_reserved_peers(peer_ids);
-		peerset.set_reserved_only(reserved_only);
+		self.network_service.set_reserved_peers(peer_ids, reserved_only);
 	}
 }
 
@@ -286,17 +287,19 @@ pub(crate) struct AsyncApi {
 
 impl AsyncApi {
 	/// Creates new Offchain extensions API implementation  an the asynchronous processing part.
-	pub fn new<S: OffchainStorage>(
+	pub fn new<B: BlockT, S: OffchainStorage>(
 		db: S,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
+		network_service: Arc<NetworkService<B, <B as BlockT>::Hash>>,
 		is_validator: bool,
 		shared_client: SharedClient,
-	) -> (Api<S>, Self) {
+	) -> (Api<B, S>, Self) {
 		let (http_api, http_worker) = http::http(shared_client);
 
 		let api = Api {
 			db,
 			network_state,
+			network_service,
 			is_validator,
 			http: http_api,
 		};
@@ -321,7 +324,6 @@ mod tests {
 	use super::*;
 	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
 	use sc_client_db::offchain::LocalStorage;
-	use sc_peerset::{Peerset, PeersetConfig, PeersetHandle};
 
 	struct MockNetworkStateInfo();
 
@@ -333,32 +335,18 @@ mod tests {
 		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
 		}
-
-		fn local_public_key(&self) -> identity::PublicKey {
-			identity::Keypair::generate_ed25519().public()
-		}
-
-		fn peerset(&self) -> PeersetHandle {
-			Peerset::from_config(PeersetConfig {
-				in_peers: 25,
-				out_peers: 25,
-				bootnodes: vec![],
-				reserved_only: false,
-				priority_groups: vec![],
-			}).1
-		}
 	}
 
-	fn offchain_api() -> (Api<LocalStorage>, AsyncApi) {
+	fn offchain_api() -> (Api<substrate_test_runtime_client::runtime::Block, LocalStorage>, AsyncApi) {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
 		let mock = Arc::new(MockNetworkStateInfo());
 		let shared_client = SharedClient::new();
 
-
 		AsyncApi::new(
 			db,
 			mock,
+			substrate_test_runtime_network::build_network_service(),
 			false,
 			shared_client,
 		)

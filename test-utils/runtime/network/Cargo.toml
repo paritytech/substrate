@@ -1,0 +1,24 @@
+[package]
+name = "substrate-test-runtime-network"
+version = "2.0.0-rc6"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+async-std = { version = "1.6.2", features = ["unstable"] }
+futures = "0.3.4"
+rand = "0.7.2"
+sc-service = { version = "0.8.0-rc6", default-features = false, path = "../../../client/service" }
+sc-network = { version = "0.8.0-rc6", path = "../../../client/network" }
+sp-blockchain = { version = "2.0.0-rc6", path = "../../../primitives/blockchain" }
+sp-consensus = { version = "0.8.0-rc6", path = "../../../primitives/consensus/common" }
+sp-core = { version = "2.0.0-rc6", path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0-rc6", path = "../../../primitives/runtime" }
+substrate-test-runtime-client = { version = "2.0.0-rc6", path = "../../runtime/client" }

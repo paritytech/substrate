@@ -7054,6 +7054,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-utils",
  "substrate-test-runtime-client",
+ "substrate-test-runtime-network",
  "threadpool",
  "tokio 0.2.22",
 ]
@@ -8829,6 +8830,22 @@ dependencies = [
  "sp-runtime",
  "substrate-test-client",
  "substrate-test-runtime",
+]
+
+[[package]]
+name = "substrate-test-runtime-network"
+version = "2.0.0-rc6"
+dependencies = [
+ "async-std",
+ "futures 0.3.5",
+ "rand 0.7.3",
+ "sc-network",
+ "sc-service",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-core",
+ "sp-runtime",
+ "substrate-test-runtime-client",
 ]
 
 [[package]]

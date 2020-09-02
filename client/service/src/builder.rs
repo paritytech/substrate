@@ -431,7 +431,8 @@ pub fn build_offchain_workers<TBl, TBackend, TCl>(
 				client.clone(),
 				offchain,
 				Clone::clone(&spawn_handle),
-				network.clone()
+				network.clone(),
+				network.clone(),
 			)
 		);
 	}

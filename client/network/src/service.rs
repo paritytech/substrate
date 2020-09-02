@@ -602,6 +602,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self.local_peer_id
 	}
 
+	/// Returns the local node `PublicKey`.
+	pub fn local_public_key(&self) -> &PublicKey {
+		&self.local_public_key
+	}
+
+	/// Set reserved peers and reserved_only flag.
+	pub fn set_reserved_peers(&self, peers: HashSet<PeerId>, reserved_only: bool) {
+		self.peerset.set_reserved_peers(peers);
+		self.peerset.set_reserved_only(reserved_only)
+	}
+
 	/// Appends a notification to the buffer of pending outgoing notifications with the given peer.
 	/// Has no effect if the notifications channel with this protocol name is not open.
 	///
@@ -1059,16 +1070,6 @@ impl<B, H> NetworkStateInfo for NetworkService<B, H>
 	/// Returns the local Peer ID.
 	fn local_peer_id(&self) -> PeerId {
 		self.local_peer_id.clone()
-	}
-
-	/// Returns the PublicKey of local peer.
-	fn local_public_key(&self) -> PublicKey {
-		self.local_public_key.clone()
-	}
-
-	/// Returns the peerset.
-	fn peerset(&self) -> PeersetHandle {
-		self.peerset.clone()
 	}
 }
 

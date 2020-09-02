@@ -42,6 +42,7 @@ sc-client-db = { version = "0.8.0-rc6", default-features = true, path = "../db/"
 sc-transaction-pool = { version = "2.0.0-rc6", path = "../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0-rc6", path = "../../primitives/transaction-pool" }
 substrate-test-runtime-client = { version = "2.0.0-rc6", path = "../../test-utils/runtime/client" }
+substrate-test-runtime-network = { version = "2.0.0-rc6", path = "../../test-utils/runtime/network" }
 tokio = "0.2"
 lazy_static = "1.4.0"
 

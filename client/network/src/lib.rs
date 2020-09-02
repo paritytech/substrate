@@ -270,8 +270,6 @@ pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, Peer
 pub use service::{NetworkService, NetworkWorker, RequestFailure, OutboundFailure};
 
 pub use sc_peerset::ReputationChange;
-use config::identity::PublicKey;
-use sc_peerset::PeersetHandle;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// The maximum allowed number of established connections per peer.
@@ -296,12 +294,6 @@ pub trait NetworkStateInfo {
 
 	/// Returns the local Peer ID.
 	fn local_peer_id(&self) -> PeerId;
-
-	/// Returns the local Peer PublicKey.
-	fn local_public_key(&self) -> PublicKey;
-
-	/// Returns the peerset
-	fn peerset(&self) -> PeersetHandle;
 }
 
 /// Overview status of the network.
