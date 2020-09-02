@@ -144,7 +144,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f823d037a7ec6ea2197046bafd4ae150e6bc36f9ca347404f46a46823fa84f2"
 dependencies = [
  "approx",
- "num-complex",
+ "num-complex 0.2.4",
  "num-traits",
 ]
 
@@ -1148,6 +1148,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "curve25519-dalek"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8492de420e9e60bc9a1d66e2dbb91825390b738a388606600663fc529b4b307"
+dependencies = [
+ "byteorder 1.3.4",
+ "digest 0.9.0",
+ "rand_core 0.5.1",
+ "subtle 2.2.3",
+ "zeroize",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1269,15 +1282,15 @@ dependencies = [
 
 [[package]]
 name = "ed25519-dalek"
-version = "1.0.0-pre.4"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21a8a37f4e8b35af971e6db5e3897e7a6344caa3f92f6544f88125a1f5f0035a"
+checksum = "53d2e93f837d749c16d118e7ddf7a4dfd0ac8f452cf51e46e9348824e5ef6851"
 dependencies = [
- "curve25519-dalek",
+ "curve25519-dalek 3.0.0",
  "ed25519",
  "rand 0.7.3",
  "serde",
- "sha2 0.8.2",
+ "sha2 0.9.1",
  "zeroize",
 ]
 
@@ -3045,7 +3058,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0beba6459d06153f5f8e23da3df1d2183798b1f457c7c9468ff99760bcbcc60b"
 dependencies = [
  "bytes 0.5.6",
- "curve25519-dalek",
+ "curve25519-dalek 2.1.0",
  "futures 0.3.5",
  "lazy_static",
  "libp2p-core",
@@ -3617,8 +3630,8 @@ dependencies = [
  "approx",
  "generic-array 0.12.3",
  "matrixmultiply",
- "num-complex",
- "num-rational",
+ "num-complex 0.2.4",
+ "num-rational 0.2.4",
  "num-traits",
  "rand 0.6.5",
  "typenum",
@@ -4097,10 +4110,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "num"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab3e176191bc4faad357e3122c4747aa098ac880e88b168f106386128736cf4a"
+dependencies = [
+ "num-bigint 0.3.0",
+ "num-complex 0.3.0",
+ "num-integer",
+ "num-iter",
+ "num-rational 0.3.0",
+ "num-traits",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "090c7f9998ee0ff65aa5b723e4009f7b217707f1fb5ea551329cc4d6231fb304"
+dependencies = [
+ "autocfg 1.0.0",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7f3fc75e3697059fb1bc465e3d8cca6cf92f56854f201158b3f9c77d5a3cfa0"
 dependencies = [
  "autocfg 1.0.0",
  "num-integer",
@@ -4118,6 +4156,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-complex"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b05ad05bd8977050b171b3f6b48175fea6e0565b7981059b486075e1026a9fb5"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4128,13 +4175,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-iter"
+version = "0.1.41"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a6e6b7c748f995c4c29c5f5ae0248536e04a5739927c74ec0fa564805094b9f"
+dependencies = [
+ "autocfg 1.0.0",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "num-rational"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c000134b5dbf44adc5cb772486d335293351644b801551abe8f75c84cfa4aef"
 dependencies = [
  "autocfg 1.0.0",
- "num-bigint",
+ "num-bigint 0.2.6",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-rational"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5b4d7360f362cfb50dde8143501e6940b22f644be75a4cc90b2d81968908138"
+dependencies = [
+ "autocfg 1.0.0",
+ "num-bigint 0.3.0",
  "num-integer",
  "num-traits",
 ]
@@ -4523,10 +4593,13 @@ dependencies = [
 name = "pallet-evm"
 version = "2.0.0-rc6"
 dependencies = [
+ "blake2-rfc",
+ "ed25519-dalek",
  "evm",
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",
+ "num",
  "pallet-balances",
  "pallet-timestamp",
  "parity-scale-codec",
@@ -4535,6 +4608,7 @@ dependencies = [
  "rlp",
  "serde",
  "sha3",
+ "sp-application-crypto",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6525,8 +6599,8 @@ dependencies = [
  "futures-timer 3.0.2",
  "log",
  "merlin",
- "num-bigint",
- "num-rational",
+ "num-bigint 0.2.6",
+ "num-rational 0.2.4",
  "num-traits",
  "parity-scale-codec",
  "parking_lot 0.10.2",
@@ -7381,7 +7455,7 @@ checksum = "021b403afe70d81eea68f6ea12f6b3c9588e5d536a94c3bf80f15e7faa267862"
 dependencies = [
  "arrayref",
  "arrayvec 0.5.1",
- "curve25519-dalek",
+ "curve25519-dalek 2.1.0",
  "getrandom",
  "merlin",
  "rand 0.7.3",
@@ -7876,7 +7950,7 @@ name = "sp-arithmetic-fuzzer"
 version = "2.0.0-rc6"
 dependencies = [
  "honggfuzz",
- "num-bigint",
+ "num-bigint 0.2.6",
  "num-traits",
  "primitive-types",
  "sp-arithmetic",
@@ -9547,7 +9621,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.5.6",
+ "rand 0.7.3",
 ]
 
 [[package]]
@@ -9897,7 +9971,7 @@ dependencies = [
  "errno",
  "libc",
  "memory_units",
- "num-rational",
+ "num-rational 0.2.4",
  "num-traits",
  "parity-wasm 0.41.0",
  "wasmi-validation",
@@ -10230,7 +10304,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "637ff90c9540fa3073bb577e65033069e4bae7c79d49d74aa3ffdf5342a53217"
 dependencies = [
- "curve25519-dalek",
+ "curve25519-dalek 2.1.0",
  "rand_core 0.5.1",
  "zeroize",
 ]

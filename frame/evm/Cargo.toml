@@ -18,6 +18,7 @@ frame-support = { version = "2.0.0-rc6", default-features = false, path = "../su
 frame-system = { version = "2.0.0-rc6", default-features = false, path = "../system" }
 pallet-timestamp = { version = "2.0.0-rc6", default-features = false, path = "../timestamp" }
 pallet-balances = { version = "2.0.0-rc6", default-features = false, path = "../balances" }
+sp-application-crypto = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/application-crypto" }
 sp-core = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/std" }
@@ -28,12 +29,16 @@ evm = { version = "0.17", default-features = false }
 sha3 = { version = "0.8", default-features = false }
 impl-trait-for-tuples = "0.1"
 ripemd160 = { version = "0.9", default-features = false }
+ed25519-dalek = { version = "1.0.0", features = ["alloc", "u64_backend"], default-features = false }
+num = { version = "0.3", features = ["alloc"], default-features = false }
+blake2-rfc = { version = "0.2.18", default-features = false }
 
 [features]
 default = ["std"]
 std = [
 	"serde",
 	"codec/std",
+	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-runtime/std",
 	"frame-support/std",
@@ -47,4 +52,5 @@ std = [
 	"evm/std",
 	"pallet-timestamp/std",
 	"ripemd160/std",
+	"num/std",
 ]
