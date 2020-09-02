@@ -149,12 +149,12 @@ decl_module! {
 			ensure!(name.len() <= T::MaxLength::get(), Error::<T>::TooLong);
 
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
-				Self::deposit_event(RawEvent::NameSet(sender.clone()));
+				Self::deposit_event(RawEvent::NameChanged(sender.clone()));
 				deposit
 			} else {
 				let deposit = T::ReservationFee::get();
 				T::Currency::reserve(&sender, deposit.clone())?;
-				Self::deposit_event(RawEvent::NameChanged(sender.clone()));
+				Self::deposit_event(RawEvent::NameSet(sender.clone()));
 				deposit
 			};
 

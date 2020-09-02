@@ -630,7 +630,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 						messages: vec![(msg.engine_id, From::from(msg.data))],
 					}
 				} else {
-					warn!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
+					debug!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
 					CustomMessageOutcome::None
 				},
 			GenericMessage::ConsensusBatch(messages) => {
@@ -640,7 +640,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 						if self.protocol_name_by_engine.contains_key(&msg.engine_id) {
 							Some((msg.engine_id, From::from(msg.data)))
 						} else {
-							warn!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
+							debug!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
 							None
 						}
 					})
@@ -1653,7 +1653,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						}
 					}
 					None => {
-						error!(target: "sub-libp2p", "Received notification from unknown protocol {:?}", protocol_name);
+						debug!(target: "sub-libp2p", "Received notification from unknown protocol {:?}", protocol_name);
 						CustomMessageOutcome::None
 					}
 				}
