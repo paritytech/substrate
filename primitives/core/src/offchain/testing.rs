@@ -36,7 +36,6 @@ use crate::offchain::{
 	TransactionPool,
 	OffchainStorage,
 };
-use crate::{NodePublicKey, ed25519};
 
 use parking_lot::RwLock;
 
@@ -377,11 +376,7 @@ impl offchain::Externalities for TestOffchainExt {
 		}
 	}
 
-	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()> {
-		Ok(NodePublicKey::Ed25519(ed25519::Public([0u8; 32])))
-	}
-
-	fn set_reserved_nodes(&mut self, _nodes: Vec<NodePublicKey>, _reserved_only: bool) {
+	fn set_reserved_nodes(&mut self, _nodes: Vec<Vec<u8>>, _reserved_only: bool) {
 		unimplemented!()
 	}
 }

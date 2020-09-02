@@ -25,13 +25,12 @@ use std::{
 use sp_core::offchain::OffchainStorage;
 use futures::Future;
 use log::error;
-use sc_network::{config::identity, PeerId, Multiaddr, NetworkService, NetworkStateInfo};
+use sc_network::{PeerId, Multiaddr, NetworkService, NetworkStateInfo};
 use codec::{Encode, Decode};
 use sp_core::offchain::{
 	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
-use sp_core::{NodePublicKey, ed25519};
 use sp_runtime::traits::Block as BlockT;
 pub use sp_offchain::STORAGE_PREFIX;
 pub use http::SharedClient;
@@ -184,26 +183,9 @@ impl<Block: BlockT, Storage: OffchainStorage> OffchainExt for Api<Block, Storage
 		self.http.response_read_body(request_id, buffer, deadline)
 	}
 
-	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()> {
-		let public_key = self.network_service.local_public_key();
-		match public_key {
-			identity::PublicKey::Ed25519(public) =>
-				Ok(NodePublicKey::Ed25519(ed25519::Public(public.encode()))),
-			_ => Err(()),
-		}
-	}
-
-	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool) {
+	fn set_reserved_nodes(&mut self, nodes: Vec<Vec<u8>>, reserved_only: bool) {
 		let peer_ids: HashSet<PeerId> = nodes.iter()
-			.filter_map(|node|
-				match node {
-					NodePublicKey::Ed25519(public) =>
-						identity::ed25519::PublicKey::decode(&public.0).ok()
-				}
-			)
-			.map(|public|
-				identity::PublicKey::Ed25519(public).into_peer_id()
-			)
+			.filter_map(|node| PeerId::from_bytes(node.clone()).ok())
 			.collect();
 		
 		self.network_service.set_reserved_peers(peer_ids, reserved_only);
@@ -441,15 +423,5 @@ mod tests {
 		let seed = api.random_seed();
 		// then
 		assert_ne!(seed, [0; 32]);
-	}
-
-	#[test]
-	fn should_get_node_public_key() {
-		// given
-		let mut api = offchain_api().0;
-		let node_public_key = api.get_node_public_key();
-
-		// then
-		assert!(node_public_key.is_ok());
 	}
 }

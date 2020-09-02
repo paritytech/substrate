@@ -18,7 +18,8 @@
 //! # Node authorization pallet
 //!
 //! This pallet manages a configurable set of nodes for a permissioned network.
-//! It provides two ways to authorize a node,
+//! Each node is dentified by a PeerId (i.e. Vec<u8>). It provides two ways to
+//! authorize a node,
 //!
 //! - a set of well known nodes across different organizations in which the
 //! connections are allowed.
@@ -29,13 +30,14 @@
 //! for the node. Only one user is allowed to claim a specific node. To eliminate
 //! false claim, the maintainer of the node should claim it before even starting the
 //! node. This pallet uses offchain worker to set reserved nodes, if the node is not
-//! an authority, make sure to enable offchain worker with the right CLI flag.
+//! an authority, make sure to enable offchain worker with the right CLI flag. The
+//! node can be lagged with the latest block, in this case you need to disable offchain
+//! worker and manually set reserved nodes when starting it.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_core::NodePublicKey;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
 	debug, ensure,
@@ -43,6 +45,8 @@ use frame_support::{
 	traits::{Get, EnsureOrigin},
 };
 use frame_system::ensure_signed;
+
+type PeerId = Vec<u8>;
 
 pub trait WeightInfo {
 	fn add_well_known_node() -> Weight;
@@ -94,16 +98,16 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as NodeAuthorization {
 		/// The set of well known nodes. This is stored sorted (just by value).
-		pub WellKnownNodes get(fn well_known_nodes): Vec<NodePublicKey>;
+		pub WellKnownNodes get(fn well_known_nodes): Vec<PeerId>;
 		/// A map that maintains the ownership of each node.
 		pub Owners get(fn owners):
-			map hasher(blake2_128_concat) NodePublicKey => T::AccountId;
+			map hasher(blake2_128_concat) PeerId => T::AccountId;
 		/// The additional adapative connections of each node.
 		pub AdditionalConnections get(fn additional_connection):
-			map hasher(blake2_128_concat) NodePublicKey => Vec<NodePublicKey>;
+			map hasher(blake2_128_concat) PeerId => Vec<PeerId>;
 	}
 	add_extra_genesis {
-		config(nodes): Vec<(NodePublicKey, T::AccountId)>;
+		config(nodes): Vec<(PeerId, T::AccountId)>;
 		build(|config: &GenesisConfig<T>| {
 			<Module<T>>::initialize_nodes(&config.nodes)
 		})
@@ -115,24 +119,24 @@ decl_event! {
 		<T as frame_system::Trait>::AccountId,
 	{
 		/// The given well known node was added.
-		NodeAdded(NodePublicKey, AccountId),
+		NodeAdded(PeerId, AccountId),
 		/// The given well known node was removed.
-		NodeRemoved(NodePublicKey),
+		NodeRemoved(PeerId),
 		/// The given well known node was swapped; first item was removed,
 		/// the latter was added.
-		NodeSwapped(NodePublicKey, NodePublicKey),
+		NodeSwapped(PeerId, PeerId),
 		/// The given well known nodes were reset.
-		NodesReset(Vec<(NodePublicKey, AccountId)>),
+		NodesReset(Vec<(PeerId, AccountId)>),
 		/// The given node was claimed by a user.
-		NodeClaimed(NodePublicKey, AccountId),
+		NodeClaimed(PeerId, AccountId),
 		/// The given claim was removed by its owner.
-		ClaimRemoved(NodePublicKey, AccountId),
+		ClaimRemoved(PeerId, AccountId),
 		/// The node was transferred to another account.
-		NodeTransferred(NodePublicKey, AccountId, AccountId),
+		NodeTransferred(PeerId, AccountId, AccountId),
 		/// The allowed connections were added to a node.
-		ConnectionsAdded(NodePublicKey, Vec<NodePublicKey>),
+		ConnectionsAdded(PeerId, Vec<PeerId>),
 		/// The allowed connections were removed from a node.
-		ConnectionsRemoved(NodePublicKey, Vec<NodePublicKey>),
+		ConnectionsRemoved(PeerId, Vec<PeerId>),
 	}
 }
 
@@ -172,7 +176,7 @@ decl_module! {
 		///
 		/// - `node`: identifier of the node.
 		#[weight = (T::WeightInfo::add_well_known_node(), DispatchClass::Operational)]
-		pub fn add_well_known_node(origin, node: NodePublicKey, owner: T::AccountId) {
+		pub fn add_well_known_node(origin, node: PeerId, owner: T::AccountId) {
 			T::AddOrigin::ensure_origin(origin)?;
 
 			let mut nodes = WellKnownNodes::get();
@@ -194,7 +198,7 @@ decl_module! {
 		///
 		/// - `node`: identifier of the node.
 		#[weight = (T::WeightInfo::remove_well_known_node(), DispatchClass::Operational)]
-		pub fn remove_well_known_node(origin, node: NodePublicKey) {
+		pub fn remove_well_known_node(origin, node: PeerId) {
 			T::RemoveOrigin::ensure_origin(origin)?;
 
 			let mut nodes = WellKnownNodes::get();
@@ -217,7 +221,7 @@ decl_module! {
 		/// - `remove`: the node which will be moved out from the list.
 		/// - `add`: the node which will be put in the list.
 		#[weight = (T::WeightInfo::swap_well_known_node(), DispatchClass::Operational)]
-		pub fn swap_well_known_node(origin, remove: NodePublicKey, add: NodePublicKey) {
+		pub fn swap_well_known_node(origin, remove: PeerId, add: PeerId) {
 			T::SwapOrigin::ensure_origin(origin)?;
 
 			if remove == add { return Ok(()) }
@@ -243,7 +247,7 @@ decl_module! {
 		///
 		/// - `nodes`: the new nodes for the allow list.
 		#[weight = (T::WeightInfo::reset_well_known_nodes(), DispatchClass::Operational)]
-		pub fn reset_well_known_nodes(origin, nodes: Vec<(NodePublicKey, T::AccountId)>) {
+		pub fn reset_well_known_nodes(origin, nodes: Vec<(PeerId, T::AccountId)>) {
 			T::ResetOrigin::ensure_origin(origin)?;
 			ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
 
@@ -253,11 +257,11 @@ decl_module! {
 		}
 
 		/// A given node can be claimed by anyone. The owner should be the first to know its
-		/// public key, so claim it right away!
+		/// PeerId, so claim it right away!
 		///
 		/// - `node`: identifier of the node.
 		#[weight = T::WeightInfo::claim_node()]
-		pub fn claim_node(origin, node: NodePublicKey) {
+		pub fn claim_node(origin, node: PeerId) {
 			let sender = ensure_signed(origin)?;
 			ensure!(!Owners::<T>::contains_key(&node),Error::<T>::AlreadyClaimed);
 
@@ -271,7 +275,7 @@ decl_module! {
 		///
 		/// - `node`: identifier of the node.
 		#[weight = T::WeightInfo::remove_claim()]
-		pub fn remove_claim(origin, node: NodePublicKey) {
+		pub fn remove_claim(origin, node: PeerId) {
 			let sender = ensure_signed(origin)?;
 			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
 			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
@@ -288,7 +292,7 @@ decl_module! {
 		/// - `node`: identifier of the node.
 		/// - `owner`: new owner of the node.
 		#[weight = T::WeightInfo::transfer_node()]
-		pub fn transfer_node(origin, node: NodePublicKey, owner: T::AccountId) {
+		pub fn transfer_node(origin, node: PeerId, owner: T::AccountId) {
 			let sender = ensure_signed(origin)?;
 			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
 			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
@@ -305,8 +309,8 @@ decl_module! {
 		#[weight = T::WeightInfo::add_connections()]
 		pub fn add_connections(
 			origin,
-			node: NodePublicKey,
-			connections: Vec<NodePublicKey>
+			node: PeerId,
+			connections: Vec<PeerId>
 		) {
 			let sender = ensure_signed(origin)?;
 			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
@@ -335,8 +339,8 @@ decl_module! {
 		#[weight = T::WeightInfo::remove_connections()]
 		pub fn remove_connections(
 			origin,
-			node: NodePublicKey,
-			connections: Vec<NodePublicKey>
+			node: PeerId,
+			connections: Vec<PeerId>
 		) {
 			let sender = ensure_signed(origin)?;
 			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
@@ -358,11 +362,12 @@ decl_module! {
 		/// Set reserved node every block. If may not be enabled depends on the offchain
 		/// worker CLI flag.
 		fn offchain_worker(now: T::BlockNumber) {
-			let node_public_key = sp_io::offchain::get_node_public_key();
-			match node_public_key {
-				Err(_) => debug::error!("Error: failed to get public key of node at {:?}", now),
-				Ok(node) => sp_io::offchain::set_reserved_nodes(
-					Self::get_authorized_nodes(&node), true
+			let network_state = sp_io::offchain::network_state();
+			match network_state {
+				Err(_) => debug::error!("Error: failed to get network state of node at {:?}", now),
+				Ok(state) => sp_io::offchain::set_reserved_nodes(
+					Self::get_authorized_nodes(&state.peer_id.0),
+					true
 				),
 			}
 		}
@@ -370,19 +375,19 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	fn initialize_nodes(nodes: &Vec<(NodePublicKey, T::AccountId)>) {
-		let mut node_public_keys = nodes.iter()
+	fn initialize_nodes(nodes: &Vec<(PeerId, T::AccountId)>) {
+		let mut peer_ids = nodes.iter()
 			.map(|item| item.0.clone())
-			.collect::<Vec<NodePublicKey>>();
-		node_public_keys.sort();
-		WellKnownNodes::put(&node_public_keys);
+			.collect::<Vec<PeerId>>();
+		peer_ids.sort();
+		WellKnownNodes::put(&peer_ids);
 
 		for (node, who) in nodes.iter() {
 			Owners::<T>::insert(node, who);
 		}
 	}
 
-	fn get_authorized_nodes(node: &NodePublicKey) -> Vec<NodePublicKey> {
+	fn get_authorized_nodes(node: &PeerId) -> Vec<PeerId> {
 		let mut nodes = AdditionalConnections::get(node);
 
 		let mut well_known_nodes = WellKnownNodes::get();
@@ -404,7 +409,7 @@ mod tests {
 		parameter_types, ord_parameter_types,
 	};
 	use frame_system::EnsureSignedBy;
-	use sp_core::{H256, ed25519::Public};
+	use sp_core::H256;
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
 
 	impl_outer_origin! {
@@ -469,10 +474,8 @@ mod tests {
 
 	type NodeAuthorization = Module<Test>;
 
-	fn test_node(id: u8) -> NodePublicKey {
-		let mut arr = [0u8; 32];
-		arr[31] = id;
-		NodePublicKey::Ed25519(Public::from_raw(arr))
+	fn test_node(id: u8) -> PeerId {
+		vec![id]
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
@@ -747,7 +750,7 @@ mod tests {
 	}
 
 	#[test]
-	fn get_authorize_nodes_worker() {
+	fn get_authorize_nodes_works() {
 		new_test_ext().execute_with(|| {
 			AdditionalConnections::insert(
 				test_node(20), vec![test_node(5), test_node(15), test_node(25)]

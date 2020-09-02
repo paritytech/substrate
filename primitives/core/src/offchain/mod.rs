@@ -19,7 +19,7 @@
 
 use codec::{Encode, Decode};
 use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
-use crate::{RuntimeDebug, NodePublicKey};
+use crate::RuntimeDebug;
 use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
@@ -498,11 +498,8 @@ pub trait Externalities: Send {
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError>;
 
-	/// Get public key of the node
-	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()>;
-
 	/// Set the reserved nodes
-	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool);
+	fn set_reserved_nodes(&mut self, nodes: Vec<Vec<u8>>, reserved_only: bool);
 }
 
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
@@ -582,11 +579,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
 	}
 
-	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()> {
-		(&mut **self).get_node_public_key()
-	}
-
-	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool) {
+	fn set_reserved_nodes(&mut self, nodes: Vec<Vec<u8>>, reserved_only: bool) {
 		(&mut **self).set_reserved_nodes(nodes, reserved_only)
 	}
 }
@@ -708,12 +701,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
 	}
 
-	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()> {
-		self.check(Capability::NodesReservation, "get_node_public_key");
-		self.externalities.get_node_public_key()
-	}
-
-	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool) {
+	fn set_reserved_nodes(&mut self, nodes: Vec<Vec<u8>>, reserved_only: bool) {
 		self.check(Capability::NodesReservation, "set_reserved_nodes");
 		self.externalities.set_reserved_nodes(nodes, reserved_only)
 	}

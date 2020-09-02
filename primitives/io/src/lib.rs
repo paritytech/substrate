@@ -42,7 +42,7 @@ use sp_core::{
 };
 
 use sp_core::{
-	crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel, NodePublicKey,
+	crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
@@ -961,15 +961,8 @@ pub trait Offchain {
 			.map(|r| r as u32)
 	}
 
-	/// Get public key of the local node.
-	fn get_node_public_key(&mut self) -> Result<NodePublicKey, ()> {
-		self.extension::<OffchainExt>()
-			.expect("get_node_public_key can be called only in the offchain worker context")
-			.get_node_public_key()
-	}
-
 	/// Set the reserved peers
-	fn set_reserved_nodes(&mut self, nodes: Vec<NodePublicKey>, reserved_only: bool) {
+	fn set_reserved_nodes(&mut self, nodes: Vec<Vec<u8>>, reserved_only: bool) {
 		self.extension::<OffchainExt>()
 			.expect("set_reserved_nodes can be called only in the offchain worker context")
 			.set_reserved_nodes(nodes, reserved_only)
