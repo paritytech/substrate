@@ -26,7 +26,6 @@
 
 pub use crate::{service::Service, worker::{NetworkProvider, Worker, Role}};
 
-use std::pin::Pin;
 use std::sync::Arc;
 
 use futures::channel::{mpsc, oneshot};

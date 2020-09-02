@@ -18,7 +18,6 @@
 
 use std::{fs, path::{Path, PathBuf}};
 use ansi_term::Style;
-use futures::executor::block_on;
 use rand::{Rng, distributions::Alphanumeric, rngs::OsRng};
 use structopt::StructOpt;
 
@@ -142,7 +141,8 @@ fn generate_authority_keys_and_store(
 		let keystore: SyncCryptoStore = LocalKeystore::open(
 			keystore_path.join(format!("auth-{}", n)),
 			None,
-		).map_err(|err| err.to_string())?;
+		).map_err(|err| err.to_string())?
+		.into();
 
 		let (_, _, grandpa, babe, im_online, authority_discovery) =
 			chain_spec::authority_keys_from_seed(seed);

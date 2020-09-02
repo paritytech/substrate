@@ -19,7 +19,6 @@ use crate::{error::{Error, Result}, ServicetoWorkerMsg};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::marker::PhantomData;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -761,7 +760,7 @@ impl Metrics {
 
 // Helper functions for unit testing.
 #[cfg(test)]
-impl<Client, Network, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
+impl<Block, Client, Network, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + 'static,
 	Network: NetworkProvider,
