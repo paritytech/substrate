@@ -163,7 +163,9 @@ mod global_subscription {
 		inner: UnsafeCell<Option<Box<dyn TracingSubscriber>>>
 	}
 
-	static SUBSCRIBER_INSTANCE: SubscriptionHolder = SubscriptionHolder { inner: UnsafeCell::new(None) };
+	static SUBSCRIBER_INSTANCE: SubscriptionHolder = SubscriptionHolder {
+		inner: UnsafeCell::new(None)
+	};
 
 	unsafe impl core::marker::Sync for SubscriptionHolder {}
 
@@ -296,7 +298,8 @@ macro_rules! enter_span {
 /// ```
 /// sp_tracing::enter_span!(sp_tracing::Level::TRACE, "test-span");
 /// // previous will be dropped here
-/// sp_tracing::enter_span!(sp_tracing::span!(sp_tracing::Level::DEBUG, "debug-span", params="value"));
+/// sp_tracing::enter_span!(
+/// 	sp_tracing::span!(sp_tracing::Level::DEBUG, "debug-span", params="value"));
 /// sp_tracing::enter_span!(sp_tracing::info_span!("info-span",  params="value"));
 ///
 /// {

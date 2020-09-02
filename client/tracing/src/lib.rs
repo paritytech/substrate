@@ -281,11 +281,15 @@ fn parse_target(s: &str) -> (String, Level) {
 
 impl Subscriber for ProfilingSubscriber {
 	fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-		if metadata.target() == WASM_TRACE_IDENTIFIER || self.check_target(metadata.target(), metadata.level()) {
-			log::debug!(target: "tracing", "Enabled target: {}, level: {}", metadata.target(), metadata.level());
+		if metadata.target() == WASM_TRACE_IDENTIFIER
+			|| self.check_target(metadata.target(), metadata.level())
+		{
+			log::debug!(target: "tracing", "Enabled target: {}, level: {}",
+				metadata.target(), metadata.level());
 			true
 		} else {
-			log::debug!(target: "tracing", "Disabled target: {}, level: {}", metadata.target(), metadata.level());
+			log::debug!(target: "tracing", "Disabled target: {}, level: {}",
+				metadata.target(), metadata.level());
 			false
 		}
 	}

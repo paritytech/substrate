@@ -41,7 +41,11 @@ pub mod keywords {
 ///
 /// It expects the trait definition the attribute was put above and if this should be an wasm only
 /// interface.
-pub fn runtime_interface_impl(trait_def: ItemTrait, is_wasm_only: bool, tracing: bool) -> Result<TokenStream> {
+pub fn runtime_interface_impl(
+	trait_def: ItemTrait,
+	is_wasm_only: bool,
+	tracing: bool
+) -> Result<TokenStream> {
 	let bare_functions = bare_function_interface::generate(&trait_def, is_wasm_only, tracing)?;
 	let crate_include = generate_runtime_interface_include();
 	let mod_name = Ident::new(&trait_def.ident.to_string().to_snake_case(), Span::call_site());

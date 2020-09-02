@@ -424,11 +424,17 @@ where
 
 		enter_span!{ sp_tracing::Level::TRACE, "validate_transaction" };
 
-		let encoded_len = within_span!{ sp_tracing::Level::TRACE, "using_encoded"; uxt.using_encoded(|d| d.len()) };
+		let encoded_len = within_span!{ sp_tracing::Level::TRACE, "using_encoded";
+			uxt.using_encoded(|d| d.len())
+		};
 
-		let xt = within_span!{ sp_tracing::Level::TRACE, "check"; uxt.check(&Default::default())? };
+		let xt = within_span!{ sp_tracing::Level::TRACE, "check";
+			uxt.check(&Default::default())
+		}?;
 
-		let dispatch_info = within_span!{ sp_tracing::Level::TRACE, "dispatch_info"; xt.get_dispatch_info() };
+		let dispatch_info = within_span!{ sp_tracing::Level::TRACE, "dispatch_info";
+			xt.get_dispatch_info()
+		};
 
 		within_span! {
 			sp_tracing::Level::TRACE, "validate";
