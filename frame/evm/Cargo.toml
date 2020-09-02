@@ -32,6 +32,8 @@ ripemd160 = { version = "0.9", default-features = false }
 ed25519-dalek = { version = "1.0.0", features = ["alloc", "u64_backend"], default-features = false }
 num = { version = "0.3", features = ["alloc"], default-features = false }
 blake2-rfc = { version = "0.2.18", default-features = false }
+ethereum-types = { version = "0.9.2", default-features = false }
+bn = { git = "https://github.com/paritytech/bn", default-features = false }
 
 [features]
 default = ["std"]

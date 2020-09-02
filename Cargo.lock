@@ -562,6 +562,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "bn"
+version = "0.4.4"
+source = "git+https://github.com/paritytech/bn#635c4cdd560bc0c8b262e6bf809dc709da8bcd7e"
+dependencies = [
+ "byteorder 1.3.4",
+ "crunchy",
+ "lazy_static",
+ "rand 0.5.6",
+ "rustc-hex",
+]
+
+[[package]]
 name = "bs58"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2786,6 +2798,9 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+dependencies = [
+ "spin",
+]
 
 [[package]]
 name = "lazycell"
@@ -4594,7 +4609,9 @@ name = "pallet-evm"
 version = "2.0.0-rc6"
 dependencies = [
  "blake2-rfc",
+ "bn",
  "ed25519-dalek",
+ "ethereum-types",
  "evm",
  "frame-support",
  "frame-system",
