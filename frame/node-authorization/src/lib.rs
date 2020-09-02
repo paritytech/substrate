@@ -37,7 +37,11 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
+use sp_std::{
+	collections::btree_set::BTreeSet,
+	iter::FromIterator,
+	prelude::*,
+};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
 	debug, ensure,
@@ -101,13 +105,13 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as NodeAuthorization {
 		/// The set of well known nodes. This is stored sorted (just by value).
-		pub WellKnownNodes get(fn well_known_nodes): Vec<PeerId>;
+		pub WellKnownNodes get(fn well_known_nodes): BTreeSet<PeerId>;
 		/// A map that maintains the ownership of each node.
 		pub Owners get(fn owners):
 			map hasher(blake2_128_concat) PeerId => T::AccountId;
 		/// The additional adapative connections of each node.
 		pub AdditionalConnections get(fn additional_connection):
-			map hasher(blake2_128_concat) PeerId => Vec<PeerId>;
+			map hasher(blake2_128_concat) PeerId => BTreeSet<PeerId>;
 	}
 	add_extra_genesis {
 		config(nodes): Vec<(PeerId, T::AccountId)>;
@@ -135,7 +139,7 @@ decl_event! {
 		/// The given claim was removed by its owner.
 		ClaimRemoved(PeerId, AccountId),
 		/// The node was transferred to another account.
-		NodeTransferred(PeerId, AccountId, AccountId),
+		NodeTransferred(PeerId, AccountId),
 		/// The allowed connections were added to a node.
 		ConnectionsAdded(PeerId, Vec<PeerId>),
 		/// The allowed connections were removed from a node.
@@ -190,9 +194,9 @@ decl_module! {
 
 			let mut nodes = WellKnownNodes::get();
 			ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
+			ensure!(!nodes.contains(&node), Error::<T>::AlreadyJoined);
 
-			let location = nodes.binary_search(&node).err().ok_or(Error::<T>::AlreadyJoined)?;
-			nodes.insert(location, node.clone());
+			nodes.insert(node.clone());
 
 			WellKnownNodes::put(&nodes);
 			<Owners<T>>::insert(&node, &owner);
@@ -212,9 +216,9 @@ decl_module! {
 			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 
 			let mut nodes = WellKnownNodes::get();
+			ensure!(nodes.contains(&node), Error::<T>::NotExist);
 
-			let location = nodes.binary_search(&node).ok().ok_or(Error::<T>::NotExist)?;
-			nodes.remove(location);
+			nodes.remove(&node);
 
 			WellKnownNodes::put(&nodes);
 			<Owners<T>>::remove(&node);
@@ -239,10 +243,11 @@ decl_module! {
 			if remove == add { return Ok(()) }
 
 			let mut nodes = WellKnownNodes::get();
-			let remove_location = nodes.binary_search(&remove).ok().ok_or(Error::<T>::NotExist)?;
-			nodes.remove(remove_location);
-			let add_location = nodes.binary_search(&add).err().ok_or(Error::<T>::AlreadyJoined)?;
-			nodes.insert(add_location, add.clone());
+			ensure!(nodes.contains(&remove), Error::<T>::NotExist);
+			ensure!(!nodes.contains(&add), Error::<T>::AlreadyJoined);
+
+			nodes.remove(&remove);
+			nodes.insert(add.clone());
 
 			WellKnownNodes::put(&nodes);
 			Owners::<T>::swap(&remove, &add);
@@ -317,7 +322,7 @@ decl_module! {
 
 			Owners::<T>::insert(&node, &owner);
 
-			Self::deposit_event(RawEvent::NodeTransferred(node, sender, owner));
+			Self::deposit_event(RawEvent::NodeTransferred(node, owner));
 		}
 
 		/// Add additional connections to a given node.
@@ -342,9 +347,7 @@ decl_module! {
 				if *add_node == node {
 					continue;
 				}
-				if let Err(add_location) = nodes.binary_search(add_node) {
-					nodes.insert(add_location, add_node.clone());
-				}
+				nodes.insert(add_node.clone());
 			}
 
 			AdditionalConnections::insert(&node, nodes);
@@ -371,9 +374,7 @@ decl_module! {
 			let mut nodes = AdditionalConnections::get(&node);
 
 			for remove_node in connections.iter() {
-				if let Ok(remove_location) = nodes.binary_search(remove_node) {
-					nodes.remove(remove_location);
-				}
+				nodes.remove(remove_node);
 			}
 
 			AdditionalConnections::insert(&node, nodes);
@@ -398,10 +399,9 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	fn initialize_nodes(nodes: &Vec<(PeerId, T::AccountId)>) {
-		let mut peer_ids = nodes.iter()
+		let peer_ids = nodes.iter()
 			.map(|item| item.0.clone())
-			.collect::<Vec<PeerId>>();
-		peer_ids.sort();
+			.collect::<BTreeSet<PeerId>>();
 		WellKnownNodes::put(&peer_ids);
 
 		for (node, who) in nodes.iter() {
@@ -413,12 +413,12 @@ impl<T: Trait> Module<T> {
 		let mut nodes = AdditionalConnections::get(node);
 
 		let mut well_known_nodes = WellKnownNodes::get();
-		if let Ok(location) = well_known_nodes.binary_search(node) {
-			well_known_nodes.remove(location);
+		if well_known_nodes.contains(node) {
+			well_known_nodes.remove(node);
 			nodes.extend(well_known_nodes);
 		}
 
-		nodes
+		Vec::from_iter(nodes)
 	}
 }
 
@@ -531,7 +531,7 @@ mod tests {
 			);
 			assert_eq!(
 				WellKnownNodes::get(),
-				vec![test_node(10), test_node(15), test_node(20), test_node(30)]
+				BTreeSet::from_iter(vec![test_node(10), test_node(15), test_node(20), test_node(30)])
 			);
 			assert_eq!(Owners::<Test>::get(test_node(10)), 10);
 			assert_eq!(Owners::<Test>::get(test_node(20)), 20);
@@ -561,13 +561,19 @@ mod tests {
 				Error::<Test>::NotExist
 			);
 
-			AdditionalConnections::insert(test_node(20), vec![test_node(40)]);
+			AdditionalConnections::insert(
+				test_node(20),
+				BTreeSet::from_iter(vec![test_node(40)])
+			);
 			assert!(AdditionalConnections::contains_key(test_node(20)));
 
 			assert_ok!(
 				NodeAuthorization::remove_well_known_node(Origin::signed(2), test_node(20))
 			);
-			assert_eq!(WellKnownNodes::get(), vec![test_node(10), test_node(30)]);
+			assert_eq!(
+				WellKnownNodes::get(),
+				BTreeSet::from_iter(vec![test_node(10), test_node(30)])
+			);
 			assert!(!Owners::<Test>::contains_key(test_node(20)));
 			assert!(!AdditionalConnections::contains_key(test_node(20)));
 		});
@@ -602,7 +608,7 @@ mod tests {
 			);
 			assert_eq!(
 				WellKnownNodes::get(),
-				vec![test_node(10), test_node(20), test_node(30)]
+				BTreeSet::from_iter(vec![test_node(10), test_node(20), test_node(30)])
 			);
 
 			assert_noop!(
@@ -618,7 +624,10 @@ mod tests {
 				Error::<Test>::AlreadyJoined
 			);
 
-			AdditionalConnections::insert(test_node(20), vec![test_node(15)]);
+			AdditionalConnections::insert(
+				test_node(20),
+				BTreeSet::from_iter(vec![test_node(15)])
+			);
 			assert_ok!(
 				NodeAuthorization::swap_well_known_node(
 					Origin::signed(3), test_node(20), test_node(5)
@@ -626,12 +635,15 @@ mod tests {
 			);
 			assert_eq!(
 				WellKnownNodes::get(),
-				vec![test_node(5), test_node(10), test_node(30)]
+				BTreeSet::from_iter(vec![test_node(5), test_node(10), test_node(30)])
 			);
 			assert!(!Owners::<Test>::contains_key(test_node(20)));
 			assert_eq!(Owners::<Test>::get(test_node(5)), 20);
 			assert!(!AdditionalConnections::contains_key(test_node(20)));
-			assert_eq!(AdditionalConnections::get(test_node(5)), vec![test_node(15)]);
+			assert_eq!(
+				AdditionalConnections::get(test_node(5)),
+				BTreeSet::from_iter(vec![test_node(15)])
+			);
 		});
 	}
 
@@ -666,7 +678,7 @@ mod tests {
 			);
 			assert_eq!(
 				WellKnownNodes::get(),
-				vec![test_node(5), test_node(15), test_node(20)]
+				BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(20)])
 			);
 			assert_eq!(Owners::<Test>::get(test_node(5)), 5);
 			assert_eq!(Owners::<Test>::get(test_node(15)), 15);
@@ -714,7 +726,10 @@ mod tests {
 			);
 
 			Owners::<Test>::insert(test_node(15), 15);
-			AdditionalConnections::insert(test_node(15), vec![test_node(20)]);
+			AdditionalConnections::insert(
+				test_node(15),
+				BTreeSet::from_iter(vec![test_node(20)])
+			);
 			assert_ok!(NodeAuthorization::remove_claim(Origin::signed(15), test_node(15)));
 			assert!(!Owners::<Test>::contains_key(test_node(15)));
 			assert!(!AdditionalConnections::contains_key(test_node(15)));
@@ -775,7 +790,7 @@ mod tests {
 			);
 			assert_eq!(
 				AdditionalConnections::get(test_node(20)),
-				vec![test_node(5), test_node(15), test_node(25)]
+				BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(25)])
 			);
 		});
 	}
@@ -804,7 +819,8 @@ mod tests {
 			);
 
 			AdditionalConnections::insert(
-				test_node(20), vec![test_node(5), test_node(15), test_node(25)]
+				test_node(20),
+				BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(25)])
 			);
 			assert_ok!(
 				NodeAuthorization::remove_connections(
@@ -813,19 +829,26 @@ mod tests {
 					vec![test_node(15), test_node(5)]
 				)
 			);
-			assert_eq!(AdditionalConnections::get(test_node(20)), vec![test_node(25)]);
+			assert_eq!(
+				AdditionalConnections::get(test_node(20)),
+				BTreeSet::from_iter(vec![test_node(25)])
+			);
 		});
 	}
 
 	#[test]
-	fn get_authorize_nodes_works() {
+	fn get_authorized_nodes_works() {
 		new_test_ext().execute_with(|| {
 			AdditionalConnections::insert(
-				test_node(20), vec![test_node(5), test_node(15), test_node(25)]
+				test_node(20),
+				BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(25)])
 			);
+
+			let mut authorized_nodes = Module::<Test>::get_authorized_nodes(&test_node(20));
+			authorized_nodes.sort();
 			assert_eq!(
-				Module::<Test>::get_authorized_nodes(&test_node(20)),
-				vec![test_node(5), test_node(15), test_node(25), test_node(10), test_node(30)]
+				authorized_nodes,
+				vec![test_node(5), test_node(10), test_node(15), test_node(25), test_node(30)]
 			);
 		});
 	}
