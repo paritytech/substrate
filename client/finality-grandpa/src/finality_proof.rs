@@ -483,6 +483,27 @@ pub(crate) fn check_finality_proof<Block: BlockT, B, J>(
 	Ok(effects)
 }
 
+/// Check finality authority set sequence.
+fn authority_sequence_next<Block: BlockT>(
+	current_set_id: &mut u64,
+	current_authorities: &mut AuthorityList,
+	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
+	authorities_proof: StorageProof, // TODO not a storage proof
+) -> ClientResult<(u64, AuthorityList)>
+	where
+		NumberFor<Block>: BlockNumberOps,
+{
+	let header = unimplemented!("We do not have header here");
+	let block = unimplemented!("We do not have header here");
+	*current_authorities = authorities_provider.check_authorities_proof(
+		block,
+		header,
+		authorities_proof,
+	)?;
+
+	*current_set_id += 1;
+}
+
 /// Check finality proof for the single block.
 fn check_finality_proof_fragment<Block: BlockT, B, J>(
 	blockchain: &B,
