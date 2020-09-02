@@ -28,12 +28,14 @@ use structopt::StructOpt;
 	name = "inspect-key",
 	about = "Gets a public key and a SS58 address from the provided Secret URI"
 )]
-pub struct InspectCmd {
+pub struct InspectKeyCmd {
 	/// A Key URI to be inspected. May be a secret seed, secret URI
 	/// (with derivation paths and password), SS58 or public URI.
-	/// If the value is a file, the file content is used as URI.
-	/// If not given, you will be prompted for the URI.
-	#[structopt(long)]
+	///
+	/// If the given value is a file, the file content will be used
+	/// as URI.
+	///
+	/// If omitted, you will be prompted for the URI.
 	uri: Option<String>,
 
 	#[allow(missing_docs)]
@@ -53,7 +55,7 @@ pub struct InspectCmd {
 	pub crypto_scheme: CryptoSchemeFlag,
 }
 
-impl InspectCmd {
+impl InspectKeyCmd {
 	/// Run the command
 	pub fn run(&self) -> Result<(), Error> {
 		let uri = utils::read_uri(self.uri.as_ref())?;
@@ -76,7 +78,7 @@ impl InspectCmd {
 
 #[cfg(test)]
 mod tests {
-	use super::InspectCmd;
+	use super::*;
 	use structopt::StructOpt;
 
 	#[test]
@@ -86,10 +88,10 @@ mod tests {
 		let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
 
 		let inspect =
-			InspectCmd::from_iter(&["inspect-key", "--uri", words, "--password", "12345"]);
+			InspectKeyCmd::from_iter(&["inspect-key", words, "--password", "12345"]);
 		assert!(inspect.run().is_ok());
 
-		let inspect = InspectCmd::from_iter(&["inspect-key", "--uri", seed]);
+		let inspect = InspectKeyCmd::from_iter(&["inspect-key", seed]);
 		assert!(inspect.run().is_ok());
 	}
 }

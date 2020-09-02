@@ -168,6 +168,7 @@ sp_api::mock_impl_runtime_apis! {
 
 pub struct TestNetwork {
 	peer_id: PeerId,
+	external_addresses: Vec<Multiaddr>,
 	// Whenever functions on `TestNetwork` are called, the function arguments are added to the
 	// vectors below.
 	pub put_value_call: Arc<Mutex<Vec<(kad::record::Key, Vec<u8>)>>>,
@@ -179,6 +180,10 @@ impl Default for TestNetwork {
 	fn default() -> Self {
 		TestNetwork {
 			peer_id: PeerId::random(),
+			external_addresses: vec![
+				"/ip6/2001:db8::/tcp/30333"
+					.parse().unwrap(),
+			],
 			put_value_call: Default::default(),
 			get_value_call: Default::default(),
 			set_priority_group_call: Default::default(),
@@ -212,7 +217,7 @@ impl NetworkStateInfo for TestNetwork {
 	}
 
 	fn external_addresses(&self) -> Vec<Multiaddr> {
-		vec!["/ip6/2001:db8::/tcp/30333".parse().unwrap()]
+		self.external_addresses.clone()
 	}
 }
 
@@ -613,6 +618,72 @@ fn never_add_own_address_to_priority_group() {
 }
 
 #[test]
+fn limit_number_of_addresses_added_to_cache_per_authority() {
+	let remote_key_store = KeyStore::new();
+	let remote_public = remote_key_store
+		.write()
+		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+		.unwrap();
+
+	let dht_event = {
+		let addresses = (0..100).map(|_| {
+			let peer_id = PeerId::random();
+			let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
+			address.with(multiaddr::Protocol::P2p(
+				peer_id.into(),
+			)).to_vec()
+		}).collect();
+
+		let mut serialized_addresses = vec![];
+		schema::AuthorityAddresses { addresses }
+		.encode(&mut serialized_addresses)
+			.map_err(Error::EncodingProto)
+			.unwrap();
+
+		let signature = remote_key_store.read()
+			.sign_with(
+				key_types::AUTHORITY_DISCOVERY,
+				&remote_public.clone().into(),
+				serialized_addresses.as_slice(),
+			)
+			.map_err(|_| Error::Signing)
+			.unwrap();
+
+		let mut signed_addresses = vec![];
+		schema::SignedAuthorityAddresses {
+			addresses: serialized_addresses.clone(),
+			signature,
+		}
+			.encode(&mut signed_addresses)
+			.map_err(Error::EncodingProto)
+			.unwrap();
+
+		let key = hash_authority_id(&remote_public.to_raw_vec());
+		let value = signed_addresses;
+		(key, value)
+	};
+
+	let (_dht_event_tx, dht_event_rx) = channel(1);
+
+	let (_to_worker, from_service) = mpsc::channel(0);
+	let mut worker = Worker::new(
+		from_service,
+		Arc::new(TestApi { authorities: vec![remote_public.into()] }),
+		Arc::new(TestNetwork::default()),
+		vec![],
+		dht_event_rx.boxed(),
+		Role::Sentry,
+		None,
+	);
+
+	worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
+	assert_eq!(
+		MAX_ADDRESSES_PER_AUTHORITY,
+		worker.addr_cache.get_addresses_by_authority_id(&remote_public.into()).unwrap().len(),
+	);
+}
+
+#[test]
 fn do_not_cache_addresses_without_peer_id() {
 	let remote_key_store = KeyStore::new();
 	let remote_public = remote_key_store
@@ -689,5 +760,69 @@ fn do_not_cache_addresses_without_peer_id() {
 		Some(&vec![multiaddr_with_peer_id]),
 		local_worker.addr_cache.get_addresses_by_authority_id(&remote_public.into()),
 		"Expect worker to only cache `Multiaddr`s with `PeerId`s.",
+	);
+}
+
+#[test]
+fn addresses_to_publish_adds_p2p() {
+	let (_dht_event_tx, dht_event_rx) = channel(1000);
+	let network: Arc<TestNetwork> = Arc::new(Default::default());
+
+	assert!(!matches!(
+		network.external_addresses().pop().unwrap().pop().unwrap(),
+		multiaddr::Protocol::P2p(_)
+	));
+
+	let (_to_worker, from_service) = mpsc::channel(0);
+	let worker = Worker::new(
+		from_service,
+		Arc::new(TestApi {
+			authorities: vec![],
+		}),
+		network.clone(),
+		vec![],
+		dht_event_rx.boxed(),
+		Role::Authority(KeyStore::new()),
+		Some(prometheus_endpoint::Registry::new()),
+	);
+
+	assert!(
+		matches!(
+			worker.addresses_to_publish().next().unwrap().pop().unwrap(),
+			multiaddr::Protocol::P2p(_)
+		),
+		"Expect `addresses_to_publish` to append `p2p` protocol component.",
+	);
+}
+
+/// Ensure [`Worker::addresses_to_publish`] does not add an additional `p2p` protocol component in
+/// case one already exists.
+#[test]
+fn addresses_to_publish_respects_existing_p2p_protocol() {
+	let (_dht_event_tx, dht_event_rx) = channel(1000);
+	let network: Arc<TestNetwork> = Arc::new(TestNetwork {
+		external_addresses: vec![
+			"/ip6/2001:db8::/tcp/30333/p2p/QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC"
+				.parse().unwrap(),
+		],
+		.. Default::default()
+	});
+
+	let (_to_worker, from_service) = mpsc::channel(0);
+	let worker = Worker::new(
+		from_service,
+		Arc::new(TestApi {
+			authorities: vec![],
+		}),
+		network.clone(),
+		vec![],
+		dht_event_rx.boxed(),
+		Role::Authority(KeyStore::new()),
+		Some(prometheus_endpoint::Registry::new()),
+	);
+
+	assert_eq!(
+		network.external_addresses, worker.addresses_to_publish().collect::<Vec<_>>(),
+		"Expected Multiaddr from `TestNetwork` to not be altered.",
 	);
 }

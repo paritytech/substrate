@@ -645,7 +645,8 @@ pub(crate) fn ancestry<Block: BlockT, Client>(
 	client: &Arc<Client>,
 	base: Block::Hash,
 	block: Block::Hash,
-) -> Result<Vec<Block::Hash>, GrandpaError> where
+) -> Result<Vec<Block::Hash>, GrandpaError>
+where
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
 	if base == block { return Err(GrandpaError::NotDescendent) }
@@ -671,15 +672,14 @@ pub(crate) fn ancestry<Block: BlockT, Client>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, Block: BlockT, C, N, SC, VR>
-	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, Block, C, N, SC, VR>
+impl<B, Block: BlockT, C, N, SC, VR> voter::Environment<Block::Hash, NumberFor<Block>>
+	for Environment<B, Block, C, N, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block>,
 	C: crate::ClientForGrandpa<Block, B> + 'static,
 	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
- 	N: NetworkT<Block> + 'static + Send + Sync,
+	N: NetworkT<Block> + 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, C>,
 	NumberFor<Block>: BlockNumberOps,
@@ -1023,7 +1023,7 @@ where
 			number,
 			(round, commit).into(),
 			false,
-			&self.justification_sender,
+			self.justification_sender.as_ref(),
 		)
 	}
 
@@ -1088,9 +1088,10 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
-	justification_sender: &Option<GrandpaJustificationSender<Block>>,
-) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
-	Block:  BlockT,
+	justification_sender: Option<&GrandpaJustificationSender<Block>>,
+) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>
+where
+	Block: BlockT,
 	BE: Backend<Block>,
 	Client: crate::ClientForGrandpa<Block, BE>,
 {
@@ -1154,6 +1155,18 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 			}
 		}
 
+		// send a justification notification if a sender exists and in case of error log it.
+		fn notify_justification<Block: BlockT>(
+			justification_sender: Option<&GrandpaJustificationSender<Block>>,
+			justification: impl FnOnce() -> Result<GrandpaJustification<Block>, Error>,
+		) {
+			if let Some(sender) = justification_sender {
+				if let Err(err) = sender.notify(justification) {
+					warn!(target: "afg", "Error creating justification for subscriber: {:?}", err);
+				}
+			}
+		}
+
 		// NOTE: this code assumes that honest voters will never vote past a
 		// transition block, thus we don't have to worry about the case where
 		// we have a transition with `effective_block = N`, but we finalize
@@ -1161,7 +1174,10 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 		// justifications for transition blocks which will be requested by
 		// syncing clients.
 		let justification = match justification_or_commit {
-			JustificationOrCommit::Justification(justification) => Some(justification),
+			JustificationOrCommit::Justification(justification) => {
+				notify_justification(justification_sender, || Ok(justification.clone()));
+				Some(justification.encode())
+			},
 			JustificationOrCommit::Commit((round_number, commit)) => {
 				let mut justification_required =
 					// justification is always required when block that enacts new authorities
@@ -1181,28 +1197,30 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 					}
 				}
 
-				if justification_required {
-					let justification = GrandpaJustification::from_commit(
-						&client,
-						round_number,
-						commit,
-					)?;
+				// NOTE: the code below is a bit more verbose because we
+				// really want to avoid creating a justification if it isn't
+				// needed (e.g. if there's no subscribers), and also to avoid
+				// creating it twice. depending on the vote tree for the round,
+				// creating a justification might require multiple fetches of
+				// headers from the database.
+				let justification = || GrandpaJustification::from_commit(
+					&client,
+					round_number,
+					commit,
+				);
 
-					Some(justification)
+				if justification_required {
+					let justification = justification()?;
+					notify_justification(justification_sender, || Ok(justification.clone()));
+
+					Some(justification.encode())
 				} else {
+					notify_justification(justification_sender, justification);
+
 					None
 				}
 			},
 		};
-
-		// Notify any registered listeners in case we have a justification
-		if let Some(sender) = justification_sender {
-			if let Some(ref justification) = justification {
-				let _ = sender.notify(justification.clone());
-			}
-		}
-
-		let justification = justification.map(|j| j.encode());
 
 		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
 

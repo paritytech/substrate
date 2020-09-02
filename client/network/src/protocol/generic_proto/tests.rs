@@ -83,7 +83,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		});
 
 		let behaviour = CustomProtoWithAddr {
-			inner: GenericProto::new(local_peer_id, &b"test"[..], &[1], vec![], peerset),
+			inner: GenericProto::new(local_peer_id, "test", &[1], vec![], peerset),
 			addrs: addrs
 				.iter()
 				.enumerate()

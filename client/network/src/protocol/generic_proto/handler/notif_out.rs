@@ -57,13 +57,13 @@ const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 /// See the documentation of [`NotifsOutHandler`] for more information.
 pub struct NotifsOutHandlerProto {
 	/// Name of the protocol to negotiate.
-	protocol_name: Cow<'static, [u8]>,
+	protocol_name: Cow<'static, str>,
 }
 
 impl NotifsOutHandlerProto {
 	/// Builds a new [`NotifsOutHandlerProto`]. Will use the given protocol name for the
 	/// notifications substream.
-	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>) -> Self {
+	pub fn new(protocol_name: impl Into<Cow<'static, str>>) -> Self {
 		NotifsOutHandlerProto {
 			protocol_name: protocol_name.into(),
 		}
@@ -97,7 +97,7 @@ impl IntoProtocolsHandler for NotifsOutHandlerProto {
 /// the remote for the purpose of sending notifications to it.
 pub struct NotifsOutHandler {
 	/// Name of the protocol to negotiate.
-	protocol_name: Cow<'static, [u8]>,
+	protocol_name: Cow<'static, str>,
 
 	/// Relationship with the node we're connected to.
 	state: State,
@@ -203,8 +203,24 @@ impl NotifsOutHandler {
 		}
 	}
 
+	/// Returns `true` if there has been an attempt to open the substream, but the remote refused
+	/// the substream.
+	///
+	/// Always returns `false` if the handler is in a disabled state.
+	pub fn is_refused(&self) -> bool {
+		match &self.state {
+			State::Disabled => false,
+			State::DisabledOpening => false,
+			State::DisabledOpen(_) => false,
+			State::Opening { .. } => false,
+			State::Refused => true,
+			State::Open { .. } => false,
+			State::Poisoned => false,
+		}
+	}
+
 	/// Returns the name of the protocol that we negotiate.
-	pub fn protocol_name(&self) -> &[u8] {
+	pub fn protocol_name(&self) -> &Cow<'static, str> {
 		&self.protocol_name
 	}
 
