@@ -68,23 +68,40 @@ mod inner {
 		module_path, concat, format_args, file, line,
 	};
 
-	// just a simplistic holder for span and entered spans
+	// just a simplistic holder for the entered span
 	// that exits on drop
 	pub struct Span(u64);     // 0 means no item
 
 	impl Span {
+		/// Hold the `id` of the entered span
 		pub fn new(v: u64) -> Self {
 			Span(v)
 		}
+		/// Create a not-activated Span
 		pub fn none() -> Self {
 			Span::new(0)
 		}
+		/// This is a noop, just pointing a reference to itself only
+		/// existing to be compliant with the general usage.
+		/// In this implementation, spans are already entered
+		pub fn enter(&self) -> &Self {
+			// return a reference to self prevents using enter and
+			// `in_scope` on the same span.
+			&self
+		}
+
+		/// Execute `f` and consume the span, which leads to it
+		/// immediately exiting before return
 		pub fn in_scope<F: FnOnce() -> T, T>(self, f: F) -> T {
-			let x = f();
+			f()
+		}
+	}
+
+	impl Drop for Span {
+		fn drop(&mut self) {
 			if self.0 != 0 {
 				crate::with_tracing_subscriber(|t| t.exit(self.0));
 			}
-			x
 		}
 	}
 

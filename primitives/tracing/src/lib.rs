@@ -229,7 +229,9 @@ macro_rules! within_span {
 		$( $code:tt )*
 	) => {
 		$span.in_scope(||
-			$( $code )*
+			{
+				$( $code )*
+			}
 		)
 	};
 	(
