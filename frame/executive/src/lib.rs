@@ -207,15 +207,14 @@ where
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
-		sp_tracing::within_span!(sp_tracing::Level::TRACE, "init_block"; {
-			let digests = Self::extract_pre_digest(&header);
-			Self::initialize_block_impl(
-				header.number(),
-				header.parent_hash(),
-				header.extrinsics_root(),
-				&digests
-			);
-		})
+		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
+		let digests = Self::extract_pre_digest(&header);
+		Self::initialize_block_impl(
+			header.number(),
+			header.parent_hash(),
+			header.extrinsics_root(),
+			&digests
+		);
 	}
 
 	fn extract_pre_digest(header: &System::Header) -> DigestOf<System> {
@@ -272,28 +271,29 @@ where
 	}
 
 	fn initial_checks(block: &Block) {
-		sp_tracing::within_span!(sp_tracing::Level::TRACE, "initial_checks"; {
-			let header = block.header();
+		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
+		let header = block.header();
 
-			// Check that `parent_hash` is correct.
-			let n = header.number().clone();
-			assert!(
-				n > System::BlockNumber::zero()
-				&& <frame_system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
-				"Parent hash should be valid."
-			);
+		// Check that `parent_hash` is correct.
+		let n = header.number().clone();
+		assert!(
+			n > System::BlockNumber::zero()
+			&& <frame_system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
+			"Parent hash should be valid."
+		);
 
-			// Check that transaction trie root represents the transactions.
-			let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
-			header.extrinsics_root().check_equal(&xts_root);
-			assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
-		})
+		// Check that transaction trie root represents the transactions.
+		let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
+		header.extrinsics_root().check_equal(&xts_root);
+		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
 	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
 		sp_io::init_tracing();
-		sp_tracing::within_span!(sp_tracing::info_span!( "execute_block", ?block); {
+		sp_tracing::within_span! {
+			sp_tracing::info_span!( "execute_block", ?block);
+		{
 			Self::initialize_block(block.header());
 
 			// any initial checks
@@ -311,7 +311,7 @@ where
 
 			// any final checks
 			Self::final_checks(&header);
-		})
+		} };
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
@@ -327,16 +327,15 @@ where
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
 	pub fn finalize_block() -> System::Header {
-		sp_tracing::within_span!(sp_tracing::Level::TRACE, "finalize_block" ; {
-			<frame_system::Module<System>>::note_finished_extrinsics();
-			let block_number = <frame_system::Module<System>>::block_number();
-			<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
-			<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+		sp_tracing::enter_span!( sp_tracing::Level::TRACE, "finalize_block" );
+		<frame_system::Module<System>>::note_finished_extrinsics();
+		let block_number = <frame_system::Module<System>>::block_number();
+		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 
-			// set up extrinsics
-			<frame_system::Module<System>>::derive_extrinsics();
-			<frame_system::Module<System>>::finalize()
-		})
+		// set up extrinsics
+		<frame_system::Module<System>>::derive_extrinsics();
+		<frame_system::Module<System>>::finalize()
 	}
 
 	/// Apply extrinsic outside of the block execution function.
@@ -365,54 +364,52 @@ where
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
 	) -> ApplyExtrinsicResult {
-		sp_tracing::within_span!(sp_tracing::info_span!("apply_extrinsic",
-				ext=?sp_core::hexdisplay::HexDisplay::from(&uxt.encode()));
-		{
-			// Verify that the signature is good.
-			let xt = uxt.check(&Default::default())?;
+		sp_tracing::enter_span!(
+			sp_tracing::info_span!("apply_extrinsic",
+				ext=?sp_core::hexdisplay::HexDisplay::from(&uxt.encode()))
+		);
+		// Verify that the signature is good.
+		let xt = uxt.check(&Default::default())?;
 
-			// We don't need to make sure to `note_extrinsic` only after we know it's going to be
-			// executed to prevent it from leaking in storage since at this point, it will either
-			// execute or panic (and revert storage changes).
-			if let Some(encoded) = to_note {
-				<frame_system::Module<System>>::note_extrinsic(encoded);
-			}
+		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
+		// executed to prevent it from leaking in storage since at this point, it will either
+		// execute or panic (and revert storage changes).
+		if let Some(encoded) = to_note {
+			<frame_system::Module<System>>::note_extrinsic(encoded);
+		}
 
-			// AUDIT: Under no circumstances may this function panic from here onwards.
+		// AUDIT: Under no circumstances may this function panic from here onwards.
 
-			// Decode parameters and dispatch
-			let dispatch_info = xt.get_dispatch_info();
-			let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
+		// Decode parameters and dispatch
+		let dispatch_info = xt.get_dispatch_info();
+		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
-			<frame_system::Module<System>>::note_applied_extrinsic(&r, dispatch_info);
+		<frame_system::Module<System>>::note_applied_extrinsic(&r, dispatch_info);
 
-			Ok(r.map(|_| ()).map_err(|e| e.error))
-		})
+		Ok(r.map(|_| ()).map_err(|e| e.error))
 	}
 
 	fn final_checks(header: &System::Header) {
-		sp_tracing::within_span!(sp_tracing::Level::TRACE, "final_checks";
-		{
-			// remove temporaries
-			let new_header = <frame_system::Module<System>>::finalize();
+		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "final_checks");
+		// remove temporaries
+		let new_header = <frame_system::Module<System>>::finalize();
 
-			// check digest
-			assert_eq!(
-				header.digest().logs().len(),
-				new_header.digest().logs().len(),
-				"Number of digest items must match that calculated."
-			);
-			let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
-			for (header_item, computed_item) in items_zip {
-				header_item.check_equal(&computed_item);
-				assert!(header_item == computed_item, "Digest item must match that calculated.");
-			}
+		// check digest
+		assert_eq!(
+			header.digest().logs().len(),
+			new_header.digest().logs().len(),
+			"Number of digest items must match that calculated."
+		);
+		let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
+		for (header_item, computed_item) in items_zip {
+			header_item.check_equal(&computed_item);
+			assert!(header_item == computed_item, "Digest item must match that calculated.");
+		}
 
-			// check storage root.
-			let storage_root = new_header.state_root();
-			header.state_root().check_equal(&storage_root);
-			assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
-		})
+		// check storage root.
+		let storage_root = new_header.state_root();
+		header.state_root().check_equal(&storage_root);
+		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any
@@ -423,21 +420,20 @@ where
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
 	) -> TransactionValidity {
-		use sp_tracing::{within_span};
+		use sp_tracing::{enter_span, within_span};
 
-		within_span!(sp_tracing::Level::TRACE, "validate_transaction"; {
+		enter_span!{ sp_tracing::Level::TRACE, "validate_transaction" };
 
-			let encoded_len = within_span!{ sp_tracing::Level::TRACE, "using_encoded"; uxt.using_encoded(|d| d.len()) };
+		let encoded_len = within_span!{ sp_tracing::Level::TRACE, "using_encoded"; uxt.using_encoded(|d| d.len()) };
 
-			let xt = within_span!{ sp_tracing::Level::TRACE, "check"; uxt.check(&Default::default()) }?;
+		let xt = within_span!{ sp_tracing::Level::TRACE, "check"; uxt.check(&Default::default())? };
 
-			let dispatch_info = within_span!{ sp_tracing::Level::TRACE, "dispatch_info"; xt.get_dispatch_info() };
+		let dispatch_info = within_span!{ sp_tracing::Level::TRACE, "dispatch_info"; xt.get_dispatch_info() };
 
-			within_span! {
-				sp_tracing::Level::TRACE, "validate";
-				xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
-			}
-		})
+		within_span! {
+			sp_tracing::Level::TRACE, "validate";
+			xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
+		}
 	}
 
 	/// Start an offchain worker and generate extrinsics.
