@@ -493,6 +493,16 @@ fn authority_sequence_next<Block: BlockT>(
 	where
 		NumberFor<Block>: BlockNumberOps,
 {
+	// TODO we get new authority set from the header log/digest.
+	// We get Forced Change and Scheduled change.
+	//
+	// Then for every log we also get header justification.
+	// This method check justification for the header against
+	// current set and update to next set afterward.
+	//
+	// TODO debug against value of stored authority set (each
+	// got a delay and forced got a block start: not sure why
+	// not using delay there).
 	let header = unimplemented!("We do not have header here");
 	let block = unimplemented!("We do not have header here");
 	*current_authorities = authorities_provider.check_authorities_proof(
