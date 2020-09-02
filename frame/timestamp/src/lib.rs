@@ -95,7 +95,7 @@
 mod benchmarking;
 mod default_weights;
 
-use sp_std::{result, cmp, vec, vec::Vec};
+use sp_std::{result, cmp, vec};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
 #[cfg(feature = "std")]
 use frame_support::debug;
