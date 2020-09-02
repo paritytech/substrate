@@ -588,7 +588,7 @@ impl ProtocolsHandler for NotifsHandler {
 							}
 						}
 
-						// If this code is reached, there exists two possibilities:
+						// This code can be reached via the following scenarios:
 						//
 						// - User tried to send a notification on a non-existing protocol. This
 						// most likely relates to https://github.com/paritytech/substrate/issues/6827
