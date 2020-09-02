@@ -262,16 +262,10 @@ struct NotificationsSinkInner {
 /// dedicated to the peer.
 #[derive(Debug)]
 enum NotificationsSinkMessage {
-	/// Message emitted by [`NotificationsSink::send_legacy`].
-	Legacy {
-		message: Vec<u8>,
-	},
-
 	/// Message emitted by [`NotificationsSink::reserve_notification`] and
 	/// [`NotificationsSink::write_notification_now`].
 	Notification {
 		protocol_name: Cow<'static, str>,
-		encoded_fallback_message: Vec<u8>,
 		message: Vec<u8>,
 	},
 
@@ -280,26 +274,6 @@ enum NotificationsSinkMessage {
 }
 
 impl NotificationsSink {
-	/// Sends a message to the peer using the legacy substream.
-	///
-	/// If too many messages are already buffered, the message is silently discarded and the
-	/// connection to the peer will be closed shortly after.
-	///
-	/// This method will be removed in a future version.
-	pub fn send_legacy<'a>(&'a self, message: impl Into<Vec<u8>>) {
-		let mut lock = self.inner.sync_channel.lock();
-		let result = lock.try_send(NotificationsSinkMessage::Legacy {
-			message: message.into()
-		});
-
-		if result.is_err() {
-			// Cloning the `mpsc::Sender` guarantees the allocation of an extra spot in the
-			// buffer, and therefore that `try_send` will succeed.
-			let _result2 = lock.clone().try_send(NotificationsSinkMessage::ForceClose);
-			debug_assert!(_result2.map(|()| true).unwrap_or_else(|err| err.is_disconnected()));
-		}
-	}
-
 	/// Sends a notification to the peer.
 	///
 	/// If too many messages are already buffered, the notification is silently discarded and the
@@ -312,13 +286,11 @@ impl NotificationsSink {
 	pub fn send_sync_notification<'a>(
 		&'a self,
 		protocol_name: Cow<'static, str>,
-		encoded_fallback_message: impl Into<Vec<u8>>,
 		message: impl Into<Vec<u8>>
 	) {
 		let mut lock = self.inner.sync_channel.lock();
 		let result = lock.try_send(NotificationsSinkMessage::Notification {
-			protocol_name: protocol_name,
-			encoded_fallback_message: encoded_fallback_message.into(),
+			protocol_name,
 			message: message.into()
 		});
 
@@ -364,12 +336,10 @@ impl<'a> Ready<'a> {
 	/// Returns an error if the substream has been closed.
 	pub fn send(
 		mut self,
-		encoded_fallback_message: impl Into<Vec<u8>>,
 		notification: impl Into<Vec<u8>>
 	) -> Result<(), ()> {
 		self.lock.start_send(NotificationsSinkMessage::Notification {
 			protocol_name: self.protocol_name,
-			encoded_fallback_message: encoded_fallback_message.into(),
 			message: notification.into(),
 		}).map_err(|_| ())
 	}
@@ -602,26 +572,38 @@ impl ProtocolsHandler for NotifsHandler {
 				};
 
 				match message {
-					NotificationsSinkMessage::Legacy { message } => {
-						self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage {
-							message
-						});
-					}
 					NotificationsSinkMessage::Notification {
 						protocol_name,
-						encoded_fallback_message,
 						message
 					} => {
+						let mut found_any_with_name = false;
+
 						for (handler, _) in &mut self.out_handlers {
-							if *handler.protocol_name() == protocol_name && handler.is_open() {
-								handler.send_or_discard(message);
-								continue 'poll_notifs_sink;
+							if *handler.protocol_name() == protocol_name {
+								found_any_with_name = true;
+								if handler.is_open() {
+									handler.send_or_discard(message);
+									continue 'poll_notifs_sink;
+								}
 							}
 						}
 
-						self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage {
-							message: encoded_fallback_message,
-						});
+						// This code can be reached via the following scenarios:
+						//
+						// - User tried to send a notification on a non-existing protocol. This
+						// most likely relates to https://github.com/paritytech/substrate/issues/6827
+						// - User tried to send a notification to a peer we're not or no longer
+						// connected to. This happens in a normal scenario due to the racy nature
+						// of connections and disconnections, and is benign.
+						//
+						// We print a warning in the former condition.
+						if !found_any_with_name {
+							log::warn!(
+								target: "sub-libp2p",
+								"Tried to send a notification on non-registered protocol: {:?}",
+								protocol_name
+							);
+						}
 					}
 					NotificationsSinkMessage::ForceClose => {
 						return Poll::Ready(ProtocolsHandlerEvent::Close(NotifsHandlerError::SyncNotificationsClogged));
