@@ -14,7 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+use std::sync::Arc;
 use node_runtime::{
 	Executive, Indices, Runtime, UncheckedExtrinsic,
 };
@@ -25,7 +25,7 @@ use sp_core::{
 		TransactionPoolExt,
 		testing::TestTransactionPoolExt,
 	},
-	traits::KeystoreExt,
+	traits::{KeystoreExt, SyncCryptoStore},
 };
 use frame_system::{
 	offchain::{
@@ -35,7 +35,6 @@ use frame_system::{
 	}
 };
 use codec::Decode;
-use futures::executor::block_on;
 
 pub mod common;
 use self::common::*;
@@ -72,16 +71,10 @@ fn should_submit_signed_transaction() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore = KeyStore::new();
-	block_on(
-		keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE)))
-	).unwrap();
-	block_on(
-		keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE)))
-	).unwrap();
-	block_on(
-		keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter3", PHRASE)))
-	).unwrap();
+	let keystore: Arc<SyncCryptoStore> = Arc::new(KeyStore::new().into());
+	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
+	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter3", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
@@ -103,13 +96,9 @@ fn should_submit_signed_twice_from_the_same_account() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore = KeyStore::new();
-	block_on(
-		keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE)))
-	).unwrap();
-	block_on(
-		keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE)))
-	).unwrap();
+	let keystore: Arc<SyncCryptoStore>= Arc::new(KeyStore::new().into());
+	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
@@ -151,13 +140,9 @@ fn should_submit_signed_twice_from_all_accounts() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore = KeyStore::new();
-	block_on(
-		keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE)))
-	).unwrap();
-	block_on(
-		keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE)))
-	).unwrap();
+	let keystore: Arc<SyncCryptoStore>= Arc::new(KeyStore::new().into());
+	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
@@ -214,10 +199,8 @@ fn submitted_transaction_should_be_valid() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore = KeyStore::new();
-	block_on(
-		keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE)))
-	).unwrap();
+	let keystore: Arc<SyncCryptoStore>= Arc::new(KeyStore::new().into());
+	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
