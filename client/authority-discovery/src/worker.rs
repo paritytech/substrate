@@ -110,7 +110,7 @@ pub enum Role {
 /// When run as a sentry node, the [`Worker`] does not publish
 /// any addresses to the DHT but still discovers validators and sentry nodes of
 /// validators, i.e. only step 2 (Discovers other authorities) is executed.
-pub struct Worker<Client, Network, Block>
+pub struct Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + 'static,
 	Network: NetworkProvider,
@@ -132,7 +132,7 @@ where
 	//   - Some(vec![a, b, c, ...]): Valid addresses were specified.
 	sentry_nodes: Option<Vec<Multiaddr>>,
 	/// Channel we receive Dht events on.
-	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+	dht_event_rx: DhtEventStream,
 
 	/// Interval to be proactive, publishing own addresses.
 	publish_interval: Interval,
@@ -151,13 +151,14 @@ where
 	phantom: PhantomData<Block>,
 }
 
-impl<Client, Network, Block> Worker<Client, Network, Block>
+impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api:
 		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
+	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Return a new [`Worker`].
 	///
@@ -168,7 +169,7 @@ where
 		client: Arc<Client>,
 		network: Arc<Network>,
 		sentry_nodes: Vec<MultiaddrWithPeerId>,
-		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+		dht_event_rx: DhtEventStream,
 		role: Role,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 	) -> Self {
@@ -340,7 +341,7 @@ where
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		let keys = Worker::<Client, Network, Block>::get_own_public_keys_within_authority_set(
+		let keys = Worker::<Client, Network, Block, DhtEventStream>::get_own_public_keys_within_authority_set(
 			key_store.clone(),
 			self.client.as_ref(),
 		).await?.into_iter().map(Into::into).collect::<Vec<_>>();
@@ -760,7 +761,7 @@ impl Metrics {
 
 // Helper functions for unit testing.
 #[cfg(test)]
-impl<Client, Network, Block> Worker<Client, Network, Block>
+impl<Client, Network, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + 'static,
 	Network: NetworkProvider,

@@ -45,19 +45,20 @@ mod tests;
 mod worker;
 
 /// Create a new authority discovery [`Worker`] and [`Service`].
-pub fn new_worker_and_service<Client, Network, Block>(
+pub fn new_worker_and_service<Client, Network, Block, DhtEventStream>(
 	client: Arc<Client>,
 	network: Arc<Network>,
 	sentry_nodes: Vec<MultiaddrWithPeerId>,
-	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+	dht_event_rx: DhtEventStream,
 	role: Role,
 	prometheus_registry: Option<prometheus_endpoint::Registry>,
-) -> (Worker<Client, Network, Block>, Service)
+) -> (Worker<Client, Network, Block, DhtEventStream>, Service)
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
+	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	let (to_worker, from_service) = mpsc::channel(0);
 
