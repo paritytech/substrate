@@ -30,10 +30,7 @@
 use crate::{
 	ExHashT, NetworkStateInfo,
 	behaviour::{self, Behaviour, BehaviourOut},
-	config::{
-		parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig,
-		identity::PublicKey,
-	},
+	config::{parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
 	DhtEvent,
 	discovery::DiscoveryConfig,
 	error::Error,
@@ -97,8 +94,6 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	is_major_syncing: Arc<AtomicBool>,
 	/// Local copy of the `PeerId` of the local node.
 	local_peer_id: PeerId,
-	/// Local copy of the `PublicKey` of the local node.
-	local_public_key: PublicKey,
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
 	bandwidth: Arc<transport::BandwidthSinks>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
@@ -322,7 +317,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					protocol,
 					params.role,
 					user_agent,
-					local_public.clone(),
+					local_public,
 					block_requests,
 					finality_proof_requests,
 					light_client_handler,
@@ -403,7 +398,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
 			local_peer_id,
-			local_public_key: local_public,
 			to_worker,
 			peers_notifications_sinks: peers_notifications_sinks.clone(),
 			protocol_name_by_engine,
@@ -600,11 +594,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Returns the local `PeerId`.
 	pub fn local_peer_id(&self) -> &PeerId {
 		&self.local_peer_id
-	}
-
-	/// Returns the local node `PublicKey`.
-	pub fn local_public_key(&self) -> &PublicKey {
-		&self.local_public_key
 	}
 
 	/// Set reserved peers and reserved_only flag.
