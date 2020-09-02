@@ -27,7 +27,12 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	sp_consensus::DefaultImportQueue<Block, FullClient>,
 	sc_transaction_pool::FullPool<Block, FullClient>,
 	(
-		sc_consensus_aura::AuraBlockImport<Block, FullClient, sc_finality_grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>, AuraPair>,
+		sc_consensus_aura::AuraBlockImport<
+			Block,
+			FullClient,
+			sc_finality_grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>,
+			AuraPair
+		>,
 		sc_finality_grandpa::LinkHalf<Block, FullClient, FullSelectChain>
 	)
 >, ServiceError> {
