@@ -1018,6 +1018,16 @@ impl<T: Encode + Decode> Crossing<T> {
 	}
 }
 
+// useful for testing
+impl<T> core::default::Default for Crossing<T>
+	where T: core::default::Default + Encode + Decode
+{
+	fn default() -> Self {
+		Self(Default::default())
+	}
+
+}
+
 /// Interface to providing tracing facilities for wasm. Modeled after tokios `tracing`-crate
 /// interfaces. See `sp-tracing` for more information.
 #[runtime_interface(wasm_only,no_tracing)]

@@ -20,7 +20,7 @@
 
 use core::fmt::Debug;
 use sp_std::{
-	vec::Vec,
+	vec, vec::Vec,
 };
 use sp_std::Writer;
 use codec::{Encode, Decode};
@@ -38,6 +38,12 @@ pub enum WasmLevel {
 	DEBUG,
 	/// The lowest level, keeping track of minute detail
 	TRACE
+}
+
+impl core::default::Default for WasmLevel {
+	fn default() -> Self {
+		WasmLevel::TRACE
+	}
 }
 
 /// A paramter value provided to the span/event
@@ -335,6 +341,23 @@ impl core::fmt::Debug for WasmMetadata {
 	}
 }
 
+impl core::default::Default for WasmMetadata {
+	fn default() -> Self {
+		let target = "default".as_bytes().to_vec();
+		WasmMetadata {
+			target,
+			name: Default::default(),
+			level: Default::default(),
+			file: Default::default(),
+			line: Default::default(),
+			module_path: Default::default(),
+			is_span: true,
+			fields: WasmFields::empty()
+		}
+	}
+}
+
+
 fn decode_field(field: &[u8]) -> &str {
 	core::str::from_utf8(field).unwrap_or_default()
 }
@@ -348,6 +371,16 @@ pub struct WasmEntryAttributes {
 	pub metadata: WasmMetadata,
 	/// the Values provided
 	pub fields: WasmValuesSet,
+}
+
+impl core::default::Default for WasmEntryAttributes {
+	fn default() -> Self {
+		WasmEntryAttributes {
+			parent_id: None,
+			metadata: Default::default(),
+			fields: WasmValuesSet(vec![]),
+		}
+	}
 }
 
 #[cfg(feature = "std")]
