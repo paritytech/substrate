@@ -42,6 +42,7 @@ use sp_std::{
 	iter::FromIterator,
 	prelude::*,
 };
+use codec::Decode;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
 	debug, ensure,
@@ -388,10 +389,16 @@ decl_module! {
 			let network_state = sp_io::offchain::network_state();
 			match network_state {
 				Err(_) => debug::error!("Error: failed to get network state of node at {:?}", now),
-				Ok(state) => sp_io::offchain::set_reserved_nodes(
-					Self::get_authorized_nodes(&state.peer_id.0),
-					true
-				),
+				Ok(state) => {
+					let encoded_peer = state.peer_id.0;
+					match Decode::decode(&mut &encoded_peer[..]) {
+						Err(_) => debug::error!("Error: failed to decode PeerId at {:?}", now),
+						Ok(node) => sp_io::offchain::set_reserved_nodes(
+							Self::get_authorized_nodes(&node),
+							true
+						)
+					}
+				}
 			}
 		}
 	}
