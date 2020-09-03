@@ -265,7 +265,7 @@
 		{
 			"prefix": "48",
 			"network": "reserved48",
-			"displayName": "All prefixes above 48 are reserved.",
+			"displayName": "All prefixes 48 and higher are reserved and cannot be allocated.",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": null,
