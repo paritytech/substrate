@@ -170,7 +170,7 @@
 //! 	```nocompile
 //! 	// submit a extrinsic to call `Call::set_url(...)`
 //! 	```
-//! 3. after set url for a key, user need to set offchain period for this `StorageKey`
+//! 3. after set url and json key for a key, user need to set offchain period for this `StorageKey`
 //! 	note, if pass `None` for `period` parameter, would remove the period for this `StorageKey`.
 //! 	and if the period not existed for a `StorageKey`(OffchainPeriod::get(key).is_none()),
 //! 	the offchain would not work for this `StorageKey`.
@@ -339,21 +339,23 @@ pub enum NumberType {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug)]
 pub struct FeededDataInfo<BlockNumber> {
-	/// the key of what we want from the json callback
-	key_str: Vec<u8>,
 	number_type: NumberType,
 	operation: Operations,
 	schedule: BlockNumber,
 }
 
 impl<BlockNumber> FeededDataInfo<BlockNumber> {
-	fn key_str(&self) -> &[u8] {
-		&self.key_str
-	}
-
 	fn number_type(&self) -> NumberType {
 		self.number_type
 	}
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug)]
+pub struct OffchainRequestInfo {
+	/// the url that offchain request to fetch data
+	url: Vec<u8>,
+	/// the key of what we want from the json callback
+	key_str: Vec<u8>,
 }
 
 pub trait Trait: CreateSignedTransaction<Call<Self>> {
@@ -380,8 +382,8 @@ decl_event!(
 		ProviderAdded(AccountId),
 		/// Remove a provider accountid
 		RemoveProvider(AccountId),
-		/// Set url for a key, which would be used in offchain
-		SetUrl(StorageKey, Vec<u8>),
+		/// Set url and json key for a key, which would be used in offchain
+		SetRequestInfo(StorageKey, OffchainRequestInfo),
 		/// New data stored on blockchain
 		FeedData(AccountId, StorageKey, DataType),
 		/// Set calculated data
@@ -425,13 +427,14 @@ decl_storage! {
 		/// from a json blob
 		pub DataInfo get(fn data_info): map hasher(twox_64_concat) StorageKey => Option<FeededDataInfo<T::BlockNumber>>;
 
-		/// Permissible URL that could be used to fetch data
-		pub Url get(fn url): map hasher(twox_64_concat) StorageKey => Option<Vec<u8>>;
-
 		/// Feeded Data stored in a ring buffer, which MUST ALWAYS be full of valid values.
 		/// when receive new data, if would drop last old data and receive new one in front of buffer.
 		pub DataFeeds get(fn feeded_data):
 			double_map hasher(twox_64_concat) StorageKey, hasher(blake2_128_concat) T::AccountId => Option<[DataType; RING_BUF_LEN]>;
+
+		// TODO when offchain provider a way to filter account, this data could bind to accountid
+		/// Permissible URL that could be used to fetch data and the json key for return value
+		pub OffchainRequestInfoFor get(fn offchain_request_info): map hasher(twox_64_concat) StorageKey => Option<OffchainRequestInfo>;
 
 		/// Scheduled interval height for submitting data from a offchain call. If not set this,
 		/// the offchain call would not auto work.
@@ -483,20 +486,20 @@ decl_module! {
 				v.retain(|k| k != &key);
 			});
 			DataInfo::<T>::remove(&key);
-			Url::remove(&key);
+			OffchainRequestInfoFor::remove(&key);
 			DataFeeds::<T>::remove_prefix(&key);
 			Self::deposit_event(RawEvent::RemoveStorageKey(key));
 			Ok(())
 		}
 
 		/// Set a url for a key which used in offchain to fetch data from this url.
-		#[weight = T::WeightInfo::set_url(key.len() as u32, url.len() as u32)]
-		pub fn set_url(origin, key: StorageKey, url: Vec<u8>) -> DispatchResult {
+		#[weight = T::WeightInfo::set_offchain_request_info(key.len() as u32, request_info.url.len() as u32, request_info.key_str.len() as u32)]
+		pub fn set_offchain_request_info(origin, key: StorageKey, request_info: OffchainRequestInfo) -> DispatchResult {
 			T::DataFeedOrigin::ensure_origin(origin)?;
 			let _ = Self::data_info(&key).ok_or(Error::<T>::InvalidKey)?;
 
-			Url::insert(&key, &url);
-			Self::deposit_event(RawEvent::SetUrl(key, url));
+			OffchainRequestInfoFor::insert(&key, &request_info);
+			Self::deposit_event(RawEvent::SetRequestInfo(key, request_info));
 			Ok(())
 		}
 
@@ -511,7 +514,7 @@ decl_module! {
 				Some(p) => {
 					let _ = Self::data_info(&key).ok_or(Error::<T>::InvalidKey)?;
 					// if not set url, we do not allow to set period for offchain
-					let _ = Self::url(&key).ok_or(Error::<T>::NotAllowOffchain)?;
+					let _ = Self::offchain_request_info(&key).ok_or(Error::<T>::NotAllowOffchain)?;
 					OffchainPeriod::<T>::insert(&key, p);
 				},
 				None => OffchainPeriod::<T>::remove(&key),
@@ -770,10 +773,12 @@ impl<T: Trait> Module<T> {
 		// You can also wait idefinitely for the response, however you may still get a timeout
 		// coming from the host machine.
 		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(2_000));
-		let url = Self::url(storage_key).ok_or("no url for this storage key")?;
+		let request_info: OffchainRequestInfo = Self::offchain_request_info(storage_key)
+			.ok_or("no request info for this storage key")?;
 
-		let request =
-			http::Request::get(core::str::from_utf8(&url).map_err(|_| "parse url error")?);
+		let request = http::Request::get(
+			core::str::from_utf8(&request_info.url).map_err(|_| "parse url error")?,
+		);
 
 		// to alter request headers or stream body content in case of non-GET requests.
 		let pending = request
@@ -800,7 +805,7 @@ impl<T: Trait> Module<T> {
 			debug::warn!("No UTF8 body");
 			"Unknown error has been encountered."
 		})?;
-		let key_str = core::str::from_utf8(info.key_str())
+		let key_str = core::str::from_utf8(&request_info.key_str)
 			.map_err(|_| "json key is invalid")?
 			.chars();
 		let data = match Self::parse_data(key_str, number_type, body_str) {

@@ -209,7 +209,6 @@ fn should_submit_signed_data_on_chain() {
 
 pub fn register_info() {
 	let data_info = super::FeededDataInfo {
-		key_str: "USD".as_bytes().to_vec(),
 		number_type: NumberType::FixedU128,
 		operation: Operations::Average,
 		schedule: 2,
@@ -221,12 +220,15 @@ pub fn register_info() {
 		data_info
 	));
 
-	assert_ok!(DataFeed::set_url(
+	let info = OffchainRequestInfo {
+		url: b"https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".to_vec(),
+		key_str: b"USD".to_vec(),
+	};
+	assert_ok!(DataFeed::set_offchain_request_info(
 		frame_system::RawOrigin::Root.into(),
 		StorageArgument::key().to_vec(),
-		b"https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD".to_vec()
+		info
 	));
-
 	assert_ok!(DataFeed::set_offchain_period(
 		frame_system::RawOrigin::Root.into(),
 		StorageArgument::key().to_vec(),

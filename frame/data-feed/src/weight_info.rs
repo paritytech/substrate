@@ -8,12 +8,13 @@ use frame_support::weights::{constants::RocksDbWeight as DbWeight, Weight};
 pub trait WeightInfo {
 	fn register_storage_key(n: u32, ) -> Weight;
 	fn remove_storage_key(n: u32, ) -> Weight;
-	fn set_url(n: u32, l: u32, ) -> Weight;
+	fn set_offchain_request_info(n: u32, l: u32, m: u32, ) -> Weight;
 	fn set_offchain_period(n: u32, ) -> Weight;
 	fn feed_data(n: u32, ) -> Weight;
 	fn add_provider() -> Weight;
 	fn remove_provider() -> Weight;
 }
+
 
 impl WeightInfo for () {
 	fn register_storage_key(n: u32, ) -> Weight {
@@ -28,10 +29,11 @@ impl WeightInfo for () {
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
-	fn set_url(n: u32, l: u32, ) -> Weight {
+	fn set_offchain_request_info(n: u32, l: u32, m: u32, ) -> Weight {
 		(185375000 as Weight)
 			.saturating_add((255000 as Weight).saturating_mul(n as Weight))
 			.saturating_add((2000 as Weight).saturating_mul(l as Weight))
+			.saturating_add((2000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
