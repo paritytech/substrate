@@ -8300,7 +8300,6 @@ dependencies = [
  "parity-scale-codec",
  "parity-util-mem",
  "paste",
- "pin-project",
  "rand 0.7.3",
  "serde",
  "serde_json",

@@ -103,7 +103,7 @@ impl<Storage: OffchainStorage> offchain::Externalities for Api<Storage> {
 		sleep(timestamp::timestamp_from_now(deadline));
 	}
 
-	fn timer_until(&mut self, duration: Duration) -> Result<TimerId, ()> {
+	fn timer_until(&mut self, duration: Duration) -> TimerId {
 		self.timer.start_timer(duration)
 	}
 

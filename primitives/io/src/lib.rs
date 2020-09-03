@@ -810,7 +810,7 @@ pub trait Offchain {
 	}
 
 	/// Pause the execution until `deadline` is reached.
-	fn timer_until(&mut self, duration: Duration) -> Result<TimerId, ()> {
+	fn timer_until(&mut self, duration: Duration) -> TimerId {
 		self.extension::<OffchainExt>()
 			.expect("timer_until can be called only in the offchain worker context")
 			.timer_until(duration)

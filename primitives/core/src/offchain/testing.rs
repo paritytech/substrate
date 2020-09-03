@@ -231,7 +231,7 @@ impl offchain::Externalities for TestOffchainExt {
 		self.0.write().timestamp = deadline;
 	}
 
-	fn timer_until(&mut self, duration: Duration) -> Result<TimerId, ()> {
+	fn timer_until(&mut self, duration: Duration) -> TimerId {
 		unimplemented!()
 	}
 

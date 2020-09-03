@@ -225,7 +225,7 @@ impl From<u32> for PollableKind {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, PassByInner)]
 #[cfg_attr(feature = "std", derive(Hash))]
 #[repr(transparent)]
-pub struct PollableId(pub u64);
+pub struct PollableId(u64);
 
 impl core::fmt::Debug for PollableId {
 	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -455,7 +455,7 @@ pub trait Externalities: Send {
 
 	/// Creates a timer that resolves in `Duration`. Can be awaited with
 	/// `pollable_wait`.
-	fn timer_until(&mut self, duration: Duration) -> Result<TimerId, ()>;
+	fn timer_until(&mut self, duration: Duration) -> TimerId;
 
 	/// Returns a random seed.
 	///
@@ -638,7 +638,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).sleep_until(deadline)
 	}
 
-	fn timer_until(&mut self, duration: Duration) -> Result<TimerId, ()> {
+	fn timer_until(&mut self, duration: Duration) -> TimerId {
 		(&mut **self).timer_until(duration)
 	}
 
@@ -757,7 +757,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.externalities.sleep_until(deadline)
 	}
 
-	fn timer_until(&mut self, duration: Duration) -> Result<TimerId, ()> {
+	fn timer_until(&mut self, duration: Duration) -> TimerId {
 		self.externalities.timer_until(duration)
 	}
 

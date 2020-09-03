@@ -1,3 +1,20 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! A simple futures executor/reactor used in tandem with host-driven futures.
 //!
 //! At the time of writing, the off-chain workers are not capable of network I/O
@@ -24,8 +41,6 @@
 
 // Based on https://github.com/tomaka/redshirt/blob/802e4ab44078e15b47dc72afc6b7e45bab1b72df/interfaces/syscalls/src/block_on.rs#L88.
 
-#![allow(dead_code, unused_variables)]
-
 use sp_core::offchain::{PollableId, PollableKind};
 use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus};
 use sp_std::{rc::Rc, collections::btree_set::BTreeSet};
@@ -39,7 +54,6 @@ use core::pin::Pin;
 use core::task::{self, Context, Poll, Waker, RawWaker, RawWakerVTable};
 
 use spin::Mutex;
-use pin_project::pin_project;
 
 pub(crate) type MessageId = PollableId;
 
@@ -59,52 +73,29 @@ macro_rules! pin_mut {
 	)* }
 }
 
-fn epoll_peek(interest_list: &[MessageId]) -> Option<MessageId> {
-	let deadline = sp_io::offchain::timestamp();
-	sp_io::offchain::pollable_wait(interest_list, Some(deadline))
-}
-
-fn epoll_wait(interest_list: &[MessageId]) -> MessageId {
-	sp_io::offchain::pollable_wait(interest_list, None)
-		.expect(
-			"pollable_wait with None deadline should block indefinitely \
-			until we get a response; qed"
-		)
-}
-
+/// Fetches the first ready-to-progress `MessageId` from the ones contained in
+/// the `interest_list`.
+///
+/// If the `block` is set to `true`, then it waits indefinitely until a `Some(id)`
+/// is returned containing a `MessageId` flagged as ready to make progress. Otherwise,
+/// returns a `None` if no IDs are ready yet or `Some(id)` if one is flagged already.
 pub(crate) fn next_notification(interest_list: &[MessageId], block: bool) -> Option<(MessageId, usize)> {
 	let id = if !block {
-		epoll_peek(interest_list)
+		let deadline = sp_io::offchain::timestamp();
+		sp_io::offchain::pollable_wait(interest_list, Some(deadline))
 	} else {
-		Some(epoll_wait(interest_list))
+		let id = sp_io::offchain::pollable_wait(interest_list, None)
+			.expect(
+				"pollable_wait with None deadline should block indefinitely \
+				until we get a response; qed"
+			);
+		Some(id)
 	}?;
 
 	let pos = interest_list.iter().position(|&x| x == id)
 		.expect("pollable API should only return an ID from the interest list; qed");
 
 	Some((id, pos))
-}
-
-/// Registers a message ID and a waker. The `block_on` function will
-/// then ask the kernel for a message corresponding to this ID. If one is received, the `Waker`
-/// is called.
-///
-/// For non-interface messages, there can only ever be one registered `Waker`. Registering a
-/// `Waker` a second time overrides the one previously registered.
-pub(crate) fn register_message_waker(message_id: MessageId, waker: Waker) {
-	let mut state = STATE.lock();
-
-	if let Some(pos) = state
-		.message_ids
-		.iter()
-		.position(|msg| *msg == message_id)
-	{
-		state.wakers[pos] = waker;
-		return;
-	}
-
-	state.message_ids.push(message_id);
-	state.wakers.push(waker);
 }
 
 // Copied `alloc::task::Wake` without having to opt-in via `#![feature(wake_trait)]`
@@ -239,7 +230,7 @@ lazy_static::lazy_static! {
 /// This is instantiated only once.
 struct BlockOnState {
 	/// List of messages for which we are waiting for a response. A pointer to this list is passed
-	/// to the kernel.
+	/// to the host.
 	message_ids: Vec<MessageId>,
 
 	/// List whose length is identical to [`BlockOnState::messages_ids`]. For each element in
@@ -253,6 +244,28 @@ struct BlockOnState {
 	/// >           channel, otherwise dropping a `Future` would silently drop messages that have
 	/// >           already been received.
 	pending_messages: BTreeSet<MessageId>,
+}
+
+/// Registers a message ID and a waker. The `block_on` function will
+/// then ask the host for a message corresponding to this ID. If one is received, the `Waker`
+/// is called.
+///
+/// For non-interface messages, there can only ever be one registered `Waker`. Registering a
+/// `Waker` a second time overrides the one previously registered.
+pub(crate) fn register_message_waker(message_id: MessageId, waker: Waker) {
+	let mut state = STATE.lock();
+
+	if let Some(pos) = state
+		.message_ids
+		.iter()
+		.position(|msg| *msg == message_id)
+	{
+		state.wakers[pos] = waker;
+		return;
+	}
+
+	state.message_ids.push(message_id);
+	state.wakers.push(waker);
 }
 
 /// Future that's resolved whenever the `PollableId` is signalled as ready by
@@ -277,6 +290,11 @@ impl Future for HostFuture {
 	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		fn peek_response(msg_id: MessageId) -> bool {
+			let mut state = STATE.lock();
+			state.pending_messages.remove(&msg_id)
+		}
+
 		assert!(!self.finished);
 		if peek_response(self.msg_id) {
 			self.finished = true;
@@ -288,21 +306,14 @@ impl Future for HostFuture {
 	}
 }
 
-/// If a response to this message ID has previously been obtained, extracts it for processing.
-pub(crate) fn peek_response(msg_id: MessageId) -> bool {
-	let mut state = STATE.lock();
-	state.pending_messages.remove(&msg_id)
-}
-
 /// Future that resolves to a HTTP request response.
 ///
 /// Because HTTP response can be chunked, the resolved [`HttpResponse`] contains
 /// both HTTP status code and headers but the [`HttpResponse::body`] is a future
 /// type that has to be driven separately.
-#[pin_project]
 #[derive(Debug)]
 pub struct HttpFuture {
-	#[pin] inner: HostFuture,
+	inner: HostFuture,
 }
 
 impl TryFrom<HostFuture> for HttpFuture {
@@ -319,11 +330,11 @@ impl TryFrom<HostFuture> for HttpFuture {
 impl Future for HttpFuture {
 	type Output = Result<HttpResponse, sp_core::offchain::HttpError>;
 
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let id: HttpRequestId = self.inner.msg_id.try_into()
 			.expect("HttpFuture can be only constructed with HTTP HostFuture");
 
-		match Future::poll(self.project().inner, cx) {
+		match Future::poll(Pin::new(&mut self.inner), cx) {
 			Poll::Pending => return Poll::Pending,
 			Poll::Ready(()) => {},
 		}
@@ -370,7 +381,7 @@ pub struct HttpBodyFuture {
 }
 
 impl Future for HttpBodyFuture {
-	type Output = Box<[u8]>;
+	type Output = Result<Box<[u8]>, HttpError>;
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		// Help the borrow checker see disjoint field mutable borrow through Pin
@@ -392,7 +403,7 @@ impl Future for HttpBodyFuture {
 						.expect("HttpBodyFuture polled after value taken");
 					buf.truncate(*len);
 
-					return Poll::Ready(buf.into_boxed_slice());
+					return Poll::Ready(Ok(buf.into_boxed_slice()));
 				},
 				Ok(bytes_read) => {
 					// Grow the temporary buffer if it's full
@@ -415,7 +426,9 @@ impl Future for HttpBodyFuture {
 
 					return Poll::Pending;
 				},
-				Err(HttpError::IoError) | Err(HttpError::Invalid) => panic!(
+				// An I/O-related error has occurred, e.g. the connection dropped
+				Err(HttpError::IoError) => return Poll::Ready(Err(HttpError::IoError)),
+				Err(HttpError::Invalid) => panic!(
 					"HttpBodyFuture is created for HTTP requests that are Finished \
 					and so reading body can return DeadlineReached at worst; qed"
 				),

@@ -65,7 +65,7 @@ pub struct TimerApi {
 
 impl TimerApi {
 	/// Starts a new timer that resolves a `duration` from the current epoch.
-	pub fn start_timer(&mut self, duration: offchain::Duration) -> Result<TimerId, ()> {
+	pub fn start_timer(&mut self, duration: offchain::Duration) -> TimerId {
 		let id = self.next_id;
 		self.next_id = TimerId(self.next_id.0 + 1);
 
@@ -73,7 +73,7 @@ impl TimerApi {
 
 		self.to_worker.unbounded_send((id, timestamp))
 			.map(|_| id)
-			.map_err(drop)
+			.expect("TimerWorker should live and be driven as long as TimerApi is alive; qed")
 	}
 }
 
