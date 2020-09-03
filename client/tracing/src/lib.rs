@@ -298,11 +298,13 @@ impl Subscriber for ProfilingSubscriber {
 		let id = Id::from_u64(self.next_id.fetch_add(1, Ordering::Relaxed));
 		let mut values = Values::default();
 		attrs.record(&mut values);
+
 		if attrs.metadata().target() == WASM_TRACE_IDENTIFIER {
 			// If this is a wasm trace, check if target/level is enabled
 			if let Some(wasm_target) = values.string_values.get(WASM_TARGET_KEY) {
 				if !self.check_target(wasm_target, attrs.metadata().level()) {
-					return id
+					// returning as disabled
+					return Id::from_u64(0)
 				}
 			}
 		}
