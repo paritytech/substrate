@@ -13,7 +13,7 @@
 		{
 			"prefix": "0",
 			"network": "polkadot",
-			"description": "Polkadot Relay Chain",
+			"displayName": "Polkadot Relay Chain",
 			"symbol": ["DOT"],
 			"decimals": "10",
 			"standardAccount": "*25519",
@@ -22,7 +22,7 @@
 		{
 			"prefix": "1",
 			"network": "reserved1",
-			"description": "This prefix is reserved.",
+			"displayName": "This prefix is reserved.",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": null,
@@ -31,7 +31,7 @@
 		{
 			"prefix": "2",
 			"network": "kusama",
-			"description": "Kusama Relay Chain",
+			"displayName": "Kusama Relay Chain",
 			"symbol": ["KSM"],
 			"decimals": "12",
 			"standardAccount": "*25519",
@@ -40,7 +40,7 @@
 		{
 			"prefix": "3",
 			"network": "reserved3",
-			"description": "This prefix is reserved.",
+			"displayName": "This prefix is reserved.",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": null,
@@ -49,7 +49,7 @@
 		{
 			"prefix": "4",
 			"network": "katalchain",
-			"description": "Katal Chain",
+			"displayName": "Katal Chain",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -58,7 +58,7 @@
 		{
 			"prefix": "5",
 			"network": "plasm",
-			"description": "Plasm Network",
+			"displayName": "Plasm Network",
 			"symbol": ["PLM"],
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -67,7 +67,7 @@
 		{
 			"prefix": "6",
 			"network": "bitfrost",
-			"description": "Bitfrost",
+			"displayName": "Bitfrost",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -76,7 +76,7 @@
 		{
 			"prefix": "7",
 			"network": "edgeware",
-			"description": "Edgeware",
+			"displayName": "Edgeware",
 			"symbol": ["EDG"],
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -85,7 +85,7 @@
 		{
 			"prefix": "8",
 			"network": "karura",
-			"description": "Acala Karura Canary",
+			"displayName": "Acala Karura Canary",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -94,7 +94,7 @@
 		{
 			"prefix": "9",
 			"network": "reynolds",
-			"description": "Laminar Reynolds Canary",
+			"displayName": "Laminar Reynolds Canary",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -103,7 +103,7 @@
 		{
 			"prefix": "10",
 			"network": "acala",
-			"description": "Acala",
+			"displayName": "Acala",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -112,7 +112,7 @@
 		{
 			"prefix": "11",
 			"network": "laminar",
-			"description": "Laminar",
+			"displayName": "Laminar",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -121,7 +121,7 @@
 		{
 			"prefix": "12",
 			"network": "polymath",
-			"description": "Polymath",
+			"displayName": "Polymath",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -130,7 +130,7 @@
 		{
 			"prefix": "13",
 			"network": "substratee",
-			"description": "SubstraTEE",
+			"displayName": "SubstraTEE",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -139,7 +139,7 @@
 		{
 			"prefix": "16",
 			"network": "kulupu",
-			"description": "Kulupu",
+			"displayName": "Kulupu",
 			"symbol": ["KLP"],
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -148,7 +148,7 @@
 		{
 			"prefix": "18",
 			"network": "darwinia",
-			"description": "Darwinia Chain",
+			"displayName": "Darwinia Chain",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -157,7 +157,7 @@
 		{
 			"prefix": "20",
 			"network": "stafi",
-			"description": "Stafi",
+			"displayName": "Stafi",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -166,7 +166,7 @@
 		{
 			"prefix": "23",
 			"network": "shift",
-			"description": "ShiftNrg",
+			"displayName": "ShiftNrg",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -175,7 +175,7 @@
 		{
 			"prefix": "28",
 			"network": "subsocial",
-			"description": "Subsocial",
+			"displayName": "Subsocial",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -184,7 +184,7 @@
 		{
 			"prefix": "30",
 			"network": "phala",
-			"description": "Phala Network",
+			"displayName": "Phala Network",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -193,7 +193,7 @@
 		{
 			"prefix": "32",
 			"network": "robonomics",
-			"description": "Robonomics Network",
+			"displayName": "Robonomics Network",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -202,7 +202,7 @@
 		{
 			"prefix": "33",
 			"network": "datahighway",
-			"description": "DataHighway",
+			"displayName": "DataHighway",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -211,7 +211,7 @@
 		{
 			"prefix": "36",
 			"network": "centrifuge",
-			"description": "Centrifuge Chain",
+			"displayName": "Centrifuge Chain",
 			"symbol": ["RAD"],
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -220,7 +220,7 @@
 		{
 			"prefix": "42",
 			"network": "substrate",
-			"description": "Substrate",
+			"displayName": "Substrate",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -229,7 +229,7 @@
 		{
 			"prefix": "43",
 			"network": "reserved43",
-			"description": "This prefix is reserved.",
+			"displayName": "This prefix is reserved.",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": null,
@@ -238,7 +238,7 @@
 		{
 			"prefix": "44",
 			"network": "chainx",
-			"description": "ChainX",
+			"displayName": "ChainX",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": "*25519",
@@ -247,7 +247,7 @@
 		{
 			"prefix": "46",
 			"network": "reserved46",
-			"description": "This prefix is reserved.",
+			"displayName": "This prefix is reserved.",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": null,
@@ -256,7 +256,7 @@
 		{
 			"prefix": "47",
 			"network": "reserved47",
-			"description": "This prefix is reserved.",
+			"displayName": "This prefix is reserved.",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": null,
@@ -265,7 +265,7 @@
 		{
 			"prefix": "48",
 			"network": "reserved48",
-			"description": "All prefixes above 48 are reserved.",
+			"displayName": "All prefixes above 48 are reserved.",
 			"symbol": null,
 			"decimals": null,
 			"standardAccount": null,
