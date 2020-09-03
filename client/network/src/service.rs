@@ -105,7 +105,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ConsensusEngineId), NotificationsSink>>>,
 	/// For each legacy gossiping engine ID, the corresponding new protocol name.
-	protocol_name_by_engine: Mutex<HashMap<ConsensusEngineId, Cow<'static, [u8]>>>,
+	protocol_name_by_engine: Mutex<HashMap<ConsensusEngineId, Cow<'static, str>>>,
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
 	notifications_sizes_metric: Option<HistogramVec>,
@@ -635,18 +635,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		// Determine the wire protocol name corresponding to this `engine_id`.
 		let protocol_name = self.protocol_name_by_engine.lock().get(&engine_id).cloned();
 		if let Some(protocol_name) = protocol_name {
-			// For backwards-compatibility reason, we have to duplicate the message and pass it
-			// in the situation where the remote still uses the legacy substream.
-			let fallback = codec::Encode::encode(&{
-				protocol::message::generic::Message::<(), (), (), ()>::Consensus({
-					protocol::message::generic::ConsensusMessage {
-						engine_id,
-						data: message.clone(),
-					}
-				})
-			});
-
-			sink.send_sync_notification(&protocol_name, fallback, message);
+			sink.send_sync_notification(protocol_name, message);
 		} else {
 			return;
 		}
@@ -751,7 +740,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		Ok(NotificationSender {
 			sink,
 			protocol_name,
-			engine_id,
 			notification_size_metric: self.notifications_sizes_metric.as_ref().map(|histogram| {
 				histogram.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
 			}),
@@ -828,7 +816,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub fn register_notifications_protocol(
 		&self,
 		engine_id: ConsensusEngineId,
-		protocol_name: impl Into<Cow<'static, [u8]>>,
+		protocol_name: impl Into<Cow<'static, str>>,
 	) {
 		let protocol_name = protocol_name.into();
 		self.protocol_name_by_engine.lock().insert(engine_id, protocol_name.clone());
@@ -1062,10 +1050,7 @@ pub struct NotificationSender {
 	sink: NotificationsSink,
 
 	/// Name of the protocol on the wire.
-	protocol_name: Cow<'static, [u8]>,
-
-	/// Engine ID used for the fallback message.
-	engine_id: ConsensusEngineId,
+	protocol_name: Cow<'static, str>,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1076,11 +1061,10 @@ impl NotificationSender {
 	/// Returns a future that resolves when the `NotificationSender` is ready to send a notification.
 	pub async fn ready<'a>(&'a self) -> Result<NotificationSenderReady<'a>, NotificationSenderError> {
 		Ok(NotificationSenderReady {
-			ready: match self.sink.reserve_notification(&self.protocol_name).await {
+			ready: match self.sink.reserve_notification(self.protocol_name.clone()).await {
 				Ok(r) => r,
 				Err(()) => return Err(NotificationSenderError::Closed),
 			},
-			engine_id: self.engine_id,
 			notification_size_metric: self.notification_size_metric.clone(),
 		})
 	}
@@ -1090,9 +1074,6 @@ impl NotificationSender {
 #[must_use]
 pub struct NotificationSenderReady<'a> {
 	ready: Ready<'a>,
-
-	/// Engine ID used for the fallback message.
-	engine_id: ConsensusEngineId,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1108,18 +1089,8 @@ impl<'a> NotificationSenderReady<'a> {
 			notification_size_metric.observe(notification.len() as f64);
 		}
 
-		// For backwards-compatibility reason, we have to duplicate the message and pass it
-		// in the situation where the remote still uses the legacy substream.
-		let fallback = codec::Encode::encode(&{
-			protocol::message::generic::Message::<(), (), (), ()>::Consensus({
-				protocol::message::generic::ConsensusMessage {
-					engine_id: self.engine_id,
-					data: notification.clone(),
-				}
-			})
-		});
-
-		self.ready.send(fallback, notification)
+		self.ready
+			.send(notification)
 			.map_err(|()| NotificationSenderError::Closed)
 	}
 }
@@ -1158,7 +1129,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	},
 	RegisterNotifProtocol {
 		engine_id: ConsensusEngineId,
-		protocol_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, str>,
 	},
 	DisconnectPeer(PeerId),
 	UpdateChain,

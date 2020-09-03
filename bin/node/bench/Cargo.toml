@@ -22,7 +22,7 @@ serde_json = "1.0.41"
 structopt = "0.3"
 derive_more = "0.99.2"
 kvdb = "0.7"
-kvdb-rocksdb = "0.9"
+kvdb-rocksdb = "0.9.1"
 sp-trie = { version = "2.0.0-rc6", path = "../../../primitives/trie" }
 sp-core = { version = "2.0.0-rc6", path = "../../../primitives/core" }
 sp-consensus = { version = "0.8.0-rc6", path = "../../../primitives/consensus/common" }
