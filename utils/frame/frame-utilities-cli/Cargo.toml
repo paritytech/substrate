@@ -1,0 +1,22 @@
+[package]
+name = "substrate-frame-cli"
+version = "2.0.0-rc6"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "cli interface for FRAME"
+documentation = "https://docs.rs/substrate-frame-cli"
+
+[dependencies]
+sp-core = { version = "2.0.0-rc6", path = "../../../primitives/core" }
+sc-cli = { version = "0.8.0-rc6", path = "../../../client/cli" }
+sp-runtime = { version = "2.0.0-rc6", path = "../../../primitives/runtime" }
+structopt = "0.3.8"
+frame-system = { version = "2.0.0-rc6", path = "../../../frame/system" }
+
+[dev-dependencies]
+
+[features]
+default = []

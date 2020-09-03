@@ -1,6 +1,6 @@
 [package]
 name = "node-bench"
-version = "0.8.0-rc5"
+version = "0.8.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node integration benchmarks."
 edition = "2018"
@@ -10,27 +10,27 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 
 [dependencies]
 log = "0.4.8"
-node-primitives = { version = "2.0.0-rc5", path = "../primitives" }
-node-testing = { version = "2.0.0-rc5", path = "../testing" }
-node-runtime = { version = "2.0.0-rc5", path = "../runtime" }
-sc-cli = { version = "0.8.0-rc5", path = "../../../client/cli" }
-sc-client-api = { version = "2.0.0-rc5", path = "../../../client/api/" }
-sp-runtime = { version = "2.0.0-rc5", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.8.0-rc5", path = "../../../primitives/state-machine" }
+node-primitives = { version = "2.0.0-rc6", path = "../primitives" }
+node-testing = { version = "2.0.0-rc6", path = "../testing" }
+node-runtime = { version = "2.0.0-rc6", path = "../runtime" }
+sc-cli = { version = "0.8.0-rc6", path = "../../../client/cli" }
+sc-client-api = { version = "2.0.0-rc6", path = "../../../client/api/" }
+sp-runtime = { version = "2.0.0-rc6", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.8.0-rc6", path = "../../../primitives/state-machine" }
 serde = "1.0.101"
 serde_json = "1.0.41"
 structopt = "0.3"
 derive_more = "0.99.2"
 kvdb = "0.7"
-kvdb-rocksdb = "0.9"
-sp-trie = { version = "2.0.0-rc5", path = "../../../primitives/trie" }
-sp-core = { version = "2.0.0-rc5", path = "../../../primitives/core" }
-sp-consensus = { version = "0.8.0-rc5", path = "../../../primitives/consensus/common" }
-sp-transaction-pool = { version = "2.0.0-rc5", path = "../../../primitives/transaction-pool" }
-sc-basic-authorship = { version = "0.8.0-rc5", path = "../../../client/basic-authorship" }
-sp-inherents = { version = "2.0.0-rc5", path = "../../../primitives/inherents" }
-sp-finality-tracker = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/finality-tracker" }
-sp-timestamp = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/timestamp" }
+kvdb-rocksdb = "0.9.1"
+sp-trie = { version = "2.0.0-rc6", path = "../../../primitives/trie" }
+sp-core = { version = "2.0.0-rc6", path = "../../../primitives/core" }
+sp-consensus = { version = "0.8.0-rc6", path = "../../../primitives/consensus/common" }
+sp-transaction-pool = { version = "2.0.0-rc6", path = "../../../primitives/transaction-pool" }
+sc-basic-authorship = { version = "0.8.0-rc6", path = "../../../client/basic-authorship" }
+sp-inherents = { version = "2.0.0-rc6", path = "../../../primitives/inherents" }
+sp-finality-tracker = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/finality-tracker" }
+sp-timestamp = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/timestamp" }
 hash-db = "0.15.2"
 tempfile = "3.1.0"
 fs_extra = "1"
@@ -39,5 +39,5 @@ rand = { version = "0.7.2", features = ["small_rng"] }
 lazy_static = "1.4.0"
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
 parity-db = { version = "0.1.2" }
-sc-transaction-pool = { version = "2.0.0-rc5", path = "../../../client/transaction-pool" }
+sc-transaction-pool = { version = "2.0.0-rc6", path = "../../../client/transaction-pool" }
 futures = { version = "0.3.4", features = ["thread-pool"] }

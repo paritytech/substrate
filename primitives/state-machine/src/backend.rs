@@ -19,11 +19,14 @@
 
 use hash_db::Hasher;
 use codec::{Decode, Encode};
-use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
+use sp_core::{
+	traits::RuntimeCode,
+	storage::{ChildInfo, well_known_keys, TrackedStorageKey}
+};
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
-	UsageInfo, StorageKey, StorageValue, StorageCollection,
+	UsageInfo, StorageKey, StorageValue, StorageCollection, ChildStorageCollection,
 };
 
 /// A state backend is used to read state data and can have changes committed
@@ -212,7 +215,13 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Commit given transaction to storage.
-	fn commit(&self, _: H::Out, _: Self::Transaction, _: StorageCollection) -> Result<(), Self::Error> {
+	fn commit(
+		&self,
+		_: H::Out,
+		_: Self::Transaction,
+		_: StorageCollection,
+		_: ChildStorageCollection,
+	) -> Result<(), Self::Error> {
 		unimplemented!()
 	}
 
@@ -226,10 +235,13 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		unimplemented!()
 	}
 
-	/// Update the whitelist for tracking db reads/writes
-	fn set_whitelist(&self, _: Vec<Vec<u8>>) {
-		unimplemented!()
+	/// Get the whitelist for tracking db reads/writes
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		Default::default()
 	}
+
+	/// Update the whitelist for tracking db reads/writes
+	fn set_whitelist(&self, _: Vec<TrackedStorageKey>) {}
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {

@@ -180,6 +180,7 @@ members = [
 	"utils/build-script-utils",
 	"utils/fork-tree",
 	"utils/frame/benchmarking-cli",
+	"utils/frame/frame-utilities-cli",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
 	"utils/wasm-builder",
