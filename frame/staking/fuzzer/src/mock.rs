@@ -193,6 +193,7 @@ impl pallet_staking::Trait for Test {
 	type MaxIterations = MaxIterations;
 	type MinSolutionScoreBump = ();
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type ValidatorCountAdjust = ();
 	type UnsignedPriority = ();
 	type WeightInfo = ();
 }
