@@ -1,275 +1,275 @@
 {
 	"specification": "https://github.com/paritytech/substrate/wiki/External-Address-Format-(SS58)",
 	"schema": {
-	  "prefix": "The address prefix. Must be an integer and unique.",
-	  "network": "Unique identifier for the network that will use this prefix, string, no spaces. To integrate with CLI tools, e.g. `--network polkadot`.",
-	  "displayName": "The name of the network that will use this prefix, in a format friendly for display.",
-	  "symbol": "Array of symbols of any tokens the chain uses, usually 2-5 characters. Most chains will only have one. Chains that have multiple instances of the Balances pallet should order the array by instance.",
-	  "decimals": "Number of decimals representing a single unit to the end user. Must be an integer.",
-	  "standardAccount": "Signing curve for standard account. Substrate supports ed25519, sr25519, and secp256k1.",
-	  "website": "A website or Github repo associated with the network."
+		"prefix": "The address prefix. Must be an integer and unique.",
+		"network": "Unique identifier for the network that will use this prefix, string, no spaces. To integrate with CLI tools, e.g. `--network polkadot`.",
+		"displayName": "The name of the network that will use this prefix, in a format friendly for display.",
+		"symbol": "Array of symbols of any tokens the chain uses, usually 2-5 characters. Most chains will only have one. Chains that have multiple instances of the Balances pallet should order the array by instance.",
+		"decimals": "Number of decimals representing a single unit to the end user. Must be an integer.",
+		"standardAccount": "Signing curve for standard account. Substrate supports ed25519, sr25519, and secp256k1.",
+		"website": "A website or Github repo associated with the network."
 	},
 	"registry": [
-	  {
-		"prefix": "0",
-		"network": "polkadot",
-		"description": "Polkadot Relay Chain",
-		"symbol": ["DOT"],
-		"decimals": "10",
-		"standardAccount": "*25519",
-		"website": "https://polkadot.network"
-	  },
-	  {
-		"prefix": "1",
-		"network": "reserved1",
-		"description": "This prefix is reserved.",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": null,
-		"website": null
-	  },
-	  {
-		"prefix": "2",
-		"network": "kusama",
-		"description": "Kusama Relay Chain",
-		"symbol": ["KSM"],
-		"decimals": "12",
-		"standardAccount": "*25519",
-		"website": "https://kusama.network"
-	  },
-	  {
-		"prefix": "3",
-		"network": "reserved3",
-		"description": "This prefix is reserved.",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": null,
-		"website": null
-	  },
-	  {
-		"prefix": "4",
-		"network": "katalchain",
-		"description": "Katal Chain",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "5",
-		"network": "plasm",
-		"description": "Plasm Network",
-		"symbol": ["PLM"],
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "6",
-		"network": "bitfrost",
-		"description": "Bitfrost",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "7",
-		"network": "edgeware",
-		"description": "Edgeware",
-		"symbol": ["EDG"],
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "8",
-		"network": "karura",
-		"description": "Acala Karura Canary",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "9",
-		"network": "reynolds",
-		"description": "Laminar Reynolds Canary",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "10",
-		"network": "acala",
-		"description": "Acala",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "11",
-		"network": "laminar",
-		"description": "Laminar",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "12",
-		"network": "polymath",
-		"description": "Polymath",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "13",
-		"network": "substratee",
-		"description": "SubstraTEE",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "16",
-		"network": "kulupu",
-		"description": "Kulupu",
-		"symbol": ["KLP"],
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "18",
-		"network": "darwinia",
-		"description": "Darwinia Chain",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "20",
-		"network": "stafi",
-		"description": "Stafi",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "23",
-		"network": "shift",
-		"description": "ShiftNrg",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "28",
-		"network": "subsocial",
-		"description": "Subsocial",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "30",
-		"network": "phala",
-		"description": "Phala Network",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "32",
-		"network": "robonomics",
-		"description": "Robonomics Network",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "33",
-		"network": "datahighway",
-		"description": "DataHighway",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "36",
-		"network": "centrifuge",
-		"description": "Centrifuge Chain",
-		"symbol": ["RAD"],
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "42",
-		"network": "substrate",
-		"description": "Substrate",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": "https://substrate.dev/"
-	  },
-	  {
-		"prefix": "43",
-		"network": "reserved43",
-		"description": "This prefix is reserved.",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": null,
-		"website": null
-	  },
-	  {
-		"prefix": "44",
-		"network": "chainx",
-		"description": "ChainX",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": "*25519",
-		"website": null
-	  },
-	  {
-		"prefix": "46",
-		"network": "reserved46",
-		"description": "This prefix is reserved.",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": null,
-		"website": null
-	  },
-	  {
-		"prefix": "47",
-		"network": "reserved47",
-		"description": "This prefix is reserved.",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": null,
-		"website": null
-	  },
-	  {
-		"prefix": "48",
-		"network": "reserved48",
-		"description": "All prefixes above 48 are reserved.",
-		"symbol": null,
-		"decimals": null,
-		"standardAccount": null,
-		"website": null
-	  }
+		{
+			"prefix": "0",
+			"network": "polkadot",
+			"description": "Polkadot Relay Chain",
+			"symbol": ["DOT"],
+			"decimals": "10",
+			"standardAccount": "*25519",
+			"website": "https://polkadot.network"
+		},
+		{
+			"prefix": "1",
+			"network": "reserved1",
+			"description": "This prefix is reserved.",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": null,
+			"website": null
+		},
+		{
+			"prefix": "2",
+			"network": "kusama",
+			"description": "Kusama Relay Chain",
+			"symbol": ["KSM"],
+			"decimals": "12",
+			"standardAccount": "*25519",
+			"website": "https://kusama.network"
+		},
+		{
+			"prefix": "3",
+			"network": "reserved3",
+			"description": "This prefix is reserved.",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": null,
+			"website": null
+		},
+		{
+			"prefix": "4",
+			"network": "katalchain",
+			"description": "Katal Chain",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "5",
+			"network": "plasm",
+			"description": "Plasm Network",
+			"symbol": ["PLM"],
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "6",
+			"network": "bitfrost",
+			"description": "Bitfrost",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "7",
+			"network": "edgeware",
+			"description": "Edgeware",
+			"symbol": ["EDG"],
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "8",
+			"network": "karura",
+			"description": "Acala Karura Canary",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "9",
+			"network": "reynolds",
+			"description": "Laminar Reynolds Canary",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "10",
+			"network": "acala",
+			"description": "Acala",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "11",
+			"network": "laminar",
+			"description": "Laminar",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "12",
+			"network": "polymath",
+			"description": "Polymath",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "13",
+			"network": "substratee",
+			"description": "SubstraTEE",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "16",
+			"network": "kulupu",
+			"description": "Kulupu",
+			"symbol": ["KLP"],
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "18",
+			"network": "darwinia",
+			"description": "Darwinia Chain",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "20",
+			"network": "stafi",
+			"description": "Stafi",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "23",
+			"network": "shift",
+			"description": "ShiftNrg",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "28",
+			"network": "subsocial",
+			"description": "Subsocial",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "30",
+			"network": "phala",
+			"description": "Phala Network",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "32",
+			"network": "robonomics",
+			"description": "Robonomics Network",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "33",
+			"network": "datahighway",
+			"description": "DataHighway",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "36",
+			"network": "centrifuge",
+			"description": "Centrifuge Chain",
+			"symbol": ["RAD"],
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "42",
+			"network": "substrate",
+			"description": "Substrate",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": "https://substrate.dev/"
+		},
+		{
+			"prefix": "43",
+			"network": "reserved43",
+			"description": "This prefix is reserved.",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": null,
+			"website": null
+		},
+		{
+			"prefix": "44",
+			"network": "chainx",
+			"description": "ChainX",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": "46",
+			"network": "reserved46",
+			"description": "This prefix is reserved.",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": null,
+			"website": null
+		},
+		{
+			"prefix": "47",
+			"network": "reserved47",
+			"description": "This prefix is reserved.",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": null,
+			"website": null
+		},
+		{
+			"prefix": "48",
+			"network": "reserved48",
+			"description": "All prefixes above 48 are reserved.",
+			"symbol": null,
+			"decimals": null,
+			"standardAccount": null,
+			"website": null
+		}
 	]
 }
