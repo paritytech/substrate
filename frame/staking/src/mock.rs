@@ -66,6 +66,7 @@ thread_local! {
 	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
 	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
 	static MAX_ITERATIONS: RefCell<u32> = RefCell::new(0);
+	static ADJUST_VALIDATOR_COUNT: RefCell<bool> = RefCell::new(false);
 }
 
 /// Another session handler struct to test on_disabled.
@@ -149,6 +150,13 @@ pub struct MaxIterations;
 impl Get<u32> for MaxIterations {
 	fn get() -> u32 {
 		MAX_ITERATIONS.with(|v| *v.borrow())
+	}
+}
+
+pub struct AdjustValidatorCount;
+impl Get<bool> for AdjustValidatorCount {
+	fn get() -> bool {
+		ADJUST_VALIDATOR_COUNT.with(|v| *v.borrow())
 	}
 }
 
@@ -329,6 +337,7 @@ impl Trait for Test {
 	type MaxIterations = MaxIterations;
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type ValidatorCountAdjust = AdjustValidatorCount;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();
 }
@@ -350,6 +359,7 @@ pub struct ExtBuilder {
 	validator_pool: bool,
 	nominate: bool,
 	validator_count: u32,
+	validator_adjust: bool,
 	minimum_validator_count: u32,
 	slash_defer_duration: EraIndex,
 	fair: bool,
@@ -369,6 +379,7 @@ impl Default for ExtBuilder {
 			validator_pool: false,
 			nominate: true,
 			validator_count: 2,
+			validator_adjust: false,
 			minimum_validator_count: 0,
 			slash_defer_duration: 0,
 			fair: true,
@@ -395,6 +406,10 @@ impl ExtBuilder {
 	}
 	pub fn validator_count(mut self, count: u32) -> Self {
 		self.validator_count = count;
+		self
+	}
+	pub fn validator_adjust(mut self, adjust: bool) -> Self {
+		self.validator_adjust = adjust;
 		self
 	}
 	pub fn minimum_validator_count(mut self, count: u32) -> Self {
@@ -449,6 +464,7 @@ impl ExtBuilder {
 		ELECTION_LOOKAHEAD.with(|v| *v.borrow_mut() = self.election_lookahead);
 		PERIOD.with(|v| *v.borrow_mut() = self.session_length);
 		MAX_ITERATIONS.with(|v| *v.borrow_mut() = self.max_offchain_iterations);
+		ADJUST_VALIDATOR_COUNT.with(|v| *v.borrow_mut() = self.validator_adjust);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		let _ = env_logger::try_init();

@@ -973,6 +973,9 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// their reward. This used to limit the i/o cost for the nominator payout.
 	type MaxNominatorRewardedPerValidator: Get<u32>;
 
+	/// Automaticly adjust the validator count.
+	type ValidatorCountAdjust: Get<bool>;
+
 	/// A configuration for base priority of unsigned transactions.
 	///
 	/// This is exposed so that it can be tuned for particular runtime, when
@@ -2912,12 +2915,13 @@ impl<T: Trait> Module<T> {
 				<ErasStakersClipped<T>>::insert(&current_era, &stash, exposure_clipped);
 			});
 
-			let new_validator_count = Self::update_target_validators(exposure_totals);
-			sp_std::if_std!{
-				println!("New validator count: {}", new_validator_count);
+			if T::ValidatorCountAdjust::get() {
+				let new_validator_count = Self::update_target_validators(exposure_totals);
+				sp_std::if_std!{
+					println!("New validator count: {}", new_validator_count);
+				}
+				ValidatorCount::put(new_validator_count);
 			}
-			// ValidatorCount::put(new_validator_count);
-
 			// Insert current era staking information
 			<ErasTotalStake<T>>::insert(&current_era, total_stake);
 
