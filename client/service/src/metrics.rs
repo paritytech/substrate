@@ -19,7 +19,6 @@
 use std::{convert::TryFrom, time::SystemTime};
 
 use crate::{NetworkStatus, NetworkState, NetworkStatusSinks, config::Configuration};
-use futures::future::{FutureExt, poll_fn};
 use futures_timer::Delay;
 use prometheus_endpoint::{register, Gauge, U64, Registry, PrometheusError, Opts, GaugeVec};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
