@@ -215,35 +215,37 @@ impl crate::WeightInfo for WeightInfo {
 	}
 }
 
+#[cfg(feature = "std")]
+const DEFAULT_WEIGHT: Weight = 1_000_000_000;
 
 #[cfg(feature = "std")]
 impl crate::WeightInfo for () {
-	fn bond() -> Weight { 1_000_000_000 }
-	fn bond_extra() -> Weight { 1_000_000_000 }
-	fn unbond() -> Weight { 1_000_000_000 }
-	fn withdraw_unbonded_update(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn withdraw_unbonded_kill(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn validate() -> Weight { 1_000_000_000 }
-	fn nominate(_n: u32) -> Weight { 1_000_000_000 }
-	fn chill() -> Weight { 1_000_000_000 }
-	fn set_payee() -> Weight { 1_000_000_000 }
-	fn set_controller() -> Weight { 1_000_000_000 }
-	fn set_validator_count() -> Weight { 1_000_000_000 }
-	fn force_no_eras() -> Weight { 1_000_000_000 }
-	fn force_new_era() -> Weight { 1_000_000_000 }
-	fn force_new_era_always() -> Weight { 1_000_000_000 }
-	fn set_invulnerables(_v: u32, ) -> Weight { 1_000_000_000 }
-	fn force_unstake(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn cancel_deferred_slash(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn payout_stakers(_n: u32, ) -> Weight { 1_000_000_000 }
-	fn payout_stakers_alive_controller(_n: u32, ) -> Weight { 1_000_000_000 }
-	fn rebond(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn set_history_depth(_e: u32, ) -> Weight { 1_000_000_000 }
-	fn reap_stash(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn new_era(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
-	fn do_slash() -> Weight { 1_000_000_000 }
-	fn payout_all(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
-	fn submit_solution_initial(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { 1_000_000_000 }
-	fn submit_solution_better(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { 1_000_000_000 }
-	fn submit_solution_weaker(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn bond() -> Weight { DEFAULT_WEIGHT }
+	fn bond_extra() -> Weight { DEFAULT_WEIGHT }
+	fn unbond() -> Weight { DEFAULT_WEIGHT }
+	fn withdraw_unbonded_update(_s: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn withdraw_unbonded_kill(_s: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn validate() -> Weight { DEFAULT_WEIGHT }
+	fn nominate(_n: u32) -> Weight { DEFAULT_WEIGHT }
+	fn chill() -> Weight { DEFAULT_WEIGHT }
+	fn set_payee() -> Weight { DEFAULT_WEIGHT }
+	fn set_controller() -> Weight { DEFAULT_WEIGHT }
+	fn set_validator_count() -> Weight { DEFAULT_WEIGHT }
+	fn force_no_eras() -> Weight { DEFAULT_WEIGHT }
+	fn force_new_era() -> Weight { DEFAULT_WEIGHT }
+	fn force_new_era_always() -> Weight { DEFAULT_WEIGHT }
+	fn set_invulnerables(_v: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn force_unstake(_s: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn cancel_deferred_slash(_s: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn payout_stakers(_n: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn payout_stakers_alive_controller(_n: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn rebond(_l: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn set_history_depth(_e: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn reap_stash(_s: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn new_era(_v: u32, _n: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn do_slash() -> Weight { DEFAULT_WEIGHT }
+	fn payout_all(_v: u32, _n: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn submit_solution_initial(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn submit_solution_better(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { DEFAULT_WEIGHT }
+	fn submit_solution_weaker(_v: u32, _n: u32, ) -> Weight { DEFAULT_WEIGHT }
 }

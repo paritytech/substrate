@@ -436,18 +436,17 @@ benchmarks! {
 		}
 	}
 
-	// This benchmark create `v` validators intent, `n` nominators intent, each nominator nominate
-	// MAX_NOMINATIONS in the set of the first `w` validators.
-	// It builds a solution with `w` winners composed of nominated validators randomly nominated,
-	// `a` assignment with MAX_NOMINATIONS.
+	// This benchmark create `v` validators intent, `n` nominators intent, in total creating `e`
+	// edges.
 	submit_solution_initial {
-		// number of validator intention.
+		// number of validator intention. This will be equal to `ElectionSize::validators`.
 		let v in 200 .. 400;
-		// number of nominator intention.
+		// number of nominator intention. This will be equal to `ElectionSize::nominators`.
 		let n in 500 .. 1000;
-		// number of assignments. Basically, number of active nominators.
+		// number of assignments. Basically, number of active nominators. This will be equal to
+		// `compact.len()`.
 		let a in 200 .. 400;
-		// number of winners, also ValidatorCount.
+		// number of winners, also ValidatorCount. This will be equal to `winner.len()`.
 		let w in 16 .. 100;
 
 		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
@@ -476,6 +475,13 @@ benchmarks! {
 			size
 		) = offchain_election::prepare_submission::<T>(assignments, winners, false).unwrap();
 
+		assert_eq!(
+			winners.len(), compact.unique_targets().len(),
+			"unique targets ({}) and winners ({}) count not same. This solution is not valid.",
+			compact.unique_targets().len(),
+			winners.len(),
+		);
+
 		// needed for the solution to be accepted
 		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
 
@@ -502,6 +508,7 @@ benchmarks! {
 	}
 
 	// same as submit_solution_initial but we place a very weak solution on chian first.
+	#[extra]
 	submit_solution_better {
 		// number of validator intention.
 		let v in 200 .. 400;
@@ -539,6 +546,13 @@ benchmarks! {
 			score,
 			size
 		) = offchain_election::prepare_submission::<T>(assignments, winners, false).unwrap();
+
+		assert_eq!(
+			winners.len(), compact.unique_targets().len(),
+			"unique targets ({}) and winners ({}) count not same. This solution is not valid.",
+			compact.unique_targets().len(),
+			winners.len(),
+		);
 
 		// needed for the solution to be accepted
 		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
@@ -586,6 +600,7 @@ benchmarks! {
 	}
 
 	// This will be early rejected based on the score.
+	#[extra]
 	submit_solution_weaker {
 		// number of validator intention.
 		let v in 200 .. 400;
@@ -609,6 +624,12 @@ benchmarks! {
 		// submit a seq-phragmen with all the good stuff on chain.
 		{
 			let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(true);
+			assert_eq!(
+				winners.len(), compact.unique_targets().len(),
+				"unique targets ({}) and winners ({}) count not same. This solution is not valid.",
+				compact.unique_targets().len(),
+				winners.len(),
+			);
 			assert!(
 				<Staking<T>>::submit_election_solution(
 					RawOrigin::Signed(caller.clone()).into(),

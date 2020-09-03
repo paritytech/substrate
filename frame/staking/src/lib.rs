@@ -769,72 +769,6 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 	}
 }
 
-mod weight {
-	use super::*;
-
-	/// All weight notes are pertaining to the case of a better solution, in which we execute
-	/// the longest code path.
-	/// Weight: 0 + (0.63 μs * v) + (0.36 μs * n) + (96.53 μs * a ) + (8 μs * w ) with:
-	/// * v validators in snapshot validators,
-	/// * n nominators in snapshot nominators,
-	/// * a assignment in the submitted solution
-	/// * w winners in the submitted solution
-	///
-	/// State reads:
-	/// 	- Initial checks:
-	/// 		- ElectionState, CurrentEra, QueuedScore
-	/// 		- SnapshotValidators.len() + SnapShotNominators.len()
-	/// 		- ValidatorCount
-	/// 		- SnapshotValidators
-	/// 		- SnapshotNominators
-	/// 	- Iterate over nominators:
-	/// 		- compact.len() * Nominators(who)
-	/// 		- (non_self_vote_edges) * SlashingSpans
-	/// 	- For `assignment_ratio_to_staked`: Basically read the staked value of each stash.
-	/// 		- (winners.len() + compact.len()) * (Ledger + Bonded)
-	/// 		- TotalIssuance (read a gzillion times potentially, but well it is cached.)
-	/// - State writes:
-	/// 	- QueuedElected, QueuedScore
-	pub fn weight_for_submit_solution<T: Trait>(
-		winners: &Vec<ValidatorIndex>,
-		compact: &CompactAssignments,
-		size: &ElectionSize,
-	) -> Weight {
-		(630 * WEIGHT_PER_NANOS).saturating_mul(size.validators as Weight)
-			.saturating_add((360 * WEIGHT_PER_NANOS).saturating_mul(size.nominators as Weight))
-			.saturating_add((96 * WEIGHT_PER_MICROS).saturating_mul(compact.len() as Weight))
-			.saturating_add((8 * WEIGHT_PER_MICROS).saturating_mul(winners.len() as Weight))
-			// Initial checks
-			.saturating_add(T::DbWeight::get().reads(8))
-			// Nominators
-			.saturating_add(T::DbWeight::get().reads(compact.len() as Weight))
-			// SlashingSpans (upper bound for invalid solution)
-			.saturating_add(T::DbWeight::get().reads(compact.edge_count() as Weight))
-			// `assignment_ratio_to_staked`
-			.saturating_add(T::DbWeight::get().reads(2 * ((winners.len() + compact.len()) as Weight)))
-			.saturating_add(T::DbWeight::get().reads(1))
-			// write queued score and elected
-			.saturating_add(T::DbWeight::get().writes(2))
-	}
-
-	/// Weight of `submit_solution` in case of a correct submission.
-	///
-	/// refund: we charged compact.len() * read(1) for SlashingSpans. A valid solution only reads
-	/// winners.len().
-	pub fn weight_for_correct_submit_solution<T: Trait>(
-		winners: &Vec<ValidatorIndex>,
-		compact: &CompactAssignments,
-		size: &ElectionSize,
-	) -> Weight {
-		// NOTE: for consistency, we re-compute the original weight to maintain their relation and
-		// prevent any foot-guns.
-		let original_weight = weight_for_submit_solution::<T>(winners, compact, size);
-		original_weight
-			.saturating_sub(T::DbWeight::get().reads(compact.edge_count() as Weight))
-			.saturating_add(T::DbWeight::get().reads(winners.len() as Weight))
-	}
-}
-
 pub trait WeightInfo {
 	fn bond() -> Weight;
 	fn bond_extra() -> Weight;
@@ -2172,7 +2106,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = T::WeightInfo::submit_solution_better(
 			size.validators as u32,
-			size.validators as u32,
+			size.nominators as u32,
 			compact.len() as u32,
 			winners.len() as u32,
 		)]
@@ -2206,7 +2140,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = T::WeightInfo::submit_solution_better(
 			size.validators as u32,
-			size.validators as u32,
+			size.nominators as u32,
 			compact.len() as u32,
 			winners.len() as u32,
 		)]
@@ -2524,6 +2458,16 @@ impl<T: Trait> Module<T> {
 	) -> DispatchResultWithPostInfo {
 		// Do the basic checks. era, claimed score and window open.
 		let _ = Self::pre_dispatch_checks(claimed_score, era)?;
+
+		// before we read any further state, we check that the unique targets in compact is same as
+		// compact. is a all in-memory check and easy to do. Moreover, it ensures that the solution
+		// is not full of bogus edges that can cause lots of reads to SlashingSpans. Thus, we can
+		// assume that the storage access of this function is always O(|winners|), not
+		// O(|compact.edge_count()|).
+		ensure!(
+			compact_assignments.unique_targets().len() == winners.len(),
+			Error::<T>::OffchainElectionBogusWinnerCount,
+		);
 
 		// Check that the number of presented winners is sane. Most often we have more candidates
 		// than we need. Then it should be `Self::validator_count()`. Else it should be all the
