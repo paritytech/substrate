@@ -25,6 +25,9 @@ codec = { package = "parity-scale-codec", version = "1.3.4", features = ["derive
 blake2-rfc = "0.2.18"
 
 sc-client-api = { version = "2.0.0", path = "../api" }
+sc-finality-grandpa = { version = "0.8.0", path = "../finality-grandpa" }
+sp-finality-grandpa = { version = "2.0.0", path = "../../primitives/finality-grandpa" }
+num-traits = "0.2.8"
 sp-arithmetic = { version = "2.0.0", path = "../../primitives/arithmetic" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }

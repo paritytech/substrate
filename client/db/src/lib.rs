@@ -53,6 +53,8 @@ use parking_lot::{Mutex, RwLock};
 use linked_hash_map::LinkedHashMap;
 use log::{trace, debug, warn};
 
+use sc_finality_grandpa::BlockNumberOps; // TODO remove (for test)
+use num_traits::cast::AsPrimitive; // TODO remove (for test)
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
 	backend::{NewBlockState, PrunableStateChangesTrieStorage, ProvideChtRoots},
@@ -859,7 +861,9 @@ pub struct Backend<Block: BlockT> {
 	state_usage: Arc<StateUsageStats>,
 }
 
-impl<Block: BlockT> Backend<Block> {
+impl<Block: BlockT> Backend<Block>
+	where NumberFor<Block>: BlockNumberOps,
+{
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
@@ -1049,6 +1053,45 @@ impl<Block: BlockT> Backend<Block> {
 				&utils::number_and_hash_to_lookup_key(number, hash)?,
 				justification.encode(),
 			);
+		}
+
+
+		// TODO remove and deps (only to test without writing rpc)
+		use std::convert::TryInto;
+		if let Ok(number32) = number.try_into() {
+			let interval = 100_000;
+		if number32 % interval == 0 && number32 != 0 {
+			let begin32 = number32 - interval;
+			let begin = if let Ok(begin) = begin32.try_into() {
+				begin
+			} else {
+				unreachable!()
+			};
+			let head_begin = self.blockchain.expect_header(BlockId::Number(begin))?;
+
+			let state =  {
+				use sc_client_api::backend::Backend;
+				self.state_at(BlockId::Number(begin)).unwrap()
+			};
+
+			let current_authorities = state.storage(b"grandpa_authorities")?
+				.and_then(|encoded| sp_finality_grandpa::VersionedAuthorityList::decode(&mut encoded.as_slice()).ok())
+				.map(|versioned| versioned.into())
+				.ok_or(ClientError::InvalidAuthoritiesSet)?;
+
+
+			let current_set_id = unimplemented!();
+			sc_finality_grandpa::finality_proof::prove_authority::<
+				Block,
+				BlockchainDb<Block>,
+				sc_finality_grandpa::GrandpaJustification<Block>,
+			>(
+				&self.blockchain,
+				head_begin.hash(),
+				current_set_id,
+				current_authorities,
+			)?;
+		}
 		}
 		Ok((*hash, number, false, true))
 	}
@@ -1440,7 +1483,9 @@ impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: Blo
 	}
 }
 
-impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
+impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block>
+	where NumberFor<Block>: BlockNumberOps,
+{
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = SyncingCachingState<RefTrackingState<Block>, Block>;
@@ -1764,7 +1809,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 }
 
-impl<Block: BlockT> sc_client_api::backend::LocalBackend<Block> for Backend<Block> {}
+impl<Block: BlockT> sc_client_api::backend::LocalBackend<Block> for Backend<Block>
+where NumberFor<Block>: BlockNumberOps,
+{}
 
 #[cfg(test)]
 pub(crate) mod tests {
