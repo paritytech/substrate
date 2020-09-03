@@ -207,6 +207,7 @@ where
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
+		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
 		let digests = Self::extract_pre_digest(&header);
 		Self::initialize_block_impl(
@@ -327,6 +328,7 @@ where
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
 	pub fn finalize_block() -> System::Header {
+		sp_io::init_tracing();
 		sp_tracing::enter_span!( sp_tracing::Level::TRACE, "finalize_block" );
 		<frame_system::Module<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Module<System>>::block_number();
@@ -420,6 +422,7 @@ where
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
 	) -> TransactionValidity {
+		sp_io::init_tracing();
 		use sp_tracing::{enter_span, within_span};
 
 		enter_span!{ sp_tracing::Level::TRACE, "validate_transaction" };
@@ -444,6 +447,7 @@ where
 
 	/// Start an offchain worker and generate extrinsics.
 	pub fn offchain_worker(header: &System::Header) {
+		sp_io::init_tracing();
 		// We need to keep events available for offchain workers,
 		// hence we initialize the block manually.
 		// OffchainWorker RuntimeApi should skip initialization.

@@ -1030,8 +1030,8 @@ impl<T> core::default::Default for Crossing<T>
 
 /// Interface to providing tracing facilities for wasm. Modeled after tokios `tracing`-crate
 /// interfaces. See `sp-tracing` for more information.
-#[runtime_interface(wasm_only,no_tracing)]
-pub trait WasmTracing {
+#[runtime_interface(wasm_only, no_tracing)]
+trait WasmTracing {
 	/// Given the crossing over `WasmMetadata`, return whether this should be handled or not.
 	/// On the host converts into a static Metadata and checks against the global `tracing` dispatcher.
 	///
@@ -1086,45 +1086,62 @@ pub trait WasmTracing {
 	}
 }
 
-#[cfg(not(feature="std"))]
-/// The PassingTracingSubscriber implements `sp_tracing::TracingSubscriber`
-/// and pushes the information accross the runtime interface to the host
-pub struct PassingTracingSubsciber;
-#[cfg(not(feature="std"))]
-impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
-	fn enabled(&self, metadata: &sp_tracing::WasmMetadata) -> bool {
-		wasm_tracing::enabled(Crossing(metadata.clone()))
-	}
-	fn enter_span(&self, attrs: sp_tracing::WasmEntryAttributes) -> u64 {
-		wasm_tracing::enter_span(Crossing(attrs))
-	}
-	fn event(&self,
-		parent_id: Option<u64>,
-		metadata: &sp_tracing::WasmMetadata,
-		values: &sp_tracing::WasmValuesSet
-	) {
-		wasm_tracing::event(Crossing(sp_tracing::WasmEntryAttributes {
-			parent_id,
-			metadata: metadata.clone(),
-			fields: values.clone()
-		}))
-	}
-	fn exit(&self, span: u64) {
-		wasm_tracing::exit(span)
-	}
-}
-
 #[cfg(all(not(feature="std"), feature="with-tracing"))]
-/// Initialize tracing of sp_tracing on wasm with `with-tracing` enabled
-pub fn init_tracing() {
+mod tracing_setup {
+	use core::sync::atomic::{AtomicBool, Ordering};
 	use sp_std::boxed::Box;
-	sp_tracing::set_tracing_subscriber(Box::new(PassingTracingSubsciber {} ));
+	use super::{wasm_tracing, Crossing};
+
+	const TRACING_SET : AtomicBool = AtomicBool::new(false);
+
+
+	/// The PassingTracingSubscriber implements `sp_tracing::TracingSubscriber`
+	/// and pushes the information accross the runtime interface to the host
+	struct PassingTracingSubsciber;
+
+	impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
+		fn enabled(&self, metadata: &sp_tracing::WasmMetadata) -> bool {
+			wasm_tracing::enabled(Crossing(metadata.clone()))
+		}
+		fn enter_span(&self, attrs: sp_tracing::WasmEntryAttributes) -> u64 {
+			wasm_tracing::enter_span(Crossing(attrs))
+		}
+		fn event(&self,
+			parent_id: Option<u64>,
+			metadata: &sp_tracing::WasmMetadata,
+			values: &sp_tracing::WasmValuesSet
+		) {
+			wasm_tracing::event(Crossing(sp_tracing::WasmEntryAttributes {
+				parent_id,
+				metadata: metadata.clone(),
+				fields: values.clone()
+			}))
+		}
+		fn exit(&self, span: u64) {
+			wasm_tracing::exit(span)
+		}
+	}
+
+
+	/// Initialize tracing of sp_tracing on wasm with `with-tracing` enabled.
+	/// Can be called multiple times from within the same process will only
+	/// set the global bridgin subscriber once.
+	pub fn init_tracing() {
+		if TRACING_SET.load(Ordering::Relaxed) == false {
+			sp_tracing::set_tracing_subscriber(Box::new(PassingTracingSubsciber {} ));
+			TRACING_SET.store(true, Ordering::Relaxed);
+		}
+	}
 }
 
 #[cfg(not(all(not(feature="std"), feature="with-tracing")))]
-/// Initialize tracing of sp_tracing not necessary – noop. To enable build
-/// without std and with the `with-tracing`-feature.
-pub fn init_tracing() { }
+mod tracing_setup {
+	/// Initialize tracing of sp_tracing not necessary – noop. To enable build
+	/// without std and with the `with-tracing`-feature.
+	pub fn init_tracing() { }
+}
+
+pub use tracing_setup::init_tracing;
 
 /// Wasm-only interface that provides functions for interacting with the sandbox.
 #[runtime_interface(wasm_only)]
