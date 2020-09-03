@@ -309,7 +309,7 @@ async fn manual_seal_fork_blocks() {
 
 // This test verifies that heartbeat block is produced when time out.
 #[tokio::test]
-async fn heartbeat_stream_produce_blocks_regularly() {
+async fn heartbeat_stream_produce_block_when_max_blocktime_lapsed_with_no_tx() {
 	// Setup
 	let builder = TestClientBuilder::new();
 	let (client, select_chain) = builder.build_with_longest_chain();
@@ -326,13 +326,9 @@ async fn heartbeat_stream_produce_blocks_regularly() {
 	);
 
 	// Run instant seal with heartbeat
-	const BLOCK_TIMEOUT: u64 = 2;
-	let hbo = HeartbeatOptions {
-		timeout: BLOCK_TIMEOUT,
-		min_blocktime: 1,
-		finalize: false,
-	};
+	let max_blocktime = 2;
 
+	let hbo = HeartbeatOptions { min_blocktime: 1, max_blocktime, finalize: false };
 	let future = run_instant_seal(
 		Box::new(client.clone()),
 		env,
@@ -349,26 +345,27 @@ async fn heartbeat_stream_produce_blocks_regularly() {
 		rt.block_on(future);
 	});
 
-	// First, ensure the chain only has genesis block
+	// First, ensure the chain only has genesis block.
+	assert!(client.block(&BlockId::Number(0)).unwrap().is_some());
 	assert!(client.block(&BlockId::Number(1)).unwrap().is_none());
 	assert!(client.block(&BlockId::Number(2)).unwrap().is_none());
 
-	// Wait for the heartbeat block
-	thread::sleep(Duration::from_secs(BLOCK_TIMEOUT + 1));
-
-	// Then, ensure the heartbeat block is created
-	// QUESTION: How to make this block generation test to be more specific?
-	//   Right now it is just checking a new block is generated.
+	// Wait for the max_blocktime to pass. This should generate a new block. We
+	//   give extra 500ms for timing error/buffer.
+	// Then ensure only one block is created when max_blocktime passed
+	let lapsed_in_millis = max_blocktime * 1000 + 500;
+	thread::sleep(Duration::from_millis(lapsed_in_millis));
 	assert!(client.block(&BlockId::Number(1)).unwrap().is_some());
+	assert!(client.block(&BlockId::Number(2)).unwrap().is_none());
 
-	// Wait for another heartbeat block
-	thread::sleep(Duration::from_secs(BLOCK_TIMEOUT));
+	// Wait for another block to be generated
+	thread::sleep(Duration::from_millis(lapsed_in_millis));
 	assert!(client.block(&BlockId::Number(2)).unwrap().is_some());
 }
 
 // This test verifies that heartbeat block is produced when time out.
 #[tokio::test]
-async fn heartbeat_stream_produce_blocks_at_most_every_min_blocktime() {
+async fn heartbeat_stream_wait_for_min_blocktime_when_multiple_txs_come() {
 	// Setup
 	let builder = TestClientBuilder::new();
 	let (client, select_chain) = builder.build_with_longest_chain();
@@ -386,12 +383,8 @@ async fn heartbeat_stream_produce_blocks_at_most_every_min_blocktime() {
 	);
 
 	// Run instant seal with heartbeat
-	const MIN_BLOCKTIME: u64 = 2;
-	let hbo = HeartbeatOptions {
-		timeout: MIN_BLOCKTIME * 10,
-		min_blocktime: MIN_BLOCKTIME,
-		finalize: false,
-	};
+	let min_blocktime = 2;
+	let hbo = HeartbeatOptions { min_blocktime, max_blocktime: min_blocktime * 10, finalize: false };
 
 	let future = run_instant_seal(
 		Box::new(client.clone()),
@@ -409,8 +402,12 @@ async fn heartbeat_stream_produce_blocks_at_most_every_min_blocktime() {
 		rt.block_on(future);
 	});
 
+	// First, ensure the chain only has genesis block.
+	assert!(client.block(&BlockId::Number(0)).unwrap().is_some());
+	assert!(client.block(&BlockId::Number(1)).unwrap().is_none());
+	assert!(client.block(&BlockId::Number(2)).unwrap().is_none());
+
 	// Submit 3 txs in a burst
-	//   QUESTION: Is this the right way to submit blocks and verify the blocks??
 	assert!(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Alice, 0)).await.is_ok());
 	pool_api.increment_nonce(Alice.into());
 
@@ -419,9 +416,9 @@ async fn heartbeat_stream_produce_blocks_at_most_every_min_blocktime() {
 
 	assert!(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Alice, 2)).await.is_ok());
 
-	// Ensure only two blocks are generated.
-	thread::sleep(Duration::from_secs(MIN_BLOCKTIME + 1));
-	assert!(client.block(&BlockId::Number(0)).unwrap().is_some());
+	// Ensure only on block is generated. We give additional 100ms for timing error/buffer.
+	let lapsed_in_millis = min_blocktime * 1000 + 500;
+	thread::sleep(Duration::from_millis(lapsed_in_millis));
 	assert!(client.block(&BlockId::Number(1)).unwrap().is_some());
 	assert!(client.block(&BlockId::Number(2)).unwrap().is_none());
 }
