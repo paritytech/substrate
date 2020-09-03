@@ -54,7 +54,6 @@ use linked_hash_map::LinkedHashMap;
 use log::{trace, debug, warn};
 
 use sc_finality_grandpa::BlockNumberOps; // TODO remove (for test)
-use num_traits::cast::AsPrimitive; // TODO remove (for test)
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
 	backend::{NewBlockState, PrunableStateChangesTrieStorage, ProvideChtRoots},
@@ -1078,9 +1077,11 @@ impl<Block: BlockT> Backend<Block>
 				.and_then(|encoded| sp_finality_grandpa::VersionedAuthorityList::decode(&mut encoded.as_slice()).ok())
 				.map(|versioned| versioned.into())
 				.ok_or(ClientError::InvalidAuthoritiesSet)?;
+//"0x2371e21684d2fae99bcb4d579242f74a8a2d09463effcc78a22d75b9cb87dffc"
 
-
-			let current_set_id = unimplemented!();
+			let current_set_id = state.storage(&[35u8, 113, 226, 22, 132, 210, 250, 233, 155, 203, 77, 87, 146, 66, 247, 74, 138, 45, 9, 70, 62, 255, 204, 120, 162, 45, 117, 185, 203, 135, 223, 252][..])?
+				.and_then(|encoded| u64::decode(&mut encoded.as_slice()).ok())
+				.ok_or(ClientError::InvalidAuthoritiesSet)?;
 			sc_finality_grandpa::finality_proof::prove_authority::<
 				Block,
 				BlockchainDb<Block>,
