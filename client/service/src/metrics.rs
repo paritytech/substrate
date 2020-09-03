@@ -180,7 +180,7 @@ impl MetricsService {
 
 		loop {
 			// Wait for the next tick of the timer.
-			poll_fn(|cx| timer.poll_unpin(cx)).await;
+			(&mut timer).await;
 
 			// Try to get the latest network information.
 			let mut net_status = None;
