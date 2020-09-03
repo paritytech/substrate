@@ -27,23 +27,23 @@ use std::{
 	sync::{Arc, atomic},
 	time::SystemTime,
 };
-
-use sc_keystore::KeyStorePtr;
+use sc_client_api::AuxStore;
 use sc_consensus_babe::{
 	Config, Epoch, authorship, CompatibleDigestItem, BabeIntermediate,
 	register_babe_inherent_data_provider, INTERMEDIATE_KEY,
 };
+use sc_consensus_epochs::{SharedEpochChanges, descendent_query};
+use sc_keystore::KeyStorePtr;
+
+use sp_api::{ProvideRuntimeApi, TransactionFor};
+use sp_blockchain::{HeaderBackend, HeaderMetadata};
+use sp_consensus::BlockImportParams;
 use sp_consensus_babe::{BabeApi, inherents::BabeInherentData};
 use sp_inherents::{InherentDataProviders, InherentData, ProvideInherentData, InherentIdentifier};
 use sp_runtime::{
 	traits::{DigestItemFor, DigestFor, Block as BlockT, Header as _},
 	generic::Digest,
 };
-use sc_client_api::AuxStore;
-use sp_api::{ProvideRuntimeApi, TransactionFor};
-use sc_consensus_epochs::{SharedEpochChanges, Epoch as _, descendent_query};
-use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_consensus::BlockImportParams;
 use sp_timestamp::{InherentType, InherentError, INHERENT_IDENTIFIER};
 
 /// Provides BABE-compatible predigests and BlockImportParams.
@@ -120,11 +120,6 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 				log::info!(target: "babe", "create_digest: no viable_epoch :(");
 				sp_consensus::Error::InvalidAuthoritiesSet
 			})?;
-
-		if epoch.as_ref().end_slot()  == slot_number {
-			// we want to create a new block here.
-			log::info!(target: "manual-seal", "\n\nthis is the end of the epoch\n\n")
-		}
 
 		// this is a dev node environment, we should always be able to claim a slot.
 		let (predigest, _) = authorship::claim_slot(slot_number, epoch.as_ref(), &self.keystore)

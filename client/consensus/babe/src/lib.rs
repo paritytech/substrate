@@ -126,9 +126,10 @@ use schnorrkel::SignatureError;
 use codec::{Encode, Decode};
 use sp_api::ApiExt;
 
-pub mod aux_schema;
 mod verification;
 mod migration;
+
+pub mod aux_schema;
 pub mod authorship;
 #[cfg(test)]
 mod tests;

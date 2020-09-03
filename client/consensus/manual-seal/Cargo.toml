@@ -37,11 +37,11 @@ sp-core = {  path = "../../../primitives/core", version = "2.0.0-rc5" }
 sp-api = {  path = "../../../primitives/api", version = "2.0.0-rc5" }
 sp-transaction-pool = { path = "../../../primitives/transaction-pool", version = "2.0.0-rc5" }
 sp-timestamp = { path = "../../../primitives/timestamp", version = "2.0.0-rc6" }
-tokio = { version = "0.2", features = ["rt-core", "macros", "time"] }
 
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0-rc5" }
 
 [dev-dependencies]
+tokio = { version = "0.2", features = ["rt-core", "macros"] }
 sc-basic-authorship = { path = "../../basic-authorship", version = "0.8.0-rc6" }
 substrate-test-runtime-client = { path = "../../../test-utils/runtime/client", version = "2.0.0-rc6" }
 substrate-test-runtime-transaction-pool = { path = "../../../test-utils/runtime/transaction-pool", version = "2.0.0-rc6" }
