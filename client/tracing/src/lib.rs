@@ -284,8 +284,8 @@ impl Subscriber for ProfilingSubscriber {
 		if metadata.target() == WASM_TRACE_IDENTIFIER
 			|| self.check_target(metadata.target(), metadata.level())
 		{
-			log::debug!(target: "tracing", "Enabled target: {}, level: {}",
-				metadata.target(), metadata.level());
+			log::debug!(target: "tracing", "Enabled target: {:?}",
+				metadata);
 			true
 		} else {
 			log::debug!(target: "tracing", "Disabled target: {}, level: {}",
