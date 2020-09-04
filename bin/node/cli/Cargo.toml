@@ -39,7 +39,6 @@ serde = { version = "1.0.102", features = ["derive"] }
 futures = { version = "0.3.1", features = ["compat"] }
 hex-literal = "0.3.1"
 jsonrpc-core = "14.2.0"
-jsonrpc-pubsub = "14.2.0"
 log = "0.4.8"
 rand = "0.7.2"
 structopt = { version = "0.3.8", optional = true }
