@@ -922,7 +922,7 @@ impl<Block: BlockT> Backend<Block>
 			},
 		)?;
 
-		Ok(Backend {
+		let result = Backend {
 			storage: Arc::new(storage_db),
 			offchain_storage,
 			changes_tries_storage,
@@ -936,8 +936,63 @@ impl<Block: BlockT> Backend<Block>
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: Arc::new(StateUsageStats::new()),
-		})
+		};
+
+		result.test_it(1);
+		result.test_it(10_000);
+		result.test_it(30_000);
+		result.test_it(50_000);
+		result.test_it(100_000);
+		result.test_it(200_000);
+		result.test_it(300_000);
+
+		Ok(result)
 	}
+
+	fn test_it(&self, begin32: u32)
+	 -> ClientResult<()> {
+		let last_finalized_hash = self.blockchain.meta.read().finalized_hash;
+		 let last_fin_head = self.blockchain.expect_header(BlockId::Hash(last_finalized_hash.clone()))?;
+		 let number = last_fin_head.number();
+		 
+		// TODO remove and deps (only to test without writing rpc)
+		use std::convert::TryInto;
+		if let Ok(number32) = number.clone().try_into() {
+			let interval = 10_000;
+			let begin = if let Ok(begin) = begin32.try_into() {
+				begin
+			} else {
+				unreachable!()
+			};
+			let head_begin = self.blockchain.expect_header(BlockId::Number(begin))?;
+
+			let state =  {
+				use sc_client_api::backend::Backend;
+				self.state_at(BlockId::Number(begin)).unwrap()
+			};
+
+			let current_authorities = state.storage(b"grandpa_authorities")?
+				.and_then(|encoded| sp_finality_grandpa::VersionedAuthorityList::decode(&mut encoded.as_slice()).ok())
+				.map(|versioned| versioned.into())
+				.ok_or(ClientError::InvalidAuthoritiesSet)?;
+//"0x2371e21684d2fae99bcb4d579242f74a8a2d09463effcc78a22d75b9cb87dffc"
+
+			let current_set_id = state.storage(&[35u8, 113, 226, 22, 132, 210, 250, 233, 155, 203, 77, 87, 146, 66, 247, 74, 138, 45, 9, 70, 62, 255, 204, 120, 162, 45, 117, 185, 203, 135, 223, 252][..])?
+				.and_then(|encoded| u64::decode(&mut encoded.as_slice()).ok())
+				.ok_or(ClientError::InvalidAuthoritiesSet)?;
+			sc_finality_grandpa::finality_proof::prove_authority::<
+				Block,
+				BlockchainDb<Block>,
+				sc_finality_grandpa::GrandpaJustification<Block>,
+			>(
+				&self.blockchain,
+				head_begin.hash(),
+				current_set_id,
+				current_authorities,
+			)?;
+		}
+		Ok(())
+	 }
 
 	/// Handle setting head within a transaction. `route_to` should be the last
 	/// block that existed in the database. `best_to` should be the best block
@@ -1055,45 +1110,6 @@ impl<Block: BlockT> Backend<Block>
 		}
 
 
-		// TODO remove and deps (only to test without writing rpc)
-		use std::convert::TryInto;
-		if let Ok(number32) = number.try_into() {
-			let interval = 100_000;
-		if number32 % interval == 0 && number32 != 0 {
-			let begin32 = number32 - interval;
-			let begin = if let Ok(begin) = begin32.try_into() {
-				begin
-			} else {
-				unreachable!()
-			};
-			let head_begin = self.blockchain.expect_header(BlockId::Number(begin))?;
-
-			let state =  {
-				use sc_client_api::backend::Backend;
-				self.state_at(BlockId::Number(begin)).unwrap()
-			};
-
-			let current_authorities = state.storage(b"grandpa_authorities")?
-				.and_then(|encoded| sp_finality_grandpa::VersionedAuthorityList::decode(&mut encoded.as_slice()).ok())
-				.map(|versioned| versioned.into())
-				.ok_or(ClientError::InvalidAuthoritiesSet)?;
-//"0x2371e21684d2fae99bcb4d579242f74a8a2d09463effcc78a22d75b9cb87dffc"
-
-			let current_set_id = state.storage(&[35u8, 113, 226, 22, 132, 210, 250, 233, 155, 203, 77, 87, 146, 66, 247, 74, 138, 45, 9, 70, 62, 255, 204, 120, 162, 45, 117, 185, 203, 135, 223, 252][..])?
-				.and_then(|encoded| u64::decode(&mut encoded.as_slice()).ok())
-				.ok_or(ClientError::InvalidAuthoritiesSet)?;
-			sc_finality_grandpa::finality_proof::prove_authority::<
-				Block,
-				BlockchainDb<Block>,
-				sc_finality_grandpa::GrandpaJustification<Block>,
-			>(
-				&self.blockchain,
-				head_begin.hash(),
-				current_set_id,
-				current_authorities,
-			)?;
-		}
-		}
 		Ok((*hash, number, false, true))
 	}
 
