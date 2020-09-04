@@ -674,6 +674,7 @@ fn check_authority_proof_fragment<Block: BlockT, J>(
 	if authorities_proof.header.number() <= current_block {
 		return Err(ClientError::Msg("Invalid authority warp proof".to_string()));
 	}
+	current_block = authorities_proof.header.number();
 	let mut at_block = None;
 	if let Some(sp_finality_grandpa::ScheduledChange {
 		next_authorities,
