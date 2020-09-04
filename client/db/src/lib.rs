@@ -988,7 +988,7 @@ impl<Block: BlockT> Backend<Block>
 				&self.blockchain,
 				head_begin.hash(),
 			)?;
-			let (head_target, nb, authorities, justification) = sc_finality_grandpa::finality_proof::check_authority_proof::<
+			let (head_target, nb, authorities) = sc_finality_grandpa::finality_proof::check_authority_proof::<
 				Block,
 				sc_finality_grandpa::GrandpaJustification<Block>,
 			>(
@@ -997,8 +997,6 @@ impl<Block: BlockT> Backend<Block>
 				proof.clone(),
 			)?;
 
-			let is_valid = justification.commit.target_hash == head_target.hash();
-			let is_valid = &justification.commit.target_number == head_target.number();
 			let is_valid = head_target.hash() == last_fin_head.hash();
 			let is_valid = head_target.number() == last_fin_head.number();
 			let is_valid = head_target == last_fin_head;

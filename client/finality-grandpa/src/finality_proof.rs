@@ -612,10 +612,10 @@ pub fn check_authority_proof<Block: BlockT, J>(
 	current_set_id: u64,
 	current_authorities: AuthorityList,
 	remote_proof: Vec<u8>,
-) -> ClientResult<(Block::Header, u64, AuthorityList, J)>
+) -> ClientResult<(Block::Header, u64, AuthorityList)>
 	where
 		NumberFor<Block>: BlockNumberOps,
-		J: ProvableJustification<Block::Header>,
+		J: Decode + ProvableJustification<Block::Header> + BlockJustification<Block::Header>,
 {
 	// decode finality proof
 	let proof = AuthoritySetProof::<Block::Header>::decode(&mut &remote_proof[..])
@@ -627,7 +627,7 @@ pub fn check_authority_proof<Block: BlockT, J>(
 
 	for (ix, fragment) in proof.into_iter().enumerate() {
 		let is_last = ix == last;
-		let check_result = check_authority_proof_fragment::<Block, J>(
+		result = check_authority_proof_fragment::<Block, J>(
 			result.0,
 			&result.1,
 			&result.2,
@@ -635,9 +635,8 @@ pub fn check_authority_proof<Block: BlockT, J>(
 			&fragment,
 		)?; 
 
-		result = check_result.0;
 		if is_last {
-			return Ok((fragment.header, result.0, result.1, check_result.1))
+			return Ok((fragment.header, result.0, result.1))
 		}
 	}
 
@@ -652,19 +651,25 @@ fn check_authority_proof_fragment<Block: BlockT, J>(
 	current_block: &NumberFor<Block>,
 	is_last: bool,
 	authorities_proof: &AuthoritySetProofFragment<Block::Header>,
-) -> ClientResult<((u64, AuthorityList, NumberFor<Block>), J)>
+) -> ClientResult<(u64, AuthorityList, NumberFor<Block>)>
 	where
 		NumberFor<Block>: BlockNumberOps,
-		J: Decode + ProvableJustification<Block::Header>,
+		J: Decode + ProvableJustification<Block::Header> + BlockJustification<Block::Header>,
 {
 	let justification: J = Decode::decode(&mut authorities_proof.justification.as_slice())
 		.map_err(|_| ClientError::JustificationDecode)?;
 	justification.verify(current_set_id, &current_authorities)?;
 
+	// assert justification is for this header
+	if &justification.number() != authorities_proof.header.number()
+		|| justification.hash().as_ref() != authorities_proof.header.hash().as_ref() {
+		return Err(ClientError::Msg("Invalid authority warp proof, justification do not match header".to_string()));
+	}
+
 	if authorities_proof.header.number() <= current_block {
 		return Err(ClientError::Msg("Invalid authority warp proof".to_string()));
 	}
-	let mut current_block = authorities_proof.header.number();
+	let current_block = authorities_proof.header.number();
 	let mut at_block = None;
 	if let Some(sp_finality_grandpa::ScheduledChange {
 		next_authorities,
@@ -686,9 +691,9 @@ fn check_authority_proof_fragment<Block: BlockT, J>(
 		return Err(ClientError::Msg("Invalid authority warp proof".to_string()));
 	}
 	if let Some((at_block, next_authorities)) = at_block {
-		Ok(((current_set_id + 1, next_authorities, at_block), justification))
+		Ok((current_set_id + 1, next_authorities, at_block))
 	} else {
-		Ok(((current_set_id, current_authorities.clone(), current_block.clone()), justification))
+		Ok((current_set_id, current_authorities.clone(), current_block.clone()))
 	}
 }
 
@@ -760,6 +765,15 @@ impl<Header: HeaderT> AuthoritiesOrEffects<Header> {
 	}
 }
 
+/// Block info extracted from the justification.
+pub trait BlockJustification<Header: HeaderT> {
+	/// Block number justified.
+	fn number(&self) -> Header::Number;
+
+	/// Block hash justified.
+	fn hash(&self) -> Header::Hash;
+}
+
 /// Justification used to prove block finality.
 /// TODO switch back to pub(crate)
 pub trait ProvableJustification<Header: HeaderT>: Encode + Decode {
@@ -789,6 +803,15 @@ impl<Block: BlockT> ProvableJustification<Block::Header> for GrandpaJustificatio
 		)?;
 
 		GrandpaJustification::verify(self, set_id, &authorities)
+	}
+}
+
+impl<Block: BlockT> BlockJustification<Block::Header> for GrandpaJustification<Block> {
+	fn number(&self) -> NumberFor<Block> {
+		self.commit.target_number.clone()
+	}
+	fn hash(&self) -> Block::Hash {
+		self.commit.target_hash.clone()
 	}
 }
 
