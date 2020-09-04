@@ -46,7 +46,7 @@ use sp_runtime::traits::{
 };
 use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use wasm_timer::SystemTime;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::MaintainedTransactionPool;
@@ -729,14 +729,10 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	);
 	let system = system::System::new(system_info, system_rpc_tx, deny_unsafe);
 
-	let maybe_offchain_rpc = offchain_storage
-	.map(|storage| {
+	let maybe_offchain_rpc = offchain_storage.map(|storage| {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe);
-		// FIXME: Use plain Option (don't collect into HashMap) when we upgrade to jsonrpc 14.1
-		// https://github.com/paritytech/jsonrpc/commit/20485387ed06a48f1a70bf4d609a7cde6cf0accf
-		let delegate = offchain::OffchainApi::to_delegate(offchain);
-			delegate.into_iter().collect::<HashMap<_, _>>()
-	}).unwrap_or_default();
+		offchain::OffchainApi::to_delegate(offchain)
+	});
 
 	sc_rpc_server::rpc_handler((
 		state::StateApi::to_delegate(state),
