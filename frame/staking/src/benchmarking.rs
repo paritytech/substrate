@@ -100,16 +100,14 @@ pub fn create_validator_with_nominators<T: Trait>(
 	Ok(v_stash)
 }
 
+const USER_SEED: u32 = 999666;
+
 benchmarks! {
-	_{
-		// User account seed
-		let u in 0 .. 1000 => ();
-	}
+	_{}
 
 	bond {
-		let u in ...;
-		let stash = create_funded_user::<T>("stash", u, 100);
-		let controller = create_funded_user::<T>("controller", u, 100);
+		let stash = create_funded_user::<T>("stash", USER_SEED, 100);
+		let controller = create_funded_user::<T>("controller", USER_SEED, 100);
 		let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
 		let reward_destination = RewardDestination::Staked;
 		let amount = T::Currency::minimum_balance() * 10.into();
@@ -120,8 +118,7 @@ benchmarks! {
 	}
 
 	bond_extra {
-		let u in ...;
-		let (stash, controller) = create_stash_controller::<T>(u, 100)?;
+		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100)?;
 		let max_additional = T::Currency::minimum_balance() * 10.into();
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
@@ -133,8 +130,7 @@ benchmarks! {
 	}
 
 	unbond {
-		let u in ...;
-		let (_, controller) = create_stash_controller::<T>(u, 100)?;
+		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100)?;
 		let amount = T::Currency::minimum_balance() * 10.into();
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
@@ -180,8 +176,7 @@ benchmarks! {
 	}
 
 	validate {
-		let u in ...;
-		let (stash, controller) = create_stash_controller::<T>(u, 100)?;
+		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100)?;
 		let prefs = ValidatorPrefs::default();
 	}: _(RawOrigin::Signed(controller), prefs)
 	verify {
@@ -199,13 +194,11 @@ benchmarks! {
 	}
 
 	chill {
-		let u in ...;
-		let (_, controller) = create_stash_controller::<T>(u, 100)?;
+		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100)?;
 	}: _(RawOrigin::Signed(controller))
 
 	set_payee {
-		let u in ...;
-		let (stash, controller) = create_stash_controller::<T>(u, 100)?;
+		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100)?;
 		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Staked);
 	}: _(RawOrigin::Signed(controller), RewardDestination::Controller)
 	verify {
@@ -213,9 +206,8 @@ benchmarks! {
 	}
 
 	set_controller {
-		let u in ...;
-		let (stash, _) = create_stash_controller::<T>(u, 100)?;
-		let new_controller = create_funded_user::<T>("new_controller", u, 100);
+		let (stash, _) = create_stash_controller::<T>(USER_SEED, 100)?;
+		let new_controller = create_funded_user::<T>("new_controller", USER_SEED, 100);
 		let new_controller_lookup = T::Lookup::unlookup(new_controller.clone());
 	}: _(RawOrigin::Signed(stash), new_controller_lookup)
 	verify {
@@ -229,13 +221,13 @@ benchmarks! {
 		assert_eq!(ValidatorCount::get(), c);
 	}
 
-	force_no_eras { let i in 0 .. 1; }: _(RawOrigin::Root)
+	force_no_eras {}: _(RawOrigin::Root)
 	verify { assert_eq!(ForceEra::get(), Forcing::ForceNone); }
 
-	force_new_era {let i in 0 .. 1; }: _(RawOrigin::Root)
+	force_new_era {}: _(RawOrigin::Root)
 	verify { assert_eq!(ForceEra::get(), Forcing::ForceNew); }
 
-	force_new_era_always { let i in 0 .. 1; }: _(RawOrigin::Root)
+	force_new_era_always {}: _(RawOrigin::Root)
 	verify { assert_eq!(ForceEra::get(), Forcing::ForceAlways); }
 
 	// Worst case scenario, the list of invulnerables is very long.
@@ -315,7 +307,7 @@ benchmarks! {
 
 	rebond {
 		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
-		let (_, controller) = create_stash_controller::<T>(u, 100)?;
+		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100)?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
 			value: 1.into(),
@@ -372,6 +364,7 @@ benchmarks! {
 		assert!(validators.len() == v as usize);
 	}
 
+	#[extra]
 	do_slash {
 		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
 		let (stash, controller) = create_stash_controller::<T>(0, 100)?;
@@ -438,6 +431,7 @@ benchmarks! {
 
 	// This benchmark create `v` validators intent, `n` nominators intent, in total creating `e`
 	// edges.
+	#[extra]
 	submit_solution_initial {
 		// number of validator intention. This will be equal to `ElectionSize::validators`.
 		let v in 200 .. 400;

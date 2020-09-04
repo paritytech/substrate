@@ -1,4 +1,3 @@
-
 // This file is part of Substrate.
 
 // Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
@@ -169,12 +168,6 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().writes(8 as Weight))
 			.saturating_add(DbWeight::get().writes((3 as Weight).saturating_mul(v as Weight)))
 	}
-	// WARNING! Some components were not used: ["l"]
-	fn do_slash() -> Weight {
-		(47783000 as Weight)
-			.saturating_add(DbWeight::get().reads(3 as Weight))
-			.saturating_add(DbWeight::get().writes(2 as Weight))
-	}
 	fn payout_all(v: u32, n: u32, ) -> Weight {
 		(0 as Weight)
 			.saturating_add((1841741000 as Weight).saturating_mul(v as Weight))
@@ -184,7 +177,7 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().writes((8 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(DbWeight::get().writes((3 as Weight).saturating_mul(n as Weight)))
 	}
-	fn submit_solution_initial(v: u32, n: u32, a: u32, w: u32, ) -> Weight {
+	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight {
 		(0 as Weight)
 			.saturating_add((762000 as Weight).saturating_mul(v as Weight))
 			.saturating_add((868000 as Weight).saturating_mul(n as Weight))
@@ -194,22 +187,5 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().reads((4 as Weight).saturating_mul(a as Weight)))
 			.saturating_add(DbWeight::get().reads((1 as Weight).saturating_mul(w as Weight)))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
-	}
-	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight {
-		(0 as Weight)
-			.saturating_add((784000 as Weight).saturating_mul(v as Weight))
-			.saturating_add((640000 as Weight).saturating_mul(n as Weight))
-			.saturating_add((68830000 as Weight).saturating_mul(a as Weight))
-			.saturating_add((8181000 as Weight).saturating_mul(w as Weight))
-			.saturating_add(DbWeight::get().reads(6 as Weight))
-			.saturating_add(DbWeight::get().reads((4 as Weight).saturating_mul(a as Weight)))
-			.saturating_add(DbWeight::get().reads((1 as Weight).saturating_mul(w as Weight)))
-			.saturating_add(DbWeight::get().writes(2 as Weight))
-	}
-	fn submit_solution_weaker(v: u32, n: u32, ) -> Weight {
-		(11244000 as Weight)
-			.saturating_add((28000 as Weight).saturating_mul(v as Weight))
-			.saturating_add((12000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(DbWeight::get().reads(3 as Weight))
 	}
 }
