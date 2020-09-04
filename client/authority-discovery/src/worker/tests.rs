@@ -303,8 +303,9 @@ fn publish_discover_cycle() {
 	let key_store = KeyStore::new();
 
 	let _ = pool.spawner().spawn_local_obj(async move {
-		let node_a_public = block_on(key_store
-			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
+		let node_a_public = key_store
+			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+			.await
 			.unwrap();
 		let test_api = Arc::new(TestApi {
 			authorities: vec![node_a_public.into()],
