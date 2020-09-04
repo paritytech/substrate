@@ -26,7 +26,7 @@ use futures::{future, future::FutureExt, Future};
 use log::info;
 use sc_service::{Configuration, TaskType, TaskManager};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, pin::Pin};
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -124,9 +124,12 @@ impl<C: SubstrateCli> Runner<C> {
 		let task_executor = move |fut, task_type| {
 			match task_type {
 				TaskType::Async => runtime_handle.spawn(fut).map(drop),
-				TaskType::Blocking =>
-					runtime_handle.spawn_blocking(move || futures::executor::block_on(fut))
-						.map(drop),
+				TaskType::Blocking => {
+					let handle = runtime_handle.clone();
+					runtime_handle.spawn_blocking(move || {
+						handle.block_on::<Pin<Box<dyn Future<Output = ()> + Send>>>(fut)
+					}).map(drop)
+				},
 			}
 		};
 
