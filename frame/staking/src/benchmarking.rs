@@ -364,33 +364,6 @@ benchmarks! {
 		assert!(validators.len() == v as usize);
 	}
 
-	#[extra]
-	do_slash {
-		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
-		let (stash, controller) = create_stash_controller::<T>(0, 100)?;
-		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
-		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
-			value: 1.into(),
-			era: EraIndex::zero(),
-		};
-		for _ in 0 .. l {
-			staking_ledger.unlocking.push(unlock_chunk.clone())
-		}
-		Ledger::<T>::insert(controller, staking_ledger);
-		let slash_amount = T::Currency::minimum_balance() * 10.into();
-		let balance_before = T::Currency::free_balance(&stash);
-	}: {
-		crate::slashing::do_slash::<T>(
-			&stash,
-			slash_amount,
-			&mut BalanceOf::<T>::zero(),
-			&mut NegativeImbalanceOf::<T>::zero()
-		);
-	} verify {
-		let balance_after = T::Currency::free_balance(&stash);
-		assert!(balance_before > balance_after);
-	}
-
 	payout_all {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
@@ -427,6 +400,33 @@ benchmarks! {
 		for arg in payout_calls_arg {
 			<Staking<T>>::payout_stakers(RawOrigin::Signed(caller.clone()).into(), arg.0, arg.1)?;
 		}
+	}
+
+	#[extra]
+	do_slash {
+		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
+		let (stash, controller) = create_stash_controller::<T>(0, 100)?;
+		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
+		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
+			value: 1.into(),
+			era: EraIndex::zero(),
+		};
+		for _ in 0 .. l {
+			staking_ledger.unlocking.push(unlock_chunk.clone())
+		}
+		Ledger::<T>::insert(controller, staking_ledger);
+		let slash_amount = T::Currency::minimum_balance() * 10.into();
+		let balance_before = T::Currency::free_balance(&stash);
+	}: {
+		crate::slashing::do_slash::<T>(
+			&stash,
+			slash_amount,
+			&mut BalanceOf::<T>::zero(),
+			&mut NegativeImbalanceOf::<T>::zero()
+		);
+	} verify {
+		let balance_after = T::Currency::free_balance(&stash);
+		assert!(balance_before > balance_after);
 	}
 
 	// This benchmark create `v` validators intent, `n` nominators intent, in total creating `e`
