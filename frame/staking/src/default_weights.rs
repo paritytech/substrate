@@ -24,8 +24,7 @@
 
 use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 
-pub struct WeightInfo;
-impl crate::WeightInfo for WeightInfo {
+impl crate::WeightInfo for () {
 	// WARNING! Some components were not used: ["u"]
 	fn bond() -> Weight {
 		(65788000 as Weight)
@@ -213,39 +212,4 @@ impl crate::WeightInfo for WeightInfo {
 			.saturating_add((12000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 	}
-}
-
-#[cfg(feature = "std")]
-const DEFAULT_WEIGHT: Weight = 1_000_000_000;
-
-#[cfg(feature = "std")]
-impl crate::WeightInfo for () {
-	fn bond() -> Weight { DEFAULT_WEIGHT }
-	fn bond_extra() -> Weight { DEFAULT_WEIGHT }
-	fn unbond() -> Weight { DEFAULT_WEIGHT }
-	fn withdraw_unbonded_update(_s: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn withdraw_unbonded_kill(_s: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn validate() -> Weight { DEFAULT_WEIGHT }
-	fn nominate(_n: u32) -> Weight { DEFAULT_WEIGHT }
-	fn chill() -> Weight { DEFAULT_WEIGHT }
-	fn set_payee() -> Weight { DEFAULT_WEIGHT }
-	fn set_controller() -> Weight { DEFAULT_WEIGHT }
-	fn set_validator_count() -> Weight { DEFAULT_WEIGHT }
-	fn force_no_eras() -> Weight { DEFAULT_WEIGHT }
-	fn force_new_era() -> Weight { DEFAULT_WEIGHT }
-	fn force_new_era_always() -> Weight { DEFAULT_WEIGHT }
-	fn set_invulnerables(_v: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn force_unstake(_s: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn cancel_deferred_slash(_s: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn payout_stakers(_n: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn payout_stakers_alive_controller(_n: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn rebond(_l: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn set_history_depth(_e: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn reap_stash(_s: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn new_era(_v: u32, _n: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn do_slash() -> Weight { DEFAULT_WEIGHT }
-	fn payout_all(_v: u32, _n: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn submit_solution_initial(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn submit_solution_better(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { DEFAULT_WEIGHT }
-	fn submit_solution_weaker(_v: u32, _n: u32, ) -> Weight { DEFAULT_WEIGHT }
 }

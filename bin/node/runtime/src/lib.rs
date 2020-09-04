@@ -454,7 +454,7 @@ impl pallet_staking::Trait for Runtime {
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = StakingUnsignedPriority;
-	type WeightInfo = pallet_staking::default_weights::WeightInfo;
+	type WeightInfo = ();
 }
 
 parameter_types! {

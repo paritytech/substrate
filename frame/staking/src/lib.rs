@@ -1603,12 +1603,7 @@ decl_module! {
 				Self::update_ledger(&controller, &ledger);
 
 				// This is only an update, so we use less overall weight.
-				// Note: we are re-calculating weights here which is not performant per se but it is
-				// accurate and maintainable. The calculation themselve are trivial and O(1).
-				Some(
-					T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans)
-						.saturating_sub(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
-				)
+				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
 			};
 
 			// `old_total` should never be less than the new total because
