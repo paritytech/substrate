@@ -971,7 +971,7 @@ impl<Block: BlockT> Backend<Block>
 				self.state_at(BlockId::Number(begin)).unwrap()
 			};
 
-			let current_authorities = state.storage(b"grandpa_authorities")?
+			let current_authorities = state.storage(b":grandpa_authorities")?
 				.and_then(|encoded| sp_finality_grandpa::VersionedAuthorityList::decode(&mut encoded.as_slice()).ok())
 				.map(|versioned| versioned.into())
 				.ok_or(ClientError::InvalidAuthoritiesSet)?;
