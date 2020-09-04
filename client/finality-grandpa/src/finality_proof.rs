@@ -492,7 +492,11 @@ pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
 			let dest = block_number + delay;
 			if dest <= end_number {
 				result.push(header.clone());
+				let inc = delay == Zero::zero() && block_number == index;
 				index = dest;
+				if inc {
+					index += One::one();
+				}
 				continue;
 			}
 		}
@@ -505,6 +509,9 @@ pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
 			if dest <= end_number {
 				result.push(header.clone());
 				index = dest;
+				if delay == Zero::zero() {
+					index += One::one();
+				}
 				continue;
 			}
 		}
