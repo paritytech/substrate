@@ -400,7 +400,7 @@ impl Metrics {
 			)?,
 			finality_grandpa_precommits: register(
 				Counter::new(
-					"finality_grandpa_precommits",
+					"finality_grandpa_precommits_total",
 					"Total number of GRANDPA precommits cast locally.",
 				)?,
 				registry,
