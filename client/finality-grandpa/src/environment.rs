@@ -393,7 +393,7 @@ impl Metrics {
 			)?,
 			finality_grandpa_prevotes: register(
 				Counter::new(
-					"finality_grandpa_prevotes",
+					"finality_grandpa_prevotes_total",
 					"Total number of GRANDPA prevotes cast locally.",
 				)?,
 				registry,
