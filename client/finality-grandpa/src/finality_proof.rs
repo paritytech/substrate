@@ -491,7 +491,15 @@ pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
 		})) = crate::import::find_forced_change::<Block>(&header) {
 			let dest = block_number + delay;
 			if dest <= end_number {
-				result.push(header.clone());
+				if let Some(justification) = blockchain.justification(BlockId::Number(index.clone()))? {
+					result.push(AuthoritySetProofFragment {
+						header: header.clone(),
+						justification,
+					});
+				} else {
+					println!("should be unreachable");
+				}
+	
 				let inc = delay == Zero::zero() && block_number == index;
 				index = dest;
 				if inc {
@@ -507,7 +515,14 @@ pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
 		}) = crate::import::find_scheduled_change::<Block>(&header) {
 			let dest = index + delay;
 			if dest <= end_number {
-				result.push(header.clone());
+				if let Some(justification) = blockchain.justification(BlockId::Number(index.clone()))? {
+					result.push(AuthoritySetProofFragment {
+						header: header.clone(),
+						justification,
+					});
+				} else {
+					println!("should be unreachable");
+				}
 				index = dest;
 				if delay == Zero::zero() {
 					index += One::one();
@@ -519,9 +534,16 @@ pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
 		index = *header.number() + One::one();
 	}
 
-	if result.last().as_ref().map(|head| head.number()) != Some(&end_number) {
+	if result.last().as_ref().map(|head| head.header.number()) != Some(&end_number) {
 		let header = blockchain.expect_header(end)?;
-		result.push(header);
+		if let Some(justification) = blockchain.justification(BlockId::Number(end_number.clone()))? {
+			result.push(AuthoritySetProofFragment {
+				header: header.clone(),
+				justification,
+			});
+		} else {
+			println!("should be unreachable");
+		}
 	}
 
 	let proof = result.encode();
