@@ -40,7 +40,7 @@ use crate::{Commit, Error};
 #[derive(Clone, Encode, Decode, PartialEq, Eq, Debug)]
 pub struct GrandpaJustification<Block: BlockT> {
 	round: u64,
-	pub(crate) commit: Commit<Block>,
+	pub commit: Commit<Block>,
 	votes_ancestries: Vec<Block::Header>,
 }
 

@@ -452,8 +452,6 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
 	blockchain: &B,
 	begin: Block::Hash,
-	current_set_id: u64, // TODO remove after debugging
-	current_authorities: AuthorityList, // TODO remove after debugging
 ) -> ::sp_blockchain::Result<Vec<u8>>
 	where
 		J: ProvableJustification<Block::Header>,
@@ -546,16 +544,7 @@ pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
 		}
 	}
 
-	let proof = result.encode();
-
-	// TODO only for initial testing
-	check_authority_proof::<Block, J>(
-		current_set_id,
-		current_authorities,
-		proof.clone(),
-	)?;
-	
-	Ok(proof)
+	Ok(result.encode())
 }
 
 /// Check GRANDPA proof-of-finality for the given block.
@@ -619,11 +608,11 @@ pub(crate) fn check_finality_proof<Block: BlockT, B, J>(
 /// Check GRANDPA authority change sequence to assert finality of a target block. 
 ///
 /// Returns the header of the target block.
-pub(crate) fn check_authority_proof<Block: BlockT, J>(
+pub fn check_authority_proof<Block: BlockT, J>(
 	current_set_id: u64,
 	current_authorities: AuthorityList,
 	remote_proof: Vec<u8>,
-) -> ClientResult<(Block::Header, u64, AuthorityList)>
+) -> ClientResult<(Block::Header, u64, AuthorityList, J)>
 	where
 		NumberFor<Block>: BlockNumberOps,
 		J: ProvableJustification<Block::Header>,
@@ -638,7 +627,7 @@ pub(crate) fn check_authority_proof<Block: BlockT, J>(
 
 	for (ix, fragment) in proof.into_iter().enumerate() {
 		let is_last = ix == last;
-		result = check_authority_proof_fragment::<Block, J>(
+		let check_result = check_authority_proof_fragment::<Block, J>(
 			result.0,
 			&result.1,
 			&result.2,
@@ -646,8 +635,9 @@ pub(crate) fn check_authority_proof<Block: BlockT, J>(
 			&fragment,
 		)?; 
 
+		result = check_result.0;
 		if is_last {
-			return Ok((fragment.header, result.0, result.1))
+			return Ok((fragment.header, result.0, result.1, check_result.1))
 		}
 	}
 
@@ -662,7 +652,7 @@ fn check_authority_proof_fragment<Block: BlockT, J>(
 	current_block: &NumberFor<Block>,
 	is_last: bool,
 	authorities_proof: &AuthoritySetProofFragment<Block::Header>,
-) -> ClientResult<(u64, AuthorityList, NumberFor<Block>)>
+) -> ClientResult<((u64, AuthorityList, NumberFor<Block>), J)>
 	where
 		NumberFor<Block>: BlockNumberOps,
 		J: Decode + ProvableJustification<Block::Header>,
@@ -674,7 +664,7 @@ fn check_authority_proof_fragment<Block: BlockT, J>(
 	if authorities_proof.header.number() <= current_block {
 		return Err(ClientError::Msg("Invalid authority warp proof".to_string()));
 	}
-	current_block = authorities_proof.header.number();
+	let mut current_block = authorities_proof.header.number();
 	let mut at_block = None;
 	if let Some(sp_finality_grandpa::ScheduledChange {
 		next_authorities,
@@ -696,9 +686,9 @@ fn check_authority_proof_fragment<Block: BlockT, J>(
 		return Err(ClientError::Msg("Invalid authority warp proof".to_string()));
 	}
 	if let Some((at_block, next_authorities)) = at_block {
-		Ok((current_set_id + 1, next_authorities, at_block))
+		Ok(((current_set_id + 1, next_authorities, at_block), justification))
 	} else {
-		Ok((current_set_id, current_authorities.clone(), current_block.clone()))
+		Ok(((current_set_id, current_authorities.clone(), current_block.clone()), justification))
 	}
 }
 

@@ -980,16 +980,29 @@ impl<Block: BlockT> Backend<Block>
 			let current_set_id = state.storage(&[35u8, 113, 226, 22, 132, 210, 250, 233, 155, 203, 77, 87, 146, 66, 247, 74, 138, 45, 9, 70, 62, 255, 204, 120, 162, 45, 117, 185, 203, 135, 223, 252][..])?
 				.and_then(|encoded| u64::decode(&mut encoded.as_slice()).ok())
 				.ok_or(ClientError::InvalidAuthoritiesSet)?;
-			sc_finality_grandpa::finality_proof::prove_authority::<
+			let proof = sc_finality_grandpa::finality_proof::prove_authority::<
 				Block,
 				BlockchainDb<Block>,
 				sc_finality_grandpa::GrandpaJustification<Block>,
 			>(
 				&self.blockchain,
 				head_begin.hash(),
+			)?;
+			let (head_target, nb, authorities, justification) = sc_finality_grandpa::finality_proof::check_authority_proof::<
+				Block,
+				sc_finality_grandpa::GrandpaJustification<Block>,
+			>(
 				current_set_id,
 				current_authorities,
+				proof.clone(),
 			)?;
+
+			let is_valid = justification.commit.target_hash == head_target.hash();
+			let is_valid = &justification.commit.target_number == head_target.number();
+			let is_valid = head_target.hash() == last_fin_head.hash();
+			let is_valid = head_target.number() == last_fin_head.number();
+			let is_valid = head_target == last_fin_head;
+	
 		}
 		Ok(())
 	 }
