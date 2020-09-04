@@ -149,7 +149,6 @@ fn struct_def(
 		)
 	}).collect::<TokenStream2>();
 
-
 	let len_impl = len_impl(count);
 	let edge_count_impl = edge_count_impl(count);
 	let unique_targets_impl = unique_targets_impl(count);
