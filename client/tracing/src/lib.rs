@@ -38,7 +38,7 @@ use tracing::{
 	span::{Attributes, Id, Record},
 	subscriber::Subscriber,
 };
-use tracing_subscriber::layer::{Layer, Context};
+use tracing_subscriber::{CurrentSpan, layer::{Layer, Context}};
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
@@ -47,7 +47,7 @@ const ZERO_DURATION: Duration = Duration::from_nanos(0);
 const PROXY_TARGET: &'static str = "sp_tracing::proxy";
 
 /// Responsible for assigning ids to new spans, which are not re-used.
-pub struct ProfilingSubscriber {
+pub struct ProfilingLayer {
 	targets: Vec<(String, Level)>,
 	trace_handler: Box<dyn TraceHandler>,
 	span_data: Mutex<FxHashMap<Id, SpanDatum>>,
@@ -308,9 +308,7 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 		}
 	}
 
-	fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
-
-	fn event(&self, event: &Event<'_>) {
+	fn on_event(&self, event: &Event<'_>, _ctx: Context<S>) {
 		let mut values = Values::default();
 		event.record(&mut values);
 		let trace_event = TraceEvent {
@@ -323,7 +321,7 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 		self.trace_handler.handle_event(trace_event);
 	}
 
-	fn enter(&self, span: &Id, _ctx: Context<S>) {
+	fn on_enter(&self, span: &Id, _ctx: Context<S>) {
 		self.current_span.enter(span.clone());
 		let mut span_data = self.span_data.lock();
 		let start_time = Instant::now();
