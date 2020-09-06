@@ -4359,7 +4359,7 @@ fn test_payout_stakers() {
 	// We also test that `payout_extra_nominators` works.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
-		// Create three validators:
+		// Create a validator:
 		bond_validator(11, 10, balance); // Default(64)
 
 		// Create nominators, targeting stash of validators
@@ -4597,15 +4597,12 @@ fn on_initialize_weight_is_correct() {
 	});
 }
 
-
 #[test]
 fn payout_creates_controller() {
-	// Here we will test validator can set `max_nominators_payout` and it works.
-	// We also test that `payout_extra_nominators` works.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
-		// Create three validators:
-		bond_validator(11, 10, balance); // Default(64)
+		// Create a validator:
+		bond_validator(11, 10, balance);
 
 		// Create a stash/controller pair
 		bond_nominator(1234, 1337, 100, vec![11]);
@@ -4624,5 +4621,34 @@ fn payout_creates_controller() {
 
 		// Controller is created
 		assert!(Balances::free_balance(1337) > 0);
+	})
+}
+
+#[test]
+fn payout_to_any_account_works() {
+	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+		let balance = 1000;
+		// Create a validator:
+		bond_validator(11, 10, balance); // Default(64)
+
+		// Create a stash/controller pair
+		bond_nominator(1234, 1337, 100, vec![11]);
+
+		// Update payout location
+		assert_ok!(Staking::set_payee(Origin::signed(1337), RewardDestination::Account(42)));
+
+		// Reward Destination account doesn't exist
+		assert_eq!(Balances::free_balance(42), 0);
+
+		mock::start_era(1);
+		Staking::reward_by_ids(vec![(11, 1)]);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
+		mock::start_era(2);
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
+
+		// Payment is successful
+		assert!(Balances::free_balance(42) > 0);
 	})
 }

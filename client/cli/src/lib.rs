@@ -21,7 +21,7 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-mod arg_enums;
+pub mod arg_enums;
 mod commands;
 mod config;
 mod error;

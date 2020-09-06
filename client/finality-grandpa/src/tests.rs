@@ -23,7 +23,7 @@ use assert_matches::assert_matches;
 use environment::HasVoted;
 use sc_network_test::{
 	Block, BlockImportAdapter, Hash, PassThroughVerifier, Peer, PeersClient, PeersFullClient,
-	TestClient, TestNetFactory,
+	TestClient, TestNetFactory, FullPeerConfig,
 };
 use sc_network::config::{ProtocolConfig, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
@@ -92,6 +92,15 @@ impl TestNetFactory for GrandpaTestNet {
 	fn default_config() -> ProtocolConfig {
 		// This is unused.
 		ProtocolConfig::default()
+	}
+
+	fn add_full_peer(&mut self) {
+		self.add_full_peer_with_config(FullPeerConfig {
+			notifications_protocols: vec![
+				(communication::GRANDPA_ENGINE_ID, communication::GRANDPA_PROTOCOL_NAME.into())
+			],
+			..Default::default()
+		})
 	}
 
 	fn make_verifier(
