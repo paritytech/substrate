@@ -242,6 +242,31 @@ impl Default for DispatchClass {
 	}
 }
 
+/// Primitives related to priority management of Frame.
+pub mod priority {
+	/// The starting point of all Operational transactions. 3/4 of u64::max_value().
+	pub const LIMIT: u64 = 13_835_058_055_282_163_711_u64;
+
+	/// Wrapper for priority of different dispatch classes.
+	///
+	/// This only makes sure that any value created for the operational dispatch class is
+	/// incremented by [`LIMIT`].
+	#[derive(Clone, Copy)]
+	pub enum FrameTransactionPriority {
+		Normal(u64),
+		Operational(u64),
+	}
+
+	impl Into<u64> for FrameTransactionPriority {
+		fn into(self) -> u64 {
+			match self {
+				FrameTransactionPriority::Normal(inner) => inner,
+				FrameTransactionPriority::Operational(inner) => inner.saturating_add(LIMIT),
+			}
+		}
+	}
+}
+
 /// A bundle of static information collected from the `#[weight = $x]` attributes.
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
 pub struct DispatchInfo {

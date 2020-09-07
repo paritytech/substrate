@@ -27,7 +27,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	traits::{Get},
-	weights::{PostDispatchInfo, DispatchInfo, DispatchClass},
+	weights::{PostDispatchInfo, DispatchInfo, DispatchClass, priority::FrameTransactionPriority},
 	StorageValue,
 };
 
@@ -157,12 +157,18 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	}
 
 	/// get the priority of an extrinsic denoted by `info`.
+	///
+	/// Operational transaction will be given a fixed initial amount to be fairly distinguished from
+	/// the normal ones.
 	fn get_priority(info: &DispatchInfoOf<T::Call>) -> TransactionPriority {
 		match info.class {
-			DispatchClass::Normal => info.weight.into(),
-			// Don't use up the whole priority space, to allow things like `tip`
-			// to be taken into account as well.
-			DispatchClass::Operational => TransactionPriority::max_value() / 2,
+			// Normal transaction.
+			DispatchClass::Normal =>
+				FrameTransactionPriority::Normal(info.weight.into()).into(),
+			// Don't use up the whole priority space, to allow things like `tip` to be taken into
+			// account as well.
+			DispatchClass::Operational =>
+				FrameTransactionPriority::Operational(info.weight.into()).into(),
 			// Mandatory extrinsics are only for inherents; never transactions.
 			DispatchClass::Mandatory => TransactionPriority::min_value(),
 		}

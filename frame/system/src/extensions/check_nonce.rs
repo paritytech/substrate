@@ -25,7 +25,7 @@ use sp_runtime::{
 	traits::{SignedExtension, DispatchInfoOf, Dispatchable, One},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
-		TransactionLongevity, TransactionPriority,
+		TransactionLongevity,
 	},
 };
 use sp_std::vec;
@@ -90,7 +90,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> where
 		&self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		// check index
@@ -107,7 +107,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> where
 		};
 
 		Ok(ValidTransaction {
-			priority: info.weight as TransactionPriority,
+			priority: 0,
 			requires,
 			provides,
 			longevity: TransactionLongevity::max_value(),
