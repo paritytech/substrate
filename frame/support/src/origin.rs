@@ -241,10 +241,9 @@ macro_rules! impl_outer_origin {
 				#[codec(index = "0")]
 				system($system::Origin<$runtime>),
 				$(
-					$( #[codec(index = $index )] )?
+					$( #[codec(index = $index)] )?
 					[< $module $( _ $generic_instance )? >]
 					($module::Origin < $( $generic, )? $( $module::$generic_instance )? > ),
-
 				)*
 				#[allow(dead_code)]
 				Void($crate::Void)
