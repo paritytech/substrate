@@ -48,6 +48,7 @@ use rand_chacha::{
 };
 use sc_keystore::LocalKeystore;
 use sp_application_crypto::key_types::BABE;
+use async_std::task;
 
 type Item = DigestItem<Hash>;
 
@@ -387,7 +388,7 @@ fn run_one_test(
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore: SyncCryptoStore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore").into();
-		keystore.ed25519_generate_new(BABE, Some(seed)).expect("Generates authority key");
+		keystore.sr25519_generate_new(BABE, Some(seed)).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
 		let mut got_own = false;
@@ -434,8 +435,7 @@ fn run_one_test(
 			can_author_with: sp_consensus::AlwaysCanAuthor,
 		}).expect("Starts babe"));
 	}
-
-	futures::executor::block_on(future::select(
+	task::block_on(future::select(
 		futures::future::poll_fn(move |cx| {
 			let mut net = net.lock();
 			net.poll(cx);

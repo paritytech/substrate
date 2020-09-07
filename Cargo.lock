@@ -6574,6 +6574,7 @@ dependencies = [
 name = "sc-consensus-babe"
 version = "0.8.0-rc6"
 dependencies = [
+ "async-std",
  "derive_more",
  "env_logger",
  "fork-tree",
