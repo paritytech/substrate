@@ -272,7 +272,6 @@ decl_module! {
 		/// The maximum amount of signatories allowed for a given multisig.
 		const MaxSignatories: u16 = T::MaxSignatories::get();
 
-
 		/// Immediately dispatch a multi-signature call using a single approval from the caller.
 		///
 		/// The dispatch origin for this call must be _Signed_.
