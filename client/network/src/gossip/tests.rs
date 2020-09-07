@@ -100,7 +100,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		finality_proof_request_builder: None,
 		on_demand: None,
 		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
-		protocol_id: config::ProtocolId::from(&b"/test-protocol-name"[..]),
+		protocol_id: config::ProtocolId::from("/test-protocol-name"),
 		import_queue,
 		block_announce_validator: Box::new(
 			sp_consensus::block_validation::DefaultBlockAnnounceValidator,
@@ -130,14 +130,14 @@ fn build_nodes_one_proto()
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![(ENGINE_ID, From::from(&b"/foo"[..]))],
+		notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
 		.. config::NetworkConfiguration::new_local()
 	});
 
 	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![(ENGINE_ID, From::from(&b"/foo"[..]))],
+		notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
 		listen_addresses: vec![],
 		reserved_nodes: vec![config::MultiaddrWithPeerId {
 			multiaddr: listen_addr,

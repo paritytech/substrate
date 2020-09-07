@@ -16,7 +16,7 @@
 
 //! Block sealing utilities
 
-use crate::{Error, rpc};
+use crate::{Error, rpc, CreatedBlock, ConsensusDataProvider};
 use std::sync::Arc;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
@@ -24,24 +24,21 @@ use sp_runtime::{
 };
 use futures::prelude::*;
 use sc_transaction_pool::txpool;
-use rpc::CreatedBlock;
-
 use sp_consensus::{
-	self, BlockImport, Environment, Proposer,
-	ForkChoiceStrategy, BlockImportParams, BlockOrigin,
-	ImportResult, SelectChain,
-	import_queue::BoxBlockImport,
+	self, BlockImport, Environment, Proposer, ForkChoiceStrategy,
+	BlockImportParams, BlockOrigin, ImportResult, SelectChain,
 };
 use sp_blockchain::HeaderBackend;
 use std::collections::HashMap;
 use std::time::Duration;
 use sp_inherents::InherentDataProviders;
+use sp_api::{ProvideRuntimeApi, TransactionFor};
 
 /// max duration for creating a proposal in secs
-const MAX_PROPOSAL_DURATION: u64 = 10;
+pub const MAX_PROPOSAL_DURATION: u64 = 10;
 
 /// params for sealing a new block
-pub struct SealBlockParams<'a, B: BlockT, SC, HB, E, T, P: txpool::ChainApi> {
+pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P: txpool::ChainApi> {
 	/// if true, empty blocks(without extrinsics) will be created.
 	/// otherwise, will return Error::EmptyTransactionPool.
 	pub create_empty: bool,
@@ -54,19 +51,21 @@ pub struct SealBlockParams<'a, B: BlockT, SC, HB, E, T, P: txpool::ChainApi> {
 	/// transaction pool
 	pub pool: Arc<txpool::Pool<P>>,
 	/// header backend
-	pub client: Arc<HB>,
+	pub client: Arc<C>,
 	/// Environment trait object for creating a proposer
 	pub env: &'a mut E,
 	/// SelectChain object
 	pub select_chain: &'a SC,
+	/// Digest provider for inclusion in blocks.
+	pub consensus_data_provider: Option<&'a dyn ConsensusDataProvider<B, Transaction = TransactionFor<C, B>>>,
 	/// block import object
-	pub block_import: &'a mut BoxBlockImport<B, T>,
+	pub block_import: &'a mut BI,
 	/// inherent data provider
 	pub inherent_data_provider: &'a InherentDataProviders,
 }
 
 /// seals a new block with the given params
-pub async fn seal_new_block<B, SC, HB, E, T, P>(
+pub async fn seal_block<B, BI, SC, C, E, P>(
 	SealBlockParams {
 		create_empty,
 		finalize,
@@ -77,13 +76,16 @@ pub async fn seal_new_block<B, SC, HB, E, T, P>(
 		block_import,
 		env,
 		inherent_data_provider,
+		consensus_data_provider: digest_provider,
 		mut sender,
 		..
-	}: SealBlockParams<'_, B, SC, HB, E, T, P>
+	}: SealBlockParams<'_, B, BI, SC, C, E, P>
 )
 	where
 		B: BlockT,
-		HB: HeaderBackend<B>,
+		BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
+			+ Send + Sync + 'static,
+		C: HeaderBackend<B> + ProvideRuntimeApi<B>,
 		E: Environment<B>,
 		<E as Environment<B>>::Error: std::fmt::Display,
 		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
@@ -98,7 +100,7 @@ pub async fn seal_new_block<B, SC, HB, E, T, P>(
 		// get the header to build this new block on.
 		// use the parent_hash supplied via `EngineCommand`
 		// or fetch the best_block.
-		let header = match parent_hash {
+		let parent = match parent_hash {
 			Some(hash) => {
 				match client.header(BlockId::Hash(hash))? {
 					Some(header) => header,
@@ -108,11 +110,18 @@ pub async fn seal_new_block<B, SC, HB, E, T, P>(
 			None => select_chain.best_chain()?
 		};
 
-		let proposer = env.init(&header)
+		let proposer = env.init(&parent)
 			.map_err(|err| Error::StringError(format!("{}", err))).await?;
 		let id = inherent_data_provider.create_inherent_data()?;
 		let inherents_len = id.len();
-		let proposal = proposer.propose(id, Default::default(), Duration::from_secs(MAX_PROPOSAL_DURATION), false.into())
+
+		let digest = if let Some(digest_provider) = digest_provider {
+			digest_provider.create_digest(&parent, &id)?
+		} else {
+			Default::default()
+		};
+
+		let proposal = proposer.propose(id.clone(), digest, Duration::from_secs(MAX_PROPOSAL_DURATION), false.into())
 			.map_err(|err| Error::StringError(format!("{}", err))).await?;
 
 		if proposal.block.extrinsics().len() == inherents_len && !create_empty {
@@ -124,6 +133,10 @@ pub async fn seal_new_block<B, SC, HB, E, T, P>(
 		params.body = Some(body);
 		params.finalized = finalize;
 		params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+
+		if let Some(digest_provider) = digest_provider {
+			digest_provider.append_block_import(&parent, &mut params, &id)?;
+		}
 
 		match block_import.import_block(params, HashMap::new())? {
 			ImportResult::Imported(aux) => {
