@@ -245,7 +245,8 @@ decl_module! {
 		/// Dispatch the given `call` from an account that the sender is authorised for through
 		/// `add_proxy`.
 		///
-		/// Removes any corresponding announcement(s).
+		/// This can only be used for proxies that are set with no delay. Removes any corresponding
+		/// announcement(s).
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///

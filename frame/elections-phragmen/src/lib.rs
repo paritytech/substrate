@@ -96,7 +96,7 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo},
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
-		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus, InitializeMembers,
+		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, InitializeMembers,
 		ContainsLengthBound,
 	}
 };
@@ -194,7 +194,10 @@ pub trait Trait: frame_system::Trait {
 	/// How much should be locked up in order to submit one's candidacy.
 	type CandidacyBond: Get<BalanceOf<Self>>;
 
-	/// How much should be locked up in order to be able to submit votes.
+	/// Base deposit associated with voting.
+	///
+	/// This should be sensibly high to economically ensure the pallet cannot be attacked by
+	/// creating a gigantic number of votes.
 	type VotingBond: Get<BalanceOf<Self>>;
 
 	/// Handler for the unbalanced reduction when a candidate has lost (and is not a runner-up)
@@ -364,6 +367,7 @@ decl_module! {
 		) {
 			let who = ensure_signed(origin)?;
 
+			// votes should not be empty and more than `MAXIMUM_VOTE` in any case.
 			ensure!(votes.len() <= MAXIMUM_VOTE, Error::<T>::MaximumVotesExceeded);
 			ensure!(!votes.is_empty(), Error::<T>::NoVotes);
 
@@ -371,9 +375,10 @@ decl_module! {
 			let members_count = <Members<T>>::decode_len().unwrap_or(0);
 			let runners_up_count = <RunnersUp<T>>::decode_len().unwrap_or(0);
 
+			// can never submit a vote of there are no members, and cannot submit more votes than
+			// all potential vote targets.
 			// addition is valid: candidates, members and runners-up will never overlap.
 			let allowed_votes = candidates_count + members_count + runners_up_count;
-
 			ensure!(!allowed_votes.is_zero(), Error::<T>::UnableToVote);
 			ensure!(votes.len() <= allowed_votes, Error::<T>::TooManyVotes);
 
@@ -420,20 +425,21 @@ decl_module! {
 			Self::do_remove_voter(&who, true);
 		}
 
-		/// Report `target` for being an defunct voter. In case of a valid report, the reporter is
-		/// rewarded by the bond amount of `target`. Otherwise, the reporter itself is removed and
-		/// their bond is slashed.
+		/// Report `target` for being an defunct voter. In case of a valid report, the `target`'s
+		/// bond is returned and their voting is removed. Otherwise, nothing happens.
 		///
-		/// A defunct voter is defined to be:
-		///   - a voter whose current submitted votes are all invalid. i.e. all of them are no
-		///     longer a candidate nor an active member or a runner-up.
+		/// Note that regardless of the outcome, neither slashing nor rewarding happens.
 		///
+		/// A defunct voter is defined to be: a voter who's current submitted votes are all invalid.
+		/// 	i.e. all of them are no longer a candidate nor an active member or a runner-up.
+		///
+		/// The dispatch origin of this call must be signed.
 		///
 		/// The origin must provide the number of current candidates and votes of the reported target
 		/// for the purpose of accurate weight calculation.
 		///
 		/// # <weight>
-		/// No Base weight based on min square analysis.
+		/// No base weight based on min square analysis.
 		/// Complexity of candidate_count: 1.755 µs
 		/// Complexity of vote_count: 18.51 µs
 		/// State reads:
@@ -460,7 +466,6 @@ decl_module! {
 			let target = T::Lookup::lookup(defunct.who)?;
 
 			ensure!(reporter != target, Error::<T>::ReportSelf);
-			ensure!(Self::is_voter(&reporter), Error::<T>::MustBeVoter);
 
 			let DefunctVoter { candidate_count, vote_count, .. }  = defunct;
 
@@ -483,17 +488,11 @@ decl_module! {
 
 			let valid = Self::is_defunct_voter(&votes);
 			if valid {
-				// reporter will get the voting bond of the target
-				T::Currency::repatriate_reserved(&target, &reporter, T::VotingBond::get(), BalanceStatus::Free)?;
-				// remove the target. They are defunct.
-				Self::do_remove_voter(&target, false);
-			} else {
-				// slash the bond of the reporter.
-				let imbalance = T::Currency::slash_reserved(&reporter, T::VotingBond::get()).0;
-				T::BadReport::on_unbalanced(imbalance);
-				// remove the reporter.
-				Self::do_remove_voter(&reporter, false);
+				// remove the defunct target while unreserving their bond.
+				Self::do_remove_voter(&target, true);
+				// TODO: probably refund or be more kind to the poor origin.
 			}
+
 			Self::deposit_event(RawEvent::VoterReported(target, reporter, valid));
 		}
 
@@ -832,7 +831,9 @@ impl<T: Trait> Module<T> {
 	/// Reads Members, RunnersUp, Candidates and Voting(who) from database.
 	fn is_defunct_voter(votes: &[T::AccountId]) -> bool {
 		votes.iter().all(|v|
-			!Self::is_member(v) && !Self::is_runner_up(v) && !Self::is_candidate(v).is_ok()
+			!Self::is_member(v) &&
+			!Self::is_runner_up(v) &&
+			!Self::is_candidate(v).is_ok()
 		)
 	}
 
@@ -840,12 +841,11 @@ impl<T: Trait> Module<T> {
 	///
 	/// This will clean always clean the storage associated with the voter, and remove the balance
 	/// lock. Optionally, it would also return the reserved voting bond if indicated by `unreserve`.
-	/// If unreserve is true, has 3 storage reads and 1 reads.
 	///
 	/// DB access: Voting and Lock are always written to, if unreserve, then 1 read and write added.
 	fn do_remove_voter(who: &T::AccountId, unreserve: bool) {
 		// remove storage and lock.
-		Voting::<T>::remove(who);
+		<Voting<T>>::remove(who);
 		T::Currency::remove_lock(T::ModuleId::get(), who);
 
 		if unreserve {
@@ -2028,7 +2028,7 @@ mod tests {
 	}
 
 	#[test]
-	fn report_voter_should_work_and_earn_reward() {
+	fn report_voter_should_work() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_ok!(submit_candidacy(Origin::signed(5)));
 			assert_ok!(submit_candidacy(Origin::signed(4)));
@@ -2053,13 +2053,15 @@ mod tests {
 				event.event == Event::elections_phragmen(RawEvent::VoterReported(3, 5, true))
 			}));
 
-			assert_eq!(balances(&3), (28, 0));
-			assert_eq!(balances(&5), (47, 5));
+			// target got bond back.
+			assert_eq!(balances(&3), (30, 0));
+			// reporter nothing changed.
+			assert_eq!(balances(&5), (45, 5));
 		});
 	}
 
 	#[test]
-	fn report_voter_should_slash_when_bad_report() {
+	fn report_voter_should_do_nothing_when_bad_report() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_ok!(submit_candidacy(Origin::signed(5)));
 			assert_ok!(submit_candidacy(Origin::signed(4)));
@@ -2081,8 +2083,9 @@ mod tests {
 				event.event == Event::elections_phragmen(RawEvent::VoterReported(4, 5, false))
 			}));
 
+			// neither change. Only 5 is paying tx fee (not reflected here).
 			assert_eq!(balances(&4), (35, 5));
-			assert_eq!(balances(&5), (45, 3));
+			assert_eq!(balances(&5), (45, 5));
 		});
 	}
 
