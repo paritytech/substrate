@@ -139,7 +139,7 @@ pub fn create_full<C, P, SC>(
 		shared_voter_state,
 		shared_authority_set,
 		justification_stream,
-		subscriptions,
+		sub_task_executor,
 	} = grandpa;
 
 	io.extend_with(
@@ -172,7 +172,7 @@ pub fn create_full<C, P, SC>(
 				shared_authority_set,
 				shared_voter_state,
 				justification_stream,
-				subscriptions,
+				sub_task_executor,
 			)
 		)
 	);
