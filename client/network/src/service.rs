@@ -773,13 +773,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Sends a single targeted request to a specific peer. On success, returns the response of
 	/// the peer.
 	///
-	/// Request-response protocols are a way to complement notifications protocols, but
-	/// notifications should remain the default ways of communicating information. For example, a
-	/// peer can announce something through a notification, after which the recipient can obtain
-	/// more information by performing a request.
-	/// As such, this function is meant to be called only with peers we are already connected to.
-	/// Calling this method with a `target` we are not connected to will *not* attempt to connect
-	/// to said peer.
+	/// If there isn't any existing connection with the given target, the implementation will
+	/// attempt to establish one.
 	///
 	/// No limit or throttling of concurrent outbound requests per peer and protocol are enforced.
 	/// Such restrictions, if desired, need to be enforced at the call site(s).
@@ -1264,10 +1259,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 								request_id,
 								(pending_response, Instant::now(), protocol.to_string())
 							);
-						},
-						Err(behaviour::SendRequestError::NotConnected) => {
-							let err = RequestFailure::Network(OutboundFailure::ConnectionClosed);
-							let _ = pending_response.send(Err(err));
 						},
 						Err(behaviour::SendRequestError::UnknownProtocol) => {
 							let err = RequestFailure::Network(OutboundFailure::UnsupportedProtocols);

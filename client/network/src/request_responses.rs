@@ -207,17 +207,12 @@ impl RequestResponsesBehaviour {
 
 	/// Initiates sending a request.
 	///
-	/// An error is returned if we are not connected to the target peer or if the protocol doesn't
-	/// match one that has been registered.
+	/// An error is returned if the protocol doesn't match one that has been registered.
 	pub fn send_request(&mut self, target: &PeerId, protocol: &str, request: Vec<u8>)
 		-> Result<RequestId, SendRequestError>
 	{
 		if let Some((protocol, _)) = self.protocols.get_mut(protocol) {
-			if protocol.is_connected(target) {
-				Ok(protocol.send_request(target, request))
-			} else {
-				Err(SendRequestError::NotConnected)
-			}
+			Ok(protocol.send_request(target, request))
 		} else {
 			Err(SendRequestError::UnknownProtocol)
 		}
@@ -500,8 +495,6 @@ pub enum RegisterError {
 /// Error when sending a request.
 #[derive(Debug, derive_more::Display, derive_more::Error)]
 pub enum SendRequestError {
-	/// We are not currently connected to the requested peer.
-	NotConnected,
 	/// Given protocol hasn't been registered.
 	UnknownProtocol,
 }
