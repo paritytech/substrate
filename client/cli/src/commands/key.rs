@@ -28,10 +28,11 @@ use super::{
 	generate_node_key::GenerateNodeKeyCmd,
 };
 
-/// key utilities for the cli.
+/// Key utilities for the cli.
 #[derive(Debug, StructOpt)]
 pub enum KeySubcommand {
-	/// Generate a random node libp2p key, save it to file and print its peer ID
+	/// Generate a random node libp2p key, save it to file or print it to stdout
+	/// and print its peer ID to stderr.
 	GenerateNodeKey(GenerateNodeKeyCmd),
 
 	/// Generate a random account
