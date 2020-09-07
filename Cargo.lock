@@ -9753,9 +9753,9 @@ checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "wabt"
-version = "0.9.2"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c5c5c1286c6e578416982609f47594265f9d489f9b836157d403ad605a46693"
+checksum = "94b5f5d6984ca42df66280baa8a15ac188a173ddaf4580b574a98931c01920e7"
 dependencies = [
  "serde",
  "serde_derive",
@@ -9765,9 +9765,9 @@ dependencies = [
 
 [[package]]
 name = "wabt-sys"
-version = "0.7.2"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01c695f98f7eb81fd4e2f6b65301ccc916a950dc2265eeefc4d376b34ce666df"
+checksum = "b064c81821100adb4b71923cecfc67fef083db21c3bbd454b0162c7ffe63eeaa"
 dependencies = [
  "cc",
  "cmake",
