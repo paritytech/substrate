@@ -6536,6 +6536,7 @@ dependencies = [
 name = "sc-consensus-aura"
 version = "0.8.0-rc6"
 dependencies = [
+ "async-std",
  "derive_more",
  "env_logger",
  "futures 0.3.5",

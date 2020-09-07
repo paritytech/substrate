@@ -890,6 +890,7 @@ mod tests {
 	use substrate_test_runtime_client::runtime::{Header, H256};
 	use sc_keystore::LocalKeystore;
 	use sp_application_crypto::key_types::AURA;
+	use async_std::task;
 
 	type Error = sp_blockchain::Error;
 
@@ -1052,7 +1053,7 @@ mod tests {
 			).expect("Starts aura"));
 		}
 
-		futures::executor::block_on(future::select(
+		task::block_on(future::select(
 			future::poll_fn(move |cx| {
 				net.lock().poll(cx);
 				Poll::<()>::Pending
