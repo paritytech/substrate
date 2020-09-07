@@ -102,8 +102,8 @@ thread_local! {
 impl crate::LeafDataProvider for LeafData {
 	type LeafData = Self;
 
-	fn leaf_data() -> Self::LeafData {
-		LEAF_DATA.with(|r| r.borrow().clone())
+	fn leaf_data() -> (Self::LeafData, Weight) {
+		(LEAF_DATA.with(|r| r.borrow().clone()), 1)
 	}
 }
 
@@ -191,10 +191,14 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 
 	// make sure the leaves end up in the offchain DB
 	ext.persist_offchain_overlay();
-	let odb = ext.offchain_db();
-	assert_eq!(odb.get(b"mmr-1").map(decode_node), Some(MMRNode::Leaf(Leaf {
+	let offchain_db = ext.offchain_db();
+	assert_eq!(offchain_db.get(&MMR::offchain_key(0)).map(decode_node), Some(MMRNode::Leaf(Leaf {
 		hash: H256::repeat_byte(1),
 		data: LeafData::new(1),
+	})));
+	assert_eq!(offchain_db.get(&MMR::offchain_key(1)).map(decode_node), Some(MMRNode::Leaf(Leaf {
+		hash: H256::repeat_byte(2),
+		data: LeafData::new(2),
 	})));
 }
 

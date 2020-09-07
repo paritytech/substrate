@@ -28,10 +28,12 @@ use frame_support::{
 	debug, decl_module, decl_storage, RuntimeDebug,
 	dispatch::Parameter,
 	weights::Weight,
+	traits::Get,
 };
 use sp_runtime::traits;
 use sp_std::{fmt, marker::PhantomData};
 
+mod mmr;
 mod primitives;
 #[cfg(test)]
 mod tests;
@@ -46,7 +48,9 @@ pub trait LeafDataProvider {
 	///
 	/// This is being called by the `on_initialize` method of
 	/// this pallet at the very beginning of each block.
-	fn leaf_data() -> Self::LeafData;
+	/// The second argument should indicate how much `Weight`
+	/// was required to retrieve the data.
+	fn leaf_data() -> (Self::LeafData, Weight);
 }
 
 /// This pallet's configuration trait
@@ -102,7 +106,7 @@ decl_module! {
 			debug::native::info!("Hello World from MMR");
 
 			let hash = <frame_system::Module<T>>::parent_hash();
-			let data = T::LeafData::leaf_data();
+			let (data, leaf_weight) = T::LeafData::leaf_data();
 			let mut mmr = MMR::<T, _>::new(Self::mmr_size());
 			mmr.push(primitives::Leaf { hash, data })
 				.expect("MMR push never fails.");
@@ -113,17 +117,28 @@ decl_module! {
 			<Size>::put(size);
 			<RootHash<T>>::put(root);
 
-			Self::prune_non_peaks();
+			let pruned = Self::prune_non_peaks();
+			let peaks = mmr::NodesUtils::new(size).number_of_peaks();
 
-			// TODO [ToDr] Calculate weight
-			0
+			leaf_weight + <T as frame_system::Trait>::DbWeight::get().reads_writes(
+				2 + peaks,
+				2 + peaks + pruned
+			)
 		}
 	}
 }
 
 impl<T: Trait> Module<T> {
-	fn prune_non_peaks() {
+	/// Returns the number of nodes pruned.
+	fn prune_non_peaks() -> u64 {
 		debug::native::info!("Pruning MMR of size: {:?}", Self::mmr_size());
+		// TODO [ToDr] Implement me
+		0
+	}
+
+	fn offchain_key(pos: u64) -> Vec<u8> {
+		// TODO [ToDr] Configurable?
+		(b"mmr-", pos).encode()
 	}
 }
 
@@ -142,7 +157,7 @@ pub type MMRNodeOf<T, L> = MMRNode<<T as Trait>::Hashing, L>;
 /// A wrapper around a MMR library to expose limited functionality that works
 /// with non-peak nodes pruned.
 pub struct MMR<T: Trait, L: codec::Codec + fmt::Debug> {
-	mmr: mmr::MMR<
+	mmr: mmr_lib::MMR<
 		MMRNodeOf<T, L>,
 		MMRHasher<<T as Trait>::Hashing, L>,
 		MMRIndexer<T, L>
@@ -153,7 +168,7 @@ impl<T: Trait, L: codec::Codec + PartialEq + fmt::Debug + Clone> MMR<T, L> {
 	/// Create a pointer to an existing MMR with given size.
 	pub fn new(size: u64) -> Self {
 		Self {
-			mmr: mmr::MMR::new(size, Default::default()),
+			mmr: mmr_lib::MMR::new(size, Default::default()),
 		}
 	}
 
@@ -214,24 +229,26 @@ impl<T, L> Default for MMRIndexer<T, L> {
 	}
 }
 
-impl<T: Trait, L: codec::Codec + fmt::Debug> mmr::MMRStore<MMRNodeOf<T, L>> for MMRIndexer<T, L> {
-	fn get_elem(&self, pos: u64) -> mmr::Result<Option<MMRNodeOf<T, L>>> {
+impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<MMRNodeOf<T, L>> for MMRIndexer<T, L> {
+	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<MMRNodeOf<T, L>>> {
 		Ok(<Nodes<T>>::get(pos)
 			.map(MMRNode::Inner)
 		)
 	}
 
-	fn append(&mut self, pos: u64, elems: Vec<MMRNodeOf<T, L>>) -> mmr::Result<()> {
+	fn append(&mut self, pos: u64, elems: Vec<MMRNodeOf<T, L>>) -> mmr_lib::Result<()> {
 		let mut size = Size::get();
 		if pos != size {
-			return Err(mmr::Error::InconsistentStore);
+			return Err(mmr_lib::Error::InconsistentStore);
 		}
 
 		for elem in elems {
 			<Nodes<T>>::insert(size, elem.hash());
 			println!("Inserting node: {:?}", elem);
 			// Indexing API used to store the full leaf content.
-			elem.using_encoded(|elem| sp_io::offchain_index::set(b"mmr", elem));
+			elem.using_encoded(|elem| {
+				sp_io::offchain_index::set(&Module::<T>::offchain_key(size), elem)
+			});
 			size += 1;
 		}
 
@@ -244,7 +261,7 @@ impl<T: Trait, L: codec::Codec + fmt::Debug> mmr::MMRStore<MMRNodeOf<T, L>> for 
 /// Hasher type for MMR.
 pub struct MMRHasher<H, L>(PhantomData<(H, L)>);
 
-impl<H: traits::Hash, L: codec::Codec> mmr::Merge for MMRHasher<H, L> {
+impl<H: traits::Hash, L: codec::Codec> mmr_lib::Merge for MMRHasher<H, L> {
 	type Item = MMRNode<H, L>;
 
 	fn merge(left: &Self::Item, right: &Self::Item) -> Self::Item {
