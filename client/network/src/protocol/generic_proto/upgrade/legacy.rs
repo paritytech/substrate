@@ -123,15 +123,6 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 		self.is_closing = true;
 		self.send_queue.clear();
 	}
-
-	/// Sends a message to the substream.
-	pub fn send_message(&mut self, data: Vec<u8>) {
-		if self.is_closing {
-			return
-		}
-
-		self.send_queue.push_back(From::from(&data[..]));
-	}
 }
 
 /// Event produced by the `RegisteredProtocolSubstream`.
