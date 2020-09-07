@@ -251,7 +251,6 @@ pub mod priority {
 	///
 	/// This only makes sure that any value created for the operational dispatch class is
 	/// incremented by [`LIMIT`].
-	#[derive(Clone, Copy)]
 	pub enum FrameTransactionPriority {
 		Normal(u64),
 		Operational(u64),
