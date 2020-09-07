@@ -240,7 +240,8 @@ impl InstanceFilter<Call> for ProxyType {
 				Call::Vesting(pallet_vesting::Call::vested_transfer(..)) |
 				Call::Indices(pallet_indices::Call::transfer(..))
 			),
-			ProxyType::Governance => matches!(c,
+			ProxyType::Governance => matches!(
+				c,
 				Call::Democracy(..) |
 				Call::Council(..) |
 				Call::Society(..) |

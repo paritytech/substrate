@@ -490,7 +490,6 @@ decl_module! {
 			if valid {
 				// remove the defunct target while unreserving their bond.
 				Self::do_remove_voter(&target, true);
-				// TODO: probably refund or be more kind to the poor origin.
 			}
 
 			Self::deposit_event(RawEvent::VoterReported(target, reporter, valid));
