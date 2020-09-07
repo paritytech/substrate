@@ -24,6 +24,7 @@ use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, Span};
 use quote::quote;
 use syn::{Ident, Result, TypePath};
+use std::collections::HashSet;
 
 /// The fixed name of the system module.
 const SYSTEM_MODULE_NAME: &str = "System";
@@ -493,21 +494,18 @@ fn check_modules(
 			module.index.map_or(false, |i| i == 0) && module.name != SYSTEM_MODULE_NAME
 		})
 	{
-		let msg = format!(
-			"Only system module is allowed to be defined at index `0`, this is because of origin \
-			encoding",
-		);
+		let msg = "Only system module is allowed to be defined at index `0`, this is to avoid \
+			confusion for encoding of origin. Indeed, origin system variant is always encoded at \
+			index 0";
 		return Err(syn::Error::new(module.name.span(), msg));
 	}
 
 	// No module indices conflicts
-	let mut indices = vec![];
+	let mut indices = HashSet::new();
 	for module in modules {
 		if let Some(index) = module.index {
-			if indices.contains(&index) {
+			if !indices.insert(index) {
 				return Err(syn::Error::new(module.module.span(), "module index is already used"));
-			} else {
-				indices.push(index)
 			}
 		}
 	}
