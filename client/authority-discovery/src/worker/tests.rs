@@ -840,7 +840,7 @@ fn lookup_throttling() {
 		// Assert worker to trigger MAX_IN_FLIGHT_LOOKUPS lookups.
 		assert_eq!(Poll::Pending, worker.poll_unpin(cx));
 		assert_eq!(worker.pending_lookups.len(), remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS);
-		assert_eq!(worker.in_flight_lookups.len(), MAX_ADDRESSES_PER_AUTHORITY);
+		assert_eq!(worker.in_flight_lookups.len(), MAX_IN_FLIGHT_LOOKUPS);
 		assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
 
 		// Make first lookup succeed.
@@ -855,7 +855,7 @@ fn lookup_throttling() {
 		// Assert worker to trigger another lookup.
 		assert_eq!(Poll::Pending, worker.poll_unpin(cx));
 		assert_eq!(worker.pending_lookups.len(), remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS - 1);
-		assert_eq!(worker.in_flight_lookups.len(), MAX_ADDRESSES_PER_AUTHORITY);
+		assert_eq!(worker.in_flight_lookups.len(), MAX_IN_FLIGHT_LOOKUPS);
 		assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
 
 		// Make second one fail.
@@ -866,7 +866,7 @@ fn lookup_throttling() {
 		// Assert worker to trigger another lookup.
 		assert_eq!(Poll::Pending, worker.poll_unpin(cx));
 		assert_eq!(worker.pending_lookups.len(), remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS - 2);
-		assert_eq!(worker.in_flight_lookups.len(), MAX_ADDRESSES_PER_AUTHORITY);
+		assert_eq!(worker.in_flight_lookups.len(), MAX_IN_FLIGHT_LOOKUPS);
 		assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
 
 		worker.refill_pending_lookups_queue().unwrap();
