@@ -1036,12 +1036,12 @@ pub trait WasmTracing {
 	/// On the host converts into a static Metadata and checks against the global `tracing` dispatcher.
 	///
 	/// When returning false the calling code should skip any tracing-related execution. In general
-	/// within the same block execution this is not exepected to change and there doesn't have to be
-	/// checked more than once per metadata. This exists for  optimisation purposes but is still not
+	/// within the same block execution this is not expected to change and there doesn't have to be
+	/// checked more than once per metadata. This exists for optimisation purposes but is still not
 	/// cheap as it needs to jump the wasm-native-barrier, so caching the result wasm-side might be
 	/// a useful addition.
 	fn enabled(&mut self, metadata: Crossing<sp_tracing::WasmMetadata>) -> bool {
-		let metadata : &tracing_core::metadata::Metadata<'static> = (&metadata.into_inner()).into();
+		let metadata: &tracing_core::metadata::Metadata<'static> = (&metadata.into_inner()).into();
 		tracing::dispatcher::get_default(|d| {
 			d.enabled(metadata)
 		})
@@ -1052,10 +1052,10 @@ pub trait WasmTracing {
 	///
 	/// On the native side this goes through the default `tracing` dispatcher to register the span
 	/// and then calls `clone_span` with the ID to signal that we are keeping it around on the wasm-
-	/// side even after the local span is dropped. The resulting ID is then handed over to the waasm-
+	/// side even after the local span is dropped. The resulting ID is then handed over to the wasm-
 	/// side.
 	fn enter_span(&mut self, span: Crossing<sp_tracing::WasmEntryAttributes>) -> u64 {
-		let span : tracing::Span = span.into_inner().into();
+		let span: tracing::Span = span.into_inner().into();
 		match span.id() {
 			Some(id) => tracing::dispatcher::get_default(|d| {
 				// inform dispatch that we'll keep the ID around

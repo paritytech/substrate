@@ -48,6 +48,11 @@ use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 
 /// Responsible for assigning ids to new spans, which are not re-used.
+///
+/// This profiler notably implements full ref-counting – using `clone_span` – to allow
+/// for proper tracking over the Wasm-Native-Barrier. If you replace this subscriber
+/// with a different one, be sure to implement that feature, too, or you won't be able
+/// to trace wasm-side-entries correctly.
 pub struct ProfilingSubscriber {
 	next_id: AtomicU64,
 	targets: Vec<(String, Level)>,
