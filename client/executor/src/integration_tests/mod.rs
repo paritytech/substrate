@@ -757,3 +757,17 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	assert_eq!(values.bool_values.get("wasm").unwrap(), &true);
 	assert_eq!(values.bool_values.get("is_valid_trace").unwrap(), &true);
 }
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn forking_should_work(wasm_method: WasmExecutionMethod) {
+
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	call_in_wasm(
+		"test_fork",
+		&[],
+		wasm_method,
+		&mut ext,
+	).unwrap();
+}

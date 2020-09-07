@@ -1141,6 +1141,30 @@ pub trait Sandbox {
 	}
 }
 
+pub trait InstanceHypervisor : Send {
+	fn fork_dispatch(&self, func: u32, payload: Vec<u8>) -> u32;
+	fn join(&self, handle: u32) -> Vec<u8>;
+}
+
+#[cfg(feature = "std")]
+sp_externalities::decl_extension! {
+	/// The keystore extension to register/retrieve from the externalities.
+	pub struct HypervisorExt(Box<dyn InstanceHypervisor>);
+}
+
+#[runtime_interface]
+pub trait Hypervisor {
+	fn fork(&mut self, entry: u32, payload: Vec<u8>) -> u32 {
+		let hypervisor = self.extension::<HypervisorExt>().expect("Cannot fork without isntance hypervisor");
+		hypervisor.fork_dispatch(entry, payload)
+	}
+
+	fn join(&mut self, handle: u32) -> Vec<u8> {
+		let hypervisor = self.extension::<HypervisorExt>().expect("Cannot fork without isntance hypervisor");
+		hypervisor.join(handle)
+	}
+ }
+
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(not(feature = "std"))]
 struct WasmAllocator;
@@ -1208,6 +1232,7 @@ pub type SubstrateHostFunctions = (
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
+	hypervisor::HostFunctions,
 );
 
 /// Handle for forked runtime execution.
@@ -1240,6 +1265,45 @@ pub fn fork(entry_point: fn(Vec<u8>) -> Vec<u8>, data: Vec<u8>) -> Result<DataJo
 	}));
 
 	Ok(DataJoinHandle { receiver })
+}
+
+/// Handle for forked runtime execution.
+#[cfg(not(feature = "std"))]
+pub struct DataJoinHandle {
+	handle: u32,
+}
+
+#[cfg(not(feature = "std"))]
+impl DataJoinHandle {
+	/// Join handle returned by `fork` function
+	pub fn join(self) -> Vec<u8> {
+		hypervisor::join(self.handle)
+	}
+}
+
+#[cfg(not(feature = "std"))]
+pub fn fork(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>) -> Result<DataJoinHandle, &'static str> {
+
+    #[no_mangle]
+    unsafe extern "C" fn fork_dispatch(payload_ptr: u32, payload_len: u32) -> u64 {
+
+		use codec::Decode as _;
+
+		let mut data: &[u8] = core::slice::from_raw_parts(payload_ptr as usize as *const u8, payload_len as usize);
+		let entry = u32::decode(&mut data).expect("Failed to decode input") as usize;
+		let ptr: fn(Vec<u8>) -> Vec<u8> = core::mem::transmute(entry);
+		let payload = Vec::<u8>::decode(&mut data).expect("Failed to decode input");
+
+		let output = (ptr)(payload);
+
+		let mut output_encode = (output.len() as u64) << 32;
+        output_encode | (output.as_ptr() as usize as u64)
+	}
+
+	let func_ptr: usize = unsafe { core::mem::transmute(entry_point) };
+
+	let handle = unsafe { hypervisor::fork(func_ptr as u32, payload) };
+	Ok(DataJoinHandle { handle })
 }
 
 #[cfg(test)]

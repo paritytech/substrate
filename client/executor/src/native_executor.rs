@@ -26,9 +26,10 @@ use sp_core::{
 	NativeOrEncoded, traits::{CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions},
 };
 use log::trace;
-use std::{result, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc};
+use std::{result, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc, collections::HashMap};
 use sp_wasm_interface::{HostFunctions, Function};
-use sc_executor_common::wasm_runtime::WasmInstance;
+use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule};
+use sp_externalities::ExternalitiesExt as _;
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -136,6 +137,7 @@ impl WasmExecutor {
 		f: F,
 	) -> Result<R>
 		where F: FnOnce(
+			AssertUnwindSafe<&Arc<WasmModule>>,
 			AssertUnwindSafe<&dyn WasmInstance>,
 			Option<&RuntimeVersion>,
 			AssertUnwindSafe<&mut dyn Externalities>,
@@ -148,10 +150,11 @@ impl WasmExecutor {
 			self.default_heap_pages,
 			&*self.host_functions,
 			allow_missing_host_functions,
-			|instance, version, ext| {
+			|module, instance, version, ext| {
+				let module = AssertUnwindSafe(module);
 				let instance = AssertUnwindSafe(instance);
 				let ext = AssertUnwindSafe(ext);
-				f(instance, version, ext)
+				f(module, instance, version, ext)
 			}
 		)? {
 			Ok(r) => r,
@@ -179,10 +182,13 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 				heap_pages: None,
 			};
 
-			self.with_instance(&code, ext, allow_missing_host_functions, |instance, _, mut ext| {
+			self.with_instance(&code, ext, allow_missing_host_functions, |module, instance, _, mut ext| {
 				with_externalities_safe(
 					&mut **ext,
-					move || instance.call(method, call_data),
+					move || {
+						InstanceHypervisor::register_on_externalities(module.clone());
+						instance.call(method, call_data)
+					}
 				)
 			}).map_err(|e| e.to_string())
 		} else {
@@ -200,10 +206,14 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 
 			let instance = AssertUnwindSafe(instance);
 			let mut ext = AssertUnwindSafe(ext);
+			let module = AssertUnwindSafe(module);
 
 			with_externalities_safe(
 				&mut **ext,
-				move || instance.call(method, call_data),
+				move || {
+					InstanceHypervisor::register_on_externalities(module.clone());
+					instance.call(method, call_data)
+				}
 			)
 			.and_then(|r| r)
 			.map_err(|e| e.to_string())
@@ -269,9 +279,96 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 			runtime_code,
 			ext,
 			false,
-			|_instance, version, _ext|
+			|_module, _instance, version, _ext|
 				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into()))),
 		)
+	}
+}
+
+pub struct InstanceHypervisor {
+	module: Arc<dyn sc_executor_common::wasm_runtime::WasmModule>,
+	forks: parking_lot::Mutex<HashMap<u32, std::sync::mpsc::Receiver<Vec<u8>>>>,
+	counter: std::sync::atomic::AtomicU32,
+	spawner: Box<dyn sp_core::traits::SpawnNamed>,
+}
+
+impl sp_io::InstanceHypervisor for InstanceHypervisor {
+	fn fork_dispatch(&self, func: u32, data: Vec<u8>) -> u32 {
+		use codec::Encode as _;
+
+		let new_handle = self.counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+		let (sender, receiver) = std::sync::mpsc::channel();
+		self.forks.lock().insert(new_handle, receiver);
+
+		let module = self.module.clone();
+		self.spawner.spawn("forked runtime invoke", Box::pin(async move {
+
+			let instance = module.new_instance().expect("Failed to create new instance for fork");
+			println!("dispatching fork...");
+
+			let mut dispatch_data = Vec::new();
+			func.encode_to(&mut dispatch_data);
+			data.encode_to(&mut dispatch_data);
+			let result = instance.call("fork_dispatch", &dispatch_data[..]).expect("Failed to invoke instance.");
+
+			println!("dispatched fork! ({:?})", result);
+			let _ = sender.send(result);
+		}));
+
+		println!("fork dispatch handle: {}", new_handle);
+
+		new_handle
+	}
+
+	fn join(&self, handle: u32) -> Vec<u8> {
+		println!("trying to find receiver...");
+		let receiver = self.forks.lock().remove(&handle).expect("No fork for such handle");
+		println!("trying to join...");
+		let output = receiver.recv().expect("No signal from forked execution");
+		println!("Done.");
+		output
+	}
+}
+
+impl InstanceHypervisor {
+	fn new(
+		module: Arc<dyn sc_executor_common::wasm_runtime::WasmModule>,
+		spawner: Box<dyn sp_core::traits::SpawnNamed>,
+	) -> Self {
+		InstanceHypervisor {
+			module,
+			spawner,
+			counter: 0.into(),
+			forks: HashMap::new().into(),
+		}
+	}
+
+	fn with_externalities_and_module(
+		module: Arc<dyn sc_executor_common::wasm_runtime::WasmModule>,
+		mut ext: &mut dyn Externalities,
+	) -> Option<Self> {
+		ext.extension::<sp_core::traits::TaskExecutorExt>().map(move |task_ext| Self::new(module, task_ext.clone()))
+	}
+
+	fn register_on_externalities(module: Arc<WasmModule>) {
+		sp_externalities::with_externalities(
+			move |mut ext| {
+				if let Some(instance_hypervisor) =
+					InstanceHypervisor::with_externalities_and_module(module.clone(), ext)
+				{
+					if let Err(e) = ext.register_extension::<sp_io::HypervisorExt>(
+						sp_io::HypervisorExt(Box::new(instance_hypervisor))
+					) {
+						trace!(
+							target: "executor",
+							"Failed to register instance hypervisor ext: {:?}",
+							e,
+						)
+					}
+				}
+			}
+		);
 	}
 }
 
@@ -295,32 +392,34 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 			runtime_code,
 			ext,
 			false,
-			|instance, onchain_version, mut ext| {
+			|module, instance, onchain_version, mut ext| {
 				let onchain_version = onchain_version.ok_or_else(
 					|| Error::ApiError("Unknown version".into())
 				)?;
+
+				let can_call_with = onchain_version.can_call_with(&self.native_version.runtime_version);
+
 				match (
 					use_native,
-					onchain_version.can_call_with(&self.native_version.runtime_version),
+					can_call_with,
 					native_call,
 				) {
-					(_, false, _) => {
-						trace!(
-							target: "executor",
-							"Request for native execution failed (native: {}, chain: {})",
-							self.native_version.runtime_version,
-							onchain_version,
-						);
+					(_, false, _) | (false, _, _) => {
+						if !can_call_with {
+							trace!(
+								target: "executor",
+								"Request for native execution failed (native: {}, chain: {})",
+								self.native_version.runtime_version,
+								onchain_version,
+							);
+						}
 
 						with_externalities_safe(
 							&mut **ext,
-							move || instance.call(method, data).map(NativeOrEncoded::Encoded)
-						)
-					}
-					(false, _, _) => {
-						with_externalities_safe(
-							&mut **ext,
-							move || instance.call(method, data).map(NativeOrEncoded::Encoded)
+							move || {
+								InstanceHypervisor::register_on_externalities(module.clone());
+								instance.call(method, data).map(NativeOrEncoded::Encoded)
+							}
 						)
 					},
 					(true, true, Some(call)) => {
