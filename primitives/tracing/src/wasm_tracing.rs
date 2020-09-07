@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![no_std]
-
 #[cfg(not(feature = "with-tracing"))]
 mod inner {
 	// we are no-op
@@ -453,11 +451,11 @@ pub use inner::*;
 ///
 /// Creating a new span:
 /// ```
-/// # use sp_tracing::{span, Level};
+/// # use sp_tracing::{within_span, span, Level};
 /// # fn main() {
-/// let span = span!(Level::TRACE, "my span");
-/// let _enter = span.enter();
+/// within_span!(span!(Level::TRACE, "my span"); {
 /// // do work inside the span...
+/// });
 /// # }
 /// ```
 #[macro_export]
@@ -519,7 +517,7 @@ macro_rules! span {
 	};
 }
 
-/// Constructs a span at the trace level.
+/// Constructs a span at the trace level to be used with [`enter_span!`] and [`within_span!`]
 ///
 /// [Fields] and [attributes] are set using the same syntax as the [`span!`]
 /// macro.
@@ -531,24 +529,25 @@ macro_rules! span {
 /// [attributes]: index.html#configuring-attributes
 /// [Fields]: index.html#recording-fields
 /// [`span!`]: macro.span.html
+/// [`enter_span!`]: macro.enter_span.html
+/// [`within_span!`]: macro.within_span.html
 ///
 /// # Examples
 ///
 /// ```
-/// # use sp_tracing::{trace_span, span, Level};
+/// # use sp_tracing::{enter_span, trace_span, span, Level};
 /// # fn main() {
-/// trace_span!("my_span");
+/// enter_span!(trace_span!("my_span"));
 /// // is equivalent to:
-/// span!(Level::TRACE, "my_span");
+/// enter_span!(span!(Level::TRACE, "my_span"));
 /// # }
 /// ```
 ///
 /// ```
-/// # use sp_tracing::{trace_span, span, Level};
+/// # use sp_tracing::{within_span, trace_span, span, Level};
 /// # fn main() {
-/// let span = trace_span!("my span");
-/// span.in_scope(|| {
-///     // do work inside the span...
+/// within_span!(trace_span!("my span"); {
+///    // whatever should happen
 /// });
 /// # }
 /// ```
@@ -600,7 +599,7 @@ macro_rules! trace_span {
 	($name:expr) => { $crate::trace_span!($name,) };
 }
 
-/// Constructs a span at the debug level.
+/// Constructs a span at the debug level to be used with [`enter_span!`] and [`within_span!`]
 ///
 /// [Fields] and [attributes] are set using the same syntax as the [`span!`]
 /// macro.
@@ -612,25 +611,26 @@ macro_rules! trace_span {
 /// [attributes]: index.html#configuring-attributes
 /// [Fields]: index.html#recording-fields
 /// [`span!`]: macro.span.html
+/// [`enter_span!`]: macro.enter_span.html
+/// [`within_span!`]: macro.within_span.html
 ///
 /// # Examples
 ///
 /// ```rust
-/// # use sp_tracing::{debug_span, span, Level};
+/// # use sp_tracing::{enter_span, debug_span, span, Level};
 /// # fn main() {
-/// debug_span!("my_span");
+/// enter_span!(debug_span!("my_span"));
 /// // is equivalent to:
-/// span!(Level::DEBUG, "my_span");
+/// enter_span!(span!(Level::DEBUG, "my_span"));
 /// # }
 /// ```
 ///
 /// ```rust
-/// # use sp_tracing::debug_span;
+/// # use sp_tracing::{within_span, debug_span};
 /// # fn main() {
-/// let span = debug_span!("my span");
-/// span.in_scope(|| {
-///     // do work inside the span...
-/// });
+/// within_span! { debug_span!("my span");
+///   // do the work
+/// };
 /// # }
 /// ```
 #[macro_export]
@@ -681,7 +681,7 @@ macro_rules! debug_span {
 	($name:expr) => {$crate::debug_span!($name,)};
 }
 
-/// Constructs a span at the info level.
+/// Constructs a span at the info level to be used with [`enter_span!`] and [`within_span!`]
 ///
 /// [Fields] and [attributes] are set using the same syntax as the [`span!`]
 /// macro.
@@ -693,25 +693,27 @@ macro_rules! debug_span {
 /// [attributes]: index.html#configuring-attributes
 /// [Fields]: index.html#recording-fields
 /// [`span!`]: macro.span.html
+/// [`enter_span!`]: macro.enter_span.html
+/// [`within_span!`]: macro.within_span.html
 ///
 /// # Examples
 ///
 /// ```rust
-/// # use sp_tracing::{span, info_span, Level};
+/// # use sp_tracing::{enter_span, span, info_span, Level};
 /// # fn main() {
-/// info_span!("my_span");
+/// enter_span!(info_span!("my_span"));
 /// // is equivalent to:
-/// span!(Level::INFO, "my_span");
+/// enter_span!(span!(Level::INFO, "my_span"));
 /// # }
 /// ```
 ///
 /// ```rust
-/// # use sp_tracing::info_span;
+/// # use sp_tracing::{within_span, info_span};
 /// # fn main() {
-/// let span = info_span!("my span");
-/// span.in_scope(|| {
-///     // do work inside the span...
-/// });
+/// within_span! { info_span!("my span");
+///		1 + 1;
+///		// do the work
+/// };
 /// # }
 /// ```
 #[macro_export]
@@ -762,7 +764,7 @@ macro_rules! info_span {
 	($name:expr) => {$crate::info_span!($name,)};
 }
 
-/// Constructs a span at the warn level.
+/// Constructs a span at the warn level to be used with [`enter_span!`] and [`within_span!`]
 ///
 /// [Fields] and [attributes] are set using the same syntax as the [`span!`]
 /// macro.
@@ -774,25 +776,26 @@ macro_rules! info_span {
 /// [attributes]: index.html#configuring-attributes
 /// [Fields]: index.html#recording-fields
 /// [`span!`]: macro.span.html
+/// [`enter_span!`]: macro.enter_span.html
+/// [`within_span!`]: macro.within_span.html
 ///
 /// # Examples
 ///
 /// ```rust
-/// # use sp_tracing::{warn_span, span, Level};
+/// # use sp_tracing::{enter_span, warn_span, span, Level};
 /// # fn main() {
-/// warn_span!("my_span");
+/// enter_span!(warn_span!("my_span"));
 /// // is equivalent to:
-/// span!(Level::WARN, "my_span");
+/// enter_span!(span!(Level::WARN, "my_span"));
 /// # }
 /// ```
 ///
 /// ```rust
-/// use sp_tracing::warn_span;
+/// use sp_tracing::{within_span, warn_span};
 /// # fn main() {
-/// let span = warn_span!("my span");
-/// span.in_scope(|| {
-///     // do work inside the span...
-/// });
+/// within_span! { warn_span!("my span");
+///		// do the work
+///	}
 /// # }
 /// ```
 #[macro_export]
@@ -842,7 +845,7 @@ macro_rules! warn_span {
 	};
 	($name:expr) => {$crate::warn_span!($name,)};
 }
-/// Constructs a span at the error level.
+/// Constructs a span at the error level to be used with [`enter_span!`] and [`within_span!`]
 ///
 /// [Fields] and [attributes] are set using the same syntax as the [`span!`]
 /// macro.
@@ -854,25 +857,27 @@ macro_rules! warn_span {
 /// [attributes]: index.html#configuring-attributes
 /// [Fields]: index.html#recording-fields
 /// [`span!`]: macro.span.html
+/// [`enter_span!`]: macro.enter_span.html
+/// [`within_span!`]: macro.within_span.html
 ///
 /// # Examples
 ///
 /// ```rust
-/// # use sp_tracing::{span, error_span, Level};
+/// # use sp_tracing::{enter_span, span, error_span, Level};
 /// # fn main() {
-/// error_span!("my_span");
+/// enter_span!(error_span!("my_span"));
 /// // is equivalent to:
-/// span!(Level::ERROR, "my_span");
+/// enter_span!(span!(Level::ERROR, "my_span"));
 /// # }
 /// ```
 ///
 /// ```rust
-/// # use sp_tracing::error_span;
+/// # use sp_tracing::{within_span, error_span};
 /// # fn main() {
-/// let span = error_span!("my span");
-/// span.in_scope(|| {
-///     // do work inside the span...
-/// });
+/// within_span!{ error_span!("my span");
+///		// do the work
+///		1 + 1;
+///	}
 /// # }
 /// ```
 #[macro_export]
