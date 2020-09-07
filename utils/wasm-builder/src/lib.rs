@@ -171,12 +171,12 @@ pub fn build_project_with_default_rustflags(
 	let (wasm_binary, wasm_binary_bloaty) = if let Some(wasm_binary) = wasm_binary {
 		(
 			wasm_binary.wasm_binary_path_escaped(),
-			bloaty.wasm_binary_bloaty_path_escaped()
+			bloaty.wasm_binary_bloaty_path_escaped(),
 		)
 	} else {
 		(
-			wasm_binary.wasm_binary_path_escaped(),
-			bloaty.wasm_binary_bloaty_path_escaped()
+			bloaty.wasm_binary_bloaty_path_escaped(),
+			bloaty.wasm_binary_bloaty_path_escaped(),
 		)
 	};
 	
@@ -187,8 +187,8 @@ pub fn build_project_with_default_rustflags(
 					pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
 					pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
 				"#,
-				wasm_binary,
-				wasm_binary_bloaty,
+				wasm_binary = wasm_binary,
+				wasm_binary_bloaty = wasm_binary_bloaty,
 			),
 		);
 }
