@@ -18,8 +18,8 @@
 
 use crate::BlockStatus;
 use sp_runtime::{generic::BlockId, traits::Block};
-use std::{error::Error, sync::Arc, future::Future};
-use futures::FutureExt;
+use std::{error::Error, future::Future, pin::Pin, sync::Arc};
+use futures::FutureExt as _;
 
 /// A type which provides access to chain information.
 pub trait Chain<B: Block> {
@@ -52,7 +52,7 @@ pub trait BlockAnnounceValidator<B: Block> {
 		&mut self,
 		header: &B::Header,
 		data: &[u8],
-	) -> Box<dyn Future<Output = Result<Validation, Box<dyn Error + Send>>> + Send + Unpin>;
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn Error + Send>>> + Send>>;
 }
 
 /// Default implementation of `BlockAnnounceValidator`.
@@ -64,7 +64,7 @@ impl<B: Block> BlockAnnounceValidator<B> for DefaultBlockAnnounceValidator {
 		&mut self,
 		_: &B::Header,
 		_: &[u8],
-	) -> Box<dyn Future<Output = Result<Validation, Box<dyn Error + Send>>> + Send + Unpin> {
-		Box::new(async { Ok(Validation::Success { is_new_best: false }) }.boxed())
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn Error + Send>>> + Send>> {
+		async { Ok(Validation::Success { is_new_best: false }) }.boxed()
 	}
 }

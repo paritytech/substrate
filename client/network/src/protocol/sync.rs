@@ -1201,16 +1201,13 @@ impl<B: BlockT> ChainSync<B> {
 	/// [`PreValidateBlockAnnounce`]. This result needs to be feed into
 	/// [`ChainSync::process_block_announce_pre_validation`] to finish
 	/// the block announcement processing.
-	pub fn pre_validate_block_announce(
+	pub async fn pre_validate_block_announce(
 		&mut self,
 		who: PeerId,
 		hash: &B::Hash,
 		announce: BlockAnnounce<B::Header>,
 		is_best: bool,
-	) -> FEither<
-		impl Future<Output = PreValidateBlockAnnounce<B::Header>> + Send + Unpin,
-		impl Future<Output = PreValidateBlockAnnounce<B::Header>> + Send + Unpin
-	> {
+	) -> PreValidateBlockAnnounce<B::Header> {
 		let header = &announce.header;
 		let number = *header.number();
 		debug!(
@@ -1236,7 +1233,6 @@ impl<B: BlockT> ChainSync<B> {
 		let future = self.block_announce_validator.validate(&header, assoc_data);
 		let hash = hash.clone();
 
-		FEither::Right(async move {
 			match future.await {
 				Ok(Validation::Success { is_new_best }) =>
 					PreValidateBlockAnnounce::Process {
@@ -1258,7 +1254,6 @@ impl<B: BlockT> ChainSync<B> {
 					PreValidateBlockAnnounce::Nothing { is_best, who, announce }
 				}
 			}
-		}.boxed())
 	}
 
 	/// Needs to be called with the result of [`ChainSync::pre_validate_block_announce`].

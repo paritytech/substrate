@@ -258,7 +258,7 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	boot_node_ids: Arc<HashSet<PeerId>>,
 	/// All the block announcement pre-validations that are currently active.
 	block_announce_pre_validation: FuturesUnordered<
-		Box<dyn Future<Output = sync::PreValidateBlockAnnounce<B::Header>> + Send + Unpin>
+		Pin<Box<dyn Future<Output = sync::PreValidateBlockAnnounce<B::Header>> + Send>>
 	>,
 }
 
@@ -1332,7 +1332,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		};
 
 		let future = self.sync.pre_validate_block_announce(who, &hash, announce, is_best);
-		self.block_announce_pre_validation.push(Box::new(future));
+		self.block_announce_pre_validation.push(Box::pin(future));
 	}
 
 	/// Process the result of the pre-validation of a block announcement.
