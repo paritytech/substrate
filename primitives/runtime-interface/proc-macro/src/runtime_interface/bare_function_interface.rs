@@ -195,7 +195,7 @@ fn generate_call_to_trait(
 	trait_name: &Ident,
 	method: &TraitItemMethod,
 	version: u32,
-	is_wasm_only: bool
+	is_wasm_only: bool,
 ) -> TokenStream {
 	let crate_ = generate_crate_access();
 	let method_name = create_function_ident_with_version(&method.sig.ident, version);

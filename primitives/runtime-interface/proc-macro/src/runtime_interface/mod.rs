@@ -44,7 +44,7 @@ pub mod keywords {
 pub fn runtime_interface_impl(
 	trait_def: ItemTrait,
 	is_wasm_only: bool,
-	tracing: bool
+	tracing: bool,
 ) -> Result<TokenStream> {
 	let bare_functions = bare_function_interface::generate(&trait_def, is_wasm_only, tracing)?;
 	let crate_include = generate_runtime_interface_include();
