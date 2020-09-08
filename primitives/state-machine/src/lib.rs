@@ -120,6 +120,7 @@ impl sp_std::fmt::Display for DefaultError {
 pub use crate::overlayed_changes::{
 	OverlayedChanges, StorageKey, StorageValue,
 	StorageCollection, ChildStorageCollection,
+	StorageChanges, StorageTransactionCache,
 };
 pub use crate::backend::Backend;
 pub use crate::trie_backend_essence::{TrieBackendStorage, Storage};
@@ -128,9 +129,17 @@ pub use crate::stats::{UsageInfo, UsageUnit, StateMachineStats};
 pub use error::{Error, ExecutionError};
 pub use crate::ext::ExtInner;
 
+#[cfg(not(feature = "std"))]
+mod changes_trie {
+	/// Stub for change trie block number until
+	/// change trie move to no_std.
+	pub trait BlockNumber {}
+
+	impl<N> BlockNumber for N {}
+}
+
 #[cfg(feature = "std")]
 mod std_reexport {
-	pub use crate::overlayed_changes::{StorageChanges, StorageTransactionCache};
 	pub use sp_trie::{trie_types::{Layout, TrieDBMut}, StorageProof, TrieMut, DBValue, MemoryDB};
 	pub use crate::testing::TestExternalities;
 	pub use crate::basic::BasicExternalities;

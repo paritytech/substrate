@@ -313,7 +313,8 @@ fn execute_witness_backend() -> ApplyExtrinsicResult {
 		Default::default(),
 	);
 	let mut overlay = sp_state_machine::OverlayedChanges::default();
-	let mut ext = sp_state_machine::ExtInner::new(&mut overlay, &backend);
+	let mut cache = sp_state_machine::StorageTransactionCache::<_, _, BlockNumber>::default();
+	let mut ext = sp_state_machine::ExtInner::new(&mut overlay, &backend, &mut cache);
 	ext.place_storage(vec![0], Some(vec![1]));
 	assert!(ext.storage(&[0]).is_some());
 	Ok(Ok(()))

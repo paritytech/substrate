@@ -30,10 +30,11 @@ use self::changeset::OverlayedChangeSet;
 use crate::{
 	ChangesTrieTransaction,
 	changes_trie::{
-		BlockNumber, build_changes_trie,
+		build_changes_trie,
 		State as ChangesTrieState,
 	},
 };
+use crate::changes_trie::BlockNumber;
 #[cfg(feature = "std")]
 use std::collections::HashMap as Map;
 #[cfg(not(feature = "std"))]
@@ -105,7 +106,6 @@ pub struct OverlayedChanges {
 ///
 /// This contains all the changes to the storage and transactions to apply theses changes to the
 /// backend.
-#[cfg(feature = "std")]
 pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	/// All changes to the main storage.
 	///
@@ -114,6 +114,7 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	/// All changes to the child storages.
 	pub child_storage_changes: ChildStorageCollection,
 	/// Offchain state changes to write to the offchain database.
+	#[cfg(feature = "std")]
 	pub offchain_storage_changes: OffchainOverlayedChanges,
 	/// A transaction for the backend that contains all changes from
 	/// [`main_storage_changes`](StorageChanges::main_storage_changes) and from
@@ -125,7 +126,11 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	/// Contains the transaction for the backend for the changes trie.
 	///
 	/// If changes trie is disabled the value is set to `None`.
+	#[cfg(feature = "std")]
 	pub changes_trie_transaction: Option<ChangesTrieTransaction<H, N>>,
+	/// Phantom data for block number until change trie support no_std.
+	#[cfg(not(feature = "std"))]
+	pub _ph: sp_std::marker::PhantomData<N>,
 }
 
 #[cfg(feature = "std")]
@@ -153,19 +158,22 @@ impl<Transaction, H: Hasher, N: BlockNumber> StorageChanges<Transaction, H, N> {
 /// The storage transaction are calculated as part of the `storage_root` and
 /// `changes_trie_storage_root`. These transactions can be reused for importing the block into the
 /// storage. So, we cache them to not require a recomputation of those transactions.
-#[cfg(feature = "std")]
 pub struct StorageTransactionCache<Transaction, H: Hasher, N: BlockNumber> {
 	/// Contains the changes for the main and the child storages as one transaction.
 	pub(crate) transaction: Option<Transaction>,
 	/// The storage root after applying the transaction.
 	pub(crate) transaction_storage_root: Option<H::Out>,
 	/// Contains the changes trie transaction.
+	#[cfg(feature = "std")]
 	pub(crate) changes_trie_transaction: Option<Option<ChangesTrieTransaction<H, N>>>,
 	/// The storage root after applying the changes trie transaction.
+	#[cfg(feature = "std")]
 	pub(crate) changes_trie_transaction_storage_root: Option<Option<H::Out>>,
+	/// Phantom data for block number until change trie support no_std.
+	#[cfg(not(feature = "std"))]
+	pub(crate) _ph: sp_std::marker::PhantomData<N>,
 }
 
-#[cfg(feature = "std")]
 impl<Transaction, H: Hasher, N: BlockNumber> StorageTransactionCache<Transaction, H, N> {
 	/// Reset the cached transactions.
 	pub fn reset(&mut self) {
@@ -173,28 +181,34 @@ impl<Transaction, H: Hasher, N: BlockNumber> StorageTransactionCache<Transaction
 	}
 }
 
-#[cfg(feature = "std")]
 impl<Transaction, H: Hasher, N: BlockNumber> Default for StorageTransactionCache<Transaction, H, N> {
 	fn default() -> Self {
 		Self {
 			transaction: None,
 			transaction_storage_root: None,
+			#[cfg(feature = "std")]
 			changes_trie_transaction: None,
+			#[cfg(feature = "std")]
 			changes_trie_transaction_storage_root: None,
+			#[cfg(not(feature = "std"))]
+			_ph: Default::default(),
 		}
 	}
 }
 
-#[cfg(feature = "std")]
 impl<Transaction: Default, H: Hasher, N: BlockNumber> Default for StorageChanges<Transaction, H, N> {
 	fn default() -> Self {
 		Self {
 			main_storage_changes: Default::default(),
 			child_storage_changes: Default::default(),
+			#[cfg(feature = "std")]
 			offchain_storage_changes: Default::default(),
 			transaction: Default::default(),
 			transaction_storage_root: Default::default(),
+			#[cfg(feature = "std")]
 			changes_trie_transaction: None,
+			#[cfg(not(feature = "std"))]
+			_ph: Default::default(),
 		}
 	}
 }
@@ -467,10 +481,10 @@ impl OverlayedChanges {
 	}
 
 	/// Drain all changes into a [`StorageChanges`] instance. Leave empty overlay in place.
-	#[cfg(feature = "std")]
 	pub fn drain_storage_changes<B: Backend<H>, H: Hasher, N: BlockNumber>(
 		&mut self,
 		backend: &B,
+		#[cfg(feature = "std")]
 		changes_trie_state: Option<&ChangesTrieState<H, N>>,
 		parent_hash: H::Out,
 		mut cache: &mut StorageTransactionCache<B::Transaction, H, N>,
@@ -486,6 +500,7 @@ impl OverlayedChanges {
 			.expect("Transaction was be generated as part of `storage_root`; qed");
 
 		// If the transaction does not exist, we generate it.
+		#[cfg(feature = "std")]
 		if cache.changes_trie_transaction.is_none() {
 			self.changes_trie_root(
 				backend,
@@ -496,20 +511,24 @@ impl OverlayedChanges {
 			).map_err(|_| "Failed to generate changes trie transaction")?;
 		}
 
+		#[cfg(feature = "std")]
 		let changes_trie_transaction = cache.changes_trie_transaction
 			.take()
 			.expect("Changes trie transaction was generated by `changes_trie_root`; qed");
 
-		let offchain_storage_changes = Default::default();
 		let (main_storage_changes, child_storage_changes) = self.drain_committed();
 
 		Ok(StorageChanges {
 			main_storage_changes: main_storage_changes.collect(),
 			child_storage_changes: child_storage_changes.map(|(sk, it)| (sk, it.0.collect())).collect(),
-			offchain_storage_changes,
+			#[cfg(feature = "std")]
+			offchain_storage_changes: Default::default(),
 			transaction,
 			transaction_storage_root,
+			#[cfg(feature = "std")]
 			changes_trie_transaction,
+			#[cfg(not(feature = "std"))]
+			_ph: Default::default(),
 		})
 	}
 
@@ -539,7 +558,6 @@ impl OverlayedChanges {
 	/// as seen by the current transaction.
 	///
 	/// Returns the storage root and caches storage transaction in the given `cache`.
-	#[cfg(feature = "std")]
 	pub fn storage_root<H: Hasher, N: BlockNumber, B: Backend<H>>(
 		&self,
 		backend: &B,
@@ -557,27 +575,6 @@ impl OverlayedChanges {
 
 		cache.transaction = Some(transaction);
 		cache.transaction_storage_root = Some(root);
-
-		root
-	}
-
-	/// Generate the storage root using `backend` and all changes
-	/// as seen by the current transaction.
-	///
-	/// Returns the storage root and do not cache.
-	pub fn storage_root_no_cache<H: Hasher, B: Backend<H>>(
-		&self,
-		backend: &B,
-	) -> H::Out
-		where H::Out: Ord + Encode,
-	{
-		let delta = self.changes().map(|(k, v)| (&k[..], v.value().map(|v| &v[..])));
-		let child_delta = self.children()
-			.map(|(changes, info)| (info, changes.map(
-				|(k, v)| (&k[..], v.value().map(|v| &v[..]))
-			)));
-
-		let (root, _transaction) = backend.full_storage_root(delta, child_delta);
 
 		root
 	}
