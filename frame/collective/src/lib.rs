@@ -80,7 +80,7 @@ pub trait DefaultVote {
 	/// - Raw number of no votes.
 	/// - Total number of member count.
 	fn default_vote(
-		prime_voted_aye: bool,
+		prime_vote: Option<bool>,
 		yes_votes: MemberCount,
 		no_votes: MemberCount,
 		len: MemberCount,
@@ -92,12 +92,12 @@ pub struct PrimeDefaultVote;
 
 impl DefaultVote for PrimeDefaultVote {
 	fn default_vote(
-		prime_voted_aye: bool,
+		prime_vote: Option<bool>,
 		_yes_votes: MemberCount,
 		_no_votes: MemberCount,
 		_len: MemberCount,
 	) -> bool {
-		prime_voted_aye
+		prime_vote.unwrap_or(false)
 	}
 }
 
@@ -107,13 +107,13 @@ pub struct MoreThanMajorityThenPrimeDefaultVote;
 
 impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
 	fn default_vote(
-		prime_voted_aye: bool,
+		prime_vote: Option<bool>,
 		yes_votes: MemberCount,
 		_no_votes: MemberCount,
 		len: MemberCount,
 	) -> bool {
 		let more_than_majority = yes_votes * 2 > len;
-		more_than_majority || prime_voted_aye
+		more_than_majority || prime_vote.unwrap_or(false)
 	}
 }
 
@@ -636,11 +636,10 @@ decl_module! {
 			// Only allow actual closing of the proposal after the voting period has ended.
 			ensure!(system::Module::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 
-			let prime_voted_aye = Self::prime()
-				.map_or(false, |who| voting.ayes.iter().any(|a| a == &who));
+			let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|a| a == &who));
 
 			// default voting strategy.
-			let default = T::DefaultVote::default_vote(prime_voted_aye, yes_votes, no_votes, seats);
+			let default = T::DefaultVote::default_vote(prime_vote, yes_votes, no_votes, seats);
 
 			let abstentions = seats - (yes_votes + no_votes);
 			match default {
