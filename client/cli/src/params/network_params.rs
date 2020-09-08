@@ -148,6 +148,7 @@ impl NetworkParams {
 			listen_addresses,
 			public_addresses,
 			notifications_protocols: Vec::new(),
+			request_response_protocols: Vec::new(),
 			node_key,
 			node_name: node_name.to_string(),
 			client_version: client_id.to_string(),

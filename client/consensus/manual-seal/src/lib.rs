@@ -21,8 +21,9 @@
 
 use futures::prelude::*;
 use sp_consensus::{
-	Environment, Proposer, ForkChoiceStrategy, BlockImportParams, BlockOrigin, SelectChain,
-	import_queue::{BasicQueue, CacheKeyId, Verifier, BoxBlockImport},
+	Environment, Proposer, SelectChain, BlockImport,
+	ForkChoiceStrategy, BlockImportParams, BlockOrigin,
+	import_queue::{Verifier, BasicQueue, CacheKeyId, BoxBlockImport},
 };
 use sp_blockchain::HeaderBackend;
 use sp_inherents::InherentDataProviders;
@@ -34,17 +35,19 @@ use prometheus_endpoint::Registry;
 
 mod error;
 mod finalize_block;
-mod seal_new_block;
+mod seal_block;
+
+pub mod consensus;
 pub mod rpc;
 
-use self::{
-	finalize_block::{finalize_block, FinalizeBlockParams},
-	seal_new_block::{seal_new_block, SealBlockParams},
-};
 pub use self::{
 	error::Error,
+	consensus::ConsensusDataProvider,
+	finalize_block::{finalize_block, FinalizeBlockParams},
+	seal_block::{SealBlockParams, seal_block, MAX_PROPOSAL_DURATION},
 	rpc::{EngineCommand, CreatedBlock},
 };
+use sp_api::{ProvideRuntimeApi, TransactionFor};
 
 /// The verifier for the manual seal engine; instantly finalizes.
 struct ManualSealVerifier;
@@ -87,25 +90,83 @@ pub fn import_queue<Block, Transaction>(
 	)
 }
 
+/// Params required to start the instant sealing authorship task.
+pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpool::ChainApi, SC, CS> {
+	/// Block import instance for well. importing blocks.
+	pub block_import: BI,
+
+	/// The environment we are producing blocks for.
+	pub env: E,
+
+	/// Client instance
+	pub client: Arc<C>,
+
+	/// Shared reference to the transaction pool.
+	pub pool: Arc<txpool::Pool<A>>,
+
+	/// Stream<Item = EngineCommands>, Basically the receiving end of a channel for sending commands to
+	/// the authorship task.
+	pub commands_stream: CS,
+
+	/// SelectChain strategy.
+	pub select_chain: SC,
+
+	/// Digest provider for inclusion in blocks.
+	pub consensus_data_provider: Option<Box<dyn ConsensusDataProvider<B, Transaction = TransactionFor<C, B>>>>,
+
+	/// Provider for inherents to include in blocks.
+	pub inherent_data_providers: InherentDataProviders,
+}
+
+/// Params required to start the manual sealing authorship task.
+pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpool::ChainApi, SC> {
+	/// Block import instance for well. importing blocks.
+	pub block_import: BI,
+
+	/// The environment we are producing blocks for.
+	pub env: E,
+
+	/// Client instance
+	pub client: Arc<C>,
+
+	/// Shared reference to the transaction pool.
+	pub pool: Arc<txpool::Pool<A>>,
+
+	/// SelectChain strategy.
+	pub select_chain: SC,
+
+	/// Digest provider for inclusion in blocks.
+	pub consensus_data_provider: Option<Box<dyn ConsensusDataProvider<B, Transaction = TransactionFor<C, B>>>>,
+
+	/// Provider for inherents to include in blocks.
+	pub inherent_data_providers: InherentDataProviders,
+}
+
 /// Creates the background authorship task for the manual seal engine.
-pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
-	mut block_import: BoxBlockImport<B, T>,
-	mut env: E,
-	client: Arc<C>,
-	pool: Arc<txpool::Pool<A>>,
-	mut commands_stream: S,
-	select_chain: SC,
-	inherent_data_providers: InherentDataProviders,
+pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
+	ManualSealParams {
+		mut block_import,
+		mut env,
+		client,
+		pool,
+		mut commands_stream,
+		select_chain,
+		inherent_data_providers,
+		consensus_data_provider,
+		..
+	}: ManualSealParams<B, BI, E, C, A, SC, CS>
 )
 	where
 		A: txpool::ChainApi<Block=B> + 'static,
 		B: BlockT + 'static,
-		C: HeaderBackend<B> + Finalizer<B, CB> + 'static,
+		BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
+			+ Send + Sync + 'static,
+		C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
 		CB: ClientBackend<B> + 'static,
 		E: Environment<B> + 'static,
 		E::Error: std::fmt::Display,
 		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
-		S: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
+		CS: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
 		SC: SelectChain<B> + 'static,
 {
 	while let Some(command) = commands_stream.next().await {
@@ -116,7 +177,7 @@ pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
 				parent_hash,
 				sender,
 			} => {
-				seal_new_block(
+				seal_block(
 					SealBlockParams {
 						sender,
 						parent_hash,
@@ -126,6 +187,7 @@ pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
 						select_chain: &select_chain,
 						block_import: &mut block_import,
 						inherent_data_provider: &inherent_data_providers,
+						consensus_data_provider: consensus_data_provider.as_ref().map(|p| &**p),
 						pool: pool.clone(),
 						client: client.clone(),
 					}
@@ -149,18 +211,24 @@ pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
 /// runs the background authorship task for the instant seal engine.
 /// instant-seal creates a new block for every transaction imported into
 /// the transaction pool.
-pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
-	block_import: BoxBlockImport<B, T>,
-	env: E,
-	client: Arc<C>,
-	pool: Arc<txpool::Pool<A>>,
-	select_chain: SC,
-	inherent_data_providers: InherentDataProviders,
+pub async fn run_instant_seal<B, BI, CB, E, C, A, SC>(
+	InstantSealParams {
+		block_import,
+		env,
+		client,
+		pool,
+		select_chain,
+		consensus_data_provider,
+		inherent_data_providers,
+		..
+	}: InstantSealParams<B, BI, E, C, A, SC>
 )
 	where
 		A: txpool::ChainApi<Block=B> + 'static,
 		B: BlockT + 'static,
-		C: HeaderBackend<B> + Finalizer<B, CB> + 'static,
+		BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
+			+ Send + Sync + 'static,
+		C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
 		CB: ClientBackend<B> + 'static,
 		E: Environment<B> + 'static,
 		E::Error: std::fmt::Display,
@@ -181,13 +249,16 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 		});
 
 	run_manual_seal(
-		block_import,
-		env,
-		client,
-		pool,
-		commands_stream,
-		select_chain,
-		inherent_data_providers,
+		ManualSealParams {
+			block_import,
+			env,
+			client,
+			pool,
+			commands_stream,
+			select_chain,
+			consensus_data_provider,
+			inherent_data_providers,
+		}
 	).await
 }
 
@@ -233,7 +304,7 @@ mod tests {
 		// this test checks that blocks are created as soon as transactions are imported into the pool.
 		let (sender, receiver) = futures::channel::oneshot::channel();
 		let mut sender = Arc::new(Some(sender));
-		let stream = pool.pool().validated_pool().import_notification_stream()
+		let commands_stream = pool.pool().validated_pool().import_notification_stream()
 			.map(move |_| {
 				// we're only going to submit one tx so this fn will only be called once.
 				let mut_sender =  Arc::get_mut(&mut sender).unwrap();
@@ -246,13 +317,16 @@ mod tests {
 				}
 			});
 		let future = run_manual_seal(
-			Box::new(client.clone()),
-			env,
-			client.clone(),
-			pool.pool().clone(),
-			stream,
-			select_chain,
-			inherent_data_providers,
+			ManualSealParams {
+				block_import: client.clone(),
+				env,
+				client: client.clone(),
+				pool: pool.pool().clone(),
+				commands_stream,
+				select_chain,
+				inherent_data_providers,
+				consensus_data_provider: None,
+			}
 		);
 		std::thread::spawn(|| {
 			let mut rt = tokio::runtime::Runtime::new().unwrap();
@@ -299,15 +373,18 @@ mod tests {
 			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
-		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
+		let (mut sink, commands_stream) = futures::channel::mpsc::channel(1024);
 		let future = run_manual_seal(
-			Box::new(client.clone()),
-			env,
-			client.clone(),
-			pool.pool().clone(),
-			stream,
-			select_chain,
-			inherent_data_providers,
+			ManualSealParams {
+				block_import: client.clone(),
+				env,
+				client: client.clone(),
+				pool: pool.pool().clone(),
+				commands_stream,
+				select_chain,
+				consensus_data_provider: None,
+				inherent_data_providers,
+			}
 		);
 		std::thread::spawn(|| {
 			let mut rt = tokio::runtime::Runtime::new().unwrap();
@@ -371,15 +448,18 @@ mod tests {
 			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
-		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
+		let (mut sink, commands_stream) = futures::channel::mpsc::channel(1024);
 		let future = run_manual_seal(
-			Box::new(client.clone()),
-			env,
-			client.clone(),
-			pool.pool().clone(),
-			stream,
-			select_chain,
-			inherent_data_providers,
+			ManualSealParams {
+				block_import: client.clone(),
+				env,
+				client: client.clone(),
+				pool: pool.pool().clone(),
+				commands_stream,
+				select_chain,
+				consensus_data_provider: None,
+				inherent_data_providers,
+			}
 		);
 		std::thread::spawn(|| {
 			let mut rt = tokio::runtime::Runtime::new().unwrap();
