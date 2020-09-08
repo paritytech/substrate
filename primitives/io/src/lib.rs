@@ -61,6 +61,8 @@ use sp_externalities::{ExternalitiesExt, Externalities};
 #[cfg(feature = "std")]
 mod batch_verifier;
 
+pub mod tasks;
+
 #[cfg(feature = "std")]
 use batch_verifier::BatchVerifier;
 
@@ -1141,27 +1143,42 @@ pub trait Sandbox {
 	}
 }
 
-pub trait InstanceHypervisor : Send {
-	fn fork_dispatch(&self, func: u32, payload: Vec<u8>) -> u32;
+/// Runtime spawn extension.
+pub trait RuntimeSpawn : Send {
+	/// Create new runtime instance and use dynamic dispatch to invoke with specified payload.
+	fn dyn_dispatch(&self, func: u32, payload: Vec<u8>) -> u32;
+
+	/// Join the result of previously created runtime instance invocation.
 	fn join(&self, handle: u32) -> Vec<u8>;
 }
 
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
-	pub struct HypervisorExt(Box<dyn InstanceHypervisor>);
+	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
 }
 
+/// Wasm host functions for managing tasks.
+///
+/// This should be used directly. Use `sp_io::tasks` for running parallel tasks instead.
 #[runtime_interface]
-pub trait Hypervisor {
-	fn fork(&mut self, entry: u32, payload: Vec<u8>) -> u32 {
-		let hypervisor = self.extension::<HypervisorExt>().expect("Cannot fork without isntance hypervisor");
-		hypervisor.fork_dispatch(entry, payload)
+pub trait RuntimeTasks {
+	/// Wasm host function for spawning task.
+	///
+	/// This should not be used directly. Use `sp_io::tasks::spawn` instead.
+	fn spawn(&mut self, entry: u32, payload: Vec<u8>) -> u32 {
+		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
+			.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
+		runtime_spawn.dyn_dispatch(entry, payload)
 	}
 
+	/// Wasm host function for joining a task.
+	///
+	/// This should not be used directly. Use `join` of `sp_io::tasks::spawn` result instead.
 	fn join(&mut self, handle: u32) -> Vec<u8> {
-		let hypervisor = self.extension::<HypervisorExt>().expect("Cannot fork without isntance hypervisor");
-		hypervisor.join(handle)
+		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
+			.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
+		runtime_spawn.join(handle)
 	}
  }
 
@@ -1232,79 +1249,8 @@ pub type SubstrateHostFunctions = (
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
-	hypervisor::HostFunctions,
+	runtime_tasks::HostFunctions,
 );
-
-/// Handle for forked runtime execution.
-#[cfg(feature = "std")]
-pub struct DataJoinHandle {
-	receiver: std::sync::mpsc::Receiver<Vec<u8>>,
-}
-
-#[cfg(feature = "std")]
-impl DataJoinHandle {
-	/// Join handle returned by `fork` function
-	pub fn join(self) -> Vec<u8> {
-		self.receiver.recv().expect("Essntial task failure: forked runtime terminated before sending result.")
-	}
-}
-
-/// Fork runtime execution into separate thread.
-#[cfg(feature = "std")]
-pub fn fork(entry_point: fn(Vec<u8>) -> Vec<u8>, data: Vec<u8>) -> Result<DataJoinHandle, &'static str> {
-	let scheduler = sp_externalities::with_externalities(|mut ext| ext.extension::<TaskExecutorExt>()
-		.expect("No task executor associated with the current context!")
-		.0
-		.clone()
-	).ok_or("Fork called outside of externalities context!")?;
-
-	let (sender, receiver) = std::sync::mpsc::channel();
-	scheduler.spawn("forked runtime invoke", Box::pin(async move {
-		let result = entry_point(data);
-		let _ = sender.send(result);
-	}));
-
-	Ok(DataJoinHandle { receiver })
-}
-
-/// Handle for forked runtime execution.
-#[cfg(not(feature = "std"))]
-pub struct DataJoinHandle {
-	handle: u32,
-}
-
-#[cfg(not(feature = "std"))]
-impl DataJoinHandle {
-	/// Join handle returned by `fork` function
-	pub fn join(self) -> Vec<u8> {
-		hypervisor::join(self.handle)
-	}
-}
-
-#[cfg(not(feature = "std"))]
-pub fn fork(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>) -> Result<DataJoinHandle, &'static str> {
-
-    #[no_mangle]
-    unsafe extern "C" fn fork_dispatch(payload_ptr: u32, payload_len: u32) -> u64 {
-
-		use codec::Decode as _;
-
-		let mut data: &[u8] = core::slice::from_raw_parts(payload_ptr as usize as *const u8, payload_len as usize);
-		let entry = u32::decode(&mut data).expect("Failed to decode input") as usize;
-		let ptr: fn(Vec<u8>) -> Vec<u8> = core::mem::transmute(entry);
-		let payload = Vec::<u8>::decode(&mut data).expect("Failed to decode input");
-
-		let output = (ptr)(payload);
-
-		let mut output_encode = (output.len() as u64) << 32;
-        output_encode | (output.as_ptr() as usize as u64)
-	}
-
-	let func_ptr: usize = unsafe { core::mem::transmute(entry_point) };
-
-	let handle = unsafe { hypervisor::fork(func_ptr as u32, payload) };
-	Ok(DataJoinHandle { handle })
-}
 
 #[cfg(test)]
 mod tests {
