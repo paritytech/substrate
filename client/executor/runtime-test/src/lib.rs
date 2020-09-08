@@ -312,12 +312,13 @@ sp_core::wasm_export_functions! {
 
 	fn test_fork() {
 		let data = vec![1u8, 2u8];
-		let data_new = sp_io::fork(incrementer, data).expect("failed too fork").join();
+		let data_new = sp_io::tasks::spawn(incrementer, data).join();
 
 		assert_eq!(data_new, vec![2u8, 3u8]);
 	}
  }
 
+ #[cfg(not(feature = "std"))]
  fn incrementer(data: Vec<u8>) -> Vec<u8> {
 	data.into_iter().map(|v| v + 1).collect()
  }

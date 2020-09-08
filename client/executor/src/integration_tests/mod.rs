@@ -759,6 +759,7 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn forking_should_work(wasm_method: WasmExecutionMethod) {
 
 	let mut ext = TestExternalities::default();

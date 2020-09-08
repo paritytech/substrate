@@ -70,7 +70,7 @@ impl VersionedRuntime {
 		f: F,
 	) -> Result<R, Error>
 		where F: FnOnce(
-			&Arc<WasmModule>,
+			&Arc<dyn WasmModule>,
 			&dyn WasmInstance,
 			Option<&RuntimeVersion>,
 			&mut dyn Externalities)
@@ -320,7 +320,7 @@ fn create_versioned_wasm_runtime(
 ) -> Result<VersionedRuntime, WasmError> {
 	#[cfg(not(target_os = "unknown"))]
 	let time = std::time::Instant::now();
-	let mut runtime = create_wasm_runtime_with_code(
+	let runtime = create_wasm_runtime_with_code(
 		wasm_method,
 		heap_pages,
 		&code,

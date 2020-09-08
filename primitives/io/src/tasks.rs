@@ -42,12 +42,11 @@ mod inner {
     pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, data: Vec<u8>) -> Result<DataJoinHandle, &'static str> {
         let scheduler = sp_externalities::with_externalities(|mut ext| ext.extension::<TaskExecutorExt>()
             .expect("No task executor associated with the current context!")
-            .0
             .clone()
-        ).ok_or("Fork called outside of externalities context!")?;
+        ).ok_or("Spawn called outside of externalities context!")?;
 
         let (sender, receiver) = mpsc::channel();
-        scheduler.spawn("forked runtime invoke", Box::pin(async move {
+        scheduler.spawn("parallel-runtime-spawn", Box::pin(async move {
             let result = entry_point(data);
             let _ = sender.send(result);
         }));
@@ -59,8 +58,10 @@ mod inner {
 #[cfg(not(feature = "std"))]
 mod inner {
 
+    use sp_std::vec::Vec;
+
     /// Spawn new runtime task (wasm).
-    pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>) -> Result<DataJoinHandle, &'static str> {
+    pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>) -> DataJoinHandle {
 
         /// Dynamic dispatch of wasm blob.
         ///
@@ -90,8 +91,8 @@ mod inner {
 
         let func_ptr: usize = unsafe { core::mem::transmute(entry_point) };
 
-        let handle = unsafe { hypervisor::fork(func_ptr as u32, payload) };
-        Ok(DataJoinHandle { handle })
+        let handle = unsafe { crate::runtime_tasks::spawn(func_ptr as u32, payload) };
+        DataJoinHandle { handle }
     }
 
     /// Task handle (wasm).
@@ -105,7 +106,7 @@ mod inner {
     impl DataJoinHandle {
         /// Join handle returned by `spawn` function
         pub fn join(self) -> Vec<u8> {
-            hypervisor::join(self.handle)
+            crate::runtime_tasks::join(self.handle)
         }
     }
 }

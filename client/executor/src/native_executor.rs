@@ -30,6 +30,7 @@ use std::{result, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc, collections:
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule};
 use sp_externalities::ExternalitiesExt as _;
+use sp_io::RuntimeSpawnExt;
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -137,7 +138,7 @@ impl WasmExecutor {
 		f: F,
 	) -> Result<R>
 		where F: FnOnce(
-			AssertUnwindSafe<&Arc<WasmModule>>,
+			AssertUnwindSafe<&Arc<dyn WasmModule>>,
 			AssertUnwindSafe<&dyn WasmInstance>,
 			Option<&RuntimeVersion>,
 			AssertUnwindSafe<&mut dyn Externalities>,
@@ -186,7 +187,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 				with_externalities_safe(
 					&mut **ext,
 					move || {
-						InstanceHypervisor::register_on_externalities(module.clone());
+						RuntimeInstanceSpawn::register_on_externalities(module.clone());
 						instance.call(method, call_data)
 					}
 				)
@@ -211,7 +212,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 			with_externalities_safe(
 				&mut **ext,
 				move || {
-					InstanceHypervisor::register_on_externalities(module.clone());
+					RuntimeInstanceSpawn::register_on_externalities(module.clone());
 					instance.call(method, call_data)
 				}
 			)
@@ -285,15 +286,15 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	}
 }
 
-pub struct InstanceHypervisor {
+struct RuntimeInstanceSpawn {
 	module: Arc<dyn sc_executor_common::wasm_runtime::WasmModule>,
 	forks: parking_lot::Mutex<HashMap<u32, std::sync::mpsc::Receiver<Vec<u8>>>>,
 	counter: std::sync::atomic::AtomicU32,
 	spawner: Box<dyn sp_core::traits::SpawnNamed>,
 }
 
-impl sp_io::InstanceHypervisor for InstanceHypervisor {
-	fn fork_dispatch(&self, func: u32, data: Vec<u8>) -> u32 {
+impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
+	fn dyn_dispatch(&self, func: u32, data: Vec<u8>) -> u32 {
 		use codec::Encode as _;
 
 		let new_handle = self.counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -303,40 +304,33 @@ impl sp_io::InstanceHypervisor for InstanceHypervisor {
 
 		let module = self.module.clone();
 		self.spawner.spawn("forked runtime invoke", Box::pin(async move {
-
 			let instance = module.new_instance().expect("Failed to create new instance for fork");
-			println!("dispatching fork...");
 
 			let mut dispatch_data = Vec::new();
 			func.encode_to(&mut dispatch_data);
 			data.encode_to(&mut dispatch_data);
-			let result = instance.call("fork_dispatch", &dispatch_data[..]).expect("Failed to invoke instance.");
+			let result = instance.call("dyn_dispatch", &dispatch_data[..]).expect("Failed to invoke instance.");
 
-			println!("dispatched fork! ({:?})", result);
 			let _ = sender.send(result);
 		}));
 
-		println!("fork dispatch handle: {}", new_handle);
 
 		new_handle
 	}
 
 	fn join(&self, handle: u32) -> Vec<u8> {
-		println!("trying to find receiver...");
 		let receiver = self.forks.lock().remove(&handle).expect("No fork for such handle");
-		println!("trying to join...");
 		let output = receiver.recv().expect("No signal from forked execution");
-		println!("Done.");
 		output
 	}
 }
 
-impl InstanceHypervisor {
+impl RuntimeInstanceSpawn {
 	fn new(
 		module: Arc<dyn sc_executor_common::wasm_runtime::WasmModule>,
 		spawner: Box<dyn sp_core::traits::SpawnNamed>,
 	) -> Self {
-		InstanceHypervisor {
+		Self {
 			module,
 			spawner,
 			counter: 0.into(),
@@ -351,14 +345,14 @@ impl InstanceHypervisor {
 		ext.extension::<sp_core::traits::TaskExecutorExt>().map(move |task_ext| Self::new(module, task_ext.clone()))
 	}
 
-	fn register_on_externalities(module: Arc<WasmModule>) {
+	fn register_on_externalities(module: Arc<dyn WasmModule>) {
 		sp_externalities::with_externalities(
 			move |mut ext| {
-				if let Some(instance_hypervisor) =
-					InstanceHypervisor::with_externalities_and_module(module.clone(), ext)
+				if let Some(runtime_spawn) =
+					Self::with_externalities_and_module(module.clone(), ext)
 				{
-					if let Err(e) = ext.register_extension::<sp_io::HypervisorExt>(
-						sp_io::HypervisorExt(Box::new(instance_hypervisor))
+					if let Err(e) = ext.register_extension::<RuntimeSpawnExt>(
+						RuntimeSpawnExt(Box::new(runtime_spawn))
 					) {
 						trace!(
 							target: "executor",
@@ -417,7 +411,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 						with_externalities_safe(
 							&mut **ext,
 							move || {
-								InstanceHypervisor::register_on_externalities(module.clone());
+								RuntimeInstanceSpawn::register_on_externalities(module.clone());
 								instance.call(method, data).map(NativeOrEncoded::Encoded)
 							}
 						)
