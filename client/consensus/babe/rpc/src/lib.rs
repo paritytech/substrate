@@ -246,7 +246,7 @@ mod tests {
 	fn create_temp_keystore<P: AppPair>(authority: Ed25519Keyring) -> (Arc<SyncCryptoStore>, tempfile::TempDir) {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore: SyncCryptoStore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore").into();
-		keystore.ed25519_generate_new(BABE, Some(&authority.to_seed()))
+		keystore.sr25519_generate_new(BABE, Some(&authority.to_seed()))
 			.expect("Creates authority key");
 
 		(Arc::new(keystore), keystore_path)
