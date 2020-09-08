@@ -91,7 +91,7 @@ impl Drop for WorkspaceLock {
 pub fn create_and_compile(
 	cargo_manifest: &Path,
 	default_rustflags: &str,
-) -> (WasmBinary, WasmBinaryBloaty) {
+) -> (Option<WasmBinary>, WasmBinaryBloaty) {
 	let wasm_workspace_root = get_wasm_workspace_root();
 	let wasm_workspace = wasm_workspace_root.join("wbuild");
 
@@ -113,7 +113,9 @@ pub fn create_and_compile(
 		&wasm_workspace,
 	);
 
-	copy_wasm_to_target_directory(cargo_manifest, &wasm_binary);
+	wasm_binary.as_ref().map(|wasm_binary|
+		copy_wasm_to_target_directory(cargo_manifest, wasm_binary)
+	);
 
 	generate_rerun_if_changed_instructions(cargo_manifest, &project, &wasm_workspace);
 
@@ -469,18 +471,23 @@ fn compact_wasm_file(
 	project: &Path,
 	cargo_manifest: &Path,
 	wasm_workspace: &Path,
-) -> (WasmBinary, WasmBinaryBloaty) {
-	let target = if is_release_build() { "release" } else { "debug" };
+) -> (Option<WasmBinary>, WasmBinaryBloaty) {
+	let is_release_build = is_release_build();
+	let target = if is_release_build { "release" } else { "debug" };
 	let wasm_binary = get_wasm_binary_name(cargo_manifest);
 	let wasm_file = wasm_workspace.join("target/wasm32-unknown-unknown")
 		.join(target)
 		.join(format!("{}.wasm", wasm_binary));
-	let wasm_compact_file = project.join(format!("{}.compact.wasm", wasm_binary));
+	let wasm_compact_file = if is_release_build {
+		let wasm_compact_file = project.join(format!("{}.compact.wasm", wasm_binary));
+		wasm_gc::garbage_collect_file(&wasm_file, &wasm_compact_file)
+			.expect("Failed to compact generated WASM binary.");
+		Some(WasmBinary(wasm_compact_file))
+	} else {
+		None
+	};
 
-	wasm_gc::garbage_collect_file(&wasm_file, &wasm_compact_file)
-		.expect("Failed to compact generated WASM binary.");
-
-	(WasmBinary(wasm_compact_file), WasmBinaryBloaty(wasm_file))
+	(wasm_compact_file, WasmBinaryBloaty(wasm_file))
 }
 
 /// Custom wrapper for a [`cargo_metadata::Package`] to store it in
