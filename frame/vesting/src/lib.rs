@@ -95,6 +95,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// Maximum number of vesting schedules for a user.
+	type MaxVestingSchedules: Get<u32>;
 }
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
@@ -137,7 +140,7 @@ decl_storage! {
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(fn vesting):
 			map hasher(blake2_128_concat) T::AccountId
-			=> Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>;
+			=> Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>;
 	}
 	add_extra_genesis {
 		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, BalanceOf<T>)>;
@@ -156,11 +159,13 @@ decl_storage! {
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
 
-				Vesting::<T>::insert(who, VestingInfo {
-					locked: locked,
-					per_block: per_block,
-					starting_block: begin
-				});
+				Vesting::<T>::insert(who, vec![
+					VestingInfo {
+						locked: locked,
+						per_block: per_block,
+						starting_block: begin
+					}
+				]);
 				let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
 				T::Currency::set_lock(VESTING_ID, who, locked, reasons);
 			}
@@ -171,7 +176,7 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
 		/// The amount vested has been updated. This could indicate more funds are available. The
-		/// balance given is the amount which is left unvested (and thus locked). 
+		/// balance given is the amount which is left unvested (and thus locked).
 		/// [account, unvested]
 		VestingUpdated(AccountId, Balance),
 		/// An [account] has become fully vested. No further vesting can happen.
@@ -334,21 +339,25 @@ impl<T: Trait> Module<T> {
 	/// (Re)set or remove the module's currency lock on `who`'s account in accordance with their
 	/// current unvested amount.
 	fn update_lock(who: T::AccountId) -> DispatchResult {
-		let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
-		let now = <frame_system::Module<T>>::block_number();
-		let locked_now = vesting.locked_at::<T::BlockNumberToBalance>(now);
+		Vesting::<T>::try_update(&who, |vesting_schedules| {
+			ensure!(vesting_schedules.len() > 0, Error::<T>::NotVesting);
+			let now = <frame_system::Module<T>>::block_number();
+			for (i, mut vesting) in vesting_schedules.iter().enumerate() {
+				let locked_now = vesting.locked_at::<T::BlockNumberToBalance>(now);
 
-		if locked_now.is_zero() {
-			T::Currency::remove_lock(VESTING_ID, &who);
-			Vesting::<T>::remove(&who);
-			Self::deposit_event(RawEvent::VestingCompleted(who));
-		} else {
-			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
-			T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons);
-			Self::deposit_event(RawEvent::VestingUpdated(who, locked_now));
+				if locked_now.is_zero() {
+					T::Currency::remove_lock(VESTING_ID, &who);
+					Vesting::<T>::remove(&who);
+					Self::deposit_event(RawEvent::VestingCompleted(who));
+				} else {
+					let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+					T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons);
+					Self::deposit_event(RawEvent::VestingUpdated(who, locked_now));
+				}
+				Ok(())
+			}
 		}
-		Ok(())
-	}
+	});
 }
 
 impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
