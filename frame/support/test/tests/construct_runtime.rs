@@ -136,13 +136,13 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event<T>, Origin<T>},
+		System: system::{Module, Call, Event<T>, Origin<T>} = 30,
 		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T>, Origin<T>},
 		Module2: module2::{Module, Call, Storage, Event, Origin},
 		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T>, Origin<T>},
 		Module1_3: module1::<Instance3>::{Module, Storage} = 6,
 		Module1_4: module1::<Instance4>::{Module, Call} = 3,
-		Module1_5: module1::<Instance5>::{Module, Event<T>} = 2,
+		Module1_5: module1::<Instance5>::{Module, Event<T>},
 		Module1_6: module1::<Instance6>::{Module, Call, Storage, Event<T>, Origin<T>} = 1,
 		Module1_7: module1::<Instance7>::{Module, Call, Storage, Event<T>, Origin<T>},
 		Module1_8: module1::<Instance8>::{Module, Call, Storage, Event<T>, Origin<T>} = 12,
@@ -158,15 +158,15 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, 
 fn check_modules_error_type() {
 	assert_eq!(
 		Module1_1::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 4, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module { index: 31, error: 0, message: Some("Something") }),
 	);
 	assert_eq!(
 		Module2::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 5, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module { index: 32, error: 0, message: Some("Something") }),
 	);
 	assert_eq!(
 		Module1_2::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 7, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module { index: 33, error: 0, message: Some("Something") }),
 	);
 	assert_eq!(
 		Module1_3::fail(system::Origin::<Runtime>::Root.into()),
@@ -178,7 +178,7 @@ fn check_modules_error_type() {
 	);
 	assert_eq!(
 		Module1_5::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 2, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module { index: 4, error: 0, message: Some("Something") }),
 	);
 	assert_eq!(
 		Module1_6::fail(system::Origin::<Runtime>::Root.into()),
@@ -186,7 +186,7 @@ fn check_modules_error_type() {
 	);
 	assert_eq!(
 		Module1_7::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 8, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module { index: 2, error: 0, message: Some("Something") }),
 	);
 	assert_eq!(
 		Module1_8::fail(system::Origin::<Runtime>::Root.into()),
@@ -194,7 +194,7 @@ fn check_modules_error_type() {
 	);
 	assert_eq!(
 		Module1_9::fail(system::Origin::<Runtime>::Root.into()),
-		Err(DispatchError::Module { index: 9, error: 0, message: Some("Something") }),
+		Err(DispatchError::Module { index: 13, error: 0, message: Some("Something") }),
 	);
 }
 
@@ -207,42 +207,42 @@ fn integrity_test_works() {
 #[test]
 fn origin_codec() {
 	use codec::Encode;
-	assert_eq!(OriginCaller::system(system::RawOrigin::None).encode()[0], 0);
-	assert_eq!(OriginCaller::module1_Instance1(module1::Origin(Default::default())).encode()[0], 4);
-	assert_eq!(OriginCaller::module2(module2::Origin).encode()[0], 5);
-	assert_eq!(OriginCaller::module1_Instance2(module1::Origin(Default::default())).encode()[0], 7);
+	assert_eq!(OriginCaller::system(system::RawOrigin::None).encode()[0], 30);
+	assert_eq!(OriginCaller::module1_Instance1(module1::Origin(Default::default())).encode()[0], 31);
+	assert_eq!(OriginCaller::module2(module2::Origin).encode()[0], 32);
+	assert_eq!(OriginCaller::module1_Instance2(module1::Origin(Default::default())).encode()[0], 33);
 	assert_eq!(OriginCaller::module1_Instance6(module1::Origin(Default::default())).encode()[0], 1);
-	assert_eq!(OriginCaller::module1_Instance7(module1::Origin(Default::default())).encode()[0], 8);
+	assert_eq!(OriginCaller::module1_Instance7(module1::Origin(Default::default())).encode()[0], 2);
 	assert_eq!(OriginCaller::module1_Instance8(module1::Origin(Default::default())).encode()[0], 12);
-	assert_eq!(OriginCaller::module1_Instance9(module1::Origin(Default::default())).encode()[0], 9);
+	assert_eq!(OriginCaller::module1_Instance9(module1::Origin(Default::default())).encode()[0], 13);
 }
 
 #[test]
 fn event_codec() {
 	use codec::Encode;
-	assert_eq!(Event::system(system::Event::<Runtime>::ExtrinsicSuccess).encode()[0], 0);
-	assert_eq!(Event::module1_Instance1(module1::Event::<Runtime, module1::Instance1>::A(Default::default())).encode()[0], 4);
-	assert_eq!(Event::module2(module2::Event::A).encode()[0], 5);
-	assert_eq!(Event::module1_Instance2(module1::Event::<Runtime, module1::Instance2>::A(Default::default())).encode()[0], 7);
-	assert_eq!(Event::module1_Instance5(module1::Event::<Runtime, module1::Instance5>::A(Default::default())).encode()[0], 2);
+	assert_eq!(Event::system(system::Event::<Runtime>::ExtrinsicSuccess).encode()[0], 30);
+	assert_eq!(Event::module1_Instance1(module1::Event::<Runtime, module1::Instance1>::A(Default::default())).encode()[0], 31);
+	assert_eq!(Event::module2(module2::Event::A).encode()[0], 32);
+	assert_eq!(Event::module1_Instance2(module1::Event::<Runtime, module1::Instance2>::A(Default::default())).encode()[0], 33);
+	assert_eq!(Event::module1_Instance5(module1::Event::<Runtime, module1::Instance5>::A(Default::default())).encode()[0], 4);
 	assert_eq!(Event::module1_Instance6(module1::Event::<Runtime, module1::Instance6>::A(Default::default())).encode()[0], 1);
-	assert_eq!(Event::module1_Instance7(module1::Event::<Runtime, module1::Instance7>::A(Default::default())).encode()[0], 8);
+	assert_eq!(Event::module1_Instance7(module1::Event::<Runtime, module1::Instance7>::A(Default::default())).encode()[0], 2);
 	assert_eq!(Event::module1_Instance8(module1::Event::<Runtime, module1::Instance8>::A(Default::default())).encode()[0], 12);
-	assert_eq!(Event::module1_Instance9(module1::Event::<Runtime, module1::Instance9>::A(Default::default())).encode()[0], 9);
+	assert_eq!(Event::module1_Instance9(module1::Event::<Runtime, module1::Instance9>::A(Default::default())).encode()[0], 13);
 }
 
 #[test]
 fn call_codec() {
 	use codec::Encode;
-	assert_eq!(Call::System(system::Call::noop()).encode()[0], 0);
-	assert_eq!(Call::Module1_1(module1::Call::fail()).encode()[0], 4);
-	assert_eq!(Call::Module2(module2::Call::fail()).encode()[0], 5);
-	assert_eq!(Call::Module1_2(module1::Call::fail()).encode()[0], 7);
+	assert_eq!(Call::System(system::Call::noop()).encode()[0], 30);
+	assert_eq!(Call::Module1_1(module1::Call::fail()).encode()[0], 31);
+	assert_eq!(Call::Module2(module2::Call::fail()).encode()[0], 32);
+	assert_eq!(Call::Module1_2(module1::Call::fail()).encode()[0], 33);
 	assert_eq!(Call::Module1_4(module1::Call::fail()).encode()[0], 3);
 	assert_eq!(Call::Module1_6(module1::Call::fail()).encode()[0], 1);
-	assert_eq!(Call::Module1_7(module1::Call::fail()).encode()[0], 8);
+	assert_eq!(Call::Module1_7(module1::Call::fail()).encode()[0], 2);
 	assert_eq!(Call::Module1_8(module1::Call::fail()).encode()[0], 12);
-	assert_eq!(Call::Module1_9(module1::Call::fail()).encode()[0], 9);
+	assert_eq!(Call::Module1_9(module1::Call::fail()).encode()[0], 13);
 }
 
 #[test]
@@ -277,7 +277,7 @@ fn test_metadata() {
 				]))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				fixed_index: None,
+				index: 30,
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module1_1"),
@@ -299,7 +299,7 @@ fn test_metadata() {
 				}]))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				fixed_index: None,
+				index: 31,
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module2"),
@@ -323,7 +323,7 @@ fn test_metadata() {
 				]))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				fixed_index: None,
+				index: 32,
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module1_2"),
@@ -343,7 +343,7 @@ fn test_metadata() {
 				}]))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				fixed_index: None,
+				index: 33,
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module1_3"),
@@ -355,7 +355,7 @@ fn test_metadata() {
 				event: None,
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				fixed_index: Some(6),
+				index: 6,
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module1_4"),
@@ -368,7 +368,7 @@ fn test_metadata() {
 				event: None,
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				fixed_index: Some(3),
+				index: 3,
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module1_5"),
@@ -381,7 +381,7 @@ fn test_metadata() {
 				}]))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				fixed_index: Some(2),
+				index: 4,
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module1_6"),
@@ -401,7 +401,7 @@ fn test_metadata() {
 				}]))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				fixed_index: Some(1),
+				index: 1,
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module1_7"),
@@ -421,7 +421,7 @@ fn test_metadata() {
 				}]))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				fixed_index: None,
+				index: 2,
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module1_8"),
@@ -441,7 +441,7 @@ fn test_metadata() {
 				}]))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				fixed_index: Some(12),
+				index: 12,
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module1_9"),
@@ -461,7 +461,7 @@ fn test_metadata() {
 				}]))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				fixed_index: None,
+				index: 13,
 			},
 		]),
 		extrinsic: ExtrinsicMetadata {

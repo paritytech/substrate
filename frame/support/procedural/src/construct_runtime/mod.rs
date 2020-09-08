@@ -24,7 +24,7 @@ use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, Span};
 use quote::quote;
 use syn::{Ident, Result, TypePath};
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 /// The fixed name of the system module.
 const SYSTEM_MODULE_NAME: &str = "System";
@@ -52,9 +52,19 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 			},
 		..
 	} = definition;
-	let modules = modules.into_iter().collect::<Vec<_>>();
 
-	let system_module = check_modules(&modules, modules_token.span)?;
+	let mut modules = modules.into_iter().collect::<Vec<_>>();
+
+	// Automatically assign implicit index:
+	assign_implicit_index(&mut modules)?;
+
+	let system_module = modules.iter()
+		.find(|decl| decl.name == SYSTEM_MODULE_NAME)
+		.ok_or_else(|| syn::Error::new(
+			modules_token.span,
+			"`System` module declaration is missing. \
+			 Please add this line: `System: frame_system::{Module, Call, Storage, Config, Event<T>},`",
+		))?;
 
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
@@ -234,10 +244,10 @@ fn decl_runtime_metadata<'a>(
 				.map(|name| quote!(<#name>))
 				.into_iter();
 
-			let index = module_declaration.index.map(|index| quote::quote!( { index #index } ));
+			let index = module_declaration.index.expect("All index have been assigned");
 
 			quote!(
-				#module::Module #(#instance)* as #name with #(#filtered_names)* #index,
+				#module::Module #(#instance)* as #name { index #index } with #(#filtered_names)*,
 			)
 		});
 	quote!(
@@ -253,16 +263,12 @@ fn decl_outer_dispatch<'a>(
 	module_declarations: &Vec<ModuleDeclaration>,
 	scrate: &'a TokenStream2,
 ) -> TokenStream2 {
-	let mut available_indices = get_available_indices(module_declarations);
 	let modules_tokens = module_declarations.iter()
 		.filter(|module_declaration| module_declaration.exists_part("Call"))
 		.map(|module_declaration| {
 			let module = &module_declaration.module;
 			let name = &module_declaration.name;
-			let index = match module_declaration.index {
-				Some(index) => index,
-				None => available_indices.remove(0),
-			};
+			let index = module_declaration.index.expect("All index have been assigned");
 			let index_string = syn::LitStr::new(&format!("{}", index), Span::call_site());
 			quote!(#[codec(index = #index_string)] #module::#name)
 		});
@@ -279,12 +285,10 @@ fn decl_outer_dispatch<'a>(
 fn decl_outer_origin<'a>(
 	runtime_name: &'a Ident,
 	modules_except_system: &Vec<ModuleDeclaration>,
-	system_name: &'a Ident,
+	system_module: &'a ModuleDeclaration,
 	scrate: &'a TokenStream2,
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
-	let mut available_indices = get_available_indices(modules_except_system);
-	available_indices.retain(|i| *i != 0); // index 0 is reserved for system in origin
 	for module_declaration in modules_except_system {
 		match module_declaration.find_part("Origin") {
 			Some(module_entry) => {
@@ -299,28 +303,25 @@ fn decl_outer_origin<'a>(
 					);
 					return Err(syn::Error::new(module_declaration.name.span(), msg));
 				}
-				let index = match module_declaration.index {
-					Some(index) => {
-						assert!(
-							index != 0,
-							"Internal error, some origin is at index 0, but it is reserved to \
-							system"
-						);
-						index
-					},
-					None => available_indices.remove(0),
-				};
+				let index = module_declaration.index.expect("All index have been assigned");
 				let index_string = syn::LitStr::new(&format!("{}", index), Span::call_site());
-				let tokens = quote!(#[codec(index = #index_string)] #module #instance #generics ,);
+				let tokens = quote!(#[codec(index = #index_string)] #module #instance #generics,);
 				modules_tokens.extend(tokens);
 			}
 			None => {}
 		}
 	}
 
+	let system_name = &system_module.module;
+	let system_index = system_module.index.expect("All index have been assigned");
+	let system_index_string = syn::LitStr::new(&format!("{}", system_index), Span::call_site());
+
 	Ok(quote!(
 		#scrate::impl_outer_origin! {
-			pub enum Origin for #runtime_name where system = #system_name {
+			pub enum Origin for #runtime_name where
+				system = #system_name,
+				system_index = #system_index_string
+			{
 				#modules_tokens
 			}
 		}
@@ -333,7 +334,6 @@ fn decl_outer_event<'a>(
 	scrate: &'a TokenStream2,
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
-	let mut available_indices = get_available_indices(module_declarations);
 	for module_declaration in module_declarations {
 		match module_declaration.find_part("Event") {
 			Some(module_entry) => {
@@ -349,10 +349,7 @@ fn decl_outer_event<'a>(
 					return Err(syn::Error::new(module_declaration.name.span(), msg));
 				}
 
-				let index = match module_declaration.index {
-					Some(index) => index,
-					None => available_indices.remove(0),
-				};
+				let index = module_declaration.index.expect("All index have been assigned");
 				let index_string = syn::LitStr::new(&format!("{}", index), Span::call_site());
 				let tokens = quote!(#[codec(index = #index_string)] #module #instance #generics,);
 				modules_tokens.extend(tokens);
@@ -409,14 +406,8 @@ fn decl_module_to_index<'a>(
 	scrate: &TokenStream2,
 ) -> TokenStream2 {
 	let names = module_declarations.iter().map(|d| &d.name);
-	let mut available_indices = get_available_indices(module_declarations);
 	let indices = module_declarations.iter()
-		.map(|module| {
-			match module.index {
-				Some(index) => index as usize,
-				None => available_indices.remove(0) as usize,
-			}
-		});
+		.map(|module| module.index.expect("All index have been assigned") as usize);
 
 	quote!(
 		/// Provides an implementation of `ModuleToIndex` to map a module
@@ -452,63 +443,36 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 	)
 }
 
-fn get_available_indices(modules: &Vec<ModuleDeclaration>) -> Vec<u8> {
-	let reserved_indices = modules.iter()
-		.filter_map(|module| module.index)
-		.collect::<Vec<_>>();
+/// Assign index to each modules using same rules as rust for fieldless enum.
+/// I.e. implicit are assigned number incrementedly from last explicit or 0.
+fn assign_implicit_index(modules: &mut Vec<ModuleDeclaration>) -> syn::Result<()> {
+	let mut indices = HashMap::new();
+	let mut last_index: u8 = 0;
 
-	(0..u8::max_value())
-	.filter(|i| !reserved_indices.contains(i))
-	.collect::<Vec<_>>()
-}
-
-/// Check:
-/// * check system module is defined
-/// * there is less than 256 modules
-/// * no module use index 0 or except system
-/// * module indices don't conflict.
-///
-/// returns system module ident
-fn check_modules(
-	modules: &Vec<ModuleDeclaration>,
-	modules_span: proc_macro2::Span,
-) -> Result<syn::Ident> {
-	// Assert we have system module declared
-	let system_module = modules.iter()
-		.find(|decl| decl.name == SYSTEM_MODULE_NAME)
-		.ok_or_else(|| syn::Error::new(
-			modules_span,
-			"`System` module declaration is missing. \
-			 Please add this line: `System: frame_system::{Module, Call, Storage, Config, Event<T>},`",
-		))?;
-
-	// Assert no more than 256 modules
-	if modules.len() > u8::max_value() as usize {
-		let msg = "Too many modules defined, only 256 modules is currently allowed";
-		return Err(syn::Error::new(modules_span, msg));
-	}
-
-	// No module use index 0 explicity (or it is system)
-	if let Some(module) = modules.iter()
-		.find(|module| {
-			module.index.map_or(false, |i| i == 0) && module.name != SYSTEM_MODULE_NAME
-		})
-	{
-		let msg = "Only system module is allowed to be defined at index `0`, this is to avoid \
-			confusion for encoding of origin. Indeed, origin system variant is always encoded at \
-			index 0";
-		return Err(syn::Error::new(module.name.span(), msg));
-	}
-
-	// No module indices conflicts
-	let mut indices = HashSet::new();
 	for module in modules {
-		if let Some(index) = module.index {
-			if !indices.insert(index) {
-				return Err(syn::Error::new(module.module.span(), "module index is already used"));
-			}
+		match module.index {
+			Some(index) => {
+				last_index = index;
+			},
+			None => {
+				last_index = match last_index.checked_add(1) {
+					Some(i) => i,
+					None => {
+						let msg = "module index doesn't fit into u8, index is 256";
+						return Err(syn::Error::new(module.module.span(), msg));
+					},
+				};
+				module.index = Some(last_index);
+			},
+		}
+
+		if let Some(used_span) = indices.insert(module.index.unwrap(), module.module.span()) {
+			let span = module.module.span().join(used_span)
+				.expect("Modules are defined in same file");
+			let msg = format!("module index are conflicting, at index {}", module.index.unwrap());
+			return Err(syn::Error::new(span, msg));
 		}
 	}
 
-	Ok(system_module.module.clone())
+	Ok(())
 }

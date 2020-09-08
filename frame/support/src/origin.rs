@@ -41,7 +41,10 @@ macro_rules! impl_outer_origin {
 
 	(
 		$(#[$attr:meta])*
-		pub enum $name:ident for $runtime:ident where system = $system:ident {
+		pub enum $name:ident for $runtime:ident where
+			system = $system:ident
+			$(, system_index = $system_index:tt)?
+		{
 			$( $rest_with_system:tt )*
 		}
 	) => {
@@ -52,6 +55,7 @@ macro_rules! impl_outer_origin {
 				[< $name Caller >];
 				$runtime;
 				$system;
+				system_index { $( $system_index )? };
 				Modules { $( $rest_with_system )* };
 			);
 		}
@@ -64,6 +68,7 @@ macro_rules! impl_outer_origin {
 		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
+		system_index { $( $system_index:tt )? };
 		Modules {
 			$( #[codec(index = $index:tt)] )? $module:ident $instance:ident <T>
 			$(, $( $rest_module:tt )* )?
@@ -76,6 +81,7 @@ macro_rules! impl_outer_origin {
 			$caller_name;
 			$runtime;
 			$system;
+			system_index { $( $system_index )? };
 			Modules { $( $( $rest_module )* )? };
 			$( $parsed )* $module <$runtime> { $instance } index { $( $index )? },
 		);
@@ -88,6 +94,7 @@ macro_rules! impl_outer_origin {
 		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
+		system_index { $( $system_index:tt )? };
 		Modules {
 			$( #[codec(index = $index:tt )] )? $module:ident $instance:ident
 			$(, $rest_module:tt )*
@@ -100,6 +107,7 @@ macro_rules! impl_outer_origin {
 			$caller_name;
 			$runtime;
 			$system;
+			system_index { $( $system_index )? };
 			Modules { $( $rest_module )* };
 			$( $parsed )* $module { $instance } index { $( $index )? },
 		);
@@ -112,6 +120,7 @@ macro_rules! impl_outer_origin {
 		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
+		system_index { $( $system_index:tt )? };
 		Modules {
 			$( #[codec(index = $index:tt )] )? $module:ident <T>
 			$(, $( $rest_module:tt )* )?
@@ -124,6 +133,7 @@ macro_rules! impl_outer_origin {
 			$caller_name;
 			$runtime;
 			$system;
+			system_index { $( $system_index )? };
 			Modules { $( $( $rest_module )* )? };
 			$( $parsed )* $module <$runtime> index { $( $index )? },
 		);
@@ -136,6 +146,7 @@ macro_rules! impl_outer_origin {
 		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
+		system_index { $( $system_index:tt )? };
 		Modules {
 			$( #[codec(index = $index:tt )] )? $module:ident
 			$(, $( $rest_module:tt )* )?
@@ -148,6 +159,7 @@ macro_rules! impl_outer_origin {
 			$caller_name;
 			$runtime;
 			$system;
+			system_index { $( $system_index )? };
 			Modules { $( $( $rest_module )* )? };
 			$( $parsed )* $module index { $( $index )? },
 		);
@@ -160,6 +172,7 @@ macro_rules! impl_outer_origin {
 		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
+		system_index { $( $system_index:tt )? };
 		Modules { };
 		$(
 			$module:ident
@@ -238,7 +251,7 @@ macro_rules! impl_outer_origin {
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
 			pub enum $caller_name {
-				#[codec(index = "0")]
+				$( #[codec(index = $system_index)] )?
 				system($system::Origin<$runtime>),
 				$(
 					$( #[codec(index = $index)] )?
@@ -450,7 +463,7 @@ mod tests {
 	);
 
 	impl_outer_origin!(
-		pub enum OriginIndices for TestRuntime {
+		pub enum OriginIndices for TestRuntime where system = frame_system, system_index = "11" {
 			origin_with_generic<T>,
 			#[codec(index = "10")] origin_without_generic,
 		}
@@ -490,7 +503,7 @@ mod tests {
 	#[test]
 	fn test_codec() {
 		use codec::Encode;
-		assert_eq!(OriginIndices::root().caller.encode()[0], 0);
+		assert_eq!(OriginIndices::root().caller.encode()[0], 11);
 		let without_generic_variant = OriginIndicesCaller::origin_without_generic(
 			origin_without_generic::Origin
 		);

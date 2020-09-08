@@ -51,9 +51,9 @@ pub use frame_metadata::{
 /// struct Runtime;
 /// frame_support::impl_runtime_metadata! {
 ///     for Runtime with modules where Extrinsic = UncheckedExtrinsic
-///         module0::Module as Module0 with,
-///         module1::Module as Module1 with,
-///         module2::Module as Module2 with Storage { index 3 },
+///         module0::Module as Module0 { index 0 } with,
+///         module1::Module as Module1 { index 1 } with,
+///         module2::Module as Module2 { index 2 } with Storage,
 /// };
 /// ```
 ///
@@ -92,8 +92,8 @@ macro_rules! __runtime_modules_to_metadata {
 		$runtime: ident;
 		$( $metadata:expr ),*;
 		$mod:ident::$module:ident $( < $instance:ident > )? as $name:ident
+			{ index $index:tt }
 			$(with)+ $($kw:ident)*
-			$( { index $index:tt } )?
 		,
 		$( $rest:tt )*
 	) => {
@@ -101,10 +101,7 @@ macro_rules! __runtime_modules_to_metadata {
 			$runtime;
 			$( $metadata, )* $crate::metadata::ModuleMetadata {
 				name: $crate::metadata::DecodeDifferent::Encode(stringify!($name)),
-				fixed_index: {
-					#[allow(path_statements)]
-					{ core::option::Option::<u8>::None $(; Some($index) )? }
-				},
+				index: $index,
 				storage: $crate::__runtime_modules_to_metadata_calls_storage!(
 					$mod, $module $( <$instance> )?, $runtime, $(with $kw)*
 				),
@@ -456,9 +453,9 @@ mod tests {
 
 	impl_runtime_metadata!(
 		for TestRuntime with modules where Extrinsic = TestExtrinsic
-			system::Module as System with Event,
-			event_module::Module as Module with Event Call { index 2 },
-			event_module2::Module as Module2 with Event Storage Call,
+			system::Module as System { index 0 } with Event,
+			event_module::Module as Module { index 1 } with Event Call,
+			event_module2::Module as Module2 { index 2 } with Event Storage Call,
 	);
 
 	struct ConstantBlockNumberByteGetter;
@@ -488,7 +485,7 @@ mod tests {
 			modules: DecodeDifferent::Encode(&[
 				ModuleMetadata {
 					name: DecodeDifferent::Encode("System"),
-					fixed_index: None,
+					index: 0,
 					storage: None,
 					calls: None,
 					event: Some(DecodeDifferent::Encode(
@@ -532,7 +529,7 @@ mod tests {
 				},
 				ModuleMetadata {
 					name: DecodeDifferent::Encode("Module"),
-					fixed_index: Some(2),
+					index: 1,
 					storage: None,
 					calls: Some(
 						DecodeDifferent::Encode(FnEncode(|| &[
@@ -568,7 +565,7 @@ mod tests {
 				},
 				ModuleMetadata {
 					name: DecodeDifferent::Encode("Module2"),
-					fixed_index: None,
+					index: 2,
 					storage: Some(DecodeDifferent::Encode(
 						FnEncode(|| StorageMetadata {
 							prefix: DecodeDifferent::Encode("TestStorage"),

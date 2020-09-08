@@ -409,9 +409,9 @@ pub struct ModuleMetadata {
 	pub event: ODFnA<EventMetadata>,
 	pub constants: DFnA<ModuleConstantMetadata>,
 	pub errors: DFnA<ErrorMetadata>,
-	/// Define the fix index of the module, this index will be used for the encoding of module
-	/// event, call and origin variants if it has some.
-	pub fixed_index: Option<u8>,
+	/// Define the index of the module, this index will be used for the encoding of module event,
+	/// call and origin variants.
+	pub index: u8,
 }
 
 type ODFnA<T> = Option<DFnA<T>>;
