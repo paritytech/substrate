@@ -167,6 +167,7 @@ sp_api::mock_impl_runtime_apis! {
 	}
 }
 
+#[derive(Debug)]
 pub enum TestNetworkEvent {
 	GetCalled(kad::record::Key),
 	PutCalled(kad::record::Key, Vec<u8>),
@@ -222,19 +223,19 @@ impl NetworkProvider for TestNetwork {
 			.lock()
 			.unwrap()
 			.push((group_id.clone(), peers.clone()));
-		let _ = self.event_sender.clone().unbounded_send(TestNetworkEvent::SetPriorityGroupCalled {
+		self.event_sender.clone().unbounded_send(TestNetworkEvent::SetPriorityGroupCalled {
 			group_id,
 			peers,
-		});
+		}).unwrap();
 		Ok(())
 	}
 	fn put_value(&self, key: kad::record::Key, value: Vec<u8>) {
 		self.put_value_call.lock().unwrap().push((key.clone(), value.clone()));
-		let _ = self.event_sender.clone().unbounded_send(TestNetworkEvent::PutCalled(key, value));
+		self.event_sender.clone().unbounded_send(TestNetworkEvent::PutCalled(key, value)).unwrap();
 	}
 	fn get_value(&self, key: &kad::record::Key) {
 		self.get_value_call.lock().unwrap().push(key.clone());
-		let _ = self.event_sender.clone().unbounded_send(TestNetworkEvent::GetCalled(key.clone()));
+		self.event_sender.clone().unbounded_send(TestNetworkEvent::GetCalled(key.clone())).unwrap();
 	}
 }
 
@@ -835,14 +836,17 @@ fn lookup_throttling() {
 	let metrics = worker.metrics.clone().unwrap();
 
 	let _ = pool.spawner().spawn_local_obj(async move {
+		// Refilling `pending_lookups` only happens every X minutes. Fast
+		// forward by calling `refill_pending_lookups_queue` directly.
 		worker.refill_pending_lookups_queue().await.unwrap();
-		worker.start_new_lookups();
 		worker.run().await
 	}.boxed_local().into());
 
 	pool.run_until(async {
-		receiver.next().await;
 		// Assert worker to trigger MAX_IN_FLIGHT_LOOKUPS lookups.
+		for _ in 0..MAX_IN_FLIGHT_LOOKUPS {
+			assert!(matches!(receiver.next().await, Some(TestNetworkEvent::GetCalled(_))));
+		}
 		assert_eq!(metrics.requests_pending.get(), (remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS) as u64);
 		assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
 
@@ -855,8 +859,8 @@ fn lookup_throttling() {
 		};
 		dht_event_tx.send(dht_event).await.expect("Channel has capacity of 1.");
 
-		receiver.next().await;
 		// Assert worker to trigger another lookup.
+		assert!(matches!(receiver.next().await, Some(TestNetworkEvent::GetCalled(_))));
 		assert_eq!(metrics.requests_pending.get(), (remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS - 1) as u64);
 		assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
 
@@ -866,10 +870,8 @@ fn lookup_throttling() {
 		dht_event_tx.send(dht_event).await.expect("Channel has capacity of 1.");
 
 		// Assert worker to trigger another lookup.
+		assert!(matches!(receiver.next().await, Some(TestNetworkEvent::GetCalled(_))));
 		assert_eq!(metrics.requests_pending.get(), (remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS - 2) as u64);
 		assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
-
-		// Assert worker to restock pending lookups and forget about in-flight lookups.
-		assert_eq!(metrics.requests_pending.get(), remote_public_keys.len() as u64);
 	}.boxed_local());
 }

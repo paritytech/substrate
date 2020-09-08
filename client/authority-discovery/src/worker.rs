@@ -248,6 +248,8 @@ where
 	/// Start the worker
 	pub async fn run(mut self) {
 		loop {
+			self.start_new_lookups();
+
 			futures::select! {
 				// Process incoming events.
 				event = self.dht_event_rx.next().fuse() => {
@@ -291,7 +293,6 @@ where
 					}
 				},
 			}
-			self.start_new_lookups();
 		}
 	}
 
