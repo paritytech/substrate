@@ -204,12 +204,6 @@ pub enum LegacyProtoHandlerIn {
 
 	/// The node should stop using custom protocols.
 	Disable,
-
-	/// Sends a message through a custom protocol substream.
-	SendCustomMessage {
-		/// The message to send.
-		message: Vec<u8>,
-	},
 }
 
 /// Event that can be emitted by a `LegacyProtoHandler`.
@@ -495,17 +489,6 @@ impl LegacyProtoHandler {
 			ProtocolState::KillAsap => ProtocolState::KillAsap,
 		};
 	}
-
-	/// Sends a message to the remote.
-	fn send_message(&mut self, message: Vec<u8>) {
-		match self.state {
-			ProtocolState::Normal { ref mut substreams, .. } =>
-				substreams[0].send_message(message),
-
-			_ => debug!(target: "sub-libp2p", "Tried to send message over closed protocol \
-				with {:?}", self.remote_peer_id)
-		}
-	}
 }
 
 impl ProtocolsHandler for LegacyProtoHandler {
@@ -539,12 +522,9 @@ impl ProtocolsHandler for LegacyProtoHandler {
 		match message {
 			LegacyProtoHandlerIn::Disable => self.disable(),
 			LegacyProtoHandlerIn::Enable => self.enable(),
-			LegacyProtoHandlerIn::SendCustomMessage { message } =>
-				self.send_message(message),
 		}
 	}
 
-	#[inline]
 	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<io::Error>) {
 		let is_severe = match err {
 			ProtocolsHandlerUpgrErr::Upgrade(_) => true,

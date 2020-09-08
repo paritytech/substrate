@@ -262,6 +262,16 @@ decl_module! {
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
+		/// The base amount of currency needed to reserve for creating a multisig execution or to store
+		/// a dispatch call for later.
+		const DepositBase: BalanceOf<T> = T::DepositBase::get();
+
+		/// The amount of currency needed per unit threshold when creating a multisig execution.
+		const DepositFactor: BalanceOf<T> = T::DepositFactor::get();
+
+		/// The maximum amount of signatories allowed for a given multisig.
+		const MaxSignatories: u16 = T::MaxSignatories::get();
+
 		/// Immediately dispatch a multi-signature call using a single approval from the caller.
 		///
 		/// The dispatch origin for this call must be _Signed_.

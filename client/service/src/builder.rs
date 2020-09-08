@@ -17,10 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
+	error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
 	TelemetryConnectionSinks, RpcHandlers, NetworkStatusSinks,
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
-	status_sinks, metrics::MetricsService,
+	metrics::MetricsService,
 	client::{light, Client, ClientConfig},
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 };
@@ -472,7 +472,9 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		transaction_pool,
 		rpc_extensions_builder,
 		remote_blockchain,
-		network, network_status_sinks, system_rpc_tx,
+		network,
+		network_status_sinks,
+		system_rpc_tx,
 		telemetry_connection_sinks,
 	} = params;
 
@@ -521,15 +523,13 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		MetricsService::new()
 	};
 
-	// Periodically notify the telemetry.
-	spawn_handle.spawn("telemetry-periodic-send", telemetry_periodic_send(
-		client.clone(), transaction_pool.clone(), metrics_service, network_status_sinks.clone()
-	));
-
-	// Periodically send the network state to the telemetry.
-	spawn_handle.spawn(
-		"telemetry-periodic-network-state",
-		telemetry_periodic_network_state(network_status_sinks.clone()),
+	// Periodically updated metrics and telemetry updates.
+	spawn_handle.spawn("telemetry-periodic-send",
+		metrics_service.run(
+			client.clone(),
+			transaction_pool.clone(),
+			network_status_sinks.clone()
+		)
 	);
 
 	// RPC
@@ -574,7 +574,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	// Spawn informant task
 	spawn_handle.spawn("informant", sc_informant::build(
 		client.clone(),
-		network_status_sinks.clone().0,
+		network_status_sinks.status.clone(),
 		transaction_pool.clone(),
 		config.informant_output_format,
 	));
@@ -604,47 +604,6 @@ async fn transaction_notifications<TBl, TExPool>(
 			ready(())
 		})
 		.await;
-}
-
-// Periodically notify the telemetry.
-async fn telemetry_periodic_send<TBl, TExPool, TCl>(
-	client: Arc<TCl>,
-	transaction_pool: Arc<TExPool>,
-	mut metrics_service: MetricsService,
-	network_status_sinks: NetworkStatusSinks<TBl>,
-)
-	where
-		TBl: BlockT,
-		TCl: ProvideRuntimeApi<TBl> + UsageProvider<TBl>,
-		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>,
-{
-	let (state_tx, state_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat1");
-	network_status_sinks.0.push(std::time::Duration::from_millis(5000), state_tx);
-	state_rx.for_each(move |(net_status, _)| {
-		let info = client.usage_info();
-		metrics_service.tick(
-			&info,
-			&transaction_pool.status(),
-			&net_status,
-		);
-		ready(())
-	}).await;
-}
-
-async fn telemetry_periodic_network_state<TBl: BlockT>(
-	network_status_sinks: NetworkStatusSinks<TBl>,
-) {
-	// Periodically send the network state to the telemetry.
-	let (netstat_tx, netstat_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat2");
-	network_status_sinks.0.push(std::time::Duration::from_secs(30), netstat_tx);
-	netstat_rx.for_each(move |(_, network_state)| {
-		telemetry!(
-			SUBSTRATE_INFO;
-			"system.network_state";
-			"state" => network_state,
-		);
-		ready(())
-	}).await;
 }
 
 fn build_telemetry<TBl: BlockT>(
@@ -890,7 +849,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl, TBackend>(
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
-	let network_status_sinks = NetworkStatusSinks::new(Arc::new(status_sinks::StatusSinks::new()));
+	let network_status_sinks = NetworkStatusSinks::new();
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 
