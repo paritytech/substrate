@@ -3746,7 +3746,6 @@ dependencies = [
  "frame-system",
  "futures 0.3.5",
  "hex-literal",
- "jsonrpc-core",
  "log",
  "nix",
  "node-executor",
