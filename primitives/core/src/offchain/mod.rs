@@ -184,7 +184,7 @@ impl TryFrom<u32> for HttpRequestStatus {
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec)]
 #[cfg_attr(feature = "std", derive(Default))]
 pub struct OpaqueNetworkState {
-	/// PeerId of the local node.
+	/// PeerId of the local node in SCALE encoded.
 	pub peer_id: OpaquePeerId,
 	/// List of addresses the node knows it can be reached as.
 	pub external_addresses: Vec<OpaqueMultiaddr>,
@@ -266,8 +266,8 @@ pub enum Capability {
 	OffchainWorkerDbRead = 32,
 	/// Access to offchain worker DB (writes).
 	OffchainWorkerDbWrite = 64,
-	/// Manage the reserved nodes
-	NodesReservation = 128,
+	/// Manage the authorized nodes
+	NodeAuthorization = 128,
 }
 
 /// A set of capabilities
@@ -487,8 +487,17 @@ pub trait Externalities: Send {
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError>;
 
-	/// Set the reserved nodes
-	fn set_reserved_nodes(&mut self, nodes: Vec<OpaquePeerId>, reserved_only: bool);
+	/// Set the authorized nodes from runtime.
+	///
+	/// In a permissioned network, the connection between nodes needs to reach a
+	/// consensus between participants.
+	///
+	/// - `nodes`: set of nodes which are allowed to connect for the local node.
+	/// each one is identified with an `OpaquePeerId`, here it just use plain bytes
+	/// without any encoding.
+	/// - `authorized_only`: if true, only the authorized nodes are allowed to connect,
+	/// otherwise unauthorized nodes can also be connected through other mechanism.
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool);
 }
 
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
@@ -568,8 +577,8 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
 	}
 
-	fn set_reserved_nodes(&mut self, nodes: Vec<OpaquePeerId>, reserved_only: bool) {
-		(&mut **self).set_reserved_nodes(nodes, reserved_only)
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
+		(&mut **self).set_authorized_nodes(nodes, authorized_only)
 	}
 }
 
@@ -690,9 +699,9 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
 	}
 
-	fn set_reserved_nodes(&mut self, nodes: Vec<OpaquePeerId>, reserved_only: bool) {
-		self.check(Capability::NodesReservation, "set_reserved_nodes");
-		self.externalities.set_reserved_nodes(nodes, reserved_only)
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
+		self.check(Capability::NodeAuthorization, "set_authorized_nodes");
+		self.externalities.set_authorized_nodes(nodes, authorized_only)
 	}
 }
 

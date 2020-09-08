@@ -392,7 +392,7 @@ decl_module! {
 					let encoded_peer = state.peer_id.0;
 					match Decode::decode(&mut &encoded_peer[..]) {
 						Err(_) => debug::error!("Error: failed to decode PeerId at {:?}", now),
-						Ok(node) => sp_io::offchain::set_reserved_nodes(
+						Ok(node) => sp_io::offchain::set_authorized_nodes(
 							Self::get_authorized_nodes(&PeerId(node)),
 							true
 						)

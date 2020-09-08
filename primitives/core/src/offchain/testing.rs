@@ -377,7 +377,7 @@ impl offchain::Externalities for TestOffchainExt {
 		}
 	}
 
-	fn set_reserved_nodes(&mut self, _nodes: Vec<OpaquePeerId>, _reserved_only: bool) {
+	fn set_authorized_nodes(&mut self, _nodes: Vec<OpaquePeerId>, _authorized_only: bool) {
 		unimplemented!()
 	}
 }

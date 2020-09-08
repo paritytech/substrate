@@ -56,11 +56,11 @@ pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
 /// NetworkProvider provides [`OffchainWorkers`] with all necessary hooks into the
 /// underlying Substrate networking.
 pub trait NetworkProvider: NetworkStateInfo {
-	/// Set the reserved peers.
-	fn set_reserved_peers(&self, peers: HashSet<PeerId>);
+	/// Set the authorized peers.
+	fn set_authorized_peers(&self, peers: HashSet<PeerId>);
 	
-	/// Set the reserved only flag.
-	fn set_reserved_only(&self, reserved_only: bool);
+	/// Set the authorized only flag.
+	fn set_authorized_only(&self, reserved_only: bool);
 }
 
 impl<B, H> NetworkProvider for NetworkService<B, H>
@@ -68,12 +68,12 @@ where
 	B: traits::Block + 'static,
 	H: ExHashT,
 {
-	fn set_reserved_peers(&self, peers: HashSet<PeerId>) {
-		self.set_reserved_peers(peers)
+	fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
+		self.set_authorized_peers(peers)
 	}
 
-	fn set_reserved_only(&self, reserved_only: bool) {
-		self.set_reserved_only(reserved_only)
+	fn set_authorized_only(&self, reserved_only: bool) {
+		self.set_authorized_only(reserved_only)
 	}
 }
 
@@ -253,11 +253,11 @@ mod tests {
 	}
 
 	impl NetworkProvider for TestNetwork {
-		fn set_reserved_peers(&self, _peers: HashSet<PeerId>) {
+		fn set_authorized_peers(&self, _peers: HashSet<PeerId>) {
 			unimplemented!()
 		}
 
-		fn set_reserved_only(&self, _reserved_only: bool) {
+		fn set_authorized_only(&self, _reserved_only: bool) {
 			unimplemented!()
 		}
 	}

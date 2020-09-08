@@ -961,11 +961,11 @@ pub trait Offchain {
 			.map(|r| r as u32)
 	}
 
-	/// Set the reserved peers
-	fn set_reserved_nodes(&mut self, nodes: Vec<OpaquePeerId>, reserved_only: bool) {
+	/// Set the authorized nodes and authorized_only flag.
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
 		self.extension::<OffchainExt>()
-			.expect("set_reserved_nodes can be called only in the offchain worker context")
-			.set_reserved_nodes(nodes, reserved_only)
+			.expect("set_authorized_nodes can be called only in the offchain worker context")
+			.set_authorized_nodes(nodes, authorized_only)
 	}
 }
 

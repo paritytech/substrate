@@ -183,13 +183,13 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		self.http.response_read_body(request_id, buffer, deadline)
 	}
 
-	fn set_reserved_nodes(&mut self, nodes: Vec<OpaquePeerId>, reserved_only: bool) {
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
 		let peer_ids: HashSet<PeerId> = nodes.iter()
 			.filter_map(|node| PeerId::from_bytes(node.0.clone()).ok())
 			.collect();
 		
-		self.network_provider.set_reserved_peers(peer_ids);
-		self.network_provider.set_reserved_only(reserved_only);
+		self.network_provider.set_authorized_peers(peer_ids);
+		self.network_provider.set_authorized_only(authorized_only);
 	}
 }
 
@@ -308,11 +308,11 @@ mod tests {
 	struct TestNetwork();
 
 	impl NetworkProvider for TestNetwork {
-		fn set_reserved_peers(&self, _peers: HashSet<PeerId>) {
+		fn set_authorized_peers(&self, _peers: HashSet<PeerId>) {
 			unimplemented!()
 		}
 
-		fn set_reserved_only(&self, _reserved_only: bool) {
+		fn set_authorized_only(&self, _reserved_only: bool) {
 			unimplemented!()
 		}
 	}
