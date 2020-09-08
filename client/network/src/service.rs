@@ -607,7 +607,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Set authorized peers.
 	///
-	/// Needs a better solution to manage authorized peers, but now just use reserved peers for
+	/// Need a better solution to manage authorized peers, but now just use reserved peers for
 	/// prototyping.
 	pub fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
 		self.peerset.set_reserved_peers(peers)
@@ -615,7 +615,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Set authorized_only flag.
 	///
-	/// Needs a better solution to decide authorized_only, but now just use reserved_only flag for
+	/// Need a better solution to decide authorized_only, but now just use reserved_only flag for
 	/// prototyping.
 	pub fn set_authorized_only(&self, reserved_only: bool) {
 		self.peerset.set_reserved_only(reserved_only)

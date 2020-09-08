@@ -489,10 +489,10 @@ pub trait Externalities: Send {
 
 	/// Set the authorized nodes from runtime.
 	///
-	/// In a permissioned network, the connection between nodes needs to reach a
+	/// In a permissioned network, the connections between nodes need to reach a
 	/// consensus between participants.
 	///
-	/// - `nodes`: set of nodes which are allowed to connect for the local node.
+	/// - `nodes`: a set of nodes which are allowed to connect for the local node.
 	/// each one is identified with an `OpaquePeerId`, here it just use plain bytes
 	/// without any encoding.
 	/// - `authorized_only`: if true, only the authorized nodes are allowed to connect,
