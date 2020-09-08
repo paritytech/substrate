@@ -283,7 +283,7 @@ where
 				},
 				// Request addresses of authorities.
 				_ = self.query_interval.next().fuse() => {
-					if let Err(e) = self.request_addresses_of_others().await {
+					if let Err(e) = self.refill_pending_lookups_queue().await {
 						error!(
 							target: LOG_TARGET,
 							"Failed to request addresses of authorities: {:?}", e,
@@ -291,6 +291,7 @@ where
 					}
 				},
 			}
+			self.start_new_lookups();
 		}
 	}
 
@@ -366,7 +367,6 @@ where
 			)
 			.await
 			.map_err(|_| Error::Signing)?;
-
 		for (sign_result, key) in signatures.into_iter().zip(keys) {
 			let mut signed_addresses = vec![];
 
@@ -458,22 +458,14 @@ where
 					metrics.dht_event_received.with_label_values(&["value_found"]).inc();
 				}
 
-				if self.in_flight_lookups.remove(&hash).is_some() {
+				if log_enabled!(log::Level::Debug) {
+					let hashes = v.iter().map(|(hash, _value)| hash.clone());
 					debug!(
 						target: LOG_TARGET,
-						"Value for hash '{:?}' not found on Dht.", hash
-					)
-				} else {
-					debug!(
-						target: LOG_TARGET,
-						"Received 'ValueNotFound' for unexpected hash '{:?}'.", hash
-					)
+						"Value for hash '{:?}' found on Dht.", hashes,
+					);
 				}
-			},
-			Some(DhtEvent::ValuePut(hash)) => {
-				if let Some(metrics) = &self.metrics {
-					metrics.dht_event_received.with_label_values(&["value_put"]).inc();
-				}
+
 				if let Err(e) = self.handle_dht_value_found_event(v) {
 					if let Some(metrics) = &self.metrics {
 						metrics.handle_value_found_event_failure.inc();
@@ -490,10 +482,17 @@ where
 					metrics.dht_event_received.with_label_values(&["value_not_found"]).inc();
 				}
 
-				debug!(
-					target: LOG_TARGET,
-					"Value for hash '{:?}' not found on Dht.", hash
-				)
+				if self.in_flight_lookups.remove(&hash).is_some() {
+					debug!(
+						target: LOG_TARGET,
+						"Value for hash '{:?}' not found on Dht.", hash
+					)
+				} else {
+					debug!(
+						target: LOG_TARGET,
+						"Received 'ValueNotFound' for unexpected hash '{:?}'.", hash
+					)
+				}
 			},
 			DhtEvent::ValuePut(hash) => {
 				if let Some(metrics) = &self.metrics {
@@ -596,7 +595,6 @@ where
 				);
 			}
 		}
-
 		Ok(())
 	}
 
