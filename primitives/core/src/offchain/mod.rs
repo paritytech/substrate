@@ -488,7 +488,7 @@ pub trait Externalities: Send {
 	) -> Result<usize, HttpError>;
 
 	/// Set the reserved nodes
-	fn set_reserved_nodes(&mut self, nodes: Vec<Vec<u8>>, reserved_only: bool);
+	fn set_reserved_nodes(&mut self, nodes: Vec<OpaquePeerId>, reserved_only: bool);
 }
 
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
@@ -568,7 +568,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
 	}
 
-	fn set_reserved_nodes(&mut self, nodes: Vec<Vec<u8>>, reserved_only: bool) {
+	fn set_reserved_nodes(&mut self, nodes: Vec<OpaquePeerId>, reserved_only: bool) {
 		(&mut **self).set_reserved_nodes(nodes, reserved_only)
 	}
 }
@@ -690,7 +690,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
 	}
 
-	fn set_reserved_nodes(&mut self, nodes: Vec<Vec<u8>>, reserved_only: bool) {
+	fn set_reserved_nodes(&mut self, nodes: Vec<OpaquePeerId>, reserved_only: bool) {
 		self.check(Capability::NodesReservation, "set_reserved_nodes");
 		self.externalities.set_reserved_nodes(nodes, reserved_only)
 	}

@@ -19,8 +19,6 @@ frame-system = { version = "2.0.0-rc6", default-features = false, path = "../sys
 sp-core = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/io" }
 sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/std" }
-
-[dev-dependencies]
 sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/runtime" }
 
 [features]
@@ -32,5 +30,6 @@ std = [
 	"frame-system/std",
 	"sp-core/std",
 	"sp-io/std",
+	"sp-runtime/std",
 	"sp-std/std",
 ]

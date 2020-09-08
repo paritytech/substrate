@@ -24,6 +24,7 @@ use std::{
 	collections::{BTreeMap, VecDeque},
 	sync::Arc,
 };
+use crate::OpaquePeerId;
 use crate::offchain::{
 	self,
 	storage::{InMemOffchainStorage, OffchainOverlayedChange, OffchainOverlayedChanges},
@@ -376,7 +377,7 @@ impl offchain::Externalities for TestOffchainExt {
 		}
 	}
 
-	fn set_reserved_nodes(&mut self, _nodes: Vec<Vec<u8>>, _reserved_only: bool) {
+	fn set_reserved_nodes(&mut self, _nodes: Vec<OpaquePeerId>, _reserved_only: bool) {
 		unimplemented!()
 	}
 }

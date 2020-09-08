@@ -37,6 +37,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use sp_core::OpaquePeerId as PeerId;
 use sp_std::{
 	collections::btree_set::BTreeSet,
 	iter::FromIterator,
@@ -50,8 +51,6 @@ use frame_support::{
 	traits::{Get, EnsureOrigin},
 };
 use frame_system::ensure_signed;
-
-type PeerId = Vec<u8>;
 
 pub trait WeightInfo {
 	fn add_well_known_node() -> Weight;
@@ -191,7 +190,7 @@ decl_module! {
 		#[weight = (T::WeightInfo::add_well_known_node(), DispatchClass::Operational)]
 		pub fn add_well_known_node(origin, node: PeerId, owner: T::AccountId) {
 			T::AddOrigin::ensure_origin(origin)?;
-			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 
 			let mut nodes = WellKnownNodes::get();
 			ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
@@ -214,7 +213,7 @@ decl_module! {
 		#[weight = (T::WeightInfo::remove_well_known_node(), DispatchClass::Operational)]
 		pub fn remove_well_known_node(origin, node: PeerId) {
 			T::RemoveOrigin::ensure_origin(origin)?;
-			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 
 			let mut nodes = WellKnownNodes::get();
 			ensure!(nodes.contains(&node), Error::<T>::NotExist);
@@ -238,8 +237,8 @@ decl_module! {
 		#[weight = (T::WeightInfo::swap_well_known_node(), DispatchClass::Operational)]
 		pub fn swap_well_known_node(origin, remove: PeerId, add: PeerId) {
 			T::SwapOrigin::ensure_origin(origin)?;
-			ensure!(remove.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
-			ensure!(add.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			ensure!(remove.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			ensure!(add.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 
 			if remove == add { return Ok(()) }
 
@@ -282,7 +281,7 @@ decl_module! {
 		pub fn claim_node(origin, node: PeerId) {
 			let sender = ensure_signed(origin)?;
 			
-			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(!Owners::<T>::contains_key(&node),Error::<T>::AlreadyClaimed);
 
 			Owners::<T>::insert(&node, &sender);
@@ -298,7 +297,7 @@ decl_module! {
 		pub fn remove_claim(origin, node: PeerId) {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
 			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
 			ensure!(!WellKnownNodes::get().contains(&node), Error::<T>::PermissionDenied);
@@ -317,7 +316,7 @@ decl_module! {
 		pub fn transfer_node(origin, node: PeerId, owner: T::AccountId) {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
 			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
 
@@ -338,7 +337,7 @@ decl_module! {
 		) {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
 			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
 
@@ -368,7 +367,7 @@ decl_module! {
 		) {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(node.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
+			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
 			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
 
@@ -383,8 +382,8 @@ decl_module! {
 			Self::deposit_event(RawEvent::ConnectionsRemoved(node, connections));
 		}
 
-		/// Set reserved node every block. If may not be enabled depends on the offchain
-		/// worker CLI flag.
+		/// Set reserved node every block. It may not be enabled depends on the offchain
+		/// worker settings when starting the node.
 		fn offchain_worker(now: T::BlockNumber) {
 			let network_state = sp_io::offchain::network_state();
 			match network_state {
@@ -394,7 +393,7 @@ decl_module! {
 					match Decode::decode(&mut &encoded_peer[..]) {
 						Err(_) => debug::error!("Error: failed to decode PeerId at {:?}", now),
 						Ok(node) => sp_io::offchain::set_reserved_nodes(
-							Self::get_authorized_nodes(&node),
+							Self::get_authorized_nodes(&PeerId(node)),
 							true
 						)
 					}

@@ -42,7 +42,7 @@ use sp_core::{
 };
 
 use sp_core::{
-	crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
+	OpaquePeerId, crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
@@ -962,7 +962,7 @@ pub trait Offchain {
 	}
 
 	/// Set the reserved peers
-	fn set_reserved_nodes(&mut self, nodes: Vec<Vec<u8>>, reserved_only: bool) {
+	fn set_reserved_nodes(&mut self, nodes: Vec<OpaquePeerId>, reserved_only: bool) {
 		self.extension::<OffchainExt>()
 			.expect("set_reserved_nodes can be called only in the offchain worker context")
 			.set_reserved_nodes(nodes, reserved_only)

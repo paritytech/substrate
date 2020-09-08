@@ -183,9 +183,9 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		self.http.response_read_body(request_id, buffer, deadline)
 	}
 
-	fn set_reserved_nodes(&mut self, nodes: Vec<Vec<u8>>, reserved_only: bool) {
+	fn set_reserved_nodes(&mut self, nodes: Vec<OpaquePeerId>, reserved_only: bool) {
 		let peer_ids: HashSet<PeerId> = nodes.iter()
-			.filter_map(|node| PeerId::from_bytes(node.clone()).ok())
+			.filter_map(|node| PeerId::from_bytes(node.0.clone()).ok())
 			.collect();
 		
 		self.network_provider.set_reserved_peers(peer_ids);
