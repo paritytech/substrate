@@ -51,12 +51,11 @@ use sp_runtime::{
 	},
 	traits::{
 		Zero, Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
-		DispatchInfoOf, PostDispatchInfoOf, UniqueSaturatedFrom, UniqueSaturatedInto,
+		DispatchInfoOf, PostDispatchInfoOf,
 	},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
-
-mod migration;
+pub mod migration;
 
 /// Fee multiplier.
 pub type Multiplier = FixedU128;
@@ -112,6 +111,42 @@ type NegativeImbalanceOf<T> =
 /// More info can be found at:
 /// https://w3f-research.readthedocs.io/en/latest/polkadot/Token%20Economics.html
 pub struct TargetedFeeAdjustment<T, S, V, M>(sp_std::marker::PhantomData<(T, S, V, M)>);
+
+/// Something that can convert the current multiplier to the next one.
+pub trait MultiplierUpdate: Convert<Multiplier, Multiplier> {
+	/// Minimum multiplier
+	fn min() -> Multiplier;
+	/// Target block saturation level
+	fn target() -> Perquintill;
+	/// Variability factor
+	fn variability() -> Multiplier;
+}
+
+impl MultiplierUpdate for () {
+	fn min() -> Multiplier {
+		Default::default()
+	}
+	fn target() -> Perquintill {
+		Default::default()
+	}
+	fn variability() -> Multiplier {
+		Default::default()
+	}
+}
+
+impl<T, S, V, M> MultiplierUpdate for TargetedFeeAdjustment<T, S, V, M>
+	where T: frame_system::Trait, S: Get<Perquintill>, V: Get<Multiplier>, M: Get<Multiplier>,
+{
+	fn min() -> Multiplier {
+		M::get()
+	}
+	fn target() -> Perquintill {
+		S::get()
+	}
+	fn variability() -> Multiplier {
+		V::get()
+	}
+}
 
 impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S, V, M>
 	where T: frame_system::Trait, S: Get<Perquintill>, V: Get<Multiplier>, M: Get<Multiplier>,
@@ -194,7 +229,7 @@ pub trait Trait: frame_system::Trait {
 	type WeightToFee: WeightToFeePolynomial<Balance=BalanceOf<Self>>;
 
 	/// Update the multiplier of the next block, based on the previous block's weight.
-	type FeeMultiplierUpdate: Convert<Multiplier, Multiplier>;
+	type FeeMultiplierUpdate: MultiplierUpdate;
 }
 
 decl_storage! {
@@ -231,6 +266,32 @@ decl_module! {
 					<T as frame_system::Trait>::MaximumBlockWeight::get().try_into().unwrap()
 				).unwrap(),
 			);
+
+			// This is the minimum value of the multiplier. Make sure that if we collapse to this
+			// value, we can recover with a reasonable amount of traffic. For this test we assert
+			// that if we collapse to minimum, the trend will be positive with a weight value
+			// which is 1% more than the target.
+			let min_value = T::FeeMultiplierUpdate::min();
+			let mut target =
+				T::FeeMultiplierUpdate::target() *
+				(T::AvailableBlockRatio::get() * T::MaximumBlockWeight::get());
+
+			// add 1 percent;
+			let addition = target / 100;
+			if addition == 0 {
+				// this is most likely because in a test setup we set everything to ().
+				return;
+			}
+			target += addition;
+
+			sp_io::TestExternalities::new_empty().execute_with(|| {
+				<frame_system::Module<T>>::set_block_limits(target, 0);
+				let next = T::FeeMultiplierUpdate::convert(min_value);
+				assert!(next > min_value, "The minimum bound of the multiplier is too low. When \
+					block saturation is more than target by 1% and multiplier is minimal then \
+					the multiplier doesn't increase."
+				);
+			})
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -315,7 +376,7 @@ impl<T: Trait> Module<T> where
 	) -> BalanceOf<T> where
 		T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
 	{
-		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, info.pays_fee)
+		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, post_info.pays_fee(info))
 	}
 
 	fn compute_fee_raw(
@@ -346,29 +407,26 @@ impl<T: Trait> Module<T> where
 			tip
 		}
 	}
-}
-
-impl<T: Trait> Module<T> {
-	/// Compute the fee for the specified weight.
-	///
-	/// This fee is already adjusted by the per block fee adjustment factor and is therefore the
-	/// share that the weight contributes to the overall fee of a transaction.
-	///
-	/// This function is generic in order to supply the contracts module with a way to calculate the
-	/// gas price. The contracts module is not able to put the necessary `BalanceOf<T>` constraints
-	/// on its trait. This function is not to be used by this module.
-	pub fn weight_to_fee_with_adjustment<Balance>(weight: Weight) -> Balance where
-		Balance: UniqueSaturatedFrom<u128>
-	{
-		let fee: u128 = Self::weight_to_fee(weight).unique_saturated_into();
-		Balance::unique_saturated_from(NextFeeMultiplier::get().saturating_mul_acc_int(fee))
-	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
 		let capped_weight = weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
 		T::WeightToFee::calc(&capped_weight)
+	}
+}
+
+impl<T> Convert<Weight, BalanceOf<T>> for Module<T> where
+	T: Trait,
+	BalanceOf<T>: FixedPointOperand,
+{
+	/// Compute the fee for the specified weight.
+	///
+	/// This fee is already adjusted by the per block fee adjustment factor and is therefore the
+	/// share that the weight contributes to the overall fee of a transaction. It is mainly
+	/// for informational purposes and not used in the actual fee calculation.
+	fn convert(weight: Weight) -> BalanceOf<T> {
+		NextFeeMultiplier::get().saturating_mul_int(Self::weight_to_fee(weight))
 	}
 }
 
@@ -588,9 +646,10 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type MigrateAccount = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type MigrateAccount = ();
+		type SystemWeightInfo = ();
 	}
 
 	parameter_types! {
@@ -603,6 +662,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	thread_local! {
 		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
@@ -708,11 +768,24 @@ mod tests {
 	}
 
 	fn post_info_from_weight(w: Weight) -> PostDispatchInfo {
-		PostDispatchInfo { actual_weight: Some(w), }
+		PostDispatchInfo {
+			actual_weight: Some(w),
+			pays_fee: Default::default(),
+		}
+	}
+
+	fn post_info_from_pays(p: Pays) -> PostDispatchInfo {
+		PostDispatchInfo {
+			actual_weight: None,
+			pays_fee: p,
+		}
 	}
 
 	fn default_post_info() -> PostDispatchInfo {
-		PostDispatchInfo { actual_weight: None, }
+		PostDispatchInfo {
+			actual_weight: None,
+			pays_fee: Default::default(),
+		}
 	}
 
 	#[test]
@@ -1154,6 +1227,40 @@ mod tests {
 
 			// 33 weight, 10 length, 7 base, 5 tip
 			assert_eq!(actual_fee, 7 + 10 + (33 * 5 / 4) + 5);
+			assert_eq!(refund_based_fee, actual_fee);
+		});
+	}
+
+	#[test]
+	fn post_info_can_change_pays_fee() {
+		ExtBuilder::default()
+			.balance_factor(10)
+			.base_weight(7)
+			.build()
+			.execute_with(||
+		{
+			let info = info_from_weight(100);
+			let post_info = post_info_from_pays(Pays::No);
+			let prev_balance = Balances::free_balance(2);
+			let len = 10;
+			let tip = 5;
+
+			NextFeeMultiplier::put(Multiplier::saturating_from_rational(5, 4));
+
+			let pre = ChargeTransactionPayment::<Runtime>::from(tip)
+				.pre_dispatch(&2, CALL, &info, len)
+				.unwrap();
+
+			ChargeTransactionPayment::<Runtime>
+				::post_dispatch(pre, &info, &post_info, len, &Ok(()))
+				.unwrap();
+
+			let refund_based_fee = prev_balance - Balances::free_balance(2);
+			let actual_fee = Module::<Runtime>
+				::compute_actual_fee(len as u32, &info, &post_info, tip);
+
+			// Only 5 tip is paid
+			assert_eq!(actual_fee, 5);
 			assert_eq!(refund_based_fee, actual_fee);
 		});
 	}

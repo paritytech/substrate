@@ -109,23 +109,22 @@ use frame_support::{
 	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
 	traits::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
+		MigrateAccount,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
 	weights::Weight,
 };
-use frame_system::{self as system, ensure_signed};
-use frame_support::traits::MigrateAccount;
+use frame_system::ensure_signed;
 
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
-pub mod migration;
-
 #[cfg(feature = "historical")]
 pub mod historical;
 
+pub mod migration;
 /// Decides whether the session should be ended.
 pub trait ShouldEndSession<BlockNumber> {
 	/// Return `true` if the session should be ended.
@@ -354,6 +353,16 @@ impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
 	}
 }
 
+pub trait WeightInfo {
+	fn set_keys(n: u32, ) -> Weight;
+	fn purge_keys(n: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn set_keys(_n: u32, ) -> Weight { 1_000_000_000 }
+	fn purge_keys(_n: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
@@ -388,6 +397,9 @@ pub trait Trait: frame_system::Trait {
 	/// After the threshold is reached `disabled` method starts to return true,
 	/// which in combination with `pallet_staking` forces a new era.
 	type DisabledValidatorsThreshold: Get<Perbill>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -437,7 +449,7 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				system::Module::<T>::inc_ref(&account);
+				frame_system::Module::<T>::inc_ref(&account);
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
@@ -474,7 +486,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event {
-		/// New session has happened. Note that the argument is the session index, not the block
+		/// New session has happened. Note that the argument is the [session_index], not the block
 		/// number as the type might suggest.
 		NewSession(SessionIndex),
 	}
@@ -701,7 +713,7 @@ impl<T: Trait> Module<T> {
 
 		let old_keys = Self::inner_set_keys(&who, keys)?;
 		if old_keys.is_none() {
-			system::Module::<T>::inc_ref(&account);
+			frame_system::Module::<T>::inc_ref(&account);
 		}
 
 		Ok(())
@@ -749,7 +761,7 @@ impl<T: Trait> Module<T> {
 			let key_data = old_keys.get_raw(*id);
 			Self::clear_key_owner(*id, key_data);
 		}
-		system::Module::<T>::dec_ref(&account);
+		frame_system::Module::<T>::dec_ref(&account);
 
 		Ok(())
 	}

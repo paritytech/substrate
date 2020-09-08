@@ -54,7 +54,7 @@ pub trait Callable<T> {
 
 // dirty hack to work around serde_derive issue
 // https://github.com/rust-lang/rust/issues/51331
-pub type CallableCallFor<A, T> = <A as Callable<T>>::Call;
+pub type CallableCallFor<A, R> = <A as Callable<R>>::Call;
 
 /// A type that can be used as a parameter in a dispatchable function.
 ///
@@ -70,7 +70,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, Trait, ensure_signed};
+/// # use frame_system::{Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
@@ -112,7 +112,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, Trait, ensure_signed};
+/// # use frame_system::{Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		#[weight = 0]
@@ -147,7 +147,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
-/// # use frame_system::{self as system, Trait, ensure_signed};
+/// # use frame_system::{Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		#[weight = 1_000_000]
@@ -167,6 +167,28 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # fn main() {}
 /// ```
 ///
+/// ### Transactional Function Example
+///
+/// Transactional function discards all changes to storage if it returns `Err`, or commits if
+/// `Ok`, via the #\[transactional\] attribute. Note the attribute must be after #\[weight\].
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate frame_support;
+/// # use frame_support::transactional;
+/// # use frame_system::Trait;
+/// decl_module! {
+/// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+/// 		#[weight = 0]
+/// 		#[transactional]
+/// 		fn my_short_function(origin) {
+///				// Your implementation
+/// 		}
+/// 	}
+/// }
+/// # fn main() {}
+/// ```
+///
 /// ### Privileged Function Example
 ///
 /// A privileged function checks that the origin of the call is `ROOT`.
@@ -175,7 +197,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
+/// # use frame_system::{Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		#[weight = 0]
@@ -188,6 +210,14 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// }
 /// # fn main() {}
 /// ```
+///
+/// ### Attributes on Functions
+///
+/// Attributes on functions are supported, but must be in the order of:
+/// 1. Optional #\[doc\] attribute.
+/// 2. #\[weight\] attribute.
+/// 3. Optional function attributes, for instance #\[transactional\]. Those function attributes will be written
+/// only on the dispatchable functions implemented on `Module`, not on the `Call` enum variant.
 ///
 /// ## Multiple Module Instances Example
 ///
@@ -292,7 +322,7 @@ macro_rules! decl_module {
 			pub struct $mod_type<
 				$trait_instance: $trait_name $(<I>, I: $instantiable $(= $module_default_instance)?)?
 			>
-			for enum $call_type where origin: $origin_type, system = system
+			for enum $call_type where origin: $origin_type, system = frame_system
 			{ $( $where_ty: $where_bound ),* }
 			{}
 			{}
@@ -1015,6 +1045,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			$origin:ident $( , $(#[$codec_attr:ident])* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1039,6 +1070,7 @@ macro_rules! decl_module {
 				$( $dispatchables )*
 				$(#[doc = $doc_attr])*
 				#[weight = $weight]
+				$(#[$fn_attr])*
 				$fn_vis fn $fn_name(
 					$origin $( , $(#[$codec_attr])* $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
@@ -1066,6 +1098,7 @@ macro_rules! decl_module {
 		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			$from:ident $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1094,6 +1127,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			$origin:ident : T::Origin $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1121,6 +1155,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			origin : $origin:ty $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1148,6 +1183,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
+		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
 			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty ),* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1302,6 +1338,7 @@ macro_rules! decl_module {
 		$(#[doc = $doc_attr:tt])*
 		fn integrity_test() { $( $impl:tt )* }
 	) => {
+		#[cfg(feature = "std")]
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::traits::IntegrityTest
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
@@ -1317,6 +1354,7 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		{ $( $other_where_bounds:tt )* }
 	) => {
+		#[cfg(feature = "std")]
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::traits::IntegrityTest
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
@@ -1408,13 +1446,13 @@ macro_rules! decl_module {
 		$origin_ty:ty;
 		$error_type:ty;
 		$ignore:ident;
-		$(#[doc = $doc_attr:tt])*
+		$(#[$fn_attr:meta])*
 		$vis:vis fn $name:ident (
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) { $( $impl:tt )* }
 	) => {
-		$(#[doc = $doc_attr])*
 		#[allow(unreachable_code)]
+		$(#[$fn_attr])*
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
@@ -1430,12 +1468,12 @@ macro_rules! decl_module {
 		$origin_ty:ty;
 		$error_type:ty;
 		$ignore:ident;
-		$(#[doc = $doc_attr:tt])*
+		$(#[$fn_attr:meta])*
 		$vis:vis fn $name:ident (
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) -> $result:ty { $( $impl:tt )* }
 	) => {
-		$(#[doc = $doc_attr])*
+		$(#[$fn_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
 			$crate::sp_tracing::enter_span!(stringify!($name));
 			$( $impl )*
@@ -1567,6 +1605,7 @@ macro_rules! decl_module {
 			$(
 				$(#[doc = $doc_attr:tt])*
 				#[weight = $weight:expr]
+				$(#[$fn_attr:meta])*
 				$fn_vis:vis fn $fn_name:ident(
 					$from:ident $( , $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 				) $( -> $result:ty )* { $( $impl:tt )* }
@@ -1652,6 +1691,7 @@ macro_rules! decl_module {
 					$(#[doc = $doc_attr])*
 					///
 					/// NOTE: Calling this function will bypass origin filters.
+					$(#[$fn_attr])*
 					$fn_vis fn $fn_name (
 						$from $(, $param_name : $param )*
 					) $( -> $result )* { $( $impl )* }
@@ -1848,8 +1888,8 @@ macro_rules! decl_module {
 	}
 }
 
-pub trait IsSubType<T: Callable<R>, R> {
-	fn is_sub_type(&self) -> Option<&CallableCallFor<T, R>>;
+pub trait IsSubType<T> {
+	fn is_sub_type(&self) -> Option<&T>;
 }
 
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
@@ -1948,7 +1988,7 @@ macro_rules! impl_outer_dispatch {
 		}
 
 		$(
-			impl $crate::dispatch::IsSubType<$camelcase, $runtime> for $call_type {
+			impl $crate::dispatch::IsSubType<$crate::dispatch::CallableCallFor<$camelcase, $runtime>> for $call_type {
 				#[allow(unreachable_patterns)]
 				fn is_sub_type(&self) -> Option<&$crate::dispatch::CallableCallFor<$camelcase, $runtime>> {
 					match *self {
@@ -2310,6 +2350,8 @@ mod tests {
 	}
 
 	pub mod system {
+		use codec::{Encode, Decode};
+
 		pub trait Trait {
 			type AccountId;
 			type Call;
@@ -2317,7 +2359,7 @@ mod tests {
 			type Origin: crate::traits::OriginTrait<Call = Self::Call>;
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
@@ -2337,7 +2379,7 @@ mod tests {
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = system, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
 			#[weight = 0]
 			fn aux_0(_origin) -> DispatchResult { unreachable!() }
@@ -2370,72 +2412,72 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_0"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[
-						" Hi, this is a comment."
-					])
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("aux_0"),
+			arguments: DecodeDifferent::Encode(&[]),
+			documentation: DecodeDifferent::Encode(&[
+				" Hi, this is a comment."
+			])
+		},
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("aux_1"),
+			arguments: DecodeDifferent::Encode(&[
+				FunctionArgumentMetadata {
+					name: DecodeDifferent::Encode("_data"),
+					ty: DecodeDifferent::Encode("Compact<u32>")
+				}
+			]),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("aux_2"),
+			arguments: DecodeDifferent::Encode(&[
+				FunctionArgumentMetadata {
+					name: DecodeDifferent::Encode("_data"),
+					ty: DecodeDifferent::Encode("i32"),
 				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_1"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("Compact<u32>")
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
+				FunctionArgumentMetadata {
+					name: DecodeDifferent::Encode("_data2"),
+					ty: DecodeDifferent::Encode("String"),
+				}
+			]),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("aux_3"),
+			arguments: DecodeDifferent::Encode(&[]),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("aux_4"),
+			arguments: DecodeDifferent::Encode(&[
+				FunctionArgumentMetadata {
+					name: DecodeDifferent::Encode("_data"),
+					ty: DecodeDifferent::Encode("i32"),
+				}
+			]),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("aux_5"),
+			arguments: DecodeDifferent::Encode(&[
+				FunctionArgumentMetadata {
+					name: DecodeDifferent::Encode("_data"),
+					ty: DecodeDifferent::Encode("i32"),
 				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_2"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("i32"),
-						},
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data2"),
-							ty: DecodeDifferent::Encode("String"),
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_3"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_4"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("i32"),
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_5"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("i32"),
-						},
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data2"),
-							ty: DecodeDifferent::Encode("Compact<u32>")
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("operational"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-			];
+				FunctionArgumentMetadata {
+					name: DecodeDifferent::Encode("_data2"),
+					ty: DecodeDifferent::Encode("Compact<u32>")
+				}
+			]),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("operational"),
+			arguments: DecodeDifferent::Encode(&[]),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+	];
 
 	pub struct TraitImpl {}
 

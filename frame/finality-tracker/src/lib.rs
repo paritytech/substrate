@@ -24,14 +24,14 @@ use sp_runtime::traits::{One, Zero, SaturatedConversion};
 use sp_std::{prelude::*, result, cmp, vec};
 use frame_support::{decl_module, decl_storage, decl_error, ensure};
 use frame_support::traits::Get;
-use frame_support::weights::{DispatchClass, Weight};
+use frame_support::weights::{Weight, DispatchClass};
 use frame_system::{ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
+mod migration;
+
 pub const DEFAULT_WINDOW_SIZE: u32 = 101;
 pub const DEFAULT_REPORT_LATENCY: u32 = 1000;
-
-mod migration;
 
 pub trait Trait: SystemTrait {
 	/// Something which can be notified when the timestamp is set. Set this to `()`
@@ -215,8 +215,9 @@ mod tests {
 	use sp_io::TestExternalities;
 	use sp_core::H256;
 	use sp_runtime::{
-		testing::Header, Perbill,
-		traits::{BlakeTwo256, IdentityLookup, Header as HeaderT},
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+		Perbill,
 	};
 	use frame_support::{
 		assert_ok, impl_outer_origin, parameter_types,
@@ -236,7 +237,7 @@ mod tests {
 	pub struct Test;
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
 	thread_local! {
@@ -280,9 +281,10 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
-		type MigrateAccount = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type MigrateAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;

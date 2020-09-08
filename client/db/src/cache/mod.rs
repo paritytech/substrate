@@ -342,8 +342,9 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 			EntryType::Genesis,
 		)?;
 		let tx_ops = tx.into_ops();
-		db.commit(dbtx);
+		db.commit(dbtx)?;
 		cache.commit(tx_ops)?;
+
 		Ok(())
 	}
 

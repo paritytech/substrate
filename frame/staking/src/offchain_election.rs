@@ -203,7 +203,8 @@ pub fn prepare_submission<T: Trait>(
 	}
 
 	// Convert back to ratio assignment. This takes less space.
-	let low_accuracy_assignment = sp_npos_elections::assignment_staked_to_ratio(staked);
+	let low_accuracy_assignment = sp_npos_elections::assignment_staked_to_ratio_normalized(staked)
+		.map_err(|e| OffchainElectionError::from(e))?;
 
 	// convert back to staked to compute the score in the receiver's accuracy. This can be done
 	// nicer, for now we do it as such since this code is not time-critical. This ensure that the

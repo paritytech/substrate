@@ -71,7 +71,7 @@ pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	PerThing, traits::SaturatedConversion, Perquintill, Perbill, Permill, Percent, PerU16,
+	PerThing, traits::SaturatedConversion, Perquintill, Perbill, Permill, Percent, PerU16, InnerOf,
 	Rational128, FixedI64, FixedI128, FixedU128, FixedPointNumber, FixedPointOperand,
 };
 /// Re-export 128 bit helpers.
@@ -159,7 +159,7 @@ impl BuildStorage for () {
 	fn assimilate_storage(
 		&self,
 		_: &mut sp_core::storage::Storage,
-	)-> Result<(), String> {
+	) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `()`".into())
 	}
 }
@@ -714,7 +714,14 @@ macro_rules! assert_eq_error_rate {
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-pub struct OpaqueExtrinsic(pub Vec<u8>);
+pub struct OpaqueExtrinsic(Vec<u8>);
+
+impl OpaqueExtrinsic {
+	/// Convert an encoded extrinsic to an `OpaqueExtrinsic`.
+	pub fn from_bytes(mut bytes: &[u8]) -> Result<Self, codec::Error> {
+		OpaqueExtrinsic::decode(&mut bytes)
+	}
+}
 
 #[cfg(feature = "std")]
 impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
@@ -794,6 +801,23 @@ impl Drop for SignatureBatching {
 	}
 }
 
+/// Describes on what should happen with a storage transaction.
+pub enum TransactionOutcome<R> {
+	/// Commit the transaction.
+	Commit(R),
+	/// Rollback the transaction.
+	Rollback(R),
+}
+
+impl<R> TransactionOutcome<R> {
+	/// Convert into the inner type.
+	pub fn into_inner(self) -> R {
+		match self {
+			Self::Commit(r) => r,
+			Self::Rollback(r) => r,
+		}
+	}
+}
 
 #[cfg(test)]
 mod tests {
@@ -847,7 +871,11 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Signature verification has not been called")]
 	fn batching_still_finishes_when_not_called_directly() {
-		let mut ext = sp_state_machine::BasicExternalities::with_tasks_executor();
+		let mut ext = sp_state_machine::BasicExternalities::default();
+		ext.register_extension(
+			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
+		);
+
 		ext.execute_with(|| {
 			let _batching = SignatureBatching::start();
 			sp_io::crypto::sr25519_verify(

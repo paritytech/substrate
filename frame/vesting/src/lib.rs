@@ -51,18 +51,34 @@ use sp_std::prelude::*;
 use sp_std::fmt::Debug;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
-	StaticLookup, Zero, AtLeast32Bit, MaybeSerializeDeserialize, Convert
+	StaticLookup, Zero, AtLeast32BitUnsigned, MaybeSerializeDeserialize, Convert
 }};
-use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
+use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure, weights::Weight};
 use frame_support::traits::{
 	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier,
 	ExistenceRequirement, Get, MigrateAccount,
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 
 mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
+pub trait WeightInfo {
+	fn vest_locked(l: u32, ) -> Weight;
+	fn vest_unlocked(l: u32, ) -> Weight;
+	fn vest_other_locked(l: u32, ) -> Weight;
+	fn vest_other_unlocked(l: u32, ) -> Weight;
+	fn vested_transfer(l: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn vest_locked(_l: u32, ) -> Weight { 1_000_000_000 }
+	fn vest_unlocked(_l: u32, ) -> Weight { 1_000_000_000 }
+	fn vest_other_locked(_l: u32, ) -> Weight { 1_000_000_000 }
+	fn vest_other_unlocked(_l: u32, ) -> Weight { 1_000_000_000 }
+	fn vested_transfer(_l: u32, ) -> Weight { 1_000_000_000 }
+}
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -76,6 +92,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// The minimum amount transferred to call `vested_transfer`.
 	type MinVestedTransfer: Get<BalanceOf<Self>>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
@@ -92,8 +111,8 @@ pub struct VestingInfo<Balance, BlockNumber> {
 }
 
 impl<
-	Balance: AtLeast32Bit + Copy,
-	BlockNumber: AtLeast32Bit + Copy,
+	Balance: AtLeast32BitUnsigned + Copy,
+	BlockNumber: AtLeast32BitUnsigned + Copy,
 > VestingInfo<Balance, BlockNumber> {
 	/// Amount locked at block `n`.
 	pub fn locked_at<
@@ -152,9 +171,10 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
 		/// The amount vested has been updated. This could indicate more funds are available. The
-		/// balance given is the amount which is left unvested (and thus locked).
+		/// balance given is the amount which is left unvested (and thus locked). 
+		/// [account, unvested]
 		VestingUpdated(AccountId, Balance),
-		/// An account (given) has become fully vested. No further vesting can happen.
+		/// An [account] has become fully vested. No further vesting can happen.
 		VestingCompleted(AccountId),
 	}
 );
@@ -229,7 +249,7 @@ decl_module! {
 			Self::update_lock(T::Lookup::lookup(target)?)
 		}
 
-		/// Create a vested transfer. 
+		/// Create a vested transfer.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -258,12 +278,12 @@ decl_module! {
 
 			let who = T::Lookup::lookup(target)?;
 			ensure!(!Vesting::<T>::contains_key(&who), Error::<T>::ExistingVestingSchedule);
-			
+
 			T::Currency::transfer(&transactor, &who, schedule.locked, ExistenceRequirement::AllowDeath)?;
 
 			Self::add_vesting_schedule(&who, schedule.locked, schedule.per_block, schedule.starting_block)
 				.expect("user does not have an existing vesting schedule; q.e.d.");
-			
+
 			Ok(())
 		}
 
@@ -403,8 +423,6 @@ mod tests {
 		traits::Get
 	};
 	use sp_core::H256;
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
 		Perbill,
 		testing::Header,
@@ -413,12 +431,9 @@ mod tests {
 	use frame_system::RawOrigin;
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
-	// For testing the pallet, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -450,9 +465,10 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type MigrateAccount = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type MigrateAccount = ();
+		type SystemWeightInfo = ();
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
@@ -460,6 +476,7 @@ mod tests {
 		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	parameter_types! {
 		pub const MinVestedTransfer: u64 = 256 * 2;
@@ -469,6 +486,7 @@ mod tests {
 		type Currency = Balances;
 		type BlockNumberToBalance = Identity;
 		type MinVestedTransfer = MinVestedTransfer;
+		type WeightInfo = ();
 	}
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;

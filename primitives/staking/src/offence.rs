@@ -117,10 +117,21 @@ impl sp_runtime::traits::Printable for OffenceError {
 pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
 	/// Report an `offence` and reward given `reporters`.
 	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError>;
+
+	/// Returns true iff all of the given offenders have been previously reported
+	/// at the given time slot. This function is useful to prevent the sending of
+	/// duplicate offence reports.
+	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool;
 }
 
 impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender, O> for () {
-	fn report_offence(_reporters: Vec<Reporter>, _offence: O) -> Result<(), OffenceError> { Ok(()) }
+	fn report_offence(_reporters: Vec<Reporter>, _offence: O) -> Result<(), OffenceError> {
+		Ok(())
+	}
+
+	fn is_known_offence(_offenders: &[Offender], _time_slot: &O::TimeSlot) -> bool {
+		true
+	}
 }
 
 /// A trait to take action on an offence.

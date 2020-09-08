@@ -64,7 +64,7 @@
 //! ```
 //! use frame_support::{decl_module, dispatch};
 //! # use pallet_timestamp as timestamp;
-//! use frame_system::{self as system, ensure_signed};
+//! use frame_system::ensure_signed;
 //!
 //! pub trait Trait: timestamp::Trait {}
 //!
@@ -93,6 +93,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
+mod default_weights;
 
 use sp_std::{result, cmp};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
@@ -115,6 +116,11 @@ use sp_timestamp::{
 	OnTimestampSet,
 };
 
+pub trait WeightInfo {
+	fn set() -> Weight;
+	fn on_finalize() -> Weight;
+}
+
 /// The module configuration trait
 pub trait Trait: frame_system::Trait {
 	/// Type used for expressing timestamp.
@@ -129,6 +135,9 @@ pub trait Trait: frame_system::Trait {
 	/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
 	/// period on default settings.
 	type MinimumPeriod: Get<Self::Moment>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_module! {
@@ -153,12 +162,9 @@ decl_module! {
 		/// - `O(T)` where `T` complexity of `on_timestamp_set`
 		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in `on_finalize`)
 		/// - 1 event handler `on_timestamp_set` `O(T)`.
-		/// - Benchmark: 7.678 (min squares analysis)
-		///   - NOTE: This benchmark was done for a runtime with insignificant `on_timestamp_set` handlers.
-		///     New benchmarking is needed when adding new handlers.
 		/// # </weight>
 		#[weight = (
-			T::DbWeight::get().reads_writes(2, 1) + 8_000_000,
+			T::WeightInfo::set(),
 			DispatchClass::Mandatory
 		)]
 		fn set(origin, #[compact] now: T::Moment) {
@@ -178,13 +184,12 @@ decl_module! {
 		/// dummy `on_initialize` to return the weight used in `on_finalize`.
 		fn on_initialize() -> Weight {
 			// weight of `on_finalize`
-			5_000_000
+			T::WeightInfo::on_finalize()
 		}
 
 		/// # <weight>
 		/// - `O(1)`
 		/// - 1 storage deletion (codec `O(1)`).
-		/// - Benchmark: 4.928 µs (min squares analysis)
 		/// # </weight>
 		fn on_finalize() {
 			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
@@ -302,7 +307,7 @@ mod tests {
 	}
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -336,9 +341,10 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
-		type MigrateAccount = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type MigrateAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;
@@ -347,6 +353,7 @@ mod tests {
 		type Moment = u64;
 		type OnTimestampSet = ();
 		type MinimumPeriod = MinimumPeriod;
+		type WeightInfo = ();
 	}
 	type Timestamp = Module<Test>;
 

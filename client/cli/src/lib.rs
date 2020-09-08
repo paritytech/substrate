@@ -21,7 +21,7 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-mod arg_enums;
+pub mod arg_enums;
 mod commands;
 mod config;
 mod error;
@@ -37,7 +37,9 @@ use log::info;
 pub use params::*;
 use regex::Regex;
 pub use runner::*;
-use sc_service::{ChainSpec, Configuration, TaskExecutor};
+use sc_service::{Configuration, TaskExecutor};
+pub use sc_service::{ChainSpec, Role};
+pub use sp_version::RuntimeVersion;
 use std::io::Write;
 pub use structopt;
 use structopt::{
@@ -55,25 +57,33 @@ use structopt::{
 /// its own implementation that will fill the necessary field based on the trait's functions.
 pub trait SubstrateCli: Sized {
 	/// Implementation name.
-	fn impl_name() -> &'static str;
+	fn impl_name() -> String;
 
 	/// Implementation version.
 	///
 	/// By default this will look like this: 2.0.0-b950f731c-x86_64-linux-gnu where the hash is the
 	/// short commit hash of the commit of in the Git repository.
-	fn impl_version() -> &'static str;
+	fn impl_version() -> String;
 
 	/// Executable file name.
-	fn executable_name() -> &'static str;
+	///
+	/// Extracts the file name from `std::env::current_exe()`.
+	/// Resorts to the env var `CARGO_PKG_NAME` in case of Error.
+	fn executable_name() -> String {
+		std::env::current_exe().ok()
+			.and_then(|e| e.file_name().map(|s| s.to_os_string()))
+			.and_then(|w| w.into_string().ok())
+			.unwrap_or_else(|| env!("CARGO_PKG_NAME").into())
+	}
 
 	/// Executable file description.
-	fn description() -> &'static str;
+	fn description() -> String;
 
 	/// Executable file author.
-	fn author() -> &'static str;
+	fn author() -> String;
 
 	/// Support URL.
-	fn support_url() -> &'static str;
+	fn support_url() -> String;
 
 	/// Copyright starting year (x-current year)
 	fn copyright_start_year() -> i32;
@@ -114,13 +124,16 @@ pub trait SubstrateCli: Sized {
 	{
 		let app = <Self as StructOpt>::clap();
 
-		let mut full_version = Self::impl_version().to_string();
+		let mut full_version = Self::impl_version();
 		full_version.push_str("\n");
 
+		let name = Self::executable_name();
+		let author = Self::author();
+		let about = Self::description();
 		let app = app
-			.name(Self::executable_name())
-			.author(Self::author())
-			.about(Self::description())
+			.name(name)
+			.author(author.as_str())
+			.about(about.as_str())
 			.version(full_version.as_str())
 			.settings(&[
 				AppSettings::GlobalVersion,
@@ -173,13 +186,16 @@ pub trait SubstrateCli: Sized {
 	{
 		let app = <Self as StructOpt>::clap();
 
-		let mut full_version = Self::impl_version().to_string();
+		let mut full_version = Self::impl_version();
 		full_version.push_str("\n");
 
+		let name = Self::executable_name();
+		let author = Self::author();
+		let about = Self::description();
 		let app = app
-			.name(Self::executable_name())
-			.author(Self::author())
-			.about(Self::description())
+			.name(name)
+			.author(author.as_str())
+			.about(about.as_str())
 			.version(full_version.as_str());
 
 		let matches = app.get_matches_from_safe(iter)?;
@@ -193,7 +209,7 @@ pub trait SubstrateCli: Sized {
 	}
 
 	/// Only create a Configuration for the command provided in argument
-	fn create_configuration<T: CliConfiguration>(
+	fn create_configuration<T: CliConfiguration<DVC>, DVC: DefaultConfigurationValues>(
 		&self,
 		command: &T,
 		task_executor: TaskExecutor,
@@ -207,6 +223,9 @@ pub trait SubstrateCli: Sized {
 		command.init::<Self>()?;
 		Runner::new(self, command)
 	}
+
+	/// Native runtime version.
+	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }
 
 /// Initialize the logger
@@ -217,10 +236,11 @@ pub fn init_logger(pattern: &str) {
 	// Disable info logging by default for some modules:
 	builder.filter(Some("ws"), log::LevelFilter::Off);
 	builder.filter(Some("yamux"), log::LevelFilter::Off);
+	builder.filter(Some("cranelift_codegen"), log::LevelFilter::Off);
 	builder.filter(Some("hyper"), log::LevelFilter::Warn);
 	builder.filter(Some("cranelift_wasm"), log::LevelFilter::Warn);
 	// Always log the special target `sc_tracing`, overrides global level
-	builder.filter(Some("sc_tracing"), log::LevelFilter::Info);
+	builder.filter(Some("sc_tracing"), log::LevelFilter::Trace);
 	// Enable info for others.
 	builder.filter(None, log::LevelFilter::Info);
 

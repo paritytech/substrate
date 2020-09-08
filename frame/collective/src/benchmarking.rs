@@ -21,7 +21,7 @@ use super::*;
 
 use frame_system::RawOrigin as SystemOrigin;
 use frame_system::EventRecord;
-use frame_benchmarking::{benchmarks_instance, account};
+use frame_benchmarking::{benchmarks_instance, account, whitelisted_caller};
 use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
@@ -123,7 +123,7 @@ benchmarks_instance! {
 			members.push(member);
 		}
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, MAX_MEMBERS)?;
@@ -153,7 +153,7 @@ benchmarks_instance! {
 			members.push(member);
 		}
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, MAX_MEMBERS)?;
@@ -184,7 +184,7 @@ benchmarks_instance! {
 			let member = account("member", i, SEED);
 			members.push(member);
 		}
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, MAX_MEMBERS)?;
 
@@ -377,7 +377,7 @@ benchmarks_instance! {
 			let member = account("member", i, SEED);
 			members.push(member);
 		}
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None, MAX_MEMBERS)?;
 
@@ -458,7 +458,7 @@ benchmarks_instance! {
 			let member = account("member", i, SEED);
 			members.push(member);
 		}
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
 		Collective::<T, _>::set_members(
 			SystemOrigin::Root.into(),
@@ -530,7 +530,7 @@ benchmarks_instance! {
 			let member = account("member", i, SEED);
 			members.push(member);
 		}
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
 		Collective::<T, _>::set_members(
 			SystemOrigin::Root.into(),

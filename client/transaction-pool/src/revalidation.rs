@@ -141,14 +141,14 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 		// which they got into the pool
 		while left > 0 {
 			let first_block = match self.block_ordered.keys().next().cloned() {
-			  Some(bn) => bn,
-			  None => break,
+				Some(bn) => bn,
+				None => break,
 			};
 			let mut block_drained = false;
 			if let Some(extrinsics) = self.block_ordered.get_mut(&first_block) {
 				let to_queue = extrinsics.iter().take(left).cloned().collect::<Vec<_>>();
 				if to_queue.len() == extrinsics.len() {
-				   block_drained = true;
+					block_drained = true;
 				} else {
 					for xt in &to_queue {
 						extrinsics.remove(xt);
@@ -159,7 +159,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 			}
 
 			if block_drained {
-			  self.block_ordered.remove(&first_block);
+				self.block_ordered.remove(&first_block);
 			}
 		}
 
@@ -211,8 +211,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 		mut self,
 		from_queue: TracingUnboundedReceiver<WorkerPayload<Api>>,
 		interval: R,
-	) where R: Send, R::Guard: Send
-	{
+	) where R: Send, R::Guard: Send {
 		let interval = interval.into_stream().fuse();
 		let from_queue = from_queue.fuse();
 		futures::pin_mut!(interval, from_queue);
@@ -253,7 +252,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 							if this.members.len() > 0 {
 								log::debug!(
 									target: "txpool",
-									"Updated revalidation queue at {}. Transactions: {:?}",
+									"Updated revalidation queue at {:?}. Transactions: {:?}",
 									this.best_block,
 									this.members,
 								);
@@ -298,9 +297,7 @@ where
 		api: Arc<Api>,
 		pool: Arc<Pool<Api>>,
 		interval: R,
-	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>)
-	where R: Send + 'static, R::Guard: Send
-	{
+	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>) where R: Send + 'static, R::Guard: Send {
 		let (to_worker, from_queue) = tracing_unbounded("mpsc_revalidation_queue");
 
 		let worker = RevalidationWorker::new(api.clone(), pool.clone());
@@ -338,16 +335,22 @@ where
 	/// If queue configured with background worker, this will return immediately.
 	/// If queue configured without background worker, this will resolve after
 	/// revalidation is actually done.
-	pub async fn revalidate_later(&self, at: NumberFor<Api>, transactions: Vec<ExtrinsicHash<Api>>) {
+	pub async fn revalidate_later(
+		&self,
+		at: NumberFor<Api>,
+		transactions: Vec<ExtrinsicHash<Api>>,
+	) {
 		if transactions.len() > 0 {
-			log::debug!(target: "txpool", "Sent {} transactions to revalidation queue", transactions.len());
+			log::debug!(
+				target: "txpool", "Sent {} transactions to revalidation queue",
+				transactions.len(),
+			);
 		}
 
 		if let Some(ref to_worker) = self.background {
 			if let Err(e) = to_worker.unbounded_send(WorkerPayload { at, transactions }) {
 				log::warn!(target: "txpool", "Failed to update background worker: {:?}", e);
 			}
-			return;
 		} else {
 			let pool = self.pool.clone();
 			let api = self.api.clone();

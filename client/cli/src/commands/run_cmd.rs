@@ -325,7 +325,7 @@ impl CliConfiguration for RunCmd {
 			Error::Input(format!(
 				"Invalid node name '{}'. Reason: {}. If unsure, use none.",
 				name, msg
-			));
+		))
 		})?;
 
 		Ok(name)
@@ -382,7 +382,7 @@ impl CliConfiguration for RunCmd {
 		Ok(self.shared_params.dev || self.force_authoring)
 	}
 
-	fn prometheus_config(&self) -> Result<Option<PrometheusConfig>> {
+	fn prometheus_config(&self, default_listen_port: u16) -> Result<Option<PrometheusConfig>> {
 		Ok(if self.no_prometheus {
 			None
 		} else {
@@ -393,7 +393,10 @@ impl CliConfiguration for RunCmd {
 			};
 
 			Some(PrometheusConfig::new_with_default_registry(
-				SocketAddr::new(interface.into(), self.prometheus_port.unwrap_or(9615))
+				SocketAddr::new(
+					interface.into(),
+					self.prometheus_port.unwrap_or(default_listen_port),
+				)
 			))
 		})
 	}
@@ -427,7 +430,7 @@ impl CliConfiguration for RunCmd {
 			.into())
 	}
 
-	fn rpc_http(&self) -> Result<Option<SocketAddr>> {
+	fn rpc_http(&self, default_listen_port: u16) -> Result<Option<SocketAddr>> {
 		let interface = rpc_interface(
 			self.rpc_external,
 			self.unsafe_rpc_external,
@@ -435,22 +438,22 @@ impl CliConfiguration for RunCmd {
 			self.validator
 		)?;
 
-		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(9933))))
+		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(default_listen_port))))
 	}
 
 	fn rpc_ipc(&self) -> Result<Option<String>> {
 		Ok(self.ipc_path.clone())
 	}
 
-	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
+	fn rpc_ws(&self, default_listen_port: u16) -> Result<Option<SocketAddr>> {
 		let interface = rpc_interface(
 			self.ws_external,
 			self.unsafe_ws_external,
 			self.rpc_methods,
-			self.validator
+			self.validator,
 		)?;
 
-		Ok(Some(SocketAddr::new(interface, self.ws_port.unwrap_or(9944))))
+		Ok(Some(SocketAddr::new(interface, self.ws_port.unwrap_or(default_listen_port))))
 	}
 
 	fn rpc_methods(&self) -> Result<sc_service::config::RpcMethods> {
@@ -610,7 +613,9 @@ mod tests {
 
 	#[test]
 	fn tests_node_name_bad() {
-		assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
+		assert!(is_node_name_valid(
+			"very very long names are really not very cool for the ui at all, really they're not"
+		).is_err());
 		assert!(is_node_name_valid("Dots.not.Ok").is_err());
 		assert!(is_node_name_valid("http://visit.me").is_err());
 		assert!(is_node_name_valid("https://visit.me").is_err());

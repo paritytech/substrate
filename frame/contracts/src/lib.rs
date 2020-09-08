@@ -85,16 +85,17 @@ mod storage;
 mod exec;
 mod wasm;
 mod rent;
+mod benchmarking;
 
 #[cfg(test)]
 mod tests;
-mod migration;
 
 use crate::exec::ExecutionContext;
 use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
-pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
+pub use crate::exec::{ExecResult, ExecReturnValue};
+pub use crate::wasm::ReturnCode as RuntimeReturnCode;
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
@@ -103,21 +104,19 @@ use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use sp_runtime::{
 	traits::{
-		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member,
+		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, Convert, Saturating,
 	},
 	RuntimeDebug,
 };
-use frame_support::dispatch::{
-	PostDispatchInfo, DispatchResult, Dispatchable, DispatchResultWithPostInfo
-};
 use frame_support::{
-	Parameter, decl_module, decl_event, decl_storage, decl_error,
-	parameter_types, IsSubType, storage::child::ChildInfo,
+	decl_module, decl_event, decl_storage, decl_error, ensure,
+	parameter_types, storage::child::ChildInfo,
+	dispatch::{DispatchResult, DispatchResultWithPostInfo},
+	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 };
-use frame_support::traits::{OnUnbalanced, Currency, Get, Time, Randomness};
-use frame_support::weights::{GetDispatchInfo, Weight};
-use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 use pallet_contracts_primitives::{RentProjection, ContractAccessError};
+use frame_support::weights::Weight;
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
 pub type TrieId = Vec<u8>;
@@ -290,9 +289,10 @@ where
 	}
 }
 
-pub type BalanceOf<T> = <<T as pallet_transaction_payment::Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+pub type BalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 pub type NegativeImbalanceOf<T> =
-	<<T as pallet_transaction_payment::Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 parameter_types! {
 	/// A reasonable default value for [`Trait::SignedClaimedHandicap`].
@@ -313,15 +313,12 @@ parameter_types! {
 	pub const DefaultMaxValueSize: u32 = 16_384;
 }
 
-pub trait Trait: frame_system::Trait + pallet_transaction_payment::Trait {
+pub trait Trait: frame_system::Trait {
 	type Time: Time;
 	type Randomness: Randomness<Self::Hash>;
 
-	/// The outer call dispatch type.
-	type Call:
-		Parameter +
-		Dispatchable<PostInfo=PostDispatchInfo, Origin=<Self as frame_system::Trait>::Origin> +
-		IsSubType<Module<Self>, Self> + GetDispatchInfo;
+	/// The currency in which fees are paid and contract balances are held.
+	type Currency: Currency<Self::AccountId>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -372,6 +369,10 @@ pub trait Trait: frame_system::Trait + pallet_transaction_payment::Trait {
 
 	/// The maximum size of a storage value in bytes.
 	type MaxValueSize: Get<u32>;
+
+	/// Used to answer contracts's queries regarding the current weight price. This is **not**
+	/// used to calculate the actual fee and is only for informational purposes.
+	type WeightPrice: Convert<Weight, BalanceOf<Self>>;
 }
 
 /// Simple contract address determiner.
@@ -411,7 +412,39 @@ decl_error! {
 		/// Tombstones don't match.
 		InvalidTombstone,
 		/// An origin TrieId written in the current block.
-		InvalidContractOrigin
+		InvalidContractOrigin,
+		/// The executed contract exhausted its gas limit.
+		OutOfGas,
+		/// The output buffer supplied to a contract API call was too small.
+		OutputBufferTooSmall,
+		/// Performing the requested transfer would have brought the contract below
+		/// the subsistence threshold. No transfer is allowed to do this in order to allow
+		/// for a tombstone to be created. Use `seal_terminate` to remove a contract without
+		/// leaving a tombstone behind.
+		BelowSubsistenceThreshold,
+		/// The newly created contract is below the subsistence threshold after executing
+		/// its contructor. No contracts are allowed to exist below that threshold.
+		NewContractNotFunded,
+		/// Performing the requested transfer failed for a reason originating in the
+		/// chosen currency implementation of the runtime. Most probably the balance is
+		/// too low or locks are placed on it.
+		TransferFailed,
+		/// Performing a call was denied because the calling depth reached the limit
+		/// of what is specified in the schedule.
+		MaxCallDepthReached,
+		/// The contract that was called is either no contract at all (a plain account)
+		/// or is a tombstone.
+		NotCallable,
+		/// The code supplied to `put_code` exceeds the limit specified in the current schedule.
+		CodeTooLarge,
+		/// No code could be found at the supplied code hash.
+		CodeNotFound,
+		/// A buffer outside of sandbox memory was passed to a contract API function.
+		OutOfBounds,
+		/// Input passed to a contract API function failed to decode as expected type.
+		DecodingFailed,
+		/// Contract trapped during execution.
+		ContractTrapped,
 	}
 }
 
@@ -487,6 +520,7 @@ decl_module! {
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 			let schedule = <Module<T>>::current_schedule();
+			ensure!(code.len() as u32 <= schedule.max_code_size, Error::<T>::CodeTooLarge);
 			let result = wasm::save_code::<T>(code, &schedule);
 			if let Ok(code_hash) = result {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
@@ -516,7 +550,7 @@ decl_module! {
 			let result = Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
 				ctx.call(dest, value, gas_meter, data)
 			});
-			gas_meter.into_dispatch_result(result.map_err(|e| e.reason))
+			gas_meter.into_dispatch_result(result)
 		}
 
 		/// Instantiates a new contract from the `codehash` generated by `put_code`, optionally transferring some balance.
@@ -544,7 +578,7 @@ decl_module! {
 				ctx.instantiate(endowment, gas_meter, &code_hash, data)
 					.map(|(_address, output)| output)
 			});
-			gas_meter.into_dispatch_result(result.map_err(|e| e.reason))
+			gas_meter.into_dispatch_result(result)
 		}
 
 		/// Allows block producers to claim a small reward for evicting a contract. If a block producer
@@ -579,10 +613,6 @@ decl_module! {
 				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get())?;
 			}
 		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migration::on_runtime_upgrade::<T>()
-		}
 	}
 }
 
@@ -592,17 +622,22 @@ impl<T: Trait> Module<T> {
 	///
 	/// This function is similar to `Self::call`, but doesn't perform any address lookups and better
 	/// suitable for calling directly from Rust.
+	///
+	/// It returns the exection result and the amount of used weight.
 	pub fn bare_call(
 		origin: T::AccountId,
 		dest: T::AccountId,
 		value: BalanceOf<T>,
 		gas_limit: Gas,
 		input_data: Vec<u8>,
-	) -> ExecResult {
+	) -> (ExecResult, Gas) {
 		let mut gas_meter = GasMeter::new(gas_limit);
-		Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
-			ctx.call(dest, value, gas_meter, input_data)
-		})
+		(
+			Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
+				ctx.call(dest, value, gas_meter, input_data)
+			}),
+			gas_meter.gas_spent(),
+		)
 	}
 
 	/// Query storage of a specified contract under a specified key.
@@ -610,7 +645,7 @@ impl<T: Trait> Module<T> {
 		address: T::AccountId,
 		key: [u8; 32],
 	) -> sp_std::result::Result<Option<Vec<u8>>, ContractAccessError> {
-		let contract_info = <ContractInfoOf<T>>::get(&address)
+		let contract_info = ContractInfoOf::<T>::get(&address)
 			.ok_or(ContractAccessError::DoesntExist)?
 			.get_alive()
 			.ok_or(ContractAccessError::IsTombstone)?;
@@ -639,31 +674,8 @@ impl<T: Trait> Module<T> {
 		let cfg = Config::preload();
 		let vm = WasmVm::new(&cfg.schedule);
 		let loader = WasmLoader::new(&cfg.schedule);
-		let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
-
-		let result = func(&mut ctx, gas_meter);
-
-		// Execute deferred actions.
-		ctx.deferred.into_iter().for_each(|deferred| {
-			use self::exec::DeferredAction::*;
-			match deferred {
-				DispatchRuntimeCall {
-					origin: who,
-					call,
-				} => {
-					let info = call.get_dispatch_info();
-					let result = call.dispatch(RawOrigin::Signed(who.clone()).into());
-					let post_info = match result {
-						Ok(post_info) => post_info,
-						Err(err) => err.post_info,
-					};
-					gas_meter.refund(post_info.calc_unspent(&info));
-					Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
-				}
-			}
-		});
-
-		result
+		let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+		func(&mut ctx, gas_meter)
 	}
 }
 
@@ -674,11 +686,12 @@ decl_event! {
 		<T as frame_system::Trait>::AccountId,
 		<T as frame_system::Trait>::Hash
 	{
-		/// Contract deployed by address at the specified address.
+		/// Contract deployed by address at the specified address. [owner, contract]
 		Instantiated(AccountId, AccountId),
 
 		/// Contract has been evicted and is now in tombstone state.
-		///
+		/// [contract, tombstone]
+		/// 
 		/// # Params
 		///
 		/// - `contract`: `AccountId`: The account ID of the evicted contract.
@@ -686,7 +699,8 @@ decl_event! {
 		Evicted(AccountId, bool),
 
 		/// Restoration for a contract has been successful.
-		///
+		/// [donor, dest, code_hash, rent_allowance]
+		/// 
 		/// # Params
 		///
 		/// - `donor`: `AccountId`: Account ID of the restoring contract
@@ -696,16 +710,14 @@ decl_event! {
 		Restored(AccountId, AccountId, Hash, Balance),
 
 		/// Code with the specified hash has been stored.
+		/// [code_hash]
 		CodeStored(Hash),
 
-		/// Triggered when the current schedule is updated.
+		/// Triggered when the current [schedule] is updated.
 		ScheduleUpdated(u32),
 
-		/// A call was dispatched from the given account. The bool signals whether it was
-		/// successful execution or not.
-		Dispatched(AccountId, bool),
-
 		/// An event deposited upon execution of a contract from the account.
+		/// [account, data]
 		ContractExecution(AccountId, Vec<u8>),
 	}
 }
@@ -748,6 +760,25 @@ impl<T: Trait> Config<T> {
 			max_depth: T::MaxDepth::get(),
 			max_value_size: T::MaxValueSize::get(),
 		}
+	}
+
+	/// Subsistence threshold is the extension of the minimum balance (aka existential deposit) by the
+	/// tombstone deposit, required for leaving a tombstone.
+	///
+	/// Rent or any contract initiated balance transfer mechanism cannot make the balance lower
+	/// than the subsistence threshold in order to guarantee that a tombstone is created.
+	///
+	/// The only way to completely kill a contract without a tombstone is calling `seal_terminate`.
+	pub fn subsistence_threshold(&self) -> BalanceOf<T> {
+		self.existential_deposit.saturating_add(self.tombstone_deposit)
+	}
+
+	/// The same as `subsistence_threshold` but without the need for a preloaded instance.
+	///
+	/// This is for cases where this value is needed in rent calculation rather than
+	/// during contract execution.
+	pub fn subsistence_threshold_uncached() -> BalanceOf<T> {
+		T::Currency::minimum_balance().saturating_add(T::TombstoneDeposit::get())
 	}
 }
 
@@ -815,12 +846,16 @@ pub struct Schedule {
 	/// Maximum allowed size of a declared table.
 	pub max_table_size: u32,
 
-	/// Whether the `ext_println` function is allowed to be used contracts.
+	/// Whether the `seal_println` function is allowed to be used contracts.
 	/// MUST only be enabled for `dev` chains, NOT for production chains
 	pub enable_println: bool,
 
 	/// The maximum length of a subject used for PRNG generation.
 	pub max_subject_len: u32,
+
+	/// The maximum length of a contract code in bytes. This limit applies to the uninstrumented
+	// and pristine form of the code as supplied to `put_code`.
+	pub max_code_size: u32,
 }
 
 // 500 (2 instructions per nano second on 2GHZ) * 1000x slowdown through wasmi
@@ -852,6 +887,7 @@ impl Default for Schedule {
 			max_table_size: 16 * 1024,
 			enable_println: false,
 			max_subject_len: 32,
+			max_code_size: 512 * 1024,
 		}
 	}
 }

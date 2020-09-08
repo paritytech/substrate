@@ -6,8 +6,6 @@ use frame_support::{
 	impl_outer_origin, parameter_types, weights::Weight,
 };
 use sp_core::H256;
-// The testing primitives are very useful for avoiding having to work with signatures
-// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 use sp_runtime::{
 	Perbill,
 	testing::Header,
@@ -18,9 +16,6 @@ impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
 
-// For testing the pallet, we construct most of a mock runtime. This means
-// first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of pallets we want to use.
 #[derive(Clone, Eq, Debug, PartialEq)]
 pub struct Test;
 parameter_types! {
@@ -52,9 +47,10 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
-	type MigrateAccount = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type MigrateAccount = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -65,6 +61,7 @@ impl pallet_balances::Trait for Test {
 	type Event = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const ProofLimit: u32 = 1024;
@@ -72,7 +69,7 @@ parameter_types! {
 }
 impl Trait for Test {
 	type Event = ();
-	type SwapAction = BalanceSwapAction<Test, Balances>;
+	type SwapAction = BalanceSwapAction<u64, Balances>;
 	type ProofLimit = ProofLimit;
 }
 type System = frame_system::Module<Test>;

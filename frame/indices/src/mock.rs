@@ -72,9 +72,10 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
-	type MigrateAccount = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type MigrateAccount = ();
+	type SystemWeightInfo = ();
 }
 
 parameter_types! {
@@ -87,6 +88,7 @@ impl pallet_balances::Trait for Test {
 	type Event = MetaEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -98,6 +100,7 @@ impl Trait for Test {
 	type Currency = Balances;
 	type Deposit = Deposit;
 	type Event = MetaEvent;
+	type WeightInfo = ();
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

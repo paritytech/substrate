@@ -20,10 +20,10 @@ use crate::{
 	CliConfiguration, error, params::{PruningParams, SharedParams, BlockNumberOrHash},
 };
 use log::info;
-use sc_service::{Configuration, ServiceBuilderCommand};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
-use std::{fmt::Debug, str::FromStr, io::Write};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use std::{fmt::Debug, str::FromStr, io::Write, sync::Arc};
 use structopt::StructOpt;
+use sc_client_api::{StorageProvider, UsageProvider};
 
 /// The `export-state` command used to export the state of a given block into
 /// a chain spec.
@@ -44,23 +44,22 @@ pub struct ExportStateCmd {
 
 impl ExportStateCmd {
 	/// Run the `export-state` command
-	pub fn run<B, BC, BB>(
+	pub async fn run<B, BA, C>(
 		&self,
-		config: Configuration,
-		builder: B,
+		client: Arc<C>,
+		mut input_spec: Box<dyn sc_service::ChainSpec>,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: BlockT + Debug,
-		<NumberFor<BB> as FromStr>::Err: std::fmt::Debug,
-		BB::Hash: FromStr,
-		<BB::Hash as FromStr>::Err: std::fmt::Debug,
+		B: BlockT,
+		C: UsageProvider<B> + StorageProvider<B, BA>,
+		BA: sc_client_api::backend::Backend<B>,
+		B::Hash: FromStr,
+		<B::Hash as FromStr>::Err: Debug,
+		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		info!("Exporting raw state...");
-		let mut input_spec = config.chain_spec.cloned_box();
 		let block_id = self.input.as_ref().map(|b| b.parse()).transpose()?;
-		let raw_state = builder(config)?.export_raw_state(block_id)?;
+		let raw_state = sc_service::chain_ops::export_raw_state(client, block_id)?;
 		input_spec.set_storage(raw_state);
 
 		info!("Generating new chain spec...");

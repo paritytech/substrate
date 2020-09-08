@@ -26,7 +26,7 @@ use crate::{
 use hash_db::Hasher;
 use sp_core::{
 	offchain::storage::OffchainOverlayedChanges,
-	storage::{well_known_keys::is_child_storage_key, ChildInfo},
+	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
 	traits::Externalities, hexdisplay::HexDisplay,
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
@@ -471,8 +471,8 @@ where
 			let root = self
 				.storage(prefixed_storage_key.as_slice())
 				.and_then(|k| Decode::decode(&mut &k[..]).ok())
-				.unwrap_or(
-					empty_child_trie_root::<Layout<H>>()
+				.unwrap_or_else(
+					|| empty_child_trie_root::<Layout<H>>()
 				);
 			trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
 				self.id,
@@ -512,8 +512,8 @@ where
 				let root = self
 					.storage(prefixed_storage_key.as_slice())
 					.and_then(|k| Decode::decode(&mut &k[..]).ok())
-					.unwrap_or(
-						empty_child_trie_root::<Layout<H>>()
+					.unwrap_or_else(
+						|| empty_child_trie_root::<Layout<H>>()
 					);
 				trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
 					self.id,
@@ -575,6 +575,9 @@ where
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.mark_dirty();
+		self.overlay
+			.enter_runtime()
+			.expect("We have reset the overlay above, so we can not be in the runtime; qed");
 	}
 
 	fn commit(&mut self) {
@@ -590,8 +593,28 @@ where
 		self.backend.commit(
 			changes.transaction_storage_root,
 			changes.transaction,
+			changes.main_storage_changes,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.mark_dirty();
+		self.overlay
+			.enter_runtime()
+			.expect("We have reset the overlay above, so we can not be in the runtime; qed");
+	}
+
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		self.backend.read_write_count()
+	}
+
+	fn reset_read_write_count(&mut self) {
+		self.backend.reset_read_write_count()
+	}
+
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		self.backend.get_whitelist()
+	}
+
+	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
+		self.backend.set_whitelist(new)
 	}
 }
 

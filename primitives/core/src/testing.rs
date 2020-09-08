@@ -90,7 +90,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 						v
 					}))
 			})
-			.unwrap_or(Ok(vec![]))
+			.unwrap_or_else(|| Ok(vec![]))
 	}
 
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
@@ -222,19 +222,19 @@ impl crate::traits::BareCryptoStore for KeyStore {
 			ed25519::CRYPTO_ID => {
 				let key_pair: ed25519::Pair = self
 					.ed25519_key_pair(id, &ed25519::Public::from_slice(key.1.as_slice()))
-					.ok_or(Error::PairNotFound("ed25519".to_owned()))?;
+					.ok_or_else(|| Error::PairNotFound("ed25519".to_owned()))?;
 				return Ok(key_pair.sign(msg).encode());
 			}
 			sr25519::CRYPTO_ID => {
 				let key_pair: sr25519::Pair = self
 					.sr25519_key_pair(id, &sr25519::Public::from_slice(key.1.as_slice()))
-					.ok_or(Error::PairNotFound("sr25519".to_owned()))?;
+					.ok_or_else(|| Error::PairNotFound("sr25519".to_owned()))?;
 				return Ok(key_pair.sign(msg).encode());
 			}
 			ecdsa::CRYPTO_ID => {
 				let key_pair: ecdsa::Pair = self
 					.ecdsa_key_pair(id, &ecdsa::Public::from_slice(key.1.as_slice()))
-					.ok_or(Error::PairNotFound("ecdsa".to_owned()))?;
+					.ok_or_else(|| Error::PairNotFound("ecdsa".to_owned()))?;
 				return Ok(key_pair.sign(msg).encode());
 			}
 			_ => Err(Error::KeyNotSupported(id))
@@ -249,7 +249,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 	) -> Result<VRFSignature, Error> {
 		let transcript = make_transcript(transcript_data);
 		let pair = self.sr25519_key_pair(key_type, public)
-			.ok_or(Error::PairNotFound("Not found".to_owned()))?;
+			.ok_or_else(|| Error::PairNotFound("Not found".to_owned()))?;
 
 		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
 		Ok(VRFSignature {
@@ -359,16 +359,16 @@ macro_rules! wasm_export_functions {
 	};
 }
 
-/// An executor that supports spawning blocking futures in tests.
+/// A task executor that can be used in tests.
 ///
 /// Internally this just wraps a `ThreadPool` with a pool size of `8`. This
 /// should ensure that we have enough threads in tests for spawning blocking futures.
 #[cfg(feature = "std")]
 #[derive(Clone)]
-pub struct SpawnBlockingExecutor(futures::executor::ThreadPool);
+pub struct TaskExecutor(futures::executor::ThreadPool);
 
 #[cfg(feature = "std")]
-impl SpawnBlockingExecutor {
+impl TaskExecutor {
 	/// Create a new instance of `Self`.
 	pub fn new() -> Self {
 		let mut builder = futures::executor::ThreadPoolBuilder::new();
@@ -377,7 +377,7 @@ impl SpawnBlockingExecutor {
 }
 
 #[cfg(feature = "std")]
-impl crate::traits::SpawnNamed for SpawnBlockingExecutor {
+impl crate::traits::SpawnNamed for TaskExecutor {
 	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		self.0.spawn_ok(future);
 	}

@@ -32,7 +32,7 @@ pub type Indices = pallet_indices::Module<Test>;
 pub type Session = pallet_session::Module<Test>;
 
 impl_outer_origin! {
-	pub enum Origin for Test  where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 impl_outer_dispatch! {
@@ -79,9 +79,10 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
-	type MigrateAccount = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = (Balances,);
+	type MigrateAccount = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
@@ -92,12 +93,14 @@ impl pallet_balances::Trait for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 impl pallet_indices::Trait for Test {
 	type AccountIndex = AccountIndex;
 	type Event = ();
 	type Currency = Balances;
 	type Deposit = ();
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
@@ -106,6 +109,7 @@ impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 impl pallet_session::historical::Trait for Test {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
@@ -143,6 +147,7 @@ impl pallet_session::Trait for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type DisabledValidatorsThreshold = ();
+	type WeightInfo = ();
 }
 pallet_staking_reward_curve::build! {
 	const I_NPOS: sp_runtime::curve::PiecewiseLinear<'static> = curve!(
@@ -190,4 +195,5 @@ impl pallet_staking::Trait for Test {
 	type MinSolutionScoreBump = ();
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = ();
+	type WeightInfo = ();
 }

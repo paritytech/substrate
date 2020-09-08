@@ -19,7 +19,10 @@
 
 use hash_db::Hasher;
 use codec::{Decode, Encode};
-use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
+use sp_core::{
+	traits::RuntimeCode,
+	storage::{ChildInfo, well_known_keys, TrackedStorageKey}
+};
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
@@ -212,9 +215,27 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Commit given transaction to storage.
-	fn commit(&self, _: H::Out, _: Self::Transaction) -> Result<(), Self::Error> {
+	fn commit(&self, _: H::Out, _: Self::Transaction, _: StorageCollection) -> Result<(), Self::Error> {
 		unimplemented!()
 	}
+
+	/// Get the read/write count of the db
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		unimplemented!()
+	}
+
+	/// Get the read/write count of the db
+	fn reset_read_write_count(&self) {
+		unimplemented!()
+	}
+
+	/// Get the whitelist for tracking db reads/writes
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		Default::default()
+	}
+
+	/// Update the whitelist for tracking db reads/writes
+	fn set_whitelist(&self, _: Vec<TrackedStorageKey>) {}
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {

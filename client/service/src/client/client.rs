@@ -92,8 +92,8 @@ use rand::Rng;
 
 #[cfg(feature="test-helpers")]
 use {
-	sp_core::traits::CodeExecutor,
-	sc_client_api::{CloneableSpawn, in_mem},
+	sp_core::traits::{CodeExecutor, SpawnNamed},
+	sc_client_api::in_mem,
 	sc_executor::RuntimeInfo,
 	super::call_executor::LocalCallExecutor,
 };
@@ -149,7 +149,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
@@ -189,7 +189,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	executor: E,
 	build_genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
@@ -351,13 +351,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		self.executor.runtime_version(id)
-	}
-
-	/// Get block hash by number.
-	pub fn block_hash(&self,
-		block_number: <<Block as BlockT>::Header as HeaderT>::Number
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		self.backend.blockchain().hash(block_number)
 	}
 
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
@@ -1061,20 +1054,31 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// reverted past the last finalized block. Returns the number of blocks
 	/// that were successfully reverted.
 	pub fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n, false)?)
+		let (number, _) = self.backend.revert(n, false)?;
+		Ok(number)
 	}
 
-	/// Attempts to revert the chain by `n` blocks disregarding finality. This
-	/// method will revert any finalized blocks as requested and can potentially
-	/// leave the node in an inconsistent state. Other modules in the system that
-	/// persist data and that rely on finality (e.g. consensus parts) will be
-	/// unaffected by the revert. Use this method with caution and making sure
-	/// that no other data needs to be reverted for consistency aside from the
-	/// block data.
+	/// Attempts to revert the chain by `n` blocks disregarding finality. This method will revert
+	/// any finalized blocks as requested and can potentially leave the node in an inconsistent
+	/// state. Other modules in the system that persist data and that rely on finality
+	/// (e.g. consensus parts) will be unaffected by the revert. Use this method with caution and
+	/// making sure that no other data needs to be reverted for consistency aside from the block
+	/// data. If `blacklist` is set to true, will also blacklist reverted blocks from finalizing
+	/// again. The blacklist is reset upon client restart.
 	///
 	/// Returns the number of blocks that were successfully reverted.
-	pub fn unsafe_revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n, true)?)
+	pub fn unsafe_revert(
+		&mut self,
+		n: NumberFor<Block>,
+		blacklist: bool,
+	) -> sp_blockchain::Result<NumberFor<Block>> {
+		let (number, reverted) = self.backend.revert(n, true)?;
+		if blacklist {
+			for b in reverted {
+				self.block_rules.mark_bad(b);
+			}
+		}
+		Ok(number)
 	}
 
 	/// Get blockchain info.
@@ -1924,6 +1928,10 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 
 	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
 		self.backend.blockchain().justification(*id)
+	}
+
+	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
+		self.backend.blockchain().hash(number)
 	}
 }
 

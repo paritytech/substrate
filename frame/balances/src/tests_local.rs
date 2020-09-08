@@ -89,9 +89,10 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = super::AccountData<u64>;
-	type MigrateAccount = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = Module<Test>;
+	type MigrateAccount = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
@@ -114,6 +115,7 @@ impl Trait for Test {
 		system::CallKillAccount<Test>,
 		u64, super::AccountData<u64>
 	>;
+	type WeightInfo = ();
 }
 
 pub struct ExtBuilder {

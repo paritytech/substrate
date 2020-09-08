@@ -131,10 +131,35 @@ services:
       - "sub-authority-discovery=trace"
       - "--prometheus-external"
 
-  ui:
-    image: polkadot-js/apps
+  prometheus:
+    image: prom/prometheus
+    networks:
+      - network-a
+      - internet
     ports:
-      - "3000:80"
+      - "9090:9090"
+    links:
+      - validator-a:validator-a
+      - sentry-a:sentry-a
+      - validator-b:validator-b
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+    restart: always
+
+  grafana:
+    image: grafana/grafana
+    user: "104"
+    depends_on:
+      - prometheus
+    networks:
+      - network-a
+      - internet
+    ports:
+      - 3001:3000
+    volumes:
+      - ./grafana/provisioning/:/etc/grafana/provisioning
+      - ../monitoring/grafana-dashboards/:/etc/grafana/provisioning/dashboard-definitions
+    restart: always
 
   prometheus:
     image: prom/prometheus

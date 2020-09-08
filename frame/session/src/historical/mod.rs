@@ -32,7 +32,7 @@ use sp_runtime::KeyTypeId;
 use sp_runtime::traits::{Convert, OpaqueKeys};
 use sp_session::{MembershipProof, ValidatorCount};
 use frame_support::{decl_module, decl_storage};
-use frame_support::{Parameter, print, weights::Weight};
+use frame_support::{Parameter, print};
 use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use sp_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
@@ -71,31 +71,7 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn on_initialize(_n: T::BlockNumber) -> Weight {
-			CachedObsolete::<T>::remove_all();
-			0
-		}
-
-		// The edgeware migration is so big we just assume it consumes the whole block.
-		// Tricky to get access to `T::MaximumBlockWeight` here, so we just use 0 because this is
-		// part of a bigger migration.
-		fn on_runtime_upgrade() -> Weight {
-			migration::migrate::<T>();
-			0
-		}
-	}
-}
-
-mod migration {
-	use super::*;
-	pub fn migrate<T: Trait>() {
-		if let Some((begin, end)) = StoredRange::get() {
-			for i in begin..end {
-				HistoricalSessions::<T>::migrate_key_from_blake(i);
-			}
-		}
-	}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
 impl<T: Trait> Module<T> {

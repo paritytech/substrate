@@ -119,8 +119,9 @@ impl NetworkParams {
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
+		default_listen_port: u16,
 	) -> NetworkConfiguration {
-		let port = self.port.unwrap_or(30333);
+		let port = self.port.unwrap_or(default_listen_port);
 
 		let listen_addresses = if self.listen_addr.is_empty() {
 			vec![

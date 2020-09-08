@@ -1,4 +1,5 @@
 use super::*;
+use frame_support::migration::{StorageIterator, put_storage_value};
 use frame_support::weights::Weight;
 use sp_runtime::traits::One;
 
@@ -44,6 +45,10 @@ pub fn migrate_enum_set<T: Trait>() -> Weight {
                 }
             }
             set_index += One::one();
+        }
+
+        for (key, value) in StorageIterator::<(T::AccountId, BalanceOf<T>)>::new(b"Indices", b"Accounts").drain() {
+            put_storage_value(b"Indices", b"Accounts", &key, (value.0, value.1, false));
         }
         sp_runtime::print("🕊️  Done Indices.");
         T::MaximumBlockWeight::get()

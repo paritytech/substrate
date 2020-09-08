@@ -39,13 +39,17 @@ pub struct WasmtimeRuntime {
 	heap_pages: u32,
 	allow_missing_func_imports: bool,
 	host_functions: Vec<&'static dyn Function>,
+	engine: Engine,
 }
 
 impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
+		let store = Store::new(&self.engine);
+
 		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
 		// and results.
 		let imports = resolve_imports(
+			&store,
 			self.module_wrapper.module(),
 			&self.host_functions,
 			self.heap_pages,
@@ -53,11 +57,12 @@ impl WasmModule for WasmtimeRuntime {
 		)?;
 
 		let instance_wrapper =
-			InstanceWrapper::new(&self.module_wrapper, &imports, self.heap_pages)?;
+			InstanceWrapper::new(&store, &self.module_wrapper, &imports, self.heap_pages)?;
 		let heap_base = instance_wrapper.extract_heap_base()?;
 		let globals_snapshot = GlobalsSnapshot::take(&instance_wrapper)?;
 
 		Ok(Box::new(WasmtimeInstance {
+			store,
 			instance_wrapper: Rc::new(instance_wrapper),
 			module_wrapper: Arc::clone(&self.module_wrapper),
 			imports,
@@ -71,6 +76,7 @@ impl WasmModule for WasmtimeRuntime {
 /// A `WasmInstance` implementation that reuses compiled module and spawns instances
 /// to execute the compiled code.
 pub struct WasmtimeInstance {
+	store: Store,
 	module_wrapper: Arc<ModuleWrapper>,
 	instance_wrapper: Rc<InstanceWrapper>,
 	globals_snapshot: GlobalsSnapshot,
@@ -106,7 +112,7 @@ impl WasmInstance for WasmtimeInstance {
 	}
 
 	fn get_global_const(&self, name: &str) -> Result<Option<Value>> {
-		let instance = InstanceWrapper::new(&self.module_wrapper, &self.imports, self.heap_pages)?;
+		let instance = InstanceWrapper::new(&self.store, &self.module_wrapper, &self.imports, self.heap_pages)?;
 		instance.get_global_val(name)
 	}
 }
@@ -124,9 +130,8 @@ pub fn create_runtime(
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 
 	let engine = Engine::new(&config);
-	let store = Store::new(&engine);
 
-	let module_wrapper = ModuleWrapper::new(&store, code)
+	let module_wrapper = ModuleWrapper::new(&engine, code)
 		.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
 	Ok(WasmtimeRuntime {
@@ -134,6 +139,7 @@ pub fn create_runtime(
 		heap_pages: heap_pages as u32,
 		allow_missing_func_imports,
 		host_functions,
+		engine,
 	})
 }
 

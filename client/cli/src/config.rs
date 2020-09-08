@@ -36,13 +36,49 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 /// The maximum number of characters for a node name.
-pub(crate) const NODE_NAME_MAX_LENGTH: usize = 32;
+pub(crate) const NODE_NAME_MAX_LENGTH: usize = 64;
 
 /// default sub directory to store network config
 pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";
 
+/// Default configuration values used by Substrate
+///
+/// These values will be used by [`CliConfiguritation`] to set
+/// default values for e.g. the listen port or the RPC port.
+pub trait DefaultConfigurationValues {
+	/// The port Substrate should listen on for p2p connections.
+	///
+	/// By default this is `30333`.
+	fn p2p_listen_port() -> u16 {
+		30333
+	}
+
+	/// The port Substrate should listen on for websocket connections.
+	///
+	/// By default this is `9944`.
+	fn rpc_ws_listen_port() -> u16 {
+		9944
+	}
+
+	/// The port Substrate should listen on for http connections.
+	///
+	/// By default this is `9933`.
+	fn rpc_http_listen_port() -> u16 {
+		9933
+	}
+
+	/// The port Substrate should listen on for prometheus connections.
+	///
+	/// By default this is `9615`.
+	fn prometheus_listen_port() -> u16 {
+		9615
+	}
+}
+
+impl DefaultConfigurationValues for () {}
+
 /// A trait that allows converting an object to a Configuration
-pub trait CliConfiguration: Sized {
+pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the SharedParams for this object
 	fn shared_params(&self) -> &SharedParams;
 
@@ -122,6 +158,7 @@ pub trait CliConfiguration: Sized {
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
+		default_listen_port: u16,
 	) -> Result<NetworkConfiguration> {
 		Ok(if let Some(network_params) = self.network_params() {
 			network_params.network_config(
@@ -131,6 +168,7 @@ pub trait CliConfiguration: Sized {
 				client_id,
 				node_name,
 				node_key,
+				default_listen_port,
 			)
 		} else {
 			NetworkConfiguration::new(
@@ -158,7 +196,7 @@ pub trait CliConfiguration: Sized {
 	fn database_cache_size(&self) -> Result<Option<usize>> {
 		Ok(self.database_params()
 			.map(|x| x.database_cache_size())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the database backend variant.
@@ -195,7 +233,7 @@ pub trait CliConfiguration: Sized {
 	fn state_cache_size(&self) -> Result<usize> {
 		Ok(self.import_params()
 			.map(|x| x.state_cache_size())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the state cache child ratio (if any).
@@ -212,7 +250,7 @@ pub trait CliConfiguration: Sized {
 	fn pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
 		self.pruning_params()
 			.map(|x| x.pruning(unsafe_pruning, role))
-			.unwrap_or(Ok(Default::default()))
+			.unwrap_or_else(|| Ok(Default::default()))
 	}
 
 	/// Get the chain ID (string).
@@ -236,7 +274,7 @@ pub trait CliConfiguration: Sized {
 	fn wasm_method(&self) -> Result<WasmExecutionMethod> {
 		Ok(self.import_params()
 			.map(|x| x.wasm_method())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the execution strategies.
@@ -251,28 +289,28 @@ pub trait CliConfiguration: Sized {
 		Ok(self
 			.import_params()
 			.map(|x| x.execution_strategies(is_dev, is_validator))
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the RPC HTTP address (`None` if disabled).
 	///
 	/// By default this is `None`.
-	fn rpc_http(&self) -> Result<Option<SocketAddr>> {
-		Ok(Default::default())
+	fn rpc_http(&self, _default_listen_port: u16) -> Result<Option<SocketAddr>> {
+		Ok(None)
 	}
 
 	/// Get the RPC IPC path (`None` if disabled).
 	///
 	/// By default this is `None`.
 	fn rpc_ipc(&self) -> Result<Option<String>> {
-		Ok(Default::default())
+		Ok(None)
 	}
 
 	/// Get the RPC websocket address (`None` if disabled).
 	///
 	/// By default this is `None`.
-	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
-		Ok(Default::default())
+	fn rpc_ws(&self, _default_listen_port: u16) -> Result<Option<SocketAddr>> {
+		Ok(None)
 	}
 
 	/// Returns the RPC method set to expose.
@@ -287,12 +325,12 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is `None`.
 	fn rpc_ws_max_connections(&self) -> Result<Option<usize>> {
-		Ok(Default::default())
+		Ok(None)
 	}
 
 	/// Get the RPC cors (`None` if disabled)
 	///
-	/// By default this is `None`.
+	/// By default this is `Some(Vec::new())`.
 	fn rpc_cors(&self, _is_dev: bool) -> Result<Option<Vec<String>>> {
 		Ok(Some(Vec::new()))
 	}
@@ -300,8 +338,8 @@ pub trait CliConfiguration: Sized {
 	/// Get the prometheus configuration (`None` if disabled)
 	///
 	/// By default this is `None`.
-	fn prometheus_config(&self) -> Result<Option<PrometheusConfig>> {
-		Ok(Default::default())
+	fn prometheus_config(&self, _default_listen_port: u16) -> Result<Option<PrometheusConfig>> {
+		Ok(None)
 	}
 
 	/// Get the telemetry endpoints (if any)
@@ -318,14 +356,14 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is `None`.
 	fn telemetry_external_transport(&self) -> Result<Option<ExtTransport>> {
-		Ok(Default::default())
+		Ok(None)
 	}
 
 	/// Get the default value for heap pages
 	///
 	/// By default this is `None`.
 	fn default_heap_pages(&self) -> Result<Option<u64>> {
-		Ok(Default::default())
+		Ok(None)
 	}
 
 	/// Returns an offchain worker config wrapped in `Ok(_)`
@@ -365,7 +403,7 @@ pub trait CliConfiguration: Sized {
 	fn tracing_targets(&self) -> Result<Option<String>> {
 		Ok(self.import_params()
 			.map(|x| x.tracing_targets())
-			.unwrap_or(Default::default()))
+			.unwrap_or_else(|| Default::default()))
 	}
 
 	/// Get the TracingReceiver value from the current object
@@ -375,7 +413,7 @@ pub trait CliConfiguration: Sized {
 	fn tracing_receiver(&self) -> Result<TracingReceiver> {
 		Ok(self.import_params()
 			.map(|x| x.tracing_receiver())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the node key from the current object
@@ -385,7 +423,7 @@ pub trait CliConfiguration: Sized {
 	fn node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> {
 		self.node_key_params()
 			.map(|x| x.node_key(net_config_dir))
-			.unwrap_or(Ok(Default::default()))
+			.unwrap_or_else(|| Ok(Default::default()))
 	}
 
 	/// Get maximum runtime instances
@@ -413,7 +451,7 @@ pub trait CliConfiguration: Sized {
 		let chain_spec = cli.load_spec(chain_id.as_str())?;
 		let base_path = self
 			.base_path()?
-			.unwrap_or_else(|| BasePath::from_project("", "", C::executable_name()));
+			.unwrap_or_else(|| BasePath::from_project("", "", &C::executable_name()));
 		let config_dir = base_path
 			.path()
 			.to_path_buf()
@@ -445,6 +483,7 @@ pub trait CliConfiguration: Sized {
 				client_id.as_str(),
 				self.node_name()?.as_str(),
 				node_key,
+				DCV::p2p_listen_port(),
 			)?,
 			keystore: self.keystore_config(&config_dir)?,
 			database: self.database_config(&config_dir, database_cache_size, database)?,
@@ -453,13 +492,13 @@ pub trait CliConfiguration: Sized {
 			pruning: self.pruning(unsafe_pruning, &role)?,
 			wasm_method: self.wasm_method()?,
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
-			rpc_http: self.rpc_http()?,
-			rpc_ws: self.rpc_ws()?,
+			rpc_http: self.rpc_http(DCV::rpc_http_listen_port())?,
+			rpc_ws: self.rpc_ws(DCV::rpc_ws_listen_port())?,
 			rpc_ipc: self.rpc_ipc()?,
 			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
-			prometheus_config: self.prometheus_config()?,
+			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
 			telemetry_endpoints: self.telemetry_endpoints(&chain_spec)?,
 			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,
@@ -498,7 +537,7 @@ pub trait CliConfiguration: Sized {
 	fn init<C: SubstrateCli>(&self) -> Result<()> {
 		let logger_pattern = self.log_filters()?;
 
-		sp_panic_handler::set(C::support_url(), C::impl_version());
+		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
 		fdlimit::raise_fd_limit();
 		init_logger(&logger_pattern);

@@ -233,8 +233,6 @@ where
 		digest: &Digest<System::Hash>,
 	) {
 		if Self::runtime_upgraded() {
-			// the block hash migration needs the block number to perform the migration
-			frame_system::Number::<System>::put(block_number);
 			// System is not part of `AllModules`, so we need to call this manually.
 			let mut weight = <frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
 			weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
@@ -295,11 +293,13 @@ where
 		// any initial checks
 		Self::initial_checks(&block);
 
-		let batching_safeguard = sp_runtime::SignatureBatching::start();
+		let signature_batching = sp_runtime::SignatureBatching::start();
+
 		// execute extrinsics
 		let (header, extrinsics) = block.deconstruct();
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
-		if !sp_runtime::SignatureBatching::verify(batching_safeguard) {
+
+		if !signature_batching.verify() {
 			panic!("Signature verification failed.");
 		}
 
@@ -569,9 +569,10 @@ mod tests {
 		type Version = RuntimeVersion;
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<Balance>;
-		type MigrateAccount = (); 
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type MigrateAccount = ();
+		type SystemWeightInfo = ();
 	}
 
 	type Balance = u64;
@@ -584,6 +585,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 
 	parameter_types! {

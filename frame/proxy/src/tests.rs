@@ -84,9 +84,10 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
-	type MigrateAccount = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type MigrateAccount = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -97,10 +98,12 @@ impl pallet_balances::Trait for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 impl pallet_utility::Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const ProxyDepositBase: u64 = 1;
@@ -145,6 +148,7 @@ impl Trait for Test {
 	type ProxyDepositBase = ProxyDepositBase;
 	type ProxyDepositFactor = ProxyDepositFactor;
 	type MaxProxies = MaxProxies;
+	type WeightInfo = ();
 }
 
 type System = frame_system::Module<Test>;
@@ -202,19 +206,11 @@ fn filtering_works() {
 		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
 		expect_event(RawEvent::ProxyExecuted(Err(DispatchError::BadOrigin)));
 
-		let sub_id = Utility::sub_account_id(1, 0);
-		Balances::mutate_account(&sub_id, |a| a.free = 1000);
+		let derivative_id = Utility::derivative_account_id(1, 0);
+		Balances::mutate_account(&derivative_id, |a| a.free = 1000);
 		let inner = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
 
-		let call = Box::new(Call::Utility(UtilityCall::as_sub(0, inner.clone())));
-		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
-		expect_event(RawEvent::ProxyExecuted(Ok(())));
-		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
-		expect_event(RawEvent::ProxyExecuted(Err(DispatchError::BadOrigin)));
-		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
-		expect_event(RawEvent::ProxyExecuted(Ok(())));
-
-		let call = Box::new(Call::Utility(UtilityCall::as_limited_sub(0, inner.clone())));
+		let call = Box::new(Call::Utility(UtilityCall::as_derivative(0, inner.clone())));
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
 		expect_event(RawEvent::ProxyExecuted(Ok(())));
 		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));

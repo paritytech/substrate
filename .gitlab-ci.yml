@@ -26,8 +26,10 @@ stages:
   - test
   - build
   - post-build-test
+  - docker
+  - chaos
   - publish
-  - kubernetes
+  - deploy
   - flaming-fir
 
 variables:                         &default-vars
@@ -64,12 +66,6 @@ default:
     - rustup show
     - cargo --version
     - sccache -s
-  only:
-    - master
-    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
-    - schedules
-    - web
-    - /^[0-9]+$/                   # PRs
   retry:
     max: 2
     when:
@@ -80,12 +76,41 @@ default:
   tags:
     - linux-docker
 
+.docker-env-only:                       &docker-env-only
+  only:
+    - master
+    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+    - schedules
+    - web
+    - /^[0-9]+$/                   # PRs
+
 .build-only:                       &build-only
   only:
     - master
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
     - /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
     - web
+
+.build-rules:                       &build-rules
+  rules:
+    - if: '$DEPLOY_TAG'
+      when: never
+    - if: $CI_COMMIT_REF_NAME=="master"
+      when: always
+    - if: $CI_PIPELINE_SOURCE=="web"
+      when: always
+    - if: $CI_COMMIT_REF_NAME=~ /^v[0-9]+\.[0-9]+.*$/
+      when: always
+    - if: $CI_COMMIT_REF_NAME=~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
+      when: always
+    - if: '$CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME=~ /^[0-9]+$/'  # i.e add [chaos:basic] in commit message to trigger
+      when: always
+    - when: never
+
+.chaos-only:                       &chaos-only
+  only:
+    variables:
+      - '$CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME=~ /^[0-9]+$/'  # i.e add [chaos:basic] in commit message to trigger
 
 #### stage:                       .pre
 
@@ -96,6 +121,10 @@ skip-if-draft:
   only:
     - /^[0-9]+$/                  # Pull requests
   script:
+     - echo "Commit message is ${CI_COMMIT_MESSAGE}"
+     - echo "Ref is ${CI_COMMIT_REF_NAME}"
+     - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
+     - echo "deploy tag is ${DEPLOY_TAG}"
      - ./.maintain/gitlab/skip_if_draft.sh
 
 #### stage:                        check
@@ -149,6 +178,7 @@ test-dependency-rules:
 cargo-audit:
   stage:                           test
   <<:                              *docker-env
+  <<:                              *docker-env-only
   except:
     - /^[0-9]+$/
   script:
@@ -158,6 +188,11 @@ cargo-audit:
 cargo-deny:
   stage:                           test
   <<:                              *docker-env
+  <<:                              *docker-env-only
+  only:
+    - schedules
+    - tags
+    - web
   script:
     - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
   after_script:
@@ -173,6 +208,7 @@ cargo-deny:
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
+  <<:                              *docker-env-only
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly check --benches --all
     - cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small
@@ -182,32 +218,58 @@ cargo-check-benches:
 cargo-check-subkey:
   stage:                           test
   <<:                              *docker-env
-  except:
-    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+  <<:                              *docker-env-only
   script:
     - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
 
-test-linux-stable:                 &test-linux
+test-deterministic-wasm:
   stage:                           test
   <<:                              *docker-env
+  <<:                              *docker-env-only
   variables:
     <<:                            *default-vars
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
-    RUST_BACKTRACE: 1
   except:
     variables:
       - $DEPLOY_TAG
   script:
-    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked
+    # build runtime
+    - WASM_BUILD_NO_COLOR=1 cargo build --verbose --release -p node-runtime
+    # make checksum
+    - sha256sum target/release/wbuild/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
+    # clean up – FIXME: can we reuse some of the artifacts?
+    - cargo clean
+    # build again
+    - WASM_BUILD_NO_COLOR=1 cargo build --verbose --release -p node-runtime
+    # confirm checksum
+    - sha256sum -c checksum.sha256
+    - sccache -s
+
+test-linux-stable:                 &test-linux
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *docker-env-only
+  variables:
+    <<:                            *default-vars
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE:                1
+    WASM_BUILD_NO_COLOR:           1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
+    - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
+    - WASM_BUILD_NO_COLOR=1 SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - sccache -s
 
 unleash-check:
   stage:                           test
   <<:                              *docker-env
+  <<:                              *docker-env-only
   only:
     - master
     - tags
@@ -215,28 +277,11 @@ unleash-check:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
 
-test-frame-staking:
-  # into one job
-  stage:                           test
-  <<:                              *docker-env
-  variables:
-    <<:                            *default-vars
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: -Cdebug-assertions=y
-    RUST_BACKTRACE: 1
-  except:
-    variables:
-      - $DEPLOY_TAG
-  script:
-    - cd frame/staking/
-    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features "std"
-    - sccache -s
-
 test-frame-examples-compile-to-wasm:
   # into one job
   stage:                           test
   <<:                              *docker-env
+  <<:                              *docker-env-only
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
@@ -253,46 +298,9 @@ test-frame-examples-compile-to-wasm:
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - sccache -s
 
-test-wasmtime:
-  stage:                           test
-  <<:                              *docker-env
-  variables:
-    <<:                            *default-vars
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: -Cdebug-assertions=y
-    RUST_BACKTRACE: 1
-  except:
-    variables:
-      - $DEPLOY_TAG
-  script:
-    - cd client/executor
-    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features wasmtime
-    - sccache -s
-
-test-runtime-benchmarks:
-  # into one job
-  stage:                           test
-  <<:                              *docker-env
-  variables:
-    <<:                            *default-vars
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: -Cdebug-assertions=y
-    RUST_BACKTRACE: 1
-  except:
-    variables:
-      - $DEPLOY_TAG
-  script:
-    - cd bin/node/cli
-    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features runtime-benchmarks
-    - sccache -s
-
 test-linux-stable-int:
   <<:                              *test-linux
   except:
-    refs:
-      - /^v[0-9]+\.[0-9]+.*$/      # i.e. v1.0, v2.1rc1
     variables:
       - $DEPLOY_TAG
   script:
@@ -315,8 +323,7 @@ test-linux-stable-int:
 check-web-wasm:
   stage:                           test
   <<:                              *docker-env
-  except:
-    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+  <<:                              *docker-env-only
   script:
     # WASM support is in progress. As more and more crates support WASM, we
     # should add entries here. See https://github.com/paritytech/substrate/issues/2416
@@ -334,6 +341,7 @@ check-web-wasm:
 test-full-crypto-feature:
   stage:                           test
   <<:                              *docker-env
+  <<:                              *docker-env-only
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
@@ -354,6 +362,7 @@ cargo-check-macos:
   stage:                           test
   # shell runner on mac ignores the image set in *docker-env
   <<:                              *docker-env
+  <<:                              *docker-env-only
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
@@ -382,16 +391,20 @@ check-polkadot-companion-status:
 check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
+  <<:                              *docker-env-only
   needs:
     - job:                         test-linux-stable-int
       artifacts:                   false
   script:
     - ./.maintain/gitlab/check_polkadot_companion_build.sh
+  after_script:
+    - cd polkadot && git rev-parse --abbrev-ref HEAD
   allow_failure:                   true
 
 test-browser-node:
   stage:                           build
   <<:                              *docker-env
+  <<:                              *docker-env-only
   needs:
     - job:                         check-web-wasm
       artifacts:                   false
@@ -407,15 +420,12 @@ build-linux-substrate:             &build-binary
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  <<:                              *build-only
+  <<:                              *build-rules
   needs:
     - job:                         test-linux-stable
       artifacts:                   false
   before_script:
     - mkdir -p ./artifacts/substrate/
-  except:
-    variables:
-      - $DEPLOY_TAG
   script:
     - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
     - mv ./target/release/substrate ./artifacts/substrate/.
@@ -435,7 +445,11 @@ build-linux-substrate:             &build-binary
 
 
 build-linux-subkey:                &build-subkey
-  <<:                              *build-binary
+  stage:                           build
+  <<:                              *collect-artifacts
+  <<:                              *docker-env
+  <<:                              *docker-env-only
+  <<:                              *build-only
   needs:
     - job:                         cargo-check-subkey
       artifacts:                   false
@@ -465,6 +479,7 @@ build-macos-subkey:
 build-rust-doc-release:
   stage:                           build
   <<:                              *docker-env
+  <<:                              *docker-env-only
   allow_failure:                   true
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
@@ -497,6 +512,73 @@ trigger-contracts-ci:
   only:
     - master
     - schedules
+
+#### stage:                        docker
+docker-build-chaos:                &docker-build-chaos
+  <<:                              *chaos-only
+  stage:                           docker
+  needs:
+    - job:                         build-linux-substrate
+  image:                           docker:stable
+  tags: 
+    - kubernetes-parity-build
+  variables:
+    <<:                            *default-vars
+    DOCKER_HOST:                   tcp://localhost:2375
+    DOCKER_DRIVER:                 overlay2
+    PRODUCT:                       substrate
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    CONTAINER_IMAGE:               paritypr/$PRODUCT
+  environment:
+    name:                          parity-chaosnet
+  services:
+    - docker:dind
+  before_script:
+    - test "$DOCKER_CHAOS_USER" -a "$DOCKER_CHAOS_TOKEN"
+        || ( echo "no docker credentials provided"; exit 1 )
+    - docker login -u "$DOCKER_CHAOS_USER" -p "$DOCKER_CHAOS_TOKEN"
+    - docker info
+  script:
+    - cd ./artifacts/$PRODUCT/
+    - VERSION="ci-${CI_COMMIT_SHORT_SHA}"
+    - echo "${PRODUCT} version = ${VERSION}"
+    - test -z "${VERSION}" && exit 1
+    - docker build
+      --build-arg VCS_REF="${CI_COMMIT_SHA}"
+      --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      --tag $CONTAINER_IMAGE:$VERSION
+      --file $DOCKERFILE .
+    - docker push $CONTAINER_IMAGE:$VERSION
+  after_script:
+    - docker logout
+
+#### stage:                        chaos
+chaos-test-singlenodeheight:
+  <<:                              *chaos-only
+  stage:                           chaos
+  image:                           parity/chaostools:latest
+  needs:
+    - job:                         docker-build-chaos
+  tags: 
+    - parity-chaos
+  variables:
+    <<:                            *default-vars
+    PRODUCT:                       substrate
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    CONTAINER_IMAGE:               paritypr/$PRODUCT
+    KEEP_NAMESPACE:                0
+    NAMESPACE:                     "substrate-ci-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}"
+    VERSION:                       "ci-${CI_COMMIT_SHORT_SHA}"
+  interruptible: true
+  environment:
+    name:                          parity-chaosnet
+  script:
+    - cd ./.maintain/chaostest
+    - npm link
+    - chaostest spawn dev -i $CONTAINER_IMAGE:$VERSION
+    - chaostest singlenodeheight -h 30
+  after_script:
+    - chaostest clean
 
 #### stage:                        publish
 
@@ -620,6 +702,7 @@ publish-draft-release:
 publish-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
+  <<:                              *docker-env-only
   only:
     - /^ci-release-.*$/
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
@@ -628,74 +711,32 @@ publish-to-crates-io:
     - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}
   allow_failure:                   true
 
-.deploy-template:                  &deploy
-  stage:                           kubernetes
-  when:                            manual
+
+
+deploy-kubernetes-alerting-rules:
+  stage:                           deploy
+  interruptible:                   true
   retry:                           1
-  image:                           paritytech/kubetools:latest
-  <<:                              *build-only
   tags:
-    # this is the runner that is used to deploy it
     - kubernetes-parity-build
-  before_script:
-    - test -z "${DEPLOY_TAG}" &&
-        test -f ./artifacts/substrate/VERSION &&
-        DEPLOY_TAG="$(cat ./artifacts/substrate/VERSION)"
-    - test "${DEPLOY_TAG}" || ( echo "Neither DEPLOY_TAG nor VERSION information available"; exit 1 )
+  image:                           paritytech/kubetools:latest
+  environment:
+    name: parity-mgmt-polkadot-alerting
+  variables:
+    NAMESPACE:                     monitoring
+    PROMETHEUSRULE:                prometheus-k8s-rules-polkadot-alerting
+    RULES:                         .maintain/monitoring/alerting-rules/alerting-rules.yaml
   script:
-    - echo "Substrate version = ${DEPLOY_TAG}"
-    # or use helm to render the template
-    - helm template
-        --values ./.maintain/kubernetes/values.yaml
-        --set image.tag=${DEPLOY_TAG}
-        --set validator.keys=${VALIDATOR_KEYS}
-        ./.maintain/kubernetes | kubectl apply -f - --dry-run=false
-    - echo "# substrate namespace ${KUBE_NAMESPACE}"
-    - kubectl -n ${KUBE_NAMESPACE} get all
-    - echo "# substrate's nodes' external ip addresses:"
-    - kubectl get nodes -l node=substrate
-        -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range @.status.addresses[?(@.type=="ExternalIP")]}{.address}{"\n"}{end}'
-    - echo "# substrate' nodes"
-    - kubectl -n ${KUBE_NAMESPACE} get pods
-        -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.nodeName}{"\n"}{end}'
-    - echo "# wait for the rollout to complete"
-    - kubectl -n ${KUBE_NAMESPACE} rollout status statefulset/substrate
-
-# have environment:url eventually point to the logs
-
-.deploy-cibuild:                   &deploy-cibuild
-  <<:                              *deploy
-  needs:
-    - job:                         publish-docker-substrate
-      artifacts:                   false
-
-.deploy-tag:                       &deploy-tag
-  <<:                              *deploy
+    - echo "deploying prometheus alerting rules"
+    - kubectl -n ${NAMESPACE} patch prometheusrule ${PROMETHEUSRULE}
+        --type=merge --patch "$(sed 's/^/  /;1s/^/spec:\n/' ${RULES})"
   only:
-    variables:
-      - $DEPLOY_TAG
+    refs:
+      - master
+    changes:
+      - "${RULES}"
 
-# have environment:url eventually point to the logs
 
-deploy-ew3:
-  <<:                              *deploy-cibuild
-  environment:
-    name:                          parity-prod-ew3
-
-deploy-ue1:
-  <<:                              *deploy-cibuild
-  environment:
-    name:                          parity-prod-ue1
-
-deploy-ew3-tag:
-  <<:                              *deploy-tag
-  environment:
-    name:                          parity-prod-ew3
-
-deploy-ue1-tag:
-  <<:                              *deploy-tag
-  environment:
-    name:                          parity-prod-ue1
 
 .validator-deploy:                 &validator-deploy
   <<:                              *build-only

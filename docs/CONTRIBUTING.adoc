@@ -14,7 +14,7 @@ There are a few basic ground-rules for contributors (including the maintainer(s)
 . **Non-master branches**, prefixed with a short name moniker (e.g. `gav-my-feature`) must be used for ongoing work.
 . **All modifications** must be made in a **pull-request** to solicit feedback from other contributors.
 . A pull-request *must not be merged until CI* has finished successfully.
-. Contributors should adhere to the https://wiki.parity.io/Substrate-Style-Guide[house coding style].
+. Contributors should adhere to the ./STYLE_GUIDE.md[house coding style].
 
 
 == Merge Process
@@ -69,7 +69,7 @@ To create a Polkadot companion PR:
 . Pull latest Polkadot master (or clone it, if you haven't yet).
 . Override your local cargo config to point to your local substrate (pointing to your WIP branch): place `paths = ["path/to/substrate"]` in `~/.cargo/config`.
 . Make the changes required and build polkadot locally.
-. Submit all this as a PR against the Polkadot Repo. Link to your Polkadot PR in the _description_ of your Substrate PR as "polkadot companion: [URL]" OR use the same name for your Polkdadot branch as the Substrate branch.
+. Submit all this as a PR against the Polkadot Repo. Link to your Polkadot PR in the _description_ of your Substrate PR as "polkadot companion: [URL]"
 . Now you should see that the `check_polkadot` CI job will build your Substrate PR agains the mentioned Polkadot branch in your PR description.
 . Wait for reviews on both
 . Once both PRs have been green lit, they can both be merged 🍻.

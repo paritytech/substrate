@@ -51,6 +51,21 @@ pub fn create_stash_controller<T: Trait>(n: u32, balance_factor: u32)
 	return Ok((stash, controller))
 }
 
+/// Create a stash and controller pair, where the controller is dead, and payouts go to controller.
+/// This is used to test worst case payout scenarios.
+pub fn create_stash_and_dead_controller<T: Trait>(n: u32, balance_factor: u32)
+	-> Result<(T::AccountId, T::AccountId), &'static str>
+{
+	let stash = create_funded_user::<T>("stash", n, balance_factor);
+	// controller has no funds
+	let controller = create_funded_user::<T>("controller", n, 0);
+	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
+	let reward_destination = RewardDestination::Controller;
+	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
+	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, reward_destination)?;
+	return Ok((stash, controller))
+}
+
 /// create `max` validators.
 pub fn create_validators<T: Trait>(
 	max: u32,
@@ -143,7 +158,7 @@ pub fn get_weak_solution<T: Trait>(
 
 	// self stake
 	<Validators<T>>::iter().for_each(|(who, _p)| {
-		*backing_stake_of.entry(who.clone()).or_insert(Zero::zero()) +=
+		*backing_stake_of.entry(who.clone()).or_insert_with(|| Zero::zero()) +=
 			<Module<T>>::slashable_balance_of(&who)
 	});
 
@@ -201,11 +216,8 @@ pub fn get_weak_solution<T: Trait>(
 	};
 
 	// convert back to ratio assignment. This takes less space.
-	let low_accuracy_assignment: Vec<Assignment<T::AccountId, OffchainAccuracy>> =
-		staked_assignments
-			.into_iter()
-			.map(|sa| sa.into_assignment(true))
-			.collect();
+	let low_accuracy_assignment = assignment_staked_to_ratio_normalized(staked_assignments)
+		.expect("Failed to normalize");
 
 	// re-calculate score based on what the chain will decode.
 	let score = {

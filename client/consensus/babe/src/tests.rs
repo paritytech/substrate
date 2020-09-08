@@ -31,7 +31,7 @@ use sp_consensus_babe::{
 };
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
-	NoNetwork as DummyOracle, Proposal, RecordProof,
+	NoNetwork as DummyOracle, Proposal, RecordProof, AlwaysCanAuthor,
 	import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport},
 };
 use sc_network_test::*;
@@ -214,8 +214,13 @@ pub struct BabeTestNet {
 type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
+type TestSelectChain = substrate_test_runtime_client::LongestChain<
+	substrate_test_runtime_client::Backend,
+	TestBlock,
+>;
+
 pub struct TestVerifier {
-	inner: BabeVerifier<TestBlock, PeersFullClient>,
+	inner: BabeVerifier<TestBlock, PeersFullClient, TestSelectChain, AlwaysCanAuthor>,
 	mutator: Mutator,
 }
 
@@ -297,19 +302,25 @@ impl TestNetFactory for BabeTestNet {
 	)
 		-> Self::Verifier
 	{
+		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
+
 		let client = client.as_full().expect("only full clients are used in test");
 		trace!(target: "babe", "Creating a verifier");
 
 		// ensure block import and verifier are linked correctly.
 		let data = maybe_link.as_ref().expect("babe link always provided to verifier instantiation");
 
+		let (_, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+
 		TestVerifier {
 			inner: BabeVerifier {
 				client: client.clone(),
+				select_chain: longest_chain,
 				inherent_data_providers: data.inherent_data_providers.clone(),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
 				time_source: data.link.time_source.clone(),
+				can_author_with: AlwaysCanAuthor,
 			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
 		}

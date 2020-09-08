@@ -17,19 +17,22 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::{BlockNumber, PruningParams, SharedParams};
+use crate::params::{GenericNumber, PruningParams, SharedParams};
 use crate::CliConfiguration;
-use sc_service::{Configuration, ServiceBuilderCommand};
+use sc_service::chain_ops::revert_chain;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
+use std::str::FromStr;
+use std::sync::Arc;
 use structopt::StructOpt;
+use sc_client_api::{Backend, UsageProvider};
 
 /// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt)]
 pub struct RevertCmd {
 	/// Number of blocks to revert.
 	#[structopt(default_value = "256")]
-	pub num: BlockNumber,
+	pub num: GenericNumber,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -42,16 +45,19 @@ pub struct RevertCmd {
 
 impl RevertCmd {
 	/// Run the revert command
-	pub fn run<B, BC, BB>(&self, config: Configuration, builder: B) -> error::Result<()>
+	pub async fn run<B, BA, C>(
+		&self,
+		client: Arc<C>,
+		backend: Arc<BA>,
+	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		B: BlockT,
+		BA: Backend<B>,
+		C: UsageProvider<B>,
+		<<<B as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		let blocks = self.num.parse()?;
-		builder(config)?.revert_chain(blocks)?;
+		revert_chain(client, backend, blocks)?;
 
 		Ok(())
 	}

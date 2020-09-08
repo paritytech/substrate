@@ -17,17 +17,20 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::{BlockNumber, DatabaseParams, PruningParams, SharedParams};
+use crate::params::{GenericNumber, DatabaseParams, PruningParams, SharedParams};
 use crate::CliConfiguration;
 use log::info;
 use sc_service::{
-	config::DatabaseConfig, Configuration, ServiceBuilderCommand,
+	config::DatabaseConfig, chain_ops::export_blocks,
 };
+use sc_client_api::{BlockBackend, UsageProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
 use structopt::StructOpt;
 
 /// The `export-blocks` command used to export blocks.
@@ -41,13 +44,13 @@ pub struct ExportBlocksCmd {
 	///
 	/// Default is 1.
 	#[structopt(long = "from", value_name = "BLOCK")]
-	pub from: Option<BlockNumber>,
+	pub from: Option<GenericNumber>,
 
 	/// Specify last block number.
 	///
 	/// Default is best block.
 	#[structopt(long = "to", value_name = "BLOCK")]
-	pub to: Option<BlockNumber>,
+	pub to: Option<GenericNumber>,
 
 	/// Use binary output rather than JSON.
 	#[structopt(long)]
@@ -68,19 +71,17 @@ pub struct ExportBlocksCmd {
 
 impl ExportBlocksCmd {
 	/// Run the export-blocks command
-	pub async fn run<B, BC, BB>(
+	pub async fn run<B, C>(
 		&self,
-		config: Configuration,
-		builder: B,
+		client: Arc<C>,
+		database_config: DatabaseConfig,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		B: BlockT,
+		C: BlockBackend<B> + UsageProvider<B> + 'static,
+		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
-		if let DatabaseConfig::RocksDb { ref path, .. } = &config.database {
+		if let DatabaseConfig::RocksDb { ref path, .. } = database_config {
 			info!("DB path: {}", path.display());
 		}
 
@@ -94,8 +95,7 @@ impl ExportBlocksCmd {
 			None => Box::new(io::stdout()),
 		};
 
-		builder(config)?
-			.export_blocks(file, from.into(), to, binary)
+		export_blocks(client, file, from.into(), to, binary)
 			.await
 			.map_err(Into::into)
 	}

@@ -21,6 +21,7 @@ use codec::{Encode, Decode};
 use sp_std::{vec::Vec, prelude::Box};
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeString;
+use sp_storage::TrackedStorageKey;
 
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
@@ -28,6 +29,13 @@ use sp_runtime::RuntimeString;
 #[allow(non_camel_case_types)]
 pub enum BenchmarkParameter {
 	a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z,
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for BenchmarkParameter {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{:?}", self)
+	}
 }
 
 /// The results of a single of benchmark.
@@ -44,7 +52,16 @@ pub struct BenchmarkBatch {
 /// Results from running benchmarks on a FRAME pallet.
 /// Contains duration of the function call in nanoseconds along with the benchmark parameters
 /// used for that benchmark result.
-pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128, u128);
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct BenchmarkResults {
+	pub components: Vec<(BenchmarkParameter, u32)>,
+	pub extrinsic_time: u128,
+	pub storage_root_time: u128,
+	pub reads: u32,
+	pub repeat_reads: u32,
+	pub writes: u32,
+	pub repeat_writes: u32,
+}
 
 sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
@@ -57,6 +74,7 @@ sp_api::decl_runtime_apis! {
 			highest_range_values: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
+			extra: bool,
 		) -> Result<Vec<BenchmarkBatch>, RuntimeString>;
 	}
 }
@@ -83,13 +101,64 @@ pub trait Benchmarking {
 	fn commit_db(&mut self) {
 		self.commit()
 	}
+
+	/// Get the read/write count.
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		self.read_write_count()
+	}
+
+	/// Reset the read/write count.
+	fn reset_read_write_count(&mut self) {
+		self.reset_read_write_count()
+	}
+
+	/// Get the DB whitelist.
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		self.get_whitelist()
+	}
+
+	/// Set the DB whitelist.
+	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
+		self.set_whitelist(new)
+	}
+
+	// Add a new item to the DB whitelist.
+	fn add_to_whitelist(&mut self, add: TrackedStorageKey) {
+		let mut whitelist = self.get_whitelist();
+		match whitelist.iter_mut().find(|x| x.key == add.key) {
+			// If we already have this key in the whitelist, update to be the most constrained value.
+			Some(item) => {
+				*item = TrackedStorageKey {
+					key: add.key,
+					has_been_read: item.has_been_read || add.has_been_read,
+					has_been_written: item.has_been_written || add.has_been_written,
+				}
+			},
+			// If the key does not exist, add it.
+			None => {
+				whitelist.push(add);
+			}
+		}
+		self.set_whitelist(whitelist);
+	}
+
+	// Remove an item from the DB whitelist.
+	fn remove_from_whitelist(&mut self, remove: Vec<u8>) {
+		let mut whitelist = self.get_whitelist();
+		whitelist.retain(|x| x.key != remove);
+		self.set_whitelist(whitelist);
+	}
 }
 
 /// The pallet benchmarking trait.
 pub trait Benchmarking<T> {
 	/// Get the benchmarks available for this pallet. Generally there is one benchmark per
 	/// extrinsic, so these are sometimes just called "extrinsics".
-	fn benchmarks() -> Vec<&'static [u8]>;
+	///
+	/// Parameters
+	/// - `extra`: Also return benchmarks marked "extra" which would otherwise not be
+	///            needed for weight calculation.
+	fn benchmarks(extra: bool) -> Vec<&'static [u8]>;
 
 	/// Run the benchmarks for this pallet.
 	///
@@ -106,23 +175,15 @@ pub trait Benchmarking<T> {
 		highest_range_values: &[u32],
 		steps: &[u32],
 		repeat: u32,
+		whitelist: &[TrackedStorageKey]
 	) -> Result<Vec<T>, &'static str>;
 }
 
 /// The required setup for creating a benchmark.
-pub trait BenchmarkingSetup<T> {
-	/// Return the components and their ranges which should be tested in this benchmark.
-	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
-
-	/// Set up the storage, and prepare a closure to run the benchmark.
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
-
-	/// Set up the storage, and prepare a closure to test and verify the benchmark
-	fn verify(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
-}
-
-/// The required setup for creating a benchmark.
-pub trait BenchmarkingSetupInstance<T, I> {
+///
+/// Instance generic parameter is optional and can be used in order to capture unused generics for
+/// instantiable pallets.
+pub trait BenchmarkingSetup<T, I = ()> {
 	/// Return the components and their ranges which should be tested in this benchmark.
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
 
@@ -137,4 +198,9 @@ pub trait BenchmarkingSetupInstance<T, I> {
 pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed: u32) -> AccountId {
 	let entropy = (name, index, seed).using_encoded(blake2_256);
 	AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+}
+
+/// This caller account is automatically whitelisted for DB reads/writes by the benchmarking macro.
+pub fn whitelisted_caller<AccountId: Decode + Default>() -> AccountId {
+	account::<AccountId>("whitelisted_caller", 0, 0)
 }

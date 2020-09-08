@@ -113,7 +113,7 @@ impl ImportParams {
 				default
 			};
 
-			exec.execution.unwrap_or(strat.unwrap_or(default)).into()
+			exec.execution.unwrap_or_else(|| strat.unwrap_or(default)).into()
 		};
 
 		let default_execution_import_block = if is_validator {

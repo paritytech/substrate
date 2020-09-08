@@ -111,6 +111,30 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trai
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
+pub trait WeightInfo {
+	fn propose_spend(u: u32, ) -> Weight;
+	fn reject_proposal(u: u32, ) -> Weight;
+	fn approve_proposal(u: u32, ) -> Weight;
+	fn report_awesome(r: u32, ) -> Weight;
+	fn retract_tip(r: u32, ) -> Weight;
+	fn tip_new(r: u32, t: u32, ) -> Weight;
+	fn tip(t: u32, ) -> Weight;
+	fn close_tip(t: u32, ) -> Weight;
+	fn on_initialize(p: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn propose_spend(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn reject_proposal(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn approve_proposal(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn report_awesome(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn retract_tip(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn tip_new(_r: u32, _t: u32, ) -> Weight { 1_000_000_000 }
+	fn tip(_t: u32, ) -> Weight { 1_000_000_000 }
+	fn close_tip(_t: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize(_p: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: frame_system::Trait {
 	/// The treasury's module id, used for deriving its sovereign account ID.
 	type ModuleId: Get<ModuleId>;
@@ -159,6 +183,12 @@ pub trait Trait: frame_system::Trait {
 
 	/// Percentage of spare funds (if any) that are burnt per spend period.
 	type Burn: Get<Permill>;
+
+	/// Handler for the unbalanced decrease when treasury funds are burned.
+	type BurnDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -192,13 +222,17 @@ pub struct OpenTip<
 	reason: Hash,
 	/// The account to be tipped.
 	who: AccountId,
-	/// The account who began this tip and the amount held on deposit.
-	finder: Option<(AccountId, Balance)>,
+	/// The account who began this tip.
+	finder: AccountId,
+	/// The amount held on deposit for this tip.
+	deposit: Balance,
 	/// The block number at which this tip will close if `Some`. If `None`, then no closing is
 	/// scheduled.
 	closes: Option<BlockNumber>,
 	/// The members who have voted for this tip. Sorted by AccountId.
 	tips: Vec<(AccountId, Balance)>,
+	/// Whether this tip should result in the finder taking a fee.
+	finders_fee: bool,
 }
 
 decl_storage! {
@@ -243,27 +277,27 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as frame_system::Trait>::Hash,
 	{
-		/// New proposal.
+		/// New proposal. [proposal_index]
 		Proposed(ProposalIndex),
-		/// We have ended a spend period and will now allocate funds.
+		/// We have ended a spend period and will now allocate funds. [budget_remaining]
 		Spending(Balance),
-		/// Some funds have been allocated.
+		/// Some funds have been allocated. [proposal_index, award, beneficiary]
 		Awarded(ProposalIndex, Balance, AccountId),
-		/// A proposal was rejected; funds were slashed.
+		/// A proposal was rejected; funds were slashed. [proposal_index, slashed]
 		Rejected(ProposalIndex, Balance),
-		/// Some of our funds have been burnt.
+		/// Some of our funds have been burnt. [burn]
 		Burnt(Balance),
-		/// Spending has finished; this is the amount that rolls over until next spend.
+		/// Spending has finished; this is the amount that rolls over until next spend. [budget_remaining]
 		Rollover(Balance),
-		/// Some funds have been deposited.
+		/// Some funds have been deposited. [deposit]
 		Deposit(Balance),
-		/// A new tip suggestion has been opened.
+		/// A new tip suggestion has been opened. [tip_hash]
 		NewTip(Hash),
-		/// A tip suggestion has reached threshold and is closing.
+		/// A tip suggestion has reached threshold and is closing. [tip_hash]
 		TipClosing(Hash),
-		/// A tip suggestion has been closed.
+		/// A tip suggestion has been closed. [tip_hash, who, payout]
 		TipClosed(Hash, AccountId, Balance),
-		/// A tip suggestion has been retracted.
+		/// A tip suggestion has been retracted. [tip_hash]
 		TipRetracted(Hash),
 	}
 );
@@ -326,7 +360,7 @@ decl_module! {
 
 		/// The amount held on deposit per byte within the tip report reason.
 		const TipReportDepositPerByte: BalanceOf<T> = T::TipReportDepositPerByte::get();
-		
+
 		/// The treasury's module id, used for deriving its sovereign account ID.
 		const ModuleId: ModuleId = T::ModuleId::get();
 
@@ -371,6 +405,8 @@ decl_module! {
 
 		/// Reject a proposed spend. The original deposit will be slashed.
 		///
+		/// May only be called from `T::RejectOrigin`.
+		///
 		/// # <weight>
 		/// - Complexity: O(1)
 		/// - DbReads: `Proposals`, `rejected proposer account`
@@ -390,6 +426,8 @@ decl_module! {
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
 		/// and the original deposit will be returned.
+		///
+		/// May only be called from `T::ApproveOrigin`.
 		///
 		/// # <weight>
 		/// - Complexity: O(1).
@@ -440,8 +478,15 @@ decl_module! {
 			T::Currency::reserve(&finder, deposit)?;
 
 			Reasons::<T>::insert(&reason_hash, &reason);
-			let finder = Some((finder, deposit));
-			let tip = OpenTip { reason: reason_hash, who, finder, closes: None, tips: vec![] };
+			let tip = OpenTip {
+				reason: reason_hash,
+				who,
+				finder,
+				deposit,
+				closes: None,
+				tips: vec![],
+				finders_fee: true
+			};
 			Tips::<T>::insert(&hash, tip);
 			Self::deposit_event(RawEvent::NewTip(hash));
 		}
@@ -469,12 +514,13 @@ decl_module! {
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
-			let (finder, deposit) = tip.finder.ok_or(Error::<T>::NotFinder)?;
-			ensure!(finder == who, Error::<T>::NotFinder);
+			ensure!(tip.finder == who, Error::<T>::NotFinder);
 
 			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(&hash);
-			let _ = T::Currency::unreserve(&who, deposit);
+			if !tip.deposit.is_zero() {
+				let _ = T::Currency::unreserve(&who, tip.deposit);
+			}
 			Self::deposit_event(RawEvent::TipRetracted(hash));
 		}
 
@@ -513,8 +559,16 @@ decl_module! {
 
 			Reasons::<T>::insert(&reason_hash, &reason);
 			Self::deposit_event(RawEvent::NewTip(hash.clone()));
-			let tips = vec![(tipper, tip_value)];
-			let tip = OpenTip { reason: reason_hash, who, finder: None, closes: None, tips };
+			let tips = vec![(tipper.clone(), tip_value)];
+			let tip = OpenTip {
+				reason: reason_hash,
+				who,
+				finder: tipper,
+				deposit: Zero::zero(),
+				closes: None,
+				tips,
+				finders_fee: false,
+			};
 			Tips::<T>::insert(&hash, tip);
 		}
 
@@ -679,15 +733,17 @@ impl<T: Trait> Module<T> {
 		let treasury = Self::account_id();
 		let max_payout = Self::pot();
 		let mut payout = tips[tips.len() / 2].1.min(max_payout);
-		if let Some((finder, deposit)) = tip.finder {
-			let _ = T::Currency::unreserve(&finder, deposit);
-			if finder != tip.who {
+		if !tip.deposit.is_zero() {
+			let _ = T::Currency::unreserve(&tip.finder, tip.deposit);
+		}
+		if tip.finders_fee {
+			if tip.finder != tip.who {
 				// pay out the finder's fee.
 				let finders_fee = T::TipFindersFee::get() * payout;
 				payout -= finders_fee;
 				// this should go through given we checked it's at most the free balance, but still
 				// we only make a best-effort.
-				let _ = T::Currency::transfer(&treasury, &finder, finders_fee, KeepAlive);
+				let _ = T::Currency::transfer(&treasury, &tip.finder, finders_fee, KeepAlive);
 			}
 		}
 		// same as above: best-effort only.
@@ -734,7 +790,10 @@ impl<T: Trait> Module<T> {
 			// burn some proportion of the remaining budget if we run a surplus.
 			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
 			budget_remaining -= burn;
-			imbalance.subsume(T::Currency::burn(burn));
+
+			let (debit, credit) = T::Currency::pair(burn);
+			imbalance.subsume(debit);
+			T::BurnDestination::on_unbalanced(credit);
 			Self::deposit_event(RawEvent::Burnt(burn))
 		}
 
@@ -764,6 +823,55 @@ impl<T: Trait> Module<T> {
 		T::Currency::free_balance(&Self::account_id())
 			// Must never be less than 0 but better be safe.
 			.saturating_sub(T::Currency::minimum_balance())
+	}
+
+	pub fn migrate_retract_tip_for_tip_new() {
+		/// An open tipping "motion". Retains all details of a tip including information on the finder
+		/// and the members who have voted.
+		#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+		pub struct OldOpenTip<
+			AccountId: Parameter,
+			Balance: Parameter,
+			BlockNumber: Parameter,
+			Hash: Parameter,
+		> {
+			/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded string. A URL would be
+			/// sensible.
+			reason: Hash,
+			/// The account to be tipped.
+			who: AccountId,
+			/// The account who began this tip and the amount held on deposit.
+			finder: Option<(AccountId, Balance)>,
+			/// The block number at which this tip will close if `Some`. If `None`, then no closing is
+			/// scheduled.
+			closes: Option<BlockNumber>,
+			/// The members who have voted for this tip. Sorted by AccountId.
+			tips: Vec<(AccountId, Balance)>,
+		}
+
+		use frame_support::{Twox64Concat, migration::StorageKeyIterator};
+
+		for (hash, old_tip) in StorageKeyIterator::<
+			T::Hash,
+			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
+			Twox64Concat,
+		>::new(b"Treasury", b"Tips").drain()
+		{
+			let (finder, deposit, finders_fee) = match old_tip.finder {
+				Some((finder, deposit)) => (finder, deposit, true),
+				None => (T::AccountId::default(), Zero::zero(), false),
+			};
+			let new_tip = OpenTip {
+				reason: old_tip.reason,
+				who: old_tip.who,
+				finder,
+				deposit,
+				closes: old_tip.closes,
+				tips: old_tip.tips,
+				finders_fee
+			};
+			Tips::<T>::insert(hash, new_tip)
+		}
 	}
 }
 
