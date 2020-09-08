@@ -20,7 +20,7 @@
 
 use crate::*;
 use crate::Module as Staking;
-use frame_benchmarking::{account};
+use frame_benchmarking::account;
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
@@ -29,7 +29,11 @@ use sp_npos_elections::*;
 const SEED: u32 = 0;
 
 /// Grab a funded user.
-pub fn create_funded_user<T: Trait>(string: &'static str, n: u32, balance_factor: u32) -> T::AccountId {
+pub fn create_funded_user<T: Trait>(
+	string: &'static str,
+	n: u32,
+	balance_factor: u32,
+) -> T::AccountId {
 	let user = account(string, n, SEED);
 	let balance = T::Currency::minimum_balance() * balance_factor.into();
 	T::Currency::make_free_balance_be(&user, balance);

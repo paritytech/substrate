@@ -29,6 +29,13 @@ const MAX_SPANS: u32 = 100;
 const MAX_VALIDATORS: u32 = 1000;
 const MAX_SLASHES: u32 = 1000;
 
+macro_rules! do_whitelist {
+	($acc:ident) => {
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&$acc);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
+	}
+}
+
 // Add slashing spans to a user account. Not relevant for actual use, only to benchmark
 // read and write operations.
 fn add_slashing_spans<T: Trait>(who: &T::AccountId, spans: u32) {
@@ -111,6 +118,7 @@ benchmarks! {
 		let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
 		let reward_destination = RewardDestination::Staked;
 		let amount = T::Currency::minimum_balance() * 10.into();
+		do_whitelist!(stash);
 	}: _(RawOrigin::Signed(stash.clone()), controller_lookup, amount, reward_destination)
 	verify {
 		assert!(Bonded::<T>::contains_key(stash));
@@ -122,6 +130,7 @@ benchmarks! {
 		let max_additional = T::Currency::minimum_balance() * 10.into();
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
+		do_whitelist!(stash);
 	}: _(RawOrigin::Signed(stash), max_additional)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
@@ -134,6 +143,7 @@ benchmarks! {
 		let amount = T::Currency::minimum_balance() * 10.into();
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
+		do_whitelist!(controller);
 	}: _(RawOrigin::Signed(controller.clone()), amount)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
@@ -152,6 +162,7 @@ benchmarks! {
 		CurrentEra::put(EraIndex::max_value());
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_total: BalanceOf<T> = ledger.total;
+		do_whitelist!(controller);
 	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
@@ -170,6 +181,7 @@ benchmarks! {
 		CurrentEra::put(EraIndex::max_value());
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_total: BalanceOf<T> = ledger.total;
+		do_whitelist!(controller);
 	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
 	verify {
 		assert!(!Ledger::<T>::contains_key(controller));
@@ -178,6 +190,7 @@ benchmarks! {
 	validate {
 		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100)?;
 		let prefs = ValidatorPrefs::default();
+		do_whitelist!(controller);
 	}: _(RawOrigin::Signed(controller), prefs)
 	verify {
 		assert!(Validators::<T>::contains_key(stash));
@@ -188,6 +201,7 @@ benchmarks! {
 		let n in 1 .. MAX_NOMINATIONS as u32;
 		let (stash, controller) = create_stash_controller::<T>(n + 1, 100)?;
 		let validators = create_validators::<T>(n, 100)?;
+		do_whitelist!(controller);
 	}: _(RawOrigin::Signed(controller), validators)
 	verify {
 		assert!(Nominators::<T>::contains_key(stash));
@@ -195,11 +209,13 @@ benchmarks! {
 
 	chill {
 		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100)?;
+		do_whitelist!(controller);
 	}: _(RawOrigin::Signed(controller))
 
 	set_payee {
 		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100)?;
 		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Staked);
+		do_whitelist!(controller);
 	}: _(RawOrigin::Signed(controller), RewardDestination::Controller)
 	verify {
 		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Controller);
@@ -209,6 +225,7 @@ benchmarks! {
 		let (stash, _) = create_stash_controller::<T>(USER_SEED, 100)?;
 		let new_controller = create_funded_user::<T>("new_controller", USER_SEED, 100);
 		let new_controller_lookup = T::Lookup::unlookup(new_controller.clone());
+		do_whitelist!(stash);
 	}: _(RawOrigin::Signed(stash), new_controller_lookup)
 	verify {
 		assert!(Ledger::<T>::contains_key(&new_controller));
@@ -318,6 +335,7 @@ benchmarks! {
 		}
 		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
 		let original_bonded: BalanceOf<T> = staking_ledger.active;
+		do_whitelist!(controller);
 	}: _(RawOrigin::Signed(controller.clone()), (l + 100).into())
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
@@ -348,6 +366,7 @@ benchmarks! {
 		let (stash, controller) = create_stash_controller::<T>(0, 100)?;
 		add_slashing_spans::<T>(&stash, s);
 		T::Currency::make_free_balance_be(&stash, 0.into());
+		do_whitelist!(controller);
 	}: _(RawOrigin::Signed(controller), stash.clone(), s)
 	verify {
 		assert!(!Bonded::<T>::contains_key(&stash));
@@ -481,10 +500,7 @@ benchmarks! {
 
 		let era = <Staking<T>>::current_era().unwrap_or(0);
 		let caller: T::AccountId = account("caller", n, SEED);
-
-		// Whitelist caller account from further DB operations.
-		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
+		do_whitelist!(caller);
 	}: {
 		let result = <Staking<T>>::submit_election_solution(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -553,10 +569,7 @@ benchmarks! {
 
 		let era = <Staking<T>>::current_era().unwrap_or(0);
 		let caller: T::AccountId = account("caller", n, SEED);
-
-		// Whitelist caller account from further DB operations.
-		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
+		do_whitelist!(caller);
 
 		// submit a very bad solution on-chain
 		{
@@ -608,12 +621,9 @@ benchmarks! {
 
 		// needed for the solution to be accepted
 		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
-		let caller: T::AccountId = account("caller", n, SEED);
 		let era = <Staking<T>>::current_era().unwrap_or(0);
-
-		// Whitelist caller account from further DB operations.
-		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
+		let caller: T::AccountId = account("caller", n, SEED);
+		do_whitelist!(caller);
 
 		// submit a seq-phragmen with all the good stuff on chain.
 		{

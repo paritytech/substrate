@@ -2097,8 +2097,8 @@ decl_module! {
 		///   - Worse solution is retraced in pre-dispatch-checks which sets its own weight.
 		/// # </weight>
 		#[weight = T::WeightInfo::submit_solution_better(
-			size.validators as u32,
-			size.nominators as u32,
+			size.validators.into(),
+			size.nominators.into(),
 			compact.len() as u32,
 			winners.len() as u32,
 		)]
@@ -2131,8 +2131,8 @@ decl_module! {
 		/// See `crate::weight` module.
 		/// # </weight>
 		#[weight = T::WeightInfo::submit_solution_better(
-			size.validators as u32,
-			size.nominators as u32,
+			size.validators.into(),
+			size.nominators.into(),
 			compact.len() as u32,
 			winners.len() as u32,
 		)]
