@@ -79,7 +79,7 @@ pub struct GrandpaDeps {
 	/// Receives notifications about justification events from Grandpa.
 	pub justification_stream: GrandpaJustificationStream<Block>,
 	/// Executor to drive the subscription manager in the Grandpa RPC handler.
-	pub sub_task_executor: SubscriptionTaskExecutor,
+	pub subscription_executor: SubscriptionTaskExecutor,
 }
 
 /// Full client dependencies.
@@ -139,7 +139,7 @@ pub fn create_full<C, P, SC>(
 		shared_voter_state,
 		shared_authority_set,
 		justification_stream,
-		sub_task_executor,
+		subscription_executor,
 	} = grandpa;
 
 	io.extend_with(
@@ -172,7 +172,7 @@ pub fn create_full<C, P, SC>(
 				shared_authority_set,
 				shared_voter_state,
 				justification_stream,
-				sub_task_executor,
+				subscription_executor,
 			)
 		)
 	);
