@@ -488,7 +488,7 @@ fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
 		).unwrap(),
 		true.encode(),
 	);
-	assert_eq!(state.read().persistent_storage.get(b"", b"test"), Some(vec![]));
+	assert_eq!(state.read().persistent_storage.get(b"test"), Some(vec![]));
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]

@@ -485,7 +485,7 @@ mod tests {
 			}
 		});
 		// lock must have been cleared at this point
-		assert_eq!(state.read().persistent_storage.get(b"", b"lock_1"), None);
+		assert_eq!(state.read().persistent_storage.get(b"lock_1"), None);
 	}
 
 	#[test]
@@ -508,7 +508,7 @@ mod tests {
 			guard.forget();
 		});
 		// lock must have been cleared at this point
-		let opt = state.read().persistent_storage.get(b"", b"lock_2");
+		let opt = state.read().persistent_storage.get(b"lock_2");
 		assert!(opt.is_some());
 	}
 
@@ -540,7 +540,7 @@ mod tests {
 		});
 
 		// lock must have been cleared at this point
-		let opt = state.read().persistent_storage.get(b"", b"lock_3");
+		let opt = state.read().persistent_storage.get(b"lock_3");
 		assert!(opt.is_some());
 	}
 
@@ -587,7 +587,7 @@ mod tests {
 		});
 
 		// lock must have been cleared at this point
-		let opt = state.read().persistent_storage.get(b"", b"lock_4");
+		let opt = state.read().persistent_storage.get(b"lock_4");
 		assert_eq!(opt.unwrap(), vec![132_u8, 3u8, 0, 0, 0, 0, 0, 0]); // 132 + 256 * 3 = 900
 	}
 }

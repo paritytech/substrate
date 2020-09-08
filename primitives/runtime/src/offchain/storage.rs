@@ -125,7 +125,7 @@ mod tests {
 			assert_eq!(val.get::<u32>(), Some(Some(15_u32)));
 			assert_eq!(val.get::<Vec<u8>>(), Some(None));
 			assert_eq!(
-				state.read().persistent_storage.get(b"", b"testval"),
+				state.read().persistent_storage.get(b"testval"),
 				Some(vec![15_u8, 0, 0, 0])
 			);
 		})
@@ -148,7 +148,7 @@ mod tests {
 			assert_eq!(result, Ok(Ok(16_u32)));
 			assert_eq!(val.get::<u32>(), Some(Some(16_u32)));
 			assert_eq!(
-				state.read().persistent_storage.get(b"", b"testval"),
+				state.read().persistent_storage.get(b"testval"),
 				Some(vec![16_u8, 0, 0, 0])
 			);
 

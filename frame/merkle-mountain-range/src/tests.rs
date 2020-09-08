@@ -109,7 +109,7 @@ impl crate::LeafDataProvider for LeafData {
 
 type MMR = Module<Test>;
 
-fn new_test_ext() -> sp_io::TestExternalities {
+pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
 
@@ -141,21 +141,21 @@ fn decode_node(v: Vec<u8>) -> crate::MMRNode<
 
 #[test]
 fn should_start_empty() {
-	env_logger::try_init();
+	let _ = env_logger::try_init();
 	new_test_ext().execute_with(|| {
 		// given
 		assert_eq!(
 			crate::RootHash::<Test>::get(),
 			"0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap()
 		);
-		assert_eq!(crate::Size::get(), 0);
+		assert_eq!(crate::NumberOfLeaves::get(), 0);
 		assert_eq!(crate::Nodes::<Test>::get(0), None);
 
 		// when
 		let weight = new_block();
 
 		// then
-		assert_eq!(crate::Size::get(), 1);
+		assert_eq!(crate::NumberOfLeaves::get(), 1);
 		assert_eq!(crate::Nodes::<Test>::get(0),
 			Some(hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")));
 		assert_eq!(
@@ -168,7 +168,7 @@ fn should_start_empty() {
 
 #[test]
 fn should_append_to_mmr_when_on_initialize_is_called() {
-	env_logger::try_init();
+	let _ = env_logger::try_init();
 	let mut ext = new_test_ext();
 	ext.execute_with(|| {
 		// when
@@ -176,13 +176,14 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 		new_block();
 
 		// then
-		assert_eq!(crate::Size::get(), 3);
+		assert_eq!(crate::NumberOfLeaves::get(), 2);
 		assert_eq!(crate::Nodes::<Test>::get(0),
 			Some(hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")));
 		assert_eq!(crate::Nodes::<Test>::get(1),
 			Some(hex("037ff5a3903a59630e03b84cda912c26bf19442efe2cd30c2a25547e06ded385")));
 		assert_eq!(crate::Nodes::<Test>::get(2),
 			Some(hex("21b847809cbb535ba771e7bb25b33985b5259f1f3fc9cae81bc097f56efbbd36")));
+		assert_eq!(crate::Nodes::<Test>::get(3), None);
 		assert_eq!(
 			crate::RootHash::<Test>::get(),
 			hex("21b847809cbb535ba771e7bb25b33985b5259f1f3fc9cae81bc097f56efbbd36")
@@ -200,11 +201,15 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 		hash: H256::repeat_byte(2),
 		data: LeafData::new(2),
 	})));
+	assert_eq!(offchain_db.get(&MMR::offchain_key(2)).map(decode_node), Some(MMRNode::Inner(
+		hex("21b847809cbb535ba771e7bb25b33985b5259f1f3fc9cae81bc097f56efbbd36")
+	)));
+	assert_eq!(offchain_db.get(&MMR::offchain_key(3)), None);
 }
 
 #[test]
 fn should_construct_larger_mmr_correctly() {
-	env_logger::try_init();
+	let _ = env_logger::try_init();
 	new_test_ext().execute_with(|| {
 		// when
 		for _ in 0..7 {
@@ -212,7 +217,7 @@ fn should_construct_larger_mmr_correctly() {
 		}
 
 		// then
-		assert_eq!(crate::Size::get(), 11);
+		assert_eq!(crate::NumberOfLeaves::get(), 7);
 		assert_eq!(crate::Nodes::<Test>::get(0),
 			Some(hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")));
 		assert_eq!(crate::Nodes::<Test>::get(10),
@@ -221,6 +226,7 @@ fn should_construct_larger_mmr_correctly() {
 			crate::RootHash::<Test>::get(),
 			hex("3106f5c4ee095d996b61283b4d7b524c0c2acb4c9eaff90da0c216709b8bd1b7")
 		);
+
 
 		// TODO [ToDr] Check that proving works.
 		// TODO [ToDr] Prune non-peaks.

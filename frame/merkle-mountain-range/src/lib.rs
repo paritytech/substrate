@@ -86,8 +86,8 @@ decl_storage! {
 		/// Latest MMR Root hash.
 		pub RootHash get(fn mmr_root_hash): <T as Trait>::Hash;
 
-		/// Current size of the MMR (number of nodes).
-		pub Size get(fn mmr_size): u64;
+		/// Current size of the MMR (number of leaves).
+		pub NumberOfLeaves get(fn mmr_leaves): u64;
 
 		/// Hashes of the nodes in the MMR.
 		///
@@ -107,18 +107,17 @@ decl_module! {
 
 			let hash = <frame_system::Module<T>>::parent_hash();
 			let (data, leaf_weight) = T::LeafData::leaf_data();
-			let mut mmr = MMR::<T, _>::new(Self::mmr_size());
+			let mut mmr = MMR::<T, _>::new(Self::mmr_leaves());
 			mmr.push(primitives::Leaf { hash, data })
 				.expect("MMR push never fails.");
 
 			// update the size
-			let (size, root) = mmr.finalize()
-				.expect("MMR finalize never fails.");
-			<Size>::put(size);
+			let (leaves, root) = mmr.finalize().expect("MMR finalize never fails.");
+			<NumberOfLeaves>::put(leaves);
 			<RootHash<T>>::put(root);
 
 			let pruned = Self::prune_non_peaks();
-			let peaks = mmr::NodesUtils::new(size).number_of_peaks();
+			let peaks = mmr::NodesUtils::new(leaves).number_of_peaks();
 
 			leaf_weight + <T as frame_system::Trait>::DbWeight::get().reads_writes(
 				2 + peaks,
@@ -131,7 +130,7 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Returns the number of nodes pruned.
 	fn prune_non_peaks() -> u64 {
-		debug::native::info!("Pruning MMR of size: {:?}", Self::mmr_size());
+		debug::native::info!("Pruning MMR of size: {:?}", Self::mmr_leaves());
 		// TODO [ToDr] Implement me
 		0
 	}
@@ -152,8 +151,6 @@ pub enum MMRNode<H: traits::Hash, L> {
 /// MMRNode type for runtime `T`.
 pub type MMRNodeOf<T, L> = MMRNode<<T as Trait>::Hashing, L>;
 
-/// TODO [ToDr] Move to a separate module.
-///
 /// A wrapper around a MMR library to expose limited functionality that works
 /// with non-peak nodes pruned.
 pub struct MMR<T: Trait, L: codec::Codec + fmt::Debug> {
@@ -162,13 +159,16 @@ pub struct MMR<T: Trait, L: codec::Codec + fmt::Debug> {
 		MMRHasher<<T as Trait>::Hashing, L>,
 		MMRIndexer<T, L>
 	>,
+	leaves: u64,
 }
 
 impl<T: Trait, L: codec::Codec + PartialEq + fmt::Debug + Clone> MMR<T, L> {
 	/// Create a pointer to an existing MMR with given size.
-	pub fn new(size: u64) -> Self {
+	pub fn new(leaves: u64) -> Self {
+		let size = mmr::NodesUtils::new(leaves).size();
 		Self {
 			mmr: mmr_lib::MMR::new(size, Default::default()),
+			leaves,
 		}
 	}
 
@@ -176,18 +176,29 @@ impl<T: Trait, L: codec::Codec + PartialEq + fmt::Debug + Clone> MMR<T, L> {
 	///
 	/// Returns element position (index) in the MMR.
 	pub fn push(&mut self, leaf: L) -> Option<u64> {
-		self.mmr.push(MMRNode::Leaf(leaf)).map_err(|e| {
+		let res = self.mmr.push(MMRNode::Leaf(leaf)).map_err(|e| {
 			debug::native::error!("Error while pushing MMR node: {:?}", e);
 			()
-		}).map_err(|e| Error::Push.debug(e)).ok()
+		}).map_err(|e| Error::Push.debug(e)).ok();
+
+		if res.is_some() {
+			self.leaves += 1;
+		}
+
+		res
+	}
+
+	/// Return the internal size of the MMR (number of nodes).
+	#[cfg(test)]
+	pub fn size(&self) -> u64 {
+		self.mmr.mmr_size()
 	}
 
 	/// Commit the changes to underlying storage and calculate MMR's size & root hash.
 	pub fn finalize(self) -> Result<(u64, <T as Trait>::Hash), Error> {
-		let size = self.mmr.mmr_size();
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.debug(e))?;
 		self.mmr.commit().map_err(|e| Error::Commit.debug(e))?;
-		Ok((size, root.hash()))
+		Ok((self.leaves, root.hash()))
 	}
 }
 
@@ -237,22 +248,26 @@ impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<MMRNodeOf<T, L>> 
 	}
 
 	fn append(&mut self, pos: u64, elems: Vec<MMRNodeOf<T, L>>) -> mmr_lib::Result<()> {
-		let mut size = Size::get();
+		let mut leaves = NumberOfLeaves::get();
+		let mut size = mmr::NodesUtils::new(leaves).size();
 		if pos != size {
 			return Err(mmr_lib::Error::InconsistentStore);
 		}
 
 		for elem in elems {
 			<Nodes<T>>::insert(size, elem.hash());
-			println!("Inserting node: {:?}", elem);
 			// Indexing API used to store the full leaf content.
 			elem.using_encoded(|elem| {
 				sp_io::offchain_index::set(&Module::<T>::offchain_key(size), elem)
 			});
 			size += 1;
+
+			if let MMRNode::Leaf(..) = elem {
+				leaves += 1;
+			}
 		}
 
-		Size::put(size);
+		NumberOfLeaves::put(leaves);
 
 		Ok(())
 	}
