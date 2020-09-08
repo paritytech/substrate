@@ -505,7 +505,7 @@ mod tests {
 	type NodeAuthorization = Module<Test>;
 
 	fn test_node(id: u8) -> PeerId {
-		vec![id]
+		PeerId(vec![id])
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
@@ -524,7 +524,7 @@ mod tests {
 				BadOrigin
 			);
 			assert_noop!(
-				NodeAuthorization::add_well_known_node(Origin::signed(1), vec![1, 2, 3], 15),
+				NodeAuthorization::add_well_known_node(Origin::signed(1), PeerId(vec![1, 2, 3]), 15),
 				Error::<Test>::PeerIdTooLong
 			);
 			assert_noop!(
@@ -559,7 +559,7 @@ mod tests {
 				BadOrigin
 			);
 			assert_noop!(
-				NodeAuthorization::remove_well_known_node(Origin::signed(2), vec![1, 2, 3]),
+				NodeAuthorization::remove_well_known_node(Origin::signed(2), PeerId(vec![1, 2, 3])),
 				Error::<Test>::PeerIdTooLong
 			);
 			assert_noop!(
@@ -596,13 +596,13 @@ mod tests {
 			);
 			assert_noop!(
 				NodeAuthorization::swap_well_known_node(
-					Origin::signed(3), vec![1, 2, 3], test_node(20)
+					Origin::signed(3), PeerId(vec![1, 2, 3]), test_node(20)
 				),
 				Error::<Test>::PeerIdTooLong
 			);
 			assert_noop!(
 				NodeAuthorization::swap_well_known_node(
-					Origin::signed(3), test_node(20), vec![1, 2, 3]
+					Origin::signed(3), test_node(20), PeerId(vec![1, 2, 3])
 				),
 				Error::<Test>::PeerIdTooLong
 			);
@@ -696,7 +696,7 @@ mod tests {
 	fn claim_node_works() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				NodeAuthorization::claim_node(Origin::signed(1), vec![1, 2, 3]),
+				NodeAuthorization::claim_node(Origin::signed(1), PeerId(vec![1, 2, 3])),
 				Error::<Test>::PeerIdTooLong
 			);
 			assert_noop!(
@@ -713,7 +713,7 @@ mod tests {
 	fn remove_claim_works() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				NodeAuthorization::remove_claim(Origin::signed(15), vec![1, 2, 3]),
+				NodeAuthorization::remove_claim(Origin::signed(15), PeerId(vec![1, 2, 3])),
 				Error::<Test>::PeerIdTooLong
 			);
 			assert_noop!(
@@ -746,7 +746,7 @@ mod tests {
 	fn transfer_node_works() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				NodeAuthorization::transfer_node(Origin::signed(15), vec![1, 2, 3], 10),
+				NodeAuthorization::transfer_node(Origin::signed(15), PeerId(vec![1, 2, 3]), 10),
 				Error::<Test>::PeerIdTooLong
 			);
 			assert_noop!(
@@ -769,7 +769,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
 				NodeAuthorization::add_connections(
-					Origin::signed(15), vec![1, 2, 3], vec![test_node(5)]
+					Origin::signed(15), PeerId(vec![1, 2, 3]), vec![test_node(5)]
 				),
 				Error::<Test>::PeerIdTooLong
 			);
@@ -806,7 +806,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
 				NodeAuthorization::remove_connections(
-					Origin::signed(15), vec![1, 2, 3], vec![test_node(5)]
+					Origin::signed(15), PeerId(vec![1, 2, 3]), vec![test_node(5)]
 				),
 				Error::<Test>::PeerIdTooLong
 			);
