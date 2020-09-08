@@ -22,10 +22,10 @@
 //!
 //! ## Overview
 //!
-//! Nicks is a non-production-ready module for keeping track of account names on-chain. It makes no
-//! effort to create a name hierarchy, be a DNS replacement or provide reverse lookups. Furthermore,
-//! the weights attached to this module's dispatchable functions are for demonstration purposes only
-//! and have not been designed to be economically secure.
+//! Nicks is an example module for keeping track of account names on-chain. It makes no effort to
+//! create a name hierarchy, be a DNS replacement or provide reverse lookups. Furthermore, the
+//! weights attached to this module's dispatchable functions are for demonstration purposes only and
+//! have not been designed to be economically secure. Do not use this pallet as-is in production.
 //!
 //! ## Interface
 //!
