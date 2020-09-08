@@ -69,7 +69,7 @@ pub struct Extrinsics(Vec<u32>);
 
 impl Extrinsics {
 	/// Extracts extrinsics into a `BTreeSets`.
-	fn flush_content(&self, dest: &mut BTreeSet<u32>) {
+	fn copy_extrinsics_into(&self, dest: &mut BTreeSet<u32>) {
 		dest.extend(self.0.iter())
 	}
 
@@ -80,8 +80,8 @@ impl Extrinsics {
 		}
 	}
 
-	///Merge two extrinsics sets.
-	fn merge(&mut self, other: Self) {
+	/// Merge two extrinsics sets.
+	fn extend(&mut self, other: Self) {
 		self.0.extend(other.0.into_iter());
 	}
 }
@@ -90,7 +90,7 @@ impl Extrinsics {
 ///
 /// It allows changes to be modified using nestable transactions.
 #[derive(Debug, Default, Clone)]
-pub struct OverlayedChanges  {
+pub struct OverlayedChanges {
 	/// Top level storage changes.
 	top: OverlayedChangeSet,
 	/// Child storage changes. The map key is the child storage key without the common prefix.

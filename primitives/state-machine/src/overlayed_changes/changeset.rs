@@ -24,8 +24,7 @@ use std::collections::HashSet as Set;
 #[cfg(not(feature = "std"))]
 use sp_std::collections::btree_set::BTreeSet as Set;
 
-use sp_std::collections::btree_map::BTreeMap;
-use sp_std::collections::btree_set::BTreeSet;
+use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use smallvec::SmallVec;
 use crate::warn;
 
@@ -112,7 +111,7 @@ impl OverlayedValue {
 	/// Unique list of extrinsic indices which modified the value.
 	pub fn extrinsics(&self) -> BTreeSet<u32> {
 		let mut set = BTreeSet::new();
-		self.transactions.iter().for_each(|t| t.extrinsics.flush_content(&mut set));
+		self.transactions.iter().for_each(|t| t.extrinsics.copy_extrinsics_into(&mut set));
 		set
 	}
 
@@ -372,7 +371,7 @@ impl OverlayedChangeSet {
 				if has_predecessor {
 					let dropped_tx = overlayed.pop_transaction();
 					*overlayed.value_mut() = dropped_tx.value;
-					overlayed.transaction_extrinsics_mut().merge(dropped_tx.extrinsics);
+					overlayed.transaction_extrinsics_mut().extend(dropped_tx.extrinsics);
 				}
 			}
 		}
