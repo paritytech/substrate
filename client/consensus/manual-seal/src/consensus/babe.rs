@@ -20,7 +20,7 @@
 
 use super::ConsensusDataProvider;
 use crate::Error;
-
+use codec::Encode;
 use std::{
 	any::Any,
 	borrow::Cow,
@@ -32,19 +32,23 @@ use sc_consensus_babe::{
 	Config, Epoch, authorship, CompatibleDigestItem, BabeIntermediate,
 	register_babe_inherent_data_provider, INTERMEDIATE_KEY,
 };
-use sc_consensus_epochs::{SharedEpochChanges, descendent_query};
+use sc_consensus_epochs::{SharedEpochChanges, descendent_query, ViableEpochDescriptor};
+use sc_keystore::KeyStorePtr;
 
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::BlockImportParams;
-use sp_consensus_babe::{BabeApi, inherents::BabeInherentData};
-use sp_keystore::SyncCryptoStorePtr;
+use sp_consensus_babe::{
+	BabeApi, inherents::BabeInherentData, ConsensusLog, BABE_ENGINE_ID, AuthorityId,
+	digests::{PreDigest, SecondaryPlainPreDigest, NextEpochDescriptor},
+};
 use sp_inherents::{InherentDataProviders, InherentData, ProvideInherentData, InherentIdentifier};
 use sp_runtime::{
 	traits::{DigestItemFor, DigestFor, Block as BlockT, Header as _},
 	generic::Digest,
 };
-use sp_timestamp::{InherentType, InherentError, INHERENT_IDENTIFIER};
+use sp_timestamp::{InherentType, InherentError, INHERENT_IDENTIFIER, TimestampInherentData};
+use sp_keyring::Sr25519Keyring::Alice;
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
@@ -122,14 +126,33 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 			})?;
 
 		// this is a dev node environment, we should always be able to claim a slot.
-		let (predigest, _) = authorship::claim_slot(slot_number, epoch.as_ref(), &self.keystore)
-			.ok_or_else(|| Error::StringError("failed to claim slot for authorship".into()))?;
-
-		Ok(Digest {
-			logs: vec![
+		let logs =  if let Some((predigest, _)) = authorship::claim_slot(slot_number, epoch.as_ref(), &self.keystore) {
+			vec![
 				<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(predigest),
-			],
-		})
+			]
+		} else {
+			// well we couldn't claim a slot because this is an existing chain and we're not in the authorities.
+			// we need to tell BabeBlockImport that the epoch has changed, and we put ourselves in the authorities.
+			let predigest = PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
+				slot_number,
+				authority_index: 0_u32,
+			});
+
+			let authority = (AuthorityId::from(Alice.public()), 1000);
+
+			let next_epoch = ConsensusLog::NextEpochData(NextEpochDescriptor {
+				authorities: vec![authority],
+				// copy the old randomness
+				randomness: epoch.as_ref().randomness.clone()
+			});
+
+			vec![
+				DigestItemFor::<B>::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
+				DigestItemFor::<B>::Consensus(BABE_ENGINE_ID, next_epoch.encode())
+			]
+		};
+
+		Ok(Digest { logs })
 	}
 
 	fn append_block_import(
@@ -139,8 +162,9 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 		inherents: &InherentData
 	) -> Result<(), Error> {
 		let slot_number = inherents.babe_inherent_data()?;
+		let epoch_changes = self.epoch_changes.lock();
 
-		let epoch_descriptor = self.epoch_changes.lock()
+		let mut epoch_descriptor = epoch_changes
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
@@ -149,6 +173,31 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 			)
 			.map_err(|e| Error::StringError(format!("failed to fetch epoch data: {}", e)))?
 			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
+
+		let epoch = epoch_changes
+			.viable_epoch(
+				&epoch_descriptor,
+				|slot| Epoch::genesis(&self.config, slot),
+			)
+			.ok_or_else(|| {
+				log::info!(target: "babe", "create_digest: no viable_epoch :(");
+				sp_consensus::Error::InvalidAuthoritiesSet
+			})?;
+
+		// a quick check to see if we're in the authorities
+		let has_authority = epoch.as_ref()
+			.authorities
+			.iter()
+			.find(|(id, _)| {
+				*id == AuthorityId::from(Alice.public())
+			})
+			.is_some();
+
+		if !has_authority {
+			log::info!(target: "babe", "authority not found");
+			let slot_number = inherents.timestamp_inherent_data()? / self.config.slot_duration;
+			epoch_descriptor = ViableEpochDescriptor::UnimportedGenesis(slot_number);
+		}
 
 		params.intermediates.insert(
 			Cow::from(INTERMEDIATE_KEY),
