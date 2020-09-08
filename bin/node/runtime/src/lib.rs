@@ -532,6 +532,8 @@ impl pallet_collective::Trait<CouncilCollective> for Runtime {
 
 parameter_types! {
 	pub const CandidacyBond: Balance = 10 * DOLLARS;
+	pub const VotingBondBase: Balance = 1 * DOLLARS;
+	pub const VotingBondFactor: Balance = 50 * CENTS;    // per 32 bytes on-chain
 	pub const VotingBond: Balance = 1 * DOLLARS;
 	pub const TermDuration: BlockNumber = 7 * DAYS;
 	pub const DesiredMembers: u32 = 13;
@@ -552,7 +554,8 @@ impl pallet_elections_phragmen::Trait for Runtime {
 	type InitializeMembers = Council;
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type CandidacyBond = CandidacyBond;
-	type VotingBond = VotingBond;
+	type VotingBondBase = VotingBondBase;
+	type VotingBondFactor = VotingBondFactor;
 	type LoserCandidate = ();
 	type BadReport = ();
 	type KickedMember = ();

@@ -84,7 +84,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Encode, Decode};
-use sp_std::prelude::*;
+use sp_std::{prelude::*, cmp::Ordering};
 use sp_runtime::{
 	DispatchError, RuntimeDebug, Perbill,
 	traits::{Zero, StaticLookup, Convert, Saturating},
@@ -198,7 +198,10 @@ pub trait Trait: frame_system::Trait {
 	///
 	/// This should be sensibly high to economically ensure the pallet cannot be attacked by
 	/// creating a gigantic number of votes.
-	type VotingBond: Get<BalanceOf<Self>>;
+	type VotingBondBase: Get<BalanceOf<Self>>;
+
+	/// The amount of bond that need to be locked for each vote (32 bytes)
+	type VotingBondFactor: Get<BalanceOf<Self>>;
 
 	/// Handler for the unbalanced reduction when a candidate has lost (and is not a runner-up)
 	type LoserCandidate: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -328,7 +331,8 @@ decl_module! {
 		fn deposit_event() = default;
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
-		const VotingBond: BalanceOf<T> = T::VotingBond::get();
+		const VotingBondBase: BalanceOf<T> = T::VotingBondBase::get();
+		const VotingBondFactor: BalanceOf<T> = T::VotingBondFactor::get();
 		const DesiredMembers: u32 = T::DesiredMembers::get();
 		const DesiredRunnersUp: u32 = T::DesiredRunnersUp::get();
 		const TermDuration: T::BlockNumber = T::TermDuration::get();
@@ -384,10 +388,29 @@ decl_module! {
 
 			ensure!(value > T::Currency::minimum_balance(), Error::<T>::LowBalance);
 
-			// first time voter. Reserve bond.
-			if !Self::is_voter(&who) {
-				T::Currency::reserve(&who, T::VotingBond::get())
+			// Reserve bond.
+			let (_, old_votes) = <Voting<T>>::get(&who);
+			if old_votes.is_empty() {
+				// First time voter. Get full deposit.
+				T::Currency::reserve(&who, Self::deposit_of(votes.len()))
 					.map_err(|_| Error::<T>::UnableToPayBond)?;
+			} else {
+				// Old voter.
+				match votes.len().cmp(&old_votes.len()) {
+					Ordering::Greater => {
+						// Must reserve a bit more.
+						let to_reserve = Self::deposit_factor_of(votes.len() - old_votes.len());
+						T::Currency::reserve(&who, to_reserve)
+							.map_err(|_| Error::<T>::UnableToPayBond)?;
+					},
+					Ordering::Equal => {},
+					Ordering::Less => {
+						// Must unreserve a bit.
+						let to_unreserve = Self::deposit_factor_of(old_votes.len() - votes.len());
+						let _remainder = T::Currency::unreserve(&who, to_unreserve);
+						debug_assert!(_remainder.is_zero());
+					},
+				}
 			}
 
 			// Amount to be locked up.
@@ -727,6 +750,18 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
+	/// The deposit value of `count` votes.
+	fn deposit_of(count: usize) -> BalanceOf<T> {
+		T::VotingBondBase::get().saturating_add(
+			T::VotingBondFactor::get().saturating_mul((count as u32).into())
+		)
+	}
+
+	/// Same as [`deposit_of`] but only returns the factor deposit.
+	fn deposit_factor_of(count: usize) -> BalanceOf<T> {
+		T::VotingBondFactor::get().saturating_mul((count as u32).into())
+	}
+
 	/// Attempts to remove a member `who`. If a runner-up exists, it is used as the replacement and
 	/// Ok(true). is returned.
 	///
@@ -843,12 +878,14 @@ impl<T: Trait> Module<T> {
 	///
 	/// DB access: Voting and Lock are always written to, if unreserve, then 1 read and write added.
 	fn do_remove_voter(who: &T::AccountId, unreserve: bool) {
+		let (_, votes) = <Voting<T>>::get(who);
 		// remove storage and lock.
 		<Voting<T>>::remove(who);
 		T::Currency::remove_lock(T::ModuleId::get(), who);
 
 		if unreserve {
-			T::Currency::unreserve(who, T::VotingBond::get());
+			let _remainder = T::Currency::unreserve(who, Self::deposit_of(votes.len()));
+			debug_assert!(_remainder.is_zero());
 		}
 	}
 
@@ -1163,15 +1200,21 @@ mod tests {
 	}
 
 	thread_local! {
-		static VOTING_BOND: RefCell<u64> = RefCell::new(2);
+		static VOTING_BOND_BASE: RefCell<u64> = RefCell::new(2);
+		static VOTING_BOND_FACTOR: RefCell<u64> = RefCell::new(0);
 		static DESIRED_MEMBERS: RefCell<u32> = RefCell::new(2);
 		static DESIRED_RUNNERS_UP: RefCell<u32> = RefCell::new(2);
 		static TERM_DURATION: RefCell<u64> = RefCell::new(5);
 	}
 
-	pub struct VotingBond;
-	impl Get<u64> for VotingBond {
-		fn get() -> u64 { VOTING_BOND.with(|v| *v.borrow()) }
+	pub struct VotingBondBase;
+	impl Get<u64> for VotingBondBase {
+		fn get() -> u64 { VOTING_BOND_BASE.with(|v| *v.borrow()) }
+	}
+
+	pub struct VotingBondFactor;
+	impl Get<u64> for VotingBondFactor {
+		fn get() -> u64 { VOTING_BOND_FACTOR.with(|v| *v.borrow()) }
 	}
 
 	pub struct DesiredMembers;
@@ -1257,7 +1300,8 @@ mod tests {
 		type ChangeMembers = TestChangeMembers;
 		type InitializeMembers = ();
 		type CandidacyBond = CandidacyBond;
-		type VotingBond = VotingBond;
+		type VotingBondBase = VotingBondBase;
+		type VotingBondFactor = VotingBondFactor;
 		type TermDuration = TermDuration;
 		type DesiredMembers = DesiredMembers;
 		type DesiredRunnersUp = DesiredRunnersUp;
@@ -1286,6 +1330,7 @@ mod tests {
 		genesis_members: Vec<(u64, u64)>,
 		balance_factor: u64,
 		voter_bond: u64,
+		voter_bond_factor: u64,
 		term_duration: u64,
 		desired_runners_up: u32,
 		desired_members: u32,
@@ -1297,6 +1342,7 @@ mod tests {
 				genesis_members: vec![],
 				balance_factor: 1,
 				voter_bond: 2,
+				voter_bond_factor: 0,
 				term_duration: 5,
 				desired_runners_up: 0,
 				desired_members: 2,
@@ -1307,6 +1353,10 @@ mod tests {
 	impl ExtBuilder {
 		pub fn voter_bond(mut self, fee: u64) -> Self {
 			self.voter_bond = fee;
+			self
+		}
+		pub fn voter_bond_factor(mut self, fee: u64) -> Self {
+			self.voter_bond_factor = fee;
 			self
 		}
 		pub fn desired_runners_up(mut self, count: u32) -> Self {
@@ -1331,7 +1381,8 @@ mod tests {
 			self
 		}
 		fn set_constants(&self) {
-			VOTING_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
+			VOTING_BOND_BASE.with(|v| *v.borrow_mut() = self.voter_bond);
+			VOTING_BOND_FACTOR.with(|v| *v.borrow_mut() = self.voter_bond_factor);
 			TERM_DURATION.with(|v| *v.borrow_mut() = self.term_duration);
 			DESIRED_RUNNERS_UP.with(|v| *v.borrow_mut() = self.desired_runners_up);
 			DESIRED_MEMBERS.with(|m| *m.borrow_mut() = self.desired_members);
@@ -1715,6 +1766,45 @@ mod tests {
 			assert_eq!(balances(&2), (18, 2));
 			assert_eq!(has_lock(&2), 15);
 			assert_eq!(Elections::locked_stake_of(&2), 15);
+		});
+	}
+
+	#[test]
+	fn voting_reserves_per_bond_per_vote() {
+		ExtBuilder::default().voter_bond_factor(1).build_and_execute(|| {
+			assert_eq!(balances(&2), (20, 0));
+
+			assert_ok!(submit_candidacy(Origin::signed(5)));
+			assert_ok!(submit_candidacy(Origin::signed(4)));
+
+			// initial vote.
+			assert_ok!(vote(Origin::signed(2), vec![5], 10));
+
+			// 2 + 1
+			assert_eq!(balances(&2), (17, 3));
+			assert_eq!(has_lock(&2), 10);
+			assert_eq!(Elections::locked_stake_of(&2), 10);
+
+			// can update; different stake; different lock and reserve.
+			assert_ok!(vote(Origin::signed(2), vec![5, 4], 15));
+			// 2 + 2
+			assert_eq!(balances(&2), (16, 4));
+			assert_eq!(has_lock(&2), 15);
+			assert_eq!(Elections::locked_stake_of(&2), 15);
+
+			// stay at two votes with different stake.
+			assert_ok!(vote(Origin::signed(2), vec![5, 3], 18));
+			// 2 + 2
+			assert_eq!(balances(&2), (16, 4));
+			assert_eq!(has_lock(&2), 18);
+			assert_eq!(Elections::locked_stake_of(&2), 18);
+
+			// back to 1 vote.
+			assert_ok!(vote(Origin::signed(2), vec![4], 12));
+			// 2 + 1
+			assert_eq!(balances(&2), (17, 3));
+			assert_eq!(has_lock(&2), 12);
+			assert_eq!(Elections::locked_stake_of(&2), 12);
 		});
 	}
 
