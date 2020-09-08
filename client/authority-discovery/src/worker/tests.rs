@@ -318,12 +318,11 @@ fn triggers_dht_get_query() {
 	// Generate authority keys
 	let authority_1_key_pair = AuthorityPair::from_seed_slice(&[1; 32]).unwrap();
 	let authority_2_key_pair = AuthorityPair::from_seed_slice(&[2; 32]).unwrap();
+	let authorities = vec![authority_1_key_pair.public(), authority_2_key_pair.public()];
 
-	let test_api = Arc::new(TestApi {
-		authorities: vec![authority_1_key_pair.public(), authority_2_key_pair.public()],
-	});
+	let test_api = Arc::new(TestApi { authorities: authorities.clone() });
 
-	let network: Arc<TestNetwork> = Arc::new(Default::default());
+	let network = Arc::new(TestNetwork::default());
 	let key_store = KeyStore::new();
 
 	let (_to_worker, from_service) = mpsc::channel(0);
@@ -337,17 +336,11 @@ fn triggers_dht_get_query() {
 		None,
 	);
 
-	let mut pool = LocalPool::new();
-
-	let _ = pool.spawner().spawn_local_obj(async {
+	futures::executor::block_on(async {
 		worker.refill_pending_lookups_queue().await.unwrap();
-		worker.run().await
-	}.boxed_local().into());
-
-	pool.run_until(async {
-		// Expect authority discovery to request new records from the dht.
-		assert_eq!(network.get_value_call.lock().unwrap().len(), 2);
-	});
+		worker.start_new_lookups();
+		assert_eq!(network.get_value_call.lock().unwrap().len(), authorities.len());
+	})
 }
 
 #[test]
