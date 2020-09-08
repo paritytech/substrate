@@ -33,14 +33,17 @@
 
 #![warn(missing_docs)]
 
-use std::{fmt, marker::PhantomData, sync::Arc};
+use std::{
+	fmt, marker::PhantomData, sync::Arc,
+	collections::HashSet,
+};
 
 use parking_lot::Mutex;
 use threadpool::ThreadPool;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use futures::future::Future;
 use log::{debug, warn};
-use sc_network::NetworkService;
+use sc_network::{ExHashT, NetworkService, NetworkStateInfo, PeerId};
 use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext, traits::SpawnNamed};
 use sp_runtime::{generic::BlockId, traits::{self, Header}};
 use futures::{prelude::*, future::ready};
@@ -49,6 +52,30 @@ mod api;
 use api::SharedClient;
 
 pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
+
+/// NetworkProvider provides [`OffchainWorkers`] with all necessary hooks into the
+/// underlying Substrate networking.
+pub trait NetworkProvider: NetworkStateInfo {
+	/// Set the reserved peers.
+	fn set_reserved_peers(&self, peers: HashSet<PeerId>);
+	
+	/// Set the reserved only flag.
+	fn set_reserved_only(&self, reserved_only: bool);
+}
+
+impl<B, H> NetworkProvider for NetworkService<B, H>
+where
+	B: traits::Block + 'static,
+	H: ExHashT,
+{
+	fn set_reserved_peers(&self, peers: HashSet<PeerId>) {
+		self.set_reserved_peers(peers)
+	}
+
+	fn set_reserved_only(&self, reserved_only: bool) {
+		self.set_reserved_only(reserved_only)
+	}
+}
 
 /// An offchain workers manager.
 pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
@@ -98,7 +125,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 	pub fn on_block_imported(
 		&self,
 		header: &Block::Header,
-		network_service: Arc<NetworkService<Block, <Block as traits::Block>::Hash>>,
+		network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 		is_validator: bool,
 	) -> impl Future<Output = ()> {
 		let runtime = self.client.runtime_api();
@@ -122,7 +149,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 		if version > 0 {
 			let (api, runner) = api::AsyncApi::new(
 				self.db.clone(),
-				network_service,
+				network_provider,
 				is_validator,
 				self.shared_client.clone(),
 			);
@@ -173,7 +200,7 @@ pub async fn notification_future<Client, Storage, Block, Spawner>(
 	client: Arc<Client>,
 	offchain: Arc<OffchainWorkers<Client, Storage, Block>>,
 	spawner: Spawner,
-	network_service: Arc<NetworkService<Block, <Block as traits::Block>::Hash>>,
+	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 )
 	where
 		Block: traits::Block,
@@ -188,7 +215,7 @@ pub async fn notification_future<Client, Storage, Block, Spawner>(
 				"offchain-on-block",
 				offchain.on_block_imported(
 					&n.header,
-					network_service.clone(),
+					network_provider.clone(),
 					is_validator,
 				).boxed(),
 			);
@@ -208,9 +235,32 @@ pub async fn notification_future<Client, Storage, Block, Spawner>(
 mod tests {
 	use super::*;
 	use std::sync::Arc;
+	use sc_network::{Multiaddr, PeerId};
 	use substrate_test_runtime_client::{TestClient, runtime::Block};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_transaction_pool::{TransactionPool, InPoolTransaction};
+
+	struct TestNetwork();
+
+	impl NetworkStateInfo for TestNetwork {
+		fn external_addresses(&self) -> Vec<Multiaddr> {
+			Vec::new()
+		}
+
+		fn local_peer_id(&self) -> PeerId {
+			PeerId::random()
+		}
+	}
+
+	impl NetworkProvider for TestNetwork {
+		fn set_reserved_peers(&self, _peers: HashSet<PeerId>) {
+			unimplemented!()
+		}
+
+		fn set_reserved_only(&self, _reserved_only: bool) {
+			unimplemented!()
+		}
+	}
 
 	struct TestPool(
 		Arc<BasicPool<FullChainApi<TestClient, Block>, Block>>
@@ -242,16 +292,13 @@ mod tests {
 			client.clone(),
 		));
 		let db = sc_client_db::offchain::LocalStorage::new_test();
+		let network = Arc::new(TestNetwork());
 		let header = client.header(&BlockId::number(0)).unwrap().unwrap();
 
 		// when
 		let offchain = OffchainWorkers::new(client, db);
 		futures::executor::block_on(
-			offchain.on_block_imported(
-				&header,
-				substrate_test_runtime_network::build_network_service(),
-				false
-			)
+			offchain.on_block_imported(&header, network, false)
 		);
 
 		// then

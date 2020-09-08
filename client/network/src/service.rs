@@ -605,9 +605,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self.local_peer_id
 	}
 
-	/// Set reserved peers and reserved_only flag.
-	pub fn set_reserved_peers(&self, peers: HashSet<PeerId>, reserved_only: bool) {
-		self.peerset.set_reserved_peers(peers);
+	/// Set reserved peers.
+	pub fn set_reserved_peers(&self, peers: HashSet<PeerId>) {
+		self.peerset.set_reserved_peers(peers)
+	}
+
+	/// Set reserved_only flag.
+	pub fn set_reserved_only(&self, reserved_only: bool) {
 		self.peerset.set_reserved_only(reserved_only)
 	}
 

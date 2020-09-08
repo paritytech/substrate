@@ -19,7 +19,7 @@
 
 use codec::{Encode, Decode};
 use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
-use crate::RuntimeDebug;
+use crate::{OpaquePeerId, RuntimeDebug};
 use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
@@ -188,17 +188,6 @@ pub struct OpaqueNetworkState {
 	pub peer_id: OpaquePeerId,
 	/// List of addresses the node knows it can be reached as.
 	pub external_addresses: Vec<OpaqueMultiaddr>,
-}
-
-/// Simple blob to hold a `PeerId` without committing to its format.
-#[derive(Default, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner)]
-pub struct OpaquePeerId(pub Vec<u8>);
-
-impl OpaquePeerId {
-	/// Create new `OpaquePeerId`
-	pub fn new(vec: Vec<u8>) -> Self {
-		OpaquePeerId(vec)
-	}
 }
 
 /// Simple blob to hold a `Multiaddr` without committing to its format.
