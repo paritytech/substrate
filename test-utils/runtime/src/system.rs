@@ -261,8 +261,6 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 			execute_storage_change(key, value.as_ref().map(|v| &**v)),
 		Extrinsic::ChangesTrieConfigUpdate(ref new_config) =>
 			execute_changes_trie_config_update(new_config.clone()),
-		Extrinsic::WitnessExt =>
-			execute_witness_backend(),
 	}
 }
 
@@ -302,21 +300,6 @@ fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyExtrinsicRes
 		Some(value) => storage::unhashed::put_raw(key, value),
 		None => storage::unhashed::kill(key),
 	}
-	Ok(Ok(()))
-}
-
-fn execute_witness_backend() -> ApplyExtrinsicResult {
-	use sp_externalities::Externalities;
-	let db = sp_trie::MemoryDB::<crate::Hashing>::default();
-	let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(
-		db,
-		Default::default(),
-	);
-	let mut overlay = sp_state_machine::OverlayedChanges::default();
-	let mut cache = sp_state_machine::StorageTransactionCache::<_, _, BlockNumber>::default();
-	let mut ext = sp_state_machine::ExtInner::new(&mut overlay, &backend, &mut cache);
-	ext.place_storage(vec![0], Some(vec![1]));
-	assert!(ext.storage(&[0]).is_some());
 	Ok(Ok(()))
 }
 
