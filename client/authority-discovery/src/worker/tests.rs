@@ -18,14 +18,13 @@
 
 use crate::worker::schema;
 
-use std::{iter::FromIterator, sync::{Arc, Mutex}};
+use std::{iter::FromIterator, sync::{Arc, Mutex}, task::Poll};
 
 use futures::channel::mpsc::{self, channel};
 use futures::executor::{block_on, LocalPool};
 use futures::future::FutureExt;
 use futures::sink::SinkExt;
 use futures::task::LocalSpawn;
-use futures::join;
 use libp2p::{kad, core::multiaddr, PeerId};
 use prometheus_endpoint::prometheus::default_registry;
 
@@ -459,29 +458,22 @@ fn terminate_when_event_stream_terminates() {
 		Box::pin(dht_event_rx),
 		Role::Authority(key_store.into()),
 		None,
-	);
-
-	let timer = async {
-		Delay::new(Duration::from_secs(1)).await;
-		// Simulate termination of the network through dropping the sender side of the dht event
-		// channel.
-		drop(dht_event_tx);
-	};
-
-	let discovery_future = async {
-		let result = worker.run().await;
-
-		assert_eq!(
-			(), result,
-			"Expect the authority discovery module to terminate once the sending side of the dht \
-			event channel is terminated.",
-		);
-	};
+	).run();
+	futures::pin_mut!(worker);
 
 	block_on(async {
-		join!(timer, discovery_future)
-	});
-}
+		assert_eq!(Poll::Pending, futures::poll!(&mut worker));
+
+		// Simulate termination of the network through dropping the sender side
+		// of the dht event channel.
+		drop(dht_event_tx);
+
+		assert_eq!(
+			Poll::Ready(()), futures::poll!(&mut worker),
+			"Expect the authority discovery module to terminate once the \
+			 sending side of the dht event channel is closed.",
+		);
+	});}
 
 #[test]
 fn dont_stop_polling_dht_event_stream_after_bogus_event() {
