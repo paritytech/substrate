@@ -207,28 +207,62 @@ fn integrity_test_works() {
 #[test]
 fn origin_codec() {
 	use codec::Encode;
-	assert_eq!(OriginCaller::system(system::RawOrigin::None).encode()[0], 30);
-	assert_eq!(OriginCaller::module1_Instance1(module1::Origin(Default::default())).encode()[0], 31);
-	assert_eq!(OriginCaller::module2(module2::Origin).encode()[0], 32);
-	assert_eq!(OriginCaller::module1_Instance2(module1::Origin(Default::default())).encode()[0], 33);
-	assert_eq!(OriginCaller::module1_Instance6(module1::Origin(Default::default())).encode()[0], 1);
-	assert_eq!(OriginCaller::module1_Instance7(module1::Origin(Default::default())).encode()[0], 2);
-	assert_eq!(OriginCaller::module1_Instance8(module1::Origin(Default::default())).encode()[0], 12);
-	assert_eq!(OriginCaller::module1_Instance9(module1::Origin(Default::default())).encode()[0], 13);
+
+	let origin = OriginCaller::system(system::RawOrigin::None);
+	assert_eq!(origin.encode()[0], 30);
+
+	let origin = OriginCaller::module1_Instance1(module1::Origin(Default::default()));
+	assert_eq!(origin.encode()[0], 31);
+
+	let origin = OriginCaller::module2(module2::Origin);
+	assert_eq!(origin.encode()[0], 32);
+
+	let origin = OriginCaller::module1_Instance2(module1::Origin(Default::default()));
+	assert_eq!(origin.encode()[0], 33);
+
+	let origin = OriginCaller::module1_Instance6(module1::Origin(Default::default()));
+	assert_eq!(origin.encode()[0], 1);
+
+	let origin = OriginCaller::module1_Instance7(module1::Origin(Default::default()));
+	assert_eq!(origin.encode()[0], 2);
+
+	let origin = OriginCaller::module1_Instance8(module1::Origin(Default::default()));
+	assert_eq!(origin.encode()[0], 12);
+
+	let origin = OriginCaller::module1_Instance9(module1::Origin(Default::default()));
+	assert_eq!(origin.encode()[0], 13);
 }
 
 #[test]
 fn event_codec() {
 	use codec::Encode;
-	assert_eq!(Event::system(system::Event::<Runtime>::ExtrinsicSuccess).encode()[0], 30);
-	assert_eq!(Event::module1_Instance1(module1::Event::<Runtime, module1::Instance1>::A(Default::default())).encode()[0], 31);
-	assert_eq!(Event::module2(module2::Event::A).encode()[0], 32);
-	assert_eq!(Event::module1_Instance2(module1::Event::<Runtime, module1::Instance2>::A(Default::default())).encode()[0], 33);
-	assert_eq!(Event::module1_Instance5(module1::Event::<Runtime, module1::Instance5>::A(Default::default())).encode()[0], 4);
-	assert_eq!(Event::module1_Instance6(module1::Event::<Runtime, module1::Instance6>::A(Default::default())).encode()[0], 1);
-	assert_eq!(Event::module1_Instance7(module1::Event::<Runtime, module1::Instance7>::A(Default::default())).encode()[0], 2);
-	assert_eq!(Event::module1_Instance8(module1::Event::<Runtime, module1::Instance8>::A(Default::default())).encode()[0], 12);
-	assert_eq!(Event::module1_Instance9(module1::Event::<Runtime, module1::Instance9>::A(Default::default())).encode()[0], 13);
+
+	let event = system::Event::<Runtime>::ExtrinsicSuccess;
+	assert_eq!(Event::from(event).encode()[0], 30);
+
+	let event = module1::Event::<Runtime, module1::Instance1>::A(Default::default());
+	assert_eq!(Event::from(event).encode()[0], 31);
+
+	let event = module2::Event::A;
+	assert_eq!(Event::from(event).encode()[0], 32);
+
+	let event = module1::Event::<Runtime, module1::Instance2>::A(Default::default());
+	assert_eq!(Event::from(event).encode()[0], 33);
+
+	let event = module1::Event::<Runtime, module1::Instance5>::A(Default::default());
+	assert_eq!(Event::from(event).encode()[0], 4);
+
+	let event = module1::Event::<Runtime, module1::Instance6>::A(Default::default());
+	assert_eq!(Event::from(event).encode()[0], 1);
+
+	let event = module1::Event::<Runtime, module1::Instance7>::A(Default::default());
+	assert_eq!(Event::from(event).encode()[0], 2);
+
+	let event = module1::Event::<Runtime, module1::Instance8>::A(Default::default());
+	assert_eq!(Event::from(event).encode()[0], 12);
+
+	let event = module1::Event::<Runtime, module1::Instance9>::A(Default::default());
+	assert_eq!(Event::from(event).encode()[0], 13);
 }
 
 #[test]
