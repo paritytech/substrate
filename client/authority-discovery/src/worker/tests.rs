@@ -484,24 +484,35 @@ fn terminate_when_event_stream_terminates() {
 }
 
 #[test]
-fn dont_stop_polling_when_error_is_returned() {
-	#[derive(PartialEq, Debug)]
-	enum Event {
-		Processed,
-		End,
+fn dont_stop_polling_dht_event_stream_after_bogus_event() {
+	let remote_multiaddr = {
+		let peer_id = PeerId::random();
+		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
+
+		address.with(multiaddr::Protocol::P2p(
+			peer_id.into(),
+		))
+	};
+	let remote_key_store = KeyStore::new();
+	let remote_public_key: AuthorityId = block_on(
+		remote_key_store.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None),
+	).unwrap().into();
+
+	let (mut dht_event_tx, dht_event_rx) = channel(1);
+	let (network, mut network_events) = {
+		let mut n = TestNetwork::default();
+		let r = n.get_event_receiver().unwrap();
+		(Arc::new(n), r)
 	};
 
-	let (mut dht_event_tx, dht_event_rx) = channel(1000);
-	let (mut discovery_update_tx, mut discovery_update_rx) = channel(1000);
-	let network: Arc<TestNetwork> = Arc::new(Default::default());
 	let key_store = KeyStore::new();
 	let test_api = Arc::new(TestApi {
-		authorities: vec![],
+		authorities: vec![remote_public_key.clone()],
 	});
 	let mut pool = LocalPool::new();
 
-	let (_to_worker, from_service) = mpsc::channel(0);
-	let worker = Worker::new(
+	let (mut to_worker, from_service) = mpsc::channel(1);
+	let mut worker = Worker::new(
 		from_service,
 		test_api,
 		network.clone(),
@@ -516,40 +527,42 @@ fn dont_stop_polling_when_error_is_returned() {
 	// As this is a local pool, only one future at a time will have the CPU and
 	// can make progress until the future returns `Pending`.
 	let _ = pool.spawner().spawn_local_obj(async move {
+		// Refilling `pending_lookups` only happens every X minutes. Fast
+		// forward by calling `refill_pending_lookups_queue` directly.
+		worker.refill_pending_lookups_queue().await.unwrap();
 		worker.run().await
 	}.boxed_local().into());
-	let _ = pool.spawner().spawn_local_obj(async move {
-		Delay::new(Duration::from_secs(1)).await;
-		let _ = discovery_update_tx.send(Event::Processed).now_or_never().unwrap();
-		Delay::new(Duration::from_secs(1)).await;
-		let _ = discovery_update_tx.send(Event::End).now_or_never().unwrap();
-	}.boxed_local().into());
 
-	pool.run_until(
-		// The future that drives the event stream
-		async {
-			// Send an event that should generate an error
-			let _ = dht_event_tx.send(DhtEvent::ValueFound(Default::default())).now_or_never();
-			// Send the same event again to make sure that the event stream needs to be polled twice
-			// to be woken up again.
-			let _ = dht_event_tx.send(DhtEvent::ValueFound(Default::default())).now_or_never();
+	pool.run_until(async {
+		// Assert worker to trigger a lookup for the one and only authority.
+		assert!(matches!(
+			network_events.next().await,
+			Some(TestNetworkEvent::GetCalled(_))
+		));
 
-			// Now we call `await` and give the control to the authority discovery future.
-			assert_eq!(Some(Event::Processed), discovery_update_rx.next().await);
+		// Send an event that should generate an error
+		dht_event_tx.send(DhtEvent::ValueFound(Default::default())).await
+			.expect("Channel has capacity of 1.");
 
-			// Drop the event rx to stop the authority discovery. If it was polled correctly, it
-			// should end properly.
-			drop(dht_event_tx);
+		// Make previously triggered lookup succeed.
+		let dht_event = {
+			let (key, value) = build_dht_event(
+				vec![remote_multiaddr.clone()],
+				remote_public_key.clone(), &remote_key_store,
+			).await;
+			sc_network::DhtEvent::ValueFound(vec![(key, value)])
+		};
+		dht_event_tx.send(dht_event).await.expect("Channel has capacity of 1.");
 
-			assert!(
-				discovery_update_rx.collect::<Vec<Event>>()
-					.await
-					.into_iter()
-					.any(|evt| evt == Event::End),
-				"The authority discovery should have ended",
-			);
-		}
-	);
+		// Expect authority discovery to function normally, now knowing the
+		// address for the remote node.
+		let (sender, addresses) = futures::channel::oneshot::channel();
+		to_worker.send(ServicetoWorkerMsg::GetAddressesByAuthorityId(
+			remote_public_key,
+			sender,
+		)).await.expect("Channel has capacity of 1.");
+		assert_eq!(Some(vec![remote_multiaddr]), addresses.await.unwrap());
+	});
 }
 
 /// In the scenario of a validator publishing the address of its sentry node to
