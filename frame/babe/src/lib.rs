@@ -203,6 +203,10 @@ decl_storage! {
 		/// if per-block initialization has already been called for current block.
 		Initialized get(fn initialized): Option<MaybeRandomness>;
 
+		/// Temporary value (cleared at block finalization) which is `Some` if we
+		/// have generated VRF randomness.
+		AuthorVrfRandomness get(fn author_vrf_randomness): Option<MaybeRandomness>;
+
 		/// How late the current block is compared to its parent.
 		///
 		/// This entry is populated as part of block execution and is cleaned up
@@ -247,6 +251,9 @@ decl_module! {
 			if let Some(Some(randomness)) = Initialized::take() {
 				Self::deposit_randomness(&randomness);
 			}
+
+			// WIP: explain
+			AuthorVrfRandomness::take();
 
 			// remove temporary "environment" entry from storage
 			Lateness::<T>::kill();
@@ -542,6 +549,8 @@ impl<T: Trait> Module<T> {
 			})
 			.next();
 
+		let is_primary = matches!(maybe_pre_digest, Some(PreDigest::Primary(..)));
+
 		let maybe_randomness: Option<schnorrkel::Randomness> = maybe_pre_digest.and_then(|digest| {
 			// on the first non-zero block (i.e. block #1)
 			// this is where the first epoch (epoch #0) actually starts.
@@ -571,14 +580,26 @@ impl<T: Trait> Module<T> {
 			Lateness::<T>::put(lateness);
 			CurrentSlot::put(current_slot);
 
-			if let PreDigest::Primary(primary) = digest {
+			match digest {
+				PreDigest::Primary(ref primary) => {
+					Some((primary.authority_index, &primary.vrf_output))
+				},
+				PreDigest::SecondaryVRF(ref secondary_vrf) => {
+					Some((secondary_vrf.authority_index, &secondary_vrf.vrf_output))
+				},
+				_ => None
+			}
+			.and_then(|(authority_index, vrf_output)| {
 				// place the VRF output into the `Initialized` storage item
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.
 				//
+				// Place the both primary and secondary VRF output into the
+				// `AuthorVrfRandomness` storage item.
+				//
 				// Reconstruct the bytes of VRFInOut using the authority id.
 				Authorities::get()
-					.get(primary.authority_index as usize)
+					.get(authority_index as usize)
 					.and_then(|author| {
 						schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok()
 					})
@@ -589,7 +610,7 @@ impl<T: Trait> Module<T> {
 							EpochIndex::get(),
 						);
 
-						primary.vrf_output.0.attach_input_hash(
+						vrf_output.0.attach_input_hash(
 							&pubkey,
 							transcript
 						).ok()
@@ -597,12 +618,13 @@ impl<T: Trait> Module<T> {
 					.map(|inout| {
 						inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT)
 					})
-			} else {
-				None
-			}
+			})
 		});
 
-		Initialized::put(maybe_randomness);
+		if is_primary {
+			Initialized::put(maybe_randomness);
+		}
+		AuthorVrfRandomness::put(maybe_randomness);
 
 		// enact epoch change, if necessary.
 		T::EpochChangeTrigger::trigger::<T>(now)
