@@ -34,7 +34,6 @@ use tracing::{
 	event::Event,
 	field::{Visit, Field},
 	Level,
-	metadata::Metadata,
 	span::{Attributes, Id, Record},
 	subscriber::Subscriber,
 };
