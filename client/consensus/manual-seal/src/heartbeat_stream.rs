@@ -24,9 +24,9 @@ use futures::{
 };
 use tokio::time::{Duration, Instant, Delay};
 
-use crate::rpc::{EngineCommand};
+use crate::rpc::EngineCommand;
 
-/// Constants for generating default heartbeat options
+// Constants for generating default heartbeat options
 const DEFAULT_MAX_BLOCKTIME: u64 = 30;
 const DEFAULT_MIN_BLOCKTIME: u64 = 1;
 const DEFAULT_FINALIZE: bool = false;
@@ -52,7 +52,7 @@ impl Default for HeartbeatOptions {
 }
 
 /// HeartbeatStream is combining transaction pool notification stream and generate a new block
-///   when a certain time has passed without any transactions.
+/// when a certain time has passed without any transactions.
 pub struct HeartbeatStream<Hash> {
 	/// The transaction pool notification stream
 	pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
@@ -67,7 +67,7 @@ pub struct HeartbeatStream<Hash> {
 impl<Hash> HeartbeatStream<Hash> {
 	pub fn new(
 		pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
-		opts: HeartbeatOptions
+		opts: HeartbeatOptions,
 	) -> Self {
 		if opts.min_blocktime > opts.max_blocktime {
 			panic!("Heartbeat options `min_blocktime` value must not be larger than `max_blocktime` value.");
@@ -76,13 +76,12 @@ impl<Hash> HeartbeatStream<Hash> {
 			pool_stream,
 			delay_future: tokio::time::delay_for(Duration::from_secs(opts.max_blocktime)),
 			last_blocktime: None,
-			opts
+			opts,
 		}
 	}
 }
 
 impl<Hash> Stream for HeartbeatStream<Hash> {
-
 	type Item = EngineCommand<Hash>;
 
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -91,7 +90,7 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 			Poll::Ready(Some(ec)) => {
 				if let Some(last_blocktime) = hbs.last_blocktime {
 					// If the last block happened less than the min_blocktime time, we want to wait till
-					//   `min_blocktime` has lapsed.
+					//  `min_blocktime` has lapsed.
 					let passed_blocktime = Instant::now() - last_blocktime;
 					if passed_blocktime < Duration::from_secs(hbs.opts.min_blocktime) {
 						// We set `delay_future` here so it will wake up when the min_blocktime since the last
