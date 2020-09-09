@@ -192,8 +192,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 	/// Prune the tree, removing all non-canonical nodes.
 	/// We remove roots that are non-canonical.
 	/// The given function `is_canonical` should return `true` if the given block
-	/// (hash and number input, and last finalized nubmer) is canonical, this only apply for block less than
-	/// the finalized one.
+	/// (hash and number input, and last finalized nubmer) is canonical.
+	/// This only apply for block less than the finalized one.
 	/// It apply recursively a clean up call back on branch.
 	///
 	/// Returns all pruned node data.

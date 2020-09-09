@@ -198,7 +198,11 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 	}
 
 	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		let lookup_key = utils::block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Number(number.clone()))?;
+		let lookup_key = utils::block_id_to_lookup_key::<Block>(
+			&*self.db,
+			columns::KEY_LOOKUP,
+			BlockId::Number(number.clone()),
+		)?;
 		Ok(if let Some(lookup_key) = lookup_key {
 			utils::lookup_key_to_hash(lookup_key.as_ref())? == hash.as_ref()
 		} else {

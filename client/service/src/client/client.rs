@@ -1549,7 +1549,11 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 		self.backend.blockchain().hash(number)
 	}
 
-	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+	fn pruned_header_was_canonical(
+		&self,
+		number: &NumberFor<Block>,
+		hash: &Block::Hash,
+	) -> sp_blockchain::Result<bool> {
 		self.backend.blockchain().pruned_header_was_canonical(number, hash)
 	}
 
@@ -1601,7 +1605,11 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for &Client<B, E, Block, RA> whe
 		(**self).hash(number)
 	}
 
-	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+	fn pruned_header_was_canonical(
+		&self,
+		number: &NumberFor<Block>,
+		hash: &Block::Hash,
+	) -> sp_blockchain::Result<bool> {
 		(**self).pruned_header_was_canonical(number, hash)
 	}
 

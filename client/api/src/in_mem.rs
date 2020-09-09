@@ -340,7 +340,11 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 		Ok(self.id(BlockId::Number(number)))
 	}
 
-	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+	fn pruned_header_was_canonical(
+		&self,
+		number: &NumberFor<Block>,
+		hash: &Block::Hash,
+	) -> sp_blockchain::Result<bool> {
 		Ok(self.storage.read().hashes.get(number) == Some(hash))
 	}
 

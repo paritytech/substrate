@@ -87,7 +87,11 @@ impl<S, Block> BlockchainHeaderBackend<Block> for Blockchain<S> where Block: Blo
 		self.storage.hash(number)
 	}
 
-	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> ClientResult<bool> {
+	fn pruned_header_was_canonical(
+		&self,
+		number: &NumberFor<Block>,
+		hash: &Block::Hash,
+	) -> ClientResult<bool> {
 		self.storage.pruned_header_was_canonical(number, hash)
 	}
 

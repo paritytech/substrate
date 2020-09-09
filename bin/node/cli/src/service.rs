@@ -349,8 +349,16 @@ pub fn new_light_base(config: Configuration) -> Result<(
 ), ServiceError> {
 	let mut shared_pruning_requirements = SharedPruningRequirements::default();
 	sc_consensus_babe::light_pruning_requirements(&mut shared_pruning_requirements);
-	let (client, backend, keystore, mut task_manager, on_demand) =
-		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config, &shared_pruning_requirements)?;
+	let (
+		client,
+		backend,
+		keystore,
+		mut task_manager,
+		on_demand,
+	) = sc_service::new_light_parts::<Block, RuntimeApi, Executor>(
+		&config,
+		&shared_pruning_requirements,
+	)?;
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 

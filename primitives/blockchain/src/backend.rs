@@ -80,7 +80,11 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	}
 
 	/// Was this header stored a canonical (partially pruned).
-	fn pruned_header_was_canonical(&self, number: &NumberFor<Block>, hash: &Block::Hash) -> Result<bool>;
+	fn pruned_header_was_canonical(
+		&self,
+		number: &NumberFor<Block>,
+		hash: &Block::Hash,
+	) -> Result<bool>;
 
 	/// Cleanup partially pruned header.
 	fn pruned_header_clean_up(&self, number: &NumberFor<Block>) -> Result<()>;
