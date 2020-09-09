@@ -494,7 +494,7 @@ pub trait Externalities: Send {
 	///
 	/// - `nodes`: a set of nodes which are allowed to connect for the local node.
 	/// each one is identified with an `OpaquePeerId`, here it just use plain bytes
-	/// without any encoding.
+	/// without any encoding. Invalid `OpaquePeerId`s are silently ignored.
 	/// - `authorized_only`: if true, only the authorized nodes are allowed to connect,
 	/// otherwise unauthorized nodes can also be connected through other mechanism.
 	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool);
