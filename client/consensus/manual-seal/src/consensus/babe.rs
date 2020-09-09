@@ -192,11 +192,11 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 				*id == AuthorityId::from(Alice.public())
 			})
 			.is_some();
-		log::info!(target: "babe", "authority found: {}", has_authority);
+		println!(target: "babe", "authority found: {}", has_authority);
 
 
 		if !has_authority {
-			log::info!(target: "babe", "authority not found");
+			println!(target: "babe", "authority not found");
 			let slot_number = inherents.timestamp_inherent_data()? / self.config.slot_duration;
 			epoch_descriptor = ViableEpochDescriptor::UnimportedGenesis(slot_number);
 		}
