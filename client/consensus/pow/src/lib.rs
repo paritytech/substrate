@@ -36,7 +36,7 @@ mod worker;
 pub use crate::worker::{MiningWorker, MiningMetadata, MiningBuild};
 
 use std::{
-	sync::Arc, any::Any, borrow::Cow, thread, collections::HashMap, marker::PhantomData,
+	sync::Arc, any::Any, borrow::Cow, collections::HashMap, marker::PhantomData,
 	time::Duration,
 };
 use futures::{prelude::*, future::Either};
