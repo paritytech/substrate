@@ -474,7 +474,10 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 	/// maximum corresponding limit.
 	///
 	/// For example, if a transaction consumed 1/4th of the block length and half of the weight, its
-	/// final priority is `fee * 2`.
+	/// final priority is `fee * min(2, 4) = fee * 2`. If it consumed `1/4th` of the block length
+	/// and the entire block weight `(1/1)`, its priority is `fee * min(1, 4) = fee * 1`. This means
+	///  that the transaction which consumes more resources (either length or weight) with the same
+	/// `fee` ends up having lower priority.
 	fn get_priority(len: usize, info: &DispatchInfoOf<T::Call>, final_fee: BalanceOf<T>) -> TransactionPriority {
 		let weight_saturation = T::MaximumBlockWeight::get() / info.weight.max(1);
 		let len_saturation = T::MaximumBlockLength::get() as u64 / (len as u64).max(1);
