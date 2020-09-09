@@ -26,19 +26,28 @@ use log::*;
 
 use crate::{INTERMEDIATE_KEY, POW_ENGINE_ID, Seal, PowAlgorithm, PowIntermediate};
 
+/// Mining metadata. This is the information needed to start an actual mining loop.
 #[derive(Clone)]
 pub struct MiningMetadata<H, D> {
+	/// Currently known best hash which the pre-hash is built on.
 	pub best_hash: H,
+	/// Mining pre-hash.
 	pub pre_hash: H,
+	/// Pre-runtime digest item.
 	pub pre_runtime: Option<Vec<u8>>,
+	/// Mining target difficulty.
 	pub difficulty: D,
 }
 
+/// A build of mining, containing the metadata and the block proposal.
 pub struct MiningBuild<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api::ProvideRuntimeApi<Block>> {
+	/// Mining metadata.
 	pub metadata: MiningMetadata<Block::Hash, Algorithm::Difficulty>,
+	/// Mining proposal.
 	pub proposal: Proposal<Block, sp_api::TransactionFor<C, Block>>,
 }
 
+/// Mining worker that exposes structs to query the current mining build and submit mined blocks.
 pub struct MiningWorker<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api::ProvideRuntimeApi<Block>> {
 	pub(crate) build: Option<MiningBuild<Block, Algorithm, C>>,
 	pub(crate) algorithm: Algorithm,
@@ -48,6 +57,8 @@ pub struct MiningWorker<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api
 impl<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api::ProvideRuntimeApi<Block>> MiningWorker<Block, Algorithm, C> where
 	Algorithm::Difficulty: 'static,
 {
+	/// Get the current best hash. `None` if the worker has just started or the client is doing
+	/// major syncing.
 	pub fn best_hash(&self) -> Option<Block::Hash> {
 		self.build.as_ref().map(|b| b.metadata.best_hash)
 	}
@@ -63,10 +74,13 @@ impl<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api::ProvideRuntimeApi
 		self.build = Some(build);
 	}
 
+	/// Get a copy of the current mining metadata, if available.
 	pub fn metadata(&self) -> Option<MiningMetadata<Block::Hash, Algorithm::Difficulty>> {
 		self.build.as_ref().map(|b| b.metadata.clone())
 	}
 
+	/// Submit a mined seal. The seal will be validated again. Returns true if the submission is
+	/// successful.
 	pub fn submit(&mut self, seal: Seal) -> bool {
 		if let Some(build) = self.build.take() {
 			match self.algorithm.verify(
