@@ -50,6 +50,7 @@ use sp_runtime::{
 use sp_timestamp::{InherentType, InherentError, INHERENT_IDENTIFIER, TimestampInherentData};
 use sp_keyring::Sr25519Keyring::Alice;
 use sp_runtime::generic::BlockId;
+use sp_runtime::traits::Zero;
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
@@ -70,7 +71,7 @@ pub struct BabeConsensusDataProvider<B: BlockT, C> {
 impl<B, C> BabeConsensusDataProvider<B, C>
 	where
 		B: BlockT,
-		C: AuxStore + ProvideRuntimeApi<B>,
+		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B>,
 		C::Api: BabeApi<B, Error = sp_blockchain::Error>,
 {
 	pub fn new(
@@ -218,9 +219,10 @@ struct SlotTimestampProvider {
 
 impl SlotTimestampProvider {
 	/// create a new mocked time stamp provider.
-	fn new<C>(client: Arc<C>) -> Result<Self, Error>
+	fn new<B, C>(client: Arc<C>) -> Result<Self, Error>
 		where
-			C: AuxStore + HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + ProvideRuntimeApi<B>,
+			B: BlockT,
+			C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B>,
 			C::Api: BabeApi<B, Error = sp_blockchain::Error>,
 	{
 		let slot_duration = Config::get_or_compute(&*client)?.slot_duration;
@@ -228,9 +230,9 @@ impl SlotTimestampProvider {
 
 		// looks like this isn't the first block, rehydrate the fake time.
 		// otherwise we'd be producing blocks for older slots.
-		let duration = if info.best_number != 0 {
+		let duration = if info.best_number != Zero::zero() {
 			let header = client.header(BlockId::Hash(info.best_hash))?.unwrap();
-			let slot_number = find_pre_digest(&header).unwrap().slot_number();
+			let slot_number = find_pre_digest::<B>(&header).unwrap().slot_number();
 			slot_number * slot_duration
 		} else {
 			// this is the first block, use the correct time.

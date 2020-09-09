@@ -199,8 +199,9 @@ impl Epoch {
 	}
 }
 
+#[allow(missing_docs)]
 #[derive(derive_more::Display, Debug)]
-enum Error<B: BlockT> {
+pub enum Error<B: BlockT> {
 	#[display(fmt = "Multiple BABE pre-runtime digests, rejecting!")]
 	MultiplePreRuntimeDigests,
 	#[display(fmt = "No BABE pre-runtime digest found")]
