@@ -27,7 +27,7 @@ use log::*;
 use crate::{INTERMEDIATE_KEY, POW_ENGINE_ID, Seal, PowAlgorithm, PowIntermediate};
 
 /// Mining metadata. This is the information needed to start an actual mining loop.
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct MiningMetadata<H, D> {
 	/// Currently known best hash which the pre-hash is built on.
 	pub best_hash: H,
