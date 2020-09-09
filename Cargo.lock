@@ -4080,7 +4080,6 @@ dependencies = [
  "sp-timestamp",
  "substrate-test-client",
  "tempfile",
- "wat",
 ]
 
 [[package]]
