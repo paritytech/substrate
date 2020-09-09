@@ -30,7 +30,7 @@ use std::{
 use sc_client_api::AuxStore;
 use sc_consensus_babe::{
 	Config, Epoch, authorship, CompatibleDigestItem, BabeIntermediate,
-	register_babe_inherent_data_provider, INTERMEDIATE_KEY,
+	register_babe_inherent_data_provider, INTERMEDIATE_KEY, find_pre_digest,
 };
 use sc_consensus_epochs::{SharedEpochChanges, descendent_query, ViableEpochDescriptor};
 use sc_keystore::KeyStorePtr;
@@ -49,6 +49,7 @@ use sp_runtime::{
 };
 use sp_timestamp::{InherentType, InherentError, INHERENT_IDENTIFIER, TimestampInherentData};
 use sp_keyring::Sr25519Keyring::Alice;
+use sp_runtime::generic::BlockId;
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
@@ -79,7 +80,7 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 		epoch_changes: SharedEpochChanges<B, Epoch>,
 	) -> Result<Self, Error> {
 		let config = Config::get_or_compute(&*client)?;
-		let timestamp_provider = SlotTimestampProvider::new(config.slot_duration)?;
+		let timestamp_provider = SlotTimestampProvider::new(client.clone())?;
 
 		provider.register_provider(timestamp_provider)?;
 		register_babe_inherent_data_provider(provider, config.slot_duration)?;
@@ -192,11 +193,9 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 				*id == AuthorityId::from(Alice.public())
 			})
 			.is_some();
-		println!(target: "babe", "authority found: {}", has_authority);
-
 
 		if !has_authority {
-			println!(target: "babe", "authority not found");
+			log::info!(target: "babe", "authority not found");
 			let slot_number = inherents.timestamp_inherent_data()? / self.config.slot_duration;
 			epoch_descriptor = ViableEpochDescriptor::UnimportedGenesis(slot_number);
 		}
@@ -219,12 +218,30 @@ struct SlotTimestampProvider {
 
 impl SlotTimestampProvider {
 	/// create a new mocked time stamp provider.
-	fn new(slot_duration: u64) -> Result<Self, Error> {
-		let now = SystemTime::now();
-		let duration = now.duration_since(SystemTime::UNIX_EPOCH)
-			.map_err(|err| Error::StringError(format!("{}", err)))?;
+	fn new<C>(client: Arc<C>) -> Result<Self, Error>
+		where
+			C: AuxStore + HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + ProvideRuntimeApi<B>,
+			C::Api: BabeApi<B, Error = sp_blockchain::Error>,
+	{
+		let slot_duration = Config::get_or_compute(&*client)?.slot_duration;
+		let info = client.info();
+
+		// looks like this isn't the first block, rehydrate the fake time.
+		// otherwise we'd be producing blocks for older slots.
+		let duration = if info.best_number != 0 {
+			let header = client.header(BlockId::Hash(info.best_hash))?.unwrap();
+			let slot_number = find_pre_digest(&header).unwrap().slot_number();
+			slot_number * slot_duration
+		} else {
+			// this is the first block, use the correct time.
+			let now = SystemTime::now();
+			now.duration_since(SystemTime::UNIX_EPOCH)
+				.map_err(|err| Error::StringError(format!("{}", err)))?
+				.as_millis() as u64
+		};
+
 		Ok(Self {
-			time: atomic::AtomicU64::new(duration.as_millis() as u64),
+			time: atomic::AtomicU64::new(duration),
 			slot_duration,
 		})
 	}
