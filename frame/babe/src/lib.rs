@@ -617,9 +617,9 @@ impl<T: Trait> Module<T> {
 			})
 		});
 
-		if is_primary {
-			Initialized::put(maybe_randomness);
-		}
+		let maybe_primary_randomness = maybe_randomness.filter(|_| is_primary);
+
+		Initialized::put(maybe_primary_randomness);
 		AuthorVrfRandomness::put(maybe_randomness);
 
 		// enact epoch change, if necessary.
