@@ -580,44 +580,40 @@ impl<T: Trait> Module<T> {
 			Lateness::<T>::put(lateness);
 			CurrentSlot::put(current_slot);
 
-			match digest {
-				PreDigest::Primary(ref primary) => {
-					Some((primary.authority_index, &primary.vrf_output))
-				},
-				PreDigest::SecondaryVRF(ref secondary_vrf) => {
-					Some((secondary_vrf.authority_index, &secondary_vrf.vrf_output))
-				},
-				_ => None
-			}
-			.and_then(|(authority_index, vrf_output)| {
-				// place the VRF output into the `Initialized` storage item
-				// and it'll be put onto the under-construction randomness
-				// later, once we've decided which epoch this block is in.
-				//
-				// Place the both primary and secondary VRF output into the
-				// `AuthorVrfRandomness` storage item.
-				//
-				// Reconstruct the bytes of VRFInOut using the authority id.
-				Authorities::get()
-					.get(authority_index as usize)
-					.and_then(|author| {
-						schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok()
-					})
-					.and_then(|pubkey| {
-						let transcript = sp_consensus_babe::make_transcript(
-							&Self::randomness(),
-							current_slot,
-							EpochIndex::get(),
-						);
+			let authority_index = digest.authority_index();
 
-						vrf_output.0.attach_input_hash(
-							&pubkey,
-							transcript
-						).ok()
-					})
-					.map(|inout| {
-						inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT)
-					})
+			// Extract out the VRF output if we have it
+			digest
+				.vrf_output()
+				.and_then(|vrf_output| {
+					// place the VRF output into the `Initialized` storage item
+					// and it'll be put onto the under-construction randomness
+					// later, once we've decided which epoch this block is in.
+					//
+					// Place the both primary and secondary VRF output into the
+					// `AuthorVrfRandomness` storage item.
+					//
+					// Reconstruct the bytes of VRFInOut using the authority id.
+					Authorities::get()
+						.get(authority_index as usize)
+						.and_then(|author| {
+							schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok()
+						})
+						.and_then(|pubkey| {
+							let transcript = sp_consensus_babe::make_transcript(
+								&Self::randomness(),
+								current_slot,
+								EpochIndex::get(),
+							);
+
+							vrf_output.0.attach_input_hash(
+								&pubkey,
+								transcript
+							).ok()
+						})
+						.map(|inout| {
+							inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT)
+						})
 			})
 		});
 
