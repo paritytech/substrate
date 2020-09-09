@@ -18,7 +18,7 @@
 /// Types for wasm based tracing. Loosly inspired by `tracing-core` but
 /// optimised for the specific use case.
 
-use core::fmt::Debug;
+use core::{format_args, fmt::Debug};
 use sp_std::{
 	vec, vec::Vec,
 };
@@ -39,6 +39,21 @@ pub enum WasmLevel {
 	/// The lowest level, keeping track of minute detail
 	TRACE
 }
+
+
+impl From<&tracing_core::Level> for WasmLevel {
+	fn from(l: &tracing_core::Level) -> WasmLevel {
+		match l {
+			&tracing_core::Level::ERROR => WasmLevel::ERROR,
+			&tracing_core::Level::WARN => WasmLevel::WARN,
+			&tracing_core::Level::INFO => WasmLevel::INFO,
+			&tracing_core::Level::DEBUG => WasmLevel::DEBUG,
+			&tracing_core::Level::TRACE => WasmLevel::TRACE,
+		}
+	}
+}
+
+
 
 impl core::default::Default for WasmLevel {
 	fn default() -> Self {
@@ -136,10 +151,10 @@ impl From<bool> for WasmValue {
 	}
 }
 
-impl From<&core::fmt::Arguments<'_>> for WasmValue {
-	fn from(inp: &core::fmt::Arguments<'_>) -> WasmValue {
+impl From<core::fmt::Arguments<'_>> for WasmValue {
+	fn from(inp: core::fmt::Arguments<'_>) -> WasmValue {
 		let mut buf = Writer::default();
-		core::fmt::write(&mut buf, *inp).expect("Writing of arguments doesn't fail");
+		core::fmt::write(&mut buf, inp).expect("Writing of arguments doesn't fail");
 		WasmValue::Formatted(buf.into_inner())
 	}
 }
@@ -248,6 +263,11 @@ impl WasmFields {
 	}
 }
 
+impl From<&tracing_core::field::FieldSet> for WasmFields {
+	fn from(wm: &tracing_core::field::FieldSet) -> WasmFields {
+		WasmFields(wm.iter().map(|s| s.name().into()).collect())
+	}
+}
 
 /// A list of `WasmFieldName`s with the given `WasmValue` (if provided)
 /// in the order specified.
@@ -304,6 +324,38 @@ impl WasmValuesSet {
 	}
 }
 
+impl tracing_core::field::Visit for WasmValuesSet {
+	fn record_debug(&mut self, field: &tracing_core::field::Field, value: &dyn Debug) {
+		self.0.push( (
+			field.name().into(),
+			Some(WasmValue::from(format_args!("{:?}", value)))
+		))
+	}
+	fn record_i64(&mut self, field: &tracing_core::field::Field, value: i64) {
+		self.0.push( (
+			field.name().into(),
+			Some(WasmValue::from(value))
+		))
+	}
+	fn record_u64(&mut self, field: &tracing_core::field::Field, value: u64) {
+		self.0.push( (
+			field.name().into(),
+			Some(WasmValue::from(value))
+		))
+	}
+	fn record_bool(&mut self, field: &tracing_core::field::Field, value: bool) {
+		self.0.push( (
+			field.name().into(),
+			Some(WasmValue::from(value))
+		))
+	}
+	fn record_str(&mut self, field: &tracing_core::field::Field, value: &str) {
+		self.0.push( (
+			field.name().into(),
+			Some(WasmValue::from(value))
+		))
+	}
+}
 /// Metadata provides generic information about the specifc location of the
 /// `span!` or `event!` call on the wasm-side.
 #[derive(Encode, Decode, Clone)]
@@ -324,6 +376,21 @@ pub struct WasmMetadata {
 	pub is_span: bool,
 	/// The list of fields specified in the call
 	pub fields: WasmFields,
+}
+
+impl From<&tracing_core::Metadata<'_>> for WasmMetadata {
+	fn from(wm: &tracing_core::Metadata<'_>) -> WasmMetadata {
+		WasmMetadata {
+			name: wm.name().as_bytes().to_vec(),
+			target: wm.target().as_bytes().to_vec(),
+			level: wm.level().into(),
+			file: wm.file().map(|f| f.as_bytes().to_vec()).unwrap_or_default(),
+			line: wm.line().unwrap_or_default(),
+			module_path: wm.module_path().map(|m| m.as_bytes().to_vec()).unwrap_or_default(),
+			is_span: wm.is_span(),
+			fields: wm.fields().into()
+		}
+	}
 }
 
 impl core::fmt::Debug for WasmMetadata {
@@ -371,6 +438,30 @@ pub struct WasmEntryAttributes {
 	pub metadata: WasmMetadata,
 	/// the Values provided
 	pub fields: WasmValuesSet,
+}
+
+impl From<&tracing_core::Event<'_>> for WasmEntryAttributes {
+	fn from(evt: &tracing_core::Event<'_>) -> WasmEntryAttributes {
+		let mut fields = WasmValuesSet(Vec::new());
+		evt.record(&mut fields);
+		WasmEntryAttributes {
+			parent_id: evt.parent().map(|id| id.into_u64()),
+			metadata: evt.metadata().into(),
+			fields: fields
+		}
+	}
+}
+
+impl From<&tracing_core::span::Attributes<'_>> for WasmEntryAttributes {
+	fn from(attrs: &tracing_core::span::Attributes<'_>) -> WasmEntryAttributes {
+		let mut fields = WasmValuesSet(Vec::new());
+		attrs.record(&mut fields);
+		WasmEntryAttributes {
+			parent_id: attrs.parent().map(|id| id.into_u64()),
+			metadata: attrs.metadata().into(),
+			fields: fields
+		}
+	}
 }
 
 impl core::default::Default for WasmEntryAttributes {

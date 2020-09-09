@@ -96,20 +96,19 @@
 
 mod types;
 
-#[cfg(not(feature = "std"))]
-#[macro_export]
-mod wasm_tracing;
+// #[cfg(not(feature = "std"))]
+// #[macro_export]
+// mod wasm_tracing;
 
-#[cfg(not(feature = "std"))]
-pub use wasm_tracing::Span;
+// #[cfg(not(feature = "std"))]
+// pub use wasm_tracing::Span;
 
 #[cfg(feature = "std")]
 use tracing;
 
-#[cfg(feature = "std")]
 pub use tracing::{
 	debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
-	span, event, Level,
+	span, event, Level, Span,
 };
 
 pub use crate::types::{
@@ -121,90 +120,6 @@ pub use crate::types::{
 	WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER
 };
 
-#[cfg(not(feature = "std"))]
-pub type Level = WasmLevel;
-
-/// Defines the interface for the  wasm-side tracing subcriber. This is
-/// very much modeled after the `tracing_core::Subscriber`, but adapted
-/// to be feasible to cross the wasm-native boundary.
-///
-/// This is generally expected to be a proxy that moves the data over to
-/// the native side as tracking within `wasm` is probably ineffecient. However
-/// any implementation may do internal optimisations for performance.
-///
-#[cfg(not(feature = "std"))]
-pub trait TracingSubscriber: Send + Sync {
-	/// Give the `WasmMetadata`, should we even continue recording this span/event
-	/// or stop execution before.
-	/// This may or may not be implemented wasm- and/or native side or have optimisations
-	/// added.
-	fn enabled(&self, metadata: &WasmMetadata) -> bool;
-	/// Enter a new `Span` with the given `WasmEntryAttributes`, return the u64 tracking ID for
-	/// it or 0 if not. Will only be called if `attrs.metadata` was found to be enabled.
-	fn enter_span(&self, attrs: WasmEntryAttributes) -> u64;
-	/// Record the `WasmValueSet` for `WasMetadata` as a new event. Willl only be called if
-	/// `WasmMetadata` was found to be enabled;
-	fn event(&self, parent_id: Option<u64>, metadata: &WasmMetadata, values: &WasmValuesSet);
-	/// Exit the given span. You can discard the span info now.
-	fn exit(&self, span: u64);
-}
-
-
-#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
-mod global_subscription {
-	// Having a global subscription for WASM
-	use crate::TracingSubscriber;
-	use sp_std::{
-		boxed::Box,
-		cell::UnsafeCell,
-	};
-
-	struct SubscriptionHolder {
-		inner: UnsafeCell<Option<Box<dyn TracingSubscriber>>>
-	}
-
-	static SUBSCRIBER_INSTANCE: SubscriptionHolder = SubscriptionHolder {
-		inner: UnsafeCell::new(None)
-	};
-
-	unsafe impl core::marker::Sync for SubscriptionHolder {}
-
-	/// Set the given `TracingSubscriber` as target for the tracing spans.
-	/// This should happen first, any span and event calls run before are not recorded.
-	///
-	/// **IMPORTANT**:
-	/// This uses unsafe features to provide a lazily-set instance-wide global. This is not
-	/// thread-safe and will panic if called from withina `with_tracing_subscriber`-call.
-	///
-	/// See module index documentation for how to set the system up properly.
-	pub fn set_tracing_subscriber(subscriber: Box<dyn TracingSubscriber>)
-	{
-		unsafe {
-			// Safety: Safe due to `inner`'s invariant
-			*SUBSCRIBER_INSTANCE.inner.get() = Some(subscriber)
-		}
-	}
-
-	/// Gain access to the globally set `TracingSubscriber`.
-	/// Used to record events and spans.
-	/// *IMPORTANT*: do not call `set_tracing_subscriber` from within. That will lead
-	/// to undefined behaviour.
-	#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
-	pub fn with_tracing_subscriber<F, R>(f: F) -> Option<R>
-		where F: FnOnce(&Box<dyn TracingSubscriber>) -> R
-	{
-		unsafe {
-			// Safety: Safe due to `inner`'s invariant
-			match SUBSCRIBER_INSTANCE.inner.get().as_ref() {
-				Some(o) => o.as_ref().map(f),
-				_ => None
-			}
-		}
-	}
-}
-
-#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
-pub use global_subscription::{set_tracing_subscriber, with_tracing_subscriber};
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///

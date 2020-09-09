@@ -1089,36 +1089,42 @@ pub trait WasmTracing {
 #[cfg(all(not(feature="std"), feature="with-tracing"))]
 mod tracing_setup {
 	use core::sync::atomic::{AtomicBool, Ordering};
-	use sp_std::boxed::Box;
+	use tracing_core::{
+		dispatcher::{Dispatch, set_global_default},
+		span::{Id, Record, Attributes},
+		Metadata, Event,
+	};
 	use super::{wasm_tracing, Crossing};
 
 	const TRACING_SET : AtomicBool = AtomicBool::new(false);
 
 
-	/// The PassingTracingSubscriber implements `sp_tracing::TracingSubscriber`
+	/// The PassingTracingSubscriber implements `tracing_core::Subscriber`
 	/// and pushes the information accross the runtime interface to the host
 	struct PassingTracingSubsciber;
 
-	impl sp_tracing::TracingSubscriber for PassingTracingSubsciber {
-		fn enabled(&self, metadata: &sp_tracing::WasmMetadata) -> bool {
-			wasm_tracing::enabled(Crossing(metadata.clone()))
+	impl tracing_core::Subscriber for PassingTracingSubsciber {
+		fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+			wasm_tracing::enabled(Crossing(metadata.into()))
 		}
-		fn enter_span(&self, attrs: sp_tracing::WasmEntryAttributes) -> u64 {
-			wasm_tracing::enter_span(Crossing(attrs))
+		fn new_span(&self, attrs: &Attributes<'_>) -> Id {
+			Id::from_u64(wasm_tracing::enter_span(Crossing(attrs.into())))
 		}
-		fn event(&self,
-			parent_id: Option<u64>,
-			metadata: &sp_tracing::WasmMetadata,
-			values: &sp_tracing::WasmValuesSet
-		) {
-			wasm_tracing::event(Crossing(sp_tracing::WasmEntryAttributes {
-				parent_id,
-				metadata: metadata.clone(),
-				fields: values.clone()
-			}))
+		fn enter(&self, span: &Id) {
+			// We are already entered in the API here
+			todo! {}
 		}
-		fn exit(&self, span: u64) {
-			wasm_tracing::exit(span)
+		fn record(&self, span: &Id, values: &Record<'_>) {
+			todo!{}
+		}
+		fn record_follows_from(&self, span: &Id, follows: &Id) {
+			todo!{ }
+		}
+		fn event(&self, event: &Event<'_>) {
+			wasm_tracing::event(Crossing(event.into()))
+		}
+		fn exit(&self, span: &Id) {
+			wasm_tracing::exit(span.into_u64())
 		}
 	}
 
@@ -1128,7 +1134,8 @@ mod tracing_setup {
 	/// set the global bridgin subscriber once.
 	pub fn init_tracing() {
 		if TRACING_SET.load(Ordering::Relaxed) == false {
-			sp_tracing::set_tracing_subscriber(Box::new(PassingTracingSubsciber {} ));
+			set_global_default(Dispatch::new(PassingTracingSubsciber {}))
+				.expect("We only ever call this once");
 			TRACING_SET.store(true, Ordering::Relaxed);
 		}
 	}

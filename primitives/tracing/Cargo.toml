@@ -19,8 +19,8 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 [dependencies]
 sp-std = { version = "2.0.0-rc6", path = "../std", default-features = false}
 codec = { version = "1.3.1", package = "parity-scale-codec", default-features = false, features = ["derive"]}
-tracing = { version = "0.1.18", default-features = false }
-tracing-core = { version = "0.1.13", optional = true }
+tracing = { version = "0.1.19", default-features = false }
+tracing-core = { version = "0.1.16", default-features = false }
 log = { version = "0.4.8", optional = true }
 
 [features]
@@ -32,7 +32,7 @@ with-tracing = [
 std = [
     "with-tracing",
     "tracing/std",
-    "tracing-core",
+    "tracing-core/std",
     "codec/std",
     "sp-std/std",
     "log",
