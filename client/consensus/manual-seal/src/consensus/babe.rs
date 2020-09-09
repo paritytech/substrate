@@ -32,7 +32,7 @@ use sc_consensus_babe::{
 	Config, Epoch, authorship, CompatibleDigestItem, BabeIntermediate,
 	register_babe_inherent_data_provider, INTERMEDIATE_KEY,
 };
-use sc_consensus_epochs::{SharedEpochChanges, descendent_query};
+use sc_consensus_epochs::{SharedEpochChanges, descendent_query, ViableEpochDescriptor};
 use sc_keystore::KeyStorePtr;
 
 use sp_api::{ProvideRuntimeApi, TransactionFor};
@@ -47,7 +47,8 @@ use sp_runtime::{
 	traits::{DigestItemFor, DigestFor, Block as BlockT, Header as _},
 	generic::Digest,
 };
-use sp_timestamp::{InherentType, InherentError, INHERENT_IDENTIFIER};
+use sp_timestamp::{InherentType, InherentError, INHERENT_IDENTIFIER, TimestampInherentData};
+use sp_keyring::Sr25519Keyring::Alice;
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
@@ -137,7 +138,6 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 				authority_index: 0_u32,
 			});
 
-			use sp_keyring::Sr25519Keyring::Alice;
 			let authority = (AuthorityId::from(Alice.public()), 1000);
 
 			let next_epoch = ConsensusLog::NextEpochData(NextEpochDescriptor {
@@ -162,8 +162,9 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 		inherents: &InherentData
 	) -> Result<(), Error> {
 		let slot_number = inherents.babe_inherent_data()?;
+		let epoch_changes = self.epoch_changes.lock();
 
-		let epoch_descriptor = self.epoch_changes.lock()
+		let mut epoch_descriptor = epoch_changes
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
@@ -172,6 +173,31 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 			)
 			.map_err(|e| Error::StringError(format!("failed to fetch epoch data: {}", e)))?
 			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
+
+		let epoch = epoch_changes
+			.viable_epoch(
+				&epoch_descriptor,
+				|slot| Epoch::genesis(&self.config, slot),
+			)
+			.ok_or_else(|| {
+				log::info!(target: "babe", "create_digest: no viable_epoch :(");
+				sp_consensus::Error::InvalidAuthoritiesSet
+			})?;
+
+		// a quick check to see if we're in the authorities
+		let has_authority = epoch.as_ref()
+			.authorities
+			.iter()
+			.find(|(id, _)| {
+				*id == AuthorityId::from(Alice.public())
+			})
+			.is_some();
+
+		if !has_authority {
+			log::info!(target: "babe", "authority not found");
+			let slot_number = inherents.timestamp_inherent_data()? / self.config.slot_duration;
+			epoch_descriptor = ViableEpochDescriptor::UnimportedGenesis(slot_number);
+		}
 
 		params.intermediates.insert(
 			Cow::from(INTERMEDIATE_KEY),
