@@ -1162,7 +1162,7 @@ decl_storage! {
 			=> Option<BalanceOf<T>>;
 
 		/// Slashing spans for stash accounts.
-		SlashingSpans: map hasher(twox_64_concat) T::AccountId => Option<slashing::SlashingSpans>;
+		SlashingSpans get(fn slashing_spans): map hasher(twox_64_concat) T::AccountId => Option<slashing::SlashingSpans>;
 
 		/// Records information about the maximum slash of a stash within a slashing span,
 		/// as well as how much reward has been paid out.
