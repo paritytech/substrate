@@ -233,7 +233,8 @@ impl SlotTimestampProvider {
 		let duration = if info.best_number != Zero::zero() {
 			let header = client.header(BlockId::Hash(info.best_hash))?.unwrap();
 			let slot_number = find_pre_digest::<B>(&header).unwrap().slot_number();
-			slot_number * slot_duration
+			// add the slot duration so there's no collision of slots
+			(slot_number * slot_duration) + slot_duration
 		} else {
 			// this is the first block, use the correct time.
 			let now = SystemTime::now();
