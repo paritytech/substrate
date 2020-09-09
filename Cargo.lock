@@ -6666,6 +6666,7 @@ dependencies = [
  "derive_more",
  "env_logger",
  "futures 0.3.5",
+ "futures-timer 3.0.2",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -6685,7 +6686,6 @@ dependencies = [
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "tempfile",
- "tokio 0.2.22",
 ]
 
 [[package]]
@@ -9160,7 +9160,6 @@ dependencies = [
  "libc",
  "memchr",
  "mio",
- "mio-named-pipes",
  "mio-uds",
  "num_cpus",
  "pin-project-lite",

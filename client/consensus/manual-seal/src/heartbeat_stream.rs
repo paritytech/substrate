@@ -17,13 +17,12 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! HeartbeatStream type and HeartbeatOptions used in instant seal
-use std::{pin::Pin};
+use std::{pin::Pin, time::{Duration, Instant}};
 use futures::{
 	prelude::*,
 	task::{Context, Poll},
 };
-use tokio::time::{Duration, Instant, Delay};
-
+use futures_timer::Delay;
 use crate::rpc::EngineCommand;
 
 
@@ -73,7 +72,7 @@ impl<Hash> HeartbeatStream<Hash> {
 		}
 		Self {
 			pool_stream,
-			delay_future: tokio::time::delay_for(Duration::from_secs(opts.max_blocktime)),
+			delay_future: Delay::new(Duration::from_secs(opts.max_blocktime)),
 			last_blocktime: None,
 			opts,
 		}
@@ -94,14 +93,14 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 					if passed_blocktime < Duration::from_secs(hbs.opts.min_blocktime) {
 						// We set `delay_future` here so it will wake up when the min_blocktime since the last
 						//   block created is passed.
-						hbs.delay_future = tokio::time::delay_for(Duration::from_secs(hbs.opts.min_blocktime)
+						hbs.delay_future = Delay::new(Duration::from_secs(hbs.opts.min_blocktime)
 							- passed_blocktime);
 						return Poll::Pending;
 					}
 				}
 
 				// reset the timer and delay future
-				hbs.delay_future = tokio::time::delay_for(Duration::from_secs(hbs.opts.max_blocktime));
+				hbs.delay_future = Delay::new(Duration::from_secs(hbs.opts.max_blocktime));
 				hbs.last_blocktime = Some(Instant::now());
 				Poll::Ready(Some(ec))
 			},
@@ -113,7 +112,7 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 				// We check if the delay for heartbeat has reached
 				if let Poll::Ready(_) = hbs.delay_future.poll_unpin(cx) {
 					// reset the timer and delay future
-					hbs.delay_future = tokio::time::delay_for(Duration::from_secs(hbs.opts.max_blocktime));
+					hbs.delay_future = Delay::new(Duration::from_secs(hbs.opts.max_blocktime));
 					hbs.last_blocktime = Some(Instant::now());
 
 					return Poll::Ready(Some(EngineCommand::SealNewBlock {

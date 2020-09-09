@@ -21,7 +21,7 @@ jsonrpc-derive = "14.2.1"
 log = "0.4.8"
 parking_lot = "0.10.0"
 serde = { version = "1.0", features=["derive"] }
-tokio = { version = "0.2", features=["full"] }
+futures-timer = "3.0.2"
 
 sc-client-api = { path = "../../../client/api", version = "2.0.0-rc6" }
 sc-transaction-pool = { path = "../../transaction-pool", version = "2.0.0-rc6" }
