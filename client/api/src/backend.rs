@@ -545,3 +545,21 @@ pub struct SharedPruningRequirements {
 	/// client.
 	pub need_mapping_for_light_pruning: bool,
 }
+
+/// Provide CHT roots. These are stored on a light client and generated dynamically on a full
+/// client.
+pub trait ProvideChtRoots<Block: BlockT> {
+	/// Get headers CHT root for given block. Returns None if the block is not a part of any CHT.
+	fn header_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> sp_blockchain::Result<Option<Block::Hash>>;
+
+	/// Get changes trie CHT root for given block. Returns None if the block is not a part of any CHT.
+	fn changes_trie_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> sp_blockchain::Result<Option<Block::Hash>>;
+}

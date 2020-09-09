@@ -127,9 +127,10 @@ use schnorrkel::SignatureError;
 use codec::{Encode, Decode};
 use sp_api::ApiExt;
 
-mod aux_schema;
 mod verification;
 mod migration;
+
+pub mod aux_schema;
 pub mod authorship;
 #[cfg(test)]
 mod tests;
@@ -995,13 +996,15 @@ where
 				// the header is valid but let's check if there was something else already
 				// proposed at the same slot by the given author. if there was, we will
 				// report the equivocation to the runtime.
-				self.check_and_report_equivocation(
+				if let Err(err) = self.check_and_report_equivocation(
 					slot_now,
 					slot_number,
 					&header,
 					&verified_info.author,
 					&origin,
-				)?;
+				) {
+					warn!(target: "babe", "Error checking/reporting BABE equivocation: {:?}", err);
+				}
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
@@ -1050,7 +1053,7 @@ where
 }
 
 /// Register the babe inherent data provider, if not registered already.
-fn register_babe_inherent_data_provider(
+pub fn register_babe_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 	slot_duration: u64,
 ) -> Result<(), sp_consensus::Error> {

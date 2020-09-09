@@ -28,8 +28,8 @@
 //! which is then processed by [`NetworkWorker::poll`].
 
 use crate::{
-	ExHashT, NetworkStateInfo,
-	behaviour::{Behaviour, BehaviourOut},
+	ExHashT, NetworkStateInfo, NetworkStatus,
+	behaviour::{self, Behaviour, BehaviourOut},
 	config::{parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
 	DhtEvent,
 	discovery::DiscoveryConfig,
@@ -42,19 +42,15 @@ use crate::{
 	protocol::{self, event::Event, NotifsHandlerError, LegacyConnectionKillError, NotificationsSink, Ready, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
-use futures::prelude::*;
+use futures::{channel::oneshot, prelude::*};
 use libp2p::{PeerId, multiaddr, Multiaddr};
 use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}, either::EitherError};
 use libp2p::kad::record;
 use libp2p::ping::handler::PingFailure;
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent, protocols_handler::NodeHandlerWrapperError};
 use log::{error, info, trace, warn};
+use metrics::{Metrics, MetricSources, Histogram, HistogramVec};
 use parking_lot::Mutex;
-use prometheus_endpoint::{
-	register, Counter, CounterVec, Gauge, GaugeVec, Histogram, HistogramOpts, HistogramVec, Opts,
-	PrometheusError, Registry, U64,
-	SourcedCounter, MetricSource
-};
 use sc_peerset::PeersetHandle;
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
 use sp_runtime::{
@@ -76,7 +72,11 @@ use std::{
 	},
 	task::Poll,
 };
+use wasm_timer::Instant;
 
+pub use behaviour::{ResponseFailure, InboundFailure, RequestFailure, OutboundFailure};
+
+mod metrics;
 mod out_events;
 #[cfg(test)]
 mod tests;
@@ -102,7 +102,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ConsensusEngineId), NotificationsSink>>>,
 	/// For each legacy gossiping engine ID, the corresponding new protocol name.
-	protocol_name_by_engine: Mutex<HashMap<ConsensusEngineId, Cow<'static, [u8]>>>,
+	protocol_name_by_engine: Mutex<HashMap<ConsensusEngineId, Cow<'static, str>>>,
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
 	notifications_sizes_metric: Option<HistogramVec>,
@@ -255,7 +255,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			local_peer_id.clone(),
 			params.chain.clone(),
 			params.transaction_pool,
-			params.finality_proof_provider.clone(),
 			params.finality_proof_request_builder,
 			params.protocol_id.clone(),
 			peerset_config,
@@ -310,16 +309,28 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config
 			};
 
-			let mut behaviour = Behaviour::new(
-				protocol,
-				params.role,
-				user_agent,
-				local_public,
-				block_requests,
-				finality_proof_requests,
-				light_client_handler,
-				discovery_config
-			);
+			let mut behaviour = {
+				let result = Behaviour::new(
+					protocol,
+					params.role,
+					user_agent,
+					local_public,
+					block_requests,
+					finality_proof_requests,
+					light_client_handler,
+					discovery_config,
+					params.network_config.request_response_protocols,
+				);
+
+				match result {
+					Ok(b) => b,
+					Err(crate::request_responses::RegisterError::DuplicateProtocol(proto)) => {
+						return Err(Error::DuplicateRequestResponseProtocol {
+							protocol: proto,
+						})
+					},
+				}
+			};
 
 			for (engine_id, protocol_name) in &params.network_config.notifications_protocols {
 				behaviour.register_notifications_protocol(*engine_id, protocol_name.clone());
@@ -351,10 +362,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		// Initialize the metrics.
 		let metrics = match &params.metrics_registry {
 			Some(registry) => {
-				// Sourced metrics.
-				BandwidthCounters::register(registry, bandwidth.clone())?;
-				// Other (i.e. new) metrics.
-				Some(Metrics::register(registry)?)
+				Some(metrics::register(registry, MetricSources {
+					bandwidth: bandwidth.clone(),
+					major_syncing: is_major_syncing.clone(),
+					connected_peers: num_connected.clone(),
+				})?)
 			}
 			None => None
 		};
@@ -405,7 +417,21 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
+			pending_requests: HashMap::with_capacity(128),
 		})
+	}
+
+	/// High-level network status information.
+	pub fn status(&self) -> NetworkStatus<B> {
+		NetworkStatus {
+			sync_state: self.sync_state(),
+			best_seen_block: self.best_seen_block(),
+			num_sync_peers: self.num_sync_peers(),
+			num_connected_peers: self.num_connected_peers(),
+			num_active_peers: self.num_active_peers(),
+			total_bytes_inbound: self.total_bytes_inbound(),
+			total_bytes_outbound: self.total_bytes_outbound(),
+		}
 	}
 
 	/// Returns the total number of bytes received so far.
@@ -547,8 +573,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			peer_id: Swarm::<B, H>::local_peer_id(&swarm).to_base58(),
 			listened_addresses: Swarm::<B, H>::listeners(&swarm).cloned().collect(),
 			external_addresses: Swarm::<B, H>::external_addresses(&swarm).cloned().collect(),
-			total_bytes_inbound: self.service.bandwidth.total_inbound(),
-			total_bytes_outbound: self.service.bandwidth.total_outbound(),
 			connected_peers,
 			not_connected_peers,
 			peerset: swarm.user_protocol_mut().peerset_debug_info(),
@@ -620,18 +644,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		// Determine the wire protocol name corresponding to this `engine_id`.
 		let protocol_name = self.protocol_name_by_engine.lock().get(&engine_id).cloned();
 		if let Some(protocol_name) = protocol_name {
-			// For backwards-compatibility reason, we have to duplicate the message and pass it
-			// in the situation where the remote still uses the legacy substream.
-			let fallback = codec::Encode::encode(&{
-				protocol::message::generic::Message::<(), (), (), ()>::Consensus({
-					protocol::message::generic::ConsensusMessage {
-						engine_id,
-						data: message.clone(),
-					}
-				})
-			});
-
-			sink.send_sync_notification(&protocol_name, fallback, message);
+			sink.send_sync_notification(protocol_name, message);
 		} else {
 			return;
 		}
@@ -736,7 +749,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		Ok(NotificationSender {
 			sink,
 			protocol_name,
-			engine_id,
 			notification_size_metric: self.notifications_sizes_metric.as_ref().map(|histogram| {
 				histogram.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
 			}),
@@ -753,10 +765,48 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// parameter is a `&'static str`, and not a `String`, in order to avoid accidentally having
 	/// an unbounded set of Prometheus metrics, which would be quite bad in terms of memory
 	pub fn event_stream(&self, name: &'static str) -> impl Stream<Item = Event> {
-		// Note: when transitioning to stable futures, remove the `Error` entirely
 		let (tx, rx) = out_events::channel(name);
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		rx
+	}
+
+	/// Sends a single targeted request to a specific peer. On success, returns the response of
+	/// the peer.
+	///
+	/// Request-response protocols are a way to complement notifications protocols, but
+	/// notifications should remain the default ways of communicating information. For example, a
+	/// peer can announce something through a notification, after which the recipient can obtain
+	/// more information by performing a request.
+	/// As such, this function is meant to be called only with peers we are already connected to.
+	/// Calling this method with a `target` we are not connected to will *not* attempt to connect
+	/// to said peer.
+	///
+	/// No limit or throttling of concurrent outbound requests per peer and protocol are enforced.
+	/// Such restrictions, if desired, need to be enforced at the call site(s).
+	///
+	/// The protocol must have been registered through
+	/// [`NetworkConfiguration::request_response_protocols`].
+	pub async fn request(
+		&self,
+		target: PeerId,
+		protocol: impl Into<Cow<'static, str>>,
+		request: Vec<u8>
+	) -> Result<Vec<u8>, RequestFailure> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::Request {
+			target,
+			protocol: protocol.into(),
+			request,
+			pending_response: tx
+		});
+
+		match rx.await {
+			Ok(v) => v,
+			// The channel can only be closed if the network worker no longer exists. If the
+			// network worker no longer exists, then all connections to `target` are necessarily
+			// closed, and we legitimately report this situation as a "ConnectionClosed".
+			Err(_) => Err(RequestFailure::Network(OutboundFailure::ConnectionClosed)),
+		}
 	}
 
 	/// Registers a new notifications protocol.
@@ -775,7 +825,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub fn register_notifications_protocol(
 		&self,
 		engine_id: ConsensusEngineId,
-		protocol_name: impl Into<Cow<'static, [u8]>>,
+		protocol_name: impl Into<Cow<'static, str>>,
 	) {
 		let protocol_name = protocol_name.into();
 		self.protocol_name_by_engine.lock().insert(engine_id, protocol_name.clone());
@@ -1009,10 +1059,7 @@ pub struct NotificationSender {
 	sink: NotificationsSink,
 
 	/// Name of the protocol on the wire.
-	protocol_name: Cow<'static, [u8]>,
-
-	/// Engine ID used for the fallback message.
-	engine_id: ConsensusEngineId,
+	protocol_name: Cow<'static, str>,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1023,11 +1070,10 @@ impl NotificationSender {
 	/// Returns a future that resolves when the `NotificationSender` is ready to send a notification.
 	pub async fn ready<'a>(&'a self) -> Result<NotificationSenderReady<'a>, NotificationSenderError> {
 		Ok(NotificationSenderReady {
-			ready: match self.sink.reserve_notification(&self.protocol_name).await {
+			ready: match self.sink.reserve_notification(self.protocol_name.clone()).await {
 				Ok(r) => r,
 				Err(()) => return Err(NotificationSenderError::Closed),
 			},
-			engine_id: self.engine_id,
 			notification_size_metric: self.notification_size_metric.clone(),
 		})
 	}
@@ -1037,9 +1083,6 @@ impl NotificationSender {
 #[must_use]
 pub struct NotificationSenderReady<'a> {
 	ready: Ready<'a>,
-
-	/// Engine ID used for the fallback message.
-	engine_id: ConsensusEngineId,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1055,18 +1098,8 @@ impl<'a> NotificationSenderReady<'a> {
 			notification_size_metric.observe(notification.len() as f64);
 		}
 
-		// For backwards-compatibility reason, we have to duplicate the message and pass it
-		// in the situation where the remote still uses the legacy substream.
-		let fallback = codec::Encode::encode(&{
-			protocol::message::generic::Message::<(), (), (), ()>::Consensus({
-				protocol::message::generic::ConsensusMessage {
-					engine_id: self.engine_id,
-					data: notification.clone(),
-				}
-			})
-		});
-
-		self.ready.send(fallback, notification)
+		self.ready
+			.send(notification)
 			.map_err(|()| NotificationSenderError::Closed)
 	}
 }
@@ -1097,9 +1130,15 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 	EventStream(out_events::Sender),
+	Request {
+		target: PeerId,
+		protocol: Cow<'static, str>,
+		request: Vec<u8>,
+		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+	},
 	RegisterNotifProtocol {
 		engine_id: ConsensusEngineId,
-		protocol_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, str>,
 	},
 	DisconnectPeer(PeerId),
 	UpdateChain,
@@ -1133,252 +1172,16 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: Arc<HashSet<PeerId>>,
+	/// Requests started using [`NetworkService::request`]. Includes the channel to send back the
+	/// response, when the request has started, and the name of the protocol for diagnostic
+	/// purposes.
+	pending_requests: HashMap<
+		behaviour::RequestId,
+		(oneshot::Sender<Result<Vec<u8>, RequestFailure>>, Instant, String)
+	>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ConsensusEngineId), NotificationsSink>>>,
-}
-
-struct Metrics {
-	// This list is ordered alphabetically
-	connections_closed_total: CounterVec<U64>,
-	connections_opened_total: CounterVec<U64>,
-	distinct_peers_connections_closed_total: Counter<U64>,
-	distinct_peers_connections_opened_total: Counter<U64>,
-	import_queue_blocks_submitted: Counter<U64>,
-	import_queue_finality_proofs_submitted: Counter<U64>,
-	import_queue_justifications_submitted: Counter<U64>,
-	incoming_connections_errors_total: CounterVec<U64>,
-	incoming_connections_total: Counter<U64>,
-	is_major_syncing: Gauge<U64>,
-	issued_light_requests: Counter<U64>,
-	kademlia_query_duration: HistogramVec,
-	kademlia_random_queries_total: CounterVec<U64>,
-	kademlia_records_count: GaugeVec<U64>,
-	kademlia_records_sizes_total: GaugeVec<U64>,
-	kbuckets_num_nodes: GaugeVec<U64>,
-	listeners_local_addresses: Gauge<U64>,
-	listeners_errors_total: Counter<U64>,
-	notifications_sizes: HistogramVec,
-	notifications_streams_closed_total: CounterVec<U64>,
-	notifications_streams_opened_total: CounterVec<U64>,
-	peers_count: Gauge<U64>,
-	peerset_num_discovered: Gauge<U64>,
-	peerset_num_requested: Gauge<U64>,
-	pending_connections: Gauge<U64>,
-	pending_connections_errors_total: CounterVec<U64>,
-	requests_in_total: HistogramVec,
-	requests_out_finished: HistogramVec,
-	requests_out_started_total: CounterVec<U64>,
-}
-
-/// The source for bandwidth metrics.
-#[derive(Clone)]
-struct BandwidthCounters(Arc<transport::BandwidthSinks>);
-
-impl BandwidthCounters {
-	fn register(registry: &Registry, sinks: Arc<transport::BandwidthSinks>)
-		-> Result<(), PrometheusError>
-	{
-		register(SourcedCounter::new(
-			&Opts::new(
-				"sub_libp2p_network_bytes_total",
-				"Total bandwidth usage"
-			).variable_label("direction"),
-			BandwidthCounters(sinks),
-		)?, registry)?;
-
-		Ok(())
-	}
-}
-
-impl MetricSource for BandwidthCounters {
-	type N = u64;
-
-	fn collect(&self, mut set: impl FnMut(&[&str], Self::N)) {
-		set(&[&"in"], self.0.total_inbound());
-		set(&[&"out"], self.0.total_outbound());
-	}
-}
-
-impl Metrics {
-	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
-		Ok(Self {
-			// This list is ordered alphabetically
-			connections_closed_total: register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_connections_closed_total",
-					"Total number of connections closed, by direction and reason"
-				),
-				&["direction", "reason"]
-			)?, registry)?,
-			connections_opened_total: register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_connections_opened_total",
-					"Total number of connections opened by direction"
-				),
-				&["direction"]
-			)?, registry)?,
-			distinct_peers_connections_closed_total: register(Counter::new(
-					"sub_libp2p_distinct_peers_connections_closed_total",
-					"Total number of connections closed with distinct peers"
-			)?, registry)?,
-			distinct_peers_connections_opened_total: register(Counter::new(
-					"sub_libp2p_distinct_peers_connections_opened_total",
-					"Total number of connections opened with distinct peers"
-			)?, registry)?,
-			import_queue_blocks_submitted: register(Counter::new(
-				"import_queue_blocks_submitted",
-				"Number of blocks submitted to the import queue.",
-			)?, registry)?,
-			import_queue_finality_proofs_submitted: register(Counter::new(
-				"import_queue_finality_proofs_submitted",
-				"Number of finality proofs submitted to the import queue.",
-			)?, registry)?,
-			import_queue_justifications_submitted: register(Counter::new(
-				"import_queue_justifications_submitted",
-				"Number of justifications submitted to the import queue.",
-			)?, registry)?,
-			incoming_connections_errors_total: register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_incoming_connections_handshake_errors_total",
-					"Total number of incoming connections that have failed during the \
-					initial handshake"
-				),
-				&["reason"]
-			)?, registry)?,
-			incoming_connections_total: register(Counter::new(
-				"sub_libp2p_incoming_connections_total",
-				"Total number of incoming connections on the listening sockets"
-			)?, registry)?,
-			is_major_syncing: register(Gauge::new(
-				"sub_libp2p_is_major_syncing", "Whether the node is performing a major sync or not.",
-			)?, registry)?,
-			issued_light_requests: register(Counter::new(
-				"issued_light_requests",
-				"Number of light client requests that our node has issued.",
-			)?, registry)?,
-			kademlia_query_duration: register(HistogramVec::new(
-				HistogramOpts {
-					common_opts: Opts::new(
-						"sub_libp2p_kademlia_query_duration",
-						"Duration of Kademlia queries per query type"
-					),
-					buckets: prometheus_endpoint::exponential_buckets(0.5, 2.0, 10)
-						.expect("parameters are always valid values; qed"),
-				},
-				&["type"]
-			)?, registry)?,
-			kademlia_random_queries_total: register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_kademlia_random_queries_total",
-					"Number of random Kademlia queries started"
-				),
-				&["protocol"]
-			)?, registry)?,
-			kademlia_records_count: register(GaugeVec::new(
-				Opts::new(
-					"sub_libp2p_kademlia_records_count",
-					"Number of records in the Kademlia records store"
-				),
-				&["protocol"]
-			)?, registry)?,
-			kademlia_records_sizes_total: register(GaugeVec::new(
-				Opts::new(
-					"sub_libp2p_kademlia_records_sizes_total",
-					"Total size of all the records in the Kademlia records store"
-				),
-				&["protocol"]
-			)?, registry)?,
-			kbuckets_num_nodes: register(GaugeVec::new(
-				Opts::new(
-					"sub_libp2p_kbuckets_num_nodes",
-					"Number of nodes in the Kademlia k-buckets"
-				),
-				&["protocol"]
-			)?, registry)?,
-			listeners_local_addresses: register(Gauge::new(
-				"sub_libp2p_listeners_local_addresses", "Number of local addresses we're listening on"
-			)?, registry)?,
-			listeners_errors_total: register(Counter::new(
-				"sub_libp2p_listeners_errors_total",
-				"Total number of non-fatal errors reported by a listener"
-			)?, registry)?,
-			notifications_sizes: register(HistogramVec::new(
-				HistogramOpts {
-					common_opts: Opts::new(
-						"sub_libp2p_notifications_sizes",
-						"Sizes of the notifications send to and received from all nodes"
-					),
-					buckets: prometheus_endpoint::exponential_buckets(64.0, 4.0, 8)
-						.expect("parameters are always valid values; qed"),
-				},
-				&["direction", "protocol"]
-			)?, registry)?,
-			notifications_streams_closed_total: register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_notifications_streams_closed_total",
-					"Total number of notification substreams that have been closed"
-				),
-				&["protocol"]
-			)?, registry)?,
-			notifications_streams_opened_total: register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_notifications_streams_opened_total",
-					"Total number of notification substreams that have been opened"
-				),
-				&["protocol"]
-			)?, registry)?,
-			peers_count: register(Gauge::new(
-				"sub_libp2p_peers_count", "Number of network gossip peers",
-			)?, registry)?,
-			peerset_num_discovered: register(Gauge::new(
-				"sub_libp2p_peerset_num_discovered", "Number of nodes stored in the peerset manager",
-			)?, registry)?,
-			peerset_num_requested: register(Gauge::new(
-				"sub_libp2p_peerset_num_requested", "Number of nodes that the peerset manager wants us to be connected to",
-			)?, registry)?,
-			pending_connections: register(Gauge::new(
-				"sub_libp2p_pending_connections",
-				"Number of connections in the process of being established",
-			)?, registry)?,
-			pending_connections_errors_total: register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_pending_connections_errors_total",
-					"Total number of pending connection errors"
-				),
-				&["reason"]
-			)?, registry)?,
-			requests_in_total: register(HistogramVec::new(
-				HistogramOpts {
-					common_opts: Opts::new(
-						"sub_libp2p_requests_in_total",
-						"Total number of requests received and answered"
-					),
-					buckets: prometheus_endpoint::exponential_buckets(0.001, 2.0, 16)
-						.expect("parameters are always valid values; qed"),
-				},
-				&["protocol"]
-			)?, registry)?,
-			requests_out_finished: register(HistogramVec::new(
-				HistogramOpts {
-					common_opts: Opts::new(
-						"sub_libp2p_requests_out_finished",
-						"Time between a request's start and finish (successful or not)"
-					),
-					buckets: prometheus_endpoint::exponential_buckets(0.001, 2.0, 16)
-						.expect("parameters are always valid values; qed"),
-				},
-				&["protocol"]
-			)?, registry)?,
-			requests_out_started_total: register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_requests_out_started_total",
-					"Total number of requests emitted"
-				),
-				&["protocol"]
-			)?, registry)?,
-		})
-	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
@@ -1405,7 +1208,22 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			}
 		}
 
+		// At the time of writing of this comment, due to a high volume of messages, the network
+		// worker sometimes takes a long time to process the loop below. When that happens, the
+		// rest of the polling is frozen. In order to avoid negative side-effects caused by this
+		// freeze, a limit to the number of iterations is enforced below. If the limit is reached,
+		// the task is interrupted then scheduled again.
+		//
+		// This allows for a more even distribution in the time taken by each sub-part of the
+		// polling.
+		let mut num_iterations = 0;
 		loop {
+			num_iterations += 1;
+			if num_iterations >= 100 {
+				cx.waker().wake_by_ref();
+				break;
+			}
+
 			// Process the next message coming from the `NetworkService`.
 			let msg = match this.from_service.poll_next_unpin(cx) {
 				Poll::Ready(Some(msg)) => msg,
@@ -1432,6 +1250,31 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 				ServiceToWorkerMsg::EventStream(sender) =>
 					this.event_streams.push(sender),
+				ServiceToWorkerMsg::Request { target, protocol, request, pending_response } => {
+					// Calling `send_request` can fail immediately in some circumstances.
+					// This is handled by sending back an error on the channel.
+					match this.network_service.send_request(&target, &protocol, request) {
+						Ok(request_id) => {
+							if let Some(metrics) = this.metrics.as_ref() {
+								metrics.requests_out_started_total
+									.with_label_values(&[&protocol])
+									.inc();
+							}
+							this.pending_requests.insert(
+								request_id,
+								(pending_response, Instant::now(), protocol.to_string())
+							);
+						},
+						Err(behaviour::SendRequestError::NotConnected) => {
+							let err = RequestFailure::Network(OutboundFailure::ConnectionClosed);
+							let _ = pending_response.send(Err(err));
+						},
+						Err(behaviour::SendRequestError::UnknownProtocol) => {
+							let err = RequestFailure::Network(OutboundFailure::UnsupportedProtocols);
+							let _ = pending_response.send(Err(err));
+						},
+					}
+				},
 				ServiceToWorkerMsg::RegisterNotifProtocol { engine_id, protocol_name } => {
 					this.network_service
 						.register_notifications_protocol(engine_id, protocol_name);
@@ -1445,7 +1288,16 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			}
 		}
 
+		// `num_iterations` serves the same purpose as in the previous loop.
+		// See the previous loop for explanations.
+		let mut num_iterations = 0;
 		loop {
+			num_iterations += 1;
+			if num_iterations >= 1000 {
+				cx.waker().wake_by_ref();
+				break;
+			}
+
 			// Process the next action coming from the network.
 			let next_event = this.network_service.next_event();
 			futures::pin_mut!(next_event);
@@ -1471,31 +1323,80 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					this.import_queue.import_finality_proof(origin, hash, nb, proof);
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::AnsweredRequest { protocol, build_time, .. })) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest { protocol, result, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.requests_in_total
-							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
-							.observe(build_time.as_secs_f64());
+						match result {
+							Ok(serve_time) => {
+								metrics.requests_in_success_total
+									.with_label_values(&[&protocol])
+									.observe(serve_time.as_secs_f64());
+							}
+							Err(err) => {
+								let reason = match err {
+									ResponseFailure::Busy => "busy",
+									ResponseFailure::Network(InboundFailure::Timeout) => "timeout",
+									ResponseFailure::Network(InboundFailure::UnsupportedProtocols) =>
+										"unsupported",
+								};
+
+								metrics.requests_in_failure_total
+									.with_label_values(&[&protocol, reason])
+									.inc();
+							}
+						}
 					}
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestStarted { protocol, .. })) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { request_id, result })) => {
+					if let Some((send_back, started, protocol)) = this.pending_requests.remove(&request_id) {
+						if let Some(metrics) = this.metrics.as_ref() {
+							match &result {
+								Ok(_) => {
+									metrics.requests_out_success_total
+										.with_label_values(&[&protocol])
+										.observe(started.elapsed().as_secs_f64());
+								}
+								Err(err) => {
+									let reason = match err {
+										RequestFailure::Refused => "refused",
+										RequestFailure::Network(OutboundFailure::DialFailure) =>
+											"dial-failure",
+										RequestFailure::Network(OutboundFailure::Timeout) =>
+											"timeout",
+										RequestFailure::Network(OutboundFailure::ConnectionClosed) =>
+											"connection-closed",
+										RequestFailure::Network(OutboundFailure::UnsupportedProtocols) =>
+											"unsupported",
+									};
+
+									metrics.requests_out_failure_total
+										.with_label_values(&[&protocol, reason])
+										.inc();
+								}
+							}
+						}
+						let _ = send_back.send(result);
+					} else {
+						error!("Request not in pending_requests");
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestStarted { protocol, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.requests_out_started_total
-							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+							.with_label_values(&[&protocol])
 							.inc();
 					}
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { protocol, request_duration, .. })) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestFinished { protocol, request_duration, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.requests_out_finished
-							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+						metrics.requests_out_success_total
+							.with_label_values(&[&protocol])
 							.observe(request_duration.as_secs_f64());
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(protocol))) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.kademlia_random_queries_total
-							.with_label_values(&[&maybe_utf8_bytes_to_string(protocol.as_bytes())])
+							.with_label_values(&[&protocol.as_ref()])
 							.inc();
 					}
 				},
@@ -1610,18 +1511,19 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							ConnectedPoint::Listener { .. } => "in",
 						};
 						let reason = match cause {
-							ConnectionError::IO(_) => "transport-error",
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::B(
-								EitherError::A(PingFailure::Timeout)))))))) => "ping-timeout",
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::Legacy(LegacyConnectionKillError)))))))) =>	"force-closed",
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged))))))) => "sync-notifications-clogged",
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) => "protocol-error",
-							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) => "keep-alive-timeout",
+							Some(ConnectionError::IO(_)) => "transport-error",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
+								EitherError::A(PingFailure::Timeout)))))))))) => "ping-timeout",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+								NotifsHandlerError::Legacy(LegacyConnectionKillError)))))))))) => "force-closed",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+								NotifsHandlerError::SyncNotificationsClogged))))))))) => "sync-notifications-clogged",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) => "protocol-error",
+							Some(ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout)) => "keep-alive-timeout",
+							None => "actively-closed",
 						};
 						metrics.connections_closed_total.with_label_values(&[direction, reason]).inc();
 
@@ -1750,20 +1652,15 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			metrics.is_major_syncing.set(is_major_syncing as u64);
 			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
-				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
-				metrics.kbuckets_num_nodes.with_label_values(&[&proto]).set(num_entries as u64);
+				metrics.kbuckets_num_nodes.with_label_values(&[&proto.as_ref()]).set(num_entries as u64);
 			}
 			for (proto, num_entries) in this.network_service.num_kademlia_records() {
-				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
-				metrics.kademlia_records_count.with_label_values(&[&proto]).set(num_entries as u64);
+				metrics.kademlia_records_count.with_label_values(&[&proto.as_ref()]).set(num_entries as u64);
 			}
 			for (proto, num_entries) in this.network_service.kademlia_records_total_size() {
-				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
-				metrics.kademlia_records_sizes_total.with_label_values(&[&proto]).set(num_entries as u64);
+				metrics.kademlia_records_sizes_total.with_label_values(&[&proto.as_ref()]).set(num_entries as u64);
 			}
-			metrics.peers_count.set(num_connected_peers as u64);
 			metrics.peerset_num_discovered.set(this.network_service.user_protocol().num_discovered_peers() as u64);
 			metrics.peerset_num_requested.set(this.network_service.user_protocol().requested_peers().count() as u64);
 			metrics.pending_connections.set(Swarm::network_info(&this.network_service).num_connections_pending as u64);
@@ -1779,7 +1676,7 @@ impl<B: BlockT + 'static, H: ExHashT> Unpin for NetworkWorker<B, H> {
 /// Turns bytes that are potentially UTF-8 into a reasonable representable string.
 ///
 /// Meant to be used only for debugging or metrics-reporting purposes.
-fn maybe_utf8_bytes_to_string(id: &[u8]) -> Cow<str> {
+pub(crate) fn maybe_utf8_bytes_to_string(id: &[u8]) -> Cow<str> {
 	if let Ok(s) = std::str::from_utf8(&id[..]) {
 		Cow::Borrowed(s)
 	} else {
