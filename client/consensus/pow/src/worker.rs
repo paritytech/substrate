@@ -54,7 +54,10 @@ pub struct MiningWorker<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api
 	pub(crate) block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
 }
 
-impl<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api::ProvideRuntimeApi<Block>> MiningWorker<Block, Algorithm, C> where
+impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
+	Block: BlockT,
+	C: sp_api::ProvideRuntimeApi<Block>,
+	Algorithm: PowAlgorithm<Block>,
 	Algorithm::Difficulty: 'static,
 {
 	/// Get the current best hash. `None` if the worker has just started or the client is doing
