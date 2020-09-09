@@ -288,6 +288,8 @@ pub trait IterableStorageDoubleMap<
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
+	///
+	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
 	fn translate<O: Decode, F: Fn(K1, K2, O) -> Option<V>>(f: F);
 }
 
@@ -436,6 +438,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 }
 
 /// Iterate over a prefix and decode raw_key and raw_value into `T`.
+///
+/// If any decoding fails it skips it and continues to the next key.
 pub struct PrefixIterator<T> {
 	prefix: Vec<u8>,
 	previous_key: Vec<u8>,
