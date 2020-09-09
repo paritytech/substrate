@@ -18,7 +18,7 @@
 
 use sc_network::{config::identity::ed25519, config::NodeKeyConfig};
 use sp_core::H256;
-use std::{path::{PathBuf, Path}, str::FromStr, fs::File, io::Read};
+use std::{path::PathBuf, str::FromStr};
 use structopt::StructOpt;
 
 use crate::arg_enums::NodeKeyType;
@@ -99,10 +99,12 @@ impl NodeKeyParams {
 			NodeKeyType::Ed25519 => {
 				let secret = if let Some(node_key) = self.node_key.as_ref() {
 					parse_ed25519_secret(node_key)?
-				} else if let Some(path) = &self.node_key_file {
-					open_ed25519_secret(&path)?
 				} else {
-					sc_network::config::Secret::File(net_config_dir.join(NODE_KEY_ED25519_FILE))
+					sc_network::config::Secret::File(
+						self.node_key_file
+							.clone()
+							.unwrap_or_else(|| net_config_dir.join(NODE_KEY_ED25519_FILE))
+					)
 				};
 
 				NodeKeyConfig::Ed25519(secret)
@@ -127,29 +129,10 @@ fn parse_ed25519_secret(hex: &str) -> error::Result<sc_network::config::Ed25519S
 		})
 }
 
-/// Open a file and try to parse it as hex or raw bytes Ed25519 secret key into a `sc_network::Secret`.
-fn open_ed25519_secret(file: &Path) -> error::Result<sc_network::config::Ed25519Secret> {
-	let mut file = File::open(file)
-		.map_err(|e| format!("Failed to open ed25519 secret: {:?}", e))?;
-
-	let mut content = Vec::new();
-	file.read_to_end(&mut content).map_err(|e| format!("Failed to read ed25519 secret: {:?}", e))?;
-
-	let secret_key = match String::from_utf8(content.clone())
-		.ok()
-		.and_then(|s| H256::from_str(&s).ok())
-	{
-		Some(bytes) => ed25519::SecretKey::from_bytes(bytes),
-		None => ed25519::SecretKey::from_bytes(content),
-	};
-
-	secret_key.map(sc_network::config::Secret::Input).map_err(invalid_node_key)
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_network::config::identity::ed25519;
+	use sc_network::config::identity::{ed25519, Keypair};
 	use std::fs;
 
 	#[test]
@@ -188,11 +171,14 @@ mod tests {
 				node_key_file: Some(file),
 			};
 
-			let node_key = params.node_key(&PathBuf::from("not-used")).expect("Creates node key");
+			let node_key = params.node_key(&PathBuf::from("not-used"))
+				.expect("Creates node key config")
+				.into_keypair()
+				.expect("Creates node key pair");
 
 			match node_key {
-				NodeKeyConfig::Ed25519(sc_network::config::Secret::Input(ref secret))
-					if secret.as_ref() == key.as_ref() => {}
+				Keypair::Ed25519(ref pair)
+					if pair.secret().as_ref() == key.as_ref() => {}
 				_ => panic!("Invalid key"),
 			}
 		}

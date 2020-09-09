@@ -625,10 +625,26 @@ impl NodeKeyConfig {
 				Ok(Keypair::Ed25519(k.into())),
 
 			Ed25519(Secret::File(f)) =>
-				get_secret(f,
-					|mut b| ed25519::SecretKey::from_bytes(&mut b),
+				get_secret(
+					f,
+					|mut b| {
+						match String::from_utf8(b.to_vec())
+							.ok()
+							.and_then(|s|{
+								if s.len() == 64 {
+									sp_core::H256::from_str(&s).ok()
+								} else {
+									None
+								}}
+							)
+						{
+							Some(s) => ed25519::SecretKey::from_bytes(s),
+							_ => ed25519::SecretKey::from_bytes(&mut b),
+						}
+					},
 					ed25519::SecretKey::generate,
-					|b| b.as_ref().to_vec())
+					|b| b.as_ref().to_vec()
+				)
 				.map(ed25519::Keypair::from)
 				.map(Keypair::Ed25519),
 		}
