@@ -19,8 +19,6 @@
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
-// #![allow(dead_code)]
-
 use std::{sync::Arc, marker::PhantomData};
 use futures::prelude::*;
 
