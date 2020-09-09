@@ -399,7 +399,7 @@ impl<
 						},
 					};
 
-					let mut key2_material = G::Hasher1::reverse(&key_material);
+					let mut key2_material = G::Hasher2::reverse(&key_material);
 					let key2 = match K2::decode(&mut key2_material) {
 						Ok(key2) => key2,
 						Err(_) => {
@@ -443,7 +443,7 @@ mod test_iterators {
 
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
-			DoubleMap: double_map hasher(blake2_128_concat) u16, hasher(blake2_128_concat) u32 => u64;
+			DoubleMap: double_map hasher(blake2_128_concat) u16, hasher(twox_64_concat) u32 => u64;
 		}
 	}
 
@@ -506,17 +506,17 @@ mod test_iterators {
 
 			assert_eq!(
 				DoubleMap::iter_prefix(k1).collect::<Vec<_>>(),
-				vec![(0, 0), (2, 2), (1, 1), (3, 3)],
+				vec![(1, 1), (2, 2), (0, 0), (3, 3)],
 			);
 
 			assert_eq!(
 				DoubleMap::iter_prefix_values(k1).collect::<Vec<_>>(),
-				vec![0, 2, 1, 3],
+				vec![1, 2, 0, 3],
 			);
 
 			assert_eq!(
 				DoubleMap::drain_prefix(k1).collect::<Vec<_>>(),
-				vec![(0, 0), (2, 2), (1, 1), (3, 3)],
+				vec![(1, 1), (2, 2), (0, 0), (3, 3)],
 			);
 
 			assert_eq!(DoubleMap::iter_prefix(k1).collect::<Vec<_>>(), vec![]);
@@ -549,7 +549,7 @@ mod test_iterators {
 				&[
 					prefix.clone(),
 					crate::Blake2_128Concat::hash(&1u16.encode()),
-					crate::Blake2_128Concat::hash(&2u32.encode()),
+					crate::Twox64Concat::hash(&2u32.encode()),
 				].concat(),
 				&vec![1],
 			);
