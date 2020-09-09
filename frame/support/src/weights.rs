@@ -256,9 +256,9 @@ pub mod priority {
 		Operational(u64),
 	}
 
-	impl Into<u64> for FrameTransactionPriority {
-		fn into(self) -> u64 {
-			match self {
+	impl From<FrameTransactionPriority> for u64 {
+		fn from(priority: FrameTransactionPriority) -> Self {
+			match priority {
 				FrameTransactionPriority::Normal(inner) => inner,
 				FrameTransactionPriority::Operational(inner) => inner.saturating_add(LIMIT),
 			}
