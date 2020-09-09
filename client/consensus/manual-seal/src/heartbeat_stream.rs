@@ -26,10 +26,6 @@ use tokio::time::{Duration, Instant, Delay};
 
 use crate::rpc::EngineCommand;
 
-// Constants for generating default heartbeat options
-const DEFAULT_MAX_BLOCKTIME: u64 = 30;
-const DEFAULT_MIN_BLOCKTIME: u64 = 1;
-const DEFAULT_FINALIZE: bool = false;
 
 /// Heartbeat options to manage the behavior of the heartbeat stream
 pub struct HeartbeatOptions {
@@ -38,15 +34,18 @@ pub struct HeartbeatOptions {
 	/// The amount of time passed that a new heartbeat block will be generated, in sec.
 	pub max_blocktime: u64,
 	/// Control whether the generated block is finalized
+	//TODO this is confusing and possibly redundant with the finalize parameter in `run_instant_seal`
+	// I recommend letting the user specify the finalize parameter once and it apples to all blocks
+	// whether they are from the trigger stream or not.
 	pub finalize: bool,
 }
 
 impl Default for HeartbeatOptions {
 	fn default() -> Self {
 		Self {
-			min_blocktime: DEFAULT_MIN_BLOCKTIME,
-			max_blocktime: DEFAULT_MAX_BLOCKTIME,
-			finalize: DEFAULT_FINALIZE,
+			min_blocktime: 30,
+			max_blocktime: 1,
+			finalize: false,
 		}
 	}
 }
