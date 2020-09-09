@@ -519,7 +519,6 @@ benchmarks! {
 	}
 
 	// same as submit_solution_initial but we place a very weak solution on chian first.
-	#[extra]
 	submit_solution_better {
 		// number of validator intention.
 		let v in 200 .. 400;
