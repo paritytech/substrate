@@ -32,7 +32,7 @@ use sc_consensus_babe::{
 	Config, Epoch, authorship, CompatibleDigestItem, BabeIntermediate,
 	register_babe_inherent_data_provider, INTERMEDIATE_KEY, find_pre_digest,
 };
-use sc_consensus_epochs::{SharedEpochChanges, descendent_query, ViableEpochDescriptor};
+use sc_consensus_epochs::{SharedEpochChanges, descendent_query, ViableEpochDescriptor, EpochIdentifier, EpochIdentifierPosition, EpochHeader};
 use sc_keystore::KeyStorePtr;
 
 use sp_api::{ProvideRuntimeApi, TransactionFor};
@@ -44,13 +44,13 @@ use sp_consensus_babe::{
 };
 use sp_inherents::{InherentDataProviders, InherentData, ProvideInherentData, InherentIdentifier};
 use sp_runtime::{
-	traits::{DigestItemFor, DigestFor, Block as BlockT, Header as _},
+	traits::{DigestItemFor, DigestFor, Block as BlockT},
 	generic::Digest,
 };
 use sp_timestamp::{InherentType, InherentError, INHERENT_IDENTIFIER, TimestampInherentData};
 use sp_keyring::Sr25519Keyring::Alice;
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::Zero;
+use sp_runtime::traits::{Zero, Header};
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
@@ -140,7 +140,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 				authority_index: 0_u32,
 			});
 
-			let authority = (AuthorityId::from(Alice.public()), 1000);
+			let authority = (AuthorityId::from(Alice.public()), 0);
 
 			let next_epoch = ConsensusLog::NextEpochData(NextEpochDescriptor {
 				authorities: vec![authority],
@@ -198,7 +198,18 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 		if !has_authority {
 			log::info!(target: "babe", "authority not found");
 			let slot_number = inherents.timestamp_inherent_data()? / self.config.slot_duration;
-			epoch_descriptor = ViableEpochDescriptor::UnimportedGenesis(slot_number);
+			// manually hard code epoch descriptor
+			epoch_descriptor = ViableEpochDescriptor::Signaled(
+				EpochIdentifier {
+					position: EpochIdentifierPosition::Regular,
+					hash: parent.hash(),
+					number: parent.number().clone()
+				},
+				EpochHeader {
+					start_slot: slot_number,
+					end_slot: slot_number + self.config.epoch_length,
+				}
+			);
 		}
 
 		params.intermediates.insert(
