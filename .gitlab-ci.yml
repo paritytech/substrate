@@ -476,7 +476,7 @@ build-macos-subkey:
   tags:
     - osx
 
-build-rust-doc-release:
+build-rust-doc:
   stage:                           build
   <<:                              *docker-env
   <<:                              *docker-env-only
