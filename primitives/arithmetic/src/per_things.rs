@@ -1192,7 +1192,7 @@ macro_rules! implement_per_thing {
 
 				let p = Compact::<$name>::decode(&mut &Compact(<$type>::max_value()).encode()[..])
 					.unwrap();
-				assert_eq!(p.0.0, $max);
+				assert_eq!((p.0).0, $max);
 				assert_eq!($name::from(p), $name::max_value());
 			}
 		}
