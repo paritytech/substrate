@@ -31,8 +31,9 @@ const MAX_SLASHES: u32 = 1000;
 
 macro_rules! do_whitelist {
 	($acc:ident) => {
-		let caller_key = frame_system::Account::<T>::hashed_key_for(&$acc);
-		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
+		frame_benchmarking::benchmarking::add_to_whitelist(
+			frame_system::Account::<T>::hashed_key_for(&$acc).into()
+		);
 	}
 }
 
