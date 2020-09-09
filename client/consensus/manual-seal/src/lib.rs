@@ -19,7 +19,7 @@
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
-#![allow(dead_code)]
+// #![allow(dead_code)]
 
 use std::{sync::Arc, marker::PhantomData};
 use futures::prelude::*;
@@ -53,7 +53,7 @@ use crate::{
 
 pub use crate::{
 	error::Error,
-	rpc::{EngineCommand, CreatedBlock},
+	rpc::{EngineCommand, CreatedBlock, ManualSeal},
 	heartbeat_stream::{HeartbeatOptions},
 };
 
