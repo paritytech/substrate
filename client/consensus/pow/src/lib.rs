@@ -542,6 +542,10 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW>(
 	SO: SyncOracle + Clone + Send + Sync + 'static,
 	CAW: CanAuthorWith<Block> + Clone + Send + 'static,
 {
+	if let Err(_) = register_pow_inherent_data_provider(&inherent_data_providers) {
+		warn!("Registering inherent data provider for timestamp failed");
+	}
+
 	let timer = UntilImportedOrTimeout::new(client.import_notification_stream(), timeout);
 	let worker = Arc::new(Mutex::new(MiningWorker::<Block, Algorithm, C> {
 		build: None,
