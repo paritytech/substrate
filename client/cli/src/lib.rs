@@ -292,14 +292,14 @@ pub fn init_logger(
 
 		match tracing::subscriber::set_global_default(subscriber.with(profiling)) {
 			Ok(_) => (),
-			Err(_) => tracing::info!(
+			Err(_) => tracing::warn!(
 				"💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"
 			),
 		}
 	} else {
 		match tracing::subscriber::set_global_default(subscriber) {
 			Ok(_) => (),
-			Err(_) => tracing::info!(
+			Err(_) => tracing::warn!(
 				"💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"
 			),
 		}
