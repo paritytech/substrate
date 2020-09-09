@@ -357,6 +357,7 @@ decl_module! {
 		/// State reads:
 		/// 	- Candidates.len() + Members.len() + RunnersUp.len()
 		/// 	- Voting (is_voter)
+		/// 	- Lock
 		/// 	- [AccountBalance(who) (unreserve + total_balance)]
 		/// State writes:
 		/// 	- Voting
@@ -530,7 +531,6 @@ decl_module! {
 		/// Base weight = 33.33 µs
 		/// Complexity of candidate_count: 0.375 µs
 		/// State reads:
-		/// 	- Candidates.len()
 		/// 	- Candidates
 		/// 	- Members
 		/// 	- RunnersUp
@@ -603,8 +603,6 @@ decl_module! {
 		/// 	State writes:
 		/// 		- RunnersUp (remove_and_replace_member),
 		/// 		- [AccountData(who) (unreserve)]
-		///
-		/// Weight note: The call into changeMembers need to be accounted for.
 		/// </weight>
 		#[weight =  match *renouncing {
 			Renouncing::Candidate(count) => {
