@@ -438,6 +438,25 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Helper to migrate scheduler when the palelt origin type has changed.
+	pub fn migrate_origin<OldOrigin: Into<T::PalletsOrigin> + codec::Decode>() {
+		Agenda::<T>::translate::<
+			Vec<Option<Scheduled<<T as Trait>::Call, T::BlockNumber, OldOrigin, T::AccountId>>>, _
+		>(|_, agenda| Some(
+			agenda
+				.into_iter()
+				.map(|schedule| schedule.map(|schedule| Scheduled {
+					maybe_id: schedule.maybe_id,
+					priority: schedule.priority,
+					call: schedule.call,
+					maybe_periodic: schedule.maybe_periodic,
+					origin: schedule.origin.into(),
+					_phantom: Default::default(),
+				}))
+				.collect::<Vec<_>>()
+		));
+	}
+
 	fn do_schedule(
 		when: DispatchTime<T::BlockNumber>,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
@@ -620,6 +639,7 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup},
 	};
 	use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
+	use substrate_test_utils::assert_eq_uvec;
 	use crate as scheduler;
 
 	mod logger {
@@ -1147,8 +1167,6 @@ mod tests {
 
 	#[test]
 	fn migration_to_v2_works() {
-		use substrate_test_utils::assert_eq_uvec;
-
 		new_test_ext().execute_with(|| {
 			for i in 0..3u64 {
 				let k = i.twox_64_concat();
@@ -1248,6 +1266,120 @@ mod tests {
 			]);
 
 			assert_eq!(StorageVersion::get(), Releases::V2);
+		});
+	}
+
+	#[test]
+	fn test_migrate_origin() {
+		new_test_ext().execute_with(|| {
+			for i in 0..3u64 {
+				let k = i.twox_64_concat();
+				let old: Vec<Option<Scheduled<_, _, u32, u64>>> = vec![
+					Some(Scheduled {
+						maybe_id: None,
+						priority: i as u8 + 10,
+						call: Call::Logger(logger::Call::log(96, 100)),
+						origin: 3u32,
+						maybe_periodic: None,
+						_phantom: Default::default(),
+					}),
+					None,
+					Some(Scheduled {
+						maybe_id: Some(b"test".to_vec()),
+						priority: 123,
+						origin: 2u32,
+						call: Call::Logger(logger::Call::log(69, 1000)),
+						maybe_periodic: Some((456u64, 10)),
+						_phantom: Default::default(),
+					}),
+				];
+				frame_support::migration::put_storage_value(
+					b"Scheduler",
+					b"Agenda",
+					&k,
+					old,
+				);
+			}
+
+			impl Into<OriginCaller> for u32 {
+				fn into(self) -> OriginCaller {
+					match self {
+						3u32 => system::RawOrigin::Root.into(),
+						2u32 => system::RawOrigin::None.into(),
+						_ => unreachable!("test make no use of it"),
+					}
+				}
+			}
+
+			Scheduler::migrate_origin::<u32>();
+
+			assert_eq_uvec!(Agenda::<Test>::iter().collect::<Vec<_>>(), vec![
+				(
+					0,
+					vec![
+					Some(ScheduledV2::<_, _, OriginCaller, u64> {
+						maybe_id: None,
+						priority: 10,
+						call: Call::Logger(logger::Call::log(96, 100)),
+						maybe_periodic: None,
+						origin: system::RawOrigin::Root.into(),
+						_phantom: PhantomData::<u64>::default(),
+					}),
+					None,
+					Some(ScheduledV2 {
+						maybe_id: Some(b"test".to_vec()),
+						priority: 123,
+						call: Call::Logger(logger::Call::log(69, 1000)),
+						maybe_periodic: Some((456u64, 10)),
+						origin: system::RawOrigin::None.into(),
+						_phantom: PhantomData::<u64>::default(),
+					}),
+				]),
+				(
+					1,
+					vec![
+						Some(ScheduledV2 {
+							maybe_id: None,
+							priority: 11,
+							call: Call::Logger(logger::Call::log(96, 100)),
+							maybe_periodic: None,
+							origin: system::RawOrigin::Root.into(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+						None,
+						Some(ScheduledV2 {
+							maybe_id: Some(b"test".to_vec()),
+							priority: 123,
+							call: Call::Logger(logger::Call::log(69, 1000)),
+							maybe_periodic: Some((456u64, 10)),
+							origin: system::RawOrigin::None.into(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+					]
+				),
+				(
+					2,
+					vec![
+						Some(ScheduledV2 {
+							maybe_id: None,
+							priority: 12,
+							call: Call::Logger(logger::Call::log(96, 100)),
+							maybe_periodic: None,
+							origin: system::RawOrigin::Root.into(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+						None,
+						Some(ScheduledV2 {
+							maybe_id: Some(b"test".to_vec()),
+							priority: 123,
+							call: Call::Logger(logger::Call::log(69, 1000)),
+							maybe_periodic: Some((456u64, 10)),
+							origin: system::RawOrigin::None.into(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+					]
+				)
+			]);
 		});
 	}
 }
