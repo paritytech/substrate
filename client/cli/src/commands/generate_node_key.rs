@@ -26,26 +26,31 @@ use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
 #[derive(Debug, StructOpt)]
 #[structopt(
 	name = "generate-node-key",
-	about = "Generate a random node libp2p key, save it to file and print its peer ID"
+	about = "Generate a random node libp2p key, save it to \
+			 file or print it to stdout and print its peer ID to stderr"
 )]
 pub struct GenerateNodeKeyCmd {
 	/// Name of file to save secret key to.
+	///
+	/// If not given, the secret key is printed to stdout.
 	#[structopt(long)]
-	file: PathBuf,
+	file: Option<PathBuf>,
 }
 
 impl GenerateNodeKeyCmd {
 	/// Run the command
 	pub fn run(&self) -> Result<(), Error> {
-		let file = &self.file;
-
 		let keypair = libp2p_ed25519::Keypair::generate();
 		let secret = keypair.secret();
 		let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
+		let secret_hex = hex::encode(secret.as_ref());
 
-		fs::write(file, hex::encode(secret.as_ref()))?;
+		match &self.file {
+			Some(file) => fs::write(file, secret_hex)?,
+			None => print!("{}", secret_hex),
+		}
 
-		println!("{}", peer_id);
+		eprintln!("{}", peer_id);
 
 		Ok(())
 	}
