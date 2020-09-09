@@ -255,7 +255,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	pub fn register_notifications_protocol(
 		&mut self,
 		engine_id: ConsensusEngineId,
-		protocol_name: impl Into<Cow<'static, [u8]>>,
+		protocol_name: impl Into<Cow<'static, str>>,
 	) {
 		// This is the message that we will send to the remote as part of the initial handshake.
 		// At the moment, we force this to be an encoded `Roles`.

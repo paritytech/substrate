@@ -157,7 +157,7 @@ fn struct_def(
 		)
 	}).collect::<TokenStream2>();
 
-	let edge_count_impl = (1..count).map(|c| {
+	let edge_count_impl = (1..=count).map(|c| {
 		let field_name = field_name_for(c);
 		quote!(
 			all_edges = all_edges.saturating_add(
