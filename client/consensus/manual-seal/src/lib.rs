@@ -193,8 +193,7 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 			}
 		});
 
-	let stream: Box<dyn Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + Send> =
-		match heartbeat_opts
+	let stream: Box<dyn Stream<Item = _> + Unpin> = match heartbeat_opts
 	{
 		Some(hbo) => Box::new(HeartbeatStream::new(Box::new(commands_stream), hbo)),
 		None => Box::new(commands_stream),
