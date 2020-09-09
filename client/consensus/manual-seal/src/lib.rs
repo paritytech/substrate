@@ -21,7 +21,7 @@
 
 #![allow(dead_code)]
 
-use std::{sync::Arc, marker::{PhantomData, Send}};
+use std::{sync::Arc, marker::PhantomData};
 use futures::prelude::*;
 
 use prometheus_endpoint::Registry;
