@@ -6688,6 +6688,7 @@ dependencies = [
  "futures-timer 3.0.2",
  "log",
  "parity-scale-codec",
+ "parking_lot 0.10.2",
  "sc-client-api",
  "sp-api",
  "sp-block-builder",
