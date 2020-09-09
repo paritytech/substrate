@@ -61,11 +61,13 @@ impl Default for TestSetup {
 		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
 		let client = Arc::new(client_builder.set_keystore(keystore.clone()).build());
 
-		let pool = Arc::new(BasicPool::new(
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone())),
 			None,
-		).0);
+			spawner,
+			client.clone(),
+		);
 		TestSetup {
 			client,
 			keystore,

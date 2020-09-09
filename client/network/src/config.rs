@@ -23,6 +23,7 @@
 
 pub use crate::chain::{Client, FinalityProofProvider};
 pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
+pub use crate::request_responses::{IncomingRequest, ProtocolConfig as RequestResponseConfig};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -34,9 +35,10 @@ use crate::ExHashT;
 
 use core::{fmt, iter};
 use futures::future;
-use libp2p::identity::{ed25519, Keypair};
-use libp2p::wasm_ext;
-use libp2p::{multiaddr, Multiaddr, PeerId};
+use libp2p::{
+	identity::{ed25519, Keypair},
+	multiaddr, wasm_ext, Multiaddr, PeerId,
+};
 use prometheus_endpoint::Registry;
 use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
@@ -48,6 +50,7 @@ use std::{
 	io::{self, Write},
 	net::Ipv4Addr,
 	path::{Path, PathBuf},
+	str,
 	sync::Arc,
 };
 use zeroize::Zeroize;
@@ -233,20 +236,26 @@ impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransaction
 	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
 }
 
-/// Name of a protocol, transmitted on the wire. Should be unique for each chain.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
 
-impl<'a> From<&'a [u8]> for ProtocolId {
-	fn from(bytes: &'a [u8]) -> ProtocolId {
-		ProtocolId(bytes.into())
+impl<'a> From<&'a str> for ProtocolId {
+	fn from(bytes: &'a str) -> ProtocolId {
+		ProtocolId(bytes.as_bytes().into())
 	}
 }
 
-impl ProtocolId {
-	/// Exposes the `ProtocolId` as bytes.
-	pub fn as_bytes(&self) -> &[u8] {
-		self.0.as_ref()
+impl AsRef<str> for ProtocolId {
+	fn as_ref(&self) -> &str {
+		str::from_utf8(&self.0[..])
+			.expect("the only way to build a ProtocolId is through a UTF-8 String; qed")
+	}
+}
+
+impl fmt::Debug for ProtocolId {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Debug::fmt(self.as_ref(), f)
 	}
 }
 
@@ -406,7 +415,9 @@ pub struct NetworkConfiguration {
 	pub node_key: NodeKeyConfig,
 	/// List of notifications protocols that the node supports. Must also include a
 	/// `ConsensusEngineId` for backwards-compatibility.
-	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, [u8]>)>,
+	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
+	/// List of request-response protocols that the node supports.
+	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// Maximum allowed number of incoming connections.
 	pub in_peers: u32,
 	/// Number of outgoing connections we're trying to maintain.
@@ -425,9 +436,6 @@ pub struct NetworkConfiguration {
 	pub max_parallel_downloads: u32,
 	/// Should we insert non-global addresses into the DHT?
 	pub allow_non_globals_in_dht: bool,
-	/// If true, uses the `/<chainid>/block-requests/<version>` experimental protocol rather than
-	/// the legacy substream. This option is meant to be hard-wired to `true` in the future.
-	pub use_new_block_requests_protocol: bool,
 }
 
 impl NetworkConfiguration {
@@ -445,6 +453,7 @@ impl NetworkConfiguration {
 			boot_nodes: Vec::new(),
 			node_key,
 			notifications_protocols: Vec::new(),
+			request_response_protocols: Vec::new(),
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
@@ -459,12 +468,9 @@ impl NetworkConfiguration {
 			},
 			max_parallel_downloads: 5,
 			allow_non_globals_in_dht: false,
-			use_new_block_requests_protocol: true,
 		}
 	}
-}
 
-impl NetworkConfiguration {
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new(

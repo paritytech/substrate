@@ -18,9 +18,10 @@
 
 //! Substrate network possible errors.
 
+use crate::config::TransportConfig;
 use libp2p::{PeerId, Multiaddr};
 
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 /// Result type alias for the network.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -31,7 +32,7 @@ pub enum Error {
 	/// Io error
 	Io(std::io::Error),
 	/// Client error
-	Client(sp_blockchain::Error),
+	Client(Box<sp_blockchain::Error>),
 	/// The same bootnode (based on address) is registered with two different peer ids.
 	#[display(
 		fmt = "The same bootnode (`{}`) is registered with two different peer ids: `{}` and `{}`",
@@ -48,7 +49,24 @@ pub enum Error {
 		second_id: PeerId,
 	},
 	/// Prometheus metrics error.
-	Prometheus(prometheus_endpoint::PrometheusError)
+	Prometheus(prometheus_endpoint::PrometheusError),
+	/// The network addresses are invalid because they don't match the transport.
+	#[display(
+		fmt = "The following addresses are invalid because they don't match the transport: {:?}",
+		addresses,
+	)]
+	AddressesForAnotherTransport {
+		/// Transport used.
+		transport: TransportConfig,
+		/// The invalid addresses.
+		addresses: Vec<Multiaddr>,
+	},
+	/// The same request-response protocol has been registered multiple times.
+	#[display(fmt = "Request-response protocol registered multiple times: {}", protocol)]
+	DuplicateRequestResponseProtocol {
+		/// Name of the protocol registered multiple times.
+		protocol: Cow<'static, str>,
+	},
 }
 
 // Make `Debug` use the `Display` implementation.
@@ -65,6 +83,8 @@ impl std::error::Error for Error {
 			Error::Client(ref err) => Some(err),
 			Error::DuplicateBootnode { .. } => None,
 			Error::Prometheus(ref err) => Some(err),
+			Error::AddressesForAnotherTransport { .. } => None,
+			Error::DuplicateRequestResponseProtocol { .. } => None,
 		}
 	}
 }

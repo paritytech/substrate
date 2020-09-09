@@ -18,7 +18,7 @@
 
 //! In memory client backend
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ptr;
 use std::sync::Arc;
 use parking_lot::RwLock;
@@ -35,7 +35,7 @@ use sp_state_machine::{
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
 
 use crate::{
-	backend::{self, NewBlockState},
+	backend::{self, NewBlockState, ProvideChtRoots},
 	blockchain::{
 		self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
 	},
@@ -114,11 +114,17 @@ pub struct Blockchain<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
 }
 
+impl<Block: BlockT> Default for Blockchain<Block> {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
 	fn clone(&self) -> Self {
 		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
 		Blockchain {
-			storage: storage.clone(),
+			storage,
 		}
 	}
 }
@@ -149,7 +155,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				aux: HashMap::new(),
 			}));
 		Blockchain {
-			storage: storage.clone(),
+			storage,
 		}
 	}
 
@@ -340,7 +346,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.header(BlockId::hash(hash))?.map(|header| CachedHeaderMetadata::from(&header))
-			.ok_or(sp_blockchain::Error::UnknownBlock(format!("header not found: {}", hash)))
+			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("header not found: {}", hash)))
 	}
 
 	fn insert_header_metadata(&self, _hash: Block::Hash, _metadata: CachedHeaderMetadata<Block>) {
@@ -441,6 +447,16 @@ impl<Block: BlockT> light::Storage<Block> for Blockchain<Block>
 		Blockchain::finalize_header(self, id, None)
 	}
 
+	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
+		None
+	}
+
+	fn usage_info(&self) -> Option<UsageInfo> {
+		None
+	}
+}
+
+impl<Block: BlockT> ProvideChtRoots<Block> for Blockchain<Block> {
 	fn header_cht_root(
 		&self,
 		_cht_size: NumberFor<Block>,
@@ -459,14 +475,6 @@ impl<Block: BlockT> light::Storage<Block> for Blockchain<Block>
 		self.storage.read().changes_trie_cht_roots.get(&block).cloned()
 			.ok_or_else(|| sp_blockchain::Error::Backend(format!("Changes trie CHT for block {} not exists", block)))
 			.map(Some)
-	}
-
-	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
-		None
-	}
-
-	fn usage_info(&self) -> Option<UsageInfo> {
-		None
 	}
 }
 
@@ -640,7 +648,10 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		Ok(())
 	}
 
-	fn commit_operation(&self, operation: Self::BlockImportOperation) -> sp_blockchain::Result<()> {
+	fn commit_operation(
+		&self,
+		operation: Self::BlockImportOperation,
+	) -> sp_blockchain::Result<()> {
 		if !operation.finalized_blocks.is_empty() {
 			for (block, justification) in operation.finalized_blocks {
 				self.blockchain.finalize_header(block, justification)?;
@@ -716,8 +727,8 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		&self,
 		_n: NumberFor<Block>,
 		_revert_finalized: bool,
-	) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(Zero::zero())
+	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<Block::Hash>)> {
+		Ok((Zero::zero(), HashSet::new()))
 	}
 
 	fn get_import_lock(&self) -> &RwLock<()> {

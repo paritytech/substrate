@@ -40,6 +40,11 @@ use crate::{
 };
 pub use basic_queue::BasicQueue;
 
+/// A commonly-used Import Queue type.
+///
+/// This defines the transaction type of the `BasicQueue` to be the transaction type for a client.
+pub type DefaultImportQueue<Block, Client> = BasicQueue<Block, sp_api::TransactionFor<Client, Block>>;
+
 mod basic_queue;
 pub mod buffered_link;
 
@@ -259,7 +264,7 @@ pub(crate) fn import_single_block_metered<B: BlockT, V: Verifier<B>, Transaction
 		r => return Ok(r), // Any other successful result means that the block is already imported.
 	}
 
-	let started = std::time::Instant::now();
+	let started = wasm_timer::Instant::now();
 	let (mut import_block, maybe_keys) = verifier.verify(block_origin, header, justification, block.body)
 		.map_err(|msg| {
 			if let Some(ref peer) = peer {

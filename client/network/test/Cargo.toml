@@ -1,7 +1,7 @@
 [package]
 description = "Integration tests for Substrate network protocol"
 name = "sc-network-test"
-version = "0.8.0-rc3"
+version = "0.8.0-rc6"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -13,23 +13,23 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-network = { version = "0.8.0-rc3", path = "../" }
+sc-network = { version = "0.8.0-rc6", path = "../" }
 log = "0.4.8"
 parking_lot = "0.10.0"
 futures = "0.3.4"
 futures-timer = "3.0.1"
 rand = "0.7.2"
-libp2p = { version = "0.19.1", default-features = false }
-sp-consensus = { version = "0.8.0-rc3", path = "../../../primitives/consensus/common" }
-sc-consensus = { version = "0.8.0-rc3", path = "../../../client/consensus/common" }
-sc-client-api = { version = "2.0.0-rc3", path = "../../api" }
-sp-blockchain = { version = "2.0.0-rc3", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "2.0.0-rc3", path = "../../../primitives/runtime" }
-sp-core = { version = "2.0.0-rc3", path = "../../../primitives/core" }
-sc-block-builder = { version = "0.8.0-rc3", path = "../../block-builder" }
-sp-consensus-babe = { version = "0.8.0-rc3", path = "../../../primitives/consensus/babe" }
+libp2p = { version = "0.24.0", default-features = false }
+sp-consensus = { version = "0.8.0-rc6", path = "../../../primitives/consensus/common" }
+sc-consensus = { version = "0.8.0-rc6", path = "../../../client/consensus/common" }
+sc-client-api = { version = "2.0.0-rc6", path = "../../api" }
+sp-blockchain = { version = "2.0.0-rc6", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "2.0.0-rc6", path = "../../../primitives/runtime" }
+sp-core = { version = "2.0.0-rc6", path = "../../../primitives/core" }
+sc-block-builder = { version = "0.8.0-rc6", path = "../../block-builder" }
+sp-consensus-babe = { version = "0.8.0-rc6", path = "../../../primitives/consensus/babe" }
 env_logger = "0.7.0"
-substrate-test-runtime-client = { version = "2.0.0-rc3", path = "../../../test-utils/runtime/client" }
-substrate-test-runtime = { version = "2.0.0-rc3", path = "../../../test-utils/runtime" }
+substrate-test-runtime-client = { version = "2.0.0-rc6", path = "../../../test-utils/runtime/client" }
+substrate-test-runtime = { version = "2.0.0-rc6", path = "../../../test-utils/runtime" }
 tempfile = "3.1.0"
-sc-service = { version = "0.8.0-rc3", default-features = false, features = ["test-helpers"],  path = "../../service" }
+sc-service = { version = "0.8.0-rc6", default-features = false, features = ["test-helpers"],  path = "../../service" }

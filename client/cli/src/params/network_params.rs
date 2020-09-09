@@ -102,11 +102,6 @@ pub struct NetworkParams {
 	/// By default this option is true for `--dev` and false otherwise.
 	#[structopt(long)]
 	pub discover_local: bool,
-
-	/// Use the legacy "pre-mainnet-launch" networking protocol. Enable if things seem broken.
-	/// This option will be removed in the future.
-	#[structopt(long)]
-	pub legacy_network_protocol: bool,
 }
 
 impl NetworkParams {
@@ -119,8 +114,9 @@ impl NetworkParams {
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
+		default_listen_port: u16,
 	) -> NetworkConfiguration {
-		let port = self.port.unwrap_or(30333);
+		let port = self.port.unwrap_or(default_listen_port);
 
 		let listen_addresses = if self.listen_addr.is_empty() {
 			vec![
@@ -152,6 +148,7 @@ impl NetworkParams {
 			listen_addresses,
 			public_addresses,
 			notifications_protocols: Vec::new(),
+			request_response_protocols: Vec::new(),
 			node_key,
 			node_name: node_name.to_string(),
 			client_version: client_id.to_string(),
@@ -165,7 +162,6 @@ impl NetworkParams {
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
 			allow_non_globals_in_dht: self.discover_local || is_dev,
-			use_new_block_requests_protocol: !self.legacy_network_protocol,
 		}
 	}
 }

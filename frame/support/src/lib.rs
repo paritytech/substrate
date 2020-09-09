@@ -30,11 +30,11 @@ pub use sp_tracing;
 
 #[cfg(feature = "std")]
 pub use serde;
+pub use sp_core::Void;
 #[doc(hidden)]
 pub use sp_std;
 #[doc(hidden)]
 pub use codec;
-use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;
@@ -44,20 +44,20 @@ pub use paste;
 #[doc(hidden)]
 pub use sp_state_machine::BasicExternalities;
 #[doc(hidden)]
-pub use sp_io::storage::root as storage_root;
+pub use sp_io::{storage::root as storage_root, self};
 #[doc(hidden)]
 pub use sp_runtime::RuntimeDebug;
 
 #[macro_use]
 pub mod debug;
 #[macro_use]
+mod origin;
+#[macro_use]
 pub mod dispatch;
 pub mod storage;
 mod hash;
 #[macro_use]
 pub mod event;
-#[macro_use]
-mod origin;
 #[macro_use]
 pub mod metadata;
 #[macro_use]
@@ -84,8 +84,24 @@ pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 #[derive(Debug)]
 pub enum Never {}
 
-/// Macro for easily creating a new implementation of the `Get` trait. If `const` token is used, the
-/// rhs of the expression must be `const`-only, and get is implemented as `const`:
+/// Create new implementations of the [`Get`](crate::traits::Get) trait.
+///
+/// The so-called parameter type can be created in three different ways:
+///
+/// - Using `const` to create a parameter type that provides a `const` getter.
+///   It is required that the `value` is const.
+///
+/// - Declare the parameter type without `const` to have more freedom when creating the value.
+///
+/// - Using `storage` to create a storage parameter type. This type is special as it tries to
+///   load the value from the storage under a fixed key. If the value could not be found in the
+///   storage, the given default value will be returned. It is required that the value implements
+///   [`Encode`](codec::Encode) and [`Decode`](codec::Decode). The key for looking up the value
+///   in the storage is built using the following formular:
+///
+///   `twox_128(":" ++ NAME ++ ":")` where `NAME` is the name that is passed as type name.
+///
+/// # Examples
 ///
 /// ```
 /// # use frame_support::traits::Get;
@@ -95,23 +111,27 @@ pub enum Never {}
 ///
 /// const FIXED_VALUE: u64 = 10;
 /// parameter_types! {
-///   pub const Argument: u64 = 42 + FIXED_VALUE;
-///   pub OtherArgument: u64 = non_const_expression();
+///    pub const Argument: u64 = 42 + FIXED_VALUE;
+///    /// Visibility of the type is optional
+///    OtherArgument: u64 = non_const_expression();
+///    pub storage StorageArgument: u64 = 5;
 /// }
 ///
 /// trait Config {
-///   type Parameter: Get<u64>;
-///   type OtherParameter: Get<u64>;
+///    type Parameter: Get<u64>;
+///    type OtherParameter: Get<u64>;
+///    type StorageParameter: Get<u64>;
 /// }
 ///
 /// struct Runtime;
 /// impl Config for Runtime {
-///   type Parameter = Argument;
-///   type OtherParameter = OtherArgument;
+///    type Parameter = Argument;
+///    type OtherParameter = OtherArgument;
+///    type StorageParameter = StorageArgument;
 /// }
 /// ```
 ///
-/// Invalid example:
+/// # Invalid example:
 ///
 /// ```compile_fail
 /// # use frame_support::traits::Get;
@@ -120,7 +140,7 @@ pub enum Never {}
 /// fn non_const_expression() -> u64 { 99 }
 ///
 /// parameter_types! {
-///   pub const Argument: u64 = non_const_expression();
+///    pub const Argument: u64 = non_const_expression();
 /// }
 /// ```
 
@@ -133,8 +153,8 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name;
-		$crate::parameter_types!{IMPL_CONST $name , $type , $value}
-		$crate::parameter_types!{ $( $rest )* }
+		$crate::parameter_types!(IMPL_CONST $name , $type , $value);
+		$crate::parameter_types!( $( $rest )* );
 	);
 	(
 		$( #[ $attr:meta ] )*
@@ -143,31 +163,77 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name;
-		$crate::parameter_types!{IMPL $name , $type , $value}
-		$crate::parameter_types!{ $( $rest )* }
+		$crate::parameter_types!(IMPL $name, $type, $value);
+		$crate::parameter_types!( $( $rest )* );
+	);
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis storage $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!(IMPL_STORAGE $name, $type, $value);
+		$crate::parameter_types!( $( $rest )* );
 	);
 	() => ();
-	(IMPL_CONST $name:ident , $type:ty , $value:expr) => {
+	(IMPL_CONST $name:ident, $type:ty, $value:expr) => {
 		impl $name {
+			/// Returns the value of this parameter type.
 			pub const fn get() -> $type {
 				$value
 			}
 		}
+
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
 				I::from($value)
 			}
 		}
 	};
-	(IMPL $name:ident , $type:ty , $value:expr) => {
+	(IMPL $name:ident, $type:ty, $value:expr) => {
 		impl $name {
+			/// Returns the value of this parameter type.
 			pub fn get() -> $type {
 				$value
 			}
 		}
+
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
 				I::from($value)
+			}
+		}
+	};
+	(IMPL_STORAGE $name:ident, $type:ty, $value:expr) => {
+		impl $name {
+			/// Returns the key for this parameter type.
+			pub fn key() -> [u8; 16] {
+				$crate::sp_io::hashing::twox_128(
+					concat!(":", stringify!($name), ":").as_bytes()
+				)
+			}
+
+			/// Set the value of this parameter type in the storage.
+			///
+			/// This needs to be executed in an externalities provided
+			/// environment.
+			pub fn set(value: &$type) {
+				$crate::storage::unhashed::put(&Self::key(), value);
+			}
+
+			/// Returns the value of this parameter type.
+			///
+			/// This needs to be executed in an externalities provided
+			/// environment.
+			pub fn get() -> $type {
+				$crate::storage::unhashed::get(&Self::key()).unwrap_or_else(|| $value)
+			}
+		}
+
+		impl<I: From<$type>> $crate::traits::Get<I> for $name {
+			fn get() -> I {
+				I::from(Self::get())
 			}
 		}
 	}
@@ -201,7 +267,7 @@ macro_rules! ord_parameter_types {
 }
 
 #[doc(inline)]
-pub use frame_support_procedural::{decl_storage, construct_runtime};
+pub use frame_support_procedural::{decl_storage, construct_runtime, transactional};
 
 /// Return Err of the expression: `return Err($expression);`.
 ///
@@ -298,11 +364,6 @@ macro_rules! assert_ok {
 	}
 }
 
-/// The void type - it cannot exist.
-// Oh rust, you crack me up...
-#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug)]
-pub enum Void {}
-
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde::{Serialize, Deserialize};
@@ -315,7 +376,8 @@ mod tests {
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByteGetter, StorageHasher,
 	};
-	use sp_std::marker::PhantomData;
+	use sp_std::{marker::PhantomData, result};
+	use sp_io::TestExternalities;
 
 	pub trait Trait {
 		type BlockNumber: Codec + EncodeLike + Default;
@@ -361,7 +423,7 @@ mod tests {
 		type Origin = u32;
 	}
 
-	fn new_test_ext() -> sp_io::TestExternalities {
+	fn new_test_ext() -> TestExternalities {
 		GenesisConfig::default().build_storage().unwrap().into()
 	}
 
@@ -567,6 +629,53 @@ mod tests {
 		});
 	}
 
+	#[test]
+	fn double_map_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			type DoubleMap = DataDM;
+
+			let (key1, key2) = (11, 13);
+
+			// mutated
+			DoubleMap::mutate_exists(key1, key2, |v| *v = Some(1));
+			assert_eq!(DoubleMap::get(&key1, key2), 1);
+
+			// removed if mutated to `None`
+			DoubleMap::mutate_exists(key1, key2, |v| *v = None);
+			assert!(!DoubleMap::contains_key(&key1, key2));
+		});
+	}
+
+	#[test]
+	fn double_map_try_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			type DoubleMap = DataDM;
+			type TestResult = result::Result<(), &'static str>;
+
+			let (key1, key2) = (11, 13);
+
+			// mutated if `Ok`
+			assert_ok!(DoubleMap::try_mutate_exists(key1, key2, |v| -> TestResult {
+				*v = Some(1);
+				Ok(())
+			}));
+			assert_eq!(DoubleMap::get(&key1, key2), 1);
+
+			// no-op if `Err`
+			assert_noop!(DoubleMap::try_mutate_exists(key1, key2, |v| -> TestResult {
+				*v = Some(2);
+				Err("nah")
+			}), "nah");
+
+			// removed if mutated to`None`
+			assert_ok!(DoubleMap::try_mutate_exists(key1, key2, |v| -> TestResult {
+				*v = None;
+				Ok(())
+			}));
+			assert!(!DoubleMap::contains_key(&key1, key2));
+		});
+	}
+
 	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 		prefix: DecodeDifferent::Encode("Test"),
 		entries: DecodeDifferent::Encode(
@@ -695,5 +804,21 @@ mod tests {
 	fn store_metadata() {
 		let metadata = Module::<Test>::storage_metadata();
 		pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
+	}
+
+	parameter_types! {
+		storage StorageParameter: u64 = 10;
+	}
+
+	#[test]
+	fn check_storage_parameter_type_works() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(sp_io::hashing::twox_128(b":StorageParameter:"), StorageParameter::key());
+
+			assert_eq!(10, StorageParameter::get());
+
+			StorageParameter::set(&300);
+			assert_eq!(300, StorageParameter::get());
+		})
 	}
 }

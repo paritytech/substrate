@@ -129,7 +129,7 @@ impl Config {
 	pub fn set_protocol(&mut self, id: &ProtocolId) -> &mut Self {
 		let mut v = Vec::new();
 		v.extend_from_slice(b"/");
-		v.extend_from_slice(id.as_bytes());
+		v.extend_from_slice(id.as_ref().as_bytes());
 		v.extend_from_slice(b"/finality-proof/1");
 		self.protocol = v.into();
 		self
@@ -206,7 +206,7 @@ where
 		let finality_proof = if let Some(provider) = &self.finality_proof_provider {
 			provider
 				.prove_finality(block_hash, &request.request)?
-				.unwrap_or(Vec::new())
+				.unwrap_or_default()
 		} else {
 			log::error!("Answering a finality proof request while finality provider is empty");
 			return Err(From::from("Empty finality proof provider".to_string()))
@@ -234,7 +234,7 @@ where
 			marker: PhantomData,
 		};
 		let mut cfg = OneShotHandlerConfig::default();
-		cfg.inactive_timeout = self.config.inactivity_timeout;
+		cfg.keep_alive_timeout = self.config.inactivity_timeout;
 		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
 	}
 

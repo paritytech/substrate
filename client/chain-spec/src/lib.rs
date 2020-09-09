@@ -29,10 +29,9 @@
 //!
 //! ```rust
 //! use std::collections::HashMap;
-//! use serde::{Serialize, Deserialize};
 //! use sc_chain_spec::{GenericChainSpec, ChainSpecExtension};
 //!
-//! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecExtension)]
+//! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecExtension)]
 //! pub struct MyExtension {
 //!		pub known_blocks: HashMap<u64, String>,
 //! }
@@ -48,21 +47,20 @@
 //! block number.
 //!
 //! ```rust
-//! use serde::{Serialize, Deserialize};
 //! use sc_chain_spec::{Forks, ChainSpecGroup, ChainSpecExtension, GenericChainSpec};
 //!
-//! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
+//! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
 //!		max_block_size: usize,
 //!		max_extrinsic_size: usize,
 //! }
 //!
-//! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
+//! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
 //! pub struct PoolParams {
 //!		max_transaction_size: usize,
 //! }
 //!
-//! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup, ChainSpecExtension)]
+//! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup, ChainSpecExtension)]
 //! pub struct Extension {
 //!		pub client: ClientParams,
 //!		pub pool: PoolParams,
@@ -110,7 +108,9 @@
 mod chain_spec;
 mod extension;
 
-pub use chain_spec::{ChainSpec as GenericChainSpec, NoExtension};
+pub use chain_spec::{
+	ChainSpec as GenericChainSpec, NoExtension, LightSyncState, SerializableLightSyncState,
+};
 pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 pub use sp_chain_spec::{Properties, ChainType};
@@ -157,4 +157,12 @@ pub trait ChainSpec: BuildStorage + Send {
 	///
 	/// This will be used as storage at genesis.
 	fn set_storage(&mut self, storage: Storage);
+	/// Hardcode infomation to allow light clients to sync quickly into the chain spec.
+	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState);
+}
+
+impl std::fmt::Debug for dyn ChainSpec {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "ChainSpec(name = {:?}, id = {:?})", self.name(), self.id())
+	}
 }

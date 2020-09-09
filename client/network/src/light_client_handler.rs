@@ -27,9 +27,10 @@
 use bytes::Bytes;
 use codec::{self, Encode, Decode};
 use crate::{
+	block_requests::build_protobuf_block_request,
 	chain::Client,
 	config::ProtocolId,
-	protocol::message::BlockAttributes,
+	protocol::message::{BlockAttributes, Direction, FromBlock},
 	schema,
 };
 use futures::{channel::oneshot, future::BoxFuture, prelude::*, stream::FuturesUnordered};
@@ -155,13 +156,13 @@ impl Config {
 	pub fn set_protocol(&mut self, id: &ProtocolId) -> &mut Self {
 		let mut vl = Vec::new();
 		vl.extend_from_slice(b"/");
-		vl.extend_from_slice(id.as_bytes());
+		vl.extend_from_slice(id.as_ref().as_bytes());
 		vl.extend_from_slice(b"/light/2");
 		self.light_protocol = vl.into();
 
 		let mut vb = Vec::new();
 		vb.extend_from_slice(b"/");
-		vb.extend_from_slice(id.as_bytes());
+		vb.extend_from_slice(id.as_ref().as_bytes());
 		vb.extend_from_slice(b"/sync/2");
 		self.block_protocol = vb.into();
 
@@ -756,7 +757,7 @@ where
 			protocol: self.config.light_protocol.clone(),
 		};
 		let mut cfg = OneShotHandlerConfig::default();
-		cfg.inactive_timeout = self.config.inactivity_timeout;
+		cfg.keep_alive_timeout = self.config.inactivity_timeout;
 		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
 	}
 
@@ -1062,13 +1063,13 @@ fn retries<B: Block>(request: &Request<B>) -> usize {
 fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::EncodeError> {
 	let request = match request {
 		Request::Body { request, .. } => {
-			let rq = schema::v1::BlockRequest {
-				fields: u32::from(BlockAttributes::BODY.bits()),
-				from_block: Some(schema::v1::block_request::FromBlock::Hash(request.header.hash().encode())),
-				to_block: Vec::new(),
-				direction: schema::v1::Direction::Ascending as i32,
-				max_blocks: 1,
-			};
+			let rq = build_protobuf_block_request::<_, NumberFor<B>>(
+				BlockAttributes::BODY,
+				FromBlock::Hash(request.header.hash()),
+				None,
+				Direction::Ascending,
+				Some(1),
+			);
 			let mut buf = Vec::with_capacity(rq.encoded_len());
 			rq.encode(&mut buf)?;
 			return Ok(buf);
@@ -1446,7 +1447,7 @@ mod tests {
 	}
 
 	fn make_config() -> super::Config {
-		super::Config::new(&ProtocolId::from(&b"foo"[..]))
+		super::Config::new(&ProtocolId::from("foo"))
 	}
 
 	fn dummy_header() -> sp_test_primitives::Header {
@@ -2035,5 +2036,23 @@ mod tests {
 		send_receive(Request::Changes { request, sender: chan.0 });
 		assert_eq!(vec![(100, 2)], task::block_on(chan.1).unwrap().unwrap());
 		//              ^--- from `DummyFetchChecker::check_changes_proof`
+	}
+
+	#[test]
+	fn body_request_fields_encoded_properly() {
+		let (sender, _) = oneshot::channel();
+		let serialized_request = serialize_request::<Block>(&Request::Body {
+			request: RemoteBodyRequest {
+				header: dummy_header(),
+				retry_count: None,
+			},
+			sender,
+		}).unwrap();
+		let deserialized_request = schema::v1::BlockRequest::decode(&serialized_request[..]).unwrap();
+		assert!(
+			BlockAttributes::from_be_u32(deserialized_request.fields)
+				.unwrap()
+				.contains(BlockAttributes::BODY)
+		);
 	}
 }

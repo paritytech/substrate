@@ -261,6 +261,11 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 		return_value
 	}
 
+	/// Returns if the transaction for the given hash is already imported.
+	pub fn is_imported(&self, tx_hash: &Hash) -> bool {
+		self.future.contains(tx_hash) || self.ready.contains(tx_hash)
+	}
+
 	/// Imports transaction to the pool.
 	///
 	/// The pool consists of two parts: Future and Ready.
@@ -272,8 +277,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 		&mut self,
 		tx: Transaction<Hash, Ex>,
 	) -> error::Result<Imported<Hash, Ex>> {
-		if self.future.contains(&tx.hash) || self.ready.contains(&tx.hash) {
-			return Err(error::Error::AlreadyImported(Box::new(tx.hash.clone())))
+		if self.is_imported(&tx.hash) {
+			return Err(error::Error::AlreadyImported(Box::new(tx.hash)))
 		}
 
 		let tx = WaitingTransaction::new(

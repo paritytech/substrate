@@ -104,6 +104,15 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim>;
 
+	/// Notifies the given slot. Similar to `claim_slot`, but will be called no matter whether we
+	/// need to author blocks or not.
+	fn notify_slot(
+		&self,
+		_header: &B::Header,
+		_slot_number: u64,
+		_epoch_data: &Self::EpochData,
+	) { }
+
 	/// Return the pre digest data to include in a block authored with the given claim.
 	fn pre_digest_data(
 		&self,
@@ -190,6 +199,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				return Box::pin(future::ready(Ok(())));
 			}
 		};
+
+		self.notify_slot(&chain_head, slot_number, &epoch_data);
 
 		let authorities_len = self.authorities_len(&epoch_data);
 
@@ -455,7 +466,7 @@ impl<T: Clone> SlotDuration<T> {
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> sp_blockchain::Result<T>,
 		T: SlotData + Encode + Decode + Debug,
 	{
-		match client.get_aux(T::SLOT_KEY)? {
+		let slot_duration = match client.get_aux(T::SLOT_KEY)? {
 			Some(v) => <T as codec::Decode>::decode(&mut &v[..])
 				.map(SlotDuration)
 				.map_err(|_| {
@@ -471,7 +482,7 @@ impl<T: Clone> SlotDuration<T> {
 
 				info!(
 					"⏱  Loaded block-time = {:?} milliseconds from genesis on first-launch",
-					genesis_slot_duration
+					genesis_slot_duration.slot_duration()
 				);
 
 				genesis_slot_duration
@@ -479,7 +490,15 @@ impl<T: Clone> SlotDuration<T> {
 
 				Ok(SlotDuration(genesis_slot_duration))
 			}
+		}?;
+
+		if slot_duration.slot_duration() == 0 {
+			return Err(sp_blockchain::Error::Msg(
+				"Invalid value for slot_duration: the value must be greater than 0.".into(),
+			))
 		}
+
+		Ok(slot_duration)
 	}
 
 	/// Returns slot data value.

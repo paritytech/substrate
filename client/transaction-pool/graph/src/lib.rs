@@ -32,6 +32,7 @@ mod pool;
 mod ready;
 mod rotator;
 mod validated_pool;
+mod tracked_map;
 
 pub mod base_pool;
 pub mod watcher;

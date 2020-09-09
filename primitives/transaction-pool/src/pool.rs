@@ -23,9 +23,8 @@ use std::{
 	sync::Arc,
 	pin::Pin,
 };
-use futures::{Future, Stream,};
+use futures::{Future, Stream};
 use serde::{Deserialize, Serialize};
-use sp_utils::mpsc;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
@@ -131,7 +130,7 @@ pub enum TransactionStatus<Hash, BlockHash> {
 pub type TransactionStatusStream<Hash, BlockHash> = dyn Stream<Item=TransactionStatus<Hash, BlockHash>> + Send + Unpin;
 
 /// The import notification event stream.
-pub type ImportNotificationStream<H> = mpsc::TracingUnboundedReceiver<H>;
+pub type ImportNotificationStream<H> = futures::channel::mpsc::Receiver<H>;
 
 /// Transaction hash type for a pool.
 pub type TxHash<P> = <P as TransactionPool>::Hash;
@@ -141,6 +140,8 @@ pub type BlockHash<P> = <<P as TransactionPool>::Block as BlockT>::Hash;
 pub type TransactionFor<P> = <<P as TransactionPool>::Block as BlockT>::Extrinsic;
 /// Type of transactions event stream for a pool.
 pub type TransactionStatusStreamFor<P> = TransactionStatusStream<TxHash<P>, BlockHash<P>>;
+/// Transaction type for a local pool.
+pub type LocalTransactionFor<P> = <<P as LocalTransactionPool>::Block as BlockT>::Extrinsic;
 
 /// Typical future type used in transaction pool api.
 pub type PoolFuture<T, E> = std::pin::Pin<Box<dyn Future<Output=Result<T, E>> + Send>>;
@@ -162,7 +163,7 @@ pub trait InPoolTransaction {
 	/// Get priority of the transaction.
 	fn priority(&self) -> &TransactionPriority;
 	/// Get longevity of the transaction.
-	fn longevity(&self) ->&TransactionLongevity;
+	fn longevity(&self) -> &TransactionLongevity;
 	/// Get transaction dependencies.
 	fn requires(&self) -> &[TransactionTag];
 	/// Get tags that transaction provides.
@@ -247,14 +248,10 @@ pub trait TransactionPool: Send + Sync {
 
 /// Events that the transaction pool listens for.
 pub enum ChainEvent<B: BlockT> {
-	/// New blocks have been added to the chain
-	NewBlock {
-		/// Is this the new best block.
-		is_new_best: bool,
+	/// New best block have been added to the chain
+	NewBestBlock {
 		/// Hash of the block.
 		hash: B::Hash,
-		/// Header of the just imported block
-		header: B::Header,
 		/// Tree route from old best to new best parent that was calculated on import.
 		///
 		/// If `None`, no re-org happened on import.
@@ -271,6 +268,28 @@ pub enum ChainEvent<B: BlockT> {
 pub trait MaintainedTransactionPool: TransactionPool {
 	/// Perform maintenance
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>>;
+}
+
+/// Transaction pool interface for submitting local transactions that exposes a
+/// blocking interface for submission.
+pub trait LocalTransactionPool: Send + Sync {
+	/// Block type.
+	type Block: BlockT;
+	/// Transaction hash type.
+	type Hash: Hash + Eq + Member + Serialize;
+	/// Error type.
+	type Error: From<crate::error::Error> + crate::error::IntoPoolError;
+
+	/// Submits the given local unverified transaction to the pool blocking the
+	/// current thread for any necessary pre-verification.
+	/// NOTE: It MUST NOT be used for transactions that originate from the
+	/// network or RPC, since the validation is performed with
+	/// `TransactionSource::Local`.
+	fn submit_local(
+		&self,
+		at: &BlockId<Self::Block>,
+		xt: LocalTransactionFor<Self>,
+	) -> Result<Self::Hash, Self::Error>;
 }
 
 /// An abstraction for transaction pool.
@@ -291,7 +310,7 @@ pub trait OffchainSubmitTransaction<Block: BlockT>: Send + Sync {
 	) -> Result<(), ()>;
 }
 
-impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
+impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 	fn submit_at(
 		&self,
 		at: &BlockId<TPool::Block>,
@@ -303,15 +322,14 @@ impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 			extrinsic
 		);
 
-		let result = futures::executor::block_on(self.submit_one(
-				&at, TransactionSource::Local, extrinsic,
-		));
+		let result = self.submit_local(&at, extrinsic);
 
-		result.map(|_| ())
-			.map_err(|e| log::warn!(
+		result.map(|_| ()).map_err(|e| {
+			log::warn!(
 				target: "txpool",
 				"(offchain call) Error submitting a transaction to the pool: {:?}",
 				e
-			))
+			)
+		})
 	}
 }

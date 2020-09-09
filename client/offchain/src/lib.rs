@@ -19,7 +19,7 @@
 //! The offchain workers is a special function of the runtime that
 //! gets executed after block is imported. During execution
 //! it's able to asynchronously submit extrinsics that will either
-//! be propagated to other nodes added to the next block
+//! be propagated to other nodes or added to the next block
 //! produced by the node as unsigned transactions.
 //!
 //! Offchain workers can be used for computation-heavy tasks
@@ -41,10 +41,12 @@ use sp_api::{ApiExt, ProvideRuntimeApi};
 use futures::future::Future;
 use log::{debug, warn};
 use sc_network::NetworkStateInfo;
-use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext};
+use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext, traits::SpawnNamed};
 use sp_runtime::{generic::BlockId, traits::{self, Header}};
+use futures::{prelude::*, future::ready};
 
 mod api;
+use api::SharedClient;
 
 pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
 
@@ -54,16 +56,19 @@ pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
 	db: Storage,
 	_block: PhantomData<Block>,
 	thread_pool: Mutex<ThreadPool>,
+	shared_client: SharedClient,
 }
 
 impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Block> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(client: Arc<Client>, db: Storage) -> Self {
+		let shared_client = SharedClient::new();
 		Self {
 			client,
 			db,
 			_block: PhantomData,
 			thread_pool: Mutex::new(ThreadPool::new(num_cpus::get())),
+			shared_client,
 		}
 	}
 }
@@ -119,6 +124,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 				self.db.clone(),
 				network_state.clone(),
 				is_validator,
+				self.shared_client.clone(),
 			);
 			debug!("Spawning offchain workers at {:?}", at);
 			let header = header.clone();
@@ -161,6 +167,43 @@ impl<Client, Storage, Block> OffchainWorkers<
 	}
 }
 
+/// Inform the offchain worker about new imported blocks
+pub async fn notification_future<Client, Storage, Block, Spawner>(
+	is_validator: bool,
+	client: Arc<Client>,
+	offchain: Arc<OffchainWorkers<Client, Storage, Block>>,
+	spawner: Spawner,
+	network_state_info: Arc<dyn NetworkStateInfo + Send + Sync>,
+)
+	where
+		Block: traits::Block,
+		Client: ProvideRuntimeApi<Block> + sc_client_api::BlockchainEvents<Block> + Send + Sync + 'static,
+		Client::Api: OffchainWorkerApi<Block>,
+		Storage: OffchainStorage + 'static,
+		Spawner: SpawnNamed
+{
+	client.import_notification_stream().for_each(move |n| {
+		if n.is_new_best {
+			spawner.spawn(
+				"offchain-on-block",
+				offchain.on_block_imported(
+					&n.header,
+					network_state_info.clone(),
+					is_validator,
+				).boxed(),
+			);
+		} else {
+			log::debug!(
+				target: "sc_offchain",
+				"Skipping offchain workers for non-canon block: {:?}",
+				n.header,
+			)
+		}
+
+		ready(())
+	}).await;
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -169,7 +212,6 @@ mod tests {
 	use substrate_test_runtime_client::{TestClient, runtime::Block};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_transaction_pool::{TransactionPool, InPoolTransaction};
-	use sc_client_api::ExecutorProvider;
 
 	struct MockNetworkStateInfo();
 
@@ -184,7 +226,7 @@ mod tests {
 	}
 
 	struct TestPool(
-		BasicPool<FullChainApi<TestClient, Block>, Block>
+		Arc<BasicPool<FullChainApi<TestClient, Block>, Block>>
 	);
 
 	impl sp_transaction_pool::OffchainSubmitTransaction<Block> for TestPool {
@@ -205,13 +247,13 @@ mod tests {
 		let _ = env_logger::try_init();
 
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let pool = Arc::new(TestPool(BasicPool::new(
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool = TestPool(BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone())),
 			None,
-		).0));
-		client.execution_extensions()
-			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
+			spawner,
+			client.clone(),
+		));
 		let db = sc_client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
 		let header = client.header(&BlockId::number(0)).unwrap().unwrap();

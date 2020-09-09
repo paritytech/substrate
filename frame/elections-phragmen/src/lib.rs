@@ -87,7 +87,7 @@ use codec::{Encode, Decode};
 use sp_std::prelude::*;
 use sp_runtime::{
 	DispatchError, RuntimeDebug, Perbill,
-	traits::{Zero, StaticLookup, Convert},
+	traits::{Zero, StaticLookup, Convert, Saturating},
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
@@ -101,7 +101,7 @@ use frame_support::{
 	}
 };
 use sp_npos_elections::{build_support_map, ExtendedBalance, VoteWeight, ElectionResult};
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 
 mod benchmarking;
 
@@ -135,6 +135,38 @@ pub struct DefunctVoter<AccountId> {
 	/// The number of current active candidates.
 	#[codec(compact)]
 	pub candidate_count: u32
+}
+
+pub trait WeightInfo {
+	fn vote(u: u32, ) -> Weight;
+	fn vote_update(u: u32, ) -> Weight;
+	fn remove_voter(u: u32, ) -> Weight;
+	fn report_defunct_voter_correct(c: u32, v: u32, ) -> Weight;
+	fn report_defunct_voter_incorrect(c: u32, v: u32, ) -> Weight;
+	fn submit_candidacy(c: u32, ) -> Weight;
+	fn renounce_candidacy_candidate(c: u32, ) -> Weight;
+	fn renounce_candidacy_member_runner_up(u: u32, ) -> Weight;
+	fn remove_member_without_replacement(c: u32, ) -> Weight;
+	fn remove_member_with_replacement(u: u32, ) -> Weight;
+	fn remove_member_wrong_refund(u: u32, ) -> Weight;
+	fn on_initialize(c: u32, ) -> Weight;
+	fn phragmen(c: u32, v: u32, e: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn vote(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn vote_update(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_voter(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn report_defunct_voter_correct(_c: u32, _v: u32, ) -> Weight { 1_000_000_000 }
+	fn report_defunct_voter_incorrect(_c: u32, _v: u32, ) -> Weight { 1_000_000_000 }
+	fn submit_candidacy(_c: u32, ) -> Weight { 1_000_000_000 }
+	fn renounce_candidacy_candidate(_c: u32, ) -> Weight { 1_000_000_000 }
+	fn renounce_candidacy_member_runner_up(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_member_without_replacement(_c: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_member_with_replacement(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_member_wrong_refund(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize(_c: u32, ) -> Weight { 1_000_000_000 }
+	fn phragmen(_c: u32, _v: u32, _e: u32, ) -> Weight { 1_000_000_000 }
 }
 
 pub trait Trait: frame_system::Trait {
@@ -184,6 +216,9 @@ pub trait Trait: frame_system::Trait {
 	/// round will happen. If set to zero, no elections are ever triggered and the module will
 	/// be in passive mode.
 	type TermDuration: Get<Self::BlockNumber>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -572,7 +607,7 @@ decl_module! {
 					// returns NoMember error in case of error.
 					let _ = Self::remove_and_replace_member(&who)?;
 					T::Currency::unreserve(&who, T::CandidacyBond::get());
-					Self::deposit_event(RawEvent::MemberRenounced(who.clone()));
+					Self::deposit_event(RawEvent::MemberRenounced(who));
 				},
 				Renouncing::RunnerUp => {
 					let mut runners_up_with_stake = Self::runners_up();
@@ -674,7 +709,7 @@ decl_event!(
 		Balance = BalanceOf<T>,
 		<T as frame_system::Trait>::AccountId,
 	{
-		/// A new term with new members. This indicates that enough candidates existed to run the
+		/// A new term with [new_members]. This indicates that enough candidates existed to run the
 		/// election, not that enough have has been elected. The inner value must be examined for
 		/// this purpose. A `NewTerm([])` indicates that some candidates got their bond slashed and
 		/// none were elected, whilst `EmptyTerm` means that no candidates existed to begin with.
@@ -682,13 +717,13 @@ decl_event!(
 		/// No (or not enough) candidates existed for this round. This is different from
 		/// `NewTerm([])`. See the description of `NewTerm`.
 		EmptyTerm,
-		/// A member has been removed. This should always be followed by either `NewTerm` ot
+		/// A [member] has been removed. This should always be followed by either `NewTerm` ot
 		/// `EmptyTerm`.
 		MemberKicked(AccountId),
-		/// A member has renounced their candidacy.
+		/// A [member] has renounced their candidacy.
 		MemberRenounced(AccountId),
-		/// A voter (first element) was reported (byt the second element) with the the report being
-		/// successful or not (third element).
+		/// A voter was reported with the the report being successful or not.
+		/// [voter, reporter, success]
 		VoterReported(AccountId, AccountId, bool),
 	}
 );
@@ -869,14 +904,20 @@ impl<T: Trait> Module<T> {
 			to_votes(Self::locked_stake_of(who))
 		};
 
-		let voters_and_votes = Voting::<T>::iter()
-			.map(|(voter, (stake, targets))| { (voter, to_votes(stake), targets) })
+		// used for prime election.
+		let voters_and_stakes = Voting::<T>::iter()
+			.map(|(voter, (stake, targets))| { (voter, stake, targets) })
+			.collect::<Vec<_>>();
+		// used for phragmen.
+		let voters_and_votes = voters_and_stakes.iter()
+			.cloned()
+			.map(|(voter, stake, targets)| { (voter, to_votes(stake), targets)} )
 			.collect::<Vec<_>>();
 		let maybe_phragmen_result = sp_npos_elections::seq_phragmen::<T::AccountId, Perbill>(
 			num_to_elect,
 			0,
 			candidates,
-			voters_and_votes.clone(),
+			voters_and_votes,
 		);
 
 		if let Some(ElectionResult { winners, assignments }) = maybe_phragmen_result {
@@ -930,17 +971,26 @@ impl<T: Trait> Module<T> {
 			// save the members, sorted based on account id.
 			new_members.sort_by(|i, j| i.0.cmp(&j.0));
 
-			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, VoteWeight::zero())).collect();
-			for (_, stake, targets) in voters_and_votes.into_iter() {
-				for (votes, who) in targets.iter()
+			// Now we select a prime member using a [Borda count](https://en.wikipedia.org/wiki/Borda_count).
+			// We weigh everyone's vote for that new member by a multiplier based on the order
+			// of the votes. i.e. the first person a voter votes for gets a 16x multiplier,
+			// the next person gets a 15x multiplier, an so on... (assuming `MAXIMUM_VOTE` = 16)
+			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
+			for (_, stake, targets) in voters_and_stakes.into_iter() {
+				for (vote_multiplier, who) in targets.iter()
 					.enumerate()
-					.map(|(votes, who)| ((MAXIMUM_VOTE - votes) as u32, who))
+					.map(|(vote_position, who)| ((MAXIMUM_VOTE - vote_position) as u32, who))
 				{
 					if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
-						prime_votes[i].1 += stake * votes as VoteWeight;
+						prime_votes[i].1 = prime_votes[i].1.saturating_add(
+							stake.saturating_mul(vote_multiplier.into())
+						);
 					}
 				}
 			}
+			// We then select the new member with the highest weighted stake. In the case of
+			// a tie, the last person in the list with the tied score is selected. This is
+			// the person with the "highest" account id based on the sort above.
 			let prime = prime_votes.into_iter().max_by_key(|x| x.1).map(|x| x.0.clone());
 
 			// new_members_ids is sorted by account id.
@@ -967,7 +1017,7 @@ impl<T: Trait> Module<T> {
 			);
 			T::ChangeMembers::change_members_sorted(
 				&incoming,
-				&outgoing.clone(),
+				&outgoing,
 				&new_members_ids,
 			);
 			T::ChangeMembers::set_prime(prime);
@@ -1060,7 +1110,6 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
 	use crate as elections_phragmen;
-	use frame_system as system;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -1070,10 +1119,11 @@ mod tests {
 	}
 
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = ();
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -1093,6 +1143,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 
 	parameter_types! {
@@ -1105,7 +1156,8 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = frame_system::Module<Test>;
-}
+		type WeightInfo = ();
+	}
 
 	parameter_types! {
 		pub const CandidacyBond: u64 = 3;
@@ -1213,6 +1265,7 @@ mod tests {
 		type LoserCandidate = ();
 		type KickedMember = ();
 		type BadReport = ();
+		type WeightInfo = ();
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -1224,7 +1277,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: system::{Module, Call, Event<T>},
+			System: frame_system::{Module, Call, Event<T>},
 			Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 			Elections: elections_phragmen::{Module, Call, Event<T>, Config<T>},
 		}
@@ -1376,11 +1429,8 @@ mod tests {
 		// historical note: helper function was created in a period of time in which the API of vote
 		// call was changing. Currently it is a wrapper for the original call and does not do much.
 		// Nonetheless, totally harmless.
-		if let Origin::system(frame_system::RawOrigin::Signed(_account)) = origin {
-			Elections::vote(origin, votes, stake)
-		} else {
-			panic!("vote origin must be signed");
-		}
+		ensure_signed(origin.clone()).expect("vote origin must be signed");
+		Elections::vote(origin, votes, stake)
 	}
 
 	fn votes_of(who: &u64) -> Vec<u64> {
@@ -2358,7 +2408,7 @@ mod tests {
 			assert_ok!(submit_candidacy(Origin::signed(3)));
 			assert_ok!(vote(Origin::signed(3), vec![3], 30));
 
-			assert_ok!(Elections::remove_member(Origin::ROOT, 4, false));
+			assert_ok!(Elections::remove_member(Origin::root(), 4, false));
 
 			assert_eq!(balances(&4), (35, 2)); // slashed
 			assert_eq!(Elections::election_rounds(), 2); // new election round
@@ -2381,7 +2431,7 @@ mod tests {
 
 			// no replacement yet.
 			assert_err_with_weight!(
-				Elections::remove_member(Origin::ROOT, 4, true),
+				Elections::remove_member(Origin::root(), 4, true),
 				Error::<Test>::InvalidReplacement,
 				Some(6000000),
 			);
@@ -2403,7 +2453,7 @@ mod tests {
 
 			// there is a replacement! and this one needs a weight refund.
 			assert_err_with_weight!(
-				Elections::remove_member(Origin::ROOT, 4, false),
+				Elections::remove_member(Origin::root(), 4, false),
 				Error::<Test>::InvalidReplacement,
 				Some(6000000) // only thing that matters for now is that it is NOT the full block.
 			);
@@ -2562,7 +2612,7 @@ mod tests {
 			Elections::end_block(System::block_number());
 
 			assert_eq!(Elections::members_ids(), vec![2, 4]);
-			assert_ok!(Elections::remove_member(Origin::ROOT, 2, true));
+			assert_ok!(Elections::remove_member(Origin::root(), 2, true));
 			assert_eq!(Elections::members_ids(), vec![4, 5]);
 		});
 	}

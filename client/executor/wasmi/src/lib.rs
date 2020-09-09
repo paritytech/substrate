@@ -234,7 +234,6 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			table.get(dispatch_thunk_id)
 				.map_err(|_| "dispatch_thunk_idx is out of the table bounds")?
 				.ok_or_else(|| "dispatch_thunk_idx points on an empty table entry")?
-				.clone()
 		};
 
 		let guest_env = match sandbox::GuestEnvironment::decode(&self.sandbox_store, raw_env_def) {

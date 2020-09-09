@@ -365,6 +365,10 @@ impl<T: codec::Codec> PassBy for Option<T> {
 	type PassBy = Codec<Self>;
 }
 
+impl PassBy for (u32, u32, u32, u32) {
+	type PassBy = Codec<Self>;
+}
+
 /// Implement `PassBy` with `Inner` for the given fixed sized hash types.
 macro_rules! for_primitive_types {
 	{ $( $hash:ident $n:expr ),* $(,)? } => {
@@ -532,4 +536,8 @@ impl PassBy for sp_wasm_interface::ValueType {
 
 impl PassBy for sp_wasm_interface::Value {
 	type PassBy = Codec<sp_wasm_interface::Value>;
+}
+
+impl PassBy for sp_storage::TrackedStorageKey {
+	type PassBy = Codec<Self>;
 }

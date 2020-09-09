@@ -87,6 +87,20 @@ bitflags! {
 	}
 }
 
+impl BlockAttributes {
+	/// Encodes attributes as big endian u32, compatible with SCALE-encoding (i.e the
+	/// significant byte has zero index).
+	pub fn to_be_u32(&self) -> u32 {
+		u32::from_be_bytes([self.bits(), 0, 0, 0])
+	}
+
+	/// Decodes attributes, encoded with the `encode_to_be_u32()` call.
+	pub fn from_be_u32(encoded: u32) -> Result<Self, Error> {
+		BlockAttributes::from_bits(encoded.to_be_bytes()[0])
+			.ok_or_else(|| Error::from("Invalid BlockAttributes"))
+	}
+}
+
 impl Encode for BlockAttributes {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push_byte(self.bits())

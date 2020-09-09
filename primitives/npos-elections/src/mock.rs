@@ -51,18 +51,18 @@ pub(crate) struct _Edge<A> {
 pub(crate) struct _Support<A> {
 	pub own: f64,
 	pub total: f64,
-	pub others: Vec<_PhragmenAssignment<A>>,
+	pub others: Vec<_Assignment<A>>,
 }
 
-pub(crate) type _PhragmenAssignment<A> = (A, f64);
+pub(crate) type _Assignment<A> = (A, f64);
 pub(crate) type _SupportMap<A> = BTreeMap<A, _Support<A>>;
 
 pub(crate) type AccountId = u64;
 
 #[derive(Debug, Clone)]
-pub(crate) struct _PhragmenResult<A: Clone> {
+pub(crate) struct _ElectionResult<A: Clone> {
 	pub winners: Vec<(A, ExtendedBalance)>,
-	pub assignments: Vec<(A, Vec<_PhragmenAssignment<A>>)>
+	pub assignments: Vec<(A, Vec<_Assignment<A>>)>
 }
 
 pub(crate) fn auto_generate_self_voters<A: Clone>(candidates: &[A]) -> Vec<(A, Vec<A>)> {
@@ -75,12 +75,12 @@ pub(crate) fn elect_float<A, FS>(
 	initial_candidates: Vec<A>,
 	initial_voters: Vec<(A, Vec<A>)>,
 	stake_of: FS,
-) -> Option<_PhragmenResult<A>> where
+) -> Option<_ElectionResult<A>> where
 	A: Default + Ord + Copy,
 	for<'r> FS: Fn(&'r A) -> VoteWeight,
 {
 	let mut elected_candidates: Vec<(A, ExtendedBalance)>;
-	let mut assigned: Vec<(A, Vec<_PhragmenAssignment<A>>)>;
+	let mut assigned: Vec<(A, Vec<_Assignment<A>>)>;
 	let mut c_idx_cache = BTreeMap::<A, usize>::new();
 	let num_voters = initial_candidates.len() + initial_voters.len();
 	let mut voters: Vec<_Voter<A>> = Vec::with_capacity(num_voters);
@@ -172,14 +172,14 @@ pub(crate) fn elect_float<A, FS>(
 		}
 	}
 
-	Some(_PhragmenResult {
+	Some(_ElectionResult {
 		winners: elected_candidates,
 		assignments: assigned,
 	})
 }
 
 pub(crate) fn equalize_float<A, FS>(
-	mut assignments: Vec<(A, Vec<_PhragmenAssignment<A>>)>,
+	mut assignments: Vec<(A, Vec<_Assignment<A>>)>,
 	supports: &mut _SupportMap<A>,
 	tolerance: f64,
 	iterations: usize,
@@ -211,7 +211,7 @@ pub(crate) fn equalize_float<A, FS>(
 pub(crate) fn do_equalize_float<A>(
 	voter: &A,
 	budget_balance: VoteWeight,
-	elected_edges: &mut Vec<_PhragmenAssignment<A>>,
+	elected_edges: &mut Vec<_Assignment<A>>,
 	support_map: &mut _SupportMap<A>,
 	tolerance: f64
 ) -> f64 where
@@ -264,7 +264,7 @@ pub(crate) fn do_equalize_float<A>(
 		e.1 = 0.0;
 	});
 
-	elected_edges.sort_unstable_by(|x, y|
+	elected_edges.sort_by(|x, y|
 		support_map.get(&x.0)
 			.and_then(|x| support_map.get(&y.0).and_then(|y| x.total.partial_cmp(&y.total)))
 			.unwrap_or(sp_std::cmp::Ordering::Equal)
@@ -366,7 +366,7 @@ pub(crate) fn run_and_compare<Output: PerThing>(
 }
 
 pub(crate) fn build_support_map_float<FS>(
-	result: &mut _PhragmenResult<AccountId>,
+	result: &mut _ElectionResult<AccountId>,
 	stake_of: FS,
 ) -> _SupportMap<AccountId>
 	where for<'r> FS: Fn(&'r AccountId) -> VoteWeight

@@ -26,7 +26,7 @@ use crate::{
 use hash_db::Hasher;
 use sp_core::{
 	offchain::storage::OffchainOverlayedChanges,
-	storage::{well_known_keys::is_child_storage_key, ChildInfo},
+	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
 	traits::Externalities, hexdisplay::HexDisplay,
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
@@ -37,6 +37,10 @@ use std::{error, fmt, any::{Any, TypeId}};
 use log::{warn, trace};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
+const BENCHMARKING_FN: &str = "\
+	This is a special fn only for benchmarking where a database commit happens from the runtime.
+	For that reason client started transactions before calling into runtime are not allowed.
+	Without client transactions the loop condition garantuees the success of the tx close.";
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
@@ -147,7 +151,7 @@ where
 
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.changes(None).map(|(k, v)| (k.clone(), v.value().cloned())))
+			.chain(self.overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned())))
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -467,8 +471,8 @@ where
 			let root = self
 				.storage(prefixed_storage_key.as_slice())
 				.and_then(|k| Decode::decode(&mut &k[..]).ok())
-				.unwrap_or(
-					empty_child_trie_root::<Layout<H>>()
+				.unwrap_or_else(
+					|| empty_child_trie_root::<Layout<H>>()
 				);
 			trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
 				self.id,
@@ -477,15 +481,14 @@ where
 			);
 			root.encode()
 		} else {
+			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
+				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
+				Some(self.backend.child_storage_root(info, delta))
+			} else {
+				None
+			};
 
-			if let Some(child_info) = self.overlay.default_child_info(storage_key) {
-				let (root, is_empty, _) = {
-					let delta = self.overlay.changes(Some(child_info))
-						.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
-
-					self.backend.child_storage_root(child_info, delta)
-				};
-
+			if let Some((root, is_empty, _)) = root {
 				let root = root.encode();
 				// We store update in the overlay in order to be able to use 'self.storage_transaction'
 				// cache. This is brittle as it rely on Ext only querying the trie backend for
@@ -509,8 +512,8 @@ where
 				let root = self
 					.storage(prefixed_storage_key.as_slice())
 					.and_then(|k| Decode::decode(&mut &k[..]).ok())
-					.unwrap_or(
-						empty_child_trie_root::<Layout<H>>()
+					.unwrap_or_else(
+						|| empty_child_trie_root::<Layout<H>>()
 					);
 				trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
 					self.id,
@@ -547,20 +550,40 @@ where
 		root.map(|r| r.map(|o| o.encode()))
 	}
 
+	fn storage_start_transaction(&mut self) {
+		self.overlay.start_transaction()
+	}
+
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
+		self.mark_dirty();
+		self.overlay.rollback_transaction().map_err(|_| ())
+	}
+
+	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
+		self.overlay.commit_transaction().map_err(|_| ())
+	}
+
 	fn wipe(&mut self) {
-		self.overlay.discard_prospective();
+		for _ in 0..self.overlay.transaction_depth() {
+			self.overlay.rollback_transaction().expect(BENCHMARKING_FN);
+		}
 		self.overlay.drain_storage_changes(
 			&self.backend,
 			None,
 			Default::default(),
 			self.storage_transaction_cache,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
-		self.storage_transaction_cache.reset();
-		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL)
+		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL);
+		self.mark_dirty();
+		self.overlay
+			.enter_runtime()
+			.expect("We have reset the overlay above, so we can not be in the runtime; qed");
 	}
 
 	fn commit(&mut self) {
-		self.overlay.commit_prospective();
+		for _ in 0..self.overlay.transaction_depth() {
+			self.overlay.commit_transaction().expect(BENCHMARKING_FN);
+		}
 		let changes = self.overlay.drain_storage_changes(
 			&self.backend,
 			None,
@@ -570,8 +593,29 @@ where
 		self.backend.commit(
 			changes.transaction_storage_root,
 			changes.transaction,
+			changes.main_storage_changes,
+			changes.child_storage_changes,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
-		self.storage_transaction_cache.reset();
+		self.mark_dirty();
+		self.overlay
+			.enter_runtime()
+			.expect("We have reset the overlay above, so we can not be in the runtime; qed");
+	}
+
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		self.backend.read_write_count()
+	}
+
+	fn reset_read_write_count(&mut self) {
+		self.backend.reset_read_write_count()
+	}
+
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		self.backend.get_whitelist()
+	}
+
+	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
+		self.backend.set_whitelist(new)
 	}
 }
 

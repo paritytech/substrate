@@ -813,7 +813,7 @@ fn max_limits_work() {
 		// No candidates because full
 		assert_eq!(Society::candidates().len(), 0);
 		// Increase member limit
-		assert_ok!(Society::set_max_members(Origin::ROOT, 200));
+		assert_ok!(Society::set_max_members(Origin::root(), 200));
 		// Rotate period
 		run_to_block(16);
 		// Candidates are back!

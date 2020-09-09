@@ -149,7 +149,7 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 }
 
 /// Finality proof provider for serving network requests.
-pub struct FinalityProofProvider<B,  Block: BlockT> {
+pub struct FinalityProofProvider<B, Block: BlockT> {
 	backend: Arc<B>,
 	authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 }
@@ -169,6 +169,18 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	{
 		FinalityProofProvider { backend, authority_provider: Arc::new(authority_provider) }
 	}
+
+	/// Create new finality proof provider for the service using:
+	///
+	/// - backend for accessing blockchain data;
+	/// - storage_and_proof_provider, which is generally a client.
+	pub fn new_for_service(
+		backend: Arc<B>,
+		storage_and_proof_provider: Arc<dyn StorageAndProofProvider<Block, B>>,
+	) -> Arc<Self> {
+		Arc::new(Self::new(backend, storage_and_proof_provider))
+	}
+
 }
 
 impl<B, Block> sc_network::config::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>

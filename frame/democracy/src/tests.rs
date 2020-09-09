@@ -22,7 +22,8 @@ use std::cell::RefCell;
 use codec::Encode;
 use frame_support::{
 	impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
-	impl_outer_event, ord_parameter_types, traits::{Contains, OnInitialize}, weights::Weight,
+	impl_outer_event, ord_parameter_types, traits::{Contains, OnInitialize, Filter},
+	weights::Weight,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -30,7 +31,7 @@ use sp_runtime::{
 	testing::Header, Perbill,
 };
 use pallet_balances::{BalanceLock, Error as BalancesError};
-use frame_system::EnsureSignedBy;
+use frame_system::{EnsureSignedBy, EnsureRoot};
 
 mod cancellation;
 mod delegation;
@@ -41,7 +42,6 @@ mod preimage;
 mod public_proposals;
 mod scheduling;
 mod voting;
-mod migration;
 mod decoders;
 
 const AYE: Vote = Vote { aye: true, conviction: Conviction::None };
@@ -50,7 +50,7 @@ const BIG_AYE: Vote = Vote { aye: true, conviction: Conviction::Locked1x };
 const BIG_NAY: Vote = Vote { aye: false, conviction: Conviction::Locked1x };
 
 impl_outer_origin! {
-	pub enum Origin for Test  where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 impl_outer_dispatch! {
@@ -74,6 +74,14 @@ impl_outer_event! {
 	}
 }
 
+// Test that a fitlered call can be dispatched.
+pub struct BaseFilter;
+impl Filter<Call> for BaseFilter {
+	fn filter(call: &Call) -> bool {
+		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance(..)))
+	}
+}
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
@@ -84,6 +92,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
+	type BaseCallFilter = BaseFilter;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -107,6 +116,7 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
@@ -114,8 +124,11 @@ parameter_types! {
 impl pallet_scheduler::Trait for Test {
 	type Event = Event;
 	type Origin = Origin;
+	type PalletsOrigin = OriginCaller;
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
+	type ScheduleOrigin = EnsureRoot<u64>;
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -126,6 +139,7 @@ impl pallet_balances::Trait for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const LaunchPeriod: u64 = 2;
@@ -187,6 +201,8 @@ impl super::Trait for Test {
 	type Scheduler = Scheduler;
 	type MaxVotes = MaxVotes;
 	type OperationalPreimageOrigin = EnsureSignedBy<Six, u64>;
+	type PalletsOrigin = OriginCaller;
+	type WeightInfo = ();
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -222,6 +238,14 @@ fn params_should_work() {
 
 fn set_balance_proposal(value: u64) -> Vec<u8> {
 	Call::Balances(pallet_balances::Call::set_balance(42, value, 0)).encode()
+}
+
+#[test]
+fn set_balance_proposal_is_correctly_filtered_out() {
+	for i in 0..10 {
+		let call = Call::decode(&mut &set_balance_proposal(i)[..]).unwrap();
+		assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+	}
 }
 
 fn set_balance_proposal_hash(value: u64) -> H256 {

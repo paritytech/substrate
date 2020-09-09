@@ -4,19 +4,19 @@ This analysis is on the computing and memory complexity of specific procedures. 
 
 The primary goal is to come up with decent pricing for functions that can be invoked by a user (via extrinsics) or by untrusted code that prevents DoS attacks.
 
-# Sandboxing
+## Sandboxing
 
 It makes sense to describe the sandboxing module first because the smart-contract module is built upon it.
 
-## Memory
+### Memory
 
-### set
+#### set
 
 Copies data from the supervisor's memory to the guest's memory.
 
 **complexity**: It doesn't allocate, and the computational complexity is proportional to the number of bytes to copy.
 
-### get
+#### get
 
 Copies data from the guest's memory to the supervisor's memory.
 
@@ -78,17 +78,10 @@ The size of the arguments and the return value depends on the exact function in 
 
 **complexity**: Memory and computational complexity can be considered as a constant.
 
-# `AccountDb`
+## Transactional Storage
 
-`AccountDb` is an abstraction that supports collecting changes to accounts with the ability to efficiently reverting them. Contract
-execution contexts operate on the AccountDb. All changes are flushed into underlying storage only after origin transaction succeeds.
-
-## Relation to the underlying storage
-
-At present, `AccountDb` is implemented as a cascade of overlays with the direct storage at the bottom. The direct
-storage `AccountDb` leverages child tries. Each overlay is represented by a `Map`. On a commit from an overlay to an
-overlay, maps are merged. On commit from an overlay to the bottommost `AccountDb` all changes are flushed to the storage
-and on revert, the overlay is just discarded.
+The contracts module makes use of the nested storage transactions feature offered by
+the underlying storage which allows efficient roll back of changes made by contracts.
 
 > ℹ️ The underlying storage has a overlay layer implemented as a `Map`. If the runtime reads a storage location and the
 > respective key doesn't exist in the overlay, then the underlying storage performs a DB access, but the value won't be
@@ -105,23 +98,24 @@ storage access.
 
 ## get_storage, get_code_hash, get_rent_allowance, get_balance, contract_exists
 
-These functions check the local cache for a requested value and, if it is there, the value is returned. Otherwise, these functions will ask an underlying `AccountDb`  for the value. This means that the number of lookups is proportional to the depth of the overlay cascade. If the value can't be found before reaching the bottommost `AccountDb`, then a DB read will be performed (in case `get_balance` the function `free_balance` will be invoked).
+Those query the underlying storage for the requested value. If the value was modified in the
+current block they are served from the cache. Otherwise a database read is performed.
 
-A lookup in the local cache consists of at least one `Map` lookup, for locating the specific account. For `get_storage` there is a second lookup: because account's storage is implemented as a nested map, another lookup is required for fetching a storage value by a key.
-
-These functions return an owned value as its result, so memory usage depends on the value being returned.
-
-**complexity**: The memory complexity is proportional to the size of the value. The computational complexity is proportional to the depth of the overlay cascade and the size of the value; the cost is dominated by the DB read though.
+**complexity**: The memory complexity is proportional to the size of the value. The computational complexity is proportional the size of the value; the cost is dominated by the DB read.
 
 ## set_storage, set_balance, set_rent_allowance
 
-These functions only modify the local `Map`.
+These function write to the underlying storage which caches those values and does not write
+them to the database immediately.
 
-A lookup in the local cache consists of at least one `Map` lookup, for locating the specific account. For `get_storage` there is a second lookup: because account's storage is implemented as a nested map, another lookup is required for fetching a storage value by a key.
+While these functions only modify the local cache, they trigger a database write later when
+all changes that were not rolled back are written to storage. Moreover, if the balance of the
+account is changed to be below `existential_deposit` then that account along with all its storage
+will be removed, which requires time proportional to the number of storage entries that account has.
+It should be ensured that pricing accounts for these facts.
 
-While these functions only modify the local `Map`, if changes made by them are committed to the bottommost `AccountDb`, each changed entry in the `Map` will require a DB write. Moreover, if the balance of the account is changed to be below `existential_deposit` then that account along with all its storage will be removed, which requires time proportional to the number of storage entries that account has. It should be ensured that pricing accounts for these facts.
-
-**complexity**: Each lookup has a logarithmical computing time to the number of already inserted entries. No additional memory is required.
+**complexity**: Each lookup has a logarithmical computing time to the number of already inserted entries.
+No additional memory is required.
 
 ## instantiate_contract
 
@@ -131,9 +125,11 @@ Calls `contract_exists` and if it doesn't exist, do not modify the local `Map` s
 
 ## commit
 
-In this function, all cached values will be inserted into the underlying `AccountDb` or into the storage.
+In this function, all values modified in the current transactions are committed to the parent
+transaction.
 
-We are doing `N` inserts into `Map` (`O(log M)` complexity) or into the storage, where `N` is the size of the committed `Map` and `M` is the size of the map of the underlying overlay. Consider adjusting the price of modifying the `AccountDb` to account for this (since pricing for the count of entries in `commit` will make the price of commit way less predictable). No additional memory is required.
+This will trigger `N` inserts into parent transaction  (`O(log M)` complexity) or into the storage, where `N` is the size of the current transaction and `M` is the size of the parent transaction. Consider adjusting the price of modifying the
+current transaction to account for this (since pricing for the count of entries in `commit` will make the price of commit way less predictable). No additional memory is required.
 
 Note that in case of storage modification we need to construct a key in the underlying storage. In order to do that we need:
 
@@ -143,21 +139,21 @@ Note that in case of storage modification we need to construct a key in the unde
 
 There is also a special case to think of: if the balance of some account goes below `existential_deposit`, then all storage entries of that account will be erased, which requires time proportional to the number of storage entries that account has.
 
-**complexity**: `N` inserts into a `Map` or eventually into the storage (if committed). Every deleted account will induce removal of all its storage which is proportional to the number of storage entries that account has.
+**complexity**: `N` inserts into a transaction or eventually into the storage (if committed). Every deleted account will induce removal of all its storage which is proportional to the number of storage entries that account has.
 
 ## revert
 
-Consists of dropping (in the Rust sense) of the `AccountDb`.
+Consists of dropping (in the Rust sense) of the current transaction.
 
 **complexity**: Computing complexity is proportional to a number of changed entries in a overlay. No additional memory is required.
 
-# Executive
+## Executive
 
-## Transfer
+### Transfer
 
 This function performs the following steps:
 
-1. Querying source and destination balances from an overlay (see `get_balance`),
+1. Querying source and destination balances from the current transaction (see `get_balance`),
 2. Querying `existential_deposit`.
 3. Executing `ensure_account_liquid` hook.
 4. Updating source and destination balance in the overlay (see `set_balance`).
@@ -171,9 +167,9 @@ returns with an error.
 
 Assuming marshaled size of a balance value is of the constant size we can neglect its effect on the performance.
 
-**complexity**: up to 2 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has. For the current `AccountDb` implementation computing complexity also depends on the depth of the `AccountDb` cascade. Memorywise it can be assumed to be constant.
+**complexity**: up to 2 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has. Memorywise it can be assumed to be constant.
 
-## Initialization
+### Initialization
 
 Before a call or instantiate can be performed the execution context must be initialized.
 
@@ -188,7 +184,7 @@ implementation they just involve a DB read.
 For subsequent calls and instantiations during contract execution, the initialization requires no
 expensive operations.
 
-## Terminate
+### Terminate
 
 This function performs the following steps:
 
@@ -204,17 +200,17 @@ the call stack is of a fixed maximum size we consider this operation as constant
 we are using child trie removal which is linear in the amount of stored keys. Upcoming changes
 will make the account removal constant time.
 
-
-## Call
+### Call
 
 This function receives input data for the contract execution. The execution consists of the following steps:
 
 1. Initialization of the execution context.
 2. Checking rent payment.
 3. Loading code from the DB.
-4. `transfer`-ing funds between the caller and the destination account.
-5. Executing the code of the destination account.
-6. Committing overlayed changed to the underlying `AccountDb`.
+4. Starting a new storage transaction.
+5. `transfer`-ing funds between the caller and the destination account.
+6. Executing the code of the destination account.
+7. Committing or rolling back the storage transaction.
 
 **Note** that the complexity of executing the contract code should be considered separately.
 
@@ -235,22 +231,24 @@ Loading code most likely will trigger a DB read, since the code is immutable and
 
 Also, `transfer` can make up to 2 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has.
 
-Finally, all changes are `commit`-ted into the underlying overlay. The complexity of this depends on the number of changes performed by the code. Thus, the pricing of storage modification should account for that.
+Finally, the current storage transaction is closed. The complexity of this depends on the number of changes performed by the code. Thus, the pricing of storage modification should account for that.
 
 **complexity**:
+
 - Only for the first invocation of the contract: up to 5 DB reads and one DB write as well as logic executed by `ensure_can_withdraw`, `withdraw`, `make_free_balance_be`.
 - On top of that for every invocation: Up to 5 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage). Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
 
-## Instantiate
+### Instantiate
 
 This function takes the code of the constructor and input data. Instantiation of a contract consists of the following steps:
 
 1. Initialization of the execution context.
 2. Calling `DetermineContractAddress` hook to determine an address for the contract,
-3. `transfer`-ing funds between self and the newly instantiated contract.
-4. Executing the constructor code. This will yield the final code of the code.
-5. Storing the code for the newly instantiated contract in the overlay.
-6. Committing overlayed changed to the underlying `AccountDb`.
+3. Starting a new storage transaction.
+4. `transfer`-ing funds between self and the newly instantiated contract.
+5. Executing the constructor code. This will yield the final code of the code.
+6. Storing the code for the newly instantiated contract in the overlay.
+7. Committing or rolling back the storage transaction.
 
 **Note** that the complexity of executing the constructor code should be considered separately.
 
@@ -262,19 +260,43 @@ Also, `transfer` can make up to 2 DB reads and up to 2 DB writes (if flushed to 
 
 Storing the code in the overlay may induce another DB write (if flushed to the storage) with the size proportional to the size of the constructor code.
 
-Finally, all changes are `commit`-ted into the underlying overlay. The complexity of this depends on the number of changes performed by the constructor code. Thus, the pricing of storage modification should account for that.
+Finally, the current storage transaction is closed.. The complexity of this depends on the number of changes performed by the constructor code. Thus, the pricing of storage modification should account for that.
 
 **complexity**: Up to 2 DB reads and induces up to 3 DB writes (if flushed to the storage), one of which is dependent on the size of the code. Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
 
-# Externalities
+## Contracts API
 
-Each external function invoked from a contract can involve some overhead.
+Each API function invoked from a contract can involve some overhead.
 
-## ext_gas
+## Getter functions
 
-**complexity**: This is of constant complexity.
+Those are simple getter functions which copy a requested value to contract memory. They
+all have the following two arguments:
 
-## ext_set_storage
+- `output_ptr`: Pointer into contract memory where to copy the value.
+- `output_len_ptr`: Pointer into contract memory where the size of the buffer is stored. The size of the copied value is also stored there.
+
+**complexity**: The size of the returned value is constant for a given runtime. Therefore we
+consider its complexity constant even though some of them might involve at most one DB read. Some of those
+functions call into other pallets of the runtime. The assumption here is that those functions are also
+linear in regard to the size of the data that is returned and therefore considered constant for a
+given runtime.
+
+This is the list of getters:
+
+- seal_caller
+- seal_address
+- seal_weight_to_fee
+- seal_gas_left
+- seal_balance
+- seal_value_transferred
+- seal_now
+- seal_minimum_balance
+- seal_tombstone_deposit
+- seal_rent_allowance
+- seal_block_number
+
+### seal_set_storage
 
 This function receives a `key` and `value` as arguments. It consists of the following steps:
 
@@ -283,7 +305,7 @@ This function receives a `key` and `value` as arguments. It consists of the foll
 
 **complexity**: Complexity is proportional to the size of the `value`. This function induces a DB write of size proportional to the `value` size (if flushed to the storage), so should be priced accordingly.
 
-## ext_clear_storage
+### seal_clear_storage
 
 This function receives a `key` as argument. It consists of the following steps:
 
@@ -293,23 +315,22 @@ This function receives a `key` as argument. It consists of the following steps:
 **complexity**: Complexity is constant. This function induces a DB write to clear the storage entry
 (upon being flushed to the storage) and should be priced accordingly.
 
-## ext_get_storage
+### seal_get_storage
 
 This function receives a `key` as an argument. It consists of the following steps:
 
 1. Reading the sandbox memory for `key` (see sandboxing memory get).
 2. Reading the storage with the given key (see `get_storage`). It receives back the owned result buffer.
-3. Replacing the scratch buffer.
+3. Writing the storage value to contract memory.
 
 Key is of a constant size. Therefore, the sandbox memory load can be considered to be of constant complexity.
 
 Unless the value is cached, a DB read will be performed. The size of the value is not known until the read is
 performed. Moreover, the DB read has to be synchronous and no progress can be made until the value is fetched.
 
-**complexity**: The memory and computing complexity is proportional to the size of the fetched value. This function performs a
-DB read.
+**complexity**: The memory and computing complexity is proportional to the size of the fetched value. This function performs a DB read.
 
-## ext_transfer
+### seal_transfer
 
 This function receives the following arguments:
 
@@ -320,18 +341,19 @@ It consists of the following steps:
 
 1. Loading `account` buffer from the sandbox memory (see sandboxing memory get) and then decoding it.
 2. Loading `value` buffer from the sandbox memory and then decoding it.
-4. Invoking the executive function `transfer`.
+3. Invoking the executive function `transfer`.
 
 Loading of `account` and `value` buffers should be charged. This is because the sizes of buffers are specified by the calling code, even though marshaled representations are, essentially, of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId` and `Balance`.
 
-## ext_call
+### seal_call
 
 This function receives the following arguments:
 
 - `callee` buffer of a marshaled `AccountId`,
 - `gas` limit which is plain u64,
 - `value` buffer of a marshaled `Balance`,
-- `input_data`. An arbitrarily sized byte vector.
+- `input_data` an arbitrarily sized byte vector.
+- `output_ptr` pointer to contract memory.
 
 It consists of the following steps:
 
@@ -339,14 +361,15 @@ It consists of the following steps:
 2. Loading `value` buffer from the sandbox memory and then decoding it.
 3. Loading `input_data` buffer from the sandbox memory.
 4. Invoking the executive function `call`.
+5. Writing output buffer to contract memory.
 
 Loading of `callee` and `value` buffers should be charged. This is because the sizes of buffers are specified by the calling code, even though marshaled representations are, essentially, of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId` and `Balance`.
 
 Loading `input_data` should be charged in any case.
 
-**complexity**: All complexity comes from loading buffers and executing `call` executive function. The former component is proportional to the sizes of `callee`, `value` and `input_data` buffers. The latter component completely depends on the complexity of `call` executive function, and also dominated by it.
+**complexity**: All complexity comes from loading and writing buffers and executing `call` executive function. The former component is proportional to the sizes of `callee`, `value`, `input_data` and `output_ptr` buffers. The latter component completely depends on the complexity of `call` executive function, and also dominated by it.
 
-## ext_instantiate
+### seal_instantiate
 
 This function receives the following arguments:
 
@@ -368,7 +391,7 @@ Loading `init_code` and `input_data` should be charged in any case.
 
 **complexity**: All complexity comes from loading buffers and executing `instantiate` executive function. The former component is proportional to the sizes of `init_code`, `value` and `input_data` buffers. The latter component completely depends on the complexity of `instantiate` executive function and also dominated by it.
 
-## ext_terminate
+### seal_terminate
 
 This function receives the following arguments:
 
@@ -382,16 +405,23 @@ Loading of the `beneficiary` buffer should be charged. This is because the sizes
 
 **complexity**: All complexity comes from loading buffers and executing `terminate` executive function. The former component is proportional to the size of the `beneficiary` buffer. The latter component completely depends on the complexity of `terminate` executive function and also dominated by it.
 
-## ext_return
+### seal_input
 
-This function receives a `data` buffer as an argument. Execution of the function consists of the following steps:
+This function receives a pointer to contract memory. It copies the input to the contract call to this location.
 
-1. Loading `data` buffer from the sandbox memory (see sandboxing memory get),
-2. Trapping
+**complexity**: The complextity is proportional to the size of the input buffer.
+
+### seal_return
+
+This function receives a `data` buffer and `flags` arguments. Execution of the function consists of the following steps:
+
+1. Loading `data` buffer from the sandbox memory (see sandboxing memory get).
+2. Storing the `u32` flags value.
+3. Trapping
 
 **complexity**: The complexity of this function is proportional to the size of the `data` buffer.
 
-## ext_deposit_event
+### seal_deposit_event
 
 This function receives a `data` buffer as an argument. Execution of the function consists of the following steps:
 
@@ -402,49 +432,7 @@ This function receives a `data` buffer as an argument. Execution of the function
 
 **complexity**: The complexity of this function is proportional to the size of the `data` buffer.
 
-## ext_caller
-
-This function serializes the address of the caller into the scratch buffer.
-
-**complexity**: Assuming that the address is of constant size, this function has constant complexity.
-
-## ext_random
-
-This function serializes a random number generated by the given subject into the scratch buffer.
-The complexity of this function highly depends on the complexity of `System::random`. `max_subject_len`
-limits the size of the subject buffer.
-
-**complexity**: The complexity of this function depends on the implementation of `System::random`.
-
-## ext_now
-
-This function serializes the current block's timestamp into the scratch buffer.
-
-**complexity**: Assuming that the timestamp is of constant size, this function has constant complexity.
-
-## ext_scratch_size
-
-This function returns the size of the scratch buffer.
-
-**complexity**: This function is of constant complexity.
-
-## ext_scratch_read
-
-This function copies slice of data from the scratch buffer to the sandbox memory. The calling code specifies the slice length. Execution of the function consists of the following steps:
-
-1. Storing a specified slice of the scratch buffer into the sandbox memory (see sandboxing memory set)
-
-**complexity**: The computing complexity of this function is proportional to the length of the slice. No additional memory is required.
-
-## ext_scratch_write
-
-This function copies slice of data from the sandbox memory to the scratch buffer. The calling code specifies the slice length. Execution of the function consists of the following steps:
-
-1. Loading a slice from the sandbox memory into the (see sandboxing memory get)
-
-**complexity**: Complexity is proportional to the length of the slice.
-
-## ext_set_rent_allowance
+### seal_set_rent_allowance
 
 This function receives the following argument:
 
@@ -456,22 +444,6 @@ It consists of the following steps:
 2. Invoking `set_rent_allowance` AccountDB function.
 
 **complexity**: Complexity is proportional to the size of the `value`. This function induces a DB write of size proportional to the `value` size (if flushed to the storage), so should be priced accordingly.
-
-## ext_rent_allowance
-
-It consists of the following steps:
-
-1. Invoking `get_rent_allowance` AccountDB function.
-2. Serializing the rent allowance of the current contract into the scratch buffer.
-
-**complexity**: Assuming that the rent allowance is of constant size, this function has constant complexity. This
-function performs a DB read.
-
-## ext_block_number
-
-This function serializes the current block's number into the scratch buffer.
-
-**complexity**: Assuming that the block number is of constant size, this function has constant complexity.
 
 ## Built-in hashing functions
 

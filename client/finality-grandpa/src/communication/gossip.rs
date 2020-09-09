@@ -750,7 +750,11 @@ impl<Block: BlockT> Inner<Block> {
 					Round(1),
 				)),
 				Some(ref mut v) => if v.set_id == set_id {
-					if self.authorities != authorities {
+					let diff_authorities =
+						self.authorities.iter().collect::<HashSet<_>>() !=
+						authorities.iter().collect();
+
+					if diff_authorities {
 						debug!(target: "afg",
 							"Gossip validator noted set {:?} twice with different authorities. \
 							Was the authority set hard forked?",
@@ -829,7 +833,7 @@ impl<Block: BlockT> Inner<Block> {
 			return Action::Discard(cost::UNKNOWN_VOTER);
 		}
 
-		if let Err(()) = sp_finality_grandpa::check_message_signature(
+		if !sp_finality_grandpa::check_message_signature(
 			&full.message.message,
 			&full.message.id,
 			&full.message.signature,
@@ -918,7 +922,7 @@ impl<Block: BlockT> Inner<Block> {
 			PendingCatchUp::Processing { .. } => {
 				self.pending_catch_up = PendingCatchUp::None;
 			},
-			state => trace!(target: "afg",
+			state => debug!(target: "afg",
 				"Noted processed catch up message when state was: {:?}",
 				state,
 			),
@@ -1039,7 +1043,7 @@ impl<Block: BlockT> Inner<Block> {
 				let (catch_up_allowed, catch_up_report) = self.note_catch_up_request(who, &request);
 
 				if catch_up_allowed {
-					trace!(target: "afg", "Sending catch-up request for round {} to {}",
+					debug!(target: "afg", "Sending catch-up request for round {} to {}",
 						   round,
 						   who,
 					);
@@ -2620,12 +2624,12 @@ mod tests {
 	fn allow_noting_different_authorities_for_same_set() {
 		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None);
 
-		let a1 = vec![AuthorityId::default()];
+		let a1 = vec![AuthorityId::from_slice(&[0; 32])];
 		val.note_set(SetId(1), a1.clone(), |_, _| {});
 
 		assert_eq!(val.inner().read().authorities, a1);
 
-		let a2 = vec![AuthorityId::default(), AuthorityId::default()];
+		let a2 = vec![AuthorityId::from_slice(&[1; 32]), AuthorityId::from_slice(&[2; 32])];
 		val.note_set(SetId(1), a2.clone(), |_, _| {});
 
 		assert_eq!(val.inner().read().authorities, a2);

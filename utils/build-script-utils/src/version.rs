@@ -31,11 +31,11 @@ pub fn generate_cargo_keys() {
 		}
 		Ok(o) => {
 			println!("cargo:warning=Git command failed with status: {}", o.status);
-			Cow::from("unknown-commit")
+			Cow::from("unknown")
 		},
 		Err(err) => {
 			println!("cargo:warning=Failed to execute git command: {}", err);
-			Cow::from("unknown-commit")
+			Cow::from("unknown")
 		},
 	};
 

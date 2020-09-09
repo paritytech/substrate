@@ -26,7 +26,6 @@ use codec::Decode;
 use sp_consensus::{evaluation, Proposal, RecordProof};
 use sp_inherents::InherentData;
 use log::{error, info, debug, trace, warn};
-use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
@@ -200,15 +199,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			record_proof,
 		)?;
 
-		// We don't check the API versions any further here since the dispatch compatibility
-		// check should be enough.
-		for inherent in self.client.runtime_api()
-			.inherent_extrinsics_with_context(
-				&self.parent_id,
-				ExecutionContext::BlockConstruction,
-				inherent_data
-			)?
-		{
+		for inherent in block_builder.create_inherents(inherent_data)? {
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() =>
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block."),
@@ -335,7 +326,7 @@ mod tests {
 		prelude::*, TestClientBuilder, runtime::{Extrinsic, Transfer}, TestClientBuilderExt,
 	};
 	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool, TransactionSource};
-	use sc_transaction_pool::{BasicPool, FullChainApi};
+	use sc_transaction_pool::BasicPool;
 	use sp_api::Core;
 	use sp_blockchain::HeaderBackend;
 	use sp_runtime::traits::NumberFor;
@@ -355,11 +346,9 @@ mod tests {
 	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
 		where NumberFor<B>: From<u64>
 	{
-		ChainEvent::NewBlock {
+		ChainEvent::NewBestBlock {
 			hash: header.hash(),
 			tree_route: None,
-			is_new_best: true,
-			header,
 		}
 	}
 
@@ -367,12 +356,12 @@ mod tests {
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let txpool = Arc::new(
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(client.clone())),
-				None,
-			).0
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			None,
+			spawner,
+			client.clone(),
 		);
 
 		futures::executor::block_on(
@@ -420,12 +409,12 @@ mod tests {
 	#[test]
 	fn should_not_panic_when_deadline_is_reached() {
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let txpool = Arc::new(
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(client.clone())),
-				None,
-			).0
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			None,
+			spawner,
+			client.clone(),
 		);
 
 		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
@@ -455,12 +444,12 @@ mod tests {
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
 		let (client, backend) = TestClientBuilder::new().build_with_backend();
 		let client = Arc::new(client);
-		let txpool = Arc::new(
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(client.clone())),
-				None,
-			).0
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			None,
+			spawner,
+			client.clone(),
 		);
 
 		let genesis_hash = client.info().best_hash;
@@ -517,12 +506,12 @@ mod tests {
 	fn should_not_remove_invalid_transactions_when_skipping() {
 		// given
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let txpool = Arc::new(
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(client.clone())),
-				None,
-			).0
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			None,
+			spawner,
+			client.clone(),
 		);
 
 		futures::executor::block_on(

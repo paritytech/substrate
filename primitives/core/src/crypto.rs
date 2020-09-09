@@ -37,10 +37,16 @@ use regex::Regex;
 use base58::{FromBase58, ToBase58};
 #[cfg(feature = "std")]
 use crate::hexdisplay::HexDisplay;
-use zeroize::Zeroize;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
 use sp_runtime_interface::pass_by::PassByInner;
+/// Trait to zeroize a memory buffer.
+pub use zeroize::Zeroize;
+/// Trait for accessing reference to `SecretString`.
+pub use secrecy::ExposeSecret;
+/// A store for sensitive data.
+#[cfg(feature = "std")]
+pub use secrecy::SecretString;
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -76,51 +82,6 @@ pub trait UncheckedInto<T> {
 impl<S, T: UncheckedFrom<S>> UncheckedInto<T> for S {
 	fn unchecked_into(self) -> T {
 		T::unchecked_from(self)
-	}
-}
-
-/// A store for sensitive data.
-///
-/// Calls `Zeroize::zeroize` upon `Drop`.
-#[derive(Clone)]
-pub struct Protected<T: Zeroize>(T);
-
-impl<T: Zeroize> AsRef<T> for Protected<T> {
-	fn as_ref(&self) -> &T {
-		&self.0
-	}
-}
-
-impl<T: Zeroize> sp_std::ops::Deref for Protected<T> {
-	type Target = T;
-
-	fn deref(&self) -> &T {
-		&self.0
-	}
-}
-
-#[cfg(feature = "std")]
-impl<T: Zeroize> std::fmt::Debug for Protected<T> {
-	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(fmt, "<protected>")
-	}
-}
-
-impl<T: Zeroize> From<T> for Protected<T> {
-	fn from(t: T) -> Self {
-		Protected(t)
-	}
-}
-
-impl<T: Zeroize> Zeroize for Protected<T> {
-	fn zeroize(&mut self) {
-		self.0.zeroize()
-	}
-}
-
-impl<T: Zeroize> Drop for Protected<T> {
-	fn drop(&mut self) {
-		self.zeroize()
 	}
 }
 
@@ -219,7 +180,7 @@ impl DeriveJunction {
 impl<T: AsRef<str>> From<T> for DeriveJunction {
 	fn from(j: T) -> DeriveJunction {
 		let j = j.as_ref();
-		let (code, hard) = if j.starts_with("/") {
+		let (code, hard) = if j.starts_with('/') {
 			(&j[1..], true)
 		} else {
 			(j, false)
@@ -304,7 +265,6 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	}
 
 	/// Return the ss58-check string for this key.
-
 	#[cfg(feature = "std")]
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
 		let mut v = vec![version.into()];
@@ -313,9 +273,11 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		v.extend(&r.as_bytes()[0..2]);
 		v.to_base58()
 	}
+
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
 	fn to_ss58check(&self) -> String { self.to_ss58check_with_version(*DEFAULT_VERSION.lock()) }
+
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
 	#[cfg(feature = "std")]
@@ -356,11 +318,24 @@ lazy_static::lazy_static! {
 macro_rules! ss58_address_format {
 	( $( $identifier:tt => ($number:expr, $name:expr, $desc:tt) )* ) => (
 		/// A known address (sub)format/network ID for SS58.
-		#[derive(Copy, Clone, PartialEq, Eq)]
+		#[derive(Copy, Clone, PartialEq, Eq, crate::RuntimeDebug)]
 		pub enum Ss58AddressFormat {
 			$(#[doc = $desc] $identifier),*,
 			/// Use a manually provided numeric value.
 			Custom(u8),
+		}
+
+		#[cfg(feature = "std")]
+		impl std::fmt::Display for Ss58AddressFormat {
+			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+				match self {
+					$(
+						Ss58AddressFormat::$identifier => write!(f, "{}", $name),
+					)*
+					Ss58AddressFormat::Custom(x) => write!(f, "{}", x),
+				}
+
+			}
 		}
 
 		static ALL_SS58_ADDRESS_FORMATS: [Ss58AddressFormat; 0 $(+ { let _ = $number; 1})*] = [
@@ -368,6 +343,12 @@ macro_rules! ss58_address_format {
 		];
 
 		impl Ss58AddressFormat {
+			/// names of all address formats
+			pub fn all_names() -> &'static [&'static str] {
+				&[
+					$($name),*,
+				]
+			}
 			/// All known address formats.
 			pub fn all() -> &'static [Ss58AddressFormat] {
 				&ALL_SS58_ADDRESS_FORMATS
@@ -397,19 +378,40 @@ macro_rules! ss58_address_format {
 			fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
 				match x {
 					$($number => Ok(Ss58AddressFormat::$identifier)),*,
-					_ => Err(()),
+					_ => {
+						#[cfg(feature = "std")]
+						match Ss58AddressFormat::default() {
+							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(x)),
+							_ => Err(()),
+						}
+
+						#[cfg(not(feature = "std"))]
+						Err(())
+					},
 				}
 			}
 		}
 
-		impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
-			type Error = ();
+		/// Error encountered while parsing `Ss58AddressFormat` from &'_ str
+		/// unit struct for now.
+		#[derive(Copy, Clone, PartialEq, Eq, crate::RuntimeDebug)]
+		pub struct ParseError;
 
-			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, ()> {
+		impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
+			type Error = ParseError;
+
+			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, Self::Error> {
 				match x {
 					$($name => Ok(Ss58AddressFormat::$identifier)),*,
-					a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ()),
+					a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ParseError),
 				}
+			}
+		}
+
+		#[cfg(feature = "std")]
+		impl std::fmt::Display for ParseError {
+			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+				write!(f, "failed to parse network value as u8")
 			}
 		}
 
@@ -423,10 +425,7 @@ macro_rules! ss58_address_format {
 		#[cfg(feature = "std")]
 		impl From<Ss58AddressFormat> for String {
 			fn from(x: Ss58AddressFormat) -> String {
-				match x {
-					$(Ss58AddressFormat::$identifier => $name.into()),*,
-					Ss58AddressFormat::Custom(x) => x.to_string(),
-				}
+				x.to_string()
 			}
 		}
 	)
@@ -442,6 +441,8 @@ ss58_address_format!(
 		(2, "kusama", "Kusama Relay-chain, standard account (*25519).")
 	Reserved3 =>
 		(3, "reserved3", "Reserved for future use (3).")
+	KatalChainAccount =>
+		(4, "katalchain", "Katal Chain, standard account (*25519).")
 	PlasmAccount =>
 		(5, "plasm", "Plasm Network, standard account (*25519).")
 	BifrostAccount =>
@@ -458,20 +459,36 @@ ss58_address_format!(
 		(11, "laminar", "Laminar mainnet, standard account (*25519).")
 	PolymathAccount =>
 		(12, "polymath", "Polymath network, standard account (*25519).")
+	SubstraTeeAccount =>
+		(13, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
 	KulupuAccount =>
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
 	DarwiniaAccount =>
 		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
+	StafiAccount =>
+		(20, "stafi", "Stafi mainnet, standard account (*25519).")
+	DockTestAccount =>
+		(21, "dock-testnet", "Dock testnet, standard account (*25519).")
+	DockMainAccount =>
+		(22, "dock-mainnet", "Dock mainnet, standard account (*25519).")
+	ShiftNrg =>
+		(23, "shift", "ShiftNrg mainnet, standard account (*25519).")
+	SubsocialAccount =>
+		(28, "subsocial", "Subsocial network, standard account (*25519).")
+	PhalaAccount =>
+		(30, "phala", "Phala Network, standard account (*25519).")
 	RobonomicsAccount =>
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
+	DataHighwayAccount =>
+		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
 	CentrifugeAccount =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
 	Reserved43 =>
 		(43, "reserved43", "Reserved for future use (43).")
-	SubstraTeeAccount =>
-		(44, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
+	ChainXAccount =>
+		(44, "chainx", "ChainX mainnet, standard account (*25519).")
 	Reserved46 =>
 		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>
@@ -671,6 +688,23 @@ impl<'de> serde::Deserialize<'de> for AccountId32 {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
 		Ss58Codec::from_ss58check(&String::deserialize(deserializer)?)
 			.map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+	}
+}
+
+#[cfg(feature = "std")]
+impl sp_std::str::FromStr for AccountId32 {
+	type Err = &'static str;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		let hex_or_ss58_without_prefix = s.trim_start_matches("0x");
+		if hex_or_ss58_without_prefix.len() == 64 {
+			let mut bytes = [0u8; 32];
+			hex::decode_to_slice(hex_or_ss58_without_prefix, &mut bytes)
+				.map_err(|_| "invalid hex address.")
+				.map(|_| Self::from(bytes))
+		} else {
+			Self::from_ss58check(s).map_err(|_| "invalid ss58 address.")
+		}
 	}
 }
 
@@ -1184,6 +1218,33 @@ mod tests {
 		assert_eq!(
 			TestPair::from_string("hello world/1//DOT///password", None),
 			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![DeriveJunction::soft(1), DeriveJunction::hard("DOT")]})
+		);
+	}
+
+	#[test]
+	fn accountid_32_from_str_works() {
+		use std::str::FromStr;
+		assert!(AccountId32::from_str("5G9VdMwXvzza9pS8qE8ZHJk3CheHW9uucBn9ngW4C1gmmzpv").is_ok());
+		assert!(AccountId32::from_str("5c55177d67b064bb5d189a3e1ddad9bc6646e02e64d6e308f5acbb1533ac430d").is_ok());
+		assert!(AccountId32::from_str("0x5c55177d67b064bb5d189a3e1ddad9bc6646e02e64d6e308f5acbb1533ac430d").is_ok());
+
+		assert_eq!(
+			AccountId32::from_str("99G9VdMwXvzza9pS8qE8ZHJk3CheHW9uucBn9ngW4C1gmmzpv").unwrap_err(),
+			"invalid ss58 address.",
+		);
+		assert_eq!(
+			AccountId32::from_str("gc55177d67b064bb5d189a3e1ddad9bc6646e02e64d6e308f5acbb1533ac430d").unwrap_err(),
+			"invalid hex address.",
+		);
+		assert_eq!(
+			AccountId32::from_str("0xgc55177d67b064bb5d189a3e1ddad9bc6646e02e64d6e308f5acbb1533ac430d").unwrap_err(),
+			"invalid hex address.",
+		);
+
+		// valid hex but invalid length will be treated as ss58.
+		assert_eq!(
+			AccountId32::from_str("55c55177d67b064bb5d189a3e1ddad9bc6646e02e64d6e308f5acbb1533ac430d").unwrap_err(),
+			"invalid ss58 address.",
 		);
 	}
 }

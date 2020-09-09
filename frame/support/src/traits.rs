@@ -25,7 +25,7 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError, traits::{
 		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-		BadOrigin
+		BadOrigin, AtLeast32BitUnsigned
 	},
 };
 use crate::dispatch::Parameter;
@@ -192,6 +192,17 @@ macro_rules! impl_filter_stack {
 	}
 }
 
+/// Type that provide some integrity tests.
+///
+/// This implemented for modules by `decl_module`.
+#[impl_for_tuples(30)]
+pub trait IntegrityTest {
+	/// Run integrity test.
+	///
+	/// The test is not executed in a externalities provided environment.
+	fn integrity_test() {}
+}
+
 #[cfg(test)]
 mod test_impl_filter_stack {
 	use super::*;
@@ -316,6 +327,10 @@ pub trait StoredMap<K, T> {
 pub trait Happened<T> {
 	/// The thing happened.
 	fn happened(t: &T);
+}
+
+impl<T> Happened<T> for () {
+	fn happened(_: &T) {}
 }
 
 /// A shim for placing around a storage item in order to use it as a `StoredValue`. Ideally this
@@ -450,9 +465,11 @@ impl<T: IntoIterator + Clone,> Len for T where <T as IntoIterator>::IntoIter: Ex
 	}
 }
 
-/// A trait for querying a single fixed value from a type.
+/// A trait for querying a single value from a type.
+///
+/// It is not required that the value is constant.
 pub trait Get<T> {
-	/// Return a constant value.
+	/// Return the current value.
 	fn get() -> T;
 }
 
@@ -775,7 +792,7 @@ pub enum SignedImbalance<B, P: Imbalance<B>>{
 impl<
 	P: Imbalance<B, Opposite=N>,
 	N: Imbalance<B, Opposite=P>,
-	B: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
+	B: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
 > SignedImbalance<B, P> {
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())
@@ -838,7 +855,8 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
+	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug +
+		Default;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
@@ -878,6 +896,14 @@ pub trait Currency<AccountId> {
 	/// This is infallible, but doesn't guarantee that the entire `amount` is issued, for example
 	/// in the case of overflow.
 	fn issue(amount: Self::Balance) -> Self::NegativeImbalance;
+
+	/// Produce a pair of imbalances that cancel each other out exactly.
+	///
+	/// This is just the same as burning and issuing the same amount and has no effect on the
+	/// total issuance.
+	fn pair(amount: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
+		(Self::burn(amount.clone()), Self::issue(amount))
+	}
 
 	/// The 'free' balance of a given account.
 	///
@@ -1006,6 +1032,7 @@ pub trait Currency<AccountId> {
 }
 
 /// Status of funds.
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum BalanceStatus {
 	/// Funds are free, as corresponding to `free` item in Balances.
 	Free,
@@ -1211,7 +1238,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 	///
 	/// This resets any previous value of prime.
 	fn change_members(incoming: &[AccountId], outgoing: &[AccountId], mut new: Vec<AccountId>) {
-		new.sort_unstable();
+		new.sort();
 		Self::change_members_sorted(incoming, outgoing, &new[..]);
 	}
 
@@ -1318,7 +1345,10 @@ pub trait Randomness<Output> {
 	}
 }
 
-impl<Output: Decode + Default> Randomness<Output> for () {
+/// Provides an implementation of [`Randomness`] that should only be used in tests!
+pub struct TestRandomness;
+
+impl<Output: Decode + Default> Randomness<Output> for TestRandomness {
 	fn random(subject: &[u8]) -> Output {
 		Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default()
 	}
@@ -1412,10 +1442,18 @@ impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 	}
 }
 
-/// The runtime upgrade trait. Implementing this lets you express what should happen
-/// when the runtime upgrades, and changes may need to occur to your module.
+/// The runtime upgrade trait.
+///
+/// Implementing this lets you express what should happen when the runtime upgrades,
+/// and changes may need to occur to your module.
 pub trait OnRuntimeUpgrade {
 	/// Perform a module upgrade.
+	///
+	/// # Warning
+	///
+	/// This function will be called before we initialized any runtime state, aka `on_initialize`
+	/// wasn't called yet. So, information like the block number and any other
+	/// block local data are not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
@@ -1463,6 +1501,15 @@ pub mod schedule {
 	/// higher priority.
 	pub type Priority = u8;
 
+	/// The dispatch time of a scheduled task.
+	#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+	pub enum DispatchTime<BlockNumber> {
+		/// At specified block.
+		At(BlockNumber),
+		/// After specified number of blocks.
+		After(BlockNumber),
+	}
+
 	/// The highest priority. We invert the value so that normal sorting will place the highest
 	/// priority at the beginning of the list.
 	pub const HIGHEST_PRIORITY: Priority = 0;
@@ -1473,7 +1520,7 @@ pub mod schedule {
 	pub const LOWEST_PRIORITY: Priority = 255;
 
 	/// A type that can be used as a scheduler.
-	pub trait Anon<BlockNumber, Call> {
+	pub trait Anon<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + Debug;
 
@@ -1483,11 +1530,12 @@ pub mod schedule {
 		///
 		/// Infallible.
 		fn schedule(
-			when: BlockNumber,
+			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
+			origin: Origin,
 			call: Call
-		) -> Self::Address;
+		) -> Result<Self::Address, DispatchError>;
 
 		/// Cancel a scheduled task. If periodic, then it will cancel all further instances of that,
 		/// also.
@@ -1503,7 +1551,7 @@ pub mod schedule {
 	}
 
 	/// A type that can be used as a scheduler.
-	pub trait Named<BlockNumber, Call> {
+	pub trait Named<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
 
@@ -1512,9 +1560,10 @@ pub mod schedule {
 		/// - `id`: The identity of the task. This must be unique and will return an error if not.
 		fn schedule_named(
 			id: Vec<u8>,
-			when: BlockNumber,
+			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
+			origin: Origin,
 			call: Call
 		) -> Result<Self::Address, ()>;
 
@@ -1545,6 +1594,77 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin;
+}
+
+/// Type that can be dispatched with an origin but without checking the origin filter.
+///
+/// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
+/// `construct_runtime` and `impl_outer_dispatch`.
+pub trait UnfilteredDispatchable {
+	/// The origin type of the runtime, (i.e. `frame_system::Trait::Origin`).
+	type Origin;
+
+	/// Dispatch this call but do not check the filter in origin.
+	fn dispatch_bypass_filter(self, origin: Self::Origin) -> crate::dispatch::DispatchResultWithPostInfo;
+}
+
+/// Methods available on `frame_system::Trait::Origin`.
+pub trait OriginTrait: Sized {
+	/// Runtime call type, as in `frame_system::Trait::Call`
+	type Call;
+
+	/// The caller origin, overarching type of all pallets origins.
+	type PalletsOrigin;
+
+	/// Add a filter to the origin.
+	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
+
+	/// Reset origin filters to default one, i.e `frame_system::Trait::BaseCallFilter`.
+	fn reset_filter(&mut self);
+
+	/// Replace the caller with caller from the other origin
+	fn set_caller_from(&mut self, other: impl Into<Self>);
+
+	/// Filter the call, if false then call is filtered out.
+	fn filter_call(&self, call: &Self::Call) -> bool;
+
+	/// Get the caller.
+	fn caller(&self) -> &Self::PalletsOrigin;
+}
+
+/// Trait to be used when types are exactly same.
+///
+/// This allow to convert back and forth from type, a reference and a mutable reference.
+pub trait IsType<T>: Into<T> + From<T> {
+	/// Cast reference.
+	fn from_ref(t: &T) -> &Self;
+
+	/// Cast reference.
+	fn into_ref(&self) -> &T;
+
+	/// Cast mutable reference.
+	fn from_mut(t: &mut T) -> &mut Self;
+
+	/// Cast mutable reference.
+	fn into_mut(&mut self) -> &mut T;
+}
+
+impl<T> IsType<T> for T {
+	fn from_ref(t: &T) -> &Self { t }
+	fn into_ref(&self) -> &T { self }
+	fn from_mut(t: &mut T) -> &mut Self { t }
+	fn into_mut(&mut self) -> &mut T { self }
+}
+
+/// An instance of a pallet in the storage.
+///
+/// It is required that these instances are unique, to support multiple instances per pallet in the same runtime!
+///
+/// E.g. for module MyModule default instance will have prefix "MyModule" and other instances
+/// "InstanceNMyModule".
+pub trait Instance: 'static {
+    /// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
+    const PREFIX: &'static str ;
 }
 
 #[cfg(test)]

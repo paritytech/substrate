@@ -101,8 +101,9 @@ pub enum OffchainOverlayedChange {
 pub enum OffchainOverlayedChanges {
 	/// Writing overlay changes to the offchain worker database is disabled by configuration.
 	Disabled,
-	/// Overlay changes can be recorded using the inner collection of this variant.
-	Enabled(HashMap<Vec<u8>, OffchainOverlayedChange>),
+	/// Overlay changes can be recorded using the inner collection of this variant,
+	/// where the identifier is the tuple of `(prefix, key)`.
+	Enabled(HashMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange>),
 }
 
 impl Default for OffchainOverlayedChanges {
@@ -140,23 +141,21 @@ impl OffchainOverlayedChanges {
 	/// Remove a key and its associated value from the offchain database.
 	pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
 		if let Self::Enabled(ref mut storage) = self {
-			let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-			let _ = storage.insert(key, OffchainOverlayedChange::Remove);
+			let _ = storage.insert((prefix.to_vec(), key.to_vec()), OffchainOverlayedChange::Remove);
 		}
 	}
 
 	/// Set the value associated with a key under a prefix to the value provided.
 	pub fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		if let Self::Enabled(ref mut storage) = self {
-			let key = prefix.iter().chain(key).cloned().collect();
-			let _ = storage.insert(key, OffchainOverlayedChange::SetValue(value.to_vec()));
+			let _ = storage.insert((prefix.to_vec(), key.to_vec()), OffchainOverlayedChange::SetValue(value.to_vec()));
 		}
 	}
 
 	/// Obtain a associated value to the given key in storage with prefix.
 	pub fn get(&self, prefix: &[u8], key: &[u8]) -> Option<OffchainOverlayedChange> {
 		if let Self::Enabled(ref storage) = self {
-			let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+			let key = (prefix.to_vec(), key.to_vec());
 			storage.get(&key).cloned()
 		} else {
 			None
@@ -168,11 +167,11 @@ use std::collections::hash_map;
 
 /// Iterate by reference over the prepared offchain worker storage changes.
 pub struct OffchainOverlayedChangesIter<'i> {
-	inner: Option<hash_map::Iter<'i, Vec<u8>, OffchainOverlayedChange>>,
+	inner: Option<hash_map::Iter<'i, (Vec<u8>, Vec<u8>), OffchainOverlayedChange>>,
 }
 
 impl<'i> Iterator for OffchainOverlayedChangesIter<'i> {
-	type Item = (&'i Vec<u8>, &'i OffchainOverlayedChange);
+	type Item = (&'i (Vec<u8>, Vec<u8>), &'i OffchainOverlayedChange);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(ref mut iter) = self.inner {
 			iter.next()
@@ -197,11 +196,11 @@ impl<'i> OffchainOverlayedChangesIter<'i> {
 
 /// Iterate by value over the prepared offchain worker storage changes.
 pub struct OffchainOverlayedChangesIntoIter {
-	inner: Option<hash_map::IntoIter<Vec<u8>,OffchainOverlayedChange>>,
+	inner: Option<hash_map::IntoIter<(Vec<u8>,Vec<u8>),OffchainOverlayedChange>>,
 }
 
 impl Iterator for OffchainOverlayedChangesIntoIter {
-	type Item = (Vec<u8>, OffchainOverlayedChange);
+	type Item = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(ref mut iter) = self.inner {
 			iter.next()
@@ -225,11 +224,11 @@ impl OffchainOverlayedChangesIntoIter {
 
 /// Iterate over all items while draining them from the collection.
 pub struct OffchainOverlayedChangesDrain<'d> {
-	inner: Option<hash_map::Drain<'d, Vec<u8>,OffchainOverlayedChange>>,
+	inner: Option<hash_map::Drain<'d, (Vec<u8>, Vec<u8>), OffchainOverlayedChange>>,
 }
 
 impl<'d> Iterator for OffchainOverlayedChangesDrain<'d> {
-	type Item = (Vec<u8>, OffchainOverlayedChange);
+	type Item = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange);
 	fn next(&mut self) -> Option<Self::Item> {
 		if let Some(ref mut iter) = self.inner {
 			iter.next()
@@ -286,9 +285,13 @@ mod test {
 
 		ooc.set(STORAGE_PREFIX, b"ppp", b"rrr");
 		let mut iter = ooc.into_iter();
-		let mut k = STORAGE_PREFIX.to_vec();
-		k.extend_from_slice(&b"ppp"[..]);
-		assert_eq!(iter.next(), Some((k, OffchainOverlayedChange::SetValue(b"rrr".to_vec()))));
+		assert_eq!(
+			iter.next(),
+			Some(
+				((STORAGE_PREFIX.to_vec(), b"ppp".to_vec()),
+				OffchainOverlayedChange::SetValue(b"rrr".to_vec()))
+			)
+		);
 		assert_eq!(iter.next(), None);
 	}
 }

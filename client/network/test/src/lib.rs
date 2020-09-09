@@ -22,7 +22,10 @@ mod block_import;
 #[cfg(test)]
 mod sync;
 
-use std::{collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData, task::{Poll, Context as FutureContext}};
+use std::{
+	borrow::Cow, collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData,
+	task::{Poll, Context as FutureContext}
+};
 
 use libp2p::build_multiaddr;
 use log::trace;
@@ -39,7 +42,7 @@ use sc_client_api::{
 use sc_consensus::LongestChain;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_network::config::Role;
-use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
+use sp_consensus::block_validation::{DefaultBlockAnnounceValidator, BlockAnnounceValidator};
 use sp_consensus::import_queue::{
 	BasicQueue, BoxJustificationImport, Verifier, BoxFinalityProofImport,
 };
@@ -55,7 +58,7 @@ use sp_core::H256;
 use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_runtime::Justification;
+use sp_runtime::{ConsensusEngineId, Justification};
 use substrate_test_runtime_client::{self, AccountKeyring};
 use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
@@ -67,7 +70,33 @@ type AuthorityId = sp_consensus_babe::AuthorityId;
 /// A Verifier that accepts all blocks and passes them on with the configured
 /// finality to be imported.
 #[derive(Clone)]
-pub struct PassThroughVerifier(pub bool);
+pub struct PassThroughVerifier {
+	finalized: bool,
+	fork_choice: ForkChoiceStrategy,
+}
+
+impl PassThroughVerifier {
+	/// Create a new instance.
+	///
+	/// Every verified block will use `finalized` for the `BlockImportParams`.
+	pub fn new(finalized: bool) -> Self {
+		Self {
+			finalized,
+			fork_choice: ForkChoiceStrategy::LongestChain,
+		}
+	}
+
+	/// Create a new instance.
+	///
+	/// Every verified block will use `finalized` for the `BlockImportParams` and
+	/// the given [`ForkChoiceStrategy`].
+	pub fn new_with_fork_choice(finalized: bool, fork_choice: ForkChoiceStrategy) -> Self {
+		Self {
+			finalized,
+			fork_choice,
+		}
+	}
+}
 
 /// This `Verifier` accepts all data as valid.
 impl<B: BlockT> Verifier<B> for PassThroughVerifier {
@@ -85,9 +114,9 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = body;
-		import.finalized = self.0;
+		import.finalized = self.finalized;
 		import.justification = justification;
-		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+		import.fork_choice = Some(self.fork_choice.clone());
 
 		Ok((import, maybe_keys))
 	}
@@ -294,6 +323,7 @@ impl<D> Peer<D> {
 			} else {
 				Default::default()
 			};
+
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
 			self.network.service().announce_block(hash, Vec::new());
 			at = hash;
@@ -519,6 +549,17 @@ impl<B: BlockT> VerifierAdapter<B> {
 	}
 }
 
+/// Configuration for a full peer.
+#[derive(Default)]
+pub struct FullPeerConfig {
+	/// Pruning window size.
+	pub keep_blocks: Option<u32>,
+	/// Block announce validator.
+	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
+	/// List of notification protocols that the network must support.
+	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
+}
+
 pub trait TestNetFactory: Sized {
 	type Verifier: 'static + Verifier<Block>;
 	type PeerData: Default;
@@ -579,12 +620,12 @@ pub trait TestNetFactory: Sized {
 	}
 
 	fn add_full_peer(&mut self) {
-		self.add_full_peer_with_states(None)
+		self.add_full_peer_with_config(Default::default())
 	}
 
 	/// Add a full peer.
-	fn add_full_peer_with_states(&mut self, keep_blocks: Option<u32>) {
-		let test_client_builder = match keep_blocks {
+	fn add_full_peer_with_config(&mut self, config: FullPeerConfig) {
+		let test_client_builder = match config.keep_blocks {
 			Some(keep_blocks) => TestClientBuilder::with_pruning_window(keep_blocks),
 			None => TestClientBuilder::with_default_backend(),
 		};
@@ -612,7 +653,7 @@ pub trait TestNetFactory: Sized {
 			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
-			&sp_core::testing::SpawnBlockingExecutor::new(),
+			&sp_core::testing::TaskExecutor::new(),
 			None,
 		));
 
@@ -627,6 +668,7 @@ pub trait TestNetFactory: Sized {
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
+		network_config.notifications_protocols = config.notifications_protocols;
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Full,
@@ -639,9 +681,10 @@ pub trait TestNetFactory: Sized {
 			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
-			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
+			protocol_id: ProtocolId::from("test-protocol-name"),
 			import_queue,
-			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
+			block_announce_validator: config.block_announce_validator
+				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
 			metrics_registry: None,
 		}).unwrap();
 
@@ -691,7 +734,7 @@ pub trait TestNetFactory: Sized {
 			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
-			&sp_core::testing::SpawnBlockingExecutor::new(),
+			&sp_core::testing::TaskExecutor::new(),
 			None,
 		));
 
@@ -718,9 +761,9 @@ pub trait TestNetFactory: Sized {
 			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
-			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
+			protocol_id: ProtocolId::from("test-protocol-name"),
 			import_queue,
-			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
+			block_announce_validator: Box::new(DefaultBlockAnnounceValidator),
 			metrics_registry: None,
 		}).unwrap();
 
@@ -787,6 +830,20 @@ pub trait TestNetFactory: Sized {
 		Poll::Ready(())
 	}
 
+	/// Polls the testnet until all peers are connected to each other.
+	///
+	/// Must be executed in a task context.
+	fn poll_until_connected(&mut self, cx: &mut FutureContext) -> Poll<()> {
+		self.poll(cx);
+
+		let num_peers = self.peers().len();
+		if self.peers().iter().all(|p| p.num_peers() == num_peers - 1) {
+			return Poll::Ready(())
+		}
+
+		Poll::Pending
+	}
+
 	/// Blocks the current thread until we are sync'ed.
 	///
 	/// Calls `poll_until_sync` repeatedly.
@@ -801,13 +858,22 @@ pub trait TestNetFactory: Sized {
 		futures::executor::block_on(futures::future::poll_fn::<(), _>(|cx| self.poll_until_idle(cx)));
 	}
 
-	/// Polls the testnet. Processes all the pending actions and returns `NotReady`.
+	/// Blocks the current thread until all peers are connected to each other.
+	///
+	/// Calls `poll_until_connected` repeatedly with the runtime passed as parameter.
+	fn block_until_connected(&mut self) {
+		futures::executor::block_on(
+			futures::future::poll_fn::<(), _>(|cx| self.poll_until_connected(cx)),
+		);
+	}
+
+	/// Polls the testnet. Processes all the pending actions.
 	fn poll(&mut self, cx: &mut FutureContext) {
 		self.mut_peers(|peers| {
 			for peer in peers {
 				trace!(target: "sync", "-- Polling {}", peer.id());
-				if let Poll::Ready(res) = Pin::new(&mut peer.network).poll(cx) {
-					res.unwrap();
+				if let Poll::Ready(()) = peer.network.poll_unpin(cx) {
+					panic!("NetworkWorker has terminated unexpectedly.")
 				}
 				trace!(target: "sync", "-- Polling complete {}", peer.id());
 
@@ -831,6 +897,17 @@ pub trait TestNetFactory: Sized {
 
 pub struct TestNet {
 	peers: Vec<Peer<()>>,
+	fork_choice: ForkChoiceStrategy,
+}
+
+impl TestNet {
+	/// Create a `TestNet` that used the given fork choice rule.
+	pub fn with_fork_choice(fork_choice: ForkChoiceStrategy) -> Self {
+		Self {
+			peers: Vec::new(),
+			fork_choice,
+		}
+	}
 }
 
 impl TestNetFactory for TestNet {
@@ -841,13 +918,14 @@ impl TestNetFactory for TestNet {
 	fn from_config(_config: &ProtocolConfig) -> Self {
 		TestNet {
 			peers: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
 		}
 	}
 
 	fn make_verifier(&self, _client: PeersClient, _config: &ProtocolConfig, _peer_data: &())
 		-> Self::Verifier
 	{
-		PassThroughVerifier(false)
+		PassThroughVerifier::new_with_fork_choice(false, self.fork_choice.clone())
 	}
 
 	fn peer(&mut self, i: usize) -> &mut Peer<()> {

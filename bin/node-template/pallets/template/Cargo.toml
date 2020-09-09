@@ -2,40 +2,41 @@
 authors = ['Anonymous']
 edition = '2018'
 name = 'pallet-template'
-version = "2.0.0-rc3"
+version = "2.0.0-rc6"
 license = "Unlicense"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "FRAME pallet template"
+description = "FRAME pallet template for defining custom runtime logic."
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
 
 [dependencies.frame-support]
 default-features = false
-version = "2.0.0-rc3"
+version = "2.0.0-rc6"
 path = "../../../../frame/support"
 
 [dependencies.frame-system]
 default-features = false
-version = "2.0.0-rc3"
+version = "2.0.0-rc6"
 path = "../../../../frame/system"
+
 [dev-dependencies.sp-core]
 default-features = false
-version = "2.0.0-rc3"
+version = "2.0.0-rc6"
 path = "../../../../primitives/core"
 
 [dev-dependencies.sp-io]
 default-features = false
-version = "2.0.0-rc3"
+version = "2.0.0-rc6"
 path = "../../../../primitives/io"
 
 [dev-dependencies.sp-runtime]
 default-features = false
-version = "2.0.0-rc3"
+version = "2.0.0-rc6"
 path = "../../../../primitives/runtime"
 
 

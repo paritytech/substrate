@@ -27,13 +27,13 @@ use sp_trie::trie_types::Layout;
 use sp_core::{
 	storage::{
 		well_known_keys::is_child_storage_key, Storage,
-		ChildInfo, StorageChild,
+		ChildInfo, StorageChild, TrackedStorageKey,
 	},
 	traits::Externalities, Blake2Hasher,
 };
 use log::warn;
 use codec::Encode;
-use sp_externalities::Extensions;
+use sp_externalities::{Extensions, Extension};
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
@@ -51,17 +51,6 @@ impl BasicExternalities {
 	/// New basic externalities with empty storage.
 	pub fn new_empty() -> Self {
 		Self::new(Storage::default())
-	}
-
-	/// New basic extternalities with tasks executor.
-	pub fn with_tasks_executor() -> Self {
-		let mut extensions = Extensions::default();
-		extensions.register(sp_core::traits::TaskExecutorExt(sp_core::tasks::executor()));
-
-		Self {
-			inner: Storage::default(),
-			extensions,
-		}
 	}
 
 	/// Insert key/value
@@ -106,6 +95,11 @@ impl BasicExternalities {
 	/// List of active extensions.
 	pub fn extensions(&mut self) -> &mut Extensions {
 		&mut self.extensions
+	}
+
+	/// Register an extension.
+	pub fn register_extension(&mut self, ext: impl Extension) {
+		self.extensions.register(ext);
 	}
 }
 
@@ -307,9 +301,37 @@ impl Externalities for BasicExternalities {
 		Ok(None)
 	}
 
+	fn storage_start_transaction(&mut self) {
+		unimplemented!("Transactions are not supported by BasicExternalities");
+	}
+
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
+		unimplemented!("Transactions are not supported by BasicExternalities");
+	}
+
+	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
+		unimplemented!("Transactions are not supported by BasicExternalities");
+	}
+
 	fn wipe(&mut self) {}
 
 	fn commit(&mut self) {}
+
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		unimplemented!("read_write_count is not supported in Basic")
+	}
+
+	fn reset_read_write_count(&mut self) {
+		unimplemented!("reset_read_write_count is not supported in Basic")
+	}
+
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		unimplemented!("get_whitelist is not supported in Basic")
+	}
+
+	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
+		unimplemented!("set_whitelist is not supported in Basic")
+	}
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {

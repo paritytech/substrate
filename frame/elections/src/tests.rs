@@ -671,7 +671,7 @@ fn retracting_active_voter_should_slash_reporter() {
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		System::set_block_number(8);
-		assert_ok!(Elections::set_desired_seats(Origin::ROOT, 3));
+		assert_ok!(Elections::set_desired_seats(Origin::root(), 3));
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		System::set_block_number(10);
@@ -1245,7 +1245,7 @@ fn election_second_tally_should_use_runners_up() {
 
 		System::set_block_number(8);
 		assert_ok!(Elections::set_approvals(Origin::signed(6), vec![false, false, true, false], 1, 0, 60));
-		assert_ok!(Elections::set_desired_seats(Origin::ROOT, 3));
+		assert_ok!(Elections::set_desired_seats(Origin::root(), 3));
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		System::set_block_number(10);

@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_system::{RawOrigin, Module as System};
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use sp_runtime::traits::Bounded;
 
 use crate::Module as Vesting;
@@ -64,7 +64,7 @@ benchmarks! {
 	vest_locked {
 		let l in 0 .. MAX_LOCKS;
 
-		let caller = account("caller", 0, SEED);
+		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		add_locks::<T>(&caller, l as u8);
 		add_vesting_schedule::<T>(&caller)?;
@@ -88,7 +88,7 @@ benchmarks! {
 	vest_unlocked {
 		let l in 0 .. MAX_LOCKS;
 
-		let caller = account("caller", 0, SEED);
+		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		add_locks::<T>(&caller, l as u8);
 		add_vesting_schedule::<T>(&caller)?;
@@ -125,7 +125,7 @@ benchmarks! {
 			"Vesting schedule not added",
 		);
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 	}: vest_other(RawOrigin::Signed(caller.clone()), other_lookup)
 	verify {
 		// Nothing happened since everything is still vested.
@@ -152,7 +152,7 @@ benchmarks! {
 			"Vesting schedule still active",
 		);
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 	}: vest_other(RawOrigin::Signed(caller.clone()), other_lookup)
 	verify {
 		// Vesting schedule is removed!
@@ -166,7 +166,7 @@ benchmarks! {
 	vested_transfer {
 		let l in 0 .. MAX_LOCKS;
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());

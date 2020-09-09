@@ -69,7 +69,7 @@ impl<B: BlockT> GossipEngine<B> {
 	pub fn new<N: Network<B> + Send + Clone + 'static>(
 		network: N,
 		engine_id: ConsensusEngineId,
-		protocol_name: impl Into<Cow<'static, [u8]>>,
+		protocol_name: impl Into<Cow<'static, str>>,
 		validator: Arc<dyn Validator<B>>,
 	) -> Self where B: 'static {
 		// We grab the event stream before registering the notifications protocol, otherwise we
@@ -333,7 +333,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn register_notifications_protocol(&self, _: ConsensusEngineId, _: Cow<'static, [u8]>) {}
+		fn register_notifications_protocol(&self, _: ConsensusEngineId, _: Cow<'static, str>) {}
 
 		fn announce(&self, _: B::Hash, _: Vec<u8>) {
 			unimplemented!();
@@ -362,7 +362,7 @@ mod tests {
 		let mut gossip_engine = GossipEngine::<Block>::new(
 			network.clone(),
 			[1, 2, 3, 4],
-			"my_protocol".as_bytes(),
+			"my_protocol",
 			Arc::new(AllowAll{}),
 		);
 
@@ -390,7 +390,7 @@ mod tests {
 		let mut gossip_engine = GossipEngine::<Block>::new(
 			network.clone(),
 			engine_id.clone(),
-			"my_protocol".as_bytes(),
+			"my_protocol",
 			Arc::new(AllowAll{}),
 		);
 
@@ -525,7 +525,7 @@ mod tests {
 			let mut gossip_engine = GossipEngine::<Block>::new(
 				network.clone(),
 				engine_id.clone(),
-				"my_protocol".as_bytes(),
+				"my_protocol",
 				Arc::new(TestValidator{}),
 			);
 

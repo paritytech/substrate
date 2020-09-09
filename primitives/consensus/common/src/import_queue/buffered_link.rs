@@ -50,7 +50,7 @@ use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 pub fn buffered_link<B: BlockT>() -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {
 	let (tx, rx) = tracing_unbounded("mpsc_buffered_link");
 	let tx = BufferedLinkSender { tx };
-	let rx = BufferedLinkReceiver { rx };
+	let rx = BufferedLinkReceiver { rx: rx.fuse() };
 	(tx, rx)
 }
 
@@ -127,7 +127,7 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 
 /// See [`buffered_link`].
 pub struct BufferedLinkReceiver<B: BlockT> {
-	rx: TracingUnboundedReceiver<BlockImportWorkerMsg<B>>,
+	rx: stream::Fuse<TracingUnboundedReceiver<BlockImportWorkerMsg<B>>>,
 }
 
 impl<B: BlockT> BufferedLinkReceiver<B> {
@@ -137,12 +137,14 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 	/// This method should behave in a way similar to `Future::poll`. It can register the current
 	/// task and notify later when more actions are ready to be polled. To continue the comparison,
 	/// it is as if this method always returned `Poll::Pending`.
-	pub fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
+	///
+	/// Returns an error if the corresponding [`BufferedLinkSender`] has been closed.
+	pub fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) -> Result<(), ()> {
 		loop {
-			let msg = if let Poll::Ready(Some(msg)) = Stream::poll_next(Pin::new(&mut self.rx), cx) {
-				msg
-			} else {
-				break
+			let msg = match Stream::poll_next(Pin::new(&mut self.rx), cx) {
+				Poll::Ready(Some(msg)) => msg,
+				Poll::Ready(None) => break Err(()),
+				Poll::Pending => break Ok(()),
 			};
 
 			match msg {
@@ -162,7 +164,7 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 
 	/// Close the channel.
 	pub fn close(&mut self) {
-		self.rx.close()
+		self.rx.get_mut().close()
 	}
 }
 

@@ -180,7 +180,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		let validator = self.validator.clone();
 		let mut context = NetworkContext { gossip: self, network };
-		validator.new_peer(&mut context, &who, role.clone());
+		validator.new_peer(&mut context, &who, role);
 	}
 
 	fn register_message_hashed(
@@ -489,7 +489,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn register_notifications_protocol(&self, _: ConsensusEngineId, _: Cow<'static, [u8]>) {}
+		fn register_notifications_protocol(&self, _: ConsensusEngineId, _: Cow<'static, str>) {}
 
 		fn announce(&self, _: B::Hash, _: Vec<u8>) {
 			unimplemented!();
