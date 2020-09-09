@@ -609,7 +609,7 @@ fn global_communication<BE, Block: BlockT, C, N>(
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: Arc<C>,
 	network: &NetworkBridge<Block, N>,
-	keystore: Option<Arc<SyncCryptoStore>>,
+	keystore: Option<&Arc<SyncCryptoStore>>,
 	metrics: Option<until_imported::Metrics>,
 ) -> (
 	impl Stream<
@@ -897,7 +897,7 @@ where
 	fn rebuild_voter(&mut self) {
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
 
-		let authority_id = is_voter(&self.env.voters, self.env.config.keystore.clone())
+		let authority_id = is_voter(&self.env.voters, self.env.config.keystore.as_ref())
 			.unwrap_or_default();
 
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
@@ -932,7 +932,7 @@ where
 					&self.env.voters,
 					self.env.client.clone(),
 					&self.env.network,
-					self.env.config.keystore.clone(),
+					self.env.config.keystore.as_ref(),
 					self.metrics.as_ref().map(|m| m.until_imported.clone()),
 				);
 
@@ -1125,7 +1125,7 @@ pub fn setup_disabled_grandpa<Block: BlockT, Client, N>(
 /// Returns the key pair of the node that is being used in the current voter set or `None`.
 fn is_voter(
 	voters: &Arc<VoterSet<AuthorityId>>,
-	keystore: Option<Arc<SyncCryptoStore>>,
+	keystore: Option<&Arc<SyncCryptoStore>>,
 ) -> Option<AuthorityId> {
 	match keystore {
 		Some(keystore) => voters

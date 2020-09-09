@@ -24,7 +24,7 @@ use sp_core::{
 };
 
 /// Local keystore implementation
-pub mod local;
+mod local;
 pub use local::LocalKeystore;
 
 /// Keystore error.

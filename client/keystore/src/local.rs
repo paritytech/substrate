@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use std::{
 	collections::{HashMap, HashSet},
 	fs::{self, File},
@@ -28,7 +27,7 @@ impl LocalKeystore {
 		Ok(Self(RwLock::new(inner)))
 	}
 
-	/// Create a local keystore in memory
+	/// Create a local keystore in memory.
 	pub fn in_memory() -> Self {
 		let inner = KeystoreInner::new_in_memory();
 		Self(RwLock::new(inner))
@@ -260,7 +259,7 @@ impl KeystoreInner {
 	/// Insert a new key with anonymous crypto.
 	///
 	/// Places it into the file system store.
-	pub(crate) fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<()> {
+	pub fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<()> {
 		if let Some(path) = self.key_file_path(public, key_type) {
 			let mut file = File::create(path).map_err(Error::Io)?;
 			serde_json::to_writer(&file, &suri).map_err(Error::Json)?;

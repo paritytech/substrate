@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! BABE authority selection and slot claiming.
+
 use std::sync::Arc;
 use sp_application_crypto::AppKey;
 use sp_consensus_babe::{

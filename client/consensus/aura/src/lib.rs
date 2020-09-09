@@ -247,14 +247,12 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot_number, epoch_data);
 		expected_author.and_then(|p| {
-			let has_keys = self.keystore.has_keys(
+			 if self.keystore.has_keys(
 				&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
-			);
-			match has_keys {
-				true => {
-					Some(p.clone())
-				},
-				false => None
+			) {
+				Some(p.clone())
+			} else {
+				None
 			}
 		})
 	}

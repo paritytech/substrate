@@ -268,7 +268,7 @@ where
 			&voters,
 			self.client.clone(),
 			&self.network,
-			self.keystore.clone(),
+			self.keystore.as_ref(),
 			None,
 		);
 
