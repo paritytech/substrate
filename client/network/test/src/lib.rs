@@ -22,7 +22,10 @@ mod block_import;
 #[cfg(test)]
 mod sync;
 
-use std::{collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData, task::{Poll, Context as FutureContext}};
+use std::{
+	borrow::Cow, collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData,
+	task::{Poll, Context as FutureContext}
+};
 
 use libp2p::build_multiaddr;
 use log::trace;
@@ -55,7 +58,7 @@ use sp_core::H256;
 use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_runtime::Justification;
+use sp_runtime::{ConsensusEngineId, Justification};
 use substrate_test_runtime_client::{self, AccountKeyring};
 use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
@@ -553,6 +556,8 @@ pub struct FullPeerConfig {
 	pub keep_blocks: Option<u32>,
 	/// Block announce validator.
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
+	/// List of notification protocols that the network must support.
+	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
 }
 
 pub trait TestNetFactory: Sized {
@@ -663,6 +668,7 @@ pub trait TestNetFactory: Sized {
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
+		network_config.notifications_protocols = config.notifications_protocols;
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Full,
@@ -675,7 +681,7 @@ pub trait TestNetFactory: Sized {
 			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
-			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
+			protocol_id: ProtocolId::from("test-protocol-name"),
 			import_queue,
 			block_announce_validator: config.block_announce_validator
 				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
@@ -755,7 +761,7 @@ pub trait TestNetFactory: Sized {
 			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
-			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
+			protocol_id: ProtocolId::from("test-protocol-name"),
 			import_queue,
 			block_announce_validator: Box::new(DefaultBlockAnnounceValidator),
 			metrics_registry: None,
