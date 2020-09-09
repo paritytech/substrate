@@ -164,6 +164,24 @@
 			"website": null
 		},
 		{
+			"prefix": 21,
+			"network": "dock-testnet",
+			"displayName": "Dock Testnet",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
+			"prefix": 22,
+			"network": "dock-mainnet",
+			"displayName": "Dock Mainnet",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
 			"prefix": 23,
 			"network": "shift",
 			"displayName": "ShiftNrg",
