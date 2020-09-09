@@ -274,10 +274,6 @@ fn parse_target(s: &str) -> (String, Level) {
 }
 
 impl<S: Subscriber> Layer<S> for ProfilingLayer {
-	fn enabled(&self, metadata: &Metadata<'_>, _ctx: Context<S>) -> bool {
-		metadata.target() == PROXY_TARGET || self.check_target(metadata.target(), metadata.level())
-	}
-
 	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, _ctx: Context<S>) {
 		let mut values = Values::default();
 		attrs.record(&mut values);
