@@ -192,6 +192,8 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 				*id == AuthorityId::from(Alice.public())
 			})
 			.is_some();
+		log::info!(target: "babe", "authority found: {}", has_authority);
+
 
 		if !has_authority {
 			log::info!(target: "babe", "authority not found");
