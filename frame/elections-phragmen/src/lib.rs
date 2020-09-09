@@ -200,7 +200,7 @@ pub trait Trait: frame_system::Trait {
 	/// creating a gigantic number of votes.
 	type VotingBondBase: Get<BalanceOf<Self>>;
 
-	/// The amount of bond that need to be locked for each vote (32 bytes)
+	/// The amount of bond that need to be locked for each vote (32 bytes).
 	type VotingBondFactor: Get<BalanceOf<Self>>;
 
 	/// Handler for the unbalanced reduction when a candidate has lost (and is not a runner-up)
