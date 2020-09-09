@@ -26,6 +26,7 @@ use log::*;
 
 use crate::{INTERMEDIATE_KEY, POW_ENGINE_ID, Seal, PowAlgorithm, PowIntermediate};
 
+#[derive(Clone)]
 pub struct MiningMetadata<H, D> {
 	pub best_hash: H,
 	pub pre_hash: H,
@@ -60,6 +61,10 @@ impl<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api::ProvideRuntimeApi
 		build: MiningBuild<Block, Algorithm, C>,
 	) {
 		self.build = Some(build);
+	}
+
+	pub fn metadata(&self) -> Option<MiningMetadata<Block::Hash, Algorithm::Difficulty>> {
+		self.build.as_ref().map(|b| b.metadata.clone())
 	}
 
 	pub fn submit(&mut self, seal: Seal) -> bool {
