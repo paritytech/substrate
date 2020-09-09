@@ -517,7 +517,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
 		type Error = Error<T>;
 
 		/// The maximum number of blocks to allow in mortal eras.
