@@ -91,7 +91,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
+	weights::Weight,
 	storage::{StorageMap, IterableStorageMap},
 	dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo},
 	traits::{
@@ -104,6 +104,7 @@ use sp_npos_elections::{build_support_map, ExtendedBalance, VoteWeight, Election
 use frame_system::{ensure_signed, ensure_root};
 
 mod benchmarking;
+mod default_weights;
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
@@ -138,35 +139,17 @@ pub struct DefunctVoter<AccountId> {
 }
 
 pub trait WeightInfo {
-	fn vote(u: u32, ) -> Weight;
-	fn vote_update(u: u32, ) -> Weight;
-	fn remove_voter(u: u32, ) -> Weight;
+	fn vote(v: u32, ) -> Weight;
+	fn vote_update(v: u32, ) -> Weight;
+	fn remove_voter() -> Weight;
 	fn report_defunct_voter_correct(c: u32, v: u32, ) -> Weight;
 	fn report_defunct_voter_incorrect(c: u32, v: u32, ) -> Weight;
 	fn submit_candidacy(c: u32, ) -> Weight;
 	fn renounce_candidacy_candidate(c: u32, ) -> Weight;
-	fn renounce_candidacy_member_runner_up(u: u32, ) -> Weight;
-	fn remove_member_without_replacement(c: u32, ) -> Weight;
-	fn remove_member_with_replacement(u: u32, ) -> Weight;
-	fn remove_member_wrong_refund(u: u32, ) -> Weight;
-	fn on_initialize(c: u32, ) -> Weight;
-	fn phragmen(c: u32, v: u32, e: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn vote(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn vote_update(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_voter(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn report_defunct_voter_correct(_c: u32, _v: u32, ) -> Weight { 1_000_000_000 }
-	fn report_defunct_voter_incorrect(_c: u32, _v: u32, ) -> Weight { 1_000_000_000 }
-	fn submit_candidacy(_c: u32, ) -> Weight { 1_000_000_000 }
-	fn renounce_candidacy_candidate(_c: u32, ) -> Weight { 1_000_000_000 }
-	fn renounce_candidacy_member_runner_up(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_member_without_replacement(_c: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_member_with_replacement(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_member_wrong_refund(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn on_initialize(_c: u32, ) -> Weight { 1_000_000_000 }
-	fn phragmen(_c: u32, _v: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn renounce_candidacy_members() -> Weight;
+	fn renounce_candidacy_runners_up() -> Weight;
+	fn remove_member_with_replacement() -> Weight;
+	fn remove_member_wrong_refund() -> Weight;
 }
 
 pub trait Trait: frame_system::Trait {
@@ -364,12 +347,12 @@ decl_module! {
 		/// 	- Lock
 		/// 	- [AccountBalance(who) (unreserve -- only when creating a new voter)]
 		/// # </weight>
-		#[weight = 50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)]
+		#[weight = T::WeightInfo::vote(votes.len() as u32)]
 		fn vote(
 			origin,
 			votes: Vec<T::AccountId>,
 			#[compact] value: BalanceOf<T>,
-		) {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
 			// votes should not be empty and more than `MAXIMUM_VOTE` in any case.
@@ -391,10 +374,11 @@ decl_module! {
 
 			// Reserve bond.
 			let (_, old_votes) = <Voting<T>>::get(&who);
-			if old_votes.is_empty() {
+			let maybe_refund = if old_votes.is_empty() {
 				// First time voter. Get full deposit.
 				T::Currency::reserve(&who, Self::deposit_of(votes.len()))
 					.map_err(|_| Error::<T>::UnableToPayBond)?;
+				None
 			} else {
 				// Old voter.
 				match votes.len().cmp(&old_votes.len()) {
@@ -412,7 +396,8 @@ decl_module! {
 						debug_assert!(_remainder.is_zero());
 					},
 				}
-			}
+				Some(T::WeightInfo::vote_update(votes.len() as u32))
+			};
 
 			// Amount to be locked up.
 			let locked_balance = value.min(T::Currency::total_balance(&who));
@@ -426,6 +411,7 @@ decl_module! {
 			);
 
 			Voting::<T>::insert(&who, (locked_balance, votes));
+			Ok(maybe_refund.into())
 		}
 
 		/// Remove `origin` as a voter. This removes the lock and returns the bond.
@@ -441,7 +427,7 @@ decl_module! {
 		/// 	- Locks
 		/// 	- [AccountData(who)]
 		/// # </weight>
-		#[weight = 35 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 2)]
+		#[weight = T::WeightInfo::remove_voter()]
 		fn remove_voter(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_voter(&who), Error::<T>::MustBeVoter);
@@ -475,17 +461,16 @@ decl_module! {
 		/// 	- Lock(reporter || target)
 		/// 	- [AccountBalance(reporter)] + AccountBalance(target)
 		/// 	- Voting(reporter || target)
-		/// Note: the db access is worse with respect to db, which is when the report is correct.
+		/// Note: We charge the case if the report is correct, if incorrect, we refund.
 		/// # </weight>
-		#[weight =
-			Weight::from(defunct.candidate_count).saturating_mul(2 * WEIGHT_PER_MICROS)
-			.saturating_add(Weight::from(defunct.vote_count).saturating_mul(19 * WEIGHT_PER_MICROS))
-			.saturating_add(T::DbWeight::get().reads_writes(6, 3))
-		]
+		#[weight = T::WeightInfo::report_defunct_voter_correct(
+			defunct.candidate_count,
+			defunct.vote_count,
+		)]
 		fn report_defunct_voter(
 			origin,
 			defunct: DefunctVoter<<T::Lookup as StaticLookup>::Source>,
-		) {
+		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 			let target = T::Lookup::lookup(defunct.who)?;
 
@@ -511,12 +496,19 @@ decl_module! {
 			);
 
 			let valid = Self::is_defunct_voter(&votes);
-			if valid {
+			let maybe_refund = if valid {
 				// remove the defunct target while unreserving their bond.
 				Self::do_remove_voter(&target, true);
-			}
+				None
+			} else {
+				Some(T::WeightInfo::report_defunct_voter_incorrect(
+					defunct.candidate_count,
+					defunct.vote_count,
+				))
+			};
 
 			Self::deposit_event(RawEvent::VoterReported(target, reporter, valid));
+			Ok(maybe_refund.into())
 		}
 
 		/// Submit oneself for candidacy.
@@ -539,11 +531,7 @@ decl_module! {
 		/// 	- [AccountBalance(who)]
 		/// 	- Candidates
 		/// # </weight>
-		#[weight =
-			(35 * WEIGHT_PER_MICROS)
-			.saturating_add(Weight::from(*candidate_count).saturating_mul(375 * WEIGHT_PER_NANOS))
-			.saturating_add(T::DbWeight::get().reads_writes(4, 1))
-		]
+		#[weight = T::WeightInfo::submit_candidacy(*candidate_count)]
 		fn submit_candidacy(origin, #[compact] candidate_count: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -605,19 +593,9 @@ decl_module! {
 		/// 		- [AccountData(who) (unreserve)]
 		/// </weight>
 		#[weight =  match *renouncing {
-			Renouncing::Candidate(count) => {
-				(18 * WEIGHT_PER_MICROS)
-				.saturating_add(Weight::from(count).saturating_mul(235 * WEIGHT_PER_NANOS))
-				.saturating_add(T::DbWeight::get().reads_writes(1, 1))
-			},
-			Renouncing::Member => {
-				46 * WEIGHT_PER_MICROS +
-				T::DbWeight::get().reads_writes(2, 2)
-			},
-			Renouncing::RunnerUp => {
-				46 * WEIGHT_PER_MICROS +
-				T::DbWeight::get().reads_writes(1, 1)
-			}
+			Renouncing::Candidate(count) => T::WeightInfo::renounce_candidacy_candidate(count),
+			Renouncing::Member => T::WeightInfo::renounce_candidacy_members(),
+			Renouncing::RunnerUp => T::WeightInfo::renounce_candidacy_runners_up(),
 		}]
 		fn renounce_candidacy(origin, renouncing: Renouncing) {
 			let who = ensure_signed(origin)?;
@@ -678,7 +656,7 @@ decl_module! {
 		/// Else, since this is a root call and will go into phragmen, we assume full block for now.
 		/// # </weight>
 		#[weight = if *has_replacement {
-			50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(3, 2)
+			T::WeightInfo::remove_member_with_replacement()
 		} else {
 			T::MaximumBlockWeight::get()
 		}]
@@ -696,7 +674,7 @@ decl_module! {
 				return Err(Error::<T>::InvalidReplacement.with_weight(
 					// refund. The weight value comes from a benchmark which is special to this.
 					//  5.751 µs
-					6 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 0)
+					T::WeightInfo::remove_member_wrong_refund()
 				));
 			} // else, prediction was correct.
 
@@ -1473,7 +1451,7 @@ mod tests {
 		Elections::submit_candidacy(origin, Elections::candidates().len() as u32)
 	}
 
-	fn vote(origin: Origin, votes: Vec<u64>, stake: u64) -> DispatchResult {
+	fn vote(origin: Origin, votes: Vec<u64>, stake: u64) -> DispatchResultWithPostInfo {
 		// historical note: helper function was created in a period of time in which the API of vote
 		// call was changing. Currently it is a wrapper for the original call and does not do much.
 		// Nonetheless, totally harmless.
@@ -2523,7 +2501,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, true),
 				Error::<Test>::InvalidReplacement,
-				Some(6000000),
+				Some(36328000),
 			);
 		});
 
@@ -2545,7 +2523,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, false),
 				Error::<Test>::InvalidReplacement,
-				Some(6000000) // only thing that matters for now is that it is NOT the full block.
+				Some(36328000) // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 	}

@@ -103,7 +103,9 @@ fn submit_candidates_with_self_vote<T: Trait>(c: u32, prefix: &'static str)
 	let candidates = submit_candidates::<T>(c, prefix)?;
 	let stake = default_stake::<T>(BALANCE_FACTOR);
 	let _ = candidates.iter().map(|c|
-		submit_voter::<T>(c.clone(), vec![c.clone()], stake)
+		// TODO: unlike DispatchInfo which is just a result, this PostDispatchInfoWithBlah cannot be
+		// collected, thus we just unwrap to make sure our setup is okay.
+		submit_voter::<T>(c.clone(), vec![c.clone()], stake).map(|_| ())
 	).collect::<Result<_, _>>()?;
 	Ok(candidates)
 }
@@ -111,7 +113,7 @@ fn submit_candidates_with_self_vote<T: Trait>(c: u32, prefix: &'static str)
 
 /// Submit one voter.
 fn submit_voter<T: Trait>(caller: T::AccountId, votes: Vec<T::AccountId>, stake: BalanceOf<T>)
-	-> Result<(), &'static str>
+	-> Result<frame_support::dispatch::PostDispatchInfo, &'static str>
 {
 	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
 		.map_err(|_| "failed to submit vote")
@@ -607,7 +609,11 @@ mod tests {
 		});
 
 		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
-			assert_ok!(test_benchmark_renounce_candidacy_member_runner_up::<Test>());
+			assert_ok!(test_benchmark_renounce_candidacy_runners_up::<Test>());
+		});
+
+		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
+			assert_ok!(test_benchmark_renounce_candidacy_members::<Test>());
 		});
 
 		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
