@@ -252,7 +252,7 @@ decl_module! {
 				Self::deposit_randomness(&randomness);
 			}
 
-			// WIP: explain
+			// The stored author generated VRF randomness is ephemeral.
 			AuthorVrfRandomness::take();
 
 			// remove temporary "environment" entry from storage
