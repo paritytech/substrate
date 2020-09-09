@@ -537,6 +537,7 @@ mod test_iterators {
 				&[prefix.clone(), vec![1, 2, 3]].concat(),
 				&3u64.encode()
 			);
+
 			// Wrong key2
 			unhashed::put(
 				&[prefix.clone(), crate::Blake2_128Concat::hash(&1u16.encode())].concat(),
@@ -556,12 +557,7 @@ mod test_iterators {
 			DoubleMap::translate(|_k1, _k2, v: u64| Some(v*2));
 			assert_eq!(
 				DoubleMap::iter().collect::<Vec<_>>(),
-				vec![
-					(3, 3, 6),
-					(0, 0, 0),
-					(2, 2, 4),
-					(1, 1, 2),
-				]
+				vec![(3, 3, 6), (0, 0, 0), (2, 2, 4), (1, 1, 2)],
 			);
 		})
 	}
