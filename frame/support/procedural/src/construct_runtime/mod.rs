@@ -447,22 +447,23 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 /// I.e. implicit are assigned number incrementedly from last explicit or 0.
 fn assign_implicit_index(modules: &mut Vec<ModuleDeclaration>) -> syn::Result<()> {
 	let mut indices = HashMap::new();
-	let mut last_index: u8 = 0;
+	let mut last_index: Option<u8> = None;
 
 	for module in modules {
 		match module.index {
 			Some(index) => {
-				last_index = index;
+				last_index = Some(index);
 			},
 			None => {
-				last_index = match last_index.checked_add(1) {
+				let index = match last_index.map_or(Some(0), |i| i.checked_add(1)) {
 					Some(i) => i,
 					None => {
 						let msg = "module index doesn't fit into u8, index is 256";
 						return Err(syn::Error::new(module.module.span(), msg));
 					},
 				};
-				module.index = Some(last_index);
+				module.index = Some(index);
+				last_index = Some(index);
 			},
 		}
 
