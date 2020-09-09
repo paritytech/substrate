@@ -7122,6 +7122,7 @@ dependencies = [
 name = "sc-rpc-server"
 version = "2.0.0-rc6"
 dependencies = [
+ "hyper 0.12.35",
  "jsonrpc-core",
  "jsonrpc-http-server",
  "jsonrpc-ipc-server",
@@ -7131,6 +7132,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-runtime",
+ "ws",
 ]
 
 [[package]]

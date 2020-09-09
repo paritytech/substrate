@@ -25,6 +25,9 @@ use jsonrpc_core::IoHandlerExtension;
 use log::error;
 use pubsub::PubSubMetadata;
 
+#[cfg(not(target_os = "unknown"))]
+mod middleware;
+
 /// Maximal payload accepted by RPC servers.
 const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
 
@@ -60,6 +63,7 @@ pub fn rpc_handler<M: PubSubMetadata>(
 
 #[cfg(not(target_os = "unknown"))]
 mod inner {
+	use middleware::{HttpRpcMiddleware, WSRpcMiddleware};
 	use super::*;
 
 	/// Type alias for ipc server
@@ -88,6 +92,7 @@ mod inner {
 			})
 			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
 			.max_request_body_size(MAX_PAYLOAD)
+			.request_middleware(HttpRpcMiddleware::new())
 			.start_http(addr)
 	}
 
@@ -122,6 +127,7 @@ mod inner {
 			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
 			.allowed_origins(map_cors(cors))
 			.allowed_hosts(hosts_filtering(cors.is_some()))
+			.request_middleware(WSRpcMiddleware::new())
 			.start(addr)
 			.map_err(|err| match err {
 				ws::Error::Io(io) => io,
