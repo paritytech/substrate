@@ -337,10 +337,10 @@ decl_module! {
 				nonce,
 				true,
 			)? {
-				(ExitReason::Succeed(_), _, _) => {
+				(ExitReason::Succeed(_), _, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::Executed(target));
 				},
-				(_, _, _) => {
+				(_, _, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::ExecutedFailed(target));
 				},
 			}
@@ -371,10 +371,10 @@ decl_module! {
 				nonce,
 				true,
 			)? {
-				(ExitReason::Succeed(_), create_address, _) => {
+				(ExitReason::Succeed(_), create_address, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::Created(create_address));
 				},
-				(_, create_address, _) => {
+				(_, create_address, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
 				},
 			}
@@ -406,10 +406,10 @@ decl_module! {
 				nonce,
 				true,
 			)? {
-				(ExitReason::Succeed(_), create_address, _) => {
+				(ExitReason::Succeed(_), create_address, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::Created(create_address));
 				},
-				(_, create_address, _) => {
+				(_, create_address, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
 				},
 			}
@@ -485,7 +485,7 @@ impl<T: Trait> Module<T> {
 		gas_price: Option<U256>,
 		nonce: Option<U256>,
 		apply_state: bool,
-	) -> Result<(ExitReason, H160, U256), Error<T>> {
+	) -> Result<(ExitReason, H160, U256, Vec<evm::backend::Log>), Error<T>> {
 		Self::execute_evm(
 			source,
 			value,
@@ -517,7 +517,7 @@ impl<T: Trait> Module<T> {
 		gas_price: Option<U256>,
 		nonce: Option<U256>,
 		apply_state: bool,
-	) -> Result<(ExitReason, H160, U256), Error<T>> {
+	) -> Result<(ExitReason, H160, U256, Vec<evm::backend::Log>), Error<T>> {
 		let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
 		Self::execute_evm(
 			source,
@@ -551,7 +551,7 @@ impl<T: Trait> Module<T> {
 		gas_price: Option<U256>,
 		nonce: Option<U256>,
 		apply_state: bool,
-	) -> Result<(ExitReason, Vec<u8>, U256), Error<T>> {
+	) -> Result<(ExitReason, Vec<u8>, U256, Vec<evm::backend::Log>), Error<T>> {
 		Self::execute_evm(
 			source,
 			value,
@@ -578,7 +578,7 @@ impl<T: Trait> Module<T> {
 		nonce: Option<U256>,
 		apply_state: bool,
 		f: F,
-	) -> Result<(ExitReason, R, U256), Error<T>> where
+	) -> Result<(ExitReason, R, U256, Vec<evm::backend::Log>), Error<T>> where
 		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (ExitReason, R),
 	{
 		let gas_price = match gas_price {
@@ -629,11 +629,13 @@ impl<T: Trait> Module<T> {
 		);
 		executor.deposit(source, total_fee.saturating_sub(actual_fee));
 
+		let mut llogs: Vec<evm::backend::Log> = Vec::new();
 		if apply_state {
 			let (values, logs) = executor.deconstruct();
-			backend.apply(values, logs, true);
+			llogs = logs.into_iter().collect::<Vec<evm::backend::Log>>().clone();
+			backend.apply(values, llogs.clone().into_iter(), true);
 		}
 
-		Ok((retv, reason, used_gas))
+		Ok((retv, reason, used_gas, llogs))
 	}
 }
