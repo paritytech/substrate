@@ -1514,8 +1514,8 @@ decl_module! {
 		/// ----------
 		/// Base Weight: 50.34 µs
 		/// DB Weight:
-		/// - Read: Era Election Status, Ledger, Current Era, Locks, [Origin Account]
-		/// - Write: [Origin Account], Locks, Ledger
+		/// - Read: EraElectionStatus, Ledger, CurrentEra, Locks, BalanceOf Stash,
+		/// - Write: Locks, Ledger, BalanceOf Stash,
 		/// </weight>
 		#[weight = T::WeightInfo::unbond()]
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
@@ -1571,8 +1571,10 @@ decl_module! {
 		/// - Reads: EraElectionStatus, Ledger, Current Era, Locks, [Origin Account]
 		/// - Writes: [Origin Account], Locks, Ledger
 		/// Kill: 79.41 + 2.366 * S µs
-		/// - Reads: EraElectionStatus, Ledger, Current Era, Bonded, Slashing Spans, [Origin Account], Locks
-		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators, [Origin Account], Locks
+		/// - Reads: EraElectionStatus, Ledger, Current Era, Bonded, Slashing Spans, [Origin
+		///   Account], Locks, BalanceOf stash
+		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators,
+		///   [Origin Account], Locks, BalanceOf stash.
 		/// - Writes Each: SpanSlash * S
 		/// NOTE: Weight annotation is the kill scenario, we refund otherwise.
 		/// # </weight>
