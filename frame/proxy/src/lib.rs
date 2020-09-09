@@ -239,7 +239,7 @@ decl_module! {
 					deposit,
 				))
 			);
-			T::MaximumBlockWeight::get()
+			T::block_weights().max_block
 		}
 
 		/// Dispatch the given `call` from an account that the sender is authorised for through
