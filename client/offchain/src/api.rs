@@ -184,8 +184,8 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 	}
 
 	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
-		let peer_ids: HashSet<PeerId> = nodes.iter()
-			.filter_map(|node| PeerId::from_bytes(node.0.clone()).ok())
+		let peer_ids: HashSet<PeerId> = nodes.into_iter()
+			.filter_map(|node| PeerId::from_bytes(node.0).ok())
 			.collect();
 		
 		self.network_provider.set_authorized_peers(peer_ids);
