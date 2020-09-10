@@ -409,7 +409,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						// Received a request from a remote.
 						RequestResponseEvent::Message {
 							peer,
-							message: RequestResponseMessage::Request { request, channel },
+							message: RequestResponseMessage::Request { request, channel, .. },
 						} => {
 							let (tx, rx) = oneshot::channel();
 
@@ -473,7 +473,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						}
 
 						// Remote has tried to send a request but failed.
-						RequestResponseEvent::InboundFailure { peer, error } => {
+						RequestResponseEvent::InboundFailure { peer, error, .. } => {
 							let out = Event::InboundRequest {
 								peer,
 								protocol: protocol.clone(),
@@ -660,7 +660,7 @@ mod tests {
 	use libp2p::Multiaddr;
 	use libp2p::core::upgrade;
 	use libp2p::core::transport::{Transport, MemoryTransport};
-	use libp2p::core::upgrade::{InboundUpgradeExt, OutboundUpgradeExt};
+	use libp2p::noise;
 	use libp2p::swarm::{Swarm, SwarmEvent};
 	use std::{iter, time::Duration};
 
@@ -672,25 +672,15 @@ mod tests {
 		let mut swarms = (0..2)
 			.map(|_| {
 				let keypair = Keypair::generate_ed25519();
-				let keypair2 = keypair.clone();
+
+				let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+					.into_authentic(&keypair)
+					.unwrap();
 
 				let transport = MemoryTransport
-					.and_then(move |out, endpoint| {
-						let secio = libp2p::secio::SecioConfig::new(keypair2);
-						libp2p::core::upgrade::apply(
-							out,
-							secio,
-							endpoint,
-							upgrade::Version::V1
-						)
-					})
-					.and_then(move |(peer_id, stream), endpoint| {
-						let peer_id2 = peer_id.clone();
-						let upgrade = libp2p::yamux::Config::default()
-							.map_inbound(move |muxer| (peer_id, muxer))
-							.map_outbound(move |muxer| (peer_id2, muxer));
-						upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
-					});
+					.upgrade(upgrade::Version::V1)
+					.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
+					.multiplex(libp2p::yamux::Config::default());
 
 				let behaviour = {
 					let (tx, mut rx) = mpsc::channel(64);
@@ -784,25 +774,15 @@ mod tests {
 		let mut swarms = (0..2)
 			.map(|_| {
 				let keypair = Keypair::generate_ed25519();
-				let keypair2 = keypair.clone();
+
+				let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+					.into_authentic(&keypair)
+					.unwrap();
 
 				let transport = MemoryTransport
-					.and_then(move |out, endpoint| {
-						let secio = libp2p::secio::SecioConfig::new(keypair2);
-						libp2p::core::upgrade::apply(
-							out,
-							secio,
-							endpoint,
-							upgrade::Version::V1
-						)
-					})
-					.and_then(move |(peer_id, stream), endpoint| {
-						let peer_id2 = peer_id.clone();
-						let upgrade = libp2p::yamux::Config::default()
-							.map_inbound(move |muxer| (peer_id, muxer))
-							.map_outbound(move |muxer| (peer_id2, muxer));
-						upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
-					});
+					.upgrade(upgrade::Version::V1)
+					.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
+					.multiplex(libp2p::yamux::Config::default());
 
 				let behaviour = {
 					let (tx, mut rx) = mpsc::channel(64);

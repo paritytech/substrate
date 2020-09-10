@@ -1337,6 +1337,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 									ResponseFailure::Network(InboundFailure::Timeout) => "timeout",
 									ResponseFailure::Network(InboundFailure::UnsupportedProtocols) =>
 										"unsupported",
+									ResponseFailure::Network(InboundFailure::ConnectionClosed) =>
+										"connection-closed",
 								};
 
 								metrics.requests_in_failure_total
