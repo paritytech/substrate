@@ -46,7 +46,6 @@ pub use std_reexport::*;
 #[cfg(feature = "std")]
 pub use execution::*;
 
-
 #[cfg(feature = "std")]
 pub use log::{debug, warn, trace, error as log_error};
 
@@ -102,7 +101,7 @@ macro_rules! log_error {
 	);
 }
 
-/// Default rror type to use with state machine trie backend.
+/// Default error type to use with state machine trie backend.
 #[cfg(feature = "std")]
 pub type DefaultError = String;
 /// Error type to use with state machine trie backend.
@@ -113,7 +112,7 @@ pub struct DefaultError;
 #[cfg(not(feature = "std"))]
 impl sp_std::fmt::Display for DefaultError {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "Default Error")
+		write!(f, "DefaultError")
 	}
 }
 

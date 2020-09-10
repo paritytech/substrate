@@ -20,7 +20,7 @@
 
 #[cfg(feature = "std")]
 use std::sync::Arc;
-use sp_std::ops::Deref;
+use sp_std::{ops::Deref, boxed::Box, vec::Vec};
 use crate::{warn, debug};
 use hash_db::{self, Hasher, Prefix};
 use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
@@ -30,8 +30,6 @@ use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
 use sp_core::storage::ChildInfo;
 use codec::Encode;
-use sp_std::boxed::Box;
-use sp_std::vec::Vec;
 
 #[cfg(not(feature = "std"))]
 macro_rules! format {

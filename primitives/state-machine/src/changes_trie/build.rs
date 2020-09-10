@@ -132,7 +132,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	block: &Number,
 	overlay: &'a OverlayedChanges,
 	child_info: Option<ChildInfo>,
-	mut changes: impl Iterator<Item=(&'a StorageKey, &'a OverlayedValue)>
+	changes: impl Iterator<Item=(&'a StorageKey, &'a OverlayedValue)>
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
 	where
 		B: Backend<H>,
@@ -140,44 +140,49 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 	changes
-		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, v)| {
+		.filter_map(|(k, v)| {
 			let extrinsics = v.extrinsics();
 			if !extrinsics.is_empty() {
-				match map.entry(k) {
-					Entry::Vacant(entry) => {
-						// ignore temporary values (values that have null value at the end of operation
-						// AND are not in storage at the beginning of operation
-						if let Some(child_info) = child_info.as_ref() {
-							if !overlay.child_storage(child_info, k).map(|v| v.is_some()).unwrap_or_default() {
-								if !backend.exists_child_storage(&child_info, k)
-									.map_err(|e| format!("{}", e))? {
-									return Ok(map);
-								}
+				Some((k, extrinsics))
+			} else {
+				None
+			}
+		})
+		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, extrinsics)| {
+			match map.entry(k) {
+				Entry::Vacant(entry) => {
+					// ignore temporary values (values that have null value at the end of operation
+					// AND are not in storage at the beginning of operation
+					if let Some(child_info) = child_info.as_ref() {
+						if !overlay.child_storage(child_info, k).map(|v| v.is_some()).unwrap_or_default() {
+							if !backend.exists_child_storage(&child_info, k)
+								.map_err(|e| format!("{}", e))? {
+								return Ok(map);
 							}
-						} else {
-							if !overlay.storage(k).map(|v| v.is_some()).unwrap_or_default() {
-								if !backend.exists_storage(k).map_err(|e| format!("{}", e))? {
-									return Ok(map);
-								}
+						}
+					} else {
+						if !overlay.storage(k).map(|v| v.is_some()).unwrap_or_default() {
+							if !backend.exists_storage(k).map_err(|e| format!("{}", e))? {
+								return Ok(map);
 							}
-						};
+						}
+					};
 
-						let extrinsics = extrinsics.into_iter().collect();
-						entry.insert((ExtrinsicIndex {
-							block: block.clone(),
-							key: k.to_vec(),
-						}, extrinsics));
-					},
-					Entry::Occupied(mut entry) => {
-						// we do not need to check for temporary values here, because entry is Occupied
-						// AND we are checking it before insertion
-						let entry_extrinsics = &mut entry.get_mut().1;
-						entry_extrinsics.extend(
-							extrinsics.into_iter()
-						);
-						entry_extrinsics.sort();
-					},
-				}
+					let extrinsics = extrinsics.into_iter().collect();
+					entry.insert((ExtrinsicIndex {
+						block: block.clone(),
+						key: k.to_vec(),
+					}, extrinsics));
+				},
+				Entry::Occupied(mut entry) => {
+					// we do not need to check for temporary values here, because entry is Occupied
+					// AND we are checking it before insertion
+					let entry_extrinsics = &mut entry.get_mut().1;
+					entry_extrinsics.extend(
+						extrinsics.into_iter()
+					);
+					entry_extrinsics.sort();
+				},
 			}
 
 			Ok(map)

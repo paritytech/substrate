@@ -25,9 +25,7 @@
 //!
 //! This crate exposes the main [`Externalities`] trait.
 
-use sp_std::any::{Any, TypeId};
-use sp_std::vec::Vec;
-use sp_std::boxed::Box;
+use sp_std::{any::{Any, TypeId}, vec::Vec, boxed::Box};
 
 use sp_storage::{ChildInfo, TrackedStorageKey};
 

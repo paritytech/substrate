@@ -81,7 +81,7 @@ impl Extrinsics {
 		}
 	}
 
-	/// Merge two extrinsics sets.
+	/// Extend `self` with `other`.
 	fn extend(&mut self, other: Self) {
 		self.0.extend(other.0.into_iter());
 	}
