@@ -765,9 +765,9 @@ mod tests {
 	use libp2p::{Multiaddr, PeerId};
 	use libp2p::core::upgrade;
 	use libp2p::core::transport::{Transport, MemoryTransport};
-	use libp2p::core::upgrade::{InboundUpgradeExt, OutboundUpgradeExt};
 	use libp2p::noise;
 	use libp2p::swarm::Swarm;
+	use libp2p::yamux;
 	use std::{collections::HashSet, task::Poll};
 	use super::{DiscoveryConfig, DiscoveryOut, protocol_name_from_protocol_id};
 
