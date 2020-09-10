@@ -379,41 +379,38 @@ impl<
 	fn translate<O: Decode, F: Fn(K1, K2, O) -> Option<V>>(f: F) {
 		let prefix = G::prefix_hash();
 		let mut previous_key = prefix.clone();
-		loop {
-			match sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix)) {
-				Some(next) => {
-					previous_key = next;
-					let value = match unhashed::get::<O>(&previous_key) {
-						Some(value) => value,
-						None => {
-							crate::debug::error!("Invalid translate: fail to decode old value");
-							continue
-						},
-					};
-					let mut key_material = G::Hasher1::reverse(&previous_key[prefix.len()..]);
-					let key1 = match K1::decode(&mut key_material) {
-						Ok(key1) => key1,
-						Err(_) => {
-							crate::debug::error!("Invalid translate: fail to decode key1");
-							continue
-						},
-					};
+		while let Some(next) = sp_io::storage::next_key(&previous_key)
+			.filter(|n| n.starts_with(&prefix))
+		{
+			previous_key = next;
+			let value = match unhashed::get::<O>(&previous_key) {
+				Some(value) => value,
+				None => {
+					crate::debug::error!("Invalid translate: fail to decode old value");
+					continue
+				},
+			};
+			let mut key_material = G::Hasher1::reverse(&previous_key[prefix.len()..]);
+			let key1 = match K1::decode(&mut key_material) {
+				Ok(key1) => key1,
+				Err(_) => {
+					crate::debug::error!("Invalid translate: fail to decode key1");
+					continue
+				},
+			};
 
-					let mut key2_material = G::Hasher2::reverse(&key_material);
-					let key2 = match K2::decode(&mut key2_material) {
-						Ok(key2) => key2,
-						Err(_) => {
-							crate::debug::error!("Invalid translate: fail to decode key2");
-							continue
-						},
-					};
+			let mut key2_material = G::Hasher2::reverse(&key_material);
+			let key2 = match K2::decode(&mut key2_material) {
+				Ok(key2) => key2,
+				Err(_) => {
+					crate::debug::error!("Invalid translate: fail to decode key2");
+					continue
+				},
+			};
 
-					match f(key1, key2, value) {
-						Some(new) => unhashed::put::<V>(&previous_key, &new),
-						None => unhashed::kill(&previous_key),
-					}
-				}
-				None => return,
+			match f(key1, key2, value) {
+				Some(new) => unhashed::put::<V>(&previous_key, &new),
+				None => unhashed::kill(&previous_key),
 			}
 		}
 	}
@@ -421,7 +418,6 @@ impl<
 
 /// Test iterators for StorageDoubleMap
 #[cfg(test)]
-#[allow(dead_code)]
 mod test_iterators {
 	use codec::{Encode, Decode};
 	use crate::{

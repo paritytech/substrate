@@ -165,33 +165,30 @@ impl<
 	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) {
 		let prefix = G::prefix_hash();
 		let mut previous_key = prefix.clone();
-		loop {
-			match sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix)) {
-				Some(next) => {
-					previous_key = next;
-					let value = match unhashed::get::<O>(&previous_key) {
-						Some(value) => value,
-						None => {
-							crate::debug::error!("Invalid translate: fail to decode old value");
-							continue
-						},
-					};
+		while let Some(next) = sp_io::storage::next_key(&previous_key)
+			.filter(|n| n.starts_with(&prefix))
+		{
+			previous_key = next;
+			let value = match unhashed::get::<O>(&previous_key) {
+				Some(value) => value,
+				None => {
+					crate::debug::error!("Invalid translate: fail to decode old value");
+					continue
+				},
+			};
 
-					let mut key_material = G::Hasher::reverse(&previous_key[prefix.len()..]);
-					let key = match K::decode(&mut key_material) {
-						Ok(key) => key,
-						Err(_) => {
-							crate::debug::error!("Invalid translate: fail to decode key");
-							continue
-						},
-					};
+			let mut key_material = G::Hasher::reverse(&previous_key[prefix.len()..]);
+			let key = match K::decode(&mut key_material) {
+				Ok(key) => key,
+				Err(_) => {
+					crate::debug::error!("Invalid translate: fail to decode key");
+					continue
+				},
+			};
 
-					match f(key, value) {
-						Some(new) => unhashed::put::<V>(&previous_key, &new),
-						None => unhashed::kill(&previous_key),
-					}
-				}
-				None => return,
+			match f(key, value) {
+				Some(new) => unhashed::put::<V>(&previous_key, &new),
+				None => unhashed::kill(&previous_key),
 			}
 		}
 	}
@@ -319,9 +316,8 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 	}
 }
 
-/// Test iterators for StorageDoubleMap
+/// Test iterators for StorageMap
 #[cfg(test)]
-#[allow(dead_code)]
 mod test_iterators {
 	use codec::{Encode, Decode};
 	use crate::{
@@ -362,7 +358,7 @@ mod test_iterators {
 	}
 
 	#[test]
-	fn double_map_reversible_reversible_iteration() {
+	fn map_reversible_reversible_iteration() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			// All map iterator
 			let prefix = Map::prefix_hash();

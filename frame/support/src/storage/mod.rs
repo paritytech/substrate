@@ -548,26 +548,23 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	fn translate_values<OldValue: Decode, F: Fn(OldValue) -> Option<Value>>(f: F) {
 		let prefix = Self::final_prefix();
 		let mut previous_key = prefix.clone().to_vec();
-		loop {
-			match sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix)) {
-				Some(next) => {
-					previous_key = next;
-					let maybe_value = unhashed::get::<OldValue>(&previous_key);
-					match maybe_value {
-						Some(value) => match f(value) {
-							Some(new) => unhashed::put::<Value>(&previous_key, &new),
-							None => unhashed::kill(&previous_key),
-						},
-						None => {
-							crate::debug::error!(
-								"old key failed to decode at {:?}",
-								previous_key
-							);
-							continue
-						},
-					}
-				}
-				None => return,
+		while let Some(next) = sp_io::storage::next_key(&previous_key)
+			.filter(|n| n.starts_with(&prefix))
+		{
+			previous_key = next;
+			let maybe_value = unhashed::get::<OldValue>(&previous_key);
+			match maybe_value {
+				Some(value) => match f(value) {
+					Some(new) => unhashed::put::<Value>(&previous_key, &new),
+					None => unhashed::kill(&previous_key),
+				},
+				None => {
+					crate::debug::error!(
+						"old key failed to decode at {:?}",
+						previous_key
+					);
+					continue
+				},
 			}
 		}
 	}
