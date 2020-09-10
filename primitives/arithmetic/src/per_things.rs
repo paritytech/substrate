@@ -327,7 +327,7 @@ macro_rules! implement_per_thing {
 		pub struct $name($type);
 
 		/// Implementation makes any compact encoding of `PerThing::Inner` valid,
-		/// when decoding it will saturate up to `PerThing::ACCURACY`
+		/// when decoding it will saturate up to `PerThing::ACCURACY`.
 		impl CompactAs for $name {
 			type As = $type;
 			fn encode_as(&self) -> &Self::As {
