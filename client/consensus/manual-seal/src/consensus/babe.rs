@@ -106,7 +106,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<DigestFor<B>, Error> {
 		let slot_number = inherents.babe_inherent_data()?;
 
-		let epoch_changes = self.epoch_changes.lock();
+		let mut epoch_changes = self.epoch_changes.lock();
 		let epoch_descriptor = epoch_changes
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
@@ -133,6 +133,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 				<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(predigest),
 			]
 		} else {
+			drop(epoch);
 			// well we couldn't claim a slot because this is an existing chain and we're not in the authorities.
 			// we need to tell BabeBlockImport that the epoch has changed, and we put ourselves in the authorities.
 			let predigest = PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
@@ -142,10 +143,21 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 
 			let authority = (AuthorityId::from(Alice.public()), 0);
 
+			let epoch_mut = match epoch_descriptor {
+				ViableEpochDescriptor::Signaled(identifier, _epoch_header) => {
+					epoch_changes.epoch_mut(&identifier)
+						.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?
+				},
+				_ => unreachable!("we couldn't claim a slot, so this isn't the genesis epoch; qed")
+			};
+
+			// mutate the current epoch
+			epoch_mut.authorities = vec![authority.clone()];
+
 			let next_epoch = ConsensusLog::NextEpochData(NextEpochDescriptor {
 				authorities: vec![authority],
 				// copy the old randomness
-				randomness: epoch.as_ref().randomness.clone()
+				randomness: epoch_mut.randomness.clone()
 			});
 
 			vec![
