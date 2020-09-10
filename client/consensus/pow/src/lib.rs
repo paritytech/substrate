@@ -37,6 +37,7 @@ use std::borrow::Cow;
 use std::thread;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::cmp::Ordering;
 use sc_client_api::{BlockOf, backend::AuxStore};
 use sp_blockchain::{HeaderBackend, ProvideCache, well_known_cache_keys::Id as CacheKeyId};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -170,6 +171,16 @@ pub trait PowAlgorithm<B: BlockT> {
 	) -> Result<Option<bool>, Error<B>> {
 		Ok(None)
 	}
+	/// Break a fork choice tie. By default this chooses the earliest block seen. Using uniform tie
+	/// breaking algorithms will help to protect against selfish mining. Returns if the new seal
+	/// should be considered best block.
+	fn break_tie(
+		&self,
+		_own_seal: &Seal,
+		_new_seal: &Seal,
+	) -> bool {
+		false
+	}
 	/// Verify that the difficulty is valid against given seal.
 	fn verify(
 		&self,
@@ -194,7 +205,7 @@ pub trait PowAlgorithm<B: BlockT> {
 pub struct PowBlockImport<B: BlockT, I, C, S, Algorithm, CAW> {
 	algorithm: Algorithm,
 	inner: I,
-	select_chain: Option<S>,
+	select_chain: S,
 	client: Arc<C>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
@@ -232,7 +243,7 @@ impl<B, I, C, S, Algorithm, CAW> PowBlockImport<B, I, C, S, Algorithm, CAW> wher
 		client: Arc<C>,
 		algorithm: Algorithm,
 		check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
-		select_chain: Option<S>,
+		select_chain: S,
 		inherent_data_providers: sp_inherents::InherentDataProviders,
 		can_author_with: CAW,
 	) -> Self {
@@ -324,12 +335,9 @@ impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, A
 		mut block: BlockImportParams<B, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		let best_hash = match self.select_chain.as_ref() {
-			Some(select_chain) => select_chain.best_chain()
-				.map_err(|e| format!("Fetch best chain failed via select chain: {:?}", e))?
-				.hash(),
-			None => self.client.info().best_hash,
-		};
+		let best_header = self.select_chain.best_chain()
+			.map_err(|e| format!("Fetch best chain failed via select chain: {:?}", e))?;
+		let best_hash = best_header.hash();
 
 		let parent_hash = *block.header.parent_hash();
 		let best_aux = PowAux::read::<_, B>(self.client.as_ref(), &best_hash)?;
@@ -391,7 +399,24 @@ impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, A
 		block.auxiliary.push((key, Some(aux.encode())));
 		if block.fork_choice.is_none() {
 			block.fork_choice = Some(ForkChoiceStrategy::Custom(
-				aux.total_difficulty > best_aux.total_difficulty
+				match aux.total_difficulty.cmp(&best_aux.total_difficulty) {
+					Ordering::Less => false,
+					Ordering::Greater => true,
+					Ordering::Equal => {
+						let best_inner_seal = match best_header.digest().logs.last() {
+							Some(DigestItem::Seal(id, seal)) => {
+								if id == &POW_ENGINE_ID {
+									seal.clone()
+								} else {
+									return Err(Error::<B>::WrongEngine(*id).into())
+								}
+							},
+							_ => return Err(Error::<B>::HeaderUnsealed(best_hash).into()),
+						};
+
+						self.algorithm.break_tie(&best_inner_seal, &inner_seal)
+					},
+				}
 			));
 		}
 
