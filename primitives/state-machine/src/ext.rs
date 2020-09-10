@@ -28,7 +28,7 @@ use sp_core::{
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{Externalities, Extensions, Extension,
-	ExtensionStore, Error as ExtensionError};
+	ExtensionStore};
 use codec::{Decode, Encode, EncodeAppend};
 
 use sp_std::{fmt, any::{Any, TypeId}, vec::Vec, vec, boxed::Box};
@@ -91,59 +91,50 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-#[cfg(feature = "std")]
 pub struct Ext<'a, H, N, B>
 	where
 		H: Hasher,
 		B: 'a + Backend<H>,
 		N: crate::changes_trie::BlockNumber,
 {
-	/// Inner Ext (change overlay and backend).
-	inner: ExtInner<'a, H, B, N>,
+	/// The overlayed changes to write to.
+	overlay: &'a mut OverlayedChanges,
 	/// The overlayed changes destined for the Offchain DB.
+	#[cfg(feature = "std")]
 	offchain_overlay: &'a mut OffchainOverlayedChanges,
+	/// The storage backend to read from.
+	backend: &'a B,
+	/// The cache for the storage transactions.
+	storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H, N>,
 	/// Changes trie state to read from.
+	#[cfg(feature = "std")]
 	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
+	/// Pseudo-unique id used for tracing.
+	pub id: u16,
 	/// Dummy usage of N arg.
-	_phantom: std::marker::PhantomData<N>,
+	_phantom: sp_std::marker::PhantomData<N>,
 	/// Extensions registered with this instance.
+	#[cfg(feature = "std")]
 	extensions: Option<&'a mut Extensions>,
 }
 
-/// Basis implementation for `Externalities` trait.
-pub struct ExtInner<'a, H, B, N>
-	where
-		H: Hasher,
-		B: Backend<H>,
-		N: crate::changes_trie::BlockNumber,
-{
-	/// The overlayed changes to write to.
-	overlay: &'a mut OverlayedChanges,
-	/// The storage backend to read from.
-	backend: &'a B,
-	/// Pseudo-unique id used for tracing.
-	id: u16,
-	/// The cache for the storage transactions.
-	storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H, N>,
-	/// Dummy usage of H arg.
-	_phantom: sp_std::marker::PhantomData<H>,
-}
 
-impl<'a, H, B, N> ExtInner<'a, H, B, N>
+impl<'a, H, N, B> Ext<'a, H, N, B>
 	where
 		H: Hasher,
 		B: Backend<H>,
 		N: crate::changes_trie::BlockNumber,
 {
-	/// Create a new `ExtInner`. Warning, this
+	/// Create a new `Ext`. Warning, this
 	/// do not init its inner id with a random
 	/// value.
+	#[cfg(not(feature = "std"))]
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
-		backend: &'a B,
 		storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H, N>,
+		backend: &'a B,
 	) -> Self {
-		ExtInner {
+		Ext {
 			overlay,
 			backend,
 			id: 0,
@@ -152,23 +143,8 @@ impl<'a, H, B, N> ExtInner<'a, H, B, N>
 		}
 	}
 
-	/// Invalidates the currently cached storage root and the db transaction.
-	///
-	/// Called when there are changes that likely will invalidate the storage root.
-	fn mark_dirty(&mut self) {
-		self.storage_transaction_cache.reset();
-	}
-}
-	
-#[cfg(feature = "std")]
-impl<'a, H, N, B> Ext<'a, H, N, B>
-where
-	H: Hasher,
-	H::Out: Ord + 'static + codec::Codec,
-	B: 'a + Backend<H>,
-	N: crate::changes_trie::BlockNumber,
-{
 	/// Create a new `Ext` from overlayed changes and read-only backend
+	#[cfg(feature = "std")]
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
 		offchain_overlay: &'a mut OffchainOverlayedChanges,
@@ -178,28 +154,28 @@ where
 		extensions: Option<&'a mut Extensions>,
 	) -> Self {
 		Self {
-			inner: ExtInner {
-				overlay,
-				backend,
-				id: rand::random(),
-				storage_transaction_cache,
-				_phantom: Default::default(),
-			},
+			overlay,
 			offchain_overlay,
+			backend,
 			changes_trie_state,
+			storage_transaction_cache,
+			id: rand::random(),
 			_phantom: Default::default(),
 			extensions,
 		}
 	}
 
-	/// Read only accessor for the scheduled overlay changes.
-	pub fn get_offchain_storage_changes(&self) -> &OffchainOverlayedChanges {
-		&*self.offchain_overlay
+	/// Invalidates the currently cached storage root and the db transaction.
+	///
+	/// Called when there are changes that likely will invalidate the storage root.
+	fn mark_dirty(&mut self) {
+		self.storage_transaction_cache.reset();
 	}
 
-	/// Access internal random id.
-	pub fn id(&self) -> u16 {
-		self.inner.id
+	/// Read only accessor for the scheduled overlay changes.
+	#[cfg(feature = "std")]
+	pub fn get_offchain_storage_changes(&self) -> &OffchainOverlayedChanges {
+		&*self.offchain_overlay
 	}
 }
 
@@ -214,9 +190,9 @@ where
 	pub fn storage_pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		use std::collections::HashMap;
 
-		self.inner.backend.pairs().iter()
+		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.inner.overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned())))
+			.chain(self.overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned())))
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -224,13 +200,23 @@ where
 	}
 }
 
-impl<'a, H, B, N> Externalities for ExtInner<'a, H, B, N>
+impl<'a, H, N, B> Externalities for Ext<'a, H, N, B>
 where
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
 	B: Backend<H>,
 	N: crate::changes_trie::BlockNumber,
 {
+	#[cfg(feature = "std")]
+	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
+		use ::sp_core::offchain::STORAGE_PREFIX;
+		match value {
+			Some(value) => self.offchain_overlay.set(STORAGE_PREFIX, key, value),
+			None => self.offchain_overlay.remove(STORAGE_PREFIX, key),
+		}
+	}
+
+	#[cfg(not(feature = "std"))]
 	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {}
 
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
@@ -583,8 +569,35 @@ where
 		}
 	}
 
+	#[cfg(not(feature = "std"))]
 	fn storage_changes_root(&mut self, _parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		Ok(None)
+	}
+
+	#[cfg(feature = "std")]
+	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
+		let _guard = guard();
+		let root = self.overlay.changes_trie_root(
+			self.backend,
+			self.changes_trie_state.as_ref(),
+			Decode::decode(&mut &parent_hash[..]).map_err(|e|
+				trace!(
+					target: "state",
+					"Failed to decode changes root parent hash: {}",
+					e,
+				)
+			)?,
+			true,
+			self.storage_transaction_cache,
+		);
+
+		trace!(target: "state", "{:04x}: ChangesRoot({}) {:?}",
+			self.id,
+			HexDisplay::from(&parent_hash),
+			root,
+		);
+
+		root.map(|r| r.map(|o| o.encode()))
 	}
 
 	fn storage_start_transaction(&mut self) {
@@ -658,214 +671,6 @@ where
 	}
 }
 
-impl<'a, H, B, N> ExtensionStore for ExtInner<'a, H, B, N>
-where
-	H: Hasher,
-	H::Out: Ord + 'static + codec::Codec,
-	B: Backend<H>,
-	N: crate::changes_trie::BlockNumber,
-{
-	fn extension_by_type_id(&mut self, _type_id: TypeId) -> Option<&mut dyn Any> {
-		None
-	}
-
-	fn register_extension_with_type_id(
-		&mut self,
-		_type_id: TypeId,
-		_extension: Box<dyn Extension>,
-	) -> Result<(), ExtensionError> {
-		Err(ExtensionError::ExtensionsAreNotSupported)
-	}
-
-	fn deregister_extension_by_type_id(
-		&mut self,
-		_type_id: TypeId,
-	) -> Result<(), ExtensionError> {
-		Err(ExtensionError::ExtensionsAreNotSupported)
-	}
-}
-
-#[cfg(feature = "std")]
-impl<'a, H, B, N> Externalities for Ext<'a, H, N, B>
-where
-	H: Hasher,
-	H::Out: Ord + 'static + codec::Codec,
-	B: 'a + Backend<H>,
-	N: crate::changes_trie::BlockNumber,
-{
-	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
-		use ::sp_core::offchain::STORAGE_PREFIX;
-		match value {
-			Some(value) => self.offchain_overlay.set(STORAGE_PREFIX, key, value),
-			None => self.offchain_overlay.remove(STORAGE_PREFIX, key),
-		}
-	}
-
-	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
-		self.inner.storage(key)
-	}
-
-	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.inner.storage_hash(key)
-	}
-
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<StorageValue> {
-		self.inner.child_storage(child_info, key)
-	}
-
-	fn child_storage_hash(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
-		self.inner.child_storage_hash(child_info, key)
-	}
-
-	fn exists_storage(&self, key: &[u8]) -> bool {
-		self.inner.exists_storage(key)
-	}
-
-	fn exists_child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> bool {
-		self.inner.exists_child_storage(child_info, key)
-	}
-
-	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		self.inner.next_storage_key(key)
-	}
-
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<StorageKey> {
-		self.inner.next_child_storage_key(child_info, key)
-	}
-
-	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
-		self.inner.place_storage(key, value)
-	}
-
-	fn place_child_storage(
-		&mut self,
-		child_info: &ChildInfo,
-		key: StorageKey,
-		value: Option<StorageValue>,
-	) {
-		self.inner.place_child_storage(child_info, key, value)
-	}
-
-	fn kill_child_storage(
-		&mut self,
-		child_info: &ChildInfo,
-	) {
-		self.inner.kill_child_storage(child_info)
-	}
-
-	fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.inner.clear_prefix(prefix)
-	}
-
-	fn clear_child_prefix(
-		&mut self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-	) {
-		self.inner.clear_child_prefix(child_info, prefix)
-	}
-
-	fn storage_append(
-		&mut self,
-		key: Vec<u8>,
-		value: Vec<u8>,
-	) {
-		self.inner.storage_append(key, value)
-	}
-
-	fn chain_id(&self) -> u64 {
-		42
-	}
-
-	fn storage_root(&mut self) -> Vec<u8> {
-		self.inner.storage_root()
-	}
-
-	fn child_storage_root(
-		&mut self,
-		child_info: &ChildInfo,
-	) -> Vec<u8> {
-		self.inner.child_storage_root(child_info)
-	}
-
-	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		let _guard = guard();
-		let root = self.inner.overlay.changes_trie_root(
-			self.inner.backend,
-			self.changes_trie_state.as_ref(),
-			Decode::decode(&mut &parent_hash[..]).map_err(|e|
-				trace!(
-					target: "state",
-					"Failed to decode changes root parent hash: {}",
-					e,
-				)
-			)?,
-			true,
-			self.inner.storage_transaction_cache,
-		);
-
-		trace!(target: "state", "{:04x}: ChangesRoot({}) {:?}",
-			self.inner.id,
-			HexDisplay::from(&parent_hash),
-			root,
-		);
-
-		root.map(|r| r.map(|o| o.encode()))
-	}
-
-	fn storage_start_transaction(&mut self) {
-		self.inner.storage_start_transaction()
-	}
-
-	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
-		self.inner.storage_rollback_transaction()
-	}
-
-	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
-		self.inner.storage_commit_transaction()
-	}
-
-	fn wipe(&mut self) {
-		self.inner.wipe()
-	}
-
-	fn commit(&mut self) {
-		self.inner.commit()
-	}
-
-	fn read_write_count(&self) -> (u32, u32, u32, u32) {
-		self.inner.read_write_count()
-	}
-
-	fn reset_read_write_count(&mut self) {
-		self.inner.reset_read_write_count()
-	}
-
-	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
-		self.inner.get_whitelist()
-	}
-
-	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
-		self.inner.set_whitelist(new)
-	}
-}
-
 /// Implement `Encode` by forwarding the stored raw vec.
 struct EncodeOpaqueValue(Vec<u8>);
 
@@ -905,8 +710,36 @@ impl<'a> StorageAppend<'a> {
 	}
 }
 
+#[cfg(not(feature = "std"))]
+impl<'a, H, N, B> ExtensionStore for Ext<'a, H, N, B>
+where
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H>,
+	N: crate::changes_trie::BlockNumber,
+{
+	fn extension_by_type_id(&mut self, _type_id: TypeId) -> Option<&mut dyn Any> {
+		None
+	}
+
+	fn register_extension_with_type_id(
+		&mut self,
+		_type_id: TypeId,
+		_extension: Box<dyn Extension>,
+	) -> Result<(), sp_externalities::Error> {
+		Err(sp_externalities::Error::ExtensionsAreNotSupported)
+	}
+
+	fn deregister_extension_by_type_id(
+		&mut self,
+		_type_id: TypeId,
+	) -> Result<(), sp_externalities::Error> {
+		Err(sp_externalities::Error::ExtensionsAreNotSupported)
+	}
+}
+
 #[cfg(feature = "std")]
-impl<'a, H, B, N> sp_externalities::ExtensionStore for Ext<'a, H, N, B>
+impl<'a, H, N, B> ExtensionStore for Ext<'a, H, N, B>
 where
 	H: Hasher,
 	B: 'a + Backend<H>,

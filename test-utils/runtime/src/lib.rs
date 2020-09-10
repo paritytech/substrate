@@ -1119,8 +1119,20 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		root,
 	);
 	let mut overlay = sp_state_machine::OverlayedChanges::default();
+	#[cfg(feature = "std")]
+	let mut offchain_overlay = Default::default();
 	let mut cache = sp_state_machine::StorageTransactionCache::<_, _, BlockNumber>::default();
-	let mut ext = sp_state_machine::ExtInner::new(&mut overlay, &backend, &mut cache);
+	let mut ext = sp_state_machine::Ext::new(
+		&mut overlay,
+		#[cfg(feature = "std")]
+		&mut offchain_overlay,
+		&mut cache,
+		&backend,
+		#[cfg(feature = "std")]
+		None,
+		#[cfg(feature = "std")]
+		None,
+	);
 	assert!(ext.storage(b"value3").is_some());
 	assert!(ext.storage_root().as_slice() == &root[..]);
 	ext.place_storage(vec![0], Some(vec![1]));

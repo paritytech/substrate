@@ -126,7 +126,7 @@ pub use crate::trie_backend_essence::{TrieBackendStorage, Storage};
 pub use crate::trie_backend::TrieBackend;
 pub use crate::stats::{UsageInfo, UsageUnit, StateMachineStats};
 pub use error::{Error, ExecutionError};
-pub use crate::ext::ExtInner;
+pub use crate::ext::Ext;
 
 #[cfg(not(feature = "std"))]
 mod changes_trie {
@@ -143,7 +143,6 @@ mod std_reexport {
 	pub use crate::testing::TestExternalities;
 	pub use crate::basic::BasicExternalities;
 	pub use crate::read_only::{ReadOnlyExternalities, InspectState};
-	pub use crate::ext::Ext;
 	pub use crate::changes_trie::{
 		AnchorBlockId as ChangesTrieAnchorBlockId,
 		State as ChangesTrieState,
@@ -416,7 +415,7 @@ mod execution {
 				Some(&mut self.extensions),
 			);
 
-			let id = ext.id();
+			let id = ext.id;
 			trace!(
 				target: "state", "{:04x}: Call {} at {:?}. Input={:?}",
 				id,
