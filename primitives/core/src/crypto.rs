@@ -408,6 +408,14 @@ macro_rules! ss58_address_format {
 			}
 		}
 
+		impl std::str::FromStr for Ss58AddressFormat {
+			type Err = ParseError;
+
+			fn from_str(data: &str) -> Result<Self, Self::Err> {
+				Self::try_from(data)
+			}
+		}
+
 		#[cfg(feature = "std")]
 		impl std::fmt::Display for ParseError {
 			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
