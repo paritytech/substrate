@@ -334,6 +334,7 @@ macro_rules! implement_per_thing {
 				&self.0
 			}
 			fn decode_from(x: Self::As) -> Self {
+				// Saturates if `x` is more than `$max` internally. 
 				Self::from_parts(x)
 			}
 		}
