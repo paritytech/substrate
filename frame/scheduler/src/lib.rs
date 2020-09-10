@@ -438,7 +438,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Helper to migrate scheduler when the palelt origin type has changed.
+	/// Helper to migrate scheduler when the pallet origin type has changed.
 	pub fn migrate_origin<OldOrigin: Into<T::PalletsOrigin> + codec::Decode>() {
 		Agenda::<T>::translate::<
 			Vec<Option<Scheduled<<T as Trait>::Call, T::BlockNumber, OldOrigin, T::AccountId>>>, _
