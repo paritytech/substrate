@@ -73,7 +73,6 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						peers.push(PeerInfo {
 							peer_id: status.peer_id.to_base58(),
 							roles: format!("{}", Role::Full),
-							protocol_version: 1,
 							best_hash: Default::default(),
 							best_number: 1,
 						});
@@ -261,7 +260,6 @@ fn system_peers() {
 		vec![PeerInfo {
 			peer_id: peer_id.to_base58(),
 			roles: "FULL".into(),
-			protocol_version: 1,
 			best_hash: Default::default(),
 			best_number: 1u64,
 		}]
