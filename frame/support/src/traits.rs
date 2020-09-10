@@ -1347,7 +1347,10 @@ pub trait Randomness<Output> {
 	}
 }
 
-impl<Output: Decode + Default> Randomness<Output> for () {
+/// Provides an implementation of [`Randomness`] that should only be used in tests!
+pub struct TestRandomness;
+
+impl<Output: Decode + Default> Randomness<Output> for TestRandomness {
 	fn random(subject: &[u8]) -> Output {
 		Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default()
 	}

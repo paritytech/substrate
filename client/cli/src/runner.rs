@@ -18,7 +18,6 @@
 
 use crate::CliConfiguration;
 use crate::Result;
-use crate::Subcommand;
 use crate::SubstrateCli;
 use chrono::prelude::*;
 use futures::pin_mut;
@@ -26,10 +25,8 @@ use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
 use sc_service::{Configuration, TaskType, TaskManager};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
-use std::{fmt::Debug, marker::PhantomData, str::FromStr, sync::Arc};
-use sc_client_api::{UsageProvider, BlockBackend, StorageProvider};
+use std::marker::PhantomData;
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -171,52 +168,6 @@ impl<C: SubstrateCli> Runner<C> {
 			self.config.database.path().map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
 		);
 		info!("⛓  Native runtime: {}", C::native_runtime_version(&self.config.chain_spec));
-	}
-
-	/// A helper function that runs a future with tokio and stops if the process receives the signal
-	/// `SIGTERM` or `SIGINT`.
-	pub fn run_subcommand<BU, B, BA, IQ, CL>(self, subcommand: &Subcommand, builder: BU)
-		-> Result<()>
-	where
-		BU: FnOnce(Configuration)
-			-> sc_service::error::Result<(Arc<CL>, Arc<BA>, IQ, TaskManager)>,
-		B: BlockT + for<'de> serde::Deserialize<'de>,
-		BA: sc_client_api::backend::Backend<B> + 'static,
-		IQ: sc_service::ImportQueue<B> + 'static,
-		<B as BlockT>::Hash: FromStr,
-		<<B as BlockT>::Hash as FromStr>::Err: Debug,
-		<<<B as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
-		CL: UsageProvider<B> + BlockBackend<B> + StorageProvider<B, BA> + Send + Sync +
-		'static,
-	{
-		let chain_spec = self.config.chain_spec.cloned_box();
-		let network_config = self.config.network.clone();
-		let db_config = self.config.database.clone();
-
-		match subcommand {
-			Subcommand::BuildSpec(cmd) => cmd.run(chain_spec, network_config),
-			Subcommand::ExportBlocks(cmd) => {
-				let (client, _, _, task_manager) = builder(self.config)?;
-				run_until_exit(self.tokio_runtime, cmd.run(client, db_config), task_manager)
-			}
-			Subcommand::ImportBlocks(cmd) => {
-				let (client, _, import_queue, task_manager) = builder(self.config)?;
-				run_until_exit(self.tokio_runtime, cmd.run(client, import_queue), task_manager)
-			}
-			Subcommand::CheckBlock(cmd) => {
-				let (client, _, import_queue, task_manager) = builder(self.config)?;
-				run_until_exit(self.tokio_runtime, cmd.run(client, import_queue), task_manager)
-			}
-			Subcommand::Revert(cmd) => {
-				let (client, backend, _, task_manager) = builder(self.config)?;
-				run_until_exit(self.tokio_runtime, cmd.run(client, backend), task_manager)
-			},
-			Subcommand::PurgeChain(cmd) => cmd.run(db_config),
-			Subcommand::ExportState(cmd) => {
-				let (client, _, _, task_manager) = builder(self.config)?;
-				run_until_exit(self.tokio_runtime, cmd.run(client, chain_spec), task_manager)
-			},
-		}
 	}
 
 	/// A helper function that runs a node with tokio and stops if the process receives the signal

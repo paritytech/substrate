@@ -19,7 +19,7 @@
 use structopt::StructOpt;
 use sc_cli::{
 	Error, VanityCmd, SignCmd, VerifyCmd, InsertCmd,
-	GenerateNodeKeyCmd, GenerateCmd, InspectCmd, InspectNodeKeyCmd
+	GenerateNodeKeyCmd, GenerateCmd, InspectKeyCmd, InspectNodeKeyCmd
 };
 use substrate_frame_cli::ModuleIdCmd;
 use sp_core::crypto::Ss58Codec;
@@ -31,14 +31,15 @@ use sp_core::crypto::Ss58Codec;
 	about = "Utility for generating and restoring with Substrate keys",
 )]
 pub enum Subkey {
-	/// Generate a random node libp2p key, save it to file and print its peer ID
+	/// Generate a random node libp2p key, save it to file or print it to stdout
+	/// and print its peer ID to stderr.
 	GenerateNodeKey(GenerateNodeKeyCmd),
 
 	/// Generate a random account
 	Generate(GenerateCmd),
 
 	/// Gets a public key and a SS58 address from the provided Secret URI
-	InspectKey(InspectCmd),
+	InspectKey(InspectKeyCmd),
 
 	/// Print the peer ID corresponding to the node key in the given file
 	InspectNodeKey(InspectNodeKeyCmd),

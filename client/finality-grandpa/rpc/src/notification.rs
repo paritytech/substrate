@@ -23,10 +23,10 @@ use sc_finality_grandpa::GrandpaJustification;
 
 /// An encoded justification proving that the given header has been finalized
 #[derive(Clone, Serialize, Deserialize)]
-pub struct JustificationNotification(Vec<u8>);
+pub struct JustificationNotification(sp_core::Bytes);
 
 impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationNotification {
 	fn from(notification: GrandpaJustification<Block>) -> Self {
-		JustificationNotification(notification.encode())
+		JustificationNotification(notification.encode().into())
 	}
 }

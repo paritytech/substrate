@@ -22,23 +22,24 @@ use structopt::StructOpt;
 
 use super::{
 	insert::InsertCmd,
-	inspect::InspectCmd,
+	inspect::InspectKeyCmd,
 	generate::GenerateCmd,
 	inspect_node_key::InspectNodeKeyCmd,
 	generate_node_key::GenerateNodeKeyCmd,
 };
 
-/// key utilities for the cli.
+/// Key utilities for the cli.
 #[derive(Debug, StructOpt)]
 pub enum KeySubcommand {
-	/// Generate a random node libp2p key, save it to file and print its peer ID
+	/// Generate a random node libp2p key, save it to file or print it to stdout
+	/// and print its peer ID to stderr.
 	GenerateNodeKey(GenerateNodeKeyCmd),
 
 	/// Generate a random account
 	Generate(GenerateCmd),
 
 	/// Gets a public key and a SS58 address from the provided Secret URI
-	InspectKey(InspectCmd),
+	InspectKey(InspectKeyCmd),
 
 	/// Print the peer ID corresponding to the node key in the given file
 	InspectNodeKey(InspectNodeKeyCmd),

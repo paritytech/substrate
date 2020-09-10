@@ -21,7 +21,7 @@
 use crate::config::TransportConfig;
 use libp2p::{PeerId, Multiaddr};
 
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 /// Result type alias for the network.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -61,6 +61,12 @@ pub enum Error {
 		/// The invalid addresses.
 		addresses: Vec<Multiaddr>,
 	},
+	/// The same request-response protocol has been registered multiple times.
+	#[display(fmt = "Request-response protocol registered multiple times: {}", protocol)]
+	DuplicateRequestResponseProtocol {
+		/// Name of the protocol registered multiple times.
+		protocol: Cow<'static, str>,
+	},
 }
 
 // Make `Debug` use the `Display` implementation.
@@ -78,6 +84,7 @@ impl std::error::Error for Error {
 			Error::DuplicateBootnode { .. } => None,
 			Error::Prometheus(ref err) => Some(err),
 			Error::AddressesForAnotherTransport { .. } => None,
+			Error::DuplicateRequestResponseProtocol { .. } => None,
 		}
 	}
 }
