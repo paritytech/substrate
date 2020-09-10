@@ -142,7 +142,9 @@ pub struct LegacyProtoHandler {
 	///
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
-	events_queue: VecDeque<ProtocolsHandlerEvent<RegisteredProtocol, Infallible, LegacyProtoHandlerOut, ConnectionKillError>>,
+	events_queue: VecDeque<
+		ProtocolsHandlerEvent<RegisteredProtocol, Infallible, LegacyProtoHandlerOut, ConnectionKillError>
+	>,
 }
 
 /// State of the handler.
