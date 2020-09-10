@@ -141,7 +141,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 				authority_index: 0_u32,
 			});
 
-			let authority = (AuthorityId::from(Alice.public()), 0);
+			let authority = (AuthorityId::from(Alice.public()), 1000);
 
 			let epoch_mut = match epoch_descriptor {
 				ViableEpochDescriptor::Signaled(identifier, _epoch_header) => {
