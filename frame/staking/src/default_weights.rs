@@ -24,98 +24,98 @@
 use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 
 impl crate::WeightInfo for () {
-		fn bond() -> Weight {
-		(412198000 as Weight)
+	fn bond() -> Weight {
+		(408578000 as Weight)
 			.saturating_add(DbWeight::get().reads(5 as Weight))
 			.saturating_add(DbWeight::get().writes(4 as Weight))
 	}
 	fn bond_extra() -> Weight {
-		(317637000 as Weight)
+		(316693000 as Weight)
 			.saturating_add(DbWeight::get().reads(4 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn unbond() -> Weight {
-		(277418000 as Weight)
+		(276194000 as Weight)
 			.saturating_add(DbWeight::get().reads(5 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
 	fn withdraw_unbonded_update(s: u32, ) -> Weight {
-		(282986000 as Weight)
-			.saturating_add((45000 as Weight).saturating_mul(s as Weight))
+		(281330000 as Weight)
+			.saturating_add((46000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(5 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
 	fn withdraw_unbonded_kill(s: u32, ) -> Weight {
-		(471338000 as Weight)
-			.saturating_add((20118000 as Weight).saturating_mul(s as Weight))
+		(474310000 as Weight)
+			.saturating_add((19672000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(7 as Weight))
 			.saturating_add(DbWeight::get().writes(8 as Weight))
 			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(s as Weight)))
 	}
 	fn validate() -> Weight {
-		(99599000 as Weight)
+		(99283000 as Weight)
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn nominate(n: u32, ) -> Weight {
-		(125965000 as Weight)
-			.saturating_add((5544000 as Weight).saturating_mul(n as Weight))
+		(126479000 as Weight)
+			.saturating_add((5329000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn chill() -> Weight {
-		(97291000 as Weight)
+		(97447000 as Weight)
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn set_payee() -> Weight {
-		(73810000 as Weight)
+		(74199000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn set_controller() -> Weight {
-		(153200000 as Weight)
+		(153911000 as Weight)
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
 	// WARNING! Some components were not used: ["c"]
 	fn set_validator_count() -> Weight {
-		(10913000 as Weight)
+		(10890000 as Weight)
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn force_no_eras() -> Weight {
-		(13148000 as Weight)
+		(13143000 as Weight)
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn force_new_era() -> Weight {
-		(13215000 as Weight)
+		(13112000 as Weight)
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn force_new_era_always() -> Weight {
-		(13150000 as Weight)
+		(13108000 as Weight)
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn set_invulnerables(v: u32, ) -> Weight {
-		(14525000 as Weight)
-			.saturating_add((224000 as Weight).saturating_mul(v as Weight))
+		(14140000 as Weight)
+			.saturating_add((218000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn force_unstake(s: u32, ) -> Weight {
-		(345510000 as Weight)
-			.saturating_add((20063000 as Weight).saturating_mul(s as Weight))
+		(344355000 as Weight)
+			.saturating_add((19704000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(4 as Weight))
 			.saturating_add(DbWeight::get().writes(8 as Weight))
 			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(s as Weight)))
 	}
 	fn cancel_deferred_slash(s: u32, ) -> Weight {
-		(260000722000 as Weight)
-			.saturating_add((1678139000 as Weight).saturating_mul(s as Weight))
+		(260009398000 as Weight)
+			.saturating_add((1675144000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn payout_stakers(n: u32, ) -> Weight {
-		(65430000 as Weight)
-			.saturating_add((275913000 as Weight).saturating_mul(n as Weight))
+		(71905000 as Weight)
+			.saturating_add((274832000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(DbWeight::get().reads(5 as Weight))
 			.saturating_add(DbWeight::get().reads((3 as Weight).saturating_mul(n as Weight)))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
@@ -123,35 +123,35 @@ impl crate::WeightInfo for () {
 	}
 	fn payout_stakers_alive_controller(n: u32, ) -> Weight {
 		(0 as Weight)
-			.saturating_add((373671000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((371585000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().reads((5 as Weight).saturating_mul(n as Weight)))
 			.saturating_add(DbWeight::get().writes((3 as Weight).saturating_mul(n as Weight)))
 	}
 	fn rebond(l: u32, ) -> Weight {
-		(209660000 as Weight)
-			.saturating_add((2307000 as Weight).saturating_mul(l as Weight))
+		(208619000 as Weight)
+			.saturating_add((2271000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(DbWeight::get().reads(4 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
 	fn set_history_depth(e: u32, ) -> Weight {
 		(0 as Weight)
-			.saturating_add((92748000 as Weight).saturating_mul(e as Weight))
+			.saturating_add((93111000 as Weight).saturating_mul(e as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(4 as Weight))
 			.saturating_add(DbWeight::get().writes((7 as Weight).saturating_mul(e as Weight)))
 	}
 	fn reap_stash(s: u32, ) -> Weight {
-		(396133000 as Weight)
-			.saturating_add((19951000 as Weight).saturating_mul(s as Weight))
+		(394410000 as Weight)
+			.saturating_add((19600000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(4 as Weight))
 			.saturating_add(DbWeight::get().writes(8 as Weight))
 			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(s as Weight)))
 	}
 	fn new_era(v: u32, n: u32, ) -> Weight {
 		(0 as Weight)
-			.saturating_add((20017645000 as Weight).saturating_mul(v as Weight))
-			.saturating_add((1812349000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((19861198000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((1792877000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(DbWeight::get().reads(10 as Weight))
 			.saturating_add(DbWeight::get().reads((4 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(DbWeight::get().reads((3 as Weight).saturating_mul(n as Weight)))
@@ -160,13 +160,22 @@ impl crate::WeightInfo for () {
 	}
 	fn payout_all(v: u32, n: u32, ) -> Weight {
 		(0 as Weight)
-			.saturating_add((24211976000 as Weight).saturating_mul(v as Weight))
-			.saturating_add((2022572000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((23897487000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((1997765000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(DbWeight::get().reads((15 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(DbWeight::get().reads((5 as Weight).saturating_mul(n as Weight)))
 			.saturating_add(DbWeight::get().writes((8 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(DbWeight::get().writes((3 as Weight).saturating_mul(n as Weight)))
 	}
-
-	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight { 0 }
+	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight {
+		(1278000000 as Weight)
+			.saturating_add((10599000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((5384000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((1016715000 as Weight).saturating_mul(a as Weight))
+			.saturating_add((113107000 as Weight).saturating_mul(w as Weight))
+			.saturating_add(DbWeight::get().reads(6 as Weight))
+			.saturating_add(DbWeight::get().reads((4 as Weight).saturating_mul(a as Weight)))
+			.saturating_add(DbWeight::get().reads((1 as Weight).saturating_mul(w as Weight)))
+			.saturating_add(DbWeight::get().writes(2 as Weight))
+	}
 }
