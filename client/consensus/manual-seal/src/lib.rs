@@ -19,9 +19,7 @@
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
-#![allow(dead_code)]
-
-use std::{sync::Arc, marker::{PhantomData, Send}};
+use std::{sync::Arc, marker::PhantomData};
 use futures::prelude::*;
 
 use prometheus_endpoint::Registry;
@@ -53,7 +51,7 @@ use crate::{
 
 pub use crate::{
 	error::Error,
-	rpc::{EngineCommand, CreatedBlock},
+	rpc::{EngineCommand, CreatedBlock, ManualSeal},
 	heartbeat_stream::{HeartbeatOptions},
 };
 
@@ -193,8 +191,7 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 			}
 		});
 
-	let stream: Box<dyn Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + Send> =
-		match heartbeat_opts
+	let stream: Box<dyn Stream<Item = _> + Unpin> = match heartbeat_opts
 	{
 		Some(hbo) => Box::new(HeartbeatStream::new(Box::new(commands_stream), hbo)),
 		None => Box::new(commands_stream),

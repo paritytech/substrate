@@ -17,19 +17,14 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! HeartbeatStream type and HeartbeatOptions used in instant seal
-use std::{pin::Pin};
+use std::{pin::Pin, time::{Duration, Instant}};
 use futures::{
 	prelude::*,
 	task::{Context, Poll},
 };
-use tokio::time::{Duration, Instant, Delay};
+use futures_timer::Delay;
+use crate::rpc::EngineCommand;
 
-use crate::rpc::{EngineCommand};
-
-/// Constants for generating default heartbeat options
-const DEFAULT_MAX_BLOCKTIME: u64 = 30;
-const DEFAULT_MIN_BLOCKTIME: u64 = 1;
-const DEFAULT_FINALIZE: bool = false;
 
 /// Heartbeat options to manage the behavior of the heartbeat stream
 pub struct HeartbeatOptions {
@@ -38,21 +33,24 @@ pub struct HeartbeatOptions {
 	/// The amount of time passed that a new heartbeat block will be generated, in sec.
 	pub max_blocktime: u64,
 	/// Control whether the generated block is finalized
+	//TODO this is confusing and possibly redundant with the finalize parameter in `run_instant_seal`
+	// I recommend letting the user specify the finalize parameter once and it apples to all blocks
+	// whether they are from the trigger stream or not.
 	pub finalize: bool,
 }
 
 impl Default for HeartbeatOptions {
 	fn default() -> Self {
 		Self {
-			min_blocktime: DEFAULT_MIN_BLOCKTIME,
-			max_blocktime: DEFAULT_MAX_BLOCKTIME,
-			finalize: DEFAULT_FINALIZE,
+			min_blocktime: 30,
+			max_blocktime: 1,
+			finalize: false,
 		}
 	}
 }
 
 /// HeartbeatStream is combining transaction pool notification stream and generate a new block
-///   when a certain time has passed without any transactions.
+/// when a certain time has passed without any transactions.
 pub struct HeartbeatStream<Hash> {
 	/// The transaction pool notification stream
 	pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
@@ -67,22 +65,21 @@ pub struct HeartbeatStream<Hash> {
 impl<Hash> HeartbeatStream<Hash> {
 	pub fn new(
 		pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
-		opts: HeartbeatOptions
+		opts: HeartbeatOptions,
 	) -> Self {
 		if opts.min_blocktime > opts.max_blocktime {
 			panic!("Heartbeat options `min_blocktime` value must not be larger than `max_blocktime` value.");
 		}
 		Self {
 			pool_stream,
-			delay_future: tokio::time::delay_for(Duration::from_secs(opts.max_blocktime)),
+			delay_future: Delay::new(Duration::from_secs(opts.max_blocktime)),
 			last_blocktime: None,
-			opts
+			opts,
 		}
 	}
 }
 
 impl<Hash> Stream for HeartbeatStream<Hash> {
-
 	type Item = EngineCommand<Hash>;
 
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -91,19 +88,19 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 			Poll::Ready(Some(ec)) => {
 				if let Some(last_blocktime) = hbs.last_blocktime {
 					// If the last block happened less than the min_blocktime time, we want to wait till
-					//   `min_blocktime` has lapsed.
+					//  `min_blocktime` has lapsed.
 					let passed_blocktime = Instant::now() - last_blocktime;
 					if passed_blocktime < Duration::from_secs(hbs.opts.min_blocktime) {
 						// We set `delay_future` here so it will wake up when the min_blocktime since the last
 						//   block created is passed.
-						hbs.delay_future = tokio::time::delay_for(Duration::from_secs(hbs.opts.min_blocktime)
+						hbs.delay_future = Delay::new(Duration::from_secs(hbs.opts.min_blocktime)
 							- passed_blocktime);
 						return Poll::Pending;
 					}
 				}
 
 				// reset the timer and delay future
-				hbs.delay_future = tokio::time::delay_for(Duration::from_secs(hbs.opts.max_blocktime));
+				hbs.delay_future = Delay::new(Duration::from_secs(hbs.opts.max_blocktime));
 				hbs.last_blocktime = Some(Instant::now());
 				Poll::Ready(Some(ec))
 			},
@@ -115,7 +112,7 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 				// We check if the delay for heartbeat has reached
 				if let Poll::Ready(_) = hbs.delay_future.poll_unpin(cx) {
 					// reset the timer and delay future
-					hbs.delay_future = tokio::time::delay_for(Duration::from_secs(hbs.opts.max_blocktime));
+					hbs.delay_future = Delay::new(Duration::from_secs(hbs.opts.max_blocktime));
 					hbs.last_blocktime = Some(Instant::now());
 
 					return Poll::Ready(Some(EngineCommand::SealNewBlock {
