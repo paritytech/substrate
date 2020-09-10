@@ -121,22 +121,15 @@ pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpool
 }
 
 /// Params required to start the instant sealing authorship task.
-pub struct ManualFinalityParams<B: BlockT, C: ProvideRuntimeApi<B>, A: txpool::ChainApi, CS> {
+pub struct ManualFinalityParams<B: BlockT, C: ProvideRuntimeApi<B>, CS> {
 	/// Client instance
 	pub client: Arc<C>,
-
-	/// Shared reference to the transaction pool.
-	pub pool: Arc<txpool::Pool<A>>,
 
 	/// Stream<Item = EngineCommands>, Basically the receiving end of a channel for sending commands to
 	/// the authorship task.
 	pub commands_stream: CS,
 
-	/// Digest provider for inclusion in blocks.
-	pub consensus_data_provider: Option<Box<dyn ConsensusDataProvider<B, Transaction = TransactionFor<C, B>>>>,
-
-	/// Provider for inherents to include in blocks.
-	pub inherent_data_providers: InherentDataProviders,
+	_phantom: PhantomData<B>,
 }
 
 /// Params required to start the manual sealing authorship task.
@@ -218,18 +211,14 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
 }
 
 /// Creates the background finality task for the manual finality engine.
-pub async fn run_manual_finality<B, CB, C, A, CS>(
+pub async fn run_manual_finality<B, CB, C, CS>(
 	ManualFinalityParams {
 		client,
-		pool,
 		mut commands_stream,
-		inherent_data_providers,
-		consensus_data_provider,
 		..
-	}: ManualFinalityParams<B, C, A, CS>
+	}: ManualFinalityParams<B, C, CS>
 )
 	where
-		A: txpool::ChainApi<Block=B> + 'static,
 		B: BlockT + 'static,
 		C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
 		CB: ClientBackend<B> + 'static,

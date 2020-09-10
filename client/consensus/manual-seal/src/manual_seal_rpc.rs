@@ -26,7 +26,6 @@ use futures::{
 	SinkExt
 };
 use serde::{Deserialize, Serialize};
-use sp_runtime::Justification;
 pub use self::gen_client::Client as ManualSealClient;
 
 /// Future's type for jsonrpc
