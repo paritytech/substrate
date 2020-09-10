@@ -43,7 +43,6 @@ use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
-const PROXY_TARGET: &'static str = "sp_tracing::proxy";
 
 /// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingLayer {
