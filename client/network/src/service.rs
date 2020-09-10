@@ -20,7 +20,7 @@
 //!
 //! There are two main structs in this module: [`NetworkWorker`] and [`NetworkService`].
 //! The [`NetworkWorker`] *is* the network and implements the `Future` trait. It must be polled in
-//! order fo the network to advance.
+//! order for the network to advance.
 //! The [`NetworkService`] is merely a shared version of the [`NetworkWorker`]. You can obtain an
 //! `Arc<NetworkService>` by calling [`NetworkWorker::service`].
 //!
@@ -603,6 +603,22 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Returns the local `PeerId`.
 	pub fn local_peer_id(&self) -> &PeerId {
 		&self.local_peer_id
+	}
+
+	/// Set authorized peers.
+	///
+	/// Need a better solution to manage authorized peers, but now just use reserved peers for
+	/// prototyping.
+	pub fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
+		self.peerset.set_reserved_peers(peers)
+	}
+
+	/// Set authorized_only flag.
+	///
+	/// Need a better solution to decide authorized_only, but now just use reserved_only flag for
+	/// prototyping.
+	pub fn set_authorized_only(&self, reserved_only: bool) {
+		self.peerset.set_reserved_only(reserved_only)
 	}
 
 	/// Appends a notification to the buffer of pending outgoing notifications with the given peer.
