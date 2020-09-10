@@ -102,7 +102,7 @@ where
             offchain_storage_changes: self.offchain_storage_changes.clone(),
             transaction: self.transaction.clone(),
             transaction_storage_root: self.transaction_storage_root.clone(),
-            changes_trie_transaction: None,
+            changes_trie_transaction: self.changes_trie_transaction.clone(),
         }
     }
 }
