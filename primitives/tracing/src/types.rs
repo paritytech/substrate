@@ -66,12 +66,8 @@ impl core::default::Default for WasmLevel {
 /// A paramter value provided to the span/event
 #[derive(Encode, Decode, Clone)]
 pub enum WasmValue {
-	U8(u8),
-	I8(i8),
-	U32(u32),
-	I32(i32),
-	I64(i64),
 	U64(u64),
+	I64(i64),
 	Bool(bool),
 	Str(Vec<u8>),
 	/// Debug or Display call, this is most-likely a print-able UTF8 String
@@ -85,6 +81,12 @@ impl WasmValue {
 	fn as_value<'a>(&'a self) -> Option<&'a dyn Value> {
 		match self {
 			WasmValue::Bool(ref i) => {
+				Some(i as &dyn Value)
+			}
+			WasmValue::U64(ref i) => {
+				Some(i as &dyn Value)
+			}
+			WasmValue::I64(ref i) => {
 				Some(i as &dyn Value)
 			}
 			// WasmValue::Formatted(i) | WasmValue::Str(i) => {
@@ -102,23 +104,11 @@ impl WasmValue {
 impl core::fmt::Debug for WasmValue {
 	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
 		match self {
-			WasmValue::U8(ref i) => {
-				f.write_fmt(format_args!("{}_u8", i))
-			}
-			WasmValue::I8(ref i) => {
-				f.write_fmt(format_args!("{}_i8", i))
-			}
-			WasmValue::U32(ref i) => {
-				f.write_fmt(format_args!("{}_u32", i))
-			}
-			WasmValue::I32(ref i) => {
-				f.write_fmt(format_args!("{}_i32", i))
+			WasmValue::U64(ref i) => {
+				f.write_fmt(format_args!("{}_u64", i))
 			}
 			WasmValue::I64(ref i) => {
 				f.write_fmt(format_args!("{}_i64", i))
-			}
-			WasmValue::U64(ref i) => {
-				f.write_fmt(format_args!("{}_u64", i))
 			}
 			WasmValue::Bool(ref i) => {
 				f.write_fmt(format_args!("{}_bool", i))
@@ -141,29 +131,12 @@ impl core::fmt::Debug for WasmValue {
 	}
 }
 
-impl From<u8> for WasmValue {
-	fn from(u: u8) -> WasmValue {
-		WasmValue::U8(u)
-	}
-}
-
-impl From<&i8> for WasmValue {
-	fn from(inp: &i8) -> WasmValue {
-		WasmValue::I8(inp.clone())
-	}
-}
-
 impl From<&str> for WasmValue {
 	fn from(inp: &str) -> WasmValue {
 		WasmValue::Str(inp.as_bytes().to_vec())
 	}
 }
 
-impl From<&&str> for WasmValue {
-	fn from(inp: &&str) -> WasmValue {
-		WasmValue::Str((*inp).as_bytes().to_vec())
-	}
-}
 
 impl From<bool> for WasmValue {
 	fn from(inp: bool) -> WasmValue {
@@ -176,36 +149,6 @@ impl From<core::fmt::Arguments<'_>> for WasmValue {
 		let mut buf = Writer::default();
 		core::fmt::write(&mut buf, inp).expect("Writing of arguments doesn't fail");
 		WasmValue::Formatted(buf.into_inner())
-	}
-}
-
-impl From<i8> for WasmValue {
-	fn from(u: i8) -> WasmValue {
-		WasmValue::I8(u)
-	}
-}
-
-impl From<i32> for WasmValue {
-	fn from(u: i32) -> WasmValue {
-		WasmValue::I32(u)
-	}
-}
-
-impl From<&i32> for WasmValue {
-	fn from(u: &i32) -> WasmValue {
-		WasmValue::I32(*u)
-	}
-}
-
-impl From<u32> for WasmValue {
-	fn from(u: u32) -> WasmValue {
-		WasmValue::U32(u)
-	}
-}
-
-impl From<&u32> for WasmValue {
-	fn from(u: &u32) -> WasmValue {
-		WasmValue::U32(*u)
 	}
 }
 
