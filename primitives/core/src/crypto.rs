@@ -408,6 +408,7 @@ macro_rules! ss58_address_format {
 			}
 		}
 
+		#[cfg(feature = "std")]
 		impl std::str::FromStr for Ss58AddressFormat {
 			type Err = ParseError;
 
