@@ -1041,7 +1041,7 @@ pub trait WasmTracing {
 	/// cheap as it needs to jump the wasm-native-barrier, so caching the result wasm-side might be
 	/// a useful addition.
 	fn enabled(&mut self, metadata: Crossing<sp_tracing::WasmMetadata>) -> bool {
-		let metadata: &tracing_core::metadata::Metadata<'static> = (&metadata.into_inner()).into();
+		let metadata: &tracing_core::metadata::Metadata<'static> = metadata.into_inner().into();
 		tracing::dispatcher::get_default(|d| {
 			d.enabled(metadata)
 		})

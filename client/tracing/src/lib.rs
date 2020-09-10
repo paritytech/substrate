@@ -43,7 +43,6 @@ use tracing::{
 use tracing_subscriber::CurrentSpan;
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 
@@ -286,9 +285,7 @@ fn parse_target(s: &str) -> (String, Level) {
 
 impl Subscriber for ProfilingSubscriber {
 	fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-		if metadata.target() == WASM_TRACE_IDENTIFIER
-			|| self.check_target(metadata.target(), metadata.level())
-		{
+		if self.check_target(metadata.target(), metadata.level()) {
 			log::debug!(target: "tracing", "Enabled target: {:?}",
 				metadata);
 			true
@@ -303,16 +300,6 @@ impl Subscriber for ProfilingSubscriber {
 		let id = Id::from_u64(self.next_id.fetch_add(1, Ordering::Relaxed));
 		let mut values = Values::default();
 		attrs.record(&mut values);
-
-		if attrs.metadata().target() == WASM_TRACE_IDENTIFIER {
-			// If this is a wasm trace, check if target/level is enabled
-			if let Some(wasm_target) = values.string_values.get(WASM_TARGET_KEY) {
-				if !self.check_target(wasm_target, attrs.metadata().level()) {
-					// returning as disabled
-					return Id::from_u64(0)
-				}
-			}
-		}
 
 		let span_datum = SpanDatum {
 			id: id.clone(),
@@ -342,25 +329,11 @@ impl Subscriber for ProfilingSubscriber {
 	fn event(&self, event: &Event<'_>) {
 		let mut values = Values::default();
 		event.record(&mut values);
-		let target = {
-			if event.metadata().target() == WASM_TRACE_IDENTIFIER {
-				// If this is a wasm trace, check if target/level is enabled
-				if let Some(wasm_target) = values.string_values.get(WASM_TARGET_KEY) {
-					if !self.check_target(wasm_target, event.metadata().level()) {
-						return // nothing to be done, we ignore
-					}
-					wasm_target.to_owned()
-				} else {
-					event.metadata().target().to_owned()
-				}
-			} else {
-				event.metadata().target().to_owned()
-			}
-		};
+
 		let trace_event = TraceEvent {
 			name: event.metadata().name(),
 			level: event.metadata().level().clone(),
-			target,
+			target: event.metadata().target().to_string(),
 			values,
 			parent_id: event.parent().cloned().or_else(|| self.current_span.id()),
 		};
@@ -394,7 +367,7 @@ impl Subscriber for ProfilingSubscriber {
 	}
 
 	fn try_close(&self, span: Id) -> bool {
-		let mut span_datum = {
+		let span_datum = {
 			let mut span_data = self.span_data.lock();
 			match span_data.entry(span).and_modify(|d| {
 				d.ref_count = d.ref_count.saturating_sub(1);
@@ -410,20 +383,8 @@ impl Subscriber for ProfilingSubscriber {
 				}
 			}
 		};
-		if span_datum.name == WASM_TRACE_IDENTIFIER {
-			span_datum.values.bool_values.insert("wasm".to_owned(), true);
-			if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
-				span_datum.name = n;
-			}
-			if let Some(t) = span_datum.values.string_values.remove(WASM_TARGET_KEY) {
-				span_datum.target = t;
-			}
-			if self.check_target(&span_datum.target, &span_datum.level) {
-				self.trace_handler.handle_span(span_datum);
-			}
-		} else {
-			self.trace_handler.handle_span(span_datum);
-		}
+		self.trace_handler.handle_span(span_datum);
+
 		true
 	}
 }
