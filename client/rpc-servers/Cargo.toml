@@ -23,5 +23,6 @@ sp-runtime = { version = "2.0.0-rc6", path = "../../primitives/runtime" }
 http = { package = "jsonrpc-http-server", version = "14.2.0" }
 hyper = "0.12"
 ipc = { version = "14.2.0", package = "jsonrpc-ipc-server" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0-rc6"}
 ws-core = { package = "ws", version = "0.9" }
 ws = { package = "jsonrpc-ws-server", version = "14.2.0" }

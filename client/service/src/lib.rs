@@ -421,6 +421,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				address,
 				config.rpc_cors.as_ref(),
 				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
+				config.prometheus_registry(),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
@@ -430,6 +431,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
 				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
+				config.prometheus_registry(),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
 	)))

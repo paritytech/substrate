@@ -23,6 +23,7 @@
 use std::io;
 use jsonrpc_core::IoHandlerExtension;
 use log::error;
+use prometheus_endpoint::Registry;
 use pubsub::PubSubMetadata;
 
 #[cfg(not(target_os = "unknown"))]
@@ -80,6 +81,7 @@ mod inner {
 		addr: &std::net::SocketAddr,
 		cors: Option<&Vec<String>>,
 		io: RpcHandler<M>,
+		metrics_registry: Option<&Registry>,
 	) -> io::Result<http::Server> {
 		http::ServerBuilder::new(io)
 			.threads(4)
@@ -92,7 +94,7 @@ mod inner {
 			})
 			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
 			.max_request_body_size(MAX_PAYLOAD)
-			.request_middleware(HttpRpcMiddleware::new())
+			.request_middleware(HttpRpcMiddleware::new(metrics_registry))
 			.start_http(addr)
 	}
 
@@ -121,13 +123,14 @@ mod inner {
 		max_connections: Option<usize>,
 		cors: Option<&Vec<String>>,
 		io: RpcHandler<M>,
+		metrics_registry: Option<&Registry>,
 	) -> io::Result<ws::Server> {
 		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| context.sender().into())
 			.max_payload(MAX_PAYLOAD)
 			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
 			.allowed_origins(map_cors(cors))
 			.allowed_hosts(hosts_filtering(cors.is_some()))
-			.request_middleware(WSRpcMiddleware::new())
+			.request_middleware(WSRpcMiddleware::new(metrics_registry))
 			.start(addr)
 			.map_err(|err| match err {
 				ws::Error::Io(io) => io,
