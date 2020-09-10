@@ -107,9 +107,12 @@ use frame_system::{self as system, ensure_signed};
 mod tests;
 mod benchmarking;
 
-type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-type PositiveImbalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
-type NegativeImbalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T, I> =
+	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type PositiveImbalanceOf<T, I> =
+	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
+type NegativeImbalanceOf<T, I> =
+	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait WeightInfo {
 	fn propose_spend(u: u32, ) -> Weight;
@@ -843,7 +846,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			T::Hash,
 			OldOpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>,
 			Twox64Concat,
-		>::new(b"Treasury", b"Tips").drain()
+		>::new(I::PREFIX.as_bytes(), b"Tips").drain()
 		{
 			let (finder, deposit, finders_fee) = match old_tip.finder {
 				Some((finder, deposit)) => (finder, deposit, true),

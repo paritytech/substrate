@@ -440,21 +440,24 @@ fn reject_already_rejected_spend_proposal_fails() {
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(Origin::root(), 0));
-		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), Error::<Test, _>::InvalidProposalIndex);
+		assert_noop!(Treasury::reject_proposal(Origin::root(), 0),
+			Error::<Test, _>::InvalidProposalIndex);
 	});
 }
 
 #[test]
 fn reject_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), Error::<Test, _>::InvalidProposalIndex);
+		assert_noop!(Treasury::reject_proposal(Origin::root(), 0),
+			Error::<Test, _>::InvalidProposalIndex);
 	});
 }
 
 #[test]
 fn accept_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test, _>::InvalidProposalIndex);
+		assert_noop!(Treasury::approve_proposal(Origin::root(), 0),
+			Error::<Test, _>::InvalidProposalIndex);
 	});
 }
 
@@ -465,7 +468,8 @@ fn accept_already_rejected_spend_proposal_fails() {
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(Origin::root(), 0));
-		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test, _>::InvalidProposalIndex);
+		assert_noop!(Treasury::approve_proposal(Origin::root(), 0),
+			Error::<Test, _>::InvalidProposalIndex);
 	});
 }
 

@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks_instance, account, whitelisted_caller};
 use frame_support::traits::OnInitialize;
 
 use crate::Module as Treasury;
@@ -77,7 +77,9 @@ fn setup_tip<T: Trait<I>, I: Instance>(r: u32, t: u32) ->
 
 // Create `t` new tips for the tip proposal with `hash`.
 // This function automatically makes the tip able to close.
-fn create_tips<T: Trait<I>, I: Instance>(t: u32, hash: T::Hash, value: BalanceOf<T, I>) -> Result<(), &'static str> {
+fn create_tips<T: Trait<I>, I: Instance>(t: u32, hash: T::Hash, value: BalanceOf<T, I>) ->
+	Result<(), &'static str>
+{
 	for i in 0 .. t {
 		let caller = account("member", i, SEED);
 		ensure!(T::Tippers::contains(&caller), "caller is not a tipper");
@@ -110,7 +112,7 @@ fn create_approved_proposals<T: Trait<I>, I: Instance>(n: u32) -> Result<(), &'s
 const MAX_BYTES: u32 = 16384;
 const MAX_TIPPERS: u32 = 100;
 
-benchmarks! {
+benchmarks_instance! {
 	_ { }
 
 	propose_spend {
