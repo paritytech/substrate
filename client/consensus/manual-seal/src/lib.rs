@@ -129,7 +129,7 @@ pub struct ManualFinalityParams<B: BlockT, C: ProvideRuntimeApi<B>, CS> {
 	/// the authorship task.
 	pub commands_stream: CS,
 
-	_phantom: PhantomData<B>,
+	pub _phantom: PhantomData<B>,
 }
 
 /// Params required to start the manual sealing authorship task.
