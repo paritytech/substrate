@@ -25,13 +25,13 @@ use futures::{
 use futures_timer::Delay;
 use crate::rpc::EngineCommand;
 
-
 /// Heartbeat options to manage the behavior of the heartbeat stream
 pub struct HeartbeatOptions {
-	/// The minimum amount of time to pass before generating a new block, in sec.
-	pub min_blocktime: u64,
-	/// The amount of time passed that a new heartbeat block will be generated, in sec.
+	/// The amount of time passed that a new heartbeat block will be generated when no transactions
+	///   in tx pool, in sec.
 	pub max_blocktime: u64,
+	/// The cooldown time after a block has been authored, in sec.
+	pub cooldown: u64,
 	/// Control whether the generated block is finalized
 	//TODO this is confusing and possibly redundant with the finalize parameter in `run_instant_seal`
 	// I recommend letting the user specify the finalize parameter once and it apples to all blocks
@@ -42,8 +42,8 @@ pub struct HeartbeatOptions {
 impl Default for HeartbeatOptions {
 	fn default() -> Self {
 		Self {
-			min_blocktime: 30,
-			max_blocktime: 1,
+			max_blocktime: 30,
+			cooldown: 1,
 			finalize: false,
 		}
 	}
@@ -59,23 +59,23 @@ pub struct HeartbeatStream<Hash> {
 	/// To remember when the last block is generated
 	last_blocktime: Option<Instant>,
 	/// Heartbeat options
-	opts: HeartbeatOptions,
+	options: HeartbeatOptions,
 }
 
 impl<Hash> HeartbeatStream<Hash> {
 	pub fn new(
 		pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
-		opts: HeartbeatOptions,
-	) -> Self {
-		if opts.min_blocktime > opts.max_blocktime {
-			panic!("Heartbeat options `min_blocktime` value must not be larger than `max_blocktime` value.");
+		options: HeartbeatOptions,
+	) -> Result<Self, &'static str> {
+		if options.cooldown > options.max_blocktime {
+			return Err("Heartbeat options `cooldown` value must not be larger than `max_blocktime` value.");
 		}
-		Self {
+		Ok(Self {
 			pool_stream,
-			delay_future: Delay::new(Duration::from_secs(opts.max_blocktime)),
+			delay_future: Delay::new(Duration::from_secs(options.max_blocktime)),
 			last_blocktime: None,
-			opts,
-		}
+			options,
+		})
 	}
 }
 
@@ -87,20 +87,20 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 		match hbs.pool_stream.poll_next_unpin(cx) {
 			Poll::Ready(Some(ec)) => {
 				if let Some(last_blocktime) = hbs.last_blocktime {
-					// If the last block happened less than the min_blocktime time, we want to wait till
-					//  `min_blocktime` has lapsed.
+					// If the last block happened less than the cooldown time, we want to wait till
+					//  `cooldown` has lapsed.
 					let passed_blocktime = Instant::now() - last_blocktime;
-					if passed_blocktime < Duration::from_secs(hbs.opts.min_blocktime) {
-						// We set `delay_future` here so it will wake up when the min_blocktime since the last
+					if passed_blocktime < Duration::from_secs(hbs.options.cooldown) {
+						// We set `delay_future` here so it will wake up when the cooldown since the last
 						//   block created is passed.
-						hbs.delay_future = Delay::new(Duration::from_secs(hbs.opts.min_blocktime)
+						hbs.delay_future = Delay::new(Duration::from_secs(hbs.options.cooldown)
 							- passed_blocktime);
 						return Poll::Pending;
 					}
 				}
 
 				// reset the timer and delay future
-				hbs.delay_future = Delay::new(Duration::from_secs(hbs.opts.max_blocktime));
+				hbs.delay_future = Delay::new(Duration::from_secs(hbs.options.max_blocktime));
 				hbs.last_blocktime = Some(Instant::now());
 				Poll::Ready(Some(ec))
 			},
@@ -112,12 +112,12 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 				// We check if the delay for heartbeat has reached
 				if let Poll::Ready(_) = hbs.delay_future.poll_unpin(cx) {
 					// reset the timer and delay future
-					hbs.delay_future = Delay::new(Duration::from_secs(hbs.opts.max_blocktime));
+					hbs.delay_future = Delay::new(Duration::from_secs(hbs.options.max_blocktime));
 					hbs.last_blocktime = Some(Instant::now());
 
 					return Poll::Ready(Some(EngineCommand::SealNewBlock {
 						create_empty: true, // new blocks created due to delay_future can be empty.
-						finalize: hbs.opts.finalize,
+						finalize: hbs.options.finalize,
 						parent_hash: None,
 						sender: None,
 					}));

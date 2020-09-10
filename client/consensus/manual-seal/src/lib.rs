@@ -166,7 +166,7 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 	select_chain: SC,
 	inherent_data_providers: InherentDataProviders,
 	finalize: bool,
-	heartbeat_opts: Option<HeartbeatOptions>,
+	heartbeat_options: Option<HeartbeatOptions>,
 )
 	where
 		A: txpool::ChainApi<Block=B> + 'static,
@@ -191,9 +191,10 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 			}
 		});
 
-	let stream: Box<dyn Stream<Item = _> + Unpin> = match heartbeat_opts
+	let stream: Box<dyn Stream<Item = _> + Unpin> = match heartbeat_options
 	{
-		Some(hbo) => Box::new(HeartbeatStream::new(Box::new(commands_stream), hbo)),
+		Some(hbo) => Box::new(
+			HeartbeatStream::new(Box::new(commands_stream), hbo).expect("HeartbeatStream cannot be created")),
 		None => Box::new(commands_stream),
 	};
 
