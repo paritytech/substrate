@@ -157,7 +157,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 			let next_epoch = ConsensusLog::NextEpochData(NextEpochDescriptor {
 				authorities: vec![authority],
 				// copy the old randomness
-				randomness: epoch_mut.randomness.clone()
+				randomness: epoch_mut.randomness.clone(),
 			});
 
 			vec![
@@ -211,17 +211,18 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 			log::info!(target: "babe", "authority not found");
 			let slot_number = inherents.timestamp_inherent_data()? / self.config.slot_duration;
 			// manually hard code epoch descriptor
-			epoch_descriptor = ViableEpochDescriptor::Signaled(
-				EpochIdentifier {
-					position: EpochIdentifierPosition::Regular,
-					hash: parent.hash(),
-					number: parent.number().clone()
+			epoch_descriptor = match epoch_descriptor {
+				ViableEpochDescriptor::Signaled(identifier, _header) => {
+					ViableEpochDescriptor::Signaled(
+						identifier,
+						EpochHeader {
+							start_slot: slot_number,
+							end_slot: slot_number + self.config.epoch_length,
+						},
+					)
 				},
-				EpochHeader {
-					start_slot: slot_number,
-					end_slot: slot_number + self.config.epoch_length,
-				}
-			);
+				_ => unreachable!("we're not in the authorities, so this isn't the genesis epoch; qed")
+			};
 		}
 
 		params.intermediates.insert(
