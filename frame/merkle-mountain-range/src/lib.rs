@@ -107,7 +107,7 @@ decl_module! {
 
 			let hash = <frame_system::Module<T>>::parent_hash();
 			let (data, leaf_weight) = T::LeafData::leaf_data();
-			let mut mmr = MMR::<T, _>::new(Self::mmr_leaves());
+			let mut mmr: ModuleMMR<T> = MMR::new(Self::mmr_leaves());
 			mmr.push(primitives::Leaf { hash, data })
 				.expect("MMR push never fails.");
 
@@ -127,6 +127,12 @@ decl_module! {
 	}
 }
 
+/// A MMR specific to the pallet.
+type ModuleMMR<T> = MMR<T, primitives::Leaf<
+	<T as frame_system::Trait>::Hash,
+	<<T as Trait>::LeafData as LeafDataProvider>::LeafData
+>>;
+
 impl<T: Trait> Module<T> {
 	/// Returns the number of nodes pruned.
 	fn prune_non_peaks() -> u64 {
@@ -138,6 +144,14 @@ impl<T: Trait> Module<T> {
 	fn offchain_key(pos: u64) -> Vec<u8> {
 		// TODO [ToDr] Configurable?
 		(b"mmr-", pos).encode()
+	}
+
+	fn generate_proof(leaf_index: u64) -> Result<
+		primitives::Proof<<T as Trait>::Hash>,
+		Error,
+	> {
+		let mmr: ModuleMMR<T> = MMR::new(Self::mmr_leaves());
+		mmr.generate_proof(leaf_index)
 	}
 }
 
@@ -188,6 +202,20 @@ impl<T: Trait, L: codec::Codec + PartialEq + fmt::Debug + Clone> MMR<T, L> {
 		res
 	}
 
+	/// Generate a proof for given list of leaf indices.
+	pub fn generate_proof(&self, leaf_index: u64) -> Result<
+		primitives::Proof<<T as Trait>::Hash>,
+		Error
+	> {
+		let position = mmr_lib::leaf_index_to_pos(leaf_index);
+		self.mmr.gen_proof(vec![position])
+			.map_err(|e| Error::GenerateProof.debug(e))
+			.map(|p| primitives::Proof {
+				leaf: position,
+				items: p.proof_items().iter().map(|x| x.hash()).collect(),
+			})
+	}
+
 	/// Return the internal size of the MMR (number of nodes).
 	#[cfg(test)]
 	pub fn size(&self) -> u64 {
@@ -207,7 +235,8 @@ impl<T: Trait, L: codec::Codec + PartialEq + fmt::Debug + Clone> MMR<T, L> {
 pub enum Error {
 	Push,
 	GetRoot,
-	Commit
+	Commit,
+	GenerateProof,
 }
 
 impl Error {

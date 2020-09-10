@@ -228,6 +228,24 @@ fn should_construct_larger_mmr_correctly() {
 		);
 
 
+		// Generate proofs for all leaves
+		let proofs = (0_u64..crate::NumberOfLeaves::get())
+			.into_iter()
+			.map(|leaf_index| crate::Module::<Test>::generate_proof(leaf_index).unwrap())
+			.collect::<Vec<_>>();
+
+		assert_eq!(proofs[0], crate::primitives::Proof {
+			leaf: 0,
+			items: vec![],
+		});
+		assert_eq!(proofs[4], crate::primitives::Proof {
+			leaf: 4,
+			items: vec![],
+		});
+		assert_eq!(proofs[6], crate::primitives::Proof {
+			leaf: 6,
+			items: vec![],
+		});
 		// TODO [ToDr] Check that proving works.
 		// TODO [ToDr] Prune non-peaks.
 	});

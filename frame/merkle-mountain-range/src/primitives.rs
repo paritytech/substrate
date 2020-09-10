@@ -17,11 +17,15 @@
 
 use frame_support::RuntimeDebug;
 
-#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq)]
-pub struct Leaf<Hash, Data> {
-	pub hash: Hash,
+#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
+pub struct Leaf<BlockHash, Data> {
+	pub hash: BlockHash,
 	pub data: Data,
 }
 
-// TODO Add Proof type
+#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
+pub struct Proof<Hash> {
+	pub leaf: u64,
+	pub items: Vec<Hash>,
+}
 
