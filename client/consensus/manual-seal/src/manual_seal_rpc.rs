@@ -34,63 +34,39 @@ type FutureResult<T> = Box<dyn jsonrpc_core::futures::Future<Item = T, Error = E
 /// sender passed to the authorship task to report errors or successes.
 pub type Sender<T> = Option<oneshot::Sender<std::result::Result<T, crate::Error>>>;
 
-/// Message sent to the background authorship task, usually by RPC.
-pub enum EngineCommand<Hash> {
-	/// Tells the engine to propose a new block
-	///
-	/// if create_empty == true, it will create empty blocks if there are no transactions
-	/// in the transaction pool.
-	///
-	/// if finalize == true, the block will be instantly finalized.
-	SealNewBlock {
-		/// if true, empty blocks(without extrinsics) will be created.
-		/// otherwise, will return Error::EmptyTransactionPool.
-		create_empty: bool,
-		/// instantly finalize this block?
-		finalize: bool,
-		/// specify the parent hash of the about-to-created block
-		parent_hash: Option<Hash>,
-		/// sender to report errors/success to the rpc.
-		sender: Sender<CreatedBlock<Hash>>,
-	},
-	/// Tells the engine to finalize the block with the supplied hash
-	FinalizeBlock {
-		/// hash of the block
-		hash: Hash,
-		/// sender to report errors/success to the rpc.
-		sender: Sender<()>,
-		/// finalization justification
-		justification: Option<Justification>,
-	}
+/// Message that instructs the background authorship task, to author a new block.
+/// Usually sent over RPC
+pub struct CreateBlockCommand<Hash> {
+	/// Whether empty blocks (without extrinsics) should be created.
+	/// When false, may return Error::EmptyTransactionPool.
+	pub allow_empty: bool,
+	/// Instantly finalize this block?
+	pub finalize: bool,
+	/// The parent hash of the about-to-created block
+	pub parent_hash: Option<Hash>,
+	/// Channel to report errors/success to the rpc.
+	pub sender: Sender<CreatedBlock<Hash>>,
 }
 
-/// RPC trait that provides methods for interacting with the manual-seal authorship task over rpc.
+/// RPC trait that provides method for interacting with the manual-seal authorship task over rpc.
 #[rpc]
 pub trait ManualSealApi<Hash> {
 	/// Instructs the manual-seal authorship task to create a new block
 	#[rpc(name = "engine_createBlock")]
 	fn create_block(
 		&self,
-		create_empty: bool,
+		allow_empty: bool,
 		finalize: bool,
 		parent_hash: Option<Hash>
 	) -> FutureResult<CreatedBlock<Hash>>;
-
-	/// Instructs the manual-seal authorship task to finalize a block
-	#[rpc(name = "engine_finalizeBlock")]
-	fn finalize_block(
-		&self,
-		hash: Hash,
-		justification: Option<Justification>
-	) -> FutureResult<bool>;
 }
 
 /// A struct that implements the [`ManualSealApi`].
 pub struct ManualSeal<Hash> {
-	import_block_channel: mpsc::Sender<EngineCommand<Hash>>,
+	import_block_channel: mpsc::Sender<CreateBlockCommand<Hash>>,
 }
 
-/// return type of `engine_createBlock`
+/// Response message sent by the authorship task.
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct CreatedBlock<Hash> {
 	/// hash of the created block.
@@ -101,7 +77,7 @@ pub struct CreatedBlock<Hash> {
 
 impl<Hash> ManualSeal<Hash> {
 	/// Create new `ManualSeal` with the given reference to the client.
-	pub fn new(import_block_channel: mpsc::Sender<EngineCommand<Hash>>) -> Self {
+	pub fn new(import_block_channel: mpsc::Sender<CreateBlockCommand<Hash>>) -> Self {
 		Self { import_block_channel }
 	}
 }
@@ -109,15 +85,15 @@ impl<Hash> ManualSeal<Hash> {
 impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 	fn create_block(
 		&self,
-		create_empty: bool,
+		allow_empty: bool,
 		finalize: bool,
 		parent_hash: Option<Hash>
 	) -> FutureResult<CreatedBlock<Hash>> {
 		let mut sink = self.import_block_channel.clone();
 		let future = async move {
 			let (sender, receiver) = oneshot::channel();
-			let command = EngineCommand::SealNewBlock {
-				create_empty,
+			let command = CreateBlockCommand {
+				allow_empty,
 				finalize,
 				parent_hash,
 				sender: Some(sender),
@@ -127,20 +103,6 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 		}.boxed();
 
 		Box::new(future.map_err(Error::from).compat())
-	}
-
-	fn finalize_block(&self, hash: Hash, justification: Option<Justification>) -> FutureResult<bool> {
-		let mut sink = self.import_block_channel.clone();
-		let future = async move {
-			let (sender, receiver) = oneshot::channel();
-			sink.send(
-				EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification }
-			).await?;
-
-			receiver.await?.map(|_| true)
-		};
-
-		Box::new(future.boxed().map_err(Error::from).compat())
 	}
 }
 

@@ -16,7 +16,7 @@
 
 //! Block finalization utilities
 
-use crate::rpc;
+use crate::manual_finality_rpc;
 use sp_runtime::{
 	Justification,
 	traits::Block as BlockT,
@@ -31,7 +31,7 @@ pub struct FinalizeBlockParams<B: BlockT, F, CB> {
 	/// hash of the block
 	pub hash: <B as BlockT>::Hash,
 	/// sender to report errors/success to the rpc.
-	pub sender: rpc::Sender<()>,
+	pub sender: manual_finality_rpc::Sender<()>,
 	/// finalization justification
 	pub justification: Option<Justification>,
 	/// Finalizer trait object.
@@ -59,11 +59,11 @@ pub async fn finalize_block<B, F, CB>(params: FinalizeBlockParams<B, F, CB>)
 	match finalizer.finalize_block(BlockId::Hash(hash), justification, true) {
 		Err(e) => {
 			log::warn!("Failed to finalize block {:?}", e);
-			rpc::send_result(&mut sender, Err(e.into()))
+			manual_finality_rpc::send_result(&mut sender, Err(e.into()))
 		}
 		Ok(()) => {
 			log::info!("✅ Successfully finalized block: {}", hash);
-			rpc::send_result(&mut sender, Ok(()))
+			manual_finality_rpc::send_result(&mut sender, Ok(()))
 		}
 	}
 }

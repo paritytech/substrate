@@ -38,14 +38,16 @@ mod finalize_block;
 mod seal_block;
 
 pub mod consensus;
-pub mod rpc;
+pub mod manual_seal_rpc;
+pub mod manual_finality_rpc;
 
 pub use self::{
 	error::Error,
 	consensus::ConsensusDataProvider,
 	finalize_block::{finalize_block, FinalizeBlockParams},
 	seal_block::{SealBlockParams, seal_block, MAX_PROPOSAL_DURATION},
-	rpc::{EngineCommand, CreatedBlock},
+	manual_seal_rpc::{CreateBlockCommand, CreatedBlock},
+	manual_finality_rpc::FinalizeBlockCommand,
 };
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 
@@ -118,6 +120,25 @@ pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpool
 	pub inherent_data_providers: InherentDataProviders,
 }
 
+/// Params required to start the instant sealing authorship task.
+pub struct ManualFinalityParams<B: BlockT, C: ProvideRuntimeApi<B>, A: txpool::ChainApi, CS> {
+	/// Client instance
+	pub client: Arc<C>,
+
+	/// Shared reference to the transaction pool.
+	pub pool: Arc<txpool::Pool<A>>,
+
+	/// Stream<Item = EngineCommands>, Basically the receiving end of a channel for sending commands to
+	/// the authorship task.
+	pub commands_stream: CS,
+
+	/// Digest provider for inclusion in blocks.
+	pub consensus_data_provider: Option<Box<dyn ConsensusDataProvider<B, Transaction = TransactionFor<C, B>>>>,
+
+	/// Provider for inherents to include in blocks.
+	pub inherent_data_providers: InherentDataProviders,
+}
+
 /// Params required to start the manual sealing authorship task.
 pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpool::ChainApi, SC> {
 	/// Block import instance for well. importing blocks.
@@ -140,6 +161,9 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpoo
 
 	/// Provider for inherents to include in blocks.
 	pub inherent_data_providers: InherentDataProviders,
+
+	/// Whether blocks should be instantly finlized
+	pub finalize: bool,
 }
 
 /// Creates the background authorship task for the manual seal engine.
@@ -166,45 +190,61 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
 		E: Environment<B> + 'static,
 		E::Error: std::fmt::Display,
 		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
-		CS: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
+		CS: Stream<Item=CreateBlockCommand<<B as BlockT>::Hash>> + Unpin + 'static,
 		SC: SelectChain<B> + 'static,
 {
-	while let Some(command) = commands_stream.next().await {
-		match command {
-			EngineCommand::SealNewBlock {
-				create_empty,
-				finalize,
-				parent_hash,
+	while let Some(CreateBlockCommand {
+		allow_empty,
+		finalize,
+		parent_hash,
+		sender,
+	}) = commands_stream.next().await {
+		seal_block(
+			SealBlockParams {
 				sender,
-			} => {
-				seal_block(
-					SealBlockParams {
-						sender,
-						parent_hash,
-						finalize,
-						create_empty,
-						env: &mut env,
-						select_chain: &select_chain,
-						block_import: &mut block_import,
-						inherent_data_provider: &inherent_data_providers,
-						consensus_data_provider: consensus_data_provider.as_ref().map(|p| &**p),
-						pool: pool.clone(),
-						client: client.clone(),
-					}
-				).await;
+				parent_hash,
+				finalize,
+				allow_empty,
+				env: &mut env,
+				select_chain: &select_chain,
+				block_import: &mut block_import,
+				inherent_data_provider: &inherent_data_providers,
+				consensus_data_provider: consensus_data_provider.as_ref().map(|p| &**p),
+				pool: pool.clone(),
+				client: client.clone(),
 			}
-			EngineCommand::FinalizeBlock { hash, sender, justification } => {
-				finalize_block(
-					FinalizeBlockParams {
-						hash,
-						sender,
-						justification,
-						finalizer: client.clone(),
-						_phantom: PhantomData,
-					}
-				).await
+		).await;
+	}
+}
+
+/// Creates the background finality task for the manual finality engine.
+pub async fn run_manual_finality<B, CB, C, A, CS>(
+	ManualFinalityParams {
+		client,
+		pool,
+		mut commands_stream,
+		inherent_data_providers,
+		consensus_data_provider,
+		..
+	}: ManualFinalityParams<B, C, A, CS>
+)
+	where
+		A: txpool::ChainApi<Block=B> + 'static,
+		B: BlockT + 'static,
+		C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
+		CB: ClientBackend<B> + 'static,
+		CS: Stream<Item=FinalizeBlockCommand<<B as BlockT>::Hash>> + Unpin + 'static,
+{
+	while let Some(FinalizeBlockCommand { hash, sender, justification }) = commands_stream.next().await {
+		finalize_block(
+			FinalizeBlockParams {
+				hash,
+				sender,
+				justification,
+				finalizer: client.clone(),
+				_phantom: PhantomData,
 			}
-		}
+		).await
 	}
 }
 
@@ -220,6 +260,7 @@ pub async fn run_instant_seal<B, BI, CB, E, C, A, SC>(
 		select_chain,
 		consensus_data_provider,
 		inherent_data_providers,
+		finalize,
 		..
 	}: InstantSealParams<B, BI, E, C, A, SC>
 )
@@ -239,10 +280,10 @@ pub async fn run_instant_seal<B, BI, CB, E, C, A, SC>(
 	// into the transaction pool.
 	let commands_stream = pool.validated_pool()
 		.import_notification_stream()
-		.map(|_| {
-			EngineCommand::SealNewBlock {
-				create_empty: false,
-				finalize: false,
+		.map(move |_| {
+			CreateBlockCommand {
+				allow_empty: false,
+				finalize,
 				parent_hash: None,
 				sender: None,
 			}
@@ -310,7 +351,7 @@ mod tests {
 				let mut_sender =  Arc::get_mut(&mut sender).unwrap();
 				let sender = std::mem::take(mut_sender);
 				EngineCommand::SealNewBlock {
-					create_empty: false,
+					allow_empty: false,
 					finalize: true,
 					parent_hash: None,
 					sender
@@ -399,7 +440,7 @@ mod tests {
 		sink.send(EngineCommand::SealNewBlock {
 			parent_hash: None,
 			sender: Some(tx),
-			create_empty: false,
+			allow_empty: false,
 			finalize: false,
 		}).await.unwrap();
 		let created_block = rx.await.unwrap().unwrap();
@@ -475,7 +516,7 @@ mod tests {
 		sink.send(EngineCommand::SealNewBlock {
 			parent_hash: None,
 			sender: Some(tx),
-			create_empty: false,
+			allow_empty: false,
 			finalize: false,
 		}).await.unwrap();
 		let created_block = rx.await.unwrap().unwrap();
@@ -510,7 +551,7 @@ mod tests {
 		assert!(sink.send(EngineCommand::SealNewBlock {
 			parent_hash: Some(created_block.hash),
 			sender: Some(tx1),
-			create_empty: false,
+			allow_empty: false,
 			finalize: false,
 		}).await.is_ok());
 		assert_matches::assert_matches!(
@@ -526,7 +567,7 @@ mod tests {
 		assert!(sink.send(EngineCommand::SealNewBlock {
 			parent_hash: Some(created_block.hash),
 			sender: Some(tx2),
-			create_empty: false,
+			allow_empty: false,
 			finalize: false,
 		}).await.is_ok());
 		let imported = rx2.await.unwrap().unwrap();

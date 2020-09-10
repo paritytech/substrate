@@ -16,7 +16,7 @@
 
 //! Block sealing utilities
 
-use crate::{Error, rpc, CreatedBlock, ConsensusDataProvider};
+use crate::{Error, manual_seal_rpc, CreatedBlock, ConsensusDataProvider};
 use std::sync::Arc;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
@@ -39,15 +39,15 @@ pub const MAX_PROPOSAL_DURATION: u64 = 10;
 
 /// params for sealing a new block
 pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P: txpool::ChainApi> {
-	/// if true, empty blocks(without extrinsics) will be created.
-	/// otherwise, will return Error::EmptyTransactionPool.
-	pub create_empty: bool,
+	/// Whether empty blocks (without extrinsics) should be created.
+	/// When false, may return Error::EmptyTransactionPool.
+	pub allow_empty: bool,
 	/// instantly finalize this block?
 	pub finalize: bool,
 	/// specify the parent hash of the about-to-created block
 	pub parent_hash: Option<<B as BlockT>::Hash>,
 	/// sender to report errors/success to the rpc.
-	pub sender: rpc::Sender<CreatedBlock<<B as BlockT>::Hash>>,
+	pub sender: manual_seal_rpc::Sender<CreatedBlock<<B as BlockT>::Hash>>,
 	/// transaction pool
 	pub pool: Arc<txpool::Pool<P>>,
 	/// header backend
@@ -67,7 +67,7 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P:
 /// seals a new block with the given params
 pub async fn seal_block<B, BI, SC, C, E, P>(
 	SealBlockParams {
-		create_empty,
+		allow_empty,
 		finalize,
 		pool,
 		parent_hash,
@@ -93,7 +93,7 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 		SC: SelectChain<B>,
 {
 	let future = async {
-		if pool.validated_pool().status().ready == 0 && !create_empty {
+		if pool.validated_pool().status().ready == 0 && !allow_empty {
 			return Err(Error::EmptyTransactionPool)
 		}
 
@@ -124,7 +124,7 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 		let proposal = proposer.propose(id.clone(), digest, Duration::from_secs(MAX_PROPOSAL_DURATION), false.into())
 			.map_err(|err| Error::StringError(format!("{}", err))).await?;
 
-		if proposal.block.extrinsics().len() == inherents_len && !create_empty {
+		if proposal.block.extrinsics().len() == inherents_len && !allow_empty {
 			return Err(Error::EmptyTransactionPool)
 		}
 
@@ -146,5 +146,5 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 		}
 	};
 
-	rpc::send_result(&mut sender, future.await)
+	manual_seal_rpc::send_result(&mut sender, future.await)
 }
