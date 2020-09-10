@@ -339,7 +339,7 @@ mod tests {
 				// we're only going to submit one tx so this fn will only be called once.
 				let mut_sender =  Arc::get_mut(&mut sender).unwrap();
 				let sender = std::mem::take(mut_sender);
-				EngineCommand::SealNewBlock {
+				CreateBlockCommand {
 					allow_empty: false,
 					finalize: true,
 					parent_hash: None,
@@ -403,14 +403,14 @@ mod tests {
 			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
-		let (mut sink, commands_stream) = futures::channel::mpsc::channel(1024);
-		let future = run_manual_seal(
+		let (mut seal_sink, seal_commands_stream) = futures::channel::mpsc::channel(1024);
+		let seal_future = run_manual_seal(
 			ManualSealParams {
 				block_import: client.clone(),
 				env,
 				client: client.clone(),
 				pool: pool.pool().clone(),
-				commands_stream,
+				commands_stream: seal_commands_stream,
 				select_chain,
 				consensus_data_provider: None,
 				inherent_data_providers,
@@ -419,14 +419,29 @@ mod tests {
 		std::thread::spawn(|| {
 			let mut rt = tokio::runtime::Runtime::new().unwrap();
 			// spawn the background authorship task
-			rt.block_on(future);
+			rt.block_on(seal_future);
 		});
+
+		let (mut finality_sink, finality_commands_stream) = futures::channel::mpsc::channel(1024);
+		let finality_future = run_manual_finality(
+			ManualFinalityParams {
+				client: client.clone(),
+				commands_stream: finality_commands_stream,
+				_phantom: Default::default(),
+			}
+		);
+		std::thread::spawn(|| {
+			let mut rt = tokio::runtime::Runtime::new().unwrap();
+			// spawn the background authorship task
+			rt.block_on(finality_future);
+		});
+
 		// submit a transaction to pool.
 		let result = pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Alice, 0)).await;
 		// assert that it was successfully imported
 		assert!(result.is_ok());
 		let (tx, rx) = futures::channel::oneshot::channel();
-		sink.send(EngineCommand::SealNewBlock {
+		seal_sink.send(CreateBlockCommand {
 			parent_hash: None,
 			sender: Some(tx),
 			allow_empty: false,
@@ -452,7 +467,7 @@ mod tests {
 		// assert that there's a new block in the db.
 		let header = client.header(&BlockId::Number(1)).unwrap().unwrap();
 		let (tx, rx) = futures::channel::oneshot::channel();
-		sink.send(EngineCommand::FinalizeBlock {
+		finality_sink.send(FinalizeBlockCommand {
 			sender: Some(tx),
 			hash: header.hash(),
 			justification: None
@@ -502,7 +517,7 @@ mod tests {
 		assert!(result.is_ok());
 
 		let (tx, rx) = futures::channel::oneshot::channel();
-		sink.send(EngineCommand::SealNewBlock {
+		sink.send(CreateBlockCommand {
 			parent_hash: None,
 			sender: Some(tx),
 			allow_empty: false,
@@ -537,7 +552,7 @@ mod tests {
 		}).await;
 
 		let (tx1, rx1) = futures::channel::oneshot::channel();
-		assert!(sink.send(EngineCommand::SealNewBlock {
+		assert!(sink.send(CreateBlockCommand {
 			parent_hash: Some(created_block.hash),
 			sender: Some(tx1),
 			allow_empty: false,
@@ -553,7 +568,7 @@ mod tests {
 
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 2)).await.is_ok());
 		let (tx2, rx2) = futures::channel::oneshot::channel();
-		assert!(sink.send(EngineCommand::SealNewBlock {
+		assert!(sink.send(CreateBlockCommand {
 			parent_hash: Some(created_block.hash),
 			sender: Some(tx2),
 			allow_empty: false,
