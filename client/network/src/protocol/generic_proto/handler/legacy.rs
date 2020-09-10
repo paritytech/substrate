@@ -30,8 +30,8 @@ use libp2p::swarm::{
 };
 use log::{debug, error};
 use smallvec::{smallvec, SmallVec};
-use std::{borrow::Cow, collections::VecDeque, error, fmt, io, mem, time::Duration};
-use std::{pin::Pin, task::{Context, Poll}};
+use std::{borrow::Cow, collections::VecDeque, convert::Infallible, error, fmt, io, mem};
+use std::{pin::Pin, task::{Context, Poll}, time::Duration};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -108,10 +108,10 @@ impl IntoProtocolsHandler for LegacyProtoHandlerProto {
 		self.protocol.clone()
 	}
 
-	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
+	fn into_handler(self, remote_peer_id: &PeerId, connected_pont: &ConnectedPoint) -> Self::Handler {
 		LegacyProtoHandler {
 			protocol: self.protocol,
-			endpoint: connected_point.clone(),
+			endpoint: connected_pont.clone(),
 			remote_peer_id: remote_peer_id.clone(),
 			state: ProtocolState::Init {
 				substreams: SmallVec::new(),
@@ -142,7 +142,7 @@ pub struct LegacyProtoHandler {
 	///
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
-	events_queue: VecDeque<ProtocolsHandlerEvent<RegisteredProtocol, (), LegacyProtoHandlerOut, ConnectionKillError>>,
+	events_queue: VecDeque<ProtocolsHandlerEvent<RegisteredProtocol, Infallible, LegacyProtoHandlerOut, ConnectionKillError>>,
 }
 
 /// State of the handler.
@@ -156,11 +156,11 @@ enum ProtocolState {
 		init_deadline: Delay,
 	},
 
-	/// Handler is opening a substream in order to activate itself.
+	/// Handler is ready to accept incoming substreams.
 	/// If we are in this state, we haven't sent any `CustomProtocolOpen` yet.
 	Opening {
-		/// Deadline after which the opening is abnormally long.
-		deadline: Delay,
+		/// Deadline after which the opening is too long and the connection should be shut down.
+		deadline: Option<Delay>,
 	},
 
 	/// Normal operating mode. Contains the substreams that are open.
@@ -251,14 +251,12 @@ impl LegacyProtoHandler {
 
 			ProtocolState::Init { substreams: mut incoming, .. } => {
 				if incoming.is_empty() {
-					if let ConnectedPoint::Dialer { .. } = self.endpoint {
-						self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							protocol: SubstreamProtocol::new(self.protocol.clone()),
-							info: (),
-						});
-					}
 					ProtocolState::Opening {
-						deadline: Delay::new(Duration::from_secs(60))
+						deadline: if self.endpoint.is_dialer() {
+							None
+						} else {
+							Some(Delay::new(Duration::from_secs(60)))
+						},
 					}
 				} else {
 					let event = LegacyProtoHandlerOut::CustomProtocolOpen {
@@ -317,7 +315,7 @@ impl LegacyProtoHandler {
 	/// Polls the state for events. Optionally returns an event to produce.
 	#[must_use]
 	fn poll_state(&mut self, cx: &mut Context)
-		-> Option<ProtocolsHandlerEvent<RegisteredProtocol, (), LegacyProtoHandlerOut, ConnectionKillError>> {
+		-> Option<ProtocolsHandlerEvent<RegisteredProtocol, Infallible, LegacyProtoHandlerOut, ConnectionKillError>> {
 		match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
 				error!(target: "sub-libp2p", "Handler with {:?} is in poisoned state",
@@ -340,8 +338,7 @@ impl LegacyProtoHandler {
 
 				None
 			}
-
-			ProtocolState::Opening { mut deadline } => {
+			ProtocolState::Opening { deadline: Some(mut deadline) } => {
 				match Pin::new(&mut deadline).poll(cx) {
 					Poll::Ready(()) => {
 						let event = LegacyProtoHandlerOut::ProtocolError {
@@ -352,10 +349,15 @@ impl LegacyProtoHandler {
 						Some(ProtocolsHandlerEvent::Custom(event))
 					},
 					Poll::Pending => {
-						self.state = ProtocolState::Opening { deadline };
+						self.state = ProtocolState::Opening { deadline: Some(deadline) };
 						None
 					},
 				}
+			}
+
+			ProtocolState::Opening { deadline: None } => {
+				self.state = ProtocolState::Opening { deadline: None };
+				None
 			}
 
 			ProtocolState::Normal { mut substreams, mut shutdown } => {
@@ -425,27 +427,38 @@ impl LegacyProtoHandler {
 				// after all the substreams are closed.
 				if reenable && shutdown.is_empty() {
 					self.state = ProtocolState::Opening {
-						deadline: Delay::new(Duration::from_secs(60))
+						deadline: if self.endpoint.is_dialer() {
+							None
+						} else {
+							Some(Delay::new(Duration::from_secs(60)))
+						},
 					};
-					Some(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-						protocol: SubstreamProtocol::new(self.protocol.clone()),
-						info: (),
-					})
 				} else {
 					self.state = ProtocolState::Disabled { shutdown, reenable };
-					None
 				}
+				None
 			}
 
 			ProtocolState::KillAsap => None,
 		}
 	}
+}
 
-	/// Called by `inject_fully_negotiated_inbound` and `inject_fully_negotiated_outbound`.
-	fn inject_fully_negotiated(
+impl ProtocolsHandler for LegacyProtoHandler {
+	type InEvent = LegacyProtoHandlerIn;
+	type OutEvent = LegacyProtoHandlerOut;
+	type Error = ConnectionKillError;
+	type InboundProtocol = RegisteredProtocol;
+	type OutboundProtocol = RegisteredProtocol;
+	type OutboundOpenInfo = Infallible;
+
+	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
+		SubstreamProtocol::new(self.protocol.clone())
+	}
+
+	fn inject_fully_negotiated_inbound(
 		&mut self,
-		mut substream: RegisteredProtocolSubstream<NegotiatedSubstream>,
-		received_handshake: Vec<u8>,
+		(mut substream, received_handshake): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
 	) {
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
@@ -489,33 +502,13 @@ impl LegacyProtoHandler {
 			ProtocolState::KillAsap => ProtocolState::KillAsap,
 		};
 	}
-}
-
-impl ProtocolsHandler for LegacyProtoHandler {
-	type InEvent = LegacyProtoHandlerIn;
-	type OutEvent = LegacyProtoHandlerOut;
-	type Error = ConnectionKillError;
-	type InboundProtocol = RegisteredProtocol;
-	type OutboundProtocol = RegisteredProtocol;
-	type OutboundOpenInfo = ();
-
-	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
-		SubstreamProtocol::new(self.protocol.clone())
-	}
-
-	fn inject_fully_negotiated_inbound(
-		&mut self,
-		(substream, handshake): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
-	) {
-		self.inject_fully_negotiated(substream, handshake);
-	}
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		(substream, handshake): <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
-		_: Self::OutboundOpenInfo
+		_: <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
+		unreachable: Self::OutboundOpenInfo
 	) {
-		self.inject_fully_negotiated(substream, handshake);
+		match unreachable {}
 	}
 
 	fn inject_event(&mut self, message: LegacyProtoHandlerIn) {
@@ -525,16 +518,12 @@ impl ProtocolsHandler for LegacyProtoHandler {
 		}
 	}
 
-	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<io::Error>) {
-		let is_severe = match err {
-			ProtocolsHandlerUpgrErr::Upgrade(_) => true,
-			_ => false,
-		};
-
-		self.events_queue.push_back(ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::ProtocolError {
-			is_severe,
-			error: Box::new(err),
-		}));
+	fn inject_dial_upgrade_error(
+		&mut self,
+		unreachable: Self::OutboundOpenInfo,
+		_: ProtocolsHandlerUpgrErr<io::Error>
+	) {
+		match unreachable {}
 	}
 
 	fn connection_keep_alive(&self) -> KeepAlive {
