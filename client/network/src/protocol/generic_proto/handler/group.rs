@@ -687,7 +687,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 		for (handler_num, (handler, handshake_message)) in self.in_handlers.iter_mut().enumerate() {
 			loop {
-				let poll = if self.pending_handshake.is_none() {
+				let poll = if self.notifications_sink_rx.is_some() {
 					handler.poll(cx)
 				} else {
 					handler.poll_process(cx)
