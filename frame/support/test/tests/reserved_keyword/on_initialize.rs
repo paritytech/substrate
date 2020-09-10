@@ -18,7 +18,7 @@ macro_rules! reserved {
 				}
 
 				frame_support::decl_module! {
-					pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+					pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
 						#[weight = 0]
 						fn $reserved(_origin) -> dispatch::DispatchResult { unreachable!() }
 					}

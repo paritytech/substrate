@@ -42,7 +42,7 @@ use sp_core::{
 };
 
 use sp_core::{
-	crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
+	OpaquePeerId, crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
@@ -959,6 +959,13 @@ pub trait Offchain {
 			.expect("http_response_read_body can be called only in the offchain worker context")
 			.http_response_read_body(request_id, buffer, deadline)
 			.map(|r| r as u32)
+	}
+
+	/// Set the authorized nodes and authorized_only flag.
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
+		self.extension::<OffchainExt>()
+			.expect("set_authorized_nodes can be called only in the offchain worker context")
+			.set_authorized_nodes(nodes, authorized_only)
 	}
 }
 
