@@ -44,9 +44,9 @@ pub mod proxy;
 #[cfg(feature = "std")]
 use std::sync::atomic::{AtomicBool, Ordering};
 
-#[cfg(feature = "std")]
 /// Try to init a simple tracing subscriber with log compatibility layer.
 /// Ignores any error. Useful for testing.
+#[cfg(feature = "std")]
 pub fn try_init_simple() {
 	let _ = tracing_subscriber::fmt().with_writer(std::io::stderr).try_init();
 }

@@ -230,13 +230,12 @@ pub trait SubstrateCli: Sized {
 pub fn init_logger(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
-	tracing_targets: Option<String>
+	tracing_targets: Option<String>,
 ) {
-	match tracing_log::LogTracer::init() {
-		Ok(_) => (),
-		Err(_) => log::info!(
+	if tracing_log::LogTracer::init().is_err() {
+		log::debug!(
 			"💬 Not registering Substrate logger, as there is already a global logger registered!"
-		),
+		)
 	}
 
 	let mut env_filter = tracing_subscriber::EnvFilter::default()
@@ -254,25 +253,19 @@ pub fn init_logger(
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
-			match lvl.parse() {
-				Ok(directive) => {
-					env_filter = env_filter.add_directive(directive);
-				}
-				// We're not sure if log or tracing is available at this moment, so silently ignore the
-				// parse error.
-				Err(_) => (),
+			// We're not sure if log or tracing is available at this moment, so silently ignore the
+			// parse error.
+			if let Ok(directive) = lvl.parse() {
+				env_filter = env_filter.add_directive(directive);
 			}
 		}
 	}
 
 	if pattern != "" {
-		match pattern.parse() {
-			Ok(directive) => {
-				env_filter = env_filter.add_directive(directive);
-			}
-			// We're not sure if log or tracing is available at this moment, so silently ignore the
-			// parse error.
-			Err(_) => (),
+		// We're not sure if log or tracing is available at this moment, so silently ignore the
+		// parse error.
+		if let Ok(directive) = pattern.parse() {
+			env_filter = env_filter.add_directive(directive);
 		}
 	}
 
@@ -290,18 +283,16 @@ pub fn init_logger(
 	if let Some(tracing_targets) = tracing_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &tracing_targets);
 
-		match tracing::subscriber::set_global_default(subscriber.with(profiling)) {
-			Ok(_) => (),
-			Err(_) => tracing::warn!(
+		if tracing::subscriber::set_global_default(subscriber.with(profiling)).is_err() {
+			tracing::debug!(
 				"💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"
-			),
+			);
 		}
 	} else {
-		match tracing::subscriber::set_global_default(subscriber) {
-			Ok(_) => (),
-			Err(_) => tracing::warn!(
+		if tracing::subscriber::set_global_default(subscriber).is_err() {
+			tracing::warn!(
 				"💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"
-			),
+			);
 		}
 	}
 }
