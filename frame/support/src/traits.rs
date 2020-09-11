@@ -1634,6 +1634,9 @@ pub trait OriginTrait: Sized {
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin;
 
+	/// The AccountId used across the system.
+	type AccountId;
+
 	/// Add a filter to the origin.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
 
