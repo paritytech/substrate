@@ -62,7 +62,7 @@ impl HttpRpcMiddleware {
 impl HttpRequestMiddleware for HttpRpcMiddleware {
 	fn on_request(&self, request: hyper::Request<Body>) -> HttpRequestMiddlewareAction {
 		if let Some(ref metrics) = self.metrics {
-			metrics.http_rpc_calls.inc()
+			metrics.http_rpc_calls.inc();
 		}
 		HttpRequestMiddlewareAction::Proceed {
 			should_continue_on_invalid_cors: false,
@@ -110,7 +110,7 @@ impl WSRpcMiddleware {
 impl WSRequestMiddleware for WSRpcMiddleware {
 	fn process(&self, _req: &ws_core::Request) -> WSRequestMiddlewareAction {
 		if let Some(ref metrics) = self.metrics {
-			metrics.ws_rpc_calls.inc()
+			metrics.ws_rpc_calls.inc();
 		}
 		WSRequestMiddlewareAction::Proceed
 	}
