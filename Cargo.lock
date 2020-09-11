@@ -1357,6 +1357,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "eth_pairings"
+version = "0.6.0"
+source = "git+https://github.com/drewstone/eip1962.git#8e03a0e299e722296cceb764e25bc91c8caeb683"
+dependencies = [
+ "byteorder 1.3.4",
+ "eth_pairings_repr_derive",
+ "fixed_width_field",
+ "fixed_width_group_and_loop",
+ "num-bigint",
+ "num-traits",
+ "once_cell 1.4.0",
+ "static_assertions",
+]
+
+[[package]]
+name = "eth_pairings_repr_derive"
+version = "0.2.0"
+source = "git+https://github.com/drewstone/eip1962.git#8e03a0e299e722296cceb764e25bc91c8caeb683"
+dependencies = [
+ "byteorder 1.3.4",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "ethbloom"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1529,6 +1555,22 @@ dependencies = [
  "rand 0.7.3",
  "rustc-hex",
  "static_assertions",
+]
+
+[[package]]
+name = "fixed_width_field"
+version = "0.1.0"
+source = "git+https://github.com/drewstone/eip1962.git#8e03a0e299e722296cceb764e25bc91c8caeb683"
+dependencies = [
+ "simple_uint",
+]
+
+[[package]]
+name = "fixed_width_group_and_loop"
+version = "0.1.0"
+source = "git+https://github.com/drewstone/eip1962.git#8e03a0e299e722296cceb764e25bc91c8caeb683"
+dependencies = [
+ "simple_uint",
 ]
 
 [[package]]
@@ -4531,6 +4573,7 @@ dependencies = [
 name = "pallet-evm"
 version = "2.0.0-rc6"
 dependencies = [
+ "eth_pairings",
  "evm",
  "frame-support",
  "frame-system",
@@ -7699,6 +7742,17 @@ name = "signature"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65211b7b6fc3f14ff9fc7a2011a434e3e6880585bd2e9e9396315ae24cbf7852"
+
+[[package]]
+name = "simple_uint"
+version = "0.1.0"
+source = "git+https://github.com/drewstone/eip1962.git#8e03a0e299e722296cceb764e25bc91c8caeb683"
+dependencies = [
+ "byteorder 1.3.4",
+ "crunchy",
+ "rustc-hex",
+ "static_assertions",
+]
 
 [[package]]
 name = "slab"
