@@ -261,17 +261,17 @@ decl_event! {
 	{
 		/// Ethereum events from contracts.
 		Log(Log),
-		/// A contract has been created at given [address].
+		/// A contract has been created at given \[address\].
 		Created(H160),
-		/// A [contract] was attempted to be created, but the execution failed.
+		/// A \[contract\] was attempted to be created, but the execution failed.
 		CreatedFailed(H160),
-		/// A [contract] has been executed successfully with states applied.
+		/// A \[contract\] has been executed successfully with states applied.
 		Executed(H160),
-		/// A [contract] has been executed with errors. States are reverted with only gas fees applied.
+		/// A \[contract\] has been executed with errors. States are reverted with only gas fees applied.
 		ExecutedFailed(H160),
-		/// A deposit has been made at a given address. [sender, address, value]
+		/// A deposit has been made at a given address. \[sender, address, value\]
 		BalanceDeposit(AccountId, H160, U256),
-		/// A withdrawal has been made from a given address. [sender, address, value]
+		/// A withdrawal has been made from a given address. \[sender, address, value\]
 		BalanceWithdraw(AccountId, H160, U256),
 	}
 }
