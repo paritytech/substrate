@@ -86,15 +86,15 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
-		/// A name was set. [who]
+		/// A name was set. \[who\]
 		NameSet(AccountId),
-		/// A name was forcibly set. [target]
+		/// A name was forcibly set. \[target\]
 		NameForced(AccountId),
-		/// A name was changed. [who]
+		/// A name was changed. \[who\]
 		NameChanged(AccountId),
-		/// A name was cleared, and the given balance returned. [who, deposit]
+		/// A name was cleared, and the given balance returned. \[who, deposit\]
 		NameCleared(AccountId, Balance),
-		/// A name was removed and the given balance slashed. [target, deposit]
+		/// A name was removed and the given balance slashed. \[target, deposit\]
 		NameKilled(AccountId, Balance),
 	}
 );
