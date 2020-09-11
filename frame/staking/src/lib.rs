@@ -787,8 +787,8 @@ pub trait WeightInfo {
 	fn set_invulnerables(v: u32, ) -> Weight;
 	fn force_unstake(s: u32, ) -> Weight;
 	fn cancel_deferred_slash(s: u32, ) -> Weight;
-	fn payout_stakers(n: u32, ) -> Weight;
-	fn payout_stakers_alive_controller(n: u32, ) -> Weight;
+	fn payout_stakers_alive_staked(n: u32, ) -> Weight;
+	fn payout_stakers_dead_controller(n: u32, ) -> Weight;
 	fn rebond(l: u32, ) -> Weight;
 	fn set_history_depth(e: u32, ) -> Weight;
 	fn reap_stash(s: u32, ) -> Weight;
@@ -1945,10 +1945,10 @@ decl_module! {
 		/// - Read Each: Bonded, Ledger, Payee, Locks, System Account (5 items)
 		/// - Write Each: System Account, Locks, Ledger (3 items)
 		///
-		///   NOTE: weights are assuming that payouts are made to dead controller accounts.
-		///   Currently we don't refund otherwise.
+		///   NOTE: weights are assuming that payouts are made to alive stash account (Staked).
+		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
 		/// # </weight>
-		#[weight = T::WeightInfo::payout_stakers(T::MaxNominatorRewardedPerValidator::get())]
+		#[weight = T::WeightInfo::payout_stakers_alive_staked(T::MaxNominatorRewardedPerValidator::get())]
 		fn payout_stakers(origin, validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			ensure_signed(origin)?;
