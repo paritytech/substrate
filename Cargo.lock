@@ -8459,10 +8459,8 @@ dependencies = [
 name = "sp-tracing"
 version = "2.0.0-rc6"
 dependencies = [
- "lazy_static",
  "log",
  "parity-scale-codec",
- "parking_lot 0.11.0",
  "sp-std",
  "tracing",
  "tracing-core",

@@ -115,6 +115,11 @@ pub use crate::types::{
 	WasmMetadata, WasmEntryAttributes, WasmValuesSet, WasmValue, WasmFields, WasmLevel, WasmFieldName
 };
 
+#[cfg(feature = "std")]
+pub use crate::types::{
+	WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER
+};
+
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///
