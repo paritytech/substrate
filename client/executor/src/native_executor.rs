@@ -311,6 +311,10 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 				&mut new_async_externalities(scheduler, module.clone())
 					.expect("Failed to setup externalities for async context"),
 				move || {
+
+					// FIXME: Should be refactored to shared "instance factory".
+					// Instatiating wasm here every time is suboptimal at the moment, shared
+					// pool of istances should be used.
 					let instance = module.new_instance().expect("Failed to create new instance for fork");
 
 					let mut dispatch_data = Vec::new();
