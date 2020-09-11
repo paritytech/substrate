@@ -259,15 +259,6 @@ pub fn open_database<Block: BlockT>(
 		DatabaseSettingsSrc::RocksDb { .. } => {
 			return db_open_error("with-kvdb-rocksdb");
 		},
-		#[cfg(feature = "with-subdb")]
-		DatabaseSettingsSrc::SubDb { path } => {
-			crate::subdb::open(&path, NUM_COLUMNS)
-				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
-		},
-		#[cfg(not(feature = "with-subdb"))]
-		DatabaseSettingsSrc::SubDb { .. } => {
-			return db_open_error("with-subdb");
-		},
 		#[cfg(feature = "with-parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
 			crate::parity_db::open(&path)
