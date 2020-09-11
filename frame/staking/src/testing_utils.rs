@@ -43,30 +43,36 @@ pub fn create_funded_user<T: Trait>(
 }
 
 /// Create a stash and controller pair.
-pub fn create_stash_controller<T: Trait>(n: u32, balance_factor: u32)
+pub fn create_stash_controller<T: Trait>(
+	n: u32,
+	balance_factor: u32,
+	destination: RewardDestination<T::AccountId>,
+)
 	-> Result<(T::AccountId, T::AccountId), &'static str>
 {
 	let stash = create_funded_user::<T>("stash", n, balance_factor);
 	let controller = create_funded_user::<T>("controller", n, balance_factor);
 	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
-	let reward_destination = RewardDestination::Staked;
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
-	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, reward_destination)?;
+	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, destination)?;
 	return Ok((stash, controller))
 }
 
 /// Create a stash and controller pair, where the controller is dead, and payouts go to controller.
 /// This is used to test worst case payout scenarios.
-pub fn create_stash_and_dead_controller<T: Trait>(n: u32, balance_factor: u32)
+pub fn create_stash_and_dead_controller<T: Trait>(
+	n: u32,
+	balance_factor: u32,
+	destination: RewardDestination<T::AccountId>,
+)
 	-> Result<(T::AccountId, T::AccountId), &'static str>
 {
 	let stash = create_funded_user::<T>("stash", n, balance_factor);
 	// controller has no funds
 	let controller = create_funded_user::<T>("controller", n, 0);
 	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
-	let reward_destination = RewardDestination::Controller;
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
-	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, reward_destination)?;
+	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, destination)?;
 	return Ok((stash, controller))
 }
 
@@ -77,7 +83,7 @@ pub fn create_validators<T: Trait>(
 ) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
 	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(max as usize);
 	for i in 0 .. max {
-		let (stash, controller) = create_stash_controller::<T>(i, balance_factor)?;
+		let (stash, controller) = create_stash_controller::<T>(i, balance_factor, RewardDestination::Staked)?;
 		let validator_prefs = ValidatorPrefs {
 			commission: Perbill::from_percent(50),
 		};
@@ -114,7 +120,7 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(
 	// Create validators
 	for i in 0 .. validators {
 		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
-		let (v_stash, v_controller) = create_stash_controller::<T>(i, balance_factor)?;
+		let (v_stash, v_controller) = create_stash_controller::<T>(i, balance_factor, RewardDestination::Staked)?;
 		let validator_prefs = ValidatorPrefs {
 			commission: Perbill::from_percent(50),
 		};
@@ -132,6 +138,7 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(
 		let (_n_stash, n_controller) = create_stash_controller::<T>(
 			u32::max_value() - j,
 			balance_factor,
+			RewardDestination::Staked,
 		)?;
 
 		// Have them randomly validate
