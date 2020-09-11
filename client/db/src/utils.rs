@@ -212,7 +212,7 @@ pub fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
 	db_type: DatabaseType,
 ) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
-	let db_open_error = |feat| Err(
+	let db_open_error = |feat: &'static str| Err(
 		sp_blockchain::Error::Backend(
 			format!("`{}` feature not enabled, database can not be opened", feat),
 		),
