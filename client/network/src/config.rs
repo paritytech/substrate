@@ -632,7 +632,7 @@ impl NodeKeyConfig {
 							.ok()
 							.and_then(|s|{
 								if s.len() == 64 {
-									sp_core::H256::from_str(&s).ok()
+									hex::decode(&s).ok()
 								} else {
 									None
 								}}
