@@ -24,7 +24,7 @@ use sp_std::{
 };
 use sp_std::Writer;
 use codec::{Encode, Decode};
-use tracing_core::{Metadata, field::{FieldSet, Value}};
+use tracing_core::{Metadata, field::FieldSet};
 
 /// The Tracing Level – the user can filter by this
 #[derive(Clone, Encode, Decode, Debug)]
@@ -99,6 +99,7 @@ impl core::fmt::Debug for WasmValue {
 					f.write_fmt(format_args!("{:?}", i))
 				}
 			}
+			#[cfg(feature = "std")]
 			WasmValue::Extracted(ref v) => {
 				f.write_fmt(format_args!("{}", v))
 			}
