@@ -197,6 +197,7 @@ macro_rules! impl_outer_origin {
 		impl $crate::traits::OriginTrait for $name {
 			type Call = <$runtime as $system::Trait>::Call;
 			type PalletsOrigin = $caller_name;
+			type AccountId = <$runtime as $system::Trait>::AccountId;
 
 			fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static) {
 				let f = self.filter.clone();
