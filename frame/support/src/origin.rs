@@ -279,6 +279,20 @@ macro_rules! impl_outer_origin {
 			}
 		}
 
+		impl $crate::traits::SystemOrigin for $name {
+			type AccountId = <$runtime as $system::Trait>::AccountId;
+
+			fn none() -> Self {
+				$system::RawOrigin::None.into()
+			}
+			fn root() -> Self {
+				$system::RawOrigin::Root.into()
+			}
+			fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
+				$system::RawOrigin::Signed(by).into()
+			}
+		}
+
 		impl From<$system::Origin<$runtime>> for $caller_name {
 			fn from(x: $system::Origin<$runtime>) -> Self {
 				$caller_name::system(x)
