@@ -800,7 +800,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Such restrictions, if desired, need to be enforced at the call site(s).
 	///
 	/// The protocol must have been registered through
-	/// [`NetworkConfiguration::request_response_protocols`](crate::config::NetworkConfiguration::request_response_protocols).
+	/// [`NetworkConfiguration::request_response_protocols`](
+	/// crate::config::NetworkConfiguration::request_response_protocols).
 	pub async fn request(
 		&self,
 		target: PeerId,

@@ -287,7 +287,8 @@ decl_event!(
 		Rejected(ProposalIndex, Balance),
 		/// Some of our funds have been burnt. \[burn\]
 		Burnt(Balance),
-		/// Spending has finished; this is the amount that rolls over until next spend. \[budget_remaining\]
+		/// Spending has finished; this is the amount that rolls over until next spend.
+		/// \[budget_remaining\]
 		Rollover(Balance),
 		/// Some funds have been deposited. \[deposit\]
 		Deposit(Balance),

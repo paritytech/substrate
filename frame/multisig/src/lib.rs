@@ -199,7 +199,8 @@ decl_event! {
 	{
 		/// A new multisig operation has begun. \[approving, multisig, call_hash\]
 		NewMultisig(AccountId, AccountId, CallHash),
-		/// A multisig operation has been approved by someone. \[approving, timepoint, multisig, call_hash\]
+		/// A multisig operation has been approved by someone.
+		/// \[approving, timepoint, multisig, call_hash\]
 		MultisigApproval(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
 		/// A multisig operation has been executed. \[approving, timepoint, multisig, call_hash\]
 		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId, CallHash, DispatchResult),
