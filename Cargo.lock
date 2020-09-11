@@ -8424,7 +8424,6 @@ version = "0.8.0-rc6"
 dependencies = [
  "hash-db",
  "hex-literal",
- "itertools 0.9.0",
  "log",
  "num-traits",
  "parity-scale-codec",
@@ -8436,6 +8435,7 @@ dependencies = [
  "sp-externalities",
  "sp-panic-handler",
  "sp-runtime",
+ "sp-std",
  "sp-trie",
  "trie-db",
  "trie-root",
@@ -8833,6 +8833,7 @@ dependencies = [
  "sp-consensus-aura",
  "sp-consensus-babe",
  "sp-core",
+ "sp-externalities",
  "sp-finality-grandpa",
  "sp-inherents",
  "sp-io",
