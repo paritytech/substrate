@@ -35,7 +35,7 @@ use sp_state_machine::{
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
 
 use crate::{
-	backend::{self, NewBlockState},
+	backend::{self, NewBlockState, ProvideChtRoots},
 	blockchain::{
 		self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
 	},
@@ -456,7 +456,7 @@ impl<Block: BlockT> light::Storage<Block> for Blockchain<Block>
 	}
 }
 
-impl<Block: BlockT> light::ChtRootStorage<Block> for Blockchain<Block> {
+impl<Block: BlockT> ProvideChtRoots<Block> for Blockchain<Block> {
 	fn header_cht_root(
 		&self,
 		_cht_size: NumberFor<Block>,

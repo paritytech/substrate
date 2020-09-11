@@ -87,8 +87,6 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						external_addresses: Default::default(),
 						connected_peers: Default::default(),
 						not_connected_peers: Default::default(),
-						total_bytes_inbound: 0,
-						total_bytes_outbound: 0,
 						peerset: serde_json::Value::Null,
 					}).unwrap());
 				},
@@ -282,8 +280,6 @@ fn system_network_state() {
 			external_addresses: Default::default(),
 			connected_peers: Default::default(),
 			not_connected_peers: Default::default(),
-			total_bytes_inbound: 0,
-			total_bytes_outbound: 0,
 			peerset: serde_json::Value::Null,
 		}
 	);

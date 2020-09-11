@@ -20,7 +20,8 @@
 use super::*;
 
 use frame_support::{
-	impl_outer_origin, parameter_types, ord_parameter_types, traits::{OnInitialize, OnFinalize}
+	impl_outer_origin, parameter_types, ord_parameter_types,
+	traits::{OnInitialize, OnFinalize, TestRandomness},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -99,7 +100,7 @@ impl pallet_balances::Trait for Test {
 impl Trait for Test {
 	type Event = ();
 	type Currency = pallet_balances::Module<Self>;
-	type Randomness = ();
+	type Randomness = TestRandomness;
 	type CandidateDeposit = CandidateDeposit;
 	type WrongSideDeduction = WrongSideDeduction;
 	type MaxStrikes = MaxStrikes;

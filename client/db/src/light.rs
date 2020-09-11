@@ -23,11 +23,11 @@ use std::convert::TryInto;
 use parking_lot::RwLock;
 
 use sc_client_api::{
-	cht, backend::{AuxStore, NewBlockState}, UsageInfo,
+	cht, backend::{AuxStore, NewBlockState, ProvideChtRoots}, UsageInfo,
 	blockchain::{
 		BlockStatus, Cache as BlockchainCache, Info as BlockchainInfo,
 	},
-	Storage, ChtRootStorage,
+	Storage,
 };
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
@@ -596,7 +596,7 @@ impl<Block> Storage<Block> for LightStorage<Block>
 	}
 }
 
-impl<Block> ChtRootStorage<Block> for LightStorage<Block>
+impl<Block> ProvideChtRoots<Block> for LightStorage<Block>
 	where Block: BlockT,
 {
 	fn header_cht_root(

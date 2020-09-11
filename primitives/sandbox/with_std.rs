@@ -300,7 +300,6 @@ impl<T> Instance<T> {
 
 #[cfg(test)]
 mod tests {
-	use wabt;
 	use crate::{Error, Value, ReturnValue, HostError, EnvironmentDefinitionBuilder, Instance};
 	use assert_matches::assert_matches;
 
@@ -351,7 +350,7 @@ mod tests {
 
 	#[test]
 	fn invoke_args() {
-		let code = wabt::wat2wasm(r#"
+		let code = wat::parse_str(r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 
@@ -386,7 +385,7 @@ mod tests {
 
 	#[test]
 	fn return_value() {
-		let code = wabt::wat2wasm(r#"
+		let code = wat::parse_str(r#"
 		(module
 			(func (export "call") (param $x i32) (result i32)
 				(i32.add
@@ -408,7 +407,7 @@ mod tests {
 
 	#[test]
 	fn signatures_dont_matter() {
-		let code = wabt::wat2wasm(r#"
+		let code = wat::parse_str(r#"
 		(module
 			(import "env" "polymorphic_id" (func $id_i32 (param i32) (result i32)))
 			(import "env" "polymorphic_id" (func $id_i64 (param i64) (result i64)))
@@ -450,7 +449,7 @@ mod tests {
 		let mut env_builder = EnvironmentDefinitionBuilder::new();
 		env_builder.add_host_func("env", "returns_i32", env_returns_i32);
 
-		let code = wabt::wat2wasm(r#"
+		let code = wat::parse_str(r#"
 		(module
 			;; It's actually returns i32, but imported as if it returned i64
 			(import "env" "returns_i32" (func $returns_i32 (result i64)))

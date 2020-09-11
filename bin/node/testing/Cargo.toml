@@ -39,7 +39,6 @@ substrate-test-client = { version = "2.0.0-rc6", path = "../../../test-utils/cli
 pallet-timestamp = { version = "2.0.0-rc6", path = "../../../frame/timestamp" }
 pallet-transaction-payment = { version = "2.0.0-rc6", path = "../../../frame/transaction-payment" }
 pallet-treasury = { version = "2.0.0-rc6", path = "../../../frame/treasury" }
-wabt = "0.10.0"
 sp-api = { version = "2.0.0-rc6", path = "../../../primitives/api" }
 sp-finality-tracker = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/finality-tracker" }
 sp-timestamp = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/timestamp" }

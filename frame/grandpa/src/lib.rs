@@ -40,8 +40,8 @@ use fg_primitives::{
 	GRANDPA_ENGINE_ID,
 };
 use frame_support::{
-	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
-	Parameter,
+	decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResultWithPostInfo,
+	storage, traits::KeyOwnerProofSystem, weights::Pays, Parameter,
 };
 use frame_system::{ensure_none, ensure_root, ensure_signed};
 use pallet_finality_tracker::OnFinalizationStalled;
@@ -247,14 +247,14 @@ decl_module! {
 			origin,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			key_owner_proof: T::KeyOwnerProof,
-		) {
+		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 
 			Self::do_report_equivocation(
 				Some(reporter),
 				equivocation_proof,
 				key_owner_proof,
-			)?;
+			)
 		}
 
 		/// Report voter equivocation/misbehavior. This method will verify the
@@ -271,14 +271,14 @@ decl_module! {
 			origin,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			key_owner_proof: T::KeyOwnerProof,
-		) {
+		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
 			Self::do_report_equivocation(
 				T::HandleEquivocation::block_author(),
 				equivocation_proof,
 				key_owner_proof,
-			)?;
+			)
 		}
 
 		/// Note that the current authority set of the GRANDPA finality gadget has
@@ -376,7 +376,7 @@ mod weight_for {
 	pub fn report_equivocation<T: super::Trait>(validator_count: u32) -> Weight {
 		// we take the validator set count from the membership proof to
 		// calculate the weight but we set a floor of 100 validators.
-		let validator_count = validator_count.min(100) as u64;
+		let validator_count = validator_count.max(100) as u64;
 
 		// worst case we are considering is that the given offender
 		// is backed by 200 nominators
@@ -520,7 +520,7 @@ impl<T: Trait> Module<T> {
 		reporter: Option<T::AccountId>,
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
-	) -> Result<(), Error<T>> {
+	) -> DispatchResultWithPostInfo {
 		// we check the equivocation within the context of its set id (and
 		// associated session) and round. we also need to know the validator
 		// set count when the offence since it is required to calculate the
@@ -585,7 +585,10 @@ impl<T: Trait> Module<T> {
 				set_id,
 				round,
 			),
-		).map_err(|_| Error::<T>::DuplicateOffenceReport)
+		).map_err(|_| Error::<T>::DuplicateOffenceReport)?;
+
+		// waive the fee since the report is valid and beneficial
+		Ok(Pays::No.into())
 	}
 
 	/// Submits an extrinsic to report an equivocation. This method will create

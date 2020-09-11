@@ -23,6 +23,7 @@
 
 pub use crate::chain::{Client, FinalityProofProvider};
 pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
+pub use crate::request_responses::{IncomingRequest, ProtocolConfig as RequestResponseConfig};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -34,9 +35,10 @@ use crate::ExHashT;
 
 use core::{fmt, iter};
 use futures::future;
-use libp2p::identity::{ed25519, Keypair};
-use libp2p::wasm_ext;
-use libp2p::{multiaddr, Multiaddr, PeerId};
+use libp2p::{
+	identity::{ed25519, Keypair},
+	multiaddr, wasm_ext, Multiaddr, PeerId,
+};
 use prometheus_endpoint::Registry;
 use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
@@ -48,6 +50,7 @@ use std::{
 	io::{self, Write},
 	net::Ipv4Addr,
 	path::{Path, PathBuf},
+	str,
 	sync::Arc,
 };
 use zeroize::Zeroize;
@@ -233,20 +236,26 @@ impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransaction
 	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
 }
 
-/// Name of a protocol, transmitted on the wire. Should be unique for each chain.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
 
-impl<'a> From<&'a [u8]> for ProtocolId {
-	fn from(bytes: &'a [u8]) -> ProtocolId {
-		ProtocolId(bytes.into())
+impl<'a> From<&'a str> for ProtocolId {
+	fn from(bytes: &'a str) -> ProtocolId {
+		ProtocolId(bytes.as_bytes().into())
 	}
 }
 
-impl ProtocolId {
-	/// Exposes the `ProtocolId` as bytes.
-	pub fn as_bytes(&self) -> &[u8] {
-		self.0.as_ref()
+impl AsRef<str> for ProtocolId {
+	fn as_ref(&self) -> &str {
+		str::from_utf8(&self.0[..])
+			.expect("the only way to build a ProtocolId is through a UTF-8 String; qed")
+	}
+}
+
+impl fmt::Debug for ProtocolId {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Debug::fmt(self.as_ref(), f)
 	}
 }
 
@@ -406,7 +415,9 @@ pub struct NetworkConfiguration {
 	pub node_key: NodeKeyConfig,
 	/// List of notifications protocols that the node supports. Must also include a
 	/// `ConsensusEngineId` for backwards-compatibility.
-	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, [u8]>)>,
+	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
+	/// List of request-response protocols that the node supports.
+	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// Maximum allowed number of incoming connections.
 	pub in_peers: u32,
 	/// Number of outgoing connections we're trying to maintain.
@@ -442,6 +453,7 @@ impl NetworkConfiguration {
 			boot_nodes: Vec::new(),
 			node_key,
 			notifications_protocols: Vec::new(),
+			request_response_protocols: Vec::new(),
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
@@ -458,9 +470,7 @@ impl NetworkConfiguration {
 			allow_non_globals_in_dht: false,
 		}
 	}
-}
 
-impl NetworkConfiguration {
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new(
@@ -615,10 +625,26 @@ impl NodeKeyConfig {
 				Ok(Keypair::Ed25519(k.into())),
 
 			Ed25519(Secret::File(f)) =>
-				get_secret(f,
-					|mut b| ed25519::SecretKey::from_bytes(&mut b),
+				get_secret(
+					f,
+					|mut b| {
+						match String::from_utf8(b.to_vec())
+							.ok()
+							.and_then(|s|{
+								if s.len() == 64 {
+									hex::decode(&s).ok()
+								} else {
+									None
+								}}
+							)
+						{
+							Some(s) => ed25519::SecretKey::from_bytes(s),
+							_ => ed25519::SecretKey::from_bytes(&mut b),
+						}
+					},
 					ed25519::SecretKey::generate,
-					|b| b.as_ref().to_vec())
+					|b| b.as_ref().to_vec()
+				)
 				.map(ed25519::Keypair::from)
 				.map(Keypair::Ed25519),
 		}
