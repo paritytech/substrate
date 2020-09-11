@@ -45,7 +45,6 @@ std = [
 	"sp-trie/std",
 	"trie-db/std",
 	"trie-root/std",
-
 	"log",
 	"parking_lot",
 	"rand",
