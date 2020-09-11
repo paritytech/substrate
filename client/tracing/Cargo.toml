@@ -21,5 +21,5 @@ serde_json = "1.0.41"
 slog = { version = "2.5.2", features = ["nested-values"] }
 tracing = "0.1.18"
 tracing-subscriber = "0.2.10"
-sp-tracing = { version = "2.0.0-rc2", path = "../../primitives/tracing" }
+sp-tracing = { version = "2.0.0-rc6", path = "../../primitives/tracing" }
 sc-telemetry = { version = "2.0.0-rc6", path = "../telemetry" }
