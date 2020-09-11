@@ -793,7 +793,6 @@ pub trait WeightInfo {
 	fn set_history_depth(e: u32, ) -> Weight;
 	fn reap_stash(s: u32, ) -> Weight;
 	fn new_era(v: u32, n: u32, ) -> Weight;
-	fn payout_all(v: u32, n: u32, ) -> Weight;
 	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight;
 }
 

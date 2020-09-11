@@ -398,6 +398,7 @@ benchmarks! {
 		assert!(validators.len() == v as usize);
 	}
 
+	#[extra]
 	payout_all {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
@@ -794,8 +795,8 @@ mod tests {
 			assert_ok!(test_benchmark_set_invulnerables::<Test>());
 			assert_ok!(test_benchmark_force_unstake::<Test>());
 			assert_ok!(test_benchmark_cancel_deferred_slash::<Test>());
-			assert_ok!(test_benchmark_payout_stakers::<Test>());
-			assert_ok!(test_benchmark_payout_stakers_alive_controller::<Test>());
+			assert_ok!(test_benchmark_payout_stakers_dead_controller::<Test>());
+			assert_ok!(test_benchmark_payout_stakers_alive_staked::<Test>());
 			assert_ok!(test_benchmark_rebond::<Test>());
 			assert_ok!(test_benchmark_set_history_depth::<Test>());
 			assert_ok!(test_benchmark_reap_stash::<Test>());

@@ -158,15 +158,6 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().writes(8 as Weight))
 			.saturating_add(DbWeight::get().writes((3 as Weight).saturating_mul(v as Weight)))
 	}
-	fn payout_all(v: u32, n: u32, ) -> Weight {
-		(0 as Weight)
-			.saturating_add((23897487000 as Weight).saturating_mul(v as Weight))
-			.saturating_add((1997765000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(DbWeight::get().reads((15 as Weight).saturating_mul(v as Weight)))
-			.saturating_add(DbWeight::get().reads((5 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(DbWeight::get().writes((8 as Weight).saturating_mul(v as Weight)))
-			.saturating_add(DbWeight::get().writes((3 as Weight).saturating_mul(n as Weight)))
-	}
 	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight {
 		(1278000000 as Weight)
 			.saturating_add((10599000 as Weight).saturating_mul(v as Weight))
