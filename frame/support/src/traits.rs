@@ -1605,6 +1605,19 @@ pub trait UnfilteredDispatchable {
 	fn dispatch_bypass_filter(self, origin: Self::Origin) -> crate::dispatch::DispatchResultWithPostInfo;
 }
 
+/// Basic origin construction and AccountId type.
+pub trait SystemOrigin {
+	/// The type of account identifiers used by the system.
+	type AccountId;
+
+	/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+	fn none() -> Self;
+	/// Create with system root origin and no filter.
+	fn root() -> Self;
+	/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+	fn signed(by: Self::AccountId) -> Self;
+}
+
 /// Methods available on `frame_system::Trait::Origin`.
 pub trait OriginTrait: Sized {
 	/// Runtime call type, as in `frame_system::Trait::Call`
@@ -1612,9 +1625,6 @@ pub trait OriginTrait: Sized {
 
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin;
-
-	/// The AccountId used across the system.
-	type AccountId;
 
 	/// Add a filter to the origin.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);

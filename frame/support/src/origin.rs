@@ -197,7 +197,6 @@ macro_rules! impl_outer_origin {
 		impl $crate::traits::OriginTrait for $name {
 			type Call = <$runtime as $system::Trait>::Call;
 			type PalletsOrigin = $caller_name;
-			type AccountId = <$runtime as $system::Trait>::AccountId;
 
 			fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static) {
 				let f = self.filter.clone();
@@ -256,6 +255,20 @@ macro_rules! impl_outer_origin {
 			}
 			/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
 			pub fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
+				$system::RawOrigin::Signed(by).into()
+			}
+		}
+
+		impl $crate::traits::SystemOrigin for $name {
+			type AccountId = <$runtime as $system::Trait>::AccountId;
+
+			fn none() -> Self {
+				$system::RawOrigin::None.into()
+			}
+			fn root() -> Self {
+				$system::RawOrigin::Root.into()
+			}
+			fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
 				$system::RawOrigin::Signed(by).into()
 			}
 		}
