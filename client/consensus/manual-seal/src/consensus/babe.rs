@@ -32,7 +32,7 @@ use sc_consensus_babe::{
 	Config, Epoch, authorship, CompatibleDigestItem, BabeIntermediate,
 	register_babe_inherent_data_provider, INTERMEDIATE_KEY, find_pre_digest,
 };
-use sc_consensus_epochs::{SharedEpochChanges, descendent_query, ViableEpochDescriptor, EpochIdentifier, EpochIdentifierPosition, EpochHeader};
+use sc_consensus_epochs::{SharedEpochChanges, descendent_query, ViableEpochDescriptor, EpochHeader};
 use sc_keystore::KeyStorePtr;
 
 use sp_api::{ProvideRuntimeApi, TransactionFor};
@@ -44,13 +44,11 @@ use sp_consensus_babe::{
 };
 use sp_inherents::{InherentDataProviders, InherentData, ProvideInherentData, InherentIdentifier};
 use sp_runtime::{
-	traits::{DigestItemFor, DigestFor, Block as BlockT},
-	generic::Digest,
+	traits::{DigestItemFor, DigestFor, Block as BlockT, Zero, Header},
+	generic::{Digest, BlockId},
 };
 use sp_timestamp::{InherentType, InherentError, INHERENT_IDENTIFIER, TimestampInherentData};
 use sp_keyring::Sr25519Keyring::Alice;
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Zero, Header};
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
