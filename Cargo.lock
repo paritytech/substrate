@@ -4740,6 +4740,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-node-authorization"
+version = "2.0.0-rc6"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-offences"
 version = "2.0.0-rc6"
 dependencies = [
@@ -8412,7 +8426,6 @@ version = "0.8.0-rc6"
 dependencies = [
  "hash-db",
  "hex-literal",
- "itertools 0.9.0",
  "log",
  "num-traits",
  "parity-scale-codec",
@@ -8424,6 +8437,7 @@ dependencies = [
  "sp-externalities",
  "sp-panic-handler",
  "sp-runtime",
+ "sp-std",
  "sp-trie",
  "trie-db",
  "trie-root",
@@ -8822,6 +8836,7 @@ dependencies = [
  "sp-consensus-aura",
  "sp-consensus-babe",
  "sp-core",
+ "sp-externalities",
  "sp-finality-grandpa",
  "sp-inherents",
  "sp-io",
