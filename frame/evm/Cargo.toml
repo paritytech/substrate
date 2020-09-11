@@ -28,6 +28,7 @@ evm = { version = "0.17", default-features = false }
 sha3 = { version = "0.8", default-features = false }
 impl-trait-for-tuples = "0.1"
 ripemd160 = { version = "0.9", default-features = false }
+eth_pairings = { git = "https://github.com/drewstone/eip1962.git", default-features = false, features = ["eip_2537"] }
 
 [features]
 default = ["std"]
@@ -47,4 +48,5 @@ std = [
 	"evm/std",
 	"pallet-timestamp/std",
 	"ripemd160/std",
+	"eth_pairings/std",
 ]
