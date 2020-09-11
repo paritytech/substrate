@@ -22,8 +22,9 @@
 //!
 //! It is required that each extension implements the [`Extension`] trait.
 
-use sp_std::{collections::btree_map::{BTreeMap, Entry}, any::{Any, TypeId},
-	ops::DerefMut, boxed::Box};
+use sp_std::{
+	collections::btree_map::{BTreeMap, Entry}, any::{Any, TypeId}, ops::DerefMut, boxed::Box,
+};
 use crate::Error;
 
 /// Marker trait for types that should be registered as [`Externalities`](crate::Externalities) extension.

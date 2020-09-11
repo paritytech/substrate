@@ -125,9 +125,7 @@ impl<'a, H, N, B> Ext<'a, H, N, B>
 		B: Backend<H>,
 		N: crate::changes_trie::BlockNumber,
 {
-	/// Create a new `Ext`. Warning, this
-	/// do not init its inner id with a random
-	/// value.
+	/// Create a new `Ext`.
 	#[cfg(not(feature = "std"))]
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
