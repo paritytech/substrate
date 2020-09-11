@@ -772,3 +772,19 @@ fn forking_should_work(wasm_method: WasmExecutionMethod) {
 		&mut ext,
 	).unwrap();
 }
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn nested_forking_should_work(wasm_method: WasmExecutionMethod) {
+
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	call_in_wasm(
+		"test_nested_fork",
+		&[],
+		wasm_method,
+		&mut ext,
+	).unwrap();
+}
+

@@ -19,6 +19,7 @@
 use crate::{
 	RuntimeInfo, error::{Error, Result},
 	wasm_runtime::{RuntimeCache, WasmExecutionMethod},
+	async_externalities::new_async_externalities,
 };
 use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
@@ -286,11 +287,11 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	}
 }
 
-struct RuntimeInstanceSpawn {
+pub struct RuntimeInstanceSpawn {
 	module: Arc<dyn sc_executor_common::wasm_runtime::WasmModule>,
 	forks: parking_lot::Mutex<HashMap<u32, std::sync::mpsc::Receiver<Vec<u8>>>>,
 	counter: std::sync::atomic::AtomicU32,
-	spawner: Box<dyn sp_core::traits::SpawnNamed>,
+	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 }
 
 impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
@@ -303,15 +304,27 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 		self.forks.lock().insert(new_handle, receiver);
 
 		let module = self.module.clone();
-		self.spawner.spawn("forked runtime invoke", Box::pin(async move {
-			let instance = module.new_instance().expect("Failed to create new instance for fork");
+		let scheduler = self.scheduler.clone();
+		self.scheduler.spawn("forked runtime invoke", Box::pin(async move {
+			let module = AssertUnwindSafe(module);
+			let result = with_externalities_safe(
+				&mut new_async_externalities(scheduler, module.clone())
+					.expect("Failed to setup externalities for async context"),
+				move || {
+					let instance = module.new_instance().expect("Failed to create new instance for fork");
 
-			let mut dispatch_data = Vec::new();
-			func.encode_to(&mut dispatch_data);
-			data.encode_to(&mut dispatch_data);
-			let result = instance.call("dyn_dispatch", &dispatch_data[..]).expect("Failed to invoke instance.");
+					let mut dispatch_data = Vec::new();
+					func.encode_to(&mut dispatch_data);
+					data.encode_to(&mut dispatch_data);
+					instance.call("dyn_dispatch", &dispatch_data[..]).expect("Failed to invoke instance.")
+				}
+			);
 
-			let _ = sender.send(result);
+			// If execution is panicked, the `join` in the original runtime code will panic as well,
+			// since the snder is dropped without seding anything.
+			if let Ok(output) = result {
+				let _ = sender.send(output);
+			}
 		}));
 
 
@@ -326,13 +339,13 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 }
 
 impl RuntimeInstanceSpawn {
-	fn new(
+	pub fn new(
 		module: Arc<dyn sc_executor_common::wasm_runtime::WasmModule>,
-		spawner: Box<dyn sp_core::traits::SpawnNamed>,
+		scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 	) -> Self {
 		Self {
 			module,
-			spawner,
+			scheduler,
 			counter: 0.into(),
 			forks: HashMap::new().into(),
 		}
