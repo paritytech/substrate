@@ -483,15 +483,15 @@ decl_storage! {
 decl_event!(
 	/// Event for the System module.
 	pub enum Event<T> where AccountId = <T as Trait>::AccountId {
-		/// An extrinsic completed successfully. [info]
+		/// An extrinsic completed successfully. \[info\]
 		ExtrinsicSuccess(DispatchInfo),
-		/// An extrinsic failed. [error, info]
+		/// An extrinsic failed. \[error, info\]
 		ExtrinsicFailed(DispatchError, DispatchInfo),
 		/// `:code` was updated.
 		CodeUpdated,
-		/// A new [account] was created.
+		/// A new \[account\] was created.
 		NewAccount(AccountId),
-		/// An [account] was reaped.
+		/// An \[account\] was reaped.
 		KilledAccount(AccountId),
 	}
 );
