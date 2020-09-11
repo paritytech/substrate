@@ -25,7 +25,7 @@ mod common;
 use common::to_range;
 use honggfuzz::fuzz;
 use sp_npos_elections::{
-	assignment_ratio_to_staked, build_support_map, to_without_backing, seq_phragmen,
+	assignment_ratio_to_staked_normalized, build_support_map, to_without_backing, seq_phragmen,
 	ElectionResult, VoteWeight, evaluate_support, is_score_better,
 };
 use sp_std::collections::btree_map::BTreeMap;
@@ -128,7 +128,7 @@ fn main() {
 			};
 
 			let unbalanced_score = {
-				let staked = assignment_ratio_to_staked(unbalanced.assignments.clone(), &stake_of);
+				let staked = assignment_ratio_to_staked_normalized(unbalanced.assignments.clone(), &stake_of).unwrap();
 				let winners = to_without_backing(unbalanced.winners);
 				let support = build_support_map(winners.as_ref(), staked.as_ref()).0;
 
@@ -148,7 +148,7 @@ fn main() {
 			).unwrap();
 
 			let balanced_score = {
-				let staked = assignment_ratio_to_staked(balanced.assignments.clone(), &stake_of);
+				let staked = assignment_ratio_to_staked_normalized(balanced.assignments.clone(), &stake_of).unwrap();
 				let winners = to_without_backing(balanced.winners);
 				let support = build_support_map(winners.as_ref(), staked.as_ref()).0;
 				evaluate_support(&support)
@@ -164,8 +164,12 @@ fn main() {
 				enhance,
 			);
 
-			// if more than one iteration has been done, or they must be equal.
-			assert!(enhance || unbalanced_score == balanced_score || iterations == 0)
+			// The only guarantee of balancing is such that the first and third element of the score
+			// cannot decrease.
+			assert!(
+				balanced_score[0] >= unbalanced_score[0] &&
+				balanced_score[2] <= unbalanced_score[2]
+			);
 		});
 	}
 }
