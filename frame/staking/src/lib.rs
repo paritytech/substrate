@@ -1241,29 +1241,29 @@ decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Trait>::AccountId {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
 		/// the remainder from the maximum amount of reward.
-		/// [era_index, validator_payout, remainder]
+		/// \[era_index, validator_payout, remainder\]
 		EraPayout(EraIndex, Balance, Balance),
-		/// The staker has been rewarded by this amount. [stash, amount]
+		/// The staker has been rewarded by this amount. \[stash, amount\]
 		Reward(AccountId, Balance),
 		/// One validator (and its nominators) has been slashed by the given amount.
-		/// [validator, amount]
+		/// \[validator, amount\]
 		Slash(AccountId, Balance),
 		/// An old slashing report from a prior era was discarded because it could
-		/// not be processed. [session_index]
+		/// not be processed. \[session_index\]
 		OldSlashingReportDiscarded(SessionIndex),
-		/// A new set of stakers was elected with the given [compute].
+		/// A new set of stakers was elected with the given \[compute\].
 		StakingElection(ElectionCompute),
-		/// A new solution for the upcoming election has been stored. [compute]
+		/// A new solution for the upcoming election has been stored. \[compute\]
 		SolutionStored(ElectionCompute),
-		/// An account has bonded this amount. [stash, amount]
+		/// An account has bonded this amount. \[stash, amount\]
 		///
 		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
 		/// it will not be emitted for staking rewards when they are added to stake.
 		Bonded(AccountId, Balance),
-		/// An account has unbonded this amount. [stash, amount]
+		/// An account has unbonded this amount. \[stash, amount\]
 		Unbonded(AccountId, Balance),
 		/// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
-		/// from the unlocking queue. [stash, amount]
+		/// from the unlocking queue. \[stash, amount\]
 		Withdrawn(AccountId, Balance),
 	}
 );
