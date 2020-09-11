@@ -75,30 +75,9 @@ pub enum WasmValue {
 	/// SCALE CODEC encoded object – the name should allow the received to know
 	/// how to decode this.
 	Encoded(Vec<u8>),
-}
-
-impl WasmValue {
-	fn as_value<'a>(&'a self) -> Option<&'a dyn Value> {
-		match self {
-			WasmValue::Bool(ref i) => {
-				Some(i as &dyn Value)
-			}
-			WasmValue::U64(ref i) => {
-				Some(i as &dyn Value)
-			}
-			WasmValue::I64(ref i) => {
-				Some(i as &dyn Value)
-			}
-			// WasmValue::Formatted(i) | WasmValue::Str(i) => {
-			// 	if let Ok(s) = std::str::from_utf8(&i) {
-			// 		Some(&s as &dyn Value)
-			// 	} else {
-			// 		None
-			// 	}
-			// }
-			_ => None
-		}
-	}
+	#[cfg(feature = "std")]
+	#[codec(skip)]
+	Extracted(tracing_core::field::DisplayValue<String>),
 }
 
 impl core::fmt::Debug for WasmValue {
@@ -119,6 +98,9 @@ impl core::fmt::Debug for WasmValue {
 				} else {
 					f.write_fmt(format_args!("{:?}", i))
 				}
+			}
+			WasmValue::Extracted(ref v) => {
+				f.write_fmt(format_args!("{}", v))
 			}
 			WasmValue::Encoded(ref v) => {
 				f.write_str("Scale(")?;
@@ -163,32 +145,6 @@ impl From<i64> for WasmValue {
 		WasmValue::I64(u)
 	}
 }
-
-// impl tracing_core::sealed::Sealed for WasmValue {}
-
-// impl Value for WasmValue {
-// 	fn record(&self, key: &tracing_core::field::Field, v: &mut dyn tracing_core::field::Visit) {
-// 		match self {
-// 			WasmValue::U8(ref i) => v.record_u64(key, i as u64),
-// 			WasmValue::I8(ref i) => v.record_u64(key, i as u64),
-// 			WasmValue::U32(ref i) => v.record_u64(key, i as u64),
-// 			WasmValue::I32(ref i) => v.record_u64(key, i as u64),
-// 			WasmValue::I64(ref i) => v.record_u64(key, i as u64),
-// 			WasmValue::U64(ref i) => v.record_u64(key, i as u64),
-// 			WasmValue::Bool(ref i) => v.record_bool(key, i);
-// 			WasmValue::Formatted(ref i) | WasmValue::Str(ref i) => {
-// 			}
-// 			_ => unreachable!()
-// 			// WasmValue::Encoded(ref v) => {
-// 			// 	f.write_str("Scale(")?;
-// 			// 		for byte in v {
-// 			// 			f.write_fmt(format_args!("{:02x}", byte))?;
-// 			// 		}
-// 			// 	f.write_str(")")
-// 			// }
-// 		}
-// 	}
-// }
 
 /// The name of a field provided as the argument name when contstructing an
 /// `event!` or `span!`.
@@ -454,11 +410,11 @@ mod std_features {
 	use tracing;
 	use tracing_core::{
 		callsite, Level,
-		field::{Value, Field, FieldSet, ValueSet},
+		field::{Value, Field, FieldSet, ValueSet, display},
 		metadata::{Kind, Metadata}
 	};
 	use parking_lot::Mutex;
-	use super::WasmLevel;
+	use super::{WasmValue, WasmLevel};
 	use std::collections::hash_map::HashMap;
 	use lazy_static::lazy_static;
 
@@ -551,11 +507,17 @@ mod std_features {
 			.iter()
 			.map(|f| (f.name(), f))
 			.collect();
+		let mut vl = attrs.fields.0;
 
-		let values = attrs.fields.0.iter().filter_map(|(f, v)| {
+		let values = vl.iter_mut().filter_map(|(f, v)| {
 			if let Ok(inner) = std::str::from_utf8(&f.0) {
 				if let Some(field) = fields.get(inner) {
-					return Some((field, v.as_ref().map(|d| d.as_value()).flatten()))
+					return Some((field,
+						match v {
+							Some(d) => d.as_value(),
+							None => None
+						}
+					))
 				}
 			}
 			None
@@ -598,6 +560,49 @@ mod std_features {
 		};
 
 		f(metadata, &values)
+	}
+
+	fn make_hex(inp: &[u8]) -> String {
+		inp.iter().map(|c| format!("{:02x}", c)).collect::<String>()
+	}
+
+	impl WasmValue {
+
+		fn as_value<'a>(&'a mut self) -> Option<&'a dyn Value> {
+			match self {
+				// We convert to String
+				WasmValue::Formatted(i) | WasmValue::Str(i) => {
+					if let Ok(s) = String::from_utf8(i.to_vec()) {
+						*self = WasmValue::Extracted(display(s))
+					} else {
+						*self = WasmValue::Extracted(display(make_hex(&i)))
+					}
+				}
+				WasmValue::Encoded(i) => {
+					*self = WasmValue::Extracted(display(make_hex(&i)))
+				}
+				_ => {}
+			}
+
+			match self {
+				WasmValue::Bool(ref i) => {
+					Some(i as &dyn Value)
+				}
+				WasmValue::U64(ref i) => {
+					Some(i as &dyn Value)
+				}
+				WasmValue::I64(ref i) => {
+					Some(i as &dyn Value)
+				}
+				WasmValue::Extracted(ref i) => {
+					Some(i as &dyn Value)
+				}
+				WasmValue::Encoded(_)  | WasmValue::Formatted(_) | WasmValue::Str(_) => {
+					// already dealt with above
+					unreachable!()
+				}
+			}
+		}
 	}
 
 	impl From<crate::WasmMetadata> for &'static Metadata<'static> {
