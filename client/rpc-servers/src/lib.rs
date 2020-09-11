@@ -23,7 +23,6 @@
 use std::io;
 use jsonrpc_core::IoHandlerExtension;
 use log::error;
-use prometheus_endpoint::Registry;
 use pubsub::PubSubMetadata;
 
 #[cfg(not(target_os = "unknown"))]
@@ -65,6 +64,7 @@ pub fn rpc_handler<M: PubSubMetadata>(
 #[cfg(not(target_os = "unknown"))]
 mod inner {
 	use middleware::{HttpRpcMiddleware, WSRpcMiddleware};
+	use prometheus_endpoint::Registry;
 	use super::*;
 
 	/// Type alias for ipc server

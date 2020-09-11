@@ -31,7 +31,7 @@ impl HTTPMetrics {
 	fn register(r: &Registry) -> Result<Self, PrometheusError> {
 		Ok(HTTPMetrics {
 			http_rpc_calls: register(Counter::new(
-				"rpc_http_calls",
+				"rpc_http_calls_total",
 				"Number of rpc calls received through http interface",
 			)?, r)?,
 		})
@@ -79,7 +79,7 @@ impl WSMetrics {
 	fn register(r: &Registry) -> Result<Self, PrometheusError> {
 		Ok(WSMetrics {
 			ws_rpc_calls: register(Counter::new(
-				"rpc_ws_calls",
+				"rpc_ws_calls_total",
 				"Number of rpc calls received through web socket interface",
 			)?, r)?,
 		})
