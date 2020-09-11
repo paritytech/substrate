@@ -46,15 +46,7 @@ pub struct HttpRpcMiddleware {
 impl HttpRpcMiddleware {
 	pub fn new(metrics_registry: Option<&Registry>) -> Self {
 		HttpRpcMiddleware {
-			metrics: if let Some(r) = metrics_registry {
-				if let Ok(registered_metrics) = HTTPMetrics::register(r) {
-					Some(registered_metrics)
-				} else {
-					None
-				}
-			} else {
-				None
-			},
+			metrics: metrics_registry.and_then(|r| HTTPMetrics::register(r).ok()),
 		}
 	}
 }
@@ -94,15 +86,7 @@ pub struct WSRpcMiddleware {
 impl WSRpcMiddleware {
 	pub fn new(metrics_registry: Option<&Registry>) -> Self {
 		WSRpcMiddleware {
-			metrics: if let Some(r) = metrics_registry {
-				if let Ok(registered_metrics) = WSMetrics::register(r) {
-					Some(registered_metrics)
-				} else {
-					None
-				}
-			} else {
-				None
-			},
+			metrics: metrics_registry.and_then(|r| WSMetrics::register(r).ok()),
 		}
 	}
 }
