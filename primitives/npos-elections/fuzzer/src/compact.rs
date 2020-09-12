@@ -9,30 +9,25 @@ fn main() {
         fuzz!(|fuzzer_data: &[u8]| {
             let result_decoded: Result<InnerTestSolutionCompact, Error> =
                 <InnerTestSolutionCompact as codec::Decode>::decode(&mut &fuzzer_data[..]);
-            match result_decoded {
-                Ok(decoded) => {
-                    // Decoding works, let's re-encode it and compare results.
-                    let reencoded: std::vec::Vec<u8> = decoded.encode();
-                    // The reencoded value may or may not be equal to the original fuzzer output. However, the
-                    // original decoder should be optimal (in the sense that there is no shorter encoding of
-                    // the same object). So let's see if the fuzzer can find something shorter:
-                    if fuzzer_data.len() < reencoded.len() {
-                        panic!("fuzzer_data.len() < reencoded.len()");
-                    }
-                    // The reencoded value should definitely be decodable (if unwrap() fails that is a valid
-                    // panic/finding for the fuzzer):
-                    let decoded2: InnerTestSolutionCompact =
-                        <InnerTestSolutionCompact as codec::Decode>::decode(
-                            &mut reencoded.as_slice(),
-                        )
-                        .unwrap();
-                    // And it should be equal to the original decoded object (resulting from directly
-                    // decoding fuzzer_data):
-                    assert_eq!(decoded, decoded2);
+            // Ignore errors as not every random sequence of bytes can be decoded as InnerTestSolutionCompact
+            if let Ok(decoded) = result_decoded {
+                // Decoding works, let's re-encode it and compare results.
+                let reencoded: std::vec::Vec<u8> = decoded.encode();
+                // The reencoded value may or may not be equal to the original fuzzer output. However, the
+                // original decoder should be optimal (in the sense that there is no shorter encoding of
+                // the same object). So let's see if the fuzzer can find something shorter:
+                if fuzzer_data.len() < reencoded.len() {
+                    panic!("fuzzer_data.len() < reencoded.len()");
                 }
-                Err(_e) => {
-                    // Can happen, not every random sequence of bytes an be decoded as InnerTestSolutionCompact
-                }
+                // The reencoded value should definitely be decodable (if unwrap() fails that is a valid
+                // panic/finding for the fuzzer):
+                let decoded2: InnerTestSolutionCompact =
+                    <InnerTestSolutionCompact as codec::Decode>::decode(
+                        &mut reencoded.as_slice(),
+                    ).unwrap();
+                // And it should be equal to the original decoded object (resulting from directly
+                // decoding fuzzer_data):
+                assert_eq!(decoded, decoded2);
             }
         });
     }
