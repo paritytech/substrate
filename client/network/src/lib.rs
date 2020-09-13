@@ -267,7 +267,10 @@ pub mod network_state;
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
-pub use service::{NetworkService, NetworkWorker, RequestFailure, OutboundFailure};
+pub use service::{
+	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
+	NotificationSenderReady,
+};
 
 pub use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};

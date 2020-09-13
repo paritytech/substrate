@@ -106,7 +106,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ### Shorthand Example
 ///
 /// The macro automatically expands a shorthand function declaration to return the
-/// [`DispatchResult`](dispatch::DispatchResult) type. These functions are the same:
+/// [`DispatchResult`] type. These functions are the same:
 ///
 /// ```
 /// # #[macro_use]

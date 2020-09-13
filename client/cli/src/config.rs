@@ -222,9 +222,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 				path: base_path.join("db"),
 				cache_size,
 			},
-			Database::SubDb => DatabaseConfig::SubDb {
-				path: base_path.join("subdb"),
-			},
 			Database::ParityDb => DatabaseConfig::ParityDb {
 				path: base_path.join("paritydb"),
 			},
