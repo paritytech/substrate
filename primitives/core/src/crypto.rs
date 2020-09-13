@@ -502,7 +502,10 @@ ss58_address_format!(
 		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>
 		(47, "reserved47", "Reserved for future use (47).")
-	// Note: 48 and above are reserved.
+	
+	PotGameAccount =>
+		(49, "PotGame", "PotGame Chain mainnet, standard account (*25519).")
+	// Note: 49 and above are reserved.
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
