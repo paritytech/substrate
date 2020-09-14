@@ -103,8 +103,6 @@ fn submit_candidates_with_self_vote<T: Trait>(c: u32, prefix: &'static str)
 	let candidates = submit_candidates::<T>(c, prefix)?;
 	let stake = default_stake::<T>(BALANCE_FACTOR);
 	let _ = candidates.iter().map(|c|
-		// TODO: unlike DispatchInfo which is just a result, this PostDispatchInfoWithBlah cannot be
-		// collected, thus we just unwrap to make sure our setup is okay.
 		submit_voter::<T>(c.clone(), vec![c.clone()], stake).map(|_| ())
 	).collect::<Result<_, _>>()?;
 	Ok(candidates)
@@ -256,7 +254,7 @@ benchmarks! {
 			stake,
 		)?;
 
-		// all the bailers go away. TODO: we can simplify this. There's no need to cerate all these
+		// all the bailers go away. NOTE: we can simplify this. There's no need to cerate all these
 		// candidates and remove them. The defunct voter can just vote for random accounts as long
 		// as there are enough members (potential candidates).
 		bailing_candidates.into_iter().for_each(|b| {
