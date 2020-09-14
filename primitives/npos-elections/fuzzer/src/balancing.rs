@@ -38,7 +38,6 @@ fn generate_random_npos_result(
 	voter_count: u64,
 	target_count: u64,
 	to_elect: usize,
-	edge_per_voter: u64,
 	mut rng: impl RngCore,
 ) -> (
 	ElectionResult<AccountId, Perbill>,
@@ -62,10 +61,11 @@ fn generate_random_npos_result(
 
 	let mut voters = Vec::with_capacity(voter_count as usize);
 	(prefix ..= (prefix + voter_count)).for_each(|acc| {
+		let edge_per_this_voter = rng.gen_range(1, candidates.len());
 		// all possible targets
 		let mut all_targets = candidates.clone();
-		// we remove and pop into `targets` `edge_per_voter` times.
-		let targets = (0..edge_per_voter).map(|_| {
+		// we remove and pop into `targets` `edge_per_this_voter` times.
+		let targets = (0..edge_per_this_voter).map(|_| {
 			let upper = all_targets.len() - 1;
 			let idx = rng.gen_range(0, upper);
 			all_targets.remove(idx)
@@ -93,12 +93,11 @@ fn generate_random_npos_result(
 
 fn main() {
 	loop {
-		fuzz!(|data: (usize, usize, usize, usize, usize, u64)| {
+		fuzz!(|data: (usize, usize, usize, usize, u64)| {
 			let (
 				mut target_count,
 				mut voter_count,
 				mut iterations,
-				mut edge_per_voter,
 				mut to_elect,
 				seed,
 			) = data;
@@ -107,9 +106,11 @@ fn main() {
 			voter_count = to_range(voter_count, 50, 1000);
 			iterations = to_range(iterations, 1, 50);
 			to_elect = to_range(to_elect, 25, target_count);
-			edge_per_voter = to_range(edge_per_voter, 1, target_count);
 
-			println!("++ [{} / {} / {} / {}]", voter_count, target_count, to_elect, iterations);
+			println!(
+				"++ [voter_count: {} / target_count:{} / to_elect:{} / iterations:{}]",
+				voter_count, target_count, to_elect, iterations,
+			);
 			let (
 				unbalanced,
 				candidates,
@@ -119,7 +120,6 @@ fn main() {
 				voter_count as u64,
 				target_count as u64,
 				to_elect,
-				edge_per_voter as u64,
 				rng,
 			);
 
@@ -168,6 +168,7 @@ fn main() {
 			// cannot decrease.
 			assert!(
 				balanced_score[0] >= unbalanced_score[0] &&
+				balanced_score[1] == unbalanced_score[1] &&
 				balanced_score[2] <= unbalanced_score[2]
 			);
 		});

@@ -78,7 +78,7 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing>(
 	)?;
 
 	if let Some((iterations, tolerance)) = balance {
-		// NOTE: might create zer-edges, but we will strip them again when we convert voter into
+		// NOTE: might create zero-edges, but we will strip them again when we convert voter into
 		// assignment.
 		let _iters = balancing::balance::<AccountId>(&mut voters, iterations, tolerance);
 	}
@@ -86,7 +86,8 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing>(
 	let mut winners = candidates
 		.into_iter()
 		.filter(|c_ptr| c_ptr.borrow().elected)
-		.take(rounds) // defensive only: seq-phragmen-core returns only up to rounds.
+		// defensive only: seq-phragmen-core returns only up to rounds.
+		.take(rounds)
 		.collect::<Vec<_>>();
 
 	// sort winners based on desirability.
