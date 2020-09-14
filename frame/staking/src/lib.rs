@@ -1391,7 +1391,7 @@ decl_module! {
 		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned
 		/// unless the `origin` falls below _existential deposit_ and gets removed as dust.
 		/// ------------------
-		/// Base Weight: 67.87 µs
+		/// Weight: O(1)
 		/// DB Weight:
 		/// - Read: Bonded, Ledger, [Origin Account], Current Era, History Depth, Locks
 		/// - Write: Bonded, Payee, [Origin Account], Locks, Ledger
@@ -1460,7 +1460,6 @@ decl_module! {
 		/// - O(1).
 		/// - One DB entry.
 		/// ------------
-		/// Base Weight: 54.88 µs
 		/// DB Weight:
 		/// - Read: Era Election Status, Bonded, Ledger, [Origin Account], Locks
 		/// - Write: [Origin Account], Locks, Ledger
@@ -1511,7 +1510,7 @@ decl_module! {
 		///   `withdraw_unbonded`.
 		/// - One DB entry.
 		/// ----------
-		/// Base Weight: 50.34 µs
+		/// Weight: O(1)
 		/// DB Weight:
 		/// - Read: EraElectionStatus, Ledger, CurrentEra, Locks, BalanceOf Stash,
 		/// - Write: Locks, Ledger, BalanceOf Stash,
@@ -1565,11 +1564,10 @@ decl_module! {
 		/// - Writes are limited to the `origin` account key.
 		/// ---------------
 		/// Complexity O(S) where S is the number of slashing spans to remove
-		/// Base Weight:
-		/// Update: 50.52 + .028 * S µs
+		/// Update:
 		/// - Reads: EraElectionStatus, Ledger, Current Era, Locks, [Origin Account]
 		/// - Writes: [Origin Account], Locks, Ledger
-		/// Kill: 79.41 + 2.366 * S µs
+		/// Kill:
 		/// - Reads: EraElectionStatus, Ledger, Current Era, Bonded, Slashing Spans, [Origin
 		///   Account], Locks, BalanceOf stash
 		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators,
@@ -1627,7 +1625,7 @@ decl_module! {
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
 		/// -----------
-		/// Base Weight: 17.13 µs
+		/// Weight: O(1)
 		/// DB Weight:
 		/// - Read: Era Election Status, Ledger
 		/// - Write: Nominators, Validators
@@ -1655,7 +1653,7 @@ decl_module! {
 		/// which is capped at CompactAssignments::LIMIT (MAX_NOMINATIONS).
 		/// - Both the reads and writes follow a similar pattern.
 		/// ---------
-		/// Base Weight: 22.34 + .36 * N µs
+		/// Weight: O(N)
 		/// where N is the number of targets
 		/// DB Weight:
 		/// - Reads: Era Election Status, Ledger, Current Era
@@ -1696,7 +1694,7 @@ decl_module! {
 		/// - Contains one read.
 		/// - Writes are limited to the `origin` account key.
 		/// --------
-		/// Base Weight: 16.53 µs
+		/// Weight: O(1)
 		/// DB Weight:
 		/// - Read: EraElectionStatus, Ledger
 		/// - Write: Validators, Nominators
@@ -1720,7 +1718,7 @@ decl_module! {
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
 		/// ---------
-		/// - Base Weight: 11.33 µs
+		/// - Weight: O(1)
 		/// - DB Weight:
 		///     - Read: Ledger
 		///     - Write: Payee
@@ -1744,7 +1742,7 @@ decl_module! {
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
 		/// ----------
-		/// Base Weight: 25.22 µs
+		/// Weight: O(1)
 		/// DB Weight:
 		/// - Read: Bonded, Ledger New Controller, Ledger Old Controller
 		/// - Write: Bonded, Ledger New Controller, Ledger Old Controller
@@ -1770,7 +1768,7 @@ decl_module! {
 		/// The dispatch origin must be Root.
 		///
 		/// # <weight>
-		/// Base Weight: 1.717 µs
+		/// Weight: O(1)
 		/// Write: Validator Count
 		/// # </weight>
 		#[weight = T::WeightInfo::set_validator_count()]
@@ -1811,7 +1809,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - No arguments.
-		/// - Base Weight: 1.857 µs
+		/// - Weight: O(1)
 		/// - Write: ForceEra
 		/// # </weight>
 		#[weight = T::WeightInfo::force_no_eras()]
@@ -1827,7 +1825,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - No arguments.
-		/// - Base Weight: 1.959 µs
+		/// - Weight: O(1)
 		/// - Write ForceEra
 		/// # </weight>
 		#[weight = T::WeightInfo::force_new_era()]
@@ -1842,7 +1840,6 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - O(V)
-		/// - Base Weight: 2.208 + .006 * V µs
 		/// - Write: Invulnerables
 		/// # </weight>
 		#[weight = T::WeightInfo::set_invulnerables(invulnerables.len() as u32)]
@@ -1857,7 +1854,6 @@ decl_module! {
 		///
 		/// # <weight>
 		/// O(S) where S is the number of slashing spans to be removed
-		/// Base Weight: 53.07 + 2.365 * S µs
 		/// Reads: Bonded, Slashing Spans, Account, Locks
 		/// Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators, Account, Locks
 		/// Writes Each: SpanSlash * S
@@ -1878,7 +1874,7 @@ decl_module! {
 		/// The dispatch origin must be Root.
 		///
 		/// # <weight>
-		/// - Base Weight: 2.05 µs
+		/// - Weight: O(1)
 		/// - Write: ForceEra
 		/// # </weight>
 		#[weight = T::WeightInfo::force_new_era_always()]
@@ -1897,7 +1893,6 @@ decl_module! {
 		/// Complexity: O(U + S)
 		/// with U unapplied slashes weighted with U=1000
 		/// and S is the number of slash indices to be canceled.
-		/// - Base: 5870 + 34.61 * S µs
 		/// - Read: Unapplied Slashes
 		/// - Write: Unapplied Slashes
 		/// # </weight>
@@ -1936,9 +1931,9 @@ decl_module! {
 		/// - Contains a limited number of reads and writes.
 		/// -----------
 		/// N is the Number of payouts for the validator (including the validator)
-		/// Base Weight:
-		/// - Reward Destination Staked: 110 + 54.2 * N µs (Median Slopes)
-		/// - Reward Destination Controller (Creating): 120 + 41.95 * N µs (Median Slopes)
+		/// Weight:
+		/// - Reward Destination Staked: O(N)
+		/// - Reward Destination Controller (Creating): O(N)
 		/// DB Weight:
 		/// - Read: EraElectionStatus, CurrentEra, HistoryDepth, ErasValidatorReward,
 		///         ErasStakersClipped, ErasRewardPoints, ErasValidatorPrefs (8 items)
@@ -1965,7 +1960,6 @@ decl_module! {
 		/// - Bounded by `MAX_UNLOCKING_CHUNKS`.
 		/// - Storage changes: Can't increase storage, only decrease it.
 		/// ---------------
-		/// - Base Weight: 34.51 µs * .048 L µs
 		/// - DB Weight:
 		///     - Reads: EraElectionStatus, Ledger, Locks, [Origin Account]
 		///     - Writes: [Origin Account], Locks, Ledger
@@ -2000,7 +1994,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - E: Number of history depths removed, i.e. 10 -> 7 = 3
-		/// - Base Weight: 29.13 * E µs
+		/// - Weight: O(E)
 		/// - DB Weight:
 		///     - Reads: Current Era, History Depth
 		///     - Writes: History Depth
@@ -2035,7 +2029,6 @@ decl_module! {
 		///
 		/// # <weight>
 		/// Complexity: O(S) where S is the number of slashing spans on the account.
-		/// Base Weight: 75.94 + 2.396 * S µs
 		/// DB Weight:
 		/// - Reads: Stash Account, Bonded, Slashing Spans, Locks
 		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators, Stash Account, Locks
