@@ -105,7 +105,6 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 
 	let import_setup = (block_import, grandpa_link, babe_link);
 
-
 	let (rpc_extensions_builder, rpc_setup) = {
 		let (_, grandpa_link, babe_link) = &import_setup;
 
