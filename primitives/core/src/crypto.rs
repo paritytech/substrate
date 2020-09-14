@@ -482,6 +482,8 @@ ss58_address_format!(
 		(22, "dock-mainnet", "Dock mainnet, standard account (*25519).")
 	ShiftNrg =>
 		(23, "shift", "ShiftNrg mainnet, standard account (*25519).")
+	PotGameAccount =>
+		(27, "PotGame", "PotGame network, standard account (*25519).")
 	SubsocialAccount =>
 		(28, "subsocial", "Subsocial network, standard account (*25519).")
 	PhalaAccount =>
