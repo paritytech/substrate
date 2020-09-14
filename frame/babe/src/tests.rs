@@ -100,6 +100,7 @@ fn first_block_epoch_zero_start() {
 		assert_eq!(Babe::genesis_slot(), genesis_slot);
 		assert_eq!(Babe::current_slot(), genesis_slot);
 		assert_eq!(Babe::epoch_index(), 0);
+		assert_eq!(Babe::author_vrf_randomness(), Some(Some(vrf_randomness)));
 
 		Babe::on_finalize(1);
 		let header = System::finalize();
@@ -107,6 +108,7 @@ fn first_block_epoch_zero_start() {
 		assert_eq!(SegmentIndex::get(), 0);
 		assert_eq!(UnderConstruction::get(0), vec![vrf_randomness]);
 		assert_eq!(Babe::randomness(), [0; 32]);
+		assert_eq!(Babe::author_vrf_randomness(), None);
 		assert_eq!(NextRandomness::get(), [0; 32]);
 
 		assert_eq!(header.digest.logs.len(), 2);
@@ -123,6 +125,99 @@ fn first_block_epoch_zero_start() {
 
 		// first epoch descriptor has same info as last.
 		assert_eq!(header.digest.logs[1], consensus_digest.clone())
+	})
+}
+
+fn make_vrf_output(
+	slot_number: u64,
+	pair: &sp_consensus_babe::AuthorityPair
+) -> (VRFOutput, VRFProof, [u8; 32]) {
+	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
+	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot_number, 0);
+	let vrf_inout = pair.vrf_sign(transcript);
+	let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness = vrf_inout.0
+		.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
+	let vrf_output = VRFOutput(vrf_inout.0.to_output());
+	let vrf_proof = VRFProof(vrf_inout.1);
+
+	(vrf_output, vrf_proof, vrf_randomness)
+}
+
+#[test]
+fn author_vrf_output_for_primary() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(1);
+
+	ext.execute_with(|| {
+		let genesis_slot = 10;
+		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let primary_pre_digest = make_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
+
+		System::initialize(
+			&1,
+			&Default::default(),
+			&Default::default(),
+			&primary_pre_digest,
+			Default::default(),
+		);
+		assert_eq!(Babe::author_vrf_randomness(), None);
+
+		Babe::do_initialize(1);
+		assert_eq!(Babe::author_vrf_randomness(), Some(Some(vrf_randomness)));
+
+		Babe::on_finalize(1);
+		System::finalize();
+		assert_eq!(Babe::author_vrf_randomness(), None);
+	})
+}
+
+#[test]
+fn author_vrf_output_for_secondary_vrf() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(1);
+
+	ext.execute_with(|| {
+		let genesis_slot = 10;
+		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let secondary_vrf_pre_digest = make_secondary_vrf_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
+
+		System::initialize(
+			&1,
+			&Default::default(),
+			&Default::default(),
+			&secondary_vrf_pre_digest,
+			Default::default(),
+		);
+		assert_eq!(Babe::author_vrf_randomness(), None);
+
+		Babe::do_initialize(1);
+		assert_eq!(Babe::author_vrf_randomness(), Some(Some(vrf_randomness)));
+
+		Babe::on_finalize(1);
+		System::finalize();
+		assert_eq!(Babe::author_vrf_randomness(), None);
+	})
+}
+
+#[test]
+fn no_author_vrf_output_for_secondary_plain() {
+	new_test_ext(1).execute_with(|| {
+		let genesis_slot = 10;
+		let secondary_plain_pre_digest = make_secondary_plain_pre_digest(0, genesis_slot);
+
+		System::initialize(
+			&1,
+			&Default::default(),
+			&Default::default(),
+			&secondary_plain_pre_digest,
+			Default::default(),
+		);
+		assert_eq!(Babe::author_vrf_randomness(), None);
+
+		Babe::do_initialize(1);
+		assert_eq!(Babe::author_vrf_randomness(), Some(None));
+
+		Babe::on_finalize(1);
+		System::finalize();
+		assert_eq!(Babe::author_vrf_randomness(), None);
 	})
 }
 

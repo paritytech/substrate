@@ -342,6 +342,24 @@ pub fn make_secondary_plain_pre_digest(
 	Digest { logs: vec![log] }
 }
 
+pub fn make_secondary_vrf_pre_digest(
+	authority_index: sp_consensus_babe::AuthorityIndex,
+	slot_number: sp_consensus_babe::SlotNumber,
+	vrf_output: VRFOutput,
+	vrf_proof: VRFProof,
+) -> Digest {
+	let digest_data = sp_consensus_babe::digests::PreDigest::SecondaryVRF(
+		sp_consensus_babe::digests::SecondaryVRFPreDigest {
+			authority_index,
+			slot_number,
+			vrf_output,
+			vrf_proof,
+		}
+	);
+	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
+	Digest { logs: vec![log] }
+}
+
 pub fn new_test_ext(authorities_len: usize) -> sp_io::TestExternalities {
 	new_test_ext_with_pairs(authorities_len).1
 }
