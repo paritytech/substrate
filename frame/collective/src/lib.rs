@@ -224,26 +224,26 @@ decl_event! {
 	{
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given
 		/// `MemberCount`).
-		/// [account, proposal_index, proposal_hash, threshold]
+		/// \[account, proposal_index, proposal_hash, threshold\]
 		Proposed(AccountId, ProposalIndex, Hash, MemberCount),
 		/// A motion (given hash) has been voted on by given account, leaving
 		/// a tally (yes votes and no votes given respectively as `MemberCount`).
-		/// [account, proposal_hash, voted, yes, no]
+		/// \[account, proposal_hash, voted, yes, no\]
 		Voted(AccountId, Hash, bool, MemberCount, MemberCount),
 		/// A motion was approved by the required threshold.
-		/// [proposal_hash]
+		/// \[proposal_hash\]
 		Approved(Hash),
 		/// A motion was not approved by the required threshold.
-		/// [proposal_hash]
+		/// \[proposal_hash\]
 		Disapproved(Hash),
 		/// A motion was executed; result will be `Ok` if it returned without error.
-		/// [proposal_hash, result]
+		/// \[proposal_hash, result\]
 		Executed(Hash, DispatchResult),
 		/// A single member did some action; result will be `Ok` if it returned without error.
-		/// [proposal_hash, result]
+		/// \[proposal_hash, result\]
 		MemberExecuted(Hash, DispatchResult),
 		/// A proposal was closed because its threshold was reached or after its duration was up.
-		/// [proposal_hash, yes, no]
+		/// \[proposal_hash, yes, no\]
 		Closed(Hash, MemberCount, MemberCount),
 	}
 }
