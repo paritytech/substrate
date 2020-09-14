@@ -824,7 +824,7 @@ version = "0.29.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe6837df1d5cba2397b835c8530f51723267e16abbf83892e9e5af4f0e5dd10a"
 dependencies = [
- "glob 0.3.0",
+ "glob",
  "libc",
  "libloading",
 ]
@@ -860,15 +860,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4344512281c643ae7638bbabc3af17a11307803ec8f0fcad9fae512a8bf36467"
 dependencies = [
  "bitflags",
-]
-
-[[package]]
-name = "cmake"
-version = "0.1.44"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e56268c17a6248366d66d4a47a3381369d068cce8409bb1716ed77ea32163bb"
-dependencies = [
- "cc",
 ]
 
 [[package]]
@@ -2188,12 +2179,6 @@ checksum = "aaf91faf136cb47367fa430cd46e37a788775e7fa104f8b4bcb3861dc389b724"
 
 [[package]]
 name = "glob"
-version = "0.2.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8be18de09a56b60ed0edf84bc9df007e30040691af7acd1c41874faac5895bfb"
-
-[[package]]
-name = "glob"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
@@ -3472,7 +3457,7 @@ checksum = "eb5b56f651c204634b936be2f92dbb42c36867e00ff7fe2405591f3b9fa66f09"
 dependencies = [
  "bindgen",
  "cc",
- "glob 0.3.0",
+ "glob",
  "libc",
 ]
 
@@ -4072,7 +4057,7 @@ dependencies = [
  "sp-trie",
  "substrate-test-client",
  "trie-root",
- "wabt",
+ "wat",
 ]
 
 [[package]]
@@ -4323,7 +4308,6 @@ dependencies = [
  "sp-timestamp",
  "substrate-test-client",
  "tempfile",
- "wabt",
 ]
 
 [[package]]
@@ -4974,6 +4958,20 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-node-authorization"
+version = "2.0.0-rc6"
+dependencies = [
+ "frame-support",
+ "frame-system",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -7032,8 +7030,8 @@ dependencies = [
  "substrate-test-runtime",
  "test-case",
  "tracing",
- "wabt",
  "wasmi",
+ "wat",
 ]
 
 [[package]]
@@ -8513,6 +8511,7 @@ name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
  "honggfuzz",
+ "parity-scale-codec",
  "rand 0.7.3",
  "sp-npos-elections",
  "sp-runtime",
@@ -8648,8 +8647,8 @@ dependencies = [
  "sp-io",
  "sp-std",
  "sp-wasm-interface",
- "wabt",
  "wasmi",
+ "wat",
 ]
 
 [[package]]
@@ -8687,7 +8686,6 @@ version = "0.8.0-rc6"
 dependencies = [
  "hash-db",
  "hex-literal",
- "itertools 0.9.0",
  "log",
  "num-traits",
  "parity-scale-codec",
@@ -8699,6 +8697,7 @@ dependencies = [
  "sp-externalities",
  "sp-panic-handler",
  "sp-runtime",
+ "sp-std",
  "sp-trie",
  "trie-db",
  "trie-root",
@@ -9108,6 +9107,7 @@ dependencies = [
  "sp-consensus-aura",
  "sp-consensus-babe",
  "sp-core",
+ "sp-externalities",
  "sp-finality-grandpa",
  "sp-inherents",
  "sp-io",
@@ -9898,7 +9898,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbe777c4e2060f44d83892be1189f96200be8ed3d99569d5c2d5ee26e62c0ea9"
 dependencies = [
  "dissimilar",
- "glob 0.3.0",
+ "glob",
  "lazy_static",
  "serde",
  "serde_json",
@@ -10080,29 +10080,6 @@ name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
-
-[[package]]
-name = "wabt"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94b5f5d6984ca42df66280baa8a15ac188a173ddaf4580b574a98931c01920e7"
-dependencies = [
- "serde",
- "serde_derive",
- "serde_json",
- "wabt-sys",
-]
-
-[[package]]
-name = "wabt-sys"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b064c81821100adb4b71923cecfc67fef083db21c3bbd454b0162c7ffe63eeaa"
-dependencies = [
- "cc",
- "cmake",
- "glob 0.2.11",
-]
 
 [[package]]
 name = "wait-timeout"
@@ -10684,7 +10661,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b89249644df056b522696b1bb9e7c18c87e8ffa3e2f0dc3b0155875d6498f01b"
 dependencies = [
  "cc",
- "glob 0.3.0",
+ "glob",
  "itertools 0.9.0",
  "libc",
 ]
