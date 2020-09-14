@@ -50,7 +50,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	(
 		impl Fn(
 			node_rpc::DenyUnsafe,
-			jsonrpc_pubsub::manager::SubscriptionManager
+			sc_rpc::SubscriptionTaskExecutor,
 		) -> node_rpc::IoHandler,
 		(
 			sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
@@ -118,7 +118,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		let select_chain = select_chain.clone();
 		let keystore = keystore_params.sync_keystore();
 
-		let rpc_extensions_builder = move |deny_unsafe, subscriptions| {
+		let rpc_extensions_builder = move |deny_unsafe, subscription_executor| {
 			let deps = node_rpc::FullDeps {
 				client: client.clone(),
 				pool: pool.clone(),
@@ -133,7 +133,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 					shared_voter_state: shared_voter_state.clone(),
 					shared_authority_set: shared_authority_set.clone(),
 					justification_stream: justification_stream.clone(),
-					subscriptions,
+					subscription_executor,
 				},
 			};
 
@@ -150,6 +150,15 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	})
 }
 
+pub struct NewFullBase {
+	pub task_manager: TaskManager,
+	pub inherent_data_providers: InherentDataProviders,
+	pub client: Arc<FullClient>,
+	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+	pub network_status_sinks: sc_service::NetworkStatusSinks<Block>,
+	pub transaction_pool: Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
+}
+
 /// Creates a full service from the configuration.
 pub fn new_full_base(
 	config: Configuration,
@@ -157,11 +166,7 @@ pub fn new_full_base(
 		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
 		&sc_consensus_babe::BabeLink<Block>,
 	)
-) -> Result<(
-	TaskManager, InherentDataProviders, Arc<FullClient>,
-	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
-	Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
-), ServiceError> {
+) -> Result<NewFullBase, ServiceError> {
 	let sc_service::PartialComponents {
 		client, backend, mut task_manager, import_queue, keystore_params,
 		select_chain, transaction_pool, inherent_data_providers,
@@ -209,7 +214,7 @@ pub fn new_full_base(
 		on_demand: None,
 		remote_blockchain: None,
 		telemetry_connection_sinks: telemetry_connection_sinks.clone(),
-		network_status_sinks,
+		network_status_sinks: network_status_sinks.clone(),
 		system_rpc_tx,
 	})?;
 
@@ -329,13 +334,16 @@ pub fn new_full_base(
 	}
 
 	network_starter.start_network();
-	Ok((task_manager, inherent_data_providers, client, network, transaction_pool))
+	Ok(NewFullBase {
+		task_manager, inherent_data_providers, client, network, network_status_sinks,
+		transaction_pool,
+	})
 }
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
 -> Result<TaskManager, ServiceError> {
-	new_full_base(config, |_, _| ()).map(|(task_manager, _, _, _, _)| {
+	new_full_base(config, |_, _| ()).map(|NewFullBase { task_manager, .. }| {
 		task_manager
 	})
 }
@@ -467,7 +475,7 @@ mod tests {
 	use sp_finality_tracker;
 	use sp_keyring::AccountKeyring;
 	use sc_service_test::TestNetNode;
-	use crate::service::{new_full_base, new_light_base};
+	use crate::service::{new_full_base, new_light_base, NewFullBase};
 	use sp_runtime::{key_types::BABE, traits::IdentifyAccount, RuntimeAppPublic};
 	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 	use sc_client_api::BlockBackend;
@@ -501,18 +509,19 @@ mod tests {
 			chain_spec,
 			|config| {
 				let mut setup_handles = None;
-				let (keep_alive, inherent_data_providers, client, network, transaction_pool) =
-					new_full_base(config,
-						|
-							block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _>,
-							babe_link: &sc_consensus_babe::BabeLink<Block>,
-						| {
-							setup_handles = Some((block_import.clone(), babe_link.clone()));
-						}
-					)?;
+				let NewFullBase {
+					task_manager, inherent_data_providers, client, network, transaction_pool, ..
+				} = new_full_base(config,
+					|
+						block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _>,
+						babe_link: &sc_consensus_babe::BabeLink<Block>,
+					| {
+						setup_handles = Some((block_import.clone(), babe_link.clone()));
+					}
+				)?;
 
 				let node = sc_service_test::TestNetComponents::new(
-					keep_alive, client, network, transaction_pool
+					task_manager, client, network, transaction_pool
 				);
 				Ok((node, (inherent_data_providers, setup_handles.unwrap())))
 			},
@@ -667,8 +676,9 @@ mod tests {
 		sc_service_test::consensus(
 			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
 			|config| {
-				let (keep_alive, _, client, network, transaction_pool) = new_full_base(config, |_, _| ())?;
-				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
+				let NewFullBase { task_manager, client, network, transaction_pool, .. }
+					= new_full_base(config,|_, _| ())?;
+				Ok(sc_service_test::TestNetComponents::new(task_manager, client, network, transaction_pool))
 			},
 			|config| {
 				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;

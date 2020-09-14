@@ -212,11 +212,12 @@ pub fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
 	db_type: DatabaseType,
 ) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
-	let db_open_error = |feat| Err(
+	#[allow(unused)]
+	fn db_open_error(feat: &'static str) -> sp_blockchain::Error {
 		sp_blockchain::Error::Backend(
 			format!("`{}` feature not enabled, database can not be opened", feat),
-		),
-	);
+		)
+	}
 
 	let db: Arc<dyn Database<DbHash>> = match &config.source {
 		#[cfg(any(feature = "with-kvdb-rocksdb", test))]
@@ -257,16 +258,7 @@ pub fn open_database<Block: BlockT>(
 		},
 		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
 		DatabaseSettingsSrc::RocksDb { .. } => {
-			return db_open_error("with-kvdb-rocksdb");
-		},
-		#[cfg(feature = "with-subdb")]
-		DatabaseSettingsSrc::SubDb { path } => {
-			crate::subdb::open(&path, NUM_COLUMNS)
-				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
-		},
-		#[cfg(not(feature = "with-subdb"))]
-		DatabaseSettingsSrc::SubDb { .. } => {
-			return db_open_error("with-subdb");
+			return Err(db_open_error("with-kvdb-rocksdb"));
 		},
 		#[cfg(feature = "with-parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
@@ -275,7 +267,7 @@ pub fn open_database<Block: BlockT>(
 		},
 		#[cfg(not(feature = "with-parity-db"))]
 		DatabaseSettingsSrc::ParityDb { .. } => {
-			return db_open_error("with-parity-db");
+			return Err(db_open_error("with-parity-db"))
 		},
 		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};

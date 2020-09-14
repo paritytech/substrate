@@ -40,7 +40,7 @@ mod module1 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call
-			where origin: <T as system::Trait>::Origin
+			where origin: <T as system::Trait>::Origin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -67,7 +67,7 @@ mod module2 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call
-			where origin: <T as system::Trait>::Origin
+			where origin: <T as system::Trait>::Origin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {

@@ -191,12 +191,12 @@ decl_event! {
 		ProxyType = <T as Trait>::ProxyType,
 		Hash = CallHashOf<T>,
 	{
-		/// A proxy was executed correctly, with the given [result].
+		/// A proxy was executed correctly, with the given \[result\].
 		ProxyExecuted(DispatchResult),
 		/// Anonymous account has been created by new proxy with given
-		/// disambiguation index and proxy type. [anonymous, who, proxy_type, disambiguation_index]
+		/// disambiguation index and proxy type. \[anonymous, who, proxy_type, disambiguation_index\]
 		AnonymousCreated(AccountId, AccountId, ProxyType, u16),
-		/// An announcement was placed to make a call in the future. [real, proxy, call_hash]
+		/// An announcement was placed to make a call in the future. \[real, proxy, call_hash\]
 		Announced(AccountId, AccountId, Hash),
 	}
 }

@@ -107,9 +107,12 @@ use frame_system::{self as system, ensure_signed};
 mod tests;
 mod benchmarking;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T, I> =
+	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type PositiveImbalanceOf<T, I> =
+	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
+type NegativeImbalanceOf<T, I> =
+	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait WeightInfo {
 	fn propose_spend(u: u32, ) -> Weight;
@@ -135,7 +138,7 @@ impl WeightInfo for () {
 	fn on_initialize(_p: u32, ) -> Weight { 1_000_000_000 }
 }
 
-pub trait Trait: frame_system::Trait {
+pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The treasury's module id, used for deriving its sovereign account ID.
 	type ModuleId: Get<ModuleId>;
 
@@ -160,23 +163,23 @@ pub trait Trait: frame_system::Trait {
 	type TipFindersFee: Get<Percent>;
 
 	/// The amount held on deposit for placing a tip report.
-	type TipReportDepositBase: Get<BalanceOf<Self>>;
+	type TipReportDepositBase: Get<BalanceOf<Self, I>>;
 
 	/// The amount held on deposit per byte within the tip report reason.
-	type TipReportDepositPerByte: Get<BalanceOf<Self>>;
+	type TipReportDepositPerByte: Get<BalanceOf<Self, I>>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Handler for the unbalanced decrease when slashing for a rejected proposal.
-	type ProposalRejection: OnUnbalanced<NegativeImbalanceOf<Self>>;
+	type ProposalRejection: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 
 	/// Fraction of a proposal's value that should be bonded in order to place the proposal.
 	/// An accepted proposal gets these back. A rejected proposal does not.
 	type ProposalBond: Get<Permill>;
 
 	/// Minimum amount of funds that should be placed in a deposit for making a proposal.
-	type ProposalBondMinimum: Get<BalanceOf<Self>>;
+	type ProposalBondMinimum: Get<BalanceOf<Self, I>>;
 
 	/// Period between successive spends.
 	type SpendPeriod: Get<Self::BlockNumber>;
@@ -185,7 +188,7 @@ pub trait Trait: frame_system::Trait {
 	type Burn: Get<Permill>;
 
 	/// Handler for the unbalanced decrease when treasury funds are burned.
-	type BurnDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
+	type BurnDestination: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -236,14 +239,14 @@ pub struct OpenTip<
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Treasury {
+	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Treasury {
 		/// Number of proposals that have been made.
 		ProposalCount get(fn proposal_count): ProposalIndex;
 
 		/// Proposals that have been made.
 		Proposals get(fn proposals):
 			map hasher(twox_64_concat) ProposalIndex
-			=> Option<Proposal<T::AccountId, BalanceOf<T>>>;
+			=> Option<Proposal<T::AccountId, BalanceOf<T, I>>>;
 
 		/// Proposal indices that have been approved but not yet awarded.
 		Approvals get(fn approvals): Vec<ProposalIndex>;
@@ -253,7 +256,7 @@ decl_storage! {
 		/// guaranteed to be a secure hash.
 		pub Tips get(fn tips):
 			map hasher(twox_64_concat) T::Hash
-			=> Option<OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>>;
+			=> Option<OpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>>;
 
 		/// Simple preimage lookup from the reason's hash to the original data. Again, has an
 		/// insecure enumerable hash since the key is guaranteed to be the result of a secure hash.
@@ -263,7 +266,7 @@ decl_storage! {
 		build(|_config| {
 			// Create Treasury account
 			let _ = T::Currency::make_free_balance_be(
-				&<Module<T>>::account_id(),
+				&<Module<T, I>>::account_id(),
 				T::Currency::minimum_balance(),
 			);
 		});
@@ -271,40 +274,41 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T>
+	pub enum Event<T, I=DefaultInstance>
 	where
-		Balance = BalanceOf<T>,
+		Balance = BalanceOf<T, I>,
 		<T as frame_system::Trait>::AccountId,
 		<T as frame_system::Trait>::Hash,
 	{
-		/// New proposal. [proposal_index]
+		/// New proposal. \[proposal_index\]
 		Proposed(ProposalIndex),
-		/// We have ended a spend period and will now allocate funds. [budget_remaining]
+		/// We have ended a spend period and will now allocate funds. \[budget_remaining\]
 		Spending(Balance),
-		/// Some funds have been allocated. [proposal_index, award, beneficiary]
+		/// Some funds have been allocated. \[proposal_index, award, beneficiary\]
 		Awarded(ProposalIndex, Balance, AccountId),
-		/// A proposal was rejected; funds were slashed. [proposal_index, slashed]
+		/// A proposal was rejected; funds were slashed. \[proposal_index, slashed\]
 		Rejected(ProposalIndex, Balance),
-		/// Some of our funds have been burnt. [burn]
+		/// Some of our funds have been burnt. \[burn\]
 		Burnt(Balance),
-		/// Spending has finished; this is the amount that rolls over until next spend. [budget_remaining]
+		/// Spending has finished; this is the amount that rolls over until next spend.
+		/// \[budget_remaining\]
 		Rollover(Balance),
-		/// Some funds have been deposited. [deposit]
+		/// Some funds have been deposited. \[deposit\]
 		Deposit(Balance),
-		/// A new tip suggestion has been opened. [tip_hash]
+		/// A new tip suggestion has been opened. \[tip_hash\]
 		NewTip(Hash),
-		/// A tip suggestion has reached threshold and is closing. [tip_hash]
+		/// A tip suggestion has reached threshold and is closing. \[tip_hash\]
 		TipClosing(Hash),
-		/// A tip suggestion has been closed. [tip_hash, who, payout]
+		/// A tip suggestion has been closed. \[tip_hash, who, payout\]
 		TipClosed(Hash, AccountId, Balance),
-		/// A tip suggestion has been retracted. [tip_hash]
+		/// A tip suggestion has been retracted. \[tip_hash\]
 		TipRetracted(Hash),
 	}
 );
 
 decl_error! {
 	/// Error for the treasury module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Trait<I>, I: Instance> {
 		/// Proposer's balance is too low.
 		InsufficientProposersBalance,
 		/// No proposal at that index.
@@ -325,13 +329,16 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance>
+		for enum Call
+		where origin: T::Origin
+	{
 		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
 		/// An accepted proposal gets these back. A rejected proposal does not.
 		const ProposalBond: Permill = T::ProposalBond::get();
 
 		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
-		const ProposalBondMinimum: BalanceOf<T> = T::ProposalBondMinimum::get();
+		const ProposalBondMinimum: BalanceOf<T, I> = T::ProposalBondMinimum::get();
 
 		/// Period between successive spends.
 		const SpendPeriod: T::BlockNumber = T::SpendPeriod::get();
@@ -346,15 +353,15 @@ decl_module! {
 		const TipFindersFee: Percent = T::TipFindersFee::get();
 
 		/// The amount held on deposit for placing a tip report.
-		const TipReportDepositBase: BalanceOf<T> = T::TipReportDepositBase::get();
+		const TipReportDepositBase: BalanceOf<T, I> = T::TipReportDepositBase::get();
 
 		/// The amount held on deposit per byte within the tip report reason.
-		const TipReportDepositPerByte: BalanceOf<T> = T::TipReportDepositPerByte::get();
+		const TipReportDepositPerByte: BalanceOf<T, I> = T::TipReportDepositPerByte::get();
 
 		/// The treasury's module id, used for deriving its sovereign account ID.
 		const ModuleId: ModuleId = T::ModuleId::get();
 
-		type Error = Error<T>;
+		type Error = Error<T, I>;
 
 		fn deposit_event() = default;
 
@@ -370,7 +377,7 @@ decl_module! {
 		#[weight = 120_000_000 + T::DbWeight::get().reads_writes(1, 2)]
 		fn propose_spend(
 			origin,
-			#[compact] value: BalanceOf<T>,
+			#[compact] value: BalanceOf<T, I>,
 			beneficiary: <T::Lookup as StaticLookup>::Source
 		) {
 			let proposer = ensure_signed(origin)?;
@@ -378,11 +385,11 @@ decl_module! {
 
 			let bond = Self::calculate_bond(value);
 			T::Currency::reserve(&proposer, bond)
-				.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
+				.map_err(|_| Error::<T, I>::InsufficientProposersBalance)?;
 
 			let c = Self::proposal_count();
-			ProposalCount::put(c + 1);
-			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond });
+			<ProposalCount<I>>::put(c + 1);
+			<Proposals<T, I>>::insert(c, Proposal { proposer, value, beneficiary, bond });
 
 			Self::deposit_event(RawEvent::Proposed(c));
 		}
@@ -400,12 +407,12 @@ decl_module! {
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
 
-			let proposal = <Proposals<T>>::take(&proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
+			let proposal = <Proposals<T, I>>::take(&proposal_id).ok_or(Error::<T, I>::InvalidProposalIndex)?;
 			let value = proposal.bond;
 			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
 			T::ProposalRejection::on_unbalanced(imbalance);
 
-			Self::deposit_event(Event::<T>::Rejected(proposal_id, value));
+			Self::deposit_event(Event::<T, I>::Rejected(proposal_id, value));
 		}
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
@@ -422,8 +429,8 @@ decl_module! {
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
-			ensure!(<Proposals<T>>::contains_key(proposal_id), Error::<T>::InvalidProposalIndex);
-			Approvals::mutate(|v| v.push(proposal_id));
+			ensure!(<Proposals<T, I>>::contains_key(proposal_id), Error::<T, I>::InvalidProposalIndex);
+			<Approvals<I>>::mutate(|v| v.push(proposal_id));
 		}
 
 		/// Report something `reason` that deserves a tip and claim any eventual the finder's fee.
@@ -450,18 +457,18 @@ decl_module! {
 			let finder = ensure_signed(origin)?;
 
 			const MAX_SENSIBLE_REASON_LENGTH: usize = 16384;
-			ensure!(reason.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
+			ensure!(reason.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T, I>::ReasonTooBig);
 
 			let reason_hash = T::Hashing::hash(&reason[..]);
-			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
+			ensure!(!Reasons::<T, I>::contains_key(&reason_hash), Error::<T, I>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
-			ensure!(!Tips::<T>::contains_key(&hash), Error::<T>::AlreadyKnown);
+			ensure!(!Tips::<T, I>::contains_key(&hash), Error::<T, I>::AlreadyKnown);
 
 			let deposit = T::TipReportDepositBase::get()
 				+ T::TipReportDepositPerByte::get() * (reason.len() as u32).into();
 			T::Currency::reserve(&finder, deposit)?;
 
-			Reasons::<T>::insert(&reason_hash, &reason);
+			Reasons::<T, I>::insert(&reason_hash, &reason);
 			let tip = OpenTip {
 				reason: reason_hash,
 				who,
@@ -471,7 +478,7 @@ decl_module! {
 				tips: vec![],
 				finders_fee: true
 			};
-			Tips::<T>::insert(&hash, tip);
+			Tips::<T, I>::insert(&hash, tip);
 			Self::deposit_event(RawEvent::NewTip(hash));
 		}
 
@@ -497,11 +504,11 @@ decl_module! {
 		#[weight = 120_000_000 + T::DbWeight::get().reads_writes(1, 2)]
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
-			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
-			ensure!(tip.finder == who, Error::<T>::NotFinder);
+			let tip = Tips::<T, I>::get(&hash).ok_or(Error::<T, I>::UnknownTip)?;
+			ensure!(tip.finder == who, Error::<T, I>::NotFinder);
 
-			Reasons::<T>::remove(&tip.reason);
-			Tips::<T>::remove(&hash);
+			Reasons::<T, I>::remove(&tip.reason);
+			Tips::<T, I>::remove(&hash);
 			if !tip.deposit.is_zero() {
 				let _ = T::Currency::unreserve(&who, tip.deposit);
 			}
@@ -534,14 +541,14 @@ decl_module! {
 			+ 4_000 * reason.len() as Weight
 			+ 480_000 * T::Tippers::max_len() as Weight
 			+ T::DbWeight::get().reads_writes(2, 2)]
-		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
+		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T, I>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
-			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
+			ensure!(!Reasons::<T, I>::contains_key(&reason_hash), Error::<T, I>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 
-			Reasons::<T>::insert(&reason_hash, &reason);
+			Reasons::<T, I>::insert(&reason_hash, &reason);
 			Self::deposit_event(RawEvent::NewTip(hash.clone()));
 			let tips = vec![(tipper.clone(), tip_value)];
 			let tip = OpenTip {
@@ -553,7 +560,7 @@ decl_module! {
 				tips,
 				finders_fee: false,
 			};
-			Tips::<T>::insert(&hash, tip);
+			Tips::<T, I>::insert(&hash, tip);
 		}
 
 		/// Declare a tip value for an already-open tip.
@@ -583,15 +590,15 @@ decl_module! {
 		/// # </weight>
 		#[weight = 68_000_000 + 2_000_000 * T::Tippers::max_len() as Weight
 			+ T::DbWeight::get().reads_writes(2, 1)]
-		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
+		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T, I>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 
-			let mut tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
+			let mut tip = Tips::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
 			if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
 				Self::deposit_event(RawEvent::TipClosing(hash.clone()));
 			}
-			Tips::<T>::insert(&hash, tip);
+			Tips::<T, I>::insert(&hash, tip);
 		}
 
 		/// Close and payout a tip.
@@ -616,12 +623,12 @@ decl_module! {
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 
-			let tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
-			let n = tip.closes.as_ref().ok_or(Error::<T>::StillOpen)?;
-			ensure!(system::Module::<T>::block_number() >= *n, Error::<T>::Premature);
+			let tip = Tips::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
+			let n = tip.closes.as_ref().ok_or(Error::<T, I>::StillOpen)?;
+			ensure!(system::Module::<T>::block_number() >= *n, Error::<T, I>::Premature);
 			// closed.
-			Reasons::<T>::remove(&tip.reason);
-			Tips::<T>::remove(hash);
+			Reasons::<T, I>::remove(&tip.reason);
+			Tips::<T, I>::remove(hash);
 			Self::payout_tip(hash, tip);
 		}
 
@@ -646,7 +653,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Trait<I>, I: Instance> Module<T, I> {
 	// Add public immutables and private mutables.
 
 	/// The account ID of the treasury pot.
@@ -658,7 +665,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// The needed bond for a proposal whose spend is `value`.
-	fn calculate_bond(value: BalanceOf<T>) -> BalanceOf<T> {
+	fn calculate_bond(value: BalanceOf<T, I>) -> BalanceOf<T, I> {
 		T::ProposalBondMinimum::get().max(T::ProposalBond::get() * value)
 	}
 
@@ -667,9 +674,9 @@ impl<T: Trait> Module<T> {
 	///
 	/// `O(T)` and one storage access.
 	fn insert_tip_and_check_closing(
-		tip: &mut OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
+		tip: &mut OpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>,
 		tipper: T::AccountId,
-		tip_value: BalanceOf<T>,
+		tip_value: BalanceOf<T, I>,
 	) -> bool {
 		match tip.tips.binary_search_by_key(&&tipper, |x| &x.0) {
 			Ok(pos) => tip.tips[pos] = (tipper, tip_value),
@@ -686,7 +693,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Remove any non-members of `Tippers` from a `tips` vector. `O(T)`.
-	fn retain_active_tips(tips: &mut Vec<(T::AccountId, BalanceOf<T>)>) {
+	fn retain_active_tips(tips: &mut Vec<(T::AccountId, BalanceOf<T, I>)>) {
 		let members = T::Tippers::sorted_members();
 		let mut members_iter = members.iter();
 		let mut member = members_iter.next();
@@ -710,7 +717,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Up to three balance operations.
 	/// Plus `O(T)` (`T` is Tippers length).
-	fn payout_tip(hash: T::Hash, tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>) {
+	fn payout_tip(hash: T::Hash, tip: OpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>) {
 		let mut tips = tip.tips;
 		Self::retain_active_tips(&mut tips);
 		tips.sort_by_key(|i| i.1);
@@ -741,15 +748,15 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Spending(budget_remaining));
 
 		let mut missed_any = false;
-		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
-		let prior_approvals_len = Approvals::mutate(|v| {
+		let mut imbalance = <PositiveImbalanceOf<T, I>>::zero();
+		let prior_approvals_len = <Approvals<I>>::mutate(|v| {
 			let prior_approvals_len = v.len() as u64;
 			v.retain(|&index| {
 				// Should always be true, but shouldn't panic if false or we're screwed.
 				if let Some(p) = Self::proposals(index) {
 					if p.value <= budget_remaining {
 						budget_remaining -= p.value;
-						<Proposals<T>>::remove(index);
+						<Proposals<T, I>>::remove(index);
 
 						// return their deposit.
 						let _ = T::Currency::unreserve(&p.proposer, p.bond);
@@ -803,7 +810,7 @@ impl<T: Trait> Module<T> {
 
 	/// Return the amount of money in the pot.
 	// The existential deposit is not part of the pot so treasury account never gets deleted.
-	fn pot() -> BalanceOf<T> {
+	fn pot() -> BalanceOf<T, I> {
 		T::Currency::free_balance(&Self::account_id())
 			// Must never be less than 0 but better be safe.
 			.saturating_sub(T::Currency::minimum_balance())
@@ -837,9 +844,9 @@ impl<T: Trait> Module<T> {
 
 		for (hash, old_tip) in StorageKeyIterator::<
 			T::Hash,
-			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
+			OldOpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>,
 			Twox64Concat,
-		>::new(b"Treasury", b"Tips").drain()
+		>::new(I::PREFIX.as_bytes(), b"Tips").drain()
 		{
 			let (finder, deposit, finders_fee) = match old_tip.finder {
 				Some((finder, deposit)) => (finder, deposit, true),
@@ -854,13 +861,13 @@ impl<T: Trait> Module<T> {
 				tips: old_tip.tips,
 				finders_fee
 			};
-			Tips::<T>::insert(hash, new_tip)
+			Tips::<T, I>::insert(hash, new_tip)
 		}
 	}
 }
 
-impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
-	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T>) {
+impl<T: Trait<I>, I: Instance> OnUnbalanced<NegativeImbalanceOf<T, I>> for Module<T, I> {
+	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T, I>) {
 		let numeric_amount = amount.peek();
 
 		// Must resolve into existing but better to be safe.
