@@ -32,7 +32,6 @@
 
 use std::sync::Arc;
 
-use jsonrpc_pubsub::manager::SubscriptionManager;
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;
@@ -48,6 +47,7 @@ use sp_block_builder::BlockBuilder;
 use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
 use sp_consensus::SelectChain;
 use sp_consensus_babe::BabeApi;
+use sc_rpc::SubscriptionTaskExecutor;
 use sp_transaction_pool::TransactionPool;
 use sp_runtime::traits::BlakeTwo256;
 
@@ -81,8 +81,8 @@ pub struct GrandpaDeps<B> {
 	pub shared_authority_set: SharedAuthoritySet<Hash, BlockNumber>,
 	/// Receives notifications about justification events from Grandpa.
 	pub justification_stream: GrandpaJustificationStream<Block>,
-	/// Subscription manager to keep track of pubsub subscribers.
-	pub subscriptions: SubscriptionManager,
+	/// Executor to drive the subscription manager in the Grandpa RPC handler.
+	pub subscription_executor: SubscriptionTaskExecutor,
 	/// Finality proof provider.
 	pub finality_provider: Arc<FinalityProofProvider<B, Block>>,
 }
@@ -146,7 +146,7 @@ pub fn create_full<C, P, SC, B>(
 		shared_voter_state,
 		shared_authority_set,
 		justification_stream,
-		subscriptions,
+		subscription_executor,
 		finality_provider,
 	} = grandpa;
 
@@ -180,7 +180,7 @@ pub fn create_full<C, P, SC, B>(
 				shared_authority_set,
 				shared_voter_state,
 				justification_stream,
-				subscriptions,
+				subscription_executor,
 				finality_provider,
 			)
 		)
