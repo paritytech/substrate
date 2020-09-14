@@ -1,9 +1,9 @@
-#!/bin/sh
+#!/usr/bin/env sh
 #
-# check if a pr is compatible with polkadot companion pr or master if not 
+# check if a pr is compatible with polkadot companion pr or master if not
 # available
 #
-# to override one that was just mentioned mark companion pr in the body of the 
+# to override one that was just mentioned mark companion pr in the body of the
 # polkadot pr like
 #
 # polkadot companion: paritytech/polkadot#567
@@ -12,7 +12,7 @@
 
 github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
 # use github api v3 in order to access the data without authentication
-github_header="Authorization: token ${GITHUB_PR_TOKEN}" 
+github_header="Authorization: token ${GITHUB_PR_TOKEN}"
 
 boldprint () { printf "|\n| \033[1m${@}\033[0m\n|\n" ; }
 boldcat () { printf "|\n"; while read l; do printf "| \033[1m${l}\033[0m\n"; done; printf "|\n" ; }
@@ -39,6 +39,8 @@ EOT
 # Set the user name and email to make merging work
 git config --global user.name 'CI system'
 git config --global user.email '<>'
+
+cargo install -f --version 0.2.0 diener
 
 SUBSTRATE_PATH=$(pwd)
 
@@ -85,14 +87,9 @@ else
   boldprint "this is not a pull request - building polkadot:master"
 fi
 
-# Make sure we override the crates in native and wasm build
-# patching the git path as described in the link below did not test correctly
-# https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html
-mkdir .cargo
-echo "paths = [ \"$SUBSTRATE_PATH\" ]" > .cargo/config
-
-mkdir -p target/debug/wbuild/.cargo
-cp .cargo/config target/debug/wbuild/.cargo/config
+cd ..
+~/.cargo/bin/diener --substrate --branch $(git branch --show-current) --git https://gitlab.parity.io/parity/substrate.git --path polkadot
+cd polkadot
 
 # Test Polkadot pr or master branch with this Substrate commit.
 time cargo test --all --release --verbose
