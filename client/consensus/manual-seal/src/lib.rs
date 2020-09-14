@@ -19,7 +19,7 @@
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
-use core::time::Duration;
+use core::{time::Duration, marker::Send};
 use futures::prelude::*;
 use std::{sync::Arc, marker::PhantomData};
 use prometheus_endpoint::Registry;
@@ -192,7 +192,7 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 			}
 		});
 
-	let stream: Box<dyn Stream<Item = _> + Unpin> = match (heartbeat, cooldown) {
+	let stream: Box<dyn Stream<Item = _> + Unpin + Send> = match (heartbeat, cooldown) {
 		(None, None) => Box::new(commands_stream),
 		_ => Box::new(HeartbeatStream::new(
 			Box::new(commands_stream),

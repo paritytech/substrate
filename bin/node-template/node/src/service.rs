@@ -1,6 +1,6 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 // use std::time::Duration;
 use sc_client_api::{/*ExecutorProvider,*/ RemoteBackend};
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
@@ -176,10 +176,10 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			transaction_pool.pool().clone(),
 			select_chain,
 			inherent_data_providers,
+			Some(Duration::from_secs(30)),
+			Some(Duration::from_secs(1)),
 			false,
-			Some(sc_consensus_manual_seal::HeartbeatOptions::default()),
 		);
-
 		// the AURA authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
 		// task_manager.spawn_essential_handle().spawn_blocking("aura", aura);
