@@ -19,9 +19,9 @@
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
-use std::{sync::Arc, marker::PhantomData};
+use core::time::Duration;
 use futures::prelude::*;
-
+use std::{sync::Arc, marker::PhantomData};
 use prometheus_endpoint::Registry;
 
 use sp_consensus::{
@@ -165,8 +165,9 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 	pool: Arc<txpool::Pool<A>>,
 	select_chain: SC,
 	inherent_data_providers: InherentDataProviders,
+	heartbeat: Option<Duration>,
+	cooldown: Option<Duration>,
 	finalize: bool,
-	heartbeat_options: Option<HeartbeatOptions>,
 )
 	where
 		A: txpool::ChainApi<Block=B> + 'static,
@@ -191,11 +192,12 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 			}
 		});
 
-	let stream: Box<dyn Stream<Item = _> + Unpin> = match heartbeat_options
-	{
-		Some(hbo) => Box::new(
-			HeartbeatStream::new(Box::new(commands_stream), hbo).expect("HeartbeatStream cannot be created")),
-		None => Box::new(commands_stream),
+	let stream: Box<dyn Stream<Item = _> + Unpin> = match (heartbeat, cooldown) {
+		(None, None) => Box::new(commands_stream),
+		_ => Box::new(HeartbeatStream::new(
+			Box::new(commands_stream),
+			HeartbeatOptions { heartbeat, cooldown, finalize },
+		).expect("HeartbeatStream cannot be created")),
 	};
 
 	run_manual_seal(

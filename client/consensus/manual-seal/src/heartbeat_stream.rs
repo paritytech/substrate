@@ -29,22 +29,18 @@ use crate::rpc::EngineCommand;
 pub struct HeartbeatOptions {
 	/// The amount of time passed that a new heartbeat block will be generated when no transactions
 	///   in tx pool, in sec.
-	pub max_blocktime: u64,
+	pub heartbeat: Option<Duration>,
 	/// The cooldown time after a block has been authored, in sec.
-	pub cooldown: u64,
-	/// Control whether the generated block is finalized
-	//TODO this is confusing and possibly redundant with the finalize parameter in `run_instant_seal`
-	// I recommend letting the user specify the finalize parameter once and it apples to all blocks
-	// whether they are from the trigger stream or not.
+	pub cooldown: Option<Duration>,
 	pub finalize: bool,
 }
 
 impl Default for HeartbeatOptions {
 	fn default() -> Self {
 		Self {
-			max_blocktime: 30,
-			cooldown: 1,
-			finalize: false,
+			heartbeat: Some(Duration::from_secs(30)),
+			cooldown: Some(Duration::from_secs(1)),
+			finalize: false
 		}
 	}
 }
@@ -55,7 +51,7 @@ pub struct HeartbeatStream<Hash> {
 	/// The transaction pool notification stream
 	pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
 	/// Future to control when the next block should be generated
-	delay_future: Delay,
+	delay_for: Option<Delay>,
 	/// To remember when the last block is generated
 	last_blocktime: Option<Instant>,
 	/// Heartbeat options
@@ -67,64 +63,92 @@ impl<Hash> HeartbeatStream<Hash> {
 		pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
 		options: HeartbeatOptions,
 	) -> Result<Self, &'static str> {
-		if options.cooldown > options.max_blocktime {
-			return Err("Heartbeat options `cooldown` value must not be larger than `max_blocktime` value.");
+		if options.cooldown > options.heartbeat {
+			return Err("Heartbeat options `cooldown` must not be larger than the `heartbeat` value.");
 		}
-		Ok(Self {
-			pool_stream,
-			delay_future: Delay::new(Duration::from_secs(options.max_blocktime)),
-			last_blocktime: None,
-			options,
-		})
+
+		let delay_for = options.heartbeat.and_then(|hb| Some(Delay::new(hb)));
+		Ok(Self {pool_stream, delay_for, last_blocktime: None, options})
 	}
 }
 
 impl<Hash> Stream for HeartbeatStream<Hash> {
 	type Item = EngineCommand<Hash>;
 
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		let mut hbs = self.get_mut();
-		match hbs.pool_stream.poll_next_unpin(cx) {
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		match self.pool_stream.poll_next_unpin(cx) {
 			Poll::Ready(Some(ec)) => {
-				if let Some(last_blocktime) = hbs.last_blocktime {
-					// If the last block happened less than the cooldown time, we want to wait till
-					//  `cooldown` has lapsed.
-					let passed_blocktime = Instant::now() - last_blocktime;
-					if passed_blocktime < Duration::from_secs(hbs.options.cooldown) {
-						// We set `delay_future` here so it will wake up when the cooldown since the last
-						//   block created is passed.
-						hbs.delay_future = Delay::new(Duration::from_secs(hbs.options.cooldown)
-							- passed_blocktime);
-						return Poll::Pending;
+				let HeartbeatOptions { heartbeat, cooldown, .. } = self.options;
+
+				match (self.last_blocktime, cooldown) {
+					(Some(last_blocktime), Some(cooldown)) => {
+						let time_passed = Instant::now() - last_blocktime;
+						if time_passed < cooldown {
+							let wait_further = cooldown - time_passed;
+							println!("poll_next: Cooling down, wait further for {:?}", wait_further);
+
+							// We set `delay_future` here so it will wake up when the cooldown since the last
+							//   block created is passed.
+							self.delay_for = Some(Delay::new(wait_further));
+							return Poll::Pending;
+						}
+
+						// tx come after cooldown period, we want to create block as normal
+						println!("poll_next: Create block due to tx - last_blocktime, cooldown");
+						// reset the timer and delay future
+						self.delay_for = heartbeat.and_then(|hb| Some(Delay::new(hb)));
+						self.last_blocktime = Some(Instant::now());
+						Poll::Ready(Some(ec))
+					},
+					_ => {
+						println!("poll_next: Create block due to tx");
+						// reset the timer and delay future
+						self.delay_for = heartbeat.and_then(|hb| Some(Delay::new(hb)));
+						self.last_blocktime = Some(Instant::now());
+						Poll::Ready(Some(ec))
 					}
 				}
-
-				// reset the timer and delay future
-				hbs.delay_future = Delay::new(Duration::from_secs(hbs.options.max_blocktime));
-				hbs.last_blocktime = Some(Instant::now());
-				Poll::Ready(Some(ec))
 			},
 
 			// The pool stream ends
-			Poll::Ready(None) => Poll::Ready(None),
+			Poll::Ready(None) => {
+				println!("poll_next: None");
+				Poll::Ready(None)
+			},
 
 			Poll::Pending => {
-				// We check if the delay for heartbeat has reached
-				if let Poll::Ready(_) = hbs.delay_future.poll_unpin(cx) {
-					// reset the timer and delay future
-					hbs.delay_future = Delay::new(Duration::from_secs(hbs.options.max_blocktime));
-					hbs.last_blocktime = Some(Instant::now());
+				let HeartbeatOptions { heartbeat, finalize, .. } = self.options;
 
-					return Poll::Ready(Some(EngineCommand::SealNewBlock {
-						create_empty: true, // new blocks created due to delay_future can be empty.
-						finalize: hbs.options.finalize,
-						parent_hash: None,
-						sender: None,
-					}));
+				match &mut self.delay_for {
+					Some(delay_for) => {
+
+						// We check if the delay for heartbeat has reached
+						if let Poll::Ready(_) = delay_for.poll_unpin(cx) {
+
+							println!("poll_next: Creating heartbeat block");
+
+							// reset the timer and delay future
+							self.delay_for = heartbeat.and_then(|hb| Some(Delay::new(hb)));
+							self.last_blocktime = Some(Instant::now());
+
+							return Poll::Ready(Some(EngineCommand::SealNewBlock {
+								create_empty: true, // new blocks created due to delay_future can be empty.
+								finalize,
+								parent_hash: None,
+								sender: None,
+							}));
+						}
+
+						println!("poll_next: Pending");
+						Poll::Pending
+					},
+					None => {
+						println!("poll_next: Pending");
+						Poll::Pending
+					}
 				}
+			}, // End of `Poll::Pending`
 
-				Poll::Pending
-			},
 		}
 	}
 }
