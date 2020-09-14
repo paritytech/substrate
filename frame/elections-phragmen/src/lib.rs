@@ -177,6 +177,13 @@ pub trait Trait: frame_system::Trait {
 	/// How much should be locked up in order to submit one's candidacy.
 	type CandidacyBond: Get<BalanceOf<Self>>;
 
+	/// DEPRECATED.
+	///
+	/// The old voting bond. Only used and needed for migrating to the new model.
+	/// // TODO: remove with all side effects after
+	/// https://github.com/paritytech/substrate/pull/7040 is merged and shipped.
+	type LegacyVotingBond: Get<BalanceOf<Self>>;
+
 	/// Base deposit associated with voting.
 	///
 	/// This should be sensibly high to economically ensure the pallet cannot be attacked by
@@ -223,11 +230,17 @@ decl_storage! {
 		/// Votes and locked stake of a particular voter.
 		///
 		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash
-		pub Voting get(fn voting): map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
+		pub Voting get(fn voting): map hasher(twox_64_concat) T::AccountId
+			=> (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The present candidate list. Sorted based on account-id. A current member or runner-up
 		/// can never enter this vector and is always implicitly assumed to be a candidate.
 		pub Candidates get(fn candidates): Vec<T::AccountId>;
+
+		/// Should be used in conjunction with `on_runtime_upgrade` to ensure an upgrade is executed
+		/// once, even if the code is not removed in time.
+		pub NeedsMigration get(fn needs_migrations): bool = true;
+
 	} add_extra_genesis {
 		config(members): Vec<(T::AccountId, BalanceOf<T>)>;
 		build(|config: &GenesisConfig<T>| {
@@ -314,12 +327,67 @@ decl_module! {
 		fn deposit_event() = default;
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
+		const LegacyVotingBond: BalanceOf<T> = T::LegacyVotingBond::get();
 		const VotingBondBase: BalanceOf<T> = T::VotingBondBase::get();
 		const VotingBondFactor: BalanceOf<T> = T::VotingBondFactor::get();
 		const DesiredMembers: u32 = T::DesiredMembers::get();
 		const DesiredRunnersUp: u32 = T::DesiredRunnersUp::get();
 		const TermDuration: T::BlockNumber = T::TermDuration::get();
 		const ModuleId: LockIdentifier  = T::ModuleId::get();
+
+		fn on_runtime_upgrade() -> Weight {
+			if Self::needs_migrations() {
+				let mut consumed_weight = 0;
+				let mut add_weight = |reads, writes| {
+					consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
+				};
+				let mut success = 0u32;
+				let mut error = 0u32;
+				<Voting<T>>::iter().for_each(|(who, (_, votes))| {
+					// first, reserve the new amount.
+					match T::Currency::reserve(&who, Self::deposit_of(votes.len())) {
+						Ok(_) => {
+							// Ok. Unreserve the old bond.
+							T::Currency::unreserve(&who, T::LegacyVotingBond::get());
+							add_weight(0, 1);
+							success += 1;
+						}
+						Err(_) => {
+							// force remove this voter.
+							// we can't use `Self::do_remove_voter()` because that one un-reserves the
+							// new bond amount. Manually remove.
+
+							// 1 write
+							<Voting<T>>::remove(&who);
+							// 1 read 1 write
+							T::Currency::remove_lock(T::ModuleId::get(), &who);
+							// 1 read 1 write
+							T::Currency::unreserve(&who, T::LegacyVotingBond::get());
+
+							add_weight(2, 3);
+							error += 1;
+						}
+					}
+				});
+
+				// for iterating over `Voting<T>`
+				consumed_weight += T::DbWeight::get().reads((success + error).into());
+
+				frame_support::debug::print!(
+					"Migration of pallet-elections-phragmen to new deposit scheme done. {} accounts moved successfully, {} failed.",
+					success,
+					error,
+				);
+
+				NeedsMigration::put(false);
+				consumed_weight
+			} else {
+				frame_support::debug::print!(
+					"Tried to run migration but NeedsMigration is false. This code probably needs to be removed now.",
+				);
+				0
+			}
+		}
 
 		/// Vote for a set of candidates for the upcoming round of election. This can be called to
 		/// set the initial votes, or update already existing votes.
@@ -1276,6 +1344,7 @@ mod tests {
 		type ChangeMembers = TestChangeMembers;
 		type InitializeMembers = ();
 		type CandidacyBond = CandidacyBond;
+		type LegacyVotingBond = VotingBondBase;
 		type VotingBondBase = VotingBondBase;
 		type VotingBondFactor = VotingBondFactor;
 		type TermDuration = TermDuration;
@@ -2501,7 +2570,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, true),
 				Error::<Test>::InvalidReplacement,
-				Some(36328000),
+				Some(30159000), // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 
@@ -2523,7 +2592,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, false),
 				Error::<Test>::InvalidReplacement,
-				Some(36328000) // only thing that matters for now is that it is NOT the full block.
+				Some(30159000) // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 	}
