@@ -189,12 +189,12 @@ decl_event!(
 		AccountId = <T as system::Trait>::AccountId,
 		PendingSwap = PendingSwap<T>,
 	{
-		/// Swap created. [account, proof, swap]
+		/// Swap created. \[account, proof, swap\]
 		NewSwap(AccountId, HashedProof, PendingSwap),
 		/// Swap claimed. The last parameter indicates whether the execution succeeds. 
-		/// [account, proof, success]
+		/// \[account, proof, success\]
 		SwapClaimed(AccountId, HashedProof, bool),
-		/// Swap cancelled. [account, proof]
+		/// Swap cancelled. \[account, proof\]
 		SwapCancelled(AccountId, HashedProof),
 	}
 );
