@@ -23,8 +23,11 @@
 //! The pallet assumes that the amount of members stays at or below `MaxMembers` for its weight
 //! calculations, but enforces this neither in `set_members` nor in `change_members_sorted`.
 //!
-//! A "prime" member may be set allowing their vote to act as the default vote in case of any
-//! abstentions after the voting period.
+//! A "prime" member may be set to help determine the default vote behavior based on chain
+//! config. If `PreimDefaultVote` is used, the prime vote acts as the default vote in case of any
+//! abstentions after the voting period. If `MoreThanMajorityThenPrimeDefaultVote` is used, then
+//! abstentations will first follow the majority of the collective voting, and then the prime
+//! member.
 //!
 //! Voting happens through motions comprising a proposal (i.e. a curried dispatchable) plus a
 //! number of approvals required for it to pass and be called. Motions are open for members to
@@ -206,8 +209,7 @@ decl_storage! {
 		pub ProposalCount get(fn proposal_count): u32;
 		/// The current members of the collective. This is stored sorted (just by value).
 		pub Members get(fn members): Vec<T::AccountId>;
-		/// The member who provides the default vote for any other members that do not vote before
-		/// the timeout. If None, then no member has that privilege.
+		/// The prime member that helps determine the default vote behavior in case of absentations.
 		pub Prime get(fn prime): Option<T::AccountId>;
 	}
 	add_extra_genesis {
