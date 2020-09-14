@@ -237,7 +237,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = T::WeightInfo::vest_other_locked(T::MaxLocks::get())
 			.max(T::WeightInfo::vest_other_unlocked(T::MaxLocks::get()))
-		]		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		]
+		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
 		}
@@ -462,14 +463,13 @@ mod tests {
 	}
 	parameter_types! {
 		pub const MinVestedTransfer: u64 = 256 * 2;
-		pub const MaxLocks: u32 = 10;
 	}
 	impl Trait for Test {
 		type Event = ();
 		type Currency = Balances;
 		type BlockNumberToBalance = Identity;
 		type MinVestedTransfer = MinVestedTransfer;
-		type MaxLocks = MaxLocks;
+		type MaxLocks = ();
 		type WeightInfo = ();
 	}
 	type System = frame_system::Module<Test>;
