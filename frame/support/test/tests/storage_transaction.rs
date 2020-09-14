@@ -29,7 +29,7 @@ pub trait Trait {
 }
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
 		#[weight = 0]
 		#[transactional]
 		fn value_commits(_origin, v: u32) {

@@ -29,7 +29,7 @@ use codec::{Encode, Decode, Input, Error};
 use sp_core::{offchain::KeyTypeId, ChangesTrieConfiguration, OpaqueMetadata, RuntimeDebug};
 use sp_application_crypto::{ed25519, sr25519, ecdsa, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
-use sp_trie::PrefixedMemoryDB;
+use sp_trie::{PrefixedMemoryDB, StorageProof};
 use sp_trie::trie_types::{TrieDB, TrieDBMut};
 
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
@@ -335,6 +335,8 @@ cfg_if! {
 				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
+				/// Check a witness.
+				fn test_witness(proof: StorageProof, root: crate::Hash);
 				/// Test that ensures that we can call a function that takes multiple
 				/// arguments.
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
@@ -384,6 +386,8 @@ cfg_if! {
 				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
+				/// Check a witness.
+				fn test_witness(proof: StorageProof, root: crate::Hash);
 				/// Test that ensures that we can call a function that takes multiple
 				/// arguments.
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
@@ -684,6 +688,10 @@ cfg_if! {
 					test_read_child_storage();
 				}
 
+				fn test_witness(proof: StorageProof, root: crate::Hash) {
+					test_witness(proof, root);
+				}
+
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
 					assert_eq!(&data[..], &other[..]);
 					assert_eq!(data.len(), num as usize);
@@ -926,6 +934,10 @@ cfg_if! {
 					test_read_child_storage();
 				}
 
+				fn test_witness(proof: StorageProof, root: crate::Hash) {
+					test_witness(proof, root);
+				}
+
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
 					assert_eq!(&data[..], &other[..]);
 					assert_eq!(data.len(), num as usize);
@@ -1055,17 +1067,13 @@ fn test_read_storage() {
 	sp_io::storage::set(KEY, b"test");
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::read(
-		KEY,
-		&mut v,
-		0
-	);
+	let r = sp_io::storage::read(KEY, &mut v, 0);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::read(KEY, &mut v, 8);
-	assert_eq!(r, Some(4));
+	let r = sp_io::storage::read(KEY, &mut v, 4);
+	assert_eq!(r, Some(0));
 	assert_eq!(&v, &[0, 0, 0, 0]);
 }
 
@@ -1095,8 +1103,36 @@ fn test_read_child_storage() {
 		&mut v,
 		8,
 	);
-	assert_eq!(r, Some(4));
+	assert_eq!(r, Some(0));
 	assert_eq!(&v, &[0, 0, 0, 0]);
+}
+
+fn test_witness(proof: StorageProof, root: crate::Hash) {
+	use sp_externalities::Externalities;
+	let db: sp_trie::MemoryDB<crate::Hashing> = proof.into_memory_db();
+	let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(
+		db,
+		root,
+	);
+	let mut overlay = sp_state_machine::OverlayedChanges::default();
+	#[cfg(feature = "std")]
+	let mut offchain_overlay = Default::default();
+	let mut cache = sp_state_machine::StorageTransactionCache::<_, _, BlockNumber>::default();
+	let mut ext = sp_state_machine::Ext::new(
+		&mut overlay,
+		#[cfg(feature = "std")]
+		&mut offchain_overlay,
+		&mut cache,
+		&backend,
+		#[cfg(feature = "std")]
+		None,
+		#[cfg(feature = "std")]
+		None,
+	);
+	assert!(ext.storage(b"value3").is_some());
+	assert!(ext.storage_root().as_slice() == &root[..]);
+	ext.place_storage(vec![0], Some(vec![1]));
+	assert!(ext.storage_root().as_slice() != &root[..]);
 }
 
 #[cfg(test)]
@@ -1156,5 +1192,34 @@ mod tests {
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		runtime_api.test_storage(&block_id).unwrap();
+	}
+
+	fn witness_backend() -> (sp_trie::MemoryDB<crate::Hashing>, crate::Hash) {
+		use sp_trie::TrieMut;
+		let mut root = crate::Hash::default();
+		let mut mdb = sp_trie::MemoryDB::<crate::Hashing>::default();
+		{
+			let mut trie = sp_trie::trie_types::TrieDBMut::new(&mut mdb, &mut root);
+			trie.insert(b"value3", &[142]).expect("insert failed");
+			trie.insert(b"value4", &[124]).expect("insert failed");
+		};
+		(mdb, root)
+	}
+
+	#[test]
+	fn witness_backend_works() {
+		let (db, root) = witness_backend();
+		let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(
+			db,
+			root,
+		);
+		let proof = sp_state_machine::prove_read(backend, vec![b"value3"]).unwrap();
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::Both)
+			.build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(client.chain_info().best_number);
+
+		runtime_api.test_witness(&block_id, proof, root).unwrap();
 	}
 }
