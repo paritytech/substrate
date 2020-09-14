@@ -179,7 +179,7 @@ pub fn build_project_with_default_rustflags(
 			bloaty.wasm_binary_bloaty_path_escaped(),
 		)
 	};
-	
+
 	write_file_if_changed(
 			file_name.into(),
 			format!(
@@ -308,4 +308,9 @@ impl CargoCommand {
 				.unwrap_or_default()
 				.contains("-nightly")
 	}
+}
+
+/// Returns `true` when color output is enabled.
+fn color_output_enabled() -> bool {
+	env::var(crate::WASM_BUILD_NO_COLOR).is_err()
 }
