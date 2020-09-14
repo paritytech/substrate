@@ -288,6 +288,15 @@
 			"decimals": null,
 			"standardAccount": null,
 			"website": null
-		}
+		},
+		{
+			"prefix": 49,
+			"network": "potgame",
+			"displayName": "PotGame",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": "https://pot-game.tech"
+		},
 	]
 }
