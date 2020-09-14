@@ -446,7 +446,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 
 #[cfg(test)]
 mod tests {
-	use std::{sync::Arc, borrow::Cow, any::Any};
+	use std::{sync::Arc, borrow::Cow, any::Any, convert::TryInto};
 	use sc_consensus_babe::{CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY};
 	use sc_consensus_epochs::descendent_query;
 	use sp_consensus::{
@@ -457,7 +457,7 @@ mod tests {
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use codec::Encode;
-	use sp_core::{crypto::Pair as CryptoPair, H256, traits::SyncCryptoStore};
+	use sp_core::{crypto::Pair as CryptoPair, H256, traits::SyncCryptoStore, Public};
 	use sp_runtime::{
 		generic::{BlockId, Era, Digest, SignedPayload},
 		traits::{Block as BlockT, Header as HeaderT},
@@ -589,7 +589,11 @@ mod tests {
 				// sign the pre-sealed hash of the block and then
 				// add it to a digest item.
 				let to_sign = pre_hash.encode();
-				let signature = alice.sign(&to_sign).unwrap();
+				let signature = keystore
+					.sign_with(sp_consensus_babe::AuthorityId::ID, &alice.to_public_crypto_pair(), &to_sign)
+					.unwrap()
+					.try_into()
+					.unwrap();
 				let item = <DigestItem as CompatibleDigestItem>::babe_seal(
 					signature,
 				);
