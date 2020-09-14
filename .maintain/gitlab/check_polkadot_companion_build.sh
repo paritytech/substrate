@@ -88,7 +88,7 @@ else
 fi
 
 cd ..
-$CARGO_HOME/bin/diener --substrate --branch $(git rev-parse --abbrev-ref HEAD) --git https://gitlab.parity.io/parity/substrate.git --path polkadot
+$CARGO_HOME/bin/diener --substrate --branch $CI_COMMIT_REF_NAME --git https://gitlab.parity.io/parity/substrate.git --path polkadot
 cd polkadot
 
 # Test Polkadot pr or master branch with this Substrate commit.
