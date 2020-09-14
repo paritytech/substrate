@@ -152,6 +152,15 @@ pub trait WeightInfo {
 	fn remove_member_wrong_refund() -> Weight;
 }
 
+#[derive(Encode, Decode, Eq, PartialEq)]
+/// Storage version.
+pub enum StorageVersion {
+	/// Initial version.
+	V1,
+	/// After moving to per-vote deposit.
+	V2,
+}
+
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.c
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -239,7 +248,7 @@ decl_storage! {
 
 		/// Should be used in conjunction with `on_runtime_upgrade` to ensure an upgrade is executed
 		/// once, even if the code is not removed in time.
-		pub NeedsMigration get(fn needs_migrations): bool = true;
+		pub PalletStorageVersion get(fn pallet_storage_version): StorageVersion = StorageVersion::V1;
 
 	} add_extra_genesis {
 		config(members): Vec<(T::AccountId, BalanceOf<T>)>;
@@ -336,7 +345,7 @@ decl_module! {
 		const ModuleId: LockIdentifier  = T::ModuleId::get();
 
 		fn on_runtime_upgrade() -> Weight {
-			if Self::needs_migrations() {
+			if Self::pallet_storage_version() == StorageVersion::V1 {
 				let mut consumed_weight = 0;
 				let mut add_weight = |reads, writes| {
 					consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
@@ -374,16 +383,16 @@ decl_module! {
 				consumed_weight += T::DbWeight::get().reads((success + error).into());
 
 				frame_support::debug::print!(
-					"Migration of pallet-elections-phragmen to new deposit scheme done. {} accounts moved successfully, {} failed.",
+					"🏛 pallet-elections-phragmen: Migration to new deposit scheme done. {} accounts moved successfully, {} failed.",
 					success,
 					error,
 				);
 
-				NeedsMigration::put(false);
+				PalletStorageVersion::put(StorageVersion::V2);
 				consumed_weight
 			} else {
 				frame_support::debug::print!(
-					"Tried to run migration but NeedsMigration is false. This code probably needs to be removed now.",
+					"🏛 pallet-elections-phragmen: Tried to run migration but PalletStorageVersion is updated to V2. This code probably needs to be removed now.",
 				);
 				0
 			}

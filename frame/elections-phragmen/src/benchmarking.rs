@@ -254,7 +254,7 @@ benchmarks! {
 			stake,
 		)?;
 
-		// all the bailers go away. NOTE: we can simplify this. There's no need to cerate all these
+		// all the bailers go away. NOTE: we can simplify this. There's no need to create all these
 		// candidates and remove them. The defunct voter can just vote for random accounts as long
 		// as there are enough members (potential candidates).
 		bailing_candidates.into_iter().for_each(|b| {
