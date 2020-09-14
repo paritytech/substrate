@@ -3731,8 +3731,6 @@ dependencies = [
  "frame-system",
  "futures 0.3.5",
  "hex-literal",
- "jsonrpc-core",
- "jsonrpc-pubsub",
  "log",
  "nix",
  "node-executor",
@@ -3866,7 +3864,6 @@ name = "node-rpc"
 version = "2.0.0-rc6"
 dependencies = [
  "jsonrpc-core",
- "jsonrpc-pubsub",
  "node-primitives",
  "node-runtime",
  "pallet-contracts-rpc",
