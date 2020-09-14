@@ -482,6 +482,8 @@ ss58_address_format!(
 		(22, "dock-mainnet", "Dock mainnet, standard account (*25519).")
 	ShiftNrg =>
 		(23, "shift", "ShiftNrg mainnet, standard account (*25519).")
+	PotGameAccount =>
+		(27, "PotGame", "PotGame Chain mainnet, standard account (*25519).")
 	SubsocialAccount =>
 		(28, "subsocial", "Subsocial network, standard account (*25519).")
 	PhalaAccount =>
@@ -503,8 +505,7 @@ ss58_address_format!(
 	Reserved47 =>
 		(47, "reserved47", "Reserved for future use (47).")
 	// Note: 48 and above are reserved.
-	PotGameAccount =>
-		(49, "PotGame", "PotGame Chain mainnet, standard account (*25519).")
+	
 
 );
 
