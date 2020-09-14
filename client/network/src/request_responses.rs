@@ -16,7 +16,7 @@
 
 //! Collection of request-response protocols.
 //!
-//! The [`RequestResponses`] struct defined in this module provides support for zero or more
+//! The [`RequestResponse`] struct defined in this module provides support for zero or more
 //! so-called "request-response" protocols.
 //!
 //! A request-response protocol works in the following way:
@@ -29,7 +29,7 @@
 //! - Requests have a certain time limit before they time out. This time includes the time it
 //! takes to send/receive the request and response.
 //!
-//! - If provided, a ["requests processing"](RequestResponseConfig::inbound_queue) channel
+//! - If provided, a ["requests processing"](ProtocolConfig::inbound_queue) channel
 //! is used to handle incoming requests.
 //!
 
@@ -108,7 +108,7 @@ pub struct IncomingRequest {
 	pub peer: PeerId,
 
 	/// Request sent by the remote. Will always be smaller than
-	/// [`RequestResponseConfig::max_request_size`].
+	/// [`ProtocolConfig::max_request_size`].
 	pub payload: Vec<u8>,
 
 	/// Channel to send back the response to.

@@ -419,9 +419,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				versions,
 				build_status_message(&config, &chain),
 				peerset,
+				// As documented in `GenericProto`, the first protocol in the list is always the
+				// one carrying the handshake reported in the `CustomProtocolOpen` event.
 				iter::once((block_announces_protocol.clone(), block_announces_handshake))
 					.chain(iter::once((transactions_protocol.clone(), vec![]))),
-				0,
 			)
 		};
 

@@ -93,10 +93,6 @@ pub struct NotifsHandlerProto {
 	/// Prototypes for handlers for outbound substreams, and the initial handshake message we send.
 	out_handlers: Vec<(NotifsOutHandlerProto, Arc<RwLock<Vec<u8>>>)>,
 
-	/// Index within `in_handlers` and `out_handlers` of the protocol containing the handshake to
-	/// report on the external API.
-	handshake_protocol_index: usize,
-
 	/// Prototype for handler for backwards-compatibility.
 	legacy: LegacyProtoHandlerProto,
 }
@@ -110,10 +106,6 @@ pub struct NotifsHandler {
 
 	/// Handlers for outbound substreams, and the initial handshake message we send.
 	out_handlers: Vec<(NotifsOutHandler, Arc<RwLock<Vec<u8>>>)>,
-
-	/// Index within `in_handlers` and `out_handlers` of the protocol containing the handshake to
-	/// report on the external API.
-	handshake_protocol_index: usize,
 
 	/// Whether we are the connection dialer or listener.
 	endpoint: ConnectedPoint,
@@ -179,7 +171,6 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 				.into_iter()
 				.map(|(proto, msg)| (proto.into_handler(remote_peer_id, connected_point), msg))
 				.collect(),
-			handshake_protocol_index: self.handshake_protocol_index,
 			endpoint: connected_point.clone(),
 			legacy: self.legacy.into_handler(remote_peer_id, connected_point),
 			pending_handshake: None,
@@ -371,23 +362,19 @@ impl NotifsHandlerProto {
 	/// handshake. At the moment, the message is always the same whether we open a substream
 	/// ourselves or respond to handshake from the remote.
 	///
-	/// `handshake_protocol_index` is the index, within `list`, of the protocol that contains
-	/// the handshake to report through the [`NotifsHandlerOut::Open`] event.
+	/// The first protocol in `list` is special-cased as the protocol that contains the handshake
+	/// to report through the [`NotifsHandlerOut::Open`] event.
 	///
 	/// # Panic
 	///
-	/// - Panics if `list` is empty (as `handshake_protocol_index` can't possibly be correct).
-	/// - Panics if `handshake_protocol_index` is >= `list.len()`.
+	/// - Panics if `list` is empty.
 	///
 	pub fn new(
 		legacy: RegisteredProtocol,
 		list: impl Into<Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>>,
-		handshake_protocol_index: usize,
 	) -> Self {
 		let list = list.into();
-
 		assert!(!list.is_empty());
-		assert!(handshake_protocol_index < list.len());
 
 		let out_handlers = list
 			.clone()
@@ -404,7 +391,6 @@ impl NotifsHandlerProto {
 		NotifsHandlerProto {
 			in_handlers,
 			out_handlers,
-			handshake_protocol_index,
 			legacy: LegacyProtoHandlerProto::new(legacy),
 		}
 	}
@@ -616,9 +602,8 @@ impl ProtocolsHandler for NotifsHandler {
 		}
 
 		// If `self.pending_handshake` is `Some`, we are in a state where the handshake-bearing
-		// substream (either the legacy substream of the one indicated by
-		// `handshake_protocol_index`) is open but the user isn't aware yet of the substreams
-		// being open.
+		// substream (either the legacy substream or the one special-cased as providing the
+		// handshake) is open but the user isn't aware yet of the substreams being open.
 		// When that is the case, neither the legacy substream nor the incoming notifications
 		// substreams should be polled, otherwise there is a risk of receiving messages from them.
 		if self.pending_handshake.is_none() {
@@ -717,7 +702,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 					// Opened substream on the handshake-bearing notification protocol.
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake })
-						if handler_num == self.handshake_protocol_index =>
+						if handler_num == 0 =>
 					{
 						if self.notifications_sink_rx.is_none() && self.pending_handshake.is_none() {
 							self.pending_handshake = Some(handshake);

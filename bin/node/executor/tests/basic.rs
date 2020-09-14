@@ -36,7 +36,7 @@ use node_runtime::{
 	constants::currency::*,
 };
 use node_primitives::{Balance, Hash};
-use wabt;
+use wat;
 use node_testing::keyring::*;
 
 pub mod common;
@@ -580,7 +580,7 @@ const CODE_TRANSFER: &str = r#"
 
 #[test]
 fn deploying_wasm_contract_should_work() {
-	let transfer_code = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+	let transfer_code = wat::parse_str(CODE_TRANSFER).unwrap();
 	let transfer_ch = <Runtime as frame_system::Trait>::Hashing::hash(&transfer_code);
 
 	let addr = <Runtime as pallet_contracts::Trait>::DetermineContractAddress::contract_address_for(
