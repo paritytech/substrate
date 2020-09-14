@@ -113,10 +113,11 @@ pub struct NotifsHandler {
 	/// Handler for backwards-compatibility.
 	legacy: LegacyProtoHandler,
 
-	/// In the situation where `legacy.is_open()` is true, but we haven't sent out any
-	/// [`NotifsHandlerOut::Open`] event yet, this contains the handshake received on the legacy
-	/// substream.
-	pending_legacy_handshake: Option<Vec<u8>>,
+	/// In the situation where either the legacy substream has been opened or the handshake-bearing
+	/// notifications protocol is open, but we haven't sent out any [`NotifsHandlerOut::Open`]
+	/// event yet, this contains the received handshake waiting to be reported through the
+	/// external API.
+	pending_handshake: Option<Vec<u8>>,
 
 	/// State of this handler.
 	enabled: EnabledState,
@@ -172,7 +173,7 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 				.collect(),
 			endpoint: connected_point.clone(),
 			legacy: self.legacy.into_handler(remote_peer_id, connected_point),
-			pending_legacy_handshake: None,
+			pending_handshake: None,
 			enabled: EnabledState::Initial,
 			pending_in: Vec::new(),
 			notifications_sink_rx: None,
@@ -360,11 +361,20 @@ impl NotifsHandlerProto {
 	/// `list` is a list of notification protocols names, and the message to send as part of the
 	/// handshake. At the moment, the message is always the same whether we open a substream
 	/// ourselves or respond to handshake from the remote.
+	///
+	/// The first protocol in `list` is special-cased as the protocol that contains the handshake
+	/// to report through the [`NotifsHandlerOut::Open`] event.
+	///
+	/// # Panic
+	///
+	/// - Panics if `list` is empty.
+	///
 	pub fn new(
 		legacy: RegisteredProtocol,
 		list: impl Into<Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>>,
 	) -> Self {
 		let list = list.into();
+		assert!(!list.is_empty());
 
 		let out_handlers = list
 			.clone()
@@ -614,11 +624,12 @@ impl ProtocolsHandler for NotifsHandler {
 			}
 		}
 
-		// If `self.pending_legacy_handshake` is `Some`, we are in a state where the legacy
-		// substream is open but the user isn't aware yet of the substreams being open.
+		// If `self.pending_handshake` is `Some`, we are in a state where the handshake-bearing
+		// substream (either the legacy substream or the one special-cased as providing the
+		// handshake) is open but the user isn't aware yet of the substreams being open.
 		// When that is the case, neither the legacy substream nor the incoming notifications
 		// substreams should be polled, otherwise there is a risk of receiving messages from them.
-		if self.pending_legacy_handshake.is_none() {
+		if self.pending_handshake.is_none() {
 			while let Poll::Ready(ev) = self.legacy.poll(cx) {
 				match ev {
 					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol } =>
@@ -631,14 +642,16 @@ impl ProtocolsHandler for NotifsHandler {
 						received_handshake,
 						..
 					}) => {
-						self.pending_legacy_handshake = Some(received_handshake);
+						if self.notifications_sink_rx.is_none() {
+							debug_assert!(self.pending_handshake.is_none());
+							self.pending_handshake = Some(received_handshake);
+						}
 						cx.waker().wake_by_ref();
 						return Poll::Pending;
 					},
 					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { reason, .. }) => {
 						// We consciously drop the receivers despite notifications being potentially
 						// still buffered up.
-						debug_assert!(self.notifications_sink_rx.is_some());
 						self.notifications_sink_rx = None;
 
 						return Poll::Ready(ProtocolsHandlerEvent::Custom(
@@ -646,7 +659,6 @@ impl ProtocolsHandler for NotifsHandler {
 						))
 					},
 					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) => {
-						debug_assert!(self.notifications_sink_rx.is_some());
 						return Poll::Ready(ProtocolsHandlerEvent::Custom(
 							NotifsHandlerOut::CustomMessage { message }
 						))
@@ -663,7 +675,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 		for (handler_num, (handler, handshake_message)) in self.in_handlers.iter_mut().enumerate() {
 			loop {
-				let poll = if self.pending_legacy_handshake.is_none() {
+				let poll = if self.notifications_sink_rx.is_some() {
 					handler.poll(cx)
 				} else {
 					handler.poll_process(cx)
@@ -692,7 +704,7 @@ impl ProtocolsHandler for NotifsHandler {
 						},
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => {},
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(message)) => {
-						debug_assert!(self.pending_legacy_handshake.is_none());
+						debug_assert!(self.pending_handshake.is_none());
 						if self.notifications_sink_rx.is_some() {
 							let msg = NotifsHandlerOut::Notification {
 								message,
@@ -716,12 +728,17 @@ impl ProtocolsHandler for NotifsHandler {
 						}),
 					ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
 
-					// At the moment we don't actually care whether any notifications protocol
-					// opens or closes.
-					// Whether our communications with the remote are open or closed entirely
-					// depends on the legacy substream, because as long as we are open the user of
-					// this struct might try to send legacy protocol messages which we need to
-					// deliver for things to work properly.
+					// Opened substream on the handshake-bearing notification protocol.
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake })
+						if handler_num == 0 =>
+					{
+						if self.notifications_sink_rx.is_none() && self.pending_handshake.is_none() {
+							self.pending_handshake = Some(handshake);
+						}
+					},
+
+					// Nothing to do in response to other notification substreams being opened
+					// or closed.
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { .. }) => {},
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) => {},
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) => {},
@@ -730,7 +747,7 @@ impl ProtocolsHandler for NotifsHandler {
 		}
 
 		if self.out_handlers.iter().all(|(h, _)| h.is_open() || h.is_refused()) {
-			if let Some(handshake) = self.pending_legacy_handshake.take() {
+			if let Some(handshake) = self.pending_handshake.take() {
 				let (async_tx, async_rx) = mpsc::channel(ASYNC_NOTIFICATIONS_BUFFER_SIZE);
 				let (sync_tx, sync_rx) = mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
 				let notifications_sink = NotificationsSink {
