@@ -211,10 +211,6 @@ decl_module! {
 		/// - DbWeight: 2 Reads, 2 Writes
 		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
-		/// - Benchmark:
-		///     - Unlocked: 48.76 + .048 * l µs (min square analysis)
-		///     - Locked: 44.43 + .284 * l µs (min square analysis)
-		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
 		#[weight = T::WeightInfo::vest_locked(T::MaxLocks::get())
 			.max(T::WeightInfo::vest_unlocked(T::MaxLocks::get()))
@@ -238,10 +234,6 @@ decl_module! {
 		/// - DbWeight: 3 Reads, 3 Writes
 		///     - Reads: Vesting Storage, Balances Locks, Target Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account
-		/// - Benchmark:
-		///     - Unlocked: 44.3 + .294 * l µs (min square analysis)
-		///     - Locked: 48.16 + .103 * l µs (min square analysis)
-		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
 		#[weight = T::WeightInfo::vest_other_locked(T::MaxLocks::get())
 			.max(T::WeightInfo::vest_other_unlocked(T::MaxLocks::get()))
@@ -265,8 +257,6 @@ decl_module! {
 		/// - DbWeight: 3 Reads, 3 Writes
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
-		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
-		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
 		#[weight = T::WeightInfo::vested_transfer(T::MaxLocks::get())]
 		pub fn vested_transfer(
@@ -304,8 +294,6 @@ decl_module! {
 		/// - DbWeight: 4 Reads, 4 Writes
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, Source Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
-		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
-		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
 		#[weight = T::WeightInfo::force_vested_transfer(T::MaxLocks::get())]
 		pub fn force_vested_transfer(
