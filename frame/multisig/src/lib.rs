@@ -197,13 +197,14 @@ decl_event! {
 		BlockNumber = <T as system::Trait>::BlockNumber,
 		CallHash = [u8; 32]
 	{
-		/// A new multisig operation has begun. [approving, multisig, call_hash]
+		/// A new multisig operation has begun. \[approving, multisig, call_hash\]
 		NewMultisig(AccountId, AccountId, CallHash),
-		/// A multisig operation has been approved by someone. [approving, timepoint, multisig, call_hash]
+		/// A multisig operation has been approved by someone.
+		/// \[approving, timepoint, multisig, call_hash\]
 		MultisigApproval(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
-		/// A multisig operation has been executed. [approving, timepoint, multisig, call_hash]
+		/// A multisig operation has been executed. \[approving, timepoint, multisig, call_hash\]
 		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId, CallHash, DispatchResult),
-		/// A multisig operation has been cancelled. [cancelling, timepoint, multisig, call_hash]
+		/// A multisig operation has been cancelled. \[cancelling, timepoint, multisig, call_hash\]
 		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
 	}
 }
@@ -261,6 +262,16 @@ decl_module! {
 
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
+
+		/// The base amount of currency needed to reserve for creating a multisig execution or to store
+		/// a dispatch call for later.
+		const DepositBase: BalanceOf<T> = T::DepositBase::get();
+
+		/// The amount of currency needed per unit threshold when creating a multisig execution.
+		const DepositFactor: BalanceOf<T> = T::DepositFactor::get();
+
+		/// The maximum amount of signatories allowed for a given multisig.
+		const MaxSignatories: u16 = T::MaxSignatories::get();
 
 		/// Immediately dispatch a multi-signature call using a single approval from the caller.
 		///

@@ -84,7 +84,7 @@ mod module {
 	pub trait Trait: system::Trait {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=system {}
 	}
 
 	#[derive(Encode, Decode, Copy, Clone, Serialize, Deserialize)]
