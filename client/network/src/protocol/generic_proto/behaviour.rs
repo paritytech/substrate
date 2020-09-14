@@ -122,10 +122,6 @@ pub struct GenericProto {
 	/// initial handshake.
 	notif_protocols: Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>,
 
-	/// Index within `notif_protocols` of the protocol containing the handshake to report on the
-	/// external API.
-	handshake_protocol_index: usize,
-
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
 
@@ -341,14 +337,12 @@ impl GenericProto {
 		handshake_message: Vec<u8>,
 		peerset: sc_peerset::Peerset,
 		notif_protocols: impl Iterator<Item = (Cow<'static, str>, Vec<u8>)>,
-		handshake_protocol_index: usize,
 	) -> Self {
 		let notif_protocols = notif_protocols
 			.map(|(n, hs)| (n, Arc::new(RwLock::new(hs))))
 			.collect::<Vec<_>>();
 
 		assert!(!notif_protocols.is_empty());
-		assert!(handshake_protocol_index < notif_protocols.len());
 
 		let legacy_handshake_message = Arc::new(RwLock::new(handshake_message));
 		let legacy_protocol = RegisteredProtocol::new(protocol, versions, legacy_handshake_message);
@@ -357,7 +351,6 @@ impl GenericProto {
 			local_peer_id,
 			legacy_protocol,
 			notif_protocols,
-			handshake_protocol_index,
 			peerset,
 			peers: FnvHashMap::default(),
 			delays: Default::default(),
@@ -869,7 +862,6 @@ impl NetworkBehaviour for GenericProto {
 		NotifsHandlerProto::new(
 			self.legacy_protocol.clone(),
 			self.notif_protocols.clone(),
-			self.handshake_protocol_index,
 		)
 	}
 
