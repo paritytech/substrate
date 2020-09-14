@@ -23,8 +23,11 @@
 //! The pallet assumes that the amount of members stays at or below `MaxMembers` for its weight
 //! calculations, but enforces this neither in `set_members` nor in `change_members_sorted`.
 //!
-//! A "prime" member may be set allowing their vote to act as the default vote in case of any
-//! abstentions after the voting period.
+//! A "prime" member may be set to help determine the default vote behavior based on chain
+//! config. If `PreimDefaultVote` is used, the prime vote acts as the default vote in case of any
+//! abstentions after the voting period. If `MoreThanMajorityThenPrimeDefaultVote` is used, then
+//! abstentations will first follow the majority of the collective voting, and then the prime
+//! member.
 //!
 //! Voting happens through motions comprising a proposal (i.e. a curried dispatchable) plus a
 //! number of approvals required for it to pass and be called. Motions are open for members to
@@ -71,6 +74,52 @@ pub type ProposalIndex = u32;
 /// vote exactly once, therefore also the number of votes for any given motion.
 pub type MemberCount = u32;
 
+/// Default voting strategy when a member is inactive.
+pub trait DefaultVote {
+	/// Get the default voting strategy, given:
+	///
+	/// - Whether the prime member voted Aye.
+	/// - Raw number of yes votes.
+	/// - Raw number of no votes.
+	/// - Total number of member count.
+	fn default_vote(
+		prime_vote: Option<bool>,
+		yes_votes: MemberCount,
+		no_votes: MemberCount,
+		len: MemberCount,
+	) -> bool;
+}
+
+/// Set the prime member's vote as the default vote.
+pub struct PrimeDefaultVote;
+
+impl DefaultVote for PrimeDefaultVote {
+	fn default_vote(
+		prime_vote: Option<bool>,
+		_yes_votes: MemberCount,
+		_no_votes: MemberCount,
+		_len: MemberCount,
+	) -> bool {
+		prime_vote.unwrap_or(false)
+	}
+}
+
+/// First see if yes vote are over majority of the whole collective. If so, set the default vote
+/// as yes. Otherwise, use the prime meber's vote as the default vote.
+pub struct MoreThanMajorityThenPrimeDefaultVote;
+
+impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
+	fn default_vote(
+		prime_vote: Option<bool>,
+		yes_votes: MemberCount,
+		_no_votes: MemberCount,
+		len: MemberCount,
+	) -> bool {
+		let more_than_majority = yes_votes * 2 > len;
+		more_than_majority || prime_vote.unwrap_or(false)
+	}
+}
+
 pub trait WeightInfo {
 	fn set_members(m: u32, n: u32, p: u32, ) -> Weight;
 	fn execute(b: u32, m: u32, ) -> Weight;
@@ -109,6 +158,9 @@ pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	/// + Benchmarks will need to be re-run and weights adjusted if this changes.
 	/// + This pallet assumes that dependents keep to the limit without enforcing it.
 	type MaxMembers: Get<MemberCount>;
+
+	/// Default vote strategy of this collective.
+	type DefaultVote: DefaultVote;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -157,8 +209,7 @@ decl_storage! {
 		pub ProposalCount get(fn proposal_count): u32;
 		/// The current members of the collective. This is stored sorted (just by value).
 		pub Members get(fn members): Vec<T::AccountId>;
-		/// The member who provides the default vote for any other members that do not vote before
-		/// the timeout. If None, then no member has that privilege.
+		/// The prime member that helps determine the default vote behavior in case of absentations.
 		pub Prime get(fn prime): Option<T::AccountId>;
 	}
 	add_extra_genesis {
@@ -587,8 +638,10 @@ decl_module! {
 			// Only allow actual closing of the proposal after the voting period has ended.
 			ensure!(system::Module::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 
-			// default to true only if there's a prime and they voted in favour.
-			let default = Self::prime().map_or(false, |who| voting.ayes.iter().any(|a| a == &who));
+			let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|a| a == &who));
+
+			// default voting strategy.
+			let default = T::DefaultVote::default_vote(prime_vote, yes_votes, no_votes, seats);
 
 			let abstentions = seats - (yes_votes + no_votes);
 			match default {
@@ -945,6 +998,17 @@ mod tests {
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
+		type DefaultVote = PrimeDefaultVote;
+		type WeightInfo = ();
+	}
+	impl Trait<Instance2> for Test {
+		type Origin = Origin;
+		type Proposal = Call;
+		type Event = Event;
+		type MotionDuration = MotionDuration;
+		type MaxProposals = MaxProposals;
+		type MaxMembers = MaxMembers;
+		type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
 		type WeightInfo = ();
 	}
 	impl Trait for Test {
@@ -954,6 +1018,7 @@ mod tests {
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
+		type DefaultVote = PrimeDefaultVote;
 		type WeightInfo = ();
 	}
 
@@ -968,6 +1033,7 @@ mod tests {
 		{
 			System: system::{Module, Call, Event<T>},
 			Collective: collective::<Instance1>::{Module, Call, Event<T>, Origin<T>, Config<T>},
+			CollectiveMajority: collective::<Instance2>::{Module, Call, Event<T>, Origin<T>, Config<T>},
 			DefaultCollective: collective::{Module, Call, Event<T>, Origin<T>, Config<T>},
 		}
 	);
@@ -978,10 +1044,18 @@ mod tests {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
 			}),
+			collective_Instance2: Some(collective::GenesisConfig {
+				members: vec![1, 2, 3, 4, 5],
+				phantom: Default::default(),
+			}),
 			collective: None,
 		}.build_storage().unwrap().into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext
+	}
+
+	fn make_proposal(value: u64) -> Call {
+		Call::System(frame_system::Call::remark(value.encode()))
 	}
 
 	#[test]
@@ -990,10 +1064,6 @@ mod tests {
 			assert_eq!(Collective::members(), vec![1, 2, 3]);
 			assert_eq!(Collective::proposals(), Vec::<H256>::new());
 		});
-	}
-
-	fn make_proposal(value: u64) -> Call {
-		Call::System(frame_system::Call::remark(value.encode()))
 	}
 
 	#[test]
@@ -1110,6 +1180,34 @@ mod tests {
 				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 3, 0))),
 				record(Event::collective_Instance1(RawEvent::Approved(hash.clone()))),
 				record(Event::collective_Instance1(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
+			]);
+		});
+	}
+
+	#[test]
+	fn close_with_no_prime_but_majority_works() {
+		new_test_ext().execute_with(|| {
+			let proposal = make_proposal(42);
+			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+			let proposal_weight = proposal.get_dispatch_info().weight;
+			let hash = BlakeTwo256::hash_of(&proposal);
+			assert_ok!(CollectiveMajority::set_members(Origin::root(), vec![1, 2, 3, 4, 5], Some(5), MaxMembers::get()));
+
+			assert_ok!(CollectiveMajority::propose(Origin::signed(1), 5, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(CollectiveMajority::vote(Origin::signed(2), hash.clone(), 0, true));
+			assert_ok!(CollectiveMajority::vote(Origin::signed(3), hash.clone(), 0, true));
+
+			System::set_block_number(4);
+			assert_ok!(CollectiveMajority::close(Origin::signed(4), hash.clone(), 0, proposal_weight, proposal_len));
+
+			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
+			assert_eq!(System::events(), vec![
+				record(Event::collective_Instance2(RawEvent::Proposed(1, 0, hash.clone(), 5))),
+				record(Event::collective_Instance2(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::collective_Instance2(RawEvent::Voted(3, hash.clone(), true, 3, 0))),
+				record(Event::collective_Instance2(RawEvent::Closed(hash.clone(), 5, 0))),
+				record(Event::collective_Instance2(RawEvent::Approved(hash.clone()))),
+				record(Event::collective_Instance2(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
 			]);
 		});
 	}
