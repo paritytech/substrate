@@ -171,8 +171,8 @@ pub trait PowAlgorithm<B: BlockT> {
 	) -> Result<Option<bool>, Error<B>> {
 		Ok(None)
 	}
-	/// Break a fork choice tie. 
-	/// 
+	/// Break a fork choice tie.
+	///
 	/// By default this chooses the earliest block seen. Using uniform tie
 	/// breaking algorithms will help to protect against selfish mining.
 	///
@@ -363,16 +363,7 @@ impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, A
 			block.body = Some(check_block.deconstruct().1);
 		}
 
-		let inner_seal = match block.post_digests.last() {
-			Some(DigestItem::Seal(id, seal)) => {
-				if id == &POW_ENGINE_ID {
-					seal.clone()
-				} else {
-					return Err(Error::<B>::WrongEngine(*id).into())
-				}
-			},
-			_ => return Err(Error::<B>::HeaderUnsealed(block.header.hash()).into()),
-		};
+		let inner_seal = fetch_seal::<B>(block.post_digests.last(), block.header.hash())?;
 
 		let intermediate = block.take_intermediate::<PowIntermediate::<Algorithm::Difficulty>>(
 			INTERMEDIATE_KEY
@@ -406,16 +397,10 @@ impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, A
 					Ordering::Less => false,
 					Ordering::Greater => true,
 					Ordering::Equal => {
-						let best_inner_seal = match best_header.digest().logs.last() {
-							Some(DigestItem::Seal(id, seal)) => {
-								if id == &POW_ENGINE_ID {
-									seal.clone()
-								} else {
-									return Err(Error::<B>::WrongEngine(*id).into())
-								}
-							},
-							_ => return Err(Error::<B>::HeaderUnsealed(best_hash).into()),
-						};
+						let best_inner_seal = fetch_seal::<B>(
+							best_header.digest().logs.last(),
+							best_hash,
+						)?;
 
 						self.algorithm.break_tie(&best_inner_seal, &inner_seal)
 					},
@@ -756,4 +741,21 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Err
 	}
 
 	Ok(pre_digest)
+}
+
+/// Fetch PoW seal.
+fn fetch_seal<B: BlockT>(
+	digest: Option<&DigestItem<B::Hash>>,
+	hash: B::Hash,
+) -> Result<Vec<u8>, Error<B>> {
+	match digest {
+		Some(DigestItem::Seal(id, seal)) => {
+			if id == &POW_ENGINE_ID {
+				Ok(seal.clone())
+			} else {
+				return Err(Error::<B>::WrongEngine(*id).into())
+			}
+		},
+		_ => return Err(Error::<B>::HeaderUnsealed(hash).into()),
+	}
 }
