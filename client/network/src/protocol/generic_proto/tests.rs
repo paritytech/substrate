@@ -20,7 +20,14 @@ use crate::protocol::generic_proto::{GenericProto, GenericProtoOut};
 
 use futures::prelude::*;
 use libp2p::{PeerId, Multiaddr, Transport};
-use libp2p::core::{connection::{ConnectionId, ListenerId}, ConnectedPoint};
+use libp2p::core::{
+	connection::{ConnectionId, ListenerId},
+	ConnectedPoint,
+	muxing,
+	transport::MemoryTransport,
+	upgrade
+};
+use libp2p::{identity, noise, yamux};
 use libp2p::swarm::{
 	Swarm, ProtocolsHandler, IntoProtocolsHandler, PollParameters,
 	NetworkBehaviour, NetworkBehaviourAction
@@ -32,7 +39,7 @@ use std::{error, io, iter, task::{Context, Poll}, time::Duration};
 fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 	let mut out = Vec::with_capacity(2);
 
-	let keypairs: Vec<_> = (0..2).map(|_| libp2p::identity::Keypair::generate_ed25519()).collect();
+	let keypairs: Vec<_> = (0..2).map(|_| identity::Keypair::generate_ed25519()).collect();
 	let addrs: Vec<Multiaddr> = (0..2)
 		.map(|_| format!("/memory/{}", rand::random::<u64>()).parse().unwrap())
 		.collect();
@@ -40,25 +47,16 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 	for index in 0 .. 2 {
 		let keypair = keypairs[index].clone();
 		let local_peer_id = keypair.public().into_peer_id();
-		let transport = libp2p::core::transport::MemoryTransport
-			.and_then(move |out, endpoint| {
-				let secio = libp2p::secio::SecioConfig::new(keypair);
-				libp2p::core::upgrade::apply(
-					out,
-					secio,
-					endpoint,
-					libp2p::core::upgrade::Version::V1
-				)
-			})
-			.and_then(move |(peer_id, stream), endpoint| {
-				libp2p::core::upgrade::apply(
-					stream,
-					libp2p::yamux::Config::default(),
-					endpoint,
-					libp2p::core::upgrade::Version::V1
-				)
-					.map_ok(|muxer| (peer_id, libp2p::core::muxing::StreamMuxerBox::new(muxer)))
-			})
+
+		let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+			.into_authentic(&keypair)
+			.unwrap();
+
+		let transport = MemoryTransport
+			.upgrade(upgrade::Version::V1)
+			.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
+			.multiplex(yamux::Config::default())
+			.map(|(peer, muxer), _| (peer, muxing::StreamMuxerBox::new(muxer)))
 			.timeout(Duration::from_secs(20))
 			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 			.boxed();
