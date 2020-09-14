@@ -42,8 +42,6 @@ git config --global user.email '<>'
 
 cargo install -f --version 0.2.0 diener
 
-SUBSTRATE_PATH=$(pwd)
-
 # Merge master into our branch before building Polkadot to make sure we don't miss
 # any commits that are required by Polkadot.
 git merge origin/master
