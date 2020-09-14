@@ -51,7 +51,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	(
 		impl Fn(
 			node_rpc::DenyUnsafe,
-			sc_rpc::SubscriptionTaskExecutor
+			sc_rpc::SubscriptionTaskExecutor,
 		) -> node_rpc::IoHandler,
 		(
 			sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,

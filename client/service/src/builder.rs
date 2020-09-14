@@ -73,9 +73,10 @@ pub trait RpcExtensionBuilder {
 
 	/// Returns an instance of the RPC extension for a particular `DenyUnsafe`
 	/// value, e.g. the RPC extension might not expose some unsafe methods.
-	fn build(&self,
+	fn build(
+		&self,
 		deny: sc_rpc::DenyUnsafe,
-		subscription_executor: sc_rpc::SubscriptionTaskExecutor
+		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
 	) -> Self::Output;
 }
 
@@ -85,9 +86,10 @@ impl<F, R> RpcExtensionBuilder for F where
 {
 	type Output = R;
 
-	fn build(&self,
+	fn build(
+		&self,
 		deny: sc_rpc::DenyUnsafe,
-		subscription_executor: sc_rpc::SubscriptionTaskExecutor
+		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
 	) -> Self::Output {
 		(*self)(deny, subscription_executor)
 	}
@@ -103,9 +105,10 @@ impl<R> RpcExtensionBuilder for NoopRpcExtensionBuilder<R> where
 {
 	type Output = R;
 
-	fn build(&self,
+	fn build(
+		&self,
 		_deny: sc_rpc::DenyUnsafe,
-		_subscription_executor: sc_rpc::SubscriptionTaskExecutor
+		_subscription_executor: sc_rpc::SubscriptionTaskExecutor,
 	) -> Self::Output {
 		self.0.clone()
 	}
