@@ -234,10 +234,10 @@ benchmarks! {
 	}
 
 	set_validator_count {
-		let c in 0 .. MAX_VALIDATORS;
-	}: _(RawOrigin::Root, c)
+		let validator_count = MAX_VALIDATORS;
+	}: _(RawOrigin::Root, validator_count)
 	verify {
-		assert_eq!(ValidatorCount::get(), c);
+		assert_eq!(ValidatorCount::get(), validator_count);
 	}
 
 	force_no_eras {}: _(RawOrigin::Root)
