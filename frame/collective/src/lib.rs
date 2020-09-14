@@ -999,6 +999,16 @@ mod tests {
 		type DefaultVote = PrimeDefaultVote;
 		type WeightInfo = ();
 	}
+	impl Trait<Instance2> for Test {
+		type Origin = Origin;
+		type Proposal = Call;
+		type Event = Event;
+		type MotionDuration = MotionDuration;
+		type MaxProposals = MaxProposals;
+		type MaxMembers = MaxMembers;
+		type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
+		type WeightInfo = ();
+	}
 	impl Trait for Test {
 		type Origin = Origin;
 		type Proposal = Call;
@@ -1021,6 +1031,7 @@ mod tests {
 		{
 			System: system::{Module, Call, Event<T>},
 			Collective: collective::<Instance1>::{Module, Call, Event<T>, Origin<T>, Config<T>},
+			CollectiveMajority: collective::<Instance2>::{Module, Call, Event<T>, Origin<T>, Config<T>},
 			DefaultCollective: collective::{Module, Call, Event<T>, Origin<T>, Config<T>},
 		}
 	);
@@ -1031,10 +1042,18 @@ mod tests {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
 			}),
+			collective_Instance2: Some(collective::GenesisConfig {
+				members: vec![1, 2, 3, 4, 5],
+				phantom: Default::default(),
+			}),
 			collective: None,
 		}.build_storage().unwrap().into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext
+	}
+
+	fn make_proposal(value: u64) -> Call {
+		Call::System(frame_system::Call::remark(value.encode()))
 	}
 
 	#[test]
@@ -1043,10 +1062,6 @@ mod tests {
 			assert_eq!(Collective::members(), vec![1, 2, 3]);
 			assert_eq!(Collective::proposals(), Vec::<H256>::new());
 		});
-	}
-
-	fn make_proposal(value: u64) -> Call {
-		Call::System(frame_system::Call::remark(value.encode()))
 	}
 
 	#[test]
@@ -1163,6 +1178,34 @@ mod tests {
 				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 3, 0))),
 				record(Event::collective_Instance1(RawEvent::Approved(hash.clone()))),
 				record(Event::collective_Instance1(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
+			]);
+		});
+	}
+
+	#[test]
+	fn close_with_no_prime_but_majority_works() {
+		new_test_ext().execute_with(|| {
+			let proposal = make_proposal(42);
+			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+			let proposal_weight = proposal.get_dispatch_info().weight;
+			let hash = BlakeTwo256::hash_of(&proposal);
+			assert_ok!(CollectiveMajority::set_members(Origin::root(), vec![1, 2, 3, 4, 5], Some(5), MaxMembers::get()));
+
+			assert_ok!(CollectiveMajority::propose(Origin::signed(1), 5, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(CollectiveMajority::vote(Origin::signed(2), hash.clone(), 0, true));
+			assert_ok!(CollectiveMajority::vote(Origin::signed(3), hash.clone(), 0, true));
+
+			System::set_block_number(4);
+			assert_ok!(CollectiveMajority::close(Origin::signed(4), hash.clone(), 0, proposal_weight, proposal_len));
+
+			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
+			assert_eq!(System::events(), vec![
+				record(Event::collective_Instance2(RawEvent::Proposed(1, 0, hash.clone(), 5))),
+				record(Event::collective_Instance2(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::collective_Instance2(RawEvent::Voted(3, hash.clone(), true, 3, 0))),
+				record(Event::collective_Instance2(RawEvent::Closed(hash.clone(), 5, 0))),
+				record(Event::collective_Instance2(RawEvent::Approved(hash.clone()))),
+				record(Event::collective_Instance2(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
 			]);
 		});
 	}
