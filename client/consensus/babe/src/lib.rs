@@ -1334,7 +1334,13 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 			Some(ForkChoiceStrategy::Custom(if total_weight > last_best_weight {
 				true
 			} else if total_weight == last_best_weight {
-				number > last_best_number
+				if number > last_best_number {
+					true
+				} else if number < last_best_number {
+					false
+				} else {
+					hash > last_best
+				}
 			} else {
 				false
 			}))
