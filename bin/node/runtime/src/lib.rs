@@ -849,6 +849,9 @@ impl pallet_society::Trait for Runtime {
 
 parameter_types! {
 	pub const MinVestedTransfer: Balance = 100 * DOLLARS;
+	// For weight estimation, we assume that the most locks on an individual account will be 50.
+	// This number may need to be adjusted in the future if this assumption no longer holds true.
+	pub const MaxLocks: u32 = 50;
 }
 
 impl pallet_vesting::Trait for Runtime {
@@ -856,7 +859,8 @@ impl pallet_vesting::Trait for Runtime {
 	type Currency = Balances;
 	type BlockNumberToBalance = ConvertInto;
 	type MinVestedTransfer = MinVestedTransfer;
-	type WeightInfo = ();
+	type MaxLocks = MaxLocks;
+	type WeightInfo = weights::pallet_vesting::WeightInfo;
 }
 
 construct_runtime!(

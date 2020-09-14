@@ -61,6 +61,7 @@ use frame_support::traits::{
 use frame_system::{ensure_signed, ensure_root};
 
 mod benchmarking;
+mod default_weights;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
@@ -70,14 +71,7 @@ pub trait WeightInfo {
 	fn vest_other_locked(l: u32, ) -> Weight;
 	fn vest_other_unlocked(l: u32, ) -> Weight;
 	fn vested_transfer(l: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn vest_locked(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn vest_unlocked(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn vest_other_locked(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn vest_other_unlocked(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn vested_transfer(_l: u32, ) -> Weight { 1_000_000_000 }
+	fn force_vested_transfer(l: u32, ) -> Weight;
 }
 
 pub trait Trait: frame_system::Trait {
@@ -92,6 +86,10 @@ pub trait Trait: frame_system::Trait {
 
 	/// The minimum amount transferred to call `vested_transfer`.
 	type MinVestedTransfer: Get<BalanceOf<Self>>;
+
+	/// The maximum number of balance locks for a user. Used for weight estimation,
+	/// and not enforced by this pallet.
+	type MaxLocks: Get<u32>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -171,7 +169,7 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
 		/// The amount vested has been updated. This could indicate more funds are available. The
-		/// balance given is the amount which is left unvested (and thus locked). 
+		/// balance given is the amount which is left unvested (and thus locked).
 		/// \[account, unvested\]
 		VestingUpdated(AccountId, Balance),
 		/// An \[account\] has become fully vested. No further vesting can happen.
@@ -218,7 +216,9 @@ decl_module! {
 		///     - Locked: 44.43 + .284 * l µs (min square analysis)
 		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 50_000_000 + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = T::WeightInfo::vest_locked(T::MaxLocks::get())
+			.max(T::WeightInfo::vest_unlocked(T::MaxLocks::get()))
+		]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
@@ -243,8 +243,9 @@ decl_module! {
 		///     - Locked: 48.16 + .103 * l µs (min square analysis)
 		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 50_000_000 + T::DbWeight::get().reads_writes(3, 3)]
-		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		#[weight = T::WeightInfo::vest_other_locked(T::MaxLocks::get())
+			.max(T::WeightInfo::vest_other_unlocked(T::MaxLocks::get()))
+		]		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
 		}
@@ -267,7 +268,7 @@ decl_module! {
 		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
 		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(3, 3)]
+		#[weight = T::WeightInfo::vested_transfer(T::MaxLocks::get())]
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -306,7 +307,7 @@ decl_module! {
 		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
 		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(4, 4)]
+		#[weight = T::WeightInfo::force_vested_transfer(T::MaxLocks::get())]
 		pub fn force_vested_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -473,12 +474,14 @@ mod tests {
 	}
 	parameter_types! {
 		pub const MinVestedTransfer: u64 = 256 * 2;
+		pub const MaxLocks: u32 = 10;
 	}
 	impl Trait for Test {
 		type Event = ();
 		type Currency = Balances;
 		type BlockNumberToBalance = Identity;
 		type MinVestedTransfer = MinVestedTransfer;
+		type MaxLocks = MaxLocks;
 		type WeightInfo = ();
 	}
 	type System = frame_system::Module<Test>;
