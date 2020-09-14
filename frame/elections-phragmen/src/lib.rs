@@ -114,6 +114,67 @@ type BalanceOf<T> =
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
+
+/// Helper functions for migrations of this module.
+pub mod migrations {
+	use super::*;
+
+	/// Migrate from the old legacy voting bond (fixed) to the new one (per-vote dynamic).
+	pub fn migrate_deposits_to_per_vote<T: Trait>() -> Weight {
+		if <Module<T>>::pallet_storage_version() == StorageVersion::V1 {
+			let mut consumed_weight = 0;
+			let mut add_weight = |reads, writes| {
+				consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
+			};
+			let mut success = 0u32;
+			let mut error = 0u32;
+			<Voting<T>>::iter().for_each(|(who, (_, votes))| {
+				// first, reserve the new amount.
+				match T::Currency::reserve(&who, <Module<T>>::deposit_of(votes.len())) {
+					Ok(_) => {
+						// Ok. Unreserve the old bond.
+						T::Currency::unreserve(&who, T::LegacyVotingBond::get());
+						add_weight(0, 1);
+						success += 1;
+					}
+					Err(_) => {
+						// force remove this voter.
+						// we can't use `Self::do_remove_voter()` because that one un-reserves the
+						// new bond amount. Manually remove.
+
+						// 1 write
+						<Voting<T>>::remove(&who);
+						// 1 read 1 write
+						T::Currency::remove_lock(T::ModuleId::get(), &who);
+						// 1 read 1 write
+						T::Currency::unreserve(&who, T::LegacyVotingBond::get());
+
+						add_weight(2, 3);
+						error += 1;
+					}
+				}
+			});
+
+			// for iterating over `Voting<T>`
+			consumed_weight += T::DbWeight::get().reads((success + error).into());
+
+			frame_support::debug::print!(
+				"🏛 pallet-elections-phragmen: Migration to new deposit scheme done. {} accounts moved successfully, {} failed.",
+				success,
+				error,
+			);
+
+			PalletStorageVersion::put(StorageVersion::V2);
+			consumed_weight
+		} else {
+			frame_support::debug::print!(
+				"🏛 pallet-elections-phragmen: Tried to run migration but PalletStorageVersion is updated to V2. This code probably needs to be removed now.",
+			);
+			0
+		}
+	}
+}
+
 /// An indication that the renouncing account currently has which of the below roles.
 #[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug)]
 pub enum Renouncing {
@@ -345,57 +406,7 @@ decl_module! {
 		const ModuleId: LockIdentifier  = T::ModuleId::get();
 
 		fn on_runtime_upgrade() -> Weight {
-			if Self::pallet_storage_version() == StorageVersion::V1 {
-				let mut consumed_weight = 0;
-				let mut add_weight = |reads, writes| {
-					consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
-				};
-				let mut success = 0u32;
-				let mut error = 0u32;
-				<Voting<T>>::iter().for_each(|(who, (_, votes))| {
-					// first, reserve the new amount.
-					match T::Currency::reserve(&who, Self::deposit_of(votes.len())) {
-						Ok(_) => {
-							// Ok. Unreserve the old bond.
-							T::Currency::unreserve(&who, T::LegacyVotingBond::get());
-							add_weight(0, 1);
-							success += 1;
-						}
-						Err(_) => {
-							// force remove this voter.
-							// we can't use `Self::do_remove_voter()` because that one un-reserves the
-							// new bond amount. Manually remove.
-
-							// 1 write
-							<Voting<T>>::remove(&who);
-							// 1 read 1 write
-							T::Currency::remove_lock(T::ModuleId::get(), &who);
-							// 1 read 1 write
-							T::Currency::unreserve(&who, T::LegacyVotingBond::get());
-
-							add_weight(2, 3);
-							error += 1;
-						}
-					}
-				});
-
-				// for iterating over `Voting<T>`
-				consumed_weight += T::DbWeight::get().reads((success + error).into());
-
-				frame_support::debug::print!(
-					"🏛 pallet-elections-phragmen: Migration to new deposit scheme done. {} accounts moved successfully, {} failed.",
-					success,
-					error,
-				);
-
-				PalletStorageVersion::put(StorageVersion::V2);
-				consumed_weight
-			} else {
-				frame_support::debug::print!(
-					"🏛 pallet-elections-phragmen: Tried to run migration but PalletStorageVersion is updated to V2. This code probably needs to be removed now.",
-				);
-				0
-			}
+			migrations::migrate_deposits_to_per_vote::<T>()
 		}
 
 		/// Vote for a set of candidates for the upcoming round of election. This can be called to
