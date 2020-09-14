@@ -25,7 +25,7 @@ mod tests {
 	use codec::{Encode, Decode, EncodeLike};
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
 	}
 
 	pub trait Trait {
@@ -420,7 +420,7 @@ mod test2 {
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
 	}
 
 	type PairOf<T> = (T, T);
@@ -455,7 +455,7 @@ mod test3 {
 		type BlockNumber;
 	}
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
 	}
 	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
@@ -485,7 +485,7 @@ mod test_append_and_len {
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]

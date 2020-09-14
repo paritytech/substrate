@@ -17,18 +17,22 @@
 
 //! Houses the code that implements the transactional overlay storage.
 
-use super::{StorageKey, StorageValue};
+use super::{StorageKey, StorageValue, Extrinsics};
 
-use itertools::Itertools;
-use std::collections::{HashSet, BTreeMap, BTreeSet};
+#[cfg(feature = "std")]
+use std::collections::HashSet as Set;
+#[cfg(not(feature = "std"))]
+use sp_std::collections::btree_set::BTreeSet as Set;
+
+use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use smallvec::SmallVec;
-use log::warn;
+use crate::warn;
 
 const PROOF_OVERLAY_NON_EMPTY: &str = "\
 	An OverlayValue is always created with at least one transaction and dropped as soon
 	as the last transaction is removed; qed";
 
-type DirtyKeysSets = SmallVec<[HashSet<StorageKey>; 5]>;
+type DirtyKeysSets = SmallVec<[Set<StorageKey>; 5]>;
 type Transactions = SmallVec<[InnerValue; 5]>;
 
 /// Error returned when trying to commit or rollback while no transaction is open or
@@ -63,7 +67,7 @@ struct InnerValue {
 	value: Option<StorageValue>,
 	/// The set of extrinsic indices where the values has been changed.
 	/// Is filled only if runtime has announced changes trie support.
-	extrinsics: BTreeSet<u32>,
+	extrinsics: Extrinsics,
 }
 
 /// An overlay that contains all versions of a value for a specific key.
@@ -105,8 +109,10 @@ impl OverlayedValue {
 	}
 
 	/// Unique list of extrinsic indices which modified the value.
-	pub fn extrinsics(&self) -> impl Iterator<Item=&u32> {
-		self.transactions.iter().flat_map(|t| t.extrinsics.iter()).unique()
+	pub fn extrinsics(&self) -> BTreeSet<u32> {
+		let mut set = BTreeSet::new();
+		self.transactions.iter().for_each(|t| t.extrinsics.copy_extrinsics_into(&mut set));
+		set
 	}
 
 	/// Mutable reference to the most recent version.
@@ -120,7 +126,7 @@ impl OverlayedValue {
 	}
 
 	/// Mutable reference to the set which holds the indices for the **current transaction only**.
-	fn transaction_extrinsics_mut(&mut self) -> &mut BTreeSet<u32> {
+	fn transaction_extrinsics_mut(&mut self) -> &mut Extrinsics {
 		&mut self.transactions.last_mut().expect(PROOF_OVERLAY_NON_EMPTY).extrinsics
 	}
 
@@ -163,9 +169,9 @@ impl OverlayedChangeSet {
 	/// This changeset might be created when there are already open transactions.
 	/// We need to catch up here so that the child is at the same transaction depth.
 	pub fn spawn_child(&self) -> Self {
-		use std::iter::repeat;
+		use sp_std::iter::repeat;
 		Self {
-			dirty_keys: repeat(HashSet::new()).take(self.transaction_depth()).collect(),
+			dirty_keys: repeat(Set::new()).take(self.transaction_depth()).collect(),
 			num_client_transactions: self.num_client_transactions,
 			execution_mode: self.execution_mode,
 			.. Default::default()
@@ -232,7 +238,7 @@ impl OverlayedChangeSet {
 		at_extrinsic: Option<u32>,
 	) {
 		for (key, val) in self.changes.iter_mut().filter(|(k, v)| predicate(k, v)) {
-			val.set(None, insert_dirty(&mut self.dirty_keys, key.to_owned()), at_extrinsic);
+			val.set(None, insert_dirty(&mut self.dirty_keys, key.clone()), at_extrinsic);
 		}
 	}
 
@@ -243,7 +249,7 @@ impl OverlayedChangeSet {
 
 	/// Get the change that is next to the supplied key.
 	pub fn next_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
-		use std::ops::Bound;
+		use sp_std::ops::Bound;
 		let range = (Bound::Excluded(key), Bound::Unbounded);
 		self.changes.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v))
 	}
@@ -388,7 +394,7 @@ mod test {
 
 	fn assert_changes(is: &OverlayedChangeSet, expected: &Changes) {
 		let is: Changes = is.changes().map(|(k, v)| {
-			(k.as_ref(), (v.value().map(AsRef::as_ref), v.extrinsics().cloned().collect()))
+			(k.as_ref(), (v.value().map(AsRef::as_ref), v.extrinsics().into_iter().collect()))
 		}).collect();
 		assert_eq!(&is, expected);
 	}
