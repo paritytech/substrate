@@ -235,24 +235,24 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as Trait<I>>::Balance
 	{
-		/// An account was created with some free balance. [account, free_balance]
+		/// An account was created with some free balance. \[account, free_balance\]
 		Endowed(AccountId, Balance),
 		/// An account was removed whose balance was non-zero but below ExistentialDeposit,
-		/// resulting in an outright loss. [account, balance]
+		/// resulting in an outright loss. \[account, balance\]
 		DustLost(AccountId, Balance),
-		/// Transfer succeeded. [from, to, value]
+		/// Transfer succeeded. \[from, to, value\]
 		Transfer(AccountId, AccountId, Balance),
-		/// A balance was set by root. [who, free, reserved]
+		/// A balance was set by root. \[who, free, reserved\]
 		BalanceSet(AccountId, Balance, Balance),
-		/// Some amount was deposited (e.g. for transaction fees). [who, deposit]
+		/// Some amount was deposited (e.g. for transaction fees). \[who, deposit\]
 		Deposit(AccountId, Balance),
-		/// Some balance was reserved (moved from free to reserved). [who, value]
+		/// Some balance was reserved (moved from free to reserved). \[who, value\]
 		Reserved(AccountId, Balance),
-		/// Some balance was unreserved (moved from reserved to free). [who, value]
+		/// Some balance was unreserved (moved from reserved to free). \[who, value\]
 		Unreserved(AccountId, Balance),
 		/// Some balance was moved from the reserve of the first account to the second account.
 		/// Final argument indicates the destination balance type.
-		/// [from, to, balance, destination_status]
+		/// \[from, to, balance, destination_status\]
 		ReserveRepatriated(AccountId, AccountId, Balance, Status),
 	}
 );
