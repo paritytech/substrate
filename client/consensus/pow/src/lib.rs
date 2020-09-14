@@ -171,9 +171,12 @@ pub trait PowAlgorithm<B: BlockT> {
 	) -> Result<Option<bool>, Error<B>> {
 		Ok(None)
 	}
-	/// Break a fork choice tie. By default this chooses the earliest block seen. Using uniform tie
-	/// breaking algorithms will help to protect against selfish mining. Returns if the new seal
-	/// should be considered best block.
+	/// Break a fork choice tie. 
+	/// 
+	/// By default this chooses the earliest block seen. Using uniform tie
+	/// breaking algorithms will help to protect against selfish mining.
+	///
+	/// Returns if the new seal should be considered best block.
 	fn break_tie(
 		&self,
 		_own_seal: &Seal,
