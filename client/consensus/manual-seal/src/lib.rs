@@ -18,6 +18,7 @@
 
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
+//! TODO: some more doc
 
 use core::{time::Duration, marker::Send};
 use futures::prelude::*;
@@ -194,10 +195,10 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 
 	let stream: Box<dyn Stream<Item = _> + Unpin + Send> = match (heartbeat, cooldown) {
 		(None, None) => Box::new(commands_stream),
-		_ => Box::new(HeartbeatStream::new(
-			Box::new(commands_stream),
-			HeartbeatOptions { heartbeat, cooldown, finalize },
-		).expect("HeartbeatStream cannot be created")),
+		_ => Box::new(
+			HeartbeatStream::new(Box::new(commands_stream), HeartbeatOptions { heartbeat, cooldown, finalize })
+				.expect("HeartbeatStream creation error.")
+		),
 	};
 
 	run_manual_seal(

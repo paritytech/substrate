@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! RPC interface for the ManualSeal Engine.
+
 use sp_consensus::ImportedAux;
 use jsonrpc_core::Error;
 use jsonrpc_derive::rpc;

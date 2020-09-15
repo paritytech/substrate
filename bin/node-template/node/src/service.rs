@@ -177,7 +177,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			select_chain,
 			inherent_data_providers,
 			Some(Duration::from_secs(30)),
-			Some(Duration::from_secs(1)),
+			Some(Duration::from_secs(10)),
 			false,
 		);
 		// the AURA authoring task is considered essential, i.e. if it

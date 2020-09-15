@@ -17,6 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! HeartbeatStream type and HeartbeatOptions used in instant seal
+//! TODO: some more doc
+
 use std::{pin::Pin, time::{Duration, Instant}};
 use futures::{
 	prelude::*,
@@ -70,6 +72,11 @@ impl<Hash> HeartbeatStream<Hash> {
 		let delay_for = options.heartbeat.and_then(|hb| Some(Delay::new(hb)));
 		Ok(Self {pool_stream, delay_for, last_blocktime: None, options})
 	}
+
+	fn create_block_now_and_reset_delay(&mut self) {
+		self.last_blocktime = Some(Instant::now());
+		self.delay_for = self.options.heartbeat.and_then(|hb| Some(Delay::new(hb)));
+	}
 }
 
 impl<Hash> Stream for HeartbeatStream<Hash> {
@@ -78,59 +85,55 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		match self.pool_stream.poll_next_unpin(cx) {
 			Poll::Ready(Some(ec)) => {
-				let HeartbeatOptions { heartbeat, cooldown, .. } = self.options;
-
+				let cooldown = self.options.cooldown;
 				match (self.last_blocktime, cooldown) {
 					(Some(last_blocktime), Some(cooldown)) => {
+						// Illustration on variables used below:
+						//      |------time_passed-------+------wait_further------|
+						//   last blocktime           current                  cooldown
+						//
 						let time_passed = Instant::now() - last_blocktime;
 						if time_passed < cooldown {
 							let wait_further = cooldown - time_passed;
-							println!("poll_next: Cooling down, wait further for {:?}", wait_further);
-
-							// We set `delay_future` here so it will wake up when the cooldown since the last
-							//   block created is passed.
+							println!("poll_next: tx come, but cooling down, wait for {:?}", wait_further);
 							self.delay_for = Some(Delay::new(wait_further));
-							return Poll::Pending;
+							// Since we set the `Delay` future above, we call `self.poll_next(cx)`, so it eventually
+							//   polls the delay future.
+							return self.poll_next(cx);
 						}
 
-						// tx come after cooldown period, we want to create block as normal
-						println!("poll_next: Create block due to tx - last_blocktime, cooldown");
-						// reset the timer and delay future
-						self.delay_for = heartbeat.and_then(|hb| Some(Delay::new(hb)));
-						self.last_blocktime = Some(Instant::now());
+						// txs come after cooldown period, so we want to create a block immediately
+						println!("poll_next: Create block due to tx, after cooldown");
+						self.create_block_now_and_reset_delay();
 						Poll::Ready(Some(ec))
 					},
 					_ => {
-						println!("poll_next: Create block due to tx");
-						// reset the timer and delay future
-						self.delay_for = heartbeat.and_then(|hb| Some(Delay::new(hb)));
-						self.last_blocktime = Some(Instant::now());
+						// Either no last_blocktime, so this is the first block created, or
+						//   no `cooldown` in hearbeat option, so we don't need to check cooldown and create
+						//   block immediately
+						println!("poll_next: Create block due to tx, first block or no cooldown");
+						self.create_block_now_and_reset_delay();
 						Poll::Ready(Some(ec))
 					}
 				}
 			},
 
-			// The pool stream ends
+			// The tx_pool stream comes to an end
 			Poll::Ready(None) => {
 				println!("poll_next: None");
 				Poll::Ready(None)
 			},
 
+			// tx_pool pending. We want to check if we need to create a block due to delay_for has been set.
+			//   `delay_for` is set when either there is a heartbeat (options.heartbeat is not `None`), or
+			//   some txs come but the stream is still cooling down.
 			Poll::Pending => {
-				let HeartbeatOptions { heartbeat, finalize, .. } = self.options;
-
+				let finalize = self.options.finalize;
 				match &mut self.delay_for {
 					Some(delay_for) => {
-
-						// We check if the delay for heartbeat has reached
 						if let Poll::Ready(_) = delay_for.poll_unpin(cx) {
-
-							println!("poll_next: Creating heartbeat block");
-
-							// reset the timer and delay future
-							self.delay_for = heartbeat.and_then(|hb| Some(Delay::new(hb)));
-							self.last_blocktime = Some(Instant::now());
-
+							println!("poll_next: Creating a block: delay_for ready");
+							self.create_block_now_and_reset_delay();
 							return Poll::Ready(Some(EngineCommand::SealNewBlock {
 								create_empty: true, // new blocks created due to delay_future can be empty.
 								finalize,
@@ -139,11 +142,12 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 							}));
 						}
 
-						println!("poll_next: Pending");
+						println!("poll_next: Pending - delay_for not ready");
 						Poll::Pending
 					},
 					None => {
-						println!("poll_next: Pending");
+						// `delay_for` is None. This is the case when no options.heartbeat is set.
+						println!("poll_next: Pending - no heartbeat");
 						Poll::Pending
 					}
 				}
