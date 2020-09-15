@@ -545,14 +545,17 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	);
 
 	// RPC
-	let gen_handler = |deny_unsafe: sc_rpc::DenyUnsafe| gen_handler(
-		deny_unsafe, &config, task_manager.spawn_handle(), client.clone(), transaction_pool.clone(),
+	let gen_handler = |deny_unsafe: sc_rpc::DenyUnsafe, rpc_middleware: sc_rpc_server::RpcMiddleware| gen_handler(
+		deny_unsafe, rpc_middleware, &config, task_manager.spawn_handle(), client.clone(), transaction_pool.clone(),
 		keystore.clone(), on_demand.clone(), remote_blockchain.clone(), &*rpc_extensions_builder,
 		backend.offchain_storage(), system_rpc_tx.clone()
 	);
 	let rpc = start_rpc_servers(&config, gen_handler)?;
 	// This is used internally, so don't restrict access to unsafe RPC
-	let rpc_handlers = RpcHandlers(Arc::new(gen_handler(sc_rpc::DenyUnsafe::No).into()));
+	let rpc_handlers = RpcHandlers(Arc::new(gen_handler(
+		sc_rpc::DenyUnsafe::No,
+		sc_rpc_server::RpcMiddleware::new(config.prometheus_registry(), "inbrowser")
+	).into()));
 
 	// Telemetry
 	let telemetry = config.telemetry_endpoints.clone().and_then(|endpoints| {
@@ -671,6 +674,7 @@ fn build_telemetry<TBl: BlockT>(
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	deny_unsafe: sc_rpc::DenyUnsafe,
+	rpc_middleware: sc_rpc_server::RpcMiddleware,
 	config: &Configuration,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
@@ -756,7 +760,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 			system::SystemApi::to_delegate(system),
 			rpc_extensions_builder.build(deny_unsafe, task_executor),
 		),
-		config.prometheus_registry()
+		rpc_middleware
 	)
 }
 

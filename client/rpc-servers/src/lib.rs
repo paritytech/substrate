@@ -26,7 +26,6 @@ use std::io;
 use jsonrpc_core::{IoHandlerExtension, MetaIoHandler};
 use log::error;
 use pubsub::PubSubMetadata;
-use prometheus_endpoint::Registry;
 
 /// Maximal payload accepted by RPC servers.
 const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
@@ -43,10 +42,11 @@ pub use middleware::RpcMiddleware;
 /// Construct rpc `IoHandler`
 pub fn rpc_handler<M: PubSubMetadata>(
 	extension: impl IoHandlerExtension<M>,
-	metrics_registry: Option<&Registry>,
+	rpc_middleware: RpcMiddleware,
 ) -> RpcHandler<M> {
 
-	let io_handler = MetaIoHandler::with_middleware(RpcMiddleware::new(metrics_registry));
+	//let io_handler = MetaIoHandler::with_middleware(RpcMiddleware::new(metrics_registry));
+	let io_handler = MetaIoHandler::with_middleware(rpc_middleware);
 	let mut io = pubsub::PubSubHandler::new(io_handler);
 	extension.augment(&mut io);
 

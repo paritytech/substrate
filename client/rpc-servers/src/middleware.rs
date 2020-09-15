@@ -22,18 +22,20 @@ use jsonrpc_core::{Middleware as RequestMiddleware, Metadata, Request, Response,
 use prometheus_endpoint::{Registry, Counter, PrometheusError, register, U64};
 
 use futures::{future::Either, Future};
+use log::error;
 
-#[derive(Debug)]
 struct RpcMetrics {
 	rpc_calls: Counter<U64>,
 }
 
 impl RpcMetrics {
-	fn register(r: &Registry) -> Result<Self, PrometheusError> {
+	fn register(r: &Registry, transport_prefix: &str) -> Result<Self, PrometheusError> {
+		let collector_name = format!("{}_rpc_calls_total", transport_prefix);
+		let collector_descr = format!("Number of rpc calls received over {}", transport_prefix);
 		Ok(RpcMetrics {
 			rpc_calls: register(Counter::new(
-				"rpc_calls_total",
-				"Number of rpc calls received",
+				collector_name,
+				collector_descr,
 			)?, r)?,
 		})
 	}
@@ -46,9 +48,16 @@ pub struct RpcMiddleware {
 
 impl RpcMiddleware {
 	/// Create an instance of middleware
-	pub fn new(metrics_registry: Option<&Registry>) -> Self {
+	/// transport_prefix must be uniq per handler in order to register Prometheus collector properly
+	pub fn new(metrics_registry: Option<&Registry>, transport_prefix: &str) -> Self {
 		RpcMiddleware {
-			metrics: metrics_registry.and_then(|r| RpcMetrics::register(r).ok()),
+			metrics: metrics_registry.and_then(|r| {
+				let metrics = RpcMetrics::register(r, transport_prefix);
+				if let Err(ref e) = metrics {
+					error!("Cannot register metrics for middleware: {:?}", e);
+				}
+				metrics.ok()
+			})
 		}
 	}
 }
