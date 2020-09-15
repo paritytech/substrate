@@ -146,6 +146,15 @@
 			"website": null
 		},
 		{
+			"prefix": 17,
+			"network": "dark",
+			"displayName": "Dark Mainnet",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": null
+		},
+		{
 			"prefix": 18,
 			"network": "darwinia",
 			"displayName": "Darwinia Chain",
