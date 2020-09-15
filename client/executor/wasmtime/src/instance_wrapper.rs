@@ -26,6 +26,7 @@ use std::{slice, marker};
 use sc_executor_common::{
 	error::{Error, Result},
 	util::{WasmModuleInfo, DataSegmentsSnapshot},
+	wasm_runtime::CallSite,
 };
 use sp_wasm_interface::{Pointer, WordSize, Value};
 use wasmtime::{Engine, Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
@@ -69,6 +70,40 @@ impl ModuleWrapper {
 
 	pub fn data_segments_snapshot(&self) -> &DataSegmentsSnapshot {
 		&self.data_segments_snapshot
+	}
+}
+
+/// Format of the entrypoint.
+pub enum EntryPointType {
+	/// Direct call.
+	Direct,
+	/// Indirect call.
+	Wrapped(u32),
+}
+
+/// Wasm blob entry point.
+pub struct EntryPoint {
+	call_type: EntryPointType,
+	func: wasmtime::Func,
+}
+
+impl EntryPoint {
+	pub fn call(&self, data_ptr: i32, data_len: i32) -> anyhow::Result<u64> {
+		(match self.call_type {
+			EntryPointType::Direct => {
+				self.func.call(&[
+					wasmtime::Val::I32(data_ptr),
+					wasmtime::Val::I32(data_len),
+				])
+			},
+			EntryPointType::Wrapped(func) => {
+				self.func.call(&[
+					wasmtime::Val::I32(func as _),
+					wasmtime::Val::I32(data_ptr),
+					wasmtime::Val::I32(data_len),
+				])
+			},
+		}).map(|results| results[0].unwrap_i64() as u64)
 	}
 }
 
@@ -150,24 +185,73 @@ impl InstanceWrapper {
 	///
 	/// An entrypoint must have a signature `(i32, i32) -> i64`, otherwise this function will return
 	/// an error.
-	pub fn resolve_entrypoint(&self, name: &str) -> Result<wasmtime::Func> {
-		// Resolve the requested method and verify that it has a proper signature.
-		let export = self
-			.instance
-			.get_export(name)
-			.ok_or_else(|| Error::from(format!("Exported method {} is not found", name)))?;
-		let entrypoint = extern_func(&export)
-			.ok_or_else(|| Error::from(format!("Export {} is not a function", name)))?;
-		match (entrypoint.ty().params(), entrypoint.ty().results()) {
-			(&[wasmtime::ValType::I32, wasmtime::ValType::I32], &[wasmtime::ValType::I64]) => {}
-			_ => {
-				return Err(Error::from(format!(
-					"method {} have an unsupported signature",
-					name
-				)))
-			}
-		}
-		Ok(entrypoint.clone())
+	pub fn resolve_entrypoint(&self, site: CallSite) -> Result<EntryPoint> {
+		Ok(match site {
+			CallSite::Export(method) => {
+				// Resolve the requested method and verify that it has a proper signature.
+				let export = self
+					.instance
+					.get_export(method)
+					.ok_or_else(|| Error::from(format!("Exported method {} is not found", method)))?;
+				let func = extern_func(&export)
+					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?
+					.clone();
+				match (func.ty().params(), func.ty().results()) {
+					(&[wasmtime::ValType::I32, wasmtime::ValType::I32], &[wasmtime::ValType::I64]) => {}
+					_ => {
+						return Err(Error::from(format!(
+							"method {} have an unsupported signature",
+							method,
+						)))
+					}
+				}
+				EntryPoint { call_type: EntryPointType::Direct, func }
+			},
+			CallSite::Table(func_ref) => {
+				let table = self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
+				let val = table.get(func_ref)
+					.ok_or(Error::NoTableEntryWithIndex(func_ref))?;
+				let func = val
+					.funcref()
+					.ok_or(Error::TableElementIsNotAFunction(func_ref))?
+					.ok_or(Error::FunctionRefIsNull(func_ref))?
+					.clone();
+
+				match (func.ty().params(), func.ty().results()) {
+					(&[wasmtime::ValType::I32, wasmtime::ValType::I32], &[wasmtime::ValType::I64]) => {}
+					_ => {
+						return Err(Error::from(format!(
+							"Function @{} have an unsupported signature",
+							func_ref,
+						)))
+					}
+				}
+				EntryPoint { call_type: EntryPointType::Direct, func }
+			},
+			CallSite::TableWithWrapper { dispatcher_ref, func } => {
+				let table = self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
+				let val = table.get(dispatcher_ref)
+					.ok_or(Error::NoTableEntryWithIndex(dispatcher_ref))?;
+				let dispatcher = val
+					.funcref()
+					.ok_or(Error::TableElementIsNotAFunction(dispatcher_ref))?
+					.ok_or(Error::FunctionRefIsNull(dispatcher_ref))?;
+
+				match (dispatcher.ty().params(), dispatcher.ty().results()) {
+					(
+						&[wasmtime::ValType::I32, wasmtime::ValType::I32, wasmtime::ValType::I32],
+						&[wasmtime::ValType::I64],
+					) => {},
+					_ => {
+						return Err(Error::from(format!(
+							"Function @{} have an unsupported signature",
+							dispatcher_ref,
+						)))
+					}
+				}
+				EntryPoint { call_type: EntryPointType::Wrapped(func), func: dispatcher.clone() }
+			},
+		})
 	}
 
 	/// Returns an indirect function table of this instance.

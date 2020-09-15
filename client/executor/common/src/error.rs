@@ -84,11 +84,22 @@ pub enum Error {
 	/// No table is present.
 	///
 	/// Call was requested that requires table but none was present in the instance.
+	#[display(fmt="No table exported by wasm blob")]
 	NoTable,
-	/// No table is present.
+	/// No table entry is present.
 	///
 	/// Call was requested that requires specific entry in the table to be present.
+	#[display(fmt="No table entry with index {} in wasm blob exported table", _0)]
+	#[from(ignore)]
 	NoTableEntryWithIndex(u32),
+	/// Table entry is not a function.
+	#[display(fmt="Table element with index {} is not a function in wasm blob exported table", _0)]
+	#[from(ignore)]
+	TableElementIsNotAFunction(u32),
+	/// Function in table is null and thus cannot be called.
+	#[display(fmt="Table entry with index {} in wasm blob is null", _0)]
+	#[from(ignore)]
+	FunctionRefIsNull(u32),
 }
 
 impl std::error::Error for Error {

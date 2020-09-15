@@ -6758,6 +6758,7 @@ dependencies = [
 name = "sc-executor-wasmtime"
 version = "0.8.0-rc6"
 dependencies = [
+ "anyhow",
  "assert_matches",
  "log",
  "parity-scale-codec",
