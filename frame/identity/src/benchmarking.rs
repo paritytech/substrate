@@ -354,7 +354,7 @@ benchmarks! {
 		let s in 1 .. T::MaxSubAccounts::get() - 1;
 
 		let caller: T::AccountId = whitelisted_caller();
-		let _ = add_sub_accounts::<T>(&caller, p)?;
+		let _ = add_sub_accounts::<T>(&caller, s)?;
 		let sub = account("new_sub", 0, SEED);
 		let data = Data::Raw(vec![0; 32]);
 		ensure!(SubsOf::<T>::get(&caller).1.len() as u32 == s, "Subs not set.");
@@ -367,7 +367,7 @@ benchmarks! {
 		let s in 1 .. T::MaxSubAccounts::get();
 
 		let caller: T::AccountId = whitelisted_caller();
-		let (sub, _) = add_sub_accounts::<T>(&caller, p)?.remove(0);
+		let (sub, _) = add_sub_accounts::<T>(&caller, s)?.remove(0);
 		let data = Data::Raw(vec![1; 32]);
 		ensure!(SuperOf::<T>::get(&sub).unwrap().1 != data, "data already set");
 	}: _(RawOrigin::Signed(caller), T::Lookup::unlookup(sub.clone()), data.clone())
@@ -391,7 +391,7 @@ benchmarks! {
 
 		let caller: T::AccountId = whitelisted_caller();
 		let sup = account("super", 0, SEED);
-		let _ = add_sub_accounts::<T>(&sup, p)?;
+		let _ = add_sub_accounts::<T>(&sup, s)?;
 		let sup_origin = RawOrigin::Signed(sup).into();
 		Identity::<T>::add_sub(sup_origin, T::Lookup::unlookup(caller.clone()), Data::Raw(vec![0; 32]))?;
 		ensure!(SuperOf::<T>::contains_key(&caller), "Sub doesn't exists");
