@@ -545,9 +545,13 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	);
 
 	// RPC
-	let gen_handler = |deny_unsafe: sc_rpc::DenyUnsafe, rpc_middleware: sc_rpc_server::RpcMiddleware| gen_handler(
-		deny_unsafe, rpc_middleware, &config, task_manager.spawn_handle(), client.clone(), transaction_pool.clone(),
-		keystore.clone(), on_demand.clone(), remote_blockchain.clone(), &*rpc_extensions_builder,
+	let gen_handler = |
+		deny_unsafe: sc_rpc::DenyUnsafe,
+		rpc_middleware: sc_rpc_server::RpcMiddleware
+	| gen_handler(
+		deny_unsafe, rpc_middleware, &config, task_manager.spawn_handle(),
+		client.clone(), transaction_pool.clone(), keystore.clone(),
+		on_demand.clone(), remote_blockchain.clone(), &*rpc_extensions_builder,
 		backend.offchain_storage(), system_rpc_tx.clone()
 	);
 	let rpc = start_rpc_servers(&config, gen_handler)?;

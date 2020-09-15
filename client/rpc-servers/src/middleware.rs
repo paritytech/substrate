@@ -18,7 +18,10 @@
 
 //! Middleware for RPC requests.
 
-use jsonrpc_core::{Middleware as RequestMiddleware, Metadata, Request, Response, FutureResponse, FutureOutput};
+use jsonrpc_core::{
+	Middleware as RequestMiddleware, Metadata,
+	Request, Response, FutureResponse, FutureOutput
+};
 use prometheus_endpoint::{Registry, Counter, PrometheusError, register, U64};
 
 use futures::{future::Either, Future};
