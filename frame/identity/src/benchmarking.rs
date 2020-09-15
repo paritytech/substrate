@@ -323,16 +323,18 @@ benchmarks! {
 
 	kill_identity {
 		let r in ...;
-		let s in ...;
-		let x in ...;
+		// Setting up our own account below.
+		let s in _ .. _ => {};
+		let x in _ .. _ => {};
 
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(target.clone()).into();
 		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
 		let _ = T::Currency::make_free_balance_be(&target, BalanceOf::<T>::max_value());
 
-		let info = create_identity_info::<T>(T::MaxAdditionalFields::get());
+		let info = create_identity_info::<T>(x);
 		Identity::<T>::set_identity(target_origin.clone(), info)?;
+		let _ = add_sub_accounts::<T>(&target, s)?;
 
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
