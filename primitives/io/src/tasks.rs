@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Parallel tasks.
+//! Runtime tasks.
+//!
+//! Contains runtime-usable interface for spawning parallel purely computational tasks.
 
 #[cfg(feature = "std")]
 mod inner {

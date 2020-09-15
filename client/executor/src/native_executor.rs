@@ -288,7 +288,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 }
 
 pub struct RuntimeInstanceSpawn {
-	module: Arc<dyn sc_executor_common::wasm_runtime::WasmModule>,
+	module: Arc<dyn WasmModule>,
 	forks: parking_lot::Mutex<HashMap<u32, std::sync::mpsc::Receiver<Vec<u8>>>>,
 	counter: std::sync::atomic::AtomicU32,
 	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
@@ -344,7 +344,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 
 impl RuntimeInstanceSpawn {
 	pub fn new(
-		module: Arc<dyn sc_executor_common::wasm_runtime::WasmModule>,
+		module: Arc<dyn WasmModule>,
 		scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 	) -> Self {
 		Self {
@@ -356,7 +356,7 @@ impl RuntimeInstanceSpawn {
 	}
 
 	fn with_externalities_and_module(
-		module: Arc<dyn sc_executor_common::wasm_runtime::WasmModule>,
+		module: Arc<dyn WasmModule>,
 		mut ext: &mut dyn Externalities,
 	) -> Option<Self> {
 		ext.extension::<sp_core::traits::TaskExecutorExt>()
