@@ -32,7 +32,7 @@ use libp2p::swarm::{
 	Swarm, ProtocolsHandler, IntoProtocolsHandler, PollParameters,
 	NetworkBehaviour, NetworkBehaviourAction
 };
-use std::{error, io, task::Context, task::Poll, time::Duration};
+use std::{error, io, iter, task::{Context, Poll}, time::Duration};
 
 /// Builds two nodes that have each other as bootstrap nodes.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
@@ -78,7 +78,10 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		});
 
 		let behaviour = CustomProtoWithAddr {
-			inner: GenericProto::new(local_peer_id, "test", &[1], vec![], peerset),
+			inner: GenericProto::new(
+				local_peer_id, "test", &[1], vec![], peerset,
+				iter::once(("/foo".into(), Vec::new()))
+			),
 			addrs: addrs
 				.iter()
 				.enumerate()

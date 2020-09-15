@@ -284,7 +284,6 @@ async fn build_network_future<
 							sc_rpc::system::PeerInfo {
 								peer_id: peer_id.to_base58(),
 								roles: format!("{:?}", p.roles),
-								protocol_version: p.protocol_version,
 								best_hash: p.best_hash,
 								best_number: p.best_number,
 							}
