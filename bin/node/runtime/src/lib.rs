@@ -703,6 +703,7 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 		sp_std::if_std!{ println!("Extra Encoded: {:?}", extra.encode()); }
 		let raw_payload = SignedPayload::new(call, extra)
 			.map_err(|e| {
+				sp_std::if_std!{ println!("Error: {:?}", e); }
 				debug::warn!("Unable to create signed payload: {:?}", e);
 			})
 			.ok()?;
@@ -1240,16 +1241,19 @@ mod tests {
 		}
 
 		sp_io::TestExternalities::default().execute_with(|| {
+			frame_system::Module::<Runtime>::set_block_number(1);
+
 			let alice: AccountId = AccountKeyring::Alice.into();
-			let bob: AccountId = AccountKeyring::Bob.into();
+			let bob_pub = AccountKeyring::Bob;
+			let bob_account: AccountId = bob_pub.into();
 			let amount: Balance = 100;
 			let call = Call::Balances(BalancesCall::transfer(alice.into(), amount));
 			let nonce: Index = 0;
 
 			let tx = <Runtime as CreateSignedTransaction<Call>>::create_transaction::<crypto::TestAuthId>(
 				call,
-				Default::default(),
-				bob,
+				bob_pub.into(),
+				bob_account,
 				nonce
 			);
 			assert!(tx.is_some())
