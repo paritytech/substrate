@@ -109,7 +109,7 @@ mod inner {
 
 		let handle = unsafe {
 			crate::runtime_tasks::spawn(
-				(dispatch_wrapper as extern "C" fn(u32, u32, u32) -> u64 as usize) as u32,
+				dispatch_wrapper as usize as _,
 				func_ptr as u32,
 				payload,
 			)
