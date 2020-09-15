@@ -20,13 +20,23 @@ use crate::{
 	RuntimeInfo, error::{Error, Result},
 	wasm_runtime::{RuntimeCache, WasmExecutionMethod},
 };
+
+use std::{
+	collections::HashMap,
+	panic::{UnwindSafe, AssertUnwindSafe},
+	result,
+	sync::{Arc, atomic::{AtomicU64, Ordering}, mpsc},
+};
+
 use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
 use sp_core::{
-	NativeOrEncoded, traits::{CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions},
+	NativeOrEncoded,
+	traits::{
+		CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions,
+	},
 };
 use log::trace;
-use std::{result, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc, collections::HashMap};
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, CallSite};
 use sp_externalities::ExternalitiesExt as _;
@@ -288,16 +298,16 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 
 pub struct RuntimeInstanceSpawn {
 	module: Arc<dyn WasmModule>,
-	forks: parking_lot::Mutex<HashMap<u32, std::sync::mpsc::Receiver<Vec<u8>>>>,
-	counter: std::sync::atomic::AtomicU32,
+	forks: parking_lot::Mutex<HashMap<u64, mpsc::Receiver<Vec<u8>>>>,
+	counter: AtomicU64,
 	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 }
 
 impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
-	fn dyn_dispatch(&self, dispatcher_ref: u32, func: u32, data: Vec<u8>) -> u32 {
-		let new_handle = self.counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+	fn dyn_dispatch(&self, dispatcher_ref: u32, func: u32, data: Vec<u8>) -> u64 {
+		let new_handle = self.counter.fetch_add(1, Ordering::Relaxed);
 
-		let (sender, receiver) = std::sync::mpsc::channel();
+		let (sender, receiver) = mpsc::channel();
 		self.forks.lock().insert(new_handle, receiver);
 
 		let module = self.module.clone();
@@ -312,7 +322,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 				move || {
 
 					// FIXME: Should be refactored to shared "instance factory".
-					// Instatiating wasm here every time is suboptimal at the moment, shared
+					// Instantiating wasm here every time is suboptimal at the moment, shared
 					// pool of istances should be used.
 					let instance = module.new_instance().expect("Failed to create new instance for fork");
 
@@ -324,7 +334,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 			);
 
 			// If execution is panicked, the `join` in the original runtime code will panic as well,
-			// since the snder is dropped without seding anything.
+			// since the sender is dropped without seding anything.
 			if let Ok(output) = result {
 				let _ = sender.send(output);
 			}
@@ -334,7 +344,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 		new_handle
 	}
 
-	fn join(&self, handle: u32) -> Vec<u8> {
+	fn join(&self, handle: u64) -> Vec<u8> {
 		let receiver = self.forks.lock().remove(&handle).expect("No fork for such handle");
 		let output = receiver.recv().expect("No signal from forked execution");
 		output

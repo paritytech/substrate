@@ -122,7 +122,7 @@ mod inner {
 	/// This can be `join`-ed to get (blocking) the result of
 	/// the spawned task execution.
 	pub struct DataJoinHandle {
-		handle: u32,
+		handle: u64,
 	}
 
 	impl DataJoinHandle {

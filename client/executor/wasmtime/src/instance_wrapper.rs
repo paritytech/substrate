@@ -88,6 +88,7 @@ pub struct EntryPoint {
 }
 
 impl EntryPoint {
+	/// Call this entry point.
 	pub fn call(&self, data_ptr: Pointer<u8>, data_len: WordSize) -> anyhow::Result<u64> {
 		let data_ptr = u32::from(data_ptr) as i32;
 		let data_len = u32::from(data_len) as i32;
@@ -107,6 +108,31 @@ impl EntryPoint {
 				])
 			},
 		}).map(|results| results[0].unwrap_i64() as u64)
+	}
+
+	pub fn direct(func: wasmtime::Func) -> std::result::Result<Self, &'static str> {
+		match (func.ty().params(), func.ty().results()) {
+			(&[wasmtime::ValType::I32, wasmtime::ValType::I32], &[wasmtime::ValType::I64]) => {
+				Ok(Self { func, call_type: EntryPointType::Direct })
+			}
+			_ => {
+				Err("Invalid signature")
+			}
+		}
+	}
+
+	pub fn wrapped(dispatcher: wasmtime::Func, func: u32) -> std::result::Result<Self, &'static str> {
+		match (dispatcher.ty().params(), dispatcher.ty().results()) {
+			(
+				&[wasmtime::ValType::I32, wasmtime::ValType::I32, wasmtime::ValType::I32],
+				&[wasmtime::ValType::I64],
+			) => {
+				Ok(Self { func: dispatcher, call_type: EntryPointType::Wrapped(func) })
+			},
+			_ => {
+				Err("Invalid signature")
+			}
+		}
 	}
 }
 
@@ -199,16 +225,13 @@ impl InstanceWrapper {
 				let func = extern_func(&export)
 					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?
 					.clone();
-				match (func.ty().params(), func.ty().results()) {
-					(&[wasmtime::ValType::I32, wasmtime::ValType::I32], &[wasmtime::ValType::I64]) => {}
-					_ => {
-						return Err(Error::from(format!(
-							"method {} have an unsupported signature",
+				EntryPoint::direct(func)
+					.map_err(|_|
+						Error::from(format!(
+							"Function '{}' has invalid signature.",
 							method,
-						)))
-					}
-				}
-				EntryPoint { call_type: EntryPointType::Direct, func }
+						))
+					)?
 			},
 			CallSite::Table(func_ref) => {
 				let table = self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
@@ -220,17 +243,14 @@ impl InstanceWrapper {
 					.ok_or(Error::FunctionRefIsNull(func_ref))?
 					.clone();
 
-				match (func.ty().params(), func.ty().results()) {
-					(&[wasmtime::ValType::I32, wasmtime::ValType::I32], &[wasmtime::ValType::I64]) => {}
-					_ => {
-						return Err(Error::from(format!(
-							"Function @{} have an unsupported signature",
+				EntryPoint::direct(func)
+					.map_err(|_|
+						Error::from(format!(
+							"Function @{} has invalid signature.",
 							func_ref,
-						)))
-					}
-				}
-				EntryPoint { call_type: EntryPointType::Direct, func }
-			},
+						))
+					)?
+				},
 			CallSite::TableWithWrapper { dispatcher_ref, func } => {
 				let table = self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
 				let val = table.get(dispatcher_ref)
@@ -238,21 +258,16 @@ impl InstanceWrapper {
 				let dispatcher = val
 					.funcref()
 					.ok_or(Error::TableElementIsNotAFunction(dispatcher_ref))?
-					.ok_or(Error::FunctionRefIsNull(dispatcher_ref))?;
+					.ok_or(Error::FunctionRefIsNull(dispatcher_ref))?
+					.clone();
 
-				match (dispatcher.ty().params(), dispatcher.ty().results()) {
-					(
-						&[wasmtime::ValType::I32, wasmtime::ValType::I32, wasmtime::ValType::I32],
-						&[wasmtime::ValType::I64],
-					) => {},
-					_ => {
-						return Err(Error::from(format!(
-							"Function @{} have an unsupported signature",
+				EntryPoint::wrapped(dispatcher, func)
+					.map_err(|_|
+						Error::from(format!(
+							"Function @{} has invalid signature.",
 							dispatcher_ref,
-						)))
-					}
-				}
-				EntryPoint { call_type: EntryPointType::Wrapped(func), func: dispatcher.clone() }
+						))
+					)?
 			},
 		})
 	}
