@@ -196,7 +196,7 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 	let stream: Box<dyn Stream<Item = _> + Unpin + Send> = match (heartbeat, cooldown) {
 		(None, None) => Box::new(commands_stream),
 		_ => Box::new(
-			HeartbeatStream::new(Box::new(commands_stream), HeartbeatOptions { heartbeat, cooldown, finalize })
+			HeartbeatStream::new(Box::new(commands_stream), heartbeat, cooldown, finalize)
 				.expect("HeartbeatStream creation error.")
 		),
 	};

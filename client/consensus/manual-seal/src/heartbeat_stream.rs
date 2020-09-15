@@ -37,16 +37,6 @@ pub struct HeartbeatOptions {
 	pub finalize: bool,
 }
 
-impl Default for HeartbeatOptions {
-	fn default() -> Self {
-		Self {
-			heartbeat: Some(Duration::from_secs(30)),
-			cooldown: Some(Duration::from_secs(1)),
-			finalize: false
-		}
-	}
-}
-
 /// HeartbeatStream is combining transaction pool notification stream and generate a new block
 /// when a certain time has passed without any transactions.
 pub struct HeartbeatStream<Hash> {
@@ -63,14 +53,23 @@ pub struct HeartbeatStream<Hash> {
 impl<Hash> HeartbeatStream<Hash> {
 	pub fn new(
 		pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
-		options: HeartbeatOptions,
+		heartbeat: Option<Duration>,
+		cooldown: Option<Duration>,
+		finalize: bool
 	) -> Result<Self, &'static str> {
-		if options.cooldown > options.heartbeat {
-			return Err("Heartbeat options `cooldown` must not be larger than the `heartbeat` value.");
-		}
+		match (heartbeat, cooldown) {
+			(Some(heartbeat), Some(cooldown)) if cooldown > heartbeat =>
+				Err("`cooldown` must not be larger than the `heartbeat`, if they are both set."),
+			_ => Ok(()),
+		}?;
 
-		let delay_for = options.heartbeat.and_then(|hb| Some(Delay::new(hb)));
-		Ok(Self {pool_stream, delay_for, last_blocktime: None, options})
+		let delay_for = heartbeat.and_then(|hb| Some(Delay::new(hb)));
+		Ok(Self {
+			pool_stream,
+			delay_for,
+			last_blocktime: None,
+			options: HeartbeatOptions { heartbeat, cooldown, finalize }
+		})
 	}
 
 	fn create_block_now_and_reset_delay(&mut self) {

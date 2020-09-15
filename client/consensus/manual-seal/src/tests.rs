@@ -326,9 +326,7 @@ async fn heartbeat_stream_produce_block_when_max_blocktime_lapsed_with_no_tx() {
 	);
 
 	// Run instant seal with heartbeat
-	let max_blocktime = 2;
-
-	let hbo = HeartbeatOptions { min_blocktime: 1, max_blocktime, finalize: false };
+	let heartbeat_secs = 2;
 	let future = run_instant_seal(
 		Box::new(client.clone()),
 		env,
@@ -336,8 +334,9 @@ async fn heartbeat_stream_produce_block_when_max_blocktime_lapsed_with_no_tx() {
 		pool.pool().clone(),
 		select_chain,
 		inherent_data_providers,
+		Some(Duration::from_secs(heartbeat_secs)),
+		None,
 		false,
-		Some(hbo),
 	);
 
 	thread::spawn(|| {
@@ -350,10 +349,10 @@ async fn heartbeat_stream_produce_block_when_max_blocktime_lapsed_with_no_tx() {
 	assert!(client.block(&BlockId::Number(1)).unwrap().is_none());
 	assert!(client.block(&BlockId::Number(2)).unwrap().is_none());
 
-	// Wait for the max_blocktime to pass. This should generate a new block. We
-	//   give extra 500ms for timing error/buffer.
-	// Then ensure only one block is created when max_blocktime passed
-	let lapsed_in_millis = max_blocktime * 1000 + 500;
+	// Wait for the heartbeat_secs to pass. This should generate a new block. We
+	//   give extra timing for error/buffer.
+	// Then ensure only one block is created when heartbeat_secs passed
+	let lapsed_in_millis = heartbeat_secs * 1000 + 500;
 	thread::sleep(Duration::from_millis(lapsed_in_millis));
 	assert!(client.block(&BlockId::Number(1)).unwrap().is_some());
 	assert!(client.block(&BlockId::Number(2)).unwrap().is_none());
@@ -383,9 +382,7 @@ async fn heartbeat_stream_wait_for_min_blocktime_when_multiple_txs_come() {
 	);
 
 	// Run instant seal with heartbeat
-	let min_blocktime = 2;
-	let hbo = HeartbeatOptions { min_blocktime, max_blocktime: min_blocktime * 10, finalize: false };
-
+	let cooldown_secs = 2;
 	let future = run_instant_seal(
 		Box::new(client.clone()),
 		env,
@@ -393,8 +390,9 @@ async fn heartbeat_stream_wait_for_min_blocktime_when_multiple_txs_come() {
 		pool.pool().clone(),
 		select_chain,
 		inherent_data_providers,
+		None,
+		Some(Duration::from_secs(cooldown_secs)),
 		false,
-		Some(hbo),
 	);
 
 	thread::spawn(|| {
@@ -417,7 +415,7 @@ async fn heartbeat_stream_wait_for_min_blocktime_when_multiple_txs_come() {
 	assert!(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Alice, 2)).await.is_ok());
 
 	// Ensure only on block is generated. We give additional 100ms for timing error/buffer.
-	let lapsed_in_millis = min_blocktime * 1000 + 500;
+	let lapsed_in_millis = cooldown_secs * 1000 + 500;
 	thread::sleep(Duration::from_millis(lapsed_in_millis));
 	assert!(client.block(&BlockId::Number(1)).unwrap().is_some());
 	assert!(client.block(&BlockId::Number(2)).unwrap().is_none());
