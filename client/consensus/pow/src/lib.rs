@@ -31,6 +31,8 @@
 //! as the storage, but it is not recommended as it won't work well with light
 //! clients.
 
+mod weak_sub;
+
 use std::sync::Arc;
 use std::any::Any;
 use std::borrow::Cow;
@@ -60,6 +62,11 @@ use prometheus_endpoint::Registry;
 use sc_client_api;
 use log::*;
 use sp_timestamp::{InherentError as TIError, TimestampInherentData};
+
+pub use crate::weak_sub::{
+	WeakSubjectiveAux, WeakSubjectiveParams, WeakSubjectiveDecision, WeakSubjectiveAlgorithm,
+	WeakSubjectiveBlockImport,
+};
 
 #[derive(derive_more::Display, Debug)]
 pub enum Error<B: BlockT> {
@@ -110,6 +117,24 @@ impl<B: BlockT> std::convert::From<Error<B>> for ConsensusError {
 	}
 }
 
+/// A block import with support of difficulty auxiliaty.
+pub trait DifficultyOf<B: BlockT> {
+	/// Type of the difficulty.
+	type Difficulty;
+
+	/// Get difficulty auxiliaty given a block hash.
+	fn difficulty_of(
+		&self,
+		hash: &B::Hash,
+	) -> Result<Option<PowAux<Self::Difficulty>>, Error<B>>;
+
+	/// Get the next block's required difficulty.
+	fn next_difficulty_of(
+		&self,
+		hash: &B::Hash,
+	) -> Result<Self::Difficulty, Error<B>>;
+}
+
 /// Auxiliary storage prefix for PoW engine.
 pub const POW_AUX_PREFIX: [u8; 4] = *b"PoW:";
 
@@ -137,17 +162,18 @@ pub struct PowAux<Difficulty> {
 	pub total_difficulty: Difficulty,
 }
 
-impl<Difficulty> PowAux<Difficulty> where
-	Difficulty: Decode + Default,
+/// Read the auxiliary from client.
+fn read_aux<Difficulty, C: AuxStore, B: BlockT>(
+	client: &C,
+	hash: &B::Hash,
+) -> Result<Option<PowAux<Difficulty>>, Error<B>> where
+	Difficulty: Decode
 {
-	/// Read the auxiliary from client.
-	pub fn read<C: AuxStore, B: BlockT>(client: &C, hash: &B::Hash) -> Result<Self, Error<B>> {
-		let key = aux_key(&hash);
+	let key = aux_key(&hash);
 
-		match client.get_aux(&key).map_err(Error::Client)? {
-			Some(bytes) => Self::decode(&mut &bytes[..]).map_err(Error::Codec),
-			None => Ok(Self::default()),
-		}
+	match client.get_aux(&key).map_err(Error::Client)? {
+		Some(bytes) => PowAux::decode(&mut &bytes[..]).map(Some).map_err(Error::Codec),
+		None => Ok(None),
 	}
 }
 
@@ -343,8 +369,8 @@ impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, A
 		let best_hash = best_header.hash();
 
 		let parent_hash = *block.header.parent_hash();
-		let best_aux = PowAux::read::<_, B>(self.client.as_ref(), &best_hash)?;
-		let mut aux = PowAux::read::<_, B>(self.client.as_ref(), &parent_hash)?;
+		let best_aux = read_aux::<_, _, B>(self.client.as_ref(), &best_hash)?.unwrap_or_default();
+		let mut aux = read_aux::<_, _, B>(self.client.as_ref(), &parent_hash)?.unwrap_or_default();
 
 		if let Some(inner_body) = block.body.take() {
 			let inherent_data = self.inherent_data_providers
