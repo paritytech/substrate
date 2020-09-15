@@ -516,50 +516,6 @@ mod weight_for {
 	use frame_support::{traits::Get, weights::Weight};
 	use super::Trait;
 
-	/// Weight calculation for `clear_identity`.
-	///
-	/// Based on benchmark:
-	/// 43.19 + R * 0.099 + S * 2.547 + X * 0.875 µs (min squares analysis)
-	pub(crate) fn clear_identity<T: Trait>(
-		judgements: Weight,
-		subs: Weight,
-		extra_fields: Weight
-	) -> Weight {
-		T::DbWeight::get().reads_writes(2, subs + 2) // S + 2 deletions
-			+ 44_000_000 // constant
-			+ 100_000 * judgements // R
-			+ 2_600_000 * subs // S
-			+ 900_000 * extra_fields // X
-	}
-
-	/// Weight calculation for `request_judgement`.
-	///
-	/// Based on benchmark:
-	/// 51.51 + R * 0.32 + X * 1.85 µs (min squares analysis)
-	pub(crate) fn request_judgement<T: Trait>(
-		judgements: Weight,
-		extra_fields: Weight
-	) -> Weight {
-		T::DbWeight::get().reads_writes(2, 1)
-			+ 52_000_000 // constant
-			+ 400_000 * judgements // R
-			+ 1_900_000 * extra_fields // X
-	}
-
-	/// Weight calculation for `cancel_request`.
-	///
-	/// Based on benchmark:
-	/// 40.95 + R * 0.219 + X * 1.655 µs (min squares analysis)
-	pub(crate) fn cancel_request<T: Trait>(
-		judgements: Weight,
-		extra_fields: Weight
-	) -> Weight {
-		T::DbWeight::get().reads_writes(1, 1)
-			+ 41_000_000 // constant
-			+ 300_000 * judgements // R
-			+ 1_700_000 * extra_fields // X
-	}
-
 	/// Weight calculation for `provide_judgement`.
 	///
 	/// Based on benchmark:
@@ -763,6 +719,12 @@ decl_module! {
 		///   - One storage write (codec complexity `O(S)`).
 		///   - One storage-exists (`IdentityOf::contains_key`).
 		/// # </weight>
+		// TODO: This whole extrinsic screams "not optimized". For example we could
+		// filter any overlap between new and old subs, and avoid reading/writing
+		// to those values... We could also ideally avoid needing to write to
+		// N storage items for N sub accounts. Right now the weight on this function
+		// is a large overestimate due to the fact that it could potentially write
+		// to 2 x T::MaxSubAccounts::get().
 		#[weight = T::WeightInfo::set_subs_old(T::MaxSubAccounts::get()) // P: Assume max sub accounts removed.
 			.saturating_add(T::WeightInfo::set_subs_new(subs.len() as u32)) // S: Assume all subs are new.
 		]
@@ -783,11 +745,6 @@ decl_module! {
 				let _ = T::Currency::unreserve(&sender, old_deposit - new_deposit);
 			}
 			// do nothing if they're equal.
-
-			// TODO: This whole extrinsic screams "not optimized". For example we could
-			// filter any overlap between new and old subs, and avoid reading/writing
-			// to those values... We could also ideally avoid needing to write to
-			// N storage items for N sub accounts.
 
 			for s in old_ids.iter() {
 				<SuperOf<T>>::remove(s);
@@ -828,7 +785,7 @@ decl_module! {
 		/// - `2` storage reads and `S + 2` storage deletions.
 		/// - One event.
 		/// # </weight>
-		#[weight = weight_for::clear_identity::<T>(
+		#[weight = T::WeightInfo::clear_identity(
 			T::MaxRegistrars::get().into(), // R
 			T::MaxSubAccounts::get().into(), // S
 			T::MaxAdditionalFields::get().into(), // X
@@ -847,10 +804,10 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::IdentityCleared(sender, deposit));
 
-			Ok(Some(weight_for::clear_identity::<T>(
-				id.judgements.len() as Weight, // R
-				sub_ids.len() as Weight, // S
-				id.info.additional.len() as Weight // X
+			Ok(Some(T::WeightInfo::clear_identity(
+				id.judgements.len() as u32, // R
+				sub_ids.len() as u32, // S
+				id.info.additional.len() as u32 // X
 			)).into())
 		}
 
@@ -877,7 +834,7 @@ decl_module! {
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(X + R)`.
 		/// - One event.
 		/// # </weight>
-		#[weight = weight_for::request_judgement::<T>(
+		#[weight = T::WeightInfo::request_judgement(
 			T::MaxRegistrars::get().into(), // R
 			T::MaxAdditionalFields::get().into(), // X
 		)]
@@ -904,13 +861,16 @@ decl_module! {
 
 			T::Currency::reserve(&sender, registrar.fee)?;
 
-			let judgements = id.judgements.len() as Weight;
-			let extra_fields = id.info.additional.len() as Weight;
+			let judgements = id.judgements.len();
+			let extra_fields = id.info.additional.len();
 			<IdentityOf<T>>::insert(&sender, id);
 
 			Self::deposit_event(RawEvent::JudgementRequested(sender, reg_index));
 
-			Ok(Some(weight_for::request_judgement::<T>(judgements, extra_fields)).into())
+			Ok(Some(T::WeightInfo::request_judgement(
+				judgements as u32,
+				extra_fields as u32,
+			)).into())
 		}
 
 		/// Cancel a previous request.
@@ -930,7 +890,7 @@ decl_module! {
 		/// - One storage mutation `O(R + X)`.
 		/// - One event
 		/// # </weight>
-		#[weight = weight_for::cancel_request::<T>(
+		#[weight = T::WeightInfo::cancel_request(
 			T::MaxRegistrars::get().into(), // R
 			T::MaxAdditionalFields::get().into(), // X
 		)]
@@ -947,13 +907,16 @@ decl_module! {
 			};
 
 			let _ = T::Currency::unreserve(&sender, fee);
-			let judgements = id.judgements.len() as Weight;
-			let extra_fields = id.info.additional.len() as Weight;
+			let judgements = id.judgements.len();
+			let extra_fields = id.info.additional.len();
 			<IdentityOf<T>>::insert(&sender, id);
 
 			Self::deposit_event(RawEvent::JudgementUnrequested(sender, reg_index));
 
-			Ok(Some(weight_for::request_judgement::<T>(judgements, extra_fields)).into())
+			Ok(Some(T::WeightInfo::cancel_request(
+				judgements as u32,
+				extra_fields as u32
+			)).into())
 		}
 
 		/// Set the fee required for a judgement to be requested from a registrar.
@@ -969,10 +932,7 @@ decl_module! {
 		/// - One storage mutation `O(R)`.
 		/// - Benchmark: 7.315 + R * 0.329 µs (min squares analysis)
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 7_400_000 // constant
-			+ 330_000 * T::MaxRegistrars::get() as Weight // R
-		]
+		#[weight = T::WeightInfo::set_fee(T::MaxRegistrars::get())] // R
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
 			#[compact] fee: BalanceOf<T>,
@@ -986,9 +946,7 @@ decl_module! {
 					.ok_or_else(|| DispatchError::from(Error::<T>::InvalidIndex))?;
 				Ok(rs.len())
 			})?;
-			Ok(Some(T::DbWeight::get().reads_writes(1, 1)
-				+ 7_400_000 + 330_000 * registrars as Weight // R
-			).into())
+			Ok(Some(T::WeightInfo::set_fee(registrars as u32)).into()) // R
 		}
 
 		/// Change the account associated with a registrar.
@@ -1004,10 +962,7 @@ decl_module! {
 		/// - One storage mutation `O(R)`.
 		/// - Benchmark: 8.823 + R * 0.32 µs (min squares analysis)
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 8_900_000 // constant
-			+ 320_000 * T::MaxRegistrars::get() as Weight // R
-		]
+		#[weight = T::WeightInfo::set_account_id(T::MaxRegistrars::get())] // R
 		fn set_account_id(origin,
 			#[compact] index: RegistrarIndex,
 			new: T::AccountId,
@@ -1021,9 +976,7 @@ decl_module! {
 					.ok_or_else(|| DispatchError::from(Error::<T>::InvalidIndex))?;
 				Ok(rs.len())
 			})?;
-			Ok(Some(T::DbWeight::get().reads_writes(1, 1)
-				+ 8_900_000 + 320_000 * registrars as Weight // R
-			).into())
+			Ok(Some(T::WeightInfo::set_account_id(registrars as u32)).into()) // R
 		}
 
 		/// Set the field information for a registrar.
