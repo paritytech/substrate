@@ -1368,27 +1368,6 @@ impl NetworkBehaviour for GenericProto {
 
 				self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 			}
-
-			// Don't do anything for non-severe errors except report them.
-			NotifsHandlerOut::ProtocolError { is_severe, ref error } if !is_severe => {
-				debug!(target: "sub-libp2p", "Handler({:?}) => Benign protocol error: {:?}",
-					source, error)
-			}
-
-			NotifsHandlerOut::ProtocolError { error, .. } => {
-				debug!(target: "sub-libp2p",
-					"Handler({:?}) => Severe protocol error: {:?}",
-					source, error);
-				// A severe protocol error happens when we detect a "bad" peer, such as a peer on
-				// a different chain, or a peer that doesn't speak the same protocol(s). We
-				// decrease the peer's reputation, hence lowering the chances we try this peer
-				// again in the short term.
-				self.peerset.report_peer(
-					source.clone(),
-					sc_peerset::ReputationChange::new(i32::min_value(), "Protocol error")
-				);
-				self.disconnect_peer_inner(&source, Some(Duration::from_secs(5)));
-			}
 		}
 	}
 

@@ -70,7 +70,7 @@ use futures::{
 };
 use log::{debug, error};
 use parking_lot::{Mutex, RwLock};
-use std::{borrow::Cow, error, str, sync::Arc, task::{Context, Poll}};
+use std::{borrow::Cow, str, sync::Arc, task::{Context, Poll}};
 
 /// Number of pending notifications in asynchronous contexts.
 /// See [`NotificationsSink::reserve_notification`] for context.
@@ -229,14 +229,6 @@ pub enum NotifsHandlerOut {
 
 		/// Message that has been received.
 		message: BytesMut,
-	},
-
-	/// An error has happened on the protocol level with this node.
-	ProtocolError {
-		/// If true the error is severe, such as a protocol violation.
-		is_severe: bool,
-		/// The error that happened.
-		error: Box<dyn error::Error + Send + Sync>,
 	},
 }
 
@@ -638,10 +630,6 @@ impl ProtocolsHandler for NotifsHandler {
 							NotifsHandlerOut::CustomMessage { message }
 						))
 					},
-					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::ProtocolError { is_severe, error }) =>
-						return Poll::Ready(ProtocolsHandlerEvent::Custom(
-							NotifsHandlerOut::ProtocolError { is_severe, error }
-						)),
 					ProtocolsHandlerEvent::Close(err) =>
 						return Poll::Ready(ProtocolsHandlerEvent::Close(NotifsHandlerError::Legacy(err))),
 				}

@@ -108,10 +108,9 @@ impl IntoProtocolsHandler for LegacyProtoHandlerProto {
 		self.protocol.clone()
 	}
 
-	fn into_handler(self, remote_peer_id: &PeerId, connected_pont: &ConnectedPoint) -> Self::Handler {
+	fn into_handler(self, remote_peer_id: &PeerId, _: &ConnectedPoint) -> Self::Handler {
 		LegacyProtoHandler {
 			protocol: self.protocol,
-			endpoint: connected_pont.clone(),
 			remote_peer_id: remote_peer_id.clone(),
 			state: ProtocolState::Init {
 				substreams: SmallVec::new(),
@@ -133,10 +132,6 @@ pub struct LegacyProtoHandler {
 	/// Identifier of the node we're talking to. Used only for logging purposes and shouldn't have
 	/// any influence on the behaviour.
 	remote_peer_id: PeerId,
-
-	/// Whether we are the connection dialer or listener. Used to determine who, between the local
-	/// node and the remote node, has priority.
-	endpoint: ConnectedPoint,
 
 	/// Queue of events to send to the outside.
 	///
@@ -227,14 +222,6 @@ pub enum LegacyProtoHandlerOut {
 	CustomMessage {
 		/// Message that has been received.
 		message: BytesMut,
-	},
-
-	/// An error has happened on the protocol level with this node.
-	ProtocolError {
-		/// If true the error is severe, such as a protocol violation.
-		is_severe: bool,
-		/// The error that happened.
-		error: Box<dyn error::Error + Send + Sync>,
 	},
 }
 
