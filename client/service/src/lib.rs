@@ -452,7 +452,10 @@ fn start_rpc_servers<
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
+fn start_rpc_servers<
+	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
+	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+(
 	_: &Configuration,
 	_: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
