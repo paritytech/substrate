@@ -910,23 +910,55 @@ macro_rules! impl_benchmark {
 							// This is the value we will be testing for component `name`
 							let component_value = lowest + step_size * s;
 
-							// Select the max value for all the other components.
-							let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+							// Select the min value for all the other components.
+							let c_min: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
 								.enumerate()
-								.map(|(idx, (n, _, h))|
+								.map(|(idx, (n, l, _h))|
 									if n == name {
 										(*n, component_value)
 									} else {
-										(*n, *highest_range_values.get(idx).unwrap_or(h))
+										let low = *lowest_range_values.get(idx).unwrap_or(l);
+										(*n, low)
 									}
 								)
 								.collect();
 
-							if verify {
-								// If `--verify` is used, run the benchmark once to verify it would complete.
-								repeat_benchmark(1, &c, &mut Vec::new(), true)?;
+							// Select the mid value for all the other components.
+							let c_mid: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+								.enumerate()
+								.map(|(idx, (n, l, h))|
+									if n == name {
+										(*n, component_value)
+									} else {
+										let low = *lowest_range_values.get(idx).unwrap_or(l);
+										let high = *highest_range_values.get(idx).unwrap_or(h);
+										let mid = (high - low) / 2 + low;
+										(*n, mid)
+									}
+								)
+								.collect();
+
+							// Select the max value for all the other components.
+							let c_max: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+								.enumerate()
+								.map(|(idx, (n, _l, h))|
+									if n == name {
+										(*n, component_value)
+									} else {
+										let high = *highest_range_values.get(idx).unwrap_or(h);
+										(*n, high)
+									}
+								)
+								.collect();
+
+							// Try benchmark at each component level.
+							for c in vec![c_min, c_mid, c_max] {
+								if verify {
+									// If `--verify` is used, run the benchmark once to verify it would complete.
+									repeat_benchmark(1, &c, &mut Vec::new(), true)?;
+								}
+								repeat_benchmark(repeat, &c, &mut results, false)?;
 							}
-							repeat_benchmark(repeat, &c, &mut results, false)?;
 						}
 					}
 				}
