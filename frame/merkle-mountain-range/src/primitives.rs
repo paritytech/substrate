@@ -25,7 +25,7 @@ pub struct Leaf<BlockHash, Data> {
 
 #[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
 pub struct Proof<Hash> {
-	pub leaf: u64,
+	pub leaf_index: u64,
 	pub items: Vec<Hash>,
 }
 

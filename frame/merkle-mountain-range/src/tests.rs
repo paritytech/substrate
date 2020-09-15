@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::*;
-use crate::primitives::Leaf;
+use crate::primitives::{Leaf, Proof};
 
 use codec::{Encode, Decode};
 use frame_support::{
@@ -24,7 +24,13 @@ use frame_support::{
 	traits::OnInitialize,
 	weights::Weight,
 };
-use sp_core::H256;
+use sp_core::{
+	H256,
+	offchain::{
+		testing::TestOffchainExt,
+		OffchainExt,
+	},
+};
 use sp_runtime::{
 	Perbill,
 	testing::Header,
@@ -113,6 +119,11 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
 
+fn register_offchain_ext(ext: &mut sp_io::TestExternalities) {
+	let (offchain, _offchain_state) = TestOffchainExt::with_offchain_db(ext.offchain_db());
+	ext.register_extension(OffchainExt::new(offchain));
+}
+
 fn new_block() -> u64 {
 	let number = frame_system::Module::<Test>::block_number() + 1;
 	let hash = H256::repeat_byte(number as u8);
@@ -137,6 +148,13 @@ fn decode_node(v: Vec<u8>) -> crate::MMRNode<
 	Leaf<H256, LeafData>,
 > {
 	codec::Decode::decode(&mut &v[..]).unwrap()
+}
+
+fn init_chain(blocks: usize) {
+	// given
+	for _ in 0..blocks {
+		new_block();
+	}
 }
 
 #[test]
@@ -212,9 +230,7 @@ fn should_construct_larger_mmr_correctly() {
 	let _ = env_logger::try_init();
 	new_test_ext().execute_with(|| {
 		// when
-		for _ in 0..7 {
-			new_block();
-		}
+		init_chain(7);
 
 		// then
 		assert_eq!(crate::NumberOfLeaves::get(), 7);
@@ -226,27 +242,110 @@ fn should_construct_larger_mmr_correctly() {
 			crate::RootHash::<Test>::get(),
 			hex("3106f5c4ee095d996b61283b4d7b524c0c2acb4c9eaff90da0c216709b8bd1b7")
 		);
+	});
+}
 
+#[test]
+fn should_generate_proofs_correclty() {
+	let _ = env_logger::try_init();
+	let mut ext = new_test_ext();
+	// given
+	ext.execute_with(|| init_chain(7));
+	ext.persist_offchain_overlay();
 
-		// Generate proofs for all leaves
+	// Try to generate proofs now. This requires the offchain extensions to be present
+	// to retrieve full leaf data.
+	register_offchain_ext(&mut ext);
+	ext.execute_with(|| {
+		// when generate proofs for all leaves
 		let proofs = (0_u64..crate::NumberOfLeaves::get())
 			.into_iter()
 			.map(|leaf_index| crate::Module::<Test>::generate_proof(leaf_index).unwrap())
 			.collect::<Vec<_>>();
 
-		assert_eq!(proofs[0], crate::primitives::Proof {
-			leaf: 0,
-			items: vec![],
-		});
-		assert_eq!(proofs[4], crate::primitives::Proof {
-			leaf: 4,
-			items: vec![],
-		});
-		assert_eq!(proofs[6], crate::primitives::Proof {
-			leaf: 6,
-			items: vec![],
-		});
-		// TODO [ToDr] Check that proving works.
+		// then
+		assert_eq!(proofs[0], (Leaf {
+			hash: H256::repeat_byte(1),
+			data: LeafData::new(1),
+		}, Proof {
+			leaf_index: 0,
+			items: vec![
+				hex("037ff5a3903a59630e03b84cda912c26bf19442efe2cd30c2a25547e06ded385"),
+				hex("5e149bed24a6997e0440cd2daeaae5b44074e9f2f1403c4149ba3e8a9e5baef1"),
+				hex("e858832b2bc93dceb94c0df74e5d897ed418140623af150076116f82fb19e78f"),
+			],
+		}));
+		assert_eq!(proofs[4], (Leaf {
+			hash: H256::repeat_byte(5),
+			data: LeafData::new(5),
+		}, Proof {
+			leaf_index: 4,
+			items: vec![
+				hex("169dc0e8d0a804f16f2081941199ba3630463c29a761d1e20a7096b33ed8a448"),
+				hex("e232c7350837c9d87a948ddfc4286cc49d946e8cdad9121e91595f190ed7e54d"),
+				hex("32d44b4a8e8a3046b9c02315847eb091678a59f136226e70d66f3a82bd836ce1"),
+			],
+		}));
+		assert_eq!(proofs[6], (Leaf {
+			hash: H256::repeat_byte(7),
+			data: LeafData::new(7),
+		}, Proof {
+			leaf_index: 6,
+			items: vec![
+				hex("169dc0e8d0a804f16f2081941199ba3630463c29a761d1e20a7096b33ed8a448"),
+				hex("ae11d66a54590bd5c28adf98dfcbb5b05feb7fd51997c4e99c73e87de9ac4e49"),
+			],
+		}));
+
 		// TODO [ToDr] Prune non-peaks.
+	});
+}
+
+#[test]
+fn should_verify() {
+	let _ = env_logger::try_init();
+
+	// Start off with chain initialisation and storing indexing data off-chain
+	// (MMR Leafs)
+	let mut ext = new_test_ext();
+	ext.execute_with(|| init_chain(7));
+	ext.persist_offchain_overlay();
+
+	// Try to generate proof now. This requires the offchain extensions to be present
+	// to retrieve full leaf data.
+	register_offchain_ext(&mut ext);
+	let (leaf, proof5) = ext.execute_with(|| {
+		// when
+		crate::Module::<Test>::generate_proof(5).unwrap()
+	});
+
+	// Now to verify the proof, we really shouldn't require offchain storage or extension.
+	// Hence we initialize the storage once again, using different externalities and then
+	// verify.
+	let mut ext2 = new_test_ext();
+	ext2.execute_with(|| {
+		init_chain(7);
+		// then
+		assert_eq!(crate::Module::<Test>::verify_leaf(leaf, proof5), Ok(true));
+	});
+}
+
+#[test]
+fn should_not_verify_on_the_next_block() {
+	let _ = env_logger::try_init();
+	let mut ext = new_test_ext();
+	// given
+	ext.execute_with(|| init_chain(7));
+
+	ext.persist_offchain_overlay();
+	register_offchain_ext(&mut ext);
+
+	ext.execute_with(|| {
+		// when
+		let (leaf, proof5) = crate::Module::<Test>::generate_proof(5).unwrap();
+		new_block();
+
+		// then
+		assert_eq!(crate::Module::<Test>::verify_leaf(leaf, proof5), Ok(false));
 	});
 }

@@ -53,6 +53,13 @@ pub trait LeafDataProvider {
 	fn leaf_data() -> (Self::LeafData, Weight);
 }
 
+impl LeafDataProvider for () {
+	type LeafData = ();
+	fn leaf_data() -> (Self::LeafData, Weight) {
+		((), 0)
+	}
+}
+
 /// This pallet's configuration trait
 pub trait Trait: frame_system::Trait {
 	/// A hasher type for MMR.
@@ -107,7 +114,7 @@ decl_module! {
 
 			let hash = <frame_system::Module<T>>::parent_hash();
 			let (data, leaf_weight) = T::LeafData::leaf_data();
-			let mut mmr: ModuleMMR<T> = MMR::new(Self::mmr_leaves());
+			let mut mmr: ModuleMMR<MMRRuntimeStorage, T> = MMR::new(Self::mmr_leaves());
 			mmr.push(primitives::Leaf { hash, data })
 				.expect("MMR push never fails.");
 
@@ -128,10 +135,13 @@ decl_module! {
 }
 
 /// A MMR specific to the pallet.
-type ModuleMMR<T> = MMR<T, primitives::Leaf<
+type ModuleMMR<StorageType, T> = MMR<StorageType, T, LeafOf<T>>;
+
+/// Leaf data.
+type LeafOf<T> = primitives::Leaf<
 	<T as frame_system::Trait>::Hash,
 	<<T as Trait>::LeafData as LeafDataProvider>::LeafData
->>;
+>;
 
 impl<T: Trait> Module<T> {
 	/// Returns the number of nodes pruned.
@@ -146,12 +156,17 @@ impl<T: Trait> Module<T> {
 		(b"mmr-", pos).encode()
 	}
 
-	fn generate_proof(leaf_index: u64) -> Result<
-		primitives::Proof<<T as Trait>::Hash>,
+	pub fn generate_proof(leaf_index: u64) -> Result<
+		(LeafOf<T>, primitives::Proof<<T as Trait>::Hash>),
 		Error,
 	> {
-		let mmr: ModuleMMR<T> = MMR::new(Self::mmr_leaves());
+		let mmr: ModuleMMR<MMROffchainStorage, T> = MMR::new(Self::mmr_leaves());
 		mmr.generate_proof(leaf_index)
+	}
+
+	pub fn verify_leaf(leaf: LeafOf<T>, proof: primitives::Proof<<T as Trait>::Hash>) -> Result<bool, Error> {
+		let mmr: ModuleMMR<MMRRuntimeStorage, T> = MMR::new(Self::mmr_leaves());
+		mmr.verify_leaf_proof(leaf, proof)
 	}
 }
 
@@ -167,16 +182,24 @@ pub type MMRNodeOf<T, L> = MMRNode<<T as Trait>::Hashing, L>;
 
 /// A wrapper around a MMR library to expose limited functionality that works
 /// with non-peak nodes pruned.
-pub struct MMR<T: Trait, L: codec::Codec + fmt::Debug> {
+pub struct MMR<StorageType, T, L> where
+	T: Trait,
+	L: codec::Codec + fmt::Debug,
+	MMRIndexer<StorageType, T, L>: mmr_lib::MMRStore<MMRNodeOf<T, L>>,
+{
 	mmr: mmr_lib::MMR<
 		MMRNodeOf<T, L>,
 		MMRHasher<<T as Trait>::Hashing, L>,
-		MMRIndexer<T, L>
+		MMRIndexer<StorageType, T, L>
 	>,
 	leaves: u64,
 }
 
-impl<T: Trait, L: codec::Codec + PartialEq + fmt::Debug + Clone> MMR<T, L> {
+impl<StorageType, T, L> MMR<StorageType, T, L> where
+	T: Trait,
+	L: codec::Codec + PartialEq + fmt::Debug + Clone,
+	MMRIndexer<StorageType, T, L>: mmr_lib::MMRStore<MMRNodeOf<T, L>>,
+{
 	/// Create a pointer to an existing MMR with given size.
 	pub fn new(leaves: u64) -> Self {
 		let size = mmr::NodesUtils::new(leaves).size();
@@ -202,18 +225,45 @@ impl<T: Trait, L: codec::Codec + PartialEq + fmt::Debug + Clone> MMR<T, L> {
 		res
 	}
 
-	/// Generate a proof for given list of leaf indices.
+	/// Verify proof of a single leaf.
+	pub fn verify_leaf_proof(&self, leaf: L, proof: primitives::Proof<<T as Trait>::Hash>) -> Result<bool, Error> {
+		let p = mmr_lib::MerkleProof::<
+			MMRNodeOf<T, L>,
+			MMRHasher<<T as Trait>::Hashing, L>,
+		>::new(
+			self.mmr.mmr_size(),
+			proof.items.into_iter().map(MMRNode::Inner).collect(),
+		);
+		let position = mmr_lib::leaf_index_to_pos(proof.leaf_index);
+		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.debug(e))?;
+		p.verify(
+			root,
+			vec![(position, MMRNode::Leaf(leaf))],
+		).map_err(|e| Error::Verify.debug(e))
+	}
+
+	// TODO [ToDr] Possibly move to type-specific impl.
+
+	/// Generate a proof for given leaf index.
+	///
+	/// Proof generation requires all the nodes (or their hashes) to be available in the storage.
+	/// (i.e. you can't run the function in the pruned storage).
 	pub fn generate_proof(&self, leaf_index: u64) -> Result<
-		primitives::Proof<<T as Trait>::Hash>,
+		(L, primitives::Proof<<T as Trait>::Hash>),
 		Error
 	> {
 		let position = mmr_lib::leaf_index_to_pos(leaf_index);
+		let leaf = match mmr_lib::MMRStore::get_elem(&<MMRIndexer<StorageType, T, L>>::default(), position) {
+			Ok(Some(MMRNode::Leaf(leaf))) => leaf,
+			e => return Err(Error::LeafNotFound.debug(e)),
+		};
 		self.mmr.gen_proof(vec![position])
 			.map_err(|e| Error::GenerateProof.debug(e))
 			.map(|p| primitives::Proof {
-				leaf: position,
+				leaf_index,
 				items: p.proof_items().iter().map(|x| x.hash()).collect(),
 			})
+			.map(|p| (leaf, p))
 	}
 
 	/// Return the internal size of the MMR (number of nodes).
@@ -230,13 +280,22 @@ impl<T: Trait, L: codec::Codec + PartialEq + fmt::Debug + Clone> MMR<T, L> {
 	}
 }
 
-/// Error during MMR
+/// Merkle Mountain Range operation error.
 #[derive(RuntimeDebug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum Error {
+	/// Error while pushing new node.
 	Push,
+	/// Error getting the new root.
 	GetRoot,
+	/// Error commiting changes.
 	Commit,
+	/// Error during proof generation.
 	GenerateProof,
+	/// Proof verification error.
+	Verify,
+	/// Leaf not found in the storage.
+	LeafNotFound,
 }
 
 impl Error {
@@ -261,15 +320,36 @@ impl<H: traits::Hash, L: codec::Encode> MMRNode<H, L> {
 }
 
 /// A storage layer for MMR.
-pub struct MMRIndexer<T, L>(PhantomData<(T, L)>);
+pub struct MMRRuntimeStorage;
+pub struct MMROffchainStorage;
 
-impl<T, L> Default for MMRIndexer<T, L> {
+pub struct MMRIndexer<StorageType, T, L>(PhantomData<(StorageType, T, L)>);
+
+impl<StorageType, T, L> Default for MMRIndexer<StorageType, T, L> {
 	fn default() -> Self {
 		Self(Default::default())
 	}
 }
 
-impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<MMRNodeOf<T, L>> for MMRIndexer<T, L> {
+impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<MMRNodeOf<T, L>>
+	for MMRIndexer<MMROffchainStorage, T, L>
+{
+	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<MMRNodeOf<T, L>>> {
+		let key = Module::<T>::offchain_key(pos);
+		Ok(
+			sp_io::offchain ::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
+				.and_then(|v| codec::Decode::decode(&mut &*v).ok())
+		)
+	}
+
+	fn append(&mut self, _: u64, _: Vec<MMRNodeOf<T, L>>) -> mmr_lib::Result<()> {
+		unimplemented!("MMR must not be altered in the off-chain context.")
+ 	}
+}
+
+impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<MMRNodeOf<T, L>>
+	for MMRIndexer<MMRRuntimeStorage, T, L>
+{
 	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<MMRNodeOf<T, L>>> {
 		Ok(<Nodes<T>>::get(pos)
 			.map(MMRNode::Inner)
