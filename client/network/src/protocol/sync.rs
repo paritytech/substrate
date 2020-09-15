@@ -1225,7 +1225,7 @@ impl<B: BlockT> ChainSync<B> {
 				who,
 				hash,
 			);
-			return FEither::Left(ready(PreValidateBlockAnnounce::Nothing { is_best, who, announce }))
+			return PreValidateBlockAnnounce::Nothing { is_best, who, announce }
 		}
 
 		// Let external validator check the block announcement.
