@@ -33,13 +33,17 @@ use sp_consensus::{
 };
 use crate::{Error, DifficultyOf};
 
+/// Auxiliaty for weak subjectivity.
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct WeakSubjectiveAux {
+	/// Receive timestamp second.
 	pub receive_timestamp_secs: u64,
+	/// Receive timestamp subsecond nanos.
 	pub receive_timestamp_subsec_nanos: u32,
 }
 
 impl WeakSubjectiveAux {
+	/// Create a new weak subjectivity auxiliaty.
 	pub fn new(receive_timestamp: Duration) -> Self {
 		Self {
 			receive_timestamp_secs: receive_timestamp.as_secs(),
@@ -47,6 +51,7 @@ impl WeakSubjectiveAux {
 		}
 	}
 
+	/// Get the receive timestamp of the auxiliaty.
 	pub fn receive_timestamp(&self) -> Duration {
 		Duration::new(self.receive_timestamp_secs, self.receive_timestamp_subsec_nanos)
 	}
@@ -65,40 +70,97 @@ fn read_aux<C: AuxStore, B: BlockT>(
 	}
 }
 
+/// Auxiliaty storage prefix for weak subjectivity block import.
 pub const WEAK_SUB_AUX_PREFIX: [u8; 9] = *b"PoW-Weak:";
 
+/// Get the auxiliaty storage key for weak subjectivity.
 fn aux_key<T: AsRef<[u8]>>(hash: &T) -> Vec<u8> {
 	WEAK_SUB_AUX_PREFIX.iter().chain(hash.as_ref()).copied().collect()
 }
 
+/// Parameters passed to decision function of whether to block the reorg.
 pub struct WeakSubjectiveParams<Difficulty> {
+	/// Total difficulty of the best block.
 	pub best_total_difficulty: Difficulty,
+	/// Total difficulty of the common ancestor.
 	pub common_total_difficulty: Difficulty,
+	/// Total difficulty of the new block to be imported.
 	pub new_total_difficulty: Difficulty,
+	/// Recieve timestamp of the best block.
 	pub best_receive_timestamp: Duration,
+	/// Receive timestamp of the common ancestor.
 	pub common_receive_timestamp: Duration,
+	/// Receive timestamp of the new block to be imported.
 	pub new_receive_timestamp: Duration,
+	/// Retracted block length if the reorg happens.
 	pub retracted_len: usize,
 }
 
+/// Deccision of weak subjectivity.
 pub enum WeakSubjectiveDecision {
+	/// Block the reorg.
 	BlockReorg,
+	/// Continue the normal import.
 	Continue,
 }
 
+/// Algorithm used for the decision function of weak subjectivity.
 pub trait WeakSubjectiveAlgorithm<Difficulty> {
+	/// Decide based on the weak subjectivity parameters of whether to block the import.
 	fn weak_subjective_decide(
 		&self,
 		params: WeakSubjectiveParams<Difficulty>,
 	) -> WeakSubjectiveDecision;
 }
 
+/// Block import for weak subjectivity. It must be combined with a PoW block import.
 pub struct WeakSubjectiveBlockImport<B: BlockT, I, C, S, Algorithm> {
 	inner: I,
 	client: Arc<C>,
 	select_chain: S,
 	algorithm: Algorithm,
 	_marker: PhantomData<B>,
+}
+
+impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone> Clone
+	for WeakSubjectiveBlockImport<B, I, C, S, Algorithm>
+{
+	fn clone(&self) -> Self {
+		Self {
+			inner: self.inner.clone(),
+			client: self.client.clone(),
+			select_chain: self.select_chain.clone(),
+			algorithm: self.algorithm.clone(),
+			_marker: PhantomData,
+		}
+	}
+}
+
+impl<B, I, C, S, Algorithm> WeakSubjectiveBlockImport<B, I, C, S, Algorithm> where
+	B: BlockT,
+	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + DifficultyOf<B> + Send + Sync,
+	I::Error: Into<ConsensusError>,
+	I::Difficulty: Decode + Add<I::Difficulty, Output=I::Difficulty>,
+	C: ProvideRuntimeApi<B> + HeaderMetadata<B> + BlockOf + AuxStore + Send + Sync,
+	C::Error: Debug,
+	S: SelectChain<B>,
+	Algorithm: WeakSubjectiveAlgorithm<I::Difficulty>,
+{
+	/// Create a new block import for weak subjectivity.
+	pub fn new(
+		inner: I,
+		client: Arc<C>,
+		algorithm: Algorithm,
+		select_chain: S,
+	) -> Self {
+		Self {
+			inner,
+			client,
+			algorithm,
+			select_chain,
+			_marker: PhantomData,
+		}
+	}
 }
 
 impl<B, I, C, S, Algorithm> BlockImport<B> for WeakSubjectiveBlockImport<B, I, C, S, Algorithm> where

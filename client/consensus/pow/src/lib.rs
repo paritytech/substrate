@@ -266,7 +266,7 @@ impl<B, I, C, S, Algorithm, CAW> PowBlockImport<B, I, C, S, Algorithm, CAW> wher
 	Algorithm: PowAlgorithm<B>,
 	CAW: CanAuthorWith<B>,
 {
-	/// Create a new block import suitable to be used in PoW
+	/// Create a new block import suitable to be used in PoW.
 	pub fn new(
 		inner: I,
 		client: Arc<C>,
@@ -335,6 +335,36 @@ impl<B, I, C, S, Algorithm, CAW> PowBlockImport<B, I, C, S, Algorithm, CAW> wher
 		} else {
 			Ok(())
 		}
+	}
+}
+
+impl<B, I, C, S, Algorithm, CAW> DifficultyOf<B>
+	for PowBlockImport<B, I, C, S, Algorithm, CAW>
+where
+	B: BlockT,
+	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
+	I::Error: Into<ConsensusError>,
+	S: SelectChain<B>,
+	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
+	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
+	Algorithm: PowAlgorithm<B>,
+	Algorithm::Difficulty: 'static,
+	CAW: CanAuthorWith<B>,
+{
+	type Difficulty = Algorithm::Difficulty;
+
+	fn difficulty_of(
+		&self,
+		hash: &B::Hash,
+	) -> Result<Option<PowAux<Self::Difficulty>>, Error<B>> {
+		read_aux::<_, _, B>(self.client.as_ref(), &hash)
+	}
+
+	fn next_difficulty_of(
+		&self,
+		hash: &B::Hash,
+	) -> Result<Self::Difficulty, Error<B>> {
+		self.algorithm.difficulty(*hash)
 	}
 }
 
