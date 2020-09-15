@@ -49,6 +49,8 @@ const NAY: Vote = Vote { aye: false, conviction: Conviction::None };
 const BIG_AYE: Vote = Vote { aye: true, conviction: Conviction::Locked1x };
 const BIG_NAY: Vote = Vote { aye: false, conviction: Conviction::Locked1x };
 
+const MAX_PROPOSALS: u32 = 100;
+
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
@@ -192,6 +194,7 @@ impl super::Trait for Test {
 	type ExternalDefaultOrigin = EnsureSignedBy<One, u64>;
 	type FastTrackOrigin = EnsureSignedBy<Five, u64>;
 	type CancellationOrigin = EnsureSignedBy<Four, u64>;
+	type CancelProposalOrigin = EnsureRoot<u64>;
 	type VetoOrigin = EnsureSignedBy<OneToFive, u64>;
 	type CooloffPeriod = CooloffPeriod;
 	type PreimageByteDeposit = PreimageByteDeposit;
@@ -268,6 +271,7 @@ fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
 		Origin::signed(who),
 		set_balance_proposal_hash(value),
 		delay,
+		MAX_PROPOSALS,
 	)
 }
 
@@ -276,6 +280,7 @@ fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> DispatchRes
 		Origin::signed(who),
 		set_balance_proposal_hash_and_note(value),
 		delay,
+		MAX_PROPOSALS,
 	)
 }
 

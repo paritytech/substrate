@@ -192,6 +192,9 @@ const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 /// NOTE: This is not enforced by any logic.
 pub const MAX_VETOERS: u32 = 100;
 
+/// The maximum number of public proposals that can exist at any time.
+pub const MAX_PROPOSALS: u32 = 1000;
+
 /// A proposal index.
 pub type PropIndex = u32;
 
@@ -203,7 +206,7 @@ type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait WeightInfo {
-	fn propose() -> Weight;
+	fn propose(p: u32, ) -> Weight;
 	fn second(s: u32, ) -> Weight;
 	fn vote_new(r: u32, ) -> Weight;
 	fn vote_existing(r: u32, ) -> Weight;
@@ -214,6 +217,7 @@ pub trait WeightInfo {
 	fn fast_track() -> Weight;
 	fn veto_external(v: u32, ) -> Weight;
 	fn cancel_referendum() -> Weight;
+	fn cancel_proposal() -> Weight;
 	fn cancel_queued(r: u32, ) -> Weight;
 	fn on_initialize_base(r: u32, ) -> Weight;
 	fn delegate(r: u32, ) -> Weight;
@@ -284,6 +288,9 @@ pub trait Trait: frame_system::Trait + Sized {
 
 	/// Origin from which any referendum may be cancelled in an emergency.
 	type CancellationOrigin: EnsureOrigin<Self::Origin>;
+
+	/// Origin from which a proposal may be cancelled and its backers slashed.
+	type CancelProposalOrigin: EnsureOrigin<Self::Origin>;
 
 	/// Origin for anyone able to veto proposals.
 	///
@@ -544,6 +551,10 @@ decl_error! {
 		WrongUpperBound,
 		/// Maximum number of votes reached.
 		MaxVotesReached,
+		/// The provided witness data is wrong.
+		InvalidWitness,
+		/// Maximum number of proposals reached.
+		TooManyProposals,
 	}
 }
 
@@ -596,14 +607,21 @@ decl_module! {
 		/// - Db reads: `PublicPropCount`, `PublicProps`
 		/// - Db writes: `PublicPropCount`, `PublicProps`, `DepositOf`
 		/// # </weight>
-		#[weight = T::WeightInfo::propose()]
-		fn propose(origin, proposal_hash: T::Hash, #[compact] value: BalanceOf<T>) {
+		#[weight = T::WeightInfo::propose(*prop_count)]
+		fn propose(origin,
+			proposal_hash: T::Hash,
+			#[compact] value: BalanceOf<T>,
+			#[compact] prop_count: u32,
+		) {
 			let who = ensure_signed(origin)?;
 			ensure!(value >= T::MinimumDeposit::get(), Error::<T>::ValueLow);
 
-			T::Currency::reserve(&who, value)?;
-
 			let index = Self::public_prop_count();
+			let real_prop_count = PublicProps::<T>::decode_len().unwrap_or(0) as u32;
+			ensure!(real_prop_count <= prop_count, Error::<T>::InvalidWitness);
+			ensure!(real_prop_count < MAX_PROPOSALS, Error::<T>::TooManyProposals);
+
+			T::Currency::reserve(&who, value)?;
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (&[&who][..], value));
 
@@ -846,6 +864,30 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::Vetoed(who, proposal_hash, until));
 			<NextExternal<T>>::kill();
+		}
+
+		/// Remove a proposal.
+		///
+		/// The dispatch origin of this call must be _Root_.
+		///
+		/// - `ref_index`: The index of the proposal to cancel.
+		///
+		/// # <weight>
+		/// - Complexity: `O(1)`.
+		/// - Db writes: `ReferendumInfoOf`
+		/// - Base Weight: 21.57 µs
+		/// # </weight>
+		#[weight = T::WeightInfo::cancel_proposal()]
+		fn cancel_proposal(origin, #[compact] prop_index: PropIndex) {
+			T::CancelProposalOrigin::ensure_origin(origin)?;
+
+			PublicProps::<T>::mutate(|props| props.retain(|p| p.0 != prop_index));
+			if let Some((whos, amount)) = DepositOf::<T>::take(prop_index) {
+				for who in whos.into_iter() {
+					T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
+				}
+			}
+
 		}
 
 		/// Remove a referendum.

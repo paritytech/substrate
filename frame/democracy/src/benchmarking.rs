@@ -57,6 +57,7 @@ fn add_proposal<T: Trait>(n: u32) -> Result<T::Hash, &'static str> {
 		RawOrigin::Signed(other).into(),
 		proposal_hash,
 		value.into(),
+		MAX_PROPOSALS,
 	)?;
 
 	Ok(proposal_hash)
@@ -100,6 +101,11 @@ benchmarks! {
 	_ { }
 
 	propose {
+		let p in 0 .. MAX_PROPOSALS;
+		for i in 0..r {
+			add_proposal::<T>(i)?;
+		}
+
 		let caller = funded_account::<T>("caller", 0);
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&0);
 		let value = T::MinimumDeposit::get();
@@ -286,6 +292,10 @@ benchmarks! {
 		let (_, new_vetoers) = <Blacklist<T>>::get(&proposal_hash).ok_or("no blacklist")?;
 		assert_eq!(new_vetoers.len(), (v + 1) as usize, "vetoers not added");
 	}
+
+	cancel_proposal {
+		let proposal_index = add_proposal::<T>(r)?;
+	}: _(RawOrigin::Root, proposal_index)
 
 	cancel_referendum {
 		let referendum_index = add_referendum::<T>(0)?;

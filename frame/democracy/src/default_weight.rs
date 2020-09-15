@@ -23,8 +23,9 @@ use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 /// Default implementation of weight, this is just from an example return, values may change
 /// depending on the runtime. This is not meant to be used in production.
 impl crate::WeightInfo for () {
-	fn propose() -> Weight {
+	fn propose(p: u32, ) -> Weight {
 		(49113000 as Weight)
+			.saturating_add((262000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
@@ -75,6 +76,10 @@ impl crate::WeightInfo for () {
 			.saturating_add((184000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
+	}
+	fn cancel_proposal() -> Weight {
+		(20431000 as Weight)
+			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn cancel_referendum() -> Weight {
 		(20431000 as Weight)
