@@ -141,7 +141,7 @@
 			"network": "kulupu",
 			"displayName": "Kulupu",
 			"symbols": ["KLP"],
-			"decimals": null,
+			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://kulupu.network/"
 		},
