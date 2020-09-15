@@ -109,7 +109,7 @@ benchmarks! {
 		let caller = funded_account::<T>("caller", 0);
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&0);
 		let value = T::MinimumDeposit::get();
-	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
+	}: _(RawOrigin::Signed(caller), proposal_hash, value.into(), MAX_PROPOSALS)
 	verify {
 		assert_eq!(Democracy::<T>::public_props().len(), 1, "Proposals not created.");
 	}
@@ -295,7 +295,7 @@ benchmarks! {
 
 	cancel_proposal {
 		let proposal_index = add_proposal::<T>(0)?;
-	}: _(RawOrigin::Root, proposal_index)
+	}: _(RawOrigin::Root, 0)
 
 	cancel_referendum {
 		let referendum_index = add_referendum::<T>(0)?;
