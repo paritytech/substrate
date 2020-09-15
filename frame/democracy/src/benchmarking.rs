@@ -102,7 +102,7 @@ benchmarks! {
 
 	propose {
 		let p in 0 .. MAX_PROPOSALS;
-		for i in 0..r {
+		for i in 0..p {
 			add_proposal::<T>(i)?;
 		}
 
@@ -294,7 +294,7 @@ benchmarks! {
 	}
 
 	cancel_proposal {
-		let proposal_index = add_proposal::<T>(r)?;
+		let proposal_index = add_proposal::<T>(0)?;
 	}: _(RawOrigin::Root, proposal_index)
 
 	cancel_referendum {
