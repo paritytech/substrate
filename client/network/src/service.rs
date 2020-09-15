@@ -1353,6 +1353,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 									ResponseFailure::Network(InboundFailure::Timeout) => "timeout",
 									ResponseFailure::Network(InboundFailure::UnsupportedProtocols) =>
 										"unsupported",
+									ResponseFailure::Network(InboundFailure::ConnectionClosed) =>
+										"connection-closed",
 								};
 
 								metrics.requests_in_failure_total
@@ -1668,8 +1670,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
-				metrics.kbuckets_num_nodes.with_label_values(&[&proto.as_ref()]).set(num_entries as u64);
+			for (proto, buckets) in this.network_service.num_entries_per_kbucket() {
+				for (lower_ilog2_bucket_bound, num_entries) in buckets {
+					metrics.kbuckets_num_nodes
+						.with_label_values(&[&proto.as_ref(), &lower_ilog2_bucket_bound.to_string()])
+						.set(num_entries as u64);
+				}
 			}
 			for (proto, num_entries) in this.network_service.num_kademlia_records() {
 				metrics.kademlia_records_count.with_label_values(&[&proto.as_ref()]).set(num_entries as u64);
