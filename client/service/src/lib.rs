@@ -383,7 +383,10 @@ mod waiting {
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
+fn start_rpc_servers<
+	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
+	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+>(
 	config: &Configuration,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
