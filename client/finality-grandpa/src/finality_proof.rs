@@ -188,8 +188,8 @@ impl<B, Block> FinalityProofProvider<B, Block>
 		NumberFor<Block>: BlockNumberOps,
 		B: Backend<Block> + Send + Sync + 'static,
 {
-	/// Return finality proofs for the given authorities set id, if it is provided, otherwise the
-	/// current one will be used.
+	/// Prove finality for the range (begin; end] hash. Returns None if there are no finalized blocks
+	/// unknown in the range.
 	pub fn prove_finality(
 		&self,
 		begin: Block::Hash,
