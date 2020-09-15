@@ -16,9 +16,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
-//! This is suitable for a testing environment.
-//! TODO: some more doc
+//! Manual sealing engine, in its simplest form, is the engine that listens for RPC calls to seal
+//! and finalize blocks.
+//!
+//! On top of manual sealing, instant-sealing is built by listening to the transaction pool stream.
+//! When a transaction comes, the instant seal engine get notified immediately.
+//!
+//! Next, we build a more sophisticated version of instant-seal with heartbeat period and cooldown
+//! period. If heartbeat option is specified, a block will be created regularly every heartbeat period.
+//! And if cooldown option is specified, it need to wait for the cooldown period before another block
+//! will be created.
 
 use core::{time::Duration, marker::Send};
 use futures::prelude::*;
@@ -47,16 +54,15 @@ mod rpc;
 use crate::{
 	finalize_block::{finalize_block, FinalizeBlockParams},
 	seal_new_block::{seal_new_block, SealBlockParams},
-	heartbeat_stream::{HeartbeatStream},
 };
 
 pub use crate::{
 	error::Error,
+	heartbeat_stream::HeartbeatStream,
 	rpc::{EngineCommand, CreatedBlock, ManualSeal},
-	heartbeat_stream::{HeartbeatOptions},
 };
 
-/// The verifier for the manual seal engine; instantly finalizes.
+// The verifier for the manual seal engine; instantly finalizes.
 struct ManualSealVerifier;
 
 impl<B: BlockT> Verifier<B> for ManualSealVerifier {
@@ -156,9 +162,22 @@ pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
 	}
 }
 
-/// runs the background authorship task for the instant seal engine.
-/// instant-seal creates a new block for every transaction imported into
-/// the transaction pool.
+/// Runs the background authorship task for the instant seal engine. In simplest form `instant-seal`
+/// creates a new block for every transaction imported into the transaction pool.
+///
+/// # Parameters
+///
+/// * `heartbeat`: This specifies if an empty block (aka heartbeat block) should be created every
+/// `heartbeat` duration. If `None`, no heartbeat block is created.
+/// * `cooldown`: This specifies if a cooldown period should be applied. If not `None`, after one block
+/// is created, it has to wait for the cooldown period before the next block will be created. If
+/// transactions come in during this period, they are deferred until the cooldown period has passed.
+/// * `finalize`: decides whether the created block is finalized or not.
+///
+/// # Panics
+///
+/// * If both `heartbeat` and `cooldown` options are not `None`, `heartbeat` must be larger than
+/// `cooldown`. Otherwise panic occurs.
 pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 	block_import: BoxBlockImport<B, T>,
 	env: E,
@@ -194,6 +213,8 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 		});
 
 	let stream: Box<dyn Stream<Item = _> + Unpin + Send> = match (heartbeat, cooldown) {
+		// If there is no heartbeat and no cooldown option. The simplest form is used.
+		// Otherwise, we use a HeartbeatStream adapter to wrap around the `commands_stream`.
 		(None, None) => Box::new(commands_stream),
 		_ => Box::new(
 			HeartbeatStream::new(Box::new(commands_stream), heartbeat, cooldown, finalize)

@@ -16,8 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! HeartbeatStream type and HeartbeatOptions used in instant seal
-//! TODO: some more doc
+//! Heartbeat stream is a stream adapter built around the manual-seal `EngineCommand` stream.
+//! It adds additional logic of creating heartbeat block and having a cooldown period.
 
 use std::{pin::Pin, time::{Duration, Instant}};
 use futures::{
@@ -27,32 +27,33 @@ use futures::{
 use futures_timer::Delay;
 use crate::rpc::EngineCommand;
 
-/// Heartbeat options to manage the behavior of the heartbeat stream
-pub struct HeartbeatOptions {
-	/// The amount of time passed that a new heartbeat block will be generated when no transactions
-	///   in tx pool, in sec.
-	pub heartbeat: Option<Duration>,
-	/// The cooldown time after a block has been authored, in sec.
-	pub cooldown: Option<Duration>,
-	pub finalize: bool,
+/// Options to manage the behavior of the heartbeat stream
+struct Options {
+	// The amount of time passed that a new empty block will be generated when no transactions
+	// in the tx pool.
+	heartbeat: Option<Duration>,
+	// The cooldown duration after a block has been authored.
+	cooldown: Option<Duration>,
+	// Whether the created block is finalized of not.
+	finalize: bool,
 }
 
-/// HeartbeatStream is combining transaction pool notification stream and generate a new block
-/// when a certain time has passed without any transactions.
+/// Heartbeat stream is a stream adapter built around the manual-seal `EngineCommand` stream.
+/// It adds additional logic of creating heartbeat block and having a cooldown period.
 pub struct HeartbeatStream<Hash> {
-	/// The transaction pool notification stream
-	pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
-	/// Future to control when the next block should be generated
+	// The `EngineCommand` stream passed from the caller
+	command_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
+	// Delay future to control when to wake up next
 	delay_for: Option<Delay>,
-	/// To remember when the last block is generated
+	// To remember when the last block is generated
 	last_blocktime: Option<Instant>,
-	/// Heartbeat options
-	options: HeartbeatOptions,
+	// Heartbeat options
+	options: Options,
 }
 
 impl<Hash> HeartbeatStream<Hash> {
 	pub fn new(
-		pool_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
+		command_stream: Box<dyn Stream<Item = EngineCommand<Hash>> + Unpin + Send>,
 		heartbeat: Option<Duration>,
 		cooldown: Option<Duration>,
 		finalize: bool
@@ -65,10 +66,10 @@ impl<Hash> HeartbeatStream<Hash> {
 
 		let delay_for = heartbeat.and_then(|hb| Some(Delay::new(hb)));
 		Ok(Self {
-			pool_stream,
+			command_stream,
 			delay_for,
 			last_blocktime: None,
-			options: HeartbeatOptions { heartbeat, cooldown, finalize }
+			options: Options { heartbeat, cooldown, finalize }
 		})
 	}
 
@@ -82,8 +83,10 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 	type Item = EngineCommand<Hash>;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		match self.pool_stream.poll_next_unpin(cx) {
+		match self.command_stream.poll_next_unpin(cx) {
+
 			Poll::Ready(Some(ec)) => {
+				// An engine command comes in, meaning a transaction in `tx_pool` now
 				let cooldown = self.options.cooldown;
 				match (self.last_blocktime, cooldown) {
 					(Some(last_blocktime), Some(cooldown)) => {
@@ -107,7 +110,7 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 						Poll::Ready(Some(ec))
 					},
 					_ => {
-						// Either no last_blocktime, so this is the first block created, or
+						// Either no `last_blocktime`, so this is the first block created, or
 						//   no `cooldown` in hearbeat option, so we don't need to check cooldown and create
 						//   block immediately
 						println!("poll_next: Create block due to tx, first block or no cooldown");
@@ -117,15 +120,16 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 				}
 			},
 
-			// The tx_pool stream comes to an end
+			// The `EngineCommand` stream comes to an end
 			Poll::Ready(None) => {
 				println!("poll_next: None");
 				Poll::Ready(None)
 			},
 
-			// tx_pool pending. We want to check if we need to create a block due to delay_for has been set.
-			//   `delay_for` is set when either there is a heartbeat (options.heartbeat is not `None`), or
-			//   some txs come but the stream is still cooling down.
+			// `EngineCommand` stream pending, meaning no txs in `tx_pool`. We want to check if we need
+			// to create a block due to `delay_for` is waking up.
+			// `delay_for` is set when either heartbeat duration is specified, or some txs has come
+			// but the stream was still cooling down.
 			Poll::Pending => {
 				let finalize = self.options.finalize;
 				match &mut self.delay_for {
@@ -134,7 +138,8 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 							println!("poll_next: Creating a block: delay_for ready");
 							self.create_block_now_and_reset_delay();
 							return Poll::Ready(Some(EngineCommand::SealNewBlock {
-								create_empty: true, // new blocks created due to delay_future can be empty.
+								// New blocks created can be empty as it may just be an empty heartbeat block.
+								create_empty: true,
 								finalize,
 								parent_hash: None,
 								sender: None,
@@ -145,7 +150,7 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 						Poll::Pending
 					},
 					None => {
-						// `delay_for` is None. This is the case when no options.heartbeat is set.
+						// `delay_for` is None. This is the case when no heartbeat duration is set.
 						println!("poll_next: Pending - no heartbeat");
 						Poll::Pending
 					}
