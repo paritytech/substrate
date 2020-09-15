@@ -31,7 +31,6 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-mod async_externalities;
 #[macro_use]
 mod native_executor;
 mod wasm_runtime;

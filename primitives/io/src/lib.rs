@@ -61,6 +61,12 @@ use sp_externalities::{ExternalitiesExt, Externalities};
 #[cfg(feature = "std")]
 mod batch_verifier;
 
+#[cfg(feature = "std")]
+mod async_externalities;
+
+#[cfg(feature = "std")]
+pub use async_externalities::{new_async_externalities, AsyncExternalities};
+
 pub mod tasks;
 
 #[cfg(feature = "std")]

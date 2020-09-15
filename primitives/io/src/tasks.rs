@@ -49,8 +49,26 @@ mod inner {
 		).ok_or("Spawn called outside of externalities context!")?;
 
 		let (sender, receiver) = mpsc::channel();
+		let extra_scheduler = scheduler.clone();
 		scheduler.spawn("parallel-runtime-spawn", Box::pin(async move {
-			let result = entry_point(data);
+			let result = match crate::new_async_externalities(extra_scheduler) {
+				Ok(mut ext) => {
+					sp_externalities::set_and_run_with_externalities(
+						&mut ext,
+						move || entry_point(data),
+					)
+				},
+				Err(e) => {
+					log::warn!(
+						target: "runtime",
+						"Unable to run async task: {}",
+						e,
+					);
+
+					return;
+				},
+			};
+
 			let _ = sender.send(result);
 		}));
 

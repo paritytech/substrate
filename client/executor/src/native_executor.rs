@@ -19,7 +19,6 @@
 use crate::{
 	RuntimeInfo, error::{Error, Result},
 	wasm_runtime::{RuntimeCache, WasmExecutionMethod},
-	async_externalities::new_async_externalities,
 };
 use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
@@ -31,7 +30,7 @@ use std::{result, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc, collections:
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, CallSite};
 use sp_externalities::ExternalitiesExt as _;
-use sp_io::RuntimeSpawnExt;
+use sp_io::{RuntimeSpawnExt, new_async_externalities};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -306,8 +305,10 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 		self.scheduler.spawn("forked runtime invoke", Box::pin(async move {
 			let module = AssertUnwindSafe(module);
 			let result = with_externalities_safe(
-				&mut new_async_externalities(scheduler, module.clone())
-					.expect("Failed to setup externalities for async context"),
+				&mut new_async_externalities(scheduler.clone())
+					.expect("Failed to setup externalities for async context")
+					.with_runtime_ext(Box::new(RuntimeInstanceSpawn::new(module.clone(), scheduler)))
+					.expect("Failed to setup runtime extension for async externalities"),
 				move || {
 
 					// FIXME: Should be refactored to shared "instance factory".

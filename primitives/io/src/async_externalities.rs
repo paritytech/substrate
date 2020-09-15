@@ -18,43 +18,45 @@
 
 //! Async externalities.
 
-use std::{
-	any::{TypeId, Any},
-	sync::Arc,
-};
+use std::any::{TypeId, Any};
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	traits::{Externalities, SpawnNamed, TaskExecutorExt},
 };
-use sp_io::RuntimeSpawnExt;
+use crate::{RuntimeSpawnExt, RuntimeSpawn};
 use sp_externalities::{Extensions, ExternalitiesExt as _};
-use crate::native_executor::RuntimeInstanceSpawn;
 
 /// Simple state-less externalities for use in async context.
 ///
 /// Will panic if anything is accessing the storage.
 #[derive(Debug)]
 pub struct AsyncExternalities {
-    extensions: Extensions,
+	extensions: Extensions,
 }
 
-pub fn new_async_externalities(
-	scheduler: Box<dyn SpawnNamed>,
-	module: Arc<dyn sc_executor_common::wasm_runtime::WasmModule>,
-) -> Result<AsyncExternalities, &'static str> {
+/// New Async externalities.
+pub fn new_async_externalities(scheduler: Box<dyn SpawnNamed>) -> Result<AsyncExternalities, &'static str> {
 	let extensions = Extensions::default();
 	let mut res = AsyncExternalities { extensions };
 	let mut ext = &mut res as &mut dyn Externalities;
 	ext.register_extension::<TaskExecutorExt>(TaskExecutorExt(scheduler.clone()))
 		.map_err(|_| "Failed to register task executor extension.")?;
-	ext.register_extension::<RuntimeSpawnExt>(
-		RuntimeSpawnExt(Box::new(
-			RuntimeInstanceSpawn::new(module, scheduler)
-		))
-	)
-	.map_err(|_| "Failed to register task executor extension.")?;
 
 	Ok(res)
+}
+
+impl AsyncExternalities {
+	/// Extend async externalities with the ability to spawn wasm instances.
+	pub fn with_runtime_ext(
+		mut self,
+		runtime_ext: Box<dyn RuntimeSpawn>,
+	) -> Result<Self, &'static str> {
+		let mut ext = &mut self as &mut dyn Externalities;
+		ext.register_extension::<RuntimeSpawnExt>(RuntimeSpawnExt(runtime_ext))
+			.map_err(|_| "Failed to register task executor extension.")?;
+
+		Ok(self)
+	}
 }
 
 type StorageKey = Vec<u8>;
