@@ -45,7 +45,7 @@ pub use per_things::{PerThing, InnerOf, UpperOf, Percent, PerU16, Permill, Perbi
 pub use rational::{Rational128, RationalInfinite};
 
 use sp_std::{prelude::*, cmp::Ordering, fmt::Debug, convert::TryInto};
-use traits::{BaseArithmetic, One, Zero, SaturatedConversion, Unsigned};
+use traits::{BaseArithmetic, One, Zero, SaturatedConversion, Unsigned, UniqueSaturatedInto};
 
 /// Trait for comparing two numbers with an threshold.
 ///
@@ -96,6 +96,10 @@ pub trait Normalizable<T> {
 	/// Only returns `Ok` if the new sum of results is guaranteed to be equal to `targeted_sum`.
 	/// Else, returns an error explaining why it failed to do so.
 	fn normalize(&self, targeted_sum: T) -> Result<Vec<T>, &'static str>;
+
+	/// Normalize self around `target_sum`, only if `sum(self)` is less than `target_sum`, else this
+	/// is a noop.
+	fn normalize_up(&self, targeted_sum: T) -> Vec<T>;
 }
 
 macro_rules! impl_normalize_for_numeric {
@@ -104,6 +108,10 @@ macro_rules! impl_normalize_for_numeric {
 			impl Normalizable<$numeric> for Vec<$numeric> {
 				fn normalize(&self, targeted_sum: $numeric) -> Result<Vec<$numeric>, &'static str> {
 					normalize(self.as_ref(), targeted_sum)
+				}
+
+				fn normalize_up(&self, target_sum: $numeric) -> Vec<$numeric> {
+					normalize_up(self.as_ref(), target_sum)
 				}
 			}
 		)*
@@ -114,12 +122,35 @@ impl_normalize_for_numeric!(u8, u16, u32, u64, u128);
 
 impl<P: PerThing> Normalizable<P> for Vec<P> {
 	fn normalize(&self, targeted_sum: P) -> Result<Vec<P>, &'static str> {
-		let inners = self.iter().map(|p| p.clone().deconstruct().into()).collect::<Vec<_>>();
+		let inners = self
+			.iter()
+			.map(|p| p.clone().deconstruct().into())
+			.collect::<Vec<_>>();
+
 		let normalized = normalize(inners.as_ref(), targeted_sum.deconstruct().into())?;
-		Ok(normalized.into_iter().map(|i: UpperOf<P>| P::from_parts(i.saturated_into())).collect())
+
+		Ok(
+			normalized
+				.into_iter()
+				.map(|i: UpperOf<P>| P::from_parts(i.saturated_into()))
+				.collect()
+		)
+	}
+
+	fn normalize_up(&self, targeted_sum: P) -> Vec<P> {
+		let inners = self
+			.iter()
+			.map(|p| p.clone().deconstruct().into())
+			.collect::<Vec<_>>();
+
+		let normalized = normalize_up(inners.as_ref(), targeted_sum.deconstruct().into());
+
+		normalized
+			.into_iter()
+			.map(|i: UpperOf<P>| P::from_parts(i.saturated_into()))
+			.collect()
 	}
 }
-
 
 /// Normalize `input` so that the sum of all elements reaches `targeted_sum`.
 ///
@@ -264,6 +295,92 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 	// sort again based on the original index.
 	output_with_idx.sort_by_key(|x| x.0);
 	Ok(output_with_idx.into_iter().map(|(_, t)| t).collect())
+}
+
+/// A simpler variant of [`normalize`] that is designated for when `sum(input) < target_sum`. Else,
+/// the function is noop and returns `input.to_vec()`. In otherwords, `input` is only normalized
+/// **upwards**.
+///
+/// If the size if `input` is also too big to fit in `T`, the this function is noop.
+///
+/// Unlike [`normalize`], this can never fail.
+pub fn normalize_up<T>(input: &[T], target_sum: T) -> Vec<T>
+	where T: Clone + Copy + Ord + BaseArithmetic + Unsigned + Debug,
+{
+	// compute sum and return error if failed.
+	let mut sum = T::zero();
+	for t in input.iter() {
+		if let Some(new_sum) = sum.checked_add(t) {
+			sum = new_sum;
+		} else {
+			return input.to_vec()
+		}
+	}
+
+	// noop if sum is greater.
+	if sum >= target_sum {
+		return input.to_vec()
+	}
+
+	let count = input.len();
+	// Nothing to do here.
+	if count.is_zero() {
+		return input.to_vec();
+	}
+	if T::try_from(count).is_err() {
+		return input.to_vec()
+	}
+	// This will not saturate.
+	let count_t: T = count.unique_saturated_into();
+
+	// targeted_sum is known to be more than sum.
+	let diff = target_sum - sum;
+
+	let per_round = diff / count_t;
+	let mut leftover = diff % count_t;
+
+	// sort output once based on diff. This will require more data transfer and saving original
+	// index, but we sort only twice instead: once now and once at the very end.
+	let mut output_with_idx = input.iter().cloned().enumerate().collect::<Vec<(usize, T)>>();
+	output_with_idx.sort_by_key(|x| x.1);
+
+	let mut min_index = 0;
+	let threshold = target_sum / count_t;
+
+	if !per_round.is_zero() {
+		for _ in 0..count {
+			output_with_idx[min_index].1 = output_with_idx[min_index].1
+				.checked_add(&per_round)
+				.expect("Proof provided in the module doc; qed.");
+			if output_with_idx[min_index].1 >= threshold {
+				min_index += 1;
+				min_index = min_index % count;
+			}
+		}
+	}
+
+	while !leftover.is_zero() {
+		output_with_idx[min_index].1 = output_with_idx[min_index].1
+			.checked_add(&T::one())
+			.expect("Proof provided in the module doc; qed.");
+		if output_with_idx[min_index].1 >= threshold {
+			min_index += 1;
+			min_index = min_index % count;
+		}
+		leftover -= One::one()
+	}
+
+	debug_assert_eq!(
+		output_with_idx.iter().fold(T::zero(), |acc, (_, x)| acc + *x),
+		target_sum,
+		"sum({:?}) != {:?}",
+		output_with_idx,
+		target_sum,
+	);
+
+	// sort again based on the original index.
+	output_with_idx.sort_by_key(|x| x.0);
+	output_with_idx.into_iter().map(|(_, t)| t).collect()
 }
 
 #[cfg(test)]
