@@ -23,6 +23,7 @@
 
 mod storage;
 mod construct_runtime;
+mod pallet_version;
 mod transactional;
 
 use proc_macro::TokenStream;
@@ -314,4 +315,21 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::transactional(attr, input)
+}
+
+/// Convert the current crate version into a [`PalletVersion`].
+///
+/// It uses the `CARGO_PKG_VERSION_MAJOR`, `CARGO_PKG_VERSION_MINOR` and
+/// `CARGO_PKG_VERSION_PATCH` environment variables to fetch the crate version.
+/// This means that the [`PalletVersion`] object will correspond to the version of the
+/// crate the macro is called in!
+///
+/// # Example
+///
+/// ```
+/// const Version: PalletVersion = crate_to_pallet_version!();
+/// ```
+#[proc_macro]
+pub fn crate_version_to_pallet_version(input: TokenStream) -> TokenStream {
+	TokenStream::default()
 }

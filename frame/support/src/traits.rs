@@ -1663,8 +1663,19 @@ impl<T> IsType<T> for T {
 /// E.g. for module MyModule default instance will have prefix "MyModule" and other instances
 /// "InstanceNMyModule".
 pub trait Instance: 'static {
-    /// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
-    const PREFIX: &'static str ;
+	/// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
+	const PREFIX: &'static str ;
+}
+
+/// The version of a pallet.
+#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode)]
+pub struct PalletVersion {
+	/// The major version of the pallet.
+	pub major: u16,
+	/// The minor version of the pallet.
+	pub minor: u8,
+	/// The patch version of the pallet.
+	pub patch: u8,
 }
 
 #[cfg(test)]
