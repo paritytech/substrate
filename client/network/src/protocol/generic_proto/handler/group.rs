@@ -404,25 +404,27 @@ impl ProtocolsHandler for NotifsHandler {
 	type OutboundProtocol = NotificationsOut;
 	// Index within the `out_handlers`
 	type OutboundOpenInfo = usize;
+	type InboundOpenInfo = ();
 
-	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
+	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, ()> {
 		let in_handlers = self.in_handlers.iter()
 			.map(|(h, _)| h.listen_protocol().into_upgrade().1)
 			.collect::<UpgradeCollec<_>>();
 
 		let proto = SelectUpgrade::new(in_handlers, self.legacy.listen_protocol().into_upgrade().1);
-		SubstreamProtocol::new(proto)
+		SubstreamProtocol::new(proto, ())
 	}
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		out: <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
+		out: <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output,
+		(): ()
 	) {
 		match out {
 			EitherOutput::First((out, num)) =>
-				self.in_handlers[num].0.inject_fully_negotiated_inbound(out),
+				self.in_handlers[num].0.inject_fully_negotiated_inbound(out, ()),
 			EitherOutput::Second(out) =>
-				self.legacy.inject_fully_negotiated_inbound(out),
+				self.legacy.inject_fully_negotiated_inbound(out, ()),
 		}
 	}
 
@@ -609,8 +611,8 @@ impl ProtocolsHandler for NotifsHandler {
 		if self.pending_handshake.is_none() {
 			while let Poll::Ready(ev) = self.legacy.poll(cx) {
 				match ev {
-					ProtocolsHandlerEvent::OutboundSubstreamRequest { info, .. } =>
-						match info {},
+					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, .. } =>
+						match *protocol.info() {},
 					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen {
 						received_handshake,
 						..
@@ -693,10 +695,10 @@ impl ProtocolsHandler for NotifsHandler {
 		for (handler_num, (handler, _)) in self.out_handlers.iter_mut().enumerate() {
 			while let Poll::Ready(ev) = handler.poll(cx) {
 				match ev {
-					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
+					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol } =>
 						return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							protocol,
-							info: handler_num,
+							protocol: protocol
+								.map_info(|()| handler_num),
 						}),
 					ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
 

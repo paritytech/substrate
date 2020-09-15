@@ -171,9 +171,9 @@ impl Metrics {
 			kbuckets_num_nodes: prometheus::register(GaugeVec::new(
 				Opts::new(
 					"sub_libp2p_kbuckets_num_nodes",
-					"Number of nodes in the Kademlia k-buckets"
+					"Number of nodes per kbucket per Kademlia instance"
 				),
-				&["protocol"]
+				&["protocol", "lower_ilog2_bucket_bound"]
 			)?, registry)?,
 			listeners_local_addresses: prometheus::register(Gauge::new(
 				"sub_libp2p_listeners_local_addresses", "Number of local addresses we're listening on"
@@ -355,4 +355,3 @@ impl MetricSource for NumConnectedGauge {
 		set(&[], self.0.load(Ordering::Relaxed) as u64);
 	}
 }
-
