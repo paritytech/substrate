@@ -558,7 +558,7 @@ docker-build-chaos:                &docker-build-chaos
 chaos-test-singlenodeheight:
   <<:                              *chaos-only
   stage:                           chaos
-  image:                           parity/chaostools:latest
+  image:                           paritypr/simnet:latest
   needs:
     - job:                         docker-build-chaos
   tags: 
@@ -575,12 +575,10 @@ chaos-test-singlenodeheight:
   environment:
     name:                          parity-chaosnet
   script:
-    - cd ./.maintain/chaostest
-    - npm link
-    - chaostest spawn dev -i $CONTAINER_IMAGE:$VERSION
-    - chaostest singlenodeheight -h 30
+    - simnet spawn dev -i $CONTAINER_IMAGE:$VERSION
+    - simnet singlenodeheight -h 30
   after_script:
-    - chaostest clean
+    - simnet clean
 
 #### stage:                        publish
 
