@@ -29,7 +29,7 @@ use sp_core::{
 use log::trace;
 use std::{result, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc, collections::HashMap};
 use sp_wasm_interface::{HostFunctions, Function};
-use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule};
+use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, CallSite};
 use sp_externalities::ExternalitiesExt as _;
 use sp_io::RuntimeSpawnExt;
 
@@ -189,7 +189,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 					&mut **ext,
 					move || {
 						RuntimeInstanceSpawn::register_on_externalities(module.clone());
-						instance.call(method, call_data)
+						instance.call(CallSite::Export(method), call_data)
 					}
 				)
 			}).map_err(|e| e.to_string())
@@ -214,7 +214,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 				&mut **ext,
 				move || {
 					RuntimeInstanceSpawn::register_on_externalities(module.clone());
-					instance.call(method, call_data)
+					instance.call(CallSite::Export(method), call_data)
 				}
 			)
 			.and_then(|r| r)
@@ -295,9 +295,7 @@ pub struct RuntimeInstanceSpawn {
 }
 
 impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
-	fn dyn_dispatch(&self, func: u32, data: Vec<u8>) -> u32 {
-		use codec::Encode as _;
-
+	fn dyn_dispatch(&self, dispatcher_ref: u32, func: u32, data: Vec<u8>) -> u32 {
 		let new_handle = self.counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
 		let (sender, receiver) = std::sync::mpsc::channel();
@@ -317,10 +315,10 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 					// pool of istances should be used.
 					let instance = module.new_instance().expect("Failed to create new instance for fork");
 
-					let mut dispatch_data = Vec::new();
-					func.encode_to(&mut dispatch_data);
-					data.encode_to(&mut dispatch_data);
-					instance.call("dyn_dispatch", &dispatch_data[..]).expect("Failed to invoke instance.")
+					instance.call(
+						CallSite::TableWithWrapper { dispatcher_ref, func },
+						&data[..],
+					).expect("Failed to invoke instance.")
 				}
 			);
 
@@ -430,7 +428,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 							&mut **ext,
 							move || {
 								RuntimeInstanceSpawn::register_on_externalities(module.clone());
-								instance.call(method, data).map(NativeOrEncoded::Encoded)
+								instance.call(CallSite::Export(method), data).map(NativeOrEncoded::Encoded)
 							}
 						)
 					},

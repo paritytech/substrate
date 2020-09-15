@@ -554,13 +554,13 @@ fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 	).expect("Creates runtime");
 
 	let instance = runtime.new_instance().unwrap();
-	let res = instance.call("returns_mutable_static", &[0]).unwrap();
+	let res = instance.call_export("returns_mutable_static", &[0]).unwrap();
 	assert_eq!(33, u64::decode(&mut &res[..]).unwrap());
 
 	// We expect that every invocation will need to return the initial
 	// value plus one. If the value increases more than that then it is
 	// a sign that the wasm runtime preserves the memory content.
-	let res = instance.call("returns_mutable_static", &[0]).unwrap();
+	let res = instance.call_export("returns_mutable_static", &[0]).unwrap();
 	assert_eq!(33, u64::decode(&mut &res[..]).unwrap());
 }
 
@@ -589,11 +589,11 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	let instance = runtime.new_instance().unwrap();
 
 	// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
-	let res = instance.call("allocates_huge_stack_array", &true.encode());
+	let res = instance.call_export("allocates_huge_stack_array", &true.encode());
 	assert!(res.is_err());
 
 	// On the second invocation we allocate yet another 768KB (75%) of stack
-	let res = instance.call("allocates_huge_stack_array", &false.encode());
+	let res = instance.call_export("allocates_huge_stack_array", &false.encode());
 	assert!(res.is_ok());
 }
 
@@ -615,10 +615,10 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 		.expect("`__heap_base` is an `i32`");
 
 	let params = (heap_base as u32, 512u32 * 64 * 1024).encode();
-	instance.call("check_and_set_in_heap", &params).unwrap();
+	instance.call_export("check_and_set_in_heap", &params).unwrap();
 
 	// Cal it a second time to check that the heap was freed.
-	instance.call("check_and_set_in_heap", &params).unwrap();
+	instance.call_export("check_and_set_in_heap", &params).unwrap();
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]

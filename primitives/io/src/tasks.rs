@@ -17,7 +17,8 @@
 
 //! Runtime tasks.
 //!
-//! Contains runtime-usable interface for spawning parallel purely computational tasks.
+//! Contains runtime-usable functions for spawning parallel purely computational tasks.
+//!
 
 #[cfg(feature = "std")]
 mod inner {
@@ -60,40 +61,41 @@ mod inner {
 #[cfg(not(feature = "std"))]
 mod inner {
 
-	use sp_std::vec::Vec;
+	use sp_std::{vec::Vec, prelude::Box};
+
+
+	/// Dynamic dispatch of wasm blob.
+	///
+	/// Arguments are expected to be scale encoded in vector at address `payload_ptr` with length of
+	/// `payload_len`.
+	///
+	/// Arguments: function pointer (u32), input (Vec<u8>).
+	///
+	/// Function at pointer is expected to have signature of `(Vec<u8>) -> Vec<u8>`. Since this dynamic dispatch
+	/// function and the invoked function are compiled with the same compiler, there should be no problem with
+	/// ABI incompatibility.
+	extern "C" fn dispatch_wrapper(func_ref: u32, payload_ptr: u32, payload_len: u32) -> u64 {
+		let payload_len = payload_len as usize;
+		let output = unsafe {
+			let payload = Vec::from_raw_parts(payload_ptr as usize as *mut _, payload_len, payload_len);
+			let ptr: fn(Vec<u8>) -> Vec<u8> = core::mem::transmute(func_ref);
+			(ptr)(payload)
+		};
+		let mut output_encode = (output.len() as u64) << 32;
+		output_encode | (output.as_ptr() as usize as u64)
+	}
 
 	/// Spawn new runtime task (wasm).
 	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>) -> DataJoinHandle {
-
-		/// Dynamic dispatch of wasm blob.
-		///
-		/// Arguments are expected to be scale encoded in vector at address `payload_ptr` with length of
-		/// `payload_len`.
-		///
-		/// Arguments: function pointer (u32), input (Vec<u8>).
-		///
-		/// Function at pointer is expected to have signature of `(Vec<u8>) -> Vec<u8>`. Since this dynamic dispatch
-		/// function and the invoked function are compiled with the same compiler, there should be no problem with
-		/// ABI incompatibility.
-		#[no_mangle]
-		unsafe extern "C" fn dyn_dispatch(payload_ptr: u32, payload_len: u32) -> u64 {
-
-			use codec::Decode as _;
-
-			let mut data: &[u8] = core::slice::from_raw_parts(payload_ptr as usize as *const u8, payload_len as usize);
-			let entry = u32::decode(&mut data).expect("Failed to decode input") as usize;
-			let ptr: fn(Vec<u8>) -> Vec<u8> = core::mem::transmute(entry);
-			let payload = Vec::<u8>::decode(&mut data).expect("Failed to decode input");
-
-			let output = (ptr)(payload);
-
-			let mut output_encode = (output.len() as u64) << 32;
-			output_encode | (output.as_ptr() as usize as u64)
-		}
-
 		let func_ptr: usize = unsafe { core::mem::transmute(entry_point) };
 
-		let handle = unsafe { crate::runtime_tasks::spawn(func_ptr as u32, payload) };
+		let handle = unsafe {
+			crate::runtime_tasks::spawn(
+				(dispatch_wrapper as extern "C" fn(u32, u32, u32) -> u64 as usize) as u32,
+				func_ptr as u32,
+				payload,
+			)
+		};
 		DataJoinHandle { handle }
 	}
 

@@ -81,6 +81,14 @@ pub enum Error {
 	/// Execution of a host function failed.
 	#[display(fmt="Host function {} execution failed with: {}", _0, _1)]
 	FunctionExecution(String, String),
+	/// No table is present.
+	///
+	/// Call was requested that requires table but none was present in the instance.
+	NoTable,
+	/// No table is present.
+	///
+	/// Call was requested that requires specific entry in the table to be present.
+	NoTableEntryWithIndex(u32),
 }
 
 impl std::error::Error for Error {

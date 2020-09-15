@@ -1145,7 +1145,7 @@ pub trait Sandbox {
 /// Runtime spawn extension.
 pub trait RuntimeSpawn : Send {
 	/// Create new runtime instance and use dynamic dispatch to invoke with specified payload.
-	fn dyn_dispatch(&self, func: u32, payload: Vec<u8>) -> u32;
+	fn dyn_dispatch(&self, dispatcher_ref: u32, func: u32, payload: Vec<u8>) -> u32;
 
 	/// Join the result of previously created runtime instance invocation.
 	fn join(&self, handle: u32) -> Vec<u8>;
@@ -1165,10 +1165,10 @@ pub trait RuntimeTasks {
 	/// Wasm host function for spawning task.
 	///
 	/// This should not be used directly. Use `sp_io::tasks::spawn` instead.
-	fn spawn(&mut self, entry: u32, payload: Vec<u8>) -> u32 {
+	fn spawn(&mut self, dispatcher_ref: u32, entry: u32, payload: Vec<u8>) -> u32 {
 		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
 			.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		runtime_spawn.dyn_dispatch(entry, payload)
+		runtime_spawn.dyn_dispatch(dispatcher_ref, entry, payload)
 	}
 
 	/// Wasm host function for joining a task.

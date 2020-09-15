@@ -19,6 +19,35 @@
 use crate::error::Error;
 use sp_wasm_interface::Value;
 
+/// How to locate method to call.
+pub enum CallSite<'a> {
+	/// Call function exported with this name.
+	///
+	/// Located function should have (u32, u32) -> u64 signature.
+	Export(&'a str),
+	/// Call function by reference from table.
+	///
+	/// Located function should have (u32, u32) -> u64 signature.
+	Table(u32),
+	/// Call function by reference from table through a wrapper.
+	///
+	/// Located function should have (u32, u32, u32) -> u64 signature.
+	///
+	/// func will be passed to the
+	TableWithWrapper {
+		/// Wrapper for call.
+		dispatcher_ref: u32,
+		/// Actual function index that should be invoked.
+		func: u32,
+	},
+}
+
+impl<'a> From<&'a str> for CallSite<'a> {
+	fn from(val: &'a str) -> CallSite<'a> {
+		CallSite::Export(val)
+	}
+}
+
 /// A trait that defines an abstract WASM runtime module.
 ///
 /// This can be implemented by an execution engine.
@@ -31,11 +60,24 @@ pub trait WasmModule: Sync + Send {
 ///
 /// This can be implemented by an execution engine.
 pub trait WasmInstance: Send {
-	/// Call a method on this WASM instance and reset it afterwards.
+	/// Call a method on this WASM instance.
+	///
+	/// Before execution, instance is reset.
+	///
 	/// Returns the encoded result on success.
-	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error>;
+	fn call(&self, call_site: CallSite, data: &[u8]) -> Result<Vec<u8>, Error>;
+
+	/// Call an exported method on this WASM instance.
+	///
+	/// Before execution, instance is reset.
+	///
+	/// Returns the encoded result on success.
+	fn call_export(&self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error> {
+		self.call(method.into(), data)
+	}
 
 	/// Get the value from a global with the given `name`.
+	///
 	/// This method is only suitable for getting immutable globals.
 	fn get_global_const(&self, name: &str) -> Result<Option<Value>, Error>;
 }
