@@ -8858,6 +8858,7 @@ dependencies = [
 name = "substrate-wasm-builder"
 version = "2.0.0"
 dependencies = [
+ "ansi_term 0.12.1",
  "atty",
  "build-helper",
  "cargo_metadata",
