@@ -699,11 +699,13 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 			frame_system::CheckWeight::<Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 		);
+		sp_std::if_std!{ println!("Extra: {:?}", extra); }
 		let raw_payload = SignedPayload::new(call, extra)
 			.map_err(|e| {
 				debug::warn!("Unable to create signed payload: {:?}", e);
 			})
 			.ok()?;
+		sp_std::if_std!{ println!("Raw Payload: {:?}", raw_payload.encode()); }
 		let signature = raw_payload
 			.using_encoded(|payload| {
 				C::sign(payload, public)
@@ -1212,5 +1214,42 @@ mod tests {
 		{}
 
 		is_submit_signed_transaction::<Runtime>();
+	}
+
+	#[test]
+	fn create_signed_transaction() {
+		use sp_keyring::AccountKeyring;
+		use frame_system::offchain::CreateSignedTransaction;
+
+		pub mod crypto {
+			use sp_core::crypto::KeyTypeId;
+			use sp_runtime::{MultiSigner, MultiSignature};
+			use frame_system::offchain::AppCrypto;
+			const KEY_TYPE: KeyTypeId = KeyTypeId(*b"test");
+
+			use sp_runtime::app_crypto::{app_crypto, sr25519};
+			app_crypto!(sr25519, KEY_TYPE);
+
+			pub struct TestAuthId;
+			impl AppCrypto<MultiSigner, MultiSignature> for TestAuthId {
+				type RuntimeAppPublic = Public;
+				type GenericSignature = sp_core::sr25519::Signature;
+				type GenericPublic = sp_core::sr25519::Public;
+			}
+		}
+
+		let alice: AccountId = AccountKeyring::Alice.into();
+		let bob: AccountId = AccountKeyring::Bob.into();
+		let amount: Balance = 100;
+		let call = Call::Balances(BalancesCall::transfer(alice.into(), amount));
+		let nonce: Index = 0;
+
+		let tx = <Runtime as CreateSignedTransaction<Call>>::create_transaction::<crypto::TestAuthId>(
+			call,
+			Default::default(),
+			bob,
+			nonce
+		);
+		assert!(tx.is_some())
 	}
 }
