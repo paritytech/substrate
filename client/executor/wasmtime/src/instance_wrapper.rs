@@ -88,7 +88,10 @@ pub struct EntryPoint {
 }
 
 impl EntryPoint {
-	pub fn call(&self, data_ptr: i32, data_len: i32) -> anyhow::Result<u64> {
+	pub fn call(&self, data_ptr: Pointer<u8>, data_len: WordSize) -> anyhow::Result<u64> {
+		let data_ptr = u32::from(data_ptr) as i32;
+		let data_len = u32::from(data_len) as i32;
+
 		(match self.call_type {
 			EntryPointType::Direct => {
 				self.func.call(&[

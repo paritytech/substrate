@@ -153,7 +153,7 @@ fn perform_call(
 
 	let host_state = HostState::new(allocator, instance_wrapper.clone());
 	let ret = state_holder::with_initialized_state(&host_state, || {
-		match entrypoint.call(u32::from(data_ptr) as i32, u32::from(data_len) as i32) {
+		match entrypoint.call(data_ptr, data_len) {
 			Ok(retval) => Ok(unpack_ptr_and_len(retval)),
 			Err(trap) => {
 				return Err(Error::from(format!(
