@@ -700,6 +700,7 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 		);
 		sp_std::if_std!{ println!("Extra: {:?}", extra); }
+		sp_std::if_std!{ println!("Extra Encoded: {:?}", extra.encode()); }
 		let raw_payload = SignedPayload::new(call, extra)
 			.map_err(|e| {
 				debug::warn!("Unable to create signed payload: {:?}", e);
@@ -1238,18 +1239,20 @@ mod tests {
 			}
 		}
 
-		let alice: AccountId = AccountKeyring::Alice.into();
-		let bob: AccountId = AccountKeyring::Bob.into();
-		let amount: Balance = 100;
-		let call = Call::Balances(BalancesCall::transfer(alice.into(), amount));
-		let nonce: Index = 0;
+		sp_io::TestExternalities::default().execute_with(|| {
+			let alice: AccountId = AccountKeyring::Alice.into();
+			let bob: AccountId = AccountKeyring::Bob.into();
+			let amount: Balance = 100;
+			let call = Call::Balances(BalancesCall::transfer(alice.into(), amount));
+			let nonce: Index = 0;
 
-		let tx = <Runtime as CreateSignedTransaction<Call>>::create_transaction::<crypto::TestAuthId>(
-			call,
-			Default::default(),
-			bob,
-			nonce
-		);
-		assert!(tx.is_some())
+			let tx = <Runtime as CreateSignedTransaction<Call>>::create_transaction::<crypto::TestAuthId>(
+				call,
+				Default::default(),
+				bob,
+				nonce
+			);
+			assert!(tx.is_some())
+		});
 	}
 }
