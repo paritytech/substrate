@@ -73,6 +73,10 @@ impl pallet_democracy::WeightInfo for WeightInfo {
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
+	fn cancel_proposal() -> Weight {
+		(20431000 as Weight)
+			.saturating_add(DbWeight::get().writes(1 as Weight))
+	}
 	fn cancel_referendum() -> Weight {
 		(20431000 as Weight)
 			.saturating_add(DbWeight::get().writes(1 as Weight))
