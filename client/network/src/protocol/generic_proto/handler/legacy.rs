@@ -160,10 +160,7 @@ enum ProtocolState {
 
 	/// Handler is ready to accept incoming substreams.
 	/// If we are in this state, we haven't sent any `CustomProtocolOpen` yet.
-	Opening {
-		/// Deadline after which the opening is too long and the connection should be shut down.
-		deadline: Option<Delay>,
-	},
+	Opening,
 
 	/// Normal operating mode. Contains the substreams that are open.
 	/// If we are in this state, we have sent a `CustomProtocolOpen` message to the outside.
@@ -253,13 +250,7 @@ impl LegacyProtoHandler {
 
 			ProtocolState::Init { substreams: mut incoming, .. } => {
 				if incoming.is_empty() {
-					ProtocolState::Opening {
-						deadline: if self.endpoint.is_dialer() {
-							None
-						} else {
-							Some(Delay::new(Duration::from_secs(60)))
-						},
-					}
+					ProtocolState::Opening
 				} else {
 					let event = LegacyProtoHandlerOut::CustomProtocolOpen {
 						version: incoming[0].0.protocol_version(),
@@ -340,25 +331,9 @@ impl LegacyProtoHandler {
 
 				None
 			}
-			ProtocolState::Opening { deadline: Some(mut deadline) } => {
-				match Pin::new(&mut deadline).poll(cx) {
-					Poll::Ready(()) => {
-						let event = LegacyProtoHandlerOut::ProtocolError {
-							is_severe: true,
-							error: "Timeout when opening protocol".to_string().into(),
-						};
-						self.state = ProtocolState::KillAsap;
-						Some(ProtocolsHandlerEvent::Custom(event))
-					},
-					Poll::Pending => {
-						self.state = ProtocolState::Opening { deadline: Some(deadline) };
-						None
-					},
-				}
-			}
 
-			ProtocolState::Opening { deadline: None } => {
-				self.state = ProtocolState::Opening { deadline: None };
+			ProtocolState::Opening => {
+				self.state = ProtocolState::Opening;
 				None
 			}
 
@@ -428,13 +403,7 @@ impl LegacyProtoHandler {
 				// If `reenable` is `true`, that means we should open the substreams system again
 				// after all the substreams are closed.
 				if reenable && shutdown.is_empty() {
-					self.state = ProtocolState::Opening {
-						deadline: if self.endpoint.is_dialer() {
-							None
-						} else {
-							Some(Delay::new(Duration::from_secs(60)))
-						},
-					};
+					self.state = ProtocolState::Opening;
 				} else {
 					self.state = ProtocolState::Disabled { shutdown, reenable };
 				}
@@ -532,10 +501,9 @@ impl ProtocolsHandler for LegacyProtoHandler {
 
 	fn connection_keep_alive(&self) -> KeepAlive {
 		match self.state {
-			ProtocolState::Init { .. } | ProtocolState::Opening { .. } |
-			ProtocolState::Normal { .. } => KeepAlive::Yes,
-			ProtocolState::Disabled { .. } | ProtocolState::Poisoned |
-	  		ProtocolState::KillAsap => KeepAlive::No,
+			ProtocolState::Init { .. } | ProtocolState::Normal { .. } => KeepAlive::Yes,
+			ProtocolState::Opening { .. } | ProtocolState::Disabled { .. } |
+			ProtocolState::Poisoned | ProtocolState::KillAsap => KeepAlive::No,
 		}
 	}
 
