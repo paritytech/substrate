@@ -23,7 +23,7 @@ use futures::prelude::*;
 use log::{info, trace, warn};
 use parity_util_mem::MallocSizeOf;
 use sc_client_api::{BlockchainEvents, UsageProvider};
-use sc_network::{network_state::NetworkState, NetworkStatus};
+use sc_network::NetworkStatus;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::traits::{Block as BlockT, Header};
 use sp_transaction_pool::TransactionPool;
@@ -81,7 +81,7 @@ impl<T: TransactionPool + MallocSizeOf> TransactionPoolAndMaybeMallogSizeOf for 
 /// Builds the informant and returns a `Future` that drives the informant.
 pub fn build<B: BlockT, C>(
 	client: Arc<C>,
-	network_status_sinks: Arc<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>,
+	network_status_sinks: Arc<status_sinks::StatusSinks<NetworkStatus<B>>>,
 	pool: Arc<impl TransactionPoolAndMaybeMallogSizeOf>,
 	format: OutputFormat,
 ) -> impl futures::Future<Output = ()>
@@ -96,7 +96,7 @@ where
 	network_status_sinks.push(Duration::from_millis(5000), network_status_sink);
 
 	let display_notifications = network_status_stream
-		.for_each(move |(net_status, _)| {
+		.for_each(move |net_status| {
 			let info = client_1.usage_info();
 			if let Some(ref usage) = info.usage {
 				trace!(target: "usage", "Usage statistics: {}", usage);

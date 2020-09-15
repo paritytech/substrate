@@ -22,8 +22,10 @@
 //!
 //! ## Overview
 //!
-//! Nicks is a trivial module for keeping track of account names on-chain. It makes no effort to
-//! create a name hierarchy, be a DNS replacement or provide reverse lookups.
+//! Nicks is an example module for keeping track of account names on-chain. It makes no effort to
+//! create a name hierarchy, be a DNS replacement or provide reverse lookups. Furthermore, the
+//! weights attached to this module's dispatchable functions are for demonstration purposes only and
+//! have not been designed to be economically secure. Do not use this pallet as-is in production.
 //!
 //! ## Interface
 //!
@@ -84,15 +86,15 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
-		/// A name was set. [who]
+		/// A name was set. \[who\]
 		NameSet(AccountId),
-		/// A name was forcibly set. [target]
+		/// A name was forcibly set. \[target\]
 		NameForced(AccountId),
-		/// A name was changed. [who]
+		/// A name was changed. \[who\]
 		NameChanged(AccountId),
-		/// A name was cleared, and the given balance returned. [who, deposit]
+		/// A name was cleared, and the given balance returned. \[who, deposit\]
 		NameCleared(AccountId, Balance),
-		/// A name was removed and the given balance slashed. [target, deposit]
+		/// A name was removed and the given balance slashed. \[target, deposit\]
 		NameKilled(AccountId, Balance),
 	}
 );
@@ -149,12 +151,12 @@ decl_module! {
 			ensure!(name.len() <= T::MaxLength::get(), Error::<T>::TooLong);
 
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
-				Self::deposit_event(RawEvent::NameSet(sender.clone()));
+				Self::deposit_event(RawEvent::NameChanged(sender.clone()));
 				deposit
 			} else {
 				let deposit = T::ReservationFee::get();
 				T::Currency::reserve(&sender, deposit.clone())?;
-				Self::deposit_event(RawEvent::NameChanged(sender.clone()));
+				Self::deposit_event(RawEvent::NameSet(sender.clone()));
 				deposit
 			};
 

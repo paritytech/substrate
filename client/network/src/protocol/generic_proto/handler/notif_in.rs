@@ -139,6 +139,33 @@ impl NotifsInHandler {
 	pub fn protocol_name(&self) -> &Cow<'static, str> {
 		self.in_protocol.protocol_name()
 	}
+
+	/// Equivalent to the `poll` method of `ProtocolsHandler`, except that it is guaranteed to
+	/// never generate [`NotifsInHandlerOut::Notif`].
+	///
+	/// Use this method in situations where it is not desirable to receive events but still
+	/// necessary to drive any potential incoming handshake or request.
+	pub fn poll_process(
+		&mut self,
+		cx: &mut Context
+	) -> Poll<
+		ProtocolsHandlerEvent<DeniedUpgrade, (), NotifsInHandlerOut, void::Void>
+	> {
+		if let Some(event) = self.events_queue.pop_front() {
+			return Poll::Ready(event)
+		}
+
+		match self.substream.as_mut().map(|s| NotificationsInSubstream::poll_process(Pin::new(s), cx)) {
+			None | Some(Poll::Pending) => {},
+			Some(Poll::Ready(Ok(v))) => match v {},
+			Some(Poll::Ready(Err(_))) => {
+				self.substream = None;
+				return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed));
+			},
+		}
+
+		Poll::Pending
+	}
 }
 
 impl ProtocolsHandler for NotifsInHandler {
@@ -148,14 +175,16 @@ impl ProtocolsHandler for NotifsInHandler {
 	type InboundProtocol = NotificationsIn;
 	type OutboundProtocol = DeniedUpgrade;
 	type OutboundOpenInfo = ();
+	type InboundOpenInfo = ();
 
-	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
-		SubstreamProtocol::new(self.in_protocol.clone())
+	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, ()> {
+		SubstreamProtocol::new(self.in_protocol.clone(), ())
 	}
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		(msg, proto): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
+		(msg, proto): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output,
+		(): ()
 	) {
 		// If a substream already exists, we drop it and replace it with the new incoming one.
 		if self.substream.is_some() {
