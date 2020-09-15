@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,86 +16,56 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Middlewares for RPC servers.
+//! Middleware for RPC requests.
 
-use http::{RequestMiddleware as HttpRequestMiddleware, RequestMiddlewareAction as HttpRequestMiddlewareAction};
-use hyper::Body;
+use jsonrpc_core::{Middleware as RequestMiddleware, Metadata, Request, Response, FutureResponse, FutureOutput};
 use prometheus_endpoint::{Registry, Counter, PrometheusError, register, U64};
-use ws::{RequestMiddleware as WSRequestMiddleware, MiddlewareAction as WSRequestMiddlewareAction};
 
-struct HTTPMetrics {
-	http_rpc_calls: Counter<U64>,
+use futures::{future::Either, Future};
+
+#[derive(Debug)]
+struct RpcMetrics {
+	rpc_calls: Counter<U64>,
 }
 
-impl HTTPMetrics {
+impl RpcMetrics {
 	fn register(r: &Registry) -> Result<Self, PrometheusError> {
-		Ok(HTTPMetrics {
-			http_rpc_calls: register(Counter::new(
-				"rpc_http_calls_total",
-				"Number of rpc calls received through http interface",
+		Ok(RpcMetrics {
+			rpc_calls: register(Counter::new(
+				"rpc_calls_total",
+				"Number of rpc calls received",
 			)?, r)?,
 		})
 	}
 }
 
-/// Middleware for RPC calls over HTTP
-pub struct HttpRpcMiddleware {
-	metrics: Option<HTTPMetrics>,
+/// Middleware for RPC calls
+pub struct RpcMiddleware {
+	metrics: Option<RpcMetrics>,
 }
 
-impl HttpRpcMiddleware {
+impl RpcMiddleware {
+	/// Create an instance of middleware
 	pub fn new(metrics_registry: Option<&Registry>) -> Self {
-		HttpRpcMiddleware {
-			metrics: metrics_registry.and_then(|r| HTTPMetrics::register(r).ok()),
+		RpcMiddleware {
+			metrics: metrics_registry.and_then(|r| RpcMetrics::register(r).ok()),
 		}
 	}
 }
 
-impl HttpRequestMiddleware for HttpRpcMiddleware {
-	fn on_request(&self, request: hyper::Request<Body>) -> HttpRequestMiddlewareAction {
+impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
+	type Future = FutureResponse;
+	type CallFuture = FutureOutput;
+
+	fn on_request<F, X>(&self, request: Request, meta: M, next: F) -> Either<FutureResponse, X>
+	where
+		F: Fn(Request, M) -> X + Send + Sync,
+		X: Future<Item = Option<Response>, Error = ()> + Send + 'static,
+	{
 		if let Some(ref metrics) = self.metrics {
-			metrics.http_rpc_calls.inc();
+			metrics.rpc_calls.inc();
 		}
-		HttpRequestMiddlewareAction::Proceed {
-			should_continue_on_invalid_cors: false,
-			request,
-		}
-	}
-}
 
-struct WSMetrics {
-	ws_rpc_calls: Counter<U64>,
-}
-
-impl WSMetrics {
-	fn register(r: &Registry) -> Result<Self, PrometheusError> {
-		Ok(WSMetrics {
-			ws_rpc_calls: register(Counter::new(
-				"rpc_ws_calls_total",
-				"Number of rpc calls received through web socket interface",
-			)?, r)?,
-		})
-	}
-}
-
-/// Middleware for RPC calls over web sockets
-pub struct WSRpcMiddleware {
-	metrics: Option<WSMetrics>,
-}
-
-impl WSRpcMiddleware {
-	pub fn new(metrics_registry: Option<&Registry>) -> Self {
-		WSRpcMiddleware {
-			metrics: metrics_registry.and_then(|r| WSMetrics::register(r).ok()),
-		}
-	}
-}
-
-impl WSRequestMiddleware for WSRpcMiddleware {
-	fn process(&self, _req: &ws_core::Request) -> WSRequestMiddlewareAction {
-		if let Some(ref metrics) = self.metrics {
-			metrics.ws_rpc_calls.inc();
-		}
-		WSRequestMiddlewareAction::Proceed
+		Either::B(next(request, meta))
 	}
 }

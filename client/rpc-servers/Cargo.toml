@@ -12,9 +12,11 @@ description = "Substrate RPC servers."
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+futures = "~0.1.6"
 jsonrpc-core = "14.2.0"
 pubsub = { package = "jsonrpc-pubsub", version = "14.2.0" }
 log = "0.4.8"
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0-rc6"}
 serde = "1.0.101"
 serde_json = "1.0.41"
 sp-runtime = { version = "2.0.0-rc6", path = "../../primitives/runtime" }
@@ -23,6 +25,4 @@ sp-runtime = { version = "2.0.0-rc6", path = "../../primitives/runtime" }
 http = { package = "jsonrpc-http-server", version = "14.2.0" }
 hyper = "0.12"
 ipc = { version = "14.2.0", package = "jsonrpc-ipc-server" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0-rc6"}
-ws-core = { package = "ws", version = "0.9" }
 ws = { package = "jsonrpc-ws-server", version = "14.2.0" }

@@ -681,7 +681,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>
-) -> jsonrpc_pubsub::PubSubHandler<sc_rpc::Metadata>
+) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
 	where
 		TBl: BlockT,
 		TCl: ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + HeaderBackend<TBl> +
@@ -746,15 +746,18 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 		offchain::OffchainApi::to_delegate(offchain)
 	});
 
-	sc_rpc_server::rpc_handler((
-		state::StateApi::to_delegate(state),
-		state::ChildStateApi::to_delegate(child_state),
-		chain::ChainApi::to_delegate(chain),
-		maybe_offchain_rpc,
-		author::AuthorApi::to_delegate(author),
-		system::SystemApi::to_delegate(system),
-		rpc_extensions_builder.build(deny_unsafe, task_executor),
-	))
+	sc_rpc_server::rpc_handler(
+		(
+			state::StateApi::to_delegate(state),
+			state::ChildStateApi::to_delegate(child_state),
+			chain::ChainApi::to_delegate(chain),
+			maybe_offchain_rpc,
+			author::AuthorApi::to_delegate(author),
+			system::SystemApi::to_delegate(system),
+			rpc_extensions_builder.build(deny_unsafe, task_executor),
+		),
+		config.prometheus_registry()
+	)
 }
 
 /// Parameters to pass into `build_network`.

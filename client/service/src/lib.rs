@@ -97,7 +97,7 @@ impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
-pub struct RpcHandlers(Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>>);
+pub struct RpcHandlers(Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>);
 
 impl RpcHandlers {
 	/// Starts an RPC query.
@@ -118,7 +118,7 @@ impl RpcHandlers {
 	}
 
 	/// Provides access to the underlying `MetaIoHandler`
-	pub fn io_handler(&self) -> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>> {
+	pub fn io_handler(&self) -> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
 		self.0.clone()
 	}
 }
@@ -421,7 +421,6 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				address,
 				config.rpc_cors.as_ref(),
 				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
-				config.prometheus_registry(),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
@@ -431,7 +430,6 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
 				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
-				config.prometheus_registry(),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
 	)))

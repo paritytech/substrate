@@ -20,13 +20,13 @@
 
 #![warn(missing_docs)]
 
+mod middleware;
+
 use std::io;
-use jsonrpc_core::IoHandlerExtension;
+use jsonrpc_core::{IoHandlerExtension, MetaIoHandler};
 use log::error;
 use pubsub::PubSubMetadata;
-
-#[cfg(not(target_os = "unknown"))]
-mod middleware;
+use prometheus_endpoint::Registry;
 
 /// Maximal payload accepted by RPC servers.
 const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
@@ -35,15 +35,19 @@ const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
 const WS_MAX_CONNECTIONS: usize = 100;
 
 /// The RPC IoHandler containing all requested APIs.
-pub type RpcHandler<T> = pubsub::PubSubHandler<T>;
+pub type RpcHandler<T> = pubsub::PubSubHandler<T, RpcMiddleware>;
 
 pub use self::inner::*;
+pub use middleware::RpcMiddleware;
 
 /// Construct rpc `IoHandler`
 pub fn rpc_handler<M: PubSubMetadata>(
-	extension: impl IoHandlerExtension<M>
+	extension: impl IoHandlerExtension<M>,
+	metrics_registry: Option<&Registry>,
 ) -> RpcHandler<M> {
-	let mut io = pubsub::PubSubHandler::default();
+
+	let io_handler = MetaIoHandler::with_middleware(RpcMiddleware::new(metrics_registry));
+	let mut io = pubsub::PubSubHandler::new(io_handler);
 	extension.augment(&mut io);
 
 	// add an endpoint to list all available methods.
@@ -63,8 +67,6 @@ pub fn rpc_handler<M: PubSubMetadata>(
 
 #[cfg(not(target_os = "unknown"))]
 mod inner {
-	use middleware::{HttpRpcMiddleware, WSRpcMiddleware};
-	use prometheus_endpoint::Registry;
 	use super::*;
 
 	/// Type alias for ipc server
@@ -81,7 +83,6 @@ mod inner {
 		addr: &std::net::SocketAddr,
 		cors: Option<&Vec<String>>,
 		io: RpcHandler<M>,
-		metrics_registry: Option<&Registry>,
 	) -> io::Result<http::Server> {
 		http::ServerBuilder::new(io)
 			.threads(4)
@@ -94,7 +95,6 @@ mod inner {
 			})
 			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
 			.max_request_body_size(MAX_PAYLOAD)
-			.request_middleware(HttpRpcMiddleware::new(metrics_registry))
 			.start_http(addr)
 	}
 
@@ -123,14 +123,12 @@ mod inner {
 		max_connections: Option<usize>,
 		cors: Option<&Vec<String>>,
 		io: RpcHandler<M>,
-		metrics_registry: Option<&Registry>,
 	) -> io::Result<ws::Server> {
 		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| context.sender().into())
 			.max_payload(MAX_PAYLOAD)
 			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
 			.allowed_origins(map_cors(cors))
 			.allowed_hosts(hosts_filtering(cors.is_some()))
-			.request_middleware(WSRpcMiddleware::new(metrics_registry))
 			.start(addr)
 			.map_err(|err| match err {
 				ws::Error::Io(io) => io,
