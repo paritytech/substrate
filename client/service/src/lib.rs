@@ -388,7 +388,8 @@ fn start_rpc_servers<
 	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
 >(
 	config: &Configuration,
-	mut gen_handler: H
+	mut gen_handler: H,
+	rpc_metrics: Option<&sc_rpc_server::RpcMetrics>
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
 		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
@@ -421,7 +422,7 @@ fn start_rpc_servers<
 		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(
 			&*path, gen_handler(
 				sc_rpc::DenyUnsafe::No,
-				sc_rpc_server::RpcMiddleware::new(config.prometheus_registry(), "ipc")
+				sc_rpc_server::RpcMiddleware::new(rpc_metrics)
 			)
 		)),
 		maybe_start_server(
@@ -431,7 +432,7 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(config.prometheus_registry(), "http")
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics)
 				),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
@@ -443,7 +444,7 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(config.prometheus_registry(), "ws")
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics)
 				),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
@@ -457,7 +458,8 @@ fn start_rpc_servers<
 	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
 >(
 	_: &Configuration,
-	_: H
+	_: H,
+	_: Option<&sc_rpc_server::RpcMetrics>
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }

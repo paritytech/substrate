@@ -37,7 +37,7 @@ const WS_MAX_CONNECTIONS: usize = 100;
 pub type RpcHandler<T> = pubsub::PubSubHandler<T, RpcMiddleware>;
 
 pub use self::inner::*;
-pub use middleware::RpcMiddleware;
+pub use middleware::{RpcMiddleware, RpcMetrics};
 
 /// Construct rpc `IoHandler`
 pub fn rpc_handler<M: PubSubMetadata>(
