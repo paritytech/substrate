@@ -97,7 +97,8 @@ type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_sy
 pub trait WeightInfo {
 	fn add_registrar(r: u32, ) -> Weight;
 	fn set_identity(r: u32, x: u32, ) -> Weight;
-	fn set_subs(p: u32, s: u32, ) -> Weight;
+	fn set_subs_new(s: u32, ) -> Weight;
+	fn set_subs_old(p: u32, ) -> Weight;
 	fn add_sub(p: u32, ) -> Weight;
 	fn rename_sub(p: u32, ) -> Weight;
 	fn remove_sub(p: u32, ) -> Weight;

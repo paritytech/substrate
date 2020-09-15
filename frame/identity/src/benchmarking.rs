@@ -158,14 +158,14 @@ benchmarks! {
 	// We need to split `set_subs` into two benchmarks to accurately isolate the potential
 	// writes caused by new or old sub accounts. The actual weight should simply be
 	// the greater of these two weights.
-	set_subs_new_subs {
+	set_subs_new {
 		let caller: T::AccountId = whitelisted_caller();
 		// Create a new subs vec with s sub accounts
 		let s in 1 .. T::MaxSubAccounts::get() => ();
 		let subs = create_sub_accounts::<T>(&caller, s)?;
 	}: set_subs(RawOrigin::Signed(caller), subs)
 
-	set_subs_old_subs {
+	set_subs_old {
 		let caller: T::AccountId = whitelisted_caller();
 		// Give them p many previous sub accounts.
 		let p in 1 .. T::MaxSubAccounts::get() => {
