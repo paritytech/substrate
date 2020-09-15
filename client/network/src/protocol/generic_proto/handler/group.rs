@@ -477,23 +477,23 @@ impl ProtocolsHandler for NotifsHandler {
 		num: usize,
 		err: ProtocolsHandlerUpgrErr<NotificationsHandshakeError>
 	) {
-		match (err, num) {
-			(ProtocolsHandlerUpgrErr::Timeout, num) =>
+		match err {
+			ProtocolsHandlerUpgrErr::Timeout =>
 				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Timeout
 				),
-			(ProtocolsHandlerUpgrErr::Timer, num) =>
+			ProtocolsHandlerUpgrErr::Timer =>
 				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Timer
 				),
-			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err)), num) =>
+			ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err)) =>
 				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err))
 				),
-			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(err)), num) =>
+			ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(err)) =>
 				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(err))
