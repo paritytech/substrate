@@ -511,74 +511,6 @@ decl_error! {
 	}
 }
 
-/// Functions for calcuating the weight of dispatchables.
-mod weight_for {
-	use frame_support::{traits::Get, weights::Weight};
-	use super::Trait;
-
-	/// Weight calculation for `provide_judgement`.
-	///
-	/// Based on benchmark:
-	/// 40.77 + R * 0.282 + X * 1.66 µs (min squares analysis)
-	pub(crate) fn provide_judgement<T: Trait>(
-		judgements: Weight,
-		extra_fields: Weight
-	) -> Weight {
-		T::DbWeight::get().reads_writes(2, 1)
-			+ 41_000_000 // constant
-			+ 300_000 * judgements // R
-			+ 1_700_000 * extra_fields// X
-	}
-
-	/// Weight calculation for `kill_identity`.
-	///
-	/// Based on benchmark:
-	/// 83.96 + R * 0.122 + S * 2.533 + X * 0.867 µs (min squares analysis)
-	pub(crate) fn kill_identity<T: Trait>(
-		judgements: Weight,
-		subs: Weight,
-		extra_fields: Weight
-	) -> Weight {
-		let db = T::DbWeight::get();
-		db.reads_writes(2, subs + 2) // 2 `take`s + S deletions
-			+ db.reads_writes(1, 1) // balance ops
-			+ 84_000_000 // constant
-			+ 130_000 * judgements // R
-			+ 2_600_000 * subs // S
-			+ 900_000 * extra_fields // X
-	}
-
-	/// Weight calculation for `add_sub`.
-	pub(crate) fn add_sub<T: Trait>(
-		subs: Weight,
-	) -> Weight {
-		let db = T::DbWeight::get();
-		db.reads_writes(4, 3) + 124_000_000 + 156_000 * subs
-	}
-
-	/// Weight calculation for `rename_sub`.
-	pub(crate) fn rename_sub<T: Trait>() -> Weight {
-		let db = T::DbWeight::get();
-		db.reads_writes(2, 1) + 30_000_000
-	}
-
-	/// Weight calculation for `remove_sub`.
-	pub(crate) fn remove_sub<T: Trait>(
-		subs: Weight,
-	) -> Weight {
-		let db = T::DbWeight::get();
-		db.reads_writes(4, 3) + 86_000_000 + 50_000 * subs
-	}
-
-	/// Weight calculation for `quit_sub`.
-	pub(crate) fn quit_sub<T: Trait>(
-		subs: Weight,
-	) -> Weight {
-		let db = T::DbWeight::get();
-		db.reads_writes(3, 2) + 63_000_000 + 230_000 * subs
-	}
-}
-
 decl_module! {
 	/// Identity module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -992,10 +924,7 @@ decl_module! {
 		/// - One storage mutation `O(R)`.
 		/// - Benchmark: 7.464 + R * 0.325 µs (min squares analysis)
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 7_500_000 // constant
-			+ 330_000 * T::MaxRegistrars::get() as Weight // R
-		]
+		#[weight = T::WeightInfo::set_fields(T::MaxRegistrars::get())] // R
 		fn set_fields(origin,
 			#[compact] index: RegistrarIndex,
 			fields: IdentityFields,
@@ -1009,9 +938,9 @@ decl_module! {
 					.ok_or_else(|| DispatchError::from(Error::<T>::InvalidIndex))?;
 				Ok(rs.len())
 			})?;
-			Ok(Some(T::DbWeight::get().reads_writes(1, 1)
-				+ 7_500_000 + 330_000 * registrars as Weight // R
-			).into())
+			Ok(Some(T::WeightInfo::set_fields(
+				registrars as u32 // R
+			)).into())
 		}
 
 		/// Provide a judgement for an account's identity.
@@ -1033,7 +962,7 @@ decl_module! {
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(R + X)`.
 		/// - One event.
 		/// # </weight>
-		#[weight = weight_for::provide_judgement::<T>(
+		#[weight = T::WeightInfo::provide_judgement(
 			T::MaxRegistrars::get().into(), // R
 			T::MaxAdditionalFields::get().into(), // X
 		)]
@@ -1063,12 +992,15 @@ decl_module! {
 				Err(position) => id.judgements.insert(position, item),
 			}
 
-			let judgements = id.judgements.len() as Weight;
-			let extra_fields = id.info.additional.len() as Weight;
+			let judgements = id.judgements.len();
+			let extra_fields = id.info.additional.len();
 			<IdentityOf<T>>::insert(&target, id);
 			Self::deposit_event(RawEvent::JudgementGiven(target, reg_index));
 
-			Ok(Some(weight_for::provide_judgement::<T>(judgements, extra_fields)).into())
+			Ok(Some(T::WeightInfo::provide_judgement(
+				judgements as u32,
+				extra_fields as u32,
+			)).into())
 		}
 
 		/// Remove an account's identity and sub-account information and slash the deposits.
@@ -1090,7 +1022,7 @@ decl_module! {
 		/// - `S + 2` storage mutations.
 		/// - One event.
 		/// # </weight>
-		#[weight = weight_for::kill_identity::<T>(
+		#[weight = T::WeightInfo::kill_identity(
 			T::MaxRegistrars::get().into(), // R
 			T::MaxSubAccounts::get().into(), // S
 			T::MaxAdditionalFields::get().into(), // X
@@ -1112,10 +1044,10 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::IdentityKilled(target, deposit));
 
-			Ok(Some(weight_for::kill_identity::<T>(
-				id.judgements.len() as Weight, // R
-				sub_ids.len() as Weight, // S
-				id.info.additional.len() as Weight // X
+			Ok(Some(T::WeightInfo::kill_identity(
+				id.judgements.len() as u32, // R
+				sub_ids.len() as u32, // S
+				id.info.additional.len() as u32 // X
 			)).into())
 		}
 
@@ -1126,9 +1058,7 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
-		#[weight = weight_for::add_sub::<T>(
-			T::MaxSubAccounts::get().into(), // S
-		)]
+		#[weight = T::WeightInfo::add_sub(T::MaxSubAccounts::get())]
 		fn add_sub(origin, sub: <T::Lookup as StaticLookup>::Source, data: Data) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let sub = T::Lookup::lookup(sub)?;
@@ -1156,7 +1086,7 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
-		#[weight = weight_for::rename_sub::<T>()]
+		#[weight = T::WeightInfo::rename_sub(T::MaxSubAccounts::get())]
 		fn rename_sub(origin, sub: <T::Lookup as StaticLookup>::Source, data: Data) {
 			let sender = ensure_signed(origin)?;
 			let sub = T::Lookup::lookup(sub)?;
@@ -1172,9 +1102,7 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
-		#[weight = weight_for::remove_sub::<T>(
-			T::MaxSubAccounts::get().into(), // S
-		)]
+		#[weight = T::WeightInfo::remove_sub(T::MaxSubAccounts::get())]
 		fn remove_sub(origin, sub: <T::Lookup as StaticLookup>::Source) {
 			let sender = ensure_signed(origin)?;
 			ensure!(IdentityOf::<T>::contains_key(&sender), Error::<T>::NoIdentity);
@@ -1201,9 +1129,7 @@ decl_module! {
 		///
 		/// NOTE: This should not normally be used, but is provided in the case that the non-
 		/// controller of an account is maliciously registered as a sub-account.
-		#[weight = weight_for::quit_sub::<T>(
-			T::MaxSubAccounts::get().into(), // S
-		)]
+		#[weight = T::WeightInfo::quit_sub(T::MaxSubAccounts::get())]
 		fn quit_sub(origin) {
 			let sender = ensure_signed(origin)?;
 			let (sup, _) = SuperOf::<T>::take(&sender).ok_or(Error::<T>::NotSub)?;

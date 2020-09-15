@@ -291,43 +291,36 @@ benchmarks! {
 	}: _(RawOrigin::Root, caller_lookup)
 
 	add_sub {
-		let caller: T::AccountId = whitelisted_caller();
+		let s in 1 .. T::MaxSubAccounts::get() - 1;
 
-		// Give them p many previous sub accounts.
-		let p in 1 .. T::MaxSubAccounts::get() - 1 => {
-			let _ = add_sub_accounts::<T>(&caller, p)?;
-		};
+		let caller: T::AccountId = whitelisted_caller();
+		let _ = add_sub_accounts::<T>(&caller, p)?;
 		let sub = account("new_sub", 0, SEED);
 		let data = Data::Raw(vec![0; 32]);
 	}: _(RawOrigin::Signed(caller), T::Lookup::unlookup(sub), data)
 
 	rename_sub {
+		let s in 1 .. T::MaxSubAccounts::get();
+
 		let caller: T::AccountId = whitelisted_caller();
-
-		let p in 1 .. T::MaxSubAccounts::get();
-
-		// Give them p many previous sub accounts.
 		let (sub, _) = add_sub_accounts::<T>(&caller, p)?.remove(0);
 		let data = Data::Raw(vec![1; 32]);
 
 	}: _(RawOrigin::Signed(caller), T::Lookup::unlookup(sub), data)
 
 	remove_sub {
-		let caller: T::AccountId = whitelisted_caller();
+		let s in 1 .. T::MaxSubAccounts::get();
 
-		// Give them p many previous sub accounts.
-		let p in 1 .. T::MaxSubAccounts::get();
-		let (sub, _) = add_sub_accounts::<T>(&caller, p)?.remove(0);
+		let caller: T::AccountId = whitelisted_caller();
+		let (sub, _) = add_sub_accounts::<T>(&caller, s)?.remove(0);
 	}: _(RawOrigin::Signed(caller), T::Lookup::unlookup(sub))
 
 	quit_sub {
+		let s in 1 .. T::MaxSubAccounts::get() - 1;
+
 		let caller: T::AccountId = whitelisted_caller();
 		let sup = account("super", 0, SEED);
-
-		// Give them p many previous sub accounts.
-		let p in 1 .. T::MaxSubAccounts::get() - 1 => {
-			let _ = add_sub_accounts::<T>(&sup, p)?;
-		};
+		let _ = add_sub_accounts::<T>(&sup, p)?;
 		let sup_origin = RawOrigin::Signed(sup).into();
 		Identity::<T>::add_sub(sup_origin, T::Lookup::unlookup(caller.clone()), Data::Raw(vec![0; 32]))?;
 	}: _(RawOrigin::Signed(caller))

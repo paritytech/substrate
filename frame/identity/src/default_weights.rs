@@ -108,27 +108,27 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(s as Weight)))
 	}
-	fn add_sub(p: u32, ) -> Weight {
+	fn add_sub(s: u32, ) -> Weight {
 		(107_628_000 as Weight)
-			.saturating_add((240_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((240_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
-	fn rename_sub(p: u32, ) -> Weight {
+	fn rename_sub(s: u32, ) -> Weight {
 		(35_566_000 as Weight)
-			.saturating_add((70_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((70_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
-	fn remove_sub(p: u32, ) -> Weight {
+	fn remove_sub(s: u32, ) -> Weight {
 		(100_689_000 as Weight)
-			.saturating_add((220_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((220_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
-	fn quit_sub(p: u32, ) -> Weight {
+	fn quit_sub(s: u32, ) -> Weight {
 		(64_411_000 as Weight)
-			.saturating_add((208_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((208_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
