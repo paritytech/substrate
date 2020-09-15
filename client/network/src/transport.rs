@@ -47,6 +47,7 @@ pub fn build_transport(
 	// Legacy noise configurations for backward compatibility.
 	let mut noise_legacy = noise::LegacyConfig::default();
 	noise_legacy.send_legacy_handshake = true;
+	noise_legacy.recv_legacy_handshake = true;
 
 	// Build configuration objects for encryption mechanisms.
 	let noise_config = {
@@ -76,7 +77,6 @@ pub fn build_transport(
 	mplex_config.max_buffer_len(usize::MAX);
 
 	let mut yamux_config = libp2p::yamux::Config::default();
-	yamux_config.set_lazy_open(true); // Only set SYN flag on first data frame sent to the remote.
 
 	if use_yamux_flow_control {
 		// Enable proper flow-control: window updates are only sent when

@@ -17,8 +17,9 @@
 
 //! Usage statistics for state db
 
+#[cfg(feature = "std")]
 use std::time::{Instant, Duration};
-use std::cell::RefCell;
+use sp_std::cell::RefCell;
 
 /// Measured count of operations and total bytes.
 #[derive(Clone, Debug, Default)]
@@ -50,8 +51,10 @@ pub struct UsageInfo {
 	/// Memory used.
 	pub memory: usize,
 
+	#[cfg(feature = "std")]
 	/// Moment at which current statistics has been started being collected.
 	pub started: Instant,
+	#[cfg(feature = "std")]
 	/// Timespan of the statistics.
 	pub span: Duration,
 }
@@ -99,7 +102,9 @@ impl UsageInfo {
 			cache_reads: UsageUnit::default(),
 			modified_reads: UsageUnit::default(),
 			memory: 0,
+			#[cfg(feature = "std")]
 			started: Instant::now(),
+			#[cfg(feature = "std")]
 			span: Default::default(),
 		}
 	}

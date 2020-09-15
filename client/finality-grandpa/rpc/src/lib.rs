@@ -19,6 +19,7 @@
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
 
+use std::sync::Arc;
 use futures::{FutureExt, TryFutureExt, TryStreamExt, StreamExt};
 use log::warn;
 use jsonrpc_derive::rpc;
@@ -27,6 +28,7 @@ use jsonrpc_core::futures::{
 	sink::Sink as Sink01,
 	stream::Stream as Stream01,
 	future::Future as Future01,
+	future::Executor as Executor01,
 };
 
 mod error;
@@ -92,12 +94,16 @@ pub struct GrandpaRpcHandler<AuthoritySet, VoterState, Block: BlockT> {
 
 impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, VoterState, Block> {
 	/// Creates a new GrandpaRpcHandler instance.
-	pub fn new(
+	pub fn new<E>(
 		authority_set: AuthoritySet,
 		voter_state: VoterState,
 		justification_stream: GrandpaJustificationStream<Block>,
-		manager: SubscriptionManager,
-	) -> Self {
+		executor: E,
+	) -> Self
+	where
+		E: Executor01<Box<dyn Future01<Item = (), Error = ()> + Send>> + Send + Sync + 'static,
+	{
+		let manager = SubscriptionManager::new(Arc::new(executor));
 		Self {
 			authority_set,
 			voter_state,
@@ -232,13 +238,12 @@ mod tests {
 		VoterState: ReportVoterState + Send + Sync + 'static,
 	{
 		let (justification_sender, justification_stream) = GrandpaJustificationStream::channel();
-		let manager = SubscriptionManager::new(Arc::new(sc_rpc::testing::TaskExecutor));
 
 		let handler = GrandpaRpcHandler::new(
 			TestAuthoritySet,
 			voter_state,
 			justification_stream,
-			manager,
+			sc_rpc::testing::TaskExecutor,
 		);
 
 		let mut io = jsonrpc_core::MetaIoHandler::default();

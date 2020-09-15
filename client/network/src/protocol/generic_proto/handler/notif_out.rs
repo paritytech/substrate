@@ -267,14 +267,16 @@ impl ProtocolsHandler for NotifsOutHandler {
 	type InboundProtocol = DeniedUpgrade;
 	type OutboundProtocol = NotificationsOut;
 	type OutboundOpenInfo = ();
+	type InboundOpenInfo = ();
 
-	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
-		SubstreamProtocol::new(DeniedUpgrade)
+	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, ()> {
+		SubstreamProtocol::new(DeniedUpgrade, ())
 	}
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		proto: <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
+		proto: <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output,
+		(): ()
 	) {
 		// We should never reach here. `proto` is a `Void`.
 		void::unreachable(proto)
@@ -309,8 +311,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 					State::Disabled => {
 						let proto = NotificationsOut::new(self.protocol_name.clone(), initial_message.clone());
 						self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							protocol: SubstreamProtocol::new(proto).with_timeout(OPEN_TIMEOUT),
-							info: (),
+							protocol: SubstreamProtocol::new(proto, ()).with_timeout(OPEN_TIMEOUT),
 						});
 						self.state = State::Opening { initial_message };
 					},
@@ -329,8 +330,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 
 						let proto = NotificationsOut::new(self.protocol_name.clone(), initial_message.clone());
 						self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							protocol: SubstreamProtocol::new(proto).with_timeout(OPEN_TIMEOUT),
-							info: (),
+							protocol: SubstreamProtocol::new(proto, ()).with_timeout(OPEN_TIMEOUT),
 						});
 						self.state = State::Opening { initial_message };
 					},
@@ -414,8 +414,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 						self.state = State::Opening { initial_message: initial_message.clone() };
 						let proto = NotificationsOut::new(self.protocol_name.clone(), initial_message);
 						self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							protocol: SubstreamProtocol::new(proto).with_timeout(OPEN_TIMEOUT),
-							info: (),
+							protocol: SubstreamProtocol::new(proto, ()).with_timeout(OPEN_TIMEOUT),
 						});
 						return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed));
 					}

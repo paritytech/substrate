@@ -95,11 +95,11 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as Trait>::AccountIndex
 	{
-		/// A account index was assigned. [who, index]
+		/// A account index was assigned. \[who, index\]
 		IndexAssigned(AccountId, AccountIndex),
-		/// A account index has been freed up (unassigned). [index]
+		/// A account index has been freed up (unassigned). \[index\]
 		IndexFreed(AccountIndex),
-		/// A account index has been frozen to its current account ID. [who, index]
+		/// A account index has been frozen to its current account ID. \[who, index\]
 		IndexFrozen(AccountIndex, AccountId),
 	}
 );
