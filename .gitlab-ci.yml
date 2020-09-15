@@ -573,14 +573,12 @@ chaos-test-singlenodeheight:
     VERSION:                       "ci-${CI_COMMIT_SHORT_SHA}"
   interruptible: true
   environment:
-    name:                          parity-chaosnet
+    name:                          parity-chaosnet   
   script:
-    - cd ./.maintain/chaostest
-    - npm link
-    - chaostest spawn dev -i $CONTAINER_IMAGE:$VERSION
-    - chaostest singlenodeheight -h 30
+    - simnet spawn dev -i $CONTAINER_IMAGE:$VERSION --namespace "substrate-ci-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}"
+    - simnet singlenodeheight -h 30
   after_script:
-    - chaostest clean
+    - simnet clean
 
 #### stage:                        publish
 
