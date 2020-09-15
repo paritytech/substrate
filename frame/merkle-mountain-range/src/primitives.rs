@@ -17,15 +17,25 @@
 
 use frame_support::RuntimeDebug;
 
+/// A leaf node of the MMR.
+///
+/// Contains the (parent) block hash and any data provided by the chain.
 #[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
 pub struct Leaf<BlockHash, Data> {
+	/// Hash of the parent block.
 	pub hash: BlockHash,
+	/// Arbitrary extra data present in the MMR.
 	pub data: Data,
 }
 
+/// A MMR proof data for one of the leaves.
 #[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
 pub struct Proof<Hash> {
+	/// The index of the leaf the proof is for.
 	pub leaf_index: u64,
+	/// Number of leafs in MMR, when the proof was generated.
+	pub leaf_count: u64,
+	/// Proof elements (hashes of inner nodes on the path to the leaf).
 	pub items: Vec<Hash>,
 }
 

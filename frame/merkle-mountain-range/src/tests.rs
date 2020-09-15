@@ -269,6 +269,7 @@ fn should_generate_proofs_correclty() {
 			data: LeafData::new(1),
 		}, Proof {
 			leaf_index: 0,
+			leaf_count: 7,
 			items: vec![
 				hex("037ff5a3903a59630e03b84cda912c26bf19442efe2cd30c2a25547e06ded385"),
 				hex("5e149bed24a6997e0440cd2daeaae5b44074e9f2f1403c4149ba3e8a9e5baef1"),
@@ -280,6 +281,7 @@ fn should_generate_proofs_correclty() {
 			data: LeafData::new(5),
 		}, Proof {
 			leaf_index: 4,
+			leaf_count: 7,
 			items: vec![
 				hex("169dc0e8d0a804f16f2081941199ba3630463c29a761d1e20a7096b33ed8a448"),
 				hex("e232c7350837c9d87a948ddfc4286cc49d946e8cdad9121e91595f190ed7e54d"),
@@ -291,6 +293,7 @@ fn should_generate_proofs_correclty() {
 			data: LeafData::new(7),
 		}, Proof {
 			leaf_index: 6,
+			leaf_count: 7,
 			items: vec![
 				hex("169dc0e8d0a804f16f2081941199ba3630463c29a761d1e20a7096b33ed8a448"),
 				hex("ae11d66a54590bd5c28adf98dfcbb5b05feb7fd51997c4e99c73e87de9ac4e49"),
@@ -331,7 +334,7 @@ fn should_verify() {
 }
 
 #[test]
-fn should_not_verify_on_the_next_block() {
+fn should_verify_on_the_next_block_since_there_is_no_pruning_yet() {
 	let _ = env_logger::try_init();
 	let mut ext = new_test_ext();
 	// given
@@ -346,6 +349,6 @@ fn should_not_verify_on_the_next_block() {
 		new_block();
 
 		// then
-		assert_eq!(crate::Module::<Test>::verify_leaf(leaf, proof5), Ok(false));
+		assert_eq!(crate::Module::<Test>::verify_leaf(leaf, proof5), Ok(true));
 	});
 }

@@ -165,7 +165,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	pub fn verify_leaf(leaf: LeafOf<T>, proof: primitives::Proof<<T as Trait>::Hash>) -> Result<bool, Error> {
-		let mmr: ModuleMMR<MMRRuntimeStorage, T> = MMR::new(Self::mmr_leaves());
+		if proof.leaf_count > Self::mmr_leaves()
+			|| proof.leaf_count == 0
+			|| proof.items.len() as u64 > proof.leaf_count
+		{
+			return Err(Error::Verify.debug("Invalid leaf count."));
+		}
+
+		let mmr: ModuleMMR<MMRRuntimeStorage, T> = MMR::new(proof.leaf_count);
 		mmr.verify_leaf_proof(leaf, proof)
 	}
 }
@@ -257,10 +264,12 @@ impl<StorageType, T, L> MMR<StorageType, T, L> where
 			Ok(Some(MMRNode::Leaf(leaf))) => leaf,
 			e => return Err(Error::LeafNotFound.debug(e)),
 		};
+		let leaf_count = self.leaves;
 		self.mmr.gen_proof(vec![position])
 			.map_err(|e| Error::GenerateProof.debug(e))
 			.map(|p| primitives::Proof {
 				leaf_index,
+				leaf_count,
 				items: p.proof_items().iter().map(|x| x.hash()).collect(),
 			})
 			.map(|p| (leaf, p))
