@@ -516,49 +516,6 @@ mod weight_for {
 	use frame_support::{traits::Get, weights::Weight};
 	use super::Trait;
 
-	/// Weight calculation for `add_registrar`.
-	///
-	/// Based on benchmark:
-	/// 22.24 + R * 0.371 µs (min squares analysis)
-	pub(crate) fn add_registrar<T: Trait>(
-		registrars: Weight
-	) -> Weight {
-		T::DbWeight::get().reads_writes(1, 1)
-			+ 23_000_000 // constant
-			+ 380_000 * registrars // R
-	}
-
-	/// Weight calculation for `set_identity`.
-	///
-	/// Based on benchmark:
-	/// 50.64 + R * 0.215 + X * 1.424 µs (min squares analysis)
-	pub(crate) fn set_identity<T: Trait>(
-		judgements: Weight,
-		extra_fields: Weight
-	) -> Weight {
-		T::DbWeight::get().reads_writes(1, 1)
-			+ 51_000_000 // constant
-			+ 220_000 * judgements // R
-			+ 1_500_000 * extra_fields // X
-	}
-
-	/// Weight calculation for `set_subs`.
-	///
-	/// Based on benchmark:
-	/// 36.21 + P * 2.481 + S * 3.633 µs (min squares analysis)
-	pub(crate) fn set_subs<T: Trait>(
-		old_subs: Weight,
-		subs: Weight
-	) -> Weight {
-		let db = T::DbWeight::get();
-		db.reads(1) // storage-exists (`IdentityOf::contains_key`)
-			.saturating_add(db.reads_writes(1, old_subs)) // `SubsOf::get` read + P old DB deletions
-			.saturating_add(db.writes(subs + 1)) // S + 1 new DB writes
-			.saturating_add(37_000_000) // constant
-			.saturating_add(2_500_000 * old_subs) // P
-			.saturating_add(subs.saturating_mul(3_700_000)) // S
-	}
-
 	/// Weight calculation for `clear_identity`.
 	///
 	/// Based on benchmark:
@@ -708,7 +665,7 @@ decl_module! {
 		/// - One storage mutation (codec `O(R)`).
 		/// - One event.
 		/// # </weight>
-		#[weight = weight_for::add_registrar::<T>(T::MaxRegistrars::get().into()) ]
+		#[weight = T::WeightInfo::add_registrar(T::MaxRegistrars::get()) ]
 		fn add_registrar(origin, account: T::AccountId) -> DispatchResultWithPostInfo {
 			T::RegistrarOrigin::ensure_origin(origin)?;
 
@@ -724,7 +681,7 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::RegistrarAdded(i));
 
-			Ok(Some(weight_for::add_registrar::<T>(registrar_count as Weight)).into())
+			Ok(Some(T::WeightInfo::add_registrar(registrar_count as u32)).into())
 		}
 
 		/// Set an account's identity information and reserve the appropriate deposit.
@@ -746,7 +703,7 @@ decl_module! {
 		/// - One storage mutation (codec-read `O(X' + R)`, codec-write `O(X + R)`).
 		/// - One event.
 		/// # </weight>
-		#[weight =  weight_for::set_identity::<T>(
+		#[weight =  T::WeightInfo::set_identity(
 			T::MaxRegistrars::get().into(), // R
 			T::MaxAdditionalFields::get().into(), // X
 		)]
@@ -775,13 +732,13 @@ decl_module! {
 				let _ = T::Currency::unreserve(&sender, old_deposit - id.deposit);
 			}
 
-			let judgements = id.judgements.len() as Weight;
+			let judgements = id.judgements.len();
 			<IdentityOf<T>>::insert(&sender, id);
 			Self::deposit_event(RawEvent::IdentitySet(sender));
 
-			Ok(Some(weight_for::set_identity::<T>(
-				judgements, // R
-				extra_fields as Weight // X
+			Ok(Some(T::WeightInfo::set_identity(
+				judgements as u32, // R
+				extra_fields // X
 			)).into())
 		}
 
@@ -806,10 +763,9 @@ decl_module! {
 		///   - One storage write (codec complexity `O(S)`).
 		///   - One storage-exists (`IdentityOf::contains_key`).
 		/// # </weight>
-		#[weight = weight_for::set_subs::<T>(
-			T::MaxSubAccounts::get().into(), // P
-			subs.len() as Weight // S
-		)]
+		#[weight = T::WeightInfo::set_subs_old(T::MaxSubAccounts::get()) // P: Assume max sub accounts removed.
+			.saturating_add(T::WeightInfo::set_subs_new(subs.len() as u32)) // S: Assume all subs are new.
+		]
 		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			ensure!(<IdentityOf<T>>::contains_key(&sender), Error::<T>::NotFound);
@@ -823,11 +779,15 @@ decl_module! {
 
 			if old_deposit < new_deposit {
 				T::Currency::reserve(&sender, new_deposit - old_deposit)?;
-			}
-			// do nothing if they're equal.
-			if old_deposit > new_deposit {
+			} else if old_deposit > new_deposit {
 				let _ = T::Currency::unreserve(&sender, old_deposit - new_deposit);
 			}
+			// do nothing if they're equal.
+
+			// TODO: This whole extrinsic screams "not optimized". For example we could
+			// filter any overlap between new and old subs, and avoid reading/writing
+			// to those values... We could also ideally avoid needing to write to
+			// N storage items for N sub accounts.
 
 			for s in old_ids.iter() {
 				<SuperOf<T>>::remove(s);
@@ -836,7 +796,7 @@ decl_module! {
 				<SuperOf<T>>::insert(&id, (sender.clone(), name));
 				id
 			}).collect::<Vec<_>>();
-			let new_subs = ids.len() as Weight;
+			let new_subs = ids.len();
 
 			if ids.is_empty() {
 				<SubsOf<T>>::remove(&sender);
@@ -844,10 +804,10 @@ decl_module! {
 				<SubsOf<T>>::insert(&sender, (new_deposit, ids));
 			}
 
-			Ok(Some(weight_for::set_subs::<T>(
-				old_ids.len() as Weight, // P
-				new_subs // S
-			)).into())
+			Ok(Some(
+				T::WeightInfo::set_subs_old(old_ids.len() as u32) // P: Real number of old accounts removed.
+				.saturating_add(T::WeightInfo::set_subs_new(new_subs as u32)) // S: New subs added.
+			).into())
 		}
 
 		/// Clear an account's identity info and all sub-accounts and return all deposits.

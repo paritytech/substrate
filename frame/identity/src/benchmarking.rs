@@ -157,7 +157,7 @@ benchmarks! {
 
 	// We need to split `set_subs` into two benchmarks to accurately isolate the potential
 	// writes caused by new or old sub accounts. The actual weight should simply be
-	// the greater of these two weights.
+	// the sum of these two weights.
 	set_subs_new {
 		let caller: T::AccountId = whitelisted_caller();
 		// Create a new subs vec with s sub accounts
@@ -344,7 +344,8 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_add_registrar::<Test>());
 			assert_ok!(test_benchmark_set_identity::<Test>());
-			assert_ok!(test_benchmark_set_subs::<Test>());
+			assert_ok!(test_benchmark_set_subs_new::<Test>());
+			assert_ok!(test_benchmark_set_subs_old::<Test>());
 			assert_ok!(test_benchmark_clear_identity::<Test>());
 			assert_ok!(test_benchmark_request_judgement::<Test>());
 			assert_ok!(test_benchmark_cancel_request::<Test>());

@@ -24,110 +24,110 @@ use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 
 impl crate::WeightInfo for () {
 	fn add_registrar(r: u32, ) -> Weight {
-		(38525000 as Weight)
-			.saturating_add((427000 as Weight).saturating_mul(r as Weight))
+		(38_700_000 as Weight)
+			.saturating_add((432_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn set_identity(r: u32, x: u32, ) -> Weight {
-		(107872000 as Weight)
-			.saturating_add((419000 as Weight).saturating_mul(r as Weight))
-			.saturating_add((3013000 as Weight).saturating_mul(x as Weight))
+		(108_344_000 as Weight)
+			.saturating_add((394_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((2_997_000 as Weight).saturating_mul(x as Weight))
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn set_subs_new(s: u32, ) -> Weight {
-		(76452000 as Weight)
-			.saturating_add((14836000 as Weight).saturating_mul(s as Weight))
+		(76_128_000 as Weight)
+			.saturating_add((14_854_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().reads((1 as Weight).saturating_mul(s as Weight)))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(s as Weight)))
 	}
 	fn set_subs_old(p: u32, ) -> Weight {
-		(70274000 as Weight)
-			.saturating_add((5518000 as Weight).saturating_mul(p as Weight))
+		(69_632_000 as Weight)
+			.saturating_add((5_532_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
 	}
 	fn add_sub(p: u32, ) -> Weight {
-		(108119000 as Weight)
-			.saturating_add((245000 as Weight).saturating_mul(p as Weight))
+		(107_628_000 as Weight)
+			.saturating_add((240_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn rename_sub(p: u32, ) -> Weight {
-		(35829000 as Weight)
-			.saturating_add((67000 as Weight).saturating_mul(p as Weight))
+		(35_566_000 as Weight)
+			.saturating_add((70_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn remove_sub(p: u32, ) -> Weight {
-		(101562000 as Weight)
-			.saturating_add((216000 as Weight).saturating_mul(p as Weight))
+		(100_689_000 as Weight)
+			.saturating_add((220_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn quit_sub(p: u32, ) -> Weight {
-		(64745000 as Weight)
-			.saturating_add((210000 as Weight).saturating_mul(p as Weight))
+		(64_411_000 as Weight)
+			.saturating_add((208_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn clear_identity(r: u32, s: u32, x: u32, ) -> Weight {
-		(89640000 as Weight)
-			.saturating_add((270000 as Weight).saturating_mul(r as Weight))
-			.saturating_add((5488000 as Weight).saturating_mul(s as Weight))
-			.saturating_add((1647000 as Weight).saturating_mul(x as Weight))
+		(89_185_000 as Weight)
+			.saturating_add((250_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((5_552_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((1_663_000 as Weight).saturating_mul(x as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(s as Weight)))
 	}
 	fn request_judgement(r: u32, x: u32, ) -> Weight {
-		(108673000 as Weight)
-			.saturating_add((491000 as Weight).saturating_mul(r as Weight))
-			.saturating_add((3236000 as Weight).saturating_mul(x as Weight))
+		(107_531_000 as Weight)
+			.saturating_add((536_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((3_237_000 as Weight).saturating_mul(x as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn cancel_request(r: u32, x: u32, ) -> Weight {
-		(94605000 as Weight)
-			.saturating_add((341000 as Weight).saturating_mul(r as Weight))
-			.saturating_add((3205000 as Weight).saturating_mul(x as Weight))
+		(93_368_000 as Weight)
+			.saturating_add((371_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((3_225_000 as Weight).saturating_mul(x as Weight))
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn set_fee(r: u32, ) -> Weight {
-		(15928000 as Weight)
-			.saturating_add((377000 as Weight).saturating_mul(r as Weight))
+		(15_942_000 as Weight)
+			.saturating_add((390_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn set_account_id(r: u32, ) -> Weight {
-		(17940000 as Weight)
-			.saturating_add((388000 as Weight).saturating_mul(r as Weight))
+		(18_135_000 as Weight)
+			.saturating_add((385_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn set_fields(r: u32, ) -> Weight {
-		(15781000 as Weight)
-			.saturating_add((391000 as Weight).saturating_mul(r as Weight))
+		(15_962_000 as Weight)
+			.saturating_add((398_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn provide_judgement(r: u32, x: u32, ) -> Weight {
-		(71415000 as Weight)
-			.saturating_add((445000 as Weight).saturating_mul(r as Weight))
-			.saturating_add((3212000 as Weight).saturating_mul(x as Weight))
+		(71_698_000 as Weight)
+			.saturating_add((423_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((3_215_000 as Weight).saturating_mul(x as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn kill_identity(r: u32, s: u32, x: u32, ) -> Weight {
-		(115969000 as Weight)
-			.saturating_add((161000 as Weight).saturating_mul(r as Weight))
-			.saturating_add((5509000 as Weight).saturating_mul(s as Weight))
-			.saturating_add((1635000 as Weight).saturating_mul(x as Weight))
+		(111_774_000 as Weight)
+			.saturating_add((249_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((5_571_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((1_662_000 as Weight).saturating_mul(x as Weight))
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(s as Weight)))
