@@ -455,7 +455,7 @@ fn start_rpc_servers<
 fn start_rpc_servers<
 	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
 	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
-(
+>(
 	_: &Configuration,
 	_: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
