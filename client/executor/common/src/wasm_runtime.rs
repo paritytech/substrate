@@ -19,7 +19,9 @@
 use crate::error::Error;
 use sp_wasm_interface::Value;
 
-/// How to locate method to call.
+/// Call site.
+///
+/// Contains variants on how to resolve wasm function that will be invoked.
 pub enum CallSite<'a> {
 	/// Call function exported with this name.
 	///
@@ -33,7 +35,7 @@ pub enum CallSite<'a> {
 	///
 	/// Located function should have (u32, u32, u32) -> u64 signature.
 	///
-	/// func will be passed to the
+	/// `func` will be passed to the
 	TableWithWrapper {
 		/// Wrapper for call.
 		dispatcher_ref: u32,
