@@ -586,13 +586,6 @@ impl<T: Trait> Module<T> {
 			digest
 				.vrf_output()
 				.and_then(|vrf_output| {
-					// place the VRF output into the `Initialized` storage item
-					// and it'll be put onto the under-construction randomness
-					// later, once we've decided which epoch this block is in.
-					//
-					// Place the both primary and secondary VRF output into the
-					// `AuthorVrfRandomness` storage item.
-					//
 					// Reconstruct the bytes of VRFInOut using the authority id.
 					Authorities::get()
 						.get(authority_index as usize)
@@ -617,9 +610,13 @@ impl<T: Trait> Module<T> {
 			})
 		});
 
-		let maybe_primary_randomness = maybe_randomness.filter(|_| is_primary);
+		// For primary VRF output we place it in the `Initialized` storage
+		// item and it'll be put onto the under-construction randomness later,
+		// once we've decided which epoch this block is in.
+		Initialized::put(if is_primary { maybe_randomness } else { None });
 
-		Initialized::put(maybe_primary_randomness);
+		// Place the both primary and secondary VRF output into the
+		// `AuthorVrfRandomness` storage item.
 		AuthorVrfRandomness::put(maybe_randomness);
 
 		// enact epoch change, if necessary.
