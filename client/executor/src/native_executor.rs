@@ -359,7 +359,8 @@ impl RuntimeInstanceSpawn {
 		module: Arc<dyn sc_executor_common::wasm_runtime::WasmModule>,
 		mut ext: &mut dyn Externalities,
 	) -> Option<Self> {
-		ext.extension::<sp_core::traits::TaskExecutorExt>().map(move |task_ext| Self::new(module, task_ext.clone()))
+		ext.extension::<sp_core::traits::TaskExecutorExt>()
+			.map(move |task_ext| Self::new(module, task_ext.clone()))
 	}
 
 	fn register_on_externalities(module: Arc<dyn WasmModule>) {
