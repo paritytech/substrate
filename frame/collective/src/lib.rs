@@ -1032,6 +1032,7 @@ mod tests {
 		type Origin = Origin;
 		type Proposal = Call;
 		type Event = Event;
+		type OnAbsentation = ();
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
