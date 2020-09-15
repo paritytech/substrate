@@ -33,9 +33,10 @@ pub enum CallSite<'a> {
 	Table(u32),
 	/// Call function by reference from table through a wrapper.
 	///
-	/// Located function should have (u32, u32, u32) -> u64 signature.
+	/// Invoked function (`dispatcher_ref`) function
+	/// should have (u32, u32, u32) -> u64 signature.
 	///
-	/// `func` will be passed to the
+	/// `func` will be passed to the invoked function as a first argument.
 	TableWithWrapper {
 		/// Wrapper for call.
 		dispatcher_ref: u32,
