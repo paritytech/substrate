@@ -6,20 +6,31 @@ you develop for your Substrate Runtime.
 ## Overview
 
 Substrate's FRAME framework allows you to develop custom logic for your blockchain that can be
-included in your runtime. This flexibility means that you can program and design complex and
-interactive platforms, but it also means that your blockchain may be vulnerable to attack by
-malicious actors taking advantage of these new functionalities.
+included in your runtime. This flexibility is key to help you design complex and interactive
+pallets, but it also means that your blockchain may become vulnerable to attack by malicious actors
+taking advantage of these new functionalities.
 
 The Substrate Runtime Benchmarking Framework is a tool you can use to mitigate denial of service
 attacks against your blockchain network by benchmarking the computational resources required to
-execute different functions in the runtime.
+execute different functions in the runtime. This is the "weight" of that function.
 
-The general philosophy behind Substrate benchmarking is to calculate the time it takes to execute a
-specific piece of logic, usually a dispatchable function, by running this function within the
-expected execution environment (Wasm, specific hardware, runtime configuration, etc...), multiple
-times, and across varying input parameters. From these benchmarks, we can construct a linear model
-of the computational resources that function needs to execute, and use this to inform our blockchain
-of the estimated resources needed before actually executing that function on a live network.
+The general philosophy behind Substrate the benchmarking and weight system is: If your blockchain
+can know ahead of time how long it will take to execute a transaction, it can safely make decisions
+to include or exclude the transaction based on its available resources. By doing this, it can keep
+the block production and block import process running smoothly.
+
+To achieve this, we need to model how long it takes to run each function in the runtime by:
+
+* Creating custom benchmarking logic which executes a specific logical path of a function.
+* Executing the benchmark within the expected execution environment, i.e. Wasm, any specific
+  hardware, custom runtime configuration, etc...
+* Executing the benchmark across controlled ranges of possible values that may effect the result of
+  the benchmark. (called "components")
+* Executing the benchmark multiple times at each point in order isolate and remove outliers.
+* Using the results of the benchmark to create a linear model of the function across its components.
+
+With this linear model, we are able to estimate ahead of time how long it would take to execute some
+logic, and thus make informed decisions without actually spending any significant resources.
 
 The benchmarking framework comes with the following components:
 
@@ -159,7 +170,8 @@ Then you can run a benchmark like so:
 This will output a file `pallet_name.rs` which implements the `WeightInfo` trait you should include
 in your pallet. Each blockchain should generate their own benchmark file with their custom
 implementation of the `WeightInfo` trait. This means that you will be able to use these modular
-Substrate pallets while still keeping your network safe for your specific requirements.
+Substrate pallets while still keeping your network safe for your specific configuration and
+requirements.
 
 To get a full list of available options when running benchmarks, simply execute:
 
