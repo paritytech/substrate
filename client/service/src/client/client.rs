@@ -802,6 +802,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		operation.op.insert_aux(aux)?;
 
+		// we only notify when we are already synced to the tip of the chain or if this import triggers a re-org
 		if make_notifications || tree_route.is_some() {
 			if finalized {
 				operation.notify_finalized.push(hash);
