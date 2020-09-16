@@ -191,7 +191,7 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 	// edge's weight is also u128 and less than the budget. Therefore, the sum of all edge weight
 	// will fit in u128. Thus, this can never fail (see the documentation of `noramlize` in
 	// `sp-arithmetic` for more info).
-	let _ = voter.try_normalize();
+	let _ = voter.try_normalize_elected();
 
 	difference
 }

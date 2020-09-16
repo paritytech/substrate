@@ -21,7 +21,7 @@ use crate::mock::*;
 use crate::{
 	seq_phragmen, balancing, build_support_map, is_score_better, helpers::*,
 	Support, StakedAssignment, Assignment, ElectionResult, ExtendedBalance, setup_inputs,
-	seq_phragmen_core,
+	seq_phragmen_core, Voter,
 };
 use substrate_test_utils::assert_eq_uvec;
 use sp_arithmetic::{Perbill, Permill, Percent, PerU16};
@@ -145,12 +145,12 @@ fn balancing_core_works() {
 			.collect::<Vec<_>>(),
 		vec![
 			// note the 0 edge. This is know and not an issue per se. Also note that the stakes are
-			// not normalized.
-			(10, 10, vec![(1, 9), (2, 0)]),
-			(20, 20, vec![(1, 8), (3, 11)]),
-			(30, 30, vec![(1, 9), (2, 6), (3, 8), (4, 7)]),
+			// normalized.
+			(10, 10, vec![(1, 9), (2, 1)]),
+			(20, 20, vec![(1, 9), (3, 11)]),
+			(30, 30, vec![(1, 8), (2, 7), (3, 8), (4, 7)]),
 			(40, 40, vec![(1, 11), (3, 18), (4, 11)]),
-			(50, 50, vec![(2, 31), (4, 19)]),
+			(50, 50, vec![(2, 30), (4, 20)]),
 		]
 	);
 
@@ -165,12 +165,58 @@ fn balancing_core_works() {
 			)).collect::<Vec<_>>(),
 		vec![
 			(1, true, 1, 37),
-			(2, true, 2, 37),
+			(2, true, 2, 38),
 			(3, true, 3, 37),
-			(4, true, 0, 37),
+			(4, true, 0, 38),
 			(5, false, 0, 0),
 		]
 	);
+}
+
+#[test]
+fn voter_normalize_ops_works() {
+	use crate::{Candidate, Edge};
+	use sp_std::{cell::RefCell, rc::Rc};
+
+	{
+		let c1 = Candidate { who: 10, elected: false ,..Default::default() };
+		let c2 = Candidate { who: 20, elected: false ,..Default::default() };
+		let c3 = Candidate { who: 30, elected: false ,..Default::default() };
+
+		let e1 = Edge { candidate: Rc::new(RefCell::new(c1)), weight: 30, ..Default::default() };
+		let e2 = Edge { candidate: Rc::new(RefCell::new(c2)), weight: 33, ..Default::default() };
+		let e3 = Edge { candidate: Rc::new(RefCell::new(c3)), weight: 30, ..Default::default() };
+
+		let mut v = Voter {
+			who: 1,
+			budget: 100,
+			edges: vec![e1, e2, e3],
+			..Default::default()
+		};
+
+		v.try_normalize().unwrap();
+		assert_eq!(v.edges.iter().map(|e| e.weight).collect::<Vec<_>>(), vec![34, 33, 33]);
+	}
+
+	{
+		let c1 = Candidate { who: 10, elected: false ,..Default::default() };
+		let c2 = Candidate { who: 20, elected: true ,..Default::default() };
+		let c3 = Candidate { who: 30, elected: true ,..Default::default() };
+
+		let e1 = Edge { candidate: Rc::new(RefCell::new(c1)), weight: 30, ..Default::default() };
+		let e2 = Edge { candidate: Rc::new(RefCell::new(c2)), weight: 33, ..Default::default() };
+		let e3 = Edge { candidate: Rc::new(RefCell::new(c3)), weight: 30, ..Default::default() };
+
+		let mut v = Voter {
+			who: 1,
+			budget: 100,
+			edges: vec![e1, e2, e3],
+			..Default::default()
+		};
+
+		v.try_normalize_elected().unwrap();
+		assert_eq!(v.edges.iter().map(|e| e.weight).collect::<Vec<_>>(), vec![30, 34, 66]);
+	}
 }
 
 #[test]
@@ -214,7 +260,7 @@ fn phragmen_poc_works() {
 
 	let staked = assignment_ratio_to_staked(assignments, &stake_of);
 	let winners = to_without_backing(winners);
-	let support_map = build_support_map::<AccountId>(&winners, &staked).0;
+	let support_map = build_support_map::<AccountId>(&winners, &staked).unwrap();
 
 	assert_eq_uvec!(
 		staked,
@@ -288,7 +334,7 @@ fn phragmen_poc_works_with_balancing() {
 
 	let staked = assignment_ratio_to_staked(assignments, &stake_of);
 	let winners = to_without_backing(winners);
-	let support_map = build_support_map::<AccountId>(&winners, &staked).0;
+	let support_map = build_support_map::<AccountId>(&winners, &staked).unwrap();
 
 	assert_eq_uvec!(
 		staked,
@@ -680,7 +726,7 @@ fn phragmen_self_votes_should_be_kept() {
 
 	let staked_assignments = assignment_ratio_to_staked(result.assignments, &stake_of);
 	let winners = to_without_backing(result.winners);
-	let (supports, _) = build_support_map::<AccountId>(&winners, &staked_assignments);
+	let supports = build_support_map::<AccountId>(&winners, &staked_assignments).unwrap();
 
 	assert_eq!(supports.get(&5u64), None);
 	assert_eq!(

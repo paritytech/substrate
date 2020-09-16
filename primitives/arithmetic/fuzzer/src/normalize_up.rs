@@ -33,29 +33,31 @@ type Ty = u64;
 fn main() {
 	let len_limit: usize = Ty::max_value().try_into().unwrap();
 
-	fuzz!(|data: (Vec<Ty>, Ty)| {
-		let (data, norm) = data;
-		if data.len() == 0 { return; }
-		let pre_sum: u128 = data.iter().map(|x| *x as u128).sum();
+	loop {
+		fuzz!(|data: (Vec<Ty>, Ty)| {
+			let (data, norm) = data;
+			if data.len() == 0 { return; }
+			let pre_sum: u128 = data.iter().map(|x| *x as u128).sum();
 
-		let normalized = data.normalize_up(norm);
+			let normalized = data.normalize_up(norm);
 
-		// error cases.
-		let sum_limit = norm;
-		if pre_sum > sum_limit.into() || data.len() > len_limit {
-			// noop
-			assert_eq!(normalized, data);
-		} else {
-			// if sum goes beyond u128, panic.
-			let sum: u128 = normalized.iter().map(|x| *x as u128).sum();
+			// error cases.
+			let sum_limit = norm;
+			if pre_sum > sum_limit.into() || data.len() > len_limit {
+				// noop
+				assert_eq!(normalized, data);
+			} else {
+				// if sum goes beyond u128, panic.
+				let sum: u128 = normalized.iter().map(|x| *x as u128).sum();
 
-			assert_eq!(
-				sum,
-				norm as u128,
-				"sums don't match {:?}, {}",
-				normalized,
-				norm,
-			);
-		}
-	})
+				assert_eq!(
+					sum,
+					norm as u128,
+					"sums don't match {:?}, {}",
+					normalized,
+					norm,
+				);
+			}
+		})
+	}
 }

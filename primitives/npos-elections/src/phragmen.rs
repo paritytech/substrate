@@ -196,8 +196,10 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 
 		// remove all zero edges. These can become phantom edges during normalization.
 		voter.edges.retain(|e| e.weight > 0);
-		// inc budget to sum the budget
-		voter.try_normalize()?;
+		// edge of all candidates that eventually have a non-zero weight must be elected.
+		debug_assert!(voter.edges.iter().all(|e| e.candidate.borrow().elected));
+		// inc budget to sum the budget.
+		voter.try_normalize_elected()?;
 	}
 
 	Ok((candidates, voters))

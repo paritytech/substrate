@@ -2725,12 +2725,10 @@ impl<T: Trait> Module<T> {
 		// build the support map thereof in order to evaluate.
 		// OPTIMIZATION: loop to create the staked assignments but it would bloat the code. Okay for
 		// now as it does not add to the complexity order.
-		let (supports, num_error) = build_support_map::<T::AccountId>(
+		let supports = build_support_map::<T::AccountId>(
 			&winners,
 			&staked_assignments,
-		);
-		// This technically checks that all targets in all nominators were among the winners.
-		ensure!(num_error == 0, Error::<T>::OffchainElectionBogusEdge);
+		).map_err(|_| Error::<T>::OffchainElectionBogusEdge)?;
 
 		// Check if the score is the same as the claimed one.
 		let submitted_score = evaluate_support(&supports);
@@ -2987,10 +2985,10 @@ impl<T: Trait> Module<T> {
 				Self::slashable_balance_of_vote_weight,
 			);
 
-			let (supports, _) = build_support_map::<T::AccountId>(
+			let supports = build_support_map::<T::AccountId>(
 				&elected_stashes,
 				&staked_assignments,
-			);
+			).ok()?;
 
 			// collect exposures
 			let exposures = Self::collect_exposure(supports);

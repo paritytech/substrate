@@ -858,7 +858,7 @@ pub(crate) fn horrible_npos_solution(
 	let score = {
 		let (_, _, better_score) = prepare_submission_with(true, 0, |_| {});
 
-		let support = build_support_map::<AccountId>(&winners, &staked_assignment).0;
+		let support = build_support_map::<AccountId>(&winners, &staked_assignment).unwrap();
 		let score = evaluate_support(&support);
 
 		assert!(sp_npos_elections::is_score_better::<Perbill>(
@@ -957,10 +957,10 @@ pub(crate) fn prepare_submission_with(
 			Staking::slashable_balance_of_vote_weight,
 		);
 
-		let (support_map, _) = build_support_map::<AccountId>(
+		let support_map = build_support_map::<AccountId>(
 			winners.as_slice(),
 			staked.as_slice(),
-		);
+		).unwrap();
 		evaluate_support::<AccountId>(&support_map)
 	};
 

@@ -226,8 +226,10 @@ pub fn get_weak_solution<T: Trait>(
 			stake_of
 		);
 
-		let (support_map, _) =
-			build_support_map::<T::AccountId>(winners.as_slice(), staked.as_slice());
+		let support_map = build_support_map::<T::AccountId>(
+			winners.as_slice(),
+			staked.as_slice(),
+		).unwrap();
 		evaluate_support::<T::AccountId>(&support_map)
 	};
 

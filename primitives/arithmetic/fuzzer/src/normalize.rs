@@ -34,31 +34,33 @@ fn main() {
 	let sum_limit = Ty::max_value() as u128;
 	let len_limit: usize = Ty::max_value().try_into().unwrap();
 
-	fuzz!(|data: (Vec<Ty>, Ty)| {
-		let (data, norm) = data;
-		if data.len() == 0 { return; }
-		let pre_sum: u128 = data.iter().map(|x| *x as u128).sum();
+	loop {
+		fuzz!(|data: (Vec<Ty>, Ty)| {
+			let (data, norm) = data;
+			if data.len() == 0 { return; }
+			let pre_sum: u128 = data.iter().map(|x| *x as u128).sum();
 
-		let normalized = data.normalize(norm);
-		// error cases.
-		if pre_sum > sum_limit || data.len() > len_limit {
-			assert!(normalized.is_err())
-		} else {
-			if let Ok(normalized) = normalized {
-				// if sum goes beyond u128, panic.
-				let sum: u128 = normalized.iter().map(|x| *x as u128).sum();
-
-				// if this function returns Ok(), then it will ALWAYS be accurate.
-				assert_eq!(
-					sum,
-					norm as u128,
-					"sums don't match {:?}, {}",
-					normalized,
-					norm,
-				);
+			let normalized = data.normalize(norm);
+			// error cases.
+			if pre_sum > sum_limit || data.len() > len_limit {
+				assert!(normalized.is_err())
 			} else {
-				panic!("Should have returned Ok for input = {:?}, target = {:?}", data, norm);
+				if let Ok(normalized) = normalized {
+					// if sum goes beyond u128, panic.
+					let sum: u128 = normalized.iter().map(|x| *x as u128).sum();
+
+					// if this function returns Ok(), then it will ALWAYS be accurate.
+					assert_eq!(
+						sum,
+						norm as u128,
+						"sums don't match {:?}, {}",
+						normalized,
+						norm,
+					);
+				} else {
+					panic!("Should have returned Ok for input = {:?}, target = {:?}", data, norm);
+				}
 			}
-		}
-	})
+		})
+	}
 }

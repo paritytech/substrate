@@ -222,7 +222,8 @@ pub fn prepare_submission<T: Trait>(
 			<Module<T>>::slashable_balance_of_vote_weight,
 		);
 
-		let (support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
+		let support_map = build_support_map::<T::AccountId>(&winners, &staked)
+			.map_err(|_| OffchainElectionError::ElectionFailed)?;
 		evaluate_support::<T::AccountId>(&support_map)
 	};
 

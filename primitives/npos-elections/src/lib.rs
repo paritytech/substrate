@@ -79,7 +79,7 @@ use sp_std::{
 };
 use sp_arithmetic::{
 	PerThing, Rational128, ThresholdOrd, InnerOf, Normalizable,
-	traits::{Zero, Saturating, Bounded},
+	traits::{Zero, Bounded},
 };
 
 #[cfg(feature = "std")]
@@ -259,7 +259,10 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 
 	/// Try and normalize the votes of self.
 	///
-	/// If the normalization is successful then `true` is returned.
+	/// If the normalization is successful then `Ok(())` is returned.
+	///
+	/// Note that this will not distinguish between elected and unelected edges. Thus, it should
+	/// only be called on a voter who has already been reduced to only elected edges.
 	///
 	/// ### Errors
 	///
@@ -270,6 +273,32 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 		edge_weights.normalize(self.budget).map(|normalized| {
 			// here we count on the fact that normalize does not change the order.
 			for (edge, corrected) in self.edges.iter_mut().zip(normalized.into_iter()) {
+				let mut candidate = edge.candidate.borrow_mut();
+				// first, subtract the incorrect weight
+				candidate.backed_stake = candidate.backed_stake.saturating_sub(edge.weight);
+				edge.weight = corrected;
+				// Then add the correct one again.
+				candidate.backed_stake = candidate.backed_stake.saturating_add(edge.weight);
+			}
+		})
+	}
+
+	/// Same as [`try_normalize`] but the normalization is only limited between elected edges.
+	pub fn try_normalize_elected(&mut self) -> Result<(), &'static str> {
+		let elected_edge_weights = self
+			.edges
+			.iter()
+			.filter_map(|e| if e.candidate.borrow().elected { Some(e.weight) } else { None })
+			.collect::<Vec<_>>();
+		elected_edge_weights.normalize(self.budget).map(|normalized| {
+			// here we count on the fact that normalize does not change the order, and that vector
+			// iteration is deterministic.
+			for (edge, corrected) in self
+				.edges
+				.iter_mut()
+				.filter(|e| e.candidate.borrow().elected)
+				.zip(normalized.into_iter())
+			{
 				let mut candidate = edge.candidate.borrow_mut();
 				// first, subtract the incorrect weight
 				candidate.backed_stake = candidate.backed_stake.saturating_sub(edge.weight);
@@ -496,10 +525,9 @@ pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 pub fn build_support_map<AccountId>(
 	winners: &[AccountId],
 	assignments: &[StakedAssignment<AccountId>],
-) -> (SupportMap<AccountId>, u32) where
+) -> Result<SupportMap<AccountId>, AccountId> where
 	AccountId: IdentifierT,
 {
-	let mut errors = 0;
 	// Initialize the support of each candidate.
 	let mut supports = <SupportMap<AccountId>>::new();
 	winners
@@ -513,11 +541,11 @@ pub fn build_support_map<AccountId>(
 				support.total = support.total.saturating_add(*weight_extended);
 				support.voters.push((who.clone(), *weight_extended));
 			} else {
-				errors = errors.saturating_add(1);
+				return Err(c.clone())
 			}
 		}
 	}
-	(supports, errors)
+	Ok(supports)
 }
 
 /// Evaluate a support map. The returned tuple contains:
