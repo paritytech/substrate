@@ -284,7 +284,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// `= $n` is an optional part allowing to define at which index the module variants in
 /// `OriginCaller`, `Call` and `Event` are encoded, and to define the ModuleToIndex value.
 ///
-/// if `= $n` is not given, then index is resolved same as fieldless enum in rust
+/// if `= $n` is not given, then index is resolved same as fieldless enum in Rust
 /// (i.e. incrementedly from previous index):
 /// ```nocompile
 /// module1 .. = 2,
