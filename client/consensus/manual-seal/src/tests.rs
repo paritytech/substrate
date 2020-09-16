@@ -421,7 +421,8 @@ async fn heartbeat_stream_wait_for_min_blocktime_when_multiple_txs_come() {
 	assert!(client.block(&BlockId::Number(2)).unwrap().is_none());
 }
 
-// ---
+// ------
+// ------
 
 // #[cfg(test)]
 // mod tests {
@@ -465,7 +466,7 @@ async fn heartbeat_stream_wait_for_min_blocktime_when_multiple_txs_come() {
 // 		// this test checks that blocks are created as soon as transactions are imported into the pool.
 // 		let (sender, receiver) = futures::channel::oneshot::channel();
 // 		let mut sender = Arc::new(Some(sender));
-// 		let stream = pool.pool().validated_pool().import_notification_stream()
+// 		let commands_stream = pool.pool().validated_pool().import_notification_stream()
 // 			.map(move |_| {
 // 				// we're only going to submit one tx so this fn will only be called once.
 // 				let mut_sender =  Arc::get_mut(&mut sender).unwrap();
@@ -478,13 +479,16 @@ async fn heartbeat_stream_wait_for_min_blocktime_when_multiple_txs_come() {
 // 				}
 // 			});
 // 		let future = run_manual_seal(
-// 			Box::new(client.clone()),
-// 			env,
-// 			client.clone(),
-// 			pool.pool().clone(),
-// 			stream,
-// 			select_chain,
-// 			inherent_data_providers,
+// 			ManualSealParams {
+// 				block_import: client.clone(),
+// 				env,
+// 				client: client.clone(),
+// 				pool: pool.pool().clone(),
+// 				commands_stream,
+// 				select_chain,
+// 				inherent_data_providers,
+// 				consensus_data_provider: None,
+// 			}
 // 		);
 // 		std::thread::spawn(|| {
 // 			let mut rt = tokio::runtime::Runtime::new().unwrap();
@@ -531,15 +535,18 @@ async fn heartbeat_stream_wait_for_min_blocktime_when_multiple_txs_come() {
 // 			None,
 // 		);
 // 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
-// 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
+// 		let (mut sink, commands_stream) = futures::channel::mpsc::channel(1024);
 // 		let future = run_manual_seal(
-// 			Box::new(client.clone()),
-// 			env,
-// 			client.clone(),
-// 			pool.pool().clone(),
-// 			stream,
-// 			select_chain,
-// 			inherent_data_providers,
+// 			ManualSealParams {
+// 				block_import: client.clone(),
+// 				env,
+// 				client: client.clone(),
+// 				pool: pool.pool().clone(),
+// 				commands_stream,
+// 				select_chain,
+// 				consensus_data_provider: None,
+// 				inherent_data_providers,
+// 			}
 // 		);
 // 		std::thread::spawn(|| {
 // 			let mut rt = tokio::runtime::Runtime::new().unwrap();
@@ -603,15 +610,18 @@ async fn heartbeat_stream_wait_for_min_blocktime_when_multiple_txs_come() {
 // 			None,
 // 		);
 // 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
-// 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
+// 		let (mut sink, commands_stream) = futures::channel::mpsc::channel(1024);
 // 		let future = run_manual_seal(
-// 			Box::new(client.clone()),
-// 			env,
-// 			client.clone(),
-// 			pool.pool().clone(),
-// 			stream,
-// 			select_chain,
-// 			inherent_data_providers,
+// 			ManualSealParams {
+// 				block_import: client.clone(),
+// 				env,
+// 				client: client.clone(),
+// 				pool: pool.pool().clone(),
+// 				commands_stream,
+// 				select_chain,
+// 				consensus_data_provider: None,
+// 				inherent_data_providers,
+// 			}
 // 		);
 // 		std::thread::spawn(|| {
 // 			let mut rt = tokio::runtime::Runtime::new().unwrap();

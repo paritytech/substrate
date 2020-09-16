@@ -44,13 +44,12 @@ use sp_consensus::{
 use sp_inherents::InherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justification};
 
+pub mod consensus;
 mod error;
 mod finalize_block;
 mod heartbeat_stream;
-mod seal_block;
-
-pub mod consensus;
 pub mod rpc;
+mod seal_block;
 
 #[cfg(test)]
 mod tests;
