@@ -224,7 +224,7 @@ benchmarks! {
 
 		// Place our proposal in the external queue, too.
 		let hash = T::Hashing::hash_of(&0);
-		assert_ok!(Democracy::<T>::external_propose(T::ExternalOrigin::successful_origin(), hash.clone()))
+		assert!(Democracy::<T>::external_propose(T::ExternalOrigin::successful_origin(), hash.clone()).is_ok());
 
 		// Add a referendum of our proposal.
 		let referendum_index = add_referendum::<T>(0)?;
