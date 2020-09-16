@@ -1111,7 +1111,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	type Moment;
 
 	/// The maximum number of locks a user should have on their account.
-	type MaxLocks;
+	type MaxLocks: Get<u32>;
 
 	/// Create a new balance lock on account `who`.
 	///

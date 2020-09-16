@@ -209,8 +209,8 @@ decl_module! {
 		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
 		/// # </weight>
-		#[weight = T::WeightInfo::vest_locked(<MaxLocksOf<T> as Get<u32>>::get())
-			.max(T::WeightInfo::vest_unlocked(<MaxLocksOf<T> as Get<u32>>::get()))
+		#[weight = T::WeightInfo::vest_locked(MaxLocksOf::<T>::get())
+			.max(T::WeightInfo::vest_unlocked(MaxLocksOf::<T>::get()))
 		]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -232,8 +232,8 @@ decl_module! {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account
 		/// # </weight>
-		#[weight = T::WeightInfo::vest_other_locked(<MaxLocksOf<T> as Get<u32>>::get())
-			.max(T::WeightInfo::vest_other_unlocked(<MaxLocksOf<T> as Get<u32>>::get()))
+		#[weight = T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get())
+			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get()))
 		]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
@@ -256,7 +256,7 @@ decl_module! {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		/// # </weight>
-		#[weight = T::WeightInfo::vested_transfer(<MaxLocksOf<T> as Get<u32>>::get())]
+		#[weight = T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get())]
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -293,7 +293,7 @@ decl_module! {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, Source Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
 		/// # </weight>
-		#[weight = T::WeightInfo::force_vested_transfer(<MaxLocksOf<T> as Get<u32>>::get())]
+		#[weight = T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get())]
 		pub fn force_vested_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -454,6 +454,7 @@ mod tests {
 		pub const MaxLocks: u32 = 10;
 	}
 	impl pallet_balances::Trait for Test {
+		type MaxLocks = ();
 		type Balance = u64;
 		type DustRemoval = ();
 		type Event = ();

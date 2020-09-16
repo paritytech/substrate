@@ -577,8 +577,10 @@ mod tests {
 	type Balance = u64;
 	parameter_types! {
 		pub const ExistentialDeposit: Balance = 1;
+		pub const MaxLocks: u32 = 10;
 	}
 	impl pallet_balances::Trait for Runtime {
+		type MaxLocks = MaxLocks;
 		type Balance = Balance;
 		type Event = MetaEvent;
 		type DustRemoval = ();
