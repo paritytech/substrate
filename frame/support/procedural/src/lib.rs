@@ -15,9 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// tag::description[]
 //! Proc macro of Support code for the runtime.
-// end::description[]
 
 #![recursion_limit="512"]
 
@@ -308,7 +306,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// The return type of the annotated function must be `Result`. All changes to storage performed
 /// by the annotated function are discarded if it returns `Err`, or committed if `Ok`.
 ///
-/// #Example
+/// # Example
 ///
 /// ```nocompile
 /// #[transactional]
@@ -325,5 +323,5 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	transactional::transactional(attr, input)
+	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }

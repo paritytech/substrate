@@ -253,8 +253,7 @@ impl LegacyProtoHandler {
 				if incoming.is_empty() {
 					if let ConnectedPoint::Dialer { .. } = self.endpoint {
 						self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							protocol: SubstreamProtocol::new(self.protocol.clone()),
-							info: (),
+							protocol: SubstreamProtocol::new(self.protocol.clone(), ()),
 						});
 					}
 					ProtocolState::Opening {
@@ -428,8 +427,7 @@ impl LegacyProtoHandler {
 						deadline: Delay::new(Duration::from_secs(60))
 					};
 					Some(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-						protocol: SubstreamProtocol::new(self.protocol.clone()),
-						info: (),
+						protocol: SubstreamProtocol::new(self.protocol.clone(), ()),
 					})
 				} else {
 					self.state = ProtocolState::Disabled { shutdown, reenable };
@@ -498,14 +496,16 @@ impl ProtocolsHandler for LegacyProtoHandler {
 	type InboundProtocol = RegisteredProtocol;
 	type OutboundProtocol = RegisteredProtocol;
 	type OutboundOpenInfo = ();
+	type InboundOpenInfo = ();
 
-	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
-		SubstreamProtocol::new(self.protocol.clone())
+	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, ()> {
+		SubstreamProtocol::new(self.protocol.clone(), ())
 	}
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		(substream, handshake): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
+		(substream, handshake): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output,
+		(): ()
 	) {
 		self.inject_fully_negotiated(substream, handshake);
 	}

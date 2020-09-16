@@ -106,7 +106,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ### Shorthand Example
 ///
 /// The macro automatically expands a shorthand function declaration to return the
-/// [`DispatchResult`](dispatch::DispatchResult) type. These functions are the same:
+/// [`DispatchResult`] type. These functions are the same:
 ///
 /// ```
 /// # #[macro_use]
@@ -2068,6 +2068,7 @@ macro_rules! __dispatch_impl_metadata {
 			where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
+			#[allow(dead_code)]
 			pub fn call_functions() -> &'static [$crate::dispatch::FunctionMetadata] {
 				$crate::__call_to_functions!($($rest)*)
 			}
@@ -2141,6 +2142,7 @@ macro_rules! __impl_module_constants_metadata {
 			$mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
+			#[allow(dead_code)]
 			pub fn module_constants_metadata() -> &'static [$crate::dispatch::ModuleConstantMetadata] {
 				// Create the `ByteGetter`s
 				$(

@@ -449,7 +449,7 @@ fn build_project(project: &Path, default_rustflags: &str) {
 		// We don't want to call ourselves recursively
 		.env(crate::SKIP_BUILD_ENV, "");
 
-	if env::var(crate::WASM_BUILD_NO_COLOR).is_err() {
+	if super::color_output_enabled() {
 		build_cmd.arg("--color=always");
 	}
 
