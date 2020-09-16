@@ -454,12 +454,12 @@ mod tests {
 		pub const MaxLocks: u32 = 10;
 	}
 	impl pallet_balances::Trait for Test {
-		type MaxLocks = ();
 		type Balance = u64;
 		type DustRemoval = ();
 		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type MaxLocks = MaxLocks;
 		type WeightInfo = ();
 	}
 	parameter_types! {

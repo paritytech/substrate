@@ -673,7 +673,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
 		if locks.len() as u32 > T::MaxLocks::get() {
-			frame_support::print(
+			frame_support::debug::warn!(
 				"Warning: A user has more currency locks than expected. \
 				A runtime configuration adjustment may be needed."
 			);
