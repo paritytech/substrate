@@ -455,13 +455,11 @@ fn assign_implicit_index(modules: &mut Vec<ModuleDeclaration>) -> syn::Result<()
 				last_index = Some(index);
 			},
 			None => {
-				let index = match last_index.map_or(Some(0), |i| i.checked_add(1)) {
-					Some(i) => i,
-					None => {
+				let index = last_index.map_or(Some(0), |i| i.checked_add(1))
+					.ok_or_else(|| {
 						let msg = "module index doesn't fit into u8, index is 256";
-						return Err(syn::Error::new(module.module.span(), msg));
-					},
-				};
+						syn::Error::new(module.module.span(), msg)
+					})?;
 				module.index = Some(index);
 				last_index = Some(index);
 			},
