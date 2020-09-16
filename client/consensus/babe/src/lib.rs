@@ -86,7 +86,10 @@ use sp_core::{crypto::Public, traits::BareCryptoStore};
 use sp_application_crypto::AppKey;
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
-	traits::{Block as BlockT, Header, DigestItemFor, Zero},
+	traits::{
+		Block as BlockT, Header, DigestItemFor, Zero,
+		UniqueSaturatedInto, Saturating,
+	},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use sc_keystore::KeyStorePtr;
@@ -114,6 +117,7 @@ use log::{debug, info, log, trace, warn};
 use prometheus_endpoint::Registry;
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
+	SignedDuration,
 };
 use sc_consensus_epochs::{
 	descendent_query, SharedEpochChanges, EpochChangesFor, Epoch as EpochT, ViableEpochDescriptor,
@@ -683,7 +687,57 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> whe
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>>;
 
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
+		let chain_head_slot = find_pre_digest::<B>(&chain_head)
+			.map(|digest| digest.slot_number())
+			.unwrap(); // WIP: REMOVE ME
+		// WIP: make these configurable
+		let param = BackoffAuthoringBlocksParam { x: 100.into(), c: 5.into(), m: 2.into() };
+		if should_backoff_authoring_blocks::<B>(
+			*chain_head.number(),
+			chain_head_slot,
+			self.client.info().finalized_number,
+			SignedDuration::default().slot_now(slot_info.duration),
+			param,
+		) {
+			return Box::pin(future::ready(Ok(())))
+		}
+
 		<Self as sc_consensus_slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
+	}
+}
+
+#[derive(Clone)]
+struct BackoffAuthoringBlocksParam<Block: BlockT> {
+	// WIP: come up with better names!
+	x: NumberFor<Block>,
+	c: NumberFor<Block>,
+	m: NumberFor<Block>,
+}
+
+// The criterion for backing off block authoring when finality is lagging
+fn should_backoff_authoring_blocks<B>(
+	chain_head_number: NumberFor<B>,
+	chain_head_slot: u64,
+	finalized_number: NumberFor<B>,
+	slot_now: u64,
+	param: BackoffAuthoringBlocksParam<B>,
+) -> bool
+where
+	B: BlockT,
+{
+	let BackoffAuthoringBlocksParam { x, c, m } = param;
+	let unfinalized_block_length = chain_head_number - finalized_number;
+	let interval = unfinalized_block_length.saturating_sub(c) / m;
+	let interval = interval.min(x).max(0.into()); // max unnecessary due to saturating_sub?
+
+	// We're doing arithmetic between block and slot numbers.
+	let interval = interval.unique_saturated_into();
+
+	if u128::from(slot_now) <= u128::from(chain_head_slot) + interval {
+		info!(target: "babe", "Backing off authoring blocks due to too many unfinalized blocks");
+		true
+	} else {
+		false
 	}
 }
 
@@ -1518,3 +1572,76 @@ pub mod test_helpers {
 		).map(|(digest, _)| digest)
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use crate::{should_backoff_authoring_blocks, BackoffAuthoringBlocksParam};
+	use substrate_test_runtime_client::runtime::Block;
+
+	#[test]
+	fn should_backoff_authoring_when_finality_lags() {
+		let finalized_number = 2u32.into();
+		let param = BackoffAuthoringBlocksParam {
+			x: 100u32.into(),
+			c: 5u32.into(),
+			m: 2u32.into(),
+		};
+
+		let mut chain_head_number = 3;
+		let mut chain_head_slot = 10;
+		let mut slot_now = 11;
+
+		while slot_now < 17 {
+			assert!(!should_backoff_authoring_blocks::<Block>(
+				chain_head_number,
+				chain_head_slot,
+				finalized_number,
+				slot_now,
+				param.clone(),
+			));
+
+			chain_head_number += 1;
+			chain_head_slot += 1;
+			slot_now += 1;
+		}
+
+		// Once the unfinalized head of the chain grows to long we start backing off block
+		// production
+		assert_eq!(chain_head_number, 9);
+		assert_eq!(chain_head_slot, 16);
+		assert_eq!(slot_now, 17);
+		assert!(should_backoff_authoring_blocks::<Block>(
+			chain_head_number,
+			chain_head_slot,
+			finalized_number,
+			slot_now,
+			param.clone(),
+		));
+		slot_now += 1;
+
+		// But we don't stop entirely
+		while slot_now < 20 {
+			assert!(!should_backoff_authoring_blocks::<Block>(
+				chain_head_number,
+				chain_head_slot,
+				finalized_number,
+				slot_now,
+				param.clone(),
+			));
+
+			chain_head_number += 1;
+			chain_head_slot += 1;
+			slot_now += 1;
+		}
+
+		// Back off again
+		assert!(should_backoff_authoring_blocks::<Block>(
+			chain_head_number,
+			chain_head_slot,
+			finalized_number,
+			slot_now,
+			param,
+		));
+	}
+}
+
