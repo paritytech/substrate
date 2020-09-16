@@ -76,20 +76,20 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 
 	let outer_event = decl_outer_event(
 		&name,
-		&modules,
+		modules.iter(),
 		&scrate,
 	)?;
 
 	let outer_origin = decl_outer_origin(
 		&name,
-		&all_but_system_modules,
+		all_but_system_modules.iter(),
 		&system_module,
 		&scrate,
 	)?;
 	let all_modules = decl_all_modules(&name, modules.iter());
 	let module_to_index = decl_module_to_index(&modules, &scrate);
 
-	let dispatch = decl_outer_dispatch(&name, &modules, &scrate);
+	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate, &unchecked_extrinsic);
 	let outer_config = decl_outer_config(&name, modules.iter(), &scrate);
 	let inherent = decl_outer_inherent(
@@ -260,10 +260,10 @@ fn decl_runtime_metadata<'a>(
 
 fn decl_outer_dispatch<'a>(
 	runtime: &'a Ident,
-	module_declarations: &Vec<ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
 	scrate: &'a TokenStream2,
 ) -> TokenStream2 {
-	let modules_tokens = module_declarations.iter()
+	let modules_tokens = module_declarations
 		.filter(|module_declaration| module_declaration.exists_part("Call"))
 		.map(|module_declaration| {
 			let module = &module_declaration.module;
@@ -284,7 +284,7 @@ fn decl_outer_dispatch<'a>(
 
 fn decl_outer_origin<'a>(
 	runtime_name: &'a Ident,
-	modules_except_system: &Vec<ModuleDeclaration>,
+	modules_except_system: impl Iterator<Item = &'a ModuleDeclaration>,
 	system_module: &'a ModuleDeclaration,
 	scrate: &'a TokenStream2,
 ) -> syn::Result<TokenStream2> {
@@ -330,7 +330,7 @@ fn decl_outer_origin<'a>(
 
 fn decl_outer_event<'a>(
 	runtime_name: &'a Ident,
-	module_declarations: &Vec<ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
 	scrate: &'a TokenStream2,
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
@@ -402,7 +402,7 @@ fn decl_all_modules<'a>(
 }
 
 fn decl_module_to_index<'a>(
-	module_declarations: &Vec<ModuleDeclaration>,
+	module_declarations: &[ModuleDeclaration],
 	scrate: &TokenStream2,
 ) -> TokenStream2 {
 	let names = module_declarations.iter().map(|d| &d.name);
@@ -445,7 +445,7 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 
 /// Assign index to each modules using same rules as rust for fieldless enum.
 /// I.e. implicit are assigned number incrementedly from last explicit or 0.
-fn assign_implicit_index(modules: &mut Vec<ModuleDeclaration>) -> syn::Result<()> {
+fn assign_implicit_index(modules: &mut [ModuleDeclaration]) -> syn::Result<()> {
 	let mut indices = HashMap::new();
 	let mut last_index: Option<u8> = None;
 
