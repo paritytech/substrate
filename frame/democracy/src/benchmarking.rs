@@ -212,6 +212,32 @@ benchmarks! {
 		assert!(Democracy::<T>::referendum_status(referendum_index).is_err());
 	}
 
+	blacklist {
+		let p in 1 .. MAX_PROPOSALS;
+
+		// Place our proposal at the end to make sure it's worst case.
+		for i in 1 .. p {
+			add_proposal::<T>(i)?;
+		}
+		add_proposal::<T>(0)?;
+		// We should really add a lot of seconds here, but we're not doing it elsewhere.
+
+		// Place our proposal in the external queue, too.
+		let hash = T::Hashing::hash_of(&0);
+		assert_ok!(Democracy::<T>::external_propose(T::ExternalOrigin::successful_origin(), hash.clone()))
+
+		// Add a referendum of our proposal.
+		let referendum_index = add_referendum::<T>(0)?;
+		assert!(Democracy::<T>::referendum_status(referendum_index).is_ok());
+
+		let call = Call::<T>::blacklist(hash, Some(referendum_index));
+		let origin = T::BlacklistOrigin::successful_origin();
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		// Referendum has been canceled
+		assert!(Democracy::<T>::referendum_status(referendum_index).is_err());
+	}
+
 	// Worst case scenario, we external propose a previously blacklisted proposal
 	external_propose {
 		let v in 1 .. MAX_VETOERS as u32;
