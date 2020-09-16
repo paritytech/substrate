@@ -101,8 +101,8 @@ benchmarks! {
 	_ { }
 
 	propose {
-		let p in 0 .. MAX_PROPOSALS;
-		for i in 0..p {
+		let p in 1 .. MAX_PROPOSALS;
+		for i in 0 .. (p - 1) {
 			add_proposal::<T>(i)?;
 		}
 
@@ -111,7 +111,7 @@ benchmarks! {
 		let value = T::MinimumDeposit::get();
 	}: _(RawOrigin::Signed(caller), proposal_hash, value.into(), MAX_PROPOSALS)
 	verify {
-		assert_eq!(Democracy::<T>::public_props().len(), 1, "Proposals not created.");
+		assert_eq!(Democracy::<T>::public_props().len(), p as usize, "Proposals not created.");
 	}
 
 	second {
