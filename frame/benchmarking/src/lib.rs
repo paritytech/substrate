@@ -158,7 +158,7 @@ pub use sp_storage::TrackedStorageKey;
 /// }
 /// ```
 ///
-/// These `verify` blocks will not execute when running your actual benchmarks!
+/// These `verify` blocks will not effect your benchmark results!
 ///
 /// You can construct benchmark tests like so:
 ///
