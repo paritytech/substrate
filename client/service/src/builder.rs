@@ -17,10 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
+	error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
 	TelemetryConnectionSinks, RpcHandlers, NetworkStatusSinks,
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
-	status_sinks, metrics::MetricsService,
+	metrics::MetricsService,
 	client::{light, Client, ClientConfig},
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 };
@@ -46,7 +46,7 @@ use sp_runtime::traits::{
 };
 use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use wasm_timer::SystemTime;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::MaintainedTransactionPool;
@@ -73,17 +73,25 @@ pub trait RpcExtensionBuilder {
 
 	/// Returns an instance of the RPC extension for a particular `DenyUnsafe`
 	/// value, e.g. the RPC extension might not expose some unsafe methods.
-	fn build(&self, deny: sc_rpc::DenyUnsafe, subscriptions: SubscriptionManager) -> Self::Output;
+	fn build(
+		&self,
+		deny: sc_rpc::DenyUnsafe,
+		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
+	) -> Self::Output;
 }
 
 impl<F, R> RpcExtensionBuilder for F where
-	F: Fn(sc_rpc::DenyUnsafe, SubscriptionManager) -> R,
+	F: Fn(sc_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> R,
 	R: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
 	type Output = R;
 
-	fn build(&self, deny: sc_rpc::DenyUnsafe, subscriptions: SubscriptionManager) -> Self::Output {
-		(*self)(deny, subscriptions)
+	fn build(
+		&self,
+		deny: sc_rpc::DenyUnsafe,
+		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
+	) -> Self::Output {
+		(*self)(deny, subscription_executor)
 	}
 }
 
@@ -97,7 +105,11 @@ impl<R> RpcExtensionBuilder for NoopRpcExtensionBuilder<R> where
 {
 	type Output = R;
 
-	fn build(&self, _deny: sc_rpc::DenyUnsafe, _subscriptions: SubscriptionManager) -> Self::Output {
+	fn build(
+		&self,
+		_deny: sc_rpc::DenyUnsafe,
+		_subscription_executor: sc_rpc::SubscriptionTaskExecutor,
+	) -> Self::Output {
 		self.0.clone()
 	}
 }
@@ -431,7 +443,7 @@ pub fn build_offchain_workers<TBl, TBackend, TCl>(
 				client.clone(),
 				offchain,
 				Clone::clone(&spawn_handle),
-				network.clone()
+				network.clone(),
 			)
 		);
 	}
@@ -472,7 +484,9 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		transaction_pool,
 		rpc_extensions_builder,
 		remote_blockchain,
-		network, network_status_sinks, system_rpc_tx,
+		network,
+		network_status_sinks,
+		system_rpc_tx,
 		telemetry_connection_sinks,
 	} = params;
 
@@ -521,15 +535,13 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		MetricsService::new()
 	};
 
-	// Periodically notify the telemetry.
-	spawn_handle.spawn("telemetry-periodic-send", telemetry_periodic_send(
-		client.clone(), transaction_pool.clone(), metrics_service, network_status_sinks.clone()
-	));
-
-	// Periodically send the network state to the telemetry.
-	spawn_handle.spawn(
-		"telemetry-periodic-network-state",
-		telemetry_periodic_network_state(network_status_sinks.clone()),
+	// Periodically updated metrics and telemetry updates.
+	spawn_handle.spawn("telemetry-periodic-send",
+		metrics_service.run(
+			client.clone(),
+			transaction_pool.clone(),
+			network_status_sinks.clone()
+		)
 	);
 
 	// RPC
@@ -574,7 +586,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	// Spawn informant task
 	spawn_handle.spawn("informant", sc_informant::build(
 		client.clone(),
-		network_status_sinks.clone().0,
+		network_status_sinks.status.clone(),
 		transaction_pool.clone(),
 		config.informant_output_format,
 	));
@@ -604,47 +616,6 @@ async fn transaction_notifications<TBl, TExPool>(
 			ready(())
 		})
 		.await;
-}
-
-// Periodically notify the telemetry.
-async fn telemetry_periodic_send<TBl, TExPool, TCl>(
-	client: Arc<TCl>,
-	transaction_pool: Arc<TExPool>,
-	mut metrics_service: MetricsService,
-	network_status_sinks: NetworkStatusSinks<TBl>,
-)
-	where
-		TBl: BlockT,
-		TCl: ProvideRuntimeApi<TBl> + UsageProvider<TBl>,
-		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>,
-{
-	let (state_tx, state_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat1");
-	network_status_sinks.0.push(std::time::Duration::from_millis(5000), state_tx);
-	state_rx.for_each(move |(net_status, _)| {
-		let info = client.usage_info();
-		metrics_service.tick(
-			&info,
-			&transaction_pool.status(),
-			&net_status,
-		);
-		ready(())
-	}).await;
-}
-
-async fn telemetry_periodic_network_state<TBl: BlockT>(
-	network_status_sinks: NetworkStatusSinks<TBl>,
-) {
-	// Periodically send the network state to the telemetry.
-	let (netstat_tx, netstat_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat2");
-	network_status_sinks.0.push(std::time::Duration::from_secs(30), netstat_tx);
-	netstat_rx.for_each(move |(_, network_state)| {
-		telemetry!(
-			SUBSTRATE_INFO;
-			"system.network_state";
-			"state" => network_state,
-		);
-		ready(())
-	}).await;
 }
 
 fn build_telemetry<TBl: BlockT>(
@@ -735,7 +706,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	};
 
 	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
-	let subscriptions = SubscriptionManager::new(Arc::new(task_executor));
+	let subscriptions = SubscriptionManager::new(Arc::new(task_executor.clone()));
 
 	let (chain, state, child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
 		(remote_blockchain, on_demand) {
@@ -764,20 +735,16 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	let author = sc_rpc::author::Author::new(
 		client,
 		transaction_pool,
-		subscriptions.clone(),
+		subscriptions,
 		keystore,
 		deny_unsafe,
 	);
 	let system = system::System::new(system_info, system_rpc_tx, deny_unsafe);
 
-	let maybe_offchain_rpc = offchain_storage
-	.map(|storage| {
+	let maybe_offchain_rpc = offchain_storage.map(|storage| {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe);
-		// FIXME: Use plain Option (don't collect into HashMap) when we upgrade to jsonrpc 14.1
-		// https://github.com/paritytech/jsonrpc/commit/20485387ed06a48f1a70bf4d609a7cde6cf0accf
-		let delegate = offchain::OffchainApi::to_delegate(offchain);
-			delegate.into_iter().collect::<HashMap<_, _>>()
-	}).unwrap_or_default();
+		offchain::OffchainApi::to_delegate(offchain)
+	});
 
 	sc_rpc_server::rpc_handler((
 		state::StateApi::to_delegate(state),
@@ -786,7 +753,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 		maybe_offchain_rpc,
 		author::AuthorApi::to_delegate(author),
 		system::SystemApi::to_delegate(system),
-		rpc_extensions_builder.build(deny_unsafe, subscriptions),
+		rpc_extensions_builder.build(deny_unsafe, task_executor),
 	))
 }
 
@@ -887,7 +854,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
-	let network_status_sinks = NetworkStatusSinks::new(Arc::new(status_sinks::StatusSinks::new()));
+	let network_status_sinks = NetworkStatusSinks::new();
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 

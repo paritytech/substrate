@@ -44,7 +44,7 @@ const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
 const DUMMY_WASM_BINARY_ENV: &str = "BUILD_DUMMY_WASM_BINARY";
 
 /// Environment variable that makes sure the WASM build is triggered.
-const TRIGGER_WASM_BUILD_ENV: &str = "TRIGGER_WASM_BUILD";
+const FORCE_WASM_BUILD_ENV: &str = "FORCE_WASM_BUILD";
 
 /// Replace all backslashes with slashes.
 fn replace_back_slashes<T: ToString>(path: T) -> String {
@@ -476,6 +476,6 @@ fn generate_rerun_if_changed_instructions() {
 	// Make sure that the `build.rs` is called again if one of the following env variables changes.
 	println!("cargo:rerun-if-env-changed={}", SKIP_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", DUMMY_WASM_BINARY_ENV);
-	println!("cargo:rerun-if-env-changed={}", TRIGGER_WASM_BUILD_ENV);
+	println!("cargo:rerun-if-env-changed={}", FORCE_WASM_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", generate_crate_skip_build_env_name());
 }

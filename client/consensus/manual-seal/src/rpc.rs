@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! RPC interface for the ManualSeal Engine.
+//! RPC interface for the `ManualSeal` Engine.
 
 use sp_consensus::ImportedAux;
 use jsonrpc_core::Error;

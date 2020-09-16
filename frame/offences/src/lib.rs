@@ -112,7 +112,7 @@ decl_event!(
 		/// There is an offence reported of the given `kind` happened at the `session_index` and
 		/// (kind-specific) time slot. This event is not deposited for duplicate slashes. last
 		/// element indicates of the offence was applied (true) or queued (false) 
-		/// [kind, timeslot, applied].
+		/// \[kind, timeslot, applied\].
 		Offence(Kind, OpaqueTimeSlot, bool),
 	}
 );

@@ -32,33 +32,38 @@ use futures::prelude::*;
 use std::{sync::Arc, marker::PhantomData};
 use prometheus_endpoint::Registry;
 
-use sp_consensus::{
-	Environment, Proposer, ForkChoiceStrategy, BlockImportParams, BlockOrigin, SelectChain,
-	import_queue::{BasicQueue, CacheKeyId, Verifier, BoxBlockImport},
-};
+use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::HeaderBackend;
-use sp_inherents::InherentDataProviders;
-use sp_runtime::{traits::Block as BlockT, Justification};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
 use sc_transaction_pool::txpool;
+use sp_consensus::{
+	Environment, Proposer, SelectChain, BlockImport,
+	ForkChoiceStrategy, BlockImportParams, BlockOrigin,
+	import_queue::{Verifier, BasicQueue, CacheKeyId, BoxBlockImport},
+};
+use sp_inherents::InherentDataProviders;
+use sp_runtime::{traits::Block as BlockT, Justification};
 
 #[cfg(test)]
 mod tests;
 
 mod error;
 mod finalize_block;
-mod seal_new_block;
+mod seal_block;
+pub mod consensus;
 mod heartbeat_stream;
-mod rpc;
+pub mod rpc;
 
-use crate::{
+use self::{
 	finalize_block::{finalize_block, FinalizeBlockParams},
 	seal_new_block::{seal_new_block, SealBlockParams},
 };
-
-pub use crate::{
+pub use self::{
+	consensus::ConsensusDataProvider,
 	error::Error,
+	finalize_block::{finalize_block, FinalizeBlockParams},
 	heartbeat_stream::HeartbeatStream,
+	seal_block::{SealBlockParams, seal_block, MAX_PROPOSAL_DURATION},
 	rpc::{EngineCommand, CreatedBlock, ManualSeal},
 };
 
@@ -103,25 +108,83 @@ pub fn import_queue<Block, Transaction>(
 	)
 }
 
+/// Params required to start the instant sealing authorship task.
+pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpool::ChainApi, SC, CS> {
+	/// Block import instance for well. importing blocks.
+	pub block_import: BI,
+
+	/// The environment we are producing blocks for.
+	pub env: E,
+
+	/// Client instance
+	pub client: Arc<C>,
+
+	/// Shared reference to the transaction pool.
+	pub pool: Arc<txpool::Pool<A>>,
+
+	/// Stream<Item = EngineCommands>, Basically the receiving end of a channel for sending commands to
+	/// the authorship task.
+	pub commands_stream: CS,
+
+	/// SelectChain strategy.
+	pub select_chain: SC,
+
+	/// Digest provider for inclusion in blocks.
+	pub consensus_data_provider: Option<Box<dyn ConsensusDataProvider<B, Transaction = TransactionFor<C, B>>>>,
+
+	/// Provider for inherents to include in blocks.
+	pub inherent_data_providers: InherentDataProviders,
+}
+
+/// Params required to start the manual sealing authorship task.
+pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpool::ChainApi, SC> {
+	/// Block import instance for well. importing blocks.
+	pub block_import: BI,
+
+	/// The environment we are producing blocks for.
+	pub env: E,
+
+	/// Client instance
+	pub client: Arc<C>,
+
+	/// Shared reference to the transaction pool.
+	pub pool: Arc<txpool::Pool<A>>,
+
+	/// SelectChain strategy.
+	pub select_chain: SC,
+
+	/// Digest provider for inclusion in blocks.
+	pub consensus_data_provider: Option<Box<dyn ConsensusDataProvider<B, Transaction = TransactionFor<C, B>>>>,
+
+	/// Provider for inherents to include in blocks.
+	pub inherent_data_providers: InherentDataProviders,
+}
+
 /// Creates the background authorship task for the manual seal engine.
-pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
-	mut block_import: BoxBlockImport<B, T>,
-	mut env: E,
-	client: Arc<C>,
-	pool: Arc<txpool::Pool<A>>,
-	mut commands_stream: S,
-	select_chain: SC,
-	inherent_data_providers: InherentDataProviders,
+pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
+	ManualSealParams {
+		mut block_import,
+		mut env,
+		client,
+		pool,
+		mut commands_stream,
+		select_chain,
+		inherent_data_providers,
+		consensus_data_provider,
+		..
+	}: ManualSealParams<B, BI, E, C, A, SC, CS>
 )
 	where
 		A: txpool::ChainApi<Block=B> + 'static,
 		B: BlockT + 'static,
-		C: HeaderBackend<B> + Finalizer<B, CB> + 'static,
+		BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
+			+ Send + Sync + 'static,
+		C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
 		CB: ClientBackend<B> + 'static,
 		E: Environment<B> + 'static,
 		E::Error: std::fmt::Display,
 		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
-		S: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
+		CS: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
 		SC: SelectChain<B> + 'static,
 {
 	while let Some(command) = commands_stream.next().await {
@@ -132,7 +195,7 @@ pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
 				parent_hash,
 				sender,
 			} => {
-				seal_new_block(
+				seal_block(
 					SealBlockParams {
 						sender,
 						parent_hash,
@@ -142,6 +205,7 @@ pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
 						select_chain: &select_chain,
 						block_import: &mut block_import,
 						inherent_data_provider: &inherent_data_providers,
+						consensus_data_provider: consensus_data_provider.as_ref().map(|p| &**p),
 						pool: pool.clone(),
 						client: client.clone(),
 					}
@@ -178,21 +242,24 @@ pub async fn run_manual_seal<B, CB, E, C, A, SC, S, T>(
 ///
 /// * If both `heartbeat` and `cooldown` options are not `None`, `heartbeat` must be larger than
 /// `cooldown`. Otherwise panic occurs.
-pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
-	block_import: BoxBlockImport<B, T>,
-	env: E,
-	client: Arc<C>,
-	pool: Arc<txpool::Pool<A>>,
-	select_chain: SC,
-	inherent_data_providers: InherentDataProviders,
-	heartbeat: Option<Duration>,
-	cooldown: Option<Duration>,
-	finalize: bool,
+pub async fn run_instant_seal<B, BI, CB, E, C, A, SC, T>(
+	InstantSealParams {
+		block_import,
+		env,
+		client,
+		pool,
+		select_chain,
+		consensus_data_provider,
+		inherent_data_providers,
+		..
+	}: InstantSealParams<B, BI, E, C, A, SC, T>
 )
 	where
 		A: txpool::ChainApi<Block=B> + 'static,
 		B: BlockT + 'static,
-		C: HeaderBackend<B> + Finalizer<B, CB> + 'static,
+		BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
+			+ Send + Sync + 'static,
+		C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
 		CB: ClientBackend<B> + 'static,
 		E: Environment<B> + 'static,
 		E::Error: std::fmt::Display,
@@ -203,10 +270,10 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 	// into the transaction pool.
 	let commands_stream = pool.validated_pool()
 		.import_notification_stream()
-		.map(move |_| {
+		.map(|_| {
 			EngineCommand::SealNewBlock {
 				create_empty: false,
-				finalize,
+				finalize: false,
 				parent_hash: None,
 				sender: None,
 			}
@@ -223,12 +290,15 @@ pub async fn run_instant_seal<B, CB, E, C, A, SC, T>(
 	};
 
 	run_manual_seal(
-		block_import,
-		env,
-		client,
-		pool,
-		stream,
-		select_chain,
-		inherent_data_providers,
+		ManualSealParams {
+			block_import,
+			env,
+			client,
+			pool,
+			stream,
+			select_chain,
+			consensus_data_provider,
+			inherent_data_providers,
+		}
 	).await
 }
