@@ -61,7 +61,7 @@ benchmarks! {
 	_ { }
 
 	vest_locked {
-		let l in 0 .. T::MaxLocks::get();
+		let l in 0 .. MaxLocksOf::<T>::get();
 
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -85,7 +85,7 @@ benchmarks! {
 	}
 
 	vest_unlocked {
-		let l in 0 .. T::MaxLocks::get();
+		let l in 0 .. MaxLocksOf::<T>::get();
 
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -109,7 +109,7 @@ benchmarks! {
 	}
 
 	vest_other_locked {
-		let l in 0 .. T::MaxLocks::get();
+		let l in 0 .. MaxLocksOf::<T>::get();
 
 		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
@@ -136,7 +136,7 @@ benchmarks! {
 	}
 
 	vest_other_unlocked {
-		let l in 0 .. T::MaxLocks::get();
+		let l in 0 .. MaxLocksOf::<T>::get();
 
 		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
@@ -163,7 +163,7 @@ benchmarks! {
 	}
 
 	vested_transfer {
-		let l in 0 .. T::MaxLocks::get();
+		let l in 0 .. MaxLocksOf::<T>::get();
 
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -194,7 +194,7 @@ benchmarks! {
 	}
 
 	force_vested_transfer {
-		let l in 0 .. T::MaxLocks::get();
+		let l in 0 .. MaxLocksOf::<T>::get();
 
 		let source: T::AccountId = account("source", 0, SEED);
 		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());

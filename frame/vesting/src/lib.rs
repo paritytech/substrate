@@ -461,7 +461,6 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type WeightInfo = ();
-		type MaxLocks = MaxLocks;
 	}
 	parameter_types! {
 		pub const MinVestedTransfer: u64 = 256 * 2;
