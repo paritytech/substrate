@@ -1222,6 +1222,7 @@ mod tests {
 	fn create_signed_transaction() {
 		use sp_keyring::AccountKeyring;
 		use frame_system::offchain::CreateSignedTransaction;
+		use frame_system::Module as System;
 
 		pub mod crypto {
 			use sp_core::crypto::KeyTypeId;
@@ -1240,8 +1241,27 @@ mod tests {
 			}
 		}
 
+		let go_to_block = |n: u32| {
+			use frame_system::InitKind;
+			let parent_hash = if System::<Runtime>::block_number() > 1 {
+				let hdr = System::<Runtime>::finalize();
+				hdr.hash()
+			} else {
+				System::<Runtime>::parent_hash()
+			};
+
+			System::<Runtime>::initialize(
+				&n,
+				&parent_hash,
+				&Default::default(),
+				&Default::default(),
+				InitKind::Full
+			);
+			System::<Runtime>::set_block_number(n);
+		};
+
 		sp_io::TestExternalities::default().execute_with(|| {
-			frame_system::Module::<Runtime>::set_block_number(1);
+			go_to_block(100);
 
 			let alice: AccountId = AccountKeyring::Alice.into();
 			let bob_pub = AccountKeyring::Bob;
