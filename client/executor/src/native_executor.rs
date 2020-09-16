@@ -323,7 +323,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 
 					// FIXME: Should be refactored to shared "instance factory".
 					// Instantiating wasm here every time is suboptimal at the moment, shared
-					// pool of istances should be used.
+					// pool of instances should be used.
 					let instance = module.new_instance().expect("Failed to create new instance for fork");
 
 					instance.call(
@@ -334,7 +334,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 			);
 
 			// If execution is panicked, the `join` in the original runtime code will panic as well,
-			// since the sender is dropped without seding anything.
+			// since the sender is dropped without sending anything.
 			if let Ok(output) = result {
 				let _ = sender.send(output);
 			}

@@ -18,7 +18,6 @@
 //! Runtime tasks.
 //!
 //! Contains runtime-usable functions for spawning parallel purely computational tasks.
-//!
 
 #[cfg(feature = "std")]
 mod inner {
@@ -79,19 +78,19 @@ mod inner {
 #[cfg(not(feature = "std"))]
 mod inner {
 
+	use core::mem;
 	use sp_std::{vec::Vec, prelude::Box};
 
-
-	/// Dynamic dispatch of wasm blob.
+	/// Dispatch wrapper for wasm blob.
 	///
-	/// Arguments are expected to be scale encoded in vector at address `payload_ptr` with length of
-	/// `payload_len`.
+	/// Serves as trampoline to call any rust function with (Vec<u8>) -> Vec<u8> compiled
+	/// into the runtime.
 	///
-	/// Arguments: function pointer (u32), input (Vec<u8>).
+	/// Function item should be provided with `func_ref`. Argument for the call
+	/// will be generated from bytes at `payload_ptr` with `payload_len`.
 	///
-	/// Function at pointer is expected to have signature of `(Vec<u8>) -> Vec<u8>`. Since this dynamic dispatch
-	/// function and the invoked function are compiled with the same compiler, there should be no problem with
-	/// ABI incompatibility.
+	/// NOTE: Since this dynamic dispatch function and the invoked function are compiled with
+	/// the same compiler, there should be no problem with ABI incompatibility.
 	extern "C" fn dispatch_wrapper(func_ref: u32, payload_ptr: u32, payload_len: u32) -> u64 {
 		let payload_len = payload_len as usize;
 		let output = unsafe {
@@ -107,13 +106,11 @@ mod inner {
 	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>) -> DataJoinHandle {
 		let func_ptr: usize = unsafe { core::mem::transmute(entry_point) };
 
-		let handle = unsafe {
-			crate::runtime_tasks::spawn(
-				dispatch_wrapper as usize as _,
-				func_ptr as u32,
-				payload,
-			)
-		};
+		let handle = crate::runtime_tasks::spawn(
+			dispatch_wrapper as usize as _,
+			func_ptr as u32,
+			payload,
+		);
 		DataJoinHandle { handle }
 	}
 

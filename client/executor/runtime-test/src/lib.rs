@@ -312,29 +312,40 @@ sp_core::wasm_export_functions! {
 
 	fn test_fork() {
 		let data = vec![1u8, 2u8];
-		let data_new = sp_io::tasks::spawn(incrementer, data).join();
+		let data_new = sp_io::tasks::spawn(tasks::incrementer, data).join();
 
 		assert_eq!(data_new, vec![2u8, 3u8]);
 	}
 
 	fn test_nested_fork() {
 		let data = vec![7u8, 13u8];
-		let data_new = sp_io::tasks::spawn(parallel_incrementer, data).join();
+		let data_new = sp_io::tasks::spawn(tasks::parallel_incrementer, data).join();
 
 		assert_eq!(data_new, vec![10u8, 16u8]);
+	}
+
+	fn test_panic_in_fork_panics_on_join() {
+		let data_new = sp_io::tasks::spawn(tasks::panicker, vec![]).join();
 	}
  }
 
  #[cfg(not(feature = "std"))]
- fn incrementer(data: Vec<u8>) -> Vec<u8> {
-	data.into_iter().map(|v| v + 1).collect()
- }
+ mod tasks {
+	use sp_std::prelude::*;
 
- #[cfg(not(feature = "std"))]
- fn parallel_incrementer(data: Vec<u8>) -> Vec<u8> {
-	let first = data.into_iter().map(|v| v + 2).collect::<Vec<_>>();
-	let second = sp_io::tasks::spawn(incrementer, first).join();
-	second
+	pub fn incrementer(data: Vec<u8>) -> Vec<u8> {
+	   data.into_iter().map(|v| v + 1).collect()
+	}
+
+	pub fn panicker(_: Vec<u8>) -> Vec<u8> {
+		panic!()
+	}
+
+	pub fn parallel_incrementer(data: Vec<u8>) -> Vec<u8> {
+	   let first = data.into_iter().map(|v| v + 2).collect::<Vec<_>>();
+	   let second = sp_io::tasks::spawn(incrementer, first).join();
+	   second
+	}
  }
 
 #[cfg(not(feature = "std"))]

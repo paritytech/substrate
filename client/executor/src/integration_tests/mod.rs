@@ -788,3 +788,21 @@ fn nested_forking_should_work(wasm_method: WasmExecutionMethod) {
 	).unwrap();
 }
 
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn panic_in_fork_panics_on_join(wasm_method: WasmExecutionMethod) {
+
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	if let Err(e) = call_in_wasm(
+		"test_panic_in_fork_panics_on_join",
+		&[],
+		wasm_method,
+		&mut ext,
+	) {
+		assert!(format!("{}", e).contains("Runtime panicked: No signal from forked execution"));
+	} else {
+		panic!("wasm call should be error")
+	}
+}
