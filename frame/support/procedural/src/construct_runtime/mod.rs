@@ -455,21 +455,21 @@ fn assign_implicit_index(modules: &mut Vec<ModuleDeclaration>) -> syn::Result<()
 			None => last_index.map_or(Some(0), |i| i.checked_add(1))
 				.ok_or_else(|| {
 					let msg = "Module index doesn't fit into u8, index is 256";
-					syn::Error::new(module.module.span(), msg)
+					syn::Error::new(module.name.span(), msg)
 				})?,
 		};
 
 		module.index = Some(final_index);
 		last_index = Some(final_index);
 
-		if let Some(used_module) = indices.insert(final_index, module.module.clone()) {
+		if let Some(used_module) = indices.insert(final_index, module.name.clone()) {
 			let msg = format!(
-				"Module index are conflicting, at index {}, modules {} and {}",
-				final_index,
-				module.module,
+				"Module index are conflicting both modules {} and {} are at index {}",
+				module.name,
 				used_module,
+				final_index,
 			);
-			return Err(syn::Error::new(module.module.span(), msg));
+			return Err(syn::Error::new(module.name.span(), msg));
 		}
 	}
 

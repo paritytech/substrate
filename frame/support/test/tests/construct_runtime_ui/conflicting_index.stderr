@@ -1,0 +1,5 @@
+error: Module index are conflicting both modules Pallet1 and System are at index 0
+  --> $DIR/conflicting_index.rs:10:3
+   |
+10 |         Pallet1: pallet1::{} = 0,
+   |         ^^^^^^^
