@@ -298,7 +298,7 @@ async fn manual_seal_fork_blocks() {
 	// Submit another tx
 	assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 2)).await.is_ok());
 
-	let (tx2, rx2) = futures::channel::oneshot::channel();
+	let (tx2, _rx2) = futures::channel::oneshot::channel();
 	assert!(sink.send(EngineCommand::SealNewBlock {
 		parent_hash: Some(created_block.hash),
 		sender: Some(tx2),
