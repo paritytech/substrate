@@ -41,12 +41,6 @@ pub type Message<B> = generic::Message<
 	<B as BlockT>::Extrinsic,
 >;
 
-/// Type alias for using the status type using block type parameters.
-pub type Status<B> = generic::Status<
-	<B as BlockT>::Hash,
-	<<B as BlockT>::Header as HeaderT>::Number,
->;
-
 /// Type alias for using the block request type using block type parameters.
 pub type BlockRequest<B> = generic::BlockRequest<
 	<B as BlockT>::Hash,

@@ -20,7 +20,7 @@
 //!
 //! There are two main structs in this module: [`NetworkWorker`] and [`NetworkService`].
 //! The [`NetworkWorker`] *is* the network and implements the `Future` trait. It must be polled in
-//! order fo the network to advance.
+//! order for the network to advance.
 //! The [`NetworkService`] is merely a shared version of the [`NetworkWorker`]. You can obtain an
 //! `Arc<NetworkService>` by calling [`NetworkWorker::service`].
 //!
@@ -605,6 +605,22 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self.local_peer_id
 	}
 
+	/// Set authorized peers.
+	///
+	/// Need a better solution to manage authorized peers, but now just use reserved peers for
+	/// prototyping.
+	pub fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
+		self.peerset.set_reserved_peers(peers)
+	}
+
+	/// Set authorized_only flag.
+	///
+	/// Need a better solution to decide authorized_only, but now just use reserved_only flag for
+	/// prototyping.
+	pub fn set_authorized_only(&self, reserved_only: bool) {
+		self.peerset.set_reserved_only(reserved_only)
+	}
+
 	/// Appends a notification to the buffer of pending outgoing notifications with the given peer.
 	/// Has no effect if the notifications channel with this protocol name is not open.
 	///
@@ -623,7 +639,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// >			preventing the message from being delivered.
 	///
 	/// The protocol must have been registered with `register_notifications_protocol` or
-	/// `NetworkConfiguration::notifications_protocols`.
+	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
 	///
 	pub fn write_notification(&self, target: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>) {
 		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
@@ -666,10 +682,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// 2.  [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
 	/// can only fail if the underlying notification substream or connection has suddenly closed.
 	///
-	/// An error is returned either by `notification_sender`, by [`NotificationSender::wait`],
-	/// or by [`NotificationSenderReady::send`] if there exists no open notifications substream
-	/// with that combination of peer and protocol, or if the remote has asked to close the
-	/// notifications substream. If that happens, it is guaranteed that an
+	/// An error is returned by [`NotificationSenderReady::send`] if there exists no open
+	/// notifications substream with that combination of peer and protocol, or if the remote
+	/// has asked to close the notifications substream. If that happens, it is guaranteed that an
 	/// [`Event::NotificationStreamClosed`] has been generated on the stream returned by
 	/// [`NetworkService::event_stream`].
 	///
@@ -680,7 +695,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// in which case enqueued notifications will be lost.
 	///
 	/// The protocol must have been registered with `register_notifications_protocol` or
-	/// `NetworkConfiguration::notifications_protocols`.
+	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
 	///
 	/// # Usage
 	///
@@ -785,7 +800,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Such restrictions, if desired, need to be enforced at the call site(s).
 	///
 	/// The protocol must have been registered through
-	/// [`NetworkConfiguration::request_response_protocols`].
+	/// [`NetworkConfiguration::request_response_protocols`](
+	/// crate::config::NetworkConfiguration::request_response_protocols).
 	pub async fn request(
 		&self,
 		target: PeerId,
@@ -1337,6 +1353,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 									ResponseFailure::Network(InboundFailure::Timeout) => "timeout",
 									ResponseFailure::Network(InboundFailure::UnsupportedProtocols) =>
 										"unsupported",
+									ResponseFailure::Network(InboundFailure::ConnectionClosed) =>
+										"connection-closed",
 								};
 
 								metrics.requests_in_failure_total
@@ -1652,8 +1670,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
-				metrics.kbuckets_num_nodes.with_label_values(&[&proto.as_ref()]).set(num_entries as u64);
+			for (proto, buckets) in this.network_service.num_entries_per_kbucket() {
+				for (lower_ilog2_bucket_bound, num_entries) in buckets {
+					metrics.kbuckets_num_nodes
+						.with_label_values(&[&proto.as_ref(), &lower_ilog2_bucket_bound.to_string()])
+						.set(num_entries as u64);
+				}
 			}
 			for (proto, num_entries) in this.network_service.num_kademlia_records() {
 				metrics.kademlia_records_count.with_label_values(&[&proto.as_ref()]).set(num_entries as u64);
