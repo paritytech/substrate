@@ -155,7 +155,7 @@
 use sp_std::prelude::*;
 use sp_runtime::{
 	DispatchResult, DispatchError, RuntimeDebug,
-	traits::{Zero, Hash, Dispatchable, Saturating},
+	traits::{Zero, Hash, Dispatchable, Saturating, Bounded},
 };
 use codec::{Encode, Decode, Input};
 use frame_support::{
@@ -211,6 +211,7 @@ pub trait WeightInfo {
 	fn vote_new(r: u32, ) -> Weight;
 	fn vote_existing(r: u32, ) -> Weight;
 	fn emergency_cancel() -> Weight;
+	fn blacklist() -> Weight;
 	fn external_propose(v: u32, ) -> Weight;
 	fn external_propose_majority() -> Weight;
 	fn external_propose_default() -> Weight;
@@ -288,6 +289,9 @@ pub trait Trait: frame_system::Trait + Sized {
 
 	/// Origin from which any referendum may be cancelled in an emergency.
 	type CancellationOrigin: EnsureOrigin<Self::Origin>;
+
+	/// Origin from which proposals may be blacklisted.
+	type BlacklistOrigin: EnsureOrigin<Self::Origin>;
 
 	/// Origin from which a proposal may be cancelled and its backers slashed.
 	type CancelProposalOrigin: EnsureOrigin<Self::Origin>;
@@ -421,8 +425,7 @@ decl_storage! {
 
 		/// A record of who vetoed what. Maps proposal hash to a possible existent block number
 		/// (until when it may not be resubmitted) and who vetoed it.
-		pub Blacklist get(fn blacklist):
-			map hasher(identity) T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
+		pub Blacklist: map hasher(identity) T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
 
 		/// Record of all proposals that have been subject to emergency cancellation.
 		pub Cancellations: map hasher(identity) T::Hash => bool;
@@ -479,6 +482,8 @@ decl_event! {
 		PreimageReaped(Hash, AccountId, Balance, AccountId),
 		/// An \[account\] has been unlocked successfully.
 		Unlocked(AccountId),
+		/// A proposal \[hash\] has been blacklisted permanently.
+		Blacklisted(Hash),
 	}
 }
 
@@ -621,6 +626,13 @@ decl_module! {
 			ensure!(real_prop_count <= prop_count, Error::<T>::InvalidWitness);
 			ensure!(real_prop_count < MAX_PROPOSALS, Error::<T>::TooManyProposals);
 
+			if let Some((until, _)) = <Blacklist<T>>::get(proposal_hash) {
+				ensure!(
+					<frame_system::Module<T>>::block_number() >= until,
+					Error::<T>::ProposalBlacklisted,
+				);
+			}
+
 			T::Currency::reserve(&who, value)?;
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (&[&who][..], value));
@@ -704,6 +716,58 @@ decl_module! {
 
 			<Cancellations<T>>::insert(h, true);
 			Self::internal_cancel_referendum(ref_index);
+		}
+
+		/// Permanently place a proposal into the blacklist. This prevents it from ever being
+		/// proposed again.
+		///
+		/// If called on an queued public or external proposal, then this will result in it being
+		/// removed. If the `ref_index` supplied is an active referendum with the proposal hash,
+		/// then it will be cancelled.
+		///
+		/// The dispatch origin of this call must be `BlacklistOrigin`.
+		///
+		/// - `proposal_hash`: The proposal hash to blacklist permanently.
+		/// - `ref_index`: An ongoing referendum whose hash is `proposal_hash`, which will be
+		/// cancelled.
+		#[weight = (T::WeightInfo::blacklist(), DispatchClass::Operational)]
+		fn blacklist(origin,
+			proposal_hash: T::Hash,
+			maybe_ref_index: Option<ReferendumIndex>,
+		) {
+			T::BlacklistOrigin::ensure_origin(origin)?;
+
+			// Insert the proposal into the blacklist.
+			let permanent = (T::BlockNumber::max_value(), Vec::<T::AccountId>::new());
+			Blacklist::<T>::insert(&proposal_hash, permanent);
+
+			// Remove the queued proposal, if it's there.
+			PublicProps::<T>::mutate(|props| {
+				if let Some(index) = props.iter().position(|p| p.1 == proposal_hash) {
+					let (prop_index, ..) = props.remove(index);
+					if let Some((whos, amount)) = DepositOf::<T>::take(prop_index) {
+						for who in whos.into_iter() {
+							T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
+						}
+					}
+				}
+			});
+
+			// Remove the external queued referendum, if it's there.
+			if matches!(NextExternal::<T>::get(), Some((h, ..)) if h == proposal_hash) {
+				NextExternal::<T>::kill();
+			}
+
+			// Remove the referendum, if it's there.
+			if let Some(ref_index) = maybe_ref_index {
+				let status = Self::referendum_status(ref_index)?;
+				let h = status.proposal_hash;
+				if h == proposal_hash {
+					Self::internal_cancel_referendum(ref_index);
+				}
+			}
+
+			Self::deposit_event(RawEvent::Blacklisted(proposal_hash));
 		}
 
 		/// Schedule a referendum to be tabled once it is legal to schedule an external
@@ -887,7 +951,6 @@ decl_module! {
 					T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
 				}
 			}
-
 		}
 
 		/// Remove a referendum.

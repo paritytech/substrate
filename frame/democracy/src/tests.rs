@@ -194,6 +194,7 @@ impl super::Trait for Test {
 	type ExternalDefaultOrigin = EnsureSignedBy<One, u64>;
 	type FastTrackOrigin = EnsureSignedBy<Five, u64>;
 	type CancellationOrigin = EnsureSignedBy<Four, u64>;
+	type BlacklistOrigin = EnsureRoot<u64>;
 	type CancelProposalOrigin = EnsureRoot<u64>;
 	type VetoOrigin = EnsureSignedBy<OneToFive, u64>;
 	type CooloffPeriod = CooloffPeriod;
