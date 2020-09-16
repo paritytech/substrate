@@ -72,6 +72,7 @@ parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
 }
 impl pallet_balances::Trait for Test {
+	type MaxLocks = ();
 	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();

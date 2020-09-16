@@ -1156,6 +1156,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = frame_system::Module<Test>;
+		type MaxLocks = ();
 		type WeightInfo = ();
 	}
 

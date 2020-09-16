@@ -28,7 +28,6 @@ use sp_runtime::traits::Bounded;
 use crate::Module as Vesting;
 
 const SEED: u32 = 0;
-const MAX_LOCKS: u32 = 20;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
@@ -62,7 +61,7 @@ benchmarks! {
 	_ { }
 
 	vest_locked {
-		let l in 0 .. MAX_LOCKS;
+		let l in 0 .. MaxLocksOf::<T>::get();
 
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -86,7 +85,7 @@ benchmarks! {
 	}
 
 	vest_unlocked {
-		let l in 0 .. MAX_LOCKS;
+		let l in 0 .. MaxLocksOf::<T>::get();
 
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -110,7 +109,7 @@ benchmarks! {
 	}
 
 	vest_other_locked {
-		let l in 0 .. MAX_LOCKS;
+		let l in 0 .. MaxLocksOf::<T>::get();
 
 		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
@@ -137,7 +136,7 @@ benchmarks! {
 	}
 
 	vest_other_unlocked {
-		let l in 0 .. MAX_LOCKS;
+		let l in 0 .. MaxLocksOf::<T>::get();
 
 		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
@@ -164,7 +163,7 @@ benchmarks! {
 	}
 
 	vested_transfer {
-		let l in 0 .. MAX_LOCKS;
+		let l in 0 .. MaxLocksOf::<T>::get();
 
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -193,6 +192,38 @@ benchmarks! {
 			"Lock not created",
 		);
 	}
+
+	force_vested_transfer {
+		let l in 0 .. MaxLocksOf::<T>::get();
+
+		let source: T::AccountId = account("source", 0, SEED);
+		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
+		T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
+		let target: T::AccountId = account("target", 0, SEED);
+		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
+		// Give target existing locks
+		add_locks::<T>(&target, l as u8);
+
+		let transfer_amount = T::MinVestedTransfer::get();
+
+		let vesting_schedule = VestingInfo {
+			locked: transfer_amount,
+			per_block: 10.into(),
+			starting_block: 1.into(),
+		};
+	}: _(RawOrigin::Root, source_lookup, target_lookup, vesting_schedule)
+	verify {
+		assert_eq!(
+			T::MinVestedTransfer::get(),
+			T::Currency::free_balance(&target),
+			"Transfer didn't happen",
+		);
+		assert_eq!(
+			Vesting::<T>::vesting_balance(&target),
+			Some(T::MinVestedTransfer::get()),
+			"Lock not created",
+		);
+	}
 }
 
 #[cfg(test)]
@@ -209,6 +240,7 @@ mod tests {
 			assert_ok!(test_benchmark_vest_other_locked::<Test>());
 			assert_ok!(test_benchmark_vest_other_unlocked::<Test>());
 			assert_ok!(test_benchmark_vested_transfer::<Test>());
+			assert_ok!(test_benchmark_force_vested_transfer::<Test>());
 		});
 	}
 }
