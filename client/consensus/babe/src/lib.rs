@@ -1075,33 +1075,37 @@ pub fn register_babe_inherent_data_provider(
 /// it is missing.
 ///
 /// The epoch change tree should be pruned as blocks are finalized.
-pub struct BabeBlockImport<Block: BlockT, Client, I> {
+pub struct BabeBlockImport<Block: BlockT, Client, SC, I> {
 	inner: I,
 	client: Arc<Client>,
+	select_chain: SC,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	config: Config,
 }
 
-impl<Block: BlockT, I: Clone, Client> Clone for BabeBlockImport<Block, Client, I> {
+impl<Block: BlockT, Client, SC: Clone, I: Clone> Clone for BabeBlockImport<Block, Client, SC, I> {
 	fn clone(&self) -> Self {
 		BabeBlockImport {
 			inner: self.inner.clone(),
 			client: self.client.clone(),
+			select_chain: self.select_chain.clone(),
 			epoch_changes: self.epoch_changes.clone(),
 			config: self.config.clone(),
 		}
 	}
 }
 
-impl<Block: BlockT, Client, I> BabeBlockImport<Block, Client, I> {
+impl<Block: BlockT, Client, SC, I> BabeBlockImport<Block, Client, SC, I> {
 	fn new(
 		client: Arc<Client>,
+		select_chain: SC,
 		epoch_changes: SharedEpochChanges<Block, Epoch>,
 		block_import: I,
 		config: Config,
 	) -> Self {
 		BabeBlockImport {
 			client,
+			select_chain,
 			inner: block_import,
 			epoch_changes,
 			config,
@@ -1109,13 +1113,14 @@ impl<Block: BlockT, Client, I> BabeBlockImport<Block, Client, I> {
 	}
 }
 
-impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client, Inner> where
+impl<Block, Client, SC, Inner> BlockImport<Block> for BabeBlockImport<Block, Client, SC, Inner> where
 	Block: BlockT,
 	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
 	Inner::Error: Into<ConsensusError>,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>
 		+ AuxStore + ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync,
 	Client::Api: BabeApi<Block> + ApiExt<Block>,
+	SC: sp_consensus::SelectChain<Block>,
 {
 	type Error = ConsensusError;
 	type Transaction = sp_api::TransactionFor<Client, Block>;
@@ -1227,8 +1232,6 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
-		let info = self.client.info();
-
 		if let Some(next_epoch_descriptor) = next_epoch_digest {
 			old_epoch_changes = Some(epoch_changes.clone());
 
@@ -1317,24 +1320,26 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		// more primary blocks), if there's a tie we go with the longest
 		// chain.
 		block.fork_choice = {
-			let (last_best, last_best_number) = (info.best_hash, info.best_number);
+			let best_header = self.select_chain.best_chain()?;
+			let best_hash = best_header.hash();
+			let best_number = best_header.number();
 
-			let last_best_weight = if &last_best == block.header.parent_hash() {
+			let best_weight = if &best_hash == block.header.parent_hash() {
 				// the parent=genesis case is already covered for loading parent weight,
 				// so we don't need to cover again here.
 				parent_weight
 			} else {
-				aux_schema::load_block_weight(&*self.client, last_best)
+				aux_schema::load_block_weight(&*self.client, best_hash)
 					.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
 					.ok_or_else(
 						|| ConsensusError::ChainLookup("No block weight for parent header.".to_string())
 					)?
 			};
 
-			Some(ForkChoiceStrategy::Custom(if total_weight > last_best_weight {
+			Some(ForkChoiceStrategy::Custom(if total_weight > best_weight {
 				true
-			} else if total_weight == last_best_weight {
-				number > last_best_number
+			} else if total_weight == best_weight {
+				number > *best_number
 			} else {
 				false
 			}))
@@ -1398,12 +1403,14 @@ fn prune_finalized<Block, Client>(
 ///
 /// Also returns a link object used to correctly instantiate the import queue
 /// and background worker.
-pub fn block_import<Client, Block: BlockT, I>(
+pub fn block_import<Block: BlockT, Client, SC, I>(
 	config: Config,
 	wrapped_block_import: I,
 	client: Arc<Client>,
-) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)> where
+	select_chain: SC,
+) -> ClientResult<(BabeBlockImport<Block, Client, SC, I>, BabeLink<Block>)> where
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
+	SC: sp_consensus::SelectChain<Block>,
 {
 	let epoch_changes = aux_schema::load_epoch_changes::<Block, _>(&*client, &config)?;
 	let link = BabeLink {
@@ -1422,6 +1429,7 @@ pub fn block_import<Client, Block: BlockT, I>(
 
 	let import = BabeBlockImport::new(
 		client,
+		select_chain,
 		epoch_changes,
 		wrapped_block_import,
 		config,

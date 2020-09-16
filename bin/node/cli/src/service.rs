@@ -54,7 +54,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 			sc_rpc::SubscriptionTaskExecutor,
 		) -> node_rpc::IoHandler,
 		(
-			sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
+			sc_consensus_babe::BabeBlockImport<Block, FullClient, FullSelectChain, FullGrandpaBlockImport>,
 			grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
 			sc_consensus_babe::BabeLink<Block>,
 		),
@@ -83,6 +83,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		sc_consensus_babe::Config::get_or_compute(&*client)?,
 		grandpa_block_import,
 		client.clone(),
+		select_chain.clone(),
 	)?;
 
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
@@ -164,7 +165,7 @@ pub struct NewFullBase {
 pub fn new_full_base(
 	config: Configuration,
 	with_startup_data: impl FnOnce(
-		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
+		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullSelectChain, FullGrandpaBlockImport>,
 		&sc_consensus_babe::BabeLink<Block>,
 	)
 ) -> Result<NewFullBase, ServiceError> {
@@ -380,6 +381,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 		sc_consensus_babe::Config::get_or_compute(&*client)?,
 		grandpa_block_import,
 		client.clone(),
+		select_chain.clone(),
 	)?;
 
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
@@ -511,7 +513,7 @@ mod tests {
 					task_manager, inherent_data_providers, client, network, transaction_pool, ..
 				} = new_full_base(config,
 					|
-						block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _>,
+						block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _, _>,
 						babe_link: &sc_consensus_babe::BabeLink<Block>,
 					| {
 						setup_handles = Some((block_import.clone(), babe_link.clone()));

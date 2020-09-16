@@ -39,6 +39,7 @@ use sc_network_test::{Block as TestBlock, PeersClient};
 use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use sc_client_api::{BlockchainEvents, backend::TransactionFor};
+use substrate_test_runtime_client::DefaultTestClientBuilderExt;
 use log::debug;
 use std::{time::Duration, cell::RefCell, task::Poll};
 use rand::RngCore;
@@ -273,11 +274,14 @@ impl TestNetFactory for BabeTestNet {
 		let client = client.as_full().expect("only full clients are tested");
 		let inherent_data_providers = InherentDataProviders::new();
 
+		let (_, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+
 		let config = Config::get_or_compute(&*client).expect("config available");
 		let (block_import, link) = crate::block_import(
 			config,
 			client.clone(),
 			client.clone(),
+			longest_chain.clone(),
 		).expect("can initialize block-import");
 
 		let block_import = PanickingBlockImport(block_import);
@@ -302,8 +306,6 @@ impl TestNetFactory for BabeTestNet {
 	)
 		-> Self::Verifier
 	{
-		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
-
 		let client = client.as_full().expect("only full clients are used in test");
 		trace!(target: "babe", "Creating a verifier");
 
