@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -156,6 +156,7 @@ impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
 	}
 }
 
+/// A stream that waits for a block import or timeout.
 pub struct UntilImportedOrTimeout<Block: BlockT> {
 	import_notifications: ImportNotifications<Block>,
 	timeout: Duration,
@@ -163,6 +164,7 @@ pub struct UntilImportedOrTimeout<Block: BlockT> {
 }
 
 impl<Block: BlockT> UntilImportedOrTimeout<Block> {
+	/// Create a new stream using the given import notification and timeout duration.
 	pub fn new(
 		import_notifications: ImportNotifications<Block>,
 		timeout: Duration,
@@ -191,24 +193,18 @@ impl<Block: BlockT> Stream for UntilImportedOrTimeout<Block> {
 			}
 		}
 
-		self.inner_delay = match self.inner_delay.take() {
-			None => {
-				Some(Delay::new(self.timeout))
-			},
-			Some(d) => Some(d),
-		};
+		let timeout = self.timeout.clone();
+		let inner_delay = self.inner_delay.get_or_insert_with(|| Delay::new(timeout));
 
-		if let Some(ref mut inner_delay) = self.inner_delay {
-			match Future::poll(Pin::new(inner_delay), cx) {
-				Poll::Pending => (),
-				Poll::Ready(()) => {
-					fire = true;
-				},
-			}
+		match Future::poll(Pin::new(inner_delay), cx) {
+			Poll::Pending => (),
+			Poll::Ready(()) => {
+				fire = true;
+			},
 		}
 
 		if fire {
-			self.inner_delay = Some(Delay::new(self.timeout));
+			self.inner_delay = None;
 			Poll::Ready(Some(()))
 		} else {
 			Poll::Pending
