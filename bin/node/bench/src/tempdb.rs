@@ -119,7 +119,7 @@ impl Clone for TempDatabase {
 			self_dir.to_string_lossy(),
 			new_dir.path().to_string_lossy(),
 		);
-		let self_db_files = std::fs::read_dir(self_dir)
+		let self_db_files: Vec<std::path::PathBuf> = std::fs::read_dir(self_dir)
 			.expect("failed to list file in seed dir")
 			.map(|f_result|
 				f_result.expect("failed to read file in seed db")

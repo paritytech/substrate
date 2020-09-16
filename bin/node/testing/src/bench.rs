@@ -112,7 +112,7 @@ impl Clone for BenchDb {
 			seed_dir.to_string_lossy(),
 			dir.path().to_string_lossy(),
 		);
-		let seed_db_files = std::fs::read_dir(seed_dir)
+		let seed_db_files: Vec<PathBuf> = std::fs::read_dir(seed_dir)
 			.expect("failed to list file in seed dir")
 			.map(|f_result|
 				f_result.expect("failed to read file in seed db")
