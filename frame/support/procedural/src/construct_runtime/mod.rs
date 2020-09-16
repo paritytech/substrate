@@ -135,9 +135,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "frame-support");
 
-	let all_but_system_modules = modules.clone().into_iter()
-		.filter(|module| module.name != SYSTEM_MODULE_NAME)
-		.collect::<Vec<_>>();
+	let all_but_system_modules = modules.iter().filter(|module| module.name != SYSTEM_MODULE_NAME);
 
 	let outer_event = decl_outer_event(
 		&name,
@@ -147,7 +145,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 
 	let outer_origin = decl_outer_origin(
 		&name,
-		all_but_system_modules.iter(),
+		all_but_system_modules,
 		&system_module,
 		&scrate,
 	)?;
