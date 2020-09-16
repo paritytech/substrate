@@ -198,21 +198,6 @@ impl Parse for ModuleDeclaration {
 	}
 }
 
-impl ModuleDeclaration {
-	/// Get resolved module parts
-	pub fn module_parts(&self) -> &[ModulePart] {
-		&self.module_parts
-	}
-
-	pub fn find_part(&self, name: &str) -> Option<&ModulePart> {
-		self.module_parts.iter().find(|part| part.name() == name)
-	}
-
-	pub fn exists_part(&self, name: &str) -> bool {
-		self.find_part(name).is_some()
-	}
-}
-
 /// Parse [`ModulePart`]'s from a braces enclosed list that is split by commas, e.g.
 ///
 /// `{ Call, Event }`
