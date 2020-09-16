@@ -97,7 +97,6 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 						let time_passed = Instant::now() - last_blocktime;
 						if time_passed < cooldown {
 							let wait_further = cooldown - time_passed;
-							println!("poll_next: tx come, but cooling down, wait for {:?}", wait_further);
 							self.delay_for = Some(Delay::new(wait_further));
 							// Since we set the `Delay` future above, we call `self.poll_next(cx)`, so it eventually
 							//   polls the delay future.
@@ -105,7 +104,6 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 						}
 
 						// txs come after cooldown period, so we want to create a block immediately
-						println!("poll_next: Create block due to tx, after cooldown");
 						self.create_block_now_and_reset_delay();
 						Poll::Ready(Some(ec))
 					},
@@ -113,17 +111,10 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 						// Either no `last_blocktime`, so this is the first block created, or
 						//   no `cooldown` in hearbeat option, so we don't need to check cooldown and create
 						//   block immediately
-						println!("poll_next: Create block due to tx, first block or no cooldown");
 						self.create_block_now_and_reset_delay();
 						Poll::Ready(Some(ec))
 					}
 				}
-			},
-
-			// The `EngineCommand` stream comes to an end
-			Poll::Ready(None) => {
-				println!("poll_next: None");
-				Poll::Ready(None)
 			},
 
 			// `EngineCommand` stream pending, meaning no txs in `tx_pool`. We want to check if we need
@@ -135,7 +126,6 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 				match &mut self.delay_for {
 					Some(delay_for) => {
 						if let Poll::Ready(_) = delay_for.poll_unpin(cx) {
-							println!("poll_next: Creating a block: delay_for ready");
 							self.create_block_now_and_reset_delay();
 							return Poll::Ready(Some(EngineCommand::SealNewBlock {
 								// New blocks created can be empty as it may just be an empty heartbeat block.
@@ -146,17 +136,14 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 							}));
 						}
 
-						println!("poll_next: Pending - delay_for not ready");
 						Poll::Pending
 					},
-					None => {
-						// `delay_for` is None. This is the case when no heartbeat duration is set.
-						println!("poll_next: Pending - no heartbeat");
-						Poll::Pending
-					}
+					None => Poll::Pending,
 				}
 			}, // End of `Poll::Pending`
 
+			// The `EngineCommand` stream comes to an end
+			Poll::Ready(None) => Poll::Ready(None),
 		}
 	}
 }
