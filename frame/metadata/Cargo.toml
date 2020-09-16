@@ -1,6 +1,6 @@
 [package]
 name = "frame-metadata"
-version = "11.0.0-rc6"
+version = "12.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"

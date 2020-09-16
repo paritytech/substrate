@@ -1620,7 +1620,7 @@ dependencies = [
 
 [[package]]
 name = "frame-metadata"
-version = "11.0.0-rc6"
+version = "12.0.0-rc6"
 dependencies = [
  "parity-scale-codec",
  "serde",
