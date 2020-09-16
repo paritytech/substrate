@@ -154,8 +154,15 @@ decl_module! {
 		}
 
 		#[weight = 0]
-		fn increase_deposit(origin, who: T::AccountId, key: Vec<u8>) {
+		fn increase_deposit(origin, who: T::AccountId, key: Vec<u8>, extra_deposit: BalanceOf<T>) {
+			let sender = ensure_signed(origin)?
 
+			let key_len = key.len();
+			ensure(key_len <= T::MaxKeyLength::get(), Error::<T>::KeyTooLarge);
+
+			Comments::<T>::try_mutate(who, key, |mut comment| {
+				T::Currency::transfer(sender, who, )
+			});
 		}
 	}
 }
