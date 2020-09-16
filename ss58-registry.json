@@ -86,37 +86,37 @@
 			"prefix": 8,
 			"network": "karura",
 			"displayName": "Acala Karura Canary",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["KAR"],
+			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://acala.network/"
 		},
 		{
 			"prefix": 9,
 			"network": "reynolds",
 			"displayName": "Laminar Reynolds Canary",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["REY"],
+			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": null
+			"website": ["http://laminar.network/"]
 		},
 		{
 			"prefix": 10,
 			"network": "acala",
 			"displayName": "Acala",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["ACA"],
+			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://acala.network/"
 		},
 		{
 			"prefix": 11,
 			"network": "laminar",
 			"displayName": "Laminar",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["LAMI"],
+			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": null
+			"website": ["http://laminar.network/"]
 		},
 		{
 			"prefix": 12,
