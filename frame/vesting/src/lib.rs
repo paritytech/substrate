@@ -64,6 +64,7 @@ mod benchmarking;
 mod default_weights;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type MaxLocksOf<T> = <<T as Trait>::Currency as LockableCurrency<<T as frame_system::Trait>::AccountId>>::MaxLocks;
 
 pub trait WeightInfo {
 	fn vest_locked(l: u32, ) -> Weight;
@@ -86,10 +87,6 @@ pub trait Trait: frame_system::Trait {
 
 	/// The minimum amount transferred to call `vested_transfer`.
 	type MinVestedTransfer: Get<BalanceOf<Self>>;
-
-	/// The maximum number of balance locks for a user. Used for weight estimation,
-	/// and not enforced by this pallet.
-	type MaxLocks: Get<u32>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -212,8 +209,8 @@ decl_module! {
 		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
 		/// # </weight>
-		#[weight = T::WeightInfo::vest_locked(T::MaxLocks::get())
-			.max(T::WeightInfo::vest_unlocked(T::MaxLocks::get()))
+		#[weight = T::WeightInfo::vest_locked(<MaxLocksOf<T> as Get<u32>>::get())
+			.max(T::WeightInfo::vest_unlocked(<MaxLocksOf<T> as Get<u32>>::get()))
 		]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -235,8 +232,8 @@ decl_module! {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account
 		/// # </weight>
-		#[weight = T::WeightInfo::vest_other_locked(T::MaxLocks::get())
-			.max(T::WeightInfo::vest_other_unlocked(T::MaxLocks::get()))
+		#[weight = T::WeightInfo::vest_other_locked(<MaxLocksOf<T> as Get<u32>>::get())
+			.max(T::WeightInfo::vest_other_unlocked(<MaxLocksOf<T> as Get<u32>>::get()))
 		]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
@@ -259,7 +256,7 @@ decl_module! {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		/// # </weight>
-		#[weight = T::WeightInfo::vested_transfer(T::MaxLocks::get())]
+		#[weight = T::WeightInfo::vested_transfer(<MaxLocksOf<T> as Get<u32>>::get())]
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -296,7 +293,7 @@ decl_module! {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, Source Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
 		/// # </weight>
-		#[weight = T::WeightInfo::force_vested_transfer(T::MaxLocks::get())]
+		#[weight = T::WeightInfo::force_vested_transfer(<MaxLocksOf<T> as Get<u32>>::get())]
 		pub fn force_vested_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -453,6 +450,9 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 	}
+	parameter_types! {
+		pub const MaxLocks: u32 = 10;
+	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type DustRemoval = ();
@@ -460,6 +460,7 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type WeightInfo = ();
+		type MaxLocks = MaxLocks;
 	}
 	parameter_types! {
 		pub const MinVestedTransfer: u64 = 256 * 2;
@@ -469,7 +470,6 @@ mod tests {
 		type Currency = Balances;
 		type BlockNumberToBalance = Identity;
 		type MinVestedTransfer = MinVestedTransfer;
-		type MaxLocks = ();
 		type WeightInfo = ();
 	}
 	type System = frame_system::Module<Test>;

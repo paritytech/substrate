@@ -1110,6 +1110,9 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
+	/// The maximum number of locks a user should have on their account.
+	type MaxLocks;
+
 	/// Create a new balance lock on account `who`.
 	///
 	/// If the new lock is valid (i.e. not already expired), it will push the struct to
