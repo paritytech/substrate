@@ -119,6 +119,7 @@ pub struct WeakSubjectiveBlockImport<B: BlockT, I, C, S, Algorithm> {
 	client: Arc<C>,
 	select_chain: S,
 	algorithm: Algorithm,
+	enabled: bool,
 	_marker: PhantomData<B>,
 }
 
@@ -131,6 +132,7 @@ impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone> Clone
 			client: self.client.clone(),
 			select_chain: self.select_chain.clone(),
 			algorithm: self.algorithm.clone(),
+			enabled: self.enabled.clone(),
 			_marker: PhantomData,
 		}
 	}
@@ -152,12 +154,14 @@ impl<B, I, C, S, Algorithm> WeakSubjectiveBlockImport<B, I, C, S, Algorithm> whe
 		client: Arc<C>,
 		algorithm: Algorithm,
 		select_chain: S,
+		enabled: bool,
 	) -> Self {
 		Self {
 			inner,
 			client,
 			algorithm,
 			select_chain,
+			enabled,
 			_marker: PhantomData,
 		}
 	}
@@ -188,68 +192,70 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for WeakSubjectiveBlockImport<B, I, C
 		mut block: BlockImportParams<B, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		let best_header = self.select_chain.best_chain()
-			.map_err(|e| format!("Fetch best chain failed via select chain: {:?}", e))?;
-		let best_hash = best_header.hash();
-
-		let parent_hash = *block.header.parent_hash();
-		let route_from_best = sp_blockchain::tree_route(
-			self.client.as_ref(),
-			best_hash,
-			parent_hash,
-		).map_err(|e| format!("Find route from best failed: {:?}", e))?;
-
-		let retracted_len = route_from_best.retracted().len();
-
-		let best_aux = read_aux::<_, B>(
-			self.client.as_ref(),
-			&best_hash,
-		)?;
-		let common_aux = read_aux::<_, B>(
-			self.client.as_ref(),
-			&route_from_best.common_block().hash,
-		)?;
-
-		let best_difficulty_aux = self.inner.difficulty_of(&best_hash)?;
-		let parent_difficulty_aux = self.inner.difficulty_of(&parent_hash)?;
-		let common_difficulty_aux = self.inner.difficulty_of(&route_from_best.common_block().hash)?;
-
 		let new_receive_timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)
 			.map_err(|e| format!("Current time is before unix epoch: {:?}", e))?;
 
-		if let (
-			Some(best_aux),
-			Some(common_aux),
-			Some(best_difficulty_aux),
-			Some(parent_difficulty_aux),
-			Some(common_difficulty_aux),
-		) = (
-			best_aux,
-			common_aux,
-			best_difficulty_aux,
-			parent_difficulty_aux,
-			common_difficulty_aux,
-		) {
-			let best_total_difficulty = best_difficulty_aux.total_difficulty;
-			let common_total_difficulty = common_difficulty_aux.total_difficulty;
-			let new_total_difficulty = parent_difficulty_aux.total_difficulty +
-				self.inner.next_difficulty_of(&parent_hash)?;
+		if self.enabled {
+			let best_header = self.select_chain.best_chain()
+				.map_err(|e| format!("Fetch best chain failed via select chain: {:?}", e))?;
+			let best_hash = best_header.hash();
 
-			let params = WeakSubjectiveParams {
-				best_total_difficulty,
-				common_total_difficulty,
-				new_total_difficulty,
-				best_receive_timestamp: best_aux.receive_timestamp(),
-				new_receive_timestamp: new_receive_timestamp.clone(),
-				common_receive_timestamp: common_aux.receive_timestamp(),
-				retracted_len,
-			};
+			let parent_hash = *block.header.parent_hash();
+			let route_from_best = sp_blockchain::tree_route(
+				self.client.as_ref(),
+				best_hash,
+				parent_hash,
+			).map_err(|e| format!("Find route from best failed: {:?}", e))?;
 
-			match self.algorithm.weak_subjective_decide(params) {
-				WeakSubjectiveDecision::BlockReorg => {
-					block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
-				},
-				WeakSubjectiveDecision::Continue => (),
+			let retracted_len = route_from_best.retracted().len();
+
+			let best_aux = read_aux::<_, B>(
+				self.client.as_ref(),
+				&best_hash,
+			)?;
+			let common_aux = read_aux::<_, B>(
+				self.client.as_ref(),
+				&route_from_best.common_block().hash,
+			)?;
+
+			let best_difficulty_aux = self.inner.difficulty_of(&best_hash)?;
+			let parent_difficulty_aux = self.inner.difficulty_of(&parent_hash)?;
+			let common_difficulty_aux = self.inner.difficulty_of(&route_from_best.common_block().hash)?;
+
+			if let (
+				Some(best_aux),
+				Some(common_aux),
+				Some(best_difficulty_aux),
+				Some(parent_difficulty_aux),
+				Some(common_difficulty_aux),
+			) = (
+				best_aux,
+				common_aux,
+				best_difficulty_aux,
+				parent_difficulty_aux,
+				common_difficulty_aux,
+			) {
+				let best_total_difficulty = best_difficulty_aux.total_difficulty;
+				let common_total_difficulty = common_difficulty_aux.total_difficulty;
+				let new_total_difficulty = parent_difficulty_aux.total_difficulty +
+					self.inner.next_difficulty_of(&parent_hash)?;
+
+				let params = WeakSubjectiveParams {
+					best_total_difficulty,
+					common_total_difficulty,
+					new_total_difficulty,
+					best_receive_timestamp: best_aux.receive_timestamp(),
+					new_receive_timestamp: new_receive_timestamp.clone(),
+					common_receive_timestamp: common_aux.receive_timestamp(),
+					retracted_len,
+				};
+
+				match self.algorithm.weak_subjective_decide(params) {
+					WeakSubjectiveDecision::BlockReorg => {
+						block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
+					},
+					WeakSubjectiveDecision::Continue => (),
+				}
 			}
 		}
 
