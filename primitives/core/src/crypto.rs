@@ -494,6 +494,10 @@ ss58_address_format!(
 		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
 	CentrifugeAccount =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
+	MathChainAccount =>
+		(39, "mathchain", "MathChain mainnet, standard account (*25519).")
+	MathChainTestAccount =>
+		(40, "mathchain-testnet", "MathChain testnet, standard account (*25519).")
 	SubstrateAccount =>
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
 	Reserved43 =>
