@@ -1802,3 +1802,57 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 	assert_eq!(client.finality_notification_sinks().lock().len(), 0);
 }
 
+/// Test that ensures that we always send an import notification for re-orgs.
+#[test]
+fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifications() {
+	let mut client = TestClientBuilder::new().build();
+
+	let mut notification_stream = futures::executor::block_on_stream(
+		client.import_notification_stream()
+	);
+
+	let a1 = client.new_block_at(
+		&BlockId::Number(0),
+		Default::default(),
+		false,
+	).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::NetworkInitialSync, a1.clone()).unwrap();
+
+	let a2 = client.new_block_at(
+		&BlockId::Hash(a1.hash()),
+		Default::default(),
+		false,
+	).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::NetworkInitialSync, a2.clone()).unwrap();
+
+	let mut b1 = client.new_block_at(
+		&BlockId::Number(0),
+		Default::default(),
+		false,
+	).unwrap();
+	// needed to make sure B1 gets a different hash from A1
+	b1.push_transfer(Transfer {
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
+		amount: 1,
+		nonce: 0,
+	}).unwrap();
+	let b1 = b1.build().unwrap().block;
+	client.import(BlockOrigin::NetworkInitialSync, b1.clone()).unwrap();
+
+	let b2 = client.new_block_at(
+		&BlockId::Hash(b1.hash()),
+		Default::default(),
+		false,
+	).unwrap().build().unwrap().block;
+
+	// Should trigger a notification because we reorg
+	client.import_as_best(BlockOrigin::NetworkInitialSync, b2.clone()).unwrap();
+
+	// There should be one notification
+	let notification = notification_stream.next().unwrap();
+
+	// We should have a tree route of the re-org
+	let tree_route = notification.tree_route.unwrap();
+	assert_eq!(tree_route.enacted()[0].hash, b1.hash());
+}

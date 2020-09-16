@@ -2067,6 +2067,7 @@ macro_rules! __dispatch_impl_metadata {
 			where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
+			#[allow(dead_code)]
 			pub fn call_functions() -> &'static [$crate::dispatch::FunctionMetadata] {
 				$crate::__call_to_functions!($($rest)*)
 			}
@@ -2140,6 +2141,7 @@ macro_rules! __impl_module_constants_metadata {
 			$mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
+			#[allow(dead_code)]
 			pub fn module_constants_metadata() -> &'static [$crate::dispatch::ModuleConstantMetadata] {
 				// Create the `ByteGetter`s
 				$(
