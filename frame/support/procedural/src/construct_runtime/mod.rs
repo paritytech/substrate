@@ -450,26 +450,26 @@ fn assign_implicit_index(modules: &mut Vec<ModuleDeclaration>) -> syn::Result<()
 	let mut last_index: Option<u8> = None;
 
 	for module in modules {
-		match module.index {
-			Some(index) => {
-				last_index = Some(index);
-			},
-			None => {
-				let index = last_index.map_or(Some(0), |i| i.checked_add(1))
-					.ok_or_else(|| {
-						let msg = "module index doesn't fit into u8, index is 256";
-						syn::Error::new(module.module.span(), msg)
-					})?;
-				module.index = Some(index);
-				last_index = Some(index);
-			},
-		}
+		let final_index = match module.index {
+			Some(i) => i,
+			None => last_index.map_or(Some(0), |i| i.checked_add(1))
+				.ok_or_else(|| {
+					let msg = "Module index doesn't fit into u8, index is 256";
+					syn::Error::new(module.module.span(), msg)
+				})?,
+		};
 
-		if let Some(used_span) = indices.insert(module.index.unwrap(), module.module.span()) {
-			let span = module.module.span().join(used_span)
-				.expect("Modules are defined in same file");
-			let msg = format!("module index are conflicting, at index {}", module.index.unwrap());
-			return Err(syn::Error::new(span, msg));
+		module.index = Some(final_index);
+		last_index = Some(final_index);
+
+		if let Some(used_module) = indices.insert(final_index, module.module.clone()) {
+			let msg = format!(
+				"Module index are conflicting, at index {}, modules {} and {}",
+				final_index,
+				module.module,
+				used_module,
+			);
+			return Err(syn::Error::new(module.module.span(), msg));
 		}
 	}
 
