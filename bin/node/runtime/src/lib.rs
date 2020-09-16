@@ -699,8 +699,11 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 			frame_system::CheckWeight::<Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 		);
+		use sp_runtime::traits::SignedExtension;
 		sp_std::if_std!{ println!("Extra: {:?}", extra); }
 		sp_std::if_std!{ println!("Extra Encoded: {:?}", extra.encode()); }
+		sp_std::if_std!{ println!("Additional Signed: {:?}", extra.additional_signed()); }
+		sp_std::if_std!{ println!("Additional Signed Encoded: {:?}", extra.additional_signed().encode()); }
 		let raw_payload = SignedPayload::new(call, extra)
 			.map_err(|e| {
 				sp_std::if_std!{ println!("Error: {:?}", e); }
