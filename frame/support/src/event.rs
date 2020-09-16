@@ -816,5 +816,10 @@ mod tests {
 			event_module2::Event::<TestRuntime2>::TestEvent(3)
 		);
 		assert_eq!(runtime_2_event_module_2.encode()[0], 5);
+		
+		let runtime_2_event_module_3 = TestEventSystemRenamed::event_module3(
+			event_module3::Event::<TestRuntime2>::HiEvent
+		);
+		assert_eq!(runtime_2_event_module_3.encode()[0], 6);
 	}
 }
