@@ -26,7 +26,6 @@ sp-inherents = { version = "2.0.0-rc6", path = "../../../primitives/inherents" }
 sc-transaction-pool = { version = "2.0.0-rc6", path = "../../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0-rc6", path = "../../../primitives/transaction-pool" }
 sc-consensus-aura = { version = "0.8.0-rc6", path = "../../../client/consensus/aura" }
-sc-consensus-manual-seal = { version = "0.8.0-rc6", path = "../../../client/consensus/manual-seal" }
 sp-consensus-aura = { version = "0.8.0-rc6", path = "../../../primitives/consensus/aura" }
 sp-consensus = { version = "0.8.0-rc6", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.8.0-rc6", path = "../../../client/consensus/common" }
@@ -34,7 +33,6 @@ sc-finality-grandpa = { version = "0.8.0-rc6", path = "../../../client/finality-
 sp-finality-grandpa = { version = "2.0.0-rc6", path = "../../../primitives/finality-grandpa" }
 sc-client-api = { version = "2.0.0-rc6", path = "../../../client/api" }
 sp-runtime = { version = "2.0.0-rc6", path = "../../../primitives/runtime" }
-sp-timestamp = { version = "2.0.0-rc6", path = "../../../primitives/timestamp" }
 
 # These dependencies are used for the node template's RPCs
 jsonrpc-core = "14.0.3"
