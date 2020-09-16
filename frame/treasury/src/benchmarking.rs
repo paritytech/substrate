@@ -110,14 +110,14 @@ fn create_approved_proposals<T: Trait<I>, I: Instance>(n: u32) -> Result<(), &'s
 }
 
 // Create bounties that are approved for use in `on_initialize`.
-fn create_approved_bounties<TT: Trait<I>, I: Instance>(n: u32) -> Result<(), &'static str> {
+fn create_approved_bounties<T: Trait<I>, I: Instance>(n: u32) -> Result<(), &'static str> {
 	for i in 0 .. n {
 		let (caller, _curator, _fee, value, reason) = setup_bounty::<T, I>(i, MAX_BYTES);
 		Treasury::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
-		let bounty_id = BountyCount::get() - 1;
+		let bounty_id = BountyCount::<I>::get() - 1;
 		Treasury::<T, I>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
 	}
-	ensure!(BountyApprovals::get().len() == n as usize, "Not all bounty approved");
+	ensure!(BountyApprovals::<I>::get().len() == n as usize, "Not all bounty approved");
 	Ok(())
 }
 
@@ -147,7 +147,7 @@ fn create_bounty<T: Trait<I>, I: Instance>() -> Result<(
 	let (caller, curator, fee, value, reason) = setup_bounty::<T, I>(0, MAX_BYTES);
 	let curator_lookup = T::Lookup::unlookup(curator.clone());
 	Treasury::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
-	let bounty_id = BountyCount::get() - 1;
+	let bounty_id = BountyCount::<I>::get() - 1;
 	Treasury::<T, I>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
 	Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 	Treasury::<T, I>::assign_curator(RawOrigin::Root.into(), bounty_id, curator_lookup.clone(), fee)?;
@@ -287,13 +287,13 @@ benchmarks_instance! {
 	reject_bounty {
 		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, MAX_BYTES);
 		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
-		let bounty_id = BountyCount::get() - 1;
+		let bounty_id = BountyCount::<I>::get() - 1;
 	}: _(RawOrigin::Root, bounty_id)
 
 	approve_bounty {
 		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, MAX_BYTES);
 		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
-		let bounty_id = BountyCount::get() - 1;
+		let bounty_id = BountyCount::<I>::get() - 1;
 	}: _(RawOrigin::Root, bounty_id)
 
 	assign_curator {
@@ -301,7 +301,7 @@ benchmarks_instance! {
 		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, MAX_BYTES);
 		let curator_lookup = T::Lookup::unlookup(curator.clone());
 		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
-		let bounty_id = BountyCount::get() - 1;
+		let bounty_id = BountyCount::<I>::get() - 1;
 		Treasury::<T, _>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 	}: _(RawOrigin::Root, bounty_id, curator_lookup, fee)
@@ -311,7 +311,7 @@ benchmarks_instance! {
 		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, MAX_BYTES);
 		let curator_lookup = T::Lookup::unlookup(curator.clone());
 		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
-		let bounty_id = BountyCount::get() - 1;
+		let bounty_id = BountyCount::<I>::get() - 1;
 		Treasury::<T, _>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 		Treasury::<T, _>::assign_curator(RawOrigin::Root.into(), bounty_id, curator_lookup, fee)?;
@@ -322,7 +322,7 @@ benchmarks_instance! {
 		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, MAX_BYTES);
 		let curator_lookup = T::Lookup::unlookup(curator.clone());
 		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
-		let bounty_id = BountyCount::get() - 1;
+		let bounty_id = BountyCount::<I>::get() - 1;
 		Treasury::<T, _>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 		Treasury::<T, _>::assign_curator(RawOrigin::Root.into(), bounty_id, curator_lookup, fee)?;
@@ -330,20 +330,20 @@ benchmarks_instance! {
 
 	award_bounty {
 		setup_pod_account::<T, _>();
-		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
+		let (curator_lookup, bounty_id) = create_bounty::<T, _>()?;
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 
-		let bounty_id = BountyCount::get() - 1;
+		let bounty_id = BountyCount::<I>::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup)?;
 		let beneficiary = T::Lookup::unlookup(account("beneficiary", 0, SEED));
 	}: _(RawOrigin::Signed(curator), bounty_id, beneficiary)
 
 	claim_bounty {
 		setup_pod_account::<T, _>();
-		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
+		let (curator_lookup, bounty_id) = create_bounty::<T, _>()?;
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 
-		let bounty_id = BountyCount::get() - 1;
+		let bounty_id = BountyCount::<I>::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup)?;
 
 		let beneficiary = T::Lookup::unlookup(account("beneficiary", 0, SEED));
@@ -355,19 +355,19 @@ benchmarks_instance! {
 
 	cancel_bounty {
 		setup_pod_account::<T, _>();
-		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
+		let (curator_lookup, bounty_id) = create_bounty::<T, _>()?;
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 
-		let bounty_id = BountyCount::get() - 1;
+		let bounty_id = BountyCount::<I>::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup)?;
 	}: _(RawOrigin::Signed(curator), bounty_id)
 
 	extend_bounty_expiry {
 		setup_pod_account::<T, _>();
-		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
+		let (curator_lookup, bounty_id) = create_bounty::<T, _>()?;
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 
-		let bounty_id = BountyCount::get() - 1;
+		let bounty_id = BountyCount::<I>::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup)?;
 	}: _(RawOrigin::Signed(curator), bounty_id, Vec::new())
 
@@ -382,7 +382,7 @@ benchmarks_instance! {
 	on_initialize_bounties {
 		let b in 0 .. 100;
 		setup_pod_account::<T, _>();
-		create_approved_bounties::<T>(b)?;
+		create_approved_bounties::<T, _>(b)?;
 	}: {
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 	}
