@@ -44,20 +44,17 @@ use sp_consensus::{
 use sp_inherents::InherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justification};
 
+mod error;
+mod finalize_block;
+mod heartbeat_stream;
+mod seal_block;
+
+pub mod consensus;
+pub mod rpc;
+
 #[cfg(test)]
 mod tests;
 
-mod error;
-mod finalize_block;
-mod seal_block;
-pub mod consensus;
-mod heartbeat_stream;
-pub mod rpc;
-
-use self::{
-	finalize_block::{finalize_block, FinalizeBlockParams},
-	seal_new_block::{seal_new_block, SealBlockParams},
-};
 pub use self::{
 	consensus::ConsensusDataProvider,
 	error::Error,
@@ -158,6 +155,15 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpoo
 
 	/// Provider for inherents to include in blocks.
 	pub inherent_data_providers: InherentDataProviders,
+
+	/// How long is the heartbeat period, if there exists one.
+	pub heartbeat: Option<Duration>,
+
+	/// How long is the cool down period, if there exists one.
+	pub cooldown: Option<Duration>,
+
+	/// Whether the sealed new block is finalized or not.
+	pub finalize: bool,
 }
 
 /// Creates the background authorship task for the manual seal engine.
@@ -242,7 +248,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
 ///
 /// * If both `heartbeat` and `cooldown` options are not `None`, `heartbeat` must be larger than
 /// `cooldown`. Otherwise panic occurs.
-pub async fn run_instant_seal<B, BI, CB, E, C, A, SC, T>(
+pub async fn run_instant_seal<B, BI, CB, E, C, A, SC>(
 	InstantSealParams {
 		block_import,
 		env,
@@ -251,8 +257,11 @@ pub async fn run_instant_seal<B, BI, CB, E, C, A, SC, T>(
 		select_chain,
 		consensus_data_provider,
 		inherent_data_providers,
+		heartbeat,
+		cooldown,
+		finalize,
 		..
-	}: InstantSealParams<B, BI, E, C, A, SC, T>
+	}: InstantSealParams<B, BI, E, C, A, SC>
 )
 	where
 		A: txpool::ChainApi<Block=B> + 'static,
@@ -270,16 +279,16 @@ pub async fn run_instant_seal<B, BI, CB, E, C, A, SC, T>(
 	// into the transaction pool.
 	let commands_stream = pool.validated_pool()
 		.import_notification_stream()
-		.map(|_| {
+		.map(move |_| {
 			EngineCommand::SealNewBlock {
 				create_empty: false,
-				finalize: false,
+				finalize: finalize.clone(),
 				parent_hash: None,
 				sender: None,
 			}
 		});
 
-	let stream: Box<dyn Stream<Item = _> + Unpin + Send> = match (heartbeat, cooldown) {
+	let commands_stream: Box<dyn Stream<Item = _> + Unpin + Send> = match (heartbeat, cooldown) {
 		// If there is no heartbeat and no cooldown option. The simplest form is used.
 		// Otherwise, we use a HeartbeatStream adapter to wrap around the `commands_stream`.
 		(None, None) => Box::new(commands_stream),
@@ -295,7 +304,7 @@ pub async fn run_instant_seal<B, BI, CB, E, C, A, SC, T>(
 			env,
 			client,
 			pool,
-			stream,
+			commands_stream,
 			select_chain,
 			consensus_data_provider,
 			inherent_data_providers,
