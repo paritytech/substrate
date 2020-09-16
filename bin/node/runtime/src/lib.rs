@@ -702,8 +702,8 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 		use sp_runtime::traits::SignedExtension;
 		sp_std::if_std!{ println!("Extra: {:?}", extra); }
 		sp_std::if_std!{ println!("Extra Encoded: {:?}", extra.encode()); }
-		sp_std::if_std!{ println!("Additional Signed: {:?}", extra.additional_signed()); }
-		sp_std::if_std!{ println!("Additional Signed Encoded: {:?}", extra.additional_signed().encode()); }
+		sp_std::if_std!{ println!("Additional Signed: {:?}", extra.additional_signed().unwrap()); }
+		sp_std::if_std!{ println!("Additional Signed Encoded: {:?}", extra.additional_signed().unwrap().encode()); }
 		let raw_payload = SignedPayload::new(call, extra)
 			.map_err(|e| {
 				sp_std::if_std!{ println!("Error: {:?}", e); }
