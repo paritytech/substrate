@@ -87,21 +87,8 @@
 /// the default subscriber is doing nothing, so any spans or events happening before
 /// will not be recorded!
 ///
-/// **Note**: The subscriber eventually handling the global subscriptions *must*
-/// implement `clone_span` and do ref-counting on the spans alive properly. Because
-/// the regular `span` is being dropped when crossing the wasm-barrier, this
-/// implementation informs the subscriber with `clone_span` that they are keeping
-/// around a reference and thus, if the references are tracked correctly, should
-/// not exit the span when the outer, native span is dropped too early.
 
 mod types;
-
-// #[cfg(not(feature = "std"))]
-// #[macro_export]
-// mod wasm_tracing;
-
-// #[cfg(not(feature = "std"))]
-// pub use wasm_tracing::Span;
 
 #[cfg(feature = "std")]
 use tracing;

@@ -562,6 +562,8 @@ mod std_features {
 		tracing_core::metadata::Kind::EVENT
 	);
 
+	// FIXME: this could be done a lot in 0.2 if they opt for using `Cow<str,'static>` instead
+	//			https://github.com/tokio-rs/tracing/issues/922
 	impl From<&crate::WasmMetadata> for &'static tracing_core::Metadata<'static> {
 		fn from(wm: &crate::WasmMetadata) -> &'static tracing_core::Metadata<'static> {
 			match (&wm.level, wm.is_span) {
