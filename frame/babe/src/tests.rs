@@ -26,8 +26,7 @@ use frame_support::{
 use mock::*;
 use pallet_session::ShouldEndSession;
 use sp_consensus_babe::AllowedSlots;
-use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::crypto::{IsWrappedBy, Pair};
+use sp_core::crypto::Pair;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
 	74, 25, 49, 128, 53, 97, 244, 49,
@@ -64,18 +63,7 @@ fn first_block_epoch_zero_start() {
 
 	ext.execute_with(|| {
 		let genesis_slot = 100;
-
-		let pair = sp_core::sr25519::Pair::from_ref(&pairs[0]).as_ref();
-		let transcript = sp_consensus_babe::make_transcript(
-			&Babe::randomness(),
-			genesis_slot,
-			0,
-		);
-		let vrf_inout = pair.vrf_sign(transcript);
-		let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness = vrf_inout.0
-			.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
-		let vrf_output = VRFOutput(vrf_inout.0.to_output());
-		let vrf_proof = VRFProof(vrf_inout.1);
+		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
 
 		let first_vrf = vrf_output;
 		let pre_digest = make_pre_digest(
@@ -126,21 +114,6 @@ fn first_block_epoch_zero_start() {
 		// first epoch descriptor has same info as last.
 		assert_eq!(header.digest.logs[1], consensus_digest.clone())
 	})
-}
-
-fn make_vrf_output(
-	slot_number: u64,
-	pair: &sp_consensus_babe::AuthorityPair
-) -> (VRFOutput, VRFProof, [u8; 32]) {
-	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
-	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot_number, 0);
-	let vrf_inout = pair.vrf_sign(transcript);
-	let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness = vrf_inout.0
-		.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
-	let vrf_output = VRFOutput(vrf_inout.0.to_output());
-	let vrf_proof = VRFProof(vrf_inout.1);
-
-	(vrf_output, vrf_proof, vrf_randomness)
 }
 
 #[test]

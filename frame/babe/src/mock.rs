@@ -32,7 +32,7 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_io;
-use sp_core::{H256, U256, crypto::{KeyTypeId, Pair}};
+use sp_core::{H256, U256, crypto::{IsWrappedBy, KeyTypeId, Pair}};
 use sp_consensus_babe::{AuthorityId, AuthorityPair, SlotNumber};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_staking::SessionIndex;
@@ -359,6 +359,22 @@ pub fn make_secondary_vrf_pre_digest(
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
 	Digest { logs: vec![log] }
 }
+
+pub fn make_vrf_output(
+	slot_number: u64,
+	pair: &sp_consensus_babe::AuthorityPair
+) -> (VRFOutput, VRFProof, [u8; 32]) {
+	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
+	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot_number, 0);
+	let vrf_inout = pair.vrf_sign(transcript);
+	let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness = vrf_inout.0
+		.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
+	let vrf_output = VRFOutput(vrf_inout.0.to_output());
+	let vrf_proof = VRFProof(vrf_inout.1);
+
+	(vrf_output, vrf_proof, vrf_randomness)
+}
+
 
 pub fn new_test_ext(authorities_len: usize) -> sp_io::TestExternalities {
 	new_test_ext_with_pairs(authorities_len).1
