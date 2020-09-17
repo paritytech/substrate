@@ -3638,6 +3638,7 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-timestamp",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-trie",
  "structopt",
@@ -3830,13 +3831,13 @@ dependencies = [
 name = "node-rpc-client"
 version = "2.0.0-rc6"
 dependencies = [
- "env_logger",
  "futures 0.1.29",
  "hyper 0.12.35",
  "jsonrpc-core-client",
  "log",
  "node-primitives",
  "sc-rpc",
+ "sp-tracing",
 ]
 
 [[package]]
@@ -4876,7 +4877,6 @@ dependencies = [
 name = "pallet-staking"
 version = "2.0.0-rc6"
 dependencies = [
- "env_logger",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -4898,6 +4898,7 @@ dependencies = [
  "sp-staking",
  "sp-std",
  "sp-storage",
+ "sp-tracing",
  "static_assertions",
  "substrate-test-utils",
 ]
@@ -6242,7 +6243,6 @@ dependencies = [
  "bytes 0.5.6",
  "derive_more",
  "either",
- "env_logger",
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",
@@ -6262,6 +6262,7 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "sp-runtime",
+ "sp-tracing",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
 ]
@@ -6345,7 +6346,6 @@ dependencies = [
  "bip39",
  "chrono",
  "derive_more",
- "env_logger",
  "fdlimit",
  "futures 0.3.5",
  "hex",
@@ -6383,6 +6383,9 @@ dependencies = [
  "tempfile",
  "time",
  "tokio 0.2.22",
+ "tracing",
+ "tracing-log",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -6428,7 +6431,6 @@ name = "sc-client-db"
 version = "0.8.0-rc6"
 dependencies = [
  "blake2-rfc",
- "env_logger",
  "hash-db",
  "kvdb",
  "kvdb-memorydb",
@@ -6451,6 +6453,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-state-machine",
+ "sp-tracing",
  "sp-trie",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
@@ -6472,7 +6475,6 @@ name = "sc-consensus-aura"
 version = "0.8.0-rc6"
 dependencies = [
  "derive_more",
- "env_logger",
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "log",
@@ -6499,6 +6501,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-timestamp",
+ "sp-tracing",
  "sp-version",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
@@ -6510,7 +6513,6 @@ name = "sc-consensus-babe"
 version = "0.8.0-rc6"
 dependencies = [
  "derive_more",
- "env_logger",
  "fork-tree",
  "futures 0.3.5",
  "futures-timer 3.0.2",
@@ -6551,6 +6553,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-timestamp",
+ "sp-tracing",
  "sp-utils",
  "sp-version",
  "substrate-prometheus-endpoint",
@@ -6604,7 +6607,6 @@ version = "0.8.0-rc6"
 dependencies = [
  "assert_matches",
  "derive_more",
- "env_logger",
  "futures 0.3.5",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -6725,6 +6727,7 @@ dependencies = [
  "substrate-test-runtime",
  "test-case",
  "tracing",
+ "tracing-subscriber",
  "wasmi",
  "wat",
 ]
@@ -6783,7 +6786,6 @@ version = "0.8.0-rc6"
 dependencies = [
  "assert_matches",
  "derive_more",
- "env_logger",
  "finality-grandpa",
  "fork-tree",
  "futures 0.3.5",
@@ -6815,6 +6817,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-state-machine",
+ "sp-tracing",
  "sp-utils",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
@@ -6914,7 +6917,6 @@ dependencies = [
  "bytes 0.5.6",
  "derive_more",
  "either",
- "env_logger",
  "erased-serde",
  "fnv",
  "fork-tree",
@@ -6951,6 +6953,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-test-primitives",
+ "sp-tracing",
  "sp-utils",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime",
@@ -6985,7 +6988,6 @@ dependencies = [
 name = "sc-network-test"
 version = "0.8.0-rc6"
 dependencies = [
- "env_logger",
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",
@@ -7002,6 +7004,7 @@ dependencies = [
  "sp-consensus-babe",
  "sp-core",
  "sp-runtime",
+ "sp-tracing",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
@@ -7012,7 +7015,6 @@ name = "sc-offchain"
 version = "2.0.0-rc6"
 dependencies = [
  "bytes 0.5.6",
- "env_logger",
  "fnv",
  "futures 0.3.5",
  "futures-timer 3.0.2",
@@ -7033,6 +7035,7 @@ dependencies = [
  "sp-core",
  "sp-offchain",
  "sp-runtime",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-utils",
  "substrate-test-runtime-client",
@@ -7221,7 +7224,6 @@ dependencies = [
 name = "sc-service-test"
 version = "2.0.0-rc6"
 dependencies = [
- "env_logger",
  "fdlimit",
  "futures 0.1.29",
  "futures 0.3.5",
@@ -7245,6 +7247,7 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-storage",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-trie",
  "substrate-test-runtime",
@@ -7257,7 +7260,6 @@ dependencies = [
 name = "sc-state-db"
 version = "0.8.0-rc6"
 dependencies = [
- "env_logger",
  "log",
  "parity-scale-codec",
  "parity-util-mem",
@@ -8432,6 +8434,7 @@ dependencies = [
  "log",
  "rental",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -8692,7 +8695,6 @@ dependencies = [
 name = "substrate-frame-rpc-system"
 version = "2.0.0-rc6"
 dependencies = [
- "env_logger",
  "frame-system-rpc-runtime-api",
  "futures 0.3.5",
  "jsonrpc-core",
@@ -8709,6 +8711,7 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "sp-runtime",
+ "sp-tracing",
  "sp-transaction-pool",
  "substrate-test-runtime-client",
 ]
