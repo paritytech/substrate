@@ -102,7 +102,7 @@ extrinsic has completed successfully. However, you can optionally include a `ver
 benchmark, which can additionally verify any final conditions, such as the final state of your
 runtime.
 
-These additional `verify` blocks will not effect the results of your final benchmarking process.
+These additional `verify` blocks will not affect the results of your final benchmarking process.
 
 To run the tests, you need to enable the `runtime-benchmarks` feature flag. This may also
 mean you need to move into your node's binary folder. For example, with the Substrate repository,
