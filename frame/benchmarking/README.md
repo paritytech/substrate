@@ -22,8 +22,8 @@ import process running smoothly.
 To achieve this, we need to model how long it takes to run each function in the runtime by:
 
 * Creating custom benchmarking logic that executes a specific code path of a function.
-* Executing the benchmark in the Wasm execution environment, on a specific set of
-  hardware, with a custom runtime configuration, etc...
+* Executing the benchmark in the Wasm execution environment, on a specific set of hardware, with a
+  custom runtime configuration, etc...
 * Executing the benchmark across controlled ranges of possible values that may affect the result of
   the benchmark (called "components").
 * Executing the benchmark multiple times at each point in order to isolate and remove outliers.
@@ -105,9 +105,9 @@ runtime.
 
 These additional `verify` blocks will not affect the results of your final benchmarking process.
 
-To run the tests, you need to enable the `runtime-benchmarks` feature flag. This may also
-mean you need to move into your node's binary folder. For example, with the Substrate repository,
-this is how you would test the Balances pallet's benchmarks:
+To run the tests, you need to enable the `runtime-benchmarks` feature flag. This may also mean you
+need to move into your node's binary folder. For example, with the Substrate repository, this is how
+you would test the Balances pallet's benchmarks:
 
 ```bash
 cd bin/node/cli
