@@ -36,7 +36,7 @@ use sp_consensus::{
 use futures::{FutureExt, StreamExt, future::ready, channel::oneshot};
 use jsonrpc_pubsub::manager::SubscriptionManager;
 use sc_keystore::Store as Keystore;
-use log::{info, warn, error};
+use log::{info, warn};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 use sc_network::NetworkService;
 use parking_lot::RwLock;
@@ -571,17 +571,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 			task_manager.spawn_handle(), genesis_hash,
 		))
 	});
-
-	// Instrumentation
-	if let Some(tracing_targets) = config.tracing_targets.as_ref() {
-		let subscriber = sc_tracing::ProfilingSubscriber::new(
-			config.tracing_receiver, tracing_targets
-		);
-		match tracing::subscriber::set_global_default(subscriber) {
-			Ok(_) => (),
-			Err(e) => error!(target: "tracing", "Unable to set global default subscriber {}", e),
-		}
-	}
 
 	// Spawn informant task
 	spawn_handle.spawn("informant", sc_informant::build(
