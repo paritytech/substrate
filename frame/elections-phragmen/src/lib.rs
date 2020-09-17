@@ -122,6 +122,8 @@ pub mod migrations {
 	use frame_support::Twox64Concat;
 
 	/// Migrate from the old legacy voting bond (fixed) to the new one (per-vote dynamic).
+	///
+	/// Will only be triggered if storage version is V1.
 	pub fn migrate_deposits_to_per_vote<T: Trait>(old_deposit: BalanceOf<T>) -> Weight {
 		if <Module<T>>::pallet_storage_version() == StorageVersion::V1 {
 
@@ -129,15 +131,14 @@ pub mod migrations {
 				b"PhragmenElection",
 				b"Voting",
 			)
-			// remove previous elements as we move on
-			.drain()
 			.for_each(|(who, (stake, votes))| {
-				// Insert a new value into the same location.
+				// Insert a new value into the same location, thus no need to do `.drain()`.
 				let deposit = old_deposit;
 				let voter = Voter { votes, stake, deposit };
 				<Voting<T>>::insert(who, voter);
 			});
 
+			PalletStorageVersion::put(StorageVersion::V2);
 			Weight::max_value()
 		} else {
 			frame_support::debug::print!(
@@ -233,13 +234,6 @@ pub trait Trait: frame_system::Trait {
 
 	/// How much should be locked up in order to submit one's candidacy.
 	type CandidacyBond: Get<BalanceOf<Self>>;
-
-	/// DEPRECATED.
-	///
-	/// The old voting bond. Only used and needed for migrating to the new model.
-	/// // TODO: remove with all side effects after
-	/// https://github.com/paritytech/substrate/pull/7040 is merged and shipped.
-	type LegacyVotingBond: Get<BalanceOf<Self>>;
 
 	/// Base deposit associated with voting.
 	///
@@ -383,7 +377,6 @@ decl_module! {
 		fn deposit_event() = default;
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
-		const LegacyVotingBond: BalanceOf<T> = T::LegacyVotingBond::get();
 		const VotingBondBase: BalanceOf<T> = T::VotingBondBase::get();
 		const VotingBondFactor: BalanceOf<T> = T::VotingBondFactor::get();
 		const DesiredMembers: u32 = T::DesiredMembers::get();
@@ -1351,7 +1344,6 @@ mod tests {
 		type ChangeMembers = TestChangeMembers;
 		type InitializeMembers = ();
 		type CandidacyBond = CandidacyBond;
-		type LegacyVotingBond = VotingBondBase;
 		type VotingBondBase = VotingBondBase;
 		type VotingBondFactor = VotingBondFactor;
 		type TermDuration = TermDuration;
