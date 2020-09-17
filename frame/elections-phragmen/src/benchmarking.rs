@@ -70,7 +70,7 @@ fn candidate_count<T: Trait>() -> u32 {
 
 /// Get the number of votes of a voter.
 fn vote_count_of<T: Trait>(who: &T::AccountId) -> u32 {
-	<Voting<T>>::get(who).1.len() as u32
+	<Voting<T>>::get(who).votes.len() as u32
 }
 
 /// A `DefunctVoter` struct with correct value

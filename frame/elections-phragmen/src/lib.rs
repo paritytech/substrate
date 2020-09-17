@@ -126,9 +126,9 @@ pub mod migrations {
 	/// Will only be triggered if storage version is V1.
 	pub fn migrate_to_recorded_deposit<T: Trait>(old_deposit: BalanceOf<T>) -> Weight {
 		if <Module<T>>::pallet_storage_version() == StorageVersion::V1 {
-			let module_storage_name = <Voting<T>>::storage_prefix();
+			let mut count = 0;
 			<StorageKeyIterator<T::AccountId, (BalanceOf<T>, Vec<T::AccountId>), Twox64Concat>>::new(
-				module_storage_name,
+				<Voting<T>>::module_prefix(),
 				b"Voting",
 			)
 			.for_each(|(who, (stake, votes))| {
@@ -136,11 +136,13 @@ pub mod migrations {
 				let deposit = old_deposit;
 				let voter = Voter { votes, stake, deposit };
 				<Voting<T>>::insert(who, voter);
+				count += 1;
 			});
 
 			PalletStorageVersion::put(StorageVersion::V2);
 			frame_support::debug::info!(
-				"🏛 pallet-elections-phragmen: Storage migrated to V2."
+				"🏛 pallet-elections-phragmen: {} voters migrated to V2.",
+				count,
 			);
 			Weight::max_value()
 		} else {
@@ -181,13 +183,13 @@ pub struct DefunctVoter<AccountId> {
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
 pub struct Voter<AccountId, Balance> {
 	/// The members being backed.
-	votes: Vec<AccountId>,
+	pub votes: Vec<AccountId>,
 	/// The amount of stake placed on this vote.
-	stake: Balance,
+	pub stake: Balance,
 	/// The amount of deposit reserved for this vote.
 	///
 	/// To be unreserved upon removal.
-	deposit: Balance,
+	pub deposit: Balance,
 }
 
 pub trait WeightInfo {
