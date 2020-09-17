@@ -134,7 +134,7 @@ parameter_types! {
 	pub const BountyDepositBase: u64 = 80;
 	pub const BountyDepositPayoutDelay: u64 = 3;
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
-	pub const BountyDuration: u32 = 20;
+	pub const BountyUpdatePeriod: u32 = 20;
 	pub const MaximumReasonLength: u32 = 16384;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: u64 = 1;
@@ -157,7 +157,7 @@ impl Trait for Test {
 	type Burn = Burn;
 	type BountyDepositBase = BountyDepositBase;
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
-	type BountyDuration = BountyDuration;
+	type BountyUpdatePeriod = BountyUpdatePeriod;
 	type BountyCuratorDeposit = BountyCuratorDeposit;
 	type BountyValueMinimum = BountyValueMinimum;
 	type MaximumReasonLength = MaximumReasonLength;

@@ -239,7 +239,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	type BountyDepositPayoutDelay: Get<Self::BlockNumber>;
 
 	/// Bounty duration in blocks.
-	type BountyDuration: Get<Self::BlockNumber>;
+	type BountyUpdatePeriod: Get<Self::BlockNumber>;
 
 	/// Percentage of the curator fee that will be reserved upfront as deposit for bounty curator.
 	type BountyCuratorDeposit: Get<Permill>;
@@ -996,7 +996,7 @@ decl_module! {
 						T::Currency::reserve(curator, deposit)?;
 						bounty.curator_deposit = deposit;
 
-						let update_due = system::Module::<T>::block_number() + T::BountyDuration::get();
+						let update_due = system::Module::<T>::block_number() + T::BountyUpdatePeriod::get();
 						bounty.status = BountyStatus::Active { curator: curator.clone(), update_due };
 
 						Ok(())
@@ -1150,7 +1150,7 @@ decl_module! {
 				match bounty.status {
 					BountyStatus::Active { ref curator, ref mut update_due } => {
 						ensure!(*curator == signer, Error::<T, I>::RequireCurator);
-						*update_due = (system::Module::<T>::block_number() + T::BountyDuration::get()).max(*update_due);
+						*update_due = (system::Module::<T>::block_number() + T::BountyUpdatePeriod::get()).max(*update_due);
 					},
 					_ => return Err(Error::<T, I>::UnexpectedStatus.into()),
 				}

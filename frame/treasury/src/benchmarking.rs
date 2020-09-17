@@ -150,7 +150,7 @@ fn create_bounty<T: Trait<I>, I: Instance>() -> Result<(
 	let bounty_id = BountyCount::<I>::get() - 1;
 	Treasury::<T, I>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
 	Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
-	Treasury::<T, I>::assign_curator(RawOrigin::Root.into(), bounty_id, curator_lookup.clone(), fee)?;
+	Treasury::<T, I>::propose_curator(RawOrigin::Root.into(), bounty_id, curator_lookup.clone(), fee)?;
 	Treasury::<T, I>::accept_curator(RawOrigin::Signed(curator).into(), bounty_id)?;
 	Ok((curator_lookup, bounty_id))
 }
@@ -284,19 +284,13 @@ benchmarks_instance! {
 		let (caller, curator, fee, value, description) = setup_bounty::<T, _>(0, d);
 	}: _(RawOrigin::Signed(caller), value, description)
 
-	reject_bounty {
-		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, MAX_BYTES);
-		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
-		let bounty_id = BountyCount::<I>::get() - 1;
-	}: _(RawOrigin::Root, bounty_id)
-
 	approve_bounty {
 		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, MAX_BYTES);
 		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<I>::get() - 1;
 	}: _(RawOrigin::Root, bounty_id)
 
-	assign_curator {
+	propose_curator {
 		setup_pod_account::<T, _>();
 		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, MAX_BYTES);
 		let curator_lookup = T::Lookup::unlookup(curator.clone());
@@ -306,16 +300,15 @@ benchmarks_instance! {
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 	}: _(RawOrigin::Root, bounty_id, curator_lookup, fee)
 
+	// Worst case when curator is inactive and any sender unassigns the curator.
 	unassign_curator {
 		setup_pod_account::<T, _>();
-		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, MAX_BYTES);
-		let curator_lookup = T::Lookup::unlookup(curator.clone());
-		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
-		let bounty_id = BountyCount::<I>::get() - 1;
-		Treasury::<T, _>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
+		let (curator_lookup, bounty_id) = create_bounty::<T, _>()?;
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
-		Treasury::<T, _>::assign_curator(RawOrigin::Root.into(), bounty_id, curator_lookup, fee)?;
-	}: _(RawOrigin::Root, bounty_id)
+		let bounty_id = BountyCount::<I>::get() - 1;
+		frame_system::Module::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1.into());
+		let caller = whitelisted_caller();
+	}: _(RawOrigin::Signed(caller), bounty_id)
 
 	accept_curator {
 		setup_pod_account::<T, _>();
@@ -325,7 +318,7 @@ benchmarks_instance! {
 		let bounty_id = BountyCount::<I>::get() - 1;
 		Treasury::<T, _>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
-		Treasury::<T, _>::assign_curator(RawOrigin::Root.into(), bounty_id, curator_lookup, fee)?;
+		Treasury::<T, _>::propose_curator(RawOrigin::Root.into(), bounty_id, curator_lookup, fee)?;
 	}: _(RawOrigin::Signed(curator), bounty_id)
 
 	award_bounty {
@@ -353,14 +346,19 @@ benchmarks_instance! {
 
 	}: _(RawOrigin::Signed(curator), bounty_id)
 
-	cancel_bounty {
+	close_bounty_proposed {
+		setup_pod_account::<T, _>();
+		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, 0);
+		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
+		let bounty_id = BountyCount::<I>::get() - 1;
+	}: close_bounty(RawOrigin::Root, bounty_id)
+
+	close_bounty_active {
 		setup_pod_account::<T, _>();
 		let (curator_lookup, bounty_id) = create_bounty::<T, _>()?;
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
-
 		let bounty_id = BountyCount::<I>::get() - 1;
-		let curator = T::Lookup::lookup(curator_lookup)?;
-	}: _(RawOrigin::Signed(curator), bounty_id)
+	}: close_bounty(RawOrigin::Root, bounty_id)
 
 	extend_bounty_expiry {
 		setup_pod_account::<T, _>();
@@ -407,13 +405,13 @@ mod tests {
 			assert_ok!(test_benchmark_close_tip::<Test>());
 			assert_ok!(test_benchmark_propose_bounty::<Test>());
 			assert_ok!(test_benchmark_approve_bounty::<Test>());
-			assert_ok!(test_benchmark_reject_bounty::<Test>());
-			assert_ok!(test_benchmark_assign_curator::<Test>());
+			assert_ok!(test_benchmark_propose_curator::<Test>());
 			assert_ok!(test_benchmark_unassign_curator::<Test>());
 			assert_ok!(test_benchmark_accept_curator::<Test>());
 			assert_ok!(test_benchmark_award_bounty::<Test>());
 			assert_ok!(test_benchmark_claim_bounty::<Test>());
-			assert_ok!(test_benchmark_cancel_bounty::<Test>());
+			assert_ok!(test_benchmark_close_bounty_proposed::<Test>());
+			assert_ok!(test_benchmark_close_bounty_active::<Test>());
 			assert_ok!(test_benchmark_extend_bounty_expiry::<Test>());
 			assert_ok!(test_benchmark_on_initialize_proposals::<Test>());
 			assert_ok!(test_benchmark_on_initialize_bounties::<Test>());
