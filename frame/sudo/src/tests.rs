@@ -18,9 +18,9 @@
 //! Tests for the module.
 
 use super::*;
-use mock::{ 
+use mock::{
 	Sudo, SudoCall, Origin, Call, Test, new_test_ext, LoggerCall, Logger, System, TestEvent,
-}; 
+};
 use frame_support::{assert_ok, assert_noop};
 
 #[test]
@@ -28,8 +28,8 @@ fn test_setup_works() {
 	// Environment setup, logger storage, and sudo `key` retrieval should work as expected.
 	new_test_ext(1).execute_with(|| {
 		assert_eq!(Sudo::key(),  1u64);
-		assert_eq!(Logger::i32_log(), vec![]);
-		assert_eq!(Logger::account_log(), vec![]);
+		assert!(Logger::i32_log().is_empty());
+		assert!(Logger::account_log().is_empty());
 	});
 }
 
@@ -40,8 +40,8 @@ fn sudo_basics() {
 		// A privileged function should work when `sudo` is passed the root `key` as `origin`.
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
 		assert_ok!(Sudo::sudo(Origin::signed(1), call));
-		assert_eq!(Logger::i32_log(), vec![42i32]); 
-		
+		assert_eq!(Logger::i32_log(), vec![42i32]);
+
 		// A privileged function should not work when `sudo` is passed a non-root `key` as `origin`.
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
 		assert_noop!(Sudo::sudo(Origin::signed(2), call), Error::<Test>::RequireSudo);
@@ -58,7 +58,7 @@ fn sudo_emits_events_correctly() {
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1)));
 		assert_ok!(Sudo::sudo(Origin::signed(1), call));
 		let expected_event = TestEvent::sudo(RawEvent::Sudid(Ok(())));
-		assert!(System::events().iter().any(|a| a.event == expected_event)); 
+		assert!(System::events().iter().any(|a| a.event == expected_event));
 	})
 }
 
@@ -68,16 +68,16 @@ fn sudo_unchecked_weight_basics() {
 		// A privileged function should work when `sudo` is passed the root `key` as origin.
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
 		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1_000));
-		assert_eq!(Logger::i32_log(), vec![42i32]); 
+		assert_eq!(Logger::i32_log(), vec![42i32]);
 
 		// A privileged function should not work when called with a non-root `key`.
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
 		assert_noop!(
-			Sudo::sudo_unchecked_weight(Origin::signed(2), call, 1_000), 
+			Sudo::sudo_unchecked_weight(Origin::signed(2), call, 1_000),
 			Error::<Test>::RequireSudo,
 		);
 		// `I32Log` is unchanged after unsuccessful call.
-		assert_eq!(Logger::i32_log(), vec![42i32]); 
+		assert_eq!(Logger::i32_log(), vec![42i32]);
 
 		// Controls the dispatched weight.
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1)));
@@ -103,7 +103,7 @@ fn sudo_unchecked_weight_emits_events_correctly() {
 
 #[test]
 fn set_key_basics() {
-	new_test_ext(1).execute_with(|| {	
+	new_test_ext(1).execute_with(|| {
 		// A root `key` can change the root `key`
 		assert_ok!(Sudo::set_key(Origin::signed(1), 2));
 		assert_eq!(Sudo::key(),  2u64);
@@ -117,7 +117,7 @@ fn set_key_basics() {
 
 #[test]
 fn set_key_emits_events_correctly() {
-	new_test_ext(1).execute_with(|| {	
+	new_test_ext(1).execute_with(|| {
 		// Set block number to 1 because events are not emitted on block 0.
 		System::set_block_number(1);
 
@@ -138,8 +138,8 @@ fn sudo_as_basics() {
 		// A privileged function will not work when passed to `sudo_as`.
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
-		assert_eq!(Logger::i32_log(), vec![]); 
-		assert_eq!(Logger::account_log(), vec![]);
+		assert!(Logger::i32_log().is_empty());
+		assert!(Logger::account_log().is_empty());
 
 		// A non-privileged function should not work when called with a non-root `key`.
 		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
@@ -156,7 +156,7 @@ fn sudo_as_basics() {
 
 #[test]
 fn sudo_as_emits_events_correctly() {
-		new_test_ext(1).execute_with(|| {	
+		new_test_ext(1).execute_with(|| {
 		// Set block number to 1 because events are not emitted on block 0.
 		System::set_block_number(1);
 

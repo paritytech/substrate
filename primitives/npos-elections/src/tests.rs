@@ -1002,6 +1002,7 @@ mod solution_type {
 		);
 		assert_eq!(compact.len(), 4);
 		assert_eq!(compact.edge_count(), 2 + 4);
+		assert_eq!(compact.unique_targets(), vec![10, 11, 20, 40, 50, 51]);
 	}
 
 	#[test]
@@ -1097,6 +1098,11 @@ mod solution_type {
 			}
 		);
 
+		assert_eq!(
+			compacted.unique_targets(),
+			vec![0, 1, 2, 3, 4, 5, 6, 7, 8],
+		);
+
 		let voter_at = |a: u32| -> Option<AccountId> {
 			voters.get(<u32 as TryInto<usize>>::try_into(a).unwrap()).cloned()
 		};
@@ -1108,6 +1114,69 @@ mod solution_type {
 			compacted.into_assignment(voter_at, target_at).unwrap(),
 			assignments,
 		);
+	}
+
+	#[test]
+	fn unique_targets_len_edge_count_works() {
+		const ACC: TestAccuracy = TestAccuracy::from_percent(10);
+
+		// we don't really care about voters here so all duplicates. This is not invalid per se.
+		let compact = TestSolutionCompact {
+			votes1: vec![(99, 1), (99, 2)],
+			votes2: vec![
+				(99, (3, ACC.clone()), 7),
+				(99, (4, ACC.clone()), 8),
+			],
+			votes3: vec![
+				(99, [(11, ACC.clone()), (12, ACC.clone())], 13),
+			],
+			// ensure the last one is also counted.
+			votes16: vec![
+				(
+					99,
+					[
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+					],
+					67,
+				)
+			],
+			..Default::default()
+		};
+
+		assert_eq!(compact.unique_targets(), vec![1, 2, 3, 4, 7, 8, 11, 12, 13, 66, 67]);
+		assert_eq!(compact.edge_count(), 2 + (2 * 2) + 3 + 16);
+		assert_eq!(compact.len(), 6);
+
+		// this one has some duplicates.
+		let compact = TestSolutionCompact {
+			votes1: vec![(99, 1), (99, 1)],
+			votes2: vec![
+				(99, (3, ACC.clone()), 7),
+				(99, (4, ACC.clone()), 8),
+			],
+			votes3: vec![
+				(99, [(11, ACC.clone()), (11, ACC.clone())], 13),
+			],
+			..Default::default()
+		};
+
+		assert_eq!(compact.unique_targets(), vec![1, 3, 4, 7, 8, 11, 13]);
+		assert_eq!(compact.edge_count(), 2 + (2 * 2) + 3);
+		assert_eq!(compact.len(), 5);
 	}
 
 	#[test]
@@ -1165,7 +1234,7 @@ mod solution_type {
 		assert_eq!(compacted.unwrap_err(), PhragmenError::CompactTargetOverflow);
 	}
 
-		#[test]
+	#[test]
 	fn zero_target_count_is_ignored() {
 		let voters = vec![1 as AccountId, 2];
 		let targets = vec![10 as AccountId, 11];

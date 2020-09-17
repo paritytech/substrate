@@ -671,6 +671,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type MaxLocks = ();
 		type WeightInfo = ();
 	}
 	thread_local! {
