@@ -233,8 +233,13 @@ pub fn open_database<Block: BlockT>(
 			let path = path.to_str()
 				.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
 
+			let state_col = match db_type {
+				DatabaseType::Full => crate::columns::STATE,
+				DatabaseType::Light => crate::light::columns::CACHE,
+			};
+
 			for i in 0..NUM_COLUMNS {
-				if i == crate::columns::STATE {
+				if i == state_col {
 					memory_budget.insert(i, state_col_budget);
 				} else {
 					memory_budget.insert(i, other_col_budget);
@@ -262,7 +267,7 @@ pub fn open_database<Block: BlockT>(
 		},
 		#[cfg(feature = "with-parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
-			crate::parity_db::open(&path)
+			crate::parity_db::open(&path, db_type)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
 		#[cfg(not(feature = "with-parity-db"))]
