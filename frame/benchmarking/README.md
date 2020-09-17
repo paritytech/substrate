@@ -22,8 +22,8 @@ import process running smoothly.
 To achieve this, we need to model how long it takes to run each function in the runtime by:
 
 * Creating custom benchmarking logic that executes a specific code path of a function.
-* Executing the benchmark within the expected execution environment, i.e. Wasm, any specific
-  hardware, custom runtime configuration, etc...
+* Executing the benchmark in the Wasm execution environment, on a specific set of
+  hardware, with a custom runtime configuration, etc...
 * Executing the benchmark across controlled ranges of possible values that may affect the result of
   the benchmark (called "components").
 * Executing the benchmark multiple times at each point in order to isolate and remove outliers.
@@ -103,11 +103,11 @@ extrinsic has completed successfully. However, you can optionally include a `ver
 benchmark, which can additionally verify any final conditions, such as the final state of your
 runtime.
 
-These additional `verify` blocks will not effect the results of your final benchmarking process.
+These additional `verify` blocks will not affect the results of your final benchmarking process.
 
-To run the tests, you need to be sure to enable the `runtime-benchmarks` feature flag. This may also
+To run the tests, you need to enable the `runtime-benchmarks` feature flag. This may also
 mean you need to move into your node's binary folder. For example, with the Substrate repository,
-this is how you would test the Balances Pallet's benchmarks:
+this is how you would test the Balances pallet's benchmarks:
 
 ```bash
 cd bin/node/cli
@@ -173,7 +173,7 @@ implementation of the `WeightInfo` trait. This means that you will be able to us
 Substrate pallets while still keeping your network safe for your specific configuration and
 requirements.
 
-To get a full list of available options when running benchmarks, simply execute:
+To get a full list of available options when running benchmarks, run:
 
 ```bash
 ./target/release/substrate benchmark --help
