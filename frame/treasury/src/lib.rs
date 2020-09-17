@@ -911,12 +911,10 @@ decl_module! {
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
-				macro_rules! slash_curator {
-					($curator:ident) => {
-						let imbalance = T::Currency::slash_reserved($curator, bounty.curator_deposit).0;
-						T::OnSlash::on_unbalanced(imbalance);
-						bounty.curator_deposit = Zero::zero();
-					}
+				let slash_curator = |curator: &T::AccountId, curator_deposit: &mut BalanceOf<T, I>| {
+					let imbalance = T::Currency::slash_reserved(curator, *curator_deposit).0;
+					T::OnSlash::on_unbalanced(imbalance);
+					*curator_deposit = Zero::zero();
 				};
 
 				match bounty.status {
@@ -934,7 +932,7 @@ decl_module! {
 						match maybe_sender {
 							// If the `RejectOrigin` is calling this function, slash the curator.
 							None => {
-								slash_curator!(curator);
+								slash_curator(curator, &mut bounty.curator_deposit);
 								// Continue to change bounty status below...
 							},
 							Some(sender) => {
@@ -943,7 +941,7 @@ decl_module! {
 								if sender != *curator {
 									let block_number = system::Module::<T>::block_number();
 									if *update_due < block_number {
-										slash_curator!(curator);
+										slash_curator(curator, &mut bounty.curator_deposit);
 										// Continue to change bounty status below...
 									} else {
 										// Curator has more time to give an update.
@@ -963,7 +961,7 @@ decl_module! {
 						// By doing so, they are claiming the curator is acting maliciously, so
 						// we slash the curator.
 						ensure!(maybe_sender.is_none(), BadOrigin);
-						slash_curator!(curator);
+						slash_curator(curator, &mut bounty.curator_deposit);
 						// Continue to change bounty status below...
 					}
 				};
