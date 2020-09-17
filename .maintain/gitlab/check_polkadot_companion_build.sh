@@ -88,6 +88,7 @@ fi
 cd ..
 $CARGO_HOME/bin/diener --substrate --branch $CI_COMMIT_REF_NAME --git https://gitlab.parity.io/parity/substrate.git --path polkadot
 cd polkadot
+git diff
 
 # Test Polkadot pr or master branch with this Substrate commit.
 time cargo test --all --release --verbose
