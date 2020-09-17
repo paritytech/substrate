@@ -26,7 +26,6 @@
 
 use rustc_hash::FxHashMap;
 use std::fmt;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
@@ -35,21 +34,18 @@ use tracing::{
 	event::Event,
 	field::{Visit, Field},
 	Level,
-	metadata::Metadata,
 	span::{Attributes, Id, Record},
 	subscriber::Subscriber,
 };
-use tracing_subscriber::CurrentSpan;
+use tracing_subscriber::{CurrentSpan, layer::{Layer, Context}};
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
-const PROXY_TARGET: &'static str = "sp_tracing::proxy";
 
 /// Responsible for assigning ids to new spans, which are not re-used.
-pub struct ProfilingSubscriber {
-	next_id: AtomicU64,
+pub struct ProfilingLayer {
 	targets: Vec<(String, Level)>,
 	trace_handler: Box<dyn TraceHandler>,
 	span_data: Mutex<FxHashMap<Id, SpanDatum>>,
@@ -216,12 +212,12 @@ impl slog::Value for Values {
 	}
 }
 
-impl ProfilingSubscriber {
+impl ProfilingLayer {
 	/// Takes a `TracingReceiver` and a comma separated list of targets,
 	/// either with a level: "pallet=trace,frame=debug"
 	/// or without: "pallet,frame" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
-	pub fn new(receiver: TracingReceiver, targets: &str) -> ProfilingSubscriber {
+	pub fn new(receiver: TracingReceiver, targets: &str) -> Self {
 		match receiver {
 			TracingReceiver::Log => Self::new_with_handler(Box::new(LogTraceHandler), targets),
 			TracingReceiver::Telemetry => Self::new_with_handler(
@@ -237,11 +233,10 @@ impl ProfilingSubscriber {
 	/// or without: "pallet" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
 	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str)
-		-> ProfilingSubscriber
+		-> Self
 	{
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
-		ProfilingSubscriber {
-			next_id: AtomicU64::new(1),
+		Self {
 			targets,
 			trace_handler,
 			span_data: Mutex::new(FxHashMap::default()),
@@ -276,25 +271,14 @@ fn parse_target(s: &str) -> (String, Level) {
 	}
 }
 
-impl Subscriber for ProfilingSubscriber {
-	fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-		if metadata.target() == PROXY_TARGET || self.check_target(metadata.target(), metadata.level()) {
-			log::debug!(target: "tracing", "Enabled target: {}, level: {}", metadata.target(), metadata.level());
-			true
-		} else {
-			log::debug!(target: "tracing", "Disabled target: {}, level: {}", metadata.target(), metadata.level());
-			false
-		}
-	}
-
-	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
-		let id = Id::from_u64(self.next_id.fetch_add(1, Ordering::Relaxed));
+impl<S: Subscriber> Layer<S> for ProfilingLayer {
+	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, _ctx: Context<S>) {
 		let mut values = Values::default();
 		attrs.record(&mut values);
 		// If this is a wasm trace, check if target/level is enabled
 		if let Some(wasm_target) = values.string_values.get(WASM_TARGET_KEY) {
 			if !self.check_target(wasm_target, attrs.metadata().level()) {
-				return id
+				return
 			}
 		}
 		let span_datum = SpanDatum {
@@ -309,19 +293,16 @@ impl Subscriber for ProfilingSubscriber {
 			values,
 		};
 		self.span_data.lock().insert(id.clone(), span_datum);
-		id
 	}
 
-	fn record(&self, span: &Id, values: &Record<'_>) {
+	fn on_record(&self, span: &Id, values: &Record<'_>, _ctx: Context<S>) {
 		let mut span_data = self.span_data.lock();
 		if let Some(s) = span_data.get_mut(span) {
 			values.record(&mut s.values);
 		}
 	}
 
-	fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
-
-	fn event(&self, event: &Event<'_>) {
+	fn on_event(&self, event: &Event<'_>, _ctx: Context<S>) {
 		let mut values = Values::default();
 		event.record(&mut values);
 		let trace_event = TraceEvent {
@@ -334,7 +315,7 @@ impl Subscriber for ProfilingSubscriber {
 		self.trace_handler.handle_event(trace_event);
 	}
 
-	fn enter(&self, span: &Id) {
+	fn on_enter(&self, span: &Id, _ctx: Context<S>) {
 		self.current_span.enter(span.clone());
 		let mut span_data = self.span_data.lock();
 		let start_time = Instant::now();
@@ -343,7 +324,7 @@ impl Subscriber for ProfilingSubscriber {
 		}
 	}
 
-	fn exit(&self, span: &Id) {
+	fn on_exit(&self, span: &Id, _ctx: Context<S>) {
 		self.current_span.exit();
 		let end_time = Instant::now();
 		let mut span_data = self.span_data.lock();
@@ -352,7 +333,7 @@ impl Subscriber for ProfilingSubscriber {
 		}
 	}
 
-	fn try_close(&self, span: Id) -> bool {
+	fn on_close(&self, span: Id, _ctx: Context<S>) {
 		let span_datum = {
 			let mut span_data = self.span_data.lock();
 			span_data.remove(&span)
@@ -373,7 +354,6 @@ impl Subscriber for ProfilingSubscriber {
 				self.trace_handler.handle_span(span_datum);
 			}
 		};
-		true
 	}
 }
 
@@ -458,6 +438,7 @@ impl TraceHandler for TelemetryTraceHandler {
 mod tests {
 	use super::*;
 	use std::sync::Arc;
+	use tracing_subscriber::layer::SubscriberExt;
 
 	struct TestTraceHandler {
 		spans: Arc<Mutex<Vec<SpanDatum>>>,
@@ -474,18 +455,24 @@ mod tests {
 		}
 	}
 
-	fn setup_subscriber() -> (ProfilingSubscriber, Arc<Mutex<Vec<SpanDatum>>>, Arc<Mutex<Vec<TraceEvent>>>) {
+	type TestSubscriber = tracing_subscriber::layer::Layered<
+		ProfilingLayer,
+		tracing_subscriber::fmt::Subscriber
+	>;
+
+	fn setup_subscriber() -> (TestSubscriber, Arc<Mutex<Vec<SpanDatum>>>, Arc<Mutex<Vec<TraceEvent>>>) {
 		let spans = Arc::new(Mutex::new(Vec::new()));
 		let events = Arc::new(Mutex::new(Vec::new()));
 		let handler = TestTraceHandler {
 			spans: spans.clone(),
 			events: events.clone(),
 		};
-		let test_subscriber = ProfilingSubscriber::new_with_handler(
+		let layer = ProfilingLayer::new_with_handler(
 			Box::new(handler),
 			"test_target"
 		);
-		(test_subscriber, spans, events)
+		let subscriber = tracing_subscriber::fmt().finish().with(layer);
+		(subscriber, spans, events)
 	}
 
 	#[test]

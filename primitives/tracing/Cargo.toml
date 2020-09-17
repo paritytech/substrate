@@ -15,7 +15,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 tracing = { version = "0.1.18", optional = true }
 rental = { version = "0.5.5", optional = true }
 log = { version = "0.4.8", optional = true }
+tracing-subscriber = { version = "0.2.10", optional = true, features = ["tracing-log"] }
 
 [features]
 default = [ "std" ]
-std = [ "tracing", "rental", "log" ]
+std = [ "tracing", "rental", "log", "tracing-subscriber" ]
