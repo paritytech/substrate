@@ -38,9 +38,13 @@ pub enum InvokeMethod<'a> {
 	///
 	/// `func` will be passed to the invoked function as a first argument.
 	TableWithWrapper {
-		/// Wrapper for call.
+		/// Wrapper for the call.
+		///
+		/// Function pointer, index into runtime exported table.
 		dispatcher_ref: u32,
-		/// Actual function index that should be invoked.
+		/// Actual wasm function pointer (index into table) that should be invoked.
+		///
+		/// This is typically generated and invoked by the runtime itself.
 		func: u32,
 	},
 }
