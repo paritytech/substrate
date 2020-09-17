@@ -72,6 +72,7 @@
 mod mock;
 mod tests;
 mod benchmarking;
+mod default_weight;
 
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
@@ -227,15 +228,7 @@ pub struct Heartbeat<BlockNumber>
 }
 
 pub trait WeightInfo {
-	fn heartbeat(k: u32, e: u32, ) -> Weight;
-	fn validate_unsigned(k: u32, e: u32, ) -> Weight;
 	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn heartbeat(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
-	fn validate_unsigned(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
-	fn validate_unsigned_and_then_heartbeat(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
 }
 
 pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
@@ -333,23 +326,20 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// # <weight>
-		/// - Complexity: `O(K + E)` where K is length of `Keys` and E is length of
-		///   `Heartbeat.network_state.external_address`
-		///
+		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len)
+		///   and E is length of `heartbeat.network_state.external_address`
 		///   - `O(K)`: decoding of length `K`
 		///   - `O(E)`: decoding/encoding of length `E`
 		/// - DbReads: pallet_session `Validators`, pallet_session `CurrentIndex`, `Keys`,
 		///   `ReceivedHeartbeats`
 		/// - DbWrites: `ReceivedHeartbeats`
 		/// # </weight>
-		// NOTE: the weight include cost of validate_unsigned as it is part of the cost to import
-		// block with such an extrinsic.
-		#[weight = (310_000_000 + T::DbWeight::get().reads_writes(4, 1))
-			.saturating_add(750_000.saturating_mul(heartbeat.validators_len as Weight))
-			.saturating_add(
-				1_200_000.saturating_mul(heartbeat.network_state.external_addresses.len() as Weight)
-			)
-		]
+		// NOTE: the weight includes the cost of validate_unsigned as it is part of the cost to
+		// import block with such an extrinsic.
+		#[weight = <T as Trait>::WeightInfo::validate_unsigned_and_then_heartbeat(
+			heartbeat.validators_len as u32,
+			heartbeat.network_state.external_addresses.len() as u32,
+		)]
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
