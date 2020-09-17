@@ -7,16 +7,17 @@ you develop for your Substrate Runtime.
 
 Substrate's FRAME framework allows you to develop custom logic for your blockchain that can be
 included in your runtime. This flexibility is key to help you design complex and interactive
-pallets, but without accurate weights assigned to dispatchables, your blockchain may become vulnerable to denial of service attacks by malicious actors.
+pallets, but without accurate weights assigned to dispatchables, your blockchain may become
+vulnerable to denial of service (DoS) attacks by malicious actors.
 
-The Substrate Runtime Benchmarking Framework is a tool you can use to mitigate denial of service
-attacks against your blockchain network by benchmarking the computational resources required to
-execute different functions in the runtime.
+The Substrate Runtime Benchmarking Framework is a tool you can use to mitigate DoS attacks against
+your blockchain network by benchmarking the computational resources required to execute different
+functions in the runtime, for example extrinsics, `on_initialize`, `verify_unsigned`, etc...
 
-The general philosophy behind the benchmarking system is: If your node can know
-ahead of time how long it will take to execute a transaction, it can safely make decisions to
-include or exclude an extrinsic based on its available resources. By doing this, it can keep the
-block production and import process running smoothly.
+The general philosophy behind the benchmarking system is: If your node can know ahead of time how
+long it will take to execute an extrinsic, it can safely make decisions to include or exclude that
+extrinsic based on its available resources. By doing this, it can keep the block production and
+import process running smoothly.
 
 To achieve this, we need to model how long it takes to run each function in the runtime by:
 
@@ -64,8 +65,8 @@ you, which you can then use in your pallet.
 
 Writing a runtime benchmark is much like writing a unit test for your pallet. It needs to be
 carefully crafted to execute a certain logical path in your code. In tests you want to check for
-various success and failure conditions, but with benchmarks you specifically look for the
-**most computationally heavy** path, a.k.a the "worst case scenario".
+various success and failure conditions, but with benchmarks you specifically look for the **most
+computationally heavy** path, a.k.a the "worst case scenario".
 
 This means that if there are certain storage items or runtime state that may affect the complexity
 of the function, for example triggering more iterations in a `for` loop, to get an accurate result,
@@ -74,9 +75,9 @@ you must set up your benchmark to trigger this.
 It may be that there are multiple paths your function can go down, and it is not clear which one is
 the heaviest. In this case, you should just create a benchmark for each scenario! You may find that
 there are paths in your code where complexity may become unbounded depending on user input. This may
-be a hint that you should enforce sane boundaries for how a user can use your pallet. For
-example: limiting the number of elements in a vector, limiting the number of iterations in a `for`
-loop, etc...
+be a hint that you should enforce sane boundaries for how a user can use your pallet. For example:
+limiting the number of elements in a vector, limiting the number of iterations in a `for` loop,
+etc...
 
 Examples of end-to-end benchmarks can be found in the [pallets provided by Substrate](../), and the
 specific details on how to use the `benchmarks!` macro can be found in [its
@@ -121,7 +122,7 @@ see an example of how to do this in the [included Substrate
 node](../../bin/node/runtime/src/lib.rs).
 
 Assuming there are already some benchmarks set up on your node, you just need to add another
-instance of the `add_benchmarks!` macro:
+instance of the `add_benchmark!` macro:
 
 ```rust
 ///  configuration for running benchmarks
