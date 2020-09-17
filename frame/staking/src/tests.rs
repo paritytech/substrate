@@ -1734,7 +1734,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
 					.collect::<Vec<_>>(),
 				vec![(31, 1000), (21, 1000), (11, 1000)],
 			);
-			assert_eq!(<Nominators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>(), vec![]);
+			assert!(<Nominators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>().is_empty());
 
 			// give the man some money
 			let initial_balance = 1000;
@@ -1782,7 +1782,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election_elected() {
 					.collect::<Vec<_>>(),
 				vec![(31, 100), (21, 1000), (11, 1000)],
 			);
-			assert_eq!(<Nominators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>(), vec![]);
+			assert!(<Nominators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>().is_empty());
 
 			// give the man some money
 			let initial_balance = 1000;

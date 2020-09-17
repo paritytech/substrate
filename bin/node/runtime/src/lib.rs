@@ -458,7 +458,7 @@ impl pallet_staking::Trait for Runtime {
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = StakingUnsignedPriority;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_staking::WeightInfo;
 }
 
 parameter_types! {
@@ -736,7 +736,7 @@ impl pallet_im_online::Trait for Runtime {
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ImOnlineUnsignedPriority;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_im_online::WeightInfo;
 }
 
 parameter_types! {
