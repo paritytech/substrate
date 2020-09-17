@@ -310,21 +310,21 @@ sp_core::wasm_export_functions! {
 		message_slice.copy_from_slice(test_message);
 	}
 
-	fn test_fork() {
+	fn test_spawn() {
 		let data = vec![1u8, 2u8];
 		let data_new = sp_io::tasks::spawn(tasks::incrementer, data).join();
 
 		assert_eq!(data_new, vec![2u8, 3u8]);
 	}
 
-	fn test_nested_fork() {
+	fn test_nested_spawn() {
 		let data = vec![7u8, 13u8];
 		let data_new = sp_io::tasks::spawn(tasks::parallel_incrementer, data).join();
 
 		assert_eq!(data_new, vec![10u8, 16u8]);
 	}
 
-	fn test_panic_in_fork_panics_on_join() {
+	fn test_panic_in_spawned() {
 		sp_io::tasks::spawn(tasks::panicker, vec![]).join();
 	}
  }

@@ -760,13 +760,13 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-fn forking_should_work(wasm_method: WasmExecutionMethod) {
+fn spawning_runtime_instance_should_work(wasm_method: WasmExecutionMethod) {
 
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
 	call_in_wasm(
-		"test_fork",
+		"test_spawn",
 		&[],
 		wasm_method,
 		&mut ext,
@@ -775,13 +775,13 @@ fn forking_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-fn nested_forking_should_work(wasm_method: WasmExecutionMethod) {
+fn spawning_runtime_instance_nested_should_work(wasm_method: WasmExecutionMethod) {
 
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
 	call_in_wasm(
-		"test_nested_fork",
+		"test_nested_spawn",
 		&[],
 		wasm_method,
 		&mut ext,
@@ -790,18 +790,18 @@ fn nested_forking_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-fn panic_in_fork_panics_on_join(wasm_method: WasmExecutionMethod) {
+fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecutionMethod) {
 
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
 	if let Err(e) = call_in_wasm(
-		"test_panic_in_fork_panics_on_join",
+		"test_panic_in_spawned",
 		&[],
 		wasm_method,
 		&mut ext,
 	) {
-		assert!(format!("{}", e).contains("No signal from forked execution"));
+		assert!(format!("{}", e).contains("No signal from spawned execution"));
 	} else {
 		panic!("wasm call should be error")
 	}

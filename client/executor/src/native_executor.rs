@@ -198,7 +198,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 					&mut **ext,
 					move || {
 						RuntimeInstanceSpawn::register_on_externalities(module.clone());
-						instance.call(InvokeMethod::Export(method), call_data)
+						instance.call_export(method, call_data)
 					}
 				)
 			}).map_err(|e| e.to_string())
@@ -223,7 +223,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 				&mut **ext,
 				move || {
 					RuntimeInstanceSpawn::register_on_externalities(module.clone());
-					instance.call(InvokeMethod::Export(method), call_data)
+					instance.call_export(method, call_data)
 				}
 			)
 			.and_then(|r| r)
@@ -312,7 +312,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 
 		let module = self.module.clone();
 		let scheduler = self.scheduler.clone();
-		self.scheduler.spawn("forked runtime invoke", Box::pin(async move {
+		self.scheduler.spawn("executor-extra-runtime-instance", Box::pin(async move {
 			let module = AssertUnwindSafe(module);
 
 			let async_ext = match new_async_externalities(scheduler.clone()) {
@@ -352,7 +352,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 					// FIXME: Should be refactored to shared "instance factory".
 					// Instantiating wasm here every time is suboptimal at the moment, shared
 					// pool of instances should be used.
-					let instance = module.new_instance().expect("Failed to create new instance for fork");
+					let instance = module.new_instance().expect("Failed to create new instance");
 
 					instance.call(
 						InvokeMethod::TableWithWrapper { dispatcher_ref, func },
@@ -374,7 +374,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 
 	fn join(&self, handle: u64) -> Vec<u8> {
 		let receiver = self.forks.lock().remove(&handle).expect("No fork for such handle");
-		let output = receiver.recv().expect("No signal from forked execution");
+		let output = receiver.recv().expect("No signal from spawned execution");
 		output
 	}
 }
@@ -467,7 +467,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 							&mut **ext,
 							move || {
 								RuntimeInstanceSpawn::register_on_externalities(module.clone());
-								instance.call(InvokeMethod::Export(method), data).map(NativeOrEncoded::Encoded)
+								instance.call_export(method, data).map(NativeOrEncoded::Encoded)
 							}
 						)
 					},

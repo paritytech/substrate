@@ -37,7 +37,7 @@ mod inner {
 	impl DataJoinHandle {
 		/// Join handle returned by `spawn` function
 		pub fn join(self) -> Vec<u8> {
-			self.receiver.recv().expect("Essential task failure: forked runtime terminated before sending result.")
+			self.receiver.recv().expect("Essential task failure: spawned runtime terminated before sending result.")
 		}
 	}
 
