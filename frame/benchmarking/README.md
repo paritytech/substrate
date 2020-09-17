@@ -7,26 +7,25 @@ you develop for your Substrate Runtime.
 
 Substrate's FRAME framework allows you to develop custom logic for your blockchain that can be
 included in your runtime. This flexibility is key to help you design complex and interactive
-pallets, but it also means that your blockchain may become vulnerable to attack by malicious actors
-taking advantage of these new functionalities.
+pallets, but without accurate weights assigned to dispatchables, your blockchain may become vulnerable to denial of service attacks by malicious actors.
 
 The Substrate Runtime Benchmarking Framework is a tool you can use to mitigate denial of service
 attacks against your blockchain network by benchmarking the computational resources required to
 execute different functions in the runtime.
 
-The general philosophy behind Substrate the benchmarking system is: If your blockchain can know
+The general philosophy behind the benchmarking system is: If your node can know
 ahead of time how long it will take to execute a transaction, it can safely make decisions to
-include or exclude the transaction based on its available resources. By doing this, it can keep the
-block production and block import process running smoothly.
+include or exclude an extrinsic based on its available resources. By doing this, it can keep the
+block production and import process running smoothly.
 
 To achieve this, we need to model how long it takes to run each function in the runtime by:
 
-* Creating custom benchmarking logic which executes a specific logical path of a function.
+* Creating custom benchmarking logic that executes a specific code path of a function.
 * Executing the benchmark within the expected execution environment, i.e. Wasm, any specific
   hardware, custom runtime configuration, etc...
-* Executing the benchmark across controlled ranges of possible values that may effect the result of
-  the benchmark. (called "components")
-* Executing the benchmark multiple times at each point in order isolate and remove outliers.
+* Executing the benchmark across controlled ranges of possible values that may affect the result of
+  the benchmark (called "components").
+* Executing the benchmark multiple times at each point in order to isolate and remove outliers.
 * Using the results of the benchmark to create a linear model of the function across its components.
 
 With this linear model, we are able to estimate ahead of time how long it would take to execute some
