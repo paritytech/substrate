@@ -534,7 +534,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 /// be used to implement a miner. However, it does not do the CPU-intensive mining itself.
 ///
 /// Two values are returned -- a worker, which contains functions that allows querying the current
-/// mining metadata and submitting mined blocks, and a future, which must be pulled to fill in
+/// mining metadata and submitting mined blocks, and a future, which must be polled to fill in
 /// information in the worker.
 pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW>(
 	block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
