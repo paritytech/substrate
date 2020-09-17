@@ -12,12 +12,12 @@ taking advantage of these new functionalities.
 
 The Substrate Runtime Benchmarking Framework is a tool you can use to mitigate denial of service
 attacks against your blockchain network by benchmarking the computational resources required to
-execute different functions in the runtime. This is the "weight" of that function.
+execute different functions in the runtime.
 
-The general philosophy behind Substrate the benchmarking and weight system is: If your blockchain
-can know ahead of time how long it will take to execute a transaction, it can safely make decisions
-to include or exclude the transaction based on its available resources. By doing this, it can keep
-the block production and block import process running smoothly.
+The general philosophy behind Substrate the benchmarking system is: If your blockchain can know
+ahead of time how long it will take to execute a transaction, it can safely make decisions to
+include or exclude the transaction based on its available resources. By doing this, it can keep the
+block production and block import process running smoothly.
 
 To achieve this, we need to model how long it takes to run each function in the runtime by:
 
