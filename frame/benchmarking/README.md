@@ -21,7 +21,7 @@ block production and import process running smoothly.
 To achieve this, we need to model how long it takes to run each function in the runtime by:
 
 * Creating custom benchmarking logic that executes a specific code path of a function.
-* Executing the benchmark within the expected execution environment, i.e. Wasm, any specific
+* Executing the benchmark in the Wasm execution environment and on a specific set of
   hardware, custom runtime configuration, etc...
 * Executing the benchmark across controlled ranges of possible values that may affect the result of
   the benchmark (called "components").
