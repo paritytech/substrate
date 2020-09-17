@@ -2004,7 +2004,7 @@ mod tests {
 
 	#[test]
 	fn send_receive_header() {
-		let _ = env_logger::try_init();
+		sp_tracing::try_init_simple();
 		let chan = oneshot::channel();
 		let request = light::RemoteHeaderRequest {
 			cht_root: Default::default(),
