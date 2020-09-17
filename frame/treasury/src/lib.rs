@@ -332,8 +332,8 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 	Approved,
 	/// The bounty is funded and waiting for curator assignment.
 	Funded,
-	/// A curator is assigned. Waiting for acceptance from curator.
-	CuratorAssigned {
+	/// A curator has been proposed by the `ApproveOrigin`. Waiting for acceptance from the curator.
+	CuratorProposed {
 		/// The assigned curator of this bounty.
 		curator: AccountId,
 	},
@@ -341,8 +341,8 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 	Active {
 		/// The curator of this bounty.
 		curator: AccountId,
-		/// Expiry block
-		expires: BlockNumber,
+		/// An update from the curator is due by this block, else they are considered inactive.
+		update_due: BlockNumber,
 	},
 	/// The bounty is awarded and waiting to released after a delay.
 	PendingPayout {
@@ -478,6 +478,9 @@ decl_error! {
 		InvalidValue,
 		/// Invalid bounty fee.
 		InvalidFee,
+		/// A bounty payout is pending.
+		/// To cancel the bounty, you must unassign and slash the curator.
+		PendingPayout,
 	}
 }
 
@@ -793,7 +796,7 @@ decl_module! {
 			Self::payout_tip(hash, tip);
 		}
 
-		/// Propose for a new bounty.
+		/// Propose a new bounty.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -812,37 +815,7 @@ decl_module! {
 			description: Vec<u8>,
 		) {
 			let proposer = ensure_signed(origin)?;
-
 			Self::create_bounty(proposer, description, value)?;
-		}
-
-		/// Reject a bounty proposal. The original deposit will be slashed.
-		///
-		/// # <weight>
-		/// - O(1).
-		/// - Limited storage reads.
-		/// - Two DB clear.
-		/// # </weight>
-		#[weight = T::WeightInfo::reject_bounty()]
-		fn reject_bounty(origin, #[compact] bounty_id: BountyIndex) {
-			T::RejectOrigin::ensure_origin(origin)?;
-
-			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-				let bounty = maybe_bounty.as_ref().ok_or(Error::<T, I>::InvalidIndex)?;
-				ensure!(bounty.status == BountyStatus::Proposed, Error::<T, I>::UnexpectedStatus);
-
-				BountyDescriptions::<I>::remove(bounty_id);
-
-				let value = bounty.bond;
-				let imbalance = T::Currency::slash_reserved(&bounty.proposer, value).0;
-				T::OnSlash::on_unbalanced(imbalance);
-
-				Self::deposit_event(Event::<T, I>::BountyRejected(bounty_id, value));
-
-				*maybe_bounty = None;
-
-				Ok(())
-			})?;
 		}
 
 		/// Approve a bounty proposal. At a later time, the bounty will be funded and become active
@@ -893,13 +866,13 @@ decl_module! {
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 				match bounty.status {
-					BountyStatus::Funded | BountyStatus::CuratorAssigned { .. } => {},
+					BountyStatus::Funded | BountyStatus::CuratorProposed { .. } => {},
 					_ => return Err(Error::<T, I>::UnexpectedStatus.into()),
 				};
 
 				ensure!(fee < bounty.value, Error::<T, I>::InvalidFee);
 
-				bounty.status = BountyStatus::CuratorAssigned { curator };
+				bounty.status = BountyStatus::CuratorProposed { curator };
 				bounty.fee = fee;
 
 				Ok(())
@@ -907,9 +880,19 @@ decl_module! {
 		}
 
 		/// Unassign curator from a bounty.
-		/// If the bounty is on active or pending payout status, the curator deposit will be slashed from curator.
 		///
-		/// May only be called from `T::ApproveOrigin` or the curator.
+		/// This function can only be called by the `RejectOrigin` a signed origin.
+		///
+		/// If this function is called by the `RejectOrigin`, we assume that the curator is malicious
+		/// or inactive. As a result, we will slash the curator when possible.
+		///
+		/// If the origin is the curator, we take this as a sign they are unable to do their job and
+		/// they willingly give up. We could slash them, but for now we allow them to recover their
+		/// deposit and exit without issue. (We may want to change this if it is abused.)
+		///
+		/// Finally, the origin can be anyone if and only if the curator is "inactive". This allows
+		/// anyone in the community to call out that a curator is not doing their due diligence, and
+		/// we should pick a new curator. In this case the curator should also be slashed.
 		///
 		/// # <weight>
 		/// - O(1).
@@ -921,23 +904,68 @@ decl_module! {
 			origin,
 			#[compact] bounty_id: ProposalIndex,
 		) {
-			let maybe_curator = ensure_signed(origin.clone())
+			let maybe_sender = ensure_signed(origin.clone())
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
-				match bounty.status {
-					BountyStatus::CuratorAssigned { ref curator } => {
-						ensure!(maybe_curator.map_or(true, |c| c == *curator), BadOrigin);
-					},
-					BountyStatus::Active { ref curator, .. } | BountyStatus::PendingPayout { ref curator, .. } => {
-						ensure!(maybe_curator.map_or(true, |c| c == *curator), BadOrigin);
-						let imbalance = T::Currency::slash_reserved(curator, bounty.curator_deposit).0;
+
+				macro_rules! slash_curator {
+					($curator:ident) => {
+						let imbalance = T::Currency::slash_reserved($curator, bounty.curator_deposit).0;
 						T::OnSlash::on_unbalanced(imbalance);
 						bounty.curator_deposit = Zero::zero();
+					}
+				};
+
+				match bounty.status {
+					BountyStatus::Proposed | BountyStatus::Approved | BountyStatus::Funded => {
+						// No curator to unassign at this point.
+						return Err(Error::<T, I>::UnexpectedStatus.into())
+					}
+					BountyStatus::CuratorProposed { ref curator } => {
+						// A curator has been proposed, but not accepted yet.
+						// Either `RejectOrigin` or the proposed curator can unassign the curator.
+						ensure!(maybe_sender.map_or(true, |sender| sender == *curator), BadOrigin);
 					},
-					_ => return Err(Error::<T, I>::UnexpectedStatus.into()),
+					BountyStatus::Active { ref curator, ref update_due } => {
+						// The bounty is active.
+						match maybe_sender {
+							// If the `RejectOrigin` is calling this function, slash the curator.
+							None => {
+								slash_curator!(curator);
+								// Continue to change bounty status below...
+							},
+							Some(sender) => {
+								// If the sender is not the curator, and the curator is inactive,
+								// slash the curator.
+								if sender != *curator {
+									let block_number = system::Module::<T>::block_number();
+									if *update_due < block_number {
+										slash_curator!(curator);
+										// Continue to change bounty status below...
+									} else {
+										// Curator has more time to give an update.
+										return Err(Error::<T, I>::Premature.into())
+									}
+								} else {
+									// Else this is the curator, willingly giving up their role.
+									// Give back their deposit.
+									let _ = T::Currency::unreserve(&curator, bounty.curator_deposit);
+									// Continue to change bounty status below...
+								}
+							},
+						}
+					},
+					BountyStatus::PendingPayout { ref curator, .. } => {
+						// The bounty is pending payout, so only council can unassign a curator.
+						// By doing so, they are claiming the curator is acting maliciously, so
+						// we slash the curator.
+						ensure!(maybe_sender.is_none(), BadOrigin);
+						slash_curator!(curator);
+						// Continue to change bounty status below...
+					}
 				};
 
 				bounty.status = BountyStatus::Funded;
@@ -963,15 +991,15 @@ decl_module! {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				match bounty.status {
-					BountyStatus::CuratorAssigned { ref curator } => {
+					BountyStatus::CuratorProposed { ref curator } => {
 						ensure!(signer == *curator, Error::<T, I>::RequireCurator);
 
 						let deposit = T::BountyCuratorDeposit::get() * bounty.fee;
 						T::Currency::reserve(curator, deposit)?;
 						bounty.curator_deposit = deposit;
 
-						let expires = system::Module::<T>::block_number() + T::BountyDuration::get();
-						bounty.status = BountyStatus::Active { curator: curator.clone(), expires };
+						let update_due = system::Module::<T>::block_number() + T::BountyDuration::get();
+						bounty.status = BountyStatus::Active { curator: curator.clone(), update_due };
 
 						Ok(())
 					},
@@ -1046,53 +1074,53 @@ decl_module! {
 			})?;
 		}
 
-		/// Cancel an active bounty. All the funds will be send to treasury.
-		/// If cancel is not initiated by `T::RejectOrigin`, curator deposit will be slashed.
+		/// Cancel a proposed or active bounty. All the funds will be sent to treasury and
+		/// the curator deposit will be unreserved if possible.
 		///
-		/// Only curator or `T::RejectOrigin` is able to cancel bounty.
+		/// Only `T::RejectOrigin` is able to cancel a bounty.
 		///
 		/// - `bounty_id`: Bounty ID to cancel.
 		#[weight = T::WeightInfo::cancel_bounty()]
 		fn cancel_bounty(origin, #[compact] bounty_id: BountyIndex) {
-			let maybe_curator = ensure_signed(origin.clone())
-				.map(Some)
-				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
+			T::RejectOrigin::ensure_origin(origin)?;
 
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.as_ref().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				match &bounty.status {
+					BountyStatus::Proposed => {
+						// The reject origin would like to cancel a proposed bounty.
+						BountyDescriptions::<I>::remove(bounty_id);
+						let value = bounty.bond;
+						let imbalance = T::Currency::slash_reserved(&bounty.proposer, value).0;
+						T::OnSlash::on_unbalanced(imbalance);
+						*maybe_bounty = None;
+
+						Self::deposit_event(Event::<T, I>::BountyRejected(bounty_id, value));
+						// Return early, nothing else to do.
+						return Ok(())
+					},
+					BountyStatus::Approved => {
+						// For weight reasons, we don't allow a council to cancel in this phase.
+						// We ask for them to wait until it is funded before they can cancel.
+						return Err(Error::<T, I>::UnexpectedStatus.into())
+					},
 					BountyStatus::Funded |
-					BountyStatus::CuratorAssigned { .. } => {
-						ensure!(maybe_curator.is_none(), BadOrigin);
+					BountyStatus::CuratorProposed { .. } => {
+						// Nothing extra to do besides the removal of the bounty below.
 					},
-					BountyStatus::PendingPayout { curator, .. } => {
-						if let Some(signer) = maybe_curator {
-							ensure!(signer == *curator, Error::<T, I>::RequireCurator);
-
-							let imbalance = T::Currency::slash_reserved(curator, bounty.curator_deposit).0;
-							T::OnSlash::on_unbalanced(imbalance);
-						} else {
-							// Cancelled by council, refund deposit
-							let _ = T::Currency::unreserve(&curator, bounty.curator_deposit);
-						}
+					BountyStatus::Active { curator, .. } => {
+						// Cancelled by council, refund deposit of the working curator.
+						let _ = T::Currency::unreserve(&curator, bounty.curator_deposit);
+						// Then execute removal of the bounty below.
 					},
-					BountyStatus::Active { curator, expires } => {
-						if let Some(signer) = maybe_curator {
-							let now = system::Module::<T>::block_number();
-							if *expires > now {
-								// only curator can cancel unexpired bounty
-								ensure!(signer == *curator, Error::<T, I>::RequireCurator);
-							}
-
-							let imbalance = T::Currency::slash_reserved(curator, bounty.curator_deposit).0;
-							T::OnSlash::on_unbalanced(imbalance);
-						} else {
-							// Cancelled by council, refund deposit
-							let _ = T::Currency::unreserve(&curator, bounty.curator_deposit);
-						}
-					},
-					_ => return Err(Error::<T, I>::UnexpectedStatus.into()),
+					BountyStatus::PendingPayout { .. } => {
+						// Bounty is already pending payout. If council wants to cancel
+						// this bounty, it should mean the curator was acting maliciously.
+						// So the council should first unassign the curator, slashing their
+						// deposit.
+						return Err(Error::<T, I>::PendingPayout.into())
+					}
 				}
 
 				let bounty_account = Self::bounty_account_id(bounty_id);
@@ -1123,9 +1151,9 @@ decl_module! {
 				let bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				match bounty.status {
-					BountyStatus::Active { ref curator, ref mut expires } => {
+					BountyStatus::Active { ref curator, ref mut update_due } => {
 						ensure!(*curator == signer, Error::<T, I>::RequireCurator);
-						*expires = (system::Module::<T>::block_number() + T::BountyDuration::get()).max(*expires);
+						*update_due = (system::Module::<T>::block_number() + T::BountyDuration::get()).max(*update_due);
 					},
 					_ => return Err(Error::<T, I>::UnexpectedStatus.into()),
 				}
