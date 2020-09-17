@@ -28,7 +28,7 @@ use sp_std::vec;
 use frame_benchmarking::benchmarks;
 use frame_support::{
 	codec::Decode,
-	storage::StorageValue,
+	storage::{StorageValue, StorageMap},
 	traits::{KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::RawOrigin;
@@ -64,6 +64,9 @@ benchmarks! {
 		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
+		// Whitelist controller account from further DB operations.
+		let v_controller_key = frame_system::Account::<T>::hashed_key_for(&v_controller);
+		frame_benchmarking::benchmarking::add_to_whitelist(v_controller_key.into());
 	}: _(RawOrigin::Signed(v_controller), keys, proof)
 
 	purge_keys {
@@ -73,8 +76,12 @@ benchmarks! {
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		Session::<T>::set_keys(RawOrigin::Signed(v_controller.clone()).into(), keys, proof)?;
+		// Whitelist controller account from further DB operations.
+		let v_controller_key = frame_system::Account::<T>::hashed_key_for(&v_controller);
+		frame_benchmarking::benchmarking::add_to_whitelist(v_controller_key.into());
 	}: _(RawOrigin::Signed(v_controller))
 
+	#[extra]
 	check_membership_proof_current_session {
 		let n in 2 .. MAX_VALIDATORS as u32;
 
@@ -87,6 +94,7 @@ benchmarks! {
 		assert!(Historical::<T>::check_proof(key, key_owner_proof2).is_some());
 	}
 
+	#[extra]
 	check_membership_proof_historical_session {
 		let n in 2 .. MAX_VALIDATORS as u32;
 
