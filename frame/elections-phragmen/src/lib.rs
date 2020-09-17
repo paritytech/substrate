@@ -126,9 +126,9 @@ pub mod migrations {
 	/// Will only be triggered if storage version is V1.
 	pub fn migrate_to_recorded_deposit<T: Trait>(old_deposit: BalanceOf<T>) -> Weight {
 		if <Module<T>>::pallet_storage_version() == StorageVersion::V1 {
-
+			let module_storage_name = <Voting<T>>::storage_prefix();
 			<StorageKeyIterator<T::AccountId, (BalanceOf<T>, Vec<T::AccountId>), Twox64Concat>>::new(
-				b"PhragmenElection",
+				module_storage_name,
 				b"Voting",
 			)
 			.for_each(|(who, (stake, votes))| {
@@ -139,9 +139,12 @@ pub mod migrations {
 			});
 
 			PalletStorageVersion::put(StorageVersion::V2);
+			frame_support::debug::info!(
+				"🏛 pallet-elections-phragmen: Storage migrated to V2."
+			);
 			Weight::max_value()
 		} else {
-			frame_support::debug::print!(
+			frame_support::debug::warn!(
 				"🏛 pallet-elections-phragmen: Tried to run migration but PalletStorageVersion is \
 				updated to V2. This code probably needs to be removed now.",
 			);
