@@ -124,7 +124,7 @@ pub mod migrations {
 	/// Migrate from the old legacy voting bond (fixed) to the new one (per-vote dynamic).
 	///
 	/// Will only be triggered if storage version is V1.
-	pub fn migrate_deposits_to_per_vote<T: Trait>(old_deposit: BalanceOf<T>) -> Weight {
+	pub fn migrate_to_recorded_deposit<T: Trait>(old_deposit: BalanceOf<T>) -> Weight {
 		if <Module<T>>::pallet_storage_version() == StorageVersion::V1 {
 
 			<StorageKeyIterator<T::AccountId, (BalanceOf<T>, Vec<T::AccountId>), Twox64Concat>>::new(
