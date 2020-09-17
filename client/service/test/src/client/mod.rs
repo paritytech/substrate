@@ -1206,7 +1206,7 @@ fn get_header_by_block_number_doesnt_panic() {
 
 #[test]
 fn state_reverted_on_reorg() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut client = substrate_test_runtime_client::new();
 
 	let current_balance = |client: &substrate_test_runtime_client::TestClient|
@@ -1266,7 +1266,7 @@ fn state_reverted_on_reorg() {
 
 #[test]
 fn doesnt_import_blocks_that_revert_finality() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let tmp = tempfile::tempdir().unwrap();
 
 	// we need to run with archive pruning to avoid pruning non-canonical
@@ -1467,7 +1467,7 @@ fn respects_block_rules() {
 
 #[test]
 fn returns_status_for_pruned_blocks() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let tmp = tempfile::tempdir().unwrap();
 
 	// set to prune after 1 block
