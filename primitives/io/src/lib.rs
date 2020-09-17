@@ -1088,7 +1088,6 @@ pub trait WasmTracing {
 		tracing::dispatcher::get_default(|d| {
 			let id = tracing_core::span::Id::from_u64(span);
 			d.exit(&id);
-			d.try_close(id);
 		});
 	}
 }

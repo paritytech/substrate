@@ -692,7 +692,7 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 	let span_id = call_in_wasm(
 		"test_enter_span",
-		&[],
+		Default::default(),
 		wasm_method,
 		&mut ext,
 	).unwrap();
