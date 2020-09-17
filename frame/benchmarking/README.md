@@ -30,7 +30,8 @@ To achieve this, we need to model how long it takes to run each function in the 
 * Using the results of the benchmark to create a linear model of the function across its components.
 
 With this linear model, we are able to estimate ahead of time how long it takes to execute some
-logic, and thus make informed decisions without actually spending any significant resources.
+logic, and thus make informed decisions without actually spending any significant resources at
+runtime.
 
 The benchmarking framework comes with the following tools:
 
