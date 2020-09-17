@@ -98,7 +98,7 @@ pub trait Storage {
 			let data = &value[value_offset.min(value.len())..];
 			let written = std::cmp::min(data.len(), value_out.len());
 			value_out[..written].copy_from_slice(&data[..written]);
-			value.len() as u32
+			data.len() as u32
 		})
 	}
 
@@ -239,7 +239,7 @@ pub trait DefaultChildStorage {
 				let data = &value[value_offset.min(value.len())..];
 				let written = std::cmp::min(data.len(), value_out.len());
 				value_out[..written].copy_from_slice(&data[..written]);
-				value.len() as u32
+				data.len() as u32
 			})
 	}
 
@@ -1347,17 +1347,18 @@ mod tests {
 
 	#[test]
 	fn read_storage_works() {
+		let value = b"\x0b\0\0\0Hello world".to_vec();
 		let mut t = BasicExternalities::new(Storage {
-			top: map![b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()],
+			top: map![b":test".to_vec() => value.clone()],
 			children_default: map![],
 		});
 
 		t.execute_with(|| {
 			let mut v = [0u8; 4];
-			assert!(storage::read(b":test", &mut v[..], 0).unwrap() >= 4);
+			assert_eq!(storage::read(b":test", &mut v[..], 0).unwrap(), value.len() as u32);
 			assert_eq!(v, [11u8, 0, 0, 0]);
 			let mut w = [0u8; 11];
-			assert!(storage::read(b":test", &mut w[..], 4).unwrap() >= 11);
+			assert_eq!(storage::read(b":test", &mut w[..], 4).unwrap(), value.len() as u32 - 4);
 			assert_eq!(&w, b"Hello world");
 		});
 	}

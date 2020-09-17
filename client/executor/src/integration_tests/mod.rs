@@ -30,6 +30,7 @@ use test_case::test_case;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 use sp_wasm_interface::HostFunctions as _;
 use sp_runtime::traits::BlakeTwo256;
+use tracing_subscriber::layer::SubscriberExt;
 
 use crate::WasmExecutionMethod;
 
@@ -678,8 +679,11 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	let handler = TestTraceHandler(traces.clone());
 
 	// Create subscriber with wasm_tracing disabled
-	let test_subscriber = sc_tracing::ProfilingSubscriber::new_with_handler(
-		Box::new(handler), "default");
+	let test_subscriber = tracing_subscriber::fmt().finish().with(
+		sc_tracing::ProfilingLayer::new_with_handler(
+			Box::new(handler), "default"
+		)
+	);
 
 	let _guard = tracing::subscriber::set_default(test_subscriber);
 

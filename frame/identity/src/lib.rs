@@ -462,27 +462,27 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
-		/// A name was set or reset (which will remove all judgements). [who]
+		/// A name was set or reset (which will remove all judgements). \[who\]
 		IdentitySet(AccountId),
-		/// A name was cleared, and the given balance returned. [who, deposit]
+		/// A name was cleared, and the given balance returned. \[who, deposit\]
 		IdentityCleared(AccountId, Balance),
-		/// A name was removed and the given balance slashed. [who, deposit]
+		/// A name was removed and the given balance slashed. \[who, deposit\]
 		IdentityKilled(AccountId, Balance),
-		/// A judgement was asked from a registrar. [who, registrar_index]
+		/// A judgement was asked from a registrar. \[who, registrar_index\]
 		JudgementRequested(AccountId, RegistrarIndex),
-		/// A judgement request was retracted. [who, registrar_index]
+		/// A judgement request was retracted. \[who, registrar_index\]
 		JudgementUnrequested(AccountId, RegistrarIndex),
-		/// A judgement was given by a registrar. [target, registrar_index]
+		/// A judgement was given by a registrar. \[target, registrar_index\]
 		JudgementGiven(AccountId, RegistrarIndex),
-		/// A registrar was added. [registrar_index]
+		/// A registrar was added. \[registrar_index\]
 		RegistrarAdded(RegistrarIndex),
-		/// A sub-identity was added to an identity and the deposit paid. [sub, main, deposit]
+		/// A sub-identity was added to an identity and the deposit paid. \[sub, main, deposit\]
 		SubIdentityAdded(AccountId, AccountId, Balance),
 		/// A sub-identity was removed from an identity and the deposit freed.
-		/// [sub, main, deposit]
+		/// \[sub, main, deposit\]
 		SubIdentityRemoved(AccountId, AccountId, Balance),
 		/// A sub-identity was cleared, and the given deposit repatriated from the
-		/// main identity account to the sub-identity account. [sub, main, deposit]
+		/// main identity account to the sub-identity account. \[sub, main, deposit\]
 		SubIdentityRevoked(AccountId, AccountId, Balance),
 	}
 );
@@ -1387,6 +1387,7 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 1;
 	}
 	impl pallet_balances::Trait for Test {
+		type MaxLocks = ();
 		type Balance = u64;
 		type Event = ();
 		type DustRemoval = ();

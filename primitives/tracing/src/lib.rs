@@ -115,6 +115,14 @@ pub use crate::types::{
 	WasmMetadata, WasmEntryAttributes, WasmValuesSet, WasmValue, WasmFields, WasmLevel, WasmFieldName
 };
 
+
+/// Try to init a simple tracing subscriber with log compatibility layer.
+/// Ignores any error. Useful for testing.
+#[cfg(feature = "std")]
+pub fn try_init_simple() {
+	let _ = tracing_subscriber::fmt().with_writer(std::io::stderr).try_init();
+}
+
 #[cfg(feature = "std")]
 pub use crate::types::{
 	WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER

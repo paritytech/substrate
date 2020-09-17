@@ -700,14 +700,14 @@ decl_module! {
 
 decl_event!(
 	pub enum Event<T> where <T as frame_system::Trait>::AccountId {
-		/// Reaped [voter, reaper].
+		/// Reaped \[voter, reaper\].
 		VoterReaped(AccountId, AccountId),
-		/// Slashed [reaper].
+		/// Slashed \[reaper\].
 		BadReaperSlashed(AccountId),
-		/// A tally (for approval votes of [seats]) has started.
+		/// A tally (for approval votes of \[seats\]) has started.
 		TallyStarted(u32),
 		/// A tally (for approval votes of seat(s)) has ended (with one or more new members). 
-		/// [incoming, outgoing]
+		/// \[incoming, outgoing\]
 		TallyFinalized(Vec<AccountId>, Vec<AccountId>),
 	}
 );

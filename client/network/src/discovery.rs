@@ -329,10 +329,18 @@ impl DiscoveryBehaviour {
 		}
 	}
 
-	/// Returns the number of nodes that are in the Kademlia k-buckets.
-	pub fn num_kbuckets_entries(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+	/// Returns the number of nodes in each Kademlia kbucket for each Kademlia instance.
+	///
+	/// Identifies Kademlia instances by their [`ProtocolId`] and kbuckets by the base 2 logarithm
+	/// of their lower bound.
+	pub fn num_entries_per_kbucket(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, Vec<(u32, usize)>)> {
 		self.kademlias.iter_mut()
-			.map(|(id, kad)| (id, kad.kbuckets().map(|bucket| bucket.iter().count()).sum()))
+			.map(|(id, kad)| {
+				let buckets = kad.kbuckets()
+					.map(|bucket| (bucket.range().0.ilog2().unwrap_or(0), bucket.iter().count()))
+					.collect();
+				(id, buckets)
+			})
 	}
 
 	/// Returns the number of records in the Kademlia record stores.
@@ -765,8 +773,9 @@ mod tests {
 	use libp2p::{Multiaddr, PeerId};
 	use libp2p::core::upgrade;
 	use libp2p::core::transport::{Transport, MemoryTransport};
-	use libp2p::core::upgrade::{InboundUpgradeExt, OutboundUpgradeExt};
+	use libp2p::noise;
 	use libp2p::swarm::Swarm;
+	use libp2p::yamux;
 	use std::{collections::HashSet, task::Poll};
 	use super::{DiscoveryConfig, DiscoveryOut, protocol_name_from_protocol_id};
 
@@ -779,25 +788,15 @@ mod tests {
 		// the first swarm via `with_user_defined`.
 		let mut swarms = (0..25).map(|i| {
 			let keypair = Keypair::generate_ed25519();
-			let keypair2 = keypair.clone();
+
+			let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+				.into_authentic(&keypair)
+				.unwrap();
 
 			let transport = MemoryTransport
-				.and_then(move |out, endpoint| {
-					let secio = libp2p::secio::SecioConfig::new(keypair2);
-					libp2p::core::upgrade::apply(
-						out,
-						secio,
-						endpoint,
-						upgrade::Version::V1
-					)
-				})
-				.and_then(move |(peer_id, stream), endpoint| {
-					let peer_id2 = peer_id.clone();
-					let upgrade = libp2p::yamux::Config::default()
-						.map_inbound(move |muxer| (peer_id, muxer))
-						.map_outbound(move |muxer| (peer_id2, muxer));
-					upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
-				});
+				.upgrade(upgrade::Version::V1)
+				.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
+				.multiplex(yamux::Config::default());
 
 			let behaviour = {
 				let mut config = DiscoveryConfig::new(keypair.public());
