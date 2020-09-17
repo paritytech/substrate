@@ -118,57 +118,31 @@ type NegativeImbalanceOf<T> =
 /// Helper functions for migrations of this module.
 pub mod migrations {
 	use super::*;
+	use frame_support::migration::StorageKeyIterator;
+	use frame_support::Twox64Concat;
 
 	/// Migrate from the old legacy voting bond (fixed) to the new one (per-vote dynamic).
-	pub fn migrate_deposits_to_per_vote<T: Trait>() -> Weight {
+	pub fn migrate_deposits_to_per_vote<T: Trait>(old_deposit: BalanceOf<T>) -> Weight {
 		if <Module<T>>::pallet_storage_version() == StorageVersion::V1 {
-			let mut consumed_weight = 0;
-			let mut add_weight = |reads, writes| {
-				consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
-			};
-			let mut success = 0u32;
-			let mut error = 0u32;
-			<Voting<T>>::iter().for_each(|(who, (_, votes))| {
-				// first, reserve the new amount.
-				match T::Currency::reserve(&who, <Module<T>>::deposit_of(votes.len())) {
-					Ok(_) => {
-						// Ok. Unreserve the old bond.
-						T::Currency::unreserve(&who, T::LegacyVotingBond::get());
-						add_weight(0, 1);
-						success += 1;
-					}
-					Err(_) => {
-						// force remove this voter.
-						// we can't use `Self::do_remove_voter()` because that one un-reserves the
-						// new bond amount. Manually remove.
 
-						// 1 write
-						<Voting<T>>::remove(&who);
-						// 1 read 1 write
-						T::Currency::remove_lock(T::ModuleId::get(), &who);
-						// 1 read 1 write
-						T::Currency::unreserve(&who, T::LegacyVotingBond::get());
-
-						add_weight(2, 3);
-						error += 1;
-					}
-				}
+			<StorageKeyIterator<T::AccountId, (BalanceOf<T>, Vec<T::AccountId>), Twox64Concat>>::new(
+				b"PhragmenElection",
+				b"Voting",
+			)
+			// remove previous elements as we move on
+			.drain()
+			.for_each(|(who, (stake, votes))| {
+				// Insert a new value into the same location.
+				let deposit = old_deposit;
+				let voter = Voter { votes, stake, deposit };
+				<Voting<T>>::insert(who, voter);
 			});
 
-			// for iterating over `Voting<T>`
-			consumed_weight += T::DbWeight::get().reads((success + error).into());
-
-			frame_support::debug::print!(
-				"🏛 pallet-elections-phragmen: Migration to new deposit scheme done. {} accounts moved successfully, {} failed.",
-				success,
-				error,
-			);
-
-			PalletStorageVersion::put(StorageVersion::V2);
-			consumed_weight
+			Weight::max_value()
 		} else {
 			frame_support::debug::print!(
-				"🏛 pallet-elections-phragmen: Tried to run migration but PalletStorageVersion is updated to V2. This code probably needs to be removed now.",
+				"🏛 pallet-elections-phragmen: Tried to run migration but PalletStorageVersion is \
+				updated to V2. This code probably needs to be removed now.",
 			);
 			0
 		}
@@ -197,6 +171,19 @@ pub struct DefunctVoter<AccountId> {
 	/// The number of current active candidates.
 	#[codec(compact)]
 	pub candidate_count: u32
+}
+
+/// An active voter.
+#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
+pub struct Voter<AccountId, Balance> {
+	/// The members being backed.
+	votes: Vec<AccountId>,
+	/// The amount of stake placed on this vote.
+	stake: Balance,
+	/// The amount of deposit reserved for this vote.
+	///
+	/// To be unreserved upon removal.
+	deposit: Balance,
 }
 
 pub trait WeightInfo {
@@ -300,8 +287,7 @@ decl_storage! {
 		/// Votes and locked stake of a particular voter.
 		///
 		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash
-		pub Voting get(fn voting): map hasher(twox_64_concat) T::AccountId
-			=> (BalanceOf<T>, Vec<T::AccountId>);
+		pub Voting get(fn voting): map hasher(twox_64_concat) T::AccountId => Voter<T::AccountId, BalanceOf<T>>;
 
 		/// The present candidate list. Sorted based on account-id. A current member or runner-up
 		/// can never enter this vector and is always implicitly assumed to be a candidate.
@@ -403,11 +389,7 @@ decl_module! {
 		const DesiredMembers: u32 = T::DesiredMembers::get();
 		const DesiredRunnersUp: u32 = T::DesiredRunnersUp::get();
 		const TermDuration: T::BlockNumber = T::TermDuration::get();
-		const ModuleId: LockIdentifier  = T::ModuleId::get();
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::migrate_deposits_to_per_vote::<T>()
-		}
+		const ModuleId: LockIdentifier = T::ModuleId::get();
 
 		/// Vote for a set of candidates for the upcoming round of election. This can be called to
 		/// set the initial votes, or update already existing votes.
@@ -461,10 +443,11 @@ decl_module! {
 			ensure!(value > T::Currency::minimum_balance(), Error::<T>::LowBalance);
 
 			// Reserve bond.
-			let (_, old_votes) = <Voting<T>>::get(&who);
+			let Voter { votes: old_votes, deposit: old_deposit, .. } = <Voting<T>>::get(&who);
 			let maybe_refund = if old_votes.is_empty() {
 				// First time voter. Get full deposit.
-				T::Currency::reserve(&who, Self::deposit_of(votes.len()))
+				let deposit = Self::deposit_of(votes.len());
+				T::Currency::reserve(&who, deposit)
 					.map_err(|_| Error::<T>::UnableToPayBond)?;
 				None
 			} else {
@@ -473,6 +456,7 @@ decl_module! {
 					Ordering::Greater => {
 						// Must reserve a bit more.
 						let to_reserve = Self::deposit_factor_of(votes.len() - old_votes.len());
+						debug_assert_eq!(old_deposit + to_reserve, Self::deposit_of(votes.len()));
 						T::Currency::reserve(&who, to_reserve)
 							.map_err(|_| Error::<T>::UnableToPayBond)?;
 					},
@@ -480,25 +464,28 @@ decl_module! {
 					Ordering::Less => {
 						// Must unreserve a bit.
 						let to_unreserve = Self::deposit_factor_of(old_votes.len() - votes.len());
+						debug_assert_eq!(old_deposit - to_unreserve, Self::deposit_of(votes.len()));
 						let _remainder = T::Currency::unreserve(&who, to_unreserve);
 						debug_assert!(_remainder.is_zero());
 					},
-				}
+				};
 				Some(T::WeightInfo::vote_update(votes.len() as u32))
 			};
 
 			// Amount to be locked up.
-			let locked_balance = value.min(T::Currency::total_balance(&who));
+			let locked_stake = value.min(T::Currency::total_balance(&who));
 
 			// lock
 			T::Currency::set_lock(
 				T::ModuleId::get(),
 				&who,
-				locked_balance,
+				locked_stake,
 				WithdrawReasons::except(WithdrawReason::TransactionPayment),
 			);
 
-			Voting::<T>::insert(&who, (locked_balance, votes));
+			let deposit = Self::deposit_of(votes.len());
+
+			Voting::<T>::insert(&who, Voter { votes, deposit, stake: locked_stake });
 			Ok(maybe_refund.into())
 		}
 
@@ -571,7 +558,7 @@ decl_module! {
 				Error::<T>::InvalidCandidateCount,
 			);
 
-			let (_, votes) = <Voting<T>>::get(&target);
+			let Voter { votes, .. } = <Voting<T>>::get(&target);
 			// indirect way to ensure target is a voter. We could call into `::contains()`, but it
 			// would have the same effect with one extra db access. Note that votes cannot be
 			// submitted with length 0. Hence, a non-zero length means that the target is a voter.
@@ -942,20 +929,20 @@ impl<T: Trait> Module<T> {
 	///
 	/// DB access: Voting and Lock are always written to, if unreserve, then 1 read and write added.
 	fn do_remove_voter(who: &T::AccountId, unreserve: bool) {
-		let (_, votes) = <Voting<T>>::get(who);
+		let Voter { deposit, .. } = <Voting<T>>::get(who);
 		// remove storage and lock.
 		<Voting<T>>::remove(who);
 		T::Currency::remove_lock(T::ModuleId::get(), who);
 
 		if unreserve {
-			let _remainder = T::Currency::unreserve(who, Self::deposit_of(votes.len()));
+			let _remainder = T::Currency::unreserve(who, deposit);
 			debug_assert!(_remainder.is_zero());
 		}
 	}
 
 	/// The locked stake of a voter.
 	fn locked_stake_of(who: &T::AccountId) -> BalanceOf<T> {
-		Voting::<T>::get(who).0
+		Voting::<T>::get(who).stake
 	}
 
 	/// Check there's nothing to do this block.
@@ -1006,12 +993,12 @@ impl<T: Trait> Module<T> {
 
 		// used for prime election.
 		let voters_and_stakes = Voting::<T>::iter()
-			.map(|(voter, (stake, targets))| { (voter, stake, targets) })
+			.map(|(voter, Voter { stake, votes, .. })| { (voter, stake, votes) })
 			.collect::<Vec<_>>();
 		// used for phragmen.
 		let voters_and_votes = voters_and_stakes.iter()
 			.cloned()
-			.map(|(voter, stake, targets)| { (voter, to_votes(stake), targets)} )
+			.map(|(voter, stake, votes)| { (voter, to_votes(stake), votes)} )
 			.collect::<Vec<_>>();
 		let maybe_phragmen_result = sp_npos_elections::seq_phragmen::<T::AccountId, Perbill>(
 			num_to_elect,
@@ -1076,8 +1063,8 @@ impl<T: Trait> Module<T> {
 			// of the votes. i.e. the first person a voter votes for gets a 16x multiplier,
 			// the next person gets a 15x multiplier, an so on... (assuming `MAXIMUM_VOTE` = 16)
 			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
-			for (_, stake, targets) in voters_and_stakes.into_iter() {
-				for (vote_multiplier, who) in targets.iter()
+			for (_, stake, votes) in voters_and_stakes.into_iter() {
+				for (vote_multiplier, who) in votes.iter()
 					.enumerate()
 					.map(|(vote_position, who)| ((MAXIMUM_VOTE - vote_position) as u32, who))
 				{
@@ -1549,7 +1536,7 @@ mod tests {
 	}
 
 	fn votes_of(who: &u64) -> Vec<u64> {
-		Voting::<Test>::get(who).1
+		Voting::<Test>::get(who).votes
 	}
 
 	fn defunct_for(who: u64) -> DefunctVoter<u64> {
@@ -1585,8 +1572,8 @@ mod tests {
 			System::set_block_number(1);
 			assert_eq!(Elections::members(), vec![(1, 10), (2, 20)]);
 
-			assert_eq!(Elections::voting(1), (10, vec![1]));
-			assert_eq!(Elections::voting(2), (20, vec![2]));
+			assert_eq!(Elections::voting(1), Voter { stake: 10u64, votes: vec![1], deposit: 2 });
+			assert_eq!(Elections::voting(2), Voter { stake: 20u64, votes: vec![2], deposit: 2 });
 
 			// they will persist since they have self vote.
 			System::set_block_number(5);
@@ -1602,8 +1589,8 @@ mod tests {
 			System::set_block_number(1);
 			assert_eq!(Elections::members(), vec![(1, 10), (2, 20)]);
 
-			assert_eq!(Elections::voting(1), (10, vec![1]));
-			assert_eq!(Elections::voting(2), (20, vec![2]));
+			assert_eq!(Elections::voting(1), Voter { stake: 10u64, votes: vec![1], deposit: 2 });
+			assert_eq!(Elections::voting(2), Voter { stake: 20u64, votes: vec![2], deposit: 2 });
 
 			// they will persist since they have self vote.
 			System::set_block_number(5);
@@ -1835,7 +1822,7 @@ mod tests {
 	}
 
 	#[test]
-	fn voting_reserves_per_bond_per_vote() {
+	fn voting_reserves_bond_per_vote() {
 		ExtBuilder::default().voter_bond_factor(1).build_and_execute(|| {
 			assert_eq!(balances(&2), (20, 0));
 
@@ -1847,6 +1834,7 @@ mod tests {
 
 			// 2 + 1
 			assert_eq!(balances(&2), (17, 3));
+			assert_eq!(Elections::voting(&2).deposit, 3);
 			assert_eq!(has_lock(&2), 10);
 			assert_eq!(Elections::locked_stake_of(&2), 10);
 
@@ -1854,6 +1842,7 @@ mod tests {
 			assert_ok!(vote(Origin::signed(2), vec![5, 4], 15));
 			// 2 + 2
 			assert_eq!(balances(&2), (16, 4));
+			assert_eq!(Elections::voting(&2).deposit, 4);
 			assert_eq!(has_lock(&2), 15);
 			assert_eq!(Elections::locked_stake_of(&2), 15);
 
@@ -1861,6 +1850,7 @@ mod tests {
 			assert_ok!(vote(Origin::signed(2), vec![5, 3], 18));
 			// 2 + 2
 			assert_eq!(balances(&2), (16, 4));
+			assert_eq!(Elections::voting(&2).deposit, 4);
 			assert_eq!(has_lock(&2), 18);
 			assert_eq!(Elections::locked_stake_of(&2), 18);
 
@@ -1868,6 +1858,7 @@ mod tests {
 			assert_ok!(vote(Origin::signed(2), vec![4], 12));
 			// 2 + 1
 			assert_eq!(balances(&2), (17, 3));
+			assert_eq!(Elections::voting(&2).deposit, 3);
 			assert_eq!(has_lock(&2), 12);
 			assert_eq!(Elections::locked_stake_of(&2), 12);
 		});
