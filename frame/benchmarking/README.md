@@ -28,10 +28,10 @@ To achieve this, we need to model how long it takes to run each function in the 
 * Executing the benchmark multiple times at each point in order to isolate and remove outliers.
 * Using the results of the benchmark to create a linear model of the function across its components.
 
-With this linear model, we are able to estimate ahead of time how long it would take to execute some
+With this linear model, we are able to estimate ahead of time how long it takes to execute some
 logic, and thus make informed decisions without actually spending any significant resources.
 
-The benchmarking framework comes with the following components:
+The benchmarking framework comes with the following tools:
 
 * [A set of macros](./src/lib.rs) (`benchmarks!`, `add_benchmark!`, etc...) to make it easy to
   write, test, and add runtime benchmarks.
@@ -39,7 +39,7 @@ The benchmarking framework comes with the following components:
 * [A CLI extension](../../utils/benchmarking-cli/) to make it easy to execute benchmarks on your
   node.
 
-The end to end benchmarking pipeline is disabled by default when compiling a node. If you want to
+The end-to-end benchmarking pipeline is disabled by default when compiling a node. If you want to
 run benchmarks, you need to enable it by compiling with a Rust feature flag `runtime-benchmarks`.
 More details about this below.
 
