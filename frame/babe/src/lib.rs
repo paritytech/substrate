@@ -203,9 +203,10 @@ decl_storage! {
 		/// if per-block initialization has already been called for current block.
 		Initialized get(fn initialized): Option<MaybeRandomness>;
 
-		/// Temporary value (cleared at block finalization) which is `Some` if we
-		/// have generated VRF randomness. Note that unlike `Initialized` there is
-		/// no outer `Option` to signal that the value has been set.
+		/// Temporary value (cleared at block finalization) that includes the VRF randomness
+		/// generated at this block.
+		/// This field should always be populated during block processing unless secondary plain
+		/// slots are enabled (which don't contain a VRF proof).
 		AuthorVrfRandomness get(fn author_vrf_randomness): MaybeRandomness;
 
 		/// How late the current block is compared to its parent.
@@ -608,7 +609,7 @@ impl<T: Trait> Module<T> {
 						.map(|inout| {
 							inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT)
 						})
-			})
+				})
 		});
 
 		// For primary VRF output we place it in the `Initialized` storage
@@ -616,7 +617,7 @@ impl<T: Trait> Module<T> {
 		// once we've decided which epoch this block is in.
 		Initialized::put(if is_primary { maybe_randomness } else { None });
 
-		// Place the both primary and secondary VRF output into the
+		// Place either the primary or secondary VRF output into the
 		// `AuthorVrfRandomness` storage item.
 		AuthorVrfRandomness::put(maybe_randomness);
 
