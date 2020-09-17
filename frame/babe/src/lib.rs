@@ -204,8 +204,9 @@ decl_storage! {
 		Initialized get(fn initialized): Option<MaybeRandomness>;
 
 		/// Temporary value (cleared at block finalization) which is `Some` if we
-		/// have generated VRF randomness.
-		AuthorVrfRandomness get(fn author_vrf_randomness): Option<MaybeRandomness>;
+		/// have generated VRF randomness. Note that unlike `Initialized` there is
+		/// no outer `Option` to signal that the value has been set.
+		AuthorVrfRandomness get(fn author_vrf_randomness): MaybeRandomness;
 
 		/// How late the current block is compared to its parent.
 		///

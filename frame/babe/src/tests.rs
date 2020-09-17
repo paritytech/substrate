@@ -100,7 +100,7 @@ fn first_block_epoch_zero_start() {
 		assert_eq!(Babe::genesis_slot(), genesis_slot);
 		assert_eq!(Babe::current_slot(), genesis_slot);
 		assert_eq!(Babe::epoch_index(), 0);
-		assert_eq!(Babe::author_vrf_randomness(), Some(Some(vrf_randomness)));
+		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
 
 		Babe::on_finalize(1);
 		let header = System::finalize();
@@ -162,7 +162,7 @@ fn author_vrf_output_for_primary() {
 		assert_eq!(Babe::author_vrf_randomness(), None);
 
 		Babe::do_initialize(1);
-		assert_eq!(Babe::author_vrf_randomness(), Some(Some(vrf_randomness)));
+		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
 
 		Babe::on_finalize(1);
 		System::finalize();
@@ -189,7 +189,7 @@ fn author_vrf_output_for_secondary_vrf() {
 		assert_eq!(Babe::author_vrf_randomness(), None);
 
 		Babe::do_initialize(1);
-		assert_eq!(Babe::author_vrf_randomness(), Some(Some(vrf_randomness)));
+		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
 
 		Babe::on_finalize(1);
 		System::finalize();
@@ -213,7 +213,7 @@ fn no_author_vrf_output_for_secondary_plain() {
 		assert_eq!(Babe::author_vrf_randomness(), None);
 
 		Babe::do_initialize(1);
-		assert_eq!(Babe::author_vrf_randomness(), Some(None));
+		assert_eq!(Babe::author_vrf_randomness(), None);
 
 		Babe::on_finalize(1);
 		System::finalize();
