@@ -56,29 +56,29 @@ time. Often, the limiting factor for a blockchain is the fixed block production 
 network.
 
 Within FRAME, each dispatchable function must have a `#[weight]` annotation with a function that can
-return the expected weight for the worst case scenario execution of that function given it's inputs.
+return the expected weight for the worst case scenario execution of that function given its inputs.
 This benchmarking framework will result in a file that automatically generates those formulas for
-you which you can then use in your pallet.
+you, which you can then use in your pallet.
 
 ## Writing Benchmarks
 
-Writing a runtime benchmark is much like writing a unit test for your pallet. They need to be
+Writing a runtime benchmark is much like writing a unit test for your pallet. It needs to be
 carefully crafted to execute a certain logical path in your code. In tests you want to check for
-various success and failure conditions, but with benchmarks you specifically want to test for the
+various success and failure conditions, but with benchmarks you specifically look for the
 **most computationally heavy** path, a.k.a the "worst case scenario".
 
-This means that if there are certain storage items or runtime state that may effect the complexity
+This means that if there are certain storage items or runtime state that may affect the complexity
 of the function, for example triggering more iterations in a `for` loop, to get an accurate result,
 you must set up your benchmark to trigger this.
 
 It may be that there are multiple paths your function can go down, and it is not clear which one is
-most heavy. In this case, you should just create a benchmark for each scenario! You may find that
+the heaviest. In this case, you should just create a benchmark for each scenario! You may find that
 there are paths in your code where complexity may become unbounded depending on user input. This may
-hint to you that you should implement sane boundaries for how a user can use your pallet. For
+be a hint that you should enforce sane boundaries for how a user can use your pallet. For
 example: limiting the number of elements in a vector, limiting the number of iterations in a `for`
 loop, etc...
 
-Examples of end to end benchmarks can be found in the [pallets provided by Substrate](../), and the
+Examples of end-to-end benchmarks can be found in the [pallets provided by Substrate](../), and the
 specific details on how to use the `benchmarks!` macro can be found in [its
 documentation](./src/lib.rs).
 
@@ -99,7 +99,7 @@ different results when testing your benchmark and actually running it.
 
 In general, benchmarks returning `Ok(())` is all you need to check for since it signals the executed
 extrinsic has completed successfully. However, you can optionally include a `verify` block with your
-benchmark which can additionally verify any final conditions, such as the final state of your
+benchmark, which can additionally verify any final conditions, such as the final state of your
 runtime.
 
 These additional `verify` blocks will not effect the results of your final benchmarking process.
