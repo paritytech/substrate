@@ -673,7 +673,7 @@ mod test {
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u32);
 			unhashed::put(&[&k[..], &vec![8][..]].concat(), &2u32);
 
-			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![]);
+			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 			MyStorage::translate_values(|v: u32| Some(v as u64));
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2]);
 			MyStorage::remove_all();
