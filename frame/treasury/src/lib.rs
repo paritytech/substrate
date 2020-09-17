@@ -118,15 +118,14 @@
 //! Bounty protocol:
 //! - `propose_bounty` - Propose a specific treasury amount to be earmarked for a predefined set of
 //! tasks and stake the required deposit.
-//! - `reject_bounty` - Reject a specific treasury amount to be earmarked for a predefined body of work.
 //! - `approve_bounty` - Accept a specific treasury amount to be earmarked for a predefined body of work.
-//! - `assign_curator` - Assign an account to a bounty as candidate curator.
+//! - `propose_curator` - Assign an account to a bounty as candidate curator.
 //! - `accept_curator` - Accept a bounty assignment from the Council, setting a curator deposit.
 //! - `extend_bounty_expiry` - Extend the expiry block number of the bounty and stay active.
 //! - `award_bounty` - Close and pay out the specified amount for the completed work.
 //! - `claim_bounty` - Claim a specific bounty amount from the Payout Address.
 //! - `unassign_curator` - Unassign an accepted curator from a specific earmark.
-//! - `cancel_bounty` - Cancel the earmark for a specific treasury amount and close the bounty.
+//! - `close_bounty` - Cancel the earmark for a specific treasury amount and close the bounty.
 //!
 //!
 //! ## GenesisConfig
@@ -173,13 +172,12 @@ pub trait WeightInfo {
 	fn close_tip(t: u32, ) -> Weight;
 	fn propose_bounty(r: u32, ) -> Weight;
 	fn approve_bounty() -> Weight;
-	fn assign_curator() -> Weight;
+	fn propose_curator() -> Weight;
 	fn unassign_curator() -> Weight;
 	fn accept_curator() -> Weight;
-	fn reject_bounty() -> Weight;
 	fn award_bounty() -> Weight;
 	fn claim_bounty() -> Weight;
-	fn cancel_bounty() -> Weight;
+	fn close_bounty() -> Weight;
 	fn extend_bounty_expiry() -> Weight;
 	fn on_initialize_proposals(p: u32, ) -> Weight;
 	fn on_initialize_bounties(b: u32, ) -> Weight;
@@ -853,8 +851,8 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = T::WeightInfo::assign_curator()]
-		fn assign_curator(
+		#[weight = T::WeightInfo::propose_curator()]
+		fn propose_curator(
 			origin,
 			#[compact] bounty_id: ProposalIndex,
 			curator: <T::Lookup as StaticLookup>::Source,
@@ -1080,8 +1078,8 @@ decl_module! {
 		/// Only `T::RejectOrigin` is able to cancel a bounty.
 		///
 		/// - `bounty_id`: Bounty ID to cancel.
-		#[weight = T::WeightInfo::cancel_bounty()]
-		fn cancel_bounty(origin, #[compact] bounty_id: BountyIndex) {
+		#[weight = T::WeightInfo::close_bounty()]
+		fn close_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
 
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
@@ -1131,10 +1129,9 @@ decl_module! {
 				let _ = T::Currency::transfer(&bounty_account, &Self::account_id(), balance, AllowDeath); // should not fail
 				*maybe_bounty = None;
 
+				Self::deposit_event(Event::<T, I>::BountyCanceled(bounty_id));
 				Ok(())
 			})?;
-
-			Self::deposit_event(Event::<T, I>::BountyCanceled(bounty_id));
 		}
 
 		/// Extend the expiry time of an active bounty.

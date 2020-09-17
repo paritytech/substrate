@@ -72,17 +72,12 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
-	fn reject_bounty() -> Weight {
-		(47109000 as Weight)
-			.saturating_add(DbWeight::get().reads(1 as Weight))
-			.saturating_add(DbWeight::get().writes(2 as Weight))
-	}
 	fn approve_bounty() -> Weight {
 		(14829000 as Weight)
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
-	fn assign_curator() -> Weight {
+	fn propose_curator() -> Weight {
 		(11392000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
@@ -107,7 +102,7 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().reads(4 as Weight))
 			.saturating_add(DbWeight::get().writes(5 as Weight))
 	}
-	fn cancel_bounty() -> Weight {
+	fn close_bounty() -> Weight {
 		(70335000 as Weight)
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
