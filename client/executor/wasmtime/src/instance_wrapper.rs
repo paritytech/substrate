@@ -26,7 +26,7 @@ use std::{slice, marker};
 use sc_executor_common::{
 	error::{Error, Result},
 	util::{WasmModuleInfo, DataSegmentsSnapshot},
-	wasm_runtime::CallSite,
+	wasm_runtime::InvokeMethod,
 };
 use sp_wasm_interface::{Pointer, WordSize, Value};
 use wasmtime::{Engine, Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
@@ -214,9 +214,9 @@ impl InstanceWrapper {
 	///
 	/// An entrypoint must have a signature `(i32, i32) -> i64`, otherwise this function will return
 	/// an error.
-	pub fn resolve_entrypoint(&self, site: CallSite) -> Result<EntryPoint> {
+	pub fn resolve_entrypoint(&self, site: InvokeMethod) -> Result<EntryPoint> {
 		Ok(match site {
-			CallSite::Export(method) => {
+			InvokeMethod::Export(method) => {
 				// Resolve the requested method and verify that it has a proper signature.
 				let export = self
 					.instance
@@ -233,7 +233,7 @@ impl InstanceWrapper {
 						))
 					)?
 			},
-			CallSite::Table(func_ref) => {
+			InvokeMethod::Table(func_ref) => {
 				let table = self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
 				let val = table.get(func_ref)
 					.ok_or(Error::NoTableEntryWithIndex(func_ref))?;
@@ -251,7 +251,7 @@ impl InstanceWrapper {
 						))
 					)?
 				},
-			CallSite::TableWithWrapper { dispatcher_ref, func } => {
+			InvokeMethod::TableWithWrapper { dispatcher_ref, func } => {
 				let table = self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
 				let val = table.get(dispatcher_ref)
 					.ok_or(Error::NoTableEntryWithIndex(dispatcher_ref))?;

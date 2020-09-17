@@ -22,7 +22,7 @@ use sp_wasm_interface::Value;
 /// Call site.
 ///
 /// Contains variants on how to resolve wasm function that will be invoked.
-pub enum CallSite<'a> {
+pub enum InvokeMethod<'a> {
 	/// Call function exported with this name.
 	///
 	/// Located function should have (u32, u32) -> u64 signature.
@@ -45,9 +45,9 @@ pub enum CallSite<'a> {
 	},
 }
 
-impl<'a> From<&'a str> for CallSite<'a> {
-	fn from(val: &'a str) -> CallSite<'a> {
-		CallSite::Export(val)
+impl<'a> From<&'a str> for InvokeMethod<'a> {
+	fn from(val: &'a str) -> InvokeMethod<'a> {
+		InvokeMethod::Export(val)
 	}
 }
 
@@ -68,7 +68,7 @@ pub trait WasmInstance: Send {
 	/// Before execution, instance is reset.
 	///
 	/// Returns the encoded result on success.
-	fn call(&self, call_site: CallSite, data: &[u8]) -> Result<Vec<u8>, Error>;
+	fn call(&self, call_site: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error>;
 
 	/// Call an exported method on this WASM instance.
 	///

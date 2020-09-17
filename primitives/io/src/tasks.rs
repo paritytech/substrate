@@ -29,6 +29,7 @@ mod inner {
 	///
 	/// This can be `join`-ed to get (blocking) the result of
 	/// the spawned task execution.
+	#[must_use]
 	pub struct DataJoinHandle {
 		receiver: mpsc::Receiver<Vec<u8>>,
 	}
@@ -36,7 +37,7 @@ mod inner {
 	impl DataJoinHandle {
 		/// Join handle returned by `spawn` function
 		pub fn join(self) -> Vec<u8> {
-			self.receiver.recv().expect("Essntial task failure: forked runtime terminated before sending result.")
+			self.receiver.recv().expect("Essential task failure: forked runtime terminated before sending result.")
 		}
 	}
 
@@ -98,8 +99,7 @@ mod inner {
 			let ptr: fn(Vec<u8>) -> Vec<u8> = core::mem::transmute(func_ref);
 			(ptr)(payload)
 		};
-		let mut output_encode = (output.len() as u64) << 32;
-		output_encode | (output.as_ptr() as usize as u64)
+		sp_runtime_interface::pack_ptr_and_len(output.as_ptr() as usize as _, output.len() as _)
 	}
 
 	/// Spawn new runtime task (wasm).
@@ -118,6 +118,7 @@ mod inner {
 	///
 	/// This can be `join`-ed to get (blocking) the result of
 	/// the spawned task execution.
+	#[must_use]
 	pub struct DataJoinHandle {
 		handle: u64,
 	}

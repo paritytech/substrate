@@ -765,7 +765,7 @@ pub trait OffchainIndex {
 
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
-	/// The keystore extension to register/retrieve from the externalities.
+	/// Batch verification extension to register/retrieve from the externalities.
 	pub struct VerificationExt(BatchVerifier);
 }
 
@@ -1161,7 +1161,7 @@ pub trait RuntimeSpawn : Send {
 
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
-	/// The keystore extension to register/retrieve from the externalities.
+	/// Extension that supports spawning extra runtime instances in exteernalities.
 	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
 }
 

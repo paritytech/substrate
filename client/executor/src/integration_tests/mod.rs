@@ -801,7 +801,7 @@ fn panic_in_fork_panics_on_join(wasm_method: WasmExecutionMethod) {
 		wasm_method,
 		&mut ext,
 	) {
-		assert!(format!("{}", e).contains("Runtime panicked: No signal from forked execution"));
+		assert!(format!("{}", e).contains("No signal from forked execution"));
 	} else {
 		panic!("wasm call should be error")
 	}

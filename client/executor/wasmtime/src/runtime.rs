@@ -25,7 +25,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use sc_executor_common::{
 	error::{Error, Result, WasmError},
-	wasm_runtime::{WasmModule, WasmInstance, CallSite},
+	wasm_runtime::{WasmModule, WasmInstance, InvokeMethod},
 };
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
@@ -90,7 +90,7 @@ pub struct WasmtimeInstance {
 unsafe impl Send for WasmtimeInstance {}
 
 impl WasmInstance for WasmtimeInstance {
-	fn call(&self, call_site: CallSite, data: &[u8]) -> Result<Vec<u8>> {
+	fn call(&self, call_site: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
 		let entrypoint = self.instance_wrapper.resolve_entrypoint(call_site)?;
 		let allocator = FreeingBumpHeapAllocator::new(self.heap_base);
 

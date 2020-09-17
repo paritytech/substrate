@@ -29,7 +29,7 @@ use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
 use sp_runtime_interface::unpack_ptr_and_len;
-use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance, CallSite};
+use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance, InvokeMethod};
 use sc_executor_common::{
 	error::{Error, WasmError},
 	sandbox,
@@ -434,7 +434,7 @@ fn get_heap_base(module: &ModuleRef) -> Result<u32, Error> {
 fn call_in_wasm_module(
 	module_instance: &ModuleRef,
 	memory: &MemoryRef,
-	call_site: CallSite,
+	call_site: InvokeMethod,
 	data: &[u8],
 	host_functions: &[&'static dyn Function],
 	allow_missing_func_imports: bool,
@@ -460,14 +460,14 @@ fn call_in_wasm_module(
 	fec.write_memory(offset, data)?;
 
 	let result = match call_site {
-		CallSite::Export(method) => {
+		InvokeMethod::Export(method) => {
 			module_instance.invoke_export(
 				method,
 				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
 				&mut fec,
 			)
 		},
-		CallSite::Table(func_ref) => {
+		InvokeMethod::Table(func_ref) => {
 			let func = table.ok_or(Error::NoTable)?
 				.get(func_ref)?
 				.ok_or(Error::NoTableEntryWithIndex(func_ref))?;
@@ -477,7 +477,7 @@ fn call_in_wasm_module(
 				&mut fec,
 			).map_err(Into::into)
 		},
-		CallSite::TableWithWrapper { dispatcher_ref, func } => {
+		InvokeMethod::TableWithWrapper { dispatcher_ref, func } => {
 			let dispatcher = table.ok_or(Error::NoTable)?
 				.get(dispatcher_ref)?
 				.ok_or(Error::NoTableEntryWithIndex(dispatcher_ref))?;
@@ -702,7 +702,7 @@ pub struct WasmiInstance {
 unsafe impl Send for WasmiInstance {}
 
 impl WasmInstance for WasmiInstance {
-	fn call(&self, call_site: CallSite, data: &[u8]) -> Result<Vec<u8>, Error> {
+	fn call(&self, call_site: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error> {
 		// We reuse a single wasm instance for multiple calls and a previous call (if any)
 		// altered the state. Therefore, we need to restore the instance to original state.
 

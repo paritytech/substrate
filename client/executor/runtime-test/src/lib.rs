@@ -325,7 +325,7 @@ sp_core::wasm_export_functions! {
 	}
 
 	fn test_panic_in_fork_panics_on_join() {
-		let data_new = sp_io::tasks::spawn(tasks::panicker, vec![]).join();
+		sp_io::tasks::spawn(tasks::panicker, vec![]).join();
 	}
  }
 

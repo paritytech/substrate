@@ -38,7 +38,7 @@ use sp_core::{
 };
 use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
-use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, CallSite};
+use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
 use sp_externalities::ExternalitiesExt as _;
 use sp_io::{RuntimeSpawnExt, new_async_externalities};
 
@@ -198,7 +198,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 					&mut **ext,
 					move || {
 						RuntimeInstanceSpawn::register_on_externalities(module.clone());
-						instance.call(CallSite::Export(method), call_data)
+						instance.call(InvokeMethod::Export(method), call_data)
 					}
 				)
 			}).map_err(|e| e.to_string())
@@ -223,7 +223,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 				&mut **ext,
 				move || {
 					RuntimeInstanceSpawn::register_on_externalities(module.clone());
-					instance.call(CallSite::Export(method), call_data)
+					instance.call(InvokeMethod::Export(method), call_data)
 				}
 			)
 			.and_then(|r| r)
@@ -314,11 +314,39 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 		let scheduler = self.scheduler.clone();
 		self.scheduler.spawn("forked runtime invoke", Box::pin(async move {
 			let module = AssertUnwindSafe(module);
+
+			let async_ext = match new_async_externalities(scheduler.clone()) {
+				Ok(val) => val,
+				Err(e) => {
+					log::warn!(
+						target: "executor",
+						"Failed to setup externalities for async context: {}",
+						e,
+					);
+
+					// This will drop sender and receiver end will panic
+					return;
+				}
+			};
+
+			let mut async_ext = match async_ext.with_runtime_ext(
+				Box::new(RuntimeInstanceSpawn::new(module.clone(), scheduler))
+			) {
+				Ok(val) => val,
+				Err(e) => {
+					log::warn!(
+						target: "executor",
+						"Failed to setup runtime extension for async externalities: {}",
+						e,
+					);
+
+					// This will drop sender and receiver end will panic
+					return;
+				}
+			};
+
 			let result = with_externalities_safe(
-				&mut new_async_externalities(scheduler.clone())
-					.expect("Failed to setup externalities for async context")
-					.with_runtime_ext(Box::new(RuntimeInstanceSpawn::new(module.clone(), scheduler)))
-					.expect("Failed to setup runtime extension for async externalities"),
+				&mut async_ext,
 				move || {
 
 					// FIXME: Should be refactored to shared "instance factory".
@@ -327,7 +355,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 					let instance = module.new_instance().expect("Failed to create new instance for fork");
 
 					instance.call(
-						CallSite::TableWithWrapper { dispatcher_ref, func },
+						InvokeMethod::TableWithWrapper { dispatcher_ref, func },
 						&data[..],
 					).expect("Failed to invoke instance.")
 				}
@@ -439,7 +467,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 							&mut **ext,
 							move || {
 								RuntimeInstanceSpawn::register_on_externalities(module.clone());
-								instance.call(CallSite::Export(method), data).map(NativeOrEncoded::Encoded)
+								instance.call(InvokeMethod::Export(method), data).map(NativeOrEncoded::Encoded)
 							}
 						)
 					},
