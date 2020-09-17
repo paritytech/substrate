@@ -145,6 +145,7 @@ use frame_support::traits::{
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, DispatchResult, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
 }};
+use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_support::weights::{Weight, DispatchClass};
 use frame_support::traits::{Contains, ContainsLengthBound, EnsureOrigin};
 use codec::{Encode, Decode};
@@ -177,7 +178,8 @@ pub trait WeightInfo {
 	fn accept_curator() -> Weight;
 	fn award_bounty() -> Weight;
 	fn claim_bounty() -> Weight;
-	fn close_bounty() -> Weight;
+	fn close_bounty_proposed() -> Weight;
+	fn close_bounty_active() -> Weight;
 	fn extend_bounty_expiry() -> Weight;
 	fn on_initialize_proposals(p: u32, ) -> Weight;
 	fn on_initialize_bounties(b: u32, ) -> Weight;
@@ -1078,11 +1080,11 @@ decl_module! {
 		/// Only `T::RejectOrigin` is able to cancel a bounty.
 		///
 		/// - `bounty_id`: Bounty ID to cancel.
-		#[weight = T::WeightInfo::close_bounty()]
-		fn close_bounty(origin, #[compact] bounty_id: BountyIndex) {
+		#[weight = T::WeightInfo::close_bounty_proposed().max(T::WeightInfo::close_bounty_active())]
+		fn close_bounty(origin, #[compact] bounty_id: BountyIndex) -> DispatchResultWithPostInfo {
 			T::RejectOrigin::ensure_origin(origin)?;
 
-			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResultWithPostInfo {
 				let bounty = maybe_bounty.as_ref().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				match &bounty.status {
@@ -1096,7 +1098,7 @@ decl_module! {
 
 						Self::deposit_event(Event::<T, I>::BountyRejected(bounty_id, value));
 						// Return early, nothing else to do.
-						return Ok(())
+						return Ok(Some(T::WeightInfo::close_bounty_proposed()).into())
 					},
 					BountyStatus::Approved => {
 						// For weight reasons, we don't allow a council to cancel in this phase.
@@ -1130,8 +1132,8 @@ decl_module! {
 				*maybe_bounty = None;
 
 				Self::deposit_event(Event::<T, I>::BountyCanceled(bounty_id));
-				Ok(())
-			})?;
+				Ok(Some(T::WeightInfo::close_bounty_active()).into())
+			})
 		}
 
 		/// Extend the expiry time of an active bounty.
