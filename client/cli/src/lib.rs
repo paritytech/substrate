@@ -226,16 +226,18 @@ pub trait SubstrateCli: Sized {
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }
 
-/// Initialize the logger
+/// Initialize the global logger
+///
+/// This sets various global logging and tracing instances and thus may only be called once.
 pub fn init_logger(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
 	tracing_targets: Option<String>,
-) {
-	if tracing_log::LogTracer::init().is_err() {
-		log::debug!(
-			"💬 Not registering Substrate logger, as there is already a global logger registered!"
-		)
+) -> std::result::Result<(), String> {
+	if let Err(e) = tracing_log::LogTracer::init() {
+		return Err(format!(
+			"Registering Substrate logger failed: {:}!", e
+		))
 	}
 
 	let mut env_filter = tracing_subscriber::EnvFilter::default()
@@ -283,16 +285,17 @@ pub fn init_logger(
 	if let Some(tracing_targets) = tracing_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &tracing_targets);
 
-		if tracing::subscriber::set_global_default(subscriber.with(profiling)).is_err() {
-			tracing::debug!(
-				"💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"
-			);
+		if let Err(e) = tracing::subscriber::set_global_default(subscriber.with(profiling)) {
+			return Err(format!(
+				"Registering Substrate tracing subscriber failed: {:}!", e
+			))
 		}
 	} else {
-		if tracing::subscriber::set_global_default(subscriber).is_err() {
-			tracing::warn!(
-				"💬 Not registering Substrate subscriber, as there is already a global subscriber registered!"
-			);
+		if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+			return Err(format!(
+				"Registering Substrate tracing subscriber  failed: {:}!", e
+			))
 		}
 	}
+	Ok(())
 }
