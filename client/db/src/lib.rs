@@ -1958,7 +1958,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn delete_only_when_negative_rc() {
-		let _ = ::env_logger::try_init();
+		sp_tracing::try_init_simple();
 		let key;
 		let backend = Backend::<Block>::new_test(1, 0);
 

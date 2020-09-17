@@ -20,6 +20,6 @@ sc-client-api = { version = "2.0.0-rc6", path = "../api" }
 sc-network = { version = "0.8.0-rc6", path = "../network" }
 sp-blockchain = { version = "2.0.0-rc6", path = "../../primitives/blockchain" }
 sp-runtime = { version = "2.0.0-rc6", path = "../../primitives/runtime" }
-sp-utils = { version = "2.0.0-rc2", path = "../../primitives/utils" }
-sp-transaction-pool = { version = "2.0.0-rc2", path = "../../primitives/transaction-pool" }
+sp-utils = { version = "2.0.0-rc6", path = "../../primitives/utils" }
+sp-transaction-pool = { version = "2.0.0-rc6", path = "../../primitives/transaction-pool" }
 wasm-timer = "0.2"

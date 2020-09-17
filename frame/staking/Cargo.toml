@@ -33,6 +33,7 @@ rand_chacha = { version = "0.2", default-features = false, optional = true }
 [dev-dependencies]
 sp-core = { version = "2.0.0-rc6", path = "../../primitives/core" }
 sp-storage = { version = "2.0.0-rc6", path = "../../primitives/storage" }
+sp-tracing = { version = "2.0.0-rc6", path = "../../primitives/tracing" }
 pallet-balances = { version = "2.0.0-rc6", path = "../balances" }
 pallet-timestamp = { version = "2.0.0-rc6", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "2.0.0-rc6",  path = "../staking/reward-curve" }
@@ -40,7 +41,6 @@ substrate-test-utils = { version = "2.0.0-rc6", path = "../../test-utils" }
 frame-benchmarking = { version = "2.0.0-rc6", path = "../benchmarking" }
 rand_chacha = { version = "0.2" }
 parking_lot = "0.10.2"
-env_logger = "0.7.1"
 hex = "0.4"
 
 [features]
