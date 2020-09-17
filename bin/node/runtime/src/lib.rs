@@ -730,9 +730,16 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime where
 	type OverarchingCall = Call;
 }
 
+impl pallet_im_online::ValidatorSet<<Self as pallet_session::Trait>::ValidatorId> for Runtime {
+	fn validators() -> Vec<<Self as pallet_session::Trait>::ValidatorId> {
+		Session::validators()
+	}
+}
+
 impl pallet_im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Event = Event;
+	type ValidatorSet = Self;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ImOnlineUnsignedPriority;

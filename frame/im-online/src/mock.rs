@@ -21,7 +21,7 @@
 
 use std::cell::RefCell;
 
-use crate::{Module, Trait};
+use crate::{Module, Trait, ValidatorSet};
 use sp_runtime::Perbill;
 use sp_staking::{SessionIndex, offence::{ReportOffence, OffenceError}};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
@@ -179,10 +179,17 @@ parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
+impl ValidatorSet<<Self as pallet_session::Trait>::ValidatorId> for Runtime {
+	fn validators() -> Vec<<Self as pallet_session::Trait>::ValidatorId> {
+		Session::validators()
+	}
+}
+
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;
+	type ValidatorSet = Self;
 	type SessionDuration = Period;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();

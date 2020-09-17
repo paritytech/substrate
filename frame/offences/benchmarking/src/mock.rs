@@ -186,9 +186,16 @@ impl pallet_staking::Trait for Test {
 	type WeightInfo = ();
 }
 
+impl pallet_im_online::ValidatorSet<<Self as pallet_session::Trait>::ValidatorId> for Test {
+	fn validators() -> Vec<<Self as pallet_session::Trait>::ValidatorId> {
+		Session::validators()
+	}
+}
+
 impl pallet_im_online::Trait for Test {
 	type AuthorityId = UintAuthorityId;
 	type Event = Event;
+	type ValidatorSet = Self;
 	type SessionDuration = Period;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();

@@ -238,6 +238,12 @@ impl WeightInfo for () {
 	fn validate_unsigned_and_then_heartbeat(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
 }
 
+/// The set of validators that are considered to be online.
+pub trait ValidatorSet<ValidatorId> {
+	/// Returns all the validators ought to be online.
+	fn validators() -> Vec<ValidatorId>;
+}
+
 pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
@@ -252,6 +258,9 @@ pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::
 	/// since the workers avoids sending them at the very beginning of the session, assuming
 	/// there is a chance the authority will produce a block and they won't be necessary.
 	type SessionDuration: Get<Self::BlockNumber>;
+
+	/// A set of validators expected to be online.
+	type ValidatorSet: ValidatorSet<<Self as pallet_session::Trait>::ValidatorId>;
 
 	/// A type that gives us the ability to submit unresponsiveness offence reports.
 	type ReportUnresponsiveness:
@@ -427,7 +436,7 @@ impl<T: Trait> Module<T> {
 	/// authored at least one block, during the current session. Otherwise
 	/// `false`.
 	pub fn is_online(authority_index: AuthIndex) -> bool {
-		let current_validators = <pallet_session::Module<T>>::validators();
+		let current_validators = T::ValidatorSet::validators();
 
 		if authority_index >= current_validators.len() as u32 {
 			return false;
@@ -475,7 +484,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		let session_index = <pallet_session::Module<T>>::current_index();
-		let validators_len = <pallet_session::Module<T>>::validators().len() as u32;
+		let validators_len = T::ValidatorSet::validators().len() as u32;
 
 		Ok(Self::local_authority_keys()
 			.map(move |(authority_index, key)|
@@ -655,7 +664,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_before_session_ending() {
 		let session_index = <pallet_session::Module<T>>::current_index();
 		let keys = Keys::<T>::get();
-		let current_validators = <pallet_session::Module<T>>::validators();
+		let current_validators = T::ValidatorSet::validators();
 
 		let offenders = current_validators.into_iter().enumerate()
 			.filter(|(index, id)|
