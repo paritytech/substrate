@@ -54,7 +54,7 @@ benchmarks! {
 	_ {	}
 
 	set_keys {
-		let n in 1 .. MAX_NOMINATIONS as u32;
+		let n = MAX_NOMINATIONS as u32;
 		let v_stash = create_validator_with_nominators::<T>(
 			n,
 			MAX_NOMINATIONS as u32,
@@ -70,7 +70,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(v_controller), keys, proof)
 
 	purge_keys {
-		let n in 1 .. MAX_NOMINATIONS as u32;
+		let n = MAX_NOMINATIONS as u32;
 		let v_stash = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32, false, RewardDestination::Staked)?;
 		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
