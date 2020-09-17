@@ -758,7 +758,7 @@ where
 		};
 		let mut cfg = OneShotHandlerConfig::default();
 		cfg.keep_alive_timeout = self.config.inactivity_timeout;
-		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
+		OneShotHandler::new(SubstreamProtocol::new(p, ()), cfg)
 	}
 
 	fn addresses_of_peer(&mut self, peer: &PeerId) -> Vec<Multiaddr> {

@@ -227,6 +227,7 @@ impl frame_system::Trait for Test {
 	type SystemWeightInfo = ();
 }
 impl pallet_balances::Trait for Test {
+	type MaxLocks = ();
 	type Balance = Balance;
 	type Event = MetaEvent;
 	type DustRemoval = ();
