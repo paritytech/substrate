@@ -329,10 +329,18 @@ impl DiscoveryBehaviour {
 		}
 	}
 
-	/// Returns the number of nodes that are in the Kademlia k-buckets.
-	pub fn num_kbuckets_entries(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+	/// Returns the number of nodes in each Kademlia kbucket for each Kademlia instance.
+	///
+	/// Identifies Kademlia instances by their [`ProtocolId`] and kbuckets by the base 2 logarithm
+	/// of their lower bound.
+	pub fn num_entries_per_kbucket(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, Vec<(u32, usize)>)> {
 		self.kademlias.iter_mut()
-			.map(|(id, kad)| (id, kad.kbuckets().map(|bucket| bucket.iter().count()).sum()))
+			.map(|(id, kad)| {
+				let buckets = kad.kbuckets()
+					.map(|bucket| (bucket.range().0.ilog2().unwrap_or(0), bucket.iter().count()))
+					.collect();
+				(id, buckets)
+			})
 	}
 
 	/// Returns the number of records in the Kademlia record stores.
