@@ -175,14 +175,16 @@ impl ProtocolsHandler for NotifsInHandler {
 	type InboundProtocol = NotificationsIn;
 	type OutboundProtocol = DeniedUpgrade;
 	type OutboundOpenInfo = ();
+	type InboundOpenInfo = ();
 
-	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
-		SubstreamProtocol::new(self.in_protocol.clone())
+	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, ()> {
+		SubstreamProtocol::new(self.in_protocol.clone(), ())
 	}
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		(msg, proto): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
+		(msg, proto): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output,
+		(): ()
 	) {
 		// If a substream already exists, we drop it and replace it with the new incoming one.
 		if self.substream.is_some() {
