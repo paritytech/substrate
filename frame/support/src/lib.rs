@@ -269,6 +269,21 @@ macro_rules! ord_parameter_types {
 #[doc(inline)]
 pub use frame_support_procedural::{decl_storage, construct_runtime, transactional};
 
+/// Convert the current crate version into a [`PalletVersion`](crate::traits::PalletVersion).
+///
+/// It uses the `CARGO_PKG_VERSION_MAJOR`, `CARGO_PKG_VERSION_MINOR` and
+/// `CARGO_PKG_VERSION_PATCH` environment variables to fetch the crate version.
+/// This means that the [`PalletVersion`](crate::traits::PalletVersion)
+/// object will correspond to the version of the crate the macro is called in!
+///
+/// # Example
+///
+/// ```
+/// #use frame_support::{traits::PalletVersion, crate_to_pallet_version};
+/// const Version: PalletVersion = crate_to_pallet_version!();
+/// ```
+pub use frame_support_procedural::crate_to_pallet_version;
+
 /// Return Err of the expression: `return Err($expression);`.
 ///
 /// Used as `fail!(expression)`.

@@ -19,12 +19,46 @@
 
 use proc_macro2::{TokenStream, Span};
 use syn::{Result, Error};
+use std::{env, str::FromStr};
+use frame_support_procedural_tools::generate_crate_access_2018;
+
+/// Get the version from the given version environment variable.
+///
+/// The version is parsed into the requested destination type.
+fn get_version<T: FromStr>(version_env: &str) -> std::result::Result<T, ()> {
+	let version = env::var(version_env)
+		.expect(&format!("`{}` is always set by cargo; qed", version_env));
+
+	T::from_str(&version).map_err(drop)
+}
+
+/// Create an error that will be shown by rustc at the call site of the macro.
+fn create_error(message: &str) -> Error {
+	Error::new(Span::call_site(), message)
+}
 
 /// Implementation of the `crate_to_pallet_version!` macro.
 pub fn crate_to_pallet_version(input: proc_macro::TokenStream) -> Result<TokenStream> {
 	if !input.is_empty() {
-		return Err(Error::new(Span::call_site(), "No arguments expected!"));
+		return Err(create_error("No arguments expected!"))
 	}
 
-	Ok(TokenStream::default())
+	let major_version = get_version::<u16>("CARGO_PKG_VERSION_MAJOR")
+		.map_err(|_| create_error("Major version needs to fit into `u16`"))?;
+
+	let minor_version = get_version::<u8>("CARGO_PKG_VERSION_MINOR")
+		.map_err(|_| create_error("Minor version needs to fit into `u8`"))?;
+
+	let patch_version = get_version::<u8>("CARGO_PKG_VERSION_PATCH")
+		.map_err(|_| create_error("Patch version needs to fit into `u8`"))?;
+
+	let crate_ = generate_crate_access_2018()?;
+
+	Ok(quote::quote! {
+		#crate_::traits::PalletVersion {
+			major: #major_version,
+			minor: #minor_version,
+			patch: #patch_version,
+		}
+	})
 }

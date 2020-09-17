@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,25 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test crate for frame_support. Allow to make use of `frame_support::decl_storage`.
-//! See tests directory.
+use frame_support::{crate_to_pallet_version, traits::PalletVersion};
 
-// Make sure we fail compilation on warnings
-#![warn(missing_docs)]
-#![deny(warnings)]
+#[test]
+fn ensure_that_current_pallet_version_is_correct() {
+	let expected = PalletVersion {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
+	};
 
-#[cfg(test)]
-mod pallet_version;
-
-/// The configuration trait
-pub trait Trait {
-	/// The runtime origin type.
-	type Origin;
-	/// The block number type.
-	type BlockNumber;
-}
-
-frame_support::decl_module! {
-	/// Some test module
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+	assert_eq!(
+		expected,
+		crate_to_pallet_version!(),
+	)
 }
