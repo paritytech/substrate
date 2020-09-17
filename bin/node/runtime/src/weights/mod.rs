@@ -23,3 +23,4 @@ pub mod pallet_im_online;
 pub mod pallet_proxy;
 pub mod pallet_timestamp;
 pub mod pallet_utility;
+pub mod pallet_vesting;

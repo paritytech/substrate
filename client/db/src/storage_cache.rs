@@ -1024,7 +1024,7 @@ mod tests {
 
 	#[test]
 	fn simple_fork() {
-		let _ = ::env_logger::try_init();
+		sp_tracing::try_init_simple();
 
 		let root_parent = H256::random();
 		let key = H256::random()[..].to_vec();
@@ -1245,7 +1245,7 @@ mod tests {
 
 	#[test]
 	fn fix_storage_mismatch_issue() {
-		let _ = ::env_logger::try_init();
+		sp_tracing::try_init_simple();
 		let root_parent = H256::random();
 
 		let key = H256::random()[..].to_vec();

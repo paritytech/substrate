@@ -28,8 +28,8 @@ sp-runtime = { version = "2.0.0-rc6", path = "../../../primitives/runtime" }
 sp-core = { version = "2.0.0-rc6", path = "../../../primitives/core" }
 sc-block-builder = { version = "0.8.0-rc6", path = "../../block-builder" }
 sp-consensus-babe = { version = "0.8.0-rc6", path = "../../../primitives/consensus/babe" }
-env_logger = "0.7.0"
 substrate-test-runtime-client = { version = "2.0.0-rc6", path = "../../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0-rc6", path = "../../../test-utils/runtime" }
 tempfile = "3.1.0"
+sp-tracing = { version = "2.0.0-rc6", path = "../../../primitives/tracing" }
 sc-service = { version = "0.8.0-rc6", default-features = false, features = ["test-helpers"],  path = "../../service" }
