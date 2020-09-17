@@ -78,6 +78,7 @@ impl pallet_balances::Trait for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type MaxLocks = ();
 	type WeightInfo = ();
 }
 parameter_types! {
