@@ -169,7 +169,7 @@ fn function_std_impl(
 	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
 	// Don't make the function public accessible when this is a wasm only interface.
 	let call_to_trait = generate_call_to_trait(trait_name, method, version, is_wasm_only);
-	let call_to_trait = if ! tracing {
+	let call_to_trait = if !tracing {
 		call_to_trait
 	} else {
 		parse_quote!(

@@ -1035,18 +1035,18 @@ impl<T> core::default::Default for Crossing<T>
 
 }
 
-/// Interface to providing tracing facilities for wasm. Modeled after tokios `tracing`-crate
+/// Interface to provide tracing facilities for wasm. Modelled after tokios `tracing`-crate
 /// interfaces. See `sp-tracing` for more information.
 #[runtime_interface(wasm_only, no_tracing)]
 pub trait WasmTracing {
-	/// Given the crossing over `WasmMetadata`, return whether this should be handled or not.
+	/// Whether the span described in `WasmMetadata` should be traced wasm-side
 	/// On the host converts into a static Metadata and checks against the global `tracing` dispatcher.
 	///
 	/// When returning false the calling code should skip any tracing-related execution. In general
-	/// within the same block execution this is not expected to change and there doesn't have to be
+	/// within the same block execution this is not expected to change and it doesn't have to be
 	/// checked more than once per metadata. This exists for optimisation purposes but is still not
-	/// cheap as it needs to jump the wasm-native-barrier, so caching the result wasm-side might be
-	/// a useful addition.
+	/// cheap as it will jump the wasm-native-barrier every time it is called. So an implementation might
+	/// chose to cache the result for the execution of the entire block.
 	fn enabled(&mut self, metadata: Crossing<sp_tracing::WasmMetadata>) -> bool {
 		let metadata: &tracing_core::metadata::Metadata<'static> = (&metadata.into_inner()).into();
 		tracing::dispatcher::get_default(|d| {
@@ -1054,8 +1054,7 @@ pub trait WasmTracing {
 		})
 	}
 
-	/// Open a new span with the given attributes. Return the u64 reference of the span. Where `0`
-	/// means no span was created or will be tracked.
+	/// Open a new span with the given attributes. Return the u64 Id of the span.
 	///
 	/// On the native side this goes through the default `tracing` dispatcher to register the span
 	/// and then calls `clone_span` with the ID to signal that we are keeping it around on the wasm-
@@ -1083,7 +1082,7 @@ pub trait WasmTracing {
 	}
 
 	/// Signal that a given span-id has been exited. On native, this directly
-	/// proxies this to the global dispatcher.
+	/// proxies the span to the global dispatcher.
 	fn exit(&mut self, span: u64) {
 		tracing::dispatcher::get_default(|d| {
 			let id = tracing_core::span::Id::from_u64(span);
@@ -1106,7 +1105,7 @@ mod tracing_setup {
 
 
 	/// The PassingTracingSubscriber implements `tracing_core::Subscriber`
-	/// and pushes the information accross the runtime interface to the host
+	/// and pushes the information across the runtime interface to the host
 	struct PassingTracingSubsciber;
 
 	impl tracing_core::Subscriber for PassingTracingSubsciber {
@@ -1117,14 +1116,17 @@ mod tracing_setup {
 			Id::from_u64(wasm_tracing::enter_span(Crossing(attrs.into())))
 		}
 		fn enter(&self, span: &Id) {
-			// We are already entered in the API here
-			todo! {}
+			// Do nothing, we already entered the span previously
 		}
+		/// Not implemented! We do not support recording values later
+		/// Will panic when used.
 		fn record(&self, span: &Id, values: &Record<'_>) {
-			todo!{}
+			unimplemented!{} // this usage is not supported
 		}
+		/// Not implemented! We do not support recording values later
+		/// Will panic when used.
 		fn record_follows_from(&self, span: &Id, follows: &Id) {
-			todo!{ }
+			unimplemented!{ } // this usage is not supported
 		}
 		fn event(&self, event: &Event<'_>) {
 			wasm_tracing::event(Crossing(event.into()))
@@ -1136,8 +1138,8 @@ mod tracing_setup {
 
 
 	/// Initialize tracing of sp_tracing on wasm with `with-tracing` enabled.
-	/// Can be called multiple times from within the same process will only
-	/// set the global bridgin subscriber once.
+	/// Can be called multiple times from within the same process and will only
+	/// set the global bridging subscriber once.
 	pub fn init_tracing() {
 		if TRACING_SET.load(Ordering::Relaxed) == false {
 			set_global_default(Dispatch::new(PassingTracingSubsciber {}))

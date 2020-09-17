@@ -563,7 +563,7 @@ mod std_features {
 	);
 
 	// FIXME: this could be done a lot in 0.2 if they opt for using `Cow<str,'static>` instead
-	//			https://github.com/tokio-rs/tracing/issues/922
+	//			https://github.com/paritytech/substrate/issues/7134
 	impl From<&crate::WasmMetadata> for &'static tracing_core::Metadata<'static> {
 		fn from(wm: &crate::WasmMetadata) -> &'static tracing_core::Metadata<'static> {
 			match (&wm.level, wm.is_span) {

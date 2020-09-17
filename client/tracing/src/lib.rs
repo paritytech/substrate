@@ -326,7 +326,7 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 		};
 
 		if let Some(mut span_datum) = span_datum {
-			span_datum.overall_time = end_time - span_datum.start_time + span_datum.overall_time;
+			span_datum.overall_time += end_time - span_datum.start_time;
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
 				span_datum.values.bool_values.insert("wasm".to_owned(), true);
 				if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
