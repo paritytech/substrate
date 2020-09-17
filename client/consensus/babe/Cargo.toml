@@ -53,13 +53,13 @@ retain_mut = "0.1.1"
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0-rc6", path = "../../../primitives/keyring" }
+sp-tracing = { version = "2.0.0-rc6", path = "../../../primitives/tracing" }
 sc-executor = { version = "0.8.0-rc6", path = "../../executor" }
 sc-network = { version = "0.8.0-rc6", path = "../../network" }
 sc-network-test = { version = "0.8.0-rc6", path = "../../network/test" }
 sc-service = { version = "0.8.0-rc6", default-features = false, path = "../../service" }
 substrate-test-runtime-client = { version = "2.0.0-rc6", path = "../../../test-utils/runtime/client" }
 sc-block-builder = { version = "0.8.0-rc6", path = "../../block-builder" }
-env_logger = "0.7.0"
 rand_chacha = "0.2.2"
 tempfile = "3.1.0"
 async-std = "1.6.2"
