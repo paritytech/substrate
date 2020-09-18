@@ -27,7 +27,7 @@ pub use self::mmr::{MMR, Error};
 /// Node type for runtime `T`.
 pub type NodeOf<T, L> = Node<<T as crate::Trait>::Hashing, L>;
 
-/// Hasher type for MMR.
+/// Default Merging & Hashing behavior for MMR.
 pub struct Hasher<H, L>(sp_std::marker::PhantomData<(H, L)>);
 
 impl<H: traits::Hash, L: codec::Codec> mmr_lib::Merge for Hasher<H, L> {
@@ -41,15 +41,17 @@ impl<H: traits::Hash, L: codec::Codec> mmr_lib::Merge for Hasher<H, L> {
 /// A node stored in the MMR.
 #[derive(RuntimeDebug, Clone, PartialEq, codec::Encode, codec::Decode)]
 pub enum Node<H: traits::Hash, L> {
+	/// A terminal leaf node, storing arbitrary content.
 	Leaf(L),
+	/// An inner node - always just a hash.
 	Inner(H::Output),
 }
 
 impl<H: traits::Hash, L: codec::Encode> Node<H, L> {
 	/// Retrieve a hash of the node.
 	///
-	/// Depending on the node type it's going to either be a contained value for `Inner` node,
-	/// or a hash of SCALE-encoded `Leaf` data.
+	/// Depending on the node type it's going to either be a contained value for [Node::Inner]
+	/// node, or a hash of SCALE-encoded [Node::Leaf] data.
 	pub fn hash(&self) -> H::Output {
 		match *self {
 			Node::Leaf(ref leaf) => H::hash_of(leaf),

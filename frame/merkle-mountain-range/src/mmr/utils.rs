@@ -17,18 +17,18 @@
 
 //! Merkle Mountain Range utilities.
 
-/// MMR nodes utilities.
+/// MMR nodes & size -related utilities.
 pub struct NodesUtils {
 	no_of_leaves: u64,
 }
 
 impl NodesUtils {
-	/// Create new instance of MMR nodes utilities.
+	/// Create new instance of MMR nodes utilities for given number of leaves.
 	pub fn new(no_of_leaves: u64) -> Self {
 		Self { no_of_leaves }
 	}
 
-	/// Return number of peaks in the MMR.
+	/// Calculate number of peaks in the MMR.
 	pub fn number_of_peaks(&self) -> u64 {
 		self.number_of_leaves().count_ones() as u64
 	}
@@ -38,7 +38,7 @@ impl NodesUtils {
 		self.no_of_leaves
 	}
 
-	/// The total size of the MMR (number of nodes).
+	/// Calculate the total size of MMR (number of nodes).
 	pub fn size(&self) -> u64 {
 		2 * self.no_of_leaves - self.number_of_peaks()
 	}

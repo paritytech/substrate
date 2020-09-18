@@ -27,8 +27,10 @@ use crate::{
 use frame_support::{debug, RuntimeDebug};
 use sp_std::fmt;
 
-/// A wrapper around a MMR library to expose limited functionality that works
-/// with non-peak nodes pruned.
+/// A wrapper around a MMR library to expose limited functionality.
+///
+/// Available functions depend on the storage kind ([Runtime](crate::mmr::storage::RuntimeStorage)
+/// vs [Off-chain](crate::mmr::storage::OffchainStorage)).
 pub struct MMR<StorageType, T, L> where
 	T: Trait,
 	L: codec::Codec + fmt::Debug,
@@ -47,7 +49,7 @@ impl<StorageType, T, L> MMR<StorageType, T, L> where
 	L: codec::Codec + PartialEq + fmt::Debug + Clone,
 	Storage<StorageType, T, L>: mmr_lib::MMRStore<NodeOf<T, L>>,
 {
-	/// Create a pointer to an existing MMR with given size.
+	/// Create a pointer to an existing MMR with given number of leaves.
 	pub fn new(leaves: u64) -> Self {
 		let size = NodesUtils::new(leaves).size();
 		Self {
@@ -57,7 +59,11 @@ impl<StorageType, T, L> MMR<StorageType, T, L> where
 	}
 
 	/// Verify proof of a single leaf.
-	pub fn verify_leaf_proof(&self, leaf: L, proof: primitives::Proof<<T as Trait>::Hash>) -> Result<bool, Error> {
+	pub fn verify_leaf_proof(
+		&self,
+		leaf: L,
+		proof: primitives::Proof<<T as Trait>::Hash>,
+	) -> Result<bool, Error> {
 		let p = mmr_lib::MerkleProof::<
 			NodeOf<T, L>,
 			Hasher<<T as Trait>::Hashing, L>,
@@ -101,7 +107,8 @@ impl<T, L> MMR<RuntimeStorage, T, L> where
 		res
 	}
 
-	/// Commit the changes to underlying storage and calculate MMR's size & root hash.
+	/// Commit the changes to underlying storage, return current number of leaves and
+	/// calculate the new MMR's root hash.
 	pub fn finalize(self) -> Result<(u64, <T as Trait>::Hash), Error> {
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.debug(e))?;
 		self.mmr.commit().map_err(|e| Error::Commit.debug(e))?;

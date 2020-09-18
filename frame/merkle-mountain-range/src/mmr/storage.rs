@@ -26,14 +26,23 @@ use sp_std::fmt;
 /// A marker type for runtime-specific storage implementation.
 ///
 /// Allows appending new items to the MMR and proof verification.
+/// MMR nodes are appended to two different storages:
+/// 1. We add nodes (leaves) hashes to the on-chain storge (see [crate::Nodes]).
+/// 2. We add full leaves (and all inner nodes as well) into the `IndexingAPI` during block
+///    processing, so the values end up in the Offchain DB if indexing is enabled.
 pub struct RuntimeStorage;
 
 /// A marker type for offchain-specific storage implementation.
 ///
 /// Allows proof generation and verification, but does not support appending new items.
+/// MMR nodes are assumed to be stored in the Off-Chain DB. Note this storage type
+/// DOES NOT support adding new items to the MMR.
 pub struct OffchainStorage;
 
 /// A storage layer for MMR.
+///
+/// There are two different implementations depending on the use case.
+/// See docs for [RuntimeStorage] and [OffchainStorage].
 pub struct Storage<StorageType, T, L>(
 	sp_std::marker::PhantomData<(StorageType, T, L)>
 );
@@ -49,6 +58,7 @@ impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<NodeOf<T, L>>
 {
 	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, L>>> {
 		let key = Module::<T>::offchain_key(pos);
+		// Retrieve the element from Off-chain DB.
 		Ok(
 			sp_io::offchain ::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
 				.and_then(|v| codec::Decode::decode(&mut &*v).ok())
@@ -77,8 +87,9 @@ impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<NodeOf<T, L>>
 		}
 
 		for elem in elems {
+			// on-chain we only store the hash (even if it's a leaf)
 			<Nodes<T>>::insert(size, elem.hash());
-			// Indexing API used to store the full leaf content.
+			// Indexing API is used to store the full leaf content.
 			elem.using_encoded(|elem| {
 				sp_io::offchain_index::set(&Module::<T>::offchain_key(size), elem)
 			});

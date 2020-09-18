@@ -60,7 +60,7 @@ pub trait Trait: frame_system::Trait {
 	/// Data stored in the leaf nodes.
 	///
 	/// By default every leaf node will always include a (parent) block hash and
-	/// any additional `LeafData` defined by this type.
+	/// any additional [LeafData](primitives::LeafDataProvider) defined by this type.
 	type LeafData: primitives::LeafDataProvider;
 }
 
@@ -120,6 +120,8 @@ type LeafOf<T> = primitives::Leaf<
 >;
 
 impl<T: Trait> Module<T> {
+	/// Prune leaf & inner nodes that are no longer necessary to keep.
+	///
 	/// Returns the number of nodes pruned.
 	fn prune_non_peaks() -> u64 {
 		debug::native::info!("Pruning MMR of size: {:?}", Self::mmr_leaves());
@@ -132,6 +134,12 @@ impl<T: Trait> Module<T> {
 		(b"mmr-", pos).encode()
 	}
 
+	/// Generate a MMR proof for given `leaf_index`.
+	///
+	/// Note this method can only be used from an off-chain context
+	/// (Offchain Worker or Runtime API call), since it requires
+	/// all the leaves to be present.
+	/// It may return an error or panic if used incorrectly.
 	pub fn generate_proof(leaf_index: u64) -> Result<
 		(LeafOf<T>, primitives::Proof<<T as Trait>::Hash>),
 		mmr::Error,
@@ -140,7 +148,13 @@ impl<T: Trait> Module<T> {
 		mmr.generate_proof(leaf_index)
 	}
 
-	pub fn verify_leaf(leaf: LeafOf<T>, proof: primitives::Proof<<T as Trait>::Hash>) -> Result<bool, mmr::Error> {
+	/// Verify MMR proof for given `leaf`.
+	///
+	/// This method is safe to use within the runtime code.
+	/// It will return `Ok(())` if the proof is valid
+	/// and an `Err(..)` if MMR is inconsistent (some leaves are missing)
+	/// or the proof is invalid.
+	pub fn verify_leaf(leaf: LeafOf<T>, proof: primitives::Proof<<T as Trait>::Hash>) -> Result<(), mmr::Error> {
 		if proof.leaf_count > Self::mmr_leaves()
 			|| proof.leaf_count == 0
 			|| proof.items.len() as u64 > proof.leaf_count
@@ -149,6 +163,11 @@ impl<T: Trait> Module<T> {
 		}
 
 		let mmr: ModuleMMR<mmr::storage::RuntimeStorage, T> = mmr::MMR::new(proof.leaf_count);
-		mmr.verify_leaf_proof(leaf, proof)
+		let is_valid = mmr.verify_leaf_proof(leaf, proof)?;
+		if is_valid {
+			Ok(())
+		} else {
+			Err(mmr::Error::Verify.debug("Incorrect proof."))
+		}
 	}
 }

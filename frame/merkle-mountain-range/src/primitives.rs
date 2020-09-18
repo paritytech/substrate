@@ -31,7 +31,7 @@ pub trait LeafDataProvider {
 	///
 	/// This is being called by the `on_initialize` method of
 	/// this pallet at the very beginning of each block.
-	/// The second argument should indicate how much `Weight`
+	/// The second return value should indicate how much [Weight]
 	/// was required to retrieve the data.
 	fn leaf_data() -> (Self::LeafData, Weight);
 }
@@ -59,7 +59,7 @@ pub struct Leaf<BlockHash, Data> {
 pub struct Proof<Hash> {
 	/// The index of the leaf the proof is for.
 	pub leaf_index: u64,
-	/// Number of leafs in MMR, when the proof was generated.
+	/// Number of leaves in MMR, when the proof was generated.
 	pub leaf_count: u64,
 	/// Proof elements (hashes of inner nodes on the path to the leaf).
 	pub items: Vec<Hash>,

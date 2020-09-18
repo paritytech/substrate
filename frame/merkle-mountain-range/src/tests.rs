@@ -329,7 +329,7 @@ fn should_verify() {
 	ext2.execute_with(|| {
 		init_chain(7);
 		// then
-		assert_eq!(crate::Module::<Test>::verify_leaf(leaf, proof5), Ok(true));
+		assert_eq!(crate::Module::<Test>::verify_leaf(leaf, proof5), Ok(()));
 	});
 }
 
@@ -349,6 +349,6 @@ fn should_verify_on_the_next_block_since_there_is_no_pruning_yet() {
 		new_block();
 
 		// then
-		assert_eq!(crate::Module::<Test>::verify_leaf(leaf, proof5), Ok(true));
+		assert_eq!(crate::Module::<Test>::verify_leaf(leaf, proof5), Ok(()));
 	});
 }
