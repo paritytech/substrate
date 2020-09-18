@@ -52,6 +52,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
+mod default_weights;
 
 use sp_std::{prelude::*, marker::PhantomData, borrow::Borrow};
 use codec::{Encode, Decode, Codec};
@@ -70,14 +71,6 @@ pub trait WeightInfo {
 	fn schedule_named(s: u32, ) -> Weight;
 	fn cancel_named(s: u32, ) -> Weight;
 	fn on_initialize(s: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn schedule(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn cancel(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn schedule_named(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn cancel_named(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn on_initialize(_s: u32, ) -> Weight { 1_000_000_000 }
 }
 
 /// Our pallet's configuration trait. All our types and constants go in here. If the
@@ -105,6 +98,10 @@ pub trait Trait: system::Trait {
 
 	/// Required origin to schedule or cancel calls.
 	type ScheduleOrigin: EnsureOrigin<<Self as system::Trait>::Origin>;
+
+	/// The maximum number of scheduled calls in the queue for a single block.
+	/// Not strictly enforced, but used for weight estimation.
+	type MaxScheduledPerBlock: Get<u32>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -340,6 +337,12 @@ decl_module! {
 				.enumerate()
 				.filter_map(|(index, s)| s.map(|inner| (index as u32, inner)))
 				.collect::<Vec<_>>();
+			if queued.len() as u32 > T::MaxScheduledPerBlock::get() {
+				frame_support::debug::warn!(
+					"Warning: This block has more items queued in Scheduler than \
+					expected from the runtime configuration. An update might be needed."
+				);
+			}
 			queued.sort_by_key(|(_, s)| s.priority);
 			let base_weight: Weight = T::DbWeight::get().reads_writes(1, 2) // Agenda + Agenda(next)
 				.saturating_add(10_000_000); // Base Weight
@@ -466,6 +469,12 @@ impl<T: Trait> Module<T> {
 		});
 		Agenda::<T>::append(when, s);
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
+		if index > T::MaxScheduledPerBlock::get() {
+			frame_support::debug::warn!(
+				"Warning: There are more items queued in the Scheduler than \
+				expected from the runtime configuration. An update might be needed."
+			);
+		}
 		Self::deposit_event(RawEvent::Scheduled(when, index));
 
 		Ok((when, index))
@@ -535,6 +544,12 @@ impl<T: Trait> Module<T> {
 		};
 		Agenda::<T>::append(when, Some(s));
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
+		if index > T::MaxScheduledPerBlock::get() {
+			frame_support::debug::warn!(
+				"Warning: There are more items queued in the Scheduler than \
+				expected from the runtime configuration. An update might be needed."
+			);
+		}
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);
 		Self::deposit_event(RawEvent::Scheduled(when, index));
@@ -734,6 +749,7 @@ mod tests {
 	}
 	parameter_types! {
 		pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+		pub const MaxScheduledPerBlock: u32 = 10;
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
@@ -746,6 +762,7 @@ mod tests {
 		type Call = Call;
 		type MaximumWeight = MaximumSchedulerWeight;
 		type ScheduleOrigin = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+		type MaxScheduledPerBlock = MaxScheduledPerBlock;
 		type WeightInfo = ();
 	}
 	type System = system::Module<Test>;
