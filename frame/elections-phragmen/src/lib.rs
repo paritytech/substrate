@@ -441,28 +441,26 @@ decl_module! {
 			ensure!(value > T::Currency::minimum_balance(), Error::<T>::LowBalance);
 
 			// Reserve bond.
+			let new_deposit = Self::deposit_of(votes.len());
 			let Voter { votes: old_votes, deposit: old_deposit, .. } = <Voting<T>>::get(&who);
 			let maybe_refund = if old_votes.is_empty() {
 				// First time voter. Get full deposit.
-				let deposit = Self::deposit_of(votes.len());
-				T::Currency::reserve(&who, deposit)
+				T::Currency::reserve(&who, new_deposit)
 					.map_err(|_| Error::<T>::UnableToPayBond)?;
 				None
 			} else {
 				// Old voter.
-				match votes.len().cmp(&old_votes.len()) {
+				match new_deposit.cmp(&old_deposit) {
 					Ordering::Greater => {
 						// Must reserve a bit more.
-						let to_reserve = Self::deposit_factor_of(votes.len() - old_votes.len());
-						debug_assert_eq!(old_deposit + to_reserve, Self::deposit_of(votes.len()));
+						let to_reserve = new_deposit - old_deposit;
 						T::Currency::reserve(&who, to_reserve)
 							.map_err(|_| Error::<T>::UnableToPayBond)?;
 					},
 					Ordering::Equal => {},
 					Ordering::Less => {
 						// Must unreserve a bit.
-						let to_unreserve = Self::deposit_factor_of(old_votes.len() - votes.len());
-						debug_assert_eq!(old_deposit - to_unreserve, Self::deposit_of(votes.len()));
+						let to_unreserve = old_deposit - new_deposit;
 						let _remainder = T::Currency::unreserve(&who, to_unreserve);
 						debug_assert!(_remainder.is_zero());
 					},
@@ -481,9 +479,7 @@ decl_module! {
 				WithdrawReasons::except(WithdrawReason::TransactionPayment),
 			);
 
-			let deposit = Self::deposit_of(votes.len());
-
-			Voting::<T>::insert(&who, Voter { votes, deposit, stake: locked_stake });
+			Voting::<T>::insert(&who, Voter { votes, deposit: new_deposit, stake: locked_stake });
 			Ok(maybe_refund.into())
 		}
 
@@ -804,11 +800,6 @@ impl<T: Trait> Module<T> {
 		T::VotingBondBase::get().saturating_add(
 			T::VotingBondFactor::get().saturating_mul((count as u32).into())
 		)
-	}
-
-	/// Same as [`deposit_of`] but only returns the factor deposit.
-	fn deposit_factor_of(count: usize) -> BalanceOf<T> {
-		T::VotingBondFactor::get().saturating_mul((count as u32).into())
 	}
 
 	/// Attempts to remove a member `who`. If a runner-up exists, it is used as the replacement and
