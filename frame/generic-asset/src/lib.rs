@@ -1340,6 +1340,8 @@ where
 {
 	type Moment = T::BlockNumber;
 
+	type MaxLocks = ();
+
 	fn set_lock(
 		id: LockIdentifier,
 		who: &T::AccountId,
