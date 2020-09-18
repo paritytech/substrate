@@ -536,6 +536,9 @@ pub fn import_queue<B, Transaction, Algorithm>(
 /// Two values are returned -- a worker, which contains functions that allows querying the current
 /// mining metadata and submitting mined blocks, and a future, which must be polled to fill in
 /// information in the worker.
+///
+/// `pre_runtime` is a parameter that allows a custom additional pre-runtime digest to be inserted
+/// for blocks being built. This can encode authorship information, or just be a graffiti.
 pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW>(
 	block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
 	client: Arc<C>,
