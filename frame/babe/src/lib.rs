@@ -552,7 +552,7 @@ impl<T: Trait> Module<T> {
 
 		let is_primary = matches!(maybe_pre_digest, Some(PreDigest::Primary(..)));
 
-		let maybe_randomness: Option<schnorrkel::Randomness> = maybe_pre_digest.and_then(|digest| {
+		let maybe_randomness: MaybeRandomness = maybe_pre_digest.and_then(|digest| {
 			// on the first non-zero block (i.e. block #1)
 			// this is where the first epoch (epoch #0) actually starts.
 			// we need to adjust internal storage accordingly.
