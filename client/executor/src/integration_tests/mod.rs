@@ -681,7 +681,7 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	// Create subscriber with wasm_tracing disabled
 	let test_subscriber = tracing_subscriber::fmt().finish().with(
 		sc_tracing::ProfilingLayer::new_with_handler(
-			Box::new(handler), "integration_test_span_target"
+			Box::new(handler), "default"
 		)
 	);
 
@@ -690,49 +690,9 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	// Test tracing disabled
-	assert!(!sp_tracing::wasm_tracing_enabled());
-
 	let span_id = call_in_wasm(
 		"test_enter_span",
-		&[],
-		wasm_method,
-		&mut ext,
-	).unwrap();
-
-	assert_eq!(
-		0u64.encode(),
-		span_id
-	);
-	// Repeat to check span id always 0 when deactivated
-	let span_id = call_in_wasm(
-		"test_enter_span",
-		&[],
-		wasm_method,
-		&mut ext,
-	).unwrap();
-
-	assert_eq!(
-		0u64.encode(),
-		span_id
-	);
-
-	call_in_wasm(
-		"test_exit_span",
-		&span_id.encode(),
-		wasm_method,
-		&mut ext,
-	).unwrap();
-	// Check span has not been recorded
-	let len = traces.lock().unwrap().len();
-	assert_eq!(len, 0);
-
-	// Test tracing enabled
-	sp_tracing::set_wasm_tracing(true);
-
-	let span_id = call_in_wasm(
-		"test_enter_span",
-		&[],
+		Default::default(),
 		wasm_method,
 		&mut ext,
 	).unwrap();
@@ -756,8 +716,7 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 	let span_datum = traces.lock().unwrap().pop().unwrap();
 	let values = span_datum.values;
-	assert_eq!(span_datum.target, "integration_test_span_target");
-	assert_eq!(span_datum.name, "integration_test_span_name");
+	assert_eq!(span_datum.target, "default");
+	assert_eq!(span_datum.name, "");
 	assert_eq!(values.bool_values.get("wasm").unwrap(), &true);
-	assert_eq!(values.bool_values.get("is_valid_trace").unwrap(), &true);
 }
