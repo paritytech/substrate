@@ -376,7 +376,6 @@ pub fn make_vrf_output(
 	(vrf_output, vrf_proof, vrf_randomness)
 }
 
-
 pub fn new_test_ext(authorities_len: usize) -> sp_io::TestExternalities {
 	new_test_ext_with_pairs(authorities_len).1
 }
