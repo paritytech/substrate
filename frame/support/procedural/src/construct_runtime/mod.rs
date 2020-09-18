@@ -21,7 +21,7 @@ use frame_support_procedural_tools::syn_ext as ext;
 use frame_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
 use parse::{ModuleDeclaration, RuntimeDefinition, WhereSection, ModulePart};
 use proc_macro::TokenStream;
-use proc_macro2::{TokenStream as TokenStream2, Span};
+use proc_macro2::{TokenStream as TokenStream2};
 use quote::quote;
 use syn::{Ident, Result, TypePath};
 use std::collections::HashMap;
@@ -79,11 +79,13 @@ fn complete_modules(decl: impl Iterator<Item = ModuleDeclaration>) -> syn::Resul
 			if let Some(used_module) = indices.insert(final_index, module.name.clone()) {
 				let msg = format!(
 					"Module index are conflicting both modules {} and {} are at index {}",
-					module.name,
 					used_module,
+					module.name,
 					final_index,
 				);
-				return Err(syn::Error::new(module.name.span(), msg));
+				let mut err = syn::Error::new(used_module.span(), &msg);
+				err.combine(syn::Error::new(module.name.span(), msg));
+				return Err(err);
 			}
 
 			Ok(Module {
