@@ -45,7 +45,17 @@ sc-basic-authorship = { version = "0.8.0-rc6", path = "../../../client/basic-aut
 substrate-frame-rpc-system = { version = "2.0.0-rc6", path = "../../../utils/frame/rpc/system" }
 pallet-transaction-payment-rpc = { version = "2.0.0-rc6", path = "../../../frame/transaction-payment/rpc/" }
 
+# These dependencies are used for runtime benchmarking
+frame-benchmarking = { version = "2.0.0-rc6", path = "../../../frame/benchmarking" }
+frame-benchmarking-cli = { version = "2.0.0-rc6", path = "../../../utils/frame/benchmarking-cli" }
+
 node-template-runtime = { version = "2.0.0-rc6", path = "../runtime" }
 
 [build-dependencies]
 substrate-build-script-utils = { version = "2.0.0-rc6", path = "../../../utils/build-script-utils" }
+
+[features]
+default = []
+runtime-benchmarks = [
+	"node-template-runtime/runtime-benchmarks",
+]

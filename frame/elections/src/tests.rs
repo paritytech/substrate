@@ -46,14 +46,14 @@ fn params_should_work() {
 
 		assert_eq!(Elections::voters(0), Vec::<Option<u64>>::new());
 		assert_eq!(Elections::voter_info(1), None);
-		assert_eq!(Elections::all_approvals_of(&1), vec![]);
+		assert!(Elections::all_approvals_of(&1).is_empty());
 	});
 }
 
 #[test]
 fn chunking_bool_to_flag_should_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		assert_eq!(Elections::bool_to_flag(vec![]), vec![]);
+		assert!(Elections::bool_to_flag(vec![]).is_empty());
 		assert_eq!(Elections::bool_to_flag(vec![false]), vec![0]);
 		assert_eq!(Elections::bool_to_flag(vec![true]), vec![1]);
 		assert_eq!(Elections::bool_to_flag(vec![true, true, true, true]), vec![15]);
@@ -274,11 +274,11 @@ fn chunking_approval_storage_should_work() {
 
 		assert_eq!(Elections::all_approvals_of(&2), vec![true]);
 		// NOTE: these two are stored in mem differently though.
-		assert_eq!(Elections::all_approvals_of(&3), vec![]);
-		assert_eq!(Elections::all_approvals_of(&4), vec![]);
+		assert!(Elections::all_approvals_of(&3).is_empty());
+		assert!(Elections::all_approvals_of(&4).is_empty());
 
 		assert_eq!(Elections::approvals_of((3, 0)), vec![0]);
-		assert_eq!(Elections::approvals_of((4, 0)), vec![]);
+		assert!(Elections::approvals_of((4, 0)).is_empty());
 	});
 }
 
@@ -385,7 +385,7 @@ fn voting_locking_stake_and_reserving_bond_works() {
 		assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
 
 		assert_eq!(balances(&2), (20, 0));
-		assert_eq!(locks(&2), vec![]);
+		assert!(locks(&2).is_empty());
 		assert_ok!(Elections::set_approvals(Origin::signed(2), vec![], 0, 0, 15));
 		assert_eq!(balances(&2), (18, 2));
 		assert_eq!(locks(&2), vec![15]);
@@ -401,7 +401,7 @@ fn voting_locking_stake_and_reserving_bond_works() {
 		assert_ok!(Elections::retract_voter(Origin::signed(2), 0));
 
 		assert_eq!(balances(&2), (102, 0));
-		assert_eq!(locks(&2), vec![]);
+		assert!(locks(&2).is_empty());
 	});
 }
 
