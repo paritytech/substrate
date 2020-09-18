@@ -48,6 +48,11 @@ pub enum Validation {
 /// Type which checks incoming block announcements.
 pub trait BlockAnnounceValidator<B: Block> {
 	/// Validate the announced header and its associated data.
+	///
+	/// # Note
+	///
+	/// Returning [`Validation::Failure`] will led to a decrease of the
+	/// peers reputation as it send us invalid data.
 	fn validate(
 		&mut self,
 		header: &B::Header,

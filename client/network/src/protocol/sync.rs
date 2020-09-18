@@ -49,8 +49,8 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion, Hash, HashFor}
 };
 use sp_arithmetic::traits::Saturating;
-use std::{fmt, ops::Range, collections::{HashMap, HashSet, VecDeque}, sync::Arc};
-use futures::future::{Either as FEither, Future, ready};
+use std::{fmt, ops::Range, collections::{HashMap, HashSet, VecDeque}, sync::Arc, pin::Pin};
+use futures::{task::Poll, Future, stream::FuturesUnordered, FutureExt, StreamExt};
 
 mod blocks;
 mod extra_requests;
@@ -193,6 +193,10 @@ pub struct ChainSync<B: BlockT> {
 	max_parallel_downloads: u32,
 	/// Total number of downloaded blocks.
 	downloaded_blocks: usize,
+	/// All block announcement pre-validations that are currently being validated.
+	block_announce_pre_validation: FuturesUnordered<
+		Pin<Box<dyn Future<Output = PreValidateBlockAnnounce<B::Header>> + Send>>
+	>,
 }
 
 /// All the data we have about a Peer that we are trying to sync with
@@ -310,6 +314,13 @@ pub enum OnBlockData<B: BlockT> {
 /// Result of [`ChainSync::process_block_announce_pre_validation`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BlockAnnounceResult<H> {
+	/// The announcement failed at validation.
+	///
+	/// The peer reputation should be decreased.
+	Failure {
+		/// Who sent the processed block announcement?
+		who: PeerId,
+	},
 	/// The announcement does not require further handling.
 	Nothing {
 		/// Who sent the processed block announcement?
@@ -330,9 +341,16 @@ pub enum BlockAnnounceResult<H> {
 	},
 }
 
-/// Result of [`ChainSync::pre_validate_block_announce`].
+/// Result of [`ChainSync::block_announce_pre_validation`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PreValidateBlockAnnounce<H> {
+enum PreValidateBlockAnnounce<H> {
+	/// The announcement failed at validation.
+	///
+	/// The peer reputation should be decreased.
+	Failure {
+		/// Who sent the processed block announcement?
+		who: PeerId,
+	},
 	/// The announcement does not require further handling.
 	Nothing {
 		/// Who sent the processed block announcement?
@@ -416,6 +434,7 @@ impl<B: BlockT> ChainSync<B> {
 			block_announce_validator,
 			max_parallel_downloads,
 			downloaded_blocks: 0,
+			block_announce_pre_validation: Default::default(),
 		}
 	}
 
@@ -1195,22 +1214,19 @@ impl<B: BlockT> ChainSync<B> {
 		self.pending_requests.set_all();
 	}
 
-	/// Pre-validate the given block announcement.
+	/// Push a block announce validation.
 	///
-	/// The pre-validation will return a [`Future`] that resolves to a
-	/// [`PreValidateBlockAnnounce`]. This result needs to be feed into
-	/// [`ChainSync::process_block_announce_pre_validation`] to finish
-	/// the block announcement processing.
-	pub fn pre_validate_block_announce(
+	/// It is required that [`ChainSync::poll_block_announce_validation`] is called
+	/// to check for finished block announce validations.
+	///
+	/// Returns `Some(_)` if the block announce was validated immediately.
+	pub fn push_block_announce_validation(
 		&mut self,
 		who: PeerId,
 		hash: &B::Hash,
 		announce: BlockAnnounce<B::Header>,
 		is_best: bool,
-	) -> FEither<
-		impl Future<Output = PreValidateBlockAnnounce<B::Header>>,
-		impl Future<Output = PreValidateBlockAnnounce<B::Header>>
-	> {
+	) -> Option<BlockAnnounceResult<B::Header>> {
 		let header = &announce.header;
 		let number = *header.number();
 		debug!(
@@ -1228,7 +1244,7 @@ impl<B: BlockT> ChainSync<B> {
 				who,
 				hash,
 			);
-			return FEither::Left(ready(PreValidateBlockAnnounce::Nothing { is_best, who, announce }))
+			return Some(BlockAnnounceResult::Nothing { is_best, who, header: announce.header })
 		}
 
 		// Let external validator check the block announcement.
@@ -1236,7 +1252,7 @@ impl<B: BlockT> ChainSync<B> {
 		let future = self.block_announce_validator.validate(&header, assoc_data);
 		let hash = hash.clone();
 
-		FEither::Right(async move {
+		self.block_announce_pre_validation.push(async move {
 			match future.await {
 				Ok(Validation::Success { is_new_best }) => PreValidateBlockAnnounce::Process {
 					is_new_best: is_new_best || is_best,
@@ -1250,29 +1266,47 @@ impl<B: BlockT> ChainSync<B> {
 						hash,
 						who,
 					);
-					PreValidateBlockAnnounce::Nothing { is_best, who, announce }
+					PreValidateBlockAnnounce::Failure { who }
 				}
 				Err(e) => {
 					error!(target: "sync", "💔 Block announcement validation errored: {}", e);
 					PreValidateBlockAnnounce::Nothing { is_best, who, announce }
 				}
 			}
-		})
+		}.boxed());
+
+		None
 	}
 
-	/// Needs to be called with the result of [`ChainSync::pre_validate_block_announce`].
+	/// Poll block announce validation.
 	///
-	/// This will finish processing of the block announcement.
+	/// Block announce validations can be pushed by using
+	/// [`ChainSync::push_block_announce_validation`].
+	///
+	/// This should be polled until it returns [`Poll::Pending`].
 	///
 	/// If [`BlockAnnounceResult::ImportHeader`] is returned, then the caller MUST try to import passed
 	/// header (call `on_block_data`). The network request isn't sent in this case.
-	pub fn process_block_announce_pre_validation(
+	pub fn poll_block_announce_validation(
+		&mut self,
+		cx: &mut std::task::Context,
+	) -> Poll<BlockAnnounceResult<B::Header>> {
+		match self.block_announce_pre_validation.poll_next_unpin(cx) {
+			Poll::Ready(Some(res)) => Poll::Ready(self.finish_block_announce_validation(res)),
+			_ => Poll::Pending,
+		}
+	}
+
+	/// This will finish processing of the block announcement.
+	fn finish_block_announce_validation(
 		&mut self,
 		pre_validation_result: PreValidateBlockAnnounce<B::Header>,
 	) -> BlockAnnounceResult<B::Header> {
 		let (announce, is_best, who) = match pre_validation_result {
 			PreValidateBlockAnnounce::Nothing { is_best, who, announce } =>
 				return BlockAnnounceResult::Nothing { is_best, who, header: announce.header },
+			PreValidateBlockAnnounce::Failure { who } =>
+				return BlockAnnounceResult::Failure { who },
 			PreValidateBlockAnnounce::Process { announce, is_new_best, who } =>
 				(announce, is_new_best, who),
 		};
