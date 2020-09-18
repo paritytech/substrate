@@ -76,7 +76,6 @@ sc-tracing = { version = "2.0.0-rc6", path = "../tracing" }
 sp-tracing = { version = "2.0.0-rc6", path = "../../primitives/tracing" }
 tracing = "0.1.19"
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
-libipld = { version = "0.5.1", default-features = false }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 tempfile = "3.1.0"
@@ -89,4 +88,3 @@ grandpa = { version = "0.8.0-rc6", package = "sc-finality-grandpa", path = "../f
 grandpa-primitives = { version = "2.0.0-rc6", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 tokio = { version = "0.2", default-features = false }
 async-std = { version = "1.6", default-features = false }
-env_logger = "0.7.1"

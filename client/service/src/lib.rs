@@ -20,7 +20,7 @@
 //! Manages communication between them.
 
 #![warn(missing_docs)]
-#![recursion_limit = "2048"]
+#![recursion_limit = "1024"]
 
 pub mod config;
 pub mod chain_ops;
@@ -41,7 +41,7 @@ use std::time::Duration;
 use std::task::Poll;
 use parking_lot::Mutex;
 
-use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*, future};
+use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
@@ -55,7 +55,7 @@ pub use self::builder::{
 	new_full_client, new_client, new_full_parts, new_light_parts,
 	spawn_tasks, build_network, BuildNetworkParams, NetworkStarter, build_offchain_workers,
 	SpawnTasksParams, TFullClient, TLightClient, TFullBackend, TLightBackend,
-	TLightBackendWithHash, TLightClientWithBackend, IpldStoreBuilder,
+	TLightBackendWithHash, TLightClientWithBackend,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
 };
 pub use config::{
@@ -82,9 +82,6 @@ pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
 use sc_client_api::BlockchainEvents;
 pub use sc_keystore::KeyStorePtr as KeyStore;
-
-use libipld::store::Store as IpldStore;
-use libipld::DefaultStoreParams as IpldStoreParams;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -204,7 +201,6 @@ async fn build_network_future<
 	B: BlockT,
 	C: BlockchainEvents<B>,
 	H: sc_network::ExHashT,
-	S: IpldStore<Params=IpldStoreParams> + 'static,
 > (
 	role: Role,
 	mut network: sc_network::NetworkWorker<B, H>,
@@ -213,7 +209,6 @@ async fn build_network_future<
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
-	ipld_store: Option<S>,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
@@ -235,23 +230,6 @@ async fn build_network_future<
 			}
 		}).fuse()
 	};
-
-	let network_service = network.service().clone();
-	let mut handle_bitswap_events = network.service().event_stream("bitswap")
-		.filter_map(|event| future::ready(if let sc_network::Event::Bitswap(event) = event {
-			Some(event)
-		} else {
-			None
-		}))
-		.for_each(|event| {
-			Box::pin(async {
-				if let Some(store) = ipld_store.clone() {
-					if let Err(err) = handle_bitswap_event(&network_service, event, store).await {
-						warn!("{}", err);
-					}
-				}
-			})
-		});
 
 	loop {
 		futures::select!{
@@ -364,29 +342,6 @@ async fn build_network_future<
 			state_sink = status_sinks.state.next().fuse() => {
 				state_sink.send(network.network_state());
 			}
-
-			_ = (&mut handle_bitswap_events).fuse() => {}
-		}
-	}
-}
-
-/// Handle a `BitswapEvent`, reading and writing from the `OffchainStorage`.
-pub async fn handle_bitswap_event<B: BlockT, H: sc_network::ExHashT, S: IpldStore<Params=IpldStoreParams>>(
-	service: &Arc<sc_network::NetworkService<B, H>>,
-	event: sc_network::BitswapEvent,
-	storage: S,
-) -> Result<(), libipld::error::Error> {
-	match event {
-		sc_network::BitswapEvent::ReceivedBlock(_, cid, data) => {
-			storage.insert(libipld::Block::new(cid.clone(), data.to_vec())?).await?;
-			service.put_value(cid.to_bytes().into(), data.to_vec());
-			Ok(())
-		},
-		sc_network::BitswapEvent::ReceivedWant(peer_id, cid, _) => {
-			let block = storage.get(&cid).await?;
-			let (_, data) = block.into_inner();
-			service.bitswap_send_block(peer_id, cid, data.into_boxed_slice());
-			Ok(())
 		}
 	}
 }

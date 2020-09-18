@@ -101,7 +101,6 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: None,
 			finality_proof_provider: Some(finality_proof_provider.clone()),
-			ipld_store_builder: (),
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -274,7 +273,6 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: Some(finality_proof_request_builder),
 			finality_proof_provider: Some(finality_proof_provider),
-			ipld_store_builder: (),
 		})?;
 
 	if config.offchain_worker.enabled {

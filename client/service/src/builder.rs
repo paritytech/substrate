@@ -747,7 +747,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 }
 
 /// Parameters to pass into `build_network`.
-pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl, TIpld: IpldStoreBuilder> {
+pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// The service configuration.
 	pub config: &'a Configuration,
 	/// A shared client returned by `new_full_parts`/`new_light_parts`.
@@ -768,40 +768,11 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl, TIpld: Ipld
 	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
 	/// An optional, shared finality proof request provider.
 	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
-	/// The builder for an IPLD store.f
-	pub ipld_store_builder: TIpld,
 }
 
-/// Something that builds an IPLD store. You generally want `()`, which always returns `None`.
-pub trait IpldStoreBuilder {
-	/// The type of store to potentially build.
-	type Store: libipld::store::Store<Params=libipld::DefaultStoreParams>+
-		'static;
-
-	/// Build the store.
-	fn build(self) -> Option<Self::Store>;
-}
-
-impl IpldStoreBuilder for () {
-	type Store = libipld::mem::MemStore<libipld::DefaultStoreParams>;
-
-	fn build(self) -> Option<Self::Store> {
-		None
-	}
-}
-
-impl<T: libipld::store::Store<Params=libipld::DefaultStoreParams> + 'static> IpldStoreBuilder for Option<T> {
-	type Store = T;
-
-	fn build(self) -> Option<Self::Store> {
-		self
-	}
-}
-
-#[warn(invalid_type_param_default)]
 /// Build the network service, the network status sinks and an RPC sender.
-pub fn build_network<TBl, TExPool, TImpQu, TCl, TIpld>(
-	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl, TIpld>
+pub fn build_network<TBl, TExPool, TImpQu, TCl>(
+	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>
 ) -> Result<
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
@@ -818,12 +789,10 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl, TIpld>(
 		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
-		TIpld: IpldStoreBuilder,
 {
 	let BuildNetworkParams {
 		config, client, transaction_pool, spawn_handle, import_queue, on_demand,
 		block_announce_validator_builder, finality_proof_request_builder, finality_proof_provider,
-		ipld_store_builder,
 	} = params;
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
@@ -886,7 +855,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl, TIpld>(
 		system_rpc_rx,
 		has_bootnodes,
 		config.announce_block,
-		ipld_store_builder.build(),
 	);
 
 	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the
