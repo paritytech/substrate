@@ -1131,7 +1131,7 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;
-	type ModuleToIndex = ();
+	type PalletRuntimeSetup = ();
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();

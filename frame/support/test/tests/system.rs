@@ -27,7 +27,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type AccountId: Encode + EncodeLike + Decode;
 	type Call;
 	type Event: From<Event<Self>>;
-	type ModuleToIndex: frame_support::traits::ModuleToIndex;
+	type PalletRuntimeSetup: frame_support::traits::PalletRuntimeSetup;
 }
 
 frame_support::decl_module! {

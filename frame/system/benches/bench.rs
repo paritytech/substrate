@@ -81,7 +81,7 @@ impl system::Trait for Runtime {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
-	type ModuleToIndex = ();
+	type PalletRuntimeSetup = ();
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();

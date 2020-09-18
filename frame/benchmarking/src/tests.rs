@@ -93,7 +93,7 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = ();
 	type AvailableBlockRatio = ();
 	type Version = ();
-	type ModuleToIndex = ();
+	type PalletRuntimeSetup = ();
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();

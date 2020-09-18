@@ -140,8 +140,8 @@ macro_rules! decl_error {
 			for $crate::sp_runtime::DispatchError
 		{
 			fn from(err: $error<$generic $(, $inst_generic)?>) -> Self {
-				let index = <$generic::ModuleToIndex as $crate::traits::ModuleToIndex>
-					::module_to_index::<$module<$generic $(, $inst_generic)?>>()
+				let index = <$generic::PalletRuntimeSetup as $crate::traits::PalletRuntimeSetup>
+					::index::<$module<$generic $(, $inst_generic)?>>()
 					.expect("Every active module has an index in the runtime; qed") as u8;
 
 				$crate::sp_runtime::DispatchError::Module {

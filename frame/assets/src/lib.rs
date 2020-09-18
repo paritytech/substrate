@@ -319,7 +319,7 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
-		type ModuleToIndex = ();
+		type PalletRuntimeSetup = ();
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
