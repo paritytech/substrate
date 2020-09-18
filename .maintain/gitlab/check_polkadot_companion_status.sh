@@ -91,8 +91,8 @@ while IFS= read -r line; do
   fi
 done < companion_pr_reviews_current.json
 
-# Then we check for at least 1 APPROVED
-if [ -z "$(jq -r -e '.[].state | select(. == "APPROVED")' < companion_pr_reviews.json)" ]; then
+# Then we check for at least 3 approvals
+if [ "$(jq -r -e '[.[].state | select(. == "APPROVED")] | length' < companion_pr_reviews.json)" -ge "3" ]; then
   boldprint "polkadot pr #${pr_companion} not APPROVED"
   exit 1
 fi
