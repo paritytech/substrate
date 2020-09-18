@@ -68,10 +68,10 @@
 			"prefix": 6,
 			"network": "bitfrost",
 			"displayName": "Bitfrost",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["BNC"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://bifrost.finance/"
 		},
 		{
 			"prefix": 7,
