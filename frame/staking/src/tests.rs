@@ -347,6 +347,28 @@ fn staking_should_work() {
 }
 
 #[test]
+fn maximum_validator_set() {
+	ExtBuilder::default()
+		.maximum_validator_count(4)
+		.build()
+		.execute_with(|| {
+			assert_eq!(Staking::maximum_validator_count(), 4);
+		});
+}
+
+#[test]
+fn validator_adjust() {
+	ExtBuilder::default()
+		.minimum_validator_count(1)
+		.maximum_validator_count(4)
+		.validator_adjust(true)
+		.build()
+		.execute_with(|| {
+			bond_validator(8,9,1000 as Balance);
+		})
+}
+
+#[test]
 fn less_than_needed_candidates_works() {
 	ExtBuilder::default()
 		.minimum_validator_count(1)

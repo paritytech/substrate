@@ -416,7 +416,7 @@ parameter_types! {
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const ElectionLookahead: BlockNumber = EPOCH_DURATION_IN_BLOCKS / 4;
 	pub const MaxIterations: u32 = 10;
-	pub const AdjustValidatorCount: bool = false;
+	pub const ValidatorCountAdjust: bool = false;
 	// 0.05%. The higher the value, the more strict solution acceptance becomes.
 	pub MinSolutionScoreBump: Perbill = Perbill::from_rational_approximation(5u32, 10_000);
 }
@@ -446,7 +446,7 @@ impl pallet_staking::Trait for Runtime {
 	type MaxIterations = MaxIterations;
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
-	type ValidatorCountAdjust = AdjustValidatorCount;
+	type ValidatorCountAdjust = ValidatorCountAdjust;
 	type UnsignedPriority = StakingUnsignedPriority;
 	type WeightInfo = ();
 }

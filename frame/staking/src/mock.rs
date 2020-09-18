@@ -66,7 +66,7 @@ thread_local! {
 	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
 	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
 	static MAX_ITERATIONS: RefCell<u32> = RefCell::new(0);
-	static ADJUST_VALIDATOR_COUNT: RefCell<bool> = RefCell::new(false);
+	static VALIDATOR_ADJUST_COUNT: RefCell<bool> = RefCell::new(false);
 }
 
 /// Another session handler struct to test on_disabled.
@@ -153,10 +153,10 @@ impl Get<u32> for MaxIterations {
 	}
 }
 
-pub struct AdjustValidatorCount;
-impl Get<bool> for AdjustValidatorCount {
+pub struct ValidatorCountAdjust;
+impl Get<bool> for ValidatorCountAdjust {
 	fn get() -> bool {
-		ADJUST_VALIDATOR_COUNT.with(|v| *v.borrow())
+		VALIDATOR_ADJUST_COUNT.with(|v| *v.borrow())
 	}
 }
 
@@ -337,7 +337,7 @@ impl Trait for Test {
 	type MaxIterations = MaxIterations;
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
-	type ValidatorCountAdjust = AdjustValidatorCount;
+	type ValidatorCountAdjust = ValidatorCountAdjust;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();
 }
@@ -361,6 +361,7 @@ pub struct ExtBuilder {
 	validator_count: u32,
 	validator_adjust: bool,
 	minimum_validator_count: u32,
+	maximum_validator_count: u32,
 	slash_defer_duration: EraIndex,
 	fair: bool,
 	num_validators: Option<u32>,
@@ -381,6 +382,7 @@ impl Default for ExtBuilder {
 			validator_count: 2,
 			validator_adjust: false,
 			minimum_validator_count: 0,
+			maximum_validator_count: 2,
 			slash_defer_duration: 0,
 			fair: true,
 			num_validators: None,
@@ -414,6 +416,10 @@ impl ExtBuilder {
 	}
 	pub fn minimum_validator_count(mut self, count: u32) -> Self {
 		self.minimum_validator_count = count;
+		self
+	}
+	pub fn maximum_validator_count(mut self, count: u32) -> Self {
+		self.maximum_validator_count = count;
 		self
 	}
 	pub fn slash_defer_duration(mut self, eras: EraIndex) -> Self {
@@ -464,7 +470,7 @@ impl ExtBuilder {
 		ELECTION_LOOKAHEAD.with(|v| *v.borrow_mut() = self.election_lookahead);
 		PERIOD.with(|v| *v.borrow_mut() = self.session_length);
 		MAX_ITERATIONS.with(|v| *v.borrow_mut() = self.max_offchain_iterations);
-		ADJUST_VALIDATOR_COUNT.with(|v| *v.borrow_mut() = self.validator_adjust);
+		VALIDATOR_ADJUST_COUNT.with(|v| *v.borrow_mut() = self.validator_adjust);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		let _ = env_logger::try_init();
@@ -528,6 +534,7 @@ impl ExtBuilder {
 			stakers: stakers,
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
+			maximum_validator_count: self.maximum_validator_count,
 			invulnerables: self.invulnerables,
 			slash_reward_fraction: Perbill::from_percent(10),
 			..Default::default()
