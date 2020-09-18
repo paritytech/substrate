@@ -168,16 +168,14 @@ benchmarks_instance! {
 	_ { }
 
 	propose_spend {
-		let u in 0 .. 1000;
-		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(u);
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), value, beneficiary_lookup)
 
 	reject_proposal {
-		let u in 0 .. 1000;
-		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(u);
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		Treasury::<T, _>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
@@ -187,8 +185,7 @@ benchmarks_instance! {
 	}: _(RawOrigin::Root, proposal_id)
 
 	approve_proposal {
-		let u in 0 .. 1000;
-		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(u);
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		Treasury::<T, _>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
