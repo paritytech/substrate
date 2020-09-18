@@ -357,14 +357,64 @@ fn maximum_validator_set() {
 }
 
 #[test]
-fn validator_adjust() {
+fn validator_adjust_up() {
 	ExtBuilder::default()
 		.minimum_validator_count(1)
 		.maximum_validator_count(4)
+		.has_stakers(false)
 		.validator_adjust(true)
+		.validator_count(2)
 		.build()
 		.execute_with(|| {
-			bond_validator(8,9,1000 as Balance);
+			let balance_1 = 1000;
+			let balance_2 = 2000;
+		    // Validator count was 2 make it so it is adjusted to 3, 1% is above 40% average exposure
+			bond_validator(11, 10, balance_1); 
+			bond_validator(21, 20, balance_2);
+			mock::start_era(1); //adjust count
+			assert_eq!(Staking::validator_count(), 3);
+		})
+}
+
+#[test]
+fn validator_adjust_down() {
+	ExtBuilder::default()
+		.minimum_validator_count(1)
+		.maximum_validator_count(4)
+		.has_stakers(false)
+		.validator_adjust(true)
+		.validator_count(3)
+		.build()
+		.execute_with(|| {
+			let balance_1 = 100;
+			let balance_2 = 200;
+			let balance_3 = 3000;
+		    // Validator count was 3 make it so it is adjusted to 2, 2*1% is below 20% average exposure
+			bond_validator(11, 10, balance_1); 
+			bond_validator(21, 20, balance_2);
+			bond_validator(31, 30, balance_3);
+			mock::start_era(1); //adjust count
+			assert_eq!(Staking::validator_count(), 2);
+		})
+}
+
+#[test]
+fn validator_no_adjust() {
+	ExtBuilder::default()
+		.minimum_validator_count(1)
+		.maximum_validator_count(4)
+		.has_stakers(false)
+		.validator_adjust(true)
+		.validator_count(2)
+		.build()
+		.execute_with(|| {
+			let balance_1 = 500;
+			let balance_2 = 2000;
+		    // Validator count is 2 but no adjustments should be made.
+			bond_validator(11, 10, balance_1); 
+			bond_validator(21, 20, balance_2);
+			mock::start_era(1); //adjust count
+			assert_eq!(Staking::validator_count(), 2);
 		})
 }
 

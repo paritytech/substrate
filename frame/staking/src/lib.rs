@@ -2917,9 +2917,6 @@ impl<T: Trait> Module<T> {
 
 			if T::ValidatorCountAdjust::get() {
 				let new_validator_count = Self::update_target_validators(exposure_totals);
-				sp_std::if_std!{
-					println!("New validator count: {}", new_validator_count);
-				}
 				ValidatorCount::put(new_validator_count);
 			}
 			// Insert current era staking information
@@ -3164,8 +3161,8 @@ impl<T: Trait> Module<T> {
 		if one_percent_average > Percent::from_percent(40) * global_average {
 			return (current_validator_count + one_percent_count).min(MaximumValidatorCount::get())
 		} else if current_validator_count > 1 {
-			let two_percent_count = one_percent_count.saturating_mul(2);
-			let two_percent_average = average(&exposures[0..(two_percent_count as usize)]);
+			let one_percent_times_two_count = one_percent_count.saturating_mul(2);
+			let two_percent_average = average(&exposures[0..(one_percent_times_two_count as usize)]);
 			// Rule 2: If the bottom 2% of validators (more precisely, 2 ceil(0.01 k) validators) have
 			// an average stake value strictly below 20% of the global average, in the next era decrease
 			// the number of active validators by 1%, i.e. k <-- max{min_limit, k - ceil(0.01 k)}.
