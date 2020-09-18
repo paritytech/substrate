@@ -40,8 +40,7 @@ use tracing::{
 use tracing_subscriber::{CurrentSpan, layer::{Layer, Context}};
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
-
+use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 
 /// Responsible for assigning ids to new spans, which are not re-used.
@@ -275,12 +274,6 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, _ctx: Context<S>) {
 		let mut values = Values::default();
 		attrs.record(&mut values);
-		// If this is a wasm trace, check if target/level is enabled
-		if let Some(wasm_target) = values.string_values.get(WASM_TARGET_KEY) {
-			if !self.check_target(wasm_target, attrs.metadata().level()) {
-				return
-			}
-		}
 		let span_datum = SpanDatum {
 			id: id.clone(),
 			parent_id: attrs.parent().cloned().or_else(|| self.current_span.id()),
@@ -327,18 +320,13 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 	fn on_exit(&self, span: &Id, _ctx: Context<S>) {
 		self.current_span.exit();
 		let end_time = Instant::now();
-		let mut span_data = self.span_data.lock();
-		if let Some(mut s) = span_data.get_mut(&span) {
-			s.overall_time = end_time - s.start_time + s.overall_time;
-		}
-	}
-
-	fn on_close(&self, span: Id, _ctx: Context<S>) {
 		let span_datum = {
 			let mut span_data = self.span_data.lock();
 			span_data.remove(&span)
 		};
+
 		if let Some(mut span_datum) = span_datum {
+			span_datum.overall_time += end_time - span_datum.start_time;
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
 				span_datum.values.bool_values.insert("wasm".to_owned(), true);
 				if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
@@ -354,6 +342,10 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 				self.trace_handler.handle_span(span_datum);
 			}
 		};
+	}
+
+	fn on_close(&self, span: Id, ctx: Context<S>) {
+		self.on_exit(&span, ctx)
 	}
 }
 

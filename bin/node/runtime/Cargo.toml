@@ -88,6 +88,7 @@ sp-io = { version = "2.0.0-rc6", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]
+with-tracing = [ "frame-executive/with-tracing" ]
 std = [
 	"sp-authority-discovery/std",
 	"pallet-authority-discovery/std",
