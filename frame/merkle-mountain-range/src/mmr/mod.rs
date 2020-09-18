@@ -15,4 +15,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod storage;
 pub mod utils;
+mod mmr;
+
+use frame_support::RuntimeDebug;
+use sp_runtime::traits;
+
+pub use self::mmr::{MMR, Error};
+
+/// Node type for runtime `T`.
+pub type NodeOf<T, L> = Node<<T as crate::Trait>::Hashing, L>;
+
+/// Hasher type for MMR.
+pub struct Hasher<H, L>(sp_std::marker::PhantomData<(H, L)>);
+
+impl<H: traits::Hash, L: codec::Codec> mmr_lib::Merge for Hasher<H, L> {
+	type Item = Node<H, L>;
+
+	fn merge(left: &Self::Item, right: &Self::Item) -> Self::Item {
+		Node::Inner(H::hash_of(&(left.hash(), right.hash())))
+	}
+}
+
+/// A node stored in the MMR.
+#[derive(RuntimeDebug, Clone, PartialEq, codec::Encode, codec::Decode)]
+pub enum Node<H: traits::Hash, L> {
+	Leaf(L),
+	Inner(H::Output),
+}
+
+impl<H: traits::Hash, L: codec::Encode> Node<H, L> {
+	/// Retrieve a hash of the node.
+	///
+	/// Depending on the node type it's going to either be a contained value for `Inner` node,
+	/// or a hash of SCALE-encoded `Leaf` data.
+	pub fn hash(&self) -> H::Output {
+		match *self {
+			Node::Leaf(ref leaf) => H::hash_of(leaf),
+			Node::Inner(ref hash) => hash.clone(),
+		}
+	}
+}

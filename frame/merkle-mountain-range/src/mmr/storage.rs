@@ -1,0 +1,96 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! A MMR storage implementations.
+
+use codec::Encode;
+use crate::mmr::{NodeOf, Node};
+use crate::{NumberOfLeaves, Nodes, Module, Trait};
+use frame_support::{StorageMap, StorageValue};
+use sp_std::fmt;
+
+/// A marker type for runtime-specific storage implementation.
+///
+/// Allows appending new items to the MMR and proof verification.
+pub struct RuntimeStorage;
+
+/// A marker type for offchain-specific storage implementation.
+///
+/// Allows proof generation and verification, but does not support appending new items.
+pub struct OffchainStorage;
+
+/// A storage layer for MMR.
+pub struct Storage<StorageType, T, L>(
+	sp_std::marker::PhantomData<(StorageType, T, L)>
+);
+
+impl<StorageType, T, L> Default for Storage<StorageType, T, L> {
+	fn default() -> Self {
+		Self(Default::default())
+	}
+}
+
+impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<NodeOf<T, L>>
+	for Storage<OffchainStorage, T, L>
+{
+	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, L>>> {
+		let key = Module::<T>::offchain_key(pos);
+		Ok(
+			sp_io::offchain ::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
+				.and_then(|v| codec::Decode::decode(&mut &*v).ok())
+		)
+	}
+
+	fn append(&mut self, _: u64, _: Vec<NodeOf<T, L>>) -> mmr_lib::Result<()> {
+		unimplemented!("MMR must not be altered in the off-chain context.")
+ 	}
+}
+
+impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<NodeOf<T, L>>
+	for Storage<RuntimeStorage, T, L>
+{
+	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, L>>> {
+		Ok(<Nodes<T>>::get(pos)
+			.map(Node::Inner)
+		)
+	}
+
+	fn append(&mut self, pos: u64, elems: Vec<NodeOf<T, L>>) -> mmr_lib::Result<()> {
+		let mut leaves = crate::NumberOfLeaves::get();
+		let mut size = crate::mmr::utils::NodesUtils::new(leaves).size();
+		if pos != size {
+			return Err(mmr_lib::Error::InconsistentStore);
+		}
+
+		for elem in elems {
+			<Nodes<T>>::insert(size, elem.hash());
+			// Indexing API used to store the full leaf content.
+			elem.using_encoded(|elem| {
+				sp_io::offchain_index::set(&Module::<T>::offchain_key(size), elem)
+			});
+			size += 1;
+
+			if let Node::Leaf(..) = elem {
+				leaves += 1;
+			}
+		}
+
+		NumberOfLeaves::put(leaves);
+
+		Ok(())
+	}
+}

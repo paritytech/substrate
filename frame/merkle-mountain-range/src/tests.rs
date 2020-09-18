@@ -143,7 +143,7 @@ fn hex(s: &str) -> H256 {
 	s.parse().unwrap()
 }
 
-fn decode_node(v: Vec<u8>) -> crate::MMRNode<
+fn decode_node(v: Vec<u8>) -> mmr::Node<
 	<Test as Trait>::Hashing,
 	Leaf<H256, LeafData>,
 > {
@@ -211,15 +211,15 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 	// make sure the leaves end up in the offchain DB
 	ext.persist_offchain_overlay();
 	let offchain_db = ext.offchain_db();
-	assert_eq!(offchain_db.get(&MMR::offchain_key(0)).map(decode_node), Some(MMRNode::Leaf(Leaf {
+	assert_eq!(offchain_db.get(&MMR::offchain_key(0)).map(decode_node), Some(mmr::Node::Leaf(Leaf {
 		hash: H256::repeat_byte(1),
 		data: LeafData::new(1),
 	})));
-	assert_eq!(offchain_db.get(&MMR::offchain_key(1)).map(decode_node), Some(MMRNode::Leaf(Leaf {
+	assert_eq!(offchain_db.get(&MMR::offchain_key(1)).map(decode_node), Some(mmr::Node::Leaf(Leaf {
 		hash: H256::repeat_byte(2),
 		data: LeafData::new(2),
 	})));
-	assert_eq!(offchain_db.get(&MMR::offchain_key(2)).map(decode_node), Some(MMRNode::Inner(
+	assert_eq!(offchain_db.get(&MMR::offchain_key(2)).map(decode_node), Some(mmr::Node::Inner(
 		hex("21b847809cbb535ba771e7bb25b33985b5259f1f3fc9cae81bc097f56efbbd36")
 	)));
 	assert_eq!(offchain_db.get(&MMR::offchain_key(3)), None);
