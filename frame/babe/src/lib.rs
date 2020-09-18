@@ -203,10 +203,9 @@ decl_storage! {
 		/// if per-block initialization has already been called for current block.
 		Initialized get(fn initialized): Option<MaybeRandomness>;
 
-		/// Temporary value (cleared at block finalization) that includes the VRF randomness
-		/// generated at this block.
-		/// This field should always be populated during block processing unless secondary plain
-		/// slots are enabled (which don't contain a VRF proof).
+		/// Temporary value (cleared at block finalization) that includes the VRF output generated
+		/// at this block. This field should always be populated during block processing unless
+		/// secondary plain slots are enabled (which don't contain a VRF output).
 		AuthorVrfRandomness get(fn author_vrf_randomness): MaybeRandomness;
 
 		/// How late the current block is compared to its parent.
