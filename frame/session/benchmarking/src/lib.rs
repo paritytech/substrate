@@ -35,7 +35,7 @@ use frame_system::RawOrigin;
 use pallet_session::{historical::Module as Historical, Module as Session, *};
 use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
-	MAX_NOMINATIONS,
+	MAX_NOMINATIONS, RewardDestination,
 };
 use sp_runtime::traits::{One, StaticLookup};
 
@@ -55,7 +55,12 @@ benchmarks! {
 
 	set_keys {
 		let n in 1 .. MAX_NOMINATIONS as u32;
-		let v_stash = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32, false)?;
+		let v_stash = create_validator_with_nominators::<T>(
+			n,
+			MAX_NOMINATIONS as u32,
+			false,
+			RewardDestination::Staked,
+		)?;
 		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
@@ -63,7 +68,7 @@ benchmarks! {
 
 	purge_keys {
 		let n in 1 .. MAX_NOMINATIONS as u32;
-		let v_stash = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32, false)?;
+		let v_stash = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32, false, RewardDestination::Staked)?;
 		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];

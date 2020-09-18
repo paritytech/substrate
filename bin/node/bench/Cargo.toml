@@ -31,6 +31,7 @@ sc-basic-authorship = { version = "0.8.0-rc6", path = "../../../client/basic-aut
 sp-inherents = { version = "2.0.0-rc6", path = "../../../primitives/inherents" }
 sp-finality-tracker = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/finality-tracker" }
 sp-timestamp = { version = "2.0.0-rc6", default-features = false, path = "../../../primitives/timestamp" }
+sp-tracing = { version = "2.0.0-rc6", path = "../../../primitives/tracing" }
 hash-db = "0.15.2"
 tempfile = "3.1.0"
 fs_extra = "1"

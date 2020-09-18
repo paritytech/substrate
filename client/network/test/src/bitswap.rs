@@ -22,14 +22,14 @@ use std::ops::Range;
 use tiny_multihash::StatefulHasher;
 use tiny_multihash::MultihashDigest;
 
-fn generate_block_and_cid(string: &str) -> (&[u8], tiny_cid::Cid) {
-	let block = string.as_bytes();
+fn generate_block(string: &str) -> libipld::Block<libipld::DefaultStoreParams> {
+	let block = string.as_bytes().to_vec();
 	let mut hasher = tiny_multihash::Sha2_256::default();
-	hasher.update(block);
+	hasher.update(&block);
 	let hash = tiny_multihash::Multihash::Sha2_256(hasher.finalize());
 	let hash = hash.to_raw().unwrap();
 	let cid = tiny_cid::Cid::new_v1(tiny_cid::RAW, hash);
-	(block, cid)
+	libipld::Block::new(cid, block).unwrap()
 }
 
 fn wait_until_x_peers_want_cid(net: &mut TestNet, x: usize, peers: Range<usize>, cid: &tiny_cid::Cid) {
@@ -61,8 +61,9 @@ fn test_bitswap_peers_sending_and_cancelling_wants_works() {
 	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
 
-	let (_, cid) = generate_block_and_cid("test_bitswap_peers_sending_and_cancelling_wants_works");
-	
+	let block = generate_block("test_bitswap_peers_sending_and_cancelling_wants_works");
+	let cid = block.cid();
+
 	net.peer(0).network_service().bitswap_want_block(cid.clone(), 0);
 
 	let peer_0 = net.peer(0).id();
@@ -87,31 +88,21 @@ fn test_bitswap_sending_blocks_works() {
 	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
 
-	let (block, cid) = generate_block_and_cid("test_bitswap_sending_blocks_works");
-	
+	let block = generate_block("test_bitswap_sending_blocks_works");
+	let cid = block.cid();
+
 	net.peer(0).network.service().bitswap_want_block(cid.clone(), 0);
 
 	wait_until_x_peers_want_cid(&mut net, 1, 1..3, &cid);
 
 	net.peer(2).network.service()
-		.bitswap_send_block_all(cid.clone(), block.to_vec().into_boxed_slice());
+		.bitswap_send_block_all(cid.clone(), block.data().to_vec().into_boxed_slice());
 
 	wait_until_x_peers_want_cid(&mut net, 0, 0..3, &cid);
 
-	assert_eq!(
-		net.peer(0).client.bitswap_storage().unwrap().get(&cid).ok(),
-		Some(block.to_vec())
-	);
-
-	assert_eq!(
-		net.peer(1).client.bitswap_storage().unwrap().get(&cid).ok(),
-		None
-	);
-
-	assert_eq!(
-		net.peer(2).client.bitswap_storage().unwrap().get(&cid).ok(),
-		None
-	);
+	assert_eq!(net.peer(0).get_ipld_block(&cid), Some(block.clone()));
+	assert_eq!(net.peer(1).get_ipld_block(&cid), None);
+	assert_eq!(net.peer(2).get_ipld_block(&cid), None);
 }
 
 #[test]
@@ -119,9 +110,10 @@ fn test_bitswap_sending_blocks_from_store_works() {
 	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
 
-	let (block, cid) = generate_block_and_cid("test_bitswap_sending_blocks_from_store_works");
-	
-	net.peer(2).client.bitswap_storage().unwrap().insert(&cid, block.into()).unwrap();
+	let block = generate_block("test_bitswap_sending_blocks_from_store_works");
+	let cid = block.cid();
+
+	net.peer(2).insert_ipld_block(block.clone()).unwrap();
 
 	net.block_until_connected();
 
@@ -131,18 +123,7 @@ fn test_bitswap_sending_blocks_from_store_works() {
 
 	wait_until_x_peers_want_cid(&mut net, 0, 0..3, &cid);
 
-	assert_eq!(
-		net.peer(0).client.bitswap_storage().unwrap().get(&cid).ok(),
-		Some(block.to_vec())
-	);
-
-	assert_eq!(
-		net.peer(1).client.bitswap_storage().unwrap().get(&cid).ok(),
-		None
-	);
-
-	assert_eq!(
-		net.peer(2).client.bitswap_storage().unwrap().get(&cid).ok(),
-		Some(block.to_vec())
-	);
+	assert_eq!(net.peer(0).get_ipld_block(&cid), Some(block.clone()));
+	assert_eq!(net.peer(1).get_ipld_block(&cid), None);
+	assert_eq!(net.peer(2).get_ipld_block(&cid), Some(block.clone()));
 }

@@ -16,6 +16,7 @@ native_executor_instance!(
 	pub Executor,
 	node_template_runtime::api::dispatch,
 	node_template_runtime::native_version,
+	frame_benchmarking::benchmarking::HostFunctions,
 );
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
@@ -93,7 +94,6 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
-			backend: backend.clone(),
 			transaction_pool: transaction_pool.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
@@ -101,6 +101,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: None,
 			finality_proof_provider: Some(finality_proof_provider.clone()),
+			ipld_store_builder: (),
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -266,7 +267,6 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
-			backend: backend.clone(),
 			transaction_pool: transaction_pool.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
@@ -274,6 +274,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: Some(finality_proof_request_builder),
 			finality_proof_provider: Some(finality_proof_provider),
+			ipld_store_builder: (),
 		})?;
 
 	if config.offchain_worker.enabled {

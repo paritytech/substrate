@@ -63,6 +63,8 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::{ConsensusEngineId, Justification};
 use substrate_test_runtime_client::{self, AccountKeyring};
 use sc_service::client::Client;
+use futures::executor::block_on;
+use libipld::store::Store;
 pub use sc_network::config::EmptyTransactionPool;
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
@@ -167,20 +169,6 @@ impl PeersClient {
 		}
 	}
 
-	fn offchain_storage(&self) -> Option<PeerOffchainStorage> {
-		match *self {
-			PeersClient::Full(ref _client, ref backend) =>
-				backend.offchain_storage().map(PeerOffchainStorage::Full),
-			PeersClient::Light(ref _client, ref backend) =>
-				backend.offchain_storage().map(PeerOffchainStorage::Light),
-		}
-	}
-
-	#[cfg(test)]
-	fn bitswap_storage(&self) -> Option<sc_service::BitswapStorage<PeerOffchainStorage>> {
-		self.offchain_storage().map(sc_service::BitswapStorage::new)
-	}
-
 	pub fn info(&self) -> BlockchainInfo<Block> {
 		match *self {
 			PeersClient::Full(ref client, ref _backend) => client.chain_info(),
@@ -229,48 +217,6 @@ impl PeersClient {
 	}
 }
 
-#[derive(Clone)]
-enum PeerOffchainStorage {
-	Full(sc_client_db::offchain::LocalStorage),
-	Light(sp_core::offchain::storage::InMemOffchainStorage),
-}
-
-impl sp_core::offchain::OffchainStorage for PeerOffchainStorage {
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		match self {
-			Self::Full(storage) => storage.set(prefix, key, value),
-			Self::Light(storage) => storage.set(prefix, key, value),
-		}
-	}
-
-	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		match self {
-			Self::Full(storage) => storage.remove(prefix, key),
-			Self::Light(storage) => storage.remove(prefix, key),
-		}
-	}
-
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		match self {
-			Self::Full(storage) => storage.get(prefix, key),
-			Self::Light(storage) => storage.get(prefix, key),
-		}
-	}
-
-	fn compare_and_set(
-		&mut self,
-		prefix: &[u8],
-		key: &[u8],
-		old_value: Option<&[u8]>,
-		new_value: &[u8]
-	) -> bool {
-		match self {
-			Self::Full(storage) => storage.compare_and_set(prefix, key, old_value, new_value),
-			Self::Light(storage) => storage.compare_and_set(prefix, key, old_value, new_value),
-		}
-	}
-}
-
 pub struct Peer<D> {
 	pub data: D,
 	client: PeersClient,
@@ -286,6 +232,7 @@ pub struct Peer<D> {
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
 	bitswap_stream: Pin<Box<dyn Stream<Item = sc_network::BitswapEvent> + Send>>,
+	ipld_store: libipld::mem::MemStore<libipld::DefaultStoreParams>,
 }
 
 impl<D> Peer<D> {
@@ -486,6 +433,18 @@ impl<D> Peer<D> {
 		self.backend.as_ref().map(
 			|backend| backend.blockchain().header(BlockId::hash(*hash)).unwrap().is_some()
 		).unwrap_or(false)
+	}
+
+	pub fn get_ipld_block(&self, cid: &tiny_cid::Cid) ->
+		Option<libipld::Block<libipld::DefaultStoreParams>>
+	{
+		block_on(self.ipld_store.info(&cid)).map(|info| info.block().clone())
+	}
+
+	pub fn insert_ipld_block(&self, block: libipld::Block<libipld::DefaultStoreParams>) ->
+		Result<(), libipld::error::Error>
+	{
+		block_on(self.ipld_store.insert(block))
 	}
 }
 
@@ -774,6 +733,7 @@ pub trait TestNetFactory: Sized {
 				verifier,
 				network,
 				bitswap_stream,
+				ipld_store: Default::default(),
 			});
 		});
 	}
@@ -862,6 +822,7 @@ pub trait TestNetFactory: Sized {
 				finality_notification_stream,
 				network,
 				bitswap_stream,
+				ipld_store: Default::default(),
 			});
 		});
 	}
@@ -969,12 +930,10 @@ pub trait TestNetFactory: Sized {
 				}
 
 				while let Poll::Ready(Some(event)) = peer.bitswap_stream.as_mut().poll_next(cx) {
-					if let Some(offchain) = peer.client.offchain_storage() {
-						if let Err(err) =
-							sc_service::handle_bitswap_event(peer.network.service(), event, offchain)
-						{
-							warn!("{}", err);
-						}
+					if let Err(err) = sc_service::handle_bitswap_event(
+						peer.network.service(), event, peer.ipld_store.clone(),
+					).now_or_never().unwrap() {
+						warn!("{}", err);
 					}
 				}
 			}

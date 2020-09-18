@@ -51,7 +51,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	(
 		impl Fn(
 			node_rpc::DenyUnsafe,
-			jsonrpc_pubsub::manager::SubscriptionManager
+			sc_rpc::SubscriptionTaskExecutor,
 		) -> node_rpc::IoHandler,
 		(
 			sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
@@ -119,7 +119,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		let select_chain = select_chain.clone();
 		let keystore = keystore.clone();
 
-		let rpc_extensions_builder = move |deny_unsafe, subscriptions| {
+		let rpc_extensions_builder = move |deny_unsafe, subscription_executor| {
 			let deps = node_rpc::FullDeps {
 				client: client.clone(),
 				pool: pool.clone(),
@@ -134,7 +134,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 					shared_voter_state: shared_voter_state.clone(),
 					shared_authority_set: shared_authority_set.clone(),
 					justification_stream: justification_stream.clone(),
-					subscriptions,
+					subscription_executor,
 				},
 			};
 
