@@ -331,9 +331,8 @@ fn decl_outer_dispatch<'a>(
 		.map(|module_declaration| {
 			let module = &module_declaration.module;
 			let name = &module_declaration.name;
-			let index = module_declaration.index;
-			let index_string = syn::LitStr::new(&format!("{}", index), Span::call_site());
-			quote!(#[codec(index = #index_string)] #module::#name)
+			let index = module_declaration.index.to_string();
+			quote!(#[codec(index = #index)] #module::#name)
 		});
 
 	quote!(
@@ -366,9 +365,8 @@ fn decl_outer_origin<'a>(
 					);
 					return Err(syn::Error::new(module_declaration.name.span(), msg));
 				}
-				let index = module_declaration.index;
-				let index_string = syn::LitStr::new(&format!("{}", index), Span::call_site());
-				let tokens = quote!(#[codec(index = #index_string)] #module #instance #generics,);
+				let index = module_declaration.index.to_string();
+				let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
 				modules_tokens.extend(tokens);
 			}
 			None => {}
@@ -376,14 +374,13 @@ fn decl_outer_origin<'a>(
 	}
 
 	let system_name = &system_module.module;
-	let system_index = system_module.index;
-	let system_index_string = syn::LitStr::new(&format!("{}", system_index), Span::call_site());
+	let system_index = system_module.index.to_string();
 
 	Ok(quote!(
 		#scrate::impl_outer_origin! {
 			pub enum Origin for #runtime_name where
 				system = #system_name,
-				system_index = #system_index_string
+				system_index = #system_index
 			{
 				#modules_tokens
 			}
@@ -412,9 +409,8 @@ fn decl_outer_event<'a>(
 					return Err(syn::Error::new(module_declaration.name.span(), msg));
 				}
 
-				let index = module_declaration.index;
-				let index_string = syn::LitStr::new(&format!("{}", index), Span::call_site());
-				let tokens = quote!(#[codec(index = #index_string)] #module #instance #generics,);
+				let index = module_declaration.index.to_string();
+				let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
 				modules_tokens.extend(tokens);
 			}
 			None => {}
