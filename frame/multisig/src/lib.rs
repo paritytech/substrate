@@ -212,18 +212,6 @@ decl_event! {
 mod weight_of {
 	use super::*;
 
-	/// - Base Weight: 33.72 + 0.002 * Z µs
-	/// - DB Weight: None
-	/// - Plus Call Weight
-	pub fn as_multi_threshold_1<T: Trait>(
-		call_len: usize,
-		call_weight: Weight,
-	 ) -> Weight {
-		(34 * WEIGHT_PER_MICROS)
-			.saturating_add((2 * WEIGHT_PER_NANOS).saturating_mul(call_len as Weight))
-			.saturating_add(call_weight)
-	}
-
 	/// - Base Weight:
 	///     - Create:          38.82 + 0.121 * S + .001 * Z µs
 	///     - Create w/ Store: 54.22 + 0.120 * S + .003 * Z µs
@@ -291,9 +279,8 @@ decl_module! {
 		/// - Plus Call Weight
 		/// # </weight>
 		#[weight = (
-			weight_of::as_multi_threshold_1::<T>(
-				call.using_encoded(|c| c.len()),
-				call.get_dispatch_info().weight
+			T::WeightInfo::as_multi_threshold_1(call.using_encoded(|c| c.len() as u32))
+				.saturating_add(call.get_dispatch_info().weight
 			),
 			call.get_dispatch_info().class,
 		)]
@@ -314,17 +301,14 @@ decl_module! {
 			let result = call.dispatch(RawOrigin::Signed(id).into());
 
 			result.map(|post_dispatch_info| post_dispatch_info.actual_weight
-				.map(|actual_weight| weight_of::as_multi_threshold_1::<T>(
-					call_len,
-					actual_weight,
-				))
-				.into()
+				.map(|actual_weight|
+					T::WeightInfo::as_multi_threshold_1(call_len as u32)
+						.saturating_add(actual_weight)
+				).into()
 			).map_err(|err| match err.post_info.actual_weight {
 				Some(actual_weight) => {
-					let weight_used = weight_of::as_multi_threshold_1::<T>(
-						call_len,
-						actual_weight,
-					);
+					let weight_used = T::WeightInfo::as_multi_threshold_1(call_len as u32)
+						.saturating_add(actual_weight);
 					let post_info = Some(weight_used).into();
 					let error = err.error.into();
 					DispatchErrorWithPostInfo { post_info, error }
