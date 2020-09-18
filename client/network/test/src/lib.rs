@@ -21,8 +21,6 @@
 mod block_import;
 #[cfg(test)]
 mod sync;
-#[cfg(test)]
-mod bitswap;
 
 use std::{
 	borrow::Cow, collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData,
@@ -30,7 +28,7 @@ use std::{
 };
 
 use libp2p::build_multiaddr;
-use log::{trace, warn};
+use log::trace;
 use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
 	HeaderBackend, Result as ClientResult,
@@ -63,8 +61,6 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::{ConsensusEngineId, Justification};
 use substrate_test_runtime_client::{self, AccountKeyring};
 use sc_service::client::Client;
-use futures::executor::block_on;
-use libipld::store::Store;
 pub use sc_network::config::EmptyTransactionPool;
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
@@ -231,8 +227,6 @@ pub struct Peer<D> {
 	network: NetworkWorker<Block, <Block as BlockT>::Hash>,
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
-	bitswap_stream: Pin<Box<dyn Stream<Item = sc_network::BitswapEvent> + Send>>,
-	ipld_store: libipld::mem::MemStore<libipld::DefaultStoreParams>,
 }
 
 impl<D> Peer<D> {
@@ -433,18 +427,6 @@ impl<D> Peer<D> {
 		self.backend.as_ref().map(
 			|backend| backend.blockchain().header(BlockId::hash(*hash)).unwrap().is_some()
 		).unwrap_or(false)
-	}
-
-	pub fn get_ipld_block(&self, cid: &tiny_cid::Cid) ->
-		Option<libipld::Block<libipld::DefaultStoreParams>>
-	{
-		block_on(self.ipld_store.info(&cid)).map(|info| info.block().clone())
-	}
-
-	pub fn insert_ipld_block(&self, block: libipld::Block<libipld::DefaultStoreParams>) ->
-		Result<(), libipld::error::Error>
-	{
-		block_on(self.ipld_store.insert(block))
 	}
 }
 
@@ -714,14 +696,6 @@ pub trait TestNetFactory: Sized {
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
 			let finality_notification_stream = Box::pin(client.finality_notification_stream().fuse());
 
-			let bitswap_stream = network.service().event_stream("bitswap")
-				.filter_map(|event| futures::future::ready(if let sc_network::Event::Bitswap(event) = event {
-					Some(event)
-				} else {
-					None
-				}))
-				.boxed();
-
 			peers.push(Peer {
 				data,
 				client: PeersClient::Full(client, backend.clone()),
@@ -732,8 +706,6 @@ pub trait TestNetFactory: Sized {
 				block_import,
 				verifier,
 				network,
-				bitswap_stream,
-				ipld_store: Default::default(),
 			});
 		});
 	}
@@ -803,14 +775,6 @@ pub trait TestNetFactory: Sized {
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
 			let finality_notification_stream = Box::pin(client.finality_notification_stream().fuse());
 
-			let bitswap_stream = network.service().event_stream("bitswap")
-				.filter_map(|event| futures::future::ready(if let sc_network::Event::Bitswap(event) = event {
-					Some(event)
-				} else {
-					None
-				}))
-				.boxed();
-			
 			peers.push(Peer {
 				data,
 				verifier,
@@ -821,8 +785,6 @@ pub trait TestNetFactory: Sized {
 				imported_blocks_stream,
 				finality_notification_stream,
 				network,
-				bitswap_stream,
-				ipld_store: Default::default(),
 			});
 		});
 	}
@@ -927,14 +889,6 @@ pub trait TestNetFactory: Sized {
 				}
 				if let Some(notification) = last {
 					peer.network.on_block_finalized(notification.hash, notification.header);
-				}
-
-				while let Poll::Ready(Some(event)) = peer.bitswap_stream.as_mut().poll_next(cx) {
-					if let Err(err) = sc_service::handle_bitswap_event(
-						peer.network.service(), event, peer.ipld_store.clone(),
-					).now_or_never().unwrap() {
-						warn!("{}", err);
-					}
 				}
 			}
 		});
