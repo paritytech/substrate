@@ -630,16 +630,16 @@ impl<T: Trait> Module<T> {
 		executor.deposit(source, total_fee.saturating_sub(actual_fee));
 
 		let mut logs_result: Vec<Log> = Vec::new();
+		let (values, logs) = executor.deconstruct();
+		let logs_data = logs.into_iter().map(|x| x ).collect::<Vec<_>>().clone();
+		for it in logs_data.clone() {
+			logs_result.push(Log {
+				address: it.address,
+				topics: it.topics,
+				data: it.data
+			});
+		}
 		if apply_state {
-			let (values, logs) = executor.deconstruct();
-			let logs_data = logs.into_iter().map(|x| x ).collect::<Vec<_>>().clone();
-			for it in logs_data.clone() {
-				logs_result.push(Log {
-					address: it.address,
-					topics: it.topics,
-					data: it.data
-				});
-			}
 			backend.apply(values, logs_data, true);
 		}
 
