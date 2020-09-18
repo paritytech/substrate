@@ -713,8 +713,8 @@ impl BlockAnnounceValidator<Block> for NewBestBlockAnnounceValidator {
 		&mut self,
 		_: &Header,
 		_: &[u8],
-	) -> Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Unpin + Send> {
-		Box::new(async { Ok(Validation::Success { is_new_best: true }) }.boxed())
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+		async { Ok(Validation::Success { is_new_best: true }) }.boxed()
 	}
 }
 
@@ -752,19 +752,17 @@ impl BlockAnnounceValidator<Block> for DeferredBlockAnnounceValidator {
 		&mut self,
 		_: &Header,
 		_: &[u8],
-	) -> Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Unpin + Send> {
-		Box::new(
-			async {
-				futures_timer::Delay::new(std::time::Duration::from_millis(500)).await;
-				Ok(Validation::Success { is_new_best: false })
-			}.boxed()
-		)
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+		async {
+			futures_timer::Delay::new(std::time::Duration::from_millis(500)).await;
+			Ok(Validation::Success { is_new_best: false })
+		}.boxed()
 	}
 }
 
 #[test]
 fn wait_until_deferred_block_announce_validation_is_ready() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	log::trace!(target: "sync", "Test");
 	let mut net = TestNet::with_fork_choice(ForkChoiceStrategy::Custom(false));
 	net.add_full_peer_with_config(Default::default());
