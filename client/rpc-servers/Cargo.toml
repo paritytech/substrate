@@ -12,7 +12,7 @@ description = "Substrate RPC servers."
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-futures = "~0.1.6"
+futures = "0.1.6"
 jsonrpc-core = "14.2.0"
 pubsub = { package = "jsonrpc-pubsub", version = "14.2.0" }
 log = "0.4.8"
