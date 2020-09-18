@@ -47,11 +47,4 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
-	fn on_initialize(s: u32, ) -> Weight {
-		(21_651_000 as Weight)
-			.saturating_add((33_001_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(DbWeight::get().reads(2 as Weight))
-			.saturating_add(DbWeight::get().writes(2 as Weight))
-			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(s as Weight)))
-	}
 }
