@@ -33,7 +33,6 @@ pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
 mod task_manager;
-mod bitswap;
 
 use std::{io, pin::Pin};
 use std::net::SocketAddr;
@@ -50,14 +49,13 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
-use sp_api::offchain::OffchainStorage;
 
 pub use self::error::Error;
 pub use self::builder::{
 	new_full_client, new_client, new_full_parts, new_light_parts,
 	spawn_tasks, build_network, BuildNetworkParams, NetworkStarter, build_offchain_workers,
 	SpawnTasksParams, TFullClient, TLightClient, TFullBackend, TLightBackend,
-	TLightBackendWithHash, TLightClientWithBackend,
+	TLightBackendWithHash, TLightClientWithBackend, IpldStoreBuilder,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
 };
 pub use config::{
@@ -84,7 +82,9 @@ pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
 use sc_client_api::BlockchainEvents;
 pub use sc_keystore::KeyStorePtr as KeyStore;
-pub use bitswap::{BitswapStorage, Error as BitswapStorageError};
+
+use libipld::store::Store as IpldStore;
+use libipld::DefaultStoreParams as IpldStoreParams;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -204,7 +204,7 @@ async fn build_network_future<
 	B: BlockT,
 	C: BlockchainEvents<B>,
 	H: sc_network::ExHashT,
-	BE: sc_client_api::Backend<B>,
+	S: IpldStore<Params=IpldStoreParams> + 'static,
 > (
 	role: Role,
 	mut network: sc_network::NetworkWorker<B, H>,
@@ -213,7 +213,7 @@ async fn build_network_future<
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
-	backend: Arc<BE>,
+	ipld_store: Option<S>,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
@@ -236,13 +236,22 @@ async fn build_network_future<
 		}).fuse()
 	};
 
-
-	let mut bitswap_events = network.service().event_stream("bitswap")
+	let network_service = network.service().clone();
+	let mut handle_bitswap_events = network.service().event_stream("bitswap")
 		.filter_map(|event| future::ready(if let sc_network::Event::Bitswap(event) = event {
 			Some(event)
 		} else {
 			None
-		})).fuse();
+		}))
+		.for_each(|event| {
+			Box::pin(async {
+				if let Some(store) = ipld_store.clone() {
+					if let Err(err) = handle_bitswap_event(&network_service, event, store).await {
+						warn!("{}", err);
+					}
+				}
+			})
+		});
 
 	loop {
 		futures::select!{
@@ -357,39 +366,28 @@ async fn build_network_future<
 				state_sink.send(network.network_state());
 			}
 
-			event = bitswap_events.select_next_some() => {
-				if let Some(offchain) = backend.offchain_storage() {
-					if let Err(err) = handle_bitswap_event(network.service(), event, offchain) {
-						warn!("{}", err);
-					}
-				}
-			}
+			_ = (&mut handle_bitswap_events).fuse() => {}
 		}
 	}
 }
 
 /// Handle a `BitswapEvent`, reading and writing from the `OffchainStorage`.
-pub fn handle_bitswap_event<B: BlockT, H: sc_network::ExHashT, S: OffchainStorage>(
+pub async fn handle_bitswap_event<B: BlockT, H: sc_network::ExHashT, S: IpldStore<Params=IpldStoreParams>>(
 	service: &Arc<sc_network::NetworkService<B, H>>,
 	event: sc_network::BitswapEvent,
 	storage: S,
-) -> Result<(), BitswapStorageError> {
-	let mut storage = BitswapStorage::new(storage);
-
+) -> Result<(), libipld::error::Error> {
 	match event {
 		sc_network::BitswapEvent::ReceivedBlock(_, cid, data) => {
-			storage.insert(&cid, data.clone())?;
+			storage.insert(libipld::Block::new(cid.clone(), data.to_vec())?).await?;
 			service.put_value(cid.to_bytes().into(), data.to_vec());
 			Ok(())
 		},
 		sc_network::BitswapEvent::ReceivedWant(peer_id, cid, _) => {
-			match storage.get(&cid) {
-				Ok(data) => {
-					service.bitswap_send_block(peer_id, cid, data.into_boxed_slice());
-					Ok(())
-				},
-				Err(error) => Err(error)
-			}
+			let block = storage.get(&cid).await?;
+			let (_, data) = block.into_inner();
+			service.bitswap_send_block(peer_id, cid, data.into_boxed_slice());
+			Ok(())
 		}
 	}
 }

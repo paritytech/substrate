@@ -181,7 +181,6 @@ pub fn new_full_base(
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
-			backend: backend.clone(),
 			transaction_pool: transaction_pool.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
@@ -189,6 +188,7 @@ pub fn new_full_base(
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: None,
 			finality_proof_provider: Some(finality_proof_provider.clone()),
+			ipld_store_builder: (),
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -405,7 +405,6 @@ pub fn new_light_base(config: Configuration) -> Result<(
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
-			backend: backend.clone(),
 			transaction_pool: transaction_pool.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
@@ -413,6 +412,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: Some(finality_proof_request_builder),
 			finality_proof_provider: Some(finality_proof_provider),
+			ipld_store_builder: (),
 		})?;
 	network_starter.start_network();
 

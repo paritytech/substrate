@@ -75,9 +75,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 sc-tracing = { version = "2.0.0-rc6", path = "../tracing" }
 tracing = "0.1.18"
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
-multihash = "0.11.2"
-tiny-cid = "0.2.5"
-libipld = "0.4.0"
+libipld = { version = "0.5.1", default-features = false }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 tempfile = "3.1.0"
