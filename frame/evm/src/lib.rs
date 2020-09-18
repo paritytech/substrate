@@ -261,17 +261,17 @@ decl_event! {
 	{
 		/// Ethereum events from contracts.
 		Log(Log),
-		/// A contract has been created at given [address].
+		/// A contract has been created at given \[address\].
 		Created(H160),
-		/// A [contract] was attempted to be created, but the execution failed.
+		/// A \[contract\] was attempted to be created, but the execution failed.
 		CreatedFailed(H160),
-		/// A [contract] has been executed successfully with states applied.
+		/// A \[contract\] has been executed successfully with states applied.
 		Executed(H160),
-		/// A [contract] has been executed with errors. States are reverted with only gas fees applied.
+		/// A \[contract\] has been executed with errors. States are reverted with only gas fees applied.
 		ExecutedFailed(H160),
-		/// A deposit has been made at a given address. [sender, address, value]
+		/// A deposit has been made at a given address. \[sender, address, value\]
 		BalanceDeposit(AccountId, H160, U256),
-		/// A withdrawal has been made from a given address. [sender, address, value]
+		/// A withdrawal has been made from a given address. \[sender, address, value\]
 		BalanceWithdraw(AccountId, H160, U256),
 	}
 }
@@ -333,7 +333,7 @@ decl_module! {
 				input,
 				value,
 				gas_limit,
-				Some(gas_price),
+				gas_price,
 				nonce,
 				true,
 			)? {
@@ -367,7 +367,7 @@ decl_module! {
 				init,
 				value,
 				gas_limit,
-				Some(gas_price),
+				gas_price,
 				nonce,
 				true,
 			)? {
@@ -402,7 +402,7 @@ decl_module! {
 				salt,
 				value,
 				gas_limit,
-				Some(gas_price),
+				gas_price,
 				nonce,
 				true,
 			)? {
@@ -482,7 +482,7 @@ impl<T: Trait> Module<T> {
 		init: Vec<u8>,
 		value: U256,
 		gas_limit: u32,
-		gas_price: Option<U256>,
+		gas_price: U256,
 		nonce: Option<U256>,
 		apply_state: bool,
 	) -> Result<(ExitReason, H160, U256, Vec<Log>), Error<T>> {
@@ -514,7 +514,7 @@ impl<T: Trait> Module<T> {
 		salt: H256,
 		value: U256,
 		gas_limit: u32,
-		gas_price: Option<U256>,
+		gas_price: U256,
 		nonce: Option<U256>,
 		apply_state: bool,
 	) -> Result<(ExitReason, H160, U256, Vec<Log>), Error<T>> {
@@ -548,7 +548,7 @@ impl<T: Trait> Module<T> {
 		input: Vec<u8>,
 		value: U256,
 		gas_limit: u32,
-		gas_price: Option<U256>,
+		gas_price: U256,
 		nonce: Option<U256>,
 		apply_state: bool,
 	) -> Result<(ExitReason, Vec<u8>, U256, Vec<Log>), Error<T>> {
@@ -574,20 +574,18 @@ impl<T: Trait> Module<T> {
 		source: H160,
 		value: U256,
 		gas_limit: u32,
-		gas_price: Option<U256>,
+		gas_price: U256,
 		nonce: Option<U256>,
 		apply_state: bool,
 		f: F,
 	) -> Result<(ExitReason, R, U256, Vec<Log>), Error<T>> where
 		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (ExitReason, R),
 	{
-		let gas_price = match gas_price {
-			Some(gas_price) => {
-				ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
-				gas_price
-			},
-			None => U256::zero(),
-		};
+
+		// Gas price check is skipped when performing a gas estimation.
+		if apply_state {
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+		}
 
 		let vicinity = Vicinity {
 			gas_price,

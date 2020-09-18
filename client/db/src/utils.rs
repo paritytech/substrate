@@ -212,11 +212,12 @@ pub fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
 	db_type: DatabaseType,
 ) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
-	let db_open_error = |feat| Err(
+	#[allow(unused)]
+	fn db_open_error(feat: &'static str) -> sp_blockchain::Error {
 		sp_blockchain::Error::Backend(
 			format!("`{}` feature not enabled, database can not be opened", feat),
-		),
-	);
+		)
+	}
 
 	let db: Arc<dyn Database<DbHash>> = match &config.source {
 		#[cfg(any(feature = "with-kvdb-rocksdb", test))]
@@ -226,30 +227,45 @@ pub fn open_database<Block: BlockT>(
 
 			// and now open database assuming that it has the latest version
 			let mut db_config = kvdb_rocksdb::DatabaseConfig::with_columns(NUM_COLUMNS);
-			let state_col_budget = (*cache_size as f64 * 0.9) as usize;
-			let other_col_budget = (cache_size - state_col_budget) / (NUM_COLUMNS as usize - 1);
-			let mut memory_budget = std::collections::HashMap::new();
 			let path = path.to_str()
 				.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
 
-			for i in 0..NUM_COLUMNS {
-				if i == crate::columns::STATE {
-					memory_budget.insert(i, state_col_budget);
-				} else {
-					memory_budget.insert(i, other_col_budget);
+			let mut memory_budget = std::collections::HashMap::new();
+			match db_type {
+				DatabaseType::Full => {
+					let state_col_budget = (*cache_size as f64 * 0.9) as usize;
+					let other_col_budget = (cache_size - state_col_budget) / (NUM_COLUMNS as usize - 1);
+
+					for i in 0..NUM_COLUMNS {
+						if i == crate::columns::STATE {
+							memory_budget.insert(i, state_col_budget);
+						} else {
+							memory_budget.insert(i, other_col_budget);
+						}
+					}
+					log::trace!(
+						target: "db",
+						"Open RocksDB database at {}, state column budget: {} MiB, others({}) column cache: {} MiB",
+						path,
+						state_col_budget,
+						NUM_COLUMNS,
+						other_col_budget,
+					);
+				},
+				DatabaseType::Light => {
+					let col_budget = cache_size / (NUM_COLUMNS as usize);
+					for i in 0..NUM_COLUMNS {
+						memory_budget.insert(i, col_budget);
+					}
+					log::trace!(
+						target: "db",
+						"Open RocksDB light database at {}, column cache: {} MiB",
+						path,
+						col_budget,
+					);
 				}
 			}
-
 			db_config.memory_budget = memory_budget;
-
-			log::trace!(
-				target: "db",
-				"Open RocksDB database at {}, state column budget: {} MiB, others({}) column cache: {} MiB",
-				path,
-				state_col_budget,
-				NUM_COLUMNS,
-				other_col_budget,
-			);
 
 			let db = kvdb_rocksdb::Database::open(&db_config, &path)
 				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?;
@@ -257,25 +273,16 @@ pub fn open_database<Block: BlockT>(
 		},
 		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
 		DatabaseSettingsSrc::RocksDb { .. } => {
-			return db_open_error("with-kvdb-rocksdb");
-		},
-		#[cfg(feature = "with-subdb")]
-		DatabaseSettingsSrc::SubDb { path } => {
-			crate::subdb::open(&path, NUM_COLUMNS)
-				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
-		},
-		#[cfg(not(feature = "with-subdb"))]
-		DatabaseSettingsSrc::SubDb { .. } => {
-			return db_open_error("with-subdb");
+			return Err(db_open_error("with-kvdb-rocksdb"));
 		},
 		#[cfg(feature = "with-parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
-			crate::parity_db::open(&path)
+			crate::parity_db::open(&path, db_type)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
 		#[cfg(not(feature = "with-parity-db"))]
 		DatabaseSettingsSrc::ParityDb { .. } => {
-			return db_open_error("with-parity-db");
+			return Err(db_open_error("with-parity-db"))
 		},
 		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};

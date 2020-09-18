@@ -39,8 +39,8 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0-rc6", path = "../../primitives/keyring" }
+sp-tracing = { version = "2.0.0-rc6", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0-rc6", path = "../../test-utils/runtime/client" }
-env_logger = "0.7.0"
 quickcheck = "0.9"
 kvdb-rocksdb = "0.9.1"
 tempfile = "3"
@@ -50,4 +50,3 @@ default = []
 test-helpers = []
 with-kvdb-rocksdb = ["kvdb-rocksdb"]
 with-parity-db = ["parity-db"]
-with-subdb = []

@@ -67,8 +67,6 @@ pub struct PeerInfo<Hash, Number> {
 	pub peer_id: String,
 	/// Roles
 	pub roles: String,
-	/// Protocol version
-	pub protocol_version: u32,
 	/// Peer best block hash
 	pub best_hash: Hash,
 	/// Peer best block number
@@ -110,11 +108,10 @@ mod tests {
 			::serde_json::to_string(&PeerInfo {
 				peer_id: "2".into(),
 				roles: "a".into(),
-				protocol_version: 2,
 				best_hash: 5u32,
 				best_number: 6u32,
 			}).unwrap(),
-			r#"{"peerId":"2","roles":"a","protocolVersion":2,"bestHash":5,"bestNumber":6}"#,
+			r#"{"peerId":"2","roles":"a","bestHash":5,"bestNumber":6}"#,
 		);
 	}
 }
