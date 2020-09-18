@@ -29,5 +29,7 @@ std = [
 	"sp-io/std",
 	"sp-sandbox/std",
 	"sp-std/std",
+	"sp-core/std",
+	"sp-runtime/std",
 	"sp-allocator/std",
 ]
