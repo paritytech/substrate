@@ -1,3 +1,5 @@
+// This file is part of Substrate.
+
 // Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -13,16 +15,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A list of the different weight modules for our runtime.
+//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 2.0.0-rc6
 
-pub mod frame_system;
-pub mod pallet_balances;
-pub mod pallet_collective;
-pub mod pallet_democracy;
-pub mod pallet_identity;
-pub mod pallet_im_online;
-pub mod pallet_proxy;
-pub mod pallet_staking;
-pub mod pallet_timestamp;
-pub mod pallet_utility;
-pub mod pallet_vesting;
+#![allow(unused_parens)]
+#![allow(unused_imports)]
+
+use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
+
+impl crate::WeightInfo for () {
+	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight {
+		(139830000 as Weight)
+			.saturating_add((211000 as Weight).saturating_mul(k as Weight))
+			.saturating_add((654000 as Weight).saturating_mul(e as Weight))
+			.saturating_add(DbWeight::get().reads(4 as Weight))
+			.saturating_add(DbWeight::get().writes(1 as Weight))
+	}
+}
