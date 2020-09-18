@@ -559,7 +559,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	// This is used internally, so don't restrict access to unsafe RPC
 	let rpc_handlers = RpcHandlers(Arc::new(gen_handler(
 		sc_rpc::DenyUnsafe::No,
-		sc_rpc_server::RpcMiddleware::new(rpc_metrics.as_ref(), "inbrowser")
+		sc_rpc_server::RpcMiddleware::new(rpc_metrics.as_ref().cloned(), "inbrowser")
 	).into()));
 
 	// Telemetry

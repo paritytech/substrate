@@ -61,9 +61,9 @@ pub struct RpcMiddleware {
 impl RpcMiddleware {
 	/// Create an instance of middleware with provided metrics
 	/// transport_label is used as a label for Prometheus collector
-	pub fn new(metrics: Option<&RpcMetrics>, transport_label: &str) -> Self {
+	pub fn new(metrics: Option<RpcMetrics>, transport_label: &str) -> Self {
 		RpcMiddleware {
-			metrics: metrics.cloned(),
+			metrics,
 			transport_label: String::from(transport_label),
 		}
 	}

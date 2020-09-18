@@ -422,7 +422,7 @@ fn start_rpc_servers<
 		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(
 			&*path, gen_handler(
 				sc_rpc::DenyUnsafe::No,
-				sc_rpc_server::RpcMiddleware::new(rpc_metrics, "ipc")
+				sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "ipc")
 			)
 		)),
 		maybe_start_server(
@@ -432,7 +432,7 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics, "http")
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "http")
 				),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
@@ -444,7 +444,7 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics, "ws")
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "ws")
 				),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
