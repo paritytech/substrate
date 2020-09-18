@@ -15,7 +15,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::RuntimeDebug;
+use frame_support::{
+	RuntimeDebug,
+	dispatch::Parameter,
+	weights::Weight,
+};
+
+/// A provider of the MMR's leaf data.
+pub trait LeafDataProvider {
+	/// A type that should end up in the leaf of MMR.
+	type LeafData: Parameter;
+
+	/// The method to return leaf data that should be placed
+	/// in the leaf node appended MMR at this block.
+	///
+	/// This is being called by the `on_initialize` method of
+	/// this pallet at the very beginning of each block.
+	/// The second argument should indicate how much `Weight`
+	/// was required to retrieve the data.
+	fn leaf_data() -> (Self::LeafData, Weight);
+}
+
+impl LeafDataProvider for () {
+	type LeafData = ();
+	fn leaf_data() -> (Self::LeafData, Weight) {
+		((), 0)
+	}
+}
 
 /// A leaf node of the MMR.
 ///

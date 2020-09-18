@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::*;
-use crate::primitives::{Leaf, Proof};
+use crate::primitives::{Leaf, Proof, LeafDataProvider};
 
 use codec::{Encode, Decode};
 use frame_support::{
@@ -105,7 +105,7 @@ thread_local! {
 	pub static LEAF_DATA: RefCell<LeafData> = RefCell::new(Default::default());
 }
 
-impl crate::LeafDataProvider for LeafData {
+impl LeafDataProvider for LeafData {
 	type LeafData = Self;
 
 	fn leaf_data() -> (Self::LeafData, Weight) {

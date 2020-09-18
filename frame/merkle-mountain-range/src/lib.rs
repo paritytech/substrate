@@ -26,7 +26,6 @@
 use codec::Encode;
 use frame_support::{
 	debug, decl_module, decl_storage, RuntimeDebug,
-	dispatch::Parameter,
 	weights::Weight,
 	traits::Get,
 };
@@ -37,28 +36,6 @@ mod mmr;
 mod primitives;
 #[cfg(test)]
 mod tests;
-
-/// A provider of the MMR's leaf data.
-pub trait LeafDataProvider {
-	/// A type that should end up in the leaf of MMR.
-	type LeafData: Parameter;
-
-	/// The method to return leaf data that should be placed
-	/// in the leaf node appended MMR at this block.
-	///
-	/// This is being called by the `on_initialize` method of
-	/// this pallet at the very beginning of each block.
-	/// The second argument should indicate how much `Weight`
-	/// was required to retrieve the data.
-	fn leaf_data() -> (Self::LeafData, Weight);
-}
-
-impl LeafDataProvider for () {
-	type LeafData = ();
-	fn leaf_data() -> (Self::LeafData, Weight) {
-		((), 0)
-	}
-}
 
 /// This pallet's configuration trait
 pub trait Trait: frame_system::Trait {
@@ -85,7 +62,7 @@ pub trait Trait: frame_system::Trait {
 	///
 	/// By default every leaf node will always include a (parent) block hash and
 	/// any additional `LeafData` defined by this type.
-	type LeafData: LeafDataProvider;
+	type LeafData: primitives::LeafDataProvider;
 }
 
 decl_storage! {
@@ -110,13 +87,13 @@ decl_module! {
 	/// A public part of the pallet.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			debug::native::info!("Hello World from MMR");
+			use primitives::LeafDataProvider;
 
 			let hash = <frame_system::Module<T>>::parent_hash();
 			let (data, leaf_weight) = T::LeafData::leaf_data();
+			// append new leaf to MMR
 			let mut mmr: ModuleMMR<MMRRuntimeStorage, T> = MMR::new(Self::mmr_leaves());
-			mmr.push(primitives::Leaf { hash, data })
-				.expect("MMR push never fails.");
+			mmr.push(primitives::Leaf { hash, data }).expect("MMR push never fails.");
 
 			// update the size
 			let (leaves, root) = mmr.finalize().expect("MMR finalize never fails.");
@@ -124,7 +101,7 @@ decl_module! {
 			<RootHash<T>>::put(root);
 
 			let pruned = Self::prune_non_peaks();
-			let peaks = mmr::NodesUtils::new(leaves).number_of_peaks();
+			let peaks = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 
 			leaf_weight + <T as frame_system::Trait>::DbWeight::get().reads_writes(
 				2 + peaks,
@@ -140,7 +117,7 @@ type ModuleMMR<StorageType, T> = MMR<StorageType, T, LeafOf<T>>;
 /// Leaf data.
 type LeafOf<T> = primitives::Leaf<
 	<T as frame_system::Trait>::Hash,
-	<<T as Trait>::LeafData as LeafDataProvider>::LeafData
+	<<T as Trait>::LeafData as primitives::LeafDataProvider>::LeafData
 >;
 
 impl<T: Trait> Module<T> {
@@ -209,27 +186,11 @@ impl<StorageType, T, L> MMR<StorageType, T, L> where
 {
 	/// Create a pointer to an existing MMR with given size.
 	pub fn new(leaves: u64) -> Self {
-		let size = mmr::NodesUtils::new(leaves).size();
+		let size = mmr::utils::NodesUtils::new(leaves).size();
 		Self {
 			mmr: mmr_lib::MMR::new(size, Default::default()),
 			leaves,
 		}
-	}
-
-	/// Push another item to the MMR.
-	///
-	/// Returns element position (index) in the MMR.
-	pub fn push(&mut self, leaf: L) -> Option<u64> {
-		let res = self.mmr.push(MMRNode::Leaf(leaf)).map_err(|e| {
-			debug::native::error!("Error while pushing MMR node: {:?}", e);
-			()
-		}).map_err(|e| Error::Push.debug(e)).ok();
-
-		if res.is_some() {
-			self.leaves += 1;
-		}
-
-		res
 	}
 
 	/// Verify proof of a single leaf.
@@ -249,8 +210,47 @@ impl<StorageType, T, L> MMR<StorageType, T, L> where
 		).map_err(|e| Error::Verify.debug(e))
 	}
 
-	// TODO [ToDr] Possibly move to type-specific impl.
+	/// Return the internal size of the MMR (number of nodes).
+	#[cfg(test)]
+	pub fn size(&self) -> u64 {
+		self.mmr.mmr_size()
+	}
+}
 
+/// Runtime specific MMR functions.
+impl<T, L> MMR<MMRRuntimeStorage, T, L> where
+	T: Trait,
+	L: codec::Codec + PartialEq + fmt::Debug + Clone,
+{
+	/// Push another item to the MMR.
+	///
+	/// Returns element position (index) in the MMR.
+	pub fn push(&mut self, leaf: L) -> Option<u64> {
+		let res = self.mmr.push(MMRNode::Leaf(leaf)).map_err(|e| {
+			debug::native::error!("Error while pushing MMR node: {:?}", e);
+			()
+		}).map_err(|e| Error::Push.debug(e)).ok();
+
+		if res.is_some() {
+			self.leaves += 1;
+		}
+
+		res
+	}
+
+	/// Commit the changes to underlying storage and calculate MMR's size & root hash.
+	pub fn finalize(self) -> Result<(u64, <T as Trait>::Hash), Error> {
+		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.debug(e))?;
+		self.mmr.commit().map_err(|e| Error::Commit.debug(e))?;
+		Ok((self.leaves, root.hash()))
+	}
+}
+
+/// Off-chain specific MMR functions.
+impl<T, L> MMR<MMROffchainStorage, T, L> where
+	T: Trait,
+	L: codec::Codec + PartialEq + fmt::Debug + Clone,
+{
 	/// Generate a proof for given leaf index.
 	///
 	/// Proof generation requires all the nodes (or their hashes) to be available in the storage.
@@ -260,7 +260,7 @@ impl<StorageType, T, L> MMR<StorageType, T, L> where
 		Error
 	> {
 		let position = mmr_lib::leaf_index_to_pos(leaf_index);
-		let leaf = match mmr_lib::MMRStore::get_elem(&<MMRIndexer<StorageType, T, L>>::default(), position) {
+		let leaf = match mmr_lib::MMRStore::get_elem(&<MMRIndexer<MMROffchainStorage, T, L>>::default(), position) {
 			Ok(Some(MMRNode::Leaf(leaf))) => leaf,
 			e => return Err(Error::LeafNotFound.debug(e)),
 		};
@@ -273,19 +273,6 @@ impl<StorageType, T, L> MMR<StorageType, T, L> where
 				items: p.proof_items().iter().map(|x| x.hash()).collect(),
 			})
 			.map(|p| (leaf, p))
-	}
-
-	/// Return the internal size of the MMR (number of nodes).
-	#[cfg(test)]
-	pub fn size(&self) -> u64 {
-		self.mmr.mmr_size()
-	}
-
-	/// Commit the changes to underlying storage and calculate MMR's size & root hash.
-	pub fn finalize(self) -> Result<(u64, <T as Trait>::Hash), Error> {
-		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.debug(e))?;
-		self.mmr.commit().map_err(|e| Error::Commit.debug(e))?;
-		Ok((self.leaves, root.hash()))
 	}
 }
 
@@ -328,10 +315,17 @@ impl<H: traits::Hash, L: codec::Encode> MMRNode<H, L> {
 	}
 }
 
-/// A storage layer for MMR.
+/// A marker type for runtime-specific storage implementation.
+///
+/// Allows appending new items to the MMR and proof verification.
 pub struct MMRRuntimeStorage;
+
+/// A marker type for offchain-specific storage implementation.
+///
+/// Allows proof generation and verification, but does not support appending new items.
 pub struct MMROffchainStorage;
 
+/// A storage layer for MMR.
 pub struct MMRIndexer<StorageType, T, L>(PhantomData<(StorageType, T, L)>);
 
 impl<StorageType, T, L> Default for MMRIndexer<StorageType, T, L> {
@@ -367,7 +361,7 @@ impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<MMRNodeOf<T, L>>
 
 	fn append(&mut self, pos: u64, elems: Vec<MMRNodeOf<T, L>>) -> mmr_lib::Result<()> {
 		let mut leaves = NumberOfLeaves::get();
-		let mut size = mmr::NodesUtils::new(leaves).size();
+		let mut size = mmr::utils::NodesUtils::new(leaves).size();
 		if pos != size {
 			return Err(mmr_lib::Error::InconsistentStore);
 		}

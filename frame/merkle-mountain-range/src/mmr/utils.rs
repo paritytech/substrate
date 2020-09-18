@@ -17,7 +17,6 @@
 
 //! Merkle Mountain Range utilities.
 
-
 /// MMR nodes utilities.
 pub struct NodesUtils {
 	no_of_leaves: u64,
