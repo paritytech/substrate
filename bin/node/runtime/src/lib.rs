@@ -320,7 +320,7 @@ impl pallet_indices::Trait for Runtime {
 	type Currency = Balances;
 	type Deposit = IndexDeposit;
 	type Event = Event;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_indices::WeightInfo;
 }
 
 parameter_types! {
