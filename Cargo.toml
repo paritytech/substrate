@@ -256,6 +256,3 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-[patch.crates-io]
-async-std = { git = "https://github.com/expenses/async-std", branch = "wasm-join-handle-future" }

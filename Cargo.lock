@@ -10593,8 +10593,3 @@ dependencies = [
  "itertools 0.9.0",
  "libc",
 ]
-
-[[patch.unused]]
-name = "async-std"
-version = "1.6.3"
-source = "git+https://github.com/expenses/async-std?branch=wasm-join-handle-future#ceb8258d9721cb10bdb110b8df9c356b3ef8d203"

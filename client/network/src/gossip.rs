@@ -81,7 +81,7 @@ impl<M> QueuedSender<M> {
 		protocol: ConsensusEngineId,
 		queue_size_limit: usize,
 		messages_encode: F
-	) -> (Self, impl Future<Output = ()> + Send + 'static)
+	) -> (Self, impl Future<Output = ()> + 'static)
 	where
 		M: Send + 'static,
 		B: BlockT + 'static,
