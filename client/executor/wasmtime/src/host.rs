@@ -117,7 +117,7 @@ impl<'a> SandboxCapabilities for HostContext<'a> {
 					return Err("Supervisor function returned unexpected result!".into());
 				}
 			}
-			Err(err) => Err(err.message().to_string().into()),
+			Err(err) => Err(err.to_string().into()),
 		}
 	}
 }
@@ -308,6 +308,7 @@ impl<'a> Sandbox for HostContext<'a> {
 				.ok_or_else(|| "dispatch_thunk_id is out of bounds")?
 				.funcref()
 				.ok_or_else(|| "dispatch_thunk_idx should be a funcref")?
+				.ok_or_else(|| "dispatch_thunk_idx should point to actual func")?
 				.clone();
 			SupervisorFuncRef(func_ref)
 		};

@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Pruning window.
 //!
@@ -45,6 +47,10 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	/// Number of calls of `prune_one` after
 	/// last call `apply_pending` or `revert_pending`
 	pending_prunings: usize,
+	/// Keep track of re-inserted keys and do not delete them when pruning.
+	/// Setting this to false requires backend that supports reference
+	/// counting.
+	count_insertions: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, parity_util_mem_derive::MallocSizeOf)]
@@ -66,7 +72,7 @@ fn to_journal_key(block: u64) -> Vec<u8> {
 }
 
 impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
-	pub fn new<D: MetaDb>(db: &D) -> Result<RefWindow<BlockHash, Key>, Error<D::Error>> {
+	pub fn new<D: MetaDb>(db: &D, count_insertions: bool) -> Result<RefWindow<BlockHash, Key>, Error<D::Error>> {
 		let last_pruned = db.get_meta(&to_meta_key(LAST_PRUNED, &()))
 			.map_err(|e| Error::Db(e))?;
 		let pending_number: u64 = match last_pruned {
@@ -80,6 +86,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			pending_number: pending_number,
 			pending_canonicalizations: 0,
 			pending_prunings: 0,
+			count_insertions,
 		};
 		// read the journal
 		trace!(target: "state-db", "Reading pruning journal. Pending #{}", pending_number);
@@ -99,17 +106,19 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 	}
 
 	fn import<I: IntoIterator<Item=Key>>(&mut self, hash: &BlockHash, journal_key: Vec<u8>, inserted: I, deleted: Vec<Key>) {
-		// remove all re-inserted keys from death rows
-		for k in inserted {
-			if let Some(block) = self.death_index.remove(&k) {
-				self.death_rows[(block - self.pending_number) as usize].deleted.remove(&k);
+		if self.count_insertions {
+			// remove all re-inserted keys from death rows
+			for k in inserted {
+				if let Some(block) = self.death_index.remove(&k) {
+					self.death_rows[(block - self.pending_number) as usize].deleted.remove(&k);
+				}
 			}
-		}
 
-		// add new keys
-		let imported_block = self.pending_number + self.death_rows.len() as u64;
-		for k in deleted.iter() {
-			self.death_index.insert(k.clone(), imported_block);
+			// add new keys
+			let imported_block = self.pending_number + self.death_rows.len() as u64;
+			for k in deleted.iter() {
+				self.death_index.insert(k.clone(), imported_block);
+			}
 		}
 		self.death_rows.push_back(
 			DeathRow {
@@ -157,8 +166,12 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 	/// Add a change set to the window. Creates a journal record and pushes it to `commit`
 	pub fn note_canonical(&mut self, hash: &BlockHash, commit: &mut CommitSet<Key>) {
 		trace!(target: "state-db", "Adding to pruning window: {:?} ({} inserted, {} deleted)", hash, commit.data.inserted.len(), commit.data.deleted.len());
-		let inserted = commit.data.inserted.iter().map(|(k, _)| k.clone()).collect();
-		let deleted = ::std::mem::replace(&mut commit.data.deleted, Vec::new());
+		let inserted = if self.count_insertions {
+			commit.data.inserted.iter().map(|(k, _)| k.clone()).collect()
+		} else {
+			Default::default()
+		};
+		let deleted = ::std::mem::take(&mut commit.data.deleted);
 		let journal_record = JournalRecord {
 			hash: hash.clone(),
 			inserted,
@@ -177,8 +190,10 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		for _ in 0 .. self.pending_prunings {
 			let pruned = self.death_rows.pop_front().expect("pending_prunings is always < death_rows.len()");
 			trace!(target: "state-db", "Applying pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
-			for k in pruned.deleted.iter() {
-				self.death_index.remove(&k);
+			if self.count_insertions {
+				for k in pruned.deleted.iter() {
+					self.death_index.remove(&k);
+				}
 			}
 			self.pending_number += 1;
 		}
@@ -192,8 +207,10 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		// We don't bother to track and revert that for now. This means that a few nodes might end up no being
 		// deleted in case transaction fails and `revert_pending` is called.
 		self.death_rows.truncate(self.death_rows.len() - self.pending_canonicalizations);
-		let new_max_block = self.death_rows.len() as u64 + self.pending_number;
-		self.death_index.retain(|_, block| *block < new_max_block);
+		if self.count_insertions {
+			let new_max_block = self.death_rows.len() as u64 + self.pending_number;
+			self.death_index.retain(|_, block| *block < new_max_block);
+		}
 		self.pending_canonicalizations = 0;
 		self.pending_prunings = 0;
 	}
@@ -207,7 +224,7 @@ mod tests {
 	use crate::test::{make_db, make_commit, TestDb};
 
 	fn check_journal(pruning: &RefWindow<H256, H256>, db: &TestDb) {
-		let restored: RefWindow<H256, H256> = RefWindow::new(db).unwrap();
+		let restored: RefWindow<H256, H256> = RefWindow::new(db, pruning.count_insertions).unwrap();
 		assert_eq!(pruning.pending_number, restored.pending_number);
 		assert_eq!(pruning.death_rows, restored.death_rows);
 		assert_eq!(pruning.death_index, restored.death_index);
@@ -216,7 +233,7 @@ mod tests {
 	#[test]
 	fn created_from_empty_db() {
 		let db = make_db(&[]);
-		let pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
+		let pruning: RefWindow<H256, H256> = RefWindow::new(&db, true).unwrap();
 		assert_eq!(pruning.pending_number, 0);
 		assert!(pruning.death_rows.is_empty());
 		assert!(pruning.death_index.is_empty());
@@ -225,7 +242,7 @@ mod tests {
 	#[test]
 	fn prune_empty() {
 		let db = make_db(&[]);
-		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
+		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db, true).unwrap();
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit);
 		assert_eq!(pruning.pending_number, 0);
@@ -238,7 +255,7 @@ mod tests {
 	#[test]
 	fn prune_one() {
 		let mut db = make_db(&[1, 2, 3]);
-		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
+		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db, true).unwrap();
 		let mut commit = make_commit(&[4, 5], &[1, 3]);
 		let h = H256::random();
 		pruning.note_canonical(&h, &mut commit);
@@ -267,7 +284,7 @@ mod tests {
 	#[test]
 	fn prune_two() {
 		let mut db = make_db(&[1, 2, 3]);
-		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
+		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db, true).unwrap();
 		let mut commit = make_commit(&[4], &[1]);
 		pruning.note_canonical(&H256::random(), &mut commit);
 		db.commit(&commit);
@@ -295,7 +312,7 @@ mod tests {
 	#[test]
 	fn prune_two_pending() {
 		let mut db = make_db(&[1, 2, 3]);
-		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
+		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db, true).unwrap();
 		let mut commit = make_commit(&[4], &[1]);
 		pruning.note_canonical(&H256::random(), &mut commit);
 		db.commit(&commit);
@@ -318,7 +335,7 @@ mod tests {
 	#[test]
 	fn reinserted_survives() {
 		let mut db = make_db(&[1, 2, 3]);
-		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
+		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db, true).unwrap();
 		let mut commit = make_commit(&[], &[2]);
 		pruning.note_canonical(&H256::random(), &mut commit);
 		db.commit(&commit);
@@ -351,7 +368,7 @@ mod tests {
 	#[test]
 	fn reinserted_survive_pending() {
 		let mut db = make_db(&[1, 2, 3]);
-		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
+		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db, true).unwrap();
 		let mut commit = make_commit(&[], &[2]);
 		pruning.note_canonical(&H256::random(), &mut commit);
 		db.commit(&commit);
@@ -377,4 +394,30 @@ mod tests {
 		pruning.apply_pending();
 		assert_eq!(pruning.pending_number, 3);
 	}
+
+	#[test]
+	fn reinserted_ignores() {
+		let mut db = make_db(&[1, 2, 3]);
+		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db, false).unwrap();
+		let mut commit = make_commit(&[], &[2]);
+		pruning.note_canonical(&H256::random(), &mut commit);
+		db.commit(&commit);
+		let mut commit = make_commit(&[2], &[]);
+		pruning.note_canonical(&H256::random(), &mut commit);
+		db.commit(&commit);
+		let mut commit = make_commit(&[], &[2]);
+		pruning.note_canonical(&H256::random(), &mut commit);
+		db.commit(&commit);
+		assert!(db.data_eq(&make_db(&[1, 2, 3])));
+		pruning.apply_pending();
+
+		check_journal(&pruning, &db);
+
+		let mut commit = CommitSet::default();
+		pruning.prune_one(&mut commit);
+		db.commit(&commit);
+		assert!(db.data_eq(&make_db(&[1, 3])));
+		assert!(pruning.death_index.is_empty());
+	}
+
 }

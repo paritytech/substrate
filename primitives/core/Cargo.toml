@@ -1,17 +1,21 @@
 [package]
 name = "sp-core"
-version = "2.0.0-alpha.5"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Shareable Substrate types."
 documentation = "https://docs.rs/sp-core"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dependencies]
-sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../std" }
-codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
+derive_more = "0.99.2"
+sp-std = { version = "2.0.0-rc6", default-features = false, path = "../std" }
+codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
 log = { version = "0.4.8", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 byteorder = { version = "1.3.2", default-features = false }
@@ -21,22 +25,24 @@ wasmi = { version = "0.6.2", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
 hash256-std-hasher = { version = "0.15.2", default-features = false }
 base58 = { version = "0.1.0", optional = true }
-rand = { version = "0.7.2", optional = true }
-substrate-bip39 = { version = "0.4.1", optional = true }
+rand = { version = "0.7.3", optional = true, features = ["small_rng"] }
+substrate-bip39 = { version = "0.4.2", optional = true }
 tiny-bip39 = { version = "0.7", optional = true }
 regex = { version = "1.3.1", optional = true }
 num-traits = { version = "0.2.8", default-features = false }
 zeroize = { version = "1.0.0", default-features = false }
+secrecy = { version = "0.6.0", default-features = false }
 lazy_static = { version = "1.4.0", default-features = false, optional = true }
 parking_lot = { version = "0.10.0", optional = true }
-sp-debug-derive = { version = "2.0.0-alpha.5", path = "../debug-derive" }
-sp-externalities = { version = "0.8.0-alpha.5", optional = true, path = "../externalities" }
-sp-storage = { version = "2.0.0-alpha.5", default-features = false, path = "../storage" }
-parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
+sp-debug-derive = { version = "2.0.0-rc6", path = "../debug-derive" }
+sp-externalities = { version = "0.8.0-rc6", optional = true, path = "../externalities" }
+sp-storage = { version = "2.0.0-rc6", default-features = false, path = "../storage" }
+parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
 futures = { version = "0.3.1", optional = true }
+dyn-clonable = { version = "0.9.0", optional = true }
 
 # full crypto
-ed25519-dalek = { version = "1.0.0-pre.3", default-features = false, features = ["u64_backend", "alloc"], optional = true }
+ed25519-dalek = { version = "1.0.0-pre.4", default-features = false, features = ["u64_backend", "alloc"], optional = true }
 blake2-rfc = { version = "0.2.18", default-features = false, optional = true }
 tiny-keccak = { version = "2.0.1", features = ["keccak"], optional = true }
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false, optional = true }
@@ -44,16 +50,18 @@ sha2 = { version = "0.8.0", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true }
 twox-hash = { version = "1.5.0", default-features = false, optional = true }
 libsecp256k1 = { version = "0.3.2", default-features = false, features = ["hmac"], optional = true }
+merlin = { version = "2.0", default-features = false, optional = true }
 
-sp-runtime-interface = { version = "2.0.0-alpha.5", default-features = false, path = "../runtime-interface" }
+sp-runtime-interface = { version = "2.0.0-rc6", default-features = false, path = "../runtime-interface" }
 
 [dev-dependencies]
-sp-serializer = { version = "2.0.0-alpha.5", path = "../serializer" }
+sp-serializer = { version = "2.0.0-rc6", path = "../serializer" }
 pretty_assertions = "0.6.1"
-hex-literal = "0.2.1"
+hex-literal = "0.3.1"
 rand = "0.7.2"
-criterion = "0.2.11"
+criterion = "0.3.3"
 serde_json = "1.0"
+rand_chacha = "0.2.2"
 
 [[bench]]
 name = "bench"
@@ -94,15 +102,17 @@ std = [
 	"schnorrkel/std",
 	"regex",
 	"num-traits/std",
-	"libsecp256k1/std",
 	"tiny-keccak",
 	"sp-debug-derive/std",
 	"sp-externalities",
 	"sp-storage/std",
 	"sp-runtime-interface/std",
 	"zeroize/alloc",
+	"secrecy/alloc",
 	"futures",
 	"futures/thread-pool",
+	"libsecp256k1/std",
+	"dyn-clonable",
 ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers
@@ -118,7 +128,5 @@ full_crypto = [
 	"twox-hash",
 	"libsecp256k1",
 	"sp-runtime-interface/disable_target_static_assertions",
+	"merlin",
 ]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

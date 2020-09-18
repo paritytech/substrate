@@ -1,20 +1,24 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Initialization errors.
+
+
 
 /// Result type alias for the CLI.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -25,16 +29,19 @@ pub enum Error {
 	/// Io error
 	Io(std::io::Error),
 	/// Cli error
-	Cli(clap::Error),
+	Cli(structopt::clap::Error),
 	/// Service error
 	Service(sc_service::Error),
 	/// Client error
 	Client(sp_blockchain::Error),
+	/// scale codec error
+	Codec(parity_scale_codec::Error),
 	/// Input error
 	#[from(ignore)]
 	Input(String),
 	/// Invalid listen multiaddress
 	#[display(fmt="Invalid listen multiaddress")]
+	#[from(ignore)]
 	InvalidListenMultiaddress,
 	/// Other uncategorized error.
 	#[from(ignore)]
@@ -62,6 +69,7 @@ impl std::error::Error for Error {
 			Error::Cli(ref err) => Some(err),
 			Error::Service(ref err) => Some(err),
 			Error::Client(ref err) => Some(err),
+			Error::Codec(ref err) => Some(err),
 			Error::Input(_) => None,
 			Error::InvalidListenMultiaddress => None,
 			Error::Other(_) => None,

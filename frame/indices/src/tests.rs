@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Tests for the module.
 
@@ -44,6 +45,20 @@ fn freeing_should_work() {
 		assert_ok!(Indices::free(Some(1).into(), 0));
 		assert_eq!(Balances::reserved_balance(1), 0);
 		assert_noop!(Indices::free(Some(1).into(), 0), Error::<Test>::NotAssigned);
+	});
+}
+
+#[test]
+fn freezing_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Indices::claim(Some(1).into(), 0));
+		assert_noop!(Indices::freeze(Some(1).into(), 1), Error::<Test>::NotAssigned);
+		assert_noop!(Indices::freeze(Some(2).into(), 0), Error::<Test>::NotOwner);
+		assert_ok!(Indices::freeze(Some(1).into(), 0));
+		assert_noop!(Indices::freeze(Some(1).into(), 0), Error::<Test>::Permanent);
+
+		assert_noop!(Indices::free(Some(1).into(), 0), Error::<Test>::Permanent);
+		assert_noop!(Indices::transfer(Some(1).into(), 2, 0), Error::<Test>::Permanent);
 	});
 }
 
@@ -86,7 +101,7 @@ fn transfer_index_on_accounts_should_work() {
 fn force_transfer_index_on_preowned_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Indices::claim(Some(1).into(), 0));
-		assert_ok!(Indices::force_transfer(Origin::ROOT, 3, 0));
+		assert_ok!(Indices::force_transfer(Origin::root(), 3, 0, false));
 		assert_eq!(Balances::reserved_balance(1), 0);
 		assert_eq!(Balances::reserved_balance(3), 0);
 		assert_eq!(Indices::lookup_index(0), Some(3));
@@ -96,7 +111,7 @@ fn force_transfer_index_on_preowned_should_work() {
 #[test]
 fn force_transfer_index_on_free_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Indices::force_transfer(Origin::ROOT, 3, 0));
+		assert_ok!(Indices::force_transfer(Origin::root(), 3, 0, false));
 		assert_eq!(Balances::reserved_balance(3), 0);
 		assert_eq!(Indices::lookup_index(0), Some(3));
 	});

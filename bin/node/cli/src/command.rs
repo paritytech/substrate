@@ -1,53 +1,51 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{chain_spec, factory_impl::FactoryState, service, Cli, FactoryCmd, Subcommand};
+use crate::{chain_spec, service, Cli, Subcommand};
 use node_executor::Executor;
 use node_runtime::{Block, RuntimeApi};
-use node_transaction_factory::RuntimeAdapter;
-use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams, SubstrateCli};
-use sc_service::Configuration;
+use sc_cli::{Result, SubstrateCli, RuntimeVersion, Role, ChainSpec};
+use sc_service::PartialComponents;
+use crate::service::{new_partial, new_full_base, NewFullBase};
 
 impl SubstrateCli for Cli {
-	fn impl_name() -> &'static str {
-		"Substrate Node"
+	fn impl_name() -> String {
+		"Substrate Node".into()
 	}
 
-	fn impl_version() -> &'static str {
-		env!("SUBSTRATE_CLI_IMPL_VERSION")
+	fn impl_version() -> String {
+		env!("SUBSTRATE_CLI_IMPL_VERSION").into()
 	}
 
-	fn description() -> &'static str {
-		env!("CARGO_PKG_DESCRIPTION")
+	fn description() -> String {
+		env!("CARGO_PKG_DESCRIPTION").into()
 	}
 
-	fn author() -> &'static str {
-		env!("CARGO_PKG_AUTHORS")
+	fn author() -> String {
+		env!("CARGO_PKG_AUTHORS").into()
 	}
 
-	fn support_url() -> &'static str {
-		"https://github.com/paritytech/substrate/issues/new"
+	fn support_url() -> String {
+		"https://github.com/paritytech/substrate/issues/new".into()
 	}
 
 	fn copyright_start_year() -> i32 {
 		2017
-	}
-
-	fn executable_name() -> &'static str {
-		"substrate"
 	}
 
 	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
@@ -61,18 +59,23 @@ impl SubstrateCli for Cli {
 			)?),
 		})
 	}
+
+	fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static RuntimeVersion {
+		&node_runtime::VERSION
+	}
 }
 
 /// Parse command line arguments into service configuration.
 pub fn run() -> Result<()> {
-	sc_cli::reset_signal_pipe_handler()?;
-
 	let cli = Cli::from_args();
 
 	match &cli.subcommand {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node(service::new_light, service::new_full)
+			runner.run_node_until_exit(|config| match config.role {
+				Role::Light => service::new_light(config),
+				_ => service::new_full(config),
+			})
 		}
 		Some(Subcommand::Inspect(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
@@ -80,60 +83,77 @@ pub fn run() -> Result<()> {
 			runner.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor>(config))
 		}
 		Some(Subcommand::Benchmark(cmd)) => {
-			let runner = cli.create_runner(cmd)?;
+			if cfg!(feature = "runtime-benchmarks") {
+				let runner = cli.create_runner(cmd)?;
 
-			runner.sync_run(|config| cmd.run::<Block, Executor>(config))
-		}
-		Some(Subcommand::Factory(cmd)) => {
-			let runner = cli.create_runner(cmd)?;
-
-			runner.sync_run(|config| cmd.run(config))
-		}
-		Some(Subcommand::Base(subcommand)) => {
-			let runner = cli.create_runner(subcommand)?;
-
-			runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
-		}
-	}
-}
-
-impl CliConfiguration for FactoryCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
-
-	fn import_params(&self) -> Option<&ImportParams> {
-		Some(&self.import_params)
-	}
-}
-
-impl FactoryCmd {
-	fn run(&self, config: Configuration) -> Result<()> {
-		match config.chain_spec.id() {
-			"dev" | "local" => {}
-			_ => return Err("Factory is only supported for development and local testnet.".into()),
-		}
-
-		// Setup tracing.
-		if let Some(tracing_targets) = self.import_params.tracing_targets.as_ref() {
-			let subscriber = sc_tracing::ProfilingSubscriber::new(
-				self.import_params.tracing_receiver.into(),
-				tracing_targets,
-			);
-			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-				return Err(format!("Unable to set global default subscriber {}", e).into());
+				runner.sync_run(|config| cmd.run::<Block, Executor>(config))
+			} else {
+				Err("Benchmarking wasn't enabled when building the node. \
+				You can enable it with `--features runtime-benchmarks`.".into())
 			}
 		}
+		Some(Subcommand::Key(cmd)) => cmd.run(),
+		Some(Subcommand::Sign(cmd)) => cmd.run(),
+		Some(Subcommand::Verify(cmd)) => cmd.run(),
+		Some(Subcommand::Vanity(cmd)) => cmd.run(),
+		Some(Subcommand::BuildSpec(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.sync_run(|config| cmd.run(config.chain_spec, config.network))
+		},
+		Some(Subcommand::BuildSyncSpec(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|config| {
+				let chain_spec = config.chain_spec.cloned_box();
+				let network_config = config.network.clone();
+				let NewFullBase { task_manager, client, network_status_sinks, .. }
+					= new_full_base(config, |_, _| ())?;
 
-		let factory_state = FactoryState::new(self.blocks, self.transactions);
-
-		let service_builder = new_full_start!(config).0;
-		node_transaction_factory::factory(
-			factory_state,
-			service_builder.client(),
-			service_builder
-				.select_chain()
-				.expect("The select_chain is always initialized by new_full_start!; qed"),
-		)
+				Ok((cmd.run(chain_spec, network_config, client, network_status_sinks), task_manager))
+			})
+		},
+		Some(Subcommand::CheckBlock(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|config| {
+				let PartialComponents { client, task_manager, import_queue, ..}
+					= new_partial(&config)?;
+				Ok((cmd.run(client, import_queue), task_manager))
+			})
+		},
+		Some(Subcommand::ExportBlocks(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|config| {
+				let PartialComponents { client, task_manager, ..}
+					= new_partial(&config)?;
+				Ok((cmd.run(client, config.database), task_manager))
+			})
+		},
+		Some(Subcommand::ExportState(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|config| {
+				let PartialComponents { client, task_manager, ..}
+					= new_partial(&config)?;
+				Ok((cmd.run(client, config.chain_spec), task_manager))
+			})
+		},
+		Some(Subcommand::ImportBlocks(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|config| {
+				let PartialComponents { client, task_manager, import_queue, ..}
+					= new_partial(&config)?;
+				Ok((cmd.run(client, import_queue), task_manager))
+			})
+		},
+		Some(Subcommand::PurgeChain(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.sync_run(|config| cmd.run(config.database))
+		},
+		Some(Subcommand::Revert(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|config| {
+				let PartialComponents { client, task_manager, backend, ..}
+					= new_partial(&config)?;
+				Ok((cmd.run(client, backend), task_manager))
+			})
+		},
 	}
 }

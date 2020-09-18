@@ -21,11 +21,17 @@
 #![allow(deprecated)]
 use super::*;
 use authorship::claim_slot;
-
-use sp_consensus_babe::{AuthorityPair, SlotNumber};
+use sp_core::{crypto::Pair, vrf::make_transcript as transcript_from_data};
+use sp_consensus_babe::{
+	AuthorityPair,
+	SlotNumber,
+	AllowedSlots,
+	make_transcript,
+	make_transcript_data,
+};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
-	NoNetwork as DummyOracle, Proposal, RecordProof,
+	NoNetwork as DummyOracle, Proposal, RecordProof, AlwaysCanAuthor,
 	import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport},
 };
 use sc_network_test::*;
@@ -35,12 +41,17 @@ use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use sc_client_api::{BlockchainEvents, backend::TransactionFor};
 use log::debug;
 use std::{time::Duration, cell::RefCell, task::Poll};
+use rand::RngCore;
+use rand_chacha::{
+	rand_core::SeedableRng,
+	ChaChaRng,
+};
 
 type Item = DigestItem<Hash>;
 
 type Error = sp_blockchain::Error;
 
-type TestClient = sc_client::Client<
+type TestClient = substrate_test_runtime_client::client::Client<
 	substrate_test_runtime_client::Backend,
 	substrate_test_runtime_client::Executor,
 	TestBlock,
@@ -127,7 +138,7 @@ impl DummyProposer {
 			&self.parent_hash,
 			self.parent_number,
 			this_slot,
-			|slot| self.factory.config.genesis_epoch(slot),
+			|slot| Epoch::genesis(&self.factory.config, slot),
 		)
 			.expect("client has data to find epoch")
 			.expect("can compute epoch for baked block");
@@ -159,7 +170,7 @@ impl Proposer<TestBlock> for DummyProposer {
 	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction>, Error>>;
 
 	fn propose(
-		&mut self,
+		mut self,
 		_: InherentData,
 		pre_digests: DigestFor<TestBlock>,
 		_: Duration,
@@ -203,8 +214,13 @@ pub struct BabeTestNet {
 type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
+type TestSelectChain = substrate_test_runtime_client::LongestChain<
+	substrate_test_runtime_client::Backend,
+	TestBlock,
+>;
+
 pub struct TestVerifier {
-	inner: BabeVerifier<TestBlock, PeersFullClient>,
+	inner: BabeVerifier<TestBlock, PeersFullClient, TestSelectChain, AlwaysCanAuthor>,
 	mutator: Mutator,
 }
 
@@ -286,19 +302,25 @@ impl TestNetFactory for BabeTestNet {
 	)
 		-> Self::Verifier
 	{
+		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
+
 		let client = client.as_full().expect("only full clients are used in test");
 		trace!(target: "babe", "Creating a verifier");
 
 		// ensure block import and verifier are linked correctly.
 		let data = maybe_link.as_ref().expect("babe link always provided to verifier instantiation");
 
+		let (_, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+
 		TestVerifier {
 			inner: BabeVerifier {
 				client: client.clone(),
+				select_chain: longest_chain,
 				inherent_data_providers: data.inherent_data_providers.clone(),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
 				time_source: data.link.time_source.clone(),
+				can_author_with: AlwaysCanAuthor,
 			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
 		}
@@ -325,7 +347,7 @@ impl TestNetFactory for BabeTestNet {
 #[test]
 #[should_panic]
 fn rejects_empty_block() {
-	env_logger::try_init().unwrap();
+	sp_tracing::try_init_simple();
 	let mut net = BabeTestNet::new(3);
 	let block_builder = |builder: BlockBuilder<_, _, _>| {
 		builder.build().unwrap().block
@@ -338,7 +360,7 @@ fn rejects_empty_block() {
 fn run_one_test(
 	mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static,
 ) {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mutator = Arc::new(mutator) as Mutator;
 
 	MUTATOR.with(|m| *m.borrow_mut() = mutator.clone());
@@ -436,7 +458,7 @@ fn authoring_blocks() {
 #[should_panic]
 fn rejects_missing_inherent_digest() {
 	run_one_test(|header: &mut TestHeader, stage| {
-		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
+		let v = std::mem::take(&mut header.digest_mut().logs);
 		header.digest_mut().logs = v.into_iter()
 			.filter(|v| stage == Stage::PostSeal || v.as_babe_pre_digest().is_none())
 			.collect()
@@ -447,7 +469,7 @@ fn rejects_missing_inherent_digest() {
 #[should_panic]
 fn rejects_missing_seals() {
 	run_one_test(|header: &mut TestHeader, stage| {
-		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
+		let v = std::mem::take(&mut header.digest_mut().logs);
 		header.digest_mut().logs = v.into_iter()
 			.filter(|v| stage == Stage::PreSeal || v.as_babe_seal().is_none())
 			.collect()
@@ -458,7 +480,7 @@ fn rejects_missing_seals() {
 #[should_panic]
 fn rejects_missing_consensus_digests() {
 	run_one_test(|header: &mut TestHeader, stage| {
-		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
+		let v = std::mem::take(&mut header.digest_mut().logs);
 		header.digest_mut().logs = v.into_iter()
 			.filter(|v| stage == Stage::PostSeal || v.as_next_epoch_descriptor().is_none())
 			.collect()
@@ -467,7 +489,7 @@ fn rejects_missing_consensus_digests() {
 
 #[test]
 fn wrong_consensus_engine_id_rejected() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let sig = AuthorityPair::generate().0.sign(b"");
 	let bad_seal: Item = DigestItem::Seal([0; 4], sig.to_vec());
 	assert!(bad_seal.as_babe_pre_digest().is_none());
@@ -476,14 +498,14 @@ fn wrong_consensus_engine_id_rejected() {
 
 #[test]
 fn malformed_pre_digest_rejected() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, [0; 64].to_vec());
 	assert!(bad_seal.as_babe_pre_digest().is_none());
 }
 
 #[test]
 fn sig_is_not_pre_digest() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let sig = AuthorityPair::generate().0.sign(b"");
 	let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig.to_vec());
 	assert!(bad_seal.as_babe_pre_digest().is_none());
@@ -492,7 +514,7 @@ fn sig_is_not_pre_digest() {
 
 #[test]
 fn can_author_block() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
 	let pair = keystore.write().insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
@@ -505,28 +527,32 @@ fn can_author_block() {
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
+		config: BabeEpochConfiguration {
+			c: (3, 10),
+			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
+		},
 	};
 
-	let mut config = crate::BabeConfiguration {
+	let mut config = crate::BabeGenesisConfiguration {
 		slot_duration: 1000,
 		epoch_length: 100,
 		c: (3, 10),
 		genesis_authorities: Vec::new(),
 		randomness: [0; 32],
-		secondary_slots: true,
+		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
 
 	// with secondary slots enabled it should never be empty
-	match claim_slot(i, &epoch, &config, &keystore) {
+	match claim_slot(i, &epoch, &keystore) {
 		None => i += 1,
 		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
 	}
 
 	// otherwise with only vrf-based primary slots we might need to try a couple
 	// of times.
-	config.secondary_slots = false;
+	config.allowed_slots = AllowedSlots::PrimarySlots;
 	loop {
-		match claim_slot(i, &epoch, &config, &keystore) {
+		match claim_slot(i, &epoch, &keystore) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
@@ -553,7 +579,7 @@ fn propose_and_import_block<Transaction>(
 	let pre_digest = sp_runtime::generic::Digest {
 		logs: vec![
 			Item::babe_pre_digest(
-				PreDigest::Secondary(SecondaryPreDigest {
+				PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					authority_index: 0,
 					slot_number,
 				}),
@@ -632,7 +658,7 @@ fn importing_block_one_sets_genesis_epoch() {
 		&mut block_import,
 	);
 
-	let genesis_epoch = data.link.config.genesis_epoch(999);
+	let genesis_epoch = Epoch::genesis(&data.link.config, 999);
 
 	let epoch_changes = data.link.epoch_changes.lock();
 	let epoch_for_second_block = epoch_changes.epoch_data_for_child_of(
@@ -640,7 +666,7 @@ fn importing_block_one_sets_genesis_epoch() {
 		&block_hash,
 		1,
 		1000,
-		|slot| data.link.config.genesis_epoch(slot),
+		|slot| Epoch::genesis(&data.link.config, slot),
 	).unwrap().unwrap();
 
 	assert_eq!(epoch_for_second_block, genesis_epoch);
@@ -791,4 +817,37 @@ fn verify_slots_are_strictly_increasing() {
 		&mut proposer_factory,
 		&mut block_import,
 	);
+}
+
+#[test]
+fn babe_transcript_generation_match() {
+	sp_tracing::try_init_simple();
+	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+	let pair = keystore.write().insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
+		.expect("Generates authority pair");
+
+	let epoch = Epoch {
+		start_slot: 0,
+		authorities: vec![(pair.public(), 1)],
+		randomness: [0; 32],
+		epoch_index: 1,
+		duration: 100,
+		config: BabeEpochConfiguration {
+			c: (3, 10),
+			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
+		},
+	};
+
+	let orig_transcript = make_transcript(&epoch.randomness.clone(), 1, epoch.epoch_index);
+	let new_transcript = make_transcript_data(&epoch.randomness, 1, epoch.epoch_index);
+
+	let test = |t: merlin::Transcript| -> [u8; 16] {
+		let mut b = [0u8; 16];
+		t.build_rng()
+			.finalize(&mut ChaChaRng::from_seed([0u8;32]))
+			.fill_bytes(&mut b);
+		b
+	};
+	debug_assert!(test(orig_transcript) == test(transcript_from_data(new_transcript)));
 }

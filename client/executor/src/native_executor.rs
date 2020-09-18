@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
 	RuntimeInfo, error::{Error, Result},
@@ -20,7 +22,9 @@ use crate::{
 };
 use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
-use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities, RuntimeCode}};
+use sp_core::{
+	NativeOrEncoded, traits::{CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions},
+};
 use log::trace;
 use std::{result, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc};
 use sp_wasm_interface::{HostFunctions, Function};
@@ -83,8 +87,6 @@ pub struct WasmExecutor {
 	host_functions: Arc<Vec<&'static dyn Function>>,
 	/// WASM runtime cache.
 	cache: Arc<RuntimeCache>,
-	/// Allow missing function imports.
-	allow_missing_func_imports: bool,
 	/// The size of the instances cache.
 	max_runtime_instances: usize,
 }
@@ -102,7 +104,6 @@ impl WasmExecutor {
 		method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
 		host_functions: Vec<&'static dyn Function>,
-		allow_missing_func_imports: bool,
 		max_runtime_instances: usize,
 	) -> Self {
 		WasmExecutor {
@@ -110,7 +111,6 @@ impl WasmExecutor {
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
 			host_functions: Arc::new(host_functions),
 			cache: Arc::new(RuntimeCache::new(max_runtime_instances)),
-			allow_missing_func_imports,
 			max_runtime_instances,
 		}
 	}
@@ -132,6 +132,7 @@ impl WasmExecutor {
 		&self,
 		runtime_code: &RuntimeCode,
 		ext: &mut dyn Externalities,
+		allow_missing_host_functions: bool,
 		f: F,
 	) -> Result<R>
 		where F: FnOnce(
@@ -146,7 +147,7 @@ impl WasmExecutor {
 			self.method,
 			self.default_heap_pages,
 			&*self.host_functions,
-			self.allow_missing_func_imports,
+			allow_missing_host_functions,
 			|instance, version, ext| {
 				let instance = AssertUnwindSafe(instance);
 				let ext = AssertUnwindSafe(ext);
@@ -167,7 +168,10 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 		method: &str,
 		call_data: &[u8],
 		ext: &mut dyn Externalities,
+		missing_host_functions: MissingHostFunctions,
 	) -> std::result::Result<Vec<u8>, String> {
+		let allow_missing_host_functions = missing_host_functions.allowed();
+
 		if let Some(hash) = code_hash {
 			let code = RuntimeCode {
 				code_fetcher: &sp_core::traits::WrappedRuntimeCode(wasm_code.into()),
@@ -175,7 +179,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 				heap_pages: None,
 			};
 
-			self.with_instance(&code, ext, |instance, _, mut ext| {
+			self.with_instance(&code, ext, allow_missing_host_functions, |instance, _, mut ext| {
 				with_externalities_safe(
 					&mut **ext,
 					move || instance.call(method, call_data),
@@ -187,7 +191,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 				self.default_heap_pages,
 				&wasm_code,
 				self.host_functions.to_vec(),
-				self.allow_missing_func_imports,
+				allow_missing_host_functions,
 			)
 				.map_err(|e| format!("Failed to create module: {:?}", e))?;
 
@@ -240,7 +244,6 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			fallback_method,
 			default_heap_pages,
 			host_functions,
-			false,
 			max_runtime_instances,
 		);
 
@@ -265,8 +268,9 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		self.wasm.with_instance(
 			runtime_code,
 			ext,
+			false,
 			|_instance, version, _ext|
-				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
+				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into()))),
 		)
 	}
 }
@@ -290,6 +294,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 		let result = self.wasm.with_instance(
 			runtime_code,
 			ext,
+			false,
 			|instance, onchain_version, mut ext| {
 				let onchain_version = onchain_version.ok_or_else(
 					|| Error::ApiError("Unknown version".into())
@@ -331,7 +336,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 						let res = with_externalities_safe(&mut **ext, move || (call)())
 							.and_then(|r| r
 								.map(NativeOrEncoded::Native)
-								.map_err(|s| Error::ApiError(s.to_string()))
+								.map_err(|s| Error::ApiError(s))
 							);
 
 						Ok(res)
@@ -372,8 +377,9 @@ impl<D: NativeExecutionDispatch> sp_core::traits::CallInWasm for NativeExecutor<
 		method: &str,
 		call_data: &[u8],
 		ext: &mut dyn Externalities,
+		missing_host_functions: MissingHostFunctions,
 	) -> std::result::Result<Vec<u8>, String> {
-		self.wasm.call_in_wasm(wasm_blob, code_hash, method, call_data, ext)
+		self.wasm.call_in_wasm(wasm_blob, code_hash, method, call_data, ext, missing_host_functions)
 	}
 }
 

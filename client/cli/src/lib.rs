@@ -1,25 +1,27 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate CLI library.
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-mod arg_enums;
+pub mod arg_enums;
 mod commands;
 mod config;
 mod error;
@@ -30,21 +32,18 @@ pub use arg_enums::*;
 pub use commands::*;
 pub use config::*;
 pub use error::*;
-use lazy_static::lazy_static;
-use log::info;
 pub use params::*;
-use regex::Regex;
 pub use runner::*;
-use sc_service::{ChainSpec, Configuration};
-use std::future::Future;
+use sc_service::{Configuration, TaskExecutor};
+pub use sc_service::{ChainSpec, Role};
+pub use sp_version::RuntimeVersion;
 use std::io::Write;
-use std::pin::Pin;
-use std::sync::Arc;
 pub use structopt;
 use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
+use tracing_subscriber::layer::SubscriberExt;
 
 /// Substrate client CLI
 ///
@@ -56,25 +55,33 @@ use structopt::{
 /// its own implementation that will fill the necessary field based on the trait's functions.
 pub trait SubstrateCli: Sized {
 	/// Implementation name.
-	fn impl_name() -> &'static str;
+	fn impl_name() -> String;
 
 	/// Implementation version.
 	///
 	/// By default this will look like this: 2.0.0-b950f731c-x86_64-linux-gnu where the hash is the
 	/// short commit hash of the commit of in the Git repository.
-	fn impl_version() -> &'static str;
+	fn impl_version() -> String;
 
 	/// Executable file name.
-	fn executable_name() -> &'static str;
+	///
+	/// Extracts the file name from `std::env::current_exe()`.
+	/// Resorts to the env var `CARGO_PKG_NAME` in case of Error.
+	fn executable_name() -> String {
+		std::env::current_exe().ok()
+			.and_then(|e| e.file_name().map(|s| s.to_os_string()))
+			.and_then(|w| w.into_string().ok())
+			.unwrap_or_else(|| env!("CARGO_PKG_NAME").into())
+	}
 
 	/// Executable file description.
-	fn description() -> &'static str;
+	fn description() -> String;
 
 	/// Executable file author.
-	fn author() -> &'static str;
+	fn author() -> String;
 
 	/// Support URL.
-	fn support_url() -> &'static str;
+	fn support_url() -> String;
 
 	/// Copyright starting year (x-current year)
 	fn copyright_start_year() -> i32;
@@ -115,13 +122,16 @@ pub trait SubstrateCli: Sized {
 	{
 		let app = <Self as StructOpt>::clap();
 
-		let mut full_version = Self::impl_version().to_string();
+		let mut full_version = Self::impl_version();
 		full_version.push_str("\n");
 
+		let name = Self::executable_name();
+		let author = Self::author();
+		let about = Self::description();
 		let app = app
-			.name(Self::executable_name())
-			.author(Self::author())
-			.about(Self::description())
+			.name(name)
+			.author(author.as_str())
+			.about(about.as_str())
 			.version(full_version.as_str())
 			.settings(&[
 				AppSettings::GlobalVersion,
@@ -129,7 +139,27 @@ pub trait SubstrateCli: Sized {
 				AppSettings::SubcommandsNegateReqs,
 			]);
 
-		<Self as StructOpt>::from_clap(&app.get_matches_from(iter))
+		let matches = match app.get_matches_from_safe(iter) {
+			Ok(matches) => matches,
+			Err(mut e) => {
+				// To support pipes, we can not use `writeln!` as any error
+				// results in a "broken pipe" error.
+				//
+				// Instead we write directly to `stdout` and ignore any error
+				// as we exit afterwards anyway.
+				e.message.extend("\n".chars());
+
+				if e.use_stderr() {
+					let _ = std::io::stderr().write_all(e.message.as_bytes());
+					std::process::exit(1);
+				} else {
+					let _ = std::io::stdout().write_all(e.message.as_bytes());
+					std::process::exit(0);
+				}
+			},
+		};
+
+		<Self as StructOpt>::from_clap(&matches)
 	}
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
@@ -143,9 +173,9 @@ pub trait SubstrateCli: Sized {
 	/// Print the error message and quit the program in case of failure.
 	///
 	/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
-	/// used. It will return a [`clap::Error`], where the [`kind`] is a
-	/// [`ErrorKind::HelpDisplayed`] or [`ErrorKind::VersionDisplayed`] respectively. You must call
-	/// [`Error::exit`] or perform a [`std::process::exit`].
+	/// used. It will return a [`clap::Error`], where the [`clap::Error::kind`] is a
+	/// [`clap::ErrorKind::HelpDisplayed`] or [`clap::ErrorKind::VersionDisplayed`] respectively.
+	/// You must call [`clap::Error::exit`] or perform a [`std::process::exit`].
 	fn try_from_iter<I>(iter: I) -> clap::Result<Self>
 	where
 		Self: StructOpt + Sized,
@@ -154,13 +184,16 @@ pub trait SubstrateCli: Sized {
 	{
 		let app = <Self as StructOpt>::clap();
 
-		let mut full_version = Self::impl_version().to_string();
+		let mut full_version = Self::impl_version();
 		full_version.push_str("\n");
 
+		let name = Self::executable_name();
+		let author = Self::author();
+		let about = Self::description();
 		let app = app
-			.name(Self::executable_name())
-			.author(Self::author())
-			.about(Self::description())
+			.name(name)
+			.author(author.as_str())
+			.about(about.as_str())
 			.version(full_version.as_str());
 
 		let matches = app.get_matches_from_safe(iter)?;
@@ -174,10 +207,10 @@ pub trait SubstrateCli: Sized {
 	}
 
 	/// Only create a Configuration for the command provided in argument
-	fn create_configuration<T: CliConfiguration>(
+	fn create_configuration<T: CliConfiguration<DVC>, DVC: DefaultConfigurationValues>(
 		&self,
 		command: &T,
-		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
+		task_executor: TaskExecutor,
 	) -> error::Result<Configuration> {
 		command.create_configuration(self, task_executor)
 	}
@@ -188,97 +221,81 @@ pub trait SubstrateCli: Sized {
 		command.init::<Self>()?;
 		Runner::new(self, command)
 	}
+
+	/// Native runtime version.
+	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }
 
-/// Initialize the logger
-pub fn init_logger(pattern: &str) {
-	use ansi_term::Colour;
-
-	let mut builder = env_logger::Builder::new();
-	// Disable info logging by default for some modules:
-	builder.filter(Some("ws"), log::LevelFilter::Off);
-	builder.filter(Some("hyper"), log::LevelFilter::Warn);
-	builder.filter(Some("cranelift_wasm"), log::LevelFilter::Warn);
-	// Always log the special target `sc_tracing`, overrides global level
-	builder.filter(Some("sc_tracing"), log::LevelFilter::Info);
-	// Enable info for others.
-	builder.filter(None, log::LevelFilter::Info);
-
-	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		builder.parse_filters(&lvl);
+/// Initialize the global logger
+///
+/// This sets various global logging and tracing instances and thus may only be called once.
+pub fn init_logger(
+	pattern: &str,
+	tracing_receiver: sc_tracing::TracingReceiver,
+	tracing_targets: Option<String>,
+) -> std::result::Result<(), String> {
+	if let Err(e) = tracing_log::LogTracer::init() {
+		return Err(format!(
+			"Registering Substrate logger failed: {:}!", e
+		))
 	}
 
-	builder.parse_filters(pattern);
+	let mut env_filter = tracing_subscriber::EnvFilter::default()
+		// Disable info logging by default for some modules.
+		.add_directive("ws=off".parse().expect("provided directive is valid"))
+		.add_directive("yamux=off".parse().expect("provided directive is valid"))
+		.add_directive("cranelift_codegen=off".parse().expect("provided directive is valid"))
+		// Set warn logging by default for some modules.
+		.add_directive("cranelife_wasm=warn".parse().expect("provided directive is valid"))
+		.add_directive("hyper=warn".parse().expect("provided directive is valid"))
+		// Always log the special target `sc_tracing`, overrides global level.
+		.add_directive("sc_tracing=trace".parse().expect("provided directive is valid"))
+		// Enable info for others.
+		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
+
+	if let Ok(lvl) = std::env::var("RUST_LOG") {
+		if lvl != "" {
+			// We're not sure if log or tracing is available at this moment, so silently ignore the
+			// parse error.
+			if let Ok(directive) = lvl.parse() {
+				env_filter = env_filter.add_directive(directive);
+			}
+		}
+	}
+
+	if pattern != "" {
+		// We're not sure if log or tracing is available at this moment, so silently ignore the
+		// parse error.
+		if let Ok(directive) = pattern.parse() {
+			env_filter = env_filter.add_directive(directive);
+		}
+	}
+
 	let isatty = atty::is(atty::Stream::Stderr);
 	let enable_color = isatty;
 
-	builder.format(move |buf, record| {
-		let now = time::now();
-		let timestamp =
-			time::strftime("%Y-%m-%d %H:%M:%S", &now).expect("Error formatting log timestamp");
+	let subscriber = tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(env_filter)
+		.with_target(false)
+		.with_ansi(enable_color)
+		.with_writer(std::io::stderr)
+		.compact()
+		.finish();
 
-		let mut output = if log::max_level() <= log::LevelFilter::Info {
-			format!(
-				"{} {}",
-				Colour::Black.bold().paint(timestamp),
-				record.args(),
-			)
-		} else {
-			let name = ::std::thread::current()
-				.name()
-				.map_or_else(Default::default, |x| {
-					format!("{}", Colour::Blue.bold().paint(x))
-				});
-			let millis = (now.tm_nsec as f32 / 1000000.0).floor() as usize;
-			let timestamp = format!("{}.{}", timestamp, millis);
-			format!(
-				"{} {} {} {}  {}",
-				Colour::Black.bold().paint(timestamp),
-				name,
-				record.level(),
-				record.target(),
-				record.args()
-			)
-		};
+	if let Some(tracing_targets) = tracing_targets {
+		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &tracing_targets);
 
-		if !isatty && record.level() <= log::Level::Info && atty::is(atty::Stream::Stdout) {
-			// duplicate INFO/WARN output to console
-			println!("{}", output);
+		if let Err(e) = tracing::subscriber::set_global_default(subscriber.with(profiling)) {
+			return Err(format!(
+				"Registering Substrate tracing subscriber failed: {:}!", e
+			))
 		}
-
-		if !enable_color {
-			output = kill_color(output.as_ref());
-		}
-
-		writeln!(buf, "{}", output)
-	});
-
-	if builder.try_init().is_err() {
-		info!("💬 Not registering Substrate logger, as there is already a global logger registered!");
-	}
-}
-
-fn kill_color(s: &str) -> String {
-	lazy_static! {
-		static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
-	}
-	RE.replace_all(s, "").to_string()
-}
-
-/// Reset the signal pipe (`SIGPIPE`) handler to the default one provided by the system.
-/// This will end the program on `SIGPIPE` instead of panicking.
-///
-/// This should be called before calling any cli method or printing any output.
-pub fn reset_signal_pipe_handler() -> Result<()> {
-	#[cfg(target_family = "unix")]
-	{
-		use nix::sys::signal;
-
-		unsafe {
-			signal::signal(signal::Signal::SIGPIPE, signal::SigHandler::SigDfl)
-				.map_err(|e| Error::Other(e.to_string()))?;
+	} else {
+		if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+			return Err(format!(
+				"Registering Substrate tracing subscriber  failed: {:}!", e
+			))
 		}
 	}
-
 	Ok(())
 }

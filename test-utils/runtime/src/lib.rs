@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! The Substrate runtime. This can be compiled with #[no_std], ready for Wasm.
 
@@ -25,40 +26,52 @@ pub mod system;
 use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use sp_core::{OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
-use sp_application_crypto::{ed25519, sr25519, RuntimeAppPublic};
+use sp_core::{offchain::KeyTypeId, ChangesTrieConfiguration, OpaqueMetadata, RuntimeDebug};
+use sp_application_crypto::{ed25519, sr25519, ecdsa, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
-use sp_trie::PrefixedMemoryDB;
+use sp_trie::{PrefixedMemoryDB, StorageProof};
 use sp_trie::trie_types::{TrieDB, TrieDBMut};
 
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 use sp_runtime::{
-	ApplyExtrinsicResult, create_runtime_str, Perbill, impl_opaque_keys,
+	create_runtime_str, impl_opaque_keys,
+	ApplyExtrinsicResult, Perbill,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
 		TransactionSource,
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
+		GetNodeBlockType, GetRuntimeBlockType, NumberFor, Verify, IdentityLookup,
 	},
 };
 use sp_version::RuntimeVersion;
 pub use sp_core::hash::H256;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{
+	impl_outer_origin, parameter_types,
+	traits::KeyOwnerProofSystem,
+	weights::{RuntimeDbWeight, Weight},
+};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
-use sp_core::storage::ChildType;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub use sp_consensus_babe::{AuthorityId, SlotNumber};
+pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
+
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
 // Include the WASM binary
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+
+#[cfg(feature = "std")]
+/// Wasm binary unwrapped. If built with `BUILD_DUMMY_WASM_BINARY`, the function panics.
+pub fn wasm_binary_unwrap() -> &'static [u8] {
+	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
+						supported with the flag disabled.")
+}
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -68,6 +81,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_version: 2,
 	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
+	transaction_version: 1,
 };
 
 fn version() -> RuntimeVersion {
@@ -181,11 +195,31 @@ impl ExtrinsicT for Extrinsic {
 	}
 }
 
+impl sp_runtime::traits::Dispatchable for Extrinsic {
+	type Origin = Origin;
+	type Trait = ();
+	type Info = ();
+	type PostInfo = ();
+	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+		panic!("This implemention should not be used for actual dispatch.");
+	}
+}
+
 impl Extrinsic {
+	/// Convert `&self` into `&Transfer`.
+	///
+	/// Panics if this is no `Transfer` extrinsic.
 	pub fn transfer(&self) -> &Transfer {
+		self.try_transfer().expect("cannot convert to transfer ref")
+	}
+
+	/// Try to convert `&self` into `&Transfer`.
+	///
+	/// Returns `None` if this is no `Transfer` extrinsic.
+	pub fn try_transfer(&self) -> Option<&Transfer> {
 		match self {
-			Extrinsic::Transfer { ref transfer, .. } => transfer,
-			_ => panic!("cannot convert to transfer ref"),
+			Extrinsic::Transfer { ref transfer, .. } => Some(transfer),
+			_ => None,
 		}
 	}
 }
@@ -196,6 +230,8 @@ pub type AccountSignature = sr25519::Signature;
 pub type AccountId = <AccountSignature as Verify>::Signer;
 /// A simple hash type for all our hashing.
 pub type Hash = H256;
+/// The hashing algorithm used.
+pub type Hashing = BlakeTwo256;
 /// The block number type used in this runtime.
 pub type BlockNumber = u64;
 /// Index of a transaction.
@@ -207,7 +243,7 @@ pub type Digest = sp_runtime::generic::Digest<H256>;
 /// A test block.
 pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
-pub type Header = sp_runtime::generic::Header<BlockNumber, BlakeTwo256>;
+pub type Header = sp_runtime::generic::Header<BlockNumber, Hashing>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
@@ -293,8 +329,17 @@ cfg_if! {
 				///
 				/// Returns the signature generated for the message `sr25519`.
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic);
+				/// Test that `ecdsa` crypto works in the runtime.
+				///
+				/// Returns the signature generated for the message `ecdsa`.
+				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
+				/// Check a witness.
+				fn test_witness(proof: StorageProof, root: crate::Hash);
+				/// Test that ensures that we can call a function that takes multiple
+				/// arguments.
+				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
 			}
 		}
 	} else {
@@ -335,8 +380,17 @@ cfg_if! {
 				///
 				/// Returns the signature generated for the message `sr25519`.
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic);
+				/// Test that `ecdsa` crypto works in the runtime.
+				///
+				/// Returns the signature generated for the message `ecdsa`.
+				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
+				/// Check a witness.
+				fn test_witness(proof: StorageProof, root: crate::Hash);
+				/// Test that ensures that we can call a function that takes multiple
+				/// arguments.
+				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
 			}
 		}
 	}
@@ -367,26 +421,35 @@ impl From<frame_system::Event<Runtime>> for Event {
 }
 
 parameter_types! {
-	pub const BlockHashCount: BlockNumber = 250;
+	pub const BlockHashCount: BlockNumber = 2400;
 	pub const MinimumPeriod: u64 = 5;
 	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
+	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
+		read: 100,
+		write: 1000,
+	};
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
 
 impl frame_system::Trait for Runtime {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = Extrinsic;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Hashing = BlakeTwo256;
+	type Hashing = Hashing;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -394,6 +457,7 @@ impl frame_system::Trait for Runtime {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 impl pallet_timestamp::Trait for Runtime {
@@ -401,6 +465,7 @@ impl pallet_timestamp::Trait for Runtime {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -415,6 +480,18 @@ impl pallet_babe::Trait for Runtime {
 	// are manually adding the digests. normally in this situation you'd use
 	// pallet_babe::SameAuthoritiesForever.
 	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
+
+	type KeyOwnerProofSystem = ();
+
+	type KeyOwnerProof =
+		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
+
+	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+		KeyTypeId,
+		AuthorityId,
+	)>>::IdentificationTuple;
+
+	type HandleEquivocation = ();
 }
 
 /// Adds one to the given input and returns the final result.
@@ -438,7 +515,7 @@ fn code_using_trie() -> u64 {
 	let mut root = sp_std::default::Default::default();
 	let _ = {
 		let v = &pairs;
-		let mut t = TrieDBMut::<BlakeTwo256>::new(&mut mdb, &mut root);
+		let mut t = TrieDBMut::<Hashing>::new(&mut mdb, &mut root);
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
 			let val: &[u8] = &v[i].1;
@@ -449,7 +526,7 @@ fn code_using_trie() -> u64 {
 		t
 	};
 
-	if let Ok(trie) = TrieDB::<BlakeTwo256>::new(&mdb, &root) {
+	if let Ok(trie) = TrieDB::<Hashing>::new(&mdb, &root) {
 		if let Ok(iter) = trie.iter() {
 			let mut iter_pairs = Vec::new();
 			for pair in iter {
@@ -466,6 +543,7 @@ impl_opaque_keys! {
 	pub struct SessionKeys {
 		pub ed25519: ed25519::AppPublic,
 		pub sr25519: sr25519::AppPublic,
+		pub ecdsa: ecdsa::AppPublic,
 	}
 }
 
@@ -601,9 +679,22 @@ cfg_if! {
 					test_sr25519_crypto()
 				}
 
+				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic) {
+					test_ecdsa_crypto()
+				}
+
 				fn test_storage() {
 					test_read_storage();
 					test_read_child_storage();
+				}
+
+				fn test_witness(proof: StorageProof, root: crate::Hash) {
+					test_witness(proof, root);
+				}
+
+				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
+					assert_eq!(&data[..], &other[..]);
+					assert_eq!(data.len(), num as usize);
 				}
 			}
 
@@ -618,20 +709,36 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeConfiguration {
-					sp_consensus_babe::BabeConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
+					sp_consensus_babe::BabeGenesisConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Module<Runtime>>::randomness(),
-						secondary_slots: true,
+						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
 				fn current_epoch_start() -> SlotNumber {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: sp_consensus_babe::EquivocationProof<
+						<Block as BlockT>::Header,
+					>,
+					_key_owner_proof: sp_consensus_babe::OpaqueKeyOwnershipProof,
+				) -> Option<()> {
+					None
+				}
+
+				fn generate_key_ownership_proof(
+					_slot_number: sp_consensus_babe::SlotNumber,
+					_authority_id: sp_consensus_babe::AuthorityId,
+				) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
+					None
 				}
 			}
 
@@ -651,6 +758,29 @@ cfg_if! {
 					encoded: Vec<u8>,
 				) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
 					SessionKeys::decode_into_raw_public_keys(&encoded)
+				}
+			}
+
+			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
+					Vec::new()
+				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
+						<Block as BlockT>::Hash,
+						NumberFor<Block>,
+					>,
+					_key_owner_proof: sp_finality_grandpa::OpaqueKeyOwnershipProof,
+				) -> Option<()> {
+					None
+				}
+
+				fn generate_key_ownership_proof(
+					_set_id: sp_finality_grandpa::SetId,
+					_authority_id: sp_finality_grandpa::AuthorityId,
+				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
+					None
 				}
 			}
 
@@ -795,9 +925,22 @@ cfg_if! {
 					test_sr25519_crypto()
 				}
 
+				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic) {
+					test_ecdsa_crypto()
+				}
+
 				fn test_storage() {
 					test_read_storage();
 					test_read_child_storage();
+				}
+
+				fn test_witness(proof: StorageProof, root: crate::Hash) {
+					test_witness(proof, root);
+				}
+
+				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
+					assert_eq!(&data[..], &other[..]);
+					assert_eq!(data.len(), num as usize);
 				}
 			}
 
@@ -812,20 +955,36 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeConfiguration {
-					sp_consensus_babe::BabeConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
+					sp_consensus_babe::BabeGenesisConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Module<Runtime>>::randomness(),
-						secondary_slots: true,
+						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
 				fn current_epoch_start() -> SlotNumber {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: sp_consensus_babe::EquivocationProof<
+						<Block as BlockT>::Header,
+					>,
+					_key_owner_proof: sp_consensus_babe::OpaqueKeyOwnershipProof,
+				) -> Option<()> {
+					None
+				}
+
+				fn generate_key_ownership_proof(
+					_slot_number: sp_consensus_babe::SlotNumber,
+					_authority_id: sp_consensus_babe::AuthorityId,
+				) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
+					None
 				}
 			}
 
@@ -887,42 +1046,49 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 	(signature, public0)
 }
 
+fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic) {
+	let public0 = ecdsa::AppPublic::generate_pair(None);
+	let public1 = ecdsa::AppPublic::generate_pair(None);
+	let public2 = ecdsa::AppPublic::generate_pair(None);
+
+	let all = ecdsa::AppPublic::all();
+	assert!(all.contains(&public0));
+	assert!(all.contains(&public1));
+	assert!(all.contains(&public2));
+
+	let signature = public0.sign(&"ecdsa").expect("Generates a valid `ecdsa` signature.");
+
+	assert!(public0.verify(&"ecdsa", &signature));
+	(signature, public0)
+}
+
 fn test_read_storage() {
 	const KEY: &[u8] = b":read_storage";
 	sp_io::storage::set(KEY, b"test");
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::read(
-		KEY,
-		&mut v,
-		0
-	);
+	let r = sp_io::storage::read(KEY, &mut v, 0);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::read(KEY, &mut v, 8);
-	assert_eq!(r, Some(4));
+	let r = sp_io::storage::read(KEY, &mut v, 4);
+	assert_eq!(r, Some(0));
 	assert_eq!(&v, &[0, 0, 0, 0]);
 }
 
 fn test_read_child_storage() {
-	const CHILD_KEY: &[u8] = b":child_storage:default:read_child_storage";
-	const UNIQUE_ID: &[u8] = b":unique_id";
+	const STORAGE_KEY: &[u8] = b"unique_id_1";
 	const KEY: &[u8] = b":read_child_storage";
-	sp_io::storage::child_set(
-		CHILD_KEY,
-		UNIQUE_ID,
-		ChildType::CryptoUniqueId as u32,
+	sp_io::default_child_storage::set(
+		STORAGE_KEY,
 		KEY,
 		b"test",
 	);
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::child_read(
-		CHILD_KEY,
-		UNIQUE_ID,
-		ChildType::CryptoUniqueId as u32,
+	let r = sp_io::default_child_storage::read(
+		STORAGE_KEY,
 		KEY,
 		&mut v,
 		0,
@@ -931,16 +1097,42 @@ fn test_read_child_storage() {
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::child_read(
-		CHILD_KEY,
-		UNIQUE_ID,
-		ChildType::CryptoUniqueId as u32,
+	let r = sp_io::default_child_storage::read(
+		STORAGE_KEY,
 		KEY,
 		&mut v,
 		8,
 	);
-	assert_eq!(r, Some(4));
+	assert_eq!(r, Some(0));
 	assert_eq!(&v, &[0, 0, 0, 0]);
+}
+
+fn test_witness(proof: StorageProof, root: crate::Hash) {
+	use sp_externalities::Externalities;
+	let db: sp_trie::MemoryDB<crate::Hashing> = proof.into_memory_db();
+	let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(
+		db,
+		root,
+	);
+	let mut overlay = sp_state_machine::OverlayedChanges::default();
+	#[cfg(feature = "std")]
+	let mut offchain_overlay = Default::default();
+	let mut cache = sp_state_machine::StorageTransactionCache::<_, _, BlockNumber>::default();
+	let mut ext = sp_state_machine::Ext::new(
+		&mut overlay,
+		#[cfg(feature = "std")]
+		&mut offchain_overlay,
+		&mut cache,
+		&backend,
+		#[cfg(feature = "std")]
+		None,
+		#[cfg(feature = "std")]
+		None,
+	);
+	assert!(ext.storage(b"value3").is_some());
+	assert!(ext.storage_root().as_slice() == &root[..]);
+	ext.place_storage(vec![0], Some(vec![1]));
+	assert!(ext.storage_root().as_slice() != &root[..]);
 }
 
 #[cfg(test)]
@@ -1000,5 +1192,34 @@ mod tests {
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		runtime_api.test_storage(&block_id).unwrap();
+	}
+
+	fn witness_backend() -> (sp_trie::MemoryDB<crate::Hashing>, crate::Hash) {
+		use sp_trie::TrieMut;
+		let mut root = crate::Hash::default();
+		let mut mdb = sp_trie::MemoryDB::<crate::Hashing>::default();
+		{
+			let mut trie = sp_trie::trie_types::TrieDBMut::new(&mut mdb, &mut root);
+			trie.insert(b"value3", &[142]).expect("insert failed");
+			trie.insert(b"value4", &[124]).expect("insert failed");
+		};
+		(mdb, root)
+	}
+
+	#[test]
+	fn witness_backend_works() {
+		let (db, root) = witness_backend();
+		let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(
+			db,
+			root,
+		);
+		let proof = sp_state_machine::prove_read(backend, vec![b"value3"]).unwrap();
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::Both)
+			.build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(client.chain_info().best_number);
+
+		runtime_api.test_witness(&block_id, proof, root).unwrap();
 	}
 }

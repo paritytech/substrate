@@ -18,8 +18,10 @@
 
 use crate::{
 	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, RawEvent,
-	TombstoneContractInfo, Trait,
+	TombstoneContractInfo, Trait, CodeHash, Config
 };
+use sp_std::prelude::*;
+use sp_io::hashing::blake2_256;
 use frame_support::storage::child;
 use frame_support::traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReason};
 use frame_support::StorageMap;
@@ -85,27 +87,24 @@ enum Verdict<T: Trait> {
 /// This function accounts for the storage rent deposit. I.e. if the contract possesses enough funds
 /// then the fee can drop to zero.
 fn compute_fee_per_block<T: Trait>(
-	balance: &BalanceOf<T>,
+	free_balance: &BalanceOf<T>,
 	contract: &AliveContractInfo<T>,
 ) -> BalanceOf<T> {
-	let free_storage = balance
+	let free_storage = free_balance
 		.checked_div(&T::RentDepositOffset::get())
 		.unwrap_or_else(Zero::zero);
 
-	let effective_storage_size =
-		<BalanceOf<T>>::from(contract.storage_size).saturating_sub(free_storage);
+	// For now, we treat every empty KV pair as if it was one byte long.
+	let empty_pairs_equivalent = contract.empty_pair_count;
+
+	let effective_storage_size = <BalanceOf<T>>::from(
+		contract.storage_size + T::StorageSizeOffset::get() + empty_pairs_equivalent,
+	)
+	.saturating_sub(free_storage);
 
 	effective_storage_size
 		.checked_mul(&T::RentByteFee::get())
-		.unwrap_or(<BalanceOf<T>>::max_value())
-}
-
-/// Subsistence threshold is the extension of the minimum balance (aka existential deposit) by the
-/// tombstone deposit, required for leaving a tombstone.
-///
-/// Rent mechanism cannot make the balance lower than subsistence threshold.
-fn subsistence_threshold<T: Trait>() -> BalanceOf<T> {
-	T::Currency::minimum_balance() + T::TombstoneDeposit::get()
+		.unwrap_or_else(|| <BalanceOf<T>>::max_value())
 }
 
 /// Returns amount of funds available to consume by rent mechanism.
@@ -113,17 +112,22 @@ fn subsistence_threshold<T: Trait>() -> BalanceOf<T> {
 /// Rent mechanism cannot consume more than `rent_allowance` set by the contract and it cannot make
 /// the balance lower than [`subsistence_threshold`].
 ///
-/// In case the balance is below the subsistence threshold, this function returns `None`.
+/// In case the toal_balance is below the subsistence threshold, this function returns `None`.
 fn rent_budget<T: Trait>(
-	balance: &BalanceOf<T>,
+	total_balance: &BalanceOf<T>,
+	free_balance: &BalanceOf<T>,
 	contract: &AliveContractInfo<T>,
 ) -> Option<BalanceOf<T>> {
-	let subsistence_threshold = subsistence_threshold::<T>();
-	if *balance < subsistence_threshold {
+	let subsistence_threshold = Config::<T>::subsistence_threshold_uncached();
+	// Reserved balance contributes towards the subsistence threshold to stay consistent
+	// with the existential deposit where the reserved balance is also counted.
+	if *total_balance < subsistence_threshold {
 		return None;
 	}
 
-	let rent_allowed_to_charge = *balance - subsistence_threshold;
+	// However, reserved balance cannot be charged so we need to use the free balance
+	// to calculate the actual budget (which can be 0).
+	let rent_allowed_to_charge = free_balance.saturating_sub(subsistence_threshold);
 	Some(<BalanceOf<T>>::min(
 		contract.rent_allowance,
 		rent_allowed_to_charge,
@@ -151,21 +155,22 @@ fn consider_case<T: Trait>(
 		return Verdict::Exempt;
 	}
 
-	let balance = T::Currency::free_balance(account);
+	let total_balance = T::Currency::total_balance(account);
+	let free_balance = T::Currency::free_balance(account);
 
 	// An amount of funds to charge per block for storage taken up by the contract.
-	let fee_per_block = compute_fee_per_block::<T>(&balance, contract);
+	let fee_per_block = compute_fee_per_block::<T>(&free_balance, contract);
 	if fee_per_block.is_zero() {
 		// The rent deposit offset reduced the fee to 0. This means that the contract
 		// gets the rent for free.
 		return Verdict::Exempt;
 	}
 
-	let rent_budget = match rent_budget::<T>(&balance, contract) {
+	let rent_budget = match rent_budget::<T>(&total_balance, &free_balance, contract) {
 		Some(rent_budget) => rent_budget,
 		None => {
-			// The contract's balance is already below subsistence threshold. That indicates that
-			// the contract cannot afford to leave a tombstone.
+			// The contract's total balance is already below subsistence threshold. That
+			// indicates that the contract cannot afford to leave a tombstone.
 			//
 			// So cleanly wipe the contract.
 			return Verdict::Kill;
@@ -174,7 +179,7 @@ fn consider_case<T: Trait>(
 
 	let dues = fee_per_block
 		.checked_mul(&blocks_passed.saturated_into::<u32>().into())
-		.unwrap_or(<BalanceOf<T>>::max_value());
+		.unwrap_or_else(|| <BalanceOf<T>>::max_value());
 	let insufficient_rent = rent_budget < dues;
 
 	// If the rent payment cannot be withdrawn due to locks on the account balance, then evict the
@@ -188,7 +193,7 @@ fn consider_case<T: Trait>(
 		account,
 		dues_limited,
 		WithdrawReason::Fee.into(),
-		balance.saturating_sub(dues_limited),
+		free_balance.saturating_sub(dues_limited),
 	)
 	.is_ok();
 
@@ -223,8 +228,7 @@ fn enact_verdict<T: Trait>(
 		Verdict::Kill => {
 			<ContractInfoOf<T>>::remove(account);
 			child::kill_storage(
-				&alive_contract_info.trie_id,
-				alive_contract_info.child_trie_unique_id(),
+				&alive_contract_info.child_trie_info(),
 			);
 			<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), false));
 			None
@@ -235,7 +239,9 @@ fn enact_verdict<T: Trait>(
 			}
 
 			// Note: this operation is heavy.
-			let child_storage_root = child::child_root(&alive_contract_info.trie_id);
+			let child_storage_root = child::root(
+				&alive_contract_info.child_trie_info(),
+			);
 
 			let tombstone = <TombstoneContractInfo<T>>::new(
 				&child_storage_root[..],
@@ -245,8 +251,7 @@ fn enact_verdict<T: Trait>(
 			<ContractInfoOf<T>>::insert(account, &tombstone_info);
 
 			child::kill_storage(
-				&alive_contract_info.trie_id,
-				alive_contract_info.child_trie_unique_id(),
+				&alive_contract_info.child_trie_info(),
 			);
 
 			<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), true));
@@ -362,14 +367,15 @@ pub fn compute_rent_projection<T: Trait>(
 	};
 
 	// Compute how much would the fee per block be with the *updated* balance.
-	let balance = T::Currency::free_balance(account);
-	let fee_per_block = compute_fee_per_block::<T>(&balance, &alive_contract_info);
+	let total_balance = T::Currency::total_balance(account);
+	let free_balance = T::Currency::free_balance(account);
+	let fee_per_block = compute_fee_per_block::<T>(&free_balance, &alive_contract_info);
 	if fee_per_block.is_zero() {
 		return Ok(RentProjection::NoEviction);
 	}
 
 	// Then compute how much the contract will sustain under these circumstances.
-	let rent_budget = rent_budget::<T>(&balance, &alive_contract_info).expect(
+	let rent_budget = rent_budget::<T>(&total_balance, &free_balance, &alive_contract_info).expect(
 		"the contract exists and in the alive state;
 		the updated balance must be greater than subsistence deposit;
 		this function doesn't return `None`;
@@ -390,4 +396,91 @@ pub fn compute_rent_projection<T: Trait>(
 	Ok(RentProjection::EvictionAt(
 		current_block_number + blocks_left,
 	))
+}
+
+/// Restores the destination account using the origin as prototype.
+///
+/// The restoration will be performed iff:
+/// - origin exists and is alive,
+/// - the origin's storage is not written in the current block
+/// - the restored account has tombstone
+/// - the tombstone matches the hash of the origin storage root, and code hash.
+///
+/// Upon succesful restoration, `origin` will be destroyed, all its funds are transferred to
+/// the restored account. The restored account will inherit the last write block and its last
+/// deduct block will be set to the current block.
+pub fn restore_to<T: Trait>(
+	origin: T::AccountId,
+	dest: T::AccountId,
+	code_hash: CodeHash<T>,
+	rent_allowance: BalanceOf<T>,
+	delta: Vec<crate::exec::StorageKey>,
+) -> Result<(), &'static str> {
+	let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
+		.and_then(|c| c.get_alive())
+		.ok_or("Cannot restore from inexisting or tombstone contract")?;
+
+	let child_trie_info = origin_contract.child_trie_info();
+
+	let current_block = <frame_system::Module<T>>::block_number();
+
+	if origin_contract.last_write == Some(current_block) {
+		return Err("Origin TrieId written in the current block");
+	}
+
+	let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
+		.and_then(|c| c.get_tombstone())
+		.ok_or("Cannot restore to inexisting or alive contract")?;
+
+	let last_write = if !delta.is_empty() {
+		Some(current_block)
+	} else {
+		origin_contract.last_write
+	};
+
+	let key_values_taken = delta.iter()
+		.filter_map(|key| {
+			child::get_raw(&child_trie_info, &blake2_256(key)).map(|value| {
+				child::kill(&child_trie_info, &blake2_256(key));
+				(key, value)
+			})
+		})
+		.collect::<Vec<_>>();
+
+	let tombstone = <TombstoneContractInfo<T>>::new(
+		// This operation is cheap enough because last_write (delta not included)
+		// is not this block as it has been checked earlier.
+		&child::root(&child_trie_info)[..],
+		code_hash,
+	);
+
+	if tombstone != dest_tombstone {
+		for (key, value) in key_values_taken {
+			child::put_raw(&child_trie_info, &blake2_256(key), &value);
+		}
+
+		return Err("Tombstones don't match");
+	}
+
+	origin_contract.storage_size -= key_values_taken.iter()
+		.map(|(_, value)| value.len() as u32)
+		.sum::<u32>();
+
+	<ContractInfoOf<T>>::remove(&origin);
+	<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
+		trie_id: origin_contract.trie_id,
+		storage_size: origin_contract.storage_size,
+		empty_pair_count: origin_contract.empty_pair_count,
+		total_pair_count: origin_contract.total_pair_count,
+		code_hash,
+		rent_allowance,
+		deduct_block: current_block,
+		last_write,
+	}));
+
+	let origin_free_balance = T::Currency::free_balance(&origin);
+	T::Currency::make_free_balance_be(&origin, <BalanceOf<T>>::zero());
+	T::Currency::deposit_creating(&dest, origin_free_balance);
+
+	Ok(())
 }

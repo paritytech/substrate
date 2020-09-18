@@ -1,55 +1,65 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Consensus extension module for BABE consensus. Collects on-chain randomness
 //! from VRF outputs and manages epoch transitions.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
+#![warn(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
 
-use pallet_timestamp;
-
-use sp_std::{result, prelude::*};
+use codec::{Decode, Encode};
 use frame_support::{
-	decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT},
-	weights::{Weight, SimpleDispatchInfo, WeighData},
+	decl_error, decl_module, decl_storage,
+	dispatch::DispatchResultWithPostInfo,
+	traits::{FindAuthor, Get, KeyOwnerProofSystem, Randomness as RandomnessT},
+	weights::{Pays, Weight},
+	Parameter,
 };
+use frame_system::{ensure_none, ensure_signed};
+use sp_application_crypto::Public;
+use sp_runtime::{
+	generic::DigestItem,
+	traits::{Hash, IsMember, One, SaturatedConversion, Saturating},
+	ConsensusEngineId, KeyTypeId,
+};
+use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_std::{prelude::*, result};
 use sp_timestamp::OnTimestampSet;
-use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
-use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash, One};
-use sp_staking::{
-	SessionIndex,
-	offence::{Offence, Kind},
-};
 
-use codec::{Encode, Decode};
-use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_babe::{
-	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber,
-	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
-	digests::{NextEpochDescriptor, RawPreDigest},
+	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
+	inherents::{BabeInherentData, INHERENT_IDENTIFIER},
+	BabeAuthorityWeight, ConsensusLog, EquivocationProof, SlotNumber, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
-pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH, PUBLIC_KEY_LENGTH};
+use sp_inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent};
 
+pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
+
+mod equivocation;
+
+#[cfg(any(feature = "runtime-benchmarks", test))]
+mod benchmarking;
+#[cfg(all(feature = "std", test))]
+mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
-#[cfg(all(feature = "std", test))]
-mod mock;
+pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquivocation};
 
 pub trait Trait: pallet_timestamp::Trait {
 	/// The amount of time, in slots, that each epoch should last.
@@ -68,6 +78,30 @@ pub trait Trait: pallet_timestamp::Trait {
 	/// Typically, the `ExternalTrigger` type should be used. An internal trigger should only be used
 	/// when no other module is responsible for changing authority set.
 	type EpochChangeTrigger: EpochChangeTrigger;
+
+	/// The proof of key ownership, used for validating equivocation reports.
+	/// The proof must include the session index and validator count of the
+	/// session at which the equivocation occurred.
+	type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+	/// The identification of a key owner, used when reporting equivocations.
+	type KeyOwnerIdentification: Parameter;
+
+	/// A system for proving ownership of keys, i.e. that a given key was part
+	/// of a validator set, needed for validating equivocation reports.
+	type KeyOwnerProofSystem: KeyOwnerProofSystem<
+		(KeyTypeId, AuthorityId),
+		Proof = Self::KeyOwnerProof,
+		IdentificationTuple = Self::KeyOwnerIdentification,
+	>;
+
+	/// The equivocation handling subsystem, defines methods to report an
+	/// offence (after the equivocation has been validated) and for submitting a
+	/// transaction to report an equivocation (from an offchain context).
+	/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
+	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
+	/// definition.
+	type HandleEquivocation: HandleEquivocation<Self>;
 }
 
 /// Trigger an epoch change, if any should take place.
@@ -102,7 +136,18 @@ impl EpochChangeTrigger for SameAuthoritiesForever {
 
 const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 
-type MaybeVrf = Option<schnorrkel::RawVRFOutput>;
+type MaybeRandomness = Option<schnorrkel::Randomness>;
+
+decl_error! {
+	pub enum Error for Module<T: Trait> {
+		/// An equivocation proof provided as part of an equivocation report is invalid.
+		InvalidEquivocationProof,
+		/// A key ownership proof provided as part of an equivocation report is invalid.
+		InvalidKeyOwnershipProof,
+		/// A given equivocation report is valid but already previously reported.
+		DuplicateOffenceReport,
+	}
+}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
@@ -134,6 +179,9 @@ decl_storage! {
 		// variable to its underlying value.
 		pub Randomness get(fn randomness): schnorrkel::Randomness;
 
+		/// Next epoch configuration, if changed.
+		NextEpochConfig: Option<NextConfigDescriptor>;
+
 		/// Next epoch randomness.
 		NextRandomness: schnorrkel::Randomness;
 
@@ -147,11 +195,13 @@ decl_storage! {
 		/// We reset all segments and return to `0` at the beginning of every
 		/// epoch.
 		SegmentIndex build(|_| 0): u32;
-		UnderConstruction: map hasher(twox_64_concat) u32 => Vec<schnorrkel::RawVRFOutput>;
+
+		/// TWOX-NOTE: `SegmentIndex` is an increasing integer, so this is okay.
+		UnderConstruction: map hasher(twox_64_concat) u32 => Vec<schnorrkel::Randomness>;
 
 		/// Temporary value (cleared at block finalization) which is `Some`
 		/// if per-block initialization has already been called for current block.
-		Initialized get(fn initialized): Option<MaybeVrf>;
+		Initialized get(fn initialized): Option<MaybeRandomness>;
 
 		/// How late the current block is compared to its parent.
 		///
@@ -184,7 +234,7 @@ decl_module! {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			Self::do_initialize(now);
 
-			SimpleDispatchInfo::default().weigh_data(())
+			0
 		}
 
 		/// Block finalization
@@ -194,17 +244,106 @@ decl_module! {
 			// that this block was the first in a new epoch, the changeover logic has
 			// already occurred at this point, so the under-construction randomness
 			// will only contain outputs from the right epoch.
-			if let Some(Some(vrf_output)) = Initialized::take() {
-				Self::deposit_vrf_output(&vrf_output);
+			if let Some(Some(randomness)) = Initialized::take() {
+				Self::deposit_randomness(&randomness);
 			}
 
 			// remove temporary "environment" entry from storage
 			Lateness::<T>::kill();
 		}
+
+		/// Report authority equivocation/misbehavior. This method will verify
+		/// the equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence will
+		/// be reported.
+		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		fn report_equivocation(
+			origin,
+			equivocation_proof: EquivocationProof<T::Header>,
+			key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResultWithPostInfo {
+			let reporter = ensure_signed(origin)?;
+
+			Self::do_report_equivocation(
+				Some(reporter),
+				equivocation_proof,
+				key_owner_proof,
+			)
+		}
+
+		/// Report authority equivocation/misbehavior. This method will verify
+		/// the equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence will
+		/// be reported.
+		/// This extrinsic must be called unsigned and it is expected that only
+		/// block authors will call it (validated in `ValidateUnsigned`), as such
+		/// if the block author is defined it will be defined as the equivocation
+		/// reporter.
+		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		fn report_equivocation_unsigned(
+			origin,
+			equivocation_proof: EquivocationProof<T::Header>,
+			key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+
+			Self::do_report_equivocation(
+				T::HandleEquivocation::block_author(),
+				equivocation_proof,
+				key_owner_proof,
+			)
+		}
+	}
+}
+
+mod weight_for {
+	use frame_support::{
+		traits::Get,
+		weights::{
+			constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
+			Weight,
+		},
+	};
+
+	pub fn report_equivocation<T: super::Trait>(validator_count: u32) -> Weight {
+		// we take the validator set count from the membership proof to
+		// calculate the weight but we set a floor of 100 validators.
+		let validator_count = validator_count.max(100) as u64;
+
+		// worst case we are considering is that the given offender
+		// is backed by 200 nominators
+		const MAX_NOMINATORS: u64 = 200;
+
+		// checking membership proof
+		(35 * WEIGHT_PER_MICROS)
+			.saturating_add((175 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
+			.saturating_add(T::DbWeight::get().reads(5))
+			// check equivocation proof
+			.saturating_add(110 * WEIGHT_PER_MICROS)
+			// report offence
+			.saturating_add(110 * WEIGHT_PER_MICROS)
+			.saturating_add(25 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
+			.saturating_add(T::DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
+			.saturating_add(T::DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
 	}
 }
 
 impl<T: Trait> RandomnessT<<T as frame_system::Trait>::Hash> for Module<T> {
+	/// Some BABE blocks have VRF outputs where the block producer has exactly one bit of influence,
+	/// either they make the block or they do not make the block and thus someone else makes the
+	/// next block. Yet, this randomness is not fresh in all BABE blocks.
+	///
+	/// If that is an insufficient security guarantee then two things can be used to improve this
+	/// randomness:
+	///
+	/// - Name, in advance, the block number whose random value will be used; ensure your module
+	///   retains a buffer of previous random values for its subject and then index into these in
+	///   order to obviate the ability of your user to look up the parent hash and choose when to
+	///   transact based upon it.
+	/// - Require your user to first commit to an additional value by first posting its hash.
+	///   Require them to reveal the value to determine the final result, hashing it with the
+	///   output of this random function. This reduces the ability of a cabal of block producers
+	///   from conspiring against individuals.
 	fn random(subject: &[u8]) -> T::Hash {
 		let mut subject = subject.to_vec();
 		subject.reserve(VRF_OUTPUT_LENGTH);
@@ -223,7 +362,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				let pre_digest: RawPreDigest = RawPreDigest::decode(&mut data).ok()?;
+				let pre_digest: PreDigest = PreDigest::decode(&mut data).ok()?;
 				return Some(pre_digest.authority_index())
 			}
 		}
@@ -249,52 +388,6 @@ impl<T: Trait> pallet_session::ShouldEndSession<T::BlockNumber> for Module<T> {
 		Self::do_initialize(now);
 
 		Self::should_epoch_change(now)
-	}
-}
-
-// TODO [slashing]: @marcio use this, remove the dead_code annotation.
-/// A BABE equivocation offence report.
-///
-/// When a validator released two or more blocks at the same slot.
-struct BabeEquivocationOffence<FullIdentification> {
-	/// A babe slot number in which this incident happened.
-	slot: u64,
-	/// The session index in which the incident happened.
-	session_index: SessionIndex,
-	/// The size of the validator set at the time of the offence.
-	validator_set_count: u32,
-	/// The authority that produced the equivocation.
-	offender: FullIdentification,
-}
-
-impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocationOffence<FullIdentification> {
-	const ID: Kind = *b"babe:equivocatio";
-	type TimeSlot = u64;
-
-	fn offenders(&self) -> Vec<FullIdentification> {
-		vec![self.offender.clone()]
-	}
-
-	fn session_index(&self) -> SessionIndex {
-		self.session_index
-	}
-
-	fn validator_set_count(&self) -> u32 {
-		self.validator_set_count
-	}
-
-	fn time_slot(&self) -> Self::TimeSlot {
-		self.slot
-	}
-
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill {
-		// the formula is min((3k / n)^2, 1)
-		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
-		// _ ^ 2
-		x.square()
 	}
 }
 
@@ -334,6 +427,9 @@ impl<T: Trait> Module<T> {
 	// -------------- IMPORTANT NOTE --------------
 	// This implementation is linked to how [`should_epoch_change`] is working. This might need to
 	// be updated accordingly, if the underlying mechanics of slot and epochs change.
+	//
+	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you update
+	// this function, you must also update the corresponding weight.
 	pub fn next_expected_epoch_change(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		next_slot
@@ -343,6 +439,15 @@ impl<T: Trait> Module<T> {
 				let blocks_remaining: T::BlockNumber = slots_remaining.saturated_into();
 				now.saturating_add(blocks_remaining)
 			})
+	}
+
+	/// Plan an epoch config change. The epoch config change is recorded and will be enacted on the
+	/// next call to `enact_epoch_change`. The config will be activated one epoch after. Multiple calls to this
+	/// method will replace any existing planned config change that had not been enacted yet.
+	pub fn plan_config_change(
+		config: NextConfigDescriptor,
+	) {
+		NextEpochConfig::put(config);
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
@@ -380,12 +485,15 @@ impl<T: Trait> Module<T> {
 		// so that nodes can track changes.
 		let next_randomness = NextRandomness::get();
 
-		let next = NextEpochDescriptor {
+		let next_epoch = NextEpochDescriptor {
 			authorities: next_authorities,
 			randomness: next_randomness,
 		};
+		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
-		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
+		if let Some(next_config) = NextEpochConfig::take() {
+			Self::deposit_consensus(ConsensusLog::NextConfigData(next_config));
+		}
 	}
 
 	// finds the start slot of the current epoch. only guaranteed to
@@ -400,17 +508,17 @@ impl<T: Trait> Module<T> {
 		<frame_system::Module<T>>::deposit_log(log.into())
 	}
 
-	fn deposit_vrf_output(vrf_output: &schnorrkel::RawVRFOutput) {
+	fn deposit_randomness(randomness: &schnorrkel::Randomness) {
 		let segment_idx = <SegmentIndex>::get();
 		let mut segment = <UnderConstruction>::get(&segment_idx);
 		if segment.len() < UNDER_CONSTRUCTION_SEGMENT_LENGTH {
 			// push onto current segment: not full.
-			segment.push(*vrf_output);
+			segment.push(*randomness);
 			<UnderConstruction>::insert(&segment_idx, &segment);
 		} else {
 			// move onto the next segment and update the index.
 			let segment_idx = segment_idx + 1;
-			<UnderConstruction>::insert(&segment_idx, &vec![vrf_output.clone()]);
+			<UnderConstruction>::insert(&segment_idx, &vec![randomness.clone()]);
 			<SegmentIndex>::put(&segment_idx);
 		}
 	}
@@ -423,18 +531,18 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		let maybe_pre_digest: Option<RawPreDigest> = <frame_system::Module<T>>::digest()
+		let maybe_pre_digest: Option<PreDigest> = <frame_system::Module<T>>::digest()
 			.logs
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
 			.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-				RawPreDigest::decode(&mut data).ok()
+				PreDigest::decode(&mut data).ok()
 			} else {
 				None
 			})
 			.next();
 
-		let maybe_vrf = maybe_pre_digest.and_then(|digest| {
+		let maybe_randomness: Option<schnorrkel::Randomness> = maybe_pre_digest.and_then(|digest| {
 			// on the first non-zero block (i.e. block #1)
 			// this is where the first epoch (epoch #0) actually starts.
 			// we need to adjust internal storage accordingly.
@@ -463,17 +571,38 @@ impl<T: Trait> Module<T> {
 			Lateness::<T>::put(lateness);
 			CurrentSlot::put(current_slot);
 
-			if let RawPreDigest::Primary(primary) = digest {
+			if let PreDigest::Primary(primary) = digest {
 				// place the VRF output into the `Initialized` storage item
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.
-				Some(primary.vrf_output)
+				//
+				// Reconstruct the bytes of VRFInOut using the authority id.
+				Authorities::get()
+					.get(primary.authority_index as usize)
+					.and_then(|author| {
+						schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok()
+					})
+					.and_then(|pubkey| {
+						let transcript = sp_consensus_babe::make_transcript(
+							&Self::randomness(),
+							current_slot,
+							EpochIndex::get(),
+						);
+
+						primary.vrf_output.0.attach_input_hash(
+							&pubkey,
+							transcript
+						).ok()
+					})
+					.map(|inout| {
+						inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT)
+					})
 			} else {
 				None
 			}
 		});
 
-		Initialized::put(maybe_vrf);
+		Initialized::put(maybe_randomness);
 
 		// enact epoch change, if necessary.
 		T::EpochChangeTrigger::trigger::<T>(now)
@@ -504,6 +633,70 @@ impl<T: Trait> Module<T> {
 			Authorities::put(authorities);
 		}
 	}
+
+	fn do_report_equivocation(
+		reporter: Option<T::AccountId>,
+		equivocation_proof: EquivocationProof<T::Header>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> DispatchResultWithPostInfo {
+		let offender = equivocation_proof.offender.clone();
+		let slot_number = equivocation_proof.slot_number;
+
+		// validate the equivocation proof
+		if !sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
+			return Err(Error::<T>::InvalidEquivocationProof.into());
+		}
+
+		let validator_set_count = key_owner_proof.validator_count();
+		let session_index = key_owner_proof.session();
+
+		let epoch_index = (slot_number.saturating_sub(GenesisSlot::get()) / T::EpochDuration::get())
+			.saturated_into::<u32>();
+
+		// check that the slot number is consistent with the session index
+		// in the key ownership proof (i.e. slot is for that epoch)
+		if epoch_index != session_index {
+			return Err(Error::<T>::InvalidKeyOwnershipProof.into());
+		}
+
+		// check the membership proof and extract the offender's id
+		let key = (sp_consensus_babe::KEY_TYPE, offender);
+		let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof)
+			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
+
+		let offence = BabeEquivocationOffence {
+			slot: slot_number,
+			validator_set_count,
+			offender,
+			session_index,
+		};
+
+		let reporters = match reporter {
+			Some(id) => vec![id],
+			None => vec![],
+		};
+
+		T::HandleEquivocation::report_offence(reporters, offence)
+			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
+
+		// waive the fee since the report is valid and beneficial
+		Ok(Pays::No.into())
+	}
+
+	/// Submits an extrinsic to report an equivocation. This method will create
+	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
+	/// will push the transaction to the pool. Only useful in an offchain
+	/// context.
+	pub fn submit_unsigned_equivocation_report(
+		equivocation_proof: EquivocationProof<T::Header>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> Option<()> {
+		T::HandleEquivocation::submit_unsigned_equivocation_report(
+			equivocation_proof,
+			key_owner_proof,
+		)
+		.ok()
+	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
@@ -513,6 +706,12 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
 	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		Self::next_expected_epoch_change(now)
+	}
+
+	// The validity of this weight depends on the implementation of `estimate_next_session_rotation`
+	fn weight(_now: T::BlockNumber) -> Weight {
+		// Read: Current Slot, Epoch Index, Genesis Slot
+		T::DbWeight::get().reads(3)
 	}
 }
 
@@ -562,7 +761,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 fn compute_randomness(
 	last_epoch_randomness: schnorrkel::Randomness,
 	epoch_index: u64,
-	rho: impl Iterator<Item=schnorrkel::RawVRFOutput>,
+	rho: impl Iterator<Item=schnorrkel::Randomness>,
 	rho_size_hint: Option<usize>,
 ) -> schnorrkel::Randomness {
 	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_OUTPUT_LENGTH);

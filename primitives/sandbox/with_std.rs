@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use sp_std::collections::btree_map::BTreeMap;
 use sp_std::fmt;
@@ -299,7 +300,6 @@ impl<T> Instance<T> {
 
 #[cfg(test)]
 mod tests {
-	use wabt;
 	use crate::{Error, Value, ReturnValue, HostError, EnvironmentDefinitionBuilder, Instance};
 	use assert_matches::assert_matches;
 
@@ -350,7 +350,7 @@ mod tests {
 
 	#[test]
 	fn invoke_args() {
-		let code = wabt::wat2wasm(r#"
+		let code = wat::parse_str(r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 
@@ -385,7 +385,7 @@ mod tests {
 
 	#[test]
 	fn return_value() {
-		let code = wabt::wat2wasm(r#"
+		let code = wat::parse_str(r#"
 		(module
 			(func (export "call") (param $x i32) (result i32)
 				(i32.add
@@ -407,7 +407,7 @@ mod tests {
 
 	#[test]
 	fn signatures_dont_matter() {
-		let code = wabt::wat2wasm(r#"
+		let code = wat::parse_str(r#"
 		(module
 			(import "env" "polymorphic_id" (func $id_i32 (param i32) (result i32)))
 			(import "env" "polymorphic_id" (func $id_i64 (param i64) (result i64)))
@@ -449,7 +449,7 @@ mod tests {
 		let mut env_builder = EnvironmentDefinitionBuilder::new();
 		env_builder.add_host_func("env", "returns_i32", env_returns_i32);
 
-		let code = wabt::wat2wasm(r#"
+		let code = wat::parse_str(r#"
 		(module
 			;; It's actually returns i32, but imported as if it returned i64
 			(import "env" "returns_i32" (func $returns_i32 (result i64)))

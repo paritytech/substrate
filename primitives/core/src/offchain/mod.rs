@@ -1,24 +1,25 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Offchain workers types
 
 use codec::{Encode, Decode};
 use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
-use crate::RuntimeDebug;
+use crate::{OpaquePeerId, RuntimeDebug};
 use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
@@ -28,10 +29,16 @@ pub mod storage;
 #[cfg(feature = "std")]
 pub mod testing;
 
+/// Local storage prefix used by the Offchain Worker API to
+pub const STORAGE_PREFIX : &'static [u8] = b"storage";
+
 /// Offchain workers local storage.
 pub trait OffchainStorage: Clone + Send + Sync {
 	/// Persist a value in storage under given key and prefix.
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
+
+	/// Clear a storage entry under given key and prefix.
+	fn remove(&mut self, prefix: &[u8], key: &[u8]);
 
 	/// Retrieve a value from storage under given key and prefix.
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
@@ -177,21 +184,10 @@ impl TryFrom<u32> for HttpRequestStatus {
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec)]
 #[cfg_attr(feature = "std", derive(Default))]
 pub struct OpaqueNetworkState {
-	/// PeerId of the local node.
+	/// PeerId of the local node in SCALE encoded.
 	pub peer_id: OpaquePeerId,
 	/// List of addresses the node knows it can be reached as.
 	pub external_addresses: Vec<OpaqueMultiaddr>,
-}
-
-/// Simple blob to hold a `PeerId` without committing to its format.
-#[derive(Default, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner)]
-pub struct OpaquePeerId(pub Vec<u8>);
-
-impl OpaquePeerId {
-	/// Create new `OpaquePeerId`
-	pub fn new(vec: Vec<u8>) -> Self {
-		OpaquePeerId(vec)
-	}
 }
 
 /// Simple blob to hold a `Multiaddr` without committing to its format.
@@ -215,7 +211,7 @@ pub struct Duration(u64);
 
 impl Duration {
 	/// Create new duration representing given number of milliseconds.
-	pub fn from_millis(millis: u64) -> Self {
+	pub const fn from_millis(millis: u64) -> Self {
 		Duration(millis)
 	}
 
@@ -270,6 +266,8 @@ pub enum Capability {
 	OffchainWorkerDbRead = 32,
 	/// Access to offchain worker DB (writes).
 	OffchainWorkerDbWrite = 64,
+	/// Manage the authorized nodes
+	NodeAuthorization = 128,
 }
 
 /// A set of capabilities
@@ -342,8 +340,14 @@ pub trait Externalities: Send {
 	/// Sets a value in the local storage.
 	///
 	/// Note this storage is not part of the consensus, it's only accessible by
-	/// offchain worker tasks running on the same machine. It IS persisted between runs.
+	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]);
+
+	/// Removes a value in the local storage.
+	///
+	/// Note this storage is not part of the consensus, it's only accessible by
+	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]);
 
 	/// Sets a value in the local storage if it matches current value.
 	///
@@ -353,7 +357,7 @@ pub trait Externalities: Send {
 	/// Returns `true` if the value has been set, `false` otherwise.
 	///
 	/// Note this storage is not part of the consensus, it's only accessible by
-	/// offchain worker tasks running on the same machine. It IS persisted between runs.
+	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
 	fn local_storage_compare_and_set(
 		&mut self,
 		kind: StorageKind,
@@ -366,7 +370,7 @@ pub trait Externalities: Send {
 	///
 	/// If the value does not exist in the storage `None` will be returned.
 	/// Note this storage is not part of the consensus, it's only accessible by
-	/// offchain worker tasks running on the same machine. It IS persisted between runs.
+	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Initiates a http request given HTTP verb and the URL.
@@ -483,7 +487,19 @@ pub trait Externalities: Send {
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError>;
 
+	/// Set the authorized nodes from runtime.
+	///
+	/// In a permissioned network, the connections between nodes need to reach a
+	/// consensus between participants.
+	///
+	/// - `nodes`: a set of nodes which are allowed to connect for the local node.
+	/// each one is identified with an `OpaquePeerId`, here it just use plain bytes
+	/// without any encoding. Invalid `OpaquePeerId`s are silently ignored.
+	/// - `authorized_only`: if true, only the authorized nodes are allowed to connect,
+	/// otherwise unauthorized nodes can also be connected through other mechanism.
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool);
 }
+
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
 	fn is_validator(&self) -> bool {
 		(& **self).is_validator()
@@ -507,6 +523,10 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
 		(&mut **self).local_storage_set(kind, key, value)
+	}
+
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		(&mut **self).local_storage_clear(kind, key)
 	}
 
 	fn local_storage_compare_and_set(
@@ -556,7 +576,12 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 	) -> Result<usize, HttpError> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
 	}
+
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
+		(&mut **self).set_authorized_nodes(nodes, authorized_only)
+	}
 }
+
 /// An `OffchainExternalities` implementation with limited capabilities.
 pub struct LimitedExternalities<T> {
 	capabilities: Capabilities,
@@ -613,6 +638,11 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.externalities.local_storage_set(kind, key, value)
 	}
 
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		self.check(Capability::OffchainWorkerDbWrite, "local_storage_clear");
+		self.externalities.local_storage_clear(kind, key)
+	}
+
 	fn local_storage_compare_and_set(
 		&mut self,
 		kind: StorageKind,
@@ -667,6 +697,11 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	) -> Result<usize, HttpError> {
 		self.check(Capability::Http, "http_response_read_body");
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
+	}
+
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
+		self.check(Capability::NodeAuthorization, "set_authorized_nodes");
+		self.externalities.set_authorized_nodes(nodes, authorized_only)
 	}
 }
 

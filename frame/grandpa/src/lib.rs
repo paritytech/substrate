@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! GRANDPA Consensus module for runtime.
 //!
@@ -31,27 +32,71 @@
 pub use sp_finality_grandpa as fg_primitives;
 
 use sp_std::prelude::*;
-use codec::{self as codec, Encode, Decode};
-use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
-use sp_runtime::{
-	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
-};
-use sp_staking::{
-	SessionIndex,
-	offence::{Offence, Kind},
-};
-use fg_primitives::{
-	GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber,
-};
-pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
-use frame_system::{self as system, ensure_signed, DigestOf};
 
+use codec::{self as codec, Decode, Encode};
+pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
+use fg_primitives::{
+	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
+	GRANDPA_ENGINE_ID,
+};
+use frame_support::{
+	decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResultWithPostInfo,
+	storage, traits::KeyOwnerProofSystem, weights::Pays, Parameter,
+};
+use frame_system::{ensure_none, ensure_root, ensure_signed};
+use pallet_finality_tracker::OnFinalizationStalled;
+use sp_runtime::{
+	generic::DigestItem,
+	traits::Zero,
+	DispatchResult, KeyTypeId,
+};
+use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_staking::SessionIndex;
+
+mod equivocation;
+
+#[cfg(any(feature = "runtime-benchmarks", test))]
+mod benchmarking;
+#[cfg(all(feature = "std", test))]
 mod mock;
+#[cfg(all(feature = "std", test))]
 mod tests;
+
+pub use equivocation::{
+	EquivocationHandler, GrandpaEquivocationOffence, GrandpaOffence, GrandpaTimeSlot,
+	HandleEquivocation,
+};
 
 pub trait Trait: frame_system::Trait {
 	/// The event type of this module.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+
+	/// The function call.
+	type Call: From<Call<Self>>;
+
+	/// The proof of key ownership, used for validating equivocation reports.
+	/// The proof must include the session index and validator count of the
+	/// session at which the equivocation occurred.
+	type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+	/// The identification of a key owner, used when reporting equivocations.
+	type KeyOwnerIdentification: Parameter;
+
+	/// A system for proving ownership of keys, i.e. that a given key was part
+	/// of a validator set, needed for validating equivocation reports.
+	type KeyOwnerProofSystem: KeyOwnerProofSystem<
+		(KeyTypeId, AuthorityId),
+		Proof = Self::KeyOwnerProof,
+		IdentificationTuple = Self::KeyOwnerIdentification,
+	>;
+
+	/// The equivocation handling subsystem, defines methods to report an
+	/// offence (after the equivocation has been validated) and for submitting a
+	/// transaction to report an equivocation (from an offchain context).
+	/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
+	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
+	/// definition.
+	type HandleEquivocation: HandleEquivocation<Self>;
 }
 
 /// A stored pending change, old format.
@@ -125,7 +170,7 @@ pub enum StoredState<N> {
 
 decl_event! {
 	pub enum Event {
-		/// New authority set has been applied.
+		/// New authority set has been applied. \[authority_set\]
 		NewAuthorities(AuthorityList),
 		/// Current authority set has been paused.
 		Paused,
@@ -146,6 +191,12 @@ decl_error! {
 		ChangePending,
 		/// Cannot signal forced change so soon after last.
 		TooSoon,
+		/// A key ownership proof provided as part of an equivocation report is invalid.
+		InvalidKeyOwnershipProof,
+		/// An equivocation proof provided as part of an equivocation report is invalid.
+		InvalidEquivocationProof,
+		/// A given equivocation report is valid but already previously reported.
+		DuplicateOffenceReport,
 	}
 }
 
@@ -155,7 +206,7 @@ decl_storage! {
 		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
 
 		/// Pending change: (signaled at, scheduled change).
-		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
+		PendingChange get(fn pending_change): Option<StoredPendingChange<T::BlockNumber>>;
 
 		/// next block number where we can force a change.
 		NextForced get(fn next_forced): Option<T::BlockNumber>;
@@ -169,11 +220,15 @@ decl_storage! {
 
 		/// A mapping from grandpa set ID to the index of the *most recent* session for which its
 		/// members were responsible.
+		///
+		/// TWOX-NOTE: `SetId` is not under user control.
 		SetIdSession get(fn session_for_set): map hasher(twox_64_concat) SetId => Option<SessionIndex>;
 	}
 	add_extra_genesis {
 		config(authorities): AuthorityList;
-		build(|config| Module::<T>::initialize_authorities(&config.authorities))
+		build(|config| {
+			Module::<T>::initialize(&config.authorities)
+		})
 	}
 }
 
@@ -183,11 +238,65 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		/// Report some misbehavior.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
-		fn report_misbehavior(origin, _report: Vec<u8>) {
-			ensure_signed(origin)?;
-			// FIXME: https://github.com/paritytech/substrate/issues/1112
+		/// Report voter equivocation/misbehavior. This method will verify the
+		/// equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		fn report_equivocation(
+			origin,
+			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+			key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResultWithPostInfo {
+			let reporter = ensure_signed(origin)?;
+
+			Self::do_report_equivocation(
+				Some(reporter),
+				equivocation_proof,
+				key_owner_proof,
+			)
+		}
+
+		/// Report voter equivocation/misbehavior. This method will verify the
+		/// equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		///
+		/// This extrinsic must be called unsigned and it is expected that only
+		/// block authors will call it (validated in `ValidateUnsigned`), as such
+		/// if the block author is defined it will be defined as the equivocation
+		/// reporter.
+		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		fn report_equivocation_unsigned(
+			origin,
+			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+			key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+
+			Self::do_report_equivocation(
+				T::HandleEquivocation::block_author(),
+				equivocation_proof,
+				key_owner_proof,
+			)
+		}
+
+		/// Note that the current authority set of the GRANDPA finality gadget has
+		/// stalled. This will trigger a forced authority set change at the beginning
+		/// of the next session, to be enacted `delay` blocks after that. The delay
+		/// should be high enough to safely assume that the block signalling the
+		/// forced change will not be re-orged (e.g. 1000 blocks). The GRANDPA voters
+		/// will start the new authority set using the given finalized block as base.
+		/// Only callable by root.
+		#[weight = weight_for::note_stalled::<T>()]
+		fn note_stalled(
+			origin,
+			delay: T::BlockNumber,
+			best_finalized_block_number: T::BlockNumber,
+		) {
+			ensure_root(origin)?;
+
+			Self::on_stalled(delay, best_finalized_block_number)
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -205,7 +314,7 @@ decl_module! {
 						))
 					} else {
 						Self::deposit_log(ConsensusLog::ScheduledChange(
-							ScheduledChange{
+							ScheduledChange {
 								delay: pending_change.delay,
 								next_authorities: pending_change.next_authorities.clone(),
 							}
@@ -252,6 +361,45 @@ decl_module! {
 				_ => {},
 			}
 		}
+	}
+}
+
+mod weight_for {
+	use frame_support::{
+		traits::Get,
+		weights::{
+			constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
+			Weight,
+		},
+	};
+
+	pub fn report_equivocation<T: super::Trait>(validator_count: u32) -> Weight {
+		// we take the validator set count from the membership proof to
+		// calculate the weight but we set a floor of 100 validators.
+		let validator_count = validator_count.max(100) as u64;
+
+		// worst case we are considering is that the given offender
+		// is backed by 200 nominators
+		const MAX_NOMINATORS: u64 = 200;
+
+		// checking membership proof
+		(35 * WEIGHT_PER_MICROS)
+			.saturating_add((175 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
+			.saturating_add(T::DbWeight::get().reads(5))
+			// check equivocation proof
+			.saturating_add(95 * WEIGHT_PER_MICROS)
+			// report offence
+			.saturating_add(110 * WEIGHT_PER_MICROS)
+			.saturating_add(25 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
+			.saturating_add(T::DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
+			.saturating_add(T::DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
+			// fetching set id -> session index mappings
+			.saturating_add(T::DbWeight::get().reads(2))
+	}
+
+	pub fn note_stalled<T: super::Trait>() -> Weight {
+		(3 * WEIGHT_PER_MICROS)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
 
@@ -351,7 +499,9 @@ impl<T: Trait> Module<T> {
 		<frame_system::Module<T>>::deposit_log(log.into());
 	}
 
-	fn initialize_authorities(authorities: &AuthorityList) {
+	// Perform module initialization, abstracted so that it can be called either through genesis
+	// config builder or through `on_genesis_session`.
+	fn initialize(authorities: &AuthorityList) {
 		if !authorities.is_empty() {
 			assert!(
 				Self::grandpa_authorities().is_empty(),
@@ -359,42 +509,101 @@ impl<T: Trait> Module<T> {
 			);
 			Self::set_grandpa_authorities(authorities);
 		}
-	}
-}
 
-impl<T: Trait> Module<T> {
-	/// Attempt to extract a GRANDPA log from a generic digest.
-	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<ConsensusLog<T::BlockNumber>> {
-		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
-		digest.convert_first(|l| l.try_to::<ConsensusLog<T::BlockNumber>>(id))
+		// NOTE: initialize first session of first set. this is necessary for
+		// the genesis set and session since we only update the set -> session
+		// mapping whenever a new session starts, i.e. through `on_new_session`.
+		SetIdSession::insert(0, 0);
 	}
 
-	/// Attempt to extract a pending set-change signal from a digest.
-	pub fn pending_change(digest: &DigestOf<T>)
-		-> Option<ScheduledChange<T::BlockNumber>>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_change())
+	fn do_report_equivocation(
+		reporter: Option<T::AccountId>,
+		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> DispatchResultWithPostInfo {
+		// we check the equivocation within the context of its set id (and
+		// associated session) and round. we also need to know the validator
+		// set count when the offence since it is required to calculate the
+		// slash amount.
+		let set_id = equivocation_proof.set_id();
+		let round = equivocation_proof.round();
+		let session_index = key_owner_proof.session();
+		let validator_count = key_owner_proof.validator_count();
+
+		// validate the key ownership proof extracting the id of the offender.
+		let offender =
+			T::KeyOwnerProofSystem::check_proof(
+				(fg_primitives::KEY_TYPE, equivocation_proof.offender().clone()),
+				key_owner_proof,
+			).ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
+
+		// validate equivocation proof (check votes are different and
+		// signatures are valid).
+		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
+			return Err(Error::<T>::InvalidEquivocationProof.into());
+		}
+
+		// fetch the current and previous sets last session index. on the
+		// genesis set there's no previous set.
+		let previous_set_id_session_index = if set_id == 0 {
+			None
+		} else {
+			let session_index =
+				if let Some(session_id) = Self::session_for_set(set_id - 1) {
+					session_id
+				} else {
+					return Err(Error::<T>::InvalidEquivocationProof.into());
+				};
+
+			Some(session_index)
+		};
+
+		let set_id_session_index =
+			if let Some(session_id) = Self::session_for_set(set_id) {
+				session_id
+			} else {
+				return Err(Error::<T>::InvalidEquivocationProof.into());
+			};
+
+		// check that the session id for the membership proof is within the
+		// bounds of the set id reported in the equivocation.
+		if session_index > set_id_session_index ||
+			previous_set_id_session_index
+			.map(|previous_index| session_index <= previous_index)
+			.unwrap_or(false)
+		{
+			return Err(Error::<T>::InvalidEquivocationProof.into());
+		}
+
+		// report to the offences module rewarding the sender.
+		T::HandleEquivocation::report_offence(
+			reporter.into_iter().collect(),
+			<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
+				session_index,
+				validator_count,
+				offender,
+				set_id,
+				round,
+			),
+		).map_err(|_| Error::<T>::DuplicateOffenceReport)?;
+
+		// waive the fee since the report is valid and beneficial
+		Ok(Pays::No.into())
 	}
 
-	/// Attempt to extract a forced set-change signal from a digest.
-	pub fn forced_change(digest: &DigestOf<T>)
-		-> Option<(T::BlockNumber, ScheduledChange<T::BlockNumber>)>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
-	}
-
-	/// Attempt to extract a pause signal from a digest.
-	pub fn pending_pause(digest: &DigestOf<T>)
-		-> Option<T::BlockNumber>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_pause())
-	}
-
-	/// Attempt to extract a resume signal from a digest.
-	pub fn pending_resume(digest: &DigestOf<T>)
-		-> Option<T::BlockNumber>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_resume())
+	/// Submits an extrinsic to report an equivocation. This method will create
+	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
+	/// will push the transaction to the pool. Only useful in an offchain
+	/// context.
+	pub fn submit_unsigned_equivocation_report(
+		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> Option<()> {
+		T::HandleEquivocation::submit_unsigned_equivocation_report(
+			equivocation_proof,
+			key_owner_proof,
+		)
+		.ok()
 	}
 }
 
@@ -411,7 +620,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
-		Self::initialize_authorities(&authorities);
+		Self::initialize(&authorities);
 	}
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
@@ -420,14 +629,26 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 		// Always issue a change if `session` says that the validators have changed.
 		// Even if their session keys are the same as before, the underlying economic
 		// identities have changed.
-		let current_set_id = if changed {
+		let current_set_id = if changed || <Stalled<T>>::exists() {
 			let next_authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
-			if let Some((further_wait, median)) = <Stalled<T>>::take() {
-				let _ = Self::schedule_change(next_authorities, further_wait, Some(median));
+
+			let res = if let Some((further_wait, median)) = <Stalled<T>>::take() {
+				Self::schedule_change(next_authorities, further_wait, Some(median))
 			} else {
-				let _ = Self::schedule_change(next_authorities, Zero::zero(), None);
+				Self::schedule_change(next_authorities, Zero::zero(), None)
+			};
+
+			if res.is_ok() {
+				CurrentSetId::mutate(|s| {
+					*s += 1;
+					*s
+				})
+			} else {
+				// either the session module signalled that the validators have changed
+				// or the set was stalled. but since we didn't successfully schedule
+				// an authority set change we do not increment the set id.
+				Self::current_set_id()
 			}
-			CurrentSetId::mutate(|s| { *s += 1; *s })
 		} else {
 			// nothing's changed, neither economic conditions nor session keys. update the pointer
 			// of the current set.
@@ -445,63 +666,11 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 	}
 }
 
-impl<T: Trait> pallet_finality_tracker::OnFinalizationStalled<T::BlockNumber> for Module<T> {
+impl<T: Trait> OnFinalizationStalled<T::BlockNumber> for Module<T> {
 	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {
 		// when we record old authority sets, we can use `pallet_finality_tracker::median`
 		// to figure out _who_ failed. until then, we can't meaningfully guard
 		// against `next == last` the way that normal session changes do.
 		<Stalled<T>>::put((further_wait, median));
-	}
-}
-
-/// A round number and set id which point on the time of an offence.
-#[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Encode, Decode)]
-struct GrandpaTimeSlot {
-	// The order of these matters for `derive(Ord)`.
-	set_id: SetId,
-	round: RoundNumber,
-}
-
-// TODO [slashing]: Integrate this.
-/// A grandpa equivocation offence report.
-struct GrandpaEquivocationOffence<FullIdentification> {
-	/// Time slot at which this incident happened.
-	time_slot: GrandpaTimeSlot,
-	/// The session index in which the incident happened.
-	session_index: SessionIndex,
-	/// The size of the validator set at the time of the offence.
-	validator_set_count: u32,
-	/// The authority which produced this equivocation.
-	offender: FullIdentification,
-}
-
-impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocationOffence<FullIdentification> {
-	const ID: Kind = *b"grandpa:equivoca";
-	type TimeSlot = GrandpaTimeSlot;
-
-	fn offenders(&self) -> Vec<FullIdentification> {
-		vec![self.offender.clone()]
-	}
-
-	fn session_index(&self) -> SessionIndex {
-		self.session_index
-	}
-
-	fn validator_set_count(&self) -> u32 {
-		self.validator_set_count
-	}
-
-	fn time_slot(&self) -> Self::TimeSlot {
-		self.time_slot
-	}
-
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill {
-		// the formula is min((3k / n)^2, 1)
-		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
-		// _ ^ 2
-		x.square()
 	}
 }

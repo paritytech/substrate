@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Primitive types for storage related stuff.
 
@@ -22,7 +23,9 @@
 use serde::{Serialize, Deserialize};
 use sp_debug_derive::RuntimeDebug;
 
-use sp_std::{vec::Vec, borrow::Cow};
+use sp_std::{vec::Vec, ops::{Deref, DerefMut}};
+use ref_cast::RefCast;
+use codec::{Encode, Decode};
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -31,6 +34,71 @@ pub struct StorageKey(
 	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
 	pub Vec<u8>,
 );
+
+/// Storage key with read/write tracking information.
+#[derive(PartialEq, Eq, RuntimeDebug, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Hash, PartialOrd, Ord))]
+pub struct TrackedStorageKey {
+	pub key: Vec<u8>,
+	pub has_been_read: bool,
+	pub has_been_written: bool,
+}
+
+// Easily convert a key to a `TrackedStorageKey` that has been read and written to.
+impl From<Vec<u8>> for TrackedStorageKey {
+	fn from(key: Vec<u8>) -> Self {
+		Self {
+			key: key,
+			has_been_read: true,
+			has_been_written: true,
+		}
+	}
+}
+
+/// Storage key of a child trie, it contains the prefix to the key.
+#[derive(PartialEq, Eq, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
+#[repr(transparent)]
+#[derive(RefCast)]
+pub struct PrefixedStorageKey(
+	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
+	Vec<u8>,
+);
+
+impl Deref for PrefixedStorageKey {
+	type Target = Vec<u8>;
+
+	fn deref(&self) -> &Vec<u8> {
+		&self.0
+	}
+}
+
+impl DerefMut for PrefixedStorageKey {
+	fn deref_mut(&mut self) -> &mut Vec<u8> {
+		&mut self.0
+	}
+}
+
+impl PrefixedStorageKey {
+	/// Create a prefixed storage key from its byte array
+	/// representation.
+	pub fn new(inner: Vec<u8>) -> Self {
+		PrefixedStorageKey(inner)
+	}
+
+	/// Create a prefixed storage key reference.
+	pub fn new_ref(inner: &Vec<u8>) -> &Self {
+		PrefixedStorageKey::ref_cast(inner)
+	}
+
+	/// Get inner key, this should
+	/// only be needed when writing
+	/// into parent trie to avoid an
+	/// allocation.
+	pub fn into_inner(self) -> Vec<u8> {
+		self.0
+	}
+}
 
 /// Storage data associated to a [`StorageKey`].
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -45,25 +113,28 @@ pub struct StorageData(
 #[cfg(feature = "std")]
 pub type StorageMap = std::collections::BTreeMap<Vec<u8>, Vec<u8>>;
 
+/// Child trie storage data.
 #[cfg(feature = "std")]
 #[derive(Debug, PartialEq, Eq, Clone)]
-/// Child trie storage data.
 pub struct StorageChild {
 	/// Child data for storage.
 	pub data: StorageMap,
 	/// Associated child info for a child
 	/// trie.
-	pub child_info: OwnedChildInfo,
+	pub child_info: ChildInfo,
 }
 
+/// Struct containing data needed for a storage.
 #[cfg(feature = "std")]
 #[derive(Default, Debug, Clone)]
-/// Struct containing data needed for a storage.
 pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,
-	/// Children trie storage data by storage key.
-	pub children: std::collections::HashMap<Vec<u8>, StorageChild>,
+	/// Children trie storage data.
+	/// The key does not including prefix, for the `default`
+	/// trie kind, so this is exclusively for the `ChildType::ParentKeyId`
+	/// tries.
+	pub children_default: std::collections::HashMap<Vec<u8>, StorageChild>,
 }
 
 /// Storage change set
@@ -98,6 +169,9 @@ pub mod well_known_keys {
 	/// Prefix of child storage keys.
 	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
 
+	/// Prefix of the default child storage keys in the top trie.
+	pub const DEFAULT_CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:default:";
+
 	/// Whether a key is a child storage key.
 	///
 	/// This is convenience function which basically checks if the given `key` starts
@@ -106,133 +180,87 @@ pub mod well_known_keys {
 		// Other code might depend on this, so be careful changing this.
 		key.starts_with(CHILD_STORAGE_KEY_PREFIX)
 	}
-
-	/// Determine whether a child trie key is valid.
-	///
-	/// For now, the only valid child trie keys are those starting with `:child_storage:default:`.
-	///
-	/// `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
-	pub fn is_child_trie_key_valid(storage_key: &[u8]) -> bool {
-		let has_right_prefix = storage_key.starts_with(b":child_storage:default:");
-		if has_right_prefix {
-			// This is an attempt to catch a change of `is_child_storage_key`, which
-			// just checks if the key has prefix `:child_storage:` at the moment of writing.
-			debug_assert!(
-				is_child_storage_key(&storage_key),
-				"`is_child_trie_key_valid` is a subset of `is_child_storage_key`",
-			);
-		}
-		has_right_prefix
-	}
 }
 
-/// A wrapper around a child storage key.
-///
-/// This wrapper ensures that the child storage key is correct and properly used. It is
-/// impossible to create an instance of this struct without providing a correct `storage_key`.
-pub struct ChildStorageKey<'a> {
-	storage_key: Cow<'a, [u8]>,
-}
-
-impl<'a> ChildStorageKey<'a> {
-	/// Create new instance of `Self`.
-	fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
-		if well_known_keys::is_child_trie_key_valid(&storage_key) {
-			Some(ChildStorageKey { storage_key })
-		} else {
-			None
-		}
-	}
-
-	/// Create a new `ChildStorageKey` from a vector.
-	///
-	/// `storage_key` need to start with `:child_storage:default:`
-	/// See `is_child_trie_key_valid` for more details.
-	pub fn from_vec(key: Vec<u8>) -> Option<Self> {
-		Self::new(Cow::Owned(key))
-	}
-
-	/// Create a new `ChildStorageKey` from a slice.
-	///
-	/// `storage_key` need to start with `:child_storage:default:`
-	/// See `is_child_trie_key_valid` for more details.
-	pub fn from_slice(key: &'a [u8]) -> Option<Self> {
-		Self::new(Cow::Borrowed(key))
-	}
-
-	/// Get access to the byte representation of the storage key.
-	///
-	/// This key is guaranteed to be correct.
-	pub fn as_ref(&self) -> &[u8] {
-		&*self.storage_key
-	}
-
-	/// Destruct this instance into an owned vector that represents the storage key.
-	///
-	/// This key is guaranteed to be correct.
-	pub fn into_owned(self) -> Vec<u8> {
-		self.storage_key.into_owned()
-	}
-}
-
-#[derive(Clone, Copy)]
 /// Information related to a child state.
-pub enum ChildInfo<'a> {
-	Default(ChildTrie<'a>),
-}
-
-/// Owned version of `ChildInfo`.
-/// To be use in persistence layers.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
-pub enum OwnedChildInfo {
-	Default(OwnedChildTrie),
+pub enum ChildInfo {
+	/// This is the one used by default.
+	ParentKeyId(ChildTrieParentKeyId),
 }
 
-impl<'a> ChildInfo<'a> {
-	/// Instantiates information for a default child trie.
-	pub const fn new_default(unique_id: &'a[u8]) -> Self {
-		ChildInfo::Default(ChildTrie {
-			data: unique_id,
+impl ChildInfo {
+	/// Instantiates child information for a default child trie
+	/// of kind `ChildType::ParentKeyId`, using an unprefixed parent
+	/// storage key.
+	pub fn new_default(storage_key: &[u8]) -> Self {
+		let data = storage_key.to_vec();
+		ChildInfo::ParentKeyId(ChildTrieParentKeyId { data })
+	}
+
+	/// Same as `new_default` but with `Vec<u8>` as input.
+	pub fn new_default_from_vec(storage_key: Vec<u8>) -> Self {
+		ChildInfo::ParentKeyId(ChildTrieParentKeyId {
+			data: storage_key,
 		})
 	}
 
-	/// Instantiates a owned version of this child info.
-	pub fn to_owned(&self) -> OwnedChildInfo {
+	/// Try to update with another instance, return false if both instance
+	/// are not compatible.
+	pub fn try_update(&mut self, other: &ChildInfo) -> bool {
 		match self {
-			ChildInfo::Default(ChildTrie { data })
-				=> OwnedChildInfo::Default(OwnedChildTrie {
-					data: data.to_vec(),
-				}),
+			ChildInfo::ParentKeyId(child_trie) => child_trie.try_update(other),
 		}
 	}
 
-	/// Create child info from a linear byte packed value and a given type.
-	pub fn resolve_child_info(child_type: u32, data: &'a[u8]) -> Option<Self> {
-		match child_type {
-			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data)),
-			_ => None,
-		}
-	}
-
-	/// Return a single byte vector containing packed child info content and its child info type.
-	/// This can be use as input for `resolve_child_info`.
-	pub fn info(&self) -> (&[u8], u32) {
-		match self {
-			ChildInfo::Default(ChildTrie {
-				data,
-			}) => (data, ChildType::CryptoUniqueId as u32),
-		}
-	}
-
-	/// Return byte sequence (keyspace) that can be use by underlying db to isolate keys.
+	/// Returns byte sequence (keyspace) that can be use by underlying db to isolate keys.
 	/// This is a unique id of the child trie. The collision resistance of this value
 	/// depends on the type of child info use. For `ChildInfo::Default` it is and need to be.
 	pub fn keyspace(&self) -> &[u8] {
 		match self {
-			ChildInfo::Default(ChildTrie {
+			ChildInfo::ParentKeyId(..) => self.storage_key(),
+		}
+	}
+
+	/// Returns a reference to the location in the direct parent of
+	/// this trie but without the common prefix for this kind of
+	/// child trie.
+	pub fn storage_key(&self) -> &[u8] {
+		match self {
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
 				data,
 			}) => &data[..],
+		}
+	}
+
+	/// Return a the full location in the direct parent of
+	/// this trie.
+	pub fn prefixed_storage_key(&self) -> PrefixedStorageKey {
+		match self {
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
+				data,
+			}) => ChildType::ParentKeyId.new_prefixed_key(data.as_slice()),
+		}
+	}
+
+	/// Returns a the full location in the direct parent of
+	/// this trie.
+	pub fn into_prefixed_storage_key(self) -> PrefixedStorageKey {
+		match self {
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
+				mut data,
+			}) => {
+				ChildType::ParentKeyId.do_prefix_key(&mut data);
+				PrefixedStorageKey(data)
+			},
+		}
+	}
+
+	/// Returns the type for this child info.
+	pub fn child_type(&self) -> ChildType {
+		match self {
+			ChildInfo::ParentKeyId(..) => ChildType::ParentKeyId,
 		}
 	}
 }
@@ -241,65 +269,101 @@ impl<'a> ChildInfo<'a> {
 /// It does not strictly define different child type, it can also
 /// be related to technical consideration or api variant.
 #[repr(u32)]
+#[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum ChildType {
-	/// Default, it uses a cryptographic strong unique id as input.
-	CryptoUniqueId = 1,
+	/// If runtime module ensures that the child key is a unique id that will
+	/// only be used once, its parent key is used as a child trie unique id.
+	ParentKeyId = 1,
 }
 
-impl OwnedChildInfo {
-	/// Instantiates info for a default child trie.
-	pub fn new_default(unique_id: Vec<u8>) -> Self {
-		OwnedChildInfo::Default(OwnedChildTrie {
-			data: unique_id,
+impl ChildType {
+	/// Try to get a child type from its `u32` representation.
+	pub fn new(repr: u32) -> Option<ChildType> {
+		Some(match repr {
+			r if r == ChildType::ParentKeyId as u32 => ChildType::ParentKeyId,
+			_ => return None,
 		})
 	}
 
-	/// Try to update with another instance, return false if both instance
-	/// are not compatible.
-	pub fn try_update(&mut self, other: ChildInfo) -> bool {
-		match self {
-			OwnedChildInfo::Default(owned_child_trie) => owned_child_trie.try_update(other),
+	/// Transform a prefixed key into a tuple of the child type
+	/// and the unprefixed representation of the key.
+	pub fn from_prefixed_key<'a>(storage_key: &'a PrefixedStorageKey) -> Option<(Self, &'a [u8])> {
+		let match_type = |storage_key: &'a [u8], child_type: ChildType| {
+			let prefix = child_type.parent_prefix();
+			if storage_key.starts_with(prefix) {
+				Some((child_type, &storage_key[prefix.len()..]))
+			} else {
+				None
+			}
+		};
+		match_type(storage_key, ChildType::ParentKeyId)
+	}
+
+	/// Produce a prefixed key for a given child type.
+	fn new_prefixed_key(&self, key: &[u8]) -> PrefixedStorageKey {
+		let parent_prefix = self.parent_prefix();
+		let mut result = Vec::with_capacity(parent_prefix.len() + key.len());
+		result.extend_from_slice(parent_prefix);
+		result.extend_from_slice(key);
+		PrefixedStorageKey(result)
+	}
+
+	/// Prefixes a vec with the prefix for this child type.
+	fn do_prefix_key(&self, key: &mut Vec<u8>) {
+		let parent_prefix = self.parent_prefix();
+		let key_len = key.len();
+		if parent_prefix.len() > 0 {
+			key.resize(key_len + parent_prefix.len(), 0);
+			key.copy_within(..key_len, parent_prefix.len());
+			key[..parent_prefix.len()].copy_from_slice(parent_prefix);
 		}
 	}
 
-	/// Get `ChildInfo` reference to this owned child info.
-	pub fn as_ref(&self) -> ChildInfo {
+	/// Returns the location reserved for this child trie in their parent trie if there
+	/// is one.
+	pub fn parent_prefix(&self) -> &'static [u8] {
 		match self {
-			OwnedChildInfo::Default(OwnedChildTrie { data })
-				=> ChildInfo::Default(ChildTrie {
-					data: data.as_slice(),
-				}),
+			&ChildType::ParentKeyId => well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX,
 		}
 	}
 }
 
 /// A child trie of default type.
-/// Default is the same implementation as the top trie.
-/// It share its trie node storage with any kind of key,
-/// and its unique id needs to be collision free (eg strong
-/// crypto hash).
-#[derive(Clone, Copy)]
-pub struct ChildTrie<'a> {
-	/// Data containing unique id.
-	/// Unique id must but unique and free of any possible key collision
-	/// (depending on its storage behavior).
-	data: &'a[u8],
-}
-
-/// Owned version of default child trie `ChildTrie`.
+/// It uses the same default implementation as the top trie,
+/// top trie being a child trie with no keyspace and no storage key.
+/// Its keyspace is the variable (unprefixed) part of its storage key.
+/// It shares its trie nodes backend storage with every other
+/// child trie, so its storage key needs to be a unique id
+/// that will be use only once.
+/// Those unique id also required to be long enough to avoid any
+/// unique id to be prefixed by an other unique id.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
-pub struct OwnedChildTrie {
-	/// See `ChildTrie` reference field documentation.
+pub struct ChildTrieParentKeyId {
+	/// Data is the storage key without prefix.
 	data: Vec<u8>,
 }
 
-impl OwnedChildTrie {
+impl ChildTrieParentKeyId {
 	/// Try to update with another instance, return false if both instance
 	/// are not compatible.
-	fn try_update(&mut self, other: ChildInfo) -> bool {
+	fn try_update(&mut self, other: &ChildInfo) -> bool {
 		match other {
-			ChildInfo::Default(other) => self.data[..] == other.data[..],
+			ChildInfo::ParentKeyId(other) => self.data[..] == other.data[..],
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_prefix_default_child_info() {
+		let child_info = ChildInfo::new_default(b"any key");
+		let prefix = child_info.child_type().parent_prefix();
+		assert!(prefix.starts_with(well_known_keys::CHILD_STORAGE_KEY_PREFIX));
+		assert!(prefix.starts_with(well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX));
 	}
 }

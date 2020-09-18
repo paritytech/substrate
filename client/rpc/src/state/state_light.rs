@@ -28,7 +28,7 @@ use futures::{
 	StreamExt as _, TryStreamExt as _,
 };
 use hash_db::Hasher;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use log::warn;
 use parking_lot::Mutex;
 use rpc::{
@@ -38,30 +38,32 @@ use rpc::{
 	futures::stream::Stream,
 };
 
-use sc_rpc_api::Subscriptions;
+use sc_rpc_api::state::ReadProof;
 use sp_blockchain::{Error as ClientError, HeaderBackend};
-use sc_client::{
+use sc_client_api::{
 	BlockchainEvents,
 	light::{
-		blockchain::{future_header, RemoteBlockchain},
-		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest},
+		RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest,
+		RemoteBlockchain, Fetcher, future_header,
 	},
 };
 use sp_core::{
-	Bytes, OpaqueMetadata, storage::{StorageKey, StorageData, StorageChangeSet},
+	Bytes, OpaqueMetadata,
+	storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet},
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HashFor}};
 
-use super::{StateBackend, error::{FutureResult, Error}, client_err};
+use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error}, client_err};
 
 /// Storage data map of storage keys => (optional) storage value.
 type StorageMap = HashMap<StorageKey, Option<StorageData>>;
 
 /// State API backend for light nodes.
+#[derive(Clone)]
 pub struct LightState<Block: BlockT, F: Fetcher<Block>, Client> {
 	client: Arc<Client>,
-	subscriptions: Subscriptions,
+	subscriptions: SubscriptionManager,
 	version_subscriptions: SimpleSubscriptions<Block::Hash, RuntimeVersion>,
 	storage_subscriptions: Arc<Mutex<StorageSubscriptions<Block>>>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
@@ -141,7 +143,7 @@ impl<Block: BlockT, F: Fetcher<Block> + 'static, Client> LightState<Block, F, Cl
 	/// Create new state API backend for light nodes.
 	pub fn new(
 		client: Arc<Client>,
-		subscriptions: Subscriptions,
+		subscriptions: SubscriptionManager,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 		fetcher: Arc<F>,
 	) -> Self {
@@ -212,6 +214,14 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
+	fn storage_size(
+		&self,
+		_: Option<Block::Hash>,
+		_: StorageKey,
+	) -> FutureResult<Option<u64>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
 	fn storage(
 		&self,
 		block: Option<Block::Hash>,
@@ -233,69 +243,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		block: Option<Block::Hash>,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
-		Box::new(self
-			.storage(block, key)
-			.and_then(|maybe_storage|
-				result(Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0))))
-			)
-		)
-	}
-
-	fn child_storage_keys(
-		&self,
-		_block: Option<Block::Hash>,
-		_child_storage_key: StorageKey,
-		_child_info: StorageKey,
-		_child_type: u32,
-		_prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
-	}
-
-	fn child_storage(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<StorageData>> {
-		let block = self.block_or_best(block);
-		let fetcher = self.fetcher.clone();
-		let child_storage = resolve_header(&*self.remote_blockchain, &*self.fetcher, block)
-			.then(move |result| match result {
-				Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadChildRequest {
-					block,
-					header,
-					storage_key: child_storage_key.0,
-					child_info: child_info.0,
-					child_type,
-					keys: vec![key.0.clone()],
-					retry_count: Default::default(),
-				}).then(move |result| ready(result
-					.map(|mut data| data
-						.remove(&key.0)
-						.expect("successful result has entry for all keys; qed")
-						.map(StorageData)
-					)
-					.map_err(client_err)
-				))),
-				Err(error) => Either::Right(ready(Err(error))),
-			});
-
-		Box::new(child_storage.boxed().compat())
-	}
-
-	fn child_storage_hash(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<Block::Hash>> {
-		Box::new(self
-			.child_storage(block, child_storage_key, child_info, child_type, key)
+		Box::new(StateBackend::storage(self, block, key)
 			.and_then(|maybe_storage|
 				result(Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0))))
 			)
@@ -339,9 +287,17 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
+	fn read_proof(
+		&self,
+		_block: Option<Block::Hash>,
+		_keys: Vec<StorageKey>,
+	) -> FutureResult<ReadProof<Block::Hash>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
 	fn subscribe_storage(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
 		keys: Option<Vec<StorageKey>>
 	) {
@@ -436,7 +392,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn unsubscribe_storage(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		if !self.subscriptions.cancel(id.clone()) {
@@ -464,7 +420,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn subscribe_runtime_version(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<RuntimeVersion>,
 	) {
 		self.subscriptions.add(subscriber, move |sink| {
@@ -511,10 +467,69 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn unsubscribe_runtime_version(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
+	}
+}
+
+impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F, Client>
+	where
+		Block: BlockT,
+		Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
+		F: Fetcher<Block> + 'static
+{
+	fn storage_keys(
+		&self,
+		_block: Option<Block::Hash>,
+		_storage_key: PrefixedStorageKey,
+		_prefix: StorageKey,
+	) -> FutureResult<Vec<StorageKey>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
+	fn storage(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+	) -> FutureResult<Option<StorageData>> {
+		let block = self.block_or_best(block);
+		let fetcher = self.fetcher.clone();
+		let child_storage = resolve_header(&*self.remote_blockchain, &*self.fetcher, block)
+			.then(move |result| match result {
+				Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadChildRequest {
+					block,
+					header,
+					storage_key,
+					keys: vec![key.0.clone()],
+					retry_count: Default::default(),
+				}).then(move |result| ready(result
+					.map(|mut data| data
+						.remove(&key.0)
+						.expect("successful result has entry for all keys; qed")
+						.map(StorageData)
+					)
+					.map_err(client_err)
+				))),
+				Err(error) => Either::Right(ready(Err(error))),
+			});
+
+		Box::new(child_storage.boxed().compat())
+	}
+
+	fn storage_hash(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+	) -> FutureResult<Option<Block::Hash>> {
+		Box::new(ChildStateBackend::storage(self, block, storage_key, key)
+			.and_then(|maybe_storage|
+				result(Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0))))
+			)
+		)
 	}
 }
 
@@ -532,7 +547,7 @@ fn resolve_header<Block: BlockT, F: Fetcher<Block>>(
 
 	maybe_header.then(move |result|
 		ready(result.and_then(|maybe_header|
-			maybe_header.ok_or(ClientError::UnknownBlock(format!("{}", block)))
+			maybe_header.ok_or_else(|| ClientError::UnknownBlock(format!("{}", block)))
 		).map_err(client_err)),
 	)
 }

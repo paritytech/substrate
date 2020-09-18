@@ -1,26 +1,30 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use sp_consensus::BlockOrigin;
 use std::time::Duration;
 use futures::executor::block_on;
 use super::*;
+use sp_consensus::block_validation::Validation;
+use substrate_test_runtime::Header;
 
 fn test_ancestor_search_when_common_is(n: usize) {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 
 	net.peer(0).push_blocks(n, false);
@@ -38,7 +42,7 @@ fn test_ancestor_search_when_common_is(n: usize) {
 
 #[test]
 fn sync_peers_works() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
@@ -54,7 +58,7 @@ fn sync_peers_works() {
 
 #[test]
 fn sync_cycle_from_offline_to_syncing_to_offline() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 	for peer in 0..3 {
 		// Offline, and not major syncing.
@@ -109,7 +113,7 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 
 #[test]
 fn syncing_node_not_major_syncing_when_disconnected() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 
 	// Generate blocks.
@@ -143,7 +147,7 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 
 #[test]
 fn sync_from_two_peers_works() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
@@ -155,7 +159,7 @@ fn sync_from_two_peers_works() {
 
 #[test]
 fn sync_from_two_peers_with_ancestry_search_works() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 	net.peer(0).push_blocks(10, true);
 	net.peer(1).push_blocks(100, false);
@@ -167,7 +171,7 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 
 #[test]
 fn ancestry_search_works_when_backoff_is_one() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 
 	net.peer(0).push_blocks(1, false);
@@ -181,7 +185,7 @@ fn ancestry_search_works_when_backoff_is_one() {
 
 #[test]
 fn ancestry_search_works_when_ancestor_is_genesis() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 
 	net.peer(0).push_blocks(13, true);
@@ -210,7 +214,7 @@ fn ancestry_search_works_when_common_is_hundred() {
 
 #[test]
 fn sync_long_chain_works() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
 	net.peer(1).push_blocks(500, false);
 	net.block_until_sync();
@@ -220,7 +224,7 @@ fn sync_long_chain_works() {
 
 #[test]
 fn sync_no_common_longer_chain_fails() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 	net.peer(0).push_blocks(20, true);
 	net.peer(1).push_blocks(20, false);
@@ -238,7 +242,7 @@ fn sync_no_common_longer_chain_fails() {
 
 #[test]
 fn sync_justifications() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = JustificationTestNet::new(3);
 	net.peer(0).push_blocks(20, false);
 	net.block_until_sync();
@@ -279,7 +283,7 @@ fn sync_justifications() {
 
 #[test]
 fn sync_justifications_across_forks() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = JustificationTestNet::new(3);
 	// we push 5 blocks
 	net.peer(0).push_blocks(5, false);
@@ -311,7 +315,7 @@ fn sync_justifications_across_forks() {
 
 #[test]
 fn sync_after_fork_works() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
@@ -334,23 +338,25 @@ fn sync_after_fork_works() {
 
 #[test]
 fn syncs_all_forks() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(4);
 	net.peer(0).push_blocks(2, false);
 	net.peer(1).push_blocks(2, false);
 
-	net.peer(0).push_blocks(2, true);
-	net.peer(1).push_blocks(4, false);
+	let b1 = net.peer(0).push_blocks(2, true);
+	let b2 = net.peer(1).push_blocks(4, false);
 
 	net.block_until_sync();
-	// Check that all peers have all of the blocks.
-	assert_eq!(9, net.peer(0).blocks_count());
-	assert_eq!(9, net.peer(1).blocks_count());
+	// Check that all peers have all of the branches.
+	assert!(net.peer(0).has_block(&b1));
+	assert!(net.peer(0).has_block(&b2));
+	assert!(net.peer(1).has_block(&b1));
+	assert!(net.peer(1).has_block(&b2));
 }
 
 #[test]
 fn own_blocks_are_announced() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 	net.block_until_sync(); // connect'em
 	net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.build().unwrap().block);
@@ -366,7 +372,7 @@ fn own_blocks_are_announced() {
 
 #[test]
 fn blocks_are_not_announced_by_light_nodes() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(0);
 
 	// full peer0 is connected to light peer
@@ -395,7 +401,7 @@ fn blocks_are_not_announced_by_light_nodes() {
 
 #[test]
 fn can_sync_small_non_best_forks() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
@@ -458,7 +464,7 @@ fn can_sync_small_non_best_forks() {
 
 #[test]
 fn can_not_sync_from_light_peer() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 
 	// given the network with 1 full nodes (#0) and 1 light node (#1)
 	let mut net = TestNet::new(1);
@@ -491,7 +497,7 @@ fn can_not_sync_from_light_peer() {
 
 #[test]
 fn light_peer_imports_header_from_announce() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 
 	fn import_with_announce(net: &mut TestNet, hash: H256) {
 		net.peer(0).announce_block(hash, Vec::new());
@@ -524,7 +530,7 @@ fn light_peer_imports_header_from_announce() {
 
 #[test]
 fn can_sync_explicit_forks() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
@@ -578,38 +584,25 @@ fn can_sync_explicit_forks() {
 
 #[test]
 fn syncs_header_only_forks() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(0);
-	net.add_full_peer_with_states(None);
-	net.add_full_peer_with_states(Some(3));
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(FullPeerConfig { keep_blocks: Some(3), ..Default::default() });
 	net.peer(0).push_blocks(2, false);
 	net.peer(1).push_blocks(2, false);
 
 	net.peer(0).push_blocks(2, true);
 	let small_hash = net.peer(0).client().info().best_hash;
-	let small_number = net.peer(0).client().info().best_number;
 	net.peer(1).push_blocks(4, false);
 
 	net.block_until_sync();
 	// Peer 1 will sync the small fork even though common block state is missing
-	assert_eq!(9, net.peer(0).blocks_count());
-	assert_eq!(9, net.peer(1).blocks_count());
-
-	// Request explicit header-only sync request for the ancient fork.
-	let first_peer_id = net.peer(0).id();
-	net.peer(1).set_sync_fork_request(vec![first_peer_id], small_hash, small_number);
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
-		net.poll(cx);
-		if net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none() {
-			return Poll::Pending
-		}
-		Poll::Ready(())
-	}));
+	assert!(net.peer(1).has_block(&small_hash));
 }
 
 #[test]
 fn does_not_sync_announced_old_best_block() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 
 	let old_hash = net.peer(0).push_blocks(1, false);
@@ -637,7 +630,7 @@ fn does_not_sync_announced_old_best_block() {
 #[test]
 fn full_sync_requires_block_body() {
 	// Check that we don't sync headers-only in full mode.
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
 
 	net.peer(0).push_headers(1);
@@ -656,7 +649,7 @@ fn full_sync_requires_block_body() {
 
 #[test]
 fn imports_stale_once() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 
 	fn import_with_announce(net: &mut TestNet, hash: H256) {
 		// Announce twice
@@ -682,17 +675,17 @@ fn imports_stale_once() {
 	// check that NEW block is imported from announce message
 	let new_hash = net.peer(0).push_blocks(1, false);
 	import_with_announce(&mut net, new_hash);
-	assert_eq!(net.peer(1).num_processed_blocks(), 1);
+	assert_eq!(net.peer(1).num_downloaded_blocks(), 1);
 
 	// check that KNOWN STALE block is imported from announce message
 	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
 	import_with_announce(&mut net, known_stale_hash);
-	assert_eq!(net.peer(1).num_processed_blocks(), 2);
+	assert_eq!(net.peer(1).num_downloaded_blocks(), 2);
 }
 
 #[test]
 fn can_sync_to_peers_with_wrong_common_block() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
 
 	net.peer(0).push_blocks(2, true);
@@ -719,3 +712,41 @@ fn can_sync_to_peers_with_wrong_common_block() {
 	assert!(net.peer(1).client().header(&BlockId::Hash(final_hash)).unwrap().is_some());
 }
 
+/// Returns `is_new_best = true` for each validated announcement.
+struct NewBestBlockAnnounceValidator;
+
+impl BlockAnnounceValidator<Block> for NewBestBlockAnnounceValidator {
+	fn validate(
+		&mut self,
+		_: &Header,
+		_: &[u8],
+	) -> Result<Validation, Box<dyn std::error::Error + Send>> {
+		Ok(Validation::Success { is_new_best: true })
+	}
+}
+
+#[test]
+fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
+	sp_tracing::try_init_simple();
+	log::trace!(target: "sync", "Test");
+	let mut net = TestNet::with_fork_choice(ForkChoiceStrategy::Custom(false));
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(FullPeerConfig {
+		block_announce_validator: Some(Box::new(NewBestBlockAnnounceValidator)),
+		..Default::default()
+	});
+
+	net.block_until_connected();
+
+	let block_hash = net.peer(0).push_blocks(1, false);
+
+	while !net.peer(2).has_block(&block_hash) {
+		net.block_until_idle();
+	}
+
+	// Peer1 should not have the block, because peer 0 did not reported the block
+	// as new best. However, peer2 has a special block announcement validator
+	// that flags all blocks as `is_new_best` and thus, it should have synced the blocks.
+	assert!(!net.peer(1).has_block(&block_hash));
+}

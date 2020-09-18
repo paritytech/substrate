@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use sp_blockchain::Error as ClientError;
 use crate::protocol::sync::{PeerSync, PeerSyncState};
@@ -102,11 +104,9 @@ impl<B: BlockT> ExtraRequests<B> {
 				// we have finalized further than the given request, presumably
 				// by some other part of the system (not sync). we can safely
 				// ignore the `Revert` error.
-				return;
 			},
 			Err(err) => {
 				debug!(target: "sync", "Failed to insert request {:?} into tree: {:?}", request, err);
-				return;
 			}
 			_ => ()
 		}
@@ -141,7 +141,7 @@ impl<B: BlockT> ExtraRequests<B> {
 					request,
 				);
 			}
-			self.failed_requests.entry(request).or_insert(Vec::new()).push((who, Instant::now()));
+			self.failed_requests.entry(request).or_default().push((who, Instant::now()));
 			self.pending_requests.push_front(request);
 		} else {
 			trace!(target: "sync", "No active {} request to {:?}",
@@ -463,7 +463,7 @@ mod tests {
 
 	#[test]
 	fn request_is_rescheduled_when_earlier_block_is_finalized() {
-		let _ = ::env_logger::try_init();
+		sp_tracing::try_init_simple();
 
 		let mut finality_proofs = ExtraRequests::<Block>::new("test");
 

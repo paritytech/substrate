@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Helper stream for waiting until one or more blocks are imported before
 //! passing through inner items. This is done in a generic way to support
@@ -31,7 +33,7 @@ use super::{
 use log::{debug, warn};
 use sp_utils::mpsc::TracingUnboundedReceiver;
 use futures::prelude::*;
-use futures::stream::Fuse;
+use futures::stream::{Fuse, StreamExt};
 use futures_timer::Delay;
 use finality_grandpa::voter;
 use parking_lot::Mutex;
@@ -137,17 +139,19 @@ impl Drop for Metrics {
 	}
 }
 
-/// Buffering imported messages until blocks with given hashes are imported.
-#[pin_project::pin_project]
-pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, I, M: BlockUntilImported<Block>> {
+/// Buffering incoming messages until blocks with given hashes are imported.
+pub(crate) struct UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
+	Block: BlockT,
+	I: Stream<Item = M::Blocked> + Unpin,
+	M: BlockUntilImported<Block>,
+{
 	import_notifications: Fuse<TracingUnboundedReceiver<BlockImportNotification<Block>>>,
 	block_sync_requester: BlockSyncRequester,
 	status_check: BlockStatus,
-	#[pin]
-	inner: Fuse<I>,
+	incoming_messages: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
 	/// Interval at which to check status of each awaited block.
-	check_pending: Pin<Box<dyn Stream<Item = Result<(), std::io::Error>> + Send>>,
+	check_pending: Pin<Box<dyn Stream<Item = Result<(), std::io::Error>> + Send + Sync>>,
 	/// Mapping block hashes to their block number, the point in time it was
 	/// first encountered (Instant) and a list of GRANDPA messages referencing
 	/// the block hash.
@@ -159,11 +163,17 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 	metrics: Option<Metrics>,
 }
 
+impl<Block, BlockStatus, BlockSyncRequester, I, M> Unpin for UntilImported<Block, BlockStatus, BlockSyncRequester, I, M > where
+	Block: BlockT,
+	I: Stream<Item = M::Blocked> + Unpin,
+	M: BlockUntilImported<Block>,
+{}
+
 impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
 	Block: BlockT,
 	BlockStatus: BlockStatusT<Block>,
 	BlockSyncRequester: BlockSyncRequesterT<Block>,
-	I: Stream<Item = M::Blocked>,
+	I: Stream<Item = M::Blocked> + Unpin,
 	M: BlockUntilImported<Block>,
 {
 	/// Create a new `UntilImported` wrapper.
@@ -171,7 +181,7 @@ impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockSta
 		import_notifications: ImportNotifications<Block>,
 		block_sync_requester: BlockSyncRequester,
 		status_check: BlockStatus,
-		stream: I,
+		incoming_messages: I,
 		identifier: &'static str,
 		metrics: Option<Metrics>,
 	) -> Self {
@@ -192,7 +202,7 @@ impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockSta
 			import_notifications: import_notifications.fuse(),
 			block_sync_requester,
 			status_check,
-			inner: stream.fuse(),
+			incoming_messages: incoming_messages.fuse(),
 			ready: VecDeque::new(),
 			check_pending: Box::pin(check_pending),
 			pending: HashMap::new(),
@@ -206,23 +216,23 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 	Block: BlockT,
 	BStatus: BlockStatusT<Block>,
 	BSyncRequester: BlockSyncRequesterT<Block>,
-	I: Stream<Item = M::Blocked>,
+	I: Stream<Item = M::Blocked> + Unpin,
 	M: BlockUntilImported<Block>,
 {
 	type Item = Result<M::Blocked, Error>;
 
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		// We are using a `this` variable in order to allow multiple simultaneous mutable borrow
-		// to `self`.
-		let mut this = self.project();
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		// We are using a `this` variable in order to allow multiple simultaneous mutable borrow to
+		// `self`.
+		let this = &mut *self;
 
 		loop {
-			match Stream::poll_next(Pin::new(&mut this.inner), cx) {
+			match StreamExt::poll_next_unpin(&mut this.incoming_messages, cx) {
 				Poll::Ready(None) => return Poll::Ready(None),
 				Poll::Ready(Some(input)) => {
 					// new input: schedule wait of any parts which require
 					// blocks to be known.
-					match M::needs_waiting(input, this.status_check)? {
+					match M::needs_waiting(input, &this.status_check)? {
 						DiscardWaitOrReady::Discard => {},
 						DiscardWaitOrReady::Wait(items) => {
 							for (target_hash, target_number, wait) in items {
@@ -245,12 +255,12 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 		}
 
 		loop {
-			match Stream::poll_next(Pin::new(&mut this.import_notifications), cx) {
+			match StreamExt::poll_next_unpin(&mut this.import_notifications, cx) {
 				Poll::Ready(None) => return Poll::Ready(None),
 				Poll::Ready(Some(notification)) => {
 					// new block imported. queue up all messages tied to that hash.
 					if let Some((_, _, messages)) = this.pending.remove(&notification.hash) {
-						let canon_number = notification.header.number().clone();
+						let canon_number = *notification.header.number();
 						let ready_messages = messages.into_iter()
 							.filter_map(|m| m.wait_completed(canon_number));
 
@@ -315,7 +325,7 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 			return Poll::Ready(Some(Ok(ready)))
 		}
 
-		if this.import_notifications.is_done() && this.inner.is_done() {
+		if this.import_notifications.is_done() && this.incoming_messages.is_done() {
 			Poll::Ready(None)
 		} else {
 			Poll::Pending
@@ -351,7 +361,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 			}
 		}
 
-		return Ok(DiscardWaitOrReady::Wait(vec![(target_hash, target_number, msg)]))
+		Ok(DiscardWaitOrReady::Wait(vec![(target_hash, target_number, msg)]))
 	}
 
 	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<Self::Blocked> {
@@ -422,7 +432,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 			let mut query_known = |target_hash, perceived_number| -> Result<bool, Error> {
 				// check integrity: all votes for same hash have same number.
 				let canon_number = match checked_hashes.entry(target_hash) {
-					Entry::Occupied(entry) => entry.get().number().clone(),
+					Entry::Occupied(entry) => *entry.get().number(),
 					Entry::Vacant(entry) => {
 						if let Some(number) = status_check.block_number(target_hash)? {
 							entry.insert(KnownOrUnknown::Known(number));
@@ -575,7 +585,7 @@ mod tests {
 				origin: BlockOrigin::File,
 				header,
 				is_new_best: false,
-				retracted: vec![],
+				tree_route: None,
 			}).unwrap();
 		}
 	}

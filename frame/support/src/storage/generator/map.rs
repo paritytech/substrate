@@ -1,25 +1,28 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
-use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike, Ref, EncodeAppend};
-use crate::{storage::{self, unhashed}, traits::Len};
-use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
+use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike};
+use crate::{
+	storage::{self, unhashed, StorageAppend, PrefixIterator},
+	Never, hash::{StorageHasher, Twox128, ReversibleStorageHasher},
+};
 
 /// Generator for `StorageMap` used by `decl_storage`.
 ///
@@ -136,53 +139,56 @@ impl<
 > storage::IterableStorageMap<K, V> for G where
 	G::Hasher: ReversibleStorageHasher
 {
-	type Iterator = StorageMapIterator<K, V, G::Hasher>;
+	type Iterator = PrefixIterator<(K, V)>;
 
 	/// Enumerate all elements in the map.
 	fn iter() -> Self::Iterator {
 		let prefix = G::prefix_hash();
-		Self::Iterator {
+		PrefixIterator {
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			_phantom: Default::default(),
+			closure: |raw_key_without_prefix, mut raw_value| {
+				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
+				Ok((K::decode(&mut key_material)?, V::decode(&mut raw_value)?))
+			},
 		}
 	}
 
 	/// Enumerate all elements in the map.
 	fn drain() -> Self::Iterator {
-		let prefix = G::prefix_hash();
-		Self::Iterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
-			drain: true,
-			_phantom: Default::default(),
-		}
+		let mut iterator = Self::iter();
+		iterator.drain = true;
+		iterator
 	}
 
 	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) {
 		let prefix = G::prefix_hash();
 		let mut previous_key = prefix.clone();
-		loop {
-			match sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix)) {
-				Some(next) => {
-					previous_key = next;
-					let maybe_value = unhashed::get::<O>(&previous_key);
-					match maybe_value {
-						Some(value) => {
-							let mut key_material = G::Hasher::reverse(&previous_key[prefix.len()..]);
-							match K::decode(&mut key_material) {
-								Ok(key) => match f(key, value) {
-									Some(new) => unhashed::put::<V>(&previous_key, &new),
-									None => unhashed::kill(&previous_key),
-								},
-								Err(_) => continue,
-							}
-						}
-						None => continue,
-					}
-				}
-				None => return,
+		while let Some(next) = sp_io::storage::next_key(&previous_key)
+			.filter(|n| n.starts_with(&prefix))
+		{
+			previous_key = next;
+			let value = match unhashed::get::<O>(&previous_key) {
+				Some(value) => value,
+				None => {
+					crate::debug::error!("Invalid translate: fail to decode old value");
+					continue
+				},
+			};
+
+			let mut key_material = G::Hasher::reverse(&previous_key[prefix.len()..]);
+			let key = match K::decode(&mut key_material) {
+				Ok(key) => key,
+				Err(_) => {
+					crate::debug::error!("Invalid translate: fail to decode key");
+					continue
+				},
+			};
+
+			match f(key, value) {
+				Some(new) => unhashed::put::<V>(&previous_key, &new),
+				None => unhashed::kill(&previous_key),
 			}
 		}
 	}
@@ -229,27 +235,11 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 	}
 
 	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
-		let final_key = Self::storage_map_final_key(key);
-		let mut val = G::from_optional_value_to_query(unhashed::get(final_key.as_ref()));
-
-		let ret = f(&mut val);
-		match G::from_query_to_optional_value(val) {
-			Some(ref val) => unhashed::put(final_key.as_ref(), &val),
-			None => unhashed::kill(final_key.as_ref()),
-		}
-		ret
+		Self::try_mutate(key, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
 	}
 
 	fn mutate_exists<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Option<V>) -> R>(key: KeyArg, f: F) -> R {
-		let final_key = Self::storage_map_final_key(key);
-		let mut val = unhashed::get(final_key.as_ref());
-
-		let ret = f(&mut val);
-		match val {
-			Some(ref val) => unhashed::put(final_key.as_ref(), &val),
-			None => unhashed::kill(final_key.as_ref()),
-		}
-		ret
+		Self::try_mutate_exists(key, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
 	}
 
 	fn try_mutate<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(
@@ -292,58 +282,15 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 		G::from_optional_value_to_query(value)
 	}
 
-	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str>
+	fn append<Item, EncodeLikeItem, EncodeLikeKey>(key: EncodeLikeKey, item: EncodeLikeItem)
 	where
-		KeyArg: EncodeLike<K>,
+		EncodeLikeKey: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
-		Items::IntoIter: ExactSizeIterator,
+		V: StorageAppend<Item>,
 	{
 		let key = Self::storage_map_final_key(key);
-		let encoded_value = unhashed::get_raw(key.as_ref())
-			.unwrap_or_else(|| {
-				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
-					Some(value) => value.encode(),
-					None => Vec::new(),
-				}
-			});
-
-		let new_val = V::append_or_new(
-			encoded_value,
-			items,
-		).map_err(|_| "Could not append given item")?;
-		unhashed::put_raw(key.as_ref(), &new_val);
-		Ok(())
-	}
-
-	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items)
-	where
-		KeyArg: EncodeLike<K>,
-		Item: Encode,
-		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
-		Items::IntoIter: ExactSizeIterator,
-	{
-		Self::append(Ref::from(&key), items.clone())
-			.unwrap_or_else(|_| Self::insert(key, items));
-	}
-
-	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength + Len
-	{
-		let key = Self::storage_map_final_key(key);
-		if let Some(v) = unhashed::get_raw(key.as_ref()) {
-			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
-		} else {
-			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
-				.map(|v| v.len())
-				.unwrap_or(0);
-
-			Ok(len)
-		}
+		sp_io::storage::append(&key, item.encode());
 	}
 
 	fn migrate_key<OldHasher: StorageHasher, KeyArg: EncodeLike<K>>(key: KeyArg) -> Option<V> {
@@ -365,6 +312,94 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 		unhashed::take(old_key.as_ref()).map(|value| {
 			unhashed::put(Self::storage_map_final_key(key).as_ref(), &value);
 			value
+		})
+	}
+}
+
+/// Test iterators for StorageMap
+#[cfg(test)]
+mod test_iterators {
+	use codec::{Encode, Decode};
+	use crate::{
+		hash::StorageHasher,
+		storage::{generator::StorageMap, IterableStorageMap, unhashed},
+	};
+
+	pub trait Trait {
+		type Origin;
+		type BlockNumber;
+	}
+
+	crate::decl_module! {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	}
+
+	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+	struct NoDef(u32);
+
+	crate::decl_storage! {
+		trait Store for Module<T: Trait> as Test {
+			Map: map hasher(blake2_128_concat) u16 => u64;
+		}
+	}
+
+	fn key_before_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
+		let last = prefix.iter_mut().last().unwrap();
+		assert!(*last != 0, "mock function not implemented for this prefix");
+		*last -= 1;
+		prefix
+	}
+
+	fn key_after_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
+		let last = prefix.iter_mut().last().unwrap();
+		assert!(*last != 255, "mock function not implemented for this prefix");
+		*last += 1;
+		prefix
+	}
+
+	#[test]
+	fn map_reversible_reversible_iteration() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			// All map iterator
+			let prefix = Map::prefix_hash();
+
+			unhashed::put(&key_before_prefix(prefix.clone()), &1u64);
+			unhashed::put(&key_after_prefix(prefix.clone()), &1u64);
+
+			for i in 0..4 {
+				Map::insert(i as u16, i as u64);
+			}
+
+			assert_eq!(Map::iter().collect::<Vec<_>>(), vec![(3, 3), (0, 0), (2, 2), (1, 1)]);
+
+			assert_eq!(Map::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1]);
+
+			assert_eq!(Map::drain().collect::<Vec<_>>(), vec![(3, 3), (0, 0), (2, 2), (1, 1)]);
+
+			assert_eq!(Map::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(unhashed::get(&key_before_prefix(prefix.clone())), Some(1u64));
+			assert_eq!(unhashed::get(&key_after_prefix(prefix.clone())), Some(1u64));
+
+			// Translate
+			let prefix = Map::prefix_hash();
+
+			unhashed::put(&key_before_prefix(prefix.clone()), &1u64);
+			unhashed::put(&key_after_prefix(prefix.clone()), &1u64);
+			for i in 0..4 {
+				Map::insert(i as u16, i as u64);
+			}
+
+			// Wrong key
+			unhashed::put(&[prefix.clone(), vec![1, 2, 3]].concat(), &3u64.encode());
+
+			// Wrong value
+			unhashed::put(
+				&[prefix.clone(), crate::Blake2_128Concat::hash(&6u16.encode())].concat(),
+				&vec![1],
+			);
+
+			Map::translate(|_k1, v: u64| Some(v*2));
+			assert_eq!(Map::iter().collect::<Vec<_>>(), vec![(3, 6), (0, 0), (2, 4), (1, 2)]);
 		})
 	}
 }

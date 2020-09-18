@@ -1,30 +1,32 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! This module expose one function `P_NPoS` (Payout NPoS) or `compute_total_payout` which returns
 //! the total payout for the era given the era duration and the staking rate in NPoS.
 //! The staking rate in NPoS is the total amount of tokens staked by nominators and validators,
 //! divided by the total token supply.
 
-use sp_runtime::{Perbill, traits::AtLeast32Bit, curve::PiecewiseLinear};
+use sp_runtime::{Perbill, traits::AtLeast32BitUnsigned, curve::PiecewiseLinear};
 
-/// The total payout to all validators (and their nominators) per era.
+/// The total payout to all validators (and their nominators) per era and maximum payout.
 ///
 /// Defined as such:
-/// `payout = yearly_inflation(npos_token_staked / total_tokens) * total_tokens / era_per_year`
+/// `staker-payout = yearly_inflation(npos_token_staked / total_tokens) * total_tokens / era_per_year`
+/// `maximum-payout = max_yearly_inflation * total_tokens / era_per_year`
 ///
 /// `era_duration` is expressed in millisecond.
 pub fn compute_total_payout<N>(
@@ -32,7 +34,7 @@ pub fn compute_total_payout<N>(
 	npos_token_staked: N,
 	total_tokens: N,
 	era_duration: u64
-) -> (N, N) where N: AtLeast32Bit + Clone {
+) -> (N, N) where N: AtLeast32BitUnsigned + Clone {
 	// Milliseconds per year for the Julian year (365.25 days).
 	const MILLISECONDS_PER_YEAR: u64 = 1000 * 3600 * 24 * 36525 / 100;
 

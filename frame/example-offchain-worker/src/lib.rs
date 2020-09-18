@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Offchain Worker Example Module
 //!
@@ -22,12 +23,12 @@
 //! Run `cargo doc --package pallet-example-offchain-worker --open` to view this module's
 //! documentation.
 //!
-//! - \[`pallet_example_offchain_worker::Trait`](./trait.Trait.html)
-//! - \[`Call`](./enum.Call.html)
-//! - \[`Module`](./struct.Module.html)
+//! - [`pallet_example_offchain_worker::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! - [`Module`](./struct.Module.html)
 //!
 //!
-//! \## Overview
+//! ## Overview
 //!
 //! In this example we are going to build a very simplistic, naive and definitely NOT
 //! production-ready oracle for BTC/USD price.
@@ -40,22 +41,32 @@
 //! one unsigned transaction floating in the network.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use frame_system::{
+	self as system,
+	ensure_signed,
+	ensure_none,
+	offchain::{
+		AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SendSignedTransaction,
+		SignedPayload, SigningTypes, Signer, SubmitTransaction,
+	}
+};
 use frame_support::{
 	debug,
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	traits::Get,
-	weights::SimpleDispatchInfo,
 };
-use frame_system::{self as system, ensure_signed, ensure_none, offchain};
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
+	RuntimeDebug,
 	offchain::{http, Duration, storage::StorageValueRef},
 	traits::Zero,
 	transaction_validity::{
 		InvalidTransaction, ValidTransaction, TransactionValidity, TransactionSource,
+		TransactionPriority,
 	},
 };
-use sp_std::{vec, vec::Vec};
+use codec::{Encode, Decode};
+use sp_std::vec::Vec;
 use lite_json::json::JsonValue;
 
 #[cfg(test)]
@@ -75,18 +86,25 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"btc!");
 /// the types with this pallet-specific identifier.
 pub mod crypto {
 	use super::KEY_TYPE;
-	use sp_runtime::app_crypto::{app_crypto, sr25519};
+	use sp_runtime::{
+		app_crypto::{app_crypto, sr25519},
+		traits::Verify,
+	};
+	use sp_core::sr25519::Signature as Sr25519Signature;
 	app_crypto!(sr25519, KEY_TYPE);
+
+	pub struct TestAuthId;
+	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature> for TestAuthId {
+		type RuntimeAppPublic = Public;
+		type GenericSignature = sp_core::sr25519::Signature;
+		type GenericPublic = sp_core::sr25519::Public;
+	}
 }
 
 /// This pallet's configuration trait
-pub trait Trait: frame_system::Trait {
-	/// The type to sign and submit transactions.
-	type SubmitSignedTransaction:
-		offchain::SubmitSignedTransaction<Self, <Self as Trait>::Call>;
-	/// The type to submit unsigned transactions.
-	type SubmitUnsignedTransaction:
-		offchain::SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
+pub trait Trait: CreateSignedTransaction<Call<Self>> {
+	/// The identifier type for an offchain worker.
+	type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -106,6 +124,27 @@ pub trait Trait: frame_system::Trait {
 	///
 	/// This ensures that we only accept unsigned transactions once, every `UnsignedInterval` blocks.
 	type UnsignedInterval: Get<Self::BlockNumber>;
+
+	/// A configuration for base priority of unsigned transactions.
+	///
+	/// This is exposed so that it can be tuned for particular runtime, when
+	/// multiple pallets send unsigned transactions.
+	type UnsignedPriority: Get<TransactionPriority>;
+}
+
+/// Payload used by this example crate to hold price
+/// data required to submit a transaction.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PricePayload<Public, BlockNumber> {
+	block_number: BlockNumber,
+	price: u32,
+	public: Public,
+}
+
+impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
+	fn public(&self) -> T::Public {
+		self.public.clone()
+	}
 }
 
 decl_storage! {
@@ -127,6 +166,7 @@ decl_event!(
 	/// Events generated by the module.
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
 		/// Event generated when new price is accepted to contribute to the average.
+		/// \[price, who\]
 		NewPrice(u32, AccountId),
 	}
 );
@@ -150,7 +190,7 @@ decl_module! {
 		/// working and receives (and provides) meaningful data.
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = 0]
 		pub fn submit_price(origin, price: u32) -> DispatchResult {
 			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
@@ -175,7 +215,7 @@ decl_module! {
 		///
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = 0]
 		pub fn submit_price_unsigned(origin, _block_number: T::BlockNumber, price: u32)
 			-> DispatchResult
 		{
@@ -183,6 +223,22 @@ decl_module! {
 			ensure_none(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
 			Self::add_price(Default::default(), price);
+			// now increment the block number at which we expect next unsigned transaction.
+			let current_block = <system::Module<T>>::block_number();
+			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
+			Ok(())
+		}
+
+		#[weight = 0]
+		pub fn submit_price_unsigned_with_signed_payload(
+			origin,
+			price_payload: PricePayload<T::Public, T::BlockNumber>,
+			_signature: T::Signature,
+		) -> DispatchResult {
+			// This ensures that the function can only be called via unsigned transaction.
+			ensure_none(origin)?;
+			// Add the price to the on-chain list, but mark it as coming from an empty address.
+			Self::add_price(Default::default(), price_payload.price);
 			// now increment the block number at which we expect next unsigned transaction.
 			let current_block = <system::Module<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
@@ -229,7 +285,9 @@ decl_module! {
 			let should_send = Self::choose_transaction_type(block_number);
 			let res = match should_send {
 				TransactionType::Signed => Self::fetch_price_and_send_signed(),
-				TransactionType::Unsigned => Self::fetch_price_and_send_unsigned(block_number),
+				TransactionType::UnsignedForAny => Self::fetch_price_and_send_unsigned_for_any_account(block_number),
+				TransactionType::UnsignedForAll => Self::fetch_price_and_send_unsigned_for_all_accounts(block_number),
+				TransactionType::Raw => Self::fetch_price_and_send_raw_unsigned(block_number),
 				TransactionType::None => Ok(()),
 			};
 			if let Err(e) = res {
@@ -241,7 +299,9 @@ decl_module! {
 
 enum TransactionType {
 	Signed,
-	Unsigned,
+	UnsignedForAny,
+	UnsignedForAll,
+	Raw,
 	None,
 }
 
@@ -304,12 +364,11 @@ impl<T: Trait> Module<T> {
 				// transactions in a row. If a strict order is desired, it's better to use
 				// the storage entry for that. (for instance store both block number and a flag
 				// indicating the type of next transaction to send).
-				let send_signed = block_number % 2.into() == Zero::zero();
-				if send_signed {
-					TransactionType::Signed
-				} else {
-					TransactionType::Unsigned
-				}
+				let transaction_type = block_number % 3.into();
+				if transaction_type == Zero::zero() { TransactionType::Signed }
+				else if transaction_type == T::BlockNumber::from(1) { TransactionType::UnsignedForAny }
+				else if transaction_type == T::BlockNumber::from(2) { TransactionType::UnsignedForAll }
+				else { TransactionType::Raw }
 			},
 			// We are in the grace period, we should not send a transaction this time.
 			Err(RECENTLY_SENT) => TransactionType::None,
@@ -324,44 +383,41 @@ impl<T: Trait> Module<T> {
 
 	/// A helper function to fetch the price and send signed transaction.
 	fn fetch_price_and_send_signed() -> Result<(), &'static str> {
-		use system::offchain::SubmitSignedTransaction;
-		// Firstly we check if there are any accounts in the local keystore that are capable of
-		// signing the transaction.
-		// If not it doesn't even make sense to make external HTTP requests, since we won't be able
-		// to put the results back on-chain.
-		if !T::SubmitSignedTransaction::can_sign() {
+		let signer = Signer::<T, T::AuthorityId>::all_accounts();
+		if !signer.can_sign() {
 			return Err(
 				"No local accounts available. Consider adding one via `author_insertKey` RPC."
 			)?
 		}
-
 		// Make an external HTTP request to fetch the current price.
 		// Note this call will block until response is received.
 		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
 
-		// Received price is wrapped into a call to `submit_price` public function of this pallet.
-		// This means that the transaction, when executed, will simply call that function passing
-		// `price` as an argument.
-		let call = Call::submit_price(price);
-
-		// Using `SubmitSignedTransaction` associated type we create and submit a transaction
+		// Using `send_signed_transaction` associated type we create and submit a transaction
 		// representing the call, we've just created.
 		// Submit signed will return a vector of results for all accounts that were found in the
 		// local keystore with expected `KEY_TYPE`.
-		let results = T::SubmitSignedTransaction::submit_signed(call);
+		let results = signer.send_signed_transaction(
+			|_account| {
+				// Received price is wrapped into a call to `submit_price` public function of this pallet.
+				// This means that the transaction, when executed, will simply call that function passing
+				// `price` as an argument.
+				Call::submit_price(price)
+			}
+		);
+
 		for (acc, res) in &results {
 			match res {
-				Ok(()) => debug::info!("[{:?}] Submitted price of {} cents", acc, price),
-				Err(e) => debug::error!("[{:?}] Failed to submit transaction: {:?}", acc, e),
+				Ok(()) => debug::info!("[{:?}] Submitted price of {} cents", acc.id, price),
+				Err(e) => debug::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
 			}
 		}
 
 		Ok(())
 	}
 
-	/// A helper function to fetch the price and send unsigned transaction.
-	fn fetch_price_and_send_unsigned(block_number: T::BlockNumber) -> Result<(), &'static str> {
-		use system::offchain::SubmitUnsignedTransaction;
+	/// A helper function to fetch the price and send a raw unsigned transaction.
+	fn fetch_price_and_send_raw_unsigned(block_number: T::BlockNumber) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
@@ -378,14 +434,81 @@ impl<T: Trait> Module<T> {
 		// passing `price` as an argument.
 		let call = Call::submit_price_unsigned(block_number, price);
 
-		// Now let's create an unsigned transaction out of this call and submit it to the pool.
+		// Now let's create a transaction out of this call and submit it to the pool.
+		// Here we showcase two ways to send an unsigned transaction / unsigned payload (raw)
+		//
 		// By default unsigned transactions are disallowed, so we need to whitelist this case
 		// by writing `UnsignedValidator`. Note that it's EXTREMELY important to carefuly
 		// implement unsigned validation logic, as any mistakes can lead to opening DoS or spam
 		// attack vectors. See validation logic docs for more details.
-		T::SubmitUnsignedTransaction::submit_unsigned(call)
-			.map_err(|()| "Unable to submit unsigned transaction.".into())
+		//
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
+			.map_err(|()| "Unable to submit unsigned transaction.")?;
 
+		Ok(())
+	}
+
+	/// A helper function to fetch the price, sign payload and send an unsigned transaction
+	fn fetch_price_and_send_unsigned_for_any_account(block_number: T::BlockNumber) -> Result<(), &'static str> {
+		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
+		// anyway.
+		let next_unsigned_at = <NextUnsignedAt<T>>::get();
+		if next_unsigned_at > block_number {
+			return Err("Too early to send unsigned transaction")
+		}
+
+		// Make an external HTTP request to fetch the current price.
+		// Note this call will block until response is received.
+		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+
+		// -- Sign using any account
+		let (_, result) = Signer::<T, T::AuthorityId>::any_account().send_unsigned_transaction(
+			|account| PricePayload {
+				price,
+				block_number,
+				public: account.public.clone()
+			},
+			|payload, signature| {
+				Call::submit_price_unsigned_with_signed_payload(payload, signature)
+			}
+		).ok_or("No local accounts accounts available.")?;
+		result.map_err(|()| "Unable to submit transaction")?;
+
+		Ok(())
+	}
+
+	/// A helper function to fetch the price, sign payload and send an unsigned transaction
+	fn fetch_price_and_send_unsigned_for_all_accounts(block_number: T::BlockNumber) -> Result<(), &'static str> {
+		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
+		// anyway.
+		let next_unsigned_at = <NextUnsignedAt<T>>::get();
+		if next_unsigned_at > block_number {
+			return Err("Too early to send unsigned transaction")
+		}
+
+		// Make an external HTTP request to fetch the current price.
+		// Note this call will block until response is received.
+		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+
+		// -- Sign using all accounts
+		let transaction_results = Signer::<T, T::AuthorityId>::all_accounts()
+			.send_unsigned_transaction(
+				|account| PricePayload {
+					price,
+					block_number,
+					public: account.public.clone()
+				},
+				|payload, signature| {
+					Call::submit_price_unsigned_with_signed_payload(payload, signature)
+				}
+			);
+		for (_account_id, result) in transaction_results.into_iter() {
+			if result.is_err() {
+				return Err("Unable to submit transaction");
+			}
+		}
+
+		Ok(())
 	}
 
 	/// Fetch current price and return the result in cents.
@@ -500,6 +623,58 @@ impl<T: Trait> Module<T> {
 			Some(prices.iter().fold(0_u32, |a, b| a.saturating_add(*b)) / prices.len() as u32)
 		}
 	}
+
+	fn validate_transaction_parameters(
+		block_number: &T::BlockNumber,
+		new_price: &u32,
+	) -> TransactionValidity {
+		// Now let's check if the transaction has any chance to succeed.
+		let next_unsigned_at = <NextUnsignedAt<T>>::get();
+		if &next_unsigned_at > block_number {
+			return InvalidTransaction::Stale.into();
+		}
+		// Let's make sure to reject transactions from the future.
+		let current_block = <system::Module<T>>::block_number();
+		if &current_block < block_number {
+			return InvalidTransaction::Future.into();
+		}
+
+		// We prioritize transactions that are more far away from current average.
+		//
+		// Note this doesn't make much sense when building an actual oracle, but this example
+		// is here mostly to show off offchain workers capabilities, not about building an
+		// oracle.
+		let avg_price = Self::average_price()
+			.map(|price| if &price > new_price { price - new_price } else { new_price - price })
+			.unwrap_or(0);
+
+		ValidTransaction::with_tag_prefix("ExampleOffchainWorker")
+			// We set base priority to 2**20 and hope it's included before any other
+			// transactions in the pool. Next we tweak the priority depending on how much
+			// it differs from the current average. (the more it differs the more priority it
+			// has).
+			.priority(T::UnsignedPriority::get().saturating_add(avg_price as _))
+			// This transaction does not require anything else to go before into the pool.
+			// In theory we could require `previous_unsigned_at` transaction to go first,
+			// but it's not necessary in our case.
+			//.and_requires()
+			// We set the `provides` tag to be the same as `next_unsigned_at`. This makes
+			// sure only one transaction produced after `next_unsigned_at` will ever
+			// get to the transaction pool and will end up in the block.
+			// We can still have multiple transactions compete for the same "spot",
+			// and the one with higher priority will replace other one in the pool.
+			.and_provides(next_unsigned_at)
+			// The transaction is only valid for next 5 blocks. After that it's
+			// going to be revalidated by the pool.
+			.longevity(5)
+			// It's fine to propagate that transaction to other peers, which means it can be
+			// created even by nodes that don't produce blocks.
+			// Note that sometimes it's better to keep it for yourself (if you are the block
+			// producer), since for instance in some schemes others may copy your solution and
+			// claim a reward.
+			.propagate(true)
+			.build()
+	}
 }
 
 #[allow(deprecated)] // ValidateUnsigned
@@ -516,53 +691,16 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		call: &Self::Call,
 	) -> TransactionValidity {
 		// Firstly let's check that we call the right function.
-		if let Call::submit_price_unsigned(block_number, new_price) = call {
-			// Now let's check if the transaction has any chance to succeed.
-			let next_unsigned_at = <NextUnsignedAt<T>>::get();
-			if &next_unsigned_at > block_number {
-				return InvalidTransaction::Stale.into();
+		if let Call::submit_price_unsigned_with_signed_payload(
+			ref payload, ref signature
+		) = call {
+			let signature_valid = SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+			if !signature_valid {
+				return InvalidTransaction::BadProof.into();
 			}
-			// Let's make sure to reject transactions from the future.
-			let current_block = <system::Module<T>>::block_number();
-			if &current_block < block_number {
-				return InvalidTransaction::Future.into();
-			}
-
-			// We prioritize transactions that are more far away from current average.
-			//
-			// Note this doesn't make much sense when building an actual oracle, but this example
-			// is here mostly to show off offchain workers capabilities, not about building an
-			// oracle.
-			let avg_price = Self::average_price()
-				.map(|price| if &price > new_price { price - new_price } else { new_price - price })
-				.unwrap_or(0);
-
-			Ok(ValidTransaction {
-				// We set base priority to 2**20 to make sure it's included before any other
-				// transactions in the pool. Next we tweak the priority depending on how much
-				// it differs from the current average. (the more it differs the more priority it
-				// has).
-				priority: (1 << 20) + avg_price as u64,
-				// This transaction does not require anything else to go before into the pool.
-				// In theory we could require `previous_unsigned_at` transaction to go first,
-				// but it's not necessary in our case.
-				requires: vec![],
-				// We set the `provides` tag to be the same as `next_unsigned_at`. This makes
-				// sure only one transaction produced after `next_unsigned_at` will ever
-				// get to the transaction pool and will end up in the block.
-				// We can still have multiple transactions compete for the same "spot",
-				// and the one with higher priority will replace other one in the pool.
-				provides: vec![codec::Encode::encode(&(KEY_TYPE.0, next_unsigned_at))],
-				// The transaction is only valid for next 5 blocks. After that it's
-				// going to be revalidated by the pool.
-				longevity: 5,
-				// It's fine to propagate that transaction to other peers, which means it can be
-				// created even by nodes that don't produce blocks.
-				// Note that sometimes it's better to keep it for yourself (if you are the block
-				// producer), since for instance in some schemes others may copy your solution and
-				// claim a reward.
-				propagate: true,
-			})
+			Self::validate_transaction_parameters(&payload.block_number, &payload.price)
+		} else if let Call::submit_price_unsigned(block_number, new_price) = call {
+			Self::validate_transaction_parameters(block_number, new_price)
 		} else {
 			InvalidTransaction::Call.into()
 		}

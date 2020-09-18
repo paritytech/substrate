@@ -34,23 +34,21 @@ pub enum Error {
 	HashingAuthorityId(libp2p::core::multiaddr::multihash::EncodeError),
 	/// Failed calling into the Substrate runtime.
 	CallingRuntime(sp_blockchain::Error),
-	/// From the Dht we only get the hashed authority id. In order to retrieve the actual authority id and to ensure it
-	/// is actually an authority, we match the hash against the hash of the authority id of all other authorities. This
-	/// error is the result of the above failing.
-	MatchingHashedAuthorityIdWithAuthorityId,
+	/// Received a dht record with a key that does not match any in-flight awaited keys.
+	ReceivingUnexpectedRecord,
 	/// Failed to set the authority discovery peerset priority group in the peerset module.
 	SettingPeersetPriorityGroup(String),
 	/// Failed to encode a protobuf payload.
 	EncodingProto(prost::EncodeError),
 	/// Failed to decode a protobuf payload.
 	DecodingProto(prost::DecodeError),
-	/// Failed to encode or decode scale payload
+	/// Failed to encode or decode scale payload.
 	EncodingDecodingScale(codec::Error),
 	/// Failed to parse a libp2p multi address.
 	ParsingMultiaddress(libp2p::core::multiaddr::Error),
-	/// Failed to sign using a specific public key
+	/// Failed to sign using a specific public key.
 	MissingSignature(CryptoTypePublicPair),
-	/// Failed to sign using all public keys
+	/// Failed to sign using all public keys.
 	Signing,
 	/// Failed to register Prometheus metric.
 	Prometheus(prometheus_endpoint::PrometheusError),

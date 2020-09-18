@@ -1,19 +1,22 @@
 [package]
 name = "sp-runtime-interface-test-wasm"
-version = "2.0.0-dev"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 publish = false
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dependencies]
-sp-runtime-interface = { version = "2.0.0-alpha.5", default-features = false, path = "../" }
-sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../std" }
-sp-io = { version = "2.0.0-alpha.5", default-features = false, path = "../../io" }
-sp-core = { version = "2.0.0-alpha.5", default-features = false, path = "../../core" }
+sp-runtime-interface = { version = "2.0.0-rc6", default-features = false, path = "../" }
+sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../std" }
+sp-io = { version = "2.0.0-rc6", default-features = false, path = "../../io" }
+sp-core = { version = "2.0.0-rc6", default-features = false, path = "../../core" }
 
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
@@ -21,6 +24,3 @@ wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-run
 [features]
 default = [ "std" ]
 std = [ "sp-runtime-interface/std", "sp-std/std", "sp-core/std", "sp-io/std" ]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

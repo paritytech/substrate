@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
@@ -24,7 +25,7 @@ mod tests {
 	use codec::{Encode, Decode, EncodeLike};
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
 	}
 
 	pub trait Trait {
@@ -419,7 +420,7 @@ mod test2 {
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
 	}
 
 	type PairOf<T> = (T, T);
@@ -454,7 +455,7 @@ mod test3 {
 		type BlockNumber;
 	}
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
 	}
 	frame_support::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
@@ -484,7 +485,7 @@ mod test_append_and_len {
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
@@ -519,54 +520,62 @@ mod test_append_and_len {
 	fn default_for_option() {
 		TestExternalities::default().execute_with(|| {
 			assert_eq!(OptionVec::get(), None);
-			assert_eq!(JustVec::get(), vec![]);
+			assert!(JustVec::get().is_empty());
 		});
 	}
 
 	#[test]
 	fn append_works() {
 		TestExternalities::default().execute_with(|| {
-			let _ = MapVec::append(1, [1, 2, 3].iter());
-			let _ = MapVec::append(1, [4, 5].iter());
+			for val in &[1, 2, 3, 4, 5] {
+				MapVec::append(1, val);
+			}
 			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
 
-			let _ = JustVec::append([1, 2, 3].iter());
-			let _ = JustVec::append([4, 5].iter());
+			MapVec::remove(1);
+			MapVec::append(1, 1);
+			assert_eq!(MapVec::get(1), vec![1]);
+
+			for val in &[1, 2, 3, 4, 5] {
+				JustVec::append(val);
+			}
 			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
+
+			JustVec::kill();
+			JustVec::append(1);
+			assert_eq!(JustVec::get(), vec![1]);
 		});
 	}
 
 	#[test]
-	fn append_works_for_default() {
+	fn append_overwrites_invalid_data() {
+		TestExternalities::default().execute_with(|| {
+			let key = JustVec::hashed_key();
+			// Set it to some invalid value.
+			frame_support::storage::unhashed::put_raw(&key, &*b"1");
+			assert!(JustVec::get().is_empty());
+			assert_eq!(frame_support::storage::unhashed::get_raw(&key), Some(b"1".to_vec()));
+
+			JustVec::append(1);
+			JustVec::append(2);
+			assert_eq!(JustVec::get(), vec![1, 2]);
+		});
+	}
+
+	#[test]
+	fn append_overwrites_default() {
 		TestExternalities::default().execute_with(|| {
 			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
-			let _ = JustVecWithDefault::append([1].iter());
-			assert_eq!(JustVecWithDefault::get(), vec![6, 9, 1]);
+			JustVecWithDefault::append(1);
+			assert_eq!(JustVecWithDefault::get(), vec![1]);
 
 			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
-			let _ = MapVecWithDefault::append(0, [1].iter());
-			assert_eq!(MapVecWithDefault::get(0), vec![6, 9, 1]);
+			MapVecWithDefault::append(0, 1);
+			assert_eq!(MapVecWithDefault::get(0), vec![1]);
 
 			assert_eq!(OptionVec::get(), None);
-			let _ = OptionVec::append([1].iter());
+			OptionVec::append(1);
 			assert_eq!(OptionVec::get(), Some(vec![1]));
-		});
-	}
-
-	#[test]
-	fn append_or_put_works() {
-		TestExternalities::default().execute_with(|| {
-			let _ = MapVec::append_or_insert(1, &[1, 2, 3][..]);
-			let _ = MapVec::append_or_insert(1, &[4, 5][..]);
-			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
-
-			let _ = JustVec::append_or_put(&[1, 2, 3][..]);
-			let _ = JustVec::append_or_put(&[4, 5][..]);
-			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
-
-			let _ = OptionVec::append_or_put(&[1, 2, 3][..]);
-			let _ = OptionVec::append_or_put(&[4, 5][..]);
-			assert_eq!(OptionVec::get(), Some(vec![1, 2, 3, 4, 5]));
 		});
 	}
 
@@ -585,38 +594,40 @@ mod test_append_and_len {
 		});
 	}
 
+	// `decode_len` should always return `None` for default assigments
+	// in `decl_storage!`.
 	#[test]
-	fn len_works_for_default() {
+	fn len_works_ignores_default_assignment() {
 		TestExternalities::default().execute_with(|| {
 			// vec
-			assert_eq!(JustVec::get(), vec![]);
-			assert_eq!(JustVec::decode_len(), Ok(0));
+			assert!(JustVec::get().is_empty());
+			assert_eq!(JustVec::decode_len(), None);
 
 			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
-			assert_eq!(JustVecWithDefault::decode_len(), Ok(2));
+			assert_eq!(JustVecWithDefault::decode_len(), None);
 
 			assert_eq!(OptionVec::get(), None);
-			assert_eq!(OptionVec::decode_len(), Ok(0));
+			assert_eq!(OptionVec::decode_len(), None);
 
 			// map
-			assert_eq!(MapVec::get(0), vec![]);
-			assert_eq!(MapVec::decode_len(0), Ok(0));
+			assert!(MapVec::get(0).is_empty());
+			assert_eq!(MapVec::decode_len(0), None);
 
 			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
-			assert_eq!(MapVecWithDefault::decode_len(0), Ok(2));
+			assert_eq!(MapVecWithDefault::decode_len(0), None);
 
 			assert_eq!(OptionMapVec::get(0), None);
-			assert_eq!(OptionMapVec::decode_len(0), Ok(0));
+			assert_eq!(OptionMapVec::decode_len(0), None);
 
 			// Double map
-			assert_eq!(DoubleMapVec::get(0, 0), vec![]);
-			assert_eq!(DoubleMapVec::decode_len(0, 1), Ok(0));
+			assert!(DoubleMapVec::get(0, 0).is_empty());
+			assert_eq!(DoubleMapVec::decode_len(0, 1), None);
 
 			assert_eq!(DoubleMapVecWithDefault::get(0, 0), vec![6, 9]);
-			assert_eq!(DoubleMapVecWithDefault::decode_len(0, 1), Ok(2));
+			assert_eq!(DoubleMapVecWithDefault::decode_len(0, 1), None);
 
 			assert_eq!(OptionDoubleMapVec::get(0, 0), None);
-			assert_eq!(OptionDoubleMapVec::decode_len(0, 1), Ok(0));
+			assert_eq!(OptionDoubleMapVec::decode_len(0, 1), None);
 		});
 	}
 }

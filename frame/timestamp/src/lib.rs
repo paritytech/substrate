@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Timestamp Module
 //!
@@ -63,13 +64,13 @@
 //! ```
 //! use frame_support::{decl_module, dispatch};
 //! # use pallet_timestamp as timestamp;
-//! use frame_system::{self as system, ensure_signed};
+//! use frame_system::ensure_signed;
 //!
 //! pub trait Trait: timestamp::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+//! 		#[weight = 0]
 //! 		pub fn get_time(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _now = <timestamp::Module<T>>::get();
@@ -92,6 +93,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
+mod default_weights;
 
 use sp_std::{result, cmp};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
@@ -100,7 +102,7 @@ use frame_support::debug;
 use frame_support::{
 	Parameter, decl_storage, decl_module,
 	traits::{Time, UnixTime, Get},
-	weights::SimpleDispatchInfo,
+	weights::{DispatchClass, Weight},
 };
 use sp_runtime::{
 	RuntimeString,
@@ -113,6 +115,11 @@ use sp_timestamp::{
 	InherentError, INHERENT_IDENTIFIER, InherentType,
 	OnTimestampSet,
 };
+
+pub trait WeightInfo {
+	fn set() -> Weight;
+	fn on_finalize() -> Weight;
+}
 
 /// The module configuration trait
 pub trait Trait: frame_system::Trait {
@@ -128,6 +135,9 @@ pub trait Trait: frame_system::Trait {
 	/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
 	/// period on default settings.
 	type MinimumPeriod: Get<Self::Moment>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_module! {
@@ -147,12 +157,22 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
-		#[weight = SimpleDispatchInfo::FixedMandatory(10_000)]
+		///
+		/// # <weight>
+		/// - `O(T)` where `T` complexity of `on_timestamp_set`
+		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in `on_finalize`)
+		/// - 1 event handler `on_timestamp_set` `O(T)`.
+		/// # </weight>
+		#[weight = (
+			T::WeightInfo::set(),
+			DispatchClass::Mandatory
+		)]
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
+			let prev = Self::now();
 			assert!(
-				Self::now().is_zero() || now >= Self::now() + T::MinimumPeriod::get(),
+				prev.is_zero() || now >= prev + T::MinimumPeriod::get(),
 				"Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
 			);
 			<Self as Store>::Now::put(now);
@@ -161,6 +181,16 @@ decl_module! {
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
 		}
 
+		/// dummy `on_initialize` to return the weight used in `on_finalize`.
+		fn on_initialize() -> Weight {
+			// weight of `on_finalize`
+			T::WeightInfo::on_finalize()
+		}
+
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 storage deletion (codec `O(1)`).
+		/// # </weight>
 		fn on_finalize() {
 			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 		}
@@ -277,7 +307,7 @@ mod tests {
 	}
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -289,6 +319,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -301,6 +332,10 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
@@ -308,6 +343,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;
@@ -316,6 +352,7 @@ mod tests {
 		type Moment = u64;
 		type OnTimestampSet = ();
 		type MinimumPeriod = MinimumPeriod;
+		type WeightInfo = ();
 	}
 	type Timestamp = Module<Test>;
 
@@ -323,7 +360,7 @@ mod tests {
 	fn timestamp_works() {
 		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
+			assert_ok!(Timestamp::set(Origin::none(), 69));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -333,8 +370,8 @@ mod tests {
 	fn double_timestamp_should_fail() {
 		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
-			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
+			assert_ok!(Timestamp::set(Origin::none(), 69));
+			let _ = Timestamp::set(Origin::none(), 70);
 		});
 	}
 
@@ -343,7 +380,7 @@ mod tests {
 	fn block_period_minimum_enforced() {
 		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
+			let _ = Timestamp::set(Origin::none(), 46);
 		});
 	}
 }

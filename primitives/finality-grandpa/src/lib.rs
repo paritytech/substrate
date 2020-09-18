@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Primitives for GRANDPA integration, suitable for WASM compilation.
 
@@ -23,10 +24,19 @@ extern crate alloc;
 
 #[cfg(feature = "std")]
 use serde::Serialize;
+
 use codec::{Encode, Decode, Input, Codec};
-use sp_runtime::{ConsensusEngineId, RuntimeDebug};
+use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
 use sp_std::borrow::Cow;
 use sp_std::vec::Vec;
+#[cfg(feature = "std")]
+use sp_core::traits::BareCryptoStorePtr;
+
+#[cfg(feature = "std")]
+use log::debug;
+
+/// Key type for GRANDPA module.
+pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::GRANDPA;
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::GRANDPA, ed25519};
@@ -157,6 +167,239 @@ impl<N: Codec> ConsensusLog<N> {
 	}
 }
 
+/// Proof of voter misbehavior on a given set id. Misbehavior/equivocation in
+/// GRANDPA happens when a voter votes on the same round (either at prevote or
+/// precommit stage) for different blocks. Proving is achieved by collecting the
+/// signed messages of conflicting votes.
+#[derive(Clone, Debug, Decode, Encode, PartialEq)]
+pub struct EquivocationProof<H, N> {
+	set_id: SetId,
+	equivocation: Equivocation<H, N>,
+}
+
+impl<H, N> EquivocationProof<H, N> {
+	/// Create a new `EquivocationProof` for the given set id and using the
+	/// given equivocation as proof.
+	pub fn new(set_id: SetId, equivocation: Equivocation<H, N>) -> Self {
+		EquivocationProof {
+			set_id,
+			equivocation,
+		}
+	}
+
+	/// Returns the set id at which the equivocation occurred.
+	pub fn set_id(&self) -> SetId {
+		self.set_id
+	}
+
+	/// Returns the round number at which the equivocation occurred.
+	pub fn round(&self) -> RoundNumber {
+		match self.equivocation {
+			Equivocation::Prevote(ref equivocation) => equivocation.round_number,
+			Equivocation::Precommit(ref equivocation) => equivocation.round_number,
+		}
+	}
+
+	/// Returns the authority id of the equivocator.
+	pub fn offender(&self) -> &AuthorityId {
+		self.equivocation.offender()
+	}
+}
+
+/// Wrapper object for GRANDPA equivocation proofs, useful for unifying prevote
+/// and precommit equivocations under a common type.
+#[derive(Clone, Debug, Decode, Encode, PartialEq)]
+pub enum Equivocation<H, N> {
+	/// Proof of equivocation at prevote stage.
+	Prevote(grandpa::Equivocation<AuthorityId, grandpa::Prevote<H, N>, AuthoritySignature>),
+	/// Proof of equivocation at precommit stage.
+	Precommit(grandpa::Equivocation<AuthorityId, grandpa::Precommit<H, N>, AuthoritySignature>),
+}
+
+impl<H, N> From<grandpa::Equivocation<AuthorityId, grandpa::Prevote<H, N>, AuthoritySignature>>
+	for Equivocation<H, N>
+{
+	fn from(
+		equivocation: grandpa::Equivocation<
+			AuthorityId,
+			grandpa::Prevote<H, N>,
+			AuthoritySignature,
+		>,
+	) -> Self {
+		Equivocation::Prevote(equivocation)
+	}
+}
+
+impl<H, N> From<grandpa::Equivocation<AuthorityId, grandpa::Precommit<H, N>, AuthoritySignature>>
+	for Equivocation<H, N>
+{
+	fn from(
+		equivocation: grandpa::Equivocation<
+			AuthorityId,
+			grandpa::Precommit<H, N>,
+			AuthoritySignature,
+		>,
+	) -> Self {
+		Equivocation::Precommit(equivocation)
+	}
+}
+
+impl<H, N> Equivocation<H, N> {
+	/// Returns the authority id of the equivocator.
+	pub fn offender(&self) -> &AuthorityId {
+		match self {
+			Equivocation::Prevote(ref equivocation) => &equivocation.identity,
+			Equivocation::Precommit(ref equivocation) => &equivocation.identity,
+		}
+	}
+}
+
+/// Verifies the equivocation proof by making sure that both votes target
+/// different blocks and that its signatures are valid.
+pub fn check_equivocation_proof<H, N>(report: EquivocationProof<H, N>) -> bool
+where
+	H: Clone + Encode + PartialEq,
+	N: Clone + Encode + PartialEq,
+{
+	// NOTE: the bare `Prevote` and `Precommit` types don't share any trait,
+	// this is implemented as a macro to avoid duplication.
+	macro_rules! check {
+		( $equivocation:expr, $message:expr ) => {
+			// if both votes have the same target the equivocation is invalid.
+			if $equivocation.first.0.target_hash == $equivocation.second.0.target_hash &&
+				$equivocation.first.0.target_number == $equivocation.second.0.target_number
+			{
+				return false;
+			}
+
+			// check signatures on both votes are valid
+			let valid_first = check_message_signature(
+				&$message($equivocation.first.0),
+				&$equivocation.identity,
+				&$equivocation.first.1,
+				$equivocation.round_number,
+				report.set_id,
+			);
+
+			let valid_second = check_message_signature(
+				&$message($equivocation.second.0),
+				&$equivocation.identity,
+				&$equivocation.second.1,
+				$equivocation.round_number,
+				report.set_id,
+			);
+
+			return valid_first && valid_second;
+		};
+	}
+
+	match report.equivocation {
+		Equivocation::Prevote(equivocation) => {
+			check!(equivocation, grandpa::Message::Prevote);
+		}
+		Equivocation::Precommit(equivocation) => {
+			check!(equivocation, grandpa::Message::Precommit);
+		}
+	}
+}
+
+/// Encode round message localized to a given round and set id.
+pub fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetId, message: &E) -> Vec<u8> {
+	let mut buf = Vec::new();
+	localized_payload_with_buffer(round, set_id, message, &mut buf);
+	buf
+}
+
+/// Encode round message localized to a given round and set id using the given
+/// buffer. The given buffer will be cleared and the resulting encoded payload
+/// will always be written to the start of the buffer.
+pub fn localized_payload_with_buffer<E: Encode>(
+	round: RoundNumber,
+	set_id: SetId,
+	message: &E,
+	buf: &mut Vec<u8>,
+) {
+	buf.clear();
+	(message, round, set_id).encode_to(buf)
+}
+
+/// Check a message signature by encoding the message as a localized payload and
+/// verifying the provided signature using the expected authority id.
+pub fn check_message_signature<H, N>(
+	message: &grandpa::Message<H, N>,
+	id: &AuthorityId,
+	signature: &AuthoritySignature,
+	round: RoundNumber,
+	set_id: SetId,
+) -> bool
+where
+	H: Encode,
+	N: Encode,
+{
+	check_message_signature_with_buffer(message, id, signature, round, set_id, &mut Vec::new())
+}
+
+/// Check a message signature by encoding the message as a localized payload and
+/// verifying the provided signature using the expected authority id.
+/// The encoding necessary to verify the signature will be done using the given
+/// buffer, the original content of the buffer will be cleared.
+pub fn check_message_signature_with_buffer<H, N>(
+	message: &grandpa::Message<H, N>,
+	id: &AuthorityId,
+	signature: &AuthoritySignature,
+	round: RoundNumber,
+	set_id: SetId,
+	buf: &mut Vec<u8>,
+) -> bool
+where
+	H: Encode,
+	N: Encode,
+{
+	use sp_application_crypto::RuntimeAppPublic;
+
+	localized_payload_with_buffer(round, set_id, message, buf);
+
+	let valid = id.verify(&buf, signature);
+
+	if !valid {
+		#[cfg(feature = "std")]
+		debug!(target: "afg", "Bad signature on message from {:?}", id);
+	}
+
+	valid
+}
+
+/// Localizes the message to the given set and round and signs the payload.
+#[cfg(feature = "std")]
+pub fn sign_message<H, N>(
+	keystore: &BareCryptoStorePtr,
+	message: grandpa::Message<H, N>,
+	public: AuthorityId,
+	round: RoundNumber,
+	set_id: SetId,
+) -> Option<grandpa::SignedMessage<H, N, AuthoritySignature, AuthorityId>>
+where
+	H: Encode,
+	N: Encode,
+{
+	use sp_core::crypto::Public;
+	use sp_application_crypto::AppKey;
+	use sp_std::convert::TryInto;
+
+	let encoded = localized_payload(round, set_id, &message);
+	let signature = keystore.read()
+		.sign_with(AuthorityId::ID, &public.to_public_crypto_pair(), &encoded[..])
+		.ok()?
+		.try_into()
+		.ok()?;
+
+	Some(grandpa::SignedMessage {
+		message,
+		signature,
+		id: public,
+	})
+}
+
 /// WASM function call to check for pending changes.
 pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
 /// WASM function call to get current GRANDPA authorities.
@@ -211,6 +454,29 @@ impl<'a> Decode for VersionedAuthorityList<'a> {
 	}
 }
 
+/// An opaque type used to represent the key ownership proof at the runtime API
+/// boundary. The inner value is an encoded representation of the actual key
+/// ownership proof which will be parameterized when defining the runtime. At
+/// the runtime API boundary this type is unknown and as such we keep this
+/// opaque representation, implementors of the runtime API will have to make
+/// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
+#[derive(Decode, Encode, PartialEq)]
+pub struct OpaqueKeyOwnershipProof(Vec<u8>);
+
+impl OpaqueKeyOwnershipProof {
+	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded
+	/// representation.
+	pub fn new(inner: Vec<u8>) -> OpaqueKeyOwnershipProof {
+		OpaqueKeyOwnershipProof(inner)
+	}
+
+	/// Try to decode this `OpaqueKeyOwnershipProof` into the given concrete key
+	/// ownership proof type.
+	pub fn decode<T: Decode>(self) -> Option<T> {
+		codec::Decode::decode(&mut &self.0[..]).ok()
+	}
+}
+
 sp_api::decl_runtime_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
 	/// This should be implemented on the runtime side.
@@ -230,5 +496,34 @@ sp_api::decl_runtime_apis! {
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> AuthorityList;
+
+		/// Submits an unsigned extrinsic to report an equivocation. The caller
+		/// must provide the equivocation proof and a key ownership proof
+		/// (should be obtained using `generate_key_ownership_proof`). The
+		/// extrinsic will be unsigned and should only be accepted for local
+		/// authorship (not to be broadcast to the network). This method returns
+		/// `None` when creation of the extrinsic fails, e.g. if equivocation
+		/// reporting is disabled for the given runtime (i.e. this method is
+		/// hardcoded to return `None`). Only useful in an offchain context.
+		fn submit_report_equivocation_unsigned_extrinsic(
+			equivocation_proof: EquivocationProof<Block::Hash, NumberFor<Block>>,
+			key_owner_proof: OpaqueKeyOwnershipProof,
+		) -> Option<()>;
+
+		/// Generates a proof of key ownership for the given authority in the
+		/// given set. An example usage of this module is coupled with the
+		/// session historical module to prove that a given authority key is
+		/// tied to a given staking identity during a specific session. Proofs
+		/// of key ownership are necessary for submitting equivocation reports.
+		/// NOTE: even though the API takes a `set_id` as parameter the current
+		/// implementations ignore this parameter and instead rely on this
+		/// method being called at the correct block height, i.e. any point at
+		/// which the given set id is live on-chain. Future implementations will
+		/// instead use indexed data through an offchain worker, not requiring
+		/// older states to be available.
+		fn generate_key_ownership_proof(
+			set_id: SetId,
+			authority_id: AuthorityId,
+		) -> Option<OpaqueKeyOwnershipProof>;
 	}
 }

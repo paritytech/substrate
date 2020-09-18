@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! RocksDB-based offchain workers local storage.
 
@@ -21,14 +23,14 @@ use std::{
 	sync::Arc,
 };
 
-use crate::columns;
-use kvdb::KeyValueDB;
+use crate::{columns, Database, DbHash, Transaction};
 use parking_lot::Mutex;
+use log::error;
 
 /// Offchain local storage
 #[derive(Clone)]
 pub struct LocalStorage {
-	db: Arc<dyn KeyValueDB>,
+	db: Arc<dyn Database<DbHash>>,
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
 }
 
@@ -43,12 +45,13 @@ impl LocalStorage {
 	/// Create new offchain storage for tests (backed by memorydb)
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test() -> Self {
-		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
+		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
+		let db = sp_database::as_database(db);
 		Self::new(db as _)
 	}
 
 	/// Create offchain local storage with given `KeyValueDB` backend.
-	pub fn new(db: Arc<dyn KeyValueDB>) -> Self {
+	pub fn new(db: Arc<dyn Database<DbHash>>) -> Self {
 		Self {
 			db,
 			locks: Default::default(),
@@ -59,20 +62,27 @@ impl LocalStorage {
 impl sp_core::offchain::OffchainStorage for LocalStorage {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		let mut tx = self.db.transaction();
-		tx.put(columns::OFFCHAIN, &key, value);
+		let mut tx = Transaction::new();
+		tx.set(columns::OFFCHAIN, &key, value);
 
-		if let Err(e) = self.db.write(tx) {
-			log::warn!("Error writing to the offchain DB: {:?}", e);
+		if let Err(err) = self.db.commit(tx) {
+			error!("Error setting on local storage: {}", err)
+		}
+	}
+
+	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
+		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+		let mut tx = Transaction::new();
+		tx.remove(columns::OFFCHAIN, &key);
+
+		if let Err(err) = self.db.commit(tx) {
+			error!("Error removing on local storage: {}", err)
 		}
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		self.db.get(columns::OFFCHAIN, &key)
-			.ok()
-			.and_then(|x| x)
-			.map(|v| v.to_vec())
 	}
 
 	fn compare_and_set(
@@ -91,9 +101,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		let is_set;
 		{
 			let _key_guard = key_lock.lock();
-			let val = self.db.get(columns::OFFCHAIN, &key)
-				.ok()
-				.and_then(|x| x);
+			let val = self.db.get(columns::OFFCHAIN, &key);
 			is_set = val.as_ref().map(|x| &**x) == old_value;
 
 			if is_set {

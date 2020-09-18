@@ -1,30 +1,35 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error::Result;
 use sc_service::config::KeystoreConfig;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use crate::error;
+use sp_core::crypto::{SecretString, Zeroize};
+use std::str::FromStr;
 
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
 
 /// Parameters of the keystore
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct KeystoreParams {
 	/// Specify custom keystore path.
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
@@ -40,9 +45,10 @@ pub struct KeystoreParams {
 	/// Password used by the keystore.
 	#[structopt(
 		long = "password",
+		parse(try_from_str = secret_string_from_str),
 		conflicts_with_all = &[ "password-interactive", "password-filename" ]
 	)]
-	pub password: Option<String>,
+	pub password: Option<SecretString>,
 
 	/// File that contains the password used by the keystore.
 	#[structopt(
@@ -54,34 +60,59 @@ pub struct KeystoreParams {
 	pub password_filename: Option<PathBuf>,
 }
 
+/// Parse a sercret string, returning a displayable error.
+pub fn secret_string_from_str(s: &str) -> std::result::Result<SecretString, String> {
+	Ok(std::str::FromStr::from_str(s)
+		.map_err(|_e| "Could not get SecretString".to_string())?)
+}
+
 impl KeystoreParams {
 	/// Get the keystore configuration for the parameters
 	pub fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
 		let password = if self.password_interactive {
 			#[cfg(not(target_os = "unknown"))]
 			{
-				Some(input_keystore_password()?.into())
+				let mut password = input_keystore_password()?;
+				let secret = std::str::FromStr::from_str(password.as_str())
+					.map_err(|()| "Error reading password")?;
+				password.zeroize();
+				Some(secret)
 			}
 			#[cfg(target_os = "unknown")]
 			None
 		} else if let Some(ref file) = self.password_filename {
-			Some(
-				fs::read_to_string(file)
-					.map_err(|e| format!("{}", e))?
-					.into(),
-			)
-		} else if let Some(ref password) = self.password {
-			Some(password.clone().into())
+			let mut password = fs::read_to_string(file)
+				.map_err(|e| format!("{}", e))?;
+			let secret = std::str::FromStr::from_str(password.as_str())
+				.map_err(|()| "Error reading password")?;
+			password.zeroize();
+			Some(secret)
 		} else {
-			None
+			self.password.clone()
 		};
 
 		let path = self
 			.keystore_path
 			.clone()
-			.unwrap_or(base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH));
+			.unwrap_or_else(|| base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH));
 
 		Ok(KeystoreConfig::Path { path, password })
+	}
+
+	/// helper method to fetch password from `KeyParams` or read from stdin
+	pub fn read_password(&self) -> error::Result<Option<SecretString>> {
+		let (password_interactive, password) = (self.password_interactive, self.password.clone());
+
+		let pass = if password_interactive {
+			let mut password = rpassword::read_password_from_tty(Some("Key password: "))?;
+			let pass = Some(FromStr::from_str(&password).map_err(|()| "Error reading password")?);
+			password.zeroize();
+			pass
+		} else {
+			password
+		};
+
+		Ok(pass)
 	}
 }
 

@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -24,7 +26,7 @@ use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
 };
 use log::{debug, info, warn};
-
+use sp_core::traits::BareCryptoStorePtr;
 use sp_consensus::SelectChain;
 use sc_client_api::backend::Backend;
 use sp_utils::mpsc::TracingUnboundedReceiver;
@@ -38,6 +40,7 @@ use crate::{
 use crate::authorities::SharedAuthoritySet;
 use crate::communication::{Network as NetworkT, NetworkBridge};
 use crate::consensus_changes::SharedConsensusChanges;
+use crate::notification::GrandpaJustificationSender;
 use sp_finality_grandpa::AuthorityId;
 use std::marker::{PhantomData, Unpin};
 
@@ -67,14 +70,14 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	voters: &Arc<VoterSet<AuthorityId>>,
+	justification_sender: &Option<GrandpaJustificationSender<Block>>,
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
-) -> impl Future<Output=Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> where
+) -> impl Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>>
+where
 	NumberFor<Block>: BlockNumberOps,
-	S: Stream<
-		Item = Result<CommunicationIn<Block>, CommandOrError<Block::Hash, NumberFor<Block>>>,
-	>,
+	S: Stream<Item = Result<CommunicationIn<Block>, CommandOrError<Block::Hash, NumberFor<Block>>>>,
 	F: Fn(u64),
 	BE: Backend<Block>,
 	Client: crate::ClientForGrandpa<Block, BE>,
@@ -83,6 +86,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	let consensus_changes = consensus_changes.clone();
 	let client = client.clone();
 	let voters = voters.clone();
+	let justification_sender = justification_sender.clone();
 
 	let observer = commits.try_fold(last_finalized_number, move |last_finalized_number, global| {
 		let (round, commit, callback) = match global {
@@ -111,7 +115,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 			Err(e) => return future::err(e.into()),
 		};
 
-		if let Some(_) = validation_result.ghost() {
+		if validation_result.ghost().is_some() {
 			let finalized_hash = commit.target_hash;
 			let finalized_number = commit.target_number;
 
@@ -125,6 +129,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 				finalized_number,
 				(round, commit).into(),
 				false,
+				justification_sender.as_ref(),
 			) {
 				Ok(_) => {},
 				Err(e) => return future::err(e),
@@ -175,6 +180,8 @@ where
 		select_chain: _,
 		persistent_data,
 		voter_commands_rx,
+		justification_sender,
+		..
 	} = link;
 
 	let network = NetworkBridge::new(
@@ -188,8 +195,9 @@ where
 		client,
 		network,
 		persistent_data,
-		config.keystore.clone(),
-		voter_commands_rx
+		config.keystore,
+		voter_commands_rx,
+		Some(justification_sender),
 	);
 
 	let observer_work = observer_work
@@ -208,8 +216,9 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
 	client: Arc<Client>,
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
-	keystore: Option<sc_keystore::KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
+	justification_sender: Option<GrandpaJustificationSender<B>>,
 	_phantom: PhantomData<BE>,
 }
 
@@ -225,8 +234,9 @@ where
 		client: Arc<Client>,
 		network: NetworkBridge<B, Network>,
 		persistent_data: PersistentData<B>,
-		keystore: Option<sc_keystore::KeyStorePtr>,
+		keystore: Option<BareCryptoStorePtr>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
+		justification_sender: Option<GrandpaJustificationSender<B>>,
 	) -> Self {
 
 		let mut work = ObserverWork {
@@ -236,8 +246,9 @@ where
 			client,
 			network,
 			persistent_data,
-			keystore,
+			keystore: keystore.clone(),
 			voter_commands_rx,
+			justification_sender,
 			_phantom: PhantomData,
 		};
 		work.rebuild_observer();
@@ -257,7 +268,7 @@ where
 			&voters,
 			self.client.clone(),
 			&self.network,
-			&self.keystore,
+			self.keystore.as_ref(),
 			None,
 		);
 
@@ -284,6 +295,7 @@ where
 			&self.persistent_data.authority_set,
 			&self.persistent_data.consensus_changes,
 			&voters,
+			&self.justification_sender,
 			last_finalized_number,
 			global_in,
 			note_round,
@@ -409,20 +421,24 @@ mod tests {
 			(Arc::new(client), backend)
 		};
 
+		let voters = vec![(sp_keyring::Ed25519Keyring::Alice.public().into(), 1)];
+
 		let persistent_data = aux_schema::load_persistent(
 			&*backend,
 			client.info().genesis_hash,
 			0,
-			|| Ok(vec![]),
+			|| Ok(voters),
 		).unwrap();
 
 		let (_tx, voter_command_rx) = tracing_unbounded("");
+
 		let observer = ObserverWork::new(
 			client,
 			tester.net_handle.clone(),
 			persistent_data,
 			None,
 			voter_command_rx,
+			None,
 		);
 
 		// Trigger a reputation change through the gossip validator.

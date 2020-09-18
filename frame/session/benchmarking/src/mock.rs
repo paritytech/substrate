@@ -1,20 +1,21 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
-//! Mock file for staking fuzzing.
+//! Mock file for session benchmarking.
 
 #![cfg(test)]
 
@@ -32,7 +33,7 @@ type Staking = pallet_staking::Module<Test>;
 type Session = pallet_session::Module<Test>;
 
 impl_outer_origin! {
-	pub enum Origin for Test  where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 impl_outer_dispatch! {
@@ -57,6 +58,7 @@ impl Convert<u128, u64> for CurrencyToVoteHandler {
 pub struct Test;
 
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
@@ -69,23 +71,30 @@ impl frame_system::Trait for Test {
 	type Event = ();
 	type BlockHashCount = ();
 	type MaximumBlockWeight = ();
+	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = ();
 	type AvailableBlockRatio = ();
 	type MaximumBlockLength = ();
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnKilledAccount = (Balances,);
+	type OnKilledAccount = Balances;
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
 }
 impl pallet_balances::Trait for Test {
+	type MaxLocks = ();
 	type Balance = Balance;
 	type Event = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -95,6 +104,7 @@ impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 impl pallet_session::historical::Trait for Test {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
@@ -132,6 +142,7 @@ impl pallet_session::Trait for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type DisabledValidatorsThreshold = ();
+	type WeightInfo = ();
 }
 pallet_staking_reward_curve::build! {
 	const I_NPOS: sp_runtime::curve::PiecewiseLinear<'static> = curve!(
@@ -146,14 +157,17 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
-type SubmitTransaction = frame_system::offchain::TransactionSubmitter<
-	sp_runtime::testing::UintAuthorityId,
-	Test,
-	Extrinsic,
->;
+
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Test where
+	Call: From<C>,
+{
+	type OverarchingCall = Call;
+	type Extrinsic = Extrinsic;
+}
 
 impl pallet_staking::Trait for Test {
 	type Currency = Balances;
@@ -172,8 +186,11 @@ impl pallet_staking::Trait for Test {
 	type NextNewSession = Session;
 	type ElectionLookahead = ();
 	type Call = Call;
-	type SubmitTransaction = SubmitTransaction;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type UnsignedPriority = UnsignedPriority;
+	type MaxIterations = ();
+	type MinSolutionScoreBump = ();
+	type WeightInfo = ();
 }
 
 impl crate::Trait for Test {}

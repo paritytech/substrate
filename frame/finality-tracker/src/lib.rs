@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! FRAME Pallet that tracks the last finalized block, as perceived by block authors.
 
@@ -23,6 +24,7 @@ use sp_runtime::traits::{One, Zero, SaturatedConversion};
 use sp_std::{prelude::*, result, cmp, vec};
 use frame_support::{decl_module, decl_storage, decl_error, ensure};
 use frame_support::traits::Get;
+use frame_support::weights::{DispatchClass};
 use frame_system::{ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
@@ -76,7 +78,7 @@ decl_module! {
 
 		/// Hint that the author of this block thinks the best finalized
 		/// block is the given number.
-		#[weight = frame_support::weights::SimpleDispatchInfo::FixedMandatory(10_000)]
+		#[weight = (0, DispatchClass::Mandatory)]
 		fn final_hint(origin, #[compact] hint: T::BlockNumber) {
 			ensure_none(origin)?;
 			ensure!(!<Self as Store>::Update::exists(), Error::<T>::AlreadyUpdated);
@@ -207,11 +209,14 @@ mod tests {
 	use sp_io::TestExternalities;
 	use sp_core::H256;
 	use sp_runtime::{
-		testing::Header, Perbill,
-		traits::{BlakeTwo256, IdentityLookup, Header as HeaderT},
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+		Perbill,
 	};
 	use frame_support::{
-		assert_ok, impl_outer_origin, parameter_types, weights::Weight, traits::OnFinalize
+		assert_ok, impl_outer_origin, parameter_types,
+		weights::Weight,
+		traits::OnFinalize,
 	};
 	use frame_system as system;
 	use std::cell::RefCell;
@@ -226,7 +231,7 @@ mod tests {
 	pub struct Test;
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
 	thread_local! {
@@ -248,6 +253,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -260,6 +266,10 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
@@ -267,6 +277,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;
@@ -329,10 +340,7 @@ mod tests {
 					&Default::default(),
 					Default::default(),
 				);
-				assert_ok!(FinalityTracker::dispatch(
-					Call::final_hint(i-1),
-					Origin::NONE,
-				));
+				assert_ok!(FinalityTracker::final_hint(Origin::none(), i - 1));
 				FinalityTracker::on_finalize(i);
 				let hdr = System::finalize();
 				parent_hash = hdr.hash();

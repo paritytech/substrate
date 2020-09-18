@@ -1,27 +1,31 @@
 [package]
 name = "pallet-treasury"
-version = "2.0.0-alpha.5"
+version = "2.0.0-rc6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet to manage treasury"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "2.0.0-alpha.5", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0-alpha.5", default-features = false, path = "../system" }
-pallet-balances = { version = "2.0.0-alpha.5", default-features = false, path = "../balances" }
+codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
+sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0-rc6", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-rc6", default-features = false, path = "../system" }
+pallet-balances = { version = "2.0.0-rc6", default-features = false, path = "../balances" }
 
-frame-benchmarking = { version = "2.0.0-alpha.5", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "2.0.0-rc6", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-io ={ version = "2.0.0-alpha.5", path = "../../primitives/io" }
-sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
+sp-io ={ version = "2.0.0-rc6", path = "../../primitives/io" }
+sp-core = { version = "2.0.0-rc6", path = "../../primitives/core" }
+sp-storage = { version = "2.0.0-rc6", path = "../../primitives/storage" }
 
 [features]
 default = ["std"]
@@ -38,6 +42,3 @@ runtime-benchmarks = [
 	"frame-benchmarking",
 	"frame-support/runtime-benchmarks",
 ]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # WASM builder runner
 //!
@@ -43,7 +44,7 @@ const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
 const DUMMY_WASM_BINARY_ENV: &str = "BUILD_DUMMY_WASM_BINARY";
 
 /// Environment variable that makes sure the WASM build is triggered.
-const TRIGGER_WASM_BUILD_ENV: &str = "TRIGGER_WASM_BUILD";
+const FORCE_WASM_BUILD_ENV: &str = "FORCE_WASM_BUILD";
 
 /// Replace all backslashes with slashes.
 fn replace_back_slashes<T: ToString>(path: T) -> String {
@@ -169,7 +170,7 @@ impl WasmBuilderSelectSource {
 /// 3. Select the source of the `wasm-builder` crate using the methods of
 ///    [`WasmBuilderSelectSource`].
 /// 4. Set additional `RUST_FLAGS` or a different name for the file containing the WASM code
-///    using methods of [`Self`].
+///    using methods of [`WasmBuilder`].
 /// 5. Build the WASM binary using [`Self::build`].
 pub struct WasmBuilder {
 	/// Where should we pull the `wasm-builder` crate from.
@@ -465,7 +466,7 @@ fn check_provide_dummy_wasm_binary() -> bool {
 fn provide_dummy_wasm_binary(file_path: &Path) {
 	fs::write(
 		file_path,
-		"pub const WASM_BINARY: &[u8] = &[]; pub const WASM_BINARY_BLOATY: &[u8] = &[];",
+		"pub const WASM_BINARY: Option<&[u8]> = None; pub const WASM_BINARY_BLOATY: Option<&[u8]> = None;",
 	).expect("Writing dummy WASM binary should not fail");
 }
 
@@ -475,6 +476,6 @@ fn generate_rerun_if_changed_instructions() {
 	// Make sure that the `build.rs` is called again if one of the following env variables changes.
 	println!("cargo:rerun-if-env-changed={}", SKIP_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", DUMMY_WASM_BINARY_ENV);
-	println!("cargo:rerun-if-env-changed={}", TRIGGER_WASM_BUILD_ENV);
+	println!("cargo:rerun-if-env-changed={}", FORCE_WASM_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", generate_crate_skip_build_env_name());
 }

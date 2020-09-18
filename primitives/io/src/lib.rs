@@ -1,20 +1,21 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
-//! This is part of the Substrate runtime.
+//! I/O host interface for substrate runtime.
 
 #![warn(missing_docs)]
 
@@ -32,16 +33,19 @@ use sp_std::vec::Vec;
 use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]
+use tracing;
+
+#[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
-	traits::{KeystoreExt, CallInWasmExt},
+	traits::{KeystoreExt, CallInWasmExt, TaskExecutorExt},
 	offchain::{OffchainExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
-	storage::{ChildStorageKey, ChildInfo},
+	storage::ChildInfo,
 };
 
 use sp_core::{
-	crypto::KeyTypeId, ed25519, sr25519, H256, LogLevel,
+	OpaquePeerId, crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
@@ -51,11 +55,18 @@ use sp_core::{
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 
 use sp_runtime_interface::{runtime_interface, Pointer};
+use sp_runtime_interface::pass_by::PassBy;
 
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use sp_externalities::{ExternalitiesExt, Externalities};
+
+#[cfg(feature = "std")]
+mod batch_verifier;
+
+#[cfg(feature = "std")]
+use batch_verifier::BatchVerifier;
 
 /// Error verifying ECDSA signature
 #[derive(Encode, Decode)]
@@ -68,49 +79,12 @@ pub enum EcdsaVerifyError {
 	BadSignature,
 }
 
-/// Returns a `ChildStorageKey` if the given `storage_key` slice is a valid storage
-/// key or panics otherwise.
-///
-/// Panicking here is aligned with what the `without_std` environment would do
-/// in the case of an invalid child storage key.
-#[cfg(feature = "std")]
-fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey {
-	match ChildStorageKey::from_slice(storage_key) {
-		Some(storage_key) => storage_key,
-		None => panic!("child storage key is invalid"),
-	}
-}
-
 /// Interface for accessing the storage from within the runtime.
 #[runtime_interface]
 pub trait Storage {
 	/// Returns the data for `key` in the storage or `None` if the key can not be found.
 	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.storage(key).map(|s| s.to_vec())
-	}
-
-	/// All Child api uses :
-	/// - A `child_storage_key` to define the anchor point for the child proof
-	/// (commonly the location where the child root is stored in its parent trie).
-	/// - A `child_storage_types` to identify the kind of the child type and how its
-	/// `child definition` parameter is encoded.
-	/// - A `child_definition_parameter` which is the additional information required
-	/// to use the child trie. For instance defaults child tries requires this to
-	/// contain a collision free unique id.
-	///
-	/// This function specifically returns the data for `key` in the child storage or `None`
-	/// if the key can not be found.
-	fn child_get(
-		&self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.child_storage(storage_key, child_info, key).map(|s| s.to_vec())
 	}
 
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
@@ -124,37 +98,8 @@ pub trait Storage {
 			let data = &value[value_offset.min(value.len())..];
 			let written = std::cmp::min(data.len(), value_out.len());
 			value_out[..written].copy_from_slice(&data[..written]);
-			value.len() as u32
+			data.len() as u32
 		})
-	}
-
-	/// Get `key` from child storage, placing the value into `value_out` and return the number
-	/// of bytes that the entry in storage has beyond the offset or `None` if the storage entry
-	/// doesn't exist at all.
-	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
-	/// are copied into `value_out`.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_read(
-		&self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-		key: &[u8],
-		value_out: &mut [u8],
-		value_offset: u32,
-	) -> Option<u32> {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.child_storage(storage_key, child_info, key)
-			.map(|value| {
-				let value_offset = value_offset as usize;
-				let data = &value[value_offset.min(value.len())..];
-				let written = std::cmp::min(data.len(), value_out.len());
-				value_out[..written].copy_from_slice(&data[..written]);
-				value.len() as u32
-			})
 	}
 
 	/// Set `key` to `value` in the storage.
@@ -162,57 +107,9 @@ pub trait Storage {
 		self.set_storage(key.to_vec(), value.to_vec());
 	}
 
-	/// Set `key` to `value` in the child storage denoted by `child_storage_key`.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_set(
-		&mut self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-		key: &[u8],
-		value: &[u8],
-	) {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.set_child_storage(storage_key, child_info, key.to_vec(), value.to_vec());
-	}
-
 	/// Clear the storage of the given `key` and its value.
 	fn clear(&mut self, key: &[u8]) {
 		self.clear_storage(key)
-	}
-
-	/// Clear the given child storage of the given `key` and its value.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_clear(
-		&mut self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-		key: &[u8],
-	) {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.clear_child_storage(storage_key, child_info, key);
-	}
-
-	/// Clear an entire child storage.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_storage_kill(
-		&mut self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-	) {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.kill_child_storage(storage_key, child_info);
 	}
 
 	/// Check whether the given `key` exists in storage.
@@ -220,65 +117,30 @@ pub trait Storage {
 		self.exists_storage(key)
 	}
 
-	/// Check whether the given `key` exists in storage.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_exists(
-		&self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-		key: &[u8],
-	) -> bool {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.exists_child_storage(storage_key, child_info, key)
-	}
-
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		Externalities::clear_prefix(*self, prefix)
 	}
 
-	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
+	/// Append the encoded `value` to the storage item at `key`.
 	///
-	/// See `child_get` for common child api parameters.
-	fn child_clear_prefix(
-		&mut self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
-		prefix: &[u8],
-	) {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.clear_child_prefix(storage_key, child_info, prefix);
+	/// The storage item needs to implement [`EncodeAppend`](codec::EncodeAppend).
+	///
+	/// # Warning
+	///
+	/// If the storage item does not support [`EncodeAppend`](codec::EncodeAppend) or
+	/// something else fails at appending, the storage item will be set to `[value]`.
+	fn append(&mut self, key: &[u8], value: Vec<u8>) {
+		self.storage_append(key.to_vec(), value);
 	}
 
 	/// "Commit" all existing operations and compute the resulting storage root.
 	///
 	/// The hashing algorithm is defined by the `Block`.
 	///
-	/// Returns the SCALE encoded hash.
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
 		self.storage_root()
-	}
-
-	/// "Commit" all existing operations and compute the resulting child storage root.
-	///
-	/// The hashing algorithm is defined by the `Block`.
-	///
-	/// Returns the SCALE encoded hash.
-	///
-	/// See `child_get` for common child api parameters.
-	fn child_root(
-		&mut self,
-		child_storage_key: &[u8],
-	) -> Vec<u8> {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.child_storage_root(storage_key)
 	}
 
 	/// "Commit" all existing operations and get the resulting storage change root.
@@ -286,7 +148,7 @@ pub trait Storage {
 	///
 	/// The hashing algorithm is defined by the `Block`.
 	///
-	/// Returns an `Some(_)` which holds the SCALE encoded hash or `None` when
+	/// Returns `Some(Vec<u8>)` which holds the SCALE encoded hash or `None` when
 	/// changes trie is disabled.
 	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
 		self.storage_changes_root(parent_hash)
@@ -298,18 +160,174 @@ pub trait Storage {
 		self.next_storage_key(&key)
 	}
 
-	/// Get the next key in storage after the given one in lexicographic order in child storage.
-	fn child_next_key(
-		&mut self,
-		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
+	/// Start a new nested transaction.
+	///
+	/// This allows to either commit or roll back all changes that are made after this call.
+	/// For every transaction there must be a matching call to either `rollback_transaction`
+	/// or `commit_transaction`. This is also effective for all values manipulated using the
+	/// `DefaultChildStorage` API.
+	///
+	/// # Warning
+	///
+	/// This is a low level API that is potentially dangerous as it can easily result
+	/// in unbalanced transactions. For example, FRAME users should use high level storage
+	/// abstractions.
+	fn start_transaction(&mut self) {
+		self.storage_start_transaction();
+	}
+
+	/// Rollback the last transaction started by `start_transaction`.
+	///
+	/// Any changes made during that transaction are discarded.
+	///
+	/// # Panics
+	///
+	/// Will panic if there is no open transaction.
+	fn rollback_transaction(&mut self) {
+		self.storage_rollback_transaction()
+			.expect("No open transaction that can be rolled back.");
+	}
+
+	/// Commit the last transaction started by `start_transaction`.
+	///
+	/// Any changes made during that transaction are committed.
+	///
+	/// # Panics
+	///
+	/// Will panic if there is no open transaction.
+	fn commit_transaction(&mut self) {
+		self.storage_commit_transaction()
+			.expect("No open transaction that can be committed.");
+	}
+}
+
+/// Interface for accessing the child storage for default child trie,
+/// from within the runtime.
+#[runtime_interface]
+pub trait DefaultChildStorage {
+	/// Get a default child storage value for a given key.
+	///
+	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the parent trie.
+	/// Result is `None` if the value for `key` in the child storage can not be found.
+	fn get(
+		&self,
+		storage_key: &[u8],
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.next_child_storage_key(storage_key, child_info, key)
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage(&child_info, key).map(|s| s.to_vec())
+	}
+
+	/// Allocation efficient variant of `get`.
+	///
+	/// Get `key` from child storage, placing the value into `value_out` and return the number
+	/// of bytes that the entry in storage has beyond the offset or `None` if the storage entry
+	/// doesn't exist at all.
+	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
+	/// are copied into `value_out`.
+	fn read(
+		&self,
+		storage_key: &[u8],
+		key: &[u8],
+		value_out: &mut [u8],
+		value_offset: u32,
+	) -> Option<u32> {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage(&child_info, key)
+			.map(|value| {
+				let value_offset = value_offset as usize;
+				let data = &value[value_offset.min(value.len())..];
+				let written = std::cmp::min(data.len(), value_out.len());
+				value_out[..written].copy_from_slice(&data[..written]);
+				data.len() as u32
+			})
+	}
+
+	/// Set a child storage value.
+	///
+	/// Set `key` to `value` in the child storage denoted by `storage_key`.
+	fn set(
+		&mut self,
+		storage_key: &[u8],
+		key: &[u8],
+		value: &[u8],
+	) {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
+	}
+
+	/// Clear a child storage key.
+	///
+	/// For the default child storage at `storage_key`, clear value at `key`.
+	fn clear(
+		&mut self,
+		storage_key: &[u8],
+		key: &[u8],
+	) {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.clear_child_storage(&child_info, key);
+	}
+
+	/// Clear an entire child storage.
+	///
+	/// If it exists, the child storage for `storage_key`
+	/// is removed.
+	fn storage_kill(
+		&mut self,
+		storage_key: &[u8],
+	) {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.kill_child_storage(&child_info);
+	}
+
+	/// Check a child storage key.
+	///
+	/// Check whether the given `key` exists in default child defined at `storage_key`.
+	fn exists(
+		&self,
+		storage_key: &[u8],
+		key: &[u8],
+	) -> bool {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.exists_child_storage(&child_info, key)
+	}
+
+	/// Clear child default key by prefix.
+	///
+	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
+	fn clear_prefix(
+		&mut self,
+		storage_key: &[u8],
+		prefix: &[u8],
+	) {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.clear_child_prefix(&child_info, prefix);
+	}
+
+	/// Default child root calculation.
+	///
+	/// "Commit" all existing operations and compute the resulting child storage root.
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	fn root(
+		&mut self,
+		storage_key: &[u8],
+	) -> Vec<u8> {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage_root(&child_info)
+	}
+
+	/// Child storage key iteration.
+	///
+	/// Get the next key in storage after the given one in lexicographic order in child storage.
+	fn next_key(
+		&mut self,
+		storage_key: &[u8],
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.next_child_storage_key(&child_info, key)
 	}
 }
 
@@ -324,6 +342,16 @@ pub trait Trie {
 	/// A trie root formed from the enumerated items.
 	fn blake2_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
 		Layout::<sp_core::Blake2Hasher>::ordered_trie_root(input)
+	}
+
+	/// A trie root formed from the iterated items.
+	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
+		Layout::<sp_core::KeccakHasher>::trie_root(input)
+	}
+
+	/// A trie root formed from the enumerated items.
+	fn keccak_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
+		Layout::<sp_core::KeccakHasher>::ordered_trie_root(input)
 	}
 }
 
@@ -354,7 +382,8 @@ pub trait Misc {
 
 	/// Extract the runtime version of the given wasm blob by calling `Core_version`.
 	///
-	/// Returns the SCALE encoded runtime version and `None` if the call failed.
+	/// Returns `None` if calling the function failed for any reason or `Some(Vec<u8>)` where
+	/// the `Vec<u8>` holds the SCALE encoded runtime version.
 	///
 	/// # Performance
 	///
@@ -367,7 +396,18 @@ pub trait Misc {
 
 		self.extension::<CallInWasmExt>()
 			.expect("No `CallInWasmExt` associated for the current context!")
-			.call_in_wasm(wasm, None, "Core_version", &[], &mut ext)
+			.call_in_wasm(
+				wasm,
+				None,
+				"Core_version",
+				&[],
+				&mut ext,
+				// If a runtime upgrade introduces new host functions that are not provided by
+				// the node, we should not fail at instantiation. Otherwise nodes that are
+				// updated could run this successfully and it could lead to a storage root
+				// mismatch when importing this block.
+				sp_core::traits::MissingHostFunctions::Allow,
+			)
 			.ok()
 	}
 }
@@ -416,16 +456,93 @@ pub trait Crypto {
 			.ok()
 	}
 
-	/// Verify an `ed25519` signature.
+	/// Verify `ed25519` signature.
 	///
-	/// Returns `true` when the verification in successful.
+	/// Returns `true` when the verification was successful.
 	fn ed25519_verify(
-		&self,
 		sig: &ed25519::Signature,
 		msg: &[u8],
 		pub_key: &ed25519::Public,
 	) -> bool {
 		ed25519::Pair::verify(sig, msg, pub_key)
+	}
+
+	/// Register a `ed25519` signature for batch verification.
+	///
+	/// Batch verification must be enabled by calling [`start_batch_verify`].
+	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// To get the result of the batch verification, [`finish_batch_verify`]
+	/// needs to be called.
+	///
+	/// Returns `true` when the verification is either successful or batched.
+	fn ed25519_batch_verify(
+		&mut self,
+		sig: &ed25519::Signature,
+		msg: &[u8],
+		pub_key: &ed25519::Public,
+	) -> bool {
+		self.extension::<VerificationExt>().map(
+			|extension| extension.push_ed25519(sig.clone(), pub_key.clone(), msg.to_vec())
+		).unwrap_or_else(|| ed25519_verify(sig, msg, pub_key))
+	}
+
+	/// Verify `sr25519` signature.
+	///
+	/// Returns `true` when the verification was successful.
+	#[version(2)]
+	fn sr25519_verify(
+		sig: &sr25519::Signature,
+		msg: &[u8],
+		pub_key: &sr25519::Public,
+	) -> bool {
+		sr25519::Pair::verify(sig, msg, pub_key)
+	}
+
+	/// Register a `sr25519` signature for batch verification.
+	///
+	/// Batch verification must be enabled by calling [`start_batch_verify`].
+	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// To get the result of the batch verification, [`finish_batch_verify`]
+	/// needs to be called.
+	///
+	/// Returns `true` when the verification is either successful or batched.
+	fn sr25519_batch_verify(
+		&mut self,
+		sig: &sr25519::Signature,
+		msg: &[u8],
+		pub_key: &sr25519::Public,
+	) -> bool {
+		self.extension::<VerificationExt>().map(
+			|extension| extension.push_sr25519(sig.clone(), pub_key.clone(), msg.to_vec())
+		).unwrap_or_else(|| sr25519_verify(sig, msg, pub_key))
+	}
+
+	/// Start verification extension.
+	fn start_batch_verify(&mut self) {
+		let scheduler = self.extension::<TaskExecutorExt>()
+			.expect("No task executor associated with the current context!")
+			.0
+			.clone();
+
+		self.register_extension(VerificationExt(BatchVerifier::new(scheduler)))
+			.expect("Failed to register required extension: `VerificationExt`");
+	}
+
+	/// Finish batch-verification of signatures.
+	///
+	/// Verify or wait for verification to finish for all signatures which were previously
+	/// deferred by `sr25519_verify`/`ed25519_verify`.
+	///
+	/// Will panic if no `VerificationExt` is registered (`start_batch_verify` was not called).
+	fn finish_batch_verify(&mut self) -> bool {
+		let result = self.extension::<VerificationExt>()
+			.expect("`finish_batch_verify` should only be called after `start_batch_verify`")
+			.verify_and_clear();
+
+		self.deregister_extension::<VerificationExt>()
+			.expect("No verification extension in current context!");
+
+		result
 	}
 
 	/// Returns all `sr25519` public keys for the given key id from the keystore.
@@ -477,12 +594,75 @@ pub trait Crypto {
 		sr25519::Pair::verify_deprecated(sig, msg, pubkey)
 	}
 
-	/// Verify an `sr25519` signature.
+	/// Returns all `ecdsa` public keys for the given key id from the keystore.
+	fn ecdsa_public_keys(&mut self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.read()
+			.ecdsa_public_keys(id)
+	}
+
+	/// Generate an `ecdsa` key for the given key type using an optional `seed` and
+	/// store it in the keystore.
 	///
-	/// Returns `true` when the verification in successful.
-	#[version(2)]
-	fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pubkey: &sr25519::Public) -> bool {
-		sr25519::Pair::verify(sig, msg, pubkey)
+	/// The `seed` needs to be a valid utf8.
+	///
+	/// Returns the public key.
+	fn ecdsa_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ecdsa::Public {
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.write()
+			.ecdsa_generate_new(id, seed)
+			.expect("`ecdsa_generate` failed")
+	}
+
+	/// Sign the given `msg` with the `ecdsa` key that corresponds to the given public key and
+	/// key type in the keystore.
+	///
+	/// Returns the signature.
+	fn ecdsa_sign(
+		&mut self,
+		id: KeyTypeId,
+		pub_key: &ecdsa::Public,
+		msg: &[u8],
+	) -> Option<ecdsa::Signature> {
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.read()
+			.sign_with(id, &pub_key.into(), msg)
+			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
+			.ok()
+	}
+
+	/// Verify `ecdsa` signature.
+	///
+	/// Returns `true` when the verification was successful.
+	fn ecdsa_verify(
+		sig: &ecdsa::Signature,
+		msg: &[u8],
+		pub_key: &ecdsa::Public,
+	) -> bool {
+		ecdsa::Pair::verify(sig, msg, pub_key)
+	}
+
+	/// Register a `ecdsa` signature for batch verification.
+	///
+	/// Batch verification must be enabled by calling [`start_batch_verify`].
+	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// To get the result of the batch verification, [`finish_batch_verify`]
+	/// needs to be called.
+	///
+	/// Returns `true` when the verification is either successful or batched.
+	fn ecdsa_batch_verify(
+		&mut self,
+		sig: &ecdsa::Signature,
+		msg: &[u8],
+		pub_key: &ecdsa::Public,
+	) -> bool {
+		self.extension::<VerificationExt>().map(
+			|extension| extension.push_ecdsa(sig.clone(), pub_key.clone(), msg.to_vec())
+		).unwrap_or_else(|| ecdsa_verify(sig, msg, pub_key))
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
@@ -566,7 +746,29 @@ pub trait Hashing {
 	}
 }
 
+/// Interface that provides functions to access the Offchain DB.
+#[runtime_interface]
+pub trait OffchainIndex {
+	/// Write a key value pair to the Offchain DB database in a buffered fashion.
+	fn set(&mut self, key: &[u8], value: &[u8]) {
+		self.set_offchain_storage(key, Some(value));
+	}
+
+	/// Remove a key and its associated value from the Offchain DB.
+	fn clear(&mut self, key: &[u8]) {
+		self.set_offchain_storage(key, None);
+	}
+}
+
+#[cfg(feature = "std")]
+sp_externalities::decl_extension! {
+	/// The keystore extension to register/retrieve from the externalities.
+	pub struct VerificationExt(BatchVerifier);
+}
+
 /// Interface that provides functions to access the offchain functionality.
+///
+/// These functions are being made available to the runtime and are called by the runtime.
 #[runtime_interface]
 pub trait Offchain {
 	/// Returns if the local node is a potential validator.
@@ -628,6 +830,16 @@ pub trait Offchain {
 		self.extension::<OffchainExt>()
 			.expect("local_storage_set can be called only in the offchain worker context")
 			.local_storage_set(kind, key, value)
+	}
+
+	/// Remove a value from the local storage.
+	///
+	/// Note this storage is not part of the consensus, it's only accessible by
+	/// offchain worker tasks running on the same machine. It IS persisted between runs.
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		self.extension::<OffchainExt>()
+			.expect("local_storage_clear can be called only in the offchain worker context")
+			.local_storage_clear(kind, key)
 	}
 
 	/// Sets a value in the local storage if it matches current value.
@@ -752,6 +964,13 @@ pub trait Offchain {
 			.http_response_read_body(request_id, buffer, deadline)
 			.map(|r| r as u32)
 	}
+
+	/// Set the authorized nodes and authorized_only flag.
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
+		self.extension::<OffchainExt>()
+			.expect("set_authorized_nodes can be called only in the offchain worker context")
+			.set_authorized_nodes(nodes, authorized_only)
+	}
 }
 
 /// Wasm only interface that provides functions for calling into the allocator.
@@ -788,6 +1007,156 @@ pub trait Logging {
 		}
 	}
 }
+
+#[derive(Encode, Decode)]
+/// Crossing is a helper wrapping any Encode-Decodeable type
+/// for transferring over the wasm barrier.
+pub struct Crossing<T: Encode + Decode>(T);
+
+impl<T: Encode + Decode> PassBy for Crossing<T> {
+	type PassBy = sp_runtime_interface::pass_by::Codec<Self>;
+}
+
+impl<T: Encode + Decode> Crossing<T> {
+
+	/// Convert into the inner type
+	pub fn into_inner(self) -> T {
+		self.0
+	}
+}
+
+// useful for testing
+impl<T> core::default::Default for Crossing<T>
+	where T: core::default::Default + Encode + Decode
+{
+	fn default() -> Self {
+		Self(Default::default())
+	}
+
+}
+
+/// Interface to provide tracing facilities for wasm. Modelled after tokios `tracing`-crate
+/// interfaces. See `sp-tracing` for more information.
+#[runtime_interface(wasm_only, no_tracing)]
+pub trait WasmTracing {
+	/// Whether the span described in `WasmMetadata` should be traced wasm-side
+	/// On the host converts into a static Metadata and checks against the global `tracing` dispatcher.
+	///
+	/// When returning false the calling code should skip any tracing-related execution. In general
+	/// within the same block execution this is not expected to change and it doesn't have to be
+	/// checked more than once per metadata. This exists for optimisation purposes but is still not
+	/// cheap as it will jump the wasm-native-barrier every time it is called. So an implementation might
+	/// chose to cache the result for the execution of the entire block.
+	fn enabled(&mut self, metadata: Crossing<sp_tracing::WasmMetadata>) -> bool {
+		let metadata: &tracing_core::metadata::Metadata<'static> = (&metadata.into_inner()).into();
+		tracing::dispatcher::get_default(|d| {
+			d.enabled(metadata)
+		})
+	}
+
+	/// Open a new span with the given attributes. Return the u64 Id of the span.
+	///
+	/// On the native side this goes through the default `tracing` dispatcher to register the span
+	/// and then calls `clone_span` with the ID to signal that we are keeping it around on the wasm-
+	/// side even after the local span is dropped. The resulting ID is then handed over to the wasm-
+	/// side.
+	fn enter_span(&mut self, span: Crossing<sp_tracing::WasmEntryAttributes>) -> u64 {
+		let span: tracing::Span = span.into_inner().into();
+		match span.id() {
+			Some(id) => tracing::dispatcher::get_default(|d| {
+				// inform dispatch that we'll keep the ID around
+				// then enter it immediately
+				let final_id = d.clone_span(&id);
+				d.enter(&final_id);
+				final_id.into_u64()
+			}),
+			_ => {
+				0
+			}
+		}
+	}
+
+	/// Emit the given event to the global tracer on the native side
+	fn event(&mut self, event: Crossing<sp_tracing::WasmEntryAttributes>) {
+		event.into_inner().emit();
+	}
+
+	/// Signal that a given span-id has been exited. On native, this directly
+	/// proxies the span to the global dispatcher.
+	fn exit(&mut self, span: u64) {
+		tracing::dispatcher::get_default(|d| {
+			let id = tracing_core::span::Id::from_u64(span);
+			d.exit(&id);
+		});
+	}
+}
+
+#[cfg(all(not(feature="std"), feature="with-tracing"))]
+mod tracing_setup {
+	use core::sync::atomic::{AtomicBool, Ordering};
+	use tracing_core::{
+		dispatcher::{Dispatch, set_global_default},
+		span::{Id, Record, Attributes},
+		Metadata, Event,
+	};
+	use super::{wasm_tracing, Crossing};
+
+	const TRACING_SET : AtomicBool = AtomicBool::new(false);
+
+
+	/// The PassingTracingSubscriber implements `tracing_core::Subscriber`
+	/// and pushes the information across the runtime interface to the host
+	struct PassingTracingSubsciber;
+
+	impl tracing_core::Subscriber for PassingTracingSubsciber {
+		fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+			wasm_tracing::enabled(Crossing(metadata.into()))
+		}
+		fn new_span(&self, attrs: &Attributes<'_>) -> Id {
+			Id::from_u64(wasm_tracing::enter_span(Crossing(attrs.into())))
+		}
+		fn enter(&self, span: &Id) {
+			// Do nothing, we already entered the span previously
+		}
+		/// Not implemented! We do not support recording values later
+		/// Will panic when used.
+		fn record(&self, span: &Id, values: &Record<'_>) {
+			unimplemented!{} // this usage is not supported
+		}
+		/// Not implemented! We do not support recording values later
+		/// Will panic when used.
+		fn record_follows_from(&self, span: &Id, follows: &Id) {
+			unimplemented!{ } // this usage is not supported
+		}
+		fn event(&self, event: &Event<'_>) {
+			wasm_tracing::event(Crossing(event.into()))
+		}
+		fn exit(&self, span: &Id) {
+			wasm_tracing::exit(span.into_u64())
+		}
+	}
+
+
+	/// Initialize tracing of sp_tracing on wasm with `with-tracing` enabled.
+	/// Can be called multiple times from within the same process and will only
+	/// set the global bridging subscriber once.
+	pub fn init_tracing() {
+		if TRACING_SET.load(Ordering::Relaxed) == false {
+			set_global_default(Dispatch::new(PassingTracingSubsciber {}))
+				.expect("We only ever call this once");
+			TRACING_SET.store(true, Ordering::Relaxed);
+		}
+	}
+}
+
+#[cfg(not(all(not(feature="std"), feature="with-tracing")))]
+mod tracing_setup {
+	/// Initialize tracing of sp_tracing not necessary – noop. To enable build
+	/// without std and with the `with-tracing`-feature.
+	pub fn init_tracing() { }
+}
+
+pub use tracing_setup::init_tracing;
 
 /// Wasm-only interface that provides functions for interacting with the sandbox.
 #[runtime_interface(wasm_only)]
@@ -933,7 +1302,9 @@ pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2
 #[cfg(feature = "std")]
 pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
+	default_child_storage::HostFunctions,
 	misc::HostFunctions,
+	wasm_tracing::HostFunctions,
 	offchain::HostFunctions,
 	crypto::HostFunctions,
 	hashing::HostFunctions,
@@ -941,14 +1312,17 @@ pub type SubstrateHostFunctions = (
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
+	offchain_index::HostFunctions,
 );
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::map;
 	use sp_state_machine::BasicExternalities;
-	use sp_core::storage::Storage;
+	use sp_core::{
+		storage::Storage, map, traits::TaskExecutorExt, testing::TaskExecutor,
+	};
+	use std::any::TypeId;
 
 	#[test]
 	fn storage_works() {
@@ -963,7 +1337,7 @@ mod tests {
 
 		t = BasicExternalities::new(Storage {
 			top: map![b"foo".to_vec() => b"bar".to_vec()],
-			children: map![],
+			children_default: map![],
 		});
 
 		t.execute_with(|| {
@@ -974,17 +1348,18 @@ mod tests {
 
 	#[test]
 	fn read_storage_works() {
+		let value = b"\x0b\0\0\0Hello world".to_vec();
 		let mut t = BasicExternalities::new(Storage {
-			top: map![b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()],
-			children: map![],
+			top: map![b":test".to_vec() => value.clone()],
+			children_default: map![],
 		});
 
 		t.execute_with(|| {
 			let mut v = [0u8; 4];
-			assert!(storage::read(b":test", &mut v[..], 0).unwrap() >= 4);
+			assert_eq!(storage::read(b":test", &mut v[..], 0).unwrap(), value.len() as u32);
 			assert_eq!(v, [11u8, 0, 0, 0]);
 			let mut w = [0u8; 11];
-			assert!(storage::read(b":test", &mut w[..], 4).unwrap() >= 11);
+			assert_eq!(storage::read(b":test", &mut w[..], 4).unwrap(), value.len() as u32 - 4);
 			assert_eq!(&w, b"Hello world");
 		});
 	}
@@ -998,7 +1373,7 @@ mod tests {
 				b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 			],
-			children: map![],
+			children_default: map![],
 		});
 
 		t.execute_with(|| {
@@ -1008,6 +1383,138 @@ mod tests {
 			assert!(storage::get(b":abdd").is_some());
 			assert!(storage::get(b":abcd").is_none());
 			assert!(storage::get(b":abc").is_none());
+		});
+	}
+
+	#[test]
+	fn batch_verify_start_finish_works() {
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
+
+		ext.execute_with(|| {
+			crypto::start_batch_verify();
+		});
+
+		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_some());
+
+		ext.execute_with(|| {
+			assert!(crypto::finish_batch_verify());
+		});
+
+		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_none());
+	}
+
+	#[test]
+	fn long_sr25519_batching() {
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
+		ext.execute_with(|| {
+			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			crypto::start_batch_verify();
+			for it in 0..70 {
+				let msg = format!("Schnorrkel {}!", it);
+				let signature = pair.sign(msg.as_bytes());
+				crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair.public());
+			}
+
+			// push invlaid
+			crypto::sr25519_batch_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+			assert!(!crypto::finish_batch_verify());
+
+			crypto::start_batch_verify();
+			for it in 0..70 {
+				let msg = format!("Schnorrkel {}!", it);
+				let signature = pair.sign(msg.as_bytes());
+				crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair.public());
+			}
+			assert!(crypto::finish_batch_verify());
+		});
+	}
+
+	#[test]
+	fn batching_works() {
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
+		ext.execute_with(|| {
+			// invalid ed25519 signature
+			crypto::start_batch_verify();
+			crypto::ed25519_batch_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+			assert!(!crypto::finish_batch_verify());
+
+			// 2 valid ed25519 signatures
+			crypto::start_batch_verify();
+
+			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Important message";
+			let signature = pair.sign(msg);
+			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
+
+			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Even more important message";
+			let signature = pair.sign(msg);
+			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
+
+			assert!(crypto::finish_batch_verify());
+
+			// 1 valid, 1 invalid ed25519 signature
+			crypto::start_batch_verify();
+
+			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Important message";
+			let signature = pair.sign(msg);
+			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
+
+			crypto::ed25519_batch_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+
+			assert!(!crypto::finish_batch_verify());
+
+			// 1 valid ed25519, 2 valid sr25519
+			crypto::start_batch_verify();
+
+			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Ed25519 batching";
+			let signature = pair.sign(msg);
+			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
+
+			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Schnorrkel rules";
+			let signature = pair.sign(msg);
+			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
+
+			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Schnorrkel batches!";
+			let signature = pair.sign(msg);
+			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
+
+			assert!(crypto::finish_batch_verify());
+
+			// 1 valid sr25519, 1 invalid sr25519
+			crypto::start_batch_verify();
+
+			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Schnorrkcel!";
+			let signature = pair.sign(msg);
+			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
+
+			crypto::sr25519_batch_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+
+			assert!(!crypto::finish_batch_verify());
 		});
 	}
 }

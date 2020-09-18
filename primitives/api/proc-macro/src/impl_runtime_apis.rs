@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::utils::{
 	generate_crate_access, generate_hidden_includes,
@@ -33,7 +34,7 @@ use syn::{
 	fold::{self, Fold}, parse_quote,
 };
 
-use std::{collections::HashSet, iter};
+use std::collections::HashSet;
 
 /// Unique identifier used to make the hidden includes unique for this macro.
 const HIDDEN_INCLUDES_ID: &str = "IMPL_RUNTIME_APIS";
@@ -70,10 +71,8 @@ fn generate_impl_call(
 	let params = extract_parameter_names_types_and_borrows(signature, AllowSelfRefInParameters::No)?;
 
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
-	let c_iter = iter::repeat(&c);
 	let fn_name = &signature.ident;
-	let fn_name_str = iter::repeat(fn_name.to_string());
-	let input = iter::repeat(input);
+	let fn_name_str = fn_name.to_string();
 	let pnames = params.iter().map(|v| &v.0);
 	let pnames2 = params.iter().map(|v| &v.0);
 	let ptypes = params.iter().map(|v| &v.1);
@@ -81,12 +80,14 @@ fn generate_impl_call(
 
 	Ok(
 		quote!(
-			#(
-				let #pnames : #ptypes = match #c_iter::Decode::decode(&mut #input) {
-					Ok(input) => input,
+			let (#( #pnames ),*) : ( #( #ptypes ),* ) =
+				match #c::DecodeLimit::decode_all_with_depth_limit(
+					#c::MAX_EXTRINSIC_DEPTH,
+					&#input,
+				) {
+					Ok(res) => res,
 					Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e.what()),
 				};
-			)*
 
 			#[allow(deprecated)]
 			<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*)
@@ -134,7 +135,7 @@ fn generate_impl_calls(
 
 /// Generate the dispatch function that is used in native to call into the runtime.
 fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
-	let data = Ident::new("data", Span::call_site());
+	let data = Ident::new("__sp_api__input_data", Span::call_site());
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let impl_calls = generate_impl_calls(impls, &data)?
 		.into_iter()
@@ -173,7 +174,7 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 				#( #attrs )*
 				#[cfg(not(feature = "std"))]
 				#[no_mangle]
-				pub fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
+				pub unsafe fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
 					let mut #input = if input_len == 0 {
 						&[0u8; 0]
 					} else {
@@ -207,6 +208,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			commit_on_success: std::cell::RefCell<bool>,
 			initialized_block: std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 			changes: std::cell::RefCell<#crate_::OverlayedChanges>,
+			offchain_changes: std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 			storage_transaction_cache: std::cell::RefCell<
 				#crate_::StorageTransactionCache<Block, C::StateBackend>
 			>,
@@ -251,17 +253,18 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		{
 			type StateBackend = C::StateBackend;
 
-			fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
+			fn execute_in_transaction<F: FnOnce(&Self) -> #crate_::TransactionOutcome<R>, R>(
 				&self,
-				map_call: F,
-			) -> std::result::Result<R, E> where Self: Sized {
+				call: F,
+			) -> R where Self: Sized {
+				self.changes.borrow_mut().start_transaction();
 				*self.commit_on_success.borrow_mut() = false;
-				let res = map_call(self);
+				let res = call(self);
 				*self.commit_on_success.borrow_mut() = true;
 
-				self.commit_on_ok(&res);
+				self.commit_or_rollback(matches!(res, #crate_::TransactionOutcome::Commit(_)));
 
-				res
+				res.into_inner()
 			}
 
 			fn has_api<A: #crate_::RuntimeApiInfo + ?Sized>(
@@ -335,6 +338,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					commit_on_success: true.into(),
 					initialized_block: None.into(),
 					changes: Default::default(),
+					offchain_changes: Default::default(),
 					recorder: Default::default(),
 					storage_transaction_cache: Default::default(),
 				}.into()
@@ -353,6 +357,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&C,
 					&Self,
 					&std::cell::RefCell<#crate_::OverlayedChanges>,
+					&std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
 					&std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 					&Option<#crate_::ProofRecorder<Block>>,
@@ -362,25 +367,34 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				&self,
 				call_api_at: F,
 			) -> std::result::Result<#crate_::NativeOrEncoded<R>, E> {
+				if *self.commit_on_success.borrow() {
+					self.changes.borrow_mut().start_transaction();
+				}
 				let res = call_api_at(
 					&self.call,
 					self,
 					&self.changes,
+					&self.offchain_changes,
 					&self.storage_transaction_cache,
 					&self.initialized_block,
 					&self.recorder,
 				);
 
-				self.commit_on_ok(&res);
+				self.commit_or_rollback(res.is_ok());
 				res
 			}
 
-			fn commit_on_ok<R, E>(&self, res: &std::result::Result<R, E>) {
+			fn commit_or_rollback(&self, commit: bool) {
+				let proof = "\
+					We only close a transaction when we opened one ourself.
+					Other parts of the runtime that make use of transactions (state-machine)
+					also balance their transactions. The runtime cannot close client initiated
+					transactions. qed";
 				if *self.commit_on_success.borrow() {
-					if res.is_err() {
-						self.changes.borrow_mut().discard_prospective();
+					if commit {
+						self.changes.borrow_mut().commit_transaction().expect(proof);
 					} else {
-						self.changes.borrow_mut().commit_prospective();
+						self.changes.borrow_mut().rollback_transaction().expect(proof);
 					}
 				}
 			}
@@ -403,7 +417,7 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 	};
 
 	let pos = trait_.segments.len() - 1;
-	trait_.segments.insert(pos, runtime.clone().into());
+	trait_.segments.insert(pos, runtime.into());
 	trait_
 }
 
@@ -517,6 +531,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 							call_runtime_at,
 							core_api,
 							changes,
+							offchain_changes,
 							storage_transaction_cache,
 							initialized_block,
 							recorder
@@ -527,6 +542,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 								at,
 								params_encoded,
 								changes,
+								offchain_changes,
 								storage_transaction_cache,
 								initialized_block,
 								params.map(|p| {

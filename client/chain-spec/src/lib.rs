@@ -29,10 +29,9 @@
 //!
 //! ```rust
 //! use std::collections::HashMap;
-//! use serde::{Serialize, Deserialize};
 //! use sc_chain_spec::{GenericChainSpec, ChainSpecExtension};
 //!
-//! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecExtension)]
+//! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecExtension)]
 //! pub struct MyExtension {
 //!		pub known_blocks: HashMap<u64, String>,
 //! }
@@ -48,21 +47,20 @@
 //! block number.
 //!
 //! ```rust
-//! use serde::{Serialize, Deserialize};
 //! use sc_chain_spec::{Forks, ChainSpecGroup, ChainSpecExtension, GenericChainSpec};
 //!
-//! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
+//! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
 //!		max_block_size: usize,
 //!		max_extrinsic_size: usize,
 //! }
 //!
-//! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
+//! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
 //! pub struct PoolParams {
 //!		max_transaction_size: usize,
 //! }
 //!
-//! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup, ChainSpecExtension)]
+//! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup, ChainSpecExtension)]
 //! pub struct Extension {
 //!		pub client: ClientParams,
 //!		pub pool: PoolParams,
@@ -107,29 +105,34 @@
 //! pub type MyChainSpec<G> = GenericChainSpec<G, Extension>;
 //! ```
 
-
 mod chain_spec;
 mod extension;
 
-pub use chain_spec::{ChainSpec as GenericChainSpec, Properties, NoExtension};
+pub use chain_spec::{
+	ChainSpec as GenericChainSpec, NoExtension, LightSyncState, SerializableLightSyncState,
+};
 pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
+pub use sp_chain_spec::{Properties, ChainType};
 
 use serde::{Serialize, de::DeserializeOwned};
 use sp_runtime::BuildStorage;
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
+use sp_core::storage::Storage;
 
 /// A set of traits for the runtime genesis config.
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
-/// Common interface to `GenericChainSpec`
+/// Common interface of a chain specification.
 pub trait ChainSpec: BuildStorage + Send {
 	/// Spec name.
 	fn name(&self) -> &str;
 	/// Spec id.
 	fn id(&self) -> &str;
+	/// Type of the chain.
+	fn chain_type(&self) -> ChainType;
 	/// A list of bootnode addresses.
 	fn boot_nodes(&self) -> &[MultiaddrWithPeerId];
 	/// Telemetry endpoints (if any)
@@ -148,4 +151,18 @@ pub trait ChainSpec: BuildStorage + Send {
 	fn as_json(&self, raw: bool) -> Result<String, String>;
 	/// Return StorageBuilder for this spec.
 	fn as_storage_builder(&self) -> &dyn BuildStorage;
+	/// Returns a cloned `Box<dyn ChainSpec>`.
+	fn cloned_box(&self) -> Box<dyn ChainSpec>;
+	/// Set the storage that should be used by this chain spec.
+	///
+	/// This will be used as storage at genesis.
+	fn set_storage(&mut self, storage: Storage);
+	/// Hardcode infomation to allow light clients to sync quickly into the chain spec.
+	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState);
+}
+
+impl std::fmt::Debug for dyn ChainSpec {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "ChainSpec(name = {:?}, id = {:?})", self.name(), self.id())
+	}
 }

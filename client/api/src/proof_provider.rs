@@ -1,25 +1,28 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Proof utilities
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT},
 };
 use crate::{StorageProof, ChangesProof};
-use sp_storage::{ChildInfo, StorageKey};
+use sp_storage::{ChildInfo, StorageKey, PrefixedStorageKey};
 
 /// Interface for providing block proving utilities.
 pub trait ProofProvider<Block: BlockT> {
@@ -35,8 +38,7 @@ pub trait ProofProvider<Block: BlockT> {
 	fn read_child_proof(
 		&self,
 		id: &BlockId<Block>,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item=&[u8]>,
 	) -> sp_blockchain::Result<StorageProof>;
 
@@ -65,7 +67,7 @@ pub trait ProofProvider<Block: BlockT> {
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		storage_key: Option<&StorageKey>,
+		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>>;
 }

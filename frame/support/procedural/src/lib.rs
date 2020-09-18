@@ -1,27 +1,27 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
-// tag::description[]
 //! Proc macro of Support code for the runtime.
-// end::description[]
 
 #![recursion_limit="512"]
 
 mod storage;
 mod construct_runtime;
+mod transactional;
 
 use proc_macro::TokenStream;
 
@@ -144,12 +144,12 @@ use proc_macro::TokenStream;
 ///
 /// * `#vis`: Set the visibility of the structure. `pub` or nothing.
 /// * `#name`: Name of the storage item, used as a prefix in storage.
-/// * [optional] `get(fn #getter)`: Implements the function #getter to `Module`.
-/// * [optional] `config(#field_name)`: `field_name` is optional if get is set.
+/// * \[optional\] `get(fn #getter)`: Implements the function #getter to `Module`.
+/// * \[optional\] `config(#field_name)`: `field_name` is optional if get is set.
 /// Will include the item in `GenesisConfig`.
-/// * [optional] `build(#closure)`: Closure called with storage overlays.
+/// * \[optional\] `build(#closure)`: Closure called with storage overlays.
 /// * `#type`: Storage type.
-/// * [optional] `#default`: Value returned when none.
+/// * \[optional\] `#default`: Value returned when none.
 ///
 /// Storage items are accessible in multiple ways:
 ///
@@ -276,10 +276,8 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// - `Event` or `Event<T>` (if the event is generic)
 /// - `Origin` or `Origin<T>` (if the origin is generic)
 /// - `Config` or `Config<T>` (if the config is generic)
-/// - `Inherent ( $(CALL),* )` - If the module provides/can check inherents. The optional parameter
-///                             is for modules that use a `Call` from a different module as
-///                             inherent.
-/// - `ValidateUnsigned`      - If the module validates unsigned extrinsics.
+/// - `Inherent` - If the module provides/can check inherents.
+/// - `ValidateUnsigned` - If the module validates unsigned extrinsics.
 ///
 /// # Note
 ///
@@ -289,4 +287,29 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
+}
+
+/// Execute the annotated function in a new storage transaction.
+///
+/// The return type of the annotated function must be `Result`. All changes to storage performed
+/// by the annotated function are discarded if it returns `Err`, or committed if `Ok`.
+///
+/// # Example
+///
+/// ```nocompile
+/// #[transactional]
+/// fn value_commits(v: u32) -> result::Result<u32, &'static str> {
+/// 	Value::set(v);
+/// 	Ok(v)
+/// }
+///
+/// #[transactional]
+/// fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
+/// 	Value::set(v);
+/// 	Err("nah")
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
+	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }

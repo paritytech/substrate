@@ -1,34 +1,36 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! List-cache storage definition and implementation.
 
 use std::sync::Arc;
 
-use kvdb::{KeyValueDB, DBTransaction};
-
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use crate::utils::{self, db_err, meta_keys};
+use sp_database::{Database, Transaction};
+use crate::utils::{self, meta_keys};
 
 use crate::cache::{CacheItemT, ComplexBlockId};
 use crate::cache::list_cache::{CommitOperation, Fork};
 use crate::cache::list_entry::{Entry, StorageEntry};
+use crate::DbHash;
 
 /// Single list-cache metadata.
 #[derive(Debug)]
@@ -97,19 +99,19 @@ pub struct DbColumns {
 pub struct DbStorage {
 	name: Vec<u8>,
 	meta_key: Vec<u8>,
-	db: Arc<dyn KeyValueDB>,
+	db: Arc<dyn Database<DbHash>>,
 	columns: DbColumns,
 }
 
 impl DbStorage {
 	/// Create new database-backed list cache storage.
-	pub fn new(name: Vec<u8>, db: Arc<dyn KeyValueDB>, columns: DbColumns) -> Self {
+	pub fn new(name: Vec<u8>, db: Arc<dyn Database<DbHash>>, columns: DbColumns) -> Self {
 		let meta_key = meta::key(&name);
 		DbStorage { name, meta_key, db, columns }
 	}
 
 	/// Get reference to the database.
-	pub fn db(&self) -> &Arc<dyn KeyValueDB> { &self.db }
+	pub fn db(&self) -> &Arc<dyn Database<DbHash>> { &self.db }
 
 	/// Get reference to the database columns.
 	pub fn columns(&self) -> &DbColumns { &self.columns }
@@ -135,49 +137,45 @@ impl<Block: BlockT, T: CacheItemT> Storage<Block, T> for DbStorage {
 	}
 
 	fn read_meta(&self) -> ClientResult<Metadata<Block>> {
-		self.db.get(self.columns.meta, &self.meta_key)
-			.map_err(db_err)
-			.and_then(|meta| match meta {
-				Some(meta) => meta::decode(&*meta),
-				None => Ok(Metadata {
-					finalized: None,
-					unfinalized: Vec::new(),
-				}),
+		match self.db.get(self.columns.meta, &self.meta_key) {
+			Some(meta) => meta::decode(&*meta),
+			None => Ok(Metadata {
+				finalized: None,
+				unfinalized: Vec::new(),
 			})
+		}
 	}
 
 	fn read_entry(&self, at: &ComplexBlockId<Block>) -> ClientResult<Option<StorageEntry<Block, T>>> {
-		self.db.get(self.columns.cache, &self.encode_block_id(at))
-			.map_err(db_err)
-			.and_then(|entry| match entry {
-				Some(entry) => StorageEntry::<Block, T>::decode(&mut &entry[..])
-					.map_err(|_| ClientError::Backend("Failed to decode cache entry".into()))
-					.map(Some),
-				None => Ok(None),
-			})
+		match self.db.get(self.columns.cache, &self.encode_block_id(at)) {
+			Some(entry) => StorageEntry::<Block, T>::decode(&mut &entry[..])
+				.map_err(|_| ClientError::Backend("Failed to decode cache entry".into()))
+				.map(Some),
+			None => Ok(None),
+		}
 	}
 }
 
 /// Database-backed list cache storage transaction.
 pub struct DbStorageTransaction<'a> {
 	storage: &'a DbStorage,
-	tx: &'a mut DBTransaction,
+	tx: &'a mut Transaction<DbHash>,
 }
 
 impl<'a> DbStorageTransaction<'a> {
 	/// Create new database transaction.
-	pub fn new(storage: &'a DbStorage, tx: &'a mut DBTransaction) -> Self {
+	pub fn new(storage: &'a DbStorage, tx: &'a mut Transaction<DbHash>) -> Self {
 		DbStorageTransaction { storage, tx }
 	}
 }
 
 impl<'a, Block: BlockT, T: CacheItemT> StorageTransaction<Block, T> for DbStorageTransaction<'a> {
 	fn insert_storage_entry(&mut self, at: &ComplexBlockId<Block>, entry: &StorageEntry<Block, T>) {
-		self.tx.put(self.storage.columns.cache, &self.storage.encode_block_id(at), &entry.encode());
+		self.tx.set_from_vec(self.storage.columns.cache, &self.storage.encode_block_id(at), entry.encode());
 	}
 
 	fn remove_storage_entry(&mut self, at: &ComplexBlockId<Block>) {
-		self.tx.delete(self.storage.columns.cache, &self.storage.encode_block_id(at));
+		self.tx.remove(self.storage.columns.cache, &self.storage.encode_block_id(at));
 	}
 
 	fn update_meta(
@@ -186,10 +184,10 @@ impl<'a, Block: BlockT, T: CacheItemT> StorageTransaction<Block, T> for DbStorag
 		unfinalized: &[Fork<Block, T>],
 		operation: &CommitOperation<Block, T>,
 	) {
-		self.tx.put(
+		self.tx.set_from_vec(
 			self.storage.columns.meta,
 			&self.storage.meta_key,
-			&meta::encode(best_finalized_entry, unfinalized, operation));
+			meta::encode(best_finalized_entry, unfinalized, operation));
 	}
 }
 

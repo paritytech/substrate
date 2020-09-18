@@ -1,18 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Implementations of the `IntoProtocolsHandler` and `ProtocolsHandler` traits for ingoing
 //! substreams for a single gossiping protocol.
@@ -35,8 +37,7 @@ use libp2p::swarm::{
 	NegotiatedSubstream,
 };
 use log::{error, warn};
-use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, pin::Pin, task::{Context, Poll}};
+use std::{borrow::Cow, collections::VecDeque, fmt, pin::Pin, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -68,11 +69,11 @@ pub struct NotifsInHandler {
 	///
 	/// This queue is only ever modified to insert elements at the back, or remove the first
 	/// element.
-	events_queue: SmallVec<[ProtocolsHandlerEvent<DeniedUpgrade, (), NotifsInHandlerOut, void::Void>; 16]>,
+	events_queue: VecDeque<ProtocolsHandlerEvent<DeniedUpgrade, (), NotifsInHandlerOut, void::Void>>,
 }
 
 /// Event that can be received by a `NotifsInHandler`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NotifsInHandlerIn {
 	/// Can be sent back as a response to an `OpenRequest`. Contains the status message to send
 	/// to the remote.
@@ -108,7 +109,7 @@ pub enum NotifsInHandlerOut {
 impl NotifsInHandlerProto {
 	/// Builds a new `NotifsInHandlerProto`.
 	pub fn new(
-		protocol_name: impl Into<Cow<'static, [u8]>>
+		protocol_name: impl Into<Cow<'static, str>>
 	) -> Self {
 		NotifsInHandlerProto {
 			in_protocol: NotificationsIn::new(protocol_name),
@@ -128,15 +129,42 @@ impl IntoProtocolsHandler for NotifsInHandlerProto {
 			in_protocol: self.in_protocol,
 			substream: None,
 			pending_accept_refuses: 0,
-			events_queue: SmallVec::new(),
+			events_queue: VecDeque::new(),
 		}
 	}
 }
 
 impl NotifsInHandler {
 	/// Returns the name of the protocol that we accept.
-	pub fn protocol_name(&self) -> &[u8] {
+	pub fn protocol_name(&self) -> &Cow<'static, str> {
 		self.in_protocol.protocol_name()
+	}
+
+	/// Equivalent to the `poll` method of `ProtocolsHandler`, except that it is guaranteed to
+	/// never generate [`NotifsInHandlerOut::Notif`].
+	///
+	/// Use this method in situations where it is not desirable to receive events but still
+	/// necessary to drive any potential incoming handshake or request.
+	pub fn poll_process(
+		&mut self,
+		cx: &mut Context
+	) -> Poll<
+		ProtocolsHandlerEvent<DeniedUpgrade, (), NotifsInHandlerOut, void::Void>
+	> {
+		if let Some(event) = self.events_queue.pop_front() {
+			return Poll::Ready(event)
+		}
+
+		match self.substream.as_mut().map(|s| NotificationsInSubstream::poll_process(Pin::new(s), cx)) {
+			None | Some(Poll::Pending) => {},
+			Some(Poll::Ready(Ok(v))) => match v {},
+			Some(Poll::Ready(Err(_))) => {
+				self.substream = None;
+				return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed));
+			},
+		}
+
+		Poll::Pending
 	}
 }
 
@@ -147,29 +175,29 @@ impl ProtocolsHandler for NotifsInHandler {
 	type InboundProtocol = NotificationsIn;
 	type OutboundProtocol = DeniedUpgrade;
 	type OutboundOpenInfo = ();
+	type InboundOpenInfo = ();
 
-	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
-		SubstreamProtocol::new(self.in_protocol.clone())
+	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, ()> {
+		SubstreamProtocol::new(self.in_protocol.clone(), ())
 	}
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		(msg, proto): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
+		(msg, proto): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output,
+		(): ()
 	) {
 		// If a substream already exists, we drop it and replace it with the new incoming one.
 		if self.substream.is_some() {
-			self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed));
+			self.events_queue.push_back(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed));
 		}
 
 		// Note that we drop the existing substream, which will send an equivalent to a TCP "RST"
-		// to the remote and force-close the substream. It  might seem like an unclean way to get
+		// to the remote and force-close the substream. It might seem like an unclean way to get
 		// rid of a substream. However, keep in mind that it is invalid for the remote to open
-		// multiple such substreams, and therefore sending a "RST" is the correct thing to do.
-		// Also note that we have already closed our writing side during the initial handshake,
-		// and we can't close "more" than that anyway.
+		// multiple such substreams, and therefore sending a "RST" is not an incorrect thing to do.
 		self.substream = Some(proto);
 
-		self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest(msg)));
+		self.events_queue.push_back(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest(msg)));
 		self.pending_accept_refuses = self.pending_accept_refuses
 			.checked_add(1)
 			.unwrap_or_else(|| {
@@ -231,8 +259,7 @@ impl ProtocolsHandler for NotifsInHandler {
 		ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent, Self::Error>
 	> {
 		// Flush the events queue if necessary.
-		if !self.events_queue.is_empty() {
-			let event = self.events_queue.remove(0);
+		if let Some(event) = self.events_queue.pop_front() {
 			return Poll::Ready(event)
 		}
 

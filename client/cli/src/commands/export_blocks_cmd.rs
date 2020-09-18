@@ -1,35 +1,40 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::{BlockNumber, PruningParams, SharedParams};
+use crate::params::{GenericNumber, DatabaseParams, PruningParams, SharedParams};
 use crate::CliConfiguration;
 use log::info;
 use sc_service::{
-	config::DatabaseConfig, Configuration, ServiceBuilderCommand,
+	config::DatabaseConfig, chain_ops::export_blocks,
 };
+use sc_client_api::{BlockBackend, UsageProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
 use structopt::StructOpt;
 
 /// The `export-blocks` command used to export blocks.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct ExportBlocksCmd {
 	/// Output file name or stdout if unspecified.
 	#[structopt(parse(from_os_str))]
@@ -39,16 +44,16 @@ pub struct ExportBlocksCmd {
 	///
 	/// Default is 1.
 	#[structopt(long = "from", value_name = "BLOCK")]
-	pub from: Option<BlockNumber>,
+	pub from: Option<GenericNumber>,
 
 	/// Specify last block number.
 	///
 	/// Default is best block.
 	#[structopt(long = "to", value_name = "BLOCK")]
-	pub to: Option<BlockNumber>,
+	pub to: Option<GenericNumber>,
 
 	/// Use binary output rather than JSON.
-	#[structopt(long = "binary", value_name = "BOOL", parse(try_from_str), default_value("false"))]
+	#[structopt(long)]
 	pub binary: bool,
 
 	#[allow(missing_docs)]
@@ -58,23 +63,25 @@ pub struct ExportBlocksCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub pruning_params: PruningParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub database_params: DatabaseParams,
 }
 
 impl ExportBlocksCmd {
 	/// Run the export-blocks command
-	pub async fn run<B, BC, BB>(
+	pub async fn run<B, C>(
 		&self,
-		config: Configuration,
-		builder: B,
+		client: Arc<C>,
+		database_config: DatabaseConfig,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		B: BlockT,
+		C: BlockBackend<B> + UsageProvider<B> + 'static,
+		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
-		if let DatabaseConfig::Path { ref path, .. } = &config.database {
+		if let DatabaseConfig::RocksDb { ref path, .. } = database_config {
 			info!("DB path: {}", path.display());
 		}
 
@@ -88,8 +95,7 @@ impl ExportBlocksCmd {
 			None => Box::new(io::stdout()),
 		};
 
-		builder(config)?
-			.export_blocks(file, from.into(), to, binary)
+		export_blocks(client, file, from.into(), to, binary)
 			.await
 			.map_err(Into::into)
 	}
@@ -102,5 +108,9 @@ impl CliConfiguration for ExportBlocksCmd {
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
 		Some(&self.pruning_params)
+	}
+
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		Some(&self.database_params)
 	}
 }

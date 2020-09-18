@@ -26,13 +26,13 @@ use sp_runtime::{
 	},
 	generic::BlockId
 };
-use sp_core::ChangesTrieConfigurationRange;
+use sp_core::{ChangesTrieConfigurationRange, storage::PrefixedStorageKey};
 use sp_state_machine::StorageProof;
 use sp_blockchain::{
 	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
 	Error as ClientError, Result as ClientResult,
 };
-use crate::{backend::{AuxStore, NewBlockState}, UsageInfo};
+use crate::{backend::{AuxStore, NewBlockState}, UsageInfo, ProvideChtRoots};
 
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -81,12 +81,7 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 	/// Header of block at which read is performed.
 	pub header: Header,
 	/// Storage key for child.
-	pub storage_key: Vec<u8>,
-	/// Child trie source information.
-	pub child_info: Vec<u8>,
-	/// Child type, its required to resolve `child_info`
-	/// content and choose child implementation.
-	pub child_type: u32,
+	pub storage_key: PrefixedStorageKey,
 	/// Child storage key to read.
 	pub keys: Vec<Vec<u8>>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
@@ -110,7 +105,7 @@ pub struct RemoteChangesRequest<Header: HeaderT> {
 	/// Proofs for roots of ascendants of tries_roots.0 are provided by the remote node.
 	pub tries_roots: (Header::Number, Header::Hash, Vec<Header::Hash>),
 	/// Optional Child Storage key to read.
-	pub storage_key: Option<Vec<u8>>,
+	pub storage_key: Option<PrefixedStorageKey>,
 	/// Storage key to read.
 	pub key: Vec<u8>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
@@ -237,7 +232,9 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 
 
 /// Light client blockchain storage.
-pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError> {
+pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block>
+	+ HeaderMetadata<Block, Error=ClientError> + ProvideChtRoots<Block>
+{
 	/// Store new header. Should refuse to revert any finalized blocks.
 	///
 	/// Takes new authorities, the leaf state of the new block, and
@@ -258,20 +255,6 @@ pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetada
 
 	/// Get last finalized header.
 	fn last_finalized(&self) -> ClientResult<Block::Hash>;
-
-	/// Get headers CHT root for given block. Returns None if the block is not pruned (not a part of any CHT).
-	fn header_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> ClientResult<Option<Block::Hash>>;
-
-	/// Get changes trie CHT root for given block. Returns None if the block is not pruned (not a part of any CHT).
-	fn changes_trie_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> ClientResult<Option<Block::Hash>>;
 
 	/// Get storage cache.
 	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>>;
@@ -301,7 +284,25 @@ pub trait RemoteBlockchain<Block: BlockT>: Send + Sync {
 	>>;
 }
 
+/// Returns future that resolves header either locally, or remotely.
+pub fn future_header<Block: BlockT, F: Fetcher<Block>>(
+	blockchain: &dyn RemoteBlockchain<Block>,
+	fetcher: &F,
+	id: BlockId<Block>,
+) -> impl Future<Output = Result<Option<Block::Header>, ClientError>> {
+	use futures::future::{ready, Either, FutureExt};
 
+	match blockchain.header(id) {
+		Ok(LocalOrRemote::Remote(request)) => Either::Left(
+			fetcher
+				.remote_header(request)
+				.then(|header| ready(header.map(Some)))
+		),
+		Ok(LocalOrRemote::Unknown) => Either::Right(ready(Ok(None))),
+		Ok(LocalOrRemote::Local(local_header)) => Either::Right(ready(Ok(Some(local_header)))),
+		Err(err) => Either::Right(ready(Err(err))),
+	}
+}
 
 #[cfg(test)]
 pub mod tests {

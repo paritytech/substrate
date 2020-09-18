@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Externalities extensions storage.
 //!
@@ -21,7 +22,10 @@
 //!
 //! It is required that each extension implements the [`Extension`] trait.
 
-use std::{collections::HashMap, any::{Any, TypeId}, ops::DerefMut};
+use sp_std::{
+	collections::btree_map::{BTreeMap, Entry}, any::{Any, TypeId}, ops::DerefMut, boxed::Box,
+};
+use crate::Error;
 
 /// Marker trait for types that should be registered as [`Externalities`](crate::Externalities) extension.
 ///
@@ -87,12 +91,29 @@ pub trait ExtensionStore {
 	/// It is advised to use [`ExternalitiesExt::extension`](crate::ExternalitiesExt::extension)
 	/// instead of this function to get type system support and automatic type downcasting.
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any>;
+
+	/// Register extension `extension` with speciifed `type_id`.
+	///
+	/// It should return error if extension is already registered.
+	fn register_extension_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) -> Result<(), Error>;
+
+	/// Deregister extension with speicifed 'type_id' and drop it.
+	///
+	/// It should return error if extension is not registered.
+	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), Error>;
 }
 
 /// Stores extensions that should be made available through the externalities.
 #[derive(Default)]
 pub struct Extensions {
-	extensions: HashMap<TypeId, Box<dyn Extension>>,
+	extensions: BTreeMap<TypeId, Box<dyn Extension>>,
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for Extensions {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "Extensions: ({})", self.extensions.len())
+	}
 }
 
 impl Extensions {
@@ -106,9 +127,22 @@ impl Extensions {
 		self.extensions.insert(ext.type_id(), Box::new(ext));
 	}
 
+	/// Register extension `ext`.
+	pub fn register_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) -> Result<(), Error> {
+		match self.extensions.entry(type_id) {
+			Entry::Vacant(vacant) => { vacant.insert(extension); Ok(()) },
+			Entry::Occupied(_) => Err(Error::ExtensionAlreadyRegistered),
+		}
+	}
+
 	/// Return a mutable reference to the requested extension.
 	pub fn get_mut(&mut self, ext_type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.get_mut(&ext_type_id).map(DerefMut::deref_mut).map(Extension::as_mut_any)
+	}
+
+	/// Deregister extension of type `E`.
+	pub fn deregister(&mut self, type_id: TypeId) -> Option<Box<dyn Extension>> {
+		self.extensions.remove(&type_id)
 	}
 }
 

@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Information about the networking, for diagnostic purposes.
 //!
@@ -41,10 +43,6 @@ pub struct NetworkState {
 	pub connected_peers: HashMap<String, Peer>,
 	/// List of node that we know of but that we're not connected to.
 	pub not_connected_peers: HashMap<String, NotConnectedPeer>,
-	/// Downloaded bytes per second averaged over the past few seconds.
-	pub average_download_per_sec: u64,
-	/// Uploaded bytes per second averaged over the past few seconds.
-	pub average_upload_per_sec: u64,
 	/// State of the peerset manager.
 	pub peerset: serde_json::Value,
 }

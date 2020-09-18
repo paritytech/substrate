@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Communication streams for the polite-grandpa networking protocol.
 //!
@@ -33,12 +35,12 @@ use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
 
+use sp_core::traits::BareCryptoStorePtr;
 use finality_grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use finality_grandpa::{voter, voter_set::VoterSet};
 use sc_network::{NetworkService, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use parity_scale_codec::{Encode, Decode};
-use sp_core::Pair;
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
@@ -56,7 +58,7 @@ use gossip::{
 	VoteMessage,
 };
 use sp_finality_grandpa::{
-	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
+	AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
 };
 use sp_utils::mpsc::TracingUnboundedReceiver;
 
@@ -67,7 +69,7 @@ mod periodic;
 pub(crate) mod tests;
 
 pub use sp_finality_grandpa::GRANDPA_ENGINE_ID;
-pub const GRANDPA_PROTOCOL_NAME: &[u8] = b"/paritytech/grandpa/1";
+pub const GRANDPA_PROTOCOL_NAME: &'static str = "/paritytech/grandpa/1";
 
 // cost scalars for reporting peers.
 mod cost {
@@ -101,6 +103,34 @@ mod benefit {
 	pub(super) const BASIC_VALIDATED_CATCH_UP: Rep = Rep::new(200, "Grandpa: Catch-up message");
 	pub(super) const BASIC_VALIDATED_COMMIT: Rep = Rep::new(100, "Grandpa: Commit");
 	pub(super) const PER_EQUIVOCATION: i32 = 10;
+}
+
+/// A type that ties together our local authority id and a keystore where it is
+/// available for signing.
+pub struct LocalIdKeystore((AuthorityId, BareCryptoStorePtr));
+
+impl LocalIdKeystore {
+	/// Returns a reference to our local authority id.
+	fn local_id(&self) -> &AuthorityId {
+		&(self.0).0
+	}
+
+	/// Returns a reference to the keystore.
+	fn keystore(&self) -> &BareCryptoStorePtr {
+		&(self.0).1
+	}
+}
+
+impl AsRef<BareCryptoStorePtr> for LocalIdKeystore {
+	fn as_ref(&self) -> &BareCryptoStorePtr {
+		self.keystore()
+	}
+}
+
+impl From<(AuthorityId, BareCryptoStorePtr)> for LocalIdKeystore {
+	fn from(inner: (AuthorityId, BareCryptoStorePtr)) -> LocalIdKeystore {
+		LocalIdKeystore(inner)
+	}
 }
 
 /// If the voter set is larger than this value some telemetry events are not
@@ -236,16 +266,14 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let (neighbor_packet_worker, neighbor_packet_sender) = periodic::NeighborPacketWorker::new();
 
-		let bridge = NetworkBridge {
+		NetworkBridge {
 			service,
 			gossip_engine,
 			validator,
 			neighbor_sender: neighbor_packet_sender,
 			neighbor_packet_worker: Arc::new(Mutex::new(neighbor_packet_worker)),
 			gossip_validator_report_stream: Arc::new(Mutex::new(report_stream)),
-		};
-
-		bridge
+		}
 	}
 
 	/// Note the beginning of a new round to the `GossipValidator`.
@@ -258,7 +286,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		// is a no-op if currently in that set.
 		self.validator.note_set(
 			set_id,
-			voters.voters().iter().map(|(v, _)| v.clone()).collect(),
+			voters.iter().map(|(v, _)| v.clone()).collect(),
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
@@ -272,10 +300,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// network all within the current set.
 	pub(crate) fn round_communication(
 		&self,
+		keystore: Option<LocalIdKeystore>,
 		round: Round,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
-		local_key: Option<AuthorityPair>,
 		has_voted: HasVoted<B>,
 	) -> (
 		impl Stream<Item = SignedMessage<B>> + Unpin,
@@ -287,10 +315,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			&*voters,
 		);
 
-		let locals = local_key.and_then(|pair| {
-			let id = pair.public();
-			if voters.contains_key(&id) {
-				Some((pair, id))
+		let keystore = keystore.and_then(|ks| {
+			let id = ks.local_id();
+			if voters.contains(id) {
+				Some(ks)
 			} else {
 				None
 			}
@@ -304,16 +332,16 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 				match decoded {
 					Err(ref e) => {
 						debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
-						return future::ready(None);
+						future::ready(None)
 					}
 					Ok(GossipMessage::Vote(msg)) => {
 						// check signature.
-						if !voters.contains_key(&msg.message.id) {
+						if !voters.contains(&msg.message.id) {
 							debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
 							return future::ready(None);
 						}
 
-						if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+						if voters.len().get() <= TELEMETRY_VOTERS_LIMIT {
 							match &msg.message.message {
 								PrimaryPropose(propose) => {
 									telemetry!(CONSENSUS_INFO; "afg.received_propose";
@@ -343,17 +371,17 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 					}
 					_ => {
 						debug!(target: "afg", "Skipping unknown message type");
-						return future::ready(None);
+						future::ready(None)
 					}
 				}
 			});
 
 		let (tx, out_rx) = mpsc::channel(0);
 		let outgoing = OutgoingMessages::<B> {
+			keystore,
 			round: round.0,
 			set_id: set_id.0,
 			network: self.gossip_engine.clone(),
-			locals,
 			sender: tx,
 			has_voted,
 		};
@@ -378,7 +406,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	) {
 		self.validator.note_set(
 			set_id,
-			voters.voters().iter().map(|(v, _)| v.clone()).collect(),
+			voters.iter().map(|(v, _)| v.clone()).collect(),
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
@@ -476,7 +504,7 @@ fn incoming_global<B: BlockT>(
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
-		if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+		if voters.len().get() <= TELEMETRY_VOTERS_LIMIT {
 			let precommits_signed_by: Vec<String> =
 				msg.message.auth_data.iter().map(move |(_, a)| {
 					format!("{}", a)
@@ -610,30 +638,6 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	}
 }
 
-/// Encode round message localized to a given round and set id.
-pub(crate) fn localized_payload<E: Encode>(
-	round: RoundNumber,
-	set_id: SetIdNumber,
-	message: &E,
-) -> Vec<u8> {
-	let mut buf = Vec::new();
-	localized_payload_with_buffer(round, set_id, message, &mut buf);
-	buf
-}
-
-/// Encode round message localized to a given round and set id using the given
-/// buffer. The given buffer will be cleared and the resulting encoded payload
-/// will always be written to the start of the buffer.
-pub(crate) fn localized_payload_with_buffer<E: Encode>(
-	round: RoundNumber,
-	set_id: SetIdNumber,
-	message: &E,
-	buf: &mut Vec<u8>,
-) {
-	buf.clear();
-	(message, round, set_id).encode_to(buf)
-}
-
 /// Type-safe wrapper around a round number.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
 pub struct Round(pub RoundNumber);
@@ -641,48 +645,6 @@ pub struct Round(pub RoundNumber);
 /// Type-safe wrapper around a set ID.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
 pub struct SetId(pub SetIdNumber);
-
-/// Check a message signature by encoding the message as a localized payload and
-/// verifying the provided signature using the expected authority id.
-pub(crate) fn check_message_sig<Block: BlockT>(
-	message: &Message<Block>,
-	id: &AuthorityId,
-	signature: &AuthoritySignature,
-	round: RoundNumber,
-	set_id: SetIdNumber,
-) -> Result<(), ()> {
-	check_message_sig_with_buffer::<Block>(
-		message,
-		id,
-		signature,
-		round,
-		set_id,
-		&mut Vec::new(),
-	)
-}
-
-/// Check a message signature by encoding the message as a localized payload and
-/// verifying the provided signature using the expected authority id.
-/// The encoding necessary to verify the signature will be done using the given
-/// buffer, the original content of the buffer will be cleared.
-pub(crate) fn check_message_sig_with_buffer<Block: BlockT>(
-	message: &Message<Block>,
-	id: &AuthorityId,
-	signature: &AuthoritySignature,
-	round: RoundNumber,
-	set_id: SetIdNumber,
-	buf: &mut Vec<u8>,
-) -> Result<(), ()> {
-	let as_public = id.clone();
-	localized_payload_with_buffer(round, set_id, message, buf);
-
-	if AuthorityPair::verify(signature, buf, &as_public) {
-		Ok(())
-	} else {
-		debug!(target: "afg", "Bad signature on message from {:?}", id);
-		Err(())
-	}
-}
 
 /// A sink for outgoing messages to the network. Any messages that are sent will
 /// be replaced, as appropriate, according to the given `HasVoted`.
@@ -694,7 +656,7 @@ pub(crate) fn check_message_sig_with_buffer<Block: BlockT>(
 pub(crate) struct OutgoingMessages<Block: BlockT> {
 	round: RoundNumber,
 	set_id: SetIdNumber,
-	locals: Option<(AuthorityPair, AuthorityId)>,
+	keystore: Option<LocalIdKeystore>,
 	sender: mpsc::Sender<SignedMessage<Block>>,
 	network: Arc<Mutex<GossipEngine<Block>>>,
 	has_voted: HasVoted<Block>,
@@ -731,16 +693,19 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 		}
 
 		// when locals exist, sign messages on import
-		if let Some((ref pair, ref local_id)) = self.locals {
-			let encoded = localized_payload(self.round, self.set_id, &msg);
-			let signature = pair.sign(&encoded[..]);
-
-			let target_hash = msg.target().0.clone();
-			let signed = SignedMessage::<Block> {
-				message: msg,
-				signature,
-				id: local_id.clone(),
-			};
+		if let Some(ref keystore) = self.keystore {
+			let target_hash = *(msg.target().0);
+			let signed = sp_finality_grandpa::sign_message(
+				keystore.as_ref(),
+				msg,
+				keystore.local_id().clone(),
+				self.round,
+				self.set_id,
+			).ok_or_else(
+				|| Error::Signing(format!(
+					"Failed to sign GRANDPA vote for round {} targetting {:?}", self.round, target_hash
+				))
+			)?;
 
 			let message = GossipMessage::Vote(VoteMessage::<Block> {
 				message: signed.clone(),
@@ -799,13 +764,13 @@ fn check_compact_commit<Block: BlockT>(
 ) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
-	let full_threshold = voters.total_weight() + f;
+	let full_threshold = (f + voters.total_weight()).0;
 
 	// check total weight is not out of range.
 	let mut total_weight = 0;
 	for (_, ref id) in &msg.auth_data {
-		if let Some(weight) = voters.info(id).map(|info| info.weight()) {
-			total_weight += weight;
+		if let Some(weight) = voters.get(id).map(|info| info.weight()) {
+			total_weight += weight.get();
 			if total_weight > full_threshold {
 				return Err(cost::MALFORMED_COMMIT);
 			}
@@ -815,7 +780,7 @@ fn check_compact_commit<Block: BlockT>(
 		}
 	}
 
-	if total_weight < voters.threshold() {
+	if total_weight < voters.threshold().get() {
 		return Err(cost::MALFORMED_COMMIT);
 	}
 
@@ -828,7 +793,7 @@ fn check_compact_commit<Block: BlockT>(
 		use crate::communication::gossip::Misbehavior;
 		use finality_grandpa::Message as GrandpaMessage;
 
-		if let Err(()) = check_message_sig_with_buffer::<Block>(
+		if !sp_finality_grandpa::check_message_signature_with_buffer(
 			&GrandpaMessage::Precommit(precommit.clone()),
 			id,
 			sig,
@@ -860,7 +825,7 @@ fn check_catch_up<Block: BlockT>(
 ) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
-	let full_threshold = voters.total_weight() + f;
+	let full_threshold = (f + voters.total_weight()).0;
 
 	// check total weight is not out of range for a set of votes.
 	fn check_weight<'a>(
@@ -871,8 +836,8 @@ fn check_catch_up<Block: BlockT>(
 		let mut total_weight = 0;
 
 		for id in votes {
-			if let Some(weight) = voters.info(&id).map(|info| info.weight()) {
-				total_weight += weight;
+			if let Some(weight) = voters.get(&id).map(|info| info.weight()) {
+				total_weight += weight.get();
 				if total_weight > full_threshold {
 					return Err(cost::MALFORMED_CATCH_UP);
 				}
@@ -882,7 +847,7 @@ fn check_catch_up<Block: BlockT>(
 			}
 		}
 
-		if total_weight < voters.threshold() {
+		if total_weight < voters.threshold().get() {
 			return Err(cost::MALFORMED_CATCH_UP);
 		}
 
@@ -916,7 +881,7 @@ fn check_catch_up<Block: BlockT>(
 		for (msg, id, sig) in messages {
 			signatures_checked += 1;
 
-			if let Err(()) = check_message_sig_with_buffer::<B>(
+			if !sp_finality_grandpa::check_message_signature_with_buffer(
 				&msg,
 				id,
 				sig,

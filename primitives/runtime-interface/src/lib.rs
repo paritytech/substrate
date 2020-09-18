@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Substrate runtime interface
 //!
@@ -108,6 +109,9 @@ extern crate self as sp_runtime_interface;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_wasm_interface;
+
+#[doc(hidden)]
+pub use sp_tracing;
 
 #[doc(hidden)]
 pub use sp_std;
@@ -280,6 +284,14 @@ pub use sp_std;
 /// 1. The generated functions are not callable from the native side.
 /// 2. The trait as shown above is not implemented for `Externalities` and is instead implemented
 ///    for `FunctionExecutor` (from `sp-wasm-interface`).
+///
+/// # Disable tracing
+/// By addding `no_tracing` to the list of options you can prevent the wasm-side interface from
+/// generating the default `sp-tracing`-calls. Note that this is rarely needed but only meant for
+/// the case when that would create a circular dependency. You usually _do not_ want to add this
+/// flag, as tracing doesn't cost you anything by default anyways (it is added as a no-op) but is
+/// super useful for debugging later.
+///
 pub use sp_runtime_interface_proc_macro::runtime_interface;
 
 #[doc(hidden)]

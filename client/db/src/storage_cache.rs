@@ -542,11 +542,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 	fn child_storage(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		let key = (storage_key.to_vec(), key.to_vec());
+		let key = (child_info.storage_key().to_vec(), key.to_vec());
 		let local_cache = self.cache.local_cache.upgradable_read();
 		if let Some(entry) = local_cache.child_storage.get(&key).cloned() {
 			trace!("Found in local cache: {:?}", key);
@@ -564,7 +563,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 			}
 		}
 		trace!("Cache miss: {:?}", key);
-		let value = self.state.child_storage(storage_key, child_info, &key.1[..])?;
+		let value = self.state.child_storage(child_info, &key.1[..])?;
 
 		// just pass it through the usage counter
 		let value =	self.usage.tally_child_key_read(&key, value, false);
@@ -579,20 +578,18 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 	fn exists_child_storage(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(storage_key, child_info, key)
+		self.state.exists_child_storage(child_info, key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	) {
-		self.state.for_keys_in_child_storage(storage_key, child_info, f)
+		self.state.for_keys_in_child_storage(child_info, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -601,11 +598,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 	fn next_child_storage_key(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.next_child_storage_key(storage_key, child_info, key)
+		self.state.next_child_storage_key(child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -618,31 +614,26 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
-		self.state.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
+		self.state.for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction)
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-	{
+	fn storage_root<'a>(
+		&self,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'a>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
-		delta: I,
-	) -> (B::Hash, bool, Self::Transaction)
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-	{
-		self.state.child_storage_root(storage_key, child_info, delta)
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
+		self.state.child_storage_root(child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -655,11 +646,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 	fn child_keys(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
-		self.state.child_keys(storage_key, child_info, prefix)
+		self.state.child_keys(child_info, prefix)
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
@@ -758,11 +748,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 
 	fn child_storage(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.caching_state().child_storage(storage_key, child_info, key)
+		self.caching_state().child_storage(child_info, key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -771,20 +760,18 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 
 	fn exists_child_storage(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		self.caching_state().exists_child_storage(storage_key, child_info, key)
+		self.caching_state().exists_child_storage(child_info, key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	) {
-		self.caching_state().for_keys_in_child_storage(storage_key, child_info, f)
+		self.caching_state().for_keys_in_child_storage(child_info, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -793,11 +780,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 
 	fn next_child_storage_key(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.caching_state().next_child_storage_key(storage_key, child_info, key)
+		self.caching_state().next_child_storage_key(child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -810,31 +796,26 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
-		self.caching_state().for_child_keys_with_prefix(storage_key, child_info, prefix, f)
+		self.caching_state().for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction)
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-	{
+	fn storage_root<'a>(
+		&self,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
 		self.caching_state().storage_root(delta)
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'a>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
-		delta: I,
-	) -> (B::Hash, bool, Self::Transaction)
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-	{
-		self.caching_state().child_storage_root(storage_key, child_info, delta)
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
+		self.caching_state().child_storage_root(child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -847,11 +828,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 
 	fn child_keys(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
-		self.caching_state().child_keys(storage_key, child_info, prefix)
+		self.caching_state().child_keys(child_info, prefix)
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
@@ -1044,7 +1024,7 @@ mod tests {
 
 	#[test]
 	fn simple_fork() {
-		let _ = ::env_logger::try_init();
+		sp_tracing::try_init_simple();
 
 		let root_parent = H256::random();
 		let key = H256::random()[..].to_vec();
@@ -1265,7 +1245,7 @@ mod tests {
 
 	#[test]
 	fn fix_storage_mismatch_issue() {
-		let _ = ::env_logger::try_init();
+		sp_tracing::try_init_simple();
 		let root_parent = H256::random();
 
 		let key = H256::random()[..].to_vec();

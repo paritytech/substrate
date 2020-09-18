@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! This crate provides procedural macros for usage within the context of the Substrate runtime
 //! interface.
@@ -25,11 +26,49 @@
 //! 3. The [`PassByEnum`](derive.PassByInner.html) derive macro for implementing `PassBy` with `Enum`.
 //! 4. The [`PassByInner`](derive.PassByInner.html) derive macro for implementing `PassBy` with `Inner`.
 
-use syn::{parse_macro_input, ItemTrait, DeriveInput};
+use syn::{parse_macro_input, ItemTrait, DeriveInput, Result, Token};
+use syn::parse::{Parse, ParseStream};
 
 mod pass_by;
 mod runtime_interface;
 mod utils;
+
+struct Options {
+	wasm_only: bool,
+	tracing: bool
+}
+
+impl Options {
+	fn unpack(self) -> (bool, bool) {
+		(self.wasm_only, self.tracing)
+	}
+}
+impl Default for Options {
+	fn default() -> Self {
+		Options { wasm_only: false, tracing: true }
+	}
+}
+
+impl Parse for Options {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let mut res = Self::default();
+		while !input.is_empty() {
+			let lookahead = input.lookahead1();
+			if lookahead.peek(runtime_interface::keywords::wasm_only) {
+				let _ = input.parse::<runtime_interface::keywords::wasm_only>();
+				res.wasm_only = true;
+			} else if lookahead.peek(runtime_interface::keywords::no_tracing) {
+				let _ = input.parse::<runtime_interface::keywords::no_tracing>();
+				res.tracing = false;
+			} else if lookahead.peek(Token![,]) {
+				let _ = input.parse::<Token![,]>();
+			} else {
+				return Err(lookahead.error())
+			}
+		}
+		Ok(res)
+	}
+}
 
 #[proc_macro_attribute]
 pub fn runtime_interface(
@@ -37,9 +76,9 @@ pub fn runtime_interface(
 	input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
 	let trait_def = parse_macro_input!(input as ItemTrait);
-	let wasm_only = parse_macro_input!(attrs as Option<runtime_interface::keywords::wasm_only>);
+	let (wasm_only, tracing) = parse_macro_input!(attrs as Options).unpack();
 
-	runtime_interface::runtime_interface_impl(trait_def, wasm_only.is_some())
+	runtime_interface::runtime_interface_impl(trait_def, wasm_only, tracing)
 		.unwrap_or_else(|e| e.to_compile_error())
 		.into()
 }

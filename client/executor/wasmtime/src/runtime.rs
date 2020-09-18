@@ -15,14 +15,14 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
-use std::rc::Rc;
-use std::sync::Arc;
 
 use crate::host::HostState;
 use crate::imports::{Imports, resolve_imports};
-use crate::instance_wrapper::InstanceWrapper;
+use crate::instance_wrapper::{ModuleWrapper, InstanceWrapper, GlobalsSnapshot};
 use crate::state_holder;
 
+use std::rc::Rc;
+use std::sync::Arc;
 use sc_executor_common::{
 	error::{Error, Result, WasmError},
 	wasm_runtime::{WasmModule, WasmInstance},
@@ -30,32 +30,45 @@ use sc_executor_common::{
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, WordSize, Value};
-use wasmtime::{Config, Engine, Module, Store};
+use wasmtime::{Config, Engine, Store};
 
 /// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
 pub struct WasmtimeRuntime {
-	module: Arc<Module>,
+	module_wrapper: Arc<ModuleWrapper>,
 	heap_pages: u32,
 	allow_missing_func_imports: bool,
 	host_functions: Vec<&'static dyn Function>,
+	engine: Engine,
 }
 
 impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
+		let store = Store::new(&self.engine);
+
 		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
 		// and results.
 		let imports = resolve_imports(
-			&self.module,
+			&store,
+			self.module_wrapper.module(),
 			&self.host_functions,
 			self.heap_pages,
 			self.allow_missing_func_imports,
 		)?;
 
+		let instance_wrapper =
+			InstanceWrapper::new(&store, &self.module_wrapper, &imports, self.heap_pages)?;
+		let heap_base = instance_wrapper.extract_heap_base()?;
+		let globals_snapshot = GlobalsSnapshot::take(&instance_wrapper)?;
+
 		Ok(Box::new(WasmtimeInstance {
-			module: self.module.clone(),
+			store,
+			instance_wrapper: Rc::new(instance_wrapper),
+			module_wrapper: Arc::clone(&self.module_wrapper),
 			imports,
+			globals_snapshot,
 			heap_pages: self.heap_pages,
+			heap_base,
 		}))
 	}
 }
@@ -63,9 +76,13 @@ impl WasmModule for WasmtimeRuntime {
 /// A `WasmInstance` implementation that reuses compiled module and spawns instances
 /// to execute the compiled code.
 pub struct WasmtimeInstance {
-	module: Arc<Module>,
+	store: Store,
+	module_wrapper: Arc<ModuleWrapper>,
+	instance_wrapper: Rc<InstanceWrapper>,
+	globals_snapshot: GlobalsSnapshot,
 	imports: Imports,
 	heap_pages: u32,
+	heap_base: u32,
 }
 
 // This is safe because `WasmtimeInstance` does not leak reference to `self.imports`
@@ -74,22 +91,31 @@ unsafe impl Send for WasmtimeInstance {}
 
 impl WasmInstance for WasmtimeInstance {
 	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
-		// TODO: reuse the instance and reset globals after call
-		// https://github.com/paritytech/substrate/issues/5141
-		let instance = Rc::new(InstanceWrapper::new(&self.module, &self.imports, self.heap_pages)?);
-		call_method(
-			instance,
-			method,
+		let entrypoint = self.instance_wrapper.resolve_entrypoint(method)?;
+		let allocator = FreeingBumpHeapAllocator::new(self.heap_base);
+
+		self.module_wrapper
+			.data_segments_snapshot()
+			.apply(|offset, contents| {
+				self.instance_wrapper
+					.write_memory_from(Pointer::new(offset), contents)
+			})?;
+
+		self.globals_snapshot.apply(&*self.instance_wrapper)?;
+
+		perform_call(
 			data,
+			Rc::clone(&self.instance_wrapper),
+			entrypoint,
+			allocator,
 		)
 	}
 
 	fn get_global_const(&self, name: &str) -> Result<Option<Value>> {
-		let instance = InstanceWrapper::new(&self.module, &self.imports, self.heap_pages)?;
+		let instance = InstanceWrapper::new(&self.store, &self.module_wrapper, &self.imports, self.heap_pages)?;
 		instance.get_global_val(name)
 	}
 }
-
 
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
 /// machine code, which can be computationally heavy.
@@ -104,29 +130,17 @@ pub fn create_runtime(
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 
 	let engine = Engine::new(&config);
-	let store = Store::new(&engine);
-	let module = Module::new(&store, code)
+
+	let module_wrapper = ModuleWrapper::new(&engine, code)
 		.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
 	Ok(WasmtimeRuntime {
-		module: Arc::new(module),
+		module_wrapper: Arc::new(module_wrapper),
 		heap_pages: heap_pages as u32,
 		allow_missing_func_imports,
 		host_functions,
+		engine,
 	})
-}
-
-/// Call a function inside a precompiled Wasm module.
-fn call_method(
-	instance_wrapper: Rc<InstanceWrapper>,
-	method: &str,
-	data: &[u8],
-) -> Result<Vec<u8>> {
-	let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
-	let heap_base = instance_wrapper.extract_heap_base()?;
-	let allocator = FreeingBumpHeapAllocator::new(heap_base);
-
-	perform_call(data, instance_wrapper, entrypoint, allocator)
 }
 
 fn perform_call(
@@ -150,7 +164,7 @@ fn perform_call(
 			Err(trap) => {
 				return Err(Error::from(format!(
 					"Wasm execution trapped: {}",
-					trap.message()
+					trap
 				)));
 			}
 		}

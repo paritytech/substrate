@@ -1,93 +1,156 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Service integration test utils.
 
 use std::iter;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 use std::net::Ipv4Addr;
 use std::pin::Pin;
 use std::time::Duration;
-use log::info;
+use log::{info, debug};
 use futures01::{Future, Stream, Poll};
 use futures::{FutureExt as _, TryFutureExt as _};
 use tempfile::TempDir;
 use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
 use sc_service::{
-	AbstractService,
+	TaskManager,
 	GenericChainSpec,
 	ChainSpecExtension,
 	Configuration,
-	config::{DatabaseConfig, KeystoreConfig},
+	config::{BasePath, DatabaseConfig, KeystoreConfig},
 	RuntimeGenesis,
 	Role,
 	Error,
+	TaskExecutor,
+	client::Client,
 };
-use sc_network::{multiaddr, Multiaddr, NetworkStateInfo};
+use sp_blockchain::HeaderBackend;
+use sc_network::{multiaddr, Multiaddr};
 use sc_network::config::{NetworkConfiguration, TransportConfig};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_transaction_pool::TransactionPool;
+use sc_client_api::{Backend, CallExecutor};
+use parking_lot::Mutex;
+
+#[cfg(test)]
+mod client;
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
 
 struct TestNet<G, E, F, L, U> {
 	runtime: Runtime,
-	authority_nodes: Vec<(usize, SyncService<F>, U, Multiaddr)>,
-	full_nodes: Vec<(usize, SyncService<F>, U, Multiaddr)>,
-	light_nodes: Vec<(usize, SyncService<L>, Multiaddr)>,
+	authority_nodes: Vec<(usize, F, U, Multiaddr)>,
+	full_nodes: Vec<(usize, F, U, Multiaddr)>,
+	light_nodes: Vec<(usize, L, Multiaddr)>,
 	chain_spec: GenericChainSpec<G, E>,
 	base_port: u16,
 	nodes: usize,
 }
 
-/// Wraps around an `Arc<Service>` and implements `Future`.
-pub struct SyncService<T>(Arc<Mutex<T>>);
+pub trait TestNetNode: Clone + Future<Item = (), Error = sc_service::Error> + Send + 'static {
+	type Block: BlockT;
+	type Backend: Backend<Self::Block>;
+	type Executor: CallExecutor<Self::Block> + Send + Sync;
+	type RuntimeApi: Send + Sync;
+	type TransactionPool: TransactionPool<Block = Self::Block>;
 
-impl<T> SyncService<T> {
-	pub fn get(&self) -> MutexGuard<T> {
-		self.0.lock().unwrap()
+	fn client(&self) -> Arc<Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>>;
+	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
+	fn network(&self) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>;
+}
+
+pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
+	task_manager: Arc<Mutex<TaskManager>>,
+	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
+	transaction_pool: Arc<TExPool>,
+	network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
+}
+
+impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool>
+TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
+	pub fn new(
+		task_manager: TaskManager,
+		client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
+		network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
+		transaction_pool: Arc<TExPool>,
+	) -> Self {
+		Self {
+			client, transaction_pool, network,
+			task_manager: Arc::new(Mutex::new(task_manager)),
+		}
 	}
 }
 
-impl<T> Clone for SyncService<T> {
+
+impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Clone for
+TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
 	fn clone(&self) -> Self {
-		Self(self.0.clone())
+		Self {
+			task_manager: self.task_manager.clone(),
+			client: self.client.clone(),
+			transaction_pool: self.transaction_pool.clone(),
+			network: self.network.clone(),
+		}
 	}
 }
 
-impl<T> From<T> for SyncService<T> {
-	fn from(service: T) -> Self {
-		SyncService(Arc::new(Mutex::new(service)))
-	}
-}
-
-impl<T: futures::Future<Output=Result<(), sc_service::Error>> + Unpin> Future for SyncService<T> {
+impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Future for
+	TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool>
+{
 	type Item = ();
 	type Error = sc_service::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		let mut f = self.0.lock().unwrap();
-		futures::compat::Compat::new(&mut *f).poll()
+		futures::compat::Compat::new(&mut self.task_manager.lock().future()).poll()
+	}
+}
+
+impl<TBl, TBackend, TExec, TRtApi, TExPool> TestNetNode for
+TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool>
+	where
+		TBl: BlockT,
+		TBackend: sc_client_api::Backend<TBl> + Send + Sync + 'static,
+		TExec: CallExecutor<TBl> + Send + Sync + 'static,
+		TRtApi: Send + Sync + 'static,
+		TExPool: TransactionPool<Block = TBl> + Send + Sync + 'static,
+{
+	type Block = TBl;
+	type Backend = TBackend;
+	type Executor = TExec;
+	type RuntimeApi = TRtApi;
+	type TransactionPool = TExPool;
+
+	fn client(&self) -> Arc<Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>> {
+		self.client.clone()
+	}
+	fn transaction_pool(&self) -> Arc<Self::TransactionPool> {
+		self.transaction_pool.clone()
+	}
+	fn network(&self) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash>> {
+		self.network.clone()
 	}
 }
 
 impl<G, E, F, L, U> TestNet<G, E, F, L, U>
-where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
+where F: Clone + Send + 'static, L: Clone + Send +'static, U: Clone + Send + 'static
 {
 	pub fn run_until_all_full<FP, LP>(
 		&mut self,
@@ -95,8 +158,8 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 		light_predicate: LP,
 	)
 		where
-			FP: Send + Fn(usize, &SyncService<F>) -> bool + 'static,
-			LP: Send + Fn(usize, &SyncService<L>) -> bool + 'static,
+			FP: Send + Fn(usize, &F) -> bool + 'static,
+			LP: Send + Fn(usize, &L) -> bool + 'static,
 	{
 		let full_nodes = self.full_nodes.clone();
 		let light_nodes = self.light_nodes.clone();
@@ -135,7 +198,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 	index: usize,
 	spec: &GenericChainSpec<G, E>,
 	role: Role,
-	task_executor: Arc<dyn Fn(Pin<Box<dyn futures::Future<Output = ()> + Send>>) + Send + Sync>,
+	task_executor: TaskExecutor,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
@@ -143,13 +206,14 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 {
 	let root = root.path().join(format!("node-{}", index));
 
-	let net_config_path = root.join("network");
-
 	let mut network_config = NetworkConfiguration::new(
 		format!("Node {}", index),
 		"network/test/0.1",
-		Default::default(), &net_config_path,
+		Default::default(),
+		None,
 	);
+
+	network_config.allow_non_globals_in_dht = true;
 
 	network_config.listen_addresses.push(
 		iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
@@ -165,8 +229,8 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 	};
 
 	Configuration {
-		impl_name: "network-test-impl",
-		impl_version: "0.1",
+		impl_name: String::from("network-test-impl"),
+		impl_version: String::from("0.1"),
 		role,
 		task_executor,
 		transaction_pool: Default::default(),
@@ -175,7 +239,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 			path: root.join("key"),
 			password: None
 		},
-		database: DatabaseConfig::Path {
+		database: DatabaseConfig::RocksDb {
 			path: root.join("db"),
 			cache_size: 128,
 		},
@@ -186,14 +250,16 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
 		rpc_http: None,
+		rpc_ipc: None,
 		rpc_ws: None,
 		rpc_ws_max_connections: None,
 		rpc_cors: None,
+		rpc_methods: Default::default(),
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		telemetry_external_transport: None,
 		default_heap_pages: None,
-		offchain_worker: false,
+		offchain_worker: Default::default(),
 		force_authoring: false,
 		disable_grandpa: false,
 		dev_key_seed: key_seed,
@@ -201,12 +267,14 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		tracing_receiver: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
+		base_path: Some(BasePath::new(root)),
+		informant_output_format: Default::default(),
 	}
 }
 
 impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
-	F: AbstractService,
-	L: AbstractService,
+	F: TestNetNode,
+	L: TestNetNode,
 	E: ChainSpecExtension + Clone + 'static + Send,
 	G: RuntimeGenesis + 'static,
 {
@@ -221,7 +289,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		)>,
 		base_port: u16
 	) -> TestNet<G, E, F, L, U> {
-		let _ = env_logger::try_init();
+		sp_tracing::try_init_simple();
 		fdlimit::raise_fd_limit();
 		let runtime = Runtime::new().expect("Error creating tokio runtime");
 		let mut net = TestNet {
@@ -245,58 +313,67 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration) -> Result<(F, U), Error>)>
 	) {
 		let executor = self.runtime.executor();
+		let task_executor: TaskExecutor = {
+			let executor = executor.clone();
+			(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _| {
+				executor.spawn(fut.unit_error().compat());
+				async {}
+			}).into()
+		};
 
 		for (key, authority) in authorities {
-			let task_executor = {
-				let executor = executor.clone();
-				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
-			};
 			let node_config = node_config(
 				self.nodes,
 				&self.chain_spec,
 				Role::Authority { sentry_nodes: Vec::new() },
-				task_executor,
+				task_executor.clone(),
 				Some(key),
 				self.base_port,
 				&temp,
 			);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let (service, user_data) = authority(node_config).expect("Error creating test node service");
-			let service = SyncService::from(service);
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.network().local_peer_id().clone().into()));
 			self.authority_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
 
 		for full in full {
-			let task_executor = {
-				let executor = executor.clone();
-				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
-			};
-			let node_config = node_config(self.nodes, &self.chain_spec, Role::Full, task_executor, None, self.base_port, &temp);
+			let node_config = node_config(
+				self.nodes,
+				&self.chain_spec,
+				Role::Full,
+				task_executor.clone(),
+				None,
+				self.base_port,
+				&temp,
+			);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
-			let service = SyncService::from(service);
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.network().local_peer_id().clone().into()));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
 
 		for light in light {
-			let task_executor = {
-				let executor = executor.clone();
-				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
-			};
-			let node_config = node_config(self.nodes, &self.chain_spec, Role::Light, task_executor, None, self.base_port, &temp);
+			let node_config = node_config(
+				self.nodes,
+				&self.chain_spec,
+				Role::Light,
+				task_executor.clone(),
+				None,
+				self.base_port,
+				&temp,
+			);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
-			let service = SyncService::from(light(node_config).expect("Error creating test node service"));
+			let service = light(node_config).expect("Error creating test node service");
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.network().local_peer_id().clone().into()));
 			self.light_nodes.push((self.nodes, service, addr));
 			self.nodes += 1;
 		}
@@ -315,9 +392,9 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	E: ChainSpecExtension + Clone + 'static + Send,
 	G: RuntimeGenesis + 'static,
 	Fb: Fn(Configuration) -> Result<F, Error>,
-	F: AbstractService,
+	F: TestNetNode,
 	Lb: Fn(Configuration) -> Result<L, Error>,
-	L: AbstractService,
+	L: TestNetNode,
 {
 	const NUM_FULL_NODES: usize = 5;
 	const NUM_LIGHT_NODES: usize = 5;
@@ -341,19 +418,25 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 			info!("Checking star topology");
 			let first_address = network.full_nodes[0].3.clone();
 			for (_, service, _, _) in network.full_nodes.iter().skip(1) {
-				service.get().network().add_reserved_peer(first_address.to_string())
+				service.network().add_reserved_peer(first_address.to_string())
 					.expect("Error adding reserved peer");
 			}
 			for (_, service, _) in network.light_nodes.iter() {
-				service.get().network().add_reserved_peer(first_address.to_string())
+				service.network().add_reserved_peer(first_address.to_string())
 					.expect("Error adding reserved peer");
 			}
 
 			network.run_until_all_full(
-				move |_index, service| service.get().network().num_connected()
-					== expected_full_connections,
-				move |_index, service| service.get().network().num_connected()
-					== expected_light_connections,
+				move |_index, service| {
+					let connected = service.network().num_connected();
+					debug!("Got {}/{} full connections...", connected, expected_full_connections);
+					connected == expected_full_connections
+				},
+				move |_index, service| {
+					let connected = service.network().num_connected();
+					debug!("Got {}/{} light connections...", connected, expected_light_connections);
+					connected == expected_light_connections
+				},
 			);
 
 			network.runtime
@@ -382,24 +465,30 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 			for i in 0..max_nodes {
 				if i != 0 {
 					if let Some((_, service, _, node_id)) = network.full_nodes.get(i) {
-						service.get().network().add_reserved_peer(address.to_string())
+						service.network().add_reserved_peer(address.to_string())
 							.expect("Error adding reserved peer");
 						address = node_id.clone();
 					}
 				}
 
 				if let Some((_, service, node_id)) = network.light_nodes.get(i) {
-					service.get().network().add_reserved_peer(address.to_string())
+					service.network().add_reserved_peer(address.to_string())
 						.expect("Error adding reserved peer");
 					address = node_id.clone();
 				}
 			}
 
 			network.run_until_all_full(
-				move |_index, service| service.get().network().num_connected()
-					== expected_full_connections,
-				move |_index, service| service.get().network().num_connected()
-					== expected_light_connections,
+				move |_index, service| {
+					let connected = service.network().num_connected();
+					debug!("Got {}/{} full connections...", connected, expected_full_connections);
+					connected == expected_full_connections
+				},
+				move |_index, service| {
+					let connected = service.network().num_connected();
+					debug!("Got {}/{} light connections...", connected, expected_light_connections);
+					connected == expected_light_connections
+				},
 			);
 		}
 		temp.close().expect("Error removing temp dir");
@@ -414,9 +503,9 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	mut extrinsic_factory: ExF
 ) where
 	Fb: Fn(Configuration) -> Result<(F, U), Error>,
-	F: AbstractService,
+	F: TestNetNode,
 	Lb: Fn(Configuration) -> Result<L, Error>,
-	L: AbstractService,
+	L: TestNetNode,
 	B: FnMut(&F, &mut U),
 	ExF: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
 	U: Clone + Send + 'static,
@@ -430,7 +519,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	let temp = tempdir_with_prefix("substrate-sync-test");
 	let mut network = TestNet::new(
 		&temp,
-		spec.clone(),
+		spec,
 		(0..NUM_FULL_NODES).map(|_| { |cfg| full_builder(cfg) }),
 		(0..NUM_LIGHT_NODES).map(|_| { |cfg| light_builder(cfg) }),
 		// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
@@ -446,38 +535,41 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 				info!("Generating #{}", i + 1);
 			}
 
-			make_block_and_import(&first_service.get(), first_user_data);
+			make_block_and_import(&first_service, first_user_data);
 		}
+		network.full_nodes[0].1.network().update_chain();
 		network.full_nodes[0].3.clone()
 	};
 
 	info!("Running sync");
 	for (_, service, _, _) in network.full_nodes.iter().skip(1) {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.light_nodes.iter() {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().chain_info().best_number == (NUM_BLOCKS as u32).into(),
+			service.client().info().best_number == (NUM_BLOCKS as u32).into(),
 		|_index, service|
-			service.get().client().chain_info().best_number == (NUM_BLOCKS as u32).into(),
+			service.client().info().best_number == (NUM_BLOCKS as u32).into(),
 	);
 
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
 	let first_user_data = &network.full_nodes[0].2;
-	let best_block = BlockId::number(first_service.get().client().chain_info().best_number);
-	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
+	let best_block = BlockId::number(first_service.client().info().best_number);
+	let extrinsic = extrinsic_factory(&first_service, first_user_data);
 	let source = sp_transaction_pool::TransactionSource::External;
 
 	futures::executor::block_on(
-		first_service.get().transaction_pool().submit_one(&best_block, source, extrinsic)
+		first_service.transaction_pool().submit_one(&best_block, source, extrinsic)
 	).expect("failed to submit extrinsic");
 
 	network.run_until_all_full(
-		|_index, service| service.get().transaction_pool().ready().count() == 1,
+		|_index, service| service.transaction_pool().ready().count() == 1,
 		|_index, _service| true,
 	);
 }
@@ -489,9 +581,9 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	authorities: impl IntoIterator<Item = String>
 ) where
 	Fb: Fn(Configuration) -> Result<F, Error>,
-	F: AbstractService,
+	F: TestNetNode,
 	Lb: Fn(Configuration) -> Result<L, Error>,
-	L: AbstractService,
+	L: TestNetNode,
 	E: ChainSpecExtension + Clone + 'static + Send,
 	G: RuntimeGenesis + 'static,
 {
@@ -501,7 +593,7 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	let temp = tempdir_with_prefix("substrate-consensus-test");
 	let mut network = TestNet::new(
 		&temp,
-		spec.clone(),
+		spec,
 		(0..NUM_FULL_NODES / 2).map(|_| { |cfg| full_builder(cfg).map(|s| (s, ())) }),
 		(0..NUM_LIGHT_NODES / 2).map(|_| { |cfg| light_builder(cfg) }),
 		authorities.into_iter().map(|key| (key, { |cfg| full_builder(cfg).map(|s| (s, ())) })),
@@ -511,19 +603,22 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	info!("Checking consensus");
 	let first_address = network.authority_nodes[0].3.clone();
 	for (_, service, _, _) in network.full_nodes.iter() {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.light_nodes.iter() {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	for (_, service, _, _) in network.authority_nodes.iter().skip(1) {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().chain_info().finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
+			service.client().info().finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
 		|_index, service|
-			service.get().client().chain_info().best_number >= (NUM_BLOCKS as u32 / 2).into(),
+			service.client().info().best_number >= (NUM_BLOCKS as u32 / 2).into(),
 	);
 
 	info!("Adding more peers");
@@ -536,15 +631,17 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 		(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg).map(|s| (s, ())) })),
 	);
 	for (_, service, _, _) in network.full_nodes.iter() {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.light_nodes.iter() {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().chain_info().finalized_number >= (NUM_BLOCKS as u32).into(),
+			service.client().info().finalized_number >= (NUM_BLOCKS as u32).into(),
 		|_index, service|
-			service.get().client().chain_info().best_number >= (NUM_BLOCKS as u32).into(),
+			service.client().info().best_number >= (NUM_BLOCKS as u32).into(),
 	);
 }

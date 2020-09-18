@@ -1,9 +1,10 @@
 # How to run this demo
 
 ```sh
-cargo install wasm-pack		# If necessary
+# If necessary, install wasm-bindgen
+# The version must match that used when building the browser demo.
+cargo install --version 0.2.67 wasm-bindgen-cli
 
-wasm-pack build --target web --out-dir ./browser-demo/pkg --no-typescript --release ./.. -- --no-default-features --features "browser"
-
-xdg-open index.html
+# Run the build script
+./build.sh
 ```

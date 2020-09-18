@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Configuration of the networking layer.
 //!
@@ -21,7 +23,7 @@
 
 pub use crate::chain::{Client, FinalityProofProvider};
 pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
-pub use crate::service::{TransactionPool, EmptyTransactionPool};
+pub use crate::request_responses::{IncomingRequest, ProtocolConfig as RequestResponseConfig};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -29,18 +31,29 @@ pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multia
 #[doc(hidden)]
 pub use crate::protocol::ProtocolConfig;
 
-use crate::service::ExHashT;
+use crate::ExHashT;
 
-use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
-use sp_runtime::traits::{Block as BlockT};
-use libp2p::identity::{Keypair, ed25519};
-use libp2p::wasm_ext;
-use libp2p::{PeerId, Multiaddr, multiaddr};
 use core::{fmt, iter};
-use std::{convert::TryFrom, future::Future, pin::Pin, str::FromStr};
-use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
-use zeroize::Zeroize;
+use futures::future;
+use libp2p::{
+	identity::{ed25519, Keypair},
+	multiaddr, wasm_ext, Multiaddr, PeerId,
+};
 use prometheus_endpoint::Registry;
+use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
+use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
+use std::{borrow::Cow, convert::TryFrom, future::Future, pin::Pin, str::FromStr};
+use std::{
+	collections::HashMap,
+	error::Error,
+	fs,
+	io::{self, Write},
+	net::Ipv4Addr,
+	path::{Path, PathBuf},
+	str,
+	sync::Arc,
+};
+use zeroize::Zeroize;
 
 /// Network initialization parameters.
 pub struct Params<B: BlockT, H: ExHashT> {
@@ -159,20 +172,90 @@ impl<B: BlockT> FinalityProofRequestBuilder<B> for DummyFinalityProofRequestBuil
 /// Shared finality proof request builder struct used by the queue.
 pub type BoxFinalityProofRequestBuilder<B> = Box<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
 
-/// Name of a protocol, transmitted on the wire. Should be unique for each chain.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Result of the transaction import.
+#[derive(Clone, Copy, Debug)]
+pub enum TransactionImport {
+	/// Transaction is good but already known by the transaction pool.
+	KnownGood,
+	/// Transaction is good and not yet known.
+	NewGood,
+	/// Transaction is invalid.
+	Bad,
+	/// Transaction import was not performed.
+	None,
+}
+
+/// Fuure resolving to transaction import result.
+pub type TransactionImportFuture = Pin<Box<dyn Future<Output=TransactionImport> + Send>>;
+
+/// Transaction pool interface
+pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
+	/// Get transactions from the pool that are ready to be propagated.
+	fn transactions(&self) -> Vec<(H, B::Extrinsic)>;
+	/// Get hash of transaction.
+	fn hash_of(&self, transaction: &B::Extrinsic) -> H;
+	/// Import a transaction into the pool.
+	///
+	/// This will return future.
+	fn import(
+		&self,
+		transaction: B::Extrinsic,
+	) -> TransactionImportFuture;
+	/// Notify the pool about transactions broadcast.
+	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
+	/// Get transaction by hash.
+	fn transaction(&self, hash: &H) -> Option<B::Extrinsic>;
+}
+
+/// Dummy implementation of the [`TransactionPool`] trait for a transaction pool that is always
+/// empty and discards all incoming transactions.
+///
+/// Requires the "hash" type to implement the `Default` trait.
+///
+/// Useful for testing purposes.
+pub struct EmptyTransactionPool;
+
+impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransactionPool {
+	fn transactions(&self) -> Vec<(H, B::Extrinsic)> {
+		Vec::new()
+	}
+
+	fn hash_of(&self, _transaction: &B::Extrinsic) -> H {
+		Default::default()
+	}
+
+	fn import(
+		&self,
+		_transaction: B::Extrinsic
+	) -> TransactionImportFuture {
+		Box::pin(future::ready(TransactionImport::KnownGood))
+	}
+
+	fn on_broadcasted(&self, _: HashMap<H, Vec<String>>) {}
+
+	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
+}
+
+/// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
 
-impl<'a> From<&'a [u8]> for ProtocolId {
-	fn from(bytes: &'a [u8]) -> ProtocolId {
-		ProtocolId(bytes.into())
+impl<'a> From<&'a str> for ProtocolId {
+	fn from(bytes: &'a str) -> ProtocolId {
+		ProtocolId(bytes.as_bytes().into())
 	}
 }
 
-impl ProtocolId {
-	/// Exposes the `ProtocolId` as bytes.
-	pub fn as_bytes(&self) -> &[u8] {
-		self.0.as_ref()
+impl AsRef<str> for ProtocolId {
+	fn as_ref(&self) -> &str {
+		str::from_utf8(&self.0[..])
+			.expect("the only way to build a ProtocolId is through a UTF-8 String; qed")
+	}
+}
+
+impl fmt::Debug for ProtocolId {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Debug::fmt(self.as_ref(), f)
 	}
 }
 
@@ -308,7 +391,7 @@ impl From<multiaddr::Error> for ParseErr {
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
 	/// Directory path to store network-specific configuration. None means nothing will be saved.
-	pub net_config_path: PathBuf,
+	pub net_config_path: Option<PathBuf>,
 	/// Multiaddresses to listen for incoming connections.
 	pub listen_addresses: Vec<Multiaddr>,
 	/// Multiaddresses to advertise. Detected automatically if empty.
@@ -317,6 +400,11 @@ pub struct NetworkConfiguration {
 	pub boot_nodes: Vec<MultiaddrWithPeerId>,
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
+	/// List of notifications protocols that the node supports. Must also include a
+	/// `ConsensusEngineId` for backwards-compatibility.
+	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
+	/// List of request-response protocols that the node supports.
+	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// Maximum allowed number of incoming connections.
 	pub in_peers: u32,
 	/// Number of outgoing connections we're trying to maintain.
@@ -333,6 +421,8 @@ pub struct NetworkConfiguration {
 	pub transport: TransportConfig,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
+	/// Should we insert non-global addresses into the DHT?
+	pub allow_non_globals_in_dht: bool,
 }
 
 impl NetworkConfiguration {
@@ -341,14 +431,16 @@ impl NetworkConfiguration {
 		node_name: SN,
 		client_version: SV,
 		node_key: NodeKeyConfig,
-		net_config_path: &PathBuf,
+		net_config_path: Option<PathBuf>,
 	) -> Self {
 		NetworkConfiguration {
-			net_config_path: net_config_path.clone(),
+			net_config_path,
 			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			node_key,
+			notifications_protocols: Vec::new(),
+			request_response_protocols: Vec::new(),
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
@@ -362,18 +454,17 @@ impl NetworkConfiguration {
 				use_yamux_flow_control: false,
 			},
 			max_parallel_downloads: 5,
+			allow_non_globals_in_dht: false,
 		}
 	}
-}
 
-impl NetworkConfiguration {
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new(
 			"test-node",
 			"test-client",
 			Default::default(),
-			&std::env::current_dir().expect("current directory must exist"),
+			None,
 		);
 
 		config.listen_addresses = vec![
@@ -382,6 +473,7 @@ impl NetworkConfiguration {
 				.collect()
 		];
 
+		config.allow_non_globals_in_dht = true;
 		config
 	}
 
@@ -391,7 +483,7 @@ impl NetworkConfiguration {
 			"test-node",
 			"test-client",
 			Default::default(),
-			&std::env::current_dir().expect("current directory must exist"),
+			None,
 		);
 
 		config.listen_addresses = vec![
@@ -400,6 +492,7 @@ impl NetworkConfiguration {
 				.collect()
 		];
 
+		config.allow_non_globals_in_dht = true;
 		config
 	}
 }
@@ -519,10 +612,26 @@ impl NodeKeyConfig {
 				Ok(Keypair::Ed25519(k.into())),
 
 			Ed25519(Secret::File(f)) =>
-				get_secret(f,
-					|mut b| ed25519::SecretKey::from_bytes(&mut b),
+				get_secret(
+					f,
+					|mut b| {
+						match String::from_utf8(b.to_vec())
+							.ok()
+							.and_then(|s|{
+								if s.len() == 64 {
+									hex::decode(&s).ok()
+								} else {
+									None
+								}}
+							)
+						{
+							Some(s) => ed25519::SecretKey::from_bytes(s),
+							_ => ed25519::SecretKey::from_bytes(&mut b),
+						}
+					},
 					ed25519::SecretKey::generate,
-					|b| b.as_ref().to_vec())
+					|b| b.as_ref().to_vec()
+				)
 				.map(ed25519::Keypair::from)
 				.map(Keypair::Ed25519),
 		}

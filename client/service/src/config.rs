@@ -1,44 +1,49 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Service configuration.
 
-pub use sc_client::ExecutionStrategies;
-pub use sc_client_db::{kvdb::KeyValueDB, PruningMode};
+pub use sc_client_db::{Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig};
 pub use sc_network::Multiaddr;
 pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
 pub use sc_executor::WasmExecutionMethod;
+use sc_client_api::execution_extensions::ExecutionStrategies;
 
-use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
+use std::{io, future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 use sc_chain_spec::ChainSpec;
-use sp_core::crypto::Protected;
+use sp_core::crypto::SecretString;
 pub use sc_telemetry::TelemetryEndpoints;
 use prometheus_endpoint::Registry;
+#[cfg(not(target_os = "unknown"))]
+use tempfile::TempDir;
 
 /// Service configuration.
+#[derive(Debug)]
 pub struct Configuration {
 	/// Implementation name
-	pub impl_name: &'static str,
+	pub impl_name: String,
 	/// Implementation version (see sc-cli to see an example of format)
-	pub impl_version: &'static str,
+	pub impl_version: String,
 	/// Node role.
 	pub role: Role,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
+	pub task_executor: TaskExecutor,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
@@ -63,10 +68,14 @@ pub struct Configuration {
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
 	pub rpc_ws: Option<SocketAddr>,
+	/// RPC over IPC binding path. `None` if disabled.
+	pub rpc_ipc: Option<String>,
 	/// Maximum number of connections for WebSockets RPC server. `None` if default.
 	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
+	/// RPC methods to expose (by default only a safe subset or all of them).
+	pub rpc_methods: RpcMethods,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
@@ -77,7 +86,7 @@ pub struct Configuration {
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
-	pub offchain_worker: bool,
+	pub offchain_worker: OffchainWorkerConfig,
 	/// Enable authoring even when offline.
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
@@ -98,17 +107,30 @@ pub struct Configuration {
 	pub max_runtime_instances: usize,
 	/// Announce block automatically after they have been imported
 	pub announce_block: bool,
+	/// Base path of the configuration
+	pub base_path: Option<BasePath>,
+	/// Configuration of the output format that the informant uses.
+	pub informant_output_format: sc_informant::OutputFormat,
+}
+
+/// Type for tasks spawned by the executor.
+#[derive(PartialEq)]
+pub enum TaskType {
+	/// Regular non-blocking futures. Polling the task is expected to be a lightweight operation.
+	Async,
+	/// The task might perform a lot of expensive CPU operations and/or call `thread::sleep`.
+	Blocking,
 }
 
 /// Configuration of the client keystore.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum KeystoreConfig {
 	/// Keystore at a path on-disk. Recommended for native nodes.
 	Path {
 		/// The path of the keystore.
 		path: PathBuf,
 		/// Node keystore's password.
-		password: Option<Protected<String>>
+		password: Option<SecretString>
 	},
 	/// In-memory keystore. Recommended for in-browser nodes.
 	InMemory,
@@ -123,24 +145,17 @@ impl KeystoreConfig {
 		}
 	}
 }
-
 /// Configuration of the database of the client.
-#[derive(Clone)]
-pub enum DatabaseConfig {
-	/// Database file at a specific path. Recommended for most uses.
-	Path {
-		/// Path to the database.
-		path: PathBuf,
-		/// Cache Size for internal database in MiB
-		cache_size: usize,
-	},
-
-	/// A custom implementation of an already-open database.
-	Custom(Arc<dyn KeyValueDB>),
+#[derive(Debug, Clone, Default)]
+pub struct OffchainWorkerConfig {
+	/// If this is allowed.
+	pub enabled: bool,
+	/// allow writes from the runtime to the offchain worker database.
+	pub indexing_enabled: bool,
 }
 
 /// Configuration of the Prometheus endpoint.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PrometheusConfig {
 	/// Port to use.
 	pub port: SocketAddr,
@@ -165,5 +180,144 @@ impl Configuration {
 	/// Returns a string displaying the node role.
 	pub fn display_role(&self) -> String {
 		self.role.to_string()
+	}
+
+	/// Returns the prometheus metrics registry, if available.
+	pub fn prometheus_registry<'a>(&'a self) -> Option<&'a Registry> {
+		self.prometheus_config.as_ref().map(|config| &config.registry)
+	}
+}
+
+/// Available RPC methods.
+#[derive(Debug, Copy, Clone)]
+pub enum RpcMethods {
+	/// Expose every RPC method only when RPC is listening on `localhost`,
+	/// otherwise serve only safe RPC methods.
+	Auto,
+	/// Allow only a safe subset of RPC methods.
+	Safe,
+	/// Expose every RPC method (even potentially unsafe ones).
+	Unsafe,
+}
+
+impl Default for RpcMethods {
+	fn default() -> RpcMethods {
+		RpcMethods::Auto
+	}
+}
+
+/// The base path that is used for everything that needs to be write on disk to run a node.
+#[derive(Debug)]
+pub enum BasePath {
+	/// A temporary directory is used as base path and will be deleted when dropped.
+	#[cfg(not(target_os = "unknown"))]
+	Temporary(TempDir),
+	/// A path on the disk.
+	Permanenent(PathBuf),
+}
+
+impl BasePath {
+	/// Create a `BasePath` instance using a temporary directory prefixed with "substrate" and use
+	/// it as base path.
+	///
+	/// Note: the temporary directory will be created automatically and deleted when the `BasePath`
+	/// instance is dropped.
+	#[cfg(not(target_os = "unknown"))]
+	pub fn new_temp_dir() -> io::Result<BasePath> {
+		Ok(BasePath::Temporary(
+			tempfile::Builder::new().prefix("substrate").tempdir()?,
+		))
+	}
+
+	/// Create a `BasePath` instance based on an existing path on disk.
+	///
+	/// Note: this function will not ensure that the directory exist nor create the directory. It
+	/// will also not delete the directory when the instance is dropped.
+	pub fn new<P: AsRef<Path>>(path: P) -> BasePath {
+		BasePath::Permanenent(path.as_ref().to_path_buf())
+	}
+
+	/// Create a base path from values describing the project.
+	#[cfg(not(target_os = "unknown"))]
+	pub fn from_project(qualifier: &str, organization: &str, application: &str) -> BasePath {
+		BasePath::new(
+			directories::ProjectDirs::from(qualifier, organization, application)
+				.expect("app directories exist on all supported platforms; qed")
+				.data_local_dir(),
+		)
+	}
+
+	/// Retrieve the base path.
+	pub fn path(&self) -> &Path {
+		match self {
+			#[cfg(not(target_os = "unknown"))]
+			BasePath::Temporary(temp_dir) => temp_dir.path(),
+			BasePath::Permanenent(path) => path.as_path(),
+		}
+	}
+}
+
+impl std::convert::From<PathBuf> for BasePath {
+	fn from(path: PathBuf) -> Self {
+		BasePath::new(path)
+	}
+}
+
+// NOTE: here for code readability.
+pub(crate) type SomeFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+pub(crate) type JoinFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+/// Callable object that execute tasks.
+///
+/// This struct can be created easily using `Into`.
+///
+/// # Examples
+///
+/// ## Using tokio
+///
+/// ```
+/// # use sc_service::TaskExecutor;
+/// use futures::future::FutureExt;
+/// use tokio::runtime::Runtime;
+///
+/// let runtime = Runtime::new().unwrap();
+/// let handle = runtime.handle().clone();
+/// let task_executor: TaskExecutor = (move |future, _task_type| {
+///     handle.spawn(future).map(|_| ())
+/// }).into();
+/// ```
+///
+/// ## Using async-std
+///
+/// ```
+/// # use sc_service::TaskExecutor;
+/// let task_executor: TaskExecutor = (|future, _task_type| {
+///     // NOTE: async-std's JoinHandle is not a Result so we don't need to map the result
+///     async_std::task::spawn(future)
+/// }).into();
+/// ```
+#[derive(Clone)]
+pub struct TaskExecutor(Arc<dyn Fn(SomeFuture, TaskType) -> JoinFuture + Send + Sync>);
+
+impl std::fmt::Debug for TaskExecutor {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "TaskExecutor")
+	}
+}
+
+impl<F, FUT> std::convert::From<F> for TaskExecutor
+where
+	F: Fn(SomeFuture, TaskType) -> FUT + Send + Sync + 'static,
+	FUT: Future<Output = ()> + Send + 'static,
+{
+	fn from(func: F) -> Self {
+		Self(Arc::new(move |fut, tt| Box::pin(func(fut, tt))))
+	}
+}
+
+impl TaskExecutor {
+	/// Spawns a new asynchronous task.
+	pub fn spawn(&self, future: SomeFuture, task_type: TaskType) -> JoinFuture {
+		self.0(future, task_type)
 	}
 }

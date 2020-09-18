@@ -1,23 +1,26 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
-#[cfg(not(feature = "std"))]
-use sp_std::prelude::*;
-use codec::{FullCodec, Encode, EncodeAppend, EncodeLike, Decode};
-use crate::{storage::{self, unhashed}, hash::{Twox128, StorageHasher}, traits::Len};
+use codec::{FullCodec, Encode, EncodeLike, Decode};
+use crate::{
+	Never,
+	storage::{self, unhashed, StorageAppend},
+	hash::{Twox128, StorageHasher},
+};
 
 /// Generator for `StorageValue` used by `decl_storage`.
 ///
@@ -104,12 +107,18 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	}
 
 	fn mutate<R, F: FnOnce(&mut G::Query) -> R>(f: F) -> R {
+		Self::try_mutate(|v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
+	}
+
+	fn try_mutate<R, E, F: FnOnce(&mut G::Query) -> Result<R, E>>(f: F) -> Result<R, E> {
 		let mut val = G::get();
 
 		let ret = f(&mut val);
-		match G::from_query_to_optional_value(val) {
-			Some(ref val) => G::put(val),
-			None => G::kill(),
+		if ret.is_ok() {
+			match G::from_query_to_optional_value(val) {
+				Some(ref val) => G::put(val),
+				None => G::kill(),
+			}
 		}
 		ret
 	}
@@ -123,67 +132,13 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		G::from_optional_value_to_query(value)
 	}
 
-	/// Append the given items to the value in the storage.
-	///
-	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<Items, Item, EncodeLikeItem>(items: Items) -> Result<(), &'static str>
+	fn append<Item, EncodeLikeItem>(item: EncodeLikeItem)
 	where
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		T: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
-		Items::IntoIter: ExactSizeIterator,
+		T: StorageAppend<Item>,
 	{
 		let key = Self::storage_value_final_key();
-		let encoded_value = unhashed::get_raw(&key)
-			.unwrap_or_else(|| {
-				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
-					Some(value) => value.encode(),
-					None => Vec::new(),
-				}
-			});
-
-		let new_val = T::append_or_new(
-			encoded_value,
-			items,
-		).map_err(|_| "Could not append given item")?;
-		unhashed::put_raw(&key, &new_val);
-		Ok(())
-	}
-
-	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
-	/// old (presumably corrupt) value is replaced with the given `items`.
-	///
-	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append_or_put<Items, Item, EncodeLikeItem>(items: Items) where
-		Item: Encode,
-		EncodeLikeItem: EncodeLike<Item>,
-		T: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<T>,
-		Items::IntoIter: ExactSizeIterator
-	{
-		Self::append(items.clone()).unwrap_or_else(|_| Self::put(items));
-	}
-
-	/// Read the length of the value in a fast way, without decoding the entire value.
-	///
-	/// `T` is required to implement `Codec::DecodeLength`.
-	///
-	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
-	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
-	/// function for this purpose.
-	fn decode_len() -> Result<usize, &'static str> where T: codec::DecodeLength, T: Len {
-		let key = Self::storage_value_final_key();
-
-		// attempt to get the length directly.
-		if let Some(k) = unhashed::get_raw(&key) {
-			<T as codec::DecodeLength>::len(&k).map_err(|e| e.what())
-		} else {
-			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
-				.map(|v| v.len())
-				.unwrap_or(0);
-
-			Ok(len)
-		}
+		sp_io::storage::append(&key, item.encode());
 	}
 }

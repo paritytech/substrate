@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Balances Module
 //!
@@ -153,13 +154,15 @@ mod tests;
 mod tests_local;
 mod tests_composite;
 mod benchmarking;
+mod default_weight;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
-	weights::SimpleDispatchInfo, traits::{
+	weights::Weight,
+	traits::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
@@ -169,17 +172,24 @@ use frame_support::{
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
-		Zero, AtLeast32Bit, StaticLookup, Member, CheckedAdd, CheckedSub,
+		Zero, AtLeast32BitUnsigned, StaticLookup, Member, CheckedAdd, CheckedSub,
 		MaybeSerializeDeserialize, Saturating, Bounded,
 	},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
-
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
+
+pub trait WeightInfo {
+	fn transfer() -> Weight;
+	fn transfer_keep_alive() -> Weight;
+	fn set_balance_creating() -> Weight;
+	fn set_balance_killing() -> Weight;
+	fn force_transfer() -> Weight;
+}
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
+	type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
 
 	/// The minimum amount required to keep an account open.
@@ -187,11 +197,18 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
+
+	/// Weight information for the extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
+
+	/// The maximum number of locks that should exist on an account.
+	/// Not strictly enforced, but used for weight estimation.
+	type MaxLocks: Get<u32>;
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
+	type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
 
 	/// Handler for the unbalanced reduction when removing a dust account.
@@ -205,12 +222,21 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
+
+	/// The maximum number of locks that should exist on an account.
+	/// Not strictly enforced, but used for weight estimation.
+	type MaxLocks: Get<u32>;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
+	type WeightInfo = <T as Trait<I>>::WeightInfo;
+	type MaxLocks = T::MaxLocks;
 }
 
 decl_event!(
@@ -218,17 +244,25 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as Trait<I>>::Balance
 	{
-		/// An account was created with some free balance.
+		/// An account was created with some free balance. \[account, free_balance\]
 		Endowed(AccountId, Balance),
 		/// An account was removed whose balance was non-zero but below ExistentialDeposit,
-		/// resulting in an outright loss.
+		/// resulting in an outright loss. \[account, balance\]
 		DustLost(AccountId, Balance),
-		/// Transfer succeeded (from, to, value).
+		/// Transfer succeeded. \[from, to, value\]
 		Transfer(AccountId, AccountId, Balance),
-		/// A balance was set by root (who, free, reserved).
+		/// A balance was set by root. \[who, free, reserved\]
 		BalanceSet(AccountId, Balance, Balance),
-		/// Some amount was deposited (e.g. for transaction fees).
+		/// Some amount was deposited (e.g. for transaction fees). \[who, deposit\]
 		Deposit(AccountId, Balance),
+		/// Some balance was reserved (moved from free to reserved). \[who, value\]
+		Reserved(AccountId, Balance),
+		/// Some balance was unreserved (moved from reserved to free). \[who, value\]
+		Unreserved(AccountId, Balance),
+		/// Some balance was moved from the reserve of the first account to the second account.
+		/// Final argument indicates the destination balance type.
+		/// \[from, to, balance, destination_status\]
+		ReserveRepatriated(AccountId, AccountId, Balance, Status),
 	}
 );
 
@@ -364,9 +398,6 @@ decl_storage! {
 
 		/// The balance of an account.
 		///
-		/// NOTE: THIS MAY NEVER BE IN EXISTENCE AND YET HAVE A `total().is_zero()`. If the total
-		/// is ever zero, then the entry *MUST* be removed.
-		///
 		/// NOTE: This is only used in the case that this module is used to store balances.
 		pub Account: map hasher(blake2_128_concat) T::AccountId => AccountData<T::Balance>;
 
@@ -383,10 +414,6 @@ decl_storage! {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
 		// ^^ begin, length, amount liquid at genesis
 		build(|config: &GenesisConfig<T, I>| {
-			assert!(
-				<T as Trait<I>>::ExistentialDeposit::get() > Zero::zero(),
-				"The existential deposit should be greater than zero."
-			);
 			for (_, balance) in &config.balances {
 				assert!(
 					*balance >= <T as Trait<I>>::ExistentialDeposit::get(),
@@ -431,9 +458,12 @@ decl_module! {
 		///   - Removing enough funds from an account will trigger `T::DustRemoval::on_unbalanced`.
 		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional
 		///     check that the transfer will not kill the origin account.
-		///
+		/// ---------------------------------
+		/// - Base Weight: 73.64 µs, worst case scenario (account created, account removed)
+		/// - DB Weight: 1 Read and 1 Write to destination account
+		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		#[weight = T::WeightInfo::transfer()]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -456,8 +486,15 @@ decl_module! {
 		/// # <weight>
 		/// - Independent of the arguments.
 		/// - Contains a limited number of reads and writes.
+		/// ---------------------
+		/// - Base Weight:
+		///     - Creating: 27.56 µs
+		///     - Killing: 35.11 µs
+		/// - DB Weight: 1 Read, 1 Write to `who`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(50_000)]
+		#[weight = T::WeightInfo::set_balance_creating() // Creates a new account.
+			.max(T::WeightInfo::set_balance_killing()) // Kills an existing account.
+		]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -495,7 +532,11 @@ decl_module! {
 
 		/// Exactly as `transfer`, except the origin must be root and the source account may be
 		/// specified.
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		/// # <weight>
+		/// - Same as transfer, but additional read and write because the source account is
+		///   not assumed to be in the overlay.
+		/// # </weight>
+		#[weight = T::WeightInfo::force_transfer()]
 		pub fn force_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -514,7 +555,12 @@ decl_module! {
 		/// 99% of the time you want [`transfer`] instead.
 		///
 		/// [`transfer`]: struct.Module.html#method.transfer
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		/// # <weight>
+		/// - Cheaper than transfer because account cannot be killed.
+		/// - Base Weight: 51.4 µs
+		/// - DB Weight: 1 Read and 1 Write to dest (sender is in overlay already)
+		/// #</weight>
+		#[weight = T::WeightInfo::transfer_keep_alive()]
 		pub fn transfer_keep_alive(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -587,11 +633,11 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn mutate_account<R>(
+	pub fn mutate_account<R>(
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>) -> R
 	) -> R {
-		Self::try_mutate_account(who, |a| -> Result<R, Infallible> { Ok(f(a)) })
+		Self::try_mutate_account(who, |a, _| -> Result<R, Infallible> { Ok(f(a)) })
 			.expect("Error is infallible; qed")
 	}
 
@@ -606,13 +652,13 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// the caller will do this.
 	fn try_mutate_account<R, E>(
 		who: &T::AccountId,
-		f: impl FnOnce(&mut AccountData<T::Balance>) -> Result<R, E>
+		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>
 	) -> Result<R, E> {
 		T::AccountStore::try_mutate_exists(who, |maybe_account| {
+			let is_new = maybe_account.is_none();
 			let mut account = maybe_account.take().unwrap_or_default();
-			let was_zero = account.total().is_zero();
-			f(&mut account).map(move |result| {
-				let maybe_endowed = if was_zero { Some(account.free) } else { None };
+			f(&mut account, is_new).map(move |result| {
+				let maybe_endowed = if is_new { Some(account.free) } else { None };
 				*maybe_account = Self::post_mutation(who, account);
 				(maybe_endowed, result)
 			})
@@ -626,6 +672,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
+		if locks.len() as u32 > T::MaxLocks::get() {
+			frame_support::debug::warn!(
+				"Warning: A user has more currency locks than expected. \
+				A runtime configuration adjustment may be needed."
+			);
+		}
 		Self::mutate_account(who, |b| {
 			b.misc_frozen = Zero::zero();
 			b.fee_frozen = Zero::zero();
@@ -830,6 +882,7 @@ impl<T: Subtrait<I>, I: Instance> PartialEq for ElevatedTrait<T, I> {
 }
 impl<T: Subtrait<I>, I: Instance> Eq for ElevatedTrait<T, I> {}
 impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
+	type BaseCallFilter = T::BaseCallFilter;
 	type Origin = T::Origin;
 	type Call = T::Call;
 	type Index = T::Index;
@@ -842,6 +895,10 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
+	type DbWeight = T::DbWeight;
+	type BlockExecutionWeight = T::BlockExecutionWeight;
+	type ExtrinsicBaseWeight = T::ExtrinsicBaseWeight;
+	type MaximumExtrinsicWeight = T::MaximumBlockWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;
@@ -849,6 +906,7 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type OnNewAccount = T::OnNewAccount;
 	type OnKilledAccount = T::OnKilledAccount;
 	type AccountData = T::AccountData;
+	type SystemWeightInfo = T::SystemWeightInfo;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
@@ -856,6 +914,8 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type DustRemoval = ();
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
+	type WeightInfo = <T as Subtrait<I>>::WeightInfo;
+	type MaxLocks = T::MaxLocks;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
@@ -944,8 +1004,8 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> DispatchResult {
 		if value.is_zero() || transactor == dest { return Ok(()) }
 
-		Self::try_mutate_account(dest, |to_account| -> DispatchResult {
-			Self::try_mutate_account(transactor, |from_account| -> DispatchResult {
+		Self::try_mutate_account(dest, |to_account, _| -> DispatchResult {
+			Self::try_mutate_account(transactor, |from_account, _| -> DispatchResult {
 				from_account.free = from_account.free.checked_sub(&value)
 					.ok_or(Error::<T, I>::InsufficientBalance)?;
 
@@ -1016,8 +1076,8 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> Result<Self::PositiveImbalance, DispatchError> {
 		if value.is_zero() { return Ok(PositiveImbalance::zero()) }
 
-		Self::try_mutate_account(who, |account| -> Result<Self::PositiveImbalance, DispatchError> {
-			ensure!(!account.total().is_zero(), Error::<T, I>::DeadAccount);
+		Self::try_mutate_account(who, |account, is_new| -> Result<Self::PositiveImbalance, DispatchError> {
+			ensure!(!is_new, Error::<T, I>::DeadAccount);
 			account.free = account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 			Ok(PositiveImbalance::new(value))
 		})
@@ -1035,14 +1095,14 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> Self::PositiveImbalance {
 		if value.is_zero() { return Self::PositiveImbalance::zero() }
 
-		Self::try_mutate_account(who, |account| -> Result<Self::PositiveImbalance, Self::PositiveImbalance> {
+		Self::try_mutate_account(who, |account, is_new| -> Result<Self::PositiveImbalance, Self::PositiveImbalance> {
 			// bail if not yet created and this operation wouldn't be enough to create it.
 			let ed = T::ExistentialDeposit::get();
-			ensure!(value >= ed || !account.total().is_zero(), Self::PositiveImbalance::zero());
+			ensure!(value >= ed || !is_new, Self::PositiveImbalance::zero());
 
 			// defensive only: overflow should never happen, however in case it does, then this
 			// operation is a no-op.
-			account.free = account.free.checked_add(&value).ok_or(Self::PositiveImbalance::zero())?;
+			account.free = account.free.checked_add(&value).ok_or_else(|| Self::PositiveImbalance::zero())?;
 
 			Ok(PositiveImbalance::new(value))
 		}).unwrap_or_else(|x| x)
@@ -1059,7 +1119,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> result::Result<Self::NegativeImbalance, DispatchError> {
 		if value.is_zero() { return Ok(NegativeImbalance::zero()); }
 
-		Self::try_mutate_account(who, |account|
+		Self::try_mutate_account(who, |account, _|
 			-> Result<Self::NegativeImbalance, DispatchError>
 		{
 			let new_free_account = account.free.checked_sub(&value)
@@ -1083,7 +1143,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	fn make_free_balance_be(who: &T::AccountId, value: Self::Balance)
 		-> SignedImbalance<Self::Balance, Self::PositiveImbalance>
 	{
-		Self::try_mutate_account(who, |account|
+		Self::try_mutate_account(who, |account, is_new|
 			-> Result<SignedImbalance<Self::Balance, Self::PositiveImbalance>, ()>
 		{
 			let ed = T::ExistentialDeposit::get();
@@ -1094,7 +1154,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			// equal and opposite cause (returned as an Imbalance), then in the
 			// instance that there's no other accounts on the system at all, we might
 			// underflow the issuance and our arithmetic will be off.
-			ensure!(value + account.reserved >= ed || !account.total().is_zero(), ());
+			ensure!(value.saturating_add(account.reserved) >= ed || !is_new, ());
 
 			let imbalance = if account.free <= value {
 				SignedImbalance::Positive(PositiveImbalance::new(value - account.free))
@@ -1103,7 +1163,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			};
 			account.free = value;
 			Ok(imbalance)
-		}).unwrap_or(SignedImbalance::Positive(Self::PositiveImbalance::zero()))
+		}).unwrap_or_else(|_| SignedImbalance::Positive(Self::PositiveImbalance::zero()))
 	}
 }
 
@@ -1132,11 +1192,14 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 	fn reserve(who: &T::AccountId, value: Self::Balance) -> DispatchResult {
 		if value.is_zero() { return Ok(()) }
 
-		Self::try_mutate_account(who, |account| -> DispatchResult {
+		Self::try_mutate_account(who, |account, _| -> DispatchResult {
 			account.free = account.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
 			account.reserved = account.reserved.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
-			Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), account.free)
-		})
+			Self::ensure_can_withdraw(&who, value.clone(), WithdrawReason::Reserve.into(), account.free)
+		})?;
+
+		Self::deposit_event(RawEvent::Reserved(who.clone(), value));
+		Ok(())
 	}
 
 	/// Unreserve some funds, returning any amount that was unable to be unreserved.
@@ -1145,14 +1208,17 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 	fn unreserve(who: &T::AccountId, value: Self::Balance) -> Self::Balance {
 		if value.is_zero() { return Zero::zero() }
 
-		Self::mutate_account(who, |account| {
+		let actual = Self::mutate_account(who, |account| {
 			let actual = cmp::min(account.reserved, value);
 			account.reserved -= actual;
 			// defensive only: this can never fail since total issuance which is at least free+reserved
 			// fits into the same data type.
 			account.free = account.free.saturating_add(actual);
-			value - actual
-		})
+			actual
+		});
+
+		Self::deposit_event(RawEvent::Unreserved(who.clone(), actual.clone()));
+		value - actual
 	}
 
 	/// Slash from reserved balance, returning the negative imbalance created,
@@ -1193,18 +1259,21 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 			};
 		}
 
-		Self::try_mutate_account(beneficiary, |to_account| -> Result<Self::Balance, DispatchError> {
-			ensure!(!to_account.total().is_zero(), Error::<T, I>::DeadAccount);
-			Self::try_mutate_account(slashed, |from_account| -> Result<Self::Balance, DispatchError> {
+		let actual = Self::try_mutate_account(beneficiary, |to_account, is_new|-> Result<Self::Balance, DispatchError> {
+			ensure!(!is_new, Error::<T, I>::DeadAccount);
+			Self::try_mutate_account(slashed, |from_account, _| -> Result<Self::Balance, DispatchError> {
 				let actual = cmp::min(from_account.reserved, value);
 				match status {
 					Status::Free => to_account.free = to_account.free.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
 					Status::Reserved => to_account.reserved = to_account.reserved.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
 				}
 				from_account.reserved -= actual;
-				Ok(value - actual)
+				Ok(actual)
 			})
-		})
+		})?;
+
+		Self::deposit_event(RawEvent::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual, status));
+		Ok(value - actual)
 	}
 }
 
@@ -1215,7 +1284,14 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 /// storage (which is the default in most examples and tests) then there's no need.**
 impl<T: Trait<I>, I: Instance> OnKilledAccount<T::AccountId> for Module<T, I> {
 	fn on_killed_account(who: &T::AccountId) {
-		Account::<T, I>::remove(who);
+		Account::<T, I>::mutate_exists(who, |account| {
+			let total = account.as_ref().map(|acc| acc.total()).unwrap_or_default();
+			if !total.is_zero() {
+				T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
+				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
+			}
+			*account = None;
+		});
 	}
 }
 
@@ -1224,6 +1300,8 @@ where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Moment = T::BlockNumber;
+
+	type MaxLocks = T::MaxLocks;
 
 	// Set a lock on the balance of `who`.
 	// Is a no-op if lock amount is zero or `reasons` `is_none()`.
@@ -1235,12 +1313,9 @@ where
 	) {
 		if amount.is_zero() || reasons.is_none() { return }
 		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
-		let mut locks = Self::locks(who).into_iter().filter_map(|l|
-			if l.id == id {
-				new_lock.take()
-			} else {
-				Some(l)
-			}).collect::<Vec<_>>();
+		let mut locks = Self::locks(who).into_iter()
+			.filter_map(|l| if l.id == id { new_lock.take() } else { Some(l) })
+			.collect::<Vec<_>>();
 		if let Some(lock) = new_lock {
 			locks.push(lock)
 		}
@@ -1289,7 +1364,7 @@ impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I> wher
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
-		// this should always be exactly equivalent to `Self::account(who).total().is_zero()`
+		// this should always be exactly equivalent to `Self::account(who).total().is_zero()` if ExistentialDeposit > 0
 		!T::AccountStore::is_explicit(who)
 	}
 }

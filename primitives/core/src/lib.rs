@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Shareable Substrate types.
 
@@ -31,6 +32,7 @@ macro_rules! map {
 	);
 }
 
+use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
 use sp_std::prelude::*;
 use sp_std::ops::Deref;
 #[cfg(feature = "std")]
@@ -49,9 +51,9 @@ pub use impl_serde::serialize as bytes;
 
 #[cfg(feature = "full_crypto")]
 pub mod hashing;
+
 #[cfg(feature = "full_crypto")]
 pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256, keccak_256};
-#[cfg(feature = "std")]
 pub mod hexdisplay;
 pub mod crypto;
 
@@ -71,7 +73,7 @@ mod changes_trie;
 pub mod traits;
 pub mod testing;
 #[cfg(feature = "std")]
-pub mod tasks;
+pub mod vrf;
 
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::{U256, U512};
@@ -82,6 +84,8 @@ pub use crypto::{DeriveJunction, Pair, Public};
 pub use hash_db::Hasher;
 #[cfg(feature = "std")]
 pub use self::hasher::blake2::Blake2Hasher;
+#[cfg(feature = "std")]
+pub use self::hasher::keccak::KeccakHasher;
 
 pub use sp_storage as storage;
 
@@ -90,9 +94,16 @@ pub use sp_std;
 
 /// Context for executing a call into the runtime.
 pub enum ExecutionContext {
-	/// Context for general importing (including own blocks).
+	/// Context used for general block import (including locally authored blocks).
 	Importing,
-	/// Context used when syncing the blockchain.
+	/// Context used for importing blocks as part of an initial sync of the blockchain.
+	///
+	/// We distinguish between major sync and import so that validators who are running
+	/// their initial sync (or catching up after some time offline) can use the faster
+	/// native runtime (since we can reasonably assume the network as a whole has already
+	/// come to a broad conensus on the block and it probably hasn't been crafted
+	/// specifically to attack this node), but when importing blocks at the head of the
+	/// chain in normal operation they can use the safer Wasm version.
 	Syncing,
 	/// Context used for block construction.
 	BlockConstruction,
@@ -110,8 +121,11 @@ impl ExecutionContext {
 		match self {
 			Importing | Syncing | BlockConstruction =>
 				offchain::Capabilities::none(),
-			// Enable keystore by default for offchain calls. CC @bkchr
-			OffchainCall(None) => [offchain::Capability::Keystore][..].into(),
+			// Enable keystore and transaction pool by default for offchain calls.
+			OffchainCall(None) => [
+				offchain::Capability::Keystore,
+				offchain::Capability::TransactionPool,
+			][..].into(),
 			OffchainCall(Some((_, capabilities))) => *capabilities,
 		}
 	}
@@ -160,6 +174,18 @@ impl sp_std::ops::Deref for OpaqueMetadata {
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+/// Simple blob to hold a `PeerId` without committing to its format.
+#[derive(Default, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, PassByInner)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct OpaquePeerId(pub Vec<u8>);
+
+impl OpaquePeerId {
+	/// Create new `OpaquePeerId`
+	pub fn new(vec: Vec<u8>) -> Self {
+		OpaquePeerId(vec)
 	}
 }
 
@@ -244,7 +270,7 @@ pub trait TypeId {
 /// A log level matching the one from `log` crate.
 ///
 /// Used internally by `sp_io::log` method.
-#[derive(Encode, Decode, sp_runtime_interface::pass_by::PassByEnum, Copy, Clone)]
+#[derive(Encode, Decode, PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
 	Error = 1,
@@ -317,6 +343,11 @@ pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
 
 	res
 }
+
+/// The void type - it cannot exist.
+// Oh rust, you crack me up...
+#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug)]
+pub enum Void {}
 
 /// Macro for creating `Maybe*` marker traits.
 ///

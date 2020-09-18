@@ -19,6 +19,9 @@
 #   - validator-a: localhost:9944
 #   - validator-b: localhost:9945
 #   - sentry-a: localhost:9946
+#   - grafana: localhost:3001
+#   - prometheus: localhost:9090
+
 
 version: "3.7"
 services:
@@ -44,9 +47,9 @@ services:
       - "--validator"
       - "--alice"
       - "--sentry-nodes"
-      - "/dns4/sentry-a/tcp/30333/p2p/QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi"
+      - "/dns/sentry-a/tcp/30333/p2p/QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi"
       - "--reserved-nodes"
-      - "/dns4/sentry-a/tcp/30333/p2p/QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi"
+      - "/dns/sentry-a/tcp/30333/p2p/QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi"
       # Not only bind to localhost.
       - "--unsafe-ws-external"
       - "--unsafe-rpc-external"
@@ -79,13 +82,12 @@ services:
       - "--chain=local"
       - "--port"
       - "30333"
-      - "--charlie"
-      - "--bootnodes"
-      - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
-      - "--bootnodes"
-      - "/dns4/validator-b/tcp/30333/p2p/QmSVnNf9HwVMT1Y4cK1P6aoJcEZjmoTXpjKBmAABLMnZEk"
+      - "--sentry"
+      - "/dns/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
       - "--reserved-nodes"
-      - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
+      - "/dns/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
+      - "--bootnodes"
+      - "/dns/validator-b/tcp/30333/p2p/QmSVnNf9HwVMT1Y4cK1P6aoJcEZjmoTXpjKBmAABLMnZEk"
       - "--no-telemetry"
       - "--rpc-cors"
       - "all"
@@ -94,7 +96,7 @@ services:
       - "--unsafe-rpc-external"
       - "--log"
       - "sub-authority-discovery=trace"
-      - "--sentry"
+      - "--prometheus-external"
 
   validator-b:
     image: parity/substrate
@@ -116,9 +118,9 @@ services:
       - "--validator"
       - "--bob"
       - "--bootnodes"
-      - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
+      - "/dns/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
       - "--bootnodes"
-      - "/dns4/sentry-a/tcp/30333/p2p/QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi"
+      - "/dns/sentry-a/tcp/30333/p2p/QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi"
       - "--no-telemetry"
       - "--rpc-cors"
       - "all"
@@ -127,11 +129,37 @@ services:
       - "--unsafe-rpc-external"
       - "--log"
       - "sub-authority-discovery=trace"
+      - "--prometheus-external"
 
-  ui:
-    image: polkadot-js/apps
+  prometheus:
+    image: prom/prometheus
+    networks:
+      - network-a
+      - internet
     ports:
-      - "3000:80"
+      - "9090:9090"
+    links:
+      - validator-a:validator-a
+      - sentry-a:sentry-a
+      - validator-b:validator-b
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+    restart: always
+
+  grafana:
+    image: grafana/grafana
+    user: "104"
+    depends_on:
+      - prometheus
+    networks:
+      - network-a
+      - internet
+    ports:
+      - 3001:3000
+    volumes:
+      - ./grafana/provisioning/:/etc/grafana/provisioning
+      - ../monitoring/grafana-dashboards/:/etc/grafana/provisioning/dashboard-definitions
+    restart: always
 
 networks:
   network-a:

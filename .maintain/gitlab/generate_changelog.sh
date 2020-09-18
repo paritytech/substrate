@@ -11,6 +11,7 @@ runtime_changes=""
 api_changes=""
 client_changes=""
 changes=""
+migrations=""
 
 while IFS= read -r line; do
   pr_id=$(echo "$line" | sed -E 's/.*#([0-9]+)\)$/\1/')
@@ -19,25 +20,29 @@ while IFS= read -r line; do
   if has_label 'paritytech/substrate' "$pr_id" 'B0-silent'; then
     continue
   fi
-  if has_label 'paritytech/substrate' "$pr_id" 'B1-runtimenoteworthy'; then
-    runtime_changes="$runtime_changes
+  if has_label 'paritytech/substrate' "$pr_id" 'B3-apinoteworthy' ; then
+    api_changes="$api_changes
 $line"
   fi
-  if has_label 'paritytech/substrate' "$pr_id" 'B1-clientnoteworthy'; then
+  if has_label 'paritytech/substrate' "$pr_id" 'B5-clientnoteworthy'; then
     client_changes="$client_changes
 $line"
   fi
-   if has_label 'paritytech/substrate' "$pr_id" 'B1-apinoteworthy' ; then
-    api_changes="$api_changes
+  if has_label 'paritytech/substrate' "$pr_id" 'B7-runtimenoteworthy'; then
+    runtime_changes="$runtime_changes
 $line"
-    continue
+  fi
+  if has_label 'paritytech/substrate' "$pr_id" 'D1-runtime-migration'; then
+    migrations="$migrations
+$line"
   fi
 done <<< "$all_changes"
 
 # Make the substrate section if there are any substrate changes
 if [ -n "$runtime_changes" ] ||
    [ -n "$api_changes" ] ||
-   [ -n "$client_changes" ]; then
+   [ -n "$client_changes" ] ||
+   [ -n "$migrations" ]; then
   changes=$(cat << EOF
 Substrate changes
 -----------------
@@ -68,6 +73,13 @@ $api_changes"
   release_text="$release_text
 
 $changes"
+fi
+if [ -n "$migrations" ]; then
+  changes="$changes
+
+Runtime Migrations
+------------------
+$migrations"
 fi
 
 echo "$changes"

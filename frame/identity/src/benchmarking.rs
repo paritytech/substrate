@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Identity pallet benchmarking.
 
@@ -20,48 +21,49 @@
 
 use super::*;
 
-use frame_system::RawOrigin;
-use sp_io::hashing::blake2_256;
-use frame_benchmarking::benchmarks;
+use frame_system::{EventRecord, RawOrigin};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use sp_runtime::traits::Bounded;
 
 use crate::Module as Identity;
 
-// The maximum number of identity registrars we will test.
-const MAX_REGISTRARS: u32 = 50;
+const SEED: u32 = 0;
 
-// Support Functions
-fn account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
-	let entropy = (name, index).using_encoded(blake2_256);
-	T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
+	let events = frame_system::Module::<T>::events();
+	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
+	// compare to the last event record
+	let EventRecord { event, .. } = &events[events.len() - 1];
+	assert_eq!(event, &system_event);
 }
 
 // Adds `r` registrars to the Identity Pallet. These registrars will have set fees and fields.
 fn add_registrars<T: Trait>(r: u32) -> Result<(), &'static str> {
 	for i in 0..r {
-		let _ = T::Currency::make_free_balance_be(&account::<T>("registrar", i), BalanceOf::<T>::max_value());
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), account::<T>("registrar", i))?;
-		Identity::<T>::set_fee(RawOrigin::Signed(account::<T>("registrar", i)).into(), i.into(), 10.into())?;
+		let registrar: T::AccountId = account("registrar", i, SEED);
+		let _ = T::Currency::make_free_balance_be(&registrar, BalanceOf::<T>::max_value());
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), registrar.clone())?;
+		Identity::<T>::set_fee(RawOrigin::Signed(registrar.clone()).into(), i.into(), 10.into())?;
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
 			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter
 		);
-		Identity::<T>::set_fields(RawOrigin::Signed(account::<T>("registrar", i)).into(), i.into(), fields)?;
+		Identity::<T>::set_fields(RawOrigin::Signed(registrar.clone()).into(), i.into(), fields)?;
 	}
 
 	assert_eq!(Registrars::<T>::get().len(), r as usize);
 	Ok(())
 }
 
-// Adds `s` sub-accounts to the identity of `who`. Each wil have 32 bytes of raw data added to it.
-// This additionally returns the vector of sub-accounts to it can be modified if needed.
-fn add_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
+// Create `s` sub-accounts for the identity of `who` and return them.
+// Each will have 32 bytes of raw data added to it.
+fn create_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
 	let mut subs = Vec::new();
 	let who_origin = RawOrigin::Signed(who.clone());
 	let data = Data::Raw(vec![0; 32]);
 
 	for i in 0..s {
-		let sub_account = account::<T>("sub", i);
+		let sub_account = account("sub", i, SEED);
 		subs.push((sub_account, data.clone()));
 	}
 
@@ -70,9 +72,18 @@ fn add_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::Acco
 	let info = create_identity_info::<T>(1);
 	Identity::<T>::set_identity(who_origin.clone().into(), info)?;
 
+	Ok(subs)
+}
+
+// Adds `s` sub-accounts to the identity of `who`. Each will have 32 bytes of raw data added to it.
+// This additionally returns the vector of sub-accounts so it can be modified if needed.
+fn add_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
+	let who_origin = RawOrigin::Signed(who.clone());
+	let subs = create_sub_accounts::<T>(who, s)?;
+
 	Identity::<T>::set_subs(who_origin.into(), subs.clone())?;
 
-	return Ok(subs)
+	Ok(subs)
 }
 
 // This creates an `IdentityInfo` object with `num_fields` extra fields.
@@ -98,24 +109,30 @@ fn create_identity_info<T: Trait>(num_fields: u32) -> IdentityInfo {
 benchmarks! {
 	// These are the common parameters along with their instancing.
 	_ {
-		let r in 1 .. MAX_REGISTRARS => add_registrars::<T>(r)?;
+		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
+		// extra parameter for the set_subs bench for previous sub accounts
+		let p in 1 .. T::MaxSubAccounts::get() => ();
 		let s in 1 .. T::MaxSubAccounts::get() => {
 			// Give them s many sub accounts
-			let caller = account::<T>("caller", 0);
+			let caller: T::AccountId = whitelisted_caller();
 			let _ = add_sub_accounts::<T>(&caller, s)?;
 		};
 		let x in 1 .. T::MaxAdditionalFields::get() => {
 			// Create their main identity with x additional fields
 			let info = create_identity_info::<T>(x);
-			let caller = account::<T>("caller", 0);
+			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Trait>::Origin::from(RawOrigin::Signed(caller));
 			Identity::<T>::set_identity(caller_origin, info)?;
 		};
 	}
 
 	add_registrar {
-		let r in ...;
-	}: _(RawOrigin::Root, account::<T>("registrar", r + 1))
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
+		ensure!(Registrars::<T>::get().len() as u32 == r, "Registrars not set up correctly.");
+	}: _(RawOrigin::Root, account("registrar", r + 1, SEED))
+	verify {
+		ensure!(Registrars::<T>::get().len() as u32 == r + 1, "Registrars not added.");
+	}
 
 	set_identity {
 		let r in ...;
@@ -124,7 +141,7 @@ benchmarks! {
 		let x in _ .. _ => ();
 		let caller = {
 			// The target user
-			let caller = account::<T>("caller", 0);
+			let caller: T::AccountId = whitelisted_caller();
 			let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
 			let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
 			let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -137,7 +154,7 @@ benchmarks! {
 			for i in 0..r {
 				Identity::<T>::request_judgement(caller_origin.clone(), i, 10.into())?;
 				Identity::<T>::provide_judgement(
-					RawOrigin::Signed(account::<T>("registrar", i)).into(),
+					RawOrigin::Signed(account("registrar", i, SEED)).into(),
 					i,
 					caller_lookup.clone(),
 					Judgement::Reasonable
@@ -145,29 +162,44 @@ benchmarks! {
 			}
 			caller
 		};
-	}: _(
-		RawOrigin::Signed(caller),
-		create_identity_info::<T>(x)
-	)
+	}: _(RawOrigin::Signed(caller.clone()), create_identity_info::<T>(x))
+	verify {
+		assert_last_event::<T>(Event::<T>::IdentitySet(caller).into());
+	}
 
-	set_subs {
-		let caller = account::<T>("caller", 0);
+	// We need to split `set_subs` into two benchmarks to accurately isolate the potential
+	// writes caused by new or old sub accounts. The actual weight should simply be
+	// the sum of these two weights.
+	set_subs_new {
+		let caller: T::AccountId = whitelisted_caller();
+		// Create a new subs vec with s sub accounts
+		let s in 1 .. T::MaxSubAccounts::get() => ();
+		let subs = create_sub_accounts::<T>(&caller, s)?;
+		ensure!(SubsOf::<T>::get(&caller).1.len() == 0, "Caller already has subs");
+	}: set_subs(RawOrigin::Signed(caller.clone()), subs)
+	verify {
+		ensure!(SubsOf::<T>::get(&caller).1.len() as u32 == s, "Subs not added");
+	}
 
-		// Give them s many sub accounts.
-		let s in 1 .. T::MaxSubAccounts::get() - 1 => {
-			let _ = add_sub_accounts::<T>(&caller, s)?;
+	set_subs_old {
+		let caller: T::AccountId = whitelisted_caller();
+		// Give them p many previous sub accounts.
+		let p in 1 .. T::MaxSubAccounts::get() => {
+			let _ = add_sub_accounts::<T>(&caller, p)?;
 		};
-
-		let mut subs = Module::<T>::subs(&caller);
-
-		// Create an s + 1 sub account.
-		let data = Data::Raw(vec![0; 32]);
-		subs.push((account::<T>("sub", s + 1), data));
-
-	}: _(RawOrigin::Signed(caller), subs)
+		// Remove all subs.
+		let subs = create_sub_accounts::<T>(&caller, 0)?;
+		ensure!(
+			SubsOf::<T>::get(&caller).1.len() as u32 == p,
+			"Caller does have subs",
+		);
+	}: set_subs(RawOrigin::Signed(caller.clone()), subs)
+	verify {
+		ensure!(SubsOf::<T>::get(&caller).1.len() == 0, "Subs not removed");
+	}
 
 	clear_identity {
-		let caller = account::<T>("caller", 0);
+		let caller: T::AccountId = whitelisted_caller();
 		let caller_origin = <T as frame_system::Trait>::Origin::from(RawOrigin::Signed(caller.clone()));
 		let caller_lookup = <T::Lookup as StaticLookup>::unlookup(caller.clone());
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -180,24 +212,31 @@ benchmarks! {
 		for i in 0..r {
 			Identity::<T>::request_judgement(caller_origin.clone(), i, 10.into())?;
 			Identity::<T>::provide_judgement(
-				RawOrigin::Signed(account::<T>("registrar", i)).into(),
+				RawOrigin::Signed(account("registrar", i, SEED)).into(),
 				i,
 				caller_lookup.clone(),
 				Judgement::Reasonable
 			)?;
 		}
-	}: _(RawOrigin::Signed(caller))
+		ensure!(IdentityOf::<T>::contains_key(&caller), "Identity does not exist.");
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
+		ensure!(!IdentityOf::<T>::contains_key(&caller), "Identity not cleared.");
+	}
 
 	request_judgement {
-		let caller = account::<T>("caller", 0);
+		let caller: T::AccountId = whitelisted_caller();
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let r in ...;
 		let x in ...;
-	}: _(RawOrigin::Signed(caller), r - 1, 10.into())
+	}: _(RawOrigin::Signed(caller.clone()), r - 1, 10.into())
+	verify {
+		assert_last_event::<T>(Event::<T>::JudgementRequested(caller, r-1).into());
+	}
 
 	cancel_request {
-		let caller = account::<T>("caller", 0);
+		let caller: T::AccountId = whitelisted_caller();
 		let caller_origin = <T as frame_system::Trait>::Origin::from(RawOrigin::Signed(caller.clone()));
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
@@ -205,49 +244,70 @@ benchmarks! {
 		let x in ...;
 
 		Identity::<T>::request_judgement(caller_origin, r - 1, 10.into())?;
-	}: _(RawOrigin::Signed(caller), r - 1)
+	}: _(RawOrigin::Signed(caller.clone()), r - 1)
+	verify {
+		assert_last_event::<T>(Event::<T>::JudgementUnrequested(caller, r-1).into());
+	}
 
 	set_fee {
-		let caller = account::<T>("caller", 0);
+		let caller: T::AccountId = whitelisted_caller();
 
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
-	}: _(RawOrigin::Signed(caller), r, 10.into())
+		let registrars = Registrars::<T>::get();
+		ensure!(registrars[r as usize].as_ref().unwrap().fee == 0.into(), "Fee already set.");
+	}: _(RawOrigin::Signed(caller), r, 100.into())
+	verify {
+		let registrars = Registrars::<T>::get();
+		ensure!(registrars[r as usize].as_ref().unwrap().fee == 100.into(), "Fee not changed.");
+	}
 
 	set_account_id {
-		let caller = account::<T>("caller", 0);
+		let caller: T::AccountId = whitelisted_caller();
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
-	}: _(RawOrigin::Signed(caller), r, account::<T>("new", 0))
+		let registrars = Registrars::<T>::get();
+		ensure!(registrars[r as usize].as_ref().unwrap().account == caller.clone(), "id not set.");
+	}: _(RawOrigin::Signed(caller), r, account("new", 0, SEED))
+	verify {
+		let registrars = Registrars::<T>::get();
+		ensure!(registrars[r as usize].as_ref().unwrap().account == account("new", 0, SEED), "id not changed.");
+	}
 
 	set_fields {
-		let caller = account::<T>("caller", 0);
+		let caller: T::AccountId = whitelisted_caller();
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
 			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter
 		);
+		let registrars = Registrars::<T>::get();
+		ensure!(registrars[r as usize].as_ref().unwrap().fields == Default::default(), "fields already set.");
 	}: _(RawOrigin::Signed(caller), r, fields)
+	verify {
+		let registrars = Registrars::<T>::get();
+		ensure!(registrars[r as usize].as_ref().unwrap().fields != Default::default(), "fields not set.");
+	}
 
 	provide_judgement {
 		// The user
-		let user = account::<T>("user", r);
+		let user: T::AccountId = account("user", r, SEED);
 		let user_origin = <T as frame_system::Trait>::Origin::from(RawOrigin::Signed(user.clone()));
 		let user_lookup = <T::Lookup as StaticLookup>::unlookup(user.clone());
 		let _ = T::Currency::make_free_balance_be(&user, BalanceOf::<T>::max_value());
 
-		let caller = account::<T>("caller", 0);
+		let caller: T::AccountId = whitelisted_caller();
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 		// For this x, it's the user identity that gts the fields, not the caller.
 		let x in _ .. _ => {
 			let info = create_identity_info::<T>(x);
@@ -257,28 +317,91 @@ benchmarks! {
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 		Identity::<T>::request_judgement(user_origin.clone(), r, 10.into())?;
 	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable)
+	verify {
+		assert_last_event::<T>(Event::<T>::JudgementGiven(user, r).into())
+	}
 
 	kill_identity {
-		let caller = account::<T>("caller", 0);
-		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
-		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
-		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-
 		let r in ...;
-		let s in ...;
-		let x in ...;
+		// Setting up our own account below.
+		let s in _ .. _ => {};
+		let x in _ .. _ => {};
+
+		let target: T::AccountId = account("target", 0, SEED);
+		let target_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(target.clone()).into();
+		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
+		let _ = T::Currency::make_free_balance_be(&target, BalanceOf::<T>::max_value());
+
+		let info = create_identity_info::<T>(x);
+		Identity::<T>::set_identity(target_origin.clone(), info)?;
+		let _ = add_sub_accounts::<T>(&target, s)?;
 
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
-			Identity::<T>::request_judgement(caller_origin.clone(), i, 10.into())?;
+			Identity::<T>::request_judgement(target_origin.clone(), i, 10.into())?;
 			Identity::<T>::provide_judgement(
-				RawOrigin::Signed(account::<T>("registrar", i)).into(),
+				RawOrigin::Signed(account("registrar", i, SEED)).into(),
 				i,
-				caller_lookup.clone(),
+				target_lookup.clone(),
 				Judgement::Reasonable
 			)?;
 		}
-	}: _(RawOrigin::Root, caller_lookup)
+		ensure!(IdentityOf::<T>::contains_key(&target), "Identity not set");
+	}: _(RawOrigin::Root, target_lookup)
+	verify {
+		ensure!(!IdentityOf::<T>::contains_key(&target), "Identity not removed");
+	}
+
+	add_sub {
+		let s in 1 .. T::MaxSubAccounts::get() - 1;
+
+		let caller: T::AccountId = whitelisted_caller();
+		let _ = add_sub_accounts::<T>(&caller, s)?;
+		let sub = account("new_sub", 0, SEED);
+		let data = Data::Raw(vec![0; 32]);
+		ensure!(SubsOf::<T>::get(&caller).1.len() as u32 == s, "Subs not set.");
+	}: _(RawOrigin::Signed(caller.clone()), T::Lookup::unlookup(sub), data)
+	verify {
+		ensure!(SubsOf::<T>::get(&caller).1.len() as u32 == s + 1, "Subs not added.");
+	}
+
+	rename_sub {
+		let s in 1 .. T::MaxSubAccounts::get();
+
+		let caller: T::AccountId = whitelisted_caller();
+		let (sub, _) = add_sub_accounts::<T>(&caller, s)?.remove(0);
+		let data = Data::Raw(vec![1; 32]);
+		ensure!(SuperOf::<T>::get(&sub).unwrap().1 != data, "data already set");
+	}: _(RawOrigin::Signed(caller), T::Lookup::unlookup(sub.clone()), data.clone())
+	verify {
+		ensure!(SuperOf::<T>::get(&sub).unwrap().1 == data, "data not set");
+	}
+
+	remove_sub {
+		let s in 1 .. T::MaxSubAccounts::get();
+
+		let caller: T::AccountId = whitelisted_caller();
+		let (sub, _) = add_sub_accounts::<T>(&caller, s)?.remove(0);
+		ensure!(SuperOf::<T>::contains_key(&sub), "Sub doesn't exists");
+	}: _(RawOrigin::Signed(caller), T::Lookup::unlookup(sub.clone()))
+	verify {
+		ensure!(!SuperOf::<T>::contains_key(&sub), "Sub not removed");
+	}
+
+	quit_sub {
+		let s in 1 .. T::MaxSubAccounts::get() - 1;
+
+		let caller: T::AccountId = whitelisted_caller();
+		let sup = account("super", 0, SEED);
+		let _ = add_sub_accounts::<T>(&sup, s)?;
+		let sup_origin = RawOrigin::Signed(sup).into();
+		Identity::<T>::add_sub(sup_origin, T::Lookup::unlookup(caller.clone()), Data::Raw(vec![0; 32]))?;
+		ensure!(SuperOf::<T>::contains_key(&caller), "Sub doesn't exists");
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
+		ensure!(!SuperOf::<T>::contains_key(&caller), "Sub not removed");
+	}
+
 }
 
 #[cfg(test)]
@@ -292,7 +415,8 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_add_registrar::<Test>());
 			assert_ok!(test_benchmark_set_identity::<Test>());
-			assert_ok!(test_benchmark_set_subs::<Test>());
+			assert_ok!(test_benchmark_set_subs_new::<Test>());
+			assert_ok!(test_benchmark_set_subs_old::<Test>());
 			assert_ok!(test_benchmark_clear_identity::<Test>());
 			assert_ok!(test_benchmark_request_judgement::<Test>());
 			assert_ok!(test_benchmark_cancel_request::<Test>());
@@ -301,6 +425,10 @@ mod tests {
 			assert_ok!(test_benchmark_set_fields::<Test>());
 			assert_ok!(test_benchmark_provide_judgement::<Test>());
 			assert_ok!(test_benchmark_kill_identity::<Test>());
+			assert_ok!(test_benchmark_add_sub::<Test>());
+			assert_ok!(test_benchmark_rename_sub::<Test>());
+			assert_ok!(test_benchmark_remove_sub::<Test>());
+			assert_ok!(test_benchmark_quit_sub::<Test>());
 		});
 	}
 }

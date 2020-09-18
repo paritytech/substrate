@@ -29,7 +29,7 @@ use std::{borrow::Cow, pin::Pin, task::{Context, Poll}};
 use crate::environment::SharedVoterSetState;
 use sp_finality_grandpa::{AuthorityList, GRANDPA_ENGINE_ID};
 use super::gossip::{self, GossipValidator};
-use super::{AuthorityId, VoterSet, Round, SetId};
+use super::{VoterSet, Round, SetId};
 
 #[derive(Debug)]
 pub(crate) enum Event {
@@ -61,7 +61,7 @@ impl sc_network_gossip::Network<Block> for TestNetwork {
 		let _ = self.sender.unbounded_send(Event::WriteNotification(who, message));
 	}
 
-	fn register_notifications_protocol(&self, _: ConsensusEngineId, _: Cow<'static, [u8]>) {}
+	fn register_notifications_protocol(&self, _: ConsensusEngineId, _: Cow<'static, str>) {}
 
 	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
@@ -142,11 +142,15 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 	use crate::authorities::AuthoritySet;
 	use crate::environment::VoterSetState;
 	use finality_grandpa::round::State as RoundState;
-	use sp_core::H256;
+	use sp_core::{crypto::Public, H256};
+	use sp_finality_grandpa::AuthorityId;
 
 	let state = RoundState::genesis((H256::zero(), 0));
 	let base = state.prevote_ghost.unwrap();
-	let voters = AuthoritySet::genesis(Vec::new());
+
+	let voters = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+	let voters = AuthoritySet::genesis(voters).unwrap();
+
 	let set_state = VoterSetState::live(
 		0,
 		&voters,
@@ -212,7 +216,7 @@ impl sc_network_gossip::ValidatorContext<Block> for NoopContext {
 fn good_commit_leads_to_relay() {
 	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
-	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
+	let voter_set = Arc::new(VoterSet::new(public.iter().cloned()).unwrap());
 
 	let round = 1;
 	let set_id = 1;
@@ -222,7 +226,7 @@ fn good_commit_leads_to_relay() {
 		let target_number = 500;
 
 		let precommit = finality_grandpa::Precommit { target_hash: target_hash.clone(), target_number };
-		let payload = super::localized_payload(
+		let payload = sp_finality_grandpa::localized_payload(
 			round, set_id, &finality_grandpa::Message::Precommit(precommit.clone())
 		);
 
@@ -357,10 +361,10 @@ fn good_commit_leads_to_relay() {
 
 #[test]
 fn bad_commit_leads_to_report() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
-	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
+	let voter_set = Arc::new(VoterSet::new(public.iter().cloned()).unwrap());
 
 	let round = 1;
 	let set_id = 1;
@@ -370,7 +374,7 @@ fn bad_commit_leads_to_report() {
 		let target_number = 500;
 
 		let precommit = finality_grandpa::Precommit { target_hash: target_hash.clone(), target_number };
-		let payload = super::localized_payload(
+		let payload = sp_finality_grandpa::localized_payload(
 			round, set_id, &finality_grandpa::Message::Precommit(precommit.clone())
 		);
 

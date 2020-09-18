@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Support code for the runtime.
 
@@ -23,11 +24,13 @@ extern crate self as frame_support;
 
 #[macro_use]
 extern crate bitmask;
-#[cfg(feature = "std")]
-pub extern crate tracing;
+
+#[doc(hidden)]
+pub use sp_tracing;
 
 #[cfg(feature = "std")]
 pub use serde;
+pub use sp_core::Void;
 #[doc(hidden)]
 pub use sp_std;
 #[doc(hidden)]
@@ -41,20 +44,20 @@ pub use paste;
 #[doc(hidden)]
 pub use sp_state_machine::BasicExternalities;
 #[doc(hidden)]
-pub use sp_io::storage::root as storage_root;
+pub use sp_io::{storage::root as storage_root, self};
 #[doc(hidden)]
 pub use sp_runtime::RuntimeDebug;
 
 #[macro_use]
 pub mod debug;
 #[macro_use]
+mod origin;
+#[macro_use]
 pub mod dispatch;
 pub mod storage;
 mod hash;
 #[macro_use]
 pub mod event;
-#[macro_use]
-mod origin;
 #[macro_use]
 pub mod metadata;
 #[macro_use]
@@ -68,7 +71,7 @@ pub mod weights;
 
 pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, Hashable,
-	StorageHasher
+	StorageHasher, ReversibleStorageHasher
 };
 pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
@@ -77,21 +80,70 @@ pub use self::storage::{
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
-/// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
-/// how you would declare a `const`:
+/// A type that cannot be instantiated.
+#[derive(Debug)]
+pub enum Never {}
+
+/// Create new implementations of the [`Get`](crate::traits::Get) trait.
 ///
-/// ```no_compile
+/// The so-called parameter type can be created in three different ways:
+///
+/// - Using `const` to create a parameter type that provides a `const` getter.
+///   It is required that the `value` is const.
+///
+/// - Declare the parameter type without `const` to have more freedom when creating the value.
+///
+/// - Using `storage` to create a storage parameter type. This type is special as it tries to
+///   load the value from the storage under a fixed key. If the value could not be found in the
+///   storage, the given default value will be returned. It is required that the value implements
+///   [`Encode`](codec::Encode) and [`Decode`](codec::Decode). The key for looking up the value
+///   in the storage is built using the following formular:
+///
+///   `twox_128(":" ++ NAME ++ ":")` where `NAME` is the name that is passed as type name.
+///
+/// # Examples
+///
+/// ```
+/// # use frame_support::traits::Get;
+/// # use frame_support::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// const FIXED_VALUE: u64 = 10;
 /// parameter_types! {
-///   pub const Argument: u64 = 42;
+///    pub const Argument: u64 = 42 + FIXED_VALUE;
+///    /// Visibility of the type is optional
+///    OtherArgument: u64 = non_const_expression();
+///    pub storage StorageArgument: u64 = 5;
 /// }
+///
 /// trait Config {
-///   type Parameter: Get<u64>;
+///    type Parameter: Get<u64>;
+///    type OtherParameter: Get<u64>;
+///    type StorageParameter: Get<u64>;
 /// }
+///
 /// struct Runtime;
 /// impl Config for Runtime {
-///   type Parameter = Argument;
+///    type Parameter = Argument;
+///    type OtherParameter = OtherArgument;
+///    type StorageParameter = StorageArgument;
 /// }
 /// ```
+///
+/// # Invalid example:
+///
+/// ```compile_fail
+/// # use frame_support::traits::Get;
+/// # use frame_support::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// parameter_types! {
+///    pub const Argument: u64 = non_const_expression();
+/// }
+/// ```
+
 #[macro_export]
 macro_rules! parameter_types {
 	(
@@ -101,19 +153,87 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name;
-		$crate::parameter_types!{IMPL $name , $type , $value}
-		$crate::parameter_types!{ $( $rest )* }
+		$crate::parameter_types!(IMPL_CONST $name , $type , $value);
+		$crate::parameter_types!( $( $rest )* );
+	);
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!(IMPL $name, $type, $value);
+		$crate::parameter_types!( $( $rest )* );
+	);
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis storage $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!(IMPL_STORAGE $name, $type, $value);
+		$crate::parameter_types!( $( $rest )* );
 	);
 	() => ();
-	(IMPL $name:ident , $type:ty , $value:expr) => {
+	(IMPL_CONST $name:ident, $type:ty, $value:expr) => {
 		impl $name {
+			/// Returns the value of this parameter type.
+			pub const fn get() -> $type {
+				$value
+			}
+		}
+
+		impl<I: From<$type>> $crate::traits::Get<I> for $name {
+			fn get() -> I {
+				I::from($value)
+			}
+		}
+	};
+	(IMPL $name:ident, $type:ty, $value:expr) => {
+		impl $name {
+			/// Returns the value of this parameter type.
 			pub fn get() -> $type {
 				$value
 			}
 		}
+
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
 				I::from($value)
+			}
+		}
+	};
+	(IMPL_STORAGE $name:ident, $type:ty, $value:expr) => {
+		impl $name {
+			/// Returns the key for this parameter type.
+			pub fn key() -> [u8; 16] {
+				$crate::sp_io::hashing::twox_128(
+					concat!(":", stringify!($name), ":").as_bytes()
+				)
+			}
+
+			/// Set the value of this parameter type in the storage.
+			///
+			/// This needs to be executed in an externalities provided
+			/// environment.
+			pub fn set(value: &$type) {
+				$crate::storage::unhashed::put(&Self::key(), value);
+			}
+
+			/// Returns the value of this parameter type.
+			///
+			/// This needs to be executed in an externalities provided
+			/// environment.
+			pub fn get() -> $type {
+				$crate::storage::unhashed::get(&Self::key()).unwrap_or_else(|| $value)
+			}
+		}
+
+		impl<I: From<$type>> $crate::traits::Get<I> for $name {
+			fn get() -> I {
+				I::from(Self::get())
 			}
 		}
 	}
@@ -147,7 +267,7 @@ macro_rules! ord_parameter_types {
 }
 
 #[doc(inline)]
-pub use frame_support_procedural::{decl_storage, construct_runtime};
+pub use frame_support_procedural::{decl_storage, construct_runtime, transactional};
 
 /// Return Err of the expression: `return Err($expression);`.
 ///
@@ -188,10 +308,6 @@ macro_rules! assert_noop {
 	}
 }
 
-/// Panic if an expression doesn't evaluate to an `Err`.
-///
-/// Used as `assert_err!(expression_to_assert, expected_err_expression)`.
-
 /// Assert an expression returns an error specified.
 ///
 /// Used as `assert_err!(expression_to_assert, expected_error_expression)`
@@ -200,6 +316,32 @@ macro_rules! assert_noop {
 macro_rules! assert_err {
 	( $x:expr , $y:expr $(,)? ) => {
 		assert_eq!($x, Err($y.into()));
+	}
+}
+
+/// Assert an expression returns an error specified.
+///
+/// This can be used on`DispatchResultWithPostInfo` when the post info should
+/// be ignored.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_err_ignore_postinfo {
+	( $x:expr , $y:expr $(,)? ) => {
+		$crate::assert_err!($x.map(|_| ()).map_err(|e| e.error), $y);
+	}
+}
+
+/// Assert an expression returns error with the given weight.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_err_with_weight {
+	($call:expr, $err:expr, $weight:expr $(,)? ) => {
+		if let Err(dispatch_err_with_post) = $call {
+			$crate::assert_err!($call.map(|_| ()).map_err(|e| e.error), $err);
+			assert_eq!(dispatch_err_with_post.post_info.actual_weight, $weight.into());
+		} else {
+			panic!("expected Err(_), got Ok(_).")
+		}
 	}
 }
 
@@ -222,11 +364,6 @@ macro_rules! assert_ok {
 	}
 }
 
-/// The void type - it cannot exist.
-// Oh rust, you crack me up...
-#[derive(Clone, Eq, PartialEq, RuntimeDebug)]
-pub enum Void {}
-
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde::{Serialize, Deserialize};
@@ -239,7 +376,8 @@ mod tests {
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByteGetter, StorageHasher,
 	};
-	use sp_std::marker::PhantomData;
+	use sp_std::{marker::PhantomData, result};
+	use sp_io::TestExternalities;
 
 	pub trait Trait {
 		type BlockNumber: Codec + EncodeLike + Default;
@@ -266,8 +404,6 @@ mod tests {
 				map hasher(identity) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(fn generic_data2):
 				map hasher(blake2_128_concat) T::BlockNumber => Option<T::BlockNumber>;
-			pub GetterNoFnKeyword get(no_fn): Option<u32>;
-
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
 				double_map hasher(twox_64_concat) u32, hasher(blake2_128_concat) u32 => u64;
 			pub GenericDataDM:
@@ -287,7 +423,7 @@ mod tests {
 		type Origin = u32;
 	}
 
-	fn new_test_ext() -> sp_io::TestExternalities {
+	fn new_test_ext() -> TestExternalities {
 		GenesisConfig::default().build_storage().unwrap().into()
 	}
 
@@ -488,8 +624,55 @@ mod tests {
 			let key2 = 18u32;
 
 			DoubleMap::insert(&key1, &key2, &vec![1]);
-			DoubleMap::append(&key1, &key2, &[2, 3]).unwrap();
-			assert_eq!(DoubleMap::get(&key1, &key2), &[1, 2, 3]);
+			DoubleMap::append(&key1, &key2, 2);
+			assert_eq!(DoubleMap::get(&key1, &key2), &[1, 2]);
+		});
+	}
+
+	#[test]
+	fn double_map_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			type DoubleMap = DataDM;
+
+			let (key1, key2) = (11, 13);
+
+			// mutated
+			DoubleMap::mutate_exists(key1, key2, |v| *v = Some(1));
+			assert_eq!(DoubleMap::get(&key1, key2), 1);
+
+			// removed if mutated to `None`
+			DoubleMap::mutate_exists(key1, key2, |v| *v = None);
+			assert!(!DoubleMap::contains_key(&key1, key2));
+		});
+	}
+
+	#[test]
+	fn double_map_try_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			type DoubleMap = DataDM;
+			type TestResult = result::Result<(), &'static str>;
+
+			let (key1, key2) = (11, 13);
+
+			// mutated if `Ok`
+			assert_ok!(DoubleMap::try_mutate_exists(key1, key2, |v| -> TestResult {
+				*v = Some(1);
+				Ok(())
+			}));
+			assert_eq!(DoubleMap::get(&key1, key2), 1);
+
+			// no-op if `Err`
+			assert_noop!(DoubleMap::try_mutate_exists(key1, key2, |v| -> TestResult {
+				*v = Some(2);
+				Err("nah")
+			}), "nah");
+
+			// removed if mutated to`None`
+			assert_ok!(DoubleMap::try_mutate_exists(key1, key2, |v| -> TestResult {
+				*v = None;
+				Ok(())
+			}));
+			assert!(!DoubleMap::contains_key(&key1, key2));
 		});
 	}
 
@@ -550,15 +733,6 @@ mod tests {
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GetterNoFnKeyword"),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGetterNoFnKeyword(PhantomData::<Test>))
 					),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
@@ -630,5 +804,21 @@ mod tests {
 	fn store_metadata() {
 		let metadata = Module::<Test>::storage_metadata();
 		pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
+	}
+
+	parameter_types! {
+		storage StorageParameter: u64 = 10;
+	}
+
+	#[test]
+	fn check_storage_parameter_type_works() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(sp_io::hashing::twox_128(b":StorageParameter:"), StorageParameter::key());
+
+			assert_eq!(10, StorageParameter::get());
+
+			StorageParameter::set(&300);
+			assert_eq!(300, StorageParameter::get());
+		})
 	}
 }

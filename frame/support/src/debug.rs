@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Runtime debugging and logging utilities.
 //!
@@ -86,11 +87,11 @@
 //!	native::print!("My struct: {:?}", x);
 //! ```
 
-use sp_std::vec::Vec;
 use sp_std::fmt::{self, Debug};
 
 pub use log::{info, debug, error, trace, warn};
 pub use crate::runtime_print as print;
+pub use sp_std::Writer;
 
 /// Native-only logging.
 ///
@@ -131,9 +132,9 @@ macro_rules! runtime_print {
 	($($arg:tt)+) => {
 		{
 			use core::fmt::Write;
-			let mut w = $crate::debug::Writer::default();
+			let mut w = $crate::sp_std::Writer::default();
 			let _ = core::write!(&mut w, $($arg)+);
-			w.print();
+			sp_io::misc::print_utf8(&w.inner())
 		}
 	}
 }
@@ -141,24 +142,6 @@ macro_rules! runtime_print {
 /// Print out the debuggable type.
 pub fn debug(data: &impl Debug) {
 	runtime_print!("{:?}", data);
-}
-
-/// A target for `core::write!` macro - constructs a string in memory.
-#[derive(Default)]
-pub struct Writer(Vec<u8>);
-
-impl fmt::Write for Writer {
-	fn write_str(&mut self, s: &str) -> fmt::Result {
-		self.0.extend(s.as_bytes());
-		Ok(())
-	}
-}
-
-impl Writer {
-	/// Print the content of this `Writer` out.
-	pub fn print(&self) {
-		sp_io::misc::print_utf8(&self.0)
-	}
 }
 
 /// Runtime logger implementation - `log` crate backend.
@@ -203,13 +186,13 @@ impl log::Log for RuntimeLogger {
 
 	fn log(&self, record: &log::Record) {
 		use fmt::Write;
-		let mut w = Writer::default();
+		let mut w = sp_std::Writer::default();
 		let _ = core::write!(&mut w, "{}", record.args());
 
 		sp_io::logging::log(
 			record.level().into(),
 			record.target(),
-			&w.0,
+			w.inner(),
 		);
 	}
 

@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Client testing utilities.
 
@@ -20,10 +21,9 @@
 
 pub mod client_ext;
 
-pub use sc_client::{blockchain, self};
 pub use sc_client_api::{
 	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
-	ForkBlocks, BadBlocks, CloneableSpawn,
+	ForkBlocks, BadBlocks,
 };
 pub use sc_client_db::{Backend, self};
 pub use sp_consensus;
@@ -33,19 +33,24 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring,
 	sr25519::Keyring as Sr25519Keyring,
 };
-pub use sp_core::{traits::BareCryptoStorePtr, tasks::executor as tasks_executor};
+pub use sp_core::traits::BareCryptoStorePtr;
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
+pub use sc_service::{RpcHandlers, RpcSession, client};
 pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
+use std::pin::Pin;
 use std::sync::Arc;
-use std::collections::HashMap;
-use sp_core::storage::{well_known_keys, ChildInfo};
-use sp_runtime::traits::{Block as BlockT, BlakeTwo256};
-use sc_client::LocalCallExecutor;
+use std::collections::{HashSet, HashMap};
+use futures::{future::{Future, FutureExt}, stream::StreamExt};
+use serde::Deserialize;
+use sp_core::storage::ChildInfo;
+use sp_runtime::{OpaqueExtrinsic, codec::Encode, traits::{Block as BlockT, BlakeTwo256}};
+use sc_service::client::{LocalCallExecutor, ClientConfig};
+use sc_client_api::BlockchainEvents;
 
 /// Test client light database backend.
-pub type LightBackend<Block> = sc_client::light::backend::Backend<
+pub type LightBackend<Block> = sc_light::Backend<
 	sc_client_db::light::LightStorage<Block>,
 	BlakeTwo256,
 >;
@@ -66,6 +71,8 @@ impl GenesisInit for () {
 pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
+	/// The key is an unprefixed storage key, this only contains
+	/// default child trie content.
 	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<Executor>,
@@ -129,17 +136,17 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 	/// Extend child storage
 	pub fn add_child_storage(
 		mut self,
+		child_info: &ChildInfo,
 		key: impl AsRef<[u8]>,
-		child_key: impl AsRef<[u8]>,
-		child_info: ChildInfo,
 		value: impl AsRef<[u8]>,
 	) -> Self {
-		let entry = self.child_storage_extension.entry(key.as_ref().to_vec())
+		let storage_key = child_info.storage_key();
+		let entry = self.child_storage_extension.entry(storage_key.to_vec())
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
-				child_info: child_info.to_owned(),
+				child_info: child_info.clone(),
 			});
-		entry.data.insert(child_key.as_ref().to_vec(), value.as_ref().to_vec());
+		entry.data.insert(key.as_ref().to_vec(), value.as_ref().to_vec());
 		self
 	}
 
@@ -173,15 +180,15 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		self,
 		executor: Executor,
 	) -> (
-		sc_client::Client<
+		client::Client<
 			Backend,
 			Executor,
 			Block,
 			RuntimeApi,
 		>,
-		sc_client::LongestChain<Backend, Block>,
+		sc_consensus::LongestChain<Backend, Block>,
 	) where
-		Executor: sc_client::CallExecutor<Block> + 'static,
+		Executor: sc_client_api::CallExecutor<Block> + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 	{
 		let storage = {
@@ -189,8 +196,8 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 
 			// Add some child storage keys.
 			for (key, child_content) in self.child_storage_extension {
-				storage.children.insert(
-					well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().cloned().chain(key).collect(),
+				storage.children_default.insert(
+					key,
 					StorageChild {
 						data: child_content.data.into_iter().collect(),
 						child_info: child_content.child_info,
@@ -201,7 +208,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			storage
 		};
 
-		let client = sc_client::Client::new(
+		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
 			&storage,
@@ -212,9 +219,10 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 				self.keystore.clone(),
 			),
 			None,
+			ClientConfig::default(),
 		).expect("Creates new client");
 
-		let longest_chain = sc_client::LongestChain::new(self.backend);
+		let longest_chain = sc_consensus::LongestChain::new(self.backend);
 
 		(client, longest_chain)
 	}
@@ -222,7 +230,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 
 impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 	Block,
-	sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+	client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 	Backend,
 	G,
 > {
@@ -231,13 +239,13 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		self,
 		executor: I,
 	) -> (
-		sc_client::Client<
+		client::Client<
 			Backend,
-			sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+			client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 			Block,
 			RuntimeApi
 		>,
-		sc_client::LongestChain<Backend, Block>,
+		sc_consensus::LongestChain<Backend, Block>,
 	) where
 		I: Into<Option<NativeExecutor<E>>>,
 		E: sc_executor::NativeExecutionDispatch + 'static,
@@ -246,8 +254,200 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		let executor = executor.into().unwrap_or_else(||
 			NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 		);
-		let executor = LocalCallExecutor::new(self.backend.clone(), executor, tasks_executor());
+		let executor = LocalCallExecutor::new(
+			self.backend.clone(),
+			executor,
+			Box::new(sp_core::testing::TaskExecutor::new()),
+			Default::default(),
+		);
 
 		self.build_with_executor(executor)
+	}
+}
+
+/// The output of an RPC transaction.
+pub struct RpcTransactionOutput {
+	/// The output string of the transaction if any.
+	pub result: Option<String>,
+	/// The session object.
+	pub session: RpcSession,
+	/// An async receiver if data will be returned via a callback.
+	pub receiver: futures01::sync::mpsc::Receiver<String>,
+}
+
+impl std::fmt::Debug for RpcTransactionOutput {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "RpcTransactionOutput {{ result: {:?}, session, receiver }}", self.result)
+	}
+}
+
+/// An error for when the RPC call fails.
+#[derive(Deserialize, Debug)]
+pub struct RpcTransactionError {
+	/// A Number that indicates the error type that occurred.
+	pub code: i64,
+	/// A String providing a short description of the error.
+	pub message: String,
+	/// A Primitive or Structured value that contains additional information about the error.
+	pub data: Option<serde_json::Value>,
+}
+
+impl std::fmt::Display for RpcTransactionError {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		std::fmt::Debug::fmt(self, f)
+	}
+}
+
+/// An extension trait for `RpcHandlers`.
+pub trait RpcHandlersExt {
+	/// Send a transaction through the RpcHandlers.
+	fn send_transaction(
+		&self,
+		extrinsic: OpaqueExtrinsic,
+	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>>;
+}
+
+impl RpcHandlersExt for RpcHandlers {
+	fn send_transaction(
+		&self,
+		extrinsic: OpaqueExtrinsic,
+	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>> {
+		let (tx, rx) = futures01::sync::mpsc::channel(0);
+		let mem = RpcSession::new(tx.into());
+		Box::pin(self
+			.rpc_query(
+				&mem,
+				&format!(
+					r#"{{
+						"jsonrpc": "2.0",
+						"method": "author_submitExtrinsic",
+						"params": ["0x{}"],
+						"id": 0
+					}}"#,
+					hex::encode(extrinsic.encode())
+				),
+			)
+			.map(move |result| parse_rpc_result(result, mem, rx))
+		)
+	}
+}
+
+pub(crate) fn parse_rpc_result(
+	result: Option<String>,
+	session: RpcSession,
+	receiver: futures01::sync::mpsc::Receiver<String>,
+) -> Result<RpcTransactionOutput, RpcTransactionError> {
+	if let Some(ref result) = result {
+		let json: serde_json::Value = serde_json::from_str(result)
+			.expect("the result can only be a JSONRPC string; qed");
+		let error = json
+			.as_object()
+			.expect("JSON result is always an object; qed")
+			.get("error");
+
+		if let Some(error) = error {
+			return Err(
+				serde_json::from_value(error.clone())
+					.expect("the JSONRPC result's error is always valid; qed")
+			)
+		}
+	}
+
+	Ok(RpcTransactionOutput {
+		result,
+		session,
+		receiver,
+	})
+}
+
+/// An extension trait for `BlockchainEvents`.
+pub trait BlockchainEventsExt<C, B>
+where
+	C: BlockchainEvents<B>,
+	B: BlockT,
+{
+	/// Wait for `count` blocks to be imported in the node and then exit. This function will not return if no blocks
+	/// are ever created, thus you should restrict the maximum amount of time of the test execution.
+	fn wait_for_blocks(&self, count: usize) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+}
+
+impl<C, B> BlockchainEventsExt<C, B> for C
+where
+	C: BlockchainEvents<B>,
+	B: BlockT,
+{
+	fn wait_for_blocks(&self, count: usize) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+		assert!(count > 0, "'count' argument must be greater than 0");
+
+		let mut import_notification_stream = self.import_notification_stream();
+		let mut blocks = HashSet::new();
+
+		Box::pin(async move {
+			while let Some(notification) = import_notification_stream.next().await {
+				if notification.is_new_best {
+					blocks.insert(notification.hash);
+					if blocks.len() == count {
+						break;
+					}
+				}
+			}
+		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use sc_service::RpcSession;
+
+	fn create_session_and_receiver() -> (RpcSession, futures01::sync::mpsc::Receiver<String>) {
+		let (tx, rx) = futures01::sync::mpsc::channel(0);
+		let mem = RpcSession::new(tx.into());
+
+		(mem, rx)
+	}
+
+	#[test]
+	fn parses_error_properly() {
+		let (mem, rx) = create_session_and_receiver();
+		assert!(super::parse_rpc_result(None, mem, rx).is_ok());
+
+		let (mem, rx) = create_session_and_receiver();
+		assert!(
+			super::parse_rpc_result(Some(r#"{
+				"jsonrpc": "2.0",
+				"result": 19,
+				"id": 1
+			}"#.to_string()), mem, rx)
+			.is_ok(),
+		);
+
+		let (mem, rx) = create_session_and_receiver();
+		let error = super::parse_rpc_result(Some(r#"{
+				"jsonrpc": "2.0",
+				"error": {
+					"code": -32601,
+					"message": "Method not found"
+				},
+				"id": 1
+			}"#.to_string()), mem, rx)
+			.unwrap_err();
+		assert_eq!(error.code, -32601);
+		assert_eq!(error.message, "Method not found");
+		assert!(error.data.is_none());
+
+		let (mem, rx) = create_session_and_receiver();
+		let error = super::parse_rpc_result(Some(r#"{
+				"jsonrpc": "2.0",
+				"error": {
+					"code": -32601,
+					"message": "Method not found",
+					"data": 42
+				},
+				"id": 1
+			}"#.to_string()), mem, rx)
+			.unwrap_err();
+		assert_eq!(error.code, -32601);
+		assert_eq!(error.message, "Method not found");
+		assert!(error.data.is_some());
 	}
 }

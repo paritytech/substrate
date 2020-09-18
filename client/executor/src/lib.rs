@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! A crate that provides means of executing/dispatching calls into the runtime.
 //!
@@ -63,7 +65,7 @@ pub trait RuntimeInfo {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_runtime_test::WASM_BINARY;
+	use sc_runtime_test::wasm_binary_unwrap;
 	use sp_io::TestExternalities;
 	use sp_wasm_interface::HostFunctions;
 	use sp_core::traits::CallInWasm;
@@ -77,15 +79,15 @@ mod tests {
 			WasmExecutionMethod::Interpreted,
 			Some(8),
 			sp_io::SubstrateHostFunctions::host_functions(),
-			true,
 			8,
 		);
 		let res = executor.call_in_wasm(
-			&WASM_BINARY[..],
+			&wasm_binary_unwrap()[..],
 			None,
 			"test_empty_return",
 			&[],
 			&mut ext,
+			sp_core::traits::MissingHostFunctions::Allow,
 		).unwrap();
 		assert_eq!(res, vec![0u8; 0]);
 	}

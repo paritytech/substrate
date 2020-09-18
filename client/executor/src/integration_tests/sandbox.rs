@@ -1,25 +1,26 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::{TestExternalities, call_in_wasm};
 use crate::WasmExecutionMethod;
 
 use codec::Encode;
 use test_case::test_case;
-use wabt;
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
@@ -27,7 +28,7 @@ fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wabt::wat2wasm(r#"
+	let code = wat::parse_str(r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(import "env" "inc_counter" (func $inc_counter (param i32) (result i32)))
@@ -65,7 +66,7 @@ fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wabt::wat2wasm(r#"
+	let code = wat::parse_str(r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(func (export "call")
@@ -92,7 +93,7 @@ fn start_called(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wabt::wat2wasm(r#"
+	let code = wat::parse_str(r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(import "env" "inc_counter" (func $inc_counter (param i32) (result i32)))
@@ -136,7 +137,7 @@ fn invoke_args(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wabt::wat2wasm(r#"
+	let code = wat::parse_str(r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 
@@ -176,7 +177,7 @@ fn return_val(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wabt::wat2wasm(r#"
+	let code = wat::parse_str(r#"
 		(module
 			(func (export "call") (param $x i32) (result i32)
 				(i32.add
@@ -204,7 +205,7 @@ fn unlinkable_module(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wabt::wat2wasm(r#"
+	let code = wat::parse_str(r#"
 		(module
 			(import "env" "non-existent" (func))
 
@@ -250,7 +251,7 @@ fn start_fn_ok(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wabt::wat2wasm(r#"
+	let code = wat::parse_str(r#"
 		(module
 			(func (export "call")
 			)
@@ -279,7 +280,7 @@ fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wabt::wat2wasm(r#"
+	let code = wat::parse_str(r#"
 		(module
 			(func (export "call")
 			)
@@ -309,7 +310,7 @@ fn get_global_val_works(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wabt::wat2wasm(r#"
+	let code = wat::parse_str(r#"
 		(module
 			(global (export "test_global") i64 (i64.const 500))
 		)

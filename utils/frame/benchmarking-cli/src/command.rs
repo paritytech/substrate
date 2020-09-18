@@ -1,32 +1,35 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
-use frame_benchmarking::{Analysis, BenchmarkBatch};
+use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkSelector};
 use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
-use sc_client::StateMachine;
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
+use sp_state_machine::StateMachine;
 use sp_externalities::Extensions;
 use sc_service::{Configuration, NativeExecutionDispatch};
-use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_core::{
+	testing::KeyStore,
+	traits::KeystoreExt,
+	offchain::{OffchainExt, testing::TestOffchainExt},
 };
-use sp_core::{tasks, testing::KeyStore, traits::KeystoreExt};
 use std::fmt::Debug;
 
 impl BenchmarkCmd {
@@ -44,21 +47,25 @@ impl BenchmarkCmd {
 
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
+		let mut offchain_changes = Default::default();
 		let cache_size = Some(self.database_cache_size as usize);
 		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size)?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method,
-			None, // heap pages
+			self.heap_pages,
 			2, // The runtime instances cache size.
 		);
 
 		let mut extensions = Extensions::default();
 		extensions.register(KeystoreExt(KeyStore::new()));
+		let (offchain, _) = TestOffchainExt::new();
+		extensions.register(OffchainExt::new(offchain));
 
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 			&state,
 			None,
 			&mut changes,
+			&mut offchain_changes,
 			&executor,
 			"Benchmark_dispatch_benchmark",
 			&(
@@ -68,10 +75,12 @@ impl BenchmarkCmd {
 				self.highest_range_values.clone(),
 				self.steps.clone(),
 				self.repeat,
+				!self.no_verify,
+				self.extra,
 			).encode(),
 			extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
-			tasks::executor(),
+			sp_core::testing::TaskExecutor::new(),
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
@@ -80,43 +89,79 @@ impl BenchmarkCmd {
 			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
 		match results {
-			Ok(batches) => for batch in batches.into_iter() {
-				// Print benchmark metadata
-				println!(
-					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
-					String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
-					String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
-					self.lowest_range_values,
-					self.highest_range_values,
-					self.steps,
-					self.repeat,
-				);
-
-				if self.raw_data {
-					// Print the table header
-					batch.results[0].0.iter().for_each(|param| print!("{:?},", param.0));
-
-					print!("extrinsic_time,storage_root_time\n");
-					// Print the values
-					batch.results.iter().for_each(|result| {
-						let parameters = &result.0;
-						parameters.iter().for_each(|param| print!("{:?},", param.1));
-						// Print extrinsic time and storage root time
-						print!("{:?},{:?}\n", result.1, result.2);
-					});
-
-					println!();
-				}
-
-				// Conduct analysis.
-				if !self.no_median_slopes {
-					if let Some(analysis) = Analysis::median_slopes(&batch.results) {
-						println!("Median Slopes Analysis\n========\n{}", analysis);
+			Ok(batches) => {
+				// If we are going to output results to a file...
+				if self.output {
+					if self.weight_trait {
+						let mut file = crate::writer::open_file("traits.rs")?;
+						crate::writer::write_trait(&mut file, batches.clone())?;
+					} else {
+						crate::writer::write_results(&batches)?;
 					}
 				}
-				if !self.no_min_squares {
-					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results) {
-						println!("Min Squares Analysis\n========\n{}", analysis);
+
+				for batch in batches.into_iter() {
+					// Print benchmark metadata
+					println!(
+						"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
+						String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
+						String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
+						self.lowest_range_values,
+						self.highest_range_values,
+						self.steps,
+						self.repeat,
+					);
+
+					// Skip raw data + analysis if there are no results
+					if batch.results.is_empty() { continue }
+
+					if self.raw_data {
+						// Print the table header
+						batch.results[0].components.iter().for_each(|param| print!("{:?},", param.0));
+
+						print!("extrinsic_time,storage_root_time,reads,repeat_reads,writes,repeat_writes\n");
+						// Print the values
+						batch.results.iter().for_each(|result| {
+							let parameters = &result.components;
+							parameters.iter().for_each(|param| print!("{:?},", param.1));
+							// Print extrinsic time and storage root time
+							print!("{:?},{:?},{:?},{:?},{:?},{:?}\n",
+								result.extrinsic_time,
+								result.storage_root_time,
+								result.reads,
+								result.repeat_reads,
+								result.writes,
+								result.repeat_writes,
+							);
+						});
+
+						println!();
+					}
+
+					// Conduct analysis.
+					if !self.no_median_slopes {
+						println!("Median Slopes Analysis\n========");
+						if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+							println!("-- Extrinsic Time --\n{}", analysis);
+						}
+						if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads) {
+							println!("Reads = {:?}", analysis);
+						}
+						if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes) {
+							println!("Writes = {:?}", analysis);
+						}
+					}
+					if !self.no_min_squares {
+						println!("Min Squares Analysis\n========");
+						if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+							println!("-- Extrinsic Time --\n{}", analysis);
+						}
+						if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads) {
+							println!("Reads = {:?}", analysis);
+						}
+						if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes) {
+							println!("Writes = {:?}", analysis);
+						}
 					}
 				}
 			},

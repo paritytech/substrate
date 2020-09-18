@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Utility library for managing tree-like ordered data with logic for pruning
 //! the tree while finalizing nodes.
@@ -114,7 +115,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		)?;
 
 		let removed = if let Some(mut root_index) = new_root_index {
-			let mut old_roots = std::mem::replace(&mut self.roots, Vec::new());
+			let mut old_roots = std::mem::take(&mut self.roots);
 
 			let mut root = None;
 			let mut cur_children = Some(&mut old_roots);
@@ -131,13 +132,13 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 			let mut root = root
 				.expect("find_node_index_where will return array with at least one index; \
-                         this results in at least one item in removed; qed");
+						 this results in at least one item in removed; qed");
 
 			let mut removed = old_roots;
 
 			// we found the deepest ancestor of the finalized block, so we prune
 			// out any children that don't include the finalized block.
-			let root_children = std::mem::replace(&mut root.children, Vec::new());
+			let root_children = std::mem::take(&mut root.children);
 			let mut is_first = true;
 
 			for child in root_children {
@@ -306,7 +307,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		}
 	}
 
-	/// Same as [`find_node_where`](Self::find_node_where), but returns mutable reference.
+	/// Same as [`find_node_where`](ForkTree::find_node_where), but returns mutable reference.
 	pub fn find_node_where_mut<F, E, P>(
 		&mut self,
 		hash: &H,
@@ -331,7 +332,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		Ok(None)
 	}
 
-	/// Same as [`find_node_where`](Self::find_node_where), but returns indexes.
+	/// Same as [`find_node_where`](ForkTree::find_node_where), but returns indexes.
 	pub fn find_node_index_where<F, E, P>(
 		&self,
 		hash: &H,

@@ -1,11 +1,11 @@
-# WASM builder is a utility for building a project as a WASM binary
+# Wasm builder is a utility for building a project as a Wasm binary
 
-The WASM builder is a tool that integrates the process of building the WASM binary of your project into the main
+The Wasm builder is a tool that integrates the process of building the WASM binary of your project into the main
 `cargo` build process.
 
 ## Project setup
 
-A project that should be compiled as a WASM binary needs to:
+A project that should be compiled as a Wasm binary needs to:
 
 1. Add a `build.rs` file.
 2. Add `substrate-wasm-builder` as dependency into `build-dependencies`.
@@ -31,21 +31,29 @@ As the final step, you need to add the following to your project:
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 ```
 
-This will include the generated WASM binary as two constants `WASM_BINARY` and `WASM_BINARY_BLOATY`.
-The former is a compact WASM binary and the latter is not compacted.
+This will include the generated Wasm binary as two constants `WASM_BINARY` and `WASM_BINARY_BLOATY`.
+The former is a compact Wasm binary and the latter is not compacted.
+
+### Feature
+
+Wasm builder supports to enable cargo features while building the Wasm binary. By default it will
+enable all features in the wasm build that are enabled for the native build except the
+`default` and `std` features. Besides that, wasm builder supports the special `runtime-wasm`
+feature. This `runtime-wasm` feature will be enabled by the wasm builder when it compiles the
+Wasm binary. If this feature is not present, it will not be enabled.
 
 ## Environment variables
 
-By using environment variables, you can configure which WASM binaries are built and how:
+By using environment variables, you can configure which Wasm binaries are built and how:
 
 - `SKIP_WASM_BUILD` - Skips building any wasm binary. This is useful when only native should be recompiled.
 - `BUILD_DUMMY_WASM_BINARY` - Builds dummy wasm binaries. These dummy binaries are empty and useful
                              for `cargo check` runs.
 - `WASM_BUILD_TYPE` - Sets the build type for building wasm binaries. Supported values are `release` or `debug`.
                       By default the build type is equal to the build type used by the main build.
-- `TRIGGER_WASM_BUILD` - Can be set to trigger a wasm build. On subsequent calls the value of the variable
-                         needs to change. As WASM builder instructs `cargo` to watch for file changes
-                         this environment variable should only be required in certain circumstances.
+- `FORCE_WASM_BUILD` - Can be set to force a wasm build. On subsequent calls the value of the variable
+                       needs to change. As wasm builder instructs `cargo` to watch for file changes
+                       this environment variable should only be required in certain circumstances.
 - `WASM_BUILD_RUSTFLAGS` - Extend `RUSTFLAGS` given to `cargo build` while building the wasm binary.
 - `WASM_BUILD_NO_COLOR` - Disable color output of the wasm build.
 - `WASM_TARGET_DIRECTORY` - Will copy any build wasm binary to the given directory. The path needs
@@ -59,7 +67,7 @@ be `NODE_RUNTIME`.
 
 ## Prerequisites:
 
-WASM builder requires the following prerequisites for building the WASM binary:
+Wasm builder requires the following prerequisites for building the Wasm binary:
 
 - rust nightly + `wasm32-unknown-unknown` toolchain
 
@@ -67,4 +75,4 @@ If a specific rust nightly is installed with `rustup`, it is important that the 
 as well. For example if installing the rust nightly from 20.02.2020 using `rustup install nightly-2020-02-20`,
 the wasm target needs to be installed as well `rustup target add wasm32-unknown-unknown --toolchain nightly-2020-02-20`.
 
-License: GPL-3.0
+License: Apache-2.0

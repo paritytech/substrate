@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Generates the bare function interface for a given trait definition.
 //!
@@ -45,7 +46,7 @@ use std::iter;
 
 /// Generate one bare function per trait method. The name of the bare function is equal to the name
 /// of the trait method.
-pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
+pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool, tracing: bool) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
 	let runtime_interface = get_runtime_interface(trait_def)?;
 
@@ -62,7 +63,7 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream
 	// earlier versions compatibility dispatch (only std variant)
 	let result: Result<TokenStream> = runtime_interface.all_versions().try_fold(token_stream?, |mut t, (version, method)|
 	{
-		t.extend(function_std_impl(trait_name, method, version, is_wasm_only)?);
+		t.extend(function_std_impl(trait_name, method, version, is_wasm_only, tracing)?);
 		Ok(t)
 	});
 
@@ -144,8 +145,10 @@ fn function_std_impl(
 	method: &TraitItemMethod,
 	version: u32,
 	is_wasm_only: bool,
+	tracing: bool,
 ) -> Result<TokenStream> {
 	let function_name = create_function_ident_with_version(&method.sig.ident, version);
+	let function_name_str = function_name.to_string();
 
 	let crate_ = generate_crate_access();
 	let args = get_function_arguments(&method.sig).map(FnArg::Typed).chain(
@@ -166,6 +169,15 @@ fn function_std_impl(
 	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
 	// Don't make the function public accessible when this is a wasm only interface.
 	let call_to_trait = generate_call_to_trait(trait_name, method, version, is_wasm_only);
+	let call_to_trait = if !tracing {
+		call_to_trait
+	} else {
+		parse_quote!(
+			#crate_::sp_tracing::within_span! { #crate_::sp_tracing::trace_span!(#function_name_str);
+				#call_to_trait
+			}
+		)
+	};
 
 	Ok(
 		quote_spanned! { method.span() =>

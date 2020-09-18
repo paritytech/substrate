@@ -1,24 +1,24 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Lowest-abstraction level for the Substrate runtime: just exports useful primitives from std
 //! or client/alloc to be used with any code that depends on the runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-
 
 #![cfg_attr(feature = "std",
    doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
@@ -63,6 +63,30 @@ include!("../with_std.rs");
 
 #[cfg(not(feature = "std"))]
 include!("../without_std.rs");
+
+
+/// A target for `core::write!` macro - constructs a string in memory.
+#[derive(Default)]
+pub struct Writer(vec::Vec<u8>);
+
+impl fmt::Write for Writer {
+	fn write_str(&mut self, s: &str) -> fmt::Result {
+		self.0.extend(s.as_bytes());
+		Ok(())
+	}
+}
+
+impl Writer {
+	/// Access the content of this `Writer` e.g. for printout
+	pub fn inner(&self) -> &vec::Vec<u8> {
+		&self.0
+	}
+
+	/// Convert into the content of this `Writer`
+	pub fn into_inner(self) -> vec::Vec<u8> {
+		self.0
+	}
+}
 
 /// Prelude of common useful imports.
 ///

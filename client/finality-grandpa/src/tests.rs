@@ -1,33 +1,35 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Tests and test helpers for GRANDPA.
 
 use super::*;
+use assert_matches::assert_matches;
 use environment::HasVoted;
 use sc_network_test::{
-	Block, Hash, TestNetFactory, BlockImportAdapter, Peer,
-	PeersClient, PassThroughVerifier, PeersFullClient,
+	Block, BlockImportAdapter, Hash, PassThroughVerifier, Peer, PeersClient, PeersFullClient,
+	TestClient, TestNetFactory, FullPeerConfig,
 };
 use sc_network::config::{ProtocolConfig, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
 use futures_timer::Delay;
 use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
-use sc_client::LongestChain;
 use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
 use sp_api::{ApiRef, StorageProof, ProvideRuntimeApi};
@@ -41,7 +43,7 @@ use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::{H256, crypto::Public};
-use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
+use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
@@ -50,17 +52,11 @@ use finality_proof::{
 };
 use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
+use sc_consensus::LongestChain;
 
-type PeerData =
-	Mutex<
-		Option<
-			LinkHalf<
-				Block,
-				PeersFullClient,
-				LongestChain<substrate_test_runtime_client::Backend, Block>
-			>
-		>
-	>;
+type TestLinkHalf =
+	LinkHalf<Block, PeersFullClient, LongestChain<substrate_test_runtime_client::Backend, Block>>;
+type PeerData = Mutex<Option<TestLinkHalf>>;
 type GrandpaPeer = Peer<PeerData>;
 
 struct GrandpaTestNet {
@@ -98,13 +94,22 @@ impl TestNetFactory for GrandpaTestNet {
 		ProtocolConfig::default()
 	}
 
+	fn add_full_peer(&mut self) {
+		self.add_full_peer_with_config(FullPeerConfig {
+			notifications_protocols: vec![
+				(communication::GRANDPA_ENGINE_ID, communication::GRANDPA_PROTOCOL_NAME.into())
+			],
+			..Default::default()
+		})
+	}
+
 	fn make_verifier(
 		&self,
 		_client: PeersClient,
 		_cfg: &ProtocolConfig,
 		_: &PeerData,
 	) -> Self::Verifier {
-		PassThroughVerifier(false) // use non-instant finality.
+		PassThroughVerifier::new(false) // use non-instant finality.
 	}
 
 	fn make_block_import<Transaction>(&self, client: PeersClient)
@@ -214,6 +219,20 @@ sp_api::mock_impl_runtime_apis! {
 		fn grandpa_authorities(&self) -> AuthorityList {
 			self.inner.genesis_authorities.clone()
 		}
+
+		fn submit_report_equivocation_unsigned_extrinsic(
+			_equivocation_proof: EquivocationProof<Hash, BlockNumber>,
+			_key_owner_proof: OpaqueKeyOwnershipProof,
+		) -> Option<()> {
+			None
+		}
+
+		fn generate_key_ownership_proof(
+			_set_id: SetId,
+			_authority_id: AuthorityId,
+		) -> Option<OpaqueKeyOwnershipProof> {
+			None
+		}
 	}
 }
 
@@ -266,7 +285,7 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 
-fn create_keystore(authority: Ed25519Keyring) -> (KeyStorePtr, tempfile::TempDir) {
+fn create_keystore(authority: Ed25519Keyring) -> (BareCryptoStorePtr, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
 	keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(&authority.to_seed())
@@ -295,8 +314,6 @@ fn run_to_completion_with<F>(
 ) -> u64 where
 	F: FnOnce(Handle) -> Option<Pin<Box<dyn Future<Output = ()>>>>
 {
-	use parking_lot::RwLock;
-
 	let mut wait_for = Vec::new();
 
 	let highest_finalized = Arc::new(RwLock::new(0));
@@ -354,6 +371,7 @@ fn run_to_completion_with<F>(
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -399,7 +417,7 @@ fn add_forced_change(
 
 #[test]
 fn finalize_3_voters_no_observers() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
@@ -485,6 +503,7 @@ fn finalize_3_voters_1_full_observer() {
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
 		};
 
 		voters.push(run_grandpa_voter(grandpa_params).expect("all in order with client and network"));
@@ -503,7 +522,7 @@ fn finalize_3_voters_1_full_observer() {
 
 #[test]
 fn transition_3_voters_twice_1_full_observer() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let peers_a = &[
 		Ed25519Keyring::Alice,
 		Ed25519Keyring::Bob,
@@ -648,6 +667,7 @@ fn transition_3_voters_twice_1_full_observer() {
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -772,7 +792,7 @@ fn sync_justifications_on_change_blocks() {
 
 #[test]
 fn finalizes_multiple_pending_changes_in_order() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 
 	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
@@ -832,7 +852,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 
 #[test]
 fn force_change_to_new_set() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 	// two of these guys are offline.
 	let genesis_authorities = &[
@@ -990,12 +1010,11 @@ fn test_bad_justification() {
 
 #[test]
 fn voter_persists_its_votes() {
-	use std::iter::FromIterator;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use futures::future;
 	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 
 	// we have two authorities but we'll only be running the voter for alice
@@ -1034,7 +1053,7 @@ fn voter_persists_its_votes() {
 			voter_rx: TracingUnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
-			keystore: KeyStorePtr,
+			keystore: BareCryptoStorePtr,
 		}
 
 		impl Future for ResettableVoter {
@@ -1073,6 +1092,7 @@ fn voter_persists_its_votes() {
 							telemetry_on_connect: None,
 							voting_rule: VotingRulesBuilder::default().build(),
 							prometheus_registry: None,
+							shared_voter_state: SharedVoterState::empty(),
 						};
 
 						let voter = run_grandpa_voter(grandpa_params)
@@ -1119,7 +1139,7 @@ fn voter_persists_its_votes() {
 		let config = Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
 			justification_period: 32,
-			keystore: Some(keystore),
+			keystore: Some(keystore.clone()),
 			name: Some(format!("peer#{}", 1)),
 			is_authority: true,
 			observer_enabled: true,
@@ -1143,10 +1163,10 @@ fn voter_persists_its_votes() {
 		);
 
 		let (round_rx, round_tx) = network.round_communication(
+			Some((peers[1].public().into(), keystore).into()),
 			communication::Round(1),
 			communication::SetId(0),
-			Arc::new(VoterSet::from_iter(voters)),
-			Some(peers[1].pair().into()),
+			Arc::new(VoterSet::new(voters).unwrap()),
 			HasVoted::No,
 		);
 
@@ -1250,7 +1270,7 @@ fn voter_persists_its_votes() {
 
 #[test]
 fn finalize_3_voters_1_light_observer() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 	let authorities = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(authorities);
@@ -1295,7 +1315,7 @@ fn finalize_3_voters_1_light_observer() {
 
 #[test]
 fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 
 	let peers = &[Ed25519Keyring::Alice];
@@ -1325,7 +1345,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	// for debug: to ensure that without forced change light client will sync finality proof
 	const FORCE_CHANGE: bool = true;
 
-	let _ = ::env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 
 	// two of these guys are offline.
@@ -1389,7 +1409,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 
 #[test]
 fn voter_catches_up_to_latest_round_when_behind() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
 
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
@@ -1418,6 +1438,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
 		};
 
 		Box::pin(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
@@ -1501,10 +1522,68 @@ fn voter_catches_up_to_latest_round_when_behind() {
 	);
 }
 
+type TestEnvironment<N, VR> = Environment<
+	substrate_test_runtime_client::Backend,
+	Block,
+	TestClient,
+	N,
+	LongestChain<substrate_test_runtime_client::Backend, Block>,
+	VR,
+>;
+
+fn test_environment<N, VR>(
+	link: &TestLinkHalf,
+	keystore: Option<BareCryptoStorePtr>,
+	network_service: N,
+	voting_rule: VR,
+) -> TestEnvironment<N, VR>
+where
+	N: NetworkT<Block>,
+	VR: VotingRule<Block, TestClient>,
+{
+	let PersistentData {
+		ref authority_set,
+		ref consensus_changes,
+		ref set_state,
+		..
+	} = link.persistent_data;
+
+	let config = Config {
+		gossip_duration: TEST_GOSSIP_DURATION,
+		justification_period: 32,
+		keystore,
+		name: None,
+		is_authority: true,
+		observer_enabled: true,
+	};
+
+	let network = NetworkBridge::new(
+		network_service.clone(),
+		config.clone(),
+		set_state.clone(),
+		None,
+	);
+
+	Environment {
+		authority_set: authority_set.clone(),
+		config: config.clone(),
+		consensus_changes: consensus_changes.clone(),
+		client: link.client.clone(),
+		select_chain: link.select_chain.clone(),
+		set_id: authority_set.set_id(),
+		voter_set_state: set_state.clone(),
+		voters: Arc::new(authority_set.current_authorities()),
+		network,
+		voting_rule,
+		metrics: None,
+		justification_sender: None,
+		_phantom: PhantomData,
+	}
+}
+
 #[test]
 fn grandpa_environment_respects_voting_rules() {
 	use finality_grandpa::Chain;
-	use sc_network_test::TestClient;
 
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
@@ -1514,63 +1593,28 @@ fn grandpa_environment_respects_voting_rules() {
 	let network_service = peer.network_service().clone();
 	let link = peer.data.lock().take().unwrap();
 
-	// create a voter environment with a given voting rule
-	let environment = |voting_rule: Box<dyn VotingRule<Block, TestClient>>| {
-		let PersistentData {
-			ref authority_set,
-			ref consensus_changes,
-			ref set_state,
-			..
-		} = link.persistent_data;
-
-		let config = Config {
-			gossip_duration: TEST_GOSSIP_DURATION,
-			justification_period: 32,
-			keystore: None,
-			name: None,
-			is_authority: true,
-			observer_enabled: true,
-		};
-
-		let network = NetworkBridge::new(
-			network_service.clone(),
-			config.clone(),
-			set_state.clone(),
-			None,
-		);
-
-		Environment {
-			authority_set: authority_set.clone(),
-			config: config.clone(),
-			consensus_changes: consensus_changes.clone(),
-			client: link.client.clone(),
-			select_chain: link.select_chain.clone(),
-			set_id: authority_set.set_id(),
-			voter_set_state: set_state.clone(),
-			voters: Arc::new(authority_set.current_authorities()),
-			network,
-			voting_rule,
-			metrics: None,
-			_phantom: PhantomData,
-		}
-	};
-
 	// add 21 blocks
 	peer.push_blocks(21, false);
 
 	// create an environment with no voting rule restrictions
-	let unrestricted_env = environment(Box::new(()));
+	let unrestricted_env = test_environment(&link, None, network_service.clone(), ());
 
 	// another with 3/4 unfinalized chain voting rule restriction
-	let three_quarters_env = environment(Box::new(
-		voting_rule::ThreeQuartersOfTheUnfinalizedChain
-	));
+	let three_quarters_env = test_environment(
+		&link,
+		None,
+		network_service.clone(),
+		voting_rule::ThreeQuartersOfTheUnfinalizedChain,
+	);
 
 	// and another restricted with the default voting rules: i.e. 3/4 rule and
 	// always below best block
-	let default_env = environment(Box::new(
-		VotingRulesBuilder::default().build()
-	));
+	let default_env = test_environment(
+		&link,
+		None,
+		network_service.clone(),
+		VotingRulesBuilder::default().build(),
+	);
 
 	// the unrestricted environment should just return the best block
 	assert_eq!(
@@ -1631,6 +1675,70 @@ fn grandpa_environment_respects_voting_rules() {
 }
 
 #[test]
+fn grandpa_environment_never_overwrites_round_voter_state() {
+	use finality_grandpa::voter::Environment;
+
+	let peers = &[Ed25519Keyring::Alice];
+	let voters = make_ids(peers);
+
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1);
+	let peer = net.peer(0);
+	let network_service = peer.network_service().clone();
+	let link = peer.data.lock().take().unwrap();
+
+	let (keystore, _keystore_path) = create_keystore(peers[0]);
+	let environment = test_environment(&link, Some(keystore), network_service.clone(), ());
+
+	let round_state = || finality_grandpa::round::State::genesis(Default::default());
+	let base = || Default::default();
+	let historical_votes = || finality_grandpa::HistoricalVotes::new();
+
+	let get_current_round = |n| {
+		let current_rounds = environment
+			.voter_set_state
+			.read()
+			.with_current_round(n)
+			.map(|(_, current_rounds)| current_rounds.clone())
+			.ok()?;
+
+		Some(current_rounds.get(&n).unwrap().clone())
+	};
+
+	// round 2 should not be tracked
+	assert_eq!(get_current_round(2), None);
+
+	// after completing round 1 we should start tracking round 2
+	environment
+		.completed(1, round_state(), base(), &historical_votes())
+		.unwrap();
+
+	assert_eq!(get_current_round(2).unwrap(), HasVoted::No);
+
+	let info = peer.client().info();
+
+	let prevote = finality_grandpa::Prevote {
+		target_hash: info.best_hash,
+		target_number: info.best_number,
+	};
+
+	// we prevote for round 2 which should lead to us updating the voter state
+	environment.prevoted(2, prevote.clone()).unwrap();
+
+	let has_voted = get_current_round(2).unwrap();
+
+	assert_matches!(has_voted, HasVoted::Yes(_, _));
+	assert_eq!(*has_voted.prevote().unwrap(), prevote);
+
+	// if we report round 1 as completed again we should not overwrite the
+	// voter state for round 2
+	environment
+		.completed(1, round_state(), base(), &historical_votes())
+		.unwrap();
+
+	assert_matches!(get_current_round(2).unwrap(), HasVoted::Yes(_, _));
+}
+
+#[test]
 fn imports_justification_for_regular_blocks_on_import() {
 	// NOTE: this is a regression test since initially we would only import
 	// justifications for authority change blocks, and would discard any
@@ -1662,7 +1770,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 		};
 
 		let msg = finality_grandpa::Message::Precommit(precommit.clone());
-		let encoded = communication::localized_payload(round, set_id, &msg);
+		let encoded = sp_finality_grandpa::localized_payload(round, set_id, &msg);
 		let signature = peers[0].sign(&encoded[..]).into();
 
 		let precommit = finality_grandpa::SignedPrecommit {

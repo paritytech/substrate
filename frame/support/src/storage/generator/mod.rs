@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Generators are a set of trait on which storage traits are implemented.
 //!
@@ -37,6 +38,7 @@ mod tests {
 	use sp_io::TestExternalities;
 	use codec::Encode;
 	use crate::storage::{unhashed, generator::StorageValue, IterableStorageMap};
+	use crate::{assert_noop, assert_ok};
 
 	struct Runtime {}
 	pub trait Trait {
@@ -57,6 +59,7 @@ mod tests {
 		trait Store for Module<T: Trait> as Runtime {
 			Value get(fn value) config(): (u64, u64);
 			NumberMap: map hasher(identity) u32 => u64;
+			DoubleMap: double_map hasher(identity) u32, hasher(identity) u32 => u64;
 		}
 	}
 
@@ -101,5 +104,55 @@ mod tests {
 				(0..50u32).map(|x| x * 2).map(|x| (x, (x as u64) << 32 | x as u64)).collect::<Vec<_>>(),
 			);
 		})
+	}
+
+	#[test]
+	fn try_mutate_works() {
+		let t = GenesisConfig::default().build_storage().unwrap();
+		TestExternalities::new(t).execute_with(|| {
+			assert_eq!(Value::get(), (0, 0));
+			assert_eq!(NumberMap::get(0), 0);
+			assert_eq!(DoubleMap::get(0, 0), 0);
+
+			// `assert_noop` ensures that the state does not change
+			assert_noop!(Value::try_mutate(|value| -> Result<(), &'static str> {
+				*value = (2, 2);
+				Err("don't change value")
+			}), "don't change value");
+
+			assert_noop!(NumberMap::try_mutate(0, |value| -> Result<(), &'static str> {
+				*value = 4;
+				Err("don't change value")
+			}), "don't change value");
+
+			assert_noop!(DoubleMap::try_mutate(0, 0, |value| -> Result<(), &'static str> {
+				*value = 6;
+				Err("don't change value")
+			}), "don't change value");
+
+			// Showing this explicitly for clarity
+			assert_eq!(Value::get(), (0, 0));
+			assert_eq!(NumberMap::get(0), 0);
+			assert_eq!(DoubleMap::get(0, 0), 0);
+
+			assert_ok!(Value::try_mutate(|value| -> Result<(), &'static str> {
+				*value = (2, 2);
+				Ok(())
+			}));
+
+			assert_ok!(NumberMap::try_mutate(0, |value| -> Result<(), &'static str> {
+				*value = 4;
+				Ok(())
+			}));
+
+			assert_ok!(DoubleMap::try_mutate(0, 0, |value| -> Result<(), &'static str> {
+				*value = 6;
+				Ok(())
+			}));
+
+			assert_eq!(Value::get(), (2, 2));
+			assert_eq!(NumberMap::get(0), 4);
+			assert_eq!(DoubleMap::get(0, 0), 6);
+		});
 	}
 }

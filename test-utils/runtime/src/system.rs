@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
@@ -341,7 +342,7 @@ mod tests {
 
 	use sp_io::TestExternalities;
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
-	use crate::{Header, Transfer, WASM_BINARY};
+	use crate::{Header, Transfer, wasm_binary_unwrap};
 	use sp_core::{NeverNativeValue, map, traits::{CodeExecutor, RuntimeCode}};
 	use sc_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
 	use sp_io::hashing::twox_128;
@@ -364,7 +365,7 @@ mod tests {
 			Sr25519Keyring::Charlie.to_raw_public()
 		];
 		TestExternalities::new_with_code(
-			WASM_BINARY,
+			wasm_binary_unwrap(),
 			sp_core::storage::Storage {
 				top: map![
 					twox_128(b"latest").to_vec() => vec![69u8; 32],
@@ -373,7 +374,7 @@ mod tests {
 						vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 					}
 				],
-				children: map![],
+				children_default: map![],
 			},
 		)
 	}
@@ -406,7 +407,7 @@ mod tests {
 		block_import_works(|b, ext| {
 			let mut ext = ext.ext();
 			let runtime_code = RuntimeCode {
-				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.into()),
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(wasm_binary_unwrap().into()),
 				hash: Vec::new(),
 				heap_pages: None,
 			};
@@ -506,7 +507,7 @@ mod tests {
 		block_import_with_transaction_works(|b, ext| {
 			let mut ext = ext.ext();
 			let runtime_code = RuntimeCode {
-				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.into()),
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(wasm_binary_unwrap().into()),
 				hash: Vec::new(),
 				heap_pages: None,
 			};

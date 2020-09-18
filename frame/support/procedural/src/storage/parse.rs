@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Parsing of decl_storage input.
 
@@ -166,7 +167,7 @@ struct DeclStorageLine {
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageGetterBody {
-	fn_keyword: Option<Token![fn]>,
+	fn_keyword: Token![fn],
 	ident: Ident,
 }
 
@@ -197,7 +198,7 @@ impl_parse_for_opt!(DeclStorageBuild => keyword::build);
 #[derive(ToTokens, Debug)]
 enum DeclStorageType {
 	Map(DeclStorageMap),
-	DoubleMap(DeclStorageDoubleMap),
+	DoubleMap(Box<DeclStorageDoubleMap>),
 	Simple(syn::Type),
 }
 
@@ -323,7 +324,16 @@ fn get_module_instance(
 	instantiable: Option<syn::Ident>,
 	default_instance: Option<syn::Ident>,
 ) -> syn::Result<Option<super::ModuleInstanceDef>> {
-	let right_syntax = "Should be $Instance: $Instantiable = $DefaultInstance";
+	let right_syntax = "Should be $I: $Instance = $DefaultInstance";
+
+	if instantiable.as_ref().map_or(false, |i| i != "Instance") {
+		let msg = format!(
+			"Instance trait must be named `Instance`, other names are no longer supported, because \
+			it is now defined at frame_support::traits::Instance. Expect `Instance` found `{}`",
+			instantiable.as_ref().unwrap(),
+		);
+		return Err(syn::Error::new(instantiable.span(), msg));
+	}
 
 	match (instance, instantiable, default_instance) {
 		(Some(instance), Some(instantiable), default_instance) => {
@@ -477,13 +487,13 @@ fn parse_storage_line_defs(
 				}
 			),
 			DeclStorageType::DoubleMap(map) => super::StorageLineTypeDef::DoubleMap(
-				super::DoubleMapDef {
+				Box::new(super::DoubleMapDef {
 					hasher1: map.hasher1.inner.ok_or_else(no_hasher_error)?.into(),
 					hasher2: map.hasher2.inner.ok_or_else(no_hasher_error)?.into(),
 					key1: map.key1,
 					key2: map.key2,
 					value: map.value,
-				}
+				})
 			),
 			DeclStorageType::Simple(expr) => super::StorageLineTypeDef::Simple(expr),
 		};

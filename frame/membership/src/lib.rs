@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Membership Module
 //!
@@ -25,10 +26,9 @@
 use sp_std::prelude::*;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
-	traits::{ChangeMembers, InitializeMembers, EnsureOrigin},
-	weights::SimpleDispatchInfo,
+	traits::{ChangeMembers, InitializeMembers, EnsureOrigin, Contains},
 };
-use frame_system::{self as system, ensure_root, ensure_signed};
+use frame_system::ensure_signed;
 
 pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The overarching event type.
@@ -117,12 +117,10 @@ decl_module! {
 
 		/// Add a member `who` to the set.
 		///
-		/// May only be called from `AddOrigin` or root.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn add_member(origin, who: T::AccountId) {
-			T::AddOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+		/// May only be called from `T::AddOrigin`.
+		#[weight = 50_000_000]
+		pub fn add_member(origin, who: T::AccountId) {
+			T::AddOrigin::ensure_origin(origin)?;
 
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&who).err().ok_or(Error::<T, I>::AlreadyMember)?;
@@ -136,12 +134,10 @@ decl_module! {
 
 		/// Remove a member `who` from the set.
 		///
-		/// May only be called from `RemoveOrigin` or root.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn remove_member(origin, who: T::AccountId) {
-			T::RemoveOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+		/// May only be called from `T::RemoveOrigin`.
+		#[weight = 50_000_000]
+		pub fn remove_member(origin, who: T::AccountId) {
+			T::RemoveOrigin::ensure_origin(origin)?;
 
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&who).ok().ok_or(Error::<T, I>::NotMember)?;
@@ -156,14 +152,12 @@ decl_module! {
 
 		/// Swap out one member `remove` for another `add`.
 		///
-		/// May only be called from `SwapOrigin` or root.
+		/// May only be called from `T::SwapOrigin`.
 		///
 		/// Prime membership is *not* passed from `remove` to `add`, if extant.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn swap_member(origin, remove: T::AccountId, add: T::AccountId) {
-			T::SwapOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+		#[weight = 50_000_000]
+		pub fn swap_member(origin, remove: T::AccountId, add: T::AccountId) {
+			T::SwapOrigin::ensure_origin(origin)?;
 
 			if remove == add { return Ok(()) }
 
@@ -187,12 +181,10 @@ decl_module! {
 		/// Change the membership to a new set, disregarding the existing membership. Be nice and
 		/// pass `members` pre-sorted.
 		///
-		/// May only be called from `ResetOrigin` or root.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn reset_members(origin, members: Vec<T::AccountId>) {
-			T::ResetOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+		/// May only be called from `T::ResetOrigin`.
+		#[weight = 50_000_000]
+		pub fn reset_members(origin, members: Vec<T::AccountId>) {
+			T::ResetOrigin::ensure_origin(origin)?;
 
 			let mut members = members;
 			members.sort();
@@ -211,8 +203,8 @@ decl_module! {
 		/// May only be called from `Signed` origin of a current member.
 		///
 		/// Prime membership is passed from the origin account to `new`, if extant.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn change_key(origin, new: T::AccountId) {
+		#[weight = 50_000_000]
+		pub fn change_key(origin, new: T::AccountId) {
 			let remove = ensure_signed(origin)?;
 
 			if remove != new {
@@ -239,22 +231,22 @@ decl_module! {
 		}
 
 		/// Set the prime member. Must be a current member.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn set_prime(origin, who: T::AccountId) {
-			T::PrimeOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+		///
+		/// May only be called from `T::PrimeOrigin`.
+		#[weight = 50_000_000]
+		pub fn set_prime(origin, who: T::AccountId) {
+			T::PrimeOrigin::ensure_origin(origin)?;
 			Self::members().binary_search(&who).ok().ok_or(Error::<T, I>::NotMember)?;
 			Prime::<T, I>::put(&who);
 			T::MembershipChanged::set_prime(Some(who));
 		}
 
 		/// Remove the prime member if it exists.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn clear_prime(origin) {
-			T::PrimeOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+		///
+		/// May only be called from `T::PrimeOrigin`.
+		#[weight = 50_000_000]
+		pub fn clear_prime(origin) {
+			T::PrimeOrigin::ensure_origin(origin)?;
 			Prime::<T, I>::kill();
 			T::MembershipChanged::set_prime(None);
 		}
@@ -272,6 +264,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 }
 
+impl<T: Trait<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
+	fn sorted_members() -> Vec<T::AccountId> {
+		Self::members()
+	}
+
+	fn count() -> usize {
+		Members::<T, I>::decode_len().unwrap_or(0)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -282,18 +284,13 @@ mod tests {
 		ord_parameter_types
 	};
 	use sp_core::H256;
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
 	use frame_system::EnsureSignedBy;
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
-	// For testing the pallet, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -303,6 +300,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -315,6 +313,10 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -322,6 +324,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
@@ -373,8 +376,6 @@ mod tests {
 
 	type Membership = Module<Test>;
 
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.

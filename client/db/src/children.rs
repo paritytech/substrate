@@ -16,23 +16,21 @@
 
 //! Functionality for reading and storing children hashes from db.
 
-use kvdb::{KeyValueDB, DBTransaction};
 use codec::{Encode, Decode};
 use sp_blockchain;
 use std::hash::Hash;
+use sp_database::{Database, Transaction};
+use crate::DbHash;
 
 /// Returns the hashes of the children blocks of the block with `parent_hash`.
 pub fn read_children<
 	K: Eq + Hash + Clone + Encode + Decode,
 	V: Eq + Hash + Clone + Encode + Decode,
->(db: &dyn KeyValueDB, column: u32, prefix: &[u8], parent_hash: K) -> sp_blockchain::Result<Vec<V>> {
+>(db: &dyn Database<DbHash>, column: u32, prefix: &[u8], parent_hash: K) -> sp_blockchain::Result<Vec<V>> {
 	let mut buf = prefix.to_vec();
 	parent_hash.using_encoded(|s| buf.extend(s));
 
-	let raw_val_opt = match db.get(column, &buf[..]) {
-		Ok(raw_val_opt) => raw_val_opt,
-		Err(_) => return Err(sp_blockchain::Error::Backend("Error reading value from database".into())),
-	};
+	let raw_val_opt = db.get(column, &buf[..]);
 
 	let raw_val = match raw_val_opt {
 		Some(val) => val,
@@ -53,7 +51,7 @@ pub fn write_children<
 	K: Eq + Hash + Clone + Encode + Decode,
 	V: Eq + Hash + Clone + Encode + Decode,
 >(
-	tx: &mut DBTransaction,
+	tx: &mut Transaction<DbHash>,
 	column: u32,
 	prefix: &[u8],
 	parent_hash: K,
@@ -61,34 +59,35 @@ pub fn write_children<
 ) {
 	let mut key = prefix.to_vec();
 	parent_hash.using_encoded(|s| key.extend(s));
-	tx.put_vec(column, &key[..], children_hashes.encode());
+	tx.set_from_vec(column, &key[..], children_hashes.encode());
 }
 
 /// Prepare transaction to remove the children of `parent_hash`.
 pub fn remove_children<
 	K: Eq + Hash + Clone + Encode + Decode,
 >(
-	tx: &mut DBTransaction,
+	tx: &mut Transaction<DbHash>,
 	column: u32,
 	prefix: &[u8],
 	parent_hash: K,
 ) {
 	let mut key = prefix.to_vec();
 	parent_hash.using_encoded(|s| key.extend(s));
-	tx.delete(column, &key[..]);
+	tx.remove(column, &key);
 }
 
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::sync::Arc;
 
 	#[test]
 	fn children_write_read_remove() {
 		const PREFIX: &[u8] = b"children";
-		let db = ::kvdb_memorydb::create(1);
+		let db = Arc::new(sp_database::MemDb::default());
 
-		let mut tx = DBTransaction::new();
+		let mut tx = Transaction::new();
 
 		let mut children1 = Vec::new();
 		children1.push(1_3);
@@ -100,19 +99,19 @@ mod tests {
 		children2.push(1_6);
 		write_children(&mut tx, 0, PREFIX, 1_2, children2);
 
-		db.write(tx.clone()).expect("(2) Committing transaction failed");
+		db.commit(tx.clone()).unwrap();
 
-		let r1: Vec<u32> = read_children(&db, 0, PREFIX, 1_1).expect("(1) Getting r1 failed");
-		let r2: Vec<u32> = read_children(&db, 0, PREFIX, 1_2).expect("(1) Getting r2 failed");
+		let r1: Vec<u32> = read_children(&*db, 0, PREFIX, 1_1).expect("(1) Getting r1 failed");
+		let r2: Vec<u32> = read_children(&*db, 0, PREFIX, 1_2).expect("(1) Getting r2 failed");
 
 		assert_eq!(r1, vec![1_3, 1_5]);
 		assert_eq!(r2, vec![1_4, 1_6]);
 
 		remove_children(&mut tx, 0, PREFIX, 1_2);
-		db.write(tx).expect("(2) Committing transaction failed");
+		db.commit(tx).unwrap();
 
-		let r1: Vec<u32> = read_children(&db, 0, PREFIX, 1_1).expect("(2) Getting r1 failed");
-		let r2: Vec<u32> = read_children(&db, 0, PREFIX, 1_2).expect("(2) Getting r2 failed");
+		let r1: Vec<u32> = read_children(&*db, 0, PREFIX, 1_1).expect("(2) Getting r1 failed");
+		let r2: Vec<u32> = read_children(&*db, 0, PREFIX, 1_2).expect("(2) Getting r2 failed");
 
 		assert_eq!(r1, vec![1_3, 1_5]);
 		assert_eq!(r2.len(), 0);

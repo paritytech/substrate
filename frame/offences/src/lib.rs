@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Offences Module
 //!
@@ -27,15 +28,15 @@ mod tests;
 use sp_std::vec::Vec;
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug,
-	weights::{Weight, SimpleDispatchInfo, WeighData},
+	traits::Get,
+	weights::Weight,
 };
-use sp_runtime::{traits::Hash, Perbill};
+use sp_runtime::{traits::{Hash, Zero}, Perbill};
 use sp_staking::{
 	SessionIndex,
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails, OffenceError},
 };
 use codec::{Encode, Decode};
-use frame_system as system;
 
 /// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
 type OpaqueTimeSlot = Vec<u8>;
@@ -50,6 +51,20 @@ pub type DeferredOffenceOf<T> = (
 	SessionIndex,
 );
 
+pub trait WeightInfo {
+	fn report_offence_im_online(r: u32, o: u32, n: u32, ) -> Weight;
+	fn report_offence_grandpa(r: u32, n: u32, ) -> Weight;
+	fn report_offence_babe(r: u32, n: u32, ) -> Weight;
+	fn on_initialize(d: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn report_offence_im_online(_r: u32, _o: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn report_offence_grandpa(_r: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn report_offence_babe(_r: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize(_d: u32, ) -> Weight { 1_000_000_000 }
+}
+
 /// Offences trait
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -57,7 +72,13 @@ pub trait Trait: frame_system::Trait {
 	/// Full identification of the validator.
 	type IdentificationTuple: Parameter + Ord;
 	/// A handler called for every offence report.
-	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple>;
+	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple, Weight>;
+	/// The a soft limit on maximum weight that may be consumed while dispatching deferred offences in
+	/// `on_initialize`.
+	/// Note it's going to be exceeded before we stop adding to it, so it has to be set conservatively.
+	type WeightSoftLimit: Get<Weight>;
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -69,7 +90,7 @@ decl_storage! {
 
 		/// Deferred reports that have been rejected by the offence handler and need to be submitted
 		/// at a later time.
-		DeferredOffences get(deferred_offences): Vec<DeferredOffenceOf<T>>;
+		DeferredOffences get(fn deferred_offences): Vec<DeferredOffenceOf<T>>;
 
 		/// A vector of reports of the same kind that happened at the same time slot.
 		ConcurrentReportsIndex:
@@ -90,7 +111,8 @@ decl_event!(
 	pub enum Event {
 		/// There is an offence reported of the given `kind` happened at the `session_index` and
 		/// (kind-specific) time slot. This event is not deposited for duplicate slashes. last
-		/// element indicates of the offence was applied (true) or queued (false).
+		/// element indicates of the offence was applied (true) or queued (false) 
+		/// \[kind, timeslot, applied\].
 		Offence(Kind, OpaqueTimeSlot, bool),
 	}
 );
@@ -99,33 +121,41 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() -> Weight {
-			Reports::<T>::remove_all();
-			ConcurrentReportsIndex::<T>::remove_all();
-			ReportsByKindIndex::remove_all();
-
-			SimpleDispatchInfo::default().weigh_data(())
-		}
-
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			// only decode storage if we can actually submit anything again.
-			if T::OnOffenceHandler::can_report() {
-				<DeferredOffences<T>>::mutate(|deferred| {
-					// keep those that fail to be reported again. An error log is emitted here; this
-					// should not happen if staking's `can_report` is implemented properly.
-					deferred.retain(|(o, p, s)| {
-						T::OnOffenceHandler::on_offence(&o, &p, *s).map_err(|_| {
-							debug::native::error!(
-								target: "pallet-offences",
-								"re-submitting a deferred slash returned Err at {}. This should not happen with pallet-staking",
-								now,
-							);
-						}).is_err()
-					})
-				})
+			if !T::OnOffenceHandler::can_report() {
+				return 0;
 			}
 
-			SimpleDispatchInfo::default().weigh_data(())
+			let limit = T::WeightSoftLimit::get();
+			let mut consumed = Weight::zero();
+
+			<DeferredOffences<T>>::mutate(|deferred| {
+				deferred.retain(|(offences, perbill, session)| {
+					if consumed >= limit {
+						true
+					} else {
+						// keep those that fail to be reported again. An error log is emitted here; this
+						// should not happen if staking's `can_report` is implemented properly.
+						match T::OnOffenceHandler::on_offence(&offences, &perbill, *session) {
+							Ok(weight) => {
+								consumed += weight;
+								false
+							},
+							Err(_) => {
+								debug::native::error!(
+									target: "pallet-offences",
+									"re-submitting a deferred slash returned Err at {}. This should not happen with pallet-staking",
+									now,
+								);
+								true
+							},
+						}
+					}
+				})
+			});
+
+			consumed
 		}
 	}
 }
@@ -170,6 +200,15 @@ where
 		Self::deposit_event(Event::Offence(O::ID, time_slot.encode(), applied));
 
 		Ok(())
+	}
+
+	fn is_known_offence(offenders: &[T::IdentificationTuple], time_slot: &O::TimeSlot) -> bool {
+		let any_unknown = offenders.iter().any(|offender| {
+			let report_id = Self::report_id::<O>(time_slot, offender);
+			!<Reports<T>>::contains_key(&report_id)
+		});
+
+		!any_unknown
 	}
 }
 

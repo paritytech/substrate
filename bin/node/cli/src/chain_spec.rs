@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate chain configurations.
 
@@ -23,11 +25,11 @@ use node_runtime::{
 	AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig,
 	DemocracyConfig,GrandpaConfig, ImOnlineConfig, SessionConfig, SessionKeys, StakerStatus,
 	StakingConfig, ElectionsConfig, IndicesConfig, SocietyConfig, SudoConfig, SystemConfig,
-	TechnicalCommitteeConfig, WASM_BINARY,
+	TechnicalCommitteeConfig, wasm_binary_unwrap,
 };
 use node_runtime::Block;
 use node_runtime::constants::currency::*;
-use sc_service;
+use sc_service::ChainType;
 use hex_literal::hex;
 use sc_telemetry::TelemetryEndpoints;
 use grandpa_primitives::{AuthorityId as GrandpaId};
@@ -51,9 +53,9 @@ const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 #[serde(rename_all = "camelCase")]
 pub struct Extensions {
 	/// Block numbers with known hashes.
-	pub fork_blocks: sc_client::ForkBlocks<Block>,
+	pub fork_blocks: sc_client_api::ForkBlocks<Block>,
 	/// Known bad block hashes.
-	pub bad_blocks: sc_client::BadBlocks<Block>,
+	pub bad_blocks: sc_client_api::BadBlocks<Block>,
 }
 
 /// Specialized `ChainSpec`.
@@ -158,6 +160,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Staging Testnet",
 		"staging_testnet",
+		ChainType::Live,
 		staging_testnet_config_genesis,
 		boot_nodes,
 		Some(TelemetryEndpoints::new(vec![(STAGING_TELEMETRY_URL.to_string(), 0)])
@@ -238,7 +241,7 @@ pub fn testnet_genesis(
 
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
-			code: WASM_BINARY.to_vec(),
+			code: wasm_binary_unwrap().to_vec(),
 			changes_trie_config: Default::default(),
 		}),
 		pallet_balances: Some(BalancesConfig {
@@ -291,7 +294,6 @@ pub fn testnet_genesis(
 				enable_println, // this should only be enabled on development chains
 				..Default::default()
 			},
-			gas_price: 1 * MILLICENTS,
 		}),
 		pallet_sudo: Some(SudoConfig {
 			key: root_key,
@@ -338,6 +340,7 @@ pub fn development_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Development",
 		"dev",
+		ChainType::Development,
 		development_config_genesis,
 		vec![],
 		None,
@@ -364,6 +367,7 @@ pub fn local_testnet_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Local Testnet",
 		"local_testnet",
+		ChainType::Local,
 		local_testnet_genesis,
 		vec![],
 		None,
@@ -376,7 +380,7 @@ pub fn local_testnet_config() -> ChainSpec {
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
-	use crate::service::{new_full, new_light};
+	use crate::service::{new_full_base, new_light_base, NewFullBase};
 	use sc_service_test;
 	use sp_runtime::BuildStorage;
 
@@ -396,6 +400,7 @@ pub(crate) mod tests {
 		ChainSpec::from_genesis(
 			"Integration Test",
 			"test",
+			ChainType::Development,
 			local_testnet_genesis_instant_single,
 			vec![],
 			None,
@@ -410,6 +415,7 @@ pub(crate) mod tests {
 		ChainSpec::from_genesis(
 			"Integration Test",
 			"test",
+			ChainType::Development,
 			local_testnet_genesis,
 			vec![],
 			None,
@@ -424,8 +430,15 @@ pub(crate) mod tests {
 	fn test_connectivity() {
 		sc_service_test::connectivity(
 			integration_test_config_with_two_authorities(),
-			|config| new_full(config),
-			|config| new_light(config),
+			|config| {
+				let NewFullBase { task_manager, client, network, transaction_pool, .. }
+					= new_full_base(config,|_, _| ())?;
+				Ok(sc_service_test::TestNetComponents::new(task_manager, client, network, transaction_pool))
+			},
+			|config| {
+				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
+				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
+			}
 		);
 	}
 

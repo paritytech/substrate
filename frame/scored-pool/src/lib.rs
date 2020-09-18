@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Scored Pool Module
 //!
@@ -54,14 +55,14 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_system::{self as system, ensure_signed};
+//! use frame_system::ensure_signed;
 //! use pallet_scored_pool::{self as scored_pool};
 //!
 //! pub trait Trait: scored_pool::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+//! 		#[weight = 0]
 //! 		pub fn candidate(origin) -> dispatch::DispatchResult {
 //! 			let who = ensure_signed(origin)?;
 //!
@@ -97,12 +98,10 @@ use sp_std::{
 use frame_support::{
 	decl_module, decl_storage, decl_event, ensure, decl_error,
 	traits::{EnsureOrigin, ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
-	weights::{Weight, SimpleDispatchInfo, WeighData},
+	weights::Weight,
 };
-use frame_system::{self as system, ensure_root, ensure_signed};
-use sp_runtime::{
-	traits::{AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup},
-};
+use frame_system::{ensure_root, ensure_signed};
+use sp_runtime::traits::{AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup};
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type PoolT<T, I> = Vec<(<T as frame_system::Trait>::AccountId, Option<<T as Trait<I>>::Score>)>;
@@ -252,7 +251,7 @@ decl_module! {
 				let pool = <Pool<T, I>>::get();
 				<Module<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
-			SimpleDispatchInfo::default().weigh_data(())
+			0
 		}
 
 		/// Add `origin` to the pool of candidates.
@@ -266,7 +265,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(!<CandidateExists<T, I>>::contains_key(&who), Error::<T, I>::AlreadyInPool);
@@ -276,10 +275,7 @@ decl_module! {
 
 			// can be inserted as last element in pool, since entities with
 			// `None` are always sorted to the end.
-			if let Err(e) = <Pool<T, I>>::append(&[(who.clone(), None)]) {
-				T::Currency::unreserve(&who, deposit);
-				Err(e)?
-			}
+			<Pool<T, I>>::append((who.clone(), Option::<<T as Trait<I>>::Score>::None));
 
 			<CandidateExists<T, I>>::insert(&who, true);
 
@@ -296,7 +292,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn withdraw_candidacy(
 			origin,
 			index: u32
@@ -312,19 +308,17 @@ decl_module! {
 
 		/// Kick a member `who` from the set.
 		///
-		/// May only be called from `KickOrigin` or root.
+		/// May only be called from `T::KickOrigin`.
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn kick(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
 			index: u32
 		) {
-			T::KickOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::KickOrigin::ensure_origin(origin)?;
 
 			let who = T::Lookup::lookup(dest)?;
 
@@ -337,20 +331,18 @@ decl_module! {
 
 		/// Score a member `who` with `score`.
 		///
-		/// May only be called from `ScoreOrigin` or root.
+		/// May only be called from `T::ScoreOrigin`.
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn score(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
 			index: u32,
 			score: T::Score
 		) {
-			T::ScoreOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ScoreOrigin::ensure_origin(origin)?;
 
 			let who = T::Lookup::lookup(dest)?;
 
@@ -363,7 +355,7 @@ decl_module! {
 			// if there is already an element with `score`, we insert
 			// right before that. if not, the search returns a location
 			// where we can insert while maintaining order.
-			let item = (who.clone(), Some(score.clone()));
+			let item = (who, Some(score.clone()));
 			let location = pool
 				.binary_search_by_key(
 					&Reverse(score),
@@ -382,7 +374,7 @@ decl_module! {
 		/// (this happens each `Period`).
 		///
 		/// May only be called from root.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn change_member_count(origin, count: u32) {
 			ensure_root(origin)?;
 			<MemberCount<I>>::put(&count);

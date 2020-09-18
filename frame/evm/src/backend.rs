@@ -5,10 +5,11 @@ use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};
 use sp_core::{U256, H256, H160};
 use sp_runtime::traits::UniqueSaturatedInto;
-use frame_support::storage::{StorageMap, StorageDoubleMap};
+use frame_support::traits::Get;
+use frame_support::{debug, storage::{StorageMap, StorageDoubleMap}};
 use sha3::{Keccak256, Digest};
 use evm::backend::{Backend as BackendT, ApplyBackend, Apply};
-use crate::{Trait, Accounts, AccountStorages, AccountCodes, Module, Event};
+use crate::{Trait, AccountStorages, AccountCodes, Module, Event};
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -91,7 +92,7 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 	}
 
 	fn chain_id(&self) -> U256 {
-		U256::from(sp_io::misc::chain_id())
+		U256::from(T::ChainId::get())
 	}
 
 	fn exists(&self, _address: H160) -> bool {
@@ -99,7 +100,7 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 	}
 
 	fn basic(&self, address: H160) -> evm::backend::Basic {
-		let account = Accounts::get(&address);
+		let account = Module::<T>::account_basic(&address);
 
 		evm::backend::Basic {
 			balance: account.balance,
@@ -140,12 +141,18 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 				Apply::Modify {
 					address, basic, code, storage, reset_storage,
 				} => {
-					Accounts::mutate(&address, |account| {
-						account.balance = basic.balance;
-						account.nonce = basic.nonce;
+					Module::<T>::mutate_account_basic(&address, Account {
+						nonce: basic.nonce,
+						balance: basic.balance,
 					});
 
 					if let Some(code) = code {
+						debug::debug!(
+							target: "evm",
+							"Inserting code ({} bytes) at {:?}",
+							code.len(),
+							address
+						);
 						AccountCodes::insert(address, code);
 					}
 
@@ -155,8 +162,21 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 
 					for (index, value) in storage {
 						if value == H256::default() {
+							debug::debug!(
+								target: "evm",
+								"Removing storage for {:?} [index: {:?}]",
+								address,
+								index
+							);
 							AccountStorages::remove(address, index);
 						} else {
+							debug::debug!(
+								target: "evm",
+								"Updating storage for {:?} [index: {:?}, value: {:?}]",
+								address,
+								index,
+								value
+							);
 							AccountStorages::insert(address, index, value);
 						}
 					}
@@ -166,12 +186,26 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 					}
 				},
 				Apply::Delete { address } => {
+					debug::debug!(
+						target: "evm",
+						"Deleting account at {:?}",
+						address
+					);
 					Module::<T>::remove_account(&address)
 				},
 			}
 		}
 
 		for log in logs {
+			debug::trace!(
+				target: "evm",
+				"Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
+				log.address,
+				log.topics.len(),
+				log.topics,
+				log.data.len(),
+				log.data
+			);
 			Module::<T>::deposit_event(Event::<T>::Log(Log {
 				address: log.address,
 				topics: log.topics,

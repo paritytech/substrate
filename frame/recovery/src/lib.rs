@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Recovery Pallet
 //!
@@ -159,7 +160,7 @@ use codec::{Encode, Decode};
 
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
-	Parameter, RuntimeDebug, weights::{GetDispatchInfo, SimpleDispatchInfo, FunctionOf},
+	Parameter, RuntimeDebug, weights::GetDispatchInfo,
 	traits::{Currency, ReservableCurrency, Get, BalanceStatus},
 	dispatch::PostDispatchInfo,
 };
@@ -263,17 +264,21 @@ decl_event! {
 	pub enum Event<T> where
 		AccountId = <T as system::Trait>::AccountId,
 	{
-		/// A recovery process has been set up for an account
+		/// A recovery process has been set up for an \[account\].
 		RecoveryCreated(AccountId),
-		/// A recovery process has been initiated for account_1 by account_2
+		/// A recovery process has been initiated for lost account by rescuer account.
+		/// \[lost, rescuer\]
 		RecoveryInitiated(AccountId, AccountId),
-		/// A recovery process for account_1 by account_2 has been vouched for by account_3
+		/// A recovery process for lost account by rescuer account has been vouched for by sender.
+		/// \[lost, rescuer, sender\]
 		RecoveryVouched(AccountId, AccountId, AccountId),
-		/// A recovery process for account_1 by account_2 has been closed
+		/// A recovery process for lost account by rescuer account has been closed.
+		/// \[lost, rescuer\]
 		RecoveryClosed(AccountId, AccountId),
-		/// Account_1 has been successfully recovered by account_2
+		/// Lost account has been successfully recovered by rescuer account.
+		/// \[lost, rescuer\]
 		AccountRecovered(AccountId, AccountId),
-		/// A recovery process has been removed for an account
+		/// A recovery process has been removed for an \[account\].
 		RecoveryRemoved(AccountId),
 	}
 }
@@ -319,6 +324,18 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
+		/// The base amount of currency needed to reserve for creating a recovery configuration.
+		const ConfigDepositBase: BalanceOf<T> = T::ConfigDepositBase::get();
+
+		/// The amount of currency needed per additional user when creating a recovery configuration.
+		const FriendDepositFactor: BalanceOf<T> = T::FriendDepositFactor::get();
+
+		/// The maximum amount of friends allowed in a recovery configuration.
+		const MaxFriends: u16 = T::MaxFriends::get();
+
+		/// The base amount of currency needed to reserve for starting a recovery.
+		const RecoveryDeposit: BalanceOf<T> = T::RecoveryDeposit::get();
+
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
@@ -335,11 +352,7 @@ decl_module! {
 		/// - The weight of the `call` + 10,000.
 		/// - One storage lookup to check account is recovered by `who`. O(1)
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000,
-			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
-			true
-		)]
+		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
 		fn as_recovered(origin,
 			account: T::AccountId,
 			call: Box<<T as Trait>::Call>
@@ -365,7 +378,7 @@ decl_module! {
 		/// - One storage write O(1)
 		/// - One event
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = 0]
 		fn set_recovered(origin, lost: T::AccountId, rescuer: T::AccountId) {
 			ensure_root(origin)?;
 			// Create the recovery storage item.
@@ -400,7 +413,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(F + X)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
+		#[weight = 100_000_000]
 		fn create_recovery(origin,
 			friends: Vec<T::AccountId>,
 			threshold: u16,
@@ -460,7 +473,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(F + X)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
+		#[weight = 100_000_000]
 		fn initiate_recovery(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Check that the account is recoverable
@@ -506,7 +519,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(F + logF + V + logV)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
+		#[weight = 100_000_000]
 		fn vouch_recovery(origin, lost: T::AccountId, rescuer: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Get the recovery configuration for the lost account.
@@ -545,7 +558,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(F + V)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
+		#[weight = 100_000_000]
 		fn claim_recovery(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Get the recovery configuration for the lost account
@@ -590,7 +603,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(V + X)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
+		#[weight = 30_000_000]
 		fn close_recovery(origin, rescuer: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Take the active recovery process started by the rescuer for this account.
@@ -622,11 +635,11 @@ decl_module! {
 		///
 		/// Total Complexity: O(F + X)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(30_000)]
+		#[weight = 30_000_000]
 		fn remove_recovery(origin) {
 			let who = ensure_signed(origin)?;
 			// Check there are no active recoveries
-			let mut active_recoveries = <ActiveRecoveries<T>>::iter_prefix(&who);
+			let mut active_recoveries = <ActiveRecoveries<T>>::iter_prefix_values(&who);
 			ensure!(active_recoveries.next().is_none(), Error::<T>::StillActive);
 			// Take the recovery configuration for this account.
 			let recovery_config = <Recoverable<T>>::take(&who).ok_or(Error::<T>::NotRecoverable)?;
@@ -647,7 +660,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage mutation to check account is recovered by `who`. O(1)
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		fn cancel_recovered(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`

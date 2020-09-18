@@ -14,15 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use ansi_term::Colour;
-use sc_client_api::ClientInfo;
-use log::info;
-use sc_network::SyncState;
-use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
-use sc_service::NetworkStatus;
-use std::{convert::{TryFrom, TryInto}, fmt};
-use wasm_timer::Instant;
 use crate::OutputFormat;
+use ansi_term::Colour;
+use log::info;
+use sc_client_api::ClientInfo;
+use sc_network::{NetworkStatus, SyncState};
+use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Saturating, Zero};
+use std::{
+	convert::{TryFrom, TryInto},
+	fmt,
+};
+use wasm_timer::Instant;
 
 /// State of the informant display system.
 ///
@@ -43,6 +45,10 @@ pub struct InformantDisplay<B: BlockT> {
 	last_number: Option<NumberFor<B>>,
 	/// The last time `display` or `new` has been called.
 	last_update: Instant,
+	/// The last seen total of bytes received.
+	last_total_bytes_inbound: u64,
+	/// The last seen total of bytes sent.
+	last_total_bytes_outbound: u64,
 	/// The format to print output in.
 	format: OutputFormat,
 }
@@ -53,6 +59,8 @@ impl<B: BlockT> InformantDisplay<B> {
 		InformantDisplay {
 			last_number: None,
 			last_update: Instant::now(),
+			last_total_bytes_inbound: 0,
+			last_total_bytes_outbound: 0,
 			format,
 		}
 	}
@@ -64,19 +72,41 @@ impl<B: BlockT> InformantDisplay<B> {
 		let finalized_number = info.chain.finalized_number;
 		let num_connected_peers = net_status.num_connected_peers;
 		let speed = speed::<B>(best_number, self.last_number, self.last_update);
-		self.last_update = Instant::now();
+		let total_bytes_inbound = net_status.total_bytes_inbound;
+		let total_bytes_outbound = net_status.total_bytes_outbound;
+
+		let now = Instant::now();
+		let elapsed = (now - self.last_update).as_secs();
+		self.last_update = now;
 		self.last_number = Some(best_number);
 
-		let (status, target) = match (net_status.sync_state, net_status.best_seen_block) {
-			(SyncState::Idle, _) => ("💤 Idle".into(), "".into()),
-			(SyncState::Downloading, None) => (format!("⚙️  Preparing{}", speed), "".into()),
-			(SyncState::Downloading, Some(n)) => (format!("⚙️  Syncing{}", speed), format!(", target=#{}", n)),
+		let diff_bytes_inbound = total_bytes_inbound - self.last_total_bytes_inbound;
+		let diff_bytes_outbound = total_bytes_outbound - self.last_total_bytes_outbound;
+		let (avg_bytes_per_sec_inbound, avg_bytes_per_sec_outbound) =
+			if elapsed > 0 {
+				self.last_total_bytes_inbound = total_bytes_inbound;
+				self.last_total_bytes_outbound = total_bytes_outbound;
+				(diff_bytes_inbound / elapsed, diff_bytes_outbound / elapsed)
+			} else {
+				(diff_bytes_inbound, diff_bytes_outbound)
+			};
+
+		let (level, status, target) = match (net_status.sync_state, net_status.best_seen_block) {
+			(SyncState::Idle, _) => ("💤", "Idle".into(), "".into()),
+			(SyncState::Downloading, None) => ("⚙️ ", format!("Preparing{}", speed), "".into()),
+			(SyncState::Downloading, Some(n)) => (
+				"⚙️ ",
+				format!("Syncing{}", speed),
+				format!(", target=#{}", n),
+			),
 		};
 
-		if self.format == OutputFormat::Coloured {
+		if self.format.enable_color {
 			info!(
 				target: "substrate",
-				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
+				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
+				level,
+				self.format.prefix,
 				Colour::White.bold().paint(&status),
 				target,
 				Colour::White.bold().paint(format!("{}", num_connected_peers)),
@@ -84,13 +114,15 @@ impl<B: BlockT> InformantDisplay<B> {
 				best_hash,
 				Colour::White.bold().paint(format!("{}", finalized_number)),
 				info.chain.finalized_hash,
-				Colour::Green.paint(format!("⬇ {}", TransferRateFormat(net_status.average_download_per_sec))),
-				Colour::Red.paint(format!("⬆ {}", TransferRateFormat(net_status.average_upload_per_sec))),
-			);
+				Colour::Green.paint(format!("⬇ {}", TransferRateFormat(avg_bytes_per_sec_inbound))),
+				Colour::Red.paint(format!("⬆ {}", TransferRateFormat(avg_bytes_per_sec_outbound))),
+			)
 		} else {
 			info!(
 				target: "substrate",
-				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
+				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
+				level,
+				self.format.prefix,
 				status,
 				target,
 				num_connected_peers,
@@ -98,9 +130,9 @@ impl<B: BlockT> InformantDisplay<B> {
 				best_hash,
 				finalized_number,
 				info.chain.finalized_hash,
-				TransferRateFormat(net_status.average_download_per_sec),
-				TransferRateFormat(net_status.average_upload_per_sec),
-			);
+				TransferRateFormat(avg_bytes_per_sec_inbound),
+				TransferRateFormat(avg_bytes_per_sec_outbound),
+			)
 		}
 	}
 }
