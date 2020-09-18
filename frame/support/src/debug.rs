@@ -87,11 +87,11 @@
 //!	native::print!("My struct: {:?}", x);
 //! ```
 
-use sp_std::vec::Vec;
 use sp_std::fmt::{self, Debug};
 
 pub use log::{info, debug, error, trace, warn};
 pub use crate::runtime_print as print;
+pub use sp_std::Writer;
 
 /// Native-only logging.
 ///
@@ -132,9 +132,9 @@ macro_rules! runtime_print {
 	($($arg:tt)+) => {
 		{
 			use core::fmt::Write;
-			let mut w = $crate::debug::Writer::default();
+			let mut w = $crate::sp_std::Writer::default();
 			let _ = core::write!(&mut w, $($arg)+);
-			w.print();
+			sp_io::misc::print_utf8(&w.inner())
 		}
 	}
 }
@@ -142,24 +142,6 @@ macro_rules! runtime_print {
 /// Print out the debuggable type.
 pub fn debug(data: &impl Debug) {
 	runtime_print!("{:?}", data);
-}
-
-/// A target for `core::write!` macro - constructs a string in memory.
-#[derive(Default)]
-pub struct Writer(Vec<u8>);
-
-impl fmt::Write for Writer {
-	fn write_str(&mut self, s: &str) -> fmt::Result {
-		self.0.extend(s.as_bytes());
-		Ok(())
-	}
-}
-
-impl Writer {
-	/// Print the content of this `Writer` out.
-	pub fn print(&self) {
-		sp_io::misc::print_utf8(&self.0)
-	}
 }
 
 /// Runtime logger implementation - `log` crate backend.
@@ -204,13 +186,13 @@ impl log::Log for RuntimeLogger {
 
 	fn log(&self, record: &log::Record) {
 		use fmt::Write;
-		let mut w = Writer::default();
+		let mut w = sp_std::Writer::default();
 		let _ = core::write!(&mut w, "{}", record.args());
 
 		sp_io::logging::log(
 			record.level().into(),
 			record.target(),
-			&w.0,
+			w.inner(),
 		);
 	}
 
