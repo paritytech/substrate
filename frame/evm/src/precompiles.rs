@@ -22,6 +22,8 @@ use sp_core::H160;
 use evm::{ExitError, ExitSucceed};
 use ripemd160::Digest;
 use impl_trait_for_tuples::impl_for_tuples;
+
+#[cfg(feature = "pairings")]
 use eth_pairings::public_interface::eip2537::{EIP2537Executor};
 
 /// Custom precompiles to be used by EVM engine.
@@ -166,33 +168,43 @@ impl Precompile for Sha256 {
 	}
 }
 
+#[cfg(feature = "pairings")]
 /// The Bls12G1Add builtin.
 pub struct Bls12G1Add;
 
+#[cfg(feature = "pairings")]
 /// The Bls12G1Mul builtin.
 pub struct Bls12G1Mul;
 
+#[cfg(feature = "pairings")]
 /// The Bls12G1MultiExp builtin.
 pub struct Bls12G1MultiExp;
 
+#[cfg(feature = "pairings")]
 /// The Bls12G2Add builtin.
 pub struct Bls12G2Add;
 
+#[cfg(feature = "pairings")]
 /// The Bls12G2Mul builtin.
 pub struct Bls12G2Mul;
 
+#[cfg(feature = "pairings")]
 /// The Bls12G2MultiExp builtin.
 pub struct Bls12G2MultiExp;
 
+#[cfg(feature = "pairings")]
 /// The Bls12Pairing builtin.
 pub struct Bls12Pairing;
 
+#[cfg(feature = "pairings")]
 /// The Bls12MapFpToG1 builtin.
 pub struct Bls12MapFpToG1;
 
+#[cfg(feature = "pairings")]
 /// The Bls12MapFp2ToG2 builtin.
 pub struct Bls12MapFp2ToG2;
 
+#[cfg(feature = "pairings")]
 impl Precompile for Bls12G1Add {
 	fn execute(
 		input: &[u8],
@@ -214,6 +226,7 @@ impl Precompile for Bls12G1Add {
 	}
 }
 
+#[cfg(feature = "pairings")]
 impl Precompile for Bls12G1Mul {
 	fn execute(
 		input: &[u8],
@@ -234,6 +247,7 @@ impl Precompile for Bls12G1Mul {
 	}
 }
 
+#[cfg(feature = "pairings")]
 impl Precompile for Bls12G1MultiExp {
 	fn execute(
 		input: &[u8],
@@ -254,6 +268,7 @@ impl Precompile for Bls12G1MultiExp {
 	}
 }
 
+#[cfg(feature = "pairings")]
 impl Precompile for Bls12G2Add {
 	fn execute(
 		input: &[u8],
@@ -274,6 +289,7 @@ impl Precompile for Bls12G2Add {
 	}
 }
 
+#[cfg(feature = "pairings")]
 impl Precompile for Bls12G2Mul {
 	fn execute(
 		input: &[u8],
@@ -294,6 +310,7 @@ impl Precompile for Bls12G2Mul {
 	}
 }
 
+#[cfg(feature = "pairings")]
 impl Precompile for Bls12G2MultiExp {
 	fn execute(
 		input: &[u8],
@@ -314,6 +331,7 @@ impl Precompile for Bls12G2MultiExp {
 	}
 }
 
+#[cfg(feature = "pairings")]
 impl Precompile for Bls12Pairing {
 	fn execute(
 		input: &[u8],
@@ -334,6 +352,7 @@ impl Precompile for Bls12Pairing {
 	}
 }
 
+#[cfg(feature = "pairings")]
 impl Precompile for Bls12MapFpToG1 {
 	fn execute(
 		input: &[u8],
@@ -354,6 +373,8 @@ impl Precompile for Bls12MapFpToG1 {
 	}
 }
 
+
+#[cfg(feature = "pairings")]
 impl Precompile for Bls12MapFp2ToG2 {
 	fn execute(
 		input: &[u8],
