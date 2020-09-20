@@ -231,7 +231,7 @@ pub trait WeightInfo {
 	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
 }
 
-/// The set of validators that are considered to be online.
+/// The set of validators that are considered to be running an authority node.
 pub trait ValidatorSet<ValidatorId> {
 	/// Returns all the validators ought to be online.
 	fn validators() -> Vec<ValidatorId>;
