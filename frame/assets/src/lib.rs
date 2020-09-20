@@ -133,9 +133,9 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{fmt::Debug, ops::Add, iter::once};
+use sp_std::{fmt::Debug};
 use sp_runtime::{RuntimeDebug, traits::{
-	Member, AtLeast32Bit, AtLeast32BitUnsigned, Zero, StaticLookup, One, Saturating,
+	Member, AtLeast32Bit, AtLeast32BitUnsigned, Zero, StaticLookup, One, Saturating, CheckedSub
 }};
 use codec::{Encode, Decode};
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
@@ -234,15 +234,15 @@ decl_event! {
 		Transferred(AssetId, AccountId, AccountId, Balance),
 		/// Some assets were destroyed. \[asset_id, owner, balance\]
 		Burned(AssetId, AccountId, Balance),
-		/// The management team changed \[issuer, admin, freezer\]
-		TeamChanged(AssetId, AccountId, AccountId, AccountId)
-		/// The owner changed \[owner\]
-		OwnerChanged(AssetId, AccountId)
+		/// The management team changed \[asset_id, issuer, admin, freezer\]
+		TeamChanged(AssetId, AccountId, AccountId, AccountId),
+		/// The owner changed \[asset_id, owner\]
+		OwnerChanged(AssetId, AccountId),
 		/// Some assets was transferred by an admin. \[asset_id, from, to, amount\]
 		ForceTransferred(AssetId, AccountId, AccountId, Balance),
-		/// Some account `who` was frozen. \[who\]
+		/// Some account `who` was frozen. \[asset_id, who\]
 		Frozen(AssetId, AccountId),
-		/// Some account `who` was thawed. \[who\]
+		/// Some account `who` was thawed. \[asset_id, who\]
 		Thawed(AssetId, AccountId),
 	}
 }
@@ -315,7 +315,7 @@ decl_module! {
 				ensure!(&origin == &d.issuer, Error::<T>::NoPermission);
 				d.supply = d.supply.saturating_add(amount);
 				Account::<T>::mutate((id, &beneficiary), |t|
-					t.balance = t.balance.satuating_add(amount)
+					t.balance = t.balance.saturating_add(amount)
 				);
 
 				Self::deposit_event(RawEvent::Issued(id, beneficiary, amount));
@@ -340,18 +340,19 @@ decl_module! {
 			let origin = (id, ensure_signed(origin)?);
 			ensure!(!amount.is_zero(), Error::<T>::AmountZero);
 
-			let origin_account = Accounts::<T>::get(&origin);
-			ensure!(origin_account.balance >= amount, Error::<T>::BalanceLow);
+			let mut origin_account = Account::<T>::get(&origin);
 			ensure!(!origin_account.is_frozen, Error::<T>::Frozen);
+			origin_account.balance = origin_account.balance.checked_sub(&amount)
+				.ok_or(Error::<T>::BalanceLow)?;
 
 			let dest = (id, T::Lookup::lookup(target)?);
 
-			if origin_account.balance == amount {
-				Balance::<T>::remove(&origin);
+			if origin_account.balance.is_zero() {
+				Account::<T>::remove(&origin);
 			} else {
-				Balances::<T>::insert(&origin, origin_account.balance - amount);
+				Account::<T>::insert(&origin, origin_account);
 			}
-			Balances::<T>::mutate(&dest, |a| a.balance = a.balance.saturating_add(amount));
+			Account::<T>::mutate(&dest, |a| a.balance = a.balance.saturating_add(amount));
 
 			Self::deposit_event(RawEvent::Transferred(id, origin.1, dest.1, amount));
 		}
@@ -364,7 +365,7 @@ decl_module! {
 		#[weight = 0]
 		fn burn(origin,
 			#[compact] id: T::AssetId,
-			who: T::<T::Lookup as StaticLookup>::Source,
+			who: <T::Lookup as StaticLookup>::Source,
 			#[compact] amount: T::Balance
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -385,7 +386,7 @@ decl_module! {
 						};
 						Ok(burned)
 					} else {
-						Err(Error::<T>::BalanceZero)?;
+						Err(Error::<T>::BalanceZero)
 					}
 				})?;
 
@@ -397,7 +398,10 @@ decl_module! {
 		}
 
 		#[weight = 0]
-		fn set_owner(origin, owner: <T::Lookup as StaticLookup>::Source) {
+		fn set_owner(origin,
+			#[compact] id: T::AssetId,
+			owner: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
@@ -407,13 +411,14 @@ decl_module! {
 
 				d.owner = owner.clone();
 
-				Self::deposit_event(OwnerChanged(id, owner))
+				Self::deposit_event(RawEvent::OwnerChanged(id, owner));
+				Ok(())
 			})
 		}
 
-
 		#[weight = 0]
 		fn set_team(origin,
+			#[compact] id: T::AssetId,
 			issuer: <T::Lookup as StaticLookup>::Source,
 			admin: <T::Lookup as StaticLookup>::Source,
 			freezer: <T::Lookup as StaticLookup>::Source,
@@ -431,12 +436,13 @@ decl_module! {
 				d.admin = admin.clone();
 				d.freezer = freezer.clone();
 
-				Self::deposit_event(TeamChanged(id, issuer, admin, freezer))
+				Self::deposit_event(RawEvent::TeamChanged(id, issuer, admin, freezer));
+				Ok(())
 			})
 		}
 
 		#[weight = 0]
-		fn freeze(origin, who: <T::Lookup as StaticLookup>::Source) {
+		fn freeze(origin, #[compact] id: T::AssetId, who: <T::Lookup as StaticLookup>::Source) {
 			let origin = ensure_signed(origin)?;
 
 			let d = Details::<T>::get(id).ok_or(Error::<T>::Unknown)?;
@@ -445,11 +451,11 @@ decl_module! {
 			let who = (id, T::Lookup::lookup(who)?);
 			Account::<T>::mutate(&who, |a| a.is_frozen = true);
 
-			Self::deposit_event(Event::<T>::Frozen(id, who));
+			Self::deposit_event(Event::<T>::Frozen(id, who.1));
 		}
 
 		#[weight = 0]
-		fn thaw(origin, who: <T::Lookup as StaticLookup>::Source) {
+		fn thaw(origin, #[compact] id: T::AssetId, who: <T::Lookup as StaticLookup>::Source) {
 			let origin = ensure_signed(origin)?;
 
 			let d = Details::<T>::get(id).ok_or(Error::<T>::Unknown)?;
@@ -458,7 +464,7 @@ decl_module! {
 			let who = (id, T::Lookup::lookup(who)?);
 			Account::<T>::mutate(&who, |a| a.is_frozen = false);
 
-			Self::deposit_event(Event::<T>::Thawed(id, who));
+			Self::deposit_event(Event::<T>::Thawed(id, who.1));
 		}
 
 		#[weight = 0]
@@ -474,7 +480,7 @@ decl_module! {
 			ensure!(&origin == &d.admin, Error::<T>::NoPermission);
 
 			let source = (id, T::Lookup::lookup(source)?);
-			let mut source_account = Accounts::<T>::get(&source);
+			let mut source_account = Account::<T>::get(&source);
 			let amount = amount.min(source_account.balance);
 
 			ensure!(!amount.is_zero(), Error::<T>::AmountZero);
@@ -488,7 +494,7 @@ decl_module! {
 				Account::<T>::insert(&source, source_account);
 			}
 
-			Balances::<T>::mutate(&dest, |a| a.balance = a.balance.saturating_add(amount));
+			Account::<T>::mutate(&dest, |a| a.balance = a.balance.saturating_add(amount));
 
 			Self::deposit_event(RawEvent::ForceTransferred(id, source.1, dest.1, amount));
 		}
@@ -501,7 +507,7 @@ impl<T: Trait> Module<T> {
 
 	/// Get the asset `id` balance of `who`.
 	pub fn balance(id: T::AssetId, who: T::AccountId) -> T::Balance {
-		Balances::<T>::get((id, who))
+		Account::<T>::get((id, who)).balance
 	}
 
 	/// Get the total supply of an asset `id`.
@@ -608,7 +614,7 @@ mod tests {
 			assert_eq!(Assets::balance(0, 1), 50);
 			assert_eq!(Assets::balance(0, 2), 19);
 			assert_eq!(Assets::balance(0, 3), 31);
-			assert_ok!(Assets::destroy(Origin::signed(3), 0, u64::max_value()));
+			assert_ok!(Assets::burn(Origin::signed(1), 0, 3, u64::max_value()));
 			assert_eq!(Assets::total_supply(0), 69);
 		});
 	}
@@ -634,7 +640,7 @@ mod tests {
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
 			assert_eq!(Assets::balance(0, 1), 50);
 			assert_eq!(Assets::balance(0, 2), 50);
-			assert_ok!(Assets::destroy(Origin::signed(1), 0));
+			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::max_value()));
 			assert_eq!(Assets::balance(0, 1), 0);
 			assert_noop!(Assets::transfer(Origin::signed(1), 0, 1, 50), Error::<Test>::BalanceLow);
 		});
@@ -666,7 +672,7 @@ mod tests {
 			assert_ok!(Assets::create(Origin::signed(1), 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
-			assert_ok!(Assets::burn(Origin::signed(1), 0, u64::max_value()));
+			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::max_value()));
 		});
 	}
 
@@ -676,7 +682,7 @@ mod tests {
 			assert_ok!(Assets::create(Origin::signed(1), 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 2), 0);
-			assert_noop!(Assets::burn(Origin::signed(2), 0, u64::max_value()), Error::<Test>::BalanceZero);
+			assert_noop!(Assets::burn(Origin::signed(1), 0, 2, u64::max_value()), Error::<Test>::BalanceZero);
 		});
 	}
 }
