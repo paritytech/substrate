@@ -128,6 +128,7 @@ impl pallet_scheduler::Trait for Test {
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<u64>;
+	type MaxScheduledPerBlock = ();
 	type WeightInfo = ();
 }
 parameter_types! {

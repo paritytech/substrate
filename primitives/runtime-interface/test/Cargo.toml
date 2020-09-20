@@ -20,4 +20,5 @@ sp-state-machine = { version = "0.8.0-rc6", path = "../../../primitives/state-ma
 sp-runtime = { version = "2.0.0-rc6", path = "../../runtime" }
 sp-core = { version = "2.0.0-rc6", path = "../../core" }
 sp-io = { version = "2.0.0-rc6", path = "../../io" }
-tracing = "0.1.18"
+tracing = "0.1.19"
+tracing-core = "0.1.15"

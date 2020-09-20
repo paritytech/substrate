@@ -57,7 +57,10 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 			grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
 			sc_consensus_babe::BabeLink<Block>,
 		),
-		grandpa::SharedVoterState,
+		(
+			grandpa::SharedVoterState,
+			Arc<GrandpaFinalityProofProvider<FullBackend, Block>>,
+		),
 	)
 >, ServiceError> {
 	let (client, backend, keystore_params, task_manager) =
@@ -107,8 +110,10 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		let justification_stream = grandpa_link.justification_stream();
 		let shared_authority_set = grandpa_link.shared_authority_set().clone();
 		let shared_voter_state = grandpa::SharedVoterState::empty();
+		let finality_proof_provider =
+			GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
-		let rpc_setup = shared_voter_state.clone();
+		let rpc_setup = (shared_voter_state.clone(), finality_proof_provider.clone());
 
 		let babe_config = babe_link.config().clone();
 		let shared_epoch_changes = babe_link.epoch_changes().clone();
@@ -134,6 +139,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 					shared_authority_set: shared_authority_set.clone(),
 					justification_stream: justification_stream.clone(),
 					subscription_executor,
+					finality_provider: finality_proof_provider.clone(),
 				},
 			};
 
@@ -173,8 +179,7 @@ pub fn new_full_base(
 		other: (rpc_extensions_builder, import_setup, rpc_setup),
 	} = new_partial(&config)?;
 
-	let finality_proof_provider =
-		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
+	let (shared_voter_state, finality_proof_provider) = rpc_setup;
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -219,7 +224,6 @@ pub fn new_full_base(
 	})?;
 
 	let (block_import, grandpa_link, babe_link) = import_setup;
-	let shared_voter_state = rpc_setup;
 
 	(with_startup_data)(&block_import, &babe_link);
 

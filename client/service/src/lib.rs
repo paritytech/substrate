@@ -96,7 +96,7 @@ impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
-pub struct RpcHandlers(Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>>);
+pub struct RpcHandlers(Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>);
 
 impl RpcHandlers {
 	/// Starts an RPC query.
@@ -117,7 +117,8 @@ impl RpcHandlers {
 	}
 
 	/// Provides access to the underlying `MetaIoHandler`
-	pub fn io_handler(&self) -> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>> {
+	pub fn io_handler(&self)
+		-> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
 		self.0.clone()
 	}
 }
@@ -381,9 +382,13 @@ mod waiting {
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
+fn start_rpc_servers<
+	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
+	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+>(
 	config: &Configuration,
-	mut gen_handler: H
+	mut gen_handler: H,
+	rpc_metrics: Option<&sc_rpc_server::RpcMetrics>
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
 		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
@@ -413,13 +418,21 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 	}
 
 	Ok(Box::new((
-		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(&*path, gen_handler(sc_rpc::DenyUnsafe::No))),
+		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(
+			&*path, gen_handler(
+				sc_rpc::DenyUnsafe::No,
+				sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "ipc")
+			)
+		)),
 		maybe_start_server(
 			config.rpc_http,
 			|address| sc_rpc_server::start_http(
 				address,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
+				gen_handler(
+					deny_unsafe(&address, &config.rpc_methods),
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "http")
+				),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
@@ -428,7 +441,10 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
+				gen_handler(
+					deny_unsafe(&address, &config.rpc_methods),
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "ws")
+				),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
 	)))
@@ -436,9 +452,13 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
+fn start_rpc_servers<
+	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
+	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+>(
 	_: &Configuration,
-	_: H
+	_: H,
+	_: Option<&sc_rpc_server::RpcMetrics>
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }
