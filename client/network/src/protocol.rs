@@ -118,8 +118,6 @@ mod rep {
 	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
 	/// Peer is on unsupported protocol version.
 	pub const BAD_PROTOCOL: Rep = Rep::new_fatal("Unsupported protocol");
-	/// Peer role does not match (e.g. light peer connecting to another light peer).
-	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
 	/// Peer response data does not have requested bits.
 	pub const BAD_RESPONSE: Rep = Rep::new(-(1 << 12), "Incomplete response");
 }
@@ -867,15 +865,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		if self.config.roles.is_light() {
-			// we're not interested in light peers
-			if status.roles.is_light() {
-				debug!(target: "sync", "Peer {} is unable to serve light requests", who);
-				self.peerset_handle.report_peer(who.clone(), rep::BAD_ROLE);
-				self.behaviour.disconnect_peer(&who);
-				return CustomMessageOutcome::None;
-			}
-
-			// we don't interested in peers that are far behind us
+			// we aren't interested in peers that are far behind us
 			let self_best_block = self
 				.context_data
 				.chain
