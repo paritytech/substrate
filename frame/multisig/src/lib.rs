@@ -629,7 +629,7 @@ impl<T: Trait> Module<T> {
 	fn get_call(hash: &[u8; 32], maybe_known: Option<&[u8]>) -> Option<(<T as Trait>::Call, usize)> {
 		maybe_known.map_or_else(|| {
 			Calls::<T>::get(hash).and_then(|(data, ..)| {
-					Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
+				Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
 			})
 		}, |data| {
 			Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
