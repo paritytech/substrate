@@ -11,7 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpc-core = "14.2.0"
+jsonrpc-core = "15.0.0"
 node-primitives = { version = "2.0.0-rc6", path = "../primitives" }
 node-runtime = { version = "2.0.0-rc6", path = "../runtime" }
 pallet-contracts-rpc = { version = "0.8.0-rc6", path = "../../../frame/contracts/rpc/" }
