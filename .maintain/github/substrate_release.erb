@@ -1,0 +1,31 @@
+<% unless misc_changes.empty? %>
+## Changes
+
+<% misc_changes.each do |c| %>
+* <%= c[:pretty_title] %>
+<% end %>
+<% end %>
+
+<% unless client_changes.empty? %>
+## Client
+
+<% client_changes.each do |c| %>
+* <%= c[:pretty_title] %>
+<% end %>
+<% end %>
+
+<% unless runtime_changes.empty? %>
+## Runtime
+
+<% runtime_changes.each do |c| %>
+* <%= c[:pretty_title] %>
+<% end %>
+<% end %>
+
+<% unless api_changes.empty? %>
+## API
+
+<% api_changes.each do |c| %>
+* <%= c[:pretty_title] %>
+<% end %>
+<% end %>

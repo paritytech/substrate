@@ -1,0 +1,33 @@
+name: Publish draft release
+on:
+  push:
+    tags:
+      - v**.**.**
+
+jobs:
+  publish-draft-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Set up ruby 2.7
+        uses: actions/setup-ruby@v1
+        with:
+          ruby-version: 2.7
+      - name: Generate release text
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gem install changelogerator
+          ruby $GITHUB_WORKSPACE/.maintain/github/generate_release_text.rb | tee release_text.md
+      - name: Create draft release
+        id: create-release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Substrate ${{ github.ref }}
+          body_path: ./release_text.md
+          draft: true

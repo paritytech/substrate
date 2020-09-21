@@ -689,16 +689,6 @@ publish-s3-doc:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
         --human-readable --summarize
 
-publish-draft-release:
-  stage:                           publish
-  image:                           paritytech/tools:latest
-  only:
-    - /^ci-release-.*$/
-    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
-  script:
-    - ./.maintain/gitlab/publish_draft_release.sh
-  allow_failure:                   true
-
 publish-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
