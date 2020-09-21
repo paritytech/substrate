@@ -78,7 +78,7 @@ fn complete_modules(decl: impl Iterator<Item = ModuleDeclaration>) -> syn::Resul
 
 			if let Some(used_module) = indices.insert(final_index, module.name.clone()) {
 				let msg = format!(
-					"Module index are conflicting both modules {} and {} are at index {}",
+					"Module indices are conflicting: Both modules {} and {} are at index {}",
 					used_module,
 					module.name,
 					final_index,
