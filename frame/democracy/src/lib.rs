@@ -211,7 +211,7 @@ pub trait WeightInfo {
 	fn vote_new(r: u32, ) -> Weight;
 	fn vote_existing(r: u32, ) -> Weight;
 	fn emergency_cancel() -> Weight;
-	fn blacklist() -> Weight;
+	fn blacklist(p: u32, ) -> Weight;
 	fn external_propose(v: u32, ) -> Weight;
 	fn external_propose_majority() -> Weight;
 	fn external_propose_default() -> Weight;
@@ -730,12 +730,16 @@ decl_module! {
 		/// - `proposal_hash`: The proposal hash to blacklist permanently.
 		/// - `ref_index`: An ongoing referendum whose hash is `proposal_hash`, which will be
 		/// cancelled.
-		#[weight = (T::WeightInfo::blacklist(), DispatchClass::Operational)]
+		#[weight = (T::WeightInfo::blacklist(*prop_count), DispatchClass::Operational)]
 		fn blacklist(origin,
 			proposal_hash: T::Hash,
 			maybe_ref_index: Option<ReferendumIndex>,
+			#[compact] prop_count: u32,
 		) {
 			T::BlacklistOrigin::ensure_origin(origin)?;
+
+			let real_prop_count = PublicProps::<T>::decode_len().unwrap_or(0) as u32;
+			ensure!(real_prop_count <= prop_count, Error::<T>::InvalidWitness);
 
 			// Insert the proposal into the blacklist.
 			let permanent = (T::BlockNumber::max_value(), Vec::<T::AccountId>::new());

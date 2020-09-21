@@ -19,7 +19,7 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, account, whitelist_account};
 use frame_support::{
 	IterableStorageMap,
 	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable, schedule::DispatchTime},
@@ -109,6 +109,7 @@ benchmarks! {
 		let caller = funded_account::<T>("caller", 0);
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&0);
 		let value = T::MinimumDeposit::get();
+		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller), proposal_hash, value.into(), MAX_PROPOSALS)
 	verify {
 		assert_eq!(Democracy::<T>::public_props().len(), p as usize, "Proposals not created.");
@@ -128,6 +129,7 @@ benchmarks! {
 
 		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
 		assert_eq!(deposits.0.len(), (s + 1) as usize, "Seconds not recorded");
+		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller), 0, u32::max_value())
 	verify {
 		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
@@ -152,7 +154,7 @@ benchmarks! {
 		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
 
 		let referendum_index = add_referendum::<T>(r)?;
-
+		whitelist_account!(caller);
 	}: vote(RawOrigin::Signed(caller.clone()), referendum_index, account_vote)
 	verify {
 		let votes = match VotingOf::<T>::get(&caller) {
@@ -185,6 +187,7 @@ benchmarks! {
 		let referendum_index = Democracy::<T>::referendum_count() - 1;
 
 		// This tests when a user changes a vote
+		whitelist_account!(caller);
 	}: vote(RawOrigin::Signed(caller.clone()), referendum_index, new_vote)
 	verify {
 		let votes = match VotingOf::<T>::get(&caller) {
@@ -230,7 +233,7 @@ benchmarks! {
 		let referendum_index = add_referendum::<T>(0)?;
 		assert!(Democracy::<T>::referendum_status(referendum_index).is_ok());
 
-		let call = Call::<T>::blacklist(hash, Some(referendum_index));
+		let call = Call::<T>::blacklist(hash, Some(referendum_index), p);
 		let origin = T::BlacklistOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -473,6 +476,7 @@ benchmarks! {
 			_ => return Err("Votes are not direct"),
 		};
 		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
+		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller.clone()), new_delegate.clone(), Conviction::Locked1x, delegated_balance)
 	verify {
 		let (target, balance) = match VotingOf::<T>::get(&caller) {
@@ -524,6 +528,7 @@ benchmarks! {
 			_ => return Err("Votes are not direct"),
 		};
 		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
+		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller.clone()))
 	verify {
 		// Voting should now be direct
@@ -544,6 +549,7 @@ benchmarks! {
 
 		let caller = funded_account::<T>("caller", 0);
 		let encoded_proposal = vec![1; b as usize];
+		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller), encoded_proposal.clone())
 	verify {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
@@ -565,6 +571,7 @@ benchmarks! {
 
 		let caller = funded_account::<T>("caller", 0);
 		let encoded_proposal = vec![1; b as usize];
+		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller), encoded_proposal.clone())
 	verify {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
@@ -591,6 +598,7 @@ benchmarks! {
 		assert!(Preimages::<T>::contains_key(proposal_hash));
 
 		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller), proposal_hash.clone(), u32::max_value())
 	verify {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
@@ -613,6 +621,7 @@ benchmarks! {
 		}
 
 		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
 	}: unlock(RawOrigin::Signed(caller), locker.clone())
 	verify {
 		// Note that we may want to add a `get_lock` api to actually verify
@@ -650,6 +659,7 @@ benchmarks! {
 		Democracy::<T>::remove_vote(RawOrigin::Signed(locker.clone()).into(), referendum_index)?;
 
 		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
 	}: unlock(RawOrigin::Signed(caller), locker.clone())
 	verify {
 		let votes = match VotingOf::<T>::get(&locker) {
@@ -681,7 +691,7 @@ benchmarks! {
 		assert_eq!(votes.len(), r as usize, "Votes not created");
 
 		let referendum_index = r - 1;
-
+		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller.clone()), referendum_index)
 	verify {
 		let votes = match VotingOf::<T>::get(&caller) {
@@ -710,7 +720,7 @@ benchmarks! {
 		assert_eq!(votes.len(), r as usize, "Votes not created");
 
 		let referendum_index = r - 1;
-
+		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller.clone()), caller.clone(), referendum_index)
 	verify {
 		let votes = match VotingOf::<T>::get(&caller) {
