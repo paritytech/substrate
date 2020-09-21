@@ -505,11 +505,11 @@ impl<T: Trait> Module<T> {
 			if maybe_pos.is_some() { approvals += 1; }
 
 			// We only bother fetching/decoding call if we know that we're ready to execute.
-			let (maybe_approved_call, call_len) = if approvals >= threshold {
+			let maybe_approved_call = if approvals >= threshold {
 				Self::get_call(&call_hash, maybe_call.as_ref().map(|c| c.as_ref()))
-			} else { (None, 0) };
+			} else { None };
 
-			if let Some(call) = maybe_approved_call {
+			if let Some((call, call_len)) = maybe_approved_call {
 				// verify weight
 				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::WeightTooLow);
 
@@ -626,19 +626,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Attempt to decode and return the call, provided by the user or from storage.
-	fn get_call(hash: &[u8; 32], maybe_known: Option<&[u8]>) -> (Option<<T as Trait>::Call>, usize) {
-		let maybe_data = maybe_known.map_or_else(|| {
-			Calls::<T>::get(hash).and_then(|(data, ..)| {
-				Some(data)
+	fn get_call(hash: &[u8; 32], maybe_known: Option<&[u8]>) -> Option<(<T as Trait>::Call, usize)> {
+			maybe_known.map_or_else(|| {
+					Calls::<T>::get(hash).and_then(|(data, ..)| {
+							Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
+					})
+			}, |data| {
+					Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
 			})
-		}, |v| Some(v.to_vec()));
-
-		if let Some(data) = maybe_data {
-			let call = Decode::decode(&mut &data[..]).ok();
-			return (call, data.len())
-		} else {
-			(None, 0)
-		}
 	}
 
 	/// Attempt to remove a call from storage, returning any deposit on it to the owner.
