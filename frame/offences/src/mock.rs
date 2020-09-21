@@ -132,7 +132,6 @@ impl Trait for Runtime {
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
-	type WeightInfo = ();
 }
 
 mod offences {
