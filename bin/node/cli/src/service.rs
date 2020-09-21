@@ -36,6 +36,7 @@ use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sp_core::traits::BareCryptoStorePtr;
 use node_executor::Executor;
+use tiny_multihash::Multihash;
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -161,7 +162,7 @@ pub struct NewFullBase {
 	pub task_manager: TaskManager,
 	pub inherent_data_providers: InherentDataProviders,
 	pub client: Arc<FullClient>,
-	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash, Multihash>>,
 	pub network_status_sinks: sc_service::NetworkStatusSinks<Block>,
 	pub transaction_pool: Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
 }
@@ -355,7 +356,7 @@ pub fn new_full(config: Configuration)
 
 pub fn new_light_base(config: Configuration) -> Result<(
 	TaskManager, RpcHandlers, Arc<LightClient>,
-	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+	Arc<NetworkService<Block, <Block as BlockT>::Hash, Multihash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
 	let (client, backend, keystore, mut task_manager, on_demand) =

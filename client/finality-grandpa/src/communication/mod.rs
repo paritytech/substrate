@@ -38,7 +38,7 @@ use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
 use sp_core::traits::BareCryptoStorePtr;
 use finality_grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use finality_grandpa::{voter, voter_set::VoterSet};
-use sc_network::{NetworkService, ReputationChange};
+use sc_network::{MultihashDigest, NetworkService, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use parity_scale_codec::{Encode, Decode};
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
@@ -152,9 +152,10 @@ pub trait Network<Block: BlockT>: GossipNetwork<Block> + Clone + Send + 'static 
 	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
 }
 
-impl<B, H> Network<B> for Arc<NetworkService<B, H>> where
+impl<B, H, M> Network<B> for Arc<NetworkService<B, H, M>> where
 	B: BlockT,
 	H: sc_network::ExHashT,
+	M: MultihashDigest,
 {
 	fn set_sync_fork_request(&self, peers: Vec<sc_network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
 		NetworkService::set_sync_fork_request(self, peers, hash, number)

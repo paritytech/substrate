@@ -61,6 +61,7 @@ pub use self::builder::{
 pub use config::{
 	BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskExecutor, TaskType,
 };
+pub use sc_network::MultihashDigest;
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
 	NoExtension, ChainType,
@@ -201,10 +202,11 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 async fn build_network_future<
 	B: BlockT,
 	C: BlockchainEvents<B>,
-	H: sc_network::ExHashT
+	H: sc_network::ExHashT,
+	M: MultihashDigest,
 > (
 	role: Role,
-	mut network: sc_network::NetworkWorker<B, H>,
+	mut network: sc_network::NetworkWorker<B, H, M>,
 	client: Arc<C>,
 	status_sinks: NetworkStatusSinks<B>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,

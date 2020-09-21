@@ -43,7 +43,7 @@ use threadpool::ThreadPool;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use futures::future::Future;
 use log::{debug, warn};
-use sc_network::{ExHashT, NetworkService, NetworkStateInfo, PeerId};
+use sc_network::{ExHashT, MultihashDigest, NetworkService, NetworkStateInfo, PeerId};
 use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext, traits::SpawnNamed};
 use sp_runtime::{generic::BlockId, traits::{self, Header}};
 use futures::{prelude::*, future::ready};
@@ -58,15 +58,16 @@ pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
 pub trait NetworkProvider: NetworkStateInfo {
 	/// Set the authorized peers.
 	fn set_authorized_peers(&self, peers: HashSet<PeerId>);
-	
+
 	/// Set the authorized only flag.
 	fn set_authorized_only(&self, reserved_only: bool);
 }
 
-impl<B, H> NetworkProvider for NetworkService<B, H>
+impl<B, H, M> NetworkProvider for NetworkService<B, H, M>
 where
 	B: traits::Block + 'static,
 	H: ExHashT,
+	M: MultihashDigest,
 {
 	fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
 		self.set_authorized_peers(peers)

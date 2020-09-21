@@ -10,6 +10,7 @@ use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::{FinalityProofProvider as GrandpaFinalityProofProvider, SharedVoterState};
+use tiny_multihash::Multihash;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -91,7 +92,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
-		sc_service::build_network(sc_service::BuildNetworkParams {
+		sc_service::build_network::<_, _, _, _, Multihash>(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
@@ -263,7 +264,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
-		sc_service::build_network(sc_service::BuildNetworkParams {
+		sc_service::build_network::<_, _, _, _, Multihash>(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),

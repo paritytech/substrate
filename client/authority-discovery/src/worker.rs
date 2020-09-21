@@ -42,6 +42,7 @@ use sc_network::{
 	DhtEvent,
 	ExHashT,
 	Multiaddr,
+	MultihashDigest,
 	NetworkStateInfo,
 	PeerId,
 };
@@ -455,6 +456,7 @@ where
 						"Failed to put hash '{:?}' on Dht.", hash
 					)
 				},
+				Some(_) => {}
 				None => {
 					debug!(target: LOG_TARGET, "Dht event stream terminated.");
 					return Poll::Ready(());
@@ -707,10 +709,11 @@ pub trait NetworkProvider: NetworkStateInfo {
 	fn get_value(&self, key: &libp2p::kad::record::Key);
 }
 
-impl<B, H> NetworkProvider for sc_network::NetworkService<B, H>
+impl<B, H, M> NetworkProvider for sc_network::NetworkService<B, H, M>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
+	M: MultihashDigest,
 {
 	fn set_priority_group(
 		&self,

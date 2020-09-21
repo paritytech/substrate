@@ -48,6 +48,7 @@ use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_transaction_pool::TransactionPool;
 use sc_client_api::{Backend, CallExecutor};
 use parking_lot::Mutex;
+use tiny_multihash::Multihash;
 
 #[cfg(test)]
 mod client;
@@ -74,14 +75,14 @@ pub trait TestNetNode: Clone + Future<Item = (), Error = sc_service::Error> + Se
 
 	fn client(&self) -> Arc<Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>>;
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
-	fn network(&self) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>;
+	fn network(&self) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash, Multihash>>;
 }
 
 pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
 	task_manager: Arc<Mutex<TaskManager>>,
 	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 	transaction_pool: Arc<TExPool>,
-	network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash, Multihash>>,
 }
 
 impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool>
@@ -89,7 +90,7 @@ TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
 	pub fn new(
 		task_manager: TaskManager,
 		client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
-		network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
+		network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash, Multihash>>,
 		transaction_pool: Arc<TExPool>,
 	) -> Self {
 		Self {
@@ -144,7 +145,7 @@ TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool>
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool> {
 		self.transaction_pool.clone()
 	}
-	fn network(&self) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash>> {
+	fn network(&self) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash, tiny_multihash::Multihash>> {
 		self.network.clone()
 	}
 }

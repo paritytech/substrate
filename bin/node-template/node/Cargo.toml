@@ -17,6 +17,7 @@ name = "node-template"
 
 [dependencies]
 structopt = "0.3.8"
+tiny-multihash = "0.4.5"
 
 sc-cli = { version = "0.8.0", path = "../../../client/cli", features = ["wasmtime"] }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }

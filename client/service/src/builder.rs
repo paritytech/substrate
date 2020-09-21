@@ -38,7 +38,7 @@ use jsonrpc_pubsub::manager::SubscriptionManager;
 use sc_keystore::Store as Keystore;
 use log::{info, warn};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
-use sc_network::NetworkService;
+use sc_network::{MultihashDigest, NetworkService};
 use parking_lot::RwLock;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
@@ -380,7 +380,7 @@ pub fn new_client<E, Block, RA>(
 }
 
 /// Parameters to pass into `build`.
-pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
+pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend, M: MultihashDigest> {
 	/// The service configuration.
 	pub config: Configuration,
 	/// A shared client returned by `new_full_parts`/`new_light_parts`.
@@ -401,7 +401,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// An optional, shared remote blockchain instance. Used for light clients.
 	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	/// A shared network instance.
-	pub network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	pub network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash, M>>,
 	/// Sinks to propagate network status updates.
 	pub network_status_sinks: NetworkStatusSinks<TBl>,
 	/// A Sender for RPC requests.
@@ -411,18 +411,19 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 }
 
 /// Build a shared offchain workers instance.
-pub fn build_offchain_workers<TBl, TBackend, TCl>(
+pub fn build_offchain_workers<TBl, TBackend, TCl, M>(
 	config: &Configuration,
 	backend: Arc<TBackend>,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash, M>>,
 ) -> Option<Arc<sc_offchain::OffchainWorkers<TCl, TBackend::OffchainStorage, TBl>>>
 	where
 		TBl: BlockT, TBackend: sc_client_api::Backend<TBl>,
 		<TBackend as sc_client_api::Backend<TBl>>::OffchainStorage: 'static,
 		TCl: Send + Sync + ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + 'static,
 		<TCl as ProvideRuntimeApi<TBl>>::Api: sc_offchain::OffchainWorkerApi<TBl>,
+		M: MultihashDigest,
 {
 	let offchain_workers = match backend.offchain_storage() {
 		Some(db) => {
@@ -452,8 +453,8 @@ pub fn build_offchain_workers<TBl, TBackend, TCl>(
 }
 
 /// Spawn the tasks that are required to run a node.
-pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
-	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
+pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl, M>(
+	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend, M>,
 ) -> Result<RpcHandlers, Error>
 	where
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
@@ -472,7 +473,8 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> +
 			MallocSizeOfWasm + 'static,
-		TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>
+		TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
+		M: MultihashDigest,
 {
 	let SpawnTasksParams {
 		mut config,
@@ -593,13 +595,14 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	Ok(rpc_handlers)
 }
 
-async fn transaction_notifications<TBl, TExPool>(
+async fn transaction_notifications<TBl, TExPool, M>(
 	transaction_pool: Arc<TExPool>,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>
+	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash, M>>
 )
 	where
 		TBl: BlockT,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>,
+		M: MultihashDigest,
 {
 	// transaction notifications
 	transaction_pool.import_notification_stream()
@@ -615,11 +618,11 @@ async fn transaction_notifications<TBl, TExPool>(
 		.await;
 }
 
-fn build_telemetry<TBl: BlockT>(
+fn build_telemetry<TBl: BlockT, M: MultihashDigest>(
 	config: &mut Configuration,
 	endpoints: sc_telemetry::TelemetryEndpoints,
 	telemetry_connection_sinks: TelemetryConnectionSinks,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash, M>>,
 	spawn_handle: SpawnTaskHandle,
 	genesis_hash: <TBl as BlockT>::Hash,
 ) -> sc_telemetry::Telemetry {
@@ -783,11 +786,11 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
-pub fn build_network<TBl, TExPool, TImpQu, TCl>(
+pub fn build_network<TBl, TExPool, TImpQu, TCl, M>(
 	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>
 ) -> Result<
 	(
-		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+		Arc<NetworkService<TBl, <TBl as BlockT>::Hash, M>>,
 		NetworkStatusSinks<TBl>,
 		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 		NetworkStarter,
@@ -801,6 +804,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
+		M: MultihashDigest,
 {
 	let BuildNetworkParams {
 		config, client, transaction_pool, spawn_handle, import_queue, on_demand,

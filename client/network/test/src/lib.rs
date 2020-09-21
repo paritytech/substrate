@@ -224,7 +224,7 @@ pub struct Peer<D> {
 	block_import: BlockImportAdapter<()>,
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
-	network: NetworkWorker<Block, <Block as BlockT>::Hash>,
+	network: NetworkWorker<Block, <Block as BlockT>::Hash, tiny_multihash::Multihash>,
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
 }
@@ -397,7 +397,7 @@ impl<D> Peer<D> {
 	}
 
 	/// Get a reference to the network service.
-	pub fn network_service(&self) -> &Arc<NetworkService<Block, <Block as BlockT>::Hash>> {
+	pub fn network_service(&self) -> &Arc<NetworkService<Block, <Block as BlockT>::Hash, tiny_multihash::Multihash>> {
 		&self.network.service()
 	}
 
