@@ -18,8 +18,6 @@
 //! Integration tests for runtime interface primitives
 #![cfg(test)]
 
-#![cfg(test)]
-
 use sp_runtime_interface::*;
 
 use sp_runtime_interface_test_wasm::{wasm_binary_unwrap, test_api::HostFunctions};
@@ -157,14 +155,26 @@ fn test_versionining_with_new_host_works() {
 
 #[test]
 fn test_tracing() {
-	use tracing::span::Id as SpanId;
+	use std::fmt;
+	use tracing::{span::Id as SpanId};
+	use tracing_core::field::{Field, Visit};
 
 	#[derive(Clone)]
 	struct TracingSubscriber(Arc<Mutex<Inner>>);
 
+	struct FieldConsumer(&'static str, Option<String>);
+	impl Visit for FieldConsumer {
+
+		fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+			if  field.name() == self.0 {
+				self.1 = Some(format!("{:?}", value))
+			}
+		}
+	}
+
 	#[derive(Default)]
 	struct Inner {
-		spans: HashSet<&'static str>,
+		spans: HashSet<String>,
 	}
 
 	impl tracing::subscriber::Subscriber for TracingSubscriber {
@@ -173,7 +183,9 @@ fn test_tracing() {
 		fn new_span(&self, span: &tracing::span::Attributes) -> tracing::Id {
 			let mut inner = self.0.lock().unwrap();
 			let id = SpanId::from_u64((inner.spans.len() + 1) as _);
-			inner.spans.insert(span.metadata().name());
+			let mut f = FieldConsumer("name", None);
+			span.record(&mut f);
+			inner.spans.insert(f.1.unwrap_or_else(||span.metadata().name().to_owned()));
 			id
 		}
 
@@ -196,5 +208,4 @@ fn test_tracing() {
 
 	let inner = subscriber.0.lock().unwrap();
 	assert!(inner.spans.contains("return_input_version_1"));
-	assert!(inner.spans.contains("ext_test_api_return_input_version_1"));
 }

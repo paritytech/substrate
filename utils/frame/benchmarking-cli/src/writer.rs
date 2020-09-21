@@ -32,6 +32,21 @@ pub fn open_file(path: &str) -> Result<File, std::io::Error> {
 		.open(path)
 }
 
+fn underscore<Number>(i: Number) -> String
+	where Number: std::string::ToString
+{
+    let mut s = String::new();
+    let i_str = i.to_string();
+    let a = i_str.chars().rev().enumerate();
+    for (idx, val) in a {
+        if idx != 0 && idx % 3 == 0 {
+            s.insert(0, '_');
+        }
+        s.insert(0, val);
+    }
+    s
+}
+
 pub fn write_trait(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<(), std::io::Error> {
 	let mut current_pallet = Vec::<u8>::new();
 
@@ -176,10 +191,10 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 		// return value
 		write!(file, ") -> Weight {{\n")?;
 
-		write!(file, "\t\t({} as Weight)\n", extrinsic_time.base.saturating_mul(1000))?;
+		write!(file, "\t\t({} as Weight)\n", underscore(extrinsic_time.base.saturating_mul(1000)))?;
 		used_extrinsic_time.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
 			write!(file, "\t\t\t.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
-				slope.saturating_mul(1000),
+				underscore(slope.saturating_mul(1000)),
 				name,
 			)
 		})?;

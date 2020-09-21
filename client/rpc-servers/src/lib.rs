@@ -20,8 +20,10 @@
 
 #![warn(missing_docs)]
 
+mod middleware;
+
 use std::io;
-use jsonrpc_core::IoHandlerExtension;
+use jsonrpc_core::{IoHandlerExtension, MetaIoHandler};
 use log::error;
 use pubsub::PubSubMetadata;
 
@@ -32,15 +34,18 @@ const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
 const WS_MAX_CONNECTIONS: usize = 100;
 
 /// The RPC IoHandler containing all requested APIs.
-pub type RpcHandler<T> = pubsub::PubSubHandler<T>;
+pub type RpcHandler<T> = pubsub::PubSubHandler<T, RpcMiddleware>;
 
 pub use self::inner::*;
+pub use middleware::{RpcMiddleware, RpcMetrics};
 
 /// Construct rpc `IoHandler`
 pub fn rpc_handler<M: PubSubMetadata>(
-	extension: impl IoHandlerExtension<M>
+	extension: impl IoHandlerExtension<M>,
+	rpc_middleware: RpcMiddleware,
 ) -> RpcHandler<M> {
-	let mut io = pubsub::PubSubHandler::default();
+	let io_handler = MetaIoHandler::with_middleware(rpc_middleware);
+	let mut io = pubsub::PubSubHandler::new(io_handler);
 	extension.augment(&mut io);
 
 	// add an endpoint to list all available methods.

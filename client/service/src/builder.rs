@@ -36,7 +36,7 @@ use sp_consensus::{
 use futures::{FutureExt, StreamExt, future::ready, channel::oneshot};
 use jsonrpc_pubsub::manager::SubscriptionManager;
 use sc_keystore::Store as Keystore;
-use log::{info, warn, error};
+use log::{info, warn};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 use sc_network::NetworkService;
 use parking_lot::RwLock;
@@ -545,14 +545,22 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	);
 
 	// RPC
-	let gen_handler = |deny_unsafe: sc_rpc::DenyUnsafe| gen_handler(
-		deny_unsafe, &config, task_manager.spawn_handle(), client.clone(), transaction_pool.clone(),
-		keystore.clone(), on_demand.clone(), remote_blockchain.clone(), &*rpc_extensions_builder,
+	let gen_handler = |
+		deny_unsafe: sc_rpc::DenyUnsafe,
+		rpc_middleware: sc_rpc_server::RpcMiddleware
+	| gen_handler(
+		deny_unsafe, rpc_middleware, &config, task_manager.spawn_handle(),
+		client.clone(), transaction_pool.clone(), keystore.clone(),
+		on_demand.clone(), remote_blockchain.clone(), &*rpc_extensions_builder,
 		backend.offchain_storage(), system_rpc_tx.clone()
 	);
-	let rpc = start_rpc_servers(&config, gen_handler)?;
+	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry()).ok();
+	let rpc = start_rpc_servers(&config, gen_handler, rpc_metrics.as_ref())?;
 	// This is used internally, so don't restrict access to unsafe RPC
-	let rpc_handlers = RpcHandlers(Arc::new(gen_handler(sc_rpc::DenyUnsafe::No).into()));
+	let rpc_handlers = RpcHandlers(Arc::new(gen_handler(
+		sc_rpc::DenyUnsafe::No,
+		sc_rpc_server::RpcMiddleware::new(rpc_metrics.as_ref().cloned(), "inbrowser")
+	).into()));
 
 	// Telemetry
 	let telemetry = config.telemetry_endpoints.clone().and_then(|endpoints| {
@@ -571,17 +579,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 			task_manager.spawn_handle(), genesis_hash,
 		))
 	});
-
-	// Instrumentation
-	if let Some(tracing_targets) = config.tracing_targets.as_ref() {
-		let subscriber = sc_tracing::ProfilingSubscriber::new(
-			config.tracing_receiver, tracing_targets
-		);
-		match tracing::subscriber::set_global_default(subscriber) {
-			Ok(_) => (),
-			Err(e) => error!(target: "tracing", "Unable to set global default subscriber {}", e),
-		}
-	}
 
 	// Spawn informant task
 	spawn_handle.spawn("informant", sc_informant::build(
@@ -671,6 +668,7 @@ fn build_telemetry<TBl: BlockT>(
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	deny_unsafe: sc_rpc::DenyUnsafe,
+	rpc_middleware: sc_rpc_server::RpcMiddleware,
 	config: &Configuration,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
@@ -681,7 +679,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>
-) -> jsonrpc_pubsub::PubSubHandler<sc_rpc::Metadata>
+) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
 	where
 		TBl: BlockT,
 		TCl: ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + HeaderBackend<TBl> +
@@ -746,15 +744,18 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 		offchain::OffchainApi::to_delegate(offchain)
 	});
 
-	sc_rpc_server::rpc_handler((
-		state::StateApi::to_delegate(state),
-		state::ChildStateApi::to_delegate(child_state),
-		chain::ChainApi::to_delegate(chain),
-		maybe_offchain_rpc,
-		author::AuthorApi::to_delegate(author),
-		system::SystemApi::to_delegate(system),
-		rpc_extensions_builder.build(deny_unsafe, task_executor),
-	))
+	sc_rpc_server::rpc_handler(
+		(
+			state::StateApi::to_delegate(state),
+			state::ChildStateApi::to_delegate(child_state),
+			chain::ChainApi::to_delegate(chain),
+			maybe_offchain_rpc,
+			author::AuthorApi::to_delegate(author),
+			system::SystemApi::to_delegate(system),
+			rpc_extensions_builder.build(deny_unsafe, task_executor),
+		),
+		rpc_middleware
+	)
 }
 
 /// Parameters to pass into `build_network`.
