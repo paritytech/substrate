@@ -77,8 +77,6 @@ pub trait Trait: frame_system::Trait {
 	/// `on_initialize`.
 	/// Note it's going to be exceeded before we stop adding to it, so it has to be set conservatively.
 	type WeightSoftLimit: Get<Weight>;
-	/// Weight information for extrinsics in this pallet.
-	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -111,7 +109,7 @@ decl_event!(
 	pub enum Event {
 		/// There is an offence reported of the given `kind` happened at the `session_index` and
 		/// (kind-specific) time slot. This event is not deposited for duplicate slashes. last
-		/// element indicates of the offence was applied (true) or queued (false) 
+		/// element indicates of the offence was applied (true) or queued (false)
 		/// \[kind, timeslot, applied\].
 		Offence(Kind, OpaqueTimeSlot, bool),
 	}
