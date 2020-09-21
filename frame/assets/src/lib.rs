@@ -135,7 +135,7 @@
 
 use sp_std::{fmt::Debug};
 use sp_runtime::{RuntimeDebug, traits::{
-	Member, AtLeast32Bit, AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub
+	Member, AtLeast32Bit, AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub,
 }};
 use codec::{Encode, Decode};
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
