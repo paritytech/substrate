@@ -263,7 +263,7 @@ impl crate::traits::CryptoStore for KeyStore {
 #[cfg(feature = "std")]
 impl Into<CryptoStorePtr> for KeyStore {
     fn into(self) -> CryptoStorePtr {
-		std::sync::Arc::new(self)
+		Arc::new(self)
     }
 }
 

@@ -205,7 +205,12 @@ pub trait CryptoStore: Send + Sync {
 	) -> Result<VRFSignature, Error>;
 }
 
-#[allow(missing_docs)]
+/// A synchronous keystore trait.
+///
+/// Note: This trait is temporarily maintained until
+/// substrate's crates that use the keystore are fully transitioned
+/// to async/await. Therefore, this trait should not be relied upon
+/// nor used for any new components.
 pub trait SyncCryptoStore: Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
@@ -441,7 +446,7 @@ impl<T: CryptoStore> SyncCryptoStore for T {
 	}
 }
 
-/// A pointer to the keystore.
+/// A pointer to a keystore.
 pub type CryptoStorePtr = Arc<dyn CryptoStore>;
 /// A pointer to a synchronous keystore.
 pub type SyncCryptoStorePtr = Arc<dyn SyncCryptoStore>;

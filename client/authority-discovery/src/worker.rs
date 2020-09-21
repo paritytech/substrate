@@ -264,7 +264,7 @@ where
 				// Handle messages from [`Service`].
 				msg = self.from_service.next().fuse() => {
 					if let Some(msg) = msg {
-						self.process_message_from_service(msg).await;
+						self.process_message_from_service(msg);
 					} else {
 						return;
 					}
@@ -300,7 +300,7 @@ where
 		}
 	}
 
-	async fn process_message_from_service(&self, msg: ServicetoWorkerMsg) {
+	fn process_message_from_service(&self, msg: ServicetoWorkerMsg) {
 		match msg {
 			ServicetoWorkerMsg::GetAddressesByAuthorityId(authority, sender) => {
 				let _ = sender.send(
