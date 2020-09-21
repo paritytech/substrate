@@ -263,6 +263,8 @@ impl Trait for Test {
 	)>>::IdentificationTuple;
 
 	type HandleEquivocation = super::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+
+	type WeightInfo = ();
 }
 
 mod pallet_grandpa {

@@ -785,6 +785,8 @@ impl pallet_grandpa::Trait for Runtime {
 
 	type HandleEquivocation =
 		pallet_grandpa::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+
+	type WeightInfo = ();
 }
 
 parameter_types! {
