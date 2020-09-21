@@ -25,6 +25,7 @@ pub mod pallet_indices;
 pub mod pallet_im_online;
 pub mod pallet_proxy;
 pub mod pallet_scheduler;
+pub mod pallet_session;
 pub mod pallet_staking;
 pub mod pallet_timestamp;
 pub mod pallet_utility;
