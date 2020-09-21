@@ -4,7 +4,8 @@ require 'changelogerator'
 require 'git'
 require 'erb'
 
-version = ENV['GITHUB_REF']
+version = ENV['GITHUB_REF'] || ARGV[0]
+abort 'No version specified, cannot continue' unless version
 token = ENV['GITHUB_TOKEN']
 
 # If we're not in Github Actions, just use current working directory
