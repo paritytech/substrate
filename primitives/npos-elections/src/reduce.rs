@@ -52,6 +52,7 @@ use crate::{ExtendedBalance, IdentifierT, StakedAssignment};
 use sp_arithmetic::traits::{Bounded, Zero};
 use sp_std::{
 	collections::btree_map::{BTreeMap, Entry::*},
+	vec,
 	prelude::*,
 };
 
