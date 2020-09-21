@@ -35,7 +35,7 @@ sc-client-api = { version = "2.0.0-rc6", path = "../../../client/api" }
 sp-runtime = { version = "2.0.0-rc6", path = "../../../primitives/runtime" }
 
 # These dependencies are used for the node template's RPCs
-jsonrpc-core = "14.0.3"
+jsonrpc-core = "15.0.0"
 sc-rpc = { version = "2.0.0-rc6", path = "../../../client/rpc" }
 sp-api = { version = "2.0.0-rc6", path = "../../../primitives/api" }
 sc-rpc-api = { version = "0.8.0-rc6", path = "../../../client/rpc-api" }
