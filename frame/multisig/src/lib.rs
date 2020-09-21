@@ -627,13 +627,13 @@ impl<T: Trait> Module<T> {
 
 	/// Attempt to decode and return the call, provided by the user or from storage.
 	fn get_call(hash: &[u8; 32], maybe_known: Option<&[u8]>) -> Option<(<T as Trait>::Call, usize)> {
-			maybe_known.map_or_else(|| {
-					Calls::<T>::get(hash).and_then(|(data, ..)| {
-							Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
-					})
-			}, |data| {
+		maybe_known.map_or_else(|| {
+			Calls::<T>::get(hash).and_then(|(data, ..)| {
 					Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
 			})
+		}, |data| {
+			Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
+		})
 	}
 
 	/// Attempt to remove a call from storage, returning any deposit on it to the owner.
