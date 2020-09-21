@@ -27,6 +27,7 @@ use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _
 type TestNetworkService = NetworkService<
 	substrate_test_runtime_client::runtime::Block,
 	substrate_test_runtime_client::runtime::Hash,
+	tiny_multihash::Multihash,
 >;
 
 /// Builds a full node to be used for testing. Returns the node service and its associated events
