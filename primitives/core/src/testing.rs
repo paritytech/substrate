@@ -405,7 +405,6 @@ mod tests {
 	use super::*;
 	use crate::sr25519;
 	use crate::testing::{ED25519, SR25519};
-	use crate::traits::SyncCryptoStore;
 	use crate::vrf::VRFTranscriptValue;
 
 	#[test]
