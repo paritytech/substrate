@@ -219,10 +219,9 @@ benchmarks! {
 		let p in 1 .. MAX_PROPOSALS;
 
 		// Place our proposal at the end to make sure it's worst case.
-		for i in 1 .. p {
+		for i in 0 .. p - 1 {
 			add_proposal::<T>(i)?;
 		}
-		add_proposal::<T>(0)?;
 		// We should really add a lot of seconds here, but we're not doing it elsewhere.
 
 		// Place our proposal in the external queue, too.
@@ -811,6 +810,8 @@ mod tests {
 			assert_ok!(test_benchmark_remove_other_vote::<Test>());
 			assert_ok!(test_benchmark_enact_proposal_execute::<Test>());
 			assert_ok!(test_benchmark_enact_proposal_slash::<Test>());
+			assert_ok!(test_benchmark_blacklist::<Test>());
+			assert_ok!(test_benchmark_cancel_proposal::<Test>());
 		});
 	}
 }
