@@ -33,6 +33,11 @@ With this linear model, we are able to estimate ahead of time how long it takes 
 logic, and thus make informed decisions without actually spending any significant resources at
 runtime.
 
+Note that we assume that all extrinsics are assumed to be of linear complexity, which is why we are
+able to always fit them to a linear model. Quadratic or higher complexity functions are, in general,
+considered to be dangerous to the runtime as the weight of these functions may explode as the
+runtime state or input becomes too complex.
+
 The benchmarking framework comes with the following tools:
 
 * [A set of macros](./src/lib.rs) (`benchmarks!`, `add_benchmark!`, etc...) to make it easy to
