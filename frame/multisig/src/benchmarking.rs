@@ -59,6 +59,9 @@ benchmarks! {
 		let call_hash = call.using_encoded(blake2_256);
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, 1);
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller.clone()), signatories, Box::new(call))
 	verify {
 		// If the benchmark resolves, then the call was dispatched successfully.
@@ -73,6 +76,9 @@ benchmarks! {
 		let call_hash = blake2_256(&call);
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call, false, 0)
 	verify {
 		assert!(Multisigs::<T>::contains_key(multi_account_id, call_hash));
@@ -89,6 +95,9 @@ benchmarks! {
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call, true, 0)
 	verify {
 		assert!(Multisigs::<T>::contains_key(multi_account_id, call_hash));
@@ -111,6 +120,9 @@ benchmarks! {
 		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone(), true, 0)?;
 		assert!(Calls::<T>::contains_key(call_hash));
 		let caller2 = signatories2.remove(0);
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller2);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call, false, 0)
 	verify {
 		let multisig = Multisigs::<T>::get(multi_account_id, call_hash).ok_or("multisig not created")?;
@@ -133,6 +145,9 @@ benchmarks! {
 		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone(), false, 0)?;
 		assert!(!Calls::<T>::contains_key(call_hash));
 		let caller2 = signatories2.remove(0);
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller2);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call, true, 0)
 	verify {
 		let multisig = Multisigs::<T>::get(multi_account_id, call_hash).ok_or("multisig not created")?;
@@ -163,6 +178,9 @@ benchmarks! {
 		}
 		let caller2 = signatories2.remove(0);
 		assert!(Multisigs::<T>::contains_key(&multi_account_id, call_hash));
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller2);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call, false, Weight::max_value())
 	verify {
 		assert!(!Multisigs::<T>::contains_key(&multi_account_id, call_hash));
@@ -177,6 +195,9 @@ benchmarks! {
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		let call_hash = blake2_256(&call);
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 		// Create the multi
 	}: approve_as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call_hash, 0)
 	verify {
@@ -206,6 +227,9 @@ benchmarks! {
 			0
 		)?;
 		let caller2 = signatories2.remove(0);
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller2);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: approve_as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call_hash, 0)
 	verify {
 		let multisig = Multisigs::<T>::get(multi_account_id, call_hash).ok_or("multisig not created")?;
@@ -236,6 +260,9 @@ benchmarks! {
 		}
 		let caller2 = signatories2.remove(0);
 		assert!(Multisigs::<T>::contains_key(&multi_account_id, call_hash));
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller2);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: approve_as_multi(
 		RawOrigin::Signed(caller2),
 		s as u16,
@@ -263,6 +290,9 @@ benchmarks! {
 		Multisig::<T>::as_multi(o, s as u16, signatories.clone(), None, call.clone(), true, 0)?;
 		assert!(Multisigs::<T>::contains_key(&multi_account_id, call_hash));
 		assert!(Calls::<T>::contains_key(call_hash));
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
 	verify {
 		assert!(!Multisigs::<T>::contains_key(multi_account_id, call_hash));
