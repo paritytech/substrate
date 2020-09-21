@@ -245,6 +245,24 @@
 			"website": "https://centrifuge.io/"
 		},
 		{
+			"prefix": 39,
+			"network": "mathchain",
+			"displayName": "MathChain mainnet",
+			"symbols": ["MATH"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://mathwallet.org"
+		},
+		{
+			"prefix": 40,
+			"network": "mathchain-testnet",
+			"displayName": "MathChain testnet",
+			"symbols": ["MATH"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://mathwallet.org"
+		},
+		{
 			"prefix": 42,
 			"network": "substrate",
 			"displayName": "Substrate",
