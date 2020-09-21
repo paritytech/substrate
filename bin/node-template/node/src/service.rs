@@ -92,7 +92,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
-		sc_service::build_network::<_, _, _, _, Multihash>(sc_service::BuildNetworkParams {
+		sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
@@ -102,7 +102,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: None,
 			finality_proof_provider: Some(finality_proof_provider.clone()),
-		})?;
+		}.build_network::<Multihash>()?;
 
 	if config.offchain_worker.enabled {
 		sc_service::build_offchain_workers(
@@ -264,7 +264,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
-		sc_service::build_network::<_, _, _, _, Multihash>(sc_service::BuildNetworkParams {
+		sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
@@ -274,7 +274,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: Some(finality_proof_request_builder),
 			finality_proof_provider: Some(finality_proof_provider),
-		})?;
+		}.build_network::<Multihash>()?;
 
 	if config.offchain_worker.enabled {
 		sc_service::build_offchain_workers(

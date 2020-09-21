@@ -785,132 +785,134 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
 }
 
-/// Build the network service, the network status sinks and an RPC sender.
-pub fn build_network<TBl, TExPool, TImpQu, TCl, M>(
-	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>
-) -> Result<
-	(
-		Arc<NetworkService<TBl, <TBl as BlockT>::Hash, M>>,
-		NetworkStatusSinks<TBl>,
-		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-		NetworkStarter,
-	),
-	Error
->
-	where
-		TBl: BlockT,
-		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
-		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
-		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
-		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
-		TImpQu: ImportQueue<TBl> + 'static,
-		M: MultihashDigest,
+impl<'a, TBl, TExPool, TImpQu, TCl> BuildNetworkParams<'a, TBl, TExPool, TImpQu, TCl>
+where
+	TBl: BlockT,
+	TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
+	BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
+	HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
+	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
+	TImpQu: ImportQueue<TBl> + 'static,
 {
-	let BuildNetworkParams {
-		config, client, transaction_pool, spawn_handle, import_queue, on_demand,
-		block_announce_validator_builder, finality_proof_request_builder, finality_proof_provider,
-	} = params;
+	/// Build the network service, the network status sinks and an RPC sender.
+	pub fn build_network<TMh: MultihashDigest>(
+		self
+	) -> Result<
+		(
+			Arc<NetworkService<TBl, <TBl as BlockT>::Hash, TMh>>,
+			NetworkStatusSinks<TBl>,
+			TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
+			NetworkStarter,
+		),
+		Error
+	>
+	{
+		let BuildNetworkParams {
+			config, client, transaction_pool, spawn_handle, import_queue, on_demand,
+			block_announce_validator_builder, finality_proof_request_builder, finality_proof_provider,
+		} = self;
 
-	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-		imports_external_transactions: !matches!(config.role, Role::Light),
-		pool: transaction_pool,
-		client: client.clone(),
-	});
+		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
+			imports_external_transactions: !matches!(config.role, Role::Light),
+			pool: transaction_pool,
+			client: client.clone(),
+		});
 
-	let protocol_id = {
-		let protocol_id_full = match config.chain_spec.protocol_id() {
-			Some(pid) => pid,
-			None => {
-				warn!("Using default protocol ID {:?} because none is configured in the \
-					chain specs", DEFAULT_PROTOCOL_ID
-				);
-				DEFAULT_PROTOCOL_ID
-			}
+		let protocol_id = {
+			let protocol_id_full = match config.chain_spec.protocol_id() {
+				Some(pid) => pid,
+				None => {
+					warn!("Using default protocol ID {:?} because none is configured in the \
+						chain specs", DEFAULT_PROTOCOL_ID
+					);
+					DEFAULT_PROTOCOL_ID
+				}
+			};
+			sc_network::config::ProtocolId::from(protocol_id_full)
 		};
-		sc_network::config::ProtocolId::from(protocol_id_full)
-	};
 
-	let block_announce_validator = if let Some(f) = block_announce_validator_builder {
-		f(client.clone())
-	} else {
-		Box::new(DefaultBlockAnnounceValidator)
-	};
+		let block_announce_validator = if let Some(f) = block_announce_validator_builder {
+			f(client.clone())
+		} else {
+			Box::new(DefaultBlockAnnounceValidator)
+		};
 
-	let network_params = sc_network::config::Params {
-		role: config.role.clone(),
-		executor: {
-			let spawn_handle = Clone::clone(&spawn_handle);
-			Some(Box::new(move |fut| {
-				spawn_handle.spawn("libp2p-node", fut);
-			}))
-		},
-		network_config: config.network.clone(),
-		chain: client.clone(),
-		finality_proof_provider,
-		finality_proof_request_builder,
-		on_demand: on_demand,
-		transaction_pool: transaction_pool_adapter as _,
-		import_queue: Box::new(import_queue),
-		protocol_id,
-		block_announce_validator,
-		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone())
-	};
+		let network_params = sc_network::config::Params {
+			role: config.role.clone(),
+			executor: {
+				let spawn_handle = Clone::clone(&spawn_handle);
+				Some(Box::new(move |fut| {
+					spawn_handle.spawn("libp2p-node", fut);
+				}))
+			},
+			network_config: config.network.clone(),
+			chain: client.clone(),
+			finality_proof_provider,
+			finality_proof_request_builder,
+			on_demand: on_demand,
+			transaction_pool: transaction_pool_adapter as _,
+			import_queue: Box::new(import_queue),
+			protocol_id,
+			block_announce_validator,
+			metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone())
+		};
 
-	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-	let network_mut = sc_network::NetworkWorker::new(network_params)?;
-	let network = network_mut.service().clone();
-	let network_status_sinks = NetworkStatusSinks::new();
+		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
+		let network_mut = sc_network::NetworkWorker::new(network_params)?;
+		let network = network_mut.service().clone();
+		let network_status_sinks = NetworkStatusSinks::new();
 
-	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
+		let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 
-	let future = build_network_future(
-		config.role.clone(),
-		network_mut,
-		client,
-		network_status_sinks.clone(),
-		system_rpc_rx,
-		has_bootnodes,
-		config.announce_block,
-	);
+		let future = build_network_future(
+			config.role.clone(),
+			network_mut,
+			client,
+			network_status_sinks.clone(),
+			system_rpc_rx,
+			has_bootnodes,
+			config.announce_block,
+		);
 
-	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the
-	// node through the `NetworkConfiguration` struct. But because this function doesn't know in
-	// advance which components, such as GrandPa or Polkadot, will be plugged on top of the
-	// service, it is unfortunately not possible to do so without some deep refactoring. To bypass
-	// this problem, the `NetworkService` provides a `register_notifications_protocol` method that
-	// can be called even after the network has been initialized. However, we want to avoid the
-	// situation where `register_notifications_protocol` is called *after* the network actually
-	// connects to other peers. For this reason, we delay the process of the network future until
-	// the user calls `NetworkStarter::start_network`.
-	//
-	// This entire hack should eventually be removed in favour of passing the list of protocols
-	// through the configuration.
-	//
-	// See also https://github.com/paritytech/substrate/issues/6827
-	let (network_start_tx, network_start_rx) = oneshot::channel();
+		// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the
+		// node through the `NetworkConfiguration` struct. But because this function doesn't know in
+		// advance which components, such as GrandPa or Polkadot, will be plugged on top of the
+		// service, it is unfortunately not possible to do so without some deep refactoring. To bypass
+		// this problem, the `NetworkService` provides a `register_notifications_protocol` method that
+		// can be called even after the network has been initialized. However, we want to avoid the
+		// situation where `register_notifications_protocol` is called *after* the network actually
+		// connects to other peers. For this reason, we delay the process of the network future until
+		// the user calls `NetworkStarter::start_network`.
+		//
+		// This entire hack should eventually be removed in favour of passing the list of protocols
+		// through the configuration.
+		//
+		// See also https://github.com/paritytech/substrate/issues/6827
+		let (network_start_tx, network_start_rx) = oneshot::channel();
 
-	// The network worker is responsible for gathering all network messages and processing
-	// them. This is quite a heavy task, and at the time of the writing of this comment it
-	// frequently happens that this future takes several seconds or in some situations
-	// even more than a minute until it has processed its entire queue. This is clearly an
-	// issue, and ideally we would like to fix the network future to take as little time as
-	// possible, but we also take the extra harm-prevention measure to execute the networking
-	// future using `spawn_blocking`.
-	spawn_handle.spawn_blocking("network-worker", async move {
-		if network_start_rx.await.is_err() {
-			debug_assert!(false);
-			log::warn!(
-				"The NetworkStart returned as part of `build_network` has been silently dropped"
-			);
-			// This `return` might seem unnecessary, but we don't want to make it look like
-			// everything is working as normal even though the user is clearly misusing the API.
-			return;
-		}
+		// The network worker is responsible for gathering all network messages and processing
+		// them. This is quite a heavy task, and at the time of the writing of this comment it
+		// frequently happens that this future takes several seconds or in some situations
+		// even more than a minute until it has processed its entire queue. This is clearly an
+		// issue, and ideally we would like to fix the network future to take as little time as
+		// possible, but we also take the extra harm-prevention measure to execute the networking
+		// future using `spawn_blocking`.
+		spawn_handle.spawn_blocking("network-worker", async move {
+			if network_start_rx.await.is_err() {
+				debug_assert!(false);
+				log::warn!(
+					"The NetworkStart returned as part of `build_network` has been silently dropped"
+				);
+				// This `return` might seem unnecessary, but we don't want to make it look like
+				// everything is working as normal even though the user is clearly misusing the API.
+				return;
+			}
 
-		future.await
-	});
+			future.await
+		});
 
-	Ok((network, network_status_sinks, system_rpc_tx, NetworkStarter(network_start_tx)))
+		Ok((network, network_status_sinks, system_rpc_tx, NetworkStarter(network_start_tx)))
+	}
 }
 
 /// Object used to start the network.
