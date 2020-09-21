@@ -256,6 +256,8 @@ where
 					if let Some(event) = event {
 						self.handle_dht_event(event).await;
 					} else {
+						// This point is reached if the network has shut down, at which point there is not
+						// much else to do than to shut down the authority discovery as well.
 						return;
 					}
 				},
@@ -263,6 +265,8 @@ where
 				msg = self.from_service.next().fuse() => {
 					if let Some(msg) = msg {
 						self.process_message_from_service(msg).await;
+					} else {
+						return;
 					}
 				},
 				// Set peerset priority group to a new random set of addresses.
