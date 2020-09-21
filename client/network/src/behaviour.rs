@@ -312,7 +312,8 @@ impl<B: BlockT, H: ExHashT, M: MultihashDigest> Behaviour<B, H, M> {
 		self.discovery.put_value(key, value);
 	}
 
-	/// Starts querying the providers of a key from the DHT. Will later produce a `Providers` or `GetProvidersFailed` event.
+	/// Starts querying the providers of a key from the DHT. Will later produce a `Providers` or
+	/// `GetProvidersFailed` event.
 	pub fn providers(&mut self, key: &record::Key) {
 		self.discovery.providers(key);
 	}
@@ -429,7 +430,8 @@ Behaviour<B, H, M> {
 	}
 }
 
-impl<B: BlockT, H: ExHashT, M: MultihashDigest> NetworkBehaviourEventProcess<request_responses::Event> for Behaviour<B, H, M> {
+impl<B: BlockT, H: ExHashT, M: MultihashDigest> NetworkBehaviourEventProcess<request_responses::Event>
+	for Behaviour<B, H, M> {
 	fn inject_event(&mut self, event: request_responses::Event) {
 		match event {
 			request_responses::Event::InboundRequest { peer, protocol, result } => {
@@ -450,7 +452,8 @@ impl<B: BlockT, H: ExHashT, M: MultihashDigest> NetworkBehaviourEventProcess<req
 	}
 }
 
-impl<B: BlockT, H: ExHashT, M: MultihashDigest> NetworkBehaviourEventProcess<block_requests::Event<B>> for Behaviour<B, H, M> {
+impl<B: BlockT, H: ExHashT, M: MultihashDigest> NetworkBehaviourEventProcess<block_requests::Event<B>>
+	for Behaviour<B, H, M> {
 	fn inject_event(&mut self, event: block_requests::Event<B>) {
 		match event {
 			block_requests::Event::AnsweredRequest { peer, total_handling_time } => {
@@ -484,7 +487,8 @@ impl<B: BlockT, H: ExHashT, M: MultihashDigest> NetworkBehaviourEventProcess<blo
 	}
 }
 
-impl<B: BlockT, H: ExHashT, M: MultihashDigest> NetworkBehaviourEventProcess<finality_requests::Event<B>> for Behaviour<B, H, M> {
+impl<B: BlockT, H: ExHashT, M: MultihashDigest> NetworkBehaviourEventProcess<finality_requests::Event<B>>
+	for Behaviour<B, H, M> {
 	fn inject_event(&mut self, event: finality_requests::Event<B>) {
 		match event {
 			finality_requests::Event::Response { peer, block_hash, proof } => {

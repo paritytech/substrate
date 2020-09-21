@@ -317,7 +317,8 @@ impl DiscoveryBehaviour {
 				warn!(
 					target: "sub-libp2p",
 					"Libp2p => Failed to start providing: {:?}", e);
-				self.pending_events.push_back(DiscoveryOut::StartProvidingFailed(key.clone(), Duration::from_secs(0)));
+				let ev = DiscoveryOut::StartProvidingFailed(key.clone(), Duration::from_secs(0));
+				self.pending_events.push_back(ev);
 			}
 		}
 	}

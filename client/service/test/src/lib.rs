@@ -66,6 +66,8 @@ struct TestNet<G, E, F, L, U> {
 	nodes: usize,
 }
 
+type TestNetworkService<B> = sc_network::NetworkService<B, <B as BlockT>::Hash, Multihash>;
+
 pub trait TestNetNode: Clone + Future<Item = (), Error = sc_service::Error> + Send + 'static {
 	type Block: BlockT;
 	type Backend: Backend<Self::Block>;
@@ -75,14 +77,14 @@ pub trait TestNetNode: Clone + Future<Item = (), Error = sc_service::Error> + Se
 
 	fn client(&self) -> Arc<Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>>;
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
-	fn network(&self) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash, Multihash>>;
+	fn network(&self) -> Arc<TestNetworkService<Self::Block>>;
 }
 
 pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
 	task_manager: Arc<Mutex<TaskManager>>,
 	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 	transaction_pool: Arc<TExPool>,
-	network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash, Multihash>>,
+	network: Arc<TestNetworkService<TBl>>,
 }
 
 impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool>
@@ -90,7 +92,7 @@ TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
 	pub fn new(
 		task_manager: TaskManager,
 		client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
-		network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash, Multihash>>,
+		network: Arc<TestNetworkService<TBl>>,
 		transaction_pool: Arc<TExPool>,
 	) -> Self {
 		Self {
@@ -145,7 +147,7 @@ TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool>
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool> {
 		self.transaction_pool.clone()
 	}
-	fn network(&self) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash, tiny_multihash::Multihash>> {
+	fn network(&self) -> Arc<TestNetworkService<Self::Block>> {
 		self.network.clone()
 	}
 }

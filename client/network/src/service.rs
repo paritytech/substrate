@@ -570,10 +570,11 @@ impl<B: BlockT + 'static, H: ExHashT, M: MultihashDigest> NetworkWorker<B, H, M>
 				.collect()
 		};
 
+		let external_addresses = Swarm::<B, H, M>::external_addresses(&swarm).cloned().collect();
 		NetworkState {
 			peer_id: Swarm::<B, H, M>::local_peer_id(&swarm).to_base58(),
 			listened_addresses: Swarm::<B, H, M>::listeners(&swarm).cloned().collect(),
-			external_addresses: Swarm::<B, H, M>::external_addresses(&swarm).cloned().collect(),
+			external_addresses,
 			connected_peers,
 			not_connected_peers,
 			peerset: swarm.user_protocol_mut().peerset_debug_info(),
