@@ -97,12 +97,14 @@ impl pallet_transaction_payment::Trait for Test {
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }
+
 impl Trait for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = system::Module<Test>;
+	type MaxLocks = ();
 	type WeightInfo = ();
 }
 

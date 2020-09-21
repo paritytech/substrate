@@ -27,7 +27,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	traits::{Get},
-	weights::{PostDispatchInfo, DispatchInfo, DispatchClass},
+	weights::{PostDispatchInfo, DispatchInfo, DispatchClass, priority::FrameTransactionPriority},
 	StorageValue,
 };
 
@@ -108,12 +108,18 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	}
 
 	/// Get the priority of an extrinsic denoted by `info`.
+	///
+	/// Operational transaction will be given a fixed initial amount to be fairly distinguished from
+	/// the normal ones.
 	fn get_priority(info: &DispatchInfoOf<T::Call>) -> TransactionPriority {
 		match info.class {
-			DispatchClass::Normal => info.weight.into(),
-			// Don't use up the whole priority space, to allow things like `tip`
-			// to be taken into account as well.
-			DispatchClass::Operational => TransactionPriority::max_value() / 2,
+			// Normal transaction.
+			DispatchClass::Normal =>
+				FrameTransactionPriority::Normal(info.weight.into()).into(),
+			// Don't use up the whole priority space, to allow things like `tip` to be taken into
+			// account as well.
+			DispatchClass::Operational =>
+				FrameTransactionPriority::Operational(info.weight.into()).into(),
 			// Mandatory extrinsics are only for inherents; never transactions.
 			DispatchClass::Mandatory => TransactionPriority::min_value(),
 		}
@@ -451,7 +457,7 @@ mod tests {
 	}
 
 	#[test]
-	fn signed_ext() {
+	fn signed_ext_check_weight_works() {
 		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: Pays::Yes };
@@ -467,7 +473,7 @@ mod tests {
 				.validate(&1, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, u64::max_value() / 2);
+			assert_eq!(priority, frame_support::weights::priority::LIMIT + 100);
 		})
 	}
 

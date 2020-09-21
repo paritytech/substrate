@@ -230,11 +230,11 @@ decl_event! {
 		<T as Trait>::Balance,
 		<T as Trait>::AssetId,
 	{
-		/// Some assets were issued. [asset_id, owner, total_supply]
+		/// Some assets were issued. \[asset_id, owner, total_supply\]
 		Issued(AssetId, AccountId, Balance),
-		/// Some assets were transferred. [asset_id, from, to, amount]
+		/// Some assets were transferred. \[asset_id, from, to, amount\]
 		Transferred(AssetId, AccountId, AccountId, Balance),
-		/// Some assets were destroyed. [asset_id, owner, balance]
+		/// Some assets were destroyed. \[asset_id, owner, balance\]
 		Destroyed(AssetId, AccountId, Balance),
 	}
 }

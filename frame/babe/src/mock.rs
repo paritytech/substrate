@@ -147,6 +147,7 @@ parameter_types! {
 }
 
 impl pallet_balances::Trait for Test {
+	type MaxLocks = ();
 	type Balance = u128;
 	type DustRemoval = ();
 	type Event = ();
@@ -225,7 +226,6 @@ impl pallet_offences::Trait for Test {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
-	type WeightInfo = ();
 }
 
 impl Trait for Test {
@@ -244,6 +244,7 @@ impl Trait for Test {
 	)>>::IdentificationTuple;
 
 	type HandleEquivocation = super::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+	type WeightInfo = ();
 }
 
 pub type Balances = pallet_balances::Module<Test>;

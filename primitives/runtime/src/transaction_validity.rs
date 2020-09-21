@@ -98,7 +98,7 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::BadProof => "Transaction has a bad signature",
 			InvalidTransaction::AncientBirthBlock => "Transaction has an ancient birth block",
 			InvalidTransaction::ExhaustsResources =>
-				"Transaction would exhausts the block limits",
+				"Transaction would exhaust the block limits",
 			InvalidTransaction::Payment =>
 				"Inability to pay some fees (e.g. account balance too low)",
 			InvalidTransaction::BadMandatory =>

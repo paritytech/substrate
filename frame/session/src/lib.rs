@@ -123,6 +123,8 @@ mod tests;
 #[cfg(feature = "historical")]
 pub mod historical;
 
+mod default_weights;
+
 /// Decides whether the session should be ended.
 pub trait ShouldEndSession<BlockNumber> {
 	/// Return `true` if the session should be ended.
@@ -352,13 +354,8 @@ impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
 }
 
 pub trait WeightInfo {
-	fn set_keys(n: u32, ) -> Weight;
-	fn purge_keys(n: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn set_keys(_n: u32, ) -> Weight { 1_000_000_000 }
-	fn purge_keys(_n: u32, ) -> Weight { 1_000_000_000 }
+	fn set_keys() -> Weight;
+	fn purge_keys() -> Weight;
 }
 
 pub trait Trait: frame_system::Trait {
@@ -484,7 +481,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event {
-		/// New session has happened. Note that the argument is the [session_index], not the block
+		/// New session has happened. Note that the argument is the \[session_index\], not the block
 		/// number as the type might suggest.
 		NewSession(SessionIndex),
 	}
@@ -524,9 +521,7 @@ decl_module! {
 		/// - DbReads per key id: `KeyOwner`
 		/// - DbWrites per key id: `KeyOwner`
 		/// # </weight>
-		#[weight = 200_000_000
-			+ T::DbWeight::get().reads(2 + T::Keys::key_ids().len() as Weight)
-			+ T::DbWeight::get().writes(1 + T::Keys::key_ids().len() as Weight)]
+		#[weight = T::WeightInfo::set_keys()]
 		pub fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -549,8 +544,7 @@ decl_module! {
 		/// - DbWrites: `NextKeys`, `origin account`
 		/// - DbWrites per key id: `KeyOwnder`
 		/// # </weight>
-		#[weight = 120_000_000
-			+ T::DbWeight::get().reads_writes(2, 1 + T::Keys::key_ids().len() as Weight)]
+		#[weight = T::WeightInfo::purge_keys()]
 		pub fn purge_keys(origin) {
 			let who = ensure_signed(origin)?;
 			Self::do_purge_keys(&who)?;

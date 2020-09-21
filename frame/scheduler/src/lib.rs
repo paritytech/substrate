@@ -52,6 +52,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
+mod default_weights;
 
 use sp_std::{prelude::*, marker::PhantomData, borrow::Borrow};
 use codec::{Encode, Decode, Codec};
@@ -69,15 +70,6 @@ pub trait WeightInfo {
 	fn cancel(s: u32, ) -> Weight;
 	fn schedule_named(s: u32, ) -> Weight;
 	fn cancel_named(s: u32, ) -> Weight;
-	fn on_initialize(s: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn schedule(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn cancel(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn schedule_named(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn cancel_named(_s: u32, ) -> Weight { 1_000_000_000 }
-	fn on_initialize(_s: u32, ) -> Weight { 1_000_000_000 }
 }
 
 /// Our pallet's configuration trait. All our types and constants go in here. If the
@@ -105,6 +97,10 @@ pub trait Trait: system::Trait {
 
 	/// Required origin to schedule or cancel calls.
 	type ScheduleOrigin: EnsureOrigin<<Self as system::Trait>::Origin>;
+
+	/// The maximum number of scheduled calls in the queue for a single block.
+	/// Not strictly enforced, but used for weight estimation.
+	type MaxScheduledPerBlock: Get<u32>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -177,11 +173,11 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::BlockNumber {
-		/// Scheduled some task. [when, index]
+		/// Scheduled some task. \[when, index\]
 		Scheduled(BlockNumber, u32),
-		/// Canceled some task. [when, index]
+		/// Canceled some task. \[when, index\]
 		Canceled(BlockNumber, u32),
-		/// Dispatched some task. [task, id, result]
+		/// Dispatched some task. \[task, id, result\]
 		Dispatched(TaskAddress<BlockNumber>, Option<Vec<u8>>, DispatchResult),
 	}
 );
@@ -213,7 +209,7 @@ decl_module! {
 		///     - Write: Agenda
 		/// - Will use base weight of 25 which should be good for up to 30 scheduled calls
 		/// # </weight>
-		#[weight = 25_000_000 + T::DbWeight::get().reads_writes(1, 1)]
+		#[weight = T::WeightInfo::schedule(T::MaxScheduledPerBlock::get())]
 		fn schedule(origin,
 			when: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
@@ -235,7 +231,7 @@ decl_module! {
 		///     - Write: Agenda, Lookup
 		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
 		/// # </weight>
-		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(1, 2)]
+		#[weight = T::WeightInfo::cancel(T::MaxScheduledPerBlock::get())]
 		fn cancel(origin, when: T::BlockNumber, index: u32) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Trait>::Origin::from(origin);
@@ -252,7 +248,7 @@ decl_module! {
 		///     - Write: Agenda, Lookup
 		/// - Will use base weight of 35 which should be good for more than 30 scheduled calls
 		/// # </weight>
-		#[weight = 35_000_000 + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = T::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get())]
 		fn schedule_named(origin,
 			id: Vec<u8>,
 			when: T::BlockNumber,
@@ -277,7 +273,7 @@ decl_module! {
 		///     - Write: Agenda, Lookup
 		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
 		/// # </weight>
-		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = T::WeightInfo::cancel_named(T::MaxScheduledPerBlock::get())]
 		fn cancel_named(origin, id: Vec<u8>) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Trait>::Origin::from(origin);
@@ -289,7 +285,7 @@ decl_module! {
 		/// # <weight>
 		/// Same as [`schedule`].
 		/// # </weight>
-		#[weight = 25_000_000 + T::DbWeight::get().reads_writes(1, 1)]
+		#[weight = T::WeightInfo::schedule(T::MaxScheduledPerBlock::get())]
 		fn schedule_after(origin,
 			after: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
@@ -308,7 +304,7 @@ decl_module! {
 		/// # <weight>
 		/// Same as [`schedule_named`].
 		/// # </weight>
-		#[weight = 35_000_000 + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = T::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get())]
 		fn schedule_named_after(origin,
 			id: Vec<u8>,
 			after: T::BlockNumber,
@@ -340,16 +336,20 @@ decl_module! {
 				.enumerate()
 				.filter_map(|(index, s)| s.map(|inner| (index as u32, inner)))
 				.collect::<Vec<_>>();
+			if queued.len() as u32 > T::MaxScheduledPerBlock::get() {
+				frame_support::debug::warn!(
+					"Warning: This block has more items queued in Scheduler than \
+					expected from the runtime configuration. An update might be needed."
+				);
+			}
 			queued.sort_by_key(|(_, s)| s.priority);
-			let base_weight: Weight = T::DbWeight::get().reads_writes(1, 2) // Agenda + Agenda(next)
-				.saturating_add(10_000_000); // Base Weight
+			let base_weight: Weight = T::DbWeight::get().reads_writes(1, 2); // Agenda + Agenda(next)
 			let mut total_weight: Weight = 0;
 			queued.into_iter()
 				.enumerate()
 				.scan(base_weight, |cumulative_weight, (order, (index, s))| {
 					*cumulative_weight = cumulative_weight
-						.saturating_add(s.call.get_dispatch_info().weight)
-						.saturating_add(25_000_000); // Base multiplier
+						.saturating_add(s.call.get_dispatch_info().weight);
 
 					if s.maybe_id.is_some() {
 						// Remove/Modify Lookup
@@ -466,6 +466,12 @@ impl<T: Trait> Module<T> {
 		});
 		Agenda::<T>::append(when, s);
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
+		if index > T::MaxScheduledPerBlock::get() {
+			frame_support::debug::warn!(
+				"Warning: There are more items queued in the Scheduler than \
+				expected from the runtime configuration. An update might be needed."
+			);
+		}
 		Self::deposit_event(RawEvent::Scheduled(when, index));
 
 		Ok((when, index))
@@ -535,6 +541,12 @@ impl<T: Trait> Module<T> {
 		};
 		Agenda::<T>::append(when, Some(s));
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
+		if index > T::MaxScheduledPerBlock::get() {
+			frame_support::debug::warn!(
+				"Warning: There are more items queued in the Scheduler than \
+				expected from the runtime configuration. An update might be needed."
+			);
+		}
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);
 		Self::deposit_event(RawEvent::Scheduled(when, index));
@@ -729,6 +741,7 @@ mod tests {
 	}
 	parameter_types! {
 		pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
+		pub const MaxScheduledPerBlock: u32 = 10;
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
@@ -741,6 +754,7 @@ mod tests {
 		type Call = Call;
 		type MaximumWeight = MaximumSchedulerWeight;
 		type ScheduleOrigin = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+		type MaxScheduledPerBlock = MaxScheduledPerBlock;
 		type WeightInfo = ();
 	}
 	type System = system::Module<Test>;
@@ -977,8 +991,8 @@ mod tests {
 	#[test]
 	fn on_initialize_weight_is_correct() {
 		new_test_ext().execute_with(|| {
-			let base_weight: Weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 2) + 10_000_000;
-			let base_multiplier = 25_000_000;
+			let base_weight: Weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 2);
+			let base_multiplier = 0;
 			let named_multiplier = <Test as frame_system::Trait>::DbWeight::get().writes(1);
 			let periodic_multiplier = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 1);
 

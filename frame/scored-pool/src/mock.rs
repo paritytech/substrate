@@ -71,6 +71,7 @@ impl frame_system::Trait for Test {
 }
 
 impl pallet_balances::Trait for Test {
+	type MaxLocks = ();
 	type Balance = u64;
 	type Event = ();
 	type DustRemoval = ();

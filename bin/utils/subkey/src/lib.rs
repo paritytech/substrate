@@ -39,7 +39,7 @@ pub enum Subkey {
 	Generate(GenerateCmd),
 
 	/// Gets a public key and a SS58 address from the provided Secret URI
-	InspectKey(InspectKeyCmd),
+	Inspect(InspectKeyCmd),
 
 	/// Print the peer ID corresponding to the node key in the given file
 	InspectNodeKey(InspectNodeKeyCmd),
@@ -69,7 +69,7 @@ pub fn run<R>() -> Result<(), Error>
 	match Subkey::from_args() {
 		Subkey::GenerateNodeKey(cmd) => cmd.run()?,
 		Subkey::Generate(cmd) => cmd.run()?,
-		Subkey::InspectKey(cmd) => cmd.run()?,
+		Subkey::Inspect(cmd) => cmd.run()?,
 		Subkey::InspectNodeKey(cmd) => cmd.run()?,
 		Subkey::Insert(cmd) => cmd.run()?,
 		Subkey::ModuleId(cmd) => cmd.run::<R>()?,

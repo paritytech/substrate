@@ -97,6 +97,9 @@ impl pallet_transaction_payment::Trait for Test {
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }
+parameter_types! {
+	pub const MaxLocks: u32 = 50;
+}
 impl Trait for Test {
 	type Balance = u64;
 	type DustRemoval = ();
@@ -108,6 +111,7 @@ impl Trait for Test {
 		system::CallKillAccount<Test>,
 		u64, super::AccountData<u64>
 	>;
+	type MaxLocks = MaxLocks;
 	type WeightInfo = ();
 }
 

@@ -222,6 +222,7 @@ impl frame_system::Trait for Test {
 	type SystemWeightInfo = ();
 }
 impl pallet_balances::Trait for Test {
+	type MaxLocks = ();
 	type Balance = Balance;
 	type Event = MetaEvent;
 	type DustRemoval = ();
@@ -446,7 +447,7 @@ impl ExtBuilder {
 		MAX_ITERATIONS.with(|v| *v.borrow_mut() = self.max_offchain_iterations);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
-		let _ = env_logger::try_init();
+		sp_tracing::try_init_simple();
 		self.set_associated_constants();
 		let mut storage = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()

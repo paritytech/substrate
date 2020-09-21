@@ -1,12 +1,12 @@
 [package]
-name = "pallet-generic-asset"
+name = "pallet-node-authorization"
 version = "2.0.0-rc6"
-authors = ["Centrality Developers <support@centrality.ai>"]
+authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "FRAME pallet for generic asset management"
+description = "FRAME pallet for node authorization"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -14,22 +14,22 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "2.0.0-rc6", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-rc6", default-features = false, path = "../system" }
-
-[dev-dependencies]
-sp-io ={ version = "2.0.0-rc6", path = "../../primitives/io" }
-sp-core = { version = "2.0.0-rc6", path = "../../primitives/core" }
+sp-core = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/std" }
 
 [features]
 default = ["std"]
-std =[
-	"serde/std",
+std = [
+	"serde",
 	"codec/std",
-	"sp-std/std",
-	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
