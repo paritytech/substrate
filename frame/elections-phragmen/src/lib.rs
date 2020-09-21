@@ -2408,7 +2408,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, true),
 				Error::<Test>::InvalidReplacement,
-				Some(30159000), // only thing that matters for now is that it is NOT the full block.
+				Some(45302000), // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 
