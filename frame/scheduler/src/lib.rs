@@ -446,12 +446,9 @@ impl<T: Trait> Module<T> {
 			agenda
 				.into_iter()
 				.map(|schedule| schedule.map(|schedule| Scheduled {
-					maybe_id: schedule.maybe_id,
-					priority: schedule.priority,
-					call: schedule.call,
-					maybe_periodic: schedule.maybe_periodic,
 					origin: schedule.origin.into(),
 					_phantom: Default::default(),
+					..scheduled
 				}))
 				.collect::<Vec<_>>()
 		));
