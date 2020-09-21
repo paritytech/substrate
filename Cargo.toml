@@ -79,7 +79,6 @@ members = [
 	"frame/example-offchain-worker",
 	"frame/executive",
 	"frame/finality-tracker",
-	"frame/generic-asset",
 	"frame/grandpa",
 	"frame/identity",
 	"frame/im-online",
