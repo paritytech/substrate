@@ -234,7 +234,7 @@ mod tests {
 		TestClientBuilder,
 	};
 	use sp_application_crypto::AppPair;
-	use sp_keyring::Ed25519Keyring;
+	use sp_keyring::Sr25519Keyring;
 	use sp_core::{crypto::key_types::BABE, traits::SyncCryptoStore};
 	use sc_keystore::LocalKeystore;
 
@@ -243,7 +243,7 @@ mod tests {
 	use jsonrpc_core::IoHandler;
 
 	/// creates keystore backed by a temp file
-	fn create_temp_keystore<P: AppPair>(authority: Ed25519Keyring) -> (Arc<SyncCryptoStore>, tempfile::TempDir) {
+	fn create_temp_keystore<P: AppPair>(authority: Sr25519Keyring) -> (Arc<SyncCryptoStore>, tempfile::TempDir) {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore: SyncCryptoStore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore").into();
 		keystore.sr25519_generate_new(BABE, Some(&authority.to_seed()))
@@ -266,7 +266,7 @@ mod tests {
 		).expect("can initialize block-import");
 
 		let epoch_changes = link.epoch_changes().clone();
-		let keystore = create_temp_keystore::<AuthorityPair>(Ed25519Keyring::Alice).0;
+		let keystore = create_temp_keystore::<AuthorityPair>(Sr25519Keyring::Alice).0;
 
 		BabeRpcHandler::new(
 			client.clone(),
