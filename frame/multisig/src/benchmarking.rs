@@ -76,6 +76,7 @@ benchmarks! {
 	}: as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call, false, 0)
 	verify {
 		assert!(Multisigs::<T>::contains_key(multi_account_id, call_hash));
+		assert!(!Calls::<T>::contains_key(call_hash));
 	}
 
 	as_multi_create_store {
@@ -108,11 +109,35 @@ benchmarks! {
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi, storing for worst case
 		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone(), true, 0)?;
+		assert!(Calls::<T>::contains_key(call_hash));
 		let caller2 = signatories2.remove(0);
 	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call, false, 0)
 	verify {
 		let multisig = Multisigs::<T>::get(multi_account_id, call_hash).ok_or("multisig not created")?;
 		assert_eq!(multisig.approvals.len(), 2);
+	}
+
+	as_multi_approve_store {
+		// Signatories, need at least 3 people (so we don't complete the multisig)
+		let s in 3 .. T::MaxSignatories::get() as u32;
+		// Transaction Length
+		let z in 0 .. 10_000;
+		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let call_hash = blake2_256(&call);
+		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
+		let mut signatories2 = signatories.clone();
+		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+		// before the call, get the timepoint
+		let timepoint = Multisig::<T>::timepoint();
+		// Create the multi, not storing
+		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone(), false, 0)?;
+		assert!(!Calls::<T>::contains_key(call_hash));
+		let caller2 = signatories2.remove(0);
+	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call, true, 0)
+	verify {
+		let multisig = Multisigs::<T>::get(multi_account_id, call_hash).ok_or("multisig not created")?;
+		assert_eq!(multisig.approvals.len(), 2);
+		assert!(Calls::<T>::contains_key(call_hash));
 	}
 
 	as_multi_complete {
@@ -278,6 +303,7 @@ mod tests {
 			assert_ok!(test_benchmark_as_multi_create::<Test>());
 			assert_ok!(test_benchmark_as_multi_create_store::<Test>());
 			assert_ok!(test_benchmark_as_multi_approve::<Test>());
+			assert_ok!(test_benchmark_as_multi_approve_store::<Test>());
 			assert_ok!(test_benchmark_as_multi_complete::<Test>());
 			assert_ok!(test_benchmark_approve_as_multi_create::<Test>());
 			assert_ok!(test_benchmark_approve_as_multi_approve::<Test>());
