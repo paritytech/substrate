@@ -448,7 +448,7 @@ impl<T: Trait> Module<T> {
 				.map(|schedule| schedule.map(|schedule| Scheduled {
 					origin: schedule.origin.into(),
 					_phantom: Default::default(),
-					..schedule
+					..scheduled
 				}))
 				.collect::<Vec<_>>()
 		));
