@@ -794,8 +794,13 @@ impl SignatureBatching {
 
 impl Drop for SignatureBatching {
 	fn drop(&mut self) {
+		#[cfg(feature = "std")]
+		let panicking = std::thread::panicking();
+		#[cfg(not(feature = "std"))]
+		let panicking = false;
+
 		// Sanity check. If user forgets to actually call `verify()`.
-		if !self.0 {
+		if !self.0 && !panicking {
 			panic!("Signature verification has not been called before `SignatureBatching::drop`")
 		}
 	}
@@ -883,6 +888,20 @@ mod tests {
 				&Vec::new(),
 				&Default::default(),
 			);
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "Hey, I'm an error")]
+	fn batching_does_not_panics_while_thread_is_already_panicking() {
+		let mut ext = sp_state_machine::BasicExternalities::default();
+		ext.register_extension(
+			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
+		);
+
+		ext.execute_with(|| {
+			let _batching = SignatureBatching::start();
+			panic!("Hey, I'm an error");
 		});
 	}
 }
