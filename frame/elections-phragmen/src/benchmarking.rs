@@ -70,7 +70,7 @@ fn candidate_count<T: Trait>() -> u32 {
 
 /// Get the number of votes of a voter.
 fn vote_count_of<T: Trait>(who: &T::AccountId) -> u32 {
-	<Voting<T>>::get(who).votes.len() as u32
+	<Voting<T>>::get(who).1.len() as u32
 }
 
 /// A `DefunctVoter` struct with correct value
@@ -111,10 +111,9 @@ fn submit_candidates_with_self_vote<T: Trait>(c: u32, prefix: &'static str)
 
 /// Submit one voter.
 fn submit_voter<T: Trait>(caller: T::AccountId, votes: Vec<T::AccountId>, stake: BalanceOf<T>)
-	-> Result<frame_support::dispatch::PostDispatchInfo, &'static str>
+	-> Result<(), sp_runtime::DispatchError>
 {
 	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
-		.map_err(|_| "failed to submit vote")
 }
 
 /// create `num_voter` voters who randomly vote for at most `votes` of `all_candidates` if
@@ -243,8 +242,13 @@ benchmarks! {
 		let bailing_candidates = submit_candidates::<T>(v, "bailing_candidates")?;
 		let all_candidates = submit_candidates::<T>(c, "all_candidates")?;
 
-		// account 1 is the reporter and must be whitelisted.
+		// account 1 is the reporter and must be whitelisted, and a voter.
 		let account_1 = endowed_account::<T>("caller", 0);
+		submit_voter::<T>(
+			account_1.clone(),
+			all_candidates.iter().take(1).cloned().collect(),
+			stake,
+		)?;
 
 		// account 2 votes for all of the mentioned candidates.
 		let account_2 = endowed_account::<T>("caller_2", 1);
@@ -300,8 +304,13 @@ benchmarks! {
 		// create a bunch of candidates as well.
 		let all_candidates = submit_candidates::<T>(c, "candidates")?;
 
-		// account 1 is the reporter and need to be whitelisted.
+		// account 1 is the reporter and need to be whitelisted, and a voter.
 		let account_1 = endowed_account::<T>("caller", 0);
+		submit_voter::<T>(
+			account_1.clone(),
+			all_candidates.iter().take(1).cloned().collect(),
+			stake,
+		)?;
 
 		// account 2 votes for a bunch of crap, and finally a correct candidate.
 		let account_2 = endowed_account::<T>("caller_2", 1);
