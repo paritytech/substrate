@@ -19,7 +19,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gem install changelogerator
+          gem install 'changelogerator:0.0.5' git
           ruby $GITHUB_WORKSPACE/.maintain/github/generate_release_text.rb | tee release_text.md
       - name: Create draft release
         id: create-release
