@@ -19,12 +19,13 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
+use std::path::PathBuf;
 use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis};
 use sp_runtime::traits::Zero;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-pub fn open_file(path: &str) -> Result<File, std::io::Error> {
+pub fn open_file(path: PathBuf) -> Result<File, std::io::Error> {
 	OpenOptions::new()
 		.create(true)
 		.write(true)
@@ -47,13 +48,18 @@ fn underscore<Number>(i: Number) -> String
     s
 }
 
-pub fn write_trait(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<(), std::io::Error> {
+pub fn write_trait(batches: &[BenchmarkBatch], path: &PathBuf) -> Result<(), std::io::Error> {
+	let mut file_path = path.clone();
+	file_path.push("trait");
+	file_path.set_extension("rs");
+	let mut file = crate::writer::open_file(file_path)?;
+
 	let mut current_pallet = Vec::<u8>::new();
 
 	// Skip writing if there are no batches
 	if batches.is_empty() { return Ok(()) }
 
-	for batch in &batches {
+	for batch in batches {
 		// Skip writing if there are no results
 		if batch.results.is_empty() { continue }
 
@@ -92,7 +98,7 @@ pub fn write_trait(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<(), 
 	Ok(())
 }
 
-pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
+pub fn write_results(batches: &[BenchmarkBatch], path: &PathBuf) -> Result<(), std::io::Error> {
 	let mut current_pallet = Vec::<u8>::new();
 
 	// Skip writing if there are no batches
@@ -103,8 +109,12 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 	let first_pallet = String::from_utf8(
 		batches_iter.peek().expect("we checked that batches is not empty").pallet.clone()
 	).unwrap();
-	let mut file = open_file(&(first_pallet + ".rs"))?;
 
+	let mut file_path = path.clone();
+	file_path.push(first_pallet);
+	file_path.set_extension("rs");
+
+	let mut file = open_file(file_path)?;
 
 	while let Some(batch) = batches_iter.next() {
 		// Skip writing if there are no results
@@ -115,6 +125,13 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 
 		// only create new trait definitions when we go to a new pallet
 		if batch.pallet != current_pallet {
+			// title of file
+			write!(
+				file,
+				"//! Weights for {}\n",
+				 pallet_string,
+			)?;
+
 			// auto-generation note
 			write!(
 				file,
@@ -131,14 +148,14 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 			// general imports
 			write!(
 				file,
-				"use frame_support::weights::{{Weight, constants::RocksDbWeight as DbWeight}};\n\n"
+				"use frame_support::{{traits::Get, weights::Weight}};\nuse sp_std::marker::PhantomData;\n\n"
 			)?;
 
 			// struct for weights
-			write!(file, "pub struct WeightInfo;\n")?;
+			write!(file, "pub struct WeightInfo<T>(PhantomData<T>);\n")?;
 
 			// trait wrapper
-			write!(file, "impl {}::WeightInfo for WeightInfo {{\n", pallet_string)?;
+			write!(file, "impl<T: frame_system::Trait> {}::WeightInfo for WeightInfo<T> {{\n", pallet_string)?;
 
 			current_pallet = batch.pallet.clone()
 		}
@@ -200,20 +217,20 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 		})?;
 
 		if !reads.base.is_zero() {
-			write!(file, "\t\t\t.saturating_add(DbWeight::get().reads({} as Weight))\n", reads.base)?;
+			write!(file, "\t\t\t.saturating_add(T::DbWeight::get().reads({} as Weight))\n", reads.base)?;
 		}
 		used_reads.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
-			write!(file, "\t\t\t.saturating_add(DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
+			write!(file, "\t\t\t.saturating_add(T::DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
 				slope,
 				name,
 			)
 		})?;
 
 		if !writes.base.is_zero() {
-			write!(file, "\t\t\t.saturating_add(DbWeight::get().writes({} as Weight))\n", writes.base)?;
+			write!(file, "\t\t\t.saturating_add(T::DbWeight::get().writes({} as Weight))\n", writes.base)?;
 		}
 		used_writes.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
-			write!(file, "\t\t\t.saturating_add(DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
+			write!(file, "\t\t\t.saturating_add(T::DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
 				slope,
 				name,
 			)
@@ -228,7 +245,11 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 			if next.pallet != current_pallet {
 				write!(file, "}}\n")?;
 				let next_pallet = String::from_utf8(next.pallet.clone()).unwrap();
-				file = open_file(&(next_pallet + ".rs"))?;
+
+				let mut file_path = path.clone();
+				file_path.push(next_pallet);
+				file_path.set_extension("rs");
+				file = open_file(file_path)?;
 			}
 		} else {
 			// This is the end of the iterator, so we close up the final file.

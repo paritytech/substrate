@@ -60,13 +60,16 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub no_min_squares: bool,
 
-	/// Output the benchmarks to a Rust file.
+	/// Output the benchmarks to a Rust file at the given path.
 	#[structopt(long)]
-	pub output: bool,
+	pub output: Option<std::path::PathBuf>,
+
+	/// Add a header file to your outputted benchmarks
+	pub header: Option<String>,
 
 	/// Output the trait definition to a Rust file.
 	#[structopt(long)]
-	pub weight_trait: bool,
+	pub r#trait: bool,
 
 	/// Set the heap pages while running benchmarks.
 	#[structopt(long)]
