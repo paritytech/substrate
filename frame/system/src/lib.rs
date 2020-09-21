@@ -895,6 +895,10 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event_indexed(&[], event.into());
 	}
 
+	pub fn account_exists(who: &T::AccountId) -> bool {
+		Account::<T>::contains_key(who)
+	}
+
 	/// Increment the reference counter on an account.
 	pub fn inc_ref(who: &T::AccountId) {
 		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_add(1));
