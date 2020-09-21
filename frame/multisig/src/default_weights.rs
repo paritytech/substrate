@@ -24,67 +24,65 @@ use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 
 impl crate::WeightInfo for () {
 	fn as_multi_threshold_1(z: u32, ) -> Weight {
-		(16_663_000 as Weight)
+		(14_749_000 as Weight)
 			.saturating_add((1_000 as Weight).saturating_mul(z as Weight))
 	}
 	fn as_multi_create(s: u32, z: u32, ) -> Weight {
-		(80_524_000 as Weight)
-			.saturating_add((95_000 as Weight).saturating_mul(s as Weight))
+		(74_556_000 as Weight)
+			.saturating_add((135_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add((1_000 as Weight).saturating_mul(z as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
 	fn as_multi_create_store(s: u32, z: u32, ) -> Weight {
-		(91_837_000 as Weight)
-			.saturating_add((87_000 as Weight).saturating_mul(s as Weight))
+		(84_401_000 as Weight)
+			.saturating_add((132_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add((3_000 as Weight).saturating_mul(z as Weight))
 			.saturating_add(DbWeight::get().reads(4 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
 	fn as_multi_approve(s: u32, z: u32, ) -> Weight {
-		(49_536_000 as Weight)
-			.saturating_add((158_000 as Weight).saturating_mul(s as Weight))
+		(45_680_000 as Weight)
+			.saturating_add((137_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add((1_000 as Weight).saturating_mul(z as Weight))
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn as_multi_approve_store(s: u32, z: u32, ) -> Weight {
-		(89_275_000 as Weight)
+		(80_718_000 as Weight)
 			.saturating_add((172_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add((3_000 as Weight).saturating_mul(z as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
 	fn as_multi_complete(s: u32, z: u32, ) -> Weight {
-		(102_536_000 as Weight)
-			.saturating_add((285_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add((5_000 as Weight).saturating_mul(z as Weight))
+		(91_869_000 as Weight)
+			.saturating_add((274_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((6_000 as Weight).saturating_mul(z as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
-	// WARNING! Some components were not used: ["z"]
 	fn approve_as_multi_create(s: u32, ) -> Weight {
-		(79_991_000 as Weight)
-			.saturating_add((136_000 as Weight).saturating_mul(s as Weight))
+		(74_413_000 as Weight)
+			.saturating_add((143_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
-	// WARNING! Some components were not used: ["z"]
 	fn approve_as_multi_approve(s: u32, ) -> Weight {
-		(48_513_000 as Weight)
-			.saturating_add((161_000 as Weight).saturating_mul(s as Weight))
+		(44_624_000 as Weight)
+			.saturating_add((165_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
 	fn approve_as_multi_complete(s: u32, ) -> Weight {
-		(106_934_000 as Weight)
-			.saturating_add((284_000 as Weight).saturating_mul(s as Weight))
+		(169_412_000 as Weight)
+			.saturating_add((283_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
 	fn cancel_as_multi(s: u32, ) -> Weight {
-		(99_028_000 as Weight)
-			.saturating_add((129_000 as Weight).saturating_mul(s as Weight))
+		(120_213_000 as Weight)
+			.saturating_add((122_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
