@@ -100,7 +100,12 @@ pub trait CryptoStore: Send + Sync {
 	/// Places it into the file system store.
 	///
 	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
-	async fn insert_unknown(&self, _key_type: KeyTypeId, _suri: &str, _public: &[u8]) -> Result<(), ()>;
+	async fn insert_unknown(
+		&self,
+		_key_type: KeyTypeId,
+		_suri: &str,
+		_public: &[u8]
+	) -> Result<(), ()>;
 
 	/// Find intersection between provided keys and supported keys
 	///

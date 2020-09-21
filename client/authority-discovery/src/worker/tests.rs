@@ -845,7 +845,10 @@ fn lookup_throttling() {
 		for _ in 0..MAX_IN_FLIGHT_LOOKUPS {
 			assert!(matches!(receiver.next().await, Some(TestNetworkEvent::GetCalled(_))));
 		}
-		assert_eq!(metrics.requests_pending.get(), (remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS) as u64);
+		assert_eq!(
+			metrics.requests_pending.get(),
+			(remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS) as u64
+		);
 		assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
 
 		// Make first lookup succeed.
@@ -859,7 +862,10 @@ fn lookup_throttling() {
 
 		// Assert worker to trigger another lookup.
 		assert!(matches!(receiver.next().await, Some(TestNetworkEvent::GetCalled(_))));
-		assert_eq!(metrics.requests_pending.get(), (remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS - 1) as u64);
+		assert_eq!(
+			metrics.requests_pending.get(),
+			(remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS - 1) as u64
+		);
 		assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
 
 		// Make second one fail.
@@ -869,7 +875,10 @@ fn lookup_throttling() {
 
 		// Assert worker to trigger another lookup.
 		assert!(matches!(receiver.next().await, Some(TestNetworkEvent::GetCalled(_))));
-		assert_eq!(metrics.requests_pending.get(), (remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS - 2) as u64);
+		assert_eq!(
+			metrics.requests_pending.get(),
+			(remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS - 2) as u64
+		);
 		assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
 	}.boxed_local());
 }
