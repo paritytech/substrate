@@ -7,12 +7,12 @@ require 'erb'
 version = ENV['GITHUB_REF']
 token = ENV['GITHUB_TOKEN']
 
-substrate_path = ENV['GITHUB_WORKSPACE'] + '/substrate/'
+substrate_path = ENV['GITHUB_WORKSPACE']
 sg = Git.open(substrate_path)
 
 # Generate an ERB renderer based on the template .erb file
 renderer = ERB.new(
-  File.read(ENV['GITHUB_WORKSPACE'] + '/substrate/.maintain/github/substrate_release.erb'),
+  File.read(ENV['GITHUB_WORKSPACE'] + '/.maintain/github/substrate_release.erb'),
   trim_mode: '<>'
 )
 
