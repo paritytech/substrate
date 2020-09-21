@@ -42,7 +42,7 @@ use std::{collections::{HashMap, HashSet}, pin::Pin};
 use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
-use sp_core::{H256, crypto::Public, traits::CryptoStore};
+use sp_core::{H256, crypto::Public, traits::SyncCryptoStorePtr};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
@@ -54,7 +54,6 @@ use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
 use sc_keystore::LocalKeystore;
-use futures::executor::block_on;
 use sp_application_crypto::key_types::GRANDPA;
 
 type TestLinkHalf =
@@ -288,13 +287,12 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 
-fn create_keystore(authority: Ed25519Keyring) -> (Arc<SyncCryptoStore>, tempfile::TempDir) {
+fn create_keystore(authority: Ed25519Keyring) -> (SyncCryptoStorePtr, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore");
-	block_on(keystore.ed25519_generate_new(GRANDPA, Some(&authority.to_seed())))
+	let keystore : SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
+	keystore.ed25519_generate_new(GRANDPA, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 
-	let keystore: Arc<SyncCryptoStore> = Arc::new(keystore.into());
 	(keystore, keystore_path)
 }
 
@@ -1057,7 +1055,7 @@ fn voter_persists_its_votes() {
 			voter_rx: TracingUnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
-			keystore: Arc<SyncCryptoStore>,
+			keystore: SyncCryptoStorePtr,
 		}
 
 		impl Future for ResettableVoter {
@@ -1537,7 +1535,7 @@ type TestEnvironment<N, VR> = Environment<
 
 fn test_environment<N, VR>(
 	link: &TestLinkHalf,
-	keystore: Option<Arc<SyncCryptoStore>>,
+	keystore: Option<SyncCryptoStorePtr>,
 	network_service: N,
 	voting_rule: VR,
 ) -> TestEnvironment<N, VR>

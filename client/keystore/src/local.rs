@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use sp_core::{
 	crypto::{CryptoTypePublicPair, KeyTypeId, Pair as PairT, ExposeSecret, SecretString, Public},
-	traits::{CryptoStore, Error as TraitError, SyncCryptoStore},
+	traits::{CryptoStore, Error as TraitError, SyncCryptoStorePtr},
 	sr25519::{Public as Sr25519Public, Pair as Sr25519Pair},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 	Encode,
@@ -61,7 +61,7 @@ impl CryptoStore for LocalKeystore {
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
-		let all_keys = self.keys(id).await?
+		let all_keys = <LocalKeystore as CryptoStore>::keys(self, id).await?
 			.into_iter()
 			.collect::<HashSet<_>>();
 		Ok(keys.into_iter()
@@ -198,9 +198,9 @@ impl CryptoStore for LocalKeystore {
 	}
 }
 
-impl Into<SyncCryptoStore> for LocalKeystore {
-    fn into(self) -> SyncCryptoStore {
-		SyncCryptoStore::new(Arc::new(self))
+impl Into<SyncCryptoStorePtr> for LocalKeystore {
+    fn into(self) -> SyncCryptoStorePtr {
+		Arc::new(self)
     }
 }
 

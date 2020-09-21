@@ -27,7 +27,7 @@ use sp_core::{
 	offchain::{OffchainExt, TransactionPoolExt, testing},
 	sr25519::Signature,
 	testing::KeyStore,
-	traits::{KeystoreExt, CryptoStore, SyncCryptoStore},
+	traits::{KeystoreExt, SyncCryptoStore},
 };
 use sp_runtime::{
 	Perbill, RuntimeAppPublic,
@@ -37,7 +37,6 @@ use sp_runtime::{
 		IdentifyAccount, Verify,
 	},
 };
-use futures::executor::block_on;
 
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
@@ -209,16 +208,17 @@ fn should_submit_signed_transaction_on_chain() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 	let keystore = KeyStore::new();
-	block_on(keystore.sr25519_generate_new(
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
 		crate::crypto::Public::ID,
 		Some(&format!("{}/hunter1", PHRASE))
-	)).unwrap();
+	).unwrap();
 
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(Arc::new(SyncCryptoStore::new(keystore.into()))));
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	price_oracle_response(&mut offchain_state.write());
 
@@ -242,13 +242,13 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 
 	let keystore = KeyStore::new();
 
-	block_on(keystore.sr25519_generate_new(
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
 		crate::crypto::Public::ID,
 		Some(&format!("{}/hunter1", PHRASE))
-	)).unwrap();
+	).unwrap();
 
-	let public_key = block_on(keystore
-		.sr25519_public_keys(crate::crypto::Public::ID))
+	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
 		.get(0)
 		.unwrap()
 		.clone();
@@ -256,7 +256,7 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(Arc::new(SyncCryptoStore::new(keystore.into()))));
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	price_oracle_response(&mut offchain_state.write());
 
@@ -295,13 +295,13 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 
 	let keystore = KeyStore::new();
 
-	block_on(keystore.sr25519_generate_new(
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
 		crate::crypto::Public::ID,
 		Some(&format!("{}/hunter1", PHRASE))
-	)).unwrap();
+	).unwrap();
 
-	let public_key = block_on(keystore
-		.sr25519_public_keys(crate::crypto::Public::ID))
+	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
 		.get(0)
 		.unwrap()
 		.clone();
@@ -309,7 +309,7 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(Arc::new(SyncCryptoStore::new(keystore.into()))));
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	price_oracle_response(&mut offchain_state.write());
 
@@ -350,7 +350,7 @@ fn should_submit_raw_unsigned_transaction_on_chain() {
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
-	t.register_extension(KeystoreExt(Arc::new(SyncCryptoStore::new(keystore.into()))));
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	price_oracle_response(&mut offchain_state.write());
 

@@ -22,7 +22,7 @@ use crate::crypto::KeyTypeId;
 use crate::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
-	traits::{CryptoStorePtr, Error, SyncCryptoStore},
+	traits::{CryptoStorePtr, Error, SyncCryptoStore, SyncCryptoStorePtr},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
 #[cfg(feature = "std")]
@@ -206,7 +206,7 @@ impl crate::traits::CryptoStore for KeyStore {
 		keys: Vec<CryptoTypePublicPair>,
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, Error> {
 		let provided_keys = keys.into_iter().collect::<HashSet<_>>();
-		let all_keys = self.keys(id).await?.into_iter().collect::<HashSet<_>>();
+		let all_keys = SyncCryptoStore::keys(self, id)?.into_iter().collect::<HashSet<_>>();
 
 		Ok(provided_keys.intersection(&all_keys).cloned().collect())
 	}
@@ -268,9 +268,9 @@ impl Into<CryptoStorePtr> for KeyStore {
 }
 
 #[cfg(feature = "std")]
-impl Into<SyncCryptoStore> for KeyStore {
-    fn into(self) -> SyncCryptoStore {
-		SyncCryptoStore::new(Arc::new(self))
+impl Into<SyncCryptoStorePtr> for KeyStore {
+    fn into(self) -> SyncCryptoStorePtr {
+		Arc::new(self)
     }
 }
 /// Macro for exporting functions from wasm in with the expected signature for using it with the
@@ -410,7 +410,7 @@ mod tests {
 
 	#[test]
 	fn store_key_and_extract() {
-		let store: SyncCryptoStore = KeyStore::new().into();
+		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let public = store.ed25519_generate_new(ED25519, None)
 			.expect("Generates key");
@@ -422,7 +422,7 @@ mod tests {
 
 	#[test]
 	fn store_unknown_and_extract_it() {
-		let store: SyncCryptoStore = KeyStore::new().into();
+		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
@@ -440,7 +440,7 @@ mod tests {
 
 	#[test]
 	fn vrf_sign() {
-		let store: SyncCryptoStore = KeyStore::new().into();
+		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");

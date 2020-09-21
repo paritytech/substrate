@@ -23,8 +23,6 @@
 extern crate alloc;
 
 #[cfg(feature = "std")]
-use std::sync::Arc;
-
 #[cfg(feature = "std")]
 use serde::Serialize;
 
@@ -33,7 +31,7 @@ use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
 use sp_std::borrow::Cow;
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
-use sp_core::traits::SyncCryptoStore;
+use sp_core::traits::SyncCryptoStorePtr;
 
 #[cfg(feature = "std")]
 use log::debug;
@@ -375,7 +373,7 @@ where
 /// Localizes the message to the given set and round and signs the payload.
 #[cfg(feature = "std")]
 pub fn sign_message<H, N>(
-	keystore: Arc<SyncCryptoStore>,
+	keystore: SyncCryptoStorePtr,
 	message: grandpa::Message<H, N>,
 	public: AuthorityId,
 	round: RoundNumber,

@@ -26,7 +26,7 @@ use sp_core::{
 		TransactionPoolExt,
 		testing::TestTransactionPoolExt,
 	},
-	traits::{KeystoreExt, SyncCryptoStore},
+	traits::{KeystoreExt, SyncCryptoStorePtr},
 };
 use frame_system::{
 	offchain::{
@@ -72,7 +72,7 @@ fn should_submit_signed_transaction() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore: Arc<SyncCryptoStore> = Arc::new(KeyStore::new().into());
+	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new().into());
 	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
 	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
 	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter3", PHRASE))).unwrap();
@@ -97,7 +97,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore: Arc<SyncCryptoStore>= Arc::new(KeyStore::new().into());
+	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new().into());
 	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
 	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
@@ -141,7 +141,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore: Arc<SyncCryptoStore>= Arc::new(KeyStore::new().into());
+	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new().into());
 	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
 	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
@@ -200,7 +200,7 @@ fn submitted_transaction_should_be_valid() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore: Arc<SyncCryptoStore>= Arc::new(KeyStore::new().into());
+	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new().into());
 	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 

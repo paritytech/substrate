@@ -33,7 +33,7 @@ use sp_core::{
 	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
 };
 #[cfg(feature="test-helpers")]
-use sp_core::traits::SyncCryptoStore;
+use sp_core::traits::SyncCryptoStorePtr;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
 	Justification, BuildStorage,
@@ -203,10 +203,9 @@ pub fn new_with_backend<B, E, Block, S, RA, TStore>(
 		B: backend::LocalBackend<Block> + 'static,
 		TStore: sp_core::traits::CryptoStore + 'static,
 {
-	let sync_keystore = match keystore {
+	let sync_keystore: Option<SyncCryptoStorePtr> = match keystore {
 		Some(store) => {
-			let sync_keystore = Arc::new(SyncCryptoStore::new(Arc::new(store)));
-			Some(sync_keystore)
+			Some(Arc::new(store))
 		},
 		None => None
 	};

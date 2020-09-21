@@ -17,11 +17,11 @@
 
 //! Integration tests for sr25519
 
-use futures::executor::block_on;
+use std::sync::Arc;
 use sp_runtime::generic::BlockId;
 use sp_core::{
 	crypto::Pair,
-	traits::CryptoStorePtr,
+	traits::SyncCryptoStorePtr,
 	testing::{KeyStore, SR25519},
 };
 use substrate_test_runtime_client::{
@@ -33,13 +33,13 @@ use sp_application_crypto::sr25519::{AppPair, AppPublic};
 
 #[test]
 fn sr25519_works_in_runtime() {
-	let keystore: CryptoStorePtr = KeyStore::new().into();
+	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new());
 	let test_client = TestClientBuilder::new().set_keystore(keystore.clone()).build();
 	let (signature, public) = test_client.runtime_api()
 		.test_sr25519_crypto(&BlockId::Number(0))
 		.expect("Tests `sr25519` crypto.");
 
-	let supported_keys = block_on(keystore.keys(SR25519)).unwrap();
+	let supported_keys = keystore.keys(SR25519).unwrap();
 	assert!(supported_keys.contains(&public.clone().into()));
 	assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(public)));
 }

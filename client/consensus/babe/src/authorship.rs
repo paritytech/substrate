@@ -16,7 +16,6 @@
 
 //! BABE authority selection and slot claiming.
 
-use std::sync::Arc;
 use sp_application_crypto::AppKey;
 use sp_consensus_babe::{
 	BABE_VRF_PREFIX,
@@ -29,7 +28,7 @@ use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::{U256, blake2_256, crypto::Public, traits::SyncCryptoStore};
+use sp_core::{U256, blake2_256, crypto::Public, traits::SyncCryptoStorePtr};
 use codec::Encode;
 use schnorrkel::{
 	keys::PublicKey,
@@ -131,7 +130,7 @@ fn claim_secondary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	keys: &[(AuthorityId, usize)],
-	keystore: Arc<SyncCryptoStore>,
+	keystore: SyncCryptoStorePtr,
 	author_secondary_vrf: bool,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -194,7 +193,7 @@ fn claim_secondary_slot(
 pub fn claim_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	keystore: Arc<SyncCryptoStore>,
+	keystore: SyncCryptoStorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let authorities = epoch.authorities.iter()
 		.enumerate()
@@ -208,7 +207,7 @@ pub fn claim_slot(
 pub fn claim_slot_using_keys(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	keystore: Arc<SyncCryptoStore>,
+	keystore: SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
 	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore.clone(), &keys)
@@ -237,7 +236,7 @@ fn claim_primary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	c: (u64, u64),
-	keystore: Arc<SyncCryptoStore>,
+	keystore: SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -289,6 +288,7 @@ fn claim_primary_slot(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::sync::Arc;
 	use sp_core::{sr25519::Pair, crypto::Pair as _};
 	use sp_consensus_babe::{AuthorityId, BabeEpochConfiguration, AllowedSlots};
 	use sc_keystore::LocalKeystore;
@@ -296,7 +296,7 @@ mod tests {
 	#[test]
 	fn claim_secondary_plain_slot_works() {
 		let keystore = LocalKeystore::in_memory();
-		let sync_keystore: Arc<SyncCryptoStore> = Arc::new(keystore.into());
+		let sync_keystore: SyncCryptoStorePtr = Arc::new(keystore);
 		let valid_public_key = dbg!(sync_keystore.sr25519_generate_new(
 			AuthorityId::ID,
 			Some(sp_core::crypto::DEV_PHRASE),

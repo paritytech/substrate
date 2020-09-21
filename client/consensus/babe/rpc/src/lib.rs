@@ -34,7 +34,7 @@ use sp_consensus_babe::{
 use serde::{Deserialize, Serialize};
 use sp_core::{
 	crypto::Public,
-	traits::SyncCryptoStore,
+	traits::SyncCryptoStorePtr,
 };
 use sp_application_crypto::AppKey;
 use sc_rpc_api::DenyUnsafe;
@@ -62,7 +62,7 @@ pub struct BabeRpcHandler<B: BlockT, C, SC> {
 	/// shared reference to EpochChanges
 	shared_epoch_changes: SharedEpochChanges<B, Epoch>,
 	/// shared reference to the Keystore
-	keystore: Arc<SyncCryptoStore>,
+	keystore: SyncCryptoStorePtr,
 	/// config (actually holds the slot duration)
 	babe_config: Config,
 	/// The SelectChain strategy
@@ -76,7 +76,7 @@ impl<B: BlockT, C, SC> BabeRpcHandler<B, C, SC> {
 	pub fn new(
 		client: Arc<C>,
 		shared_epoch_changes: SharedEpochChanges<B, Epoch>,
-		keystore: Arc<SyncCryptoStore>,
+		keystore: SyncCryptoStorePtr,
 		babe_config: Config,
 		select_chain: SC,
 		deny_unsafe: DenyUnsafe,
@@ -235,7 +235,7 @@ mod tests {
 	};
 	use sp_application_crypto::AppPair;
 	use sp_keyring::Sr25519Keyring;
-	use sp_core::{crypto::key_types::BABE, traits::SyncCryptoStore};
+	use sp_core::{crypto::key_types::BABE, traits::SyncCryptoStorePtr};
 	use sc_keystore::LocalKeystore;
 
 	use std::sync::Arc;
@@ -243,13 +243,13 @@ mod tests {
 	use jsonrpc_core::IoHandler;
 
 	/// creates keystore backed by a temp file
-	fn create_temp_keystore<P: AppPair>(authority: Sr25519Keyring) -> (Arc<SyncCryptoStore>, tempfile::TempDir) {
+	fn create_temp_keystore<P: AppPair>(authority: Sr25519Keyring) -> (SyncCryptoStorePtr, tempfile::TempDir) {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore: SyncCryptoStore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore").into();
+		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
 		keystore.sr25519_generate_new(BABE, Some(&authority.to_seed()))
 			.expect("Creates authority key");
 
-		(Arc::new(keystore), keystore_path)
+		(keystore, keystore_path)
 	}
 
 	fn test_babe_rpc_handler(

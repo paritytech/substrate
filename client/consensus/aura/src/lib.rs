@@ -63,7 +63,7 @@ use sp_runtime::{
 };
 use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
-use sp_core::{traits::SyncCryptoStore, crypto::Pair};
+use sp_core::{traits::SyncCryptoStorePtr, crypto::Pair};
 use sp_inherents::{InherentDataProviders, InherentData};
 use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
@@ -146,7 +146,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
-	keystore: Arc<SyncCryptoStore>,
+	keystore: SyncCryptoStorePtr,
 	can_author_with: CAW,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
@@ -191,7 +191,7 @@ struct AuraWorker<C, E, I, P, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
-	keystore: Arc<SyncCryptoStore>,
+	keystore: SyncCryptoStorePtr,
 	sync_oracle: SO,
 	force_authoring: bool,
 	_key_type: PhantomData<P>,
@@ -1016,7 +1016,7 @@ mod tests {
 			let client = peer.client().as_full().expect("full clients are created").clone();
 			let select_chain = peer.select_chain().expect("full client has a select chain");
 			let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-			let keystore: SyncCryptoStore= LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.").into();
+			let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore."));
 
 
 			keystore.sr25519_generate_new(AURA, Some(&key.to_seed()))
@@ -1046,7 +1046,7 @@ mod tests {
 				DummyOracle,
 				inherent_data_providers,
 				false,
-				Arc::new(keystore.into()),
+				keystore,
 				sp_consensus::AlwaysCanAuthor,
 			).expect("Starts aura"));
 		}
@@ -1086,7 +1086,7 @@ mod tests {
 		];
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore: SyncCryptoStore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.").into();
+		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore."));
 		let public = keystore.sr25519_generate_new(AuthorityPair::ID, None)
 			.expect("Key should be created");
 		authorities.push(public.into());

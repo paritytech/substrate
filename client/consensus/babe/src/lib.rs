@@ -82,7 +82,7 @@ use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
-use sp_core::{crypto::Public, traits::SyncCryptoStore};
+use sp_core::{crypto::Public, traits::SyncCryptoStorePtr};
 use sp_application_crypto::AppKey;
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
@@ -327,7 +327,7 @@ impl std::ops::Deref for Config {
 /// Parameters for BABE.
 pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	/// The keystore that manages the keys of the node.
-	pub keystore: Arc<SyncCryptoStore>,
+	pub keystore: SyncCryptoStorePtr,
 
 	/// The client to use
 	pub client: Arc<C>,
@@ -467,7 +467,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	env: E,
 	sync_oracle: SO,
 	force_authoring: bool,
-	keystore: Arc<SyncCryptoStore>,
+	keystore: SyncCryptoStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
@@ -1491,7 +1491,7 @@ pub mod test_helpers {
 		slot_number: u64,
 		parent: &B::Header,
 		client: &C,
-		keystore: Arc<SyncCryptoStore>,
+		keystore: SyncCryptoStorePtr,
 		link: &BabeLink<B>,
 	) -> Option<PreDigest> where
 		B: BlockT,

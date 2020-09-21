@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{fs, path::{Path, PathBuf}};
+use std::{fs, path::{Path, PathBuf}, sync::Arc};
 
 use ansi_term::Style;
 use rand::{Rng, distributions::Alphanumeric, rngs::OsRng};
@@ -24,7 +24,7 @@ use structopt::StructOpt;
 
 use sc_keystore::LocalKeystore;
 use node_cli::chain_spec::{self, AccountId};
-use sp_core::{sr25519, crypto::{Public, Ss58Codec}, traits::SyncCryptoStore};
+use sp_core::{sr25519, crypto::{Public, Ss58Codec}, traits::SyncCryptoStorePtr};
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
@@ -139,11 +139,10 @@ fn generate_authority_keys_and_store(
 	keystore_path: &Path,
 ) -> Result<(), String> {
 	for (n, seed) in seeds.into_iter().enumerate() {
-		let keystore: SyncCryptoStore = LocalKeystore::open(
+		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(
 			keystore_path.join(format!("auth-{}", n)),
 			None,
-		).map_err(|err| err.to_string())?
-		.into();
+		).map_err(|err| err.to_string())?);
 
 		let (_, _, grandpa, babe, im_online, authority_discovery) =
 			chain_spec::authority_keys_from_seed(seed);

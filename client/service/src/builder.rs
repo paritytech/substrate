@@ -55,7 +55,12 @@ use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::MaintainedTransactionPool;
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
-use sp_core::traits::{CodeExecutor, SpawnNamed, CryptoStore, CryptoStorePtr, SyncCryptoStore};
+use sp_core::traits::{
+	CodeExecutor,
+	SpawnNamed,
+	CryptoStorePtr,
+	SyncCryptoStorePtr,
+};
 use sp_runtime::BuildStorage;
 use sc_client_api::{
 	BlockBackend, BlockchainEvents,
@@ -203,8 +208,8 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 
 /// Construct and hold different layers of Keystore wrappers
 pub struct KeystoreContainer {
-	keystore: Arc<dyn CryptoStore>,
-	sync_keystore: Arc<SyncCryptoStore>,
+	keystore: CryptoStorePtr,
+	sync_keystore: SyncCryptoStorePtr,
 }
 
 impl KeystoreContainer {
@@ -217,7 +222,7 @@ impl KeystoreContainer {
 			)?,
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
-		let sync_keystore = Arc::new((keystore.clone() as CryptoStorePtr).into());
+		let sync_keystore = keystore.clone() as SyncCryptoStorePtr;
 
 		Ok(Self {
 			keystore,
@@ -226,12 +231,12 @@ impl KeystoreContainer {
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
-	pub fn keystore(&self) -> Arc<dyn CryptoStore> {
+	pub fn keystore(&self) -> CryptoStorePtr {
 		self.keystore.clone()
 	}
 
 	/// Returns the synchrnous keystore wrapper
-	pub fn sync_keystore(&self) -> Arc<SyncCryptoStore> {
+	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
 		self.sync_keystore.clone()
 	}
 }
@@ -421,7 +426,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// A task manager returned by `new_full_parts`/`new_light_parts`.
 	pub task_manager: &'a mut TaskManager,
 	/// A shared keystore returned by `new_full_parts`/`new_light_parts`.
-	pub keystore: Arc<SyncCryptoStore>,
+	pub keystore: SyncCryptoStorePtr,
 	/// An optional, shared data fetcher for light clients.
 	pub on_demand: Option<Arc<OnDemand<TBl>>>,
 	/// A shared transaction pool.
@@ -704,7 +709,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
-	keystore: Arc<SyncCryptoStore>,
+	keystore: SyncCryptoStorePtr,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
 	remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),

@@ -469,7 +469,7 @@ mod tests {
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use codec::Encode;
-	use sp_core::{crypto::Pair as CryptoPair, H256, traits::SyncCryptoStore, Public};
+	use sp_core::{crypto::Pair as CryptoPair, H256, traits::SyncCryptoStorePtr, Public};
 	use sp_runtime::{
 		generic::{BlockId, Era, Digest, SignedPayload},
 		traits::{Block as BlockT, Header as HeaderT},
@@ -493,9 +493,8 @@ mod tests {
 	#[ignore]
 	fn test_sync() {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore: Arc<SyncCryptoStore> = Arc::new(LocalKeystore::open(keystore_path.path(), None)
-			.expect("Creates keystore")
-			.into());
+		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+			.expect("Creates keystore"));
 		let alice: sp_consensus_babe::AuthorityId = keystore.sr25519_generate_new(BABE, Some("//Alice"))
 			.expect("Creates authority pair").into();
 
