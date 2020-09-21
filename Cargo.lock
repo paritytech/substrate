@@ -4518,6 +4518,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-example-parallel"
+version = "2.0.0-rc6"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-finality-tracker"
 version = "2.0.0-rc6"
 dependencies = [
