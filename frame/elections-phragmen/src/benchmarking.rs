@@ -103,7 +103,7 @@ fn submit_candidates_with_self_vote<T: Trait>(c: u32, prefix: &'static str)
 	let candidates = submit_candidates::<T>(c, prefix)?;
 	let stake = default_stake::<T>(BALANCE_FACTOR);
 	let _ = candidates.iter().map(|c|
-		submit_voter::<T>(c.clone(), vec![c.clone()], stake).map(|_| ())
+		submit_voter::<T>(c.clone(), vec![c.clone()], stake)
 	).collect::<Result<_, _>>()?;
 	Ok(candidates)
 }
