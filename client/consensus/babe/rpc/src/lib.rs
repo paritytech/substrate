@@ -243,7 +243,9 @@ mod tests {
 	use jsonrpc_core::IoHandler;
 
 	/// creates keystore backed by a temp file
-	fn create_temp_keystore<P: AppPair>(authority: Sr25519Keyring) -> (SyncCryptoStorePtr, tempfile::TempDir) {
+	fn create_temp_keystore<P: AppPair>(
+		authority: Sr25519Keyring
+	) -> (SyncCryptoStorePtr, tempfile::TempDir) {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 			.expect("Creates keystore"));

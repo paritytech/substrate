@@ -73,9 +73,18 @@ fn should_submit_signed_transaction() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new().into());
-	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
-	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter3", PHRASE))).unwrap();
+	keystore.sr25519_generate_new(
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+	keystore.sr25519_generate_new(
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter2", PHRASE))
+	).unwrap();
+	keystore.sr25519_generate_new(
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter3", PHRASE))
+	).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
@@ -98,8 +107,14 @@ fn should_submit_signed_twice_from_the_same_account() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new().into());
-	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
+	keystore.sr25519_generate_new(
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+	keystore.sr25519_generate_new(
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter2", PHRASE))
+	).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
@@ -142,8 +157,14 @@ fn should_submit_signed_twice_from_all_accounts() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new().into());
-	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
+	keystore.sr25519_generate_new(
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+	keystore.sr25519_generate_new(
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter2", PHRASE))
+	).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {

@@ -855,7 +855,11 @@ fn lookup_throttling() {
 		let remote_hash = network.get_value_call.lock().unwrap().pop().unwrap();
 		let remote_key: AuthorityId = remote_hash_to_key.get(&remote_hash).unwrap().clone();
 		let dht_event = {
-			let (key, value) = build_dht_event(vec![remote_multiaddr.clone()], remote_key, &remote_key_store).await;
+			let (key, value) = build_dht_event(
+				vec![remote_multiaddr.clone()],
+				remote_key,
+				&remote_key_store
+			).await;
 			sc_network::DhtEvent::ValueFound(vec![(key, value)])
 		};
 		dht_event_tx.send(dht_event).await.expect("Channel has capacity of 1.");
