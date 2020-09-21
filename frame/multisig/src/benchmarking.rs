@@ -207,7 +207,7 @@ benchmarks! {
 	approve_as_multi_approve {
 		// Signatories, need at least 2 people
 		let s in 2 .. T::MaxSignatories::get() as u32;
-		// Transaction Length not a component
+		// Transaction Length, not a component
 		let z = 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
 		let mut signatories2 = signatories.clone();
