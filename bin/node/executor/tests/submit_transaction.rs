@@ -72,7 +72,7 @@ fn should_submit_signed_transaction() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new().into());
+	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new());
 	keystore.sr25519_generate_new(
 		sr25519::AuthorityId::ID,
 		Some(&format!("{}/hunter1", PHRASE))
@@ -106,7 +106,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new().into());
+	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new());
 	keystore.sr25519_generate_new(
 		sr25519::AuthorityId::ID,
 		Some(&format!("{}/hunter1", PHRASE))
@@ -156,7 +156,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new().into());
+	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new());
 	keystore.sr25519_generate_new(
 		sr25519::AuthorityId::ID,
 		Some(&format!("{}/hunter1", PHRASE))
@@ -221,7 +221,7 @@ fn submitted_transaction_should_be_valid() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new().into());
+	let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new());
 	keystore.sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
