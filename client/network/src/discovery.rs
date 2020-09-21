@@ -947,6 +947,7 @@ mod tests {
 									to_discover[swarm_n].remove(&other);
 								},
 								DiscoveryOut::RandomKademliaStarted(_) => {},
+								DiscoveryOut::BootstrapComplete(_) => {},
 								e => {panic!("Unexpected event: {:?}", e)},
 							}
 							continue 'polling

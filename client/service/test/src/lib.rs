@@ -403,7 +403,7 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	const NUM_LIGHT_NODES: usize = 5;
 
 	let expected_full_connections = NUM_FULL_NODES - 1 + NUM_LIGHT_NODES;
-	let expected_light_connections = NUM_FULL_NODES;
+	let expected_light_connections = NUM_FULL_NODES - 1 + NUM_LIGHT_NODES;
 
 	{
 		let temp = tempdir_with_prefix("substrate-connectivity-test");
