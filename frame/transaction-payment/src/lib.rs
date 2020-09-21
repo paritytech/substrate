@@ -491,8 +491,9 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 	///  that the transaction which consumes more resources (either length or weight) with the same
 	/// `fee` ends up having lower priority.
 	fn get_priority(len: usize, info: &DispatchInfoOf<T::Call>, final_fee: BalanceOf<T>) -> TransactionPriority {
-		let weight_saturation = T::MaximumBlockWeight::get() / info.weight.max(1);
-		let len_saturation = T::MaximumBlockLength::get() as u64 / (len as u64).max(1);
+		let weight_saturation = T::block_weights().max_block / info.weight.max(1);
+		let max_block_length = *T::BlockLength::get().max.get(DispatchClass::Normal);
+		let len_saturation = max_block_length as u64 / (len as u64).max(1);
 		let coefficient: BalanceOf<T> = weight_saturation.min(len_saturation).saturated_into::<BalanceOf<T>>();
 		final_fee.saturating_mul(coefficient).saturated_into::<TransactionPriority>()
 	}

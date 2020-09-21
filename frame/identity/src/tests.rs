@@ -21,13 +21,13 @@ use super::*;
 
 use sp_runtime::traits::BadOrigin;
 use frame_support::{
-	assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
+	assert_ok, assert_noop, impl_outer_origin, parameter_types,
 	ord_parameter_types,
 };
 use sp_core::H256;
 use frame_system::{EnsureSignedBy, EnsureOneOf, EnsureRoot};
 use sp_runtime::{
-	Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup},
+	testing::Header, traits::{BlakeTwo256, IdentityLookup},
 };
 
 impl_outer_origin! {

@@ -267,7 +267,7 @@ decl_module! {
 		pub fn reset_well_known_nodes(origin, nodes: Vec<(PeerId, T::AccountId)>) {
 			T::ResetOrigin::ensure_origin(origin)?;
 			ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
-	
+
 			Self::initialize_nodes(&nodes);
 
 			Self::deposit_event(RawEvent::NodesReset(nodes));
@@ -280,7 +280,7 @@ decl_module! {
 		#[weight = T::WeightInfo::claim_node()]
 		pub fn claim_node(origin, node: PeerId) {
 			let sender = ensure_signed(origin)?;
-			
+
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(!Owners::<T>::contains_key(&node),Error::<T>::AlreadyClaimed);
 
@@ -433,12 +433,12 @@ mod tests {
 	use super::*;
 
 	use frame_support::{
-		assert_ok, assert_noop, impl_outer_origin, weights::Weight,
+		assert_ok, assert_noop, impl_outer_origin,
 		parameter_types, ord_parameter_types,
 	};
 	use frame_system::EnsureSignedBy;
 	use sp_core::H256;
-	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
+	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = frame_system {}
@@ -449,12 +449,12 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
 		type BaseCallFilter = ();
+		type DbWeight = ();
+		type BlockWeights = ();
+		type BlockLength = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -466,13 +466,6 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
