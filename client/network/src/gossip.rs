@@ -59,6 +59,7 @@ use std::{
 	sync::{atomic, Arc},
 	time::Duration,
 };
+use tiny_multihash::MultihashDigest;
 
 #[cfg(test)]
 mod tests;
@@ -75,8 +76,8 @@ impl<M> QueuedSender<M> {
 	///
 	/// In addition to the [`QueuedSender`], also returns a `Future` whose role is to drive
 	/// the messages sending forward.
-	pub fn new<B, H, F>(
-		service: Arc<NetworkService<B, H>>,
+	pub fn new<B, H, MH, F>(
+		service: Arc<NetworkService<B, H, MH>>,
 		peer_id: PeerId,
 		protocol: ConsensusEngineId,
 		queue_size_limit: usize,
@@ -86,6 +87,7 @@ impl<M> QueuedSender<M> {
 		M: Send + 'static,
 		B: BlockT + 'static,
 		H: ExHashT,
+		MH: MultihashDigest,
 		F: Fn(M) -> Vec<u8> + Send + 'static,
 	{
 		let shared = Arc::new(Shared {
@@ -198,8 +200,8 @@ struct Shared<M> {
 	queue_size_limit: usize,
 }
 
-async fn spawn_task<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>(
-	service: Arc<NetworkService<B, H>>,
+async fn spawn_task<B: BlockT, H: ExHashT, MH: MultihashDigest, M, F: Fn(M) -> Vec<u8>>(
+	service: Arc<NetworkService<B, H, MH>>,
 	peer_id: PeerId,
 	protocol: ConsensusEngineId,
 	shared: Arc<Shared<M>>,

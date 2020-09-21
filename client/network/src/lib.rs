@@ -266,6 +266,8 @@ pub mod network_state;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
+pub use libp2p::kad::record::Key;
+pub use behaviour::BitswapEvent;
 pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
 pub use service::{
 	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
@@ -273,6 +275,7 @@ pub use service::{
 };
 
 pub use sc_peerset::ReputationChange;
+pub use tiny_multihash::MultihashDigest;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// The maximum allowed number of established connections per peer.

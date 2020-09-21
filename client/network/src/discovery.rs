@@ -54,7 +54,7 @@ use libp2p::core::{connection::{ConnectionId, ListenerId}, ConnectedPoint, Multi
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters, ProtocolsHandler};
 use libp2p::swarm::protocols_handler::multi::MultiHandler;
 use libp2p::kad::{Kademlia, KademliaBucketInserts, KademliaConfig, KademliaEvent, QueryResult, Quorum, Record};
-use libp2p::kad::GetClosestPeersError;
+use libp2p::kad::{BootstrapOk, BootstrapError, GetClosestPeersError};
 use libp2p::kad::handler::KademliaHandler;
 use libp2p::kad::QueryId;
 use libp2p::kad::record::{self, store::{MemoryStore, RecordStore}};
@@ -173,7 +173,10 @@ impl DiscoveryConfig {
 	}
 
 	/// Create a `DiscoveryBehaviour` from this config.
-	pub fn finish(self) -> DiscoveryBehaviour {
+	pub fn finish(mut self) -> DiscoveryBehaviour {
+		for (_, k) in self.kademlias.iter_mut() {
+			k.bootstrap().ok();
+		}
 		DiscoveryBehaviour {
 			user_defined: self.user_defined,
 			kademlias: self.kademlias,
@@ -307,6 +310,32 @@ impl DiscoveryBehaviour {
 		}
 	}
 
+	/// Starts providing a record.
+	pub fn provide(&mut self, key: &record::Key) {
+		for k in self.kademlias.values_mut() {
+			if let Err(e) = k.start_providing(key.clone()) {
+				warn!(
+					target: "sub-libp2p",
+					"Libp2p => Failed to start providing: {:?}", e);
+				self.pending_events.push_back(DiscoveryOut::StartProvidingFailed(key.clone(), Duration::from_secs(0)));
+			}
+		}
+	}
+
+	/// Stops providing a record.
+	pub fn unprovide(&mut self, key: &record::Key) {
+		for k in self.kademlias.values_mut() {
+			k.stop_providing(key);
+		}
+	}
+
+	/// Gets the providers of a record.
+	pub fn providers(&mut self, key: &record::Key) {
+		for k in self.kademlias.values_mut() {
+			k.get_providers(key.clone());
+		}
+	}
+
 	/// Start fetching a record from the DHT.
 	///
 	/// A corresponding `ValueFound` or `ValueNotFound` event will later be generated.
@@ -399,6 +428,18 @@ pub enum DiscoveryOut {
 	/// the `identify` protocol.
 	UnroutablePeer(PeerId),
 
+	/// A set of providers found for a key. The set may be empty.
+	Providers(record::Key, HashSet<PeerId>, Duration),
+
+	/// Getting providers for a key failed.
+	GetProvidersFailed(record::Key, Duration),
+
+	/// Started providing a value in the dht.
+	Providing(record::Key, Duration),
+
+	/// Providing a value in the dht failed.
+	StartProvidingFailed(record::Key, Duration),
+
 	/// The DHT yielded results for the record request.
 	///
 	/// Returning the result grouped in (key, value) pairs as well as the request duration..
@@ -421,6 +462,9 @@ pub enum DiscoveryOut {
 
 	/// Started a random Kademlia query for each DHT identified by the given `ProtocolId`s.
 	RandomKademliaStarted(Vec<ProtocolId>),
+
+	/// Bootstrap completed.
+	BootstrapComplete(Duration),
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
@@ -658,6 +702,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							}
 						}
 						KademliaEvent::QueryResult { result: QueryResult::GetRecord(res), stats, .. } => {
+							let duration = stats.duration().unwrap_or_else(Default::default);
 							let ev = match res {
 								Ok(ok) => {
 									let results = ok.records
@@ -665,28 +710,29 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 										.map(|r| (r.record.key, r.record.value))
 										.collect();
 
-									DiscoveryOut::ValueFound(results, stats.duration().unwrap_or_else(Default::default))
+									DiscoveryOut::ValueFound(results, duration)
 								}
 								Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
 									trace!(target: "sub-libp2p",
 										"Libp2p => Failed to get record: {:?}", e);
-									DiscoveryOut::ValueNotFound(e.into_key(), stats.duration().unwrap_or_else(Default::default))
+									DiscoveryOut::ValueNotFound(e.into_key(), duration)
 								}
 								Err(e) => {
 									warn!(target: "sub-libp2p",
 										"Libp2p => Failed to get record: {:?}", e);
-									DiscoveryOut::ValueNotFound(e.into_key(), stats.duration().unwrap_or_else(Default::default))
+									DiscoveryOut::ValueNotFound(e.into_key(), duration)
 								}
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						}
 						KademliaEvent::QueryResult { result: QueryResult::PutRecord(res), stats, .. } => {
+							let duration = stats.duration().unwrap_or_else(Default::default);
 							let ev = match res {
-								Ok(ok) => DiscoveryOut::ValuePut(ok.key, stats.duration().unwrap_or_else(Default::default)),
+								Ok(ok) => DiscoveryOut::ValuePut(ok.key, duration),
 								Err(e) => {
 									warn!(target: "sub-libp2p",
 										"Libp2p => Failed to put record: {:?}", e);
-									DiscoveryOut::ValuePutFailed(e.into_key(), stats.duration().unwrap_or_else(Default::default))
+									DiscoveryOut::ValuePutFailed(e.into_key(), duration)
 								}
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
@@ -701,9 +747,55 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									e.key(), e)
 							}
 						}
-						// We never start any other type of query.
-						e => {
-							warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
+						KademliaEvent::QueryResult { result: QueryResult::GetProviders(res), stats, .. } => {
+							let duration = stats.duration().unwrap_or_else(Default::default);
+							let ev = match res {
+								Ok(ok) => DiscoveryOut::Providers(ok.key, ok.providers, duration),
+								Err(e) => {
+									warn!(target: "sub-libp2p",
+										"Libp2p => Getting providers for {:?} failed with: {:?}",
+										e.key(), e);
+									DiscoveryOut::GetProvidersFailed(e.into_key(), duration)
+								}
+							};
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
+						KademliaEvent::QueryResult { result: QueryResult::StartProviding(res), stats, .. } => {
+							let duration = stats.duration().unwrap_or_else(Default::default);
+							let ev = match res {
+								Ok(ok) => DiscoveryOut::Providing(ok.key, duration),
+								Err(e) => {
+									warn!(target: "sub-libp2p",
+										"Libp2p => Failed to put record: {:?}", e);
+									DiscoveryOut::StartProvidingFailed(e.into_key(), duration)
+								}
+							};
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
+						KademliaEvent::QueryResult { result: QueryResult::RepublishProvider(res), .. } => {
+							match res {
+								Ok(ok) => debug!(target: "sub-libp2p",
+									"Libp2p => Provider republished: {:?}",
+									ok.key),
+								Err(e) => warn!(target: "sub-libp2p",
+									"Libp2p => Republishing of provider {:?} failed with: {:?}",
+									e.key(), e)
+							}
+						}
+						KademliaEvent::QueryResult { result: QueryResult::Bootstrap(res), stats, .. } => {
+							let num_remaining = match res {
+								Ok(BootstrapOk { num_remaining, .. }) => Some(num_remaining),
+								Err(BootstrapError::Timeout { num_remaining, .. }) => num_remaining,
+							};
+							if let Some(num_remaining) = num_remaining {
+								if num_remaining == 0 {
+									debug!(target: "sub-libp2p", "Libp2p => Bootstrap complete");
+									let duration = stats.duration().unwrap_or_else(Default::default);
+									let ev = DiscoveryOut::BootstrapComplete(duration);
+									return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+								}
+							}
+							// TODO: unhandled bootstrap events
 						}
 					}
 					NetworkBehaviourAction::DialAddress { address } =>

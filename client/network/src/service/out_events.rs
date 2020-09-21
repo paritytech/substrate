@@ -227,6 +227,11 @@ impl Metrics {
 				self.events_total
 					.with_label_values(&["dht", "sent", name])
 					.inc_by(num);
+			},
+			Event::Bitswap(_) => {
+				self.events_total
+					.with_label_values(&["bitswap", "sent", name])
+					.inc_by(num);
 			}
 			Event::NotificationStreamOpened { engine_id, .. } => {
 				self.events_total
@@ -256,6 +261,11 @@ impl Metrics {
 			Event::Dht(_) => {
 				self.events_total
 					.with_label_values(&["dht", "received", name])
+					.inc();
+			}
+			Event::Bitswap(_) => {
+				self.events_total
+					.with_label_values(&["bitswap", "received", name])
 					.inc();
 			}
 			Event::NotificationStreamOpened { engine_id, .. } => {

@@ -72,6 +72,7 @@ use std::{
 	},
 	task::Poll,
 };
+use tiny_multihash::MultihashDigest;
 use wasm_timer::Instant;
 
 pub use behaviour::{ResponseFailure, InboundFailure, RequestFailure, OutboundFailure};
@@ -82,7 +83,7 @@ mod out_events;
 mod tests;
 
 /// Substrate network service. Handles network IO and manages connectivity.
-pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
+pub struct NetworkService<B: BlockT + 'static, H: ExHashT, M: MultihashDigest> {
 	/// Number of peers we're connected to.
 	num_connected: Arc<AtomicUsize>,
 	/// The local external addresses.
@@ -108,16 +109,16 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	notifications_sizes_metric: Option<HistogramVec>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
-	_marker: PhantomData<H>,
+	_marker: PhantomData<(H, M)>,
 }
 
-impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
+impl<B: BlockT + 'static, H: ExHashT, M: MultihashDigest> NetworkWorker<B, H, M> {
 	/// Creates the network service.
 	///
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
+	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H, M>, Error> {
 		// Ensure the listen addresses are consistent with the transport.
 		ensure_addresses_consistent_with_transport(
 			params.network_config.listen_addresses.iter(),
@@ -264,7 +265,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		)?;
 
 		// Build the swarm.
-		let (mut swarm, bandwidth): (Swarm<B, H>, _) = {
+		let (mut swarm, bandwidth): (Swarm<B, H, M>, _) = {
 			let user_agent = format!(
 				"{} ({})",
 				params.network_config.client_version,
@@ -373,14 +374,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		// Listen on multiaddresses.
 		for addr in &params.network_config.listen_addresses {
-			if let Err(err) = Swarm::<B, H>::listen_on(&mut swarm, addr.clone()) {
+			if let Err(err) = Swarm::<B, H, M>::listen_on(&mut swarm, addr.clone()) {
 				warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
 			}
 		}
 
 		// Add external addresses.
 		for addr in &params.network_config.public_addresses {
-			Swarm::<B, H>::add_external_address(&mut swarm, addr.clone());
+			Swarm::<B, H, M>::add_external_address(&mut swarm, addr.clone());
 		}
 
 		let external_addresses = Arc::new(Mutex::new(Vec::new()));
@@ -491,7 +492,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 	/// Return a `NetworkService` that can be shared through the code base and can be used to
 	/// manipulate the worker.
-	pub fn service(&self) -> &Arc<NetworkService<B, H>> {
+	pub fn service(&self) -> &Arc<NetworkService<B, H, M>> {
 		&self.service
 	}
 
@@ -509,14 +510,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 	/// Returns the local `PeerId`.
 	pub fn local_peer_id(&self) -> &PeerId {
-		Swarm::<B, H>::local_peer_id(&self.network_service)
+		Swarm::<B, H, M>::local_peer_id(&self.network_service)
 	}
 
 	/// Returns the list of addresses we are listening on.
 	///
 	/// Does **NOT** include a trailing `/p2p/` with our `PeerId`.
 	pub fn listen_addresses(&self) -> impl Iterator<Item = &Multiaddr> {
-		Swarm::<B, H>::listeners(&self.network_service)
+		Swarm::<B, H, M>::listeners(&self.network_service)
 	}
 
 	/// Get network state.
@@ -570,9 +571,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		};
 
 		NetworkState {
-			peer_id: Swarm::<B, H>::local_peer_id(&swarm).to_base58(),
-			listened_addresses: Swarm::<B, H>::listeners(&swarm).cloned().collect(),
-			external_addresses: Swarm::<B, H>::external_addresses(&swarm).cloned().collect(),
+			peer_id: Swarm::<B, H, M>::local_peer_id(&swarm).to_base58(),
+			listened_addresses: Swarm::<B, H, M>::listeners(&swarm).cloned().collect(),
+			external_addresses: Swarm::<B, H, M>::external_addresses(&swarm).cloned().collect(),
 			connected_peers,
 			not_connected_peers,
 			peerset: swarm.user_protocol_mut().peerset_debug_info(),
@@ -597,9 +598,24 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
 		self.service.add_reserved_peer(peer)
 	}
+
+	/// Get the number of bitswap peers we are connected to.
+	pub fn bitswap_num_peers(&self) -> usize {
+		self.network_service.bitswap.peers().count()
+	}
+
+	/// Get the number of bitswap peers who want a block.
+	pub fn bitswap_num_peers_want(&self, cid: &tiny_cid::Cid) -> usize {
+		self.network_service.bitswap.peers_want(cid).count()
+	}
+
+	/// Get if a specific bitswap peer wants a block.
+	pub fn bitswap_peer_wants_cid(&self, peer_id: &PeerId, cid: &tiny_cid::Cid) -> bool {
+		self.network_service.bitswap.peers_want(cid).find(|id| **id == *peer_id).is_some()
+	}
 }
 
-impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
+impl<B: BlockT + 'static, H: ExHashT, M: MultihashDigest> NetworkService<B, H, M> {
 	/// Returns the local `PeerId`.
 	pub fn local_peer_id(&self) -> &PeerId {
 		&self.local_peer_id
@@ -923,6 +939,27 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::PutValue(key, value));
 	}
 
+	/// Get providers of a key from the DHT.
+	pub fn providers(&self, key: record::Key) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::GetProviders(key));
+	}
+
+	/// Start providing a key.
+	pub fn provide(&self, key: record::Key) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::StartProviding(key));
+	}
+
+	/// Stop providing a key.
+	pub fn unprovide(&self, key: record::Key) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::StopProviding(key));
+	}
+
 	/// Connect to unreserved peers and allow unreserved peers to connect.
 	pub fn accept_unreserved_peers(&self) {
 		self.peerset.set_reserved_only(false);
@@ -1027,10 +1064,38 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
 	}
+
+	/// Send a bitswap block to a peer.
+	pub fn bitswap_send_block(&self, peer_id: PeerId, cid: tiny_cid::Cid, data: Box<[u8]>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::BitswapSendBlock(peer_id, cid, data));
+	}
+
+	/// Send a bitswap block to all peers that have the block in their wantlist.
+	pub fn bitswap_send_block_all(&self, cid: tiny_cid::Cid, data: Box<[u8]>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::BitswapSendBlockAll(cid, data));
+	}
+
+	/// Send a bitswap WANT request to all peers for a block.
+	pub fn bitswap_want_block(&self, cid: tiny_cid::Cid, priority: i32) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::BitswapWantBlock(cid, priority));
+	}
+
+	/// Cancel a bitswap WANT request.
+	pub fn bitswap_cancel_block(&self, cid: tiny_cid::Cid) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::BitswapCancelBlock(cid));
+	}
 }
 
-impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
-	for NetworkService<B, H>
+impl<B: BlockT + 'static, H: ExHashT, M: MultihashDigest> sp_consensus::SyncOracle
+	for NetworkService<B, H, M>
 {
 	fn is_major_syncing(&mut self) -> bool {
 		NetworkService::is_major_syncing(self)
@@ -1041,8 +1106,8 @@ impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
 	}
 }
 
-impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
-	for &'a NetworkService<B, H>
+impl<'a, B: BlockT + 'static, H: ExHashT, M: MultihashDigest> sp_consensus::SyncOracle
+	for &'a NetworkService<B, H, M>
 {
 	fn is_major_syncing(&mut self) -> bool {
 		NetworkService::is_major_syncing(self)
@@ -1053,10 +1118,11 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
 	}
 }
 
-impl<B, H> NetworkStateInfo for NetworkService<B, H>
+impl<B, H, M> NetworkStateInfo for NetworkService<B, H, M>
 	where
 		B: sp_runtime::traits::Block,
 		H: ExHashT,
+		M: MultihashDigest,
 {
 	/// Returns the local external addresses.
 	fn external_addresses(&self) -> Vec<Multiaddr> {
@@ -1143,6 +1209,9 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	AnnounceBlock(B::Hash, Vec<u8>),
 	GetValue(record::Key),
 	PutValue(record::Key, Vec<u8>),
+	GetProviders(record::Key),
+	StartProviding(record::Key),
+	StopProviding(record::Key),
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 	EventStream(out_events::Sender),
@@ -1159,13 +1228,17 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	DisconnectPeer(PeerId),
 	UpdateChain,
 	OwnBlockImported(B::Hash, NumberFor<B>),
+	BitswapSendBlock(PeerId, tiny_cid::Cid, Box<[u8]>),
+	BitswapSendBlockAll(tiny_cid::Cid, Box<[u8]>),
+	BitswapWantBlock(tiny_cid::Cid, i32),
+	BitswapCancelBlock(tiny_cid::Cid),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
 ///
 /// You are encouraged to poll this in a separate background thread or task.
 #[must_use = "The NetworkWorker must be polled in order for the network to advance"]
-pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
+pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT, M: MultihashDigest> {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
@@ -1173,9 +1246,9 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	is_major_syncing: Arc<AtomicBool>,
 	/// The network service that can be extracted and shared through the codebase.
-	service: Arc<NetworkService<B, H>>,
+	service: Arc<NetworkService<B, H, M>>,
 	/// The *actual* network.
-	network_service: Swarm<B, H>,
+	network_service: Swarm<B, H, M>,
 	/// The import queue that was passed at initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the [`NetworkService`] that must be processed.
@@ -1200,7 +1273,7 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ConsensusEngineId), NotificationsSink>>>,
 }
 
-impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
+impl<B: BlockT + 'static, H: ExHashT, M: MultihashDigest> Future for NetworkWorker<B, H, M> {
 	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
@@ -1260,6 +1333,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.get_value(&key),
 				ServiceToWorkerMsg::PutValue(key, value) =>
 					this.network_service.put_value(key, value),
+				ServiceToWorkerMsg::GetProviders(key) =>
+					this.network_service.providers(&key),
+				ServiceToWorkerMsg::StartProviding(key) =>
+					this.network_service.provide(&key),
+				ServiceToWorkerMsg::StopProviding(key) =>
+					this.network_service.unprovide(&key),
 				ServiceToWorkerMsg::AddKnownAddress(peer_id, addr) =>
 					this.network_service.add_known_address(peer_id, addr),
 				ServiceToWorkerMsg::SyncFork(peer_ids, hash, number) =>
@@ -1301,6 +1380,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().update_chain(),
 				ServiceToWorkerMsg::OwnBlockImported(hash, number) =>
 					this.network_service.user_protocol_mut().own_block_imported(hash, number),
+				ServiceToWorkerMsg::BitswapSendBlock(peer_id, cid, block) =>
+					this.network_service.bitswap.send_block(&peer_id, cid, block),
+				ServiceToWorkerMsg::BitswapSendBlockAll(cid, block) =>
+					this.network_service.bitswap.send_block_all(&cid, &block),
+				ServiceToWorkerMsg::BitswapWantBlock(cid, priority) =>
+					this.network_service.bitswap.want_block(cid, priority),
+				ServiceToWorkerMsg::BitswapCancelBlock(cid) =>
+					this.network_service.bitswap.cancel_block(&cid),
 			}
 		}
 
@@ -1499,12 +1586,20 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							DhtEvent::ValueNotFound(_) => "value-not-found",
 							DhtEvent::ValuePut(_) => "value-put",
 							DhtEvent::ValuePutFailed(_) => "value-put-failed",
+							DhtEvent::Providers(_, _) => "get-providers",
+							DhtEvent::GetProvidersFailed(_) => "get-providers-failed",
+							DhtEvent::Providing(_) => "start-providing",
+							DhtEvent::StartProvidingFailed(_) => "start-providing-failed",
+							DhtEvent::BootstrapComplete => "bootstrap-complete",
 						};
 						metrics.kademlia_query_duration.with_label_values(&[query_type])
 							.observe(duration.as_secs_f64());
 					}
 
 					this.event_streams.send(Event::Dht(event));
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Bitswap(ev))) => {
+					this.event_streams.send(Event::Bitswap(ev));
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
@@ -1531,14 +1626,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
-								EitherError::A(PingFailure::Timeout)))))))))) => "ping-timeout",
+								EitherError::A(EitherError::A(EitherError::A(EitherError::A(EitherError::B(
+								EitherError::A(PingFailure::Timeout))))))))))) => "ping-timeout",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::Legacy(LegacyConnectionKillError)))))))))) => "force-closed",
+								EitherError::A(EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+								NotifsHandlerError::Legacy(LegacyConnectionKillError))))))))))) => "force-closed",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged))))))))) => "sync-notifications-clogged",
+								EitherError::A(EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+								NotifsHandlerError::SyncNotificationsClogged)))))))))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) => "protocol-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout)) => "keep-alive-timeout",
 							None => "actively-closed",
@@ -1658,7 +1753,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		// Update the variables shared with the `NetworkService`.
 		this.num_connected.store(num_connected_peers, Ordering::Relaxed);
 		{
-			let external_addresses = Swarm::<B, H>::external_addresses(&this.network_service).cloned().collect();
+			let external_addresses = Swarm::<B, H, M>::external_addresses(&this.network_service).cloned().collect();
 			*this.external_addresses.lock() = external_addresses;
 		}
 
@@ -1692,7 +1787,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 	}
 }
 
-impl<B: BlockT + 'static, H: ExHashT> Unpin for NetworkWorker<B, H> {
+impl<B: BlockT + 'static, H: ExHashT, M: MultihashDigest> Unpin for NetworkWorker<B, H, M> {
 }
 
 /// Turns bytes that are potentially UTF-8 into a reasonable representable string.
@@ -1707,14 +1802,14 @@ pub(crate) fn maybe_utf8_bytes_to_string(id: &[u8]) -> Cow<str> {
 }
 
 /// The libp2p swarm, customized for our needs.
-type Swarm<B, H> = libp2p::swarm::Swarm<Behaviour<B, H>>;
+type Swarm<B, H, M> = libp2p::swarm::Swarm<Behaviour<B, H, M>>;
 
 // Implementation of `import_queue::Link` trait using the available local variables.
-struct NetworkLink<'a, B: BlockT, H: ExHashT> {
-	protocol: &'a mut Swarm<B, H>,
+struct NetworkLink<'a, B: BlockT, H: ExHashT, M: MultihashDigest> {
+	protocol: &'a mut Swarm<B, H, M>,
 }
 
-impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
+impl<'a, B: BlockT, H: ExHashT, M: MultihashDigest> Link<B> for NetworkLink<'a, B, H, M> {
 	fn blocks_processed(
 		&mut self,
 		imported: usize,

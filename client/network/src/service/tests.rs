@@ -271,6 +271,8 @@ fn notifications_state_consistent() {
 				// Add new events here.
 				future::Either::Left(Event::Dht(_)) => {}
 				future::Either::Right(Event::Dht(_)) => {}
+				future::Either::Left(Event::Bitswap(_)) => {}
+				future::Either::Right(Event::Bitswap(_)) => {}
 			};
 		}
 	});
