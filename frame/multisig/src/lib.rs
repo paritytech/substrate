@@ -232,7 +232,6 @@ decl_module! {
 		/// # <weight>
 		/// O(Z + C) where Z is the length of the call and C its execution weight.
 		/// -------------------------------
-		/// - Base Weight: 33.72 + 0.002 * Z µs
 		/// - DB Weight: None
 		/// - Plus Call Weight
 		/// # </weight>
@@ -316,23 +315,11 @@ decl_module! {
 		///   deposit taken for its lifetime of
 		///   `DepositBase + threshold * DepositFactor`.
 		/// -------------------------------
-		/// - Base Weight:
-		///     - Create:          41.89 + 0.118 * S + .002 * Z µs
-		///     - Create w/ Store: 53.57 + 0.119 * S + .003 * Z µs
-		///     - Approve:         31.39 + 0.136 * S + .002 * Z µs
-		///     - Complete:        39.94 + 0.26  * S + .002 * Z µs
 		/// - DB Weight:
 		///     - Reads: Multisig Storage, [Caller Account], Calls (if `store_call`)
 		///     - Writes: Multisig Storage, [Caller Account], Calls (if `store_call`)
 		/// - Plus Call Weight
 		/// # </weight>
-		// #[weight = weight_of::as_multi::<T>(
-		// 	other_signatories.len(),
-		// 	call.len(),
-		// 	*max_weight,
-		// 	true, // assume worst case: calls write
-		// 	true, // assume worst case: refunded
-		// )]
 		#[weight = {
 			let s = other_signatories.len() as u32;
 			let z = call.len() as u32;
@@ -387,9 +374,6 @@ decl_module! {
 		///   deposit taken for its lifetime of
 		///   `DepositBase + threshold * DepositFactor`.
 		/// ----------------------------------
-		/// - Base Weight:
-		///     - Create: 44.71 + 0.088 * S
-		///     - Approve: 31.48 + 0.116 * S
 		/// - DB Weight:
 		///     - Read: Multisig Storage, [Caller Account]
 		///     - Write: Multisig Storage, [Caller Account]
@@ -435,7 +419,6 @@ decl_module! {
 		/// - I/O: 1 read `O(S)`, one remove.
 		/// - Storage: removes one item.
 		/// ----------------------------------
-		/// - Base Weight: 36.07 + 0.124 * S
 		/// - DB Weight:
 		///     - Read: Multisig Storage, [Caller Account], Refund Account, Calls
 		///     - Write: Multisig Storage, [Caller Account], Refund Account, Calls
