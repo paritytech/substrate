@@ -101,7 +101,7 @@ impl Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = Version;
-	type PalletRuntimeSetup = ();
+	type PalletInfo = ();
 	type AccountData = u32;
 	type OnNewAccount = ();
 	type OnKilledAccount = RecordKilled;

@@ -59,7 +59,7 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = ();
 	type MaximumBlockLength = ();
 	type Version = ();
-	type PalletRuntimeSetup = ();
+	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = (Balances,);

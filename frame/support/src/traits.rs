@@ -1382,14 +1382,14 @@ pub trait ValidatorRegistration<ValidatorId> {
 ///
 /// An implementor should be able to provide information about each pallet that
 /// is configured in `construct_runtime!`.
-pub trait PalletRuntimeSetup {
+pub trait PalletInfo {
 	/// Convert the given pallet `P` into its index as configured in the runtime.
 	fn index<P: 'static>() -> Option<usize>;
 	/// Convert the given pallet `P` into its name as configured in the runtime.
 	fn name<P: 'static>() -> Option<&'static str>;
 }
 
-impl PalletRuntimeSetup for () {
+impl PalletInfo for () {
 	fn index<P: 'static>() -> Option<usize> { Some(0) }
 	fn name<P: 'static>() -> Option<&'static str> { Some("test") }
 }

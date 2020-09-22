@@ -388,11 +388,11 @@ fn decl_pallet_runtime_setup(
 	let indices = 0..module_declarations.len();
 
 	quote!(
-		/// Provides an implementation of `PalletRuntimeSetup` to provide information
+		/// Provides an implementation of `PalletInfo` to provide information
 		/// about the pallet setup in the runtime.
-		pub struct PalletRuntimeSetup;
+		pub struct PalletInfo;
 
-		impl #scrate::traits::PalletRuntimeSetup for PalletRuntimeSetup {
+		impl #scrate::traits::PalletInfo for PalletInfo {
 			fn index<P: 'static>() -> Option<usize> {
 				let type_id = #scrate::sp_std::any::TypeId::of::<P>();
 				#(

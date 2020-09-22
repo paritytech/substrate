@@ -24,7 +24,7 @@
 use sp_runtime::{generic, traits::{BlakeTwo256, Block as _, Verify}, DispatchError};
 use sp_core::{H256, sr25519};
 use sp_std::cell::RefCell;
-use frame_support::traits::PalletRuntimeSetup as _;
+use frame_support::traits::PalletInfo as _;
 
 mod system;
 
@@ -108,7 +108,7 @@ impl system::Trait for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
-	type PalletRuntimeSetup = PalletRuntimeSetup;
+	type PalletInfo = PalletInfo;
 	type Call = Call;
 }
 
@@ -161,12 +161,12 @@ fn integrity_test_works() {
 
 #[test]
 fn pallet_in_runtime_is_correct() {
-	assert_eq!(PalletRuntimeSetup::index::<System>().unwrap(), 0);
-	assert_eq!(PalletRuntimeSetup::name::<System>().unwrap(), "System");
+	assert_eq!(PalletInfo::index::<System>().unwrap(), 0);
+	assert_eq!(PalletInfo::name::<System>().unwrap(), "System");
 
-	assert_eq!(PalletRuntimeSetup::index::<Module1_2>().unwrap(), 3);
-	assert_eq!(PalletRuntimeSetup::name::<Module1_2>().unwrap(), "Module1_2");
+	assert_eq!(PalletInfo::index::<Module1_2>().unwrap(), 3);
+	assert_eq!(PalletInfo::name::<Module1_2>().unwrap(), "Module1_2");
 
-	assert_eq!(PalletRuntimeSetup::index::<Module2>().unwrap(), 2);
-	assert_eq!(PalletRuntimeSetup::name::<Module2>().unwrap(), "Module2");
+	assert_eq!(PalletInfo::index::<Module2>().unwrap(), 2);
+	assert_eq!(PalletInfo::name::<Module2>().unwrap(), "Module2");
 }
