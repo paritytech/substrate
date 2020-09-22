@@ -1587,70 +1587,66 @@ mod test {
 	use crate::{should_backoff_authoring_blocks, BackoffAuthoringBlocksParam};
 	use substrate_test_runtime_client::runtime::Block;
 
+	struct HeadState {
+		head_number: u64,
+		head_slot: u64,
+		slot_now: u64,
+	}
+
+	impl HeadState {
+		fn author_block(&mut self) {
+			self.head_number += 1;
+			self.head_slot += 1;
+			self.slot_now += 1;
+		}
+
+		fn dont_author_block(&mut self) {
+			self.slot_now += 1;
+		}
+	}
+
 	#[test]
 	fn should_backoff_authoring_when_finality_lags() {
 		let finalized_number = 2u32.into();
-		let param = BackoffAuthoringBlocksParam {
-			x: 100u32.into(),
-			c: 5u32.into(),
-			m: 2u32.into(),
+		let param = BackoffAuthoringBlocksParam::default();
+
+		let mut head_state = HeadState {
+			head_number: 3,
+			head_slot: 10,
+			slot_now: 11
 		};
 
-		let mut chain_head_number = 3;
-		let mut chain_head_slot = 10;
-		let mut slot_now = 11;
-
-		while slot_now < 17 {
-			assert!(!should_backoff_authoring_blocks::<Block>(
-				chain_head_number,
-				chain_head_slot,
+		let should_backoff = |head_state: &HeadState| -> bool {
+			should_backoff_authoring_blocks::<Block>(
+				head_state.head_number,
+				head_state.head_slot,
 				finalized_number,
-				slot_now,
+				head_state.slot_now,
 				param.clone(),
-			));
+			)
+		};
 
-			chain_head_number += 1;
-			chain_head_slot += 1;
-			slot_now += 1;
+		while head_state.slot_now < 17 {
+			assert!(!should_backoff(&head_state));
+			head_state.author_block();
 		}
 
-		// Once the unfinalized head of the chain grows to long we start backing off block
+		// Once the unfinalized head of the chain grows too long we start backing off block
 		// production
-		assert_eq!(chain_head_number, 9);
-		assert_eq!(chain_head_slot, 16);
-		assert_eq!(slot_now, 17);
-		assert!(should_backoff_authoring_blocks::<Block>(
-			chain_head_number,
-			chain_head_slot,
-			finalized_number,
-			slot_now,
-			param.clone(),
-		));
-		slot_now += 1;
+		assert_eq!(head_state.head_number, 9);
+		assert_eq!(head_state.head_slot, 16);
+		assert_eq!(head_state.slot_now, 17);
+		assert!(should_backoff(&head_state));
+		head_state.dont_author_block();
 
 		// But we don't stop entirely
-		while slot_now < 20 {
-			assert!(!should_backoff_authoring_blocks::<Block>(
-				chain_head_number,
-				chain_head_slot,
-				finalized_number,
-				slot_now,
-				param.clone(),
-			));
-
-			chain_head_number += 1;
-			chain_head_slot += 1;
-			slot_now += 1;
+		while head_state.slot_now < 20 {
+			assert!(!should_backoff(&head_state));
+			head_state.author_block();
 		}
 
 		// Back off again
-		assert!(should_backoff_authoring_blocks::<Block>(
-			chain_head_number,
-			chain_head_slot,
-			finalized_number,
-			slot_now,
-			param,
-		));
+		assert!(should_backoff(&head_state));
 	}
 }
 
