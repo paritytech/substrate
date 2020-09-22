@@ -19,6 +19,7 @@ Runtime
 * add generated weight info for pallet-collective (#6789)
 * Support Staking Payout to Any Account (#6832)
 * Time-delay proxies (#6770)
+* Refcounts are now u32 (#7164)
 
 Client
 ------
