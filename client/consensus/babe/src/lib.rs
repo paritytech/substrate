@@ -690,14 +690,12 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> whe
 		let chain_head_slot = find_pre_digest::<B>(&chain_head)
 			.map(|digest| digest.slot_number())
 			.unwrap(); // WIP: REMOVE ME
-		// WIP: make these configurable
-		let param = BackoffAuthoringBlocksParam { x: 100.into(), c: 5.into(), m: 2.into() };
 		if should_backoff_authoring_blocks::<B>(
 			*chain_head.number(),
 			chain_head_slot,
 			self.client.info().finalized_number,
 			SignedDuration::default().slot_now(slot_info.duration),
-			param,
+			BackoffAuthoringBlocksParam::default(),
 		) {
 			return Box::pin(future::ready(Ok(())))
 		}
@@ -707,11 +705,22 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> whe
 }
 
 #[derive(Clone)]
-struct BackoffAuthoringBlocksParam<Block: BlockT> {
+struct BackoffAuthoringBlocksParam {
 	// WIP: come up with better names!
-	x: NumberFor<Block>,
-	c: NumberFor<Block>,
-	m: NumberFor<Block>,
+	x: u32,
+	c: u32,
+	m: u32,
+}
+
+// WIP: should we expose this in the main babe configuration? Or even to the CLI?
+impl Default for BackoffAuthoringBlocksParam {
+	fn default() -> Self {
+		Self {
+			x: 100,
+			c: 5,
+			m: 2,
+		}
+	}
 }
 
 // The criterion for backing off block authoring when finality is lagging
@@ -720,15 +729,15 @@ fn should_backoff_authoring_blocks<B>(
 	chain_head_slot: u64,
 	finalized_number: NumberFor<B>,
 	slot_now: u64,
-	param: BackoffAuthoringBlocksParam<B>,
+	param: BackoffAuthoringBlocksParam,
 ) -> bool
 where
 	B: BlockT,
 {
 	let BackoffAuthoringBlocksParam { x, c, m } = param;
 	let unfinalized_block_length = chain_head_number - finalized_number;
-	let interval = unfinalized_block_length.saturating_sub(c) / m;
-	let interval = interval.min(x).max(0.into()); // max unnecessary due to saturating_sub?
+	let interval = unfinalized_block_length.saturating_sub(c.into()) / m.into();
+	let interval = interval.min(x.into()).max(0.into()); // max unnecessary due to saturating_sub?
 
 	// We're doing arithmetic between block and slot numbers.
 	let interval = interval.unique_saturated_into();
