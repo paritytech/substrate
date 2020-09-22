@@ -30,8 +30,6 @@
 use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
-
-#[cfg(feature = "std")]
 use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]

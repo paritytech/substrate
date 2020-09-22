@@ -754,7 +754,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 			.for_each(move |_| {
 				let curr = authorities.current_authorities();
 				let mut auths = curr.iter().map(|(p, _)| p);
-				let maybe_authority_id = authority_id(&mut auths, conf.keystore.clone())
+				let maybe_authority_id = authority_id(&mut auths, conf.keystore.as_ref())
 					.unwrap_or_default();
 
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
@@ -1141,7 +1141,7 @@ fn is_voter(
 /// Returns the authority id of this node, if available.
 fn authority_id<'a, I>(
 	authorities: &mut I,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<&SyncCryptoStorePtr>,
 ) -> Option<AuthorityId> where
 	I: Iterator<Item = &'a AuthorityId>,
 {

@@ -23,7 +23,6 @@
 extern crate alloc;
 
 #[cfg(feature = "std")]
-#[cfg(feature = "std")]
 use serde::Serialize;
 
 use codec::{Encode, Decode, Input, Codec};

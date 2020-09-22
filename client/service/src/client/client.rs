@@ -203,12 +203,7 @@ pub fn new_with_backend<B, E, Block, S, RA, TStore>(
 		B: backend::LocalBackend<Block> + 'static,
 		TStore: sp_core::traits::CryptoStore + 'static,
 {
-	let sync_keystore: Option<SyncCryptoStorePtr> = match keystore {
-		Some(store) => {
-			Some(Arc::new(store))
-		},
-		None => None
-	};
+	let sync_keystore: Option<SyncCryptoStorePtr> = keystore.map(|store| Arc::new(store)));
 
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
 	let extensions = ExecutionExtensions::new(Default::default(), sync_keystore);

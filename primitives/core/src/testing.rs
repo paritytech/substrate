@@ -30,6 +30,7 @@ use std::{collections::{HashMap, HashSet}, sync::Arc};
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
 
+#[cfg(feature = "std")]
 use async_trait::async_trait;
 
 /// Key type for generic Ed25519 key.
