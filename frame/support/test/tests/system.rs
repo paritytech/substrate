@@ -31,7 +31,10 @@ pub trait Trait: 'static + Eq + Clone {
 }
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
+		#[weight = 0]
+		fn noop(origin) {}
+	}
 }
 
 impl<T: Trait> Module<T> {
