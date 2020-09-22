@@ -1,12 +1,13 @@
 [package]
 name = "pallet-elections-phragmen"
-version = "2.0.0-rc6"
+version = "2.0.0-rc7"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet based on seq-Phragmén election method."
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -20,13 +21,6 @@ frame-support = { version = "2.0.0-rc6", default-features = false, path = "../su
 frame-system = { version = "2.0.0-rc6", default-features = false, path = "../system" }
 sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/std" }
 frame-benchmarking = { version = "2.0.0-rc6", default-features = false, path = "../benchmarking", optional = true }
-
-[dev-dependencies]
-sp-io = { version = "2.0.0-rc6", path = "../../primitives/io" }
-hex-literal = "0.3.1"
-pallet-balances = { version = "2.0.0-rc6", path = "../balances" }
-sp-core = { version = "2.0.0-rc6", path = "../../primitives/core" }
-substrate-test-utils = { version = "2.0.0-rc6", path = "../../test-utils" }
 
 [features]
 default = ["std"]

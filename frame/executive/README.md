@@ -7,7 +7,7 @@ extrinsic calls to the respective modules in the runtime.
 
 The executive module is not a typical pallet providing functionality around a specific feature.
 It is a cross-cutting framework component for the FRAME. It works in conjunction with the
-[FRAME System module](../frame_system/index.html) to perform these cross-cutting functions.
+[FRAME System module](https://docs.rs/frame-system) to perform these cross-cutting functions.
 
 The Executive module provides functions to:
 
@@ -27,7 +27,7 @@ The Executive module provides the following implementations:
 
 ## Usage
 
-The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in its library.
+The default Substrate node template declares the [`Executive`](https://docs.rs/frame-executive/latest/frame_executive/struct.Executive.html) type in its library.
 
 ### Example
 

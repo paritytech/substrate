@@ -2,8 +2,8 @@
 
 The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 
-- [`contract::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
+- [`contract::Trait`](https://docs.rs/pallet-contracts/latest/pallet_contracts/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-contracts/latest/pallet_contracts/enum.Call.html)
 
 ## Overview
 
@@ -59,6 +59,6 @@ WebAssembly based smart contracts in the Rust programming language. This is a wo
 
 ## Related Modules
 
-* [Balances](../pallet_balances/index.html)
+* [Balances](https://docs.rs/pallet-balances)
 
 License: Apache-2.0
