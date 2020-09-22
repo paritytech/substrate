@@ -23,6 +23,11 @@
 //!
 #![cfg_attr(not(feature = "std"), no_std)]
 
+//
+// 1. Remove system-block hash and implement LeafDataProvider for system pallet insteand.
+// 2. Implement LeafDataProvider for tuples. Each tuples node should be hashed before creating a
+//     leaf, so that we can prove only one element of the tuple instead of all of them.
+
 use codec::Encode;
 use frame_support::{
 	debug, decl_module, decl_storage,
@@ -88,11 +93,10 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			use primitives::LeafDataProvider;
 
-			let hash = <frame_system::Module<T>>::parent_hash();
 			let (data, leaf_weight) = T::LeafData::leaf_data();
 			// append new leaf to MMR
 			let mut mmr: ModuleMMR<mmr::storage::RuntimeStorage, T> = mmr::MMR::new(Self::mmr_leaves());
-			mmr.push(primitives::Leaf { hash, data }).expect("MMR push never fails.");
+			mmr.push(data).expect("MMR push never fails.");
 
 			// update the size
 			let (leaves, root) = mmr.finalize().expect("MMR finalize never fails.");
@@ -114,10 +118,7 @@ decl_module! {
 type ModuleMMR<StorageType, T> = mmr::MMR<StorageType, T, LeafOf<T>>;
 
 /// Leaf data.
-type LeafOf<T> = primitives::Leaf<
-	<T as frame_system::Trait>::Hash,
-	<<T as Trait>::LeafData as primitives::LeafDataProvider>::LeafData
->;
+type LeafOf<T> = <<T as Trait>::LeafData as primitives::LeafDataProvider>::LeafData;
 
 impl<T: Trait> Module<T> {
 	/// Prune leaf & inner nodes that are no longer necessary to keep.

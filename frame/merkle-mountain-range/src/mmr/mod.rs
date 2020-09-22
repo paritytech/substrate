@@ -38,6 +38,8 @@ impl<H: traits::Hash, L: codec::Codec> mmr_lib::Merge for Hasher<H, L> {
 	}
 }
 
+// TODO Rename to DataOrHash
+
 /// A node stored in the MMR.
 #[derive(RuntimeDebug, Clone, PartialEq, codec::Encode, codec::Decode)]
 pub enum Node<H: traits::Hash, L> {

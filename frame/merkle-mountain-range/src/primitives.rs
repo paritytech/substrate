@@ -18,6 +18,7 @@
 use frame_support::{
 	RuntimeDebug,
 	dispatch::Parameter,
+	traits::Get,
 	weights::Weight,
 };
 
@@ -38,20 +39,31 @@ pub trait LeafDataProvider {
 
 impl LeafDataProvider for () {
 	type LeafData = ();
+
 	fn leaf_data() -> (Self::LeafData, Weight) {
 		((), 0)
 	}
 }
 
-/// A leaf node of the MMR.
-///
-/// Contains the (parent) block hash and any data provided by the chain.
-#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
-pub struct Leaf<BlockHash, Data> {
-	/// Hash of the parent block.
-	pub hash: BlockHash,
-	/// Arbitrary extra data present in the MMR.
-	pub data: Data,
+impl<T: frame_system::Trait> LeafDataProvider for frame_system::Module<T> {
+	type LeafData = T::Hash;
+
+	fn leaf_data() -> (Self::LeafData, Weight) {
+		let hash = Self::parent_hash();
+		(hash, T::DbWeight::get().reads(1))
+	}
+}
+
+// TODO [ToDr] Impl for all tuples
+impl<A: LeafDataProvider, B: LeafDataProvider> LeafDataProvider for (A, B) {
+	type LeafData = (A::LeafData, B::LeafData);
+
+	fn leaf_data() -> (Self::LeafData, Weight) {
+		let (a_leaf, a_weight) = A::leaf_data();
+		let (b_leaf, b_weight) = B::leaf_data();
+
+		((a_leaf, b_leaf), a_weight.saturating_add(b_weight))
+	}
 }
 
 /// A MMR proof data for one of the leaves.

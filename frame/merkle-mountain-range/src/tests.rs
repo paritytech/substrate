@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::*;
-use crate::primitives::{Leaf, Proof, LeafDataProvider};
+use crate::primitives::{Proof, LeafDataProvider};
 
 use codec::{Encode, Decode};
 use frame_support::{
@@ -83,7 +83,7 @@ impl frame_system::Trait for Test {
 impl Trait for Test {
 	type Hashing = Keccak256;
 	type Hash = H256;
-	type LeafData = LeafData;
+	type LeafData = (frame_system::Module<Test>, LeafData);
 }
 
 #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, Debug)]
@@ -145,7 +145,7 @@ fn hex(s: &str) -> H256 {
 
 fn decode_node(v: Vec<u8>) -> mmr::Node<
 	<Test as Trait>::Hashing,
-	Leaf<H256, LeafData>,
+	(H256, LeafData),
 > {
 	codec::Decode::decode(&mut &v[..]).unwrap()
 }
@@ -211,14 +211,14 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 	// make sure the leaves end up in the offchain DB
 	ext.persist_offchain_overlay();
 	let offchain_db = ext.offchain_db();
-	assert_eq!(offchain_db.get(&MMR::offchain_key(0)).map(decode_node), Some(mmr::Node::Leaf(Leaf {
-		hash: H256::repeat_byte(1),
-		data: LeafData::new(1),
-	})));
-	assert_eq!(offchain_db.get(&MMR::offchain_key(1)).map(decode_node), Some(mmr::Node::Leaf(Leaf {
-		hash: H256::repeat_byte(2),
-		data: LeafData::new(2),
-	})));
+	assert_eq!(offchain_db.get(&MMR::offchain_key(0)).map(decode_node), Some(mmr::Node::Leaf((
+		H256::repeat_byte(1),
+		LeafData::new(1),
+	))));
+	assert_eq!(offchain_db.get(&MMR::offchain_key(1)).map(decode_node), Some(mmr::Node::Leaf((
+		H256::repeat_byte(2),
+		LeafData::new(2),
+	))));
 	assert_eq!(offchain_db.get(&MMR::offchain_key(2)).map(decode_node), Some(mmr::Node::Inner(
 		hex("21b847809cbb535ba771e7bb25b33985b5259f1f3fc9cae81bc097f56efbbd36")
 	)));
@@ -264,10 +264,10 @@ fn should_generate_proofs_correclty() {
 			.collect::<Vec<_>>();
 
 		// then
-		assert_eq!(proofs[0], (Leaf {
-			hash: H256::repeat_byte(1),
-			data: LeafData::new(1),
-		}, Proof {
+		assert_eq!(proofs[0], ((
+			H256::repeat_byte(1),
+			LeafData::new(1),
+		), Proof {
 			leaf_index: 0,
 			leaf_count: 7,
 			items: vec![
@@ -276,10 +276,10 @@ fn should_generate_proofs_correclty() {
 				hex("e858832b2bc93dceb94c0df74e5d897ed418140623af150076116f82fb19e78f"),
 			],
 		}));
-		assert_eq!(proofs[4], (Leaf {
-			hash: H256::repeat_byte(5),
-			data: LeafData::new(5),
-		}, Proof {
+		assert_eq!(proofs[4], ((
+			H256::repeat_byte(5),
+			LeafData::new(5),
+		), Proof {
 			leaf_index: 4,
 			leaf_count: 7,
 			items: vec![
@@ -288,10 +288,10 @@ fn should_generate_proofs_correclty() {
 				hex("32d44b4a8e8a3046b9c02315847eb091678a59f136226e70d66f3a82bd836ce1"),
 			],
 		}));
-		assert_eq!(proofs[6], (Leaf {
-			hash: H256::repeat_byte(7),
-			data: LeafData::new(7),
-		}, Proof {
+		assert_eq!(proofs[6], ((
+			H256::repeat_byte(7),
+			LeafData::new(7),
+		), Proof {
 			leaf_index: 6,
 			leaf_count: 7,
 			items: vec![
