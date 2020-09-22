@@ -98,7 +98,11 @@ pub fn write_trait(batches: &[BenchmarkBatch], path: &PathBuf) -> Result<(), std
 	Ok(())
 }
 
-pub fn write_results(batches: &[BenchmarkBatch], path: &PathBuf, header: &Option<PathBuf>) -> Result<(), std::io::Error> {
+pub fn write_results(
+	batches: &[BenchmarkBatch],
+	path: &PathBuf,
+	header: &Option<PathBuf>,
+) -> Result<(), std::io::Error> {
 
 	let header_text = match header {
 		Some(header_file) => {
