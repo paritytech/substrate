@@ -35,7 +35,7 @@ use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
 
-use sp_core::traits::SyncCryptoStorePtr;
+use sp_core::traits::CryptoStore;
 use finality_grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use finality_grandpa::{voter, voter_set::VoterSet};
 use sc_network::{NetworkService, ReputationChange};
@@ -107,7 +107,7 @@ mod benefit {
 
 /// A type that ties together our local authority id and a keystore where it is
 /// available for signing.
-pub struct LocalIdKeystore((AuthorityId, SyncCryptoStorePtr));
+pub struct LocalIdKeystore((AuthorityId, Arc<dyn CryptoStore>));
 
 impl LocalIdKeystore {
 	/// Returns a reference to our local authority id.
@@ -116,13 +116,13 @@ impl LocalIdKeystore {
 	}
 
 	/// Returns a reference to the keystore.
-	fn keystore(&self) -> SyncCryptoStorePtr {
+	fn keystore(&self) -> Arc<dyn CryptoStore>{
 		(self.0).1.clone()
 	}
 }
 
-impl From<(AuthorityId, SyncCryptoStorePtr)> for LocalIdKeystore {
-	fn from(inner: (AuthorityId, SyncCryptoStorePtr)) -> LocalIdKeystore {
+impl From<(AuthorityId, Arc<dyn CryptoStore>)> for LocalIdKeystore {
+	fn from(inner: (AuthorityId, Arc<dyn CryptoStore>)) -> LocalIdKeystore {
 		LocalIdKeystore(inner)
 	}
 }

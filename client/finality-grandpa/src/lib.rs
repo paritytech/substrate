@@ -76,7 +76,7 @@ use sp_inherents::InherentDataProviders;
 use sp_consensus::{SelectChain, BlockImport};
 use sp_core::{
 	crypto::Public,
-	traits::SyncCryptoStorePtr,
+	traits::{CryptoStore, SyncCryptoStore},
 };
 use sp_application_crypto::AppKey;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
@@ -272,7 +272,7 @@ pub struct Config {
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
-	pub keystore: Option<SyncCryptoStorePtr>,
+	pub keystore: Option<Arc<dyn CryptoStore>>,
 }
 
 impl Config {
@@ -609,7 +609,7 @@ fn global_communication<BE, Block: BlockT, C, N>(
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: Arc<C>,
 	network: &NetworkBridge<Block, N>,
-	keystore: Option<&SyncCryptoStorePtr>,
+	keystore: Option<&Arc<dyn CryptoStore>>,
 	metrics: Option<until_imported::Metrics>,
 ) -> (
 	impl Stream<
@@ -1125,13 +1125,13 @@ pub fn setup_disabled_grandpa<Block: BlockT, Client, N>(
 /// Returns the key pair of the node that is being used in the current voter set or `None`.
 fn is_voter(
 	voters: &Arc<VoterSet<AuthorityId>>,
-	keystore: Option<&SyncCryptoStorePtr>,
+	keystore: Option<& Arc<dyn CryptoStore>>,
 ) -> Option<AuthorityId> {
 	match keystore {
 		Some(keystore) => voters
 			.iter()
 			.find(|(p, _)| {
-				keystore.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)])
+				SyncCryptoStore::has_keys(keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
 			})
 			.map(|(p, _)| p.clone()),
 		None => None,
@@ -1141,7 +1141,7 @@ fn is_voter(
 /// Returns the authority id of this node, if available.
 fn authority_id<'a, I>(
 	authorities: &mut I,
-	keystore: Option<&SyncCryptoStorePtr>,
+	keystore: Option<&Arc<dyn CryptoStore>>,
 ) -> Option<AuthorityId> where
 	I: Iterator<Item = &'a AuthorityId>,
 {

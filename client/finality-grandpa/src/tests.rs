@@ -42,7 +42,7 @@ use std::{collections::{HashMap, HashSet}, pin::Pin};
 use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
-use sp_core::{H256, crypto::Public, traits::SyncCryptoStorePtr};
+use sp_core::{H256, crypto::Public, traits::{CryptoStore, SyncCryptoStore}};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
@@ -287,11 +287,11 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 
-fn create_keystore(authority: Ed25519Keyring) -> (SyncCryptoStorePtr, tempfile::TempDir) {
+fn create_keystore(authority: Ed25519Keyring) -> (Arc<dyn CryptoStore>, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore : SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+	let keystore: Arc<dyn CryptoStore> = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 		.expect("Creates keystore"));
-	keystore.ed25519_generate_new(GRANDPA, Some(&authority.to_seed()))
+	SyncCryptoStore::ed25519_generate_new(&keystore, GRANDPA, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 
 	(keystore, keystore_path)
@@ -1056,7 +1056,7 @@ fn voter_persists_its_votes() {
 			voter_rx: TracingUnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
-			keystore: SyncCryptoStorePtr,
+			keystore: Arc<dyn CryptoStore>,
 		}
 
 		impl Future for ResettableVoter {
@@ -1536,7 +1536,7 @@ type TestEnvironment<N, VR> = Environment<
 
 fn test_environment<N, VR>(
 	link: &TestLinkHalf,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<Arc<dyn CryptoStore>>,
 	network_service: N,
 	voting_rule: VR,
 ) -> TestEnvironment<N, VR>

@@ -26,6 +26,7 @@ use crate::{
 };
 
 use std::{
+	ops::Deref,
 	borrow::Cow,
 	fmt::{Debug, Display},
 	panic::UnwindSafe,
@@ -352,6 +353,7 @@ pub trait SyncCryptoStore: Send + Sync {
 	) -> Result<VRFSignature, Error>;
 }
 
+// TODO: Check if still needed?
 impl<T: CryptoStore> SyncCryptoStore for T {
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
 		block_on(T::sr25519_public_keys(self, id))
@@ -443,6 +445,100 @@ impl<T: CryptoStore> SyncCryptoStore for T {
 		transcript_data: VRFTranscriptData,
 	) -> Result<VRFSignature, Error> {
 		block_on(T::sr25519_vrf_sign(self, key_type, public, transcript_data))
+	}
+}
+
+impl SyncCryptoStore for Arc<dyn CryptoStore> {
+	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
+		block_on(CryptoStore::sr25519_public_keys(self.deref(), id))
+	}
+
+	fn sr25519_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<sr25519::Public, Error> {
+		block_on(CryptoStore::sr25519_generate_new(self.deref(), id, seed))
+	}
+
+	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
+		block_on(CryptoStore::ed25519_public_keys(self.deref(), id))
+	}
+
+	fn ed25519_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ed25519::Public, Error> {
+		block_on(CryptoStore::ed25519_generate_new(self.deref(), id, seed))
+	}
+
+	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+		block_on(CryptoStore::ecdsa_public_keys(self.deref(), id))
+	}
+
+	fn ecdsa_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ecdsa::Public, Error> {
+		block_on(CryptoStore::ecdsa_generate_new(self.deref(), id, seed))
+	}
+
+	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
+		block_on(CryptoStore::insert_unknown(self.deref(), key_type, suri, public))
+	}
+
+	fn supported_keys(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>
+	) -> Result<Vec<CryptoTypePublicPair>, Error> {
+		block_on(CryptoStore::supported_keys(self.deref(), id, keys))
+	}
+
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
+		block_on(CryptoStore::keys(self.deref(), id))
+	}
+
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+		block_on(CryptoStore::has_keys(self.deref(), public_keys))
+	}
+
+	fn sign_with(
+		&self,
+		id: KeyTypeId,
+		key: &CryptoTypePublicPair,
+		msg: &[u8],
+	) -> Result<Vec<u8>, Error> {
+		block_on(CryptoStore::sign_with(self.deref(), id, key, msg))
+	}
+
+	fn sign_with_any(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+		msg: &[u8]
+	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
+		block_on(CryptoStore::sign_with_any(self.deref(), id, keys, msg))
+	}
+
+	fn sign_with_all(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+		msg: &[u8],
+	) -> Result<Vec<Result<Vec<u8>, Error>>, ()> {
+		block_on(CryptoStore::sign_with_all(self.deref(), id, keys, msg))
+	}
+
+	fn sr25519_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		transcript_data: VRFTranscriptData,
+	) -> Result<VRFSignature, Error> {
+		block_on(CryptoStore::sr25519_vrf_sign(self.deref(), key_type, public, transcript_data))
 	}
 }
 
