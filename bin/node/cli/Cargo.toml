@@ -41,7 +41,7 @@ hex-literal = "0.3.1"
 log = "0.4.8"
 rand = "0.7.2"
 structopt = { version = "0.3.8", optional = true }
-tracing = "0.1.18"
+tracing = "0.1.19"
 parking_lot = "0.10.0"
 
 # primitives
