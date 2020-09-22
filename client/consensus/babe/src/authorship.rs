@@ -130,7 +130,7 @@ fn claim_secondary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	keys: &[(AuthorityId, usize)],
-	keystore: SyncCryptoStorePtr,
+	keystore: &SyncCryptoStorePtr,
 	author_secondary_vrf: bool,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -193,7 +193,7 @@ fn claim_secondary_slot(
 pub fn claim_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	keystore: SyncCryptoStorePtr,
+	keystore: &SyncCryptoStorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let authorities = epoch.authorities.iter()
 		.enumerate()
@@ -207,10 +207,10 @@ pub fn claim_slot(
 pub fn claim_slot_using_keys(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	keystore: SyncCryptoStorePtr,
+	keystore: &SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore.clone(), &keys)
+	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore, &keys)
 		.or_else(|| {
 			if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
 				epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
@@ -219,7 +219,7 @@ pub fn claim_slot_using_keys(
 					slot_number,
 					&epoch,
 					keys,
-					keystore,
+					&keystore,
 					epoch.config.allowed_slots.is_secondary_vrf_slots_allowed(),
 				)
 			} else {
@@ -236,7 +236,7 @@ fn claim_primary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	c: (u64, u64),
-	keystore: SyncCryptoStorePtr,
+	keystore: &SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -319,9 +319,9 @@ mod tests {
 			},
 		};
 
-		assert!(claim_slot(10, &epoch, sync_keystore.clone()).is_none());
+		assert!(claim_slot(10, &epoch, &sync_keystore).is_none());
 
 		epoch.authorities.push((valid_public_key.clone().into(), 10));
-		assert_eq!(claim_slot(10, &epoch, sync_keystore).unwrap().1, valid_public_key.into());
+		assert_eq!(claim_slot(10, &epoch, &sync_keystore).unwrap().1, valid_public_key.into());
 	}
 }

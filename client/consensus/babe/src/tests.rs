@@ -547,7 +547,7 @@ fn can_author_block() {
 	};
 
 	// with secondary slots enabled it should never be empty
-	match claim_slot(i, &epoch, keystore.clone()) {
+	match claim_slot(i, &epoch, &keystore) {
 		None => i += 1,
 		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
 	}
@@ -556,7 +556,7 @@ fn can_author_block() {
 	// of times.
 	config.allowed_slots = AllowedSlots::PrimarySlots;
 	loop {
-		match claim_slot(i, &epoch, keystore.clone()) {
+		match claim_slot(i, &epoch, &keystore) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);

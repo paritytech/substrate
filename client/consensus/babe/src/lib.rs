@@ -537,7 +537,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 				&epoch_descriptor,
 				|slot| Epoch::genesis(&self.config, slot)
 			)?.as_ref(),
-			self.keystore.clone(),
+			&self.keystore,
 		);
 
 		if s.is_some() {
