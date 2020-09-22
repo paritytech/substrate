@@ -301,7 +301,7 @@ mod tests {
 			type AccountId: From<u32> + Encode;
 			type BlockNumber: From<u32> + Encode;
 			type SomeValue: Get<u32>;
-			type ModuleToIndex: crate::traits::ModuleToIndex;
+			type PalletInfo: crate::traits::PalletInfo;
 			type Call;
 		}
 
@@ -447,7 +447,7 @@ mod tests {
 		type AccountId = u32;
 		type BlockNumber = u32;
 		type SomeValue = SystemValue;
-		type ModuleToIndex = ();
+		type PalletInfo = ();
 		type Call = Call;
 	}
 

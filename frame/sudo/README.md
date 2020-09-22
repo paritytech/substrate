@@ -1,7 +1,7 @@
 # Sudo Module
 
-- [`sudo::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
+- [`sudo::Trait`](https://docs.rs/pallet-sudo/latest/pallet_sudo/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-sudo/latest/pallet_sudo/enum.Call.html)
 
 ## Overview
 
@@ -56,12 +56,12 @@ decl_module! {
 
 ## Genesis Config
 
-The Sudo module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+The Sudo module depends on the [`GenesisConfig`](https://docs.rs/pallet-sudo/latest/pallet_sudo/struct.GenesisConfig.html).
 You need to set an initial superuser account as the sudo `key`.
 
 ## Related Modules
 
-* [Democracy](../pallet_democracy/index.html)
+* [Democracy](https://docs.rs/pallet-democracy/latest/pallet_democracy/)
 
 [`Call`]: ./enum.Call.html
 [`Trait`]: ./trait.Trait.html

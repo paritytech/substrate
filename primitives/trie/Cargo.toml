@@ -8,6 +8,7 @@ license = "Apache-2.0"
 edition = "2018"
 homepage = "https://substrate.dev"
 documentation = "https://docs.rs/sp-trie"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

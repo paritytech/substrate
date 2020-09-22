@@ -1,8 +1,8 @@
 # Utility Module
 A stateless module with helpers for dispatch management which does no re-authentication.
 
-- [`utility::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
+- [`utility::Trait`](https://docs.rs/pallet-utility/latest/pallet_utility/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-utility/latest/pallet_utility/enum.Call.html)
 
 ## Overview
 
