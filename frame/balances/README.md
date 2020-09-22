@@ -53,16 +53,16 @@ locks always operate over the same funds, so they "overlay" rather than "stack".
 The Balances module provides implementations for the following traits. If these traits provide the functionality
 that you need, then you can avoid coupling with the Balances module.
 
-- [`Currency`](https://docs.rs/frame-support/traits/trait.Currency.html): Functions for dealing with a
+- [`Currency`](https://docs.rs/frame-support/latest/frame_support/traits/trait.Currency.html): Functions for dealing with a
 fungible assets system.
-- [`ReservableCurrency`](https://docs.rs/frame-support/traits/trait.ReservableCurrency.html):
+- [`ReservableCurrency`](https://docs.rs/frame-support/latest/frame_support/traits/trait.ReservableCurrency.html):
 Functions for dealing with assets that can be reserved from an account.
-- [`LockableCurrency`](https://docs.rs/frame-support/traits/trait.LockableCurrency.html): Functions for
+- [`LockableCurrency`](https://docs.rs/frame-support/latest/frame_support/traits/trait.LockableCurrency.html): Functions for
 dealing with accounts that allow liquidity restrictions.
-- [`Imbalance`](https://docs.rs/frame-support/traits/trait.Imbalance.html): Functions for handling
+- [`Imbalance`](https://docs.rs/frame-support/latest/frame_support/traits/trait.Imbalance.html): Functions for handling
 imbalances between total issuance in the system and account balances. Must be used when a function
 creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-- [`IsDeadAccount`](https://docs.rs/frame-system/trait.IsDeadAccount.html): Determiner to say whether a
+- [`IsDeadAccount`](https://docs.rs/frame-system/latest/frame_system/trait.IsDeadAccount.html): Determiner to say whether a
 given account is unused.
 
 ## Interface

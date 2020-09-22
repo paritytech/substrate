@@ -110,7 +110,7 @@ them are violated, the behavior of this module is undefined.
 
 ## Related Modules
 
-* [`System`](https://docs.rs/frame-system)
-* [`Support`](https://docs.rs/frame-support)
+* [`System`](https://docs.rs/frame-system/latest/frame_system/)
+* [`Support`](https://docs.rs/frame-support/latest/frame_support/)
 
 License: Apache-2.0

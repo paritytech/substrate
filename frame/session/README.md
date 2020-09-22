@@ -66,7 +66,7 @@ for next session rotation.
 
 ### Example from the FRAME
 
-The [Staking pallet](https://docs.rs/pallet-staking) uses the Session pallet to get the validator set.
+The [Staking pallet](https://docs.rs/pallet-staking/latest/pallet_staking/) uses the Session pallet to get the validator set.
 
 ```rust
 use pallet_session as session;
@@ -78,6 +78,6 @@ fn validators<T: pallet_session::Trait>() -> Vec<<T as pallet_session::Trait>::V
 
 ## Related Modules
 
-- [Staking](https://docs.rs/pallet-staking)
+- [Staking](https://docs.rs/pallet-staking/latest/pallet_staking/)
 
 License: Apache-2.0

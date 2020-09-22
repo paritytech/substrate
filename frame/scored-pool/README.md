@@ -61,6 +61,6 @@ decl_module! {
 
 ## Dependencies
 
-This module depends on the [System module](https://docs.rs/frame-system).
+This module depends on the [System module](https://docs.rs/frame-system/latest/frame_system/).
 
 License: Apache-2.0

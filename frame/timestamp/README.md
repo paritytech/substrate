@@ -69,6 +69,6 @@ the Timestamp module for session management.
 
 ## Related Modules
 
-* [Session](https://docs.rs/pallet-timestamppallet-session)
+* [Session](https://docs.rs/pallet-timestamppallet-session/latest/pallet_session/)
 
 License: Apache-2.0

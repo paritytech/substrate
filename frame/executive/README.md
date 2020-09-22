@@ -7,7 +7,7 @@ extrinsic calls to the respective modules in the runtime.
 
 The executive module is not a typical pallet providing functionality around a specific feature.
 It is a cross-cutting framework component for the FRAME. It works in conjunction with the
-[FRAME System module](https://docs.rs/frame-system) to perform these cross-cutting functions.
+[FRAME System module](https://docs.rs/frame-system/latest/frame_system/) to perform these cross-cutting functions.
 
 The Executive module provides functions to:
 

@@ -184,7 +184,7 @@ they received during the era. Points are added to a validator using
 [`reward_by_indices`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.reward_by_indices).
 
 [`Module`](./struct.Module.html) implements
-[`pallet_authorship::EventHandler`](https://docs.rs/pallet-authorship/trait.EventHandler.html) to add reward
+[`pallet_authorship::EventHandler`](https://docs.rs/pallet-authorship/latest/pallet_authorship/trait.EventHandler.html) to add reward
 points to block producer and block producer of referenced uncles.
 
 The validator and its nominator split their reward as following:
@@ -242,8 +242,8 @@ The Staking module depends on the [`GenesisConfig`](https://docs.rs/pallet-staki
 
 ## Related Modules
 
-- [Balances](https://docs.rs/pallet-balances): Used to manage values at stake.
-- [Session](https://docs.rs/pallet-session): Used to manage sessions. Also, a list of new
+- [Balances](https://docs.rs/pallet-balances/latest/pallet_balances/): Used to manage values at stake.
+- [Session](https://docs.rs/pallet-session/latest/pallet_session/): Used to manage sessions. Also, a list of new
   validators is stored in the Session module's `Validators` at the end of each era.
 
 License: Apache-2.0

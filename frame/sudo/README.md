@@ -61,7 +61,7 @@ You need to set an initial superuser account as the sudo `key`.
 
 ## Related Modules
 
-* [Democracy](https://docs.rs/pallet-democracy)
+* [Democracy](https://docs.rs/pallet-democracy/latest/pallet_democracy/)
 
 [`Call`]: ./enum.Call.html
 [`Trait`]: ./trait.Trait.html
