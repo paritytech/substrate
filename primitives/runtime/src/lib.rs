@@ -794,13 +794,11 @@ impl SignatureBatching {
 
 impl Drop for SignatureBatching {
 	fn drop(&mut self) {
-		#[cfg(feature = "std")]
-		let panicking = std::thread::panicking();
-		#[cfg(not(feature = "std"))]
-		let panicking = false;
-
 		// Sanity check. If user forgets to actually call `verify()`.
-		if !self.0 && !panicking {
+		//
+		// We should not panic if the current thread is already panicking,
+		// because Rust otherwise aborts the process.
+		if !self.0 && !sp_std::thread::panicking() {
 			panic!("Signature verification has not been called before `SignatureBatching::drop`")
 		}
 	}
