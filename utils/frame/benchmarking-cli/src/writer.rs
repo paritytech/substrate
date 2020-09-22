@@ -123,6 +123,7 @@ pub fn write_results(
 	};
 
 	let indent = if spaces {"    "} else {"\t"};
+	let date = chrono::Utc::now();
 
 	let mut current_pallet = Vec::<u8>::new();
 
@@ -169,9 +170,12 @@ pub fn write_results(
 			// auto-generation note
 			write!(
 				file,
-				"//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {}\n\n",
+				"//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {}\n",
 				 VERSION,
 			)?;
+
+			// date of generation
+			write!(file, "//! ON {}\n\n", date.format("%Y-%m-%d"))?;
 
 			// allow statements
 			write!(
