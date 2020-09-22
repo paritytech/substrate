@@ -8,6 +8,7 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "A set of common definitions that are needed for defining execution engines."
 documentation = "https://docs.rs/sc-executor-common/"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

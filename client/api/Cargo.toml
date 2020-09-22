@@ -8,6 +8,7 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Substrate client interfaces."
 documentation = "https://docs.rs/sc-client-api"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
