@@ -65,12 +65,14 @@ pub fn create_heartbeat<T: Trait>(k: u32, e: u32) ->
 benchmarks! {
 	_{ }
 
+	#[extra]
 	heartbeat {
 		let k in 1 .. MAX_KEYS;
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
 	}: _(RawOrigin::None, input_heartbeat, signature)
 
+	#[extra]
 	validate_unsigned {
 		let k in 1 .. MAX_KEYS;
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;

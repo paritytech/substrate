@@ -17,8 +17,8 @@
 
 //! Infinite precision unsigned integer for substrate runtime.
 
-use num_traits::{Zero, One};
-use sp_std::{cmp::Ordering, ops, prelude::*, cell::RefCell, convert::TryFrom};
+use num_traits::Zero;
+use sp_std::{cmp::Ordering, ops, prelude::*, vec, cell::RefCell, convert::TryFrom};
 
 // A sensible value for this would be half of the dword size of the host machine. Since the
 // runtime is compiled to 32bit webassembly, using 32 and 64 for single and double respectively
