@@ -8,6 +8,7 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "This crate provides an implementation of `WasmRuntime` that is baked by wasmi."
 documentation = "https://docs.rs/sc-executor-wasmi"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

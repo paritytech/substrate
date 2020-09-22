@@ -6,6 +6,7 @@ description = "RPC extensions for the GRANDPA finality gadget"
 repository = "https://github.com/paritytech/substrate/"
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+readme = "README.md"
 
 [dependencies]
 sc-finality-grandpa = { version = "0.8.0-rc6", path = "../" }
