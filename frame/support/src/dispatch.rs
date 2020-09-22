@@ -29,7 +29,9 @@ pub use crate::weights::{
 	PaysFee, PostDispatchInfo, WithPostDispatchInfo,
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError};
-pub use crate::traits::{CallMetadata, GetCallMetadata, GetCallName, UnfilteredDispatchable};
+pub use crate::traits::{
+	CallMetadata, GetCallMetadata, GetCallName, UnfilteredDispatchable, GetPalletVersion,
+};
 
 /// The return typ of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
@@ -1320,7 +1322,9 @@ macro_rules! decl_module {
 		{
 			fn on_runtime_upgrade() -> $return {
 				$crate::sp_tracing::enter_span!("on_runtime_upgrade");
-				{ $( $impl )* }
+				let result = { $( $impl )* };
+
+				result
 			}
 		}
 	};
@@ -1332,7 +1336,11 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::traits::OnRuntimeUpgrade
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
-		{}
+		{
+			fn on_runtime_upgrade() -> $crate::dispatch::Weight {
+				0
+			}
+		}
 	};
 
 	(@impl_integrity_test

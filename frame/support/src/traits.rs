@@ -1681,6 +1681,23 @@ pub struct PalletVersion {
 	pub patch: u8,
 }
 
+/// A trait t
+pub trait GetPalletVersion {
+	/// Returns the current version of the pallet.
+	fn current_version() -> PalletVersion;
+
+	/// Returns the version of the pallet that is stored in storage.
+	///
+	/// Most of the time this will return the exact same version as
+	/// [`GetPalletVersion::current_version`]. Only when being in
+	/// a state after a runtime upgrade happened and the pallet did
+	/// not yet updated its version in storage, this will return a
+	/// different(the previous, seen from the time of calling) version.
+	///
+	/// See [`PalletVersion`] for more information.
+	fn storage_version() -> PalletVersion;
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
