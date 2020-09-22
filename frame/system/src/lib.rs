@@ -356,7 +356,7 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 type EventIndex = u32;
 
 /// Type used to encode the number of references an account has.
-pub type RefCount = u8;
+pub type RefCount = u32;
 
 /// Information of an account.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
@@ -458,6 +458,9 @@ decl_storage! {
 		/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
 		pub LastRuntimeUpgrade build(|_| Some(LastRuntimeUpgradeInfo::from(T::Version::get()))): Option<LastRuntimeUpgradeInfo>;
 
+		/// True if we have upgraded so that `type RefCount` is `u32`. False (default) if not.
+		UpgradedToU32RefCount build(|_| true): bool;
+
 		/// The execution phase of the block.
 		ExecutionPhase: Option<Phase>;
 	}
@@ -539,6 +542,18 @@ decl_module! {
 
 		/// The maximum length of a block (in bytes).
 		const MaximumBlockLength: u32 = T::MaximumBlockLength::get();
+
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			if !UpgradedToU32RefCount::get() {
+				Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)|
+					Some(AccountInfo { nonce, refcount: rc as RefCount, data })
+				);
+				UpgradedToU32RefCount::put(true);
+				T::MaximumBlockWeight::get()
+			} else {
+				0
+			}
+		}
 
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
