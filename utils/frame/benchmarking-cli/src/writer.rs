@@ -48,7 +48,12 @@ fn underscore<Number>(i: Number) -> String
     s
 }
 
-pub fn write_trait(batches: &[BenchmarkBatch], path: &PathBuf, spaces: bool) -> Result<(), std::io::Error> {
+pub fn write_trait(
+	batches: &[BenchmarkBatch],
+	path: &PathBuf,
+	trait_name: &String,
+	spaces: bool,
+) -> Result<(), std::io::Error> {
 	let mut file_path = path.clone();
 	file_path.push("trait");
 	file_path.set_extension("rs");
@@ -77,7 +82,7 @@ pub fn write_trait(batches: &[BenchmarkBatch], path: &PathBuf, spaces: bool) -> 
 
 			// trait wrapper
 			write!(file, "// {}\n", pallet_string)?;
-			write!(file, "pub trait WeightInfo {{\n")?;
+			write!(file, "pub trait {} {{\n", trait_name)?;
 
 			current_pallet = batch.pallet.clone()
 		}
@@ -104,6 +109,8 @@ pub fn write_results(
 	batches: &[BenchmarkBatch],
 	path: &PathBuf,
 	header: &Option<PathBuf>,
+	struct_name: &String,
+	trait_name: &String,
 	spaces: bool,
 ) -> Result<(), std::io::Error> {
 
@@ -179,10 +186,16 @@ pub fn write_results(
 			)?;
 
 			// struct for weights
-			write!(file, "pub struct WeightInfo<T>(PhantomData<T>);\n")?;
+			write!(file, "pub struct {}<T>(PhantomData<T>);\n", struct_name)?;
 
 			// trait wrapper
-			write!(file, "impl<T: frame_system::Trait> {}::WeightInfo for WeightInfo<T> {{\n", pallet_string)?;
+			write!(
+				file,
+				"impl<T: frame_system::Trait> {}::{} for {}<T> {{\n",
+				pallet_string,
+				trait_name,
+				struct_name
+			)?;
 
 			current_pallet = batch.pallet.clone()
 		}

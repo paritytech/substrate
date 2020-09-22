@@ -70,7 +70,7 @@ pub struct BenchmarkCmd {
 
 	/// Output the trait definition to a Rust file.
 	#[structopt(long)]
-	pub r#trait: bool,
+	pub trait_def: bool,
 
 	/// Set the heap pages while running benchmarks.
 	#[structopt(long)]
@@ -87,6 +87,14 @@ pub struct BenchmarkCmd {
 	/// Output files using spaces instead of tabs.
 	#[structopt(long)]
 	pub spaces: bool,
+
+	/// Output benchmarks file using this struct name.
+	#[structopt(long, default_value = "WeightInfo")]
+	pub r#struct: String,
+
+	/// Output benchmarks file using this trait name.
+	#[structopt(long, default_value = "WeightInfo")]
+	pub r#trait: String,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
