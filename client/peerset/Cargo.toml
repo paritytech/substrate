@@ -8,6 +8,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sc-peerset"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

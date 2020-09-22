@@ -8,6 +8,7 @@ edition = "2018"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sc-light"
+readme = "README.md"
 
 [dependencies]
 parking_lot = "0.10.0"
