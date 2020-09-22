@@ -1,12 +1,13 @@
 [package]
 name = "sp-tracing"
-version = "2.0.0-rc6"
+version = "2.0.0"
 license = "Apache-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Instrumentation primitives and macros for Substrate."
+readme = "README.md"
 
 [package.metadata.docs.rs]
 # let's default to wasm32
@@ -17,7 +18,7 @@ features = ["with-tracing"]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [dependencies]
-sp-std = { version = "2.0.0-rc6", path = "../std", default-features = false}
+sp-std = { version = "2.0.0", path = "../std", default-features = false}
 codec = { version = "1.3.1", package = "parity-scale-codec", default-features = false, features = ["derive"]}
 tracing = { version = "0.1.19", default-features = false }
 tracing-core = { version = "0.1.16", default-features = false }
