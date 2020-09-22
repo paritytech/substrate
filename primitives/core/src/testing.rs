@@ -251,8 +251,7 @@ impl crate::traits::CryptoStore for KeyStore {
 	) -> Result<VRFSignature, Error> {
 		let transcript = make_transcript(transcript_data);
 		let pair = self.sr25519_key_pair(key_type, public)
-			.ok_or(Error::PairNotFound("Not found".to_owned()))?;
-
+			.ok_or_else(|| Error::PairNotFound("Not found".to_owned()))?;
 		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
 		Ok(VRFSignature {
 			output: inout.to_output(),
