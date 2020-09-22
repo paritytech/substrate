@@ -702,7 +702,7 @@ pub struct WasmiInstance {
 unsafe impl Send for WasmiInstance {}
 
 impl WasmInstance for WasmiInstance {
-	fn call(&self, call_site: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error> {
+	fn call(&self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error> {
 		// We reuse a single wasm instance for multiple calls and a previous call (if any)
 		// altered the state. Therefore, we need to restore the instance to original state.
 
@@ -725,7 +725,7 @@ impl WasmInstance for WasmiInstance {
 		call_in_wasm_module(
 			&self.instance,
 			&self.memory,
-			call_site,
+			method,
 			data,
 			self.host_functions.as_ref(),
 			self.allow_missing_func_imports,

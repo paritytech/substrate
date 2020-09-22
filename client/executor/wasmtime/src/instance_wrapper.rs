@@ -214,8 +214,8 @@ impl InstanceWrapper {
 	///
 	/// An entrypoint must have a signature `(i32, i32) -> i64`, otherwise this function will return
 	/// an error.
-	pub fn resolve_entrypoint(&self, site: InvokeMethod) -> Result<EntryPoint> {
-		Ok(match site {
+	pub fn resolve_entrypoint(&self, method: InvokeMethod) -> Result<EntryPoint> {
+		Ok(match method {
 			InvokeMethod::Export(method) => {
 				// Resolve the requested method and verify that it has a proper signature.
 				let export = self

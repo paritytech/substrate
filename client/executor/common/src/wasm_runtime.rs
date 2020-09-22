@@ -72,7 +72,7 @@ pub trait WasmInstance: Send {
 	/// Before execution, instance is reset.
 	///
 	/// Returns the encoded result on success.
-	fn call(&self, call_site: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error>;
+	fn call(&self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error>;
 
 	/// Call an exported method on this WASM instance.
 	///

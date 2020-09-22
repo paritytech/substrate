@@ -90,8 +90,8 @@ pub struct WasmtimeInstance {
 unsafe impl Send for WasmtimeInstance {}
 
 impl WasmInstance for WasmtimeInstance {
-	fn call(&self, call_site: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
-		let entrypoint = self.instance_wrapper.resolve_entrypoint(call_site)?;
+	fn call(&self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
+		let entrypoint = self.instance_wrapper.resolve_entrypoint(method)?;
 		let allocator = FreeingBumpHeapAllocator::new(self.heap_base);
 
 		self.module_wrapper
