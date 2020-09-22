@@ -893,7 +893,7 @@ mod tests {
 
 	#[test]
 	#[should_panic(expected = "Hey, I'm an error")]
-	fn batching_does_not_panics_while_thread_is_already_panicking() {
+	fn batching_does_not_panic_while_thread_is_already_panicking() {
 		let mut ext = sp_state_machine::BasicExternalities::default();
 		ext.register_extension(
 			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
