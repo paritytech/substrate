@@ -492,6 +492,8 @@ impl pallet_babe::Trait for Runtime {
 	)>>::IdentificationTuple;
 
 	type HandleEquivocation = ();
+
+	type WeightInfo = ();
 }
 
 /// Adds one to the given input and returns the final result.

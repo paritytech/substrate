@@ -207,7 +207,7 @@ impl pallet_multisig::Trait for Runtime {
 	type DepositBase = DepositBase;
 	type DepositFactor = DepositFactor;
 	type MaxSignatories = MaxSignatories;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_multisig::WeightInfo;
 }
 
 parameter_types! {
@@ -311,6 +311,8 @@ impl pallet_babe::Trait for Runtime {
 
 	type HandleEquivocation =
 		pallet_babe::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -403,7 +405,7 @@ impl pallet_session::Trait for Runtime {
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_session::WeightInfo;
 }
 
 impl pallet_session::historical::Trait for Runtime {
@@ -762,7 +764,6 @@ impl pallet_offences::Trait for Runtime {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
-	type WeightInfo = ();
 }
 
 impl pallet_authority_discovery::Trait for Runtime {}
@@ -783,6 +784,8 @@ impl pallet_grandpa::Trait for Runtime {
 
 	type HandleEquivocation =
 		pallet_grandpa::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+
+	type WeightInfo = ();
 }
 
 parameter_types! {
