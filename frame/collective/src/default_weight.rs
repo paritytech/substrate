@@ -14,7 +14,7 @@
 // limitations under the License.
 
 //! Default weights for the Collective Pallet
-//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 2.0.0-rc6
+//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 2.0.0
 
 #![allow(unused_parens)]
 #![allow(unused_imports)]
