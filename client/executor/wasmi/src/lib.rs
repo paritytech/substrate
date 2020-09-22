@@ -434,7 +434,7 @@ fn get_heap_base(module: &ModuleRef) -> Result<u32, Error> {
 fn call_in_wasm_module(
 	module_instance: &ModuleRef,
 	memory: &MemoryRef,
-	call_site: InvokeMethod,
+	method: InvokeMethod,
 	data: &[u8],
 	host_functions: &[&'static dyn Function],
 	allow_missing_func_imports: bool,
@@ -446,7 +446,7 @@ fn call_in_wasm_module(
 		.and_then(|e| e.as_table().cloned());
 	let heap_base = get_heap_base(module_instance)?;
 
-	let mut fec = FunctionExecutor::new(
+	let mut functioon_executor = FunctionExecutor::new(
 		memory.clone(),
 		heap_base,
 		table.clone(),
@@ -456,15 +456,15 @@ fn call_in_wasm_module(
 	)?;
 
 	// Write the call data
-	let offset = fec.allocate_memory(data.len() as u32)?;
-	fec.write_memory(offset, data)?;
+	let offset = functioon_executor.allocate_memory(data.len() as u32)?;
+	functioon_executor.write_memory(offset, data)?;
 
-	let result = match call_site {
+	let result = match method {
 		InvokeMethod::Export(method) => {
 			module_instance.invoke_export(
 				method,
 				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
-				&mut fec,
+				&mut functioon_executor,
 			)
 		},
 		InvokeMethod::Table(func_ref) => {
@@ -474,7 +474,7 @@ fn call_in_wasm_module(
 			FuncInstance::invoke(
 				&func,
 				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
-				&mut fec,
+				&mut functioon_executor,
 			).map_err(Into::into)
 		},
 		InvokeMethod::TableWithWrapper { dispatcher_ref, func } => {
@@ -485,7 +485,7 @@ fn call_in_wasm_module(
 			FuncInstance::invoke(
 				&dispatcher,
 				&[I32(func as _), I32(u32::from(offset) as i32), I32(data.len() as i32)],
-				&mut fec,
+				&mut functioon_executor,
 			).map_err(Into::into)
 		},
 	};
@@ -499,7 +499,7 @@ fn call_in_wasm_module(
 			trace!(
 				target: "wasm-executor",
 				"Failed to execute code with {} pages",
-				memory.current_size().0
+				memory.current_size().0,
 			);
 			Err(e.into())
 		},
