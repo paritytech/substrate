@@ -45,7 +45,6 @@ use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
-use sp_core::traits::CryptoStorePtr;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
@@ -55,7 +54,7 @@ pub use self::error::Error;
 pub use self::builder::{
 	new_full_client, new_client, new_full_parts, new_light_parts,
 	spawn_tasks, build_network, build_offchain_workers,
-	BuildNetworkParams, NetworkStarter, SpawnTasksParams, TFullClient, TLightClient,
+	BuildNetworkParams, KeystoreContainer, NetworkStarter, SpawnTasksParams, TFullClient, TLightClient,
 	TFullBackend, TLightBackend, TLightBackendWithHash, TLightClientWithBackend,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
 };
@@ -182,7 +181,7 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	/// The chain task manager.
 	pub task_manager: TaskManager,
 	/// A shared keystore instance.
-	pub keystore: CryptoStorePtr,
+	pub keystore_params: KeystoreContainer,
 	/// A chain selection algorithm instance.
 	pub select_chain: SelectChain,
 	/// An import queue.
