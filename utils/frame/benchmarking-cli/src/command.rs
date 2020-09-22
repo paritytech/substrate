@@ -101,9 +101,9 @@ impl BenchmarkCmd {
 				// If we are going to output results to a file...
 				if let Some(output_path) = &self.output {
 					if self.r#trait {
-						crate::writer::write_trait(&batches, output_path)?;
+						crate::writer::write_trait(&batches, output_path, self.spaces)?;
 					} else {
-						crate::writer::write_results(&batches, output_path, &self.header)?;
+						crate::writer::write_results(&batches, output_path, &self.header, self.spaces)?;
 					}
 				}
 

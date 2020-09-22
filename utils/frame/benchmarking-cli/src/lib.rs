@@ -84,6 +84,10 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub extra: bool,
 
+	/// Output files using spaces instead of tabs.
+	#[structopt(long)]
+	pub spaces: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: sc_cli::SharedParams,

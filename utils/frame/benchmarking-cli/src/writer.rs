@@ -48,11 +48,13 @@ fn underscore<Number>(i: Number) -> String
     s
 }
 
-pub fn write_trait(batches: &[BenchmarkBatch], path: &PathBuf) -> Result<(), std::io::Error> {
+pub fn write_trait(batches: &[BenchmarkBatch], path: &PathBuf, spaces: bool) -> Result<(), std::io::Error> {
 	let mut file_path = path.clone();
 	file_path.push("trait");
 	file_path.set_extension("rs");
 	let mut file = crate::writer::open_file(file_path)?;
+
+	let indent = if spaces {"    "} else {"\t"};
 
 	let mut current_pallet = Vec::<u8>::new();
 
@@ -81,7 +83,7 @@ pub fn write_trait(batches: &[BenchmarkBatch], path: &PathBuf) -> Result<(), std
 		}
 
 		// function name
-		write!(file, "\tfn {}(", benchmark_string)?;
+		write!(file, "{}fn {}(", indent, benchmark_string)?;
 
 		// params
 		let components = &batch.results[0].components;
@@ -102,6 +104,7 @@ pub fn write_results(
 	batches: &[BenchmarkBatch],
 	path: &PathBuf,
 	header: &Option<PathBuf>,
+	spaces: bool,
 ) -> Result<(), std::io::Error> {
 
 	let header_text = match header {
@@ -111,6 +114,8 @@ pub fn write_results(
 		},
 		None => None,
 	};
+
+	let indent = if spaces {"    "} else {"\t"};
 
 	let mut current_pallet = Vec::<u8>::new();
 
@@ -218,11 +223,11 @@ pub fn write_results(
 		if all_components.len() != used_components.len() {
 			let mut unused_components = all_components;
 			unused_components.retain(|x| !used_components.contains(&x));
-			write!(file, "\t// WARNING! Some components were not used: {:?}\n", unused_components)?;
+			write!(file, "{}// WARNING! Some components were not used: {:?}\n", indent, unused_components)?;
 		}
 
 		// function name
-		write!(file, "\tfn {}(", benchmark_string)?;
+		write!(file, "{}fn {}(", indent, benchmark_string)?;
 		// params
 		for component in used_components {
 			write!(file, "{}: u32, ", component)?;
@@ -230,36 +235,55 @@ pub fn write_results(
 		// return value
 		write!(file, ") -> Weight {{\n")?;
 
-		write!(file, "\t\t({} as Weight)\n", underscore(extrinsic_time.base.saturating_mul(1000)))?;
+		write!(file, "{}{}({} as Weight)\n", indent, indent, underscore(extrinsic_time.base.saturating_mul(1000)))?;
 		used_extrinsic_time.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
-			write!(file, "\t\t\t.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
+			write!(
+				file,
+				"{}{}{}.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
+				indent, indent, indent,
 				underscore(slope.saturating_mul(1000)),
 				name,
 			)
 		})?;
 
 		if !reads.base.is_zero() {
-			write!(file, "\t\t\t.saturating_add(T::DbWeight::get().reads({} as Weight))\n", reads.base)?;
+			write!(
+				file,
+				"{}{}{}.saturating_add(T::DbWeight::get().reads({} as Weight))\n",
+				indent, indent, indent,
+				reads.base,
+			)?;
 		}
 		used_reads.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
-			write!(file, "\t\t\t.saturating_add(T::DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
+			write!(
+				file,
+				"{}{}{}.saturating_add(T::DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
+				indent, indent, indent,
 				slope,
 				name,
 			)
 		})?;
 
 		if !writes.base.is_zero() {
-			write!(file, "\t\t\t.saturating_add(T::DbWeight::get().writes({} as Weight))\n", writes.base)?;
+			write!(
+				file,
+				"{}{}{}.saturating_add(T::DbWeight::get().writes({} as Weight))\n",
+				indent, indent, indent,
+				writes.base,
+			)?;
 		}
 		used_writes.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
-			write!(file, "\t\t\t.saturating_add(T::DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
+			write!(
+				file,
+				"{}{}{}.saturating_add(T::DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
+				indent, indent, indent,
 				slope,
 				name,
 			)
 		})?;
 
 		// close function
-		write!(file, "\t}}\n")?;
+		write!(file, "{}}}\n", indent)?;
 
 		// Check if this is the end of the iterator
 		if let Some(next) = batches_iter.peek() {
