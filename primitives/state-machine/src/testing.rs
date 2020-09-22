@@ -185,10 +185,9 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	/// Returns the result of the given closure, if no panics occured.
 	/// Otherwisee, returns Err()
 	pub fn execute_with_safe<R>(&mut self, f: impl FnOnce() -> R + UnwindSafe) -> Result<R, String> {
-		let mut ext = &mut self.ext();
-		let mut ext = AssertUnwindSafe(&mut ext);
+		let mut ext = AssertUnwindSafe(self.ext());
 		std::panic::catch_unwind(move ||
-			sp_externalities::set_and_run_with_externalities(**ext, f)
+			sp_externalities::set_and_run_with_externalities(&mut *ext, f)
 		).map_err(|e| {
 			format!("Closure panicked: {:?}", e)
 		})
