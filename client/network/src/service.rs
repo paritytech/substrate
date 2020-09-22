@@ -598,11 +598,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.service.add_reserved_peer(peer)
 	}
 
-	/// Get the number of bitswap peers we are connected to.
-	pub fn bitswap_num_peers(&self) -> usize {
-		self.network_service.bitswap.peers().count()
-	}
-
 	/// Get the number of bitswap peers who want a block.
 	pub fn bitswap_num_peers_want(&self, cid: &tiny_cid::Cid) -> usize {
 		self.network_service.bitswap.peers_want(cid).count()

@@ -201,7 +201,7 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 async fn build_network_future<
 	B: BlockT,
 	C: BlockchainEvents<B>,
-	H: sc_network::ExHashT,
+	H: sc_network::ExHashT
 > (
 	role: Role,
 	mut network: sc_network::NetworkWorker<B, H>,

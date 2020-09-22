@@ -24,7 +24,7 @@ use std::iter::Iterator;
 /// In-memory storage for offchain workers.
 #[derive(Debug, Clone, Default)]
 pub struct InMemOffchainStorage {
-	pub(crate) storage: HashMap<Vec<u8>, Vec<u8>>,
+	storage: HashMap<Vec<u8>, Vec<u8>>,
 }
 
 impl InMemOffchainStorage {
