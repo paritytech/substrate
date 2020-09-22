@@ -457,7 +457,7 @@ decl_storage! {
 		pub LastRuntimeUpgrade build(|_| Some(LastRuntimeUpgradeInfo::from(T::Version::get()))): Option<LastRuntimeUpgradeInfo>;
 
 		/// True if we have upgraded so that `type RefCount` is `u32`. False (default) if not.
-		UpgradedToU32RefCount: bool;
+		UpgradedToU32RefCount build(|_| Some(true)): bool;
 
 		/// The execution phase of the block.
 		ExecutionPhase: Option<Phase>;
