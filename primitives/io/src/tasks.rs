@@ -95,7 +95,7 @@ mod inner {
 mod inner {
 
 	use core::mem;
-	use sp_std::{vec::Vec, prelude::Box};
+	use sp_std::prelude::*;
 
 	/// Dispatch wrapper for wasm blob.
 	///
@@ -107,11 +107,11 @@ mod inner {
 	///
 	/// NOTE: Since this dynamic dispatch function and the invoked function are compiled with
 	/// the same compiler, there should be no problem with ABI incompatibility.
-	extern "C" fn dispatch_wrapper(func_ref: u32, payload_ptr: u32, payload_len: u32) -> u64 {
+	extern "C" fn dispatch_wrapper(func_ref: *const u8, payload_ptr: *mut u8, payload_len: u32) -> u64 {
 		let payload_len = payload_len as usize;
 		let output = unsafe {
-			let payload = Vec::from_raw_parts(payload_ptr as usize as *mut _, payload_len, payload_len);
-			let ptr: fn(Vec<u8>) -> Vec<u8> = core::mem::transmute(func_ref);
+			let payload = Vec::from_raw_parts(payload_ptr, payload_len, payload_len);
+			let ptr: fn(Vec<u8>) -> Vec<u8> = mem::transmute(func_ref);
 			(ptr)(payload)
 		};
 		sp_runtime_interface::pack_ptr_and_len(output.as_ptr() as usize as _, output.len() as _)
@@ -119,7 +119,7 @@ mod inner {
 
 	/// Spawn new runtime task (wasm).
 	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>) -> DataJoinHandle {
-		let func_ptr: usize = unsafe { core::mem::transmute(entry_point) };
+		let func_ptr: usize = unsafe { mem::transmute(entry_point) };
 
 		let handle = crate::runtime_tasks::spawn(
 			dispatch_wrapper as usize as _,
