@@ -7,6 +7,7 @@ edition = "2018"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Instrumentation primitives and macros for Substrate."
+readme = "README.md"
 
 [package.metadata.docs.rs]
 # let's default to wasm32

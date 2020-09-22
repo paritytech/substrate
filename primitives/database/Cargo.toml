@@ -8,6 +8,7 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Substrate database trait."
 documentation = "https://docs.rs/sp-database"
+readme = "README.md"
 
 [dependencies]
 parking_lot = "0.10.0"

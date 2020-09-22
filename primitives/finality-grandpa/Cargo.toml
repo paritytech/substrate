@@ -8,6 +8,7 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Primitives for GRANDPA integration, suitable for WASM compilation."
 documentation = "https://docs.rs/sp-finality-grandpa"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
