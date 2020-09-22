@@ -598,14 +598,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.service.add_reserved_peer(peer)
 	}
 
-	/// Get the number of bitswap peers who want a block.
+	/// Count the number of connected peers who want the bitswap block with the hash of `cid`.
 	pub fn bitswap_num_peers_want(&self, cid: &tiny_cid::Cid) -> usize {
-		self.network_service.bitswap.peers_want(cid).count()
+		self.network_service.bitswap_num_peers_want(cid)
 	}
 
-	/// Get if a specific bitswap peer wants a block.
+	/// Determine whether a specific peer wants a bitswap block with the hash of `cid`.
 	pub fn bitswap_peer_wants_cid(&self, peer_id: &PeerId, cid: &tiny_cid::Cid) -> bool {
-		self.network_service.bitswap.peers_want(cid).find(|id| **id == *peer_id).is_some()
+		self.network_service.bitswap_peer_wants_cid(peer_id, cid)
 	}
 }
 
@@ -1038,28 +1038,29 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
 	}
 
-	/// Send a bitswap block to a peer.
+	/// Send a bitswap block to a specific peer, regardless of whether they want it or not.
 	pub fn bitswap_send_block(&self, peer_id: PeerId, cid: tiny_cid::Cid, data: Box<[u8]>) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::BitswapSendBlock(peer_id, cid, data));
 	}
 
-	/// Send a bitswap block to all peers that have the block in their wantlist.
+	/// Send a bitswap block to all connected peers who want it.
 	pub fn bitswap_send_block_all(&self, cid: tiny_cid::Cid, data: Box<[u8]>) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::BitswapSendBlockAll(cid, data));
 	}
 
-	/// Send a bitswap WANT request to all peers for a block.
-	pub fn bitswap_want_block(&self, cid: tiny_cid::Cid, priority: i32) {
+	/// Send out a bitswap message telling connected peers that we want the block with the hash of
+	/// `cid`. We can also say how this block should be prioritised.
+	pub fn bitswap_want_block(&self, cid: tiny_cid::Cid, priority: libp2p_bitswap::Priority) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::BitswapWantBlock(cid, priority));
 	}
 
-	/// Cancel a bitswap WANT request.
+	/// Send out a bitswap message cancelling a previously wanted block with the hash of `cid`.
 	pub fn bitswap_cancel_block(&self, cid: tiny_cid::Cid) {
 		let _ = self
 			.to_worker
@@ -1199,7 +1200,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	OwnBlockImported(B::Hash, NumberFor<B>),
 	BitswapSendBlock(PeerId, tiny_cid::Cid, Box<[u8]>),
 	BitswapSendBlockAll(tiny_cid::Cid, Box<[u8]>),
-	BitswapWantBlock(tiny_cid::Cid, i32),
+	BitswapWantBlock(tiny_cid::Cid, libp2p_bitswap::Priority),
 	BitswapCancelBlock(tiny_cid::Cid),
 }
 
@@ -1344,13 +1345,13 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				ServiceToWorkerMsg::OwnBlockImported(hash, number) =>
 					this.network_service.user_protocol_mut().own_block_imported(hash, number),
 				ServiceToWorkerMsg::BitswapSendBlock(peer_id, cid, block) =>
-					this.network_service.bitswap.send_block(&peer_id, cid, block),
+					this.network_service.bitswap_send_block(&peer_id, cid, block),
 				ServiceToWorkerMsg::BitswapSendBlockAll(cid, block) =>
-					this.network_service.bitswap.send_block_all(&cid, &block),
+					this.network_service.bitswap_send_block_all(&cid, &block),
 				ServiceToWorkerMsg::BitswapWantBlock(cid, priority) =>
-					this.network_service.bitswap.want_block(cid, priority),
+					this.network_service.bitswap_want_block(cid, priority),
 				ServiceToWorkerMsg::BitswapCancelBlock(cid) =>
-					this.network_service.bitswap.cancel_block(&cid),
+					this.network_service.bitswap_cancel_block(&cid),
 			}
 		}
 
