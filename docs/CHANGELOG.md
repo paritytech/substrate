@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
-## 2.0.0-rc6 -> 2.0.0 – two point 😮
+## 2.0.0-rc6 -> 2.0.0 – two DOT 😮
 
 Runtime
 -------
