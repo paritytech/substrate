@@ -1567,7 +1567,7 @@ dependencies = [
 
 [[package]]
 name = "frame-metadata"
-version = "11.0.0-rc6"
+version = "12.0.0-rc6"
 dependencies = [
  "parity-scale-codec",
  "serde",
@@ -1636,6 +1636,7 @@ dependencies = [
 name = "frame-support-test"
 version = "2.0.0-rc6"
 dependencies = [
+ "frame-metadata",
  "frame-support",
  "parity-scale-codec",
  "pretty_assertions",
