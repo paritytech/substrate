@@ -31,3 +31,4 @@ pub mod pallet_staking;
 pub mod pallet_timestamp;
 pub mod pallet_utility;
 pub mod pallet_vesting;
+pub mod pallet_elections_phragmen;

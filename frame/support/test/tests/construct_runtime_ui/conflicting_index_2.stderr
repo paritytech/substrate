@@ -1,0 +1,11 @@
+error: Module indices are conflicting: Both modules System and Pallet3 are at index 5
+ --> $DIR/conflicting_index_2.rs:9:3
+  |
+9 |         System: system::{} = 5,
+  |         ^^^^^^
+
+error: Module indices are conflicting: Both modules System and Pallet3 are at index 5
+  --> $DIR/conflicting_index_2.rs:12:3
+   |
+12 |         Pallet3: pallet3::{},
+   |         ^^^^^^^
