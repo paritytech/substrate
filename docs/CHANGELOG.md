@@ -6,6 +6,56 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+## 2.0.0-rc6 -> 2.0.0 – two point 😮
+
+Runtime
+-------
+
+* Rename `ModuleToIndex` to `PalletRuntimeSetup` (#7148)
+* Bounties (#5715)
+* pallet-collective: allow customized default vote (#6984)
+* add instantiable support for treasury pallet (#7058)
+* frame/authority-discovery: Have authorities() return both current and next (#6788)
+* add generated weight info for pallet-collective (#6789)
+* Support Staking Payout to Any Account (#6832)
+* Time-delay proxies (#6770)
+
+Client
+------
+
+* Rename `inspect-key` to `inspect` (#7160)
+* Send import notification always for re-orgs (#7118)
+* Allow remotes to not open a legacy substream (#7075)
+* Fix `storage::read` (#7084)
+* Support hex encoded secret key for `--node-key` (#7052)
+* Update the service tasks Grafana dashboard (#7038)
+* manual seal is now consensus agnostic (#7010)
+* Move subcommands from sc-cli to nodes (#6948)
+* Implement request-responses protocols (#6634)
+* fix bench db wipe (#6965)
+* Fix benchmark read/write key tracker for keys in child storages. (#6905)
+* *: Update to next libp2p version 0.24.0 (#6891)
+
+API
+---
+
+* grandpa-rpc: use FinalityProofProvider to check finality for rpc (#6215)
+* pow: replace the thread-base mining loop with a future-based mining worker (#7060)
+* Tracing for wasm with bridging to native (#6916)
+* Frame-support storage: make iterations and translate consistent (#5470)
+* pow: support uniform tie breaking in fork choice (#7073)
+* Make decoding of `compact<perthing>` saturating instead of invalid (#7062)
+* Set reserved nodes with offchain worker. (#6996)
+* client/*: Treat protocol name as str and not [u8] (#6967)
+* Add a `LightSyncState` field to the chain spec (#6894)
+* *: Update to next libp2p version 0.24.0 (#6891)
+
+Runtime Migrations
+------------------
+
+* Time-delay proxies (#6770)
+
+
 ## 2.0.0-rc5 -> 2.0.0-rc6 – Rock Hyrax
 
 Runtime
