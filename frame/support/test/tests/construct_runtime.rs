@@ -24,13 +24,14 @@
 use sp_runtime::{generic, traits::{BlakeTwo256, Block as _, Verify}, DispatchError};
 use sp_core::{H256, sr25519};
 use sp_std::cell::RefCell;
+use frame_support::traits::PalletInfo as _;
 
 mod system;
 
 pub trait Currency {}
 
 thread_local! {
-    pub static INTEGRITY_TEST_EXEC: RefCell<u32> = RefCell::new(0);
+	pub static INTEGRITY_TEST_EXEC: RefCell<u32> = RefCell::new(0);
 }
 
 mod module1 {
@@ -107,7 +108,7 @@ impl system::Trait for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
-	type ModuleToIndex = ModuleToIndex;
+	type PalletInfo = PalletInfo;
 	type Call = Call;
 }
 
@@ -156,4 +157,16 @@ fn check_module2_error_type() {
 fn integrity_test_works() {
 	__construct_runtime_integrity_test::runtime_integrity_tests();
 	assert_eq!(INTEGRITY_TEST_EXEC.with(|i| *i.borrow()), 1);
+}
+
+#[test]
+fn pallet_in_runtime_is_correct() {
+	assert_eq!(PalletInfo::index::<System>().unwrap(), 0);
+	assert_eq!(PalletInfo::name::<System>().unwrap(), "System");
+
+	assert_eq!(PalletInfo::index::<Module1_2>().unwrap(), 3);
+	assert_eq!(PalletInfo::name::<Module1_2>().unwrap(), "Module1_2");
+
+	assert_eq!(PalletInfo::index::<Module2>().unwrap(), 2);
+	assert_eq!(PalletInfo::name::<Module2>().unwrap(), "Module2");
 }

@@ -81,7 +81,7 @@ impl frame_system::Trait for Test {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type ModuleToIndex = ();
+	type PalletInfo = ();
 	type AccountData = super::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = Module<Test>;

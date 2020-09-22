@@ -1,6 +1,6 @@
 # Randomness Module
 
-The Randomness Collective Flip module provides a [`random`](./struct.Module.html#method.random)
+The Randomness Collective Flip module provides a [`random`](https://docs.rs/pallet-randomness-collective-flip/latest/pallet_randomness_collective_flip/struct.Module.html#method.random)
 function that generates low-influence random values based on the block hashes from the previous
 `81` blocks. Low-influence randomness can be useful when defending against relatively weak
 adversaries. Using this pallet as a randomness source is advisable primarily in low-security
@@ -8,7 +8,7 @@ situations like testing.
 
 ## Public Functions
 
-See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
+See the [`Module`](https://docs.rs/pallet-randomness-collective-flip/latest/pallet_randomness_collective_flip/struct.Module.html) struct for details of publicly available functions.
 
 ## Usage
 

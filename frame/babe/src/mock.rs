@@ -81,7 +81,14 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
-	type ModuleToIndex = ();
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = MaximumBlockWeight;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockLength = MaximumBlockLength;
+	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();

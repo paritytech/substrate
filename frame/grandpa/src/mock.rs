@@ -95,7 +95,7 @@ impl frame_system::Trait for Test {
 	type Event = TestEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type ModuleToIndex = ();
+	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();

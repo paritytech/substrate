@@ -8,6 +8,7 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Common utilities for building and using consensus engines in substrate."
 documentation = "https://docs.rs/sp-consensus/"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

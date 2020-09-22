@@ -112,7 +112,7 @@ impl Trait for Test {
 	type BlockHashCount = BlockHashCount;
 	type DbWeight = DbWeight;
 	type Version = Version;
-	type ModuleToIndex = ();
+	type PalletInfo = ();
 	type AccountData = u32;
 	type OnNewAccount = ();
 	type OnKilledAccount = RecordKilled;

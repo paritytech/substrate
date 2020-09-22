@@ -52,6 +52,8 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		..
 	} = definition;
 
+	let modules = modules.into_pairs().map(|v| v.into_value()).collect::<Vec<_>>();
+
 	// Assert we have system module declared
 	let system_module = match find_system_module(modules.iter()) {
 		Some(sm) => sm,
@@ -82,7 +84,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		&scrate,
 	)?;
 	let all_modules = decl_all_modules(&name, modules.iter());
-	let module_to_index = decl_module_to_index(modules.iter(), modules.len(), &scrate);
+	let module_to_index = decl_pallet_runtime_setup(&modules, &scrate);
 
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate, &unchecked_extrinsic);
@@ -376,25 +378,37 @@ fn decl_all_modules<'a>(
 	)
 }
 
-fn decl_module_to_index<'a>(
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
-	num_modules: usize,
+fn decl_pallet_runtime_setup(
+	module_declarations: &[ModuleDeclaration],
 	scrate: &TokenStream2,
 ) -> TokenStream2 {
-	let names = module_declarations.map(|d| &d.name);
-	let indices = 0..num_modules;
+	let names = module_declarations.iter().map(|d| &d.name);
+	let names2 = module_declarations.iter().map(|d| &d.name);
+	let name_strings = module_declarations.iter().map(|d| d.name.to_string());
+	let indices = 0..module_declarations.len();
 
 	quote!(
-		/// Provides an implementation of `ModuleToIndex` to map a module
-		/// to its index in the runtime.
-		pub struct ModuleToIndex;
+		/// Provides an implementation of `PalletInfo` to provide information
+		/// about the pallet setup in the runtime.
+		pub struct PalletInfo;
 
-		impl #scrate::traits::ModuleToIndex for ModuleToIndex {
-			fn module_to_index<M: 'static>() -> Option<usize> {
-				let type_id = #scrate::sp_std::any::TypeId::of::<M>();
+		impl #scrate::traits::PalletInfo for PalletInfo {
+			fn index<P: 'static>() -> Option<usize> {
+				let type_id = #scrate::sp_std::any::TypeId::of::<P>();
 				#(
 					if type_id == #scrate::sp_std::any::TypeId::of::<#names>() {
 						return Some(#indices)
+					}
+				)*
+
+				None
+			}
+
+			fn name<P: 'static>() -> Option<&'static str> {
+				let type_id = #scrate::sp_std::any::TypeId::of::<P>();
+				#(
+					if type_id == #scrate::sp_std::any::TypeId::of::<#names2>() {
+						return Some(#name_strings)
 					}
 				)*
 
