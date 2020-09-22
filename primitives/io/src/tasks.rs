@@ -21,7 +21,7 @@
 
 #[cfg(feature = "std")]
 mod inner {
-	use std::sync::mpsc;
+	use std::{panic::AssertUnwindSafe, sync::mpsc};
 	use sp_externalities::ExternalitiesExt as _;
 	use crate::TaskExecutorExt;
 
@@ -42,21 +42,36 @@ mod inner {
 	}
 
 	/// Spawn new runtime task (native).
-	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, data: Vec<u8>) -> Result<DataJoinHandle, &'static str> {
+	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, data: Vec<u8>) -> DataJoinHandle {
 		let scheduler = sp_externalities::with_externalities(|mut ext| ext.extension::<TaskExecutorExt>()
 			.expect("No task executor associated with the current context!")
 			.clone()
-		).ok_or("Spawn called outside of externalities context!")?;
+		).expect("Spawn called outside of externalities context!");
 
 		let (sender, receiver) = mpsc::channel();
 		let extra_scheduler = scheduler.clone();
 		scheduler.spawn("parallel-runtime-spawn", Box::pin(async move {
 			let result = match crate::new_async_externalities(extra_scheduler) {
 				Ok(mut ext) => {
-					sp_externalities::set_and_run_with_externalities(
-						&mut ext,
-						move || entry_point(data),
-					)
+					let mut ext = AssertUnwindSafe(&mut ext);
+					match std::panic::catch_unwind(move || {
+						sp_externalities::set_and_run_with_externalities(
+							&mut **ext,
+							move || entry_point(data),
+						)
+					}) {
+						Ok(result) => result,
+						Err(panic) => {
+							log::warn!(
+								target: "runtime",
+								"Spawned task panicked: {:?}",
+								panic,
+							);
+
+							// This will drop sender without sending anything.
+							return;
+						}
+					}
 				},
 				Err(e) => {
 					log::warn!(
@@ -72,7 +87,7 @@ mod inner {
 			let _ = sender.send(result);
 		}));
 
-		Ok(DataJoinHandle { receiver })
+		DataJoinHandle { receiver }
 	}
 }
 
@@ -132,3 +147,63 @@ mod inner {
 }
 
 pub use inner::{DataJoinHandle, spawn};
+
+#[cfg(test)]
+mod tests {
+
+	use super::*;
+
+	fn async_runner(mut data: Vec<u8>) -> Vec<u8> {
+		data.sort();
+		data
+	}
+
+	fn async_panicker(_data: Vec<u8>) -> Vec<u8> {
+		panic!("panic in async panicker!")
+	}
+
+	#[test]
+	fn basic() {
+		crate::TestExternalities::default().execute_with(|| {
+			let a1 = spawn(async_runner, vec![5, 2, 1]).join();
+			assert_eq!(a1, vec![1, 2, 5]);
+		})
+	}
+
+	#[test]
+	fn panicking() {
+		let res = crate::TestExternalities::default().execute_with_safe(||{
+			spawn(async_panicker, vec![5, 2, 1]).join();
+		});
+
+		assert!(res.unwrap_err().contains("Closure panicked"));
+	}
+
+	#[test]
+	fn many_joins() {
+		crate::TestExternalities::default().execute_with_safe(|| {
+			// converges to 1 only after 1000+ steps
+			let mut running_val = 9780657630u64;
+			let mut data = vec![];
+			let handles = (0..1024).map(
+				|_| {
+					running_val = if running_val % 2 == 0 {
+						running_val / 2
+					} else {
+						3 * running_val + 1
+					};
+					data.push(running_val as u8);
+					(spawn(async_runner, data.clone()), data.clone())
+				}
+			).collect::<Vec<_>>();
+
+			for (handle, mut data) in handles {
+				let result = handle.join();
+				data.sort();
+
+				assert_eq!(result, data);
+			}
+		}).expect("Failed to run with externalities");
+	}
+}
+
