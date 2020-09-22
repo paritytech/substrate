@@ -72,6 +72,7 @@ parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
 }
 impl pallet_balances::Trait for Test {
+	type MaxLocks = ();
 	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();
@@ -203,7 +204,6 @@ impl pallet_offences::Trait for Test {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
-	type WeightInfo = ();
 }
 
 impl<T> frame_system::offchain::SendTransactionTypes<T> for Test where Call: From<T> {

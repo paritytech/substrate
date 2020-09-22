@@ -128,12 +128,14 @@ impl pallet_scheduler::Trait for Test {
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<u64>;
+	type MaxScheduledPerBlock = ();
 	type WeightInfo = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
 impl pallet_balances::Trait for Test {
+	type MaxLocks = ();
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();

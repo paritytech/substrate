@@ -207,7 +207,7 @@ impl pallet_multisig::Trait for Runtime {
 	type DepositBase = DepositBase;
 	type DepositFactor = DepositFactor;
 	type MaxSignatories = MaxSignatories;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_multisig::WeightInfo;
 }
 
 parameter_types! {
@@ -273,6 +273,7 @@ impl pallet_proxy::Trait for Runtime {
 
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+	pub const MaxScheduledPerBlock: u32 = 50;
 }
 
 impl pallet_scheduler::Trait for Runtime {
@@ -282,7 +283,8 @@ impl pallet_scheduler::Trait for Runtime {
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<AccountId>;
-	type WeightInfo = ();
+	type MaxScheduledPerBlock = MaxScheduledPerBlock;
+	type WeightInfo = weights::pallet_scheduler::WeightInfo;
 }
 
 parameter_types! {
@@ -309,6 +311,8 @@ impl pallet_babe::Trait for Runtime {
 
 	type HandleEquivocation =
 		pallet_babe::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -320,14 +324,18 @@ impl pallet_indices::Trait for Runtime {
 	type Currency = Balances;
 	type Deposit = IndexDeposit;
 	type Event = Event;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_indices::WeightInfo;
 }
 
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 1 * DOLLARS;
+	// For weight estimation, we assume that the most locks on an individual account will be 50.
+	// This number may need to be adjusted in the future if this assumption no longer holds true.
+	pub const MaxLocks: u32 = 50;
 }
 
 impl pallet_balances::Trait for Runtime {
+	type MaxLocks = MaxLocks;
 	type Balance = Balance;
 	type DustRemoval = ();
 	type Event = Event;
@@ -397,7 +405,7 @@ impl pallet_session::Trait for Runtime {
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_session::WeightInfo;
 }
 
 impl pallet_session::historical::Trait for Runtime {
@@ -454,7 +462,7 @@ impl pallet_staking::Trait for Runtime {
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = StakingUnsignedPriority;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_staking::WeightInfo;
 }
 
 parameter_types! {
@@ -598,8 +606,14 @@ parameter_types! {
 	pub const TipCountdown: BlockNumber = 1 * DAYS;
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: Balance = 1 * DOLLARS;
-	pub const TipReportDepositPerByte: Balance = 1 * CENTS;
+	pub const DataDepositPerByte: Balance = 1 * CENTS;
+	pub const BountyDepositBase: Balance = 1 * DOLLARS;
+	pub const BountyDepositPayoutDelay: BlockNumber = 1 * DAYS;
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+	pub const BountyUpdatePeriod: BlockNumber = 14 * DAYS;
+	pub const MaximumReasonLength: u32 = 16384;
+	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
+	pub const BountyValueMinimum: Balance = 5 * DOLLARS;
 }
 
 impl pallet_treasury::Trait for Runtime {
@@ -619,15 +633,21 @@ impl pallet_treasury::Trait for Runtime {
 	type TipCountdown = TipCountdown;
 	type TipFindersFee = TipFindersFee;
 	type TipReportDepositBase = TipReportDepositBase;
-	type TipReportDepositPerByte = TipReportDepositPerByte;
+	type DataDepositPerByte = DataDepositPerByte;
 	type Event = Event;
-	type ProposalRejection = ();
+	type OnSlash = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
+	type BountyDepositBase = BountyDepositBase;
+	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
+	type BountyUpdatePeriod = BountyUpdatePeriod;
+	type BountyCuratorDeposit = BountyCuratorDeposit;
+	type BountyValueMinimum = BountyValueMinimum;
+	type MaximumReasonLength = MaximumReasonLength;
 	type BurnDestination = ();
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_treasury::WeightInfo;
 }
 
 parameter_types! {
@@ -732,7 +752,7 @@ impl pallet_im_online::Trait for Runtime {
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ImOnlineUnsignedPriority;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_im_online::WeightInfo;
 }
 
 parameter_types! {
@@ -744,7 +764,6 @@ impl pallet_offences::Trait for Runtime {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
-	type WeightInfo = ();
 }
 
 impl pallet_authority_discovery::Trait for Runtime {}
@@ -765,6 +784,8 @@ impl pallet_grandpa::Trait for Runtime {
 
 	type HandleEquivocation =
 		pallet_grandpa::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -799,7 +820,7 @@ impl pallet_identity::Trait for Runtime {
 	type Slashed = Treasury;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type RegistrarOrigin = EnsureRootOrHalfCouncil;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_identity::WeightInfo;
 }
 
 parameter_types! {
@@ -856,7 +877,7 @@ impl pallet_vesting::Trait for Runtime {
 	type Currency = Balances;
 	type BlockNumberToBalance = ConvertInto;
 	type MinVestedTransfer = MinVestedTransfer;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_vesting::WeightInfo;
 }
 
 construct_runtime!(
