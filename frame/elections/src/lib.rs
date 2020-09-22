@@ -15,6 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # WARNING: NOT ACTIVELY MAINTAINED
+//!
+//! This pallet is currently not maintained and should not be used in production until further
+//! notice.
+//!
+//! ---
+//!
 //! Election module for stake-weighted membership selection of a collective.
 //!
 //! The composition of a set of account IDs works according to one or more approval votes
