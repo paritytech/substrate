@@ -17,7 +17,7 @@
 
 // Outputs benchmark results to Rust files that can be ingested by the runtime.
 
-use std::fs::{File, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::prelude::*;
 use std::path::PathBuf;
 use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis};
@@ -98,7 +98,16 @@ pub fn write_trait(batches: &[BenchmarkBatch], path: &PathBuf) -> Result<(), std
 	Ok(())
 }
 
-pub fn write_results(batches: &[BenchmarkBatch], path: &PathBuf) -> Result<(), std::io::Error> {
+pub fn write_results(batches: &[BenchmarkBatch], path: &PathBuf, header: &Option<PathBuf>) -> Result<(), std::io::Error> {
+
+	let header_text = match header {
+		Some(header_file) => {
+			let text = fs::read_to_string(header_file)?;
+			Some(text)
+		},
+		None => None,
+	};
+
 	let mut current_pallet = Vec::<u8>::new();
 
 	// Skip writing if there are no batches
@@ -125,6 +134,15 @@ pub fn write_results(batches: &[BenchmarkBatch], path: &PathBuf) -> Result<(), s
 
 		// only create new trait definitions when we go to a new pallet
 		if batch.pallet != current_pallet {
+			// optional header and copyright
+			if let Some(header) = &header_text {
+				write!(
+					file,
+					"{}\n",
+					header,
+				)?;
+			}
+
 			// title of file
 			write!(
 				file,

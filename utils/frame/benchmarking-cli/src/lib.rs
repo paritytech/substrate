@@ -65,7 +65,8 @@ pub struct BenchmarkCmd {
 	pub output: Option<std::path::PathBuf>,
 
 	/// Add a header file to your outputted benchmarks
-	pub header: Option<String>,
+	#[structopt(long)]
+	pub header: Option<std::path::PathBuf>,
 
 	/// Output the trait definition to a Rust file.
 	#[structopt(long)]

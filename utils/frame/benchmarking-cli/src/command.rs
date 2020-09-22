@@ -42,7 +42,11 @@ impl BenchmarkCmd {
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		if let Some(output_path) = &self.output {
-			if !output_path.exists() { return Err("Output path does not exist!".into()) };
+			if !output_path.is_dir() { return Err("Output path is invalid!".into()) };
+		}
+
+		if let Some(header_file) = &self.header {
+			if !header_file.is_file() { return Err("Header file is invalid!".into()) };
 		}
 
 		let spec = config.chain_spec;
@@ -99,7 +103,7 @@ impl BenchmarkCmd {
 					if self.r#trait {
 						crate::writer::write_trait(&batches, output_path)?;
 					} else {
-						crate::writer::write_results(&batches, output_path)?;
+						crate::writer::write_results(&batches, output_path, &self.header)?;
 					}
 				}
 
