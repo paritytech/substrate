@@ -282,7 +282,11 @@ pub mod inflation;
 pub mod default_weights;
 
 use sp_std::{
-	result, prelude::*, collections::btree_map::BTreeMap, convert::{TryInto, From}, mem::size_of,
+	result,
+	prelude::*,
+	collections::btree_map::BTreeMap,
+	convert::{TryInto, From},
+	mem::size_of,
 };
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
@@ -1372,12 +1376,15 @@ decl_module! {
 			use sp_runtime::UpperOf;
 			// see the documentation of `Assignment::try_normalize`. Now we can ensure that this
 			// will always return `Ok`.
+			// 1. Maximum sum of Vec<ChainAccuracy> must fit into `UpperOf<ChainAccuracy>`.
 			assert!(
 				<usize as TryInto<UpperOf<ChainAccuracy>>>::try_into(MAX_NOMINATIONS)
 				.unwrap()
 				.checked_mul(<ChainAccuracy>::one().deconstruct().try_into().unwrap())
 				.is_some()
 			);
+
+			// 2. Maximum sum of Vec<OffchainAccuracy> must fit into `UpperOf<OffchainAccuracy>`.
 			assert!(
 				<usize as TryInto<UpperOf<OffchainAccuracy>>>::try_into(MAX_NOMINATIONS)
 				.unwrap()
@@ -2589,8 +2596,6 @@ impl<T: Trait> Module<T> {
 		);
 
 		// build the support map thereof in order to evaluate.
-		// OPTIMIZATION: loop to create the staked assignments but it would bloat the code. Okay for
-		// now as it does not add to the complexity order.
 		let supports = build_support_map::<T::AccountId>(
 			&winners,
 			&staked_assignments,
@@ -2853,7 +2858,14 @@ impl<T: Trait> Module<T> {
 			let supports = build_support_map::<T::AccountId>(
 				&elected_stashes,
 				&staked_assignments,
-			).ok()?;
+			)
+			.map_err(|_|
+				log!(
+					error,
+					"💸 on-chain phragmen is failing due to a problem in the result. This must be a bug."
+				)
+			)
+			.ok()?;
 
 			// collect exposures
 			let exposures = Self::collect_exposure(supports);
@@ -2917,6 +2929,7 @@ impl<T: Trait> Module<T> {
 
 		if all_validators.len() < Self::minimum_validator_count().max(1) as usize {
 			// If we don't have enough candidates, nothing to do.
+			log!(error, "💸 Chain does not have enough staking candidates to operate.");
 			None
 		} else {
 			seq_phragmen::<_, Accuracy>(

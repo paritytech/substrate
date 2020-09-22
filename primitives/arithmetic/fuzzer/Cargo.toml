@@ -29,10 +29,6 @@ name = "normalize"
 path = "src/normalize.rs"
 
 [[bin]]
-name = "normalize_up"
-path = "src/normalize_up.rs"
-
-[[bin]]
 name = "per_thing_rational"
 path = "src/per_thing_rational.rs"
 

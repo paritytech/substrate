@@ -1011,7 +1011,8 @@ impl<T: Trait> Module<T> {
 			<Candidates<T>>::kill();
 
 			ElectionRounds::mutate(|v| *v += 1);
-		}).map_err(|_| {
+		}).map_err(|e| {
+			frame_support::debug::error!("elections-phragmen: failed to run election [{:?}].", e);
 			Self::deposit_event(RawEvent::ElectionError);
 		});
 	}
@@ -1830,7 +1831,7 @@ mod tests {
 
 			assert_eq_uvec!(all_voters(), vec![3]);
 			assert!(votes_of(&2).is_empty());
-			assert_eq!(Elections::locked_stake_of(&2), 0);
+			assert_eq!(locked_stake_of(&2), 0);
 
 			assert_eq!(balances(&2), (20, 0));
 			assert_eq!(Balances::locks(&2).len(), 0);

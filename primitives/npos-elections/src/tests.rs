@@ -177,7 +177,7 @@ fn balancing_core_works() {
 fn voter_normalize_ops_works() {
 	use crate::{Candidate, Edge};
 	use sp_std::{cell::RefCell, rc::Rc};
-
+	// normalize
 	{
 		let c1 = Candidate { who: 10, elected: false ,..Default::default() };
 		let c2 = Candidate { who: 20, elected: false ,..Default::default() };
@@ -197,7 +197,7 @@ fn voter_normalize_ops_works() {
 		v.try_normalize().unwrap();
 		assert_eq!(v.edges.iter().map(|e| e.weight).collect::<Vec<_>>(), vec![34, 33, 33]);
 	}
-
+	// // normalize_elected
 	{
 		let c1 = Candidate { who: 10, elected: false ,..Default::default() };
 		let c2 = Candidate { who: 20, elected: true ,..Default::default() };

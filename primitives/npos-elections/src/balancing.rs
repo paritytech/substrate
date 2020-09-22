@@ -187,10 +187,6 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 
 	// excess / ways_to_split can cause a small un-normalized voters to be created.
 	// We won't `expect` here because even a result which is not normalized is not corrupt;
-	// Nonetheless, we can prove that it will always be fixed. A voter's budget is u128 and each
-	// edge's weight is also u128 and less than the budget. Therefore, the sum of all edge weight
-	// will fit in u128. Thus, this can never fail (see the documentation of `noramlize` in
-	// `sp-arithmetic` for more info).
 	let _ = voter.try_normalize_elected();
 
 	difference

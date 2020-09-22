@@ -84,7 +84,7 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing>(
 ///
 /// If no winner can be determined (i.e. everyone is already elected), then `None` is returned.
 ///
-/// This is an internal part of the [`balanced_heuristic`].
+/// This is an internal part of the [`phragmms`].
 pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 	candidates: &[CandidatePtr<AccountId>],
 	voters: &[Voter<AccountId>],
@@ -175,7 +175,7 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 ///
 /// Updates `voters` in place.
 ///
-/// This is an internal part of the [`balanced_heuristic`] and should be called after
+/// This is an internal part of the [`phragmms`] and should be called after
 /// [`calculate_max_score`].
 pub(crate) fn apply_elected<AccountId: IdentifierT>(
 	voters: &mut Vec<Voter<AccountId>>,
