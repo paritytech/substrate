@@ -85,8 +85,6 @@ fn it_can_enlist() {
 	use sp_core::Pair;
 
 	sp_io::TestExternalities::default().execute_with(|| {
-		assert_eq!(Example::get_current_event_id(), vec![]);
-
 		let (pair1, _) = sp_core::sr25519::Pair::generate();
 		let (pair2, _) = sp_core::sr25519::Pair::generate();
 
@@ -119,8 +117,6 @@ fn one_wrong_will_not_enlist_anyone() {
 	use sp_core::Pair;
 
 	sp_io::TestExternalities::default().execute_with(|| {
-		assert_eq!(Example::get_current_event_id(), vec![]);
-
 		let (pair1, _) = sp_core::sr25519::Pair::generate();
 		let (pair2, _) = sp_core::sr25519::Pair::generate();
 		let (pair3, _) = sp_core::sr25519::Pair::generate();
