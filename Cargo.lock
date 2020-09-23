@@ -677,7 +677,6 @@ name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
  "ansi_term 0.12.1",
- "futures 0.3.5",
  "node-cli",
  "rand 0.7.3",
  "sc-chain-spec",
@@ -3747,7 +3746,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "futures 0.3.5",
  "node-primitives",
  "node-runtime",
  "node-testing",
@@ -4505,7 +4503,6 @@ version = "2.0.0"
 dependencies = [
  "frame-support",
  "frame-system",
- "futures 0.3.5",
  "lite-json",
  "parity-scale-codec",
  "serde",
@@ -6379,7 +6376,6 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sc-executor",
- "sc-keystore",
  "sc-telemetry",
  "sp-api",
  "sp-blockchain",
@@ -6618,6 +6614,7 @@ dependencies = [
 name = "sc-consensus-pow"
 version = "0.8.0"
 dependencies = [
+ "async-trait",
  "derive_more",
  "futures 0.3.5",
  "futures-timer 3.0.2",
@@ -7835,7 +7832,6 @@ dependencies = [
 name = "sp-application-crypto-test"
 version = "2.0.0"
 dependencies = [
- "futures 0.3.5",
  "sp-api",
  "sp-application-crypto",
  "sp-core",
@@ -7930,6 +7926,7 @@ dependencies = [
 name = "sp-consensus"
 version = "0.8.0"
 dependencies = [
+ "async-trait",
  "derive_more",
  "futures 0.3.5",
  "futures-timer 3.0.2",

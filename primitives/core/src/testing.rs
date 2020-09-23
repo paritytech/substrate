@@ -265,9 +265,9 @@ impl SyncCryptoStore for KeyStore {}
 
 #[cfg(feature = "std")]
 impl Into<CryptoStorePtr> for KeyStore {
-    fn into(self) -> CryptoStorePtr {
+	fn into(self) -> CryptoStorePtr {
 		Arc::new(self)
-    }
+	}
 }
 
 /// Macro for exporting functions from wasm in with the expected signature for using it with the

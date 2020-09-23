@@ -13,7 +13,6 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-futures = { version = "0.3.4", optional = true }
 codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
@@ -27,7 +26,6 @@ lite-json = { version = "0.1", default-features = false }
 [features]
 default = ["std"]
 std = [
-	"futures",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
