@@ -22,7 +22,7 @@ use crate::crypto::KeyTypeId;
 use crate::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
-	traits::{CryptoStorePtr, Error, SyncCryptoStore, SyncCryptoStorePtr},
+	traits::{CryptoStore, CryptoStorePtr, Error, SyncCryptoStore},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
 #[cfg(feature = "std")]
@@ -83,7 +83,7 @@ impl KeyStore {
 
 #[cfg(feature = "std")]
 #[async_trait]
-impl crate::traits::CryptoStore for KeyStore {
+impl CryptoStore for KeyStore {
 	async fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
 		self.keys.read()
 			.get(&id)
@@ -207,7 +207,7 @@ impl crate::traits::CryptoStore for KeyStore {
 		keys: Vec<CryptoTypePublicPair>,
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, Error> {
 		let provided_keys = keys.into_iter().collect::<HashSet<_>>();
-		let all_keys = SyncCryptoStore::keys(self, id)?.into_iter().collect::<HashSet<_>>();
+		let all_keys = CryptoStore::keys(self, id).await?.into_iter().collect::<HashSet<_>>();
 
 		Ok(provided_keys.intersection(&all_keys).cloned().collect())
 	}
@@ -267,12 +267,6 @@ impl Into<CryptoStorePtr> for KeyStore {
     }
 }
 
-#[cfg(feature = "std")]
-impl Into<SyncCryptoStorePtr> for KeyStore {
-    fn into(self) -> SyncCryptoStorePtr {
-		Arc::new(self)
-    }
-}
 /// Macro for exporting functions from wasm in with the expected signature for using it with the
 /// wasm executor. This is useful for tests where you need to call a function in wasm.
 ///
@@ -409,9 +403,9 @@ mod tests {
 
 	#[test]
 	fn store_key_and_extract() {
-		let store: SyncCryptoStorePtr = KeyStore::new().into();
+		let store: CryptoStorePtr = Arc::new(KeyStore::new());
 
-		let public = store.ed25519_generate_new(ED25519, None)
+		let public = SyncCryptoStore::ed25519_generate_new(&store, ED25519, None)
 			.expect("Generates key");
 
 		let public_keys = store.keys(ED25519).unwrap();
@@ -421,12 +415,13 @@ mod tests {
 
 	#[test]
 	fn store_unknown_and_extract_it() {
-		let store: SyncCryptoStorePtr = KeyStore::new().into();
+		let store: CryptoStorePtr = Arc::new(KeyStore::new());
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		store.insert_unknown(
+		SyncCryptoStore::insert_unknown(
+			&store,
 			SR25519,
 			secret_uri,
 			key_pair.public().as_ref(),
@@ -439,7 +434,7 @@ mod tests {
 
 	#[test]
 	fn vrf_sign() {
-		let store: SyncCryptoStorePtr = KeyStore::new().into();
+		let store: CryptoStorePtr = Arc::new(KeyStore::new());
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
@@ -453,20 +448,23 @@ mod tests {
 			]
 		};
 
-		let result = store.sr25519_vrf_sign(
+		let result = SyncCryptoStore::sr25519_vrf_sign(
+			&store,
 			SR25519,
 			&key_pair.public(),
 			transcript_data.clone(),
 		);
 		assert!(result.is_err());
 
-		store.insert_unknown(
+		SyncCryptoStore::insert_unknown(
+			&store,
 			SR25519,
 			secret_uri,
 			key_pair.public().as_ref(),
 		).expect("Inserts unknown key");
 
-		let result = store.sr25519_vrf_sign(
+		let result = SyncCryptoStore::sr25519_vrf_sign(
+			&store,
 			SR25519,
 			&key_pair.public(),
 			transcript_data,

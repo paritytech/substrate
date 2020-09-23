@@ -353,101 +353,6 @@ pub trait SyncCryptoStore: Send + Sync {
 	) -> Result<VRFSignature, Error>;
 }
 
-// TODO: Check if still needed?
-impl<T: CryptoStore> SyncCryptoStore for T {
-	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		block_on(T::sr25519_public_keys(self, id))
-	}
-
-	fn sr25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<sr25519::Public, Error> {
-		block_on(T::sr25519_generate_new(self, id, seed))
-	}
-
-	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		block_on(T::ed25519_public_keys(self, id))
-	}
-
-	fn ed25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<ed25519::Public, Error> {
-		block_on(T::ed25519_generate_new(self, id, seed))
-	}
-
-	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		block_on(T::ecdsa_public_keys(self, id))
-	}
-
-	fn ecdsa_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<ecdsa::Public, Error> {
-		block_on(T::ecdsa_generate_new(self, id, seed))
-	}
-
-	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
-		block_on(T::insert_unknown(self, key_type, suri, public))
-	}
-
-	fn supported_keys(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>
-	) -> Result<Vec<CryptoTypePublicPair>, Error> {
-		block_on(T::supported_keys(self, id, keys))
-	}
-
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
-		block_on(T::keys(self, id))
-	}
-
-	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		block_on(T::has_keys(self, public_keys))
-	}
-
-	fn sign_with(
-		&self,
-		id: KeyTypeId,
-		key: &CryptoTypePublicPair,
-		msg: &[u8],
-	) -> Result<Vec<u8>, Error> {
-		block_on(T::sign_with(self, id, key, msg))
-	}
-
-	fn sign_with_any(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-		msg: &[u8]
-	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
-		block_on(T::sign_with_any(self, id, keys, msg))
-	}
-
-	fn sign_with_all(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-		msg: &[u8],
-	) -> Result<Vec<Result<Vec<u8>, Error>>, ()> {
-		block_on(T::sign_with_all(self, id, keys, msg))
-	}
-
-	fn sr25519_vrf_sign(
-		&self,
-		key_type: KeyTypeId,
-		public: &sr25519::Public,
-		transcript_data: VRFTranscriptData,
-	) -> Result<VRFSignature, Error> {
-		block_on(T::sr25519_vrf_sign(self, key_type, public, transcript_data))
-	}
-}
-
 impl SyncCryptoStore for Arc<dyn CryptoStore> {
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
 		block_on(CryptoStore::sr25519_public_keys(self.deref(), id))
@@ -544,8 +449,6 @@ impl SyncCryptoStore for Arc<dyn CryptoStore> {
 
 /// A pointer to a keystore.
 pub type CryptoStorePtr = Arc<dyn CryptoStore>;
-/// A pointer to a synchronous keystore.
-pub type SyncCryptoStorePtr = Arc<dyn SyncCryptoStore>;
 
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
