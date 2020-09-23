@@ -483,6 +483,7 @@ parameter_types! {
 	// One cent: $10,000 / MB
 	pub const PreimageByteDeposit: Balance = 1 * CENTS;
 	pub const MaxVotes: u32 = 100;
+	pub const MaxProposals: u32 = 100;
 }
 
 impl pallet_democracy::Trait for Runtime {
@@ -527,6 +528,7 @@ impl pallet_democracy::Trait for Runtime {
 	type PalletsOrigin = OriginCaller;
 	type MaxVotes = MaxVotes;
 	type WeightInfo = weights::pallet_democracy::WeightInfo;
+	type MaxProposals = MaxProposals;
 }
 
 parameter_types! {
