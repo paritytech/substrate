@@ -711,9 +711,9 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> whe
 
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
 		if let Some(ref backoff_param) = self.backoff_authoring_blocks {
-			let chain_head_slot = find_pre_digest::<B>(&chain_head)
-				.map(|digest| digest.slot_number());
-			if let Ok(chain_head_slot) = chain_head_slot {
+			if let Ok(chain_head_slot) = find_pre_digest::<B>(&chain_head)
+				.map(|digest| digest.slot_number())
+			{
 				if should_backoff_authoring_blocks::<B>(
 					*chain_head.number(),
 					chain_head_slot,
