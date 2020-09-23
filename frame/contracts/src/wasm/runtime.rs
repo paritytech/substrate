@@ -1157,8 +1157,11 @@ define_env!(Env, <E: Ext>,
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
 	seal_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
+		let num_topic = topics_len
+			.checked_div(sp_std::mem::size_of::<TopicOf<E::T>>() as u32)
+			.ok_or_else(|| store_err(ctx, "Zero sized topics are not allowed"))?;
 		charge_gas(ctx, RuntimeToken::DepositEvent {
-			num_topic: topics_len / sp_std::mem::size_of::<TopicOf<E::T>>() as u32,
+			num_topic,
 			len: data_len,
 		})?;
 		if data_len > ctx.ext.max_value_size() {
