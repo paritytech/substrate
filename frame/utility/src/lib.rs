@@ -59,10 +59,11 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
-use frame_support::{decl_module, decl_event, decl_storage, Parameter};
+use frame_support::{decl_module, decl_event, decl_storage, Parameter, transactional};
 use frame_support::{
 	traits::{OriginTrait, UnfilteredDispatchable},
-	weights::{Weight, GetDispatchInfo, DispatchClass}, dispatch::PostDispatchInfo,
+	weights::{Weight, GetDispatchInfo, DispatchClass, extract_actual_weight},
+	dispatch::{PostDispatchInfo, DispatchResultWithPostInfo},
 };
 use frame_system::{ensure_signed, ensure_root};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
@@ -194,6 +195,58 @@ decl_module! {
 			let pseudonym = Self::derivative_account_id(who, index);
 			origin.set_caller_from(frame_system::RawOrigin::Signed(pseudonym));
 			call.dispatch(origin).map(|_| ()).map_err(|e| e.error)
+		}
+
+		/// Send a batch of dispatch calls and atomically execute them.
+		/// The whole transaction will rollback and fail if any of the calls failed.
+		///
+		/// May be called from any origin.
+		///
+		/// - `calls`: The calls to be dispatched from the same origin.
+		///
+		/// If origin is root then call are dispatch without checking origin filter. (This includes
+		/// bypassing `frame_system::Trait::BaseCallFilter`).
+		///
+		/// # <weight>
+		/// - Base weight: 14.39 + .987 * c µs
+		/// - Plus the sum of the weights of the `calls`.
+		/// - Plus one additional event. (repeat read/write)
+		/// # </weight>
+		#[weight = (
+			calls.iter()
+				.map(|call| call.get_dispatch_info().weight)
+				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
+				.saturating_add(T::WeightInfo::batch(calls.len() as u32)),
+			{
+				let all_operational = calls.iter()
+					.map(|call| call.get_dispatch_info().class)
+					.all(|class| class == DispatchClass::Operational);
+				if all_operational {
+					DispatchClass::Operational
+				} else {
+					DispatchClass::Normal
+				}
+			},
+		)]
+		#[transactional]
+		fn batch_all(origin, calls: Vec<<T as Trait>::Call>) -> DispatchResultWithPostInfo {
+			let is_root = ensure_root(origin.clone()).is_ok();
+			let mut weight: Weight = 0;
+			for call in calls.into_iter() {
+				let info = call.get_dispatch_info();
+				let result = if is_root {
+					call.dispatch_bypass_filter(origin.clone())
+				} else {
+					call.dispatch(origin.clone())
+				};
+				weight += extract_actual_weight(&result, &info);
+				result.map_err(|mut err| {
+					err.post_info = Some(weight).into();
+					err
+				})?;
+			}
+			Self::deposit_event(Event::BatchCompleted);
+			Ok(Some(weight).into())
 		}
 	}
 }

@@ -22,8 +22,11 @@
 use super::*;
 
 use frame_support::{
-	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
-	weights::Weight, impl_outer_event, dispatch::DispatchError, traits::Filter, storage,
+	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch, impl_outer_event,
+	weights::{Weight, Pays},
+	dispatch::{DispatchError, DispatchErrorWithPostInfo},
+	traits::Filter,
+	storage,
 };
 use sp_core::H256;
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
@@ -253,5 +256,46 @@ fn batch_weight_calculation_doesnt_overflow() {
 		]));
 
 		assert_eq!(batch_call.get_dispatch_info().weight, Weight::max_value());
+	});
+}
+
+
+#[test]
+fn batch_all_works() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Balances::free_balance(1), 10);
+		assert_eq!(Balances::free_balance(2), 10);
+		assert_ok!(
+			Utility::batch_all(Origin::signed(1), vec![
+				Call::Balances(BalancesCall::transfer(2, 5)),
+				Call::Balances(BalancesCall::transfer(2, 5))
+			]),
+		);
+		assert_eq!(Balances::free_balance(1), 0);
+		assert_eq!(Balances::free_balance(2), 20);
+	});
+}
+
+#[test]
+fn batch_all_revert() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Balances::free_balance(1), 10);
+		assert_eq!(Balances::free_balance(2), 10);
+		assert_noop!(
+			Utility::batch_all(Origin::signed(1), vec![
+				Call::Balances(BalancesCall::transfer(2, 5)),
+				Call::Balances(BalancesCall::transfer(2, 10)),
+				Call::Balances(BalancesCall::transfer(2, 5)),
+			]),
+			DispatchErrorWithPostInfo {
+				post_info: PostDispatchInfo {
+					actual_weight: Some(381898000),
+					pays_fee: Pays::Yes
+				},
+				error: pallet_balances::Error::<Test, _>::InsufficientBalance.into()
+			}
+		);
+		assert_eq!(Balances::free_balance(1), 10);
+		assert_eq!(Balances::free_balance(2), 10);
 	});
 }
