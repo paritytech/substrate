@@ -184,7 +184,7 @@ mod tests {
 				.unwrap()
 				.public()
 				.to_ss58check()
-				.contains("j")
+				.contains("ab")
 		);
 	}
 
