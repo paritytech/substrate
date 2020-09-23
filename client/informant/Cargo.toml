@@ -1,12 +1,13 @@
 [package]
 name = "sc-informant"
-version = "0.8.0-rc6"
+version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate informant."
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -16,10 +17,10 @@ ansi_term = "0.12.1"
 futures = "0.3.4"
 log = "0.4.8"
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
-sc-client-api = { version = "2.0.0-rc6", path = "../api" }
-sc-network = { version = "0.8.0-rc6", path = "../network" }
-sp-blockchain = { version = "2.0.0-rc6", path = "../../primitives/blockchain" }
-sp-runtime = { version = "2.0.0-rc6", path = "../../primitives/runtime" }
-sp-utils = { version = "2.0.0-rc6", path = "../../primitives/utils" }
-sp-transaction-pool = { version = "2.0.0-rc6", path = "../../primitives/transaction-pool" }
+sc-client-api = { version = "2.0.0", path = "../api" }
+sc-network = { version = "0.8.0", path = "../network" }
+sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+sp-utils = { version = "2.0.0", path = "../../primitives/utils" }
+sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 wasm-timer = "0.2"
