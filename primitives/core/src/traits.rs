@@ -205,12 +205,14 @@ pub trait CryptoStore: Send + Sync {
 	) -> Result<VRFSignature, Error>;
 }
 
-/// A synchronous keystore trait.
+/// [deprecated] Sync version of the CryptoStore
 ///
-/// Note: This trait is temporarily maintained until
-/// substrate's crates that use the keystore are fully transitioned
-/// to async/await. Therefore, this trait should not be relied upon
-/// nor used for any new components.
+/// Some parts of Substrate still rely on a sync version of the `CryptoStore`.
+/// To make the transition easier this auto trait wraps any async `CryptoStore` and
+/// exposes a `sync` interface using `block_on`. Usage of this is deprecated and it
+/// will be removed as soon as the internal usage has transitioned successfully.
+/// If you are starting out building something new **do not use this**,
+/// instead, use [`CryptoStore`].
 pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
