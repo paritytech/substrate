@@ -184,7 +184,8 @@ mod tests {
 				.unwrap()
 				.public()
 				.to_ss58check()
-				.contains("j"));
+				.contains("j")
+		);
 	}
 
 	#[test]
@@ -195,7 +196,8 @@ mod tests {
 				.unwrap()
 				.public()
 				.to_ss58check_with_version(Ss58AddressFormat::PolkadotAccount)
-				.contains("ab"));
+				.contains("ab")
+		);
 	}
 
 	#[test]
