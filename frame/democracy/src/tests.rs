@@ -153,6 +153,7 @@ parameter_types! {
 	pub const EnactmentPeriod: u64 = 2;
 	pub const CooloffPeriod: u64 = 2;
 	pub const MaxVotes: u32 = 100;
+	pub const MaxProposals: u32 = MAX_PROPOSALS;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -209,6 +210,7 @@ impl super::Trait for Test {
 	type OperationalPreimageOrigin = EnsureSignedBy<Six, u64>;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
+	type MaxProposals = MaxProposals;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

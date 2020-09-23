@@ -30,7 +30,7 @@ use sp_runtime::traits::{Bounded, One};
 use crate::Module as Democracy;
 
 const SEED: u32 = 0;
-const MAX_REFERENDUMS: u32 = 100;
+const MAX_REFERENDUMS: u32 = 99;
 const MAX_SECONDERS: u32 = 100;
 const MAX_BYTES: u32 = 16_384;
 
@@ -57,14 +57,14 @@ fn add_proposal<T: Trait>(n: u32) -> Result<T::Hash, &'static str> {
 		RawOrigin::Signed(other).into(),
 		proposal_hash,
 		value.into(),
-		MAX_PROPOSALS,
+		T::MaxProposals::get(),
 	)?;
 
 	Ok(proposal_hash)
 }
 
 fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
-	let proposal_hash = add_proposal::<T>(n)?;
+	let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
 	let vote_threshold = VoteThreshold::SimpleMajority;
 
 	Democracy::<T>::inject_referendum(
@@ -101,7 +101,7 @@ benchmarks! {
 	_ { }
 
 	propose {
-		let p in 1 .. MAX_PROPOSALS;
+		let p in 1 .. T::MaxProposals::get();
 		for i in 0 .. (p - 1) {
 			add_proposal::<T>(i)?;
 		}
@@ -110,7 +110,7 @@ benchmarks! {
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&0);
 		let value = T::MinimumDeposit::get();
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller), proposal_hash, value.into(), MAX_PROPOSALS)
+	}: _(RawOrigin::Signed(caller), proposal_hash, value.into(), T::MaxProposals::get())
 	verify {
 		assert_eq!(Democracy::<T>::public_props().len(), p as usize, "Proposals not created.");
 	}
@@ -216,7 +216,7 @@ benchmarks! {
 	}
 
 	blacklist {
-		let p in 1 .. MAX_PROPOSALS;
+		let p in 1 .. T::MaxProposals::get();
 
 		// Place our proposal at the end to make sure it's worst case.
 		for i in 0 .. p - 1 {
@@ -232,7 +232,7 @@ benchmarks! {
 		let referendum_index = add_referendum::<T>(0)?;
 		assert!(Democracy::<T>::referendum_status(referendum_index).is_ok());
 
-		let call = Call::<T>::blacklist(hash, Some(referendum_index), p);
+		let call = Call::<T>::blacklist(hash, Some(referendum_index));
 		let origin = T::BlacklistOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -390,6 +390,7 @@ benchmarks! {
 		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
 
 		// Launch public
+		assert!(add_proposal::<T>(r).is_ok(), "proposal not created");
 		LastTabledWasExternal::put(true);
 
 		let block_number = T::LaunchPeriod::get();
@@ -397,7 +398,7 @@ benchmarks! {
 	}: { Democracy::<T>::on_initialize(block_number) }
 	verify {
 		// One extra because of next public
-		assert_eq!(Democracy::<T>::referendum_count(), r + 1, "referenda not created");
+		assert_eq!(Democracy::<T>::referendum_count(), r + 1, "proposal not accepted");
 
 		// All should be finished
 		for i in 0 .. r {

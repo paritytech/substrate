@@ -90,7 +90,7 @@ fn external_blacklisting_should_work() {
 		));
 
 		let hash = set_balance_proposal_hash(2);
-		assert_ok!(Democracy::blacklist(Origin::root(), hash, None, 1));
+		assert_ok!(Democracy::blacklist(Origin::root(), hash, None));
 
 		fast_forward_to(2);
 		assert!(Democracy::referendum_status(0).is_err());

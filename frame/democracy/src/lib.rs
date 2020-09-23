@@ -192,9 +192,6 @@ const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 /// NOTE: This is not enforced by any logic.
 pub const MAX_VETOERS: u32 = 100;
 
-/// The maximum number of public proposals that can exist at any time.
-pub const MAX_PROPOSALS: u32 = 1000;
-
 /// A proposal index.
 pub type PropIndex = u32;
 
@@ -330,6 +327,9 @@ pub trait Trait: frame_system::Trait + Sized {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// The maximum number of public proposals that can exist at any time.
+	type MaxProposals: Get<u32>;
 }
 
 #[derive(Clone, Encode, Decode, RuntimeDebug)]
@@ -604,14 +604,11 @@ decl_module! {
 		///
 		/// - `proposal_hash`: The hash of the proposal preimage.
 		/// - `value`: The amount of deposit (must be at least `MinimumDeposit`).
+		/// - `prop_count`: Witness data which must be at least `PublicProps::<T>::decode_len()`
 		///
 		/// Emits `Proposed`.
 		///
-		/// # <weight>
-		/// - Complexity: `O(1)`
-		/// - Db reads: `PublicPropCount`, `PublicProps`
-		/// - Db writes: `PublicPropCount`, `PublicProps`, `DepositOf`
-		/// # </weight>
+		/// Weight: `O(p)`
 		#[weight = T::WeightInfo::propose(*prop_count)]
 		fn propose(origin,
 			proposal_hash: T::Hash,
@@ -624,7 +621,8 @@ decl_module! {
 			let index = Self::public_prop_count();
 			let real_prop_count = PublicProps::<T>::decode_len().unwrap_or(0) as u32;
 			ensure!(real_prop_count <= prop_count, Error::<T>::InvalidWitness);
-			ensure!(real_prop_count < MAX_PROPOSALS, Error::<T>::TooManyProposals);
+			let max_proposals = T::MaxProposals::get();
+			ensure!(real_prop_count < max_proposals, Error::<T>::TooManyProposals);
 
 			if let Some((until, _)) = <Blacklist<T>>::get(proposal_hash) {
 				ensure!(
@@ -651,11 +649,7 @@ decl_module! {
 		/// - `seconds_upper_bound`: an upper bound on the current number of seconds on this
 		///   proposal. Extrinsic is weighted according to this value with no refund.
 		///
-		/// # <weight>
-		/// - Complexity: `O(S)` where S is the number of seconds a proposal already has.
-		/// - Db reads: `DepositOf`
-		/// - Db writes: `DepositOf`
-		/// # </weight>
+		/// Weight: `O(S)` where S is the number of seconds a proposal already has.
 		#[weight = T::WeightInfo::second(*seconds_upper_bound)]
 		fn second(origin, #[compact] proposal: PropIndex, #[compact] seconds_upper_bound: u32) {
 			let who = ensure_signed(origin)?;
@@ -678,12 +672,7 @@ decl_module! {
 		/// - `ref_index`: The index of the referendum to vote for.
 		/// - `vote`: The vote configuration.
 		///
-		/// # <weight>
-		/// - Complexity: `O(R)` where R is the number of referendums the voter has voted on.
-		///   weight is charged as if maximum votes.
-		/// - Db reads: `ReferendumInfoOf`, `VotingOf`, `balances locks`
-		/// - Db writes: `ReferendumInfoOf`, `VotingOf`, `balances locks`
-		/// # </weight>
+		/// Weight: `O(R)` where R is the number of referendums the voter has voted on.
 		#[weight = T::WeightInfo::vote_new(T::MaxVotes::get())
 			.max(T::WeightInfo::vote_existing(T::MaxVotes::get()))]
 		fn vote(origin,
@@ -701,11 +690,7 @@ decl_module! {
 		///
 		/// -`ref_index`: The index of the referendum to cancel.
 		///
-		/// # <weight>
-		/// - Complexity: `O(1)`.
-		/// - Db reads: `ReferendumInfoOf`, `Cancellations`
-		/// - Db writes: `ReferendumInfoOf`, `Cancellations`
-		/// # </weight>
+		/// Weight: `O(1)`.
 		#[weight = (T::WeightInfo::emergency_cancel(), DispatchClass::Operational)]
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
 			T::CancellationOrigin::ensure_origin(origin)?;
@@ -718,62 +703,6 @@ decl_module! {
 			Self::internal_cancel_referendum(ref_index);
 		}
 
-		/// Permanently place a proposal into the blacklist. This prevents it from ever being
-		/// proposed again.
-		///
-		/// If called on an queued public or external proposal, then this will result in it being
-		/// removed. If the `ref_index` supplied is an active referendum with the proposal hash,
-		/// then it will be cancelled.
-		///
-		/// The dispatch origin of this call must be `BlacklistOrigin`.
-		///
-		/// - `proposal_hash`: The proposal hash to blacklist permanently.
-		/// - `ref_index`: An ongoing referendum whose hash is `proposal_hash`, which will be
-		/// cancelled.
-		#[weight = (T::WeightInfo::blacklist(*prop_count), DispatchClass::Operational)]
-		fn blacklist(origin,
-			proposal_hash: T::Hash,
-			maybe_ref_index: Option<ReferendumIndex>,
-			#[compact] prop_count: u32,
-		) {
-			T::BlacklistOrigin::ensure_origin(origin)?;
-
-			let real_prop_count = PublicProps::<T>::decode_len().unwrap_or(0) as u32;
-			ensure!(real_prop_count <= prop_count, Error::<T>::InvalidWitness);
-
-			// Insert the proposal into the blacklist.
-			let permanent = (T::BlockNumber::max_value(), Vec::<T::AccountId>::new());
-			Blacklist::<T>::insert(&proposal_hash, permanent);
-
-			// Remove the queued proposal, if it's there.
-			PublicProps::<T>::mutate(|props| {
-				if let Some(index) = props.iter().position(|p| p.1 == proposal_hash) {
-					let (prop_index, ..) = props.remove(index);
-					if let Some((whos, amount)) = DepositOf::<T>::take(prop_index) {
-						for who in whos.into_iter() {
-							T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
-						}
-					}
-				}
-			});
-
-			// Remove the external queued referendum, if it's there.
-			if matches!(NextExternal::<T>::get(), Some((h, ..)) if h == proposal_hash) {
-				NextExternal::<T>::kill();
-			}
-
-			// Remove the referendum, if it's there.
-			if let Some(ref_index) = maybe_ref_index {
-				let status = Self::referendum_status(ref_index)?;
-				let h = status.proposal_hash;
-				if h == proposal_hash {
-					Self::internal_cancel_referendum(ref_index);
-				}
-			}
-
-			Self::deposit_event(RawEvent::Blacklisted(proposal_hash));
-		}
-
 		/// Schedule a referendum to be tabled once it is legal to schedule an external
 		/// referendum.
 		///
@@ -781,12 +710,8 @@ decl_module! {
 		///
 		/// - `proposal_hash`: The preimage hash of the proposal.
 		///
-		/// # <weight>
-		/// - Complexity `O(V)` with V number of vetoers in the blacklist of proposal.
+		/// Weight: `O(V)` with V number of vetoers in the blacklist of proposal.
 		///   Decoding vec of length V. Charged as maximum
-		/// - Db reads: `NextExternal`, `Blacklist`
-		/// - Db writes: `NextExternal`
-		/// # </weight>
 		#[weight = T::WeightInfo::external_propose(MAX_VETOERS)]
 		fn external_propose(origin, proposal_hash: T::Hash) {
 			T::ExternalOrigin::ensure_origin(origin)?;
@@ -810,10 +735,7 @@ decl_module! {
 		/// Unlike `external_propose`, blacklisting has no effect on this and it may replace a
 		/// pre-scheduled `external_propose` call.
 		///
-		/// # <weight>
-		/// - Complexity: `O(1)`
-		/// - Db write: `NextExternal`
-		/// # </weight>
+		/// Weight: `O(1)`
 		#[weight = T::WeightInfo::external_propose_majority()]
 		fn external_propose_majority(origin, proposal_hash: T::Hash) {
 			T::ExternalMajorityOrigin::ensure_origin(origin)?;
@@ -830,10 +752,7 @@ decl_module! {
 		/// Unlike `external_propose`, blacklisting has no effect on this and it may replace a
 		/// pre-scheduled `external_propose` call.
 		///
-		/// # <weight>
-		/// - Complexity: `O(1)`
-		/// - Db write: `NextExternal`
-		/// # </weight>
+		/// Weight: `O(1)`
 		#[weight = T::WeightInfo::external_propose_default()]
 		fn external_propose_default(origin, proposal_hash: T::Hash) {
 			T::ExternalDefaultOrigin::ensure_origin(origin)?;
@@ -854,12 +773,7 @@ decl_module! {
 		///
 		/// Emits `Started`.
 		///
-		/// # <weight>
-		/// - Complexity: `O(1)`
-		/// - Db reads: `NextExternal`, `ReferendumCount`
-		/// - Db writes: `NextExternal`, `ReferendumCount`, `ReferendumInfoOf`
-		/// - Base Weight: 30.1 µs
-		/// # </weight>
+		/// Weight: `O(1)`
 		#[weight = T::WeightInfo::fast_track()]
 		fn fast_track(origin,
 			proposal_hash: T::Hash,
@@ -904,12 +818,7 @@ decl_module! {
 		///
 		/// Emits `Vetoed`.
 		///
-		/// # <weight>
-		/// - Complexity: `O(V + log(V))` where V is number of `existing vetoers`
-		///   Performs a binary search on `existing_vetoers` which should not be very large.
-		/// - Db reads: `NextExternal`, `Blacklist`
-		/// - Db writes: `NextExternal`, `Blacklist`
-		/// # </weight>
+		/// Weight: `O(V + log(V))` where V is number of `existing vetoers`
 		#[weight = T::WeightInfo::veto_external(MAX_VETOERS)]
 		fn veto_external(origin, proposal_hash: T::Hash) {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
@@ -934,39 +843,13 @@ decl_module! {
 			<NextExternal<T>>::kill();
 		}
 
-		/// Remove a proposal.
-		///
-		/// The dispatch origin of this call must be _Root_.
-		///
-		/// - `ref_index`: The index of the proposal to cancel.
-		///
-		/// # <weight>
-		/// - Complexity: `O(1)`.
-		/// - Db writes: `ReferendumInfoOf`
-		/// - Base Weight: 21.57 µs
-		/// # </weight>
-		#[weight = T::WeightInfo::cancel_proposal()]
-		fn cancel_proposal(origin, #[compact] prop_index: PropIndex) {
-			T::CancelProposalOrigin::ensure_origin(origin)?;
-
-			PublicProps::<T>::mutate(|props| props.retain(|p| p.0 != prop_index));
-			if let Some((whos, amount)) = DepositOf::<T>::take(prop_index) {
-				for who in whos.into_iter() {
-					T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
-				}
-			}
-		}
-
 		/// Remove a referendum.
 		///
 		/// The dispatch origin of this call must be _Root_.
 		///
 		/// - `ref_index`: The index of the referendum to cancel.
 		///
-		/// # <weight>
-		/// - Complexity: `O(1)`.
-		/// - Db writes: `ReferendumInfoOf`
-		/// # </weight>
+		/// # Weight: `O(1)`.
 		#[weight = T::WeightInfo::cancel_referendum()]
 		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
 			ensure_root(origin)?;
@@ -979,11 +862,7 @@ decl_module! {
 		///
 		/// - `which`: The index of the referendum to cancel.
 		///
-		/// # <weight>
-		/// - `O(D)` where `D` is the items in the dispatch queue. Weighted as `D = 10`.
-		/// - Db reads: `scheduler lookup`, scheduler agenda`
-		/// - Db writes: `scheduler lookup`, scheduler agenda`
-		/// # </weight>
+		/// Weight: `O(D)` where `D` is the items in the dispatch queue. Weighted as `D = 10`.
 		#[weight = (T::WeightInfo::cancel_queued(10), DispatchClass::Operational)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
 			ensure_root(origin)?;
@@ -1017,16 +896,10 @@ decl_module! {
 		///
 		/// Emits `Delegated`.
 		///
-		/// # <weight>
-		/// - Complexity: `O(R)` where R is the number of referendums the voter delegating to has
+		/// Weight: `O(R)` where R is the number of referendums the voter delegating to has
 		///   voted on. Weight is charged as if maximum votes.
-		/// - Db reads: 3*`VotingOf`, `origin account locks`
-		/// - Db writes: 3*`VotingOf`, `origin account locks`
-		/// - Db reads per votes: `ReferendumInfoOf`
-		/// - Db writes per votes: `ReferendumInfoOf`
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
-		/// # </weight>
 		#[weight = T::WeightInfo::delegate(T::MaxVotes::get())]
 		pub fn delegate(
 			origin,
@@ -1050,16 +923,10 @@ decl_module! {
 		///
 		/// Emits `Undelegated`.
 		///
-		/// # <weight>
-		/// - Complexity: `O(R)` where R is the number of referendums the voter delegating to has
+		/// Weight: `O(R)` where R is the number of referendums the voter delegating to has
 		///   voted on. Weight is charged as if maximum votes.
-		/// - Db reads: 2*`VotingOf`
-		/// - Db writes: 2*`VotingOf`
-		/// - Db reads per votes: `ReferendumInfoOf`
-		/// - Db writes per votes: `ReferendumInfoOf`
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
-		/// # </weight>
 		#[weight = T::WeightInfo::undelegate(T::MaxVotes::get().into())]
 		fn undelegate(origin) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -1071,10 +938,7 @@ decl_module! {
 		///
 		/// The dispatch origin of this call must be _Root_.
 		///
-		/// # <weight>
-		/// - `O(1)`.
-		/// - Db writes: `PublicProps`
-		/// # </weight>
+		/// Weight: `O(1)`.
 		#[weight = T::WeightInfo::clear_public_proposals()]
 		fn clear_public_proposals(origin) {
 			ensure_root(origin)?;
@@ -1090,11 +954,7 @@ decl_module! {
 		///
 		/// Emits `PreimageNoted`.
 		///
-		/// # <weight>
-		/// - Complexity: `O(E)` with E size of `encoded_proposal` (protected by a required deposit).
-		/// - Db reads: `Preimages`
-		/// - Db writes: `Preimages`
-		/// # </weight>
+		/// Weight: `O(E)` with E size of `encoded_proposal` (protected by a required deposit).
 		#[weight = T::WeightInfo::note_preimage(encoded_proposal.len() as u32)]
 		fn note_preimage(origin, encoded_proposal: Vec<u8>) {
 			Self::note_preimage_inner(ensure_signed(origin)?, encoded_proposal)?;
@@ -1121,11 +981,7 @@ decl_module! {
 		///
 		/// Emits `PreimageNoted`.
 		///
-		/// # <weight>
-		/// - Complexity: `O(E)` with E size of `encoded_proposal` (protected by a required deposit).
-		/// - Db reads: `Preimages`
-		/// - Db writes: `Preimages`
-		/// # </weight>
+		/// Weight: `O(E)` with E size of `encoded_proposal` (protected by a required deposit).
 		#[weight = T::WeightInfo::note_imminent_preimage(encoded_proposal.len() as u32)]
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) -> DispatchResultWithPostInfo {
 			Self::note_imminent_preimage_inner(ensure_signed(origin)?, encoded_proposal)?;
@@ -1161,11 +1017,7 @@ decl_module! {
 		///
 		/// Emits `PreimageReaped`.
 		///
-		/// # <weight>
-		/// - Complexity: `O(D)` where D is length of proposal.
-		/// - Db reads: `Preimages`, provider account data
-		/// - Db writes: `Preimages` provider account data
-		/// # </weight>
+		/// Weight: `O(D)` where D is length of proposal.
 		#[weight = T::WeightInfo::reap_preimage(*proposal_len_upper_bound)]
 		fn reap_preimage(origin, proposal_hash: T::Hash, #[compact] proposal_len_upper_bound: u32) {
 			let who = ensure_signed(origin)?;
@@ -1199,11 +1051,7 @@ decl_module! {
 		///
 		/// - `target`: The account to remove the lock on.
 		///
-		/// # <weight>
-		/// - Complexity `O(R)` with R number of vote of target.
-		/// - Db reads: `VotingOf`, `balances locks`, `target account`
-		/// - Db writes: `VotingOf`, `balances locks`, `target account`
-		/// # </weight>
+		/// Weight: `O(R)` with R number of vote of target.
 		#[weight = T::WeightInfo::unlock_set(T::MaxVotes::get())
 			.max(T::WeightInfo::unlock_remove(T::MaxVotes::get()))]
 		fn unlock(origin, target: T::AccountId) {
@@ -1236,12 +1084,8 @@ decl_module! {
 		///
 		/// - `index`: The index of referendum of the vote to be removed.
 		///
-		/// # <weight>
-		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
+		/// Weight: `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
-		/// - Db reads: `ReferendumInfoOf`, `VotingOf`
-		/// - Db writes: `ReferendumInfoOf`, `VotingOf`
-		/// # </weight>
 		#[weight = T::WeightInfo::remove_vote(T::MaxVotes::get())]
 		fn remove_vote(origin, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -1261,12 +1105,8 @@ decl_module! {
 		///   referendum `index`.
 		/// - `index`: The index of referendum of the vote to be removed.
 		///
-		/// # <weight>
-		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
+		/// Weight: `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
-		/// - Db reads: `ReferendumInfoOf`, `VotingOf`
-		/// - Db writes: `ReferendumInfoOf`, `VotingOf`
-		/// # </weight>
 		#[weight = T::WeightInfo::remove_other_vote(T::MaxVotes::get())]
 		fn remove_other_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -1280,6 +1120,80 @@ decl_module! {
 		fn enact_proposal(origin, proposal_hash: T::Hash, index: ReferendumIndex) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::do_enact_proposal(proposal_hash, index)
+		}
+
+		/// Permanently place a proposal into the blacklist. This prevents it from ever being
+		/// proposed again.
+		///
+		/// If called on an queued public or external proposal, then this will result in it being
+		/// removed. If the `ref_index` supplied is an active referendum with the proposal hash,
+		/// then it will be cancelled.
+		///
+		/// The dispatch origin of this call must be `BlacklistOrigin`.
+		///
+		/// - `proposal_hash`: The proposal hash to blacklist permanently.
+		/// - `ref_index`: An ongoing referendum whose hash is `proposal_hash`, which will be
+		/// cancelled.
+		///
+		/// Weight: `O(p)` (though as this is an high-privilege dispatch, we assume it has a
+		///   reasonable value).
+		#[weight = (T::WeightInfo::blacklist(T::MaxProposals::get()), DispatchClass::Operational)]
+		fn blacklist(origin,
+			proposal_hash: T::Hash,
+			maybe_ref_index: Option<ReferendumIndex>,
+		) {
+			T::BlacklistOrigin::ensure_origin(origin)?;
+
+			// Insert the proposal into the blacklist.
+			let permanent = (T::BlockNumber::max_value(), Vec::<T::AccountId>::new());
+			Blacklist::<T>::insert(&proposal_hash, permanent);
+
+			// Remove the queued proposal, if it's there.
+			PublicProps::<T>::mutate(|props| {
+				if let Some(index) = props.iter().position(|p| p.1 == proposal_hash) {
+					let (prop_index, ..) = props.remove(index);
+					if let Some((whos, amount)) = DepositOf::<T>::take(prop_index) {
+						for who in whos.into_iter() {
+							T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
+						}
+					}
+				}
+			});
+
+			// Remove the external queued referendum, if it's there.
+			if matches!(NextExternal::<T>::get(), Some((h, ..)) if h == proposal_hash) {
+				NextExternal::<T>::kill();
+			}
+
+			// Remove the referendum, if it's there.
+			if let Some(ref_index) = maybe_ref_index {
+				let status = Self::referendum_status(ref_index)?;
+				let h = status.proposal_hash;
+				if h == proposal_hash {
+					Self::internal_cancel_referendum(ref_index);
+				}
+			}
+
+			Self::deposit_event(RawEvent::Blacklisted(proposal_hash));
+		}
+
+		/// Remove a proposal.
+		///
+		/// The dispatch origin of this call must be _Root_.
+		///
+		/// - `prop_index`: The index of the proposal to cancel.
+		///
+		/// Weight: `O(p)` where `p = PublicProps::<T>::decode_len()`
+		#[weight = T::WeightInfo::cancel_proposal()]
+		fn cancel_proposal(origin, #[compact] prop_index: PropIndex) {
+			T::CancelProposalOrigin::ensure_origin(origin)?;
+
+			PublicProps::<T>::mutate(|props| props.retain(|p| p.0 != prop_index));
+			if let Some((whos, amount)) = DepositOf::<T>::take(prop_index) {
+				for who in whos.into_iter() {
+					T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
+				}
+			}
 		}
 	}
 }
