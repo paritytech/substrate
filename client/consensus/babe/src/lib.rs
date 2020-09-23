@@ -368,6 +368,22 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	pub can_author_with: CAW,
 }
 
+/// Parameters used by BABE to decide how backoff authoring blocks if the number of unfinalized
+/// blocks grows too large.
+#[derive(Clone)]
+pub struct BackoffAuthoringBlocksParam {
+	/// The max interval to backoff when authoring blocks, regardless of delay in finality.
+	pub max_interval: u32,
+	/// The number of unfinalized blocks allowed before the BABE starts to consider to backoff
+	/// authoring blocks. Note that due to the `authoring_bias` BABE might still long until it
+	/// decides to decline to author a block.
+	pub unfinalized_slack: u32,
+	/// How aggressively BABE should start to decline authoring locks. A small value for
+	/// `authoring_bias` means BABE will quickly start to backoff block authorship as the length of
+	/// the unfinalized blocks grows.
+	pub authoring_bias: u32,
+}
+
 /// Start the babe worker.
 pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	keystore,
@@ -696,37 +712,22 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> whe
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
 		if let Some(ref backoff_param) = self.backoff_authoring_blocks {
 			let chain_head_slot = find_pre_digest::<B>(&chain_head)
-				.map(|digest| digest.slot_number())
-				.unwrap(); // WIP: REMOVE ME
-			if should_backoff_authoring_blocks::<B>(
-				*chain_head.number(),
-				chain_head_slot,
-				self.client.info().finalized_number,
-				SignedDuration::default().slot_now(slot_info.duration),
-				backoff_param,
-			) {
-				return Box::pin(future::ready(Ok(())))
+				.map(|digest| digest.slot_number());
+			if let Ok(chain_head_slot) = chain_head_slot {
+				if should_backoff_authoring_blocks::<B>(
+					*chain_head.number(),
+					chain_head_slot,
+					self.client.info().finalized_number,
+					SignedDuration::default().slot_now(slot_info.duration),
+					backoff_param,
+				) {
+					return Box::pin(future::ready(Ok(())))
+				}
 			}
 		}
 
 		<Self as sc_consensus_slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
 	}
-}
-
-/// Parameters used by BABE to decide how backoff authoring blocks if the number of unfinalized
-/// blocks grows too large.
-#[derive(Clone)]
-pub struct BackoffAuthoringBlocksParam {
-	/// The max interval to backoff when authoring blocks, regardless of delay in finality.
-	pub max_interval: u32,
-	/// The number of unfinalized blocks allowed before the BABE starts to consider to backoff
-	/// authoring blocks. Note that due to the `authoring_bias` BABE might still long until it
-	/// decides to decline to author a block.
-	pub unfinalized_slack: u32,
-	/// How aggressively BABE should start to decline authoring locks. A small value for
-	/// `authoring_bias` means BABE will quickly start to backoff block authorship as the length of
-	/// the unfinalized blocks grows.
-	pub authoring_bias: u32,
 }
 
 // The criterion for backing off block authoring when finality is lagging
