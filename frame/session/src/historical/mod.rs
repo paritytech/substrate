@@ -32,10 +32,12 @@ use sp_runtime::KeyTypeId;
 use sp_runtime::traits::{Convert, OpaqueKeys};
 use sp_session::{MembershipProof, ValidatorCount};
 use frame_support::{decl_module, decl_storage};
-use frame_support::{Parameter, print};
+use frame_support::print;
 use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use sp_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
+
+pub use sp_session::IdentificationTuple;
 
 mod shared;
 pub mod offchain;
@@ -43,17 +45,6 @@ pub mod onchain;
 
 /// Trait necessary for the historical module.
 pub trait Trait: super::Trait {
-	/// Full identification of the validator.
-	type FullIdentification: Parameter;
-
-	/// A conversion from validator ID to full identification.
-	///
-	/// This should contain any references to economic actors associated with the
-	/// validator, since they may be outdated by the time this is queried from a
-	/// historical trie.
-	///
-	/// It must return the identification for the current session index.
-	type FullIdentificationOf: Convert<Self::ValidatorId, Option<Self::FullIdentification>>;
 }
 
 decl_storage! {
@@ -160,7 +151,7 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 }
 
 /// A tuple of the validator's ID and their full identification.
-pub type IdentificationTuple<T> = (<T as crate::Trait>::ValidatorId, <T as Trait>::FullIdentification);
+// pub type IdentificationTuple<T> = (<T as crate::Trait>::ValidatorId, <T as Trait>::FullIdentification);
 
 /// A trie instance for checking and generating proofs.
 pub struct ProvingTrie<T: Trait> {
@@ -235,7 +226,7 @@ impl<T: Trait> ProvingTrie<T> {
 		val_idx.using_encoded(|s| {
 			trie.get_with(s, &mut recorder)
 				.ok()?
-				.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw).ok())
+				.and_then(|raw| <IdentificationTuple<T::AccountId, T>>::decode(&mut &*raw).ok())
 		})?;
 
 		Some(recorder.drain().into_iter().map(|r| r.data).collect())
@@ -248,7 +239,7 @@ impl<T: Trait> ProvingTrie<T> {
 
 	// Check a proof contained within the current memory-db. Returns `None` if the
 	// nodes within the current `MemoryDB` are insufficient to query the item.
-	fn query(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<IdentificationTuple<T>> {
+	fn query(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<IdentificationTuple<T::AccountId, T>> {
 		let trie = TrieDB::new(&self.db, &self.root).ok()?;
 		let val_idx = (key_id, key_data).using_encoded(|s| trie.get(s))
 			.ok()?
@@ -256,7 +247,7 @@ impl<T: Trait> ProvingTrie<T> {
 
 		val_idx.using_encoded(|s| trie.get(s))
 			.ok()?
-			.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw).ok())
+			.and_then(|raw| <IdentificationTuple<T::AccountId, T>>::decode(&mut &*raw).ok())
 	}
 }
 
@@ -264,7 +255,7 @@ impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTy
 	for Module<T>
 {
 	type Proof = MembershipProof;
-	type IdentificationTuple = IdentificationTuple<T>;
+	type IdentificationTuple = IdentificationTuple<T::AccountId, T>;
 
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
 		let session = <SessionModule<T>>::current_index();
@@ -289,7 +280,7 @@ impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTy
 			})
 	}
 
-	fn check_proof(key: (KeyTypeId, D), proof: Self::Proof) -> Option<IdentificationTuple<T>> {
+	fn check_proof(key: (KeyTypeId, D), proof: Self::Proof) -> Option<IdentificationTuple<T::AccountId, T>> {
 		let (id, data) = key;
 
 		if proof.session == <SessionModule<T>>::current_index() {

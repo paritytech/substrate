@@ -102,6 +102,7 @@
 
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
+use sp_session::ValidatorIdentification;
 use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys, Saturating};
 use sp_staking::SessionIndex;
@@ -361,17 +362,9 @@ impl WeightInfo for () {
 	fn purge_keys(_n: u32, ) -> Weight { 1_000_000_000 }
 }
 
-pub trait Trait: frame_system::Trait {
+pub trait Trait: ValidatorIdentification<<Self as frame_system::Trait>::AccountId> + frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
-
-	/// A stable ID for a validator.
-	type ValidatorId: Member + Parameter;
-
-	/// A conversion from account ID to validator ID.
-	///
-	/// Its cost must be at most one storage read.
-	type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
 
 	/// Indicator for when to end the session.
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;

@@ -3144,7 +3144,7 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 
 /// This is intended to be used with `FilterHistoricalOffences`.
 impl <T: Trait>
-	OnOffenceHandler<T::AccountId, pallet_session::historical::IdentificationTuple<T>, Weight>
+	OnOffenceHandler<T::AccountId, sp_session::IdentificationTuple<<T as frame_system::Trait>::AccountId, T>, Weight>
 for Module<T> where
 	T: pallet_session::Trait<ValidatorId = <T as frame_system::Trait>::AccountId>,
 	T: pallet_session::historical::Trait<
@@ -3159,7 +3159,7 @@ for Module<T> where
 	>,
 {
 	fn on_offence(
-		offenders: &[OffenceDetails<T::AccountId, pallet_session::historical::IdentificationTuple<T>>],
+		offenders: &[OffenceDetails<T::AccountId, sp_session::IdentificationTuple<<T as frame_system::Trait>::AccountId, T>>],
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
 	) -> Result<Weight, ()> {

@@ -4615,6 +4615,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-session",
  "sp-staking",
  "sp-std",
 ]
@@ -4895,6 +4896,7 @@ dependencies = [
  "sp-io",
  "sp-npos-elections",
  "sp-runtime",
+ "sp-session",
  "sp-staking",
  "sp-std",
  "sp-storage",
@@ -8346,6 +8348,7 @@ dependencies = [
 name = "sp-session"
 version = "2.0.0-rc6"
 dependencies = [
+ "frame-support",
  "parity-scale-codec",
  "sp-api",
  "sp-core",

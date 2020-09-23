@@ -26,6 +26,7 @@ use super::Trait as HistoricalTrait;
 
 use super::shared;
 use sp_std::prelude::*;
+use sp_session::ValidatorIdentification;
 
 /// Store the validator-set associated to the `session_index` to the off-chain database.
 ///
@@ -40,9 +41,9 @@ pub fn store_session_validator_set_to_offchain<T: HistoricalTrait + SessionTrait
 ) {
 	let encoded_validator_list = <SessionModule<T>>::validators()
 		.into_iter()
-		.filter_map(|validator_id: <T as SessionTrait>::ValidatorId| {
+		.filter_map(|validator_id: <T as ValidatorIdentification<T::AccountId>>::ValidatorId| {
 			let full_identification =
-				<<T as HistoricalTrait>::FullIdentificationOf>::convert(validator_id.clone());
+				<<T as ValidatorIdentification<T::AccountId>>::FullIdentificationOf>::convert(validator_id.clone());
 			full_identification.map(|full_identification| (validator_id, full_identification))
 		})
 		.collect::<Vec<_>>();

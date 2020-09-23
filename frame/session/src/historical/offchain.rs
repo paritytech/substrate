@@ -37,7 +37,7 @@ use sp_std::prelude::*;
 
 /// A set of validators, which was used for a fixed session index.
 struct ValidatorSet<T: Trait> {
-	validator_set: Vec<IdentificationTuple<T>>,
+	validator_set: Vec<IdentificationTuple<<T as frame_system::Trait>::AccountId, T>>,
 }
 
 impl<T: Trait> ValidatorSet<T> {

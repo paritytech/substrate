@@ -29,6 +29,8 @@ use sp_api::ProvideRuntimeApi;
 use sp_core::RuntimeDebug;
 use sp_core::crypto::KeyTypeId;
 use sp_staking::SessionIndex;
+use sp_runtime::traits::{Member, Convert};
+use frame_support::Parameter;
 use sp_std::vec::Vec;
 
 sp_api::decl_runtime_apis! {
@@ -52,6 +54,18 @@ sp_api::decl_runtime_apis! {
 
 /// Number of validators in a given session.
 pub type ValidatorCount = u32;
+
+pub type IdentificationTuple<AccountId, T> = (<T as ValidatorIdentification<AccountId>>::ValidatorId, <T as ValidatorIdentification<AccountId>>::FullIdentification);
+
+pub trait ValidatorIdentification<AccountId> {
+	type ValidatorId: Member + Parameter;
+
+	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
+
+	type FullIdentification: Parameter;
+
+	type FullIdentificationOf: Convert<Self::ValidatorId, Option<Self::FullIdentification>>;
+}
 
 /// Proof of membership of a specific key in a given session.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Default, RuntimeDebug)]
