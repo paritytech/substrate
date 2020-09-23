@@ -492,7 +492,7 @@ enum TransferCause {
 /// Transfer some funds from `transactor` to `dest`.
 ///
 /// We only allow allow for draining all funds of the sender if `cause` is
-/// is specified as`Terminate`. Otherwise, any transfer that would bring the sender below the
+/// is specified as `Terminate`. Otherwise, any transfer that would bring the sender below the
 /// subsistence threshold (for contracts) or the existential deposit (for plain accounts)
 /// results in an error.
 fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(

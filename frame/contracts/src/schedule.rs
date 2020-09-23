@@ -287,7 +287,6 @@ impl<T: Trait> Default for Schedule<T> {
 
 			op_cost_grow_mem: WASM_INSTRUCTION_COST,
 			op_cost_regular: WASM_INSTRUCTION_COST,
-	
 			api_cost_caller: cost_batched!(seal_caller),
 			api_cost_address: cost_batched!(seal_address),
 			api_cost_gas_left: cost_batched!(seal_gas_left),
