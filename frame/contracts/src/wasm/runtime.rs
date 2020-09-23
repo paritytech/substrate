@@ -350,13 +350,10 @@ where
 	}
 }
 
-/// Read designated chunk from the sandbox memory, consuming an appropriate amount of
-/// gas.
+/// Read designated chunk from the sandbox memory.
 ///
 /// Returns `Err` if one of the following conditions occurs:
 ///
-/// - calculating the gas cost resulted in overflow.
-/// - out of gas
 /// - requested buffer is not within the bounds of the sandbox memory.
 fn read_sandbox_memory<E: Ext>(
 	ctx: &mut Runtime<E>,
@@ -369,13 +366,10 @@ fn read_sandbox_memory<E: Ext>(
 	Ok(buf)
 }
 
-/// Read designated chunk from the sandbox memory into the supplied buffer, consuming
-/// an appropriate amount of gas.
+/// Read designated chunk from the sandbox memory into the supplied buffer.
 ///
 /// Returns `Err` if one of the following conditions occurs:
 ///
-/// - calculating the gas cost resulted in overflow.
-/// - out of gas
 /// - requested buffer is not within the bounds of the sandbox memory.
 fn read_sandbox_memory_into_buf<E: Ext>(
 	ctx: &mut Runtime<E>,
@@ -385,13 +379,10 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 	ctx.memory.get(ptr, buf).map_err(|_| store_err(ctx, Error::<E::T>::OutOfBounds))
 }
 
-/// Read designated chunk from the sandbox memory, consuming an appropriate amount of
-/// gas, and attempt to decode into the specified type.
+/// Read designated chunk from the sandbox memory and attempt to decode into the specified type.
 ///
 /// Returns `Err` if one of the following conditions occurs:
 ///
-/// - calculating the gas cost resulted in overflow.
-/// - out of gas
 /// - requested buffer is not within the bounds of the sandbox memory.
 /// - the buffer contents cannot be decoded as the required type.
 fn read_sandbox_memory_as<E: Ext, D: Decode>(
@@ -403,13 +394,10 @@ fn read_sandbox_memory_as<E: Ext, D: Decode>(
 	D::decode(&mut &buf[..]).map_err(|_| store_err(ctx, Error::<E::T>::DecodingFailed))
 }
 
-/// Write the given buffer to the designated location in the sandbox memory, consuming
-/// an appropriate amount of gas.
+/// Write the given buffer to the designated location in the sandbox memory.
 ///
 /// Returns `Err` if one of the following conditions occurs:
 ///
-/// - calculating the gas cost resulted in overflow.
-/// - out of gas
 /// - designated area is not within the bounds of the sandbox memory.
 fn write_sandbox_memory<E: Ext>(
 	ctx: &mut Runtime<E>,
@@ -419,17 +407,22 @@ fn write_sandbox_memory<E: Ext>(
 	ctx.memory.set(ptr, buf).map_err(|_| store_err(ctx, Error::<E::T>::OutOfBounds))
 }
 
-/// Write the given buffer and its length to the designated locations in sandbox memory.
+/// Write the given buffer and its length to the designated locations in sandbox memory and
+/// charge gas according to the token returned by `create_token`.
 //
 /// `out_ptr` is the location in sandbox memory where `buf` should be written to.
 /// `out_len_ptr` is an in-out location in sandbox memory. It is read to determine the
-/// lenght of the buffer located at `out_ptr`. If that buffer is large enough the actual
+/// length of the buffer located at `out_ptr`. If that buffer is large enough the actual
 /// `buf.len()` is written to this location.
 ///
 /// If `out_ptr` is set to the sentinel value of `u32::max_value()`  and `allow_skip` is true the
 /// operation is skipped and `Ok` is returned. This is supposed to help callers to make copying
 /// output optional. For example to skip copying back the output buffer of an `seal_call`
 /// when the caller is not interested in the result.
+///
+/// `create_token` can optionally instruct this function to charge the gas meter with the token
+/// it returns. `create_token` receives the variable amount of bytes that are about to be copied by
+/// this function.
 ///
 /// In addition to the error conditions of `write_sandbox_memory` this functions returns
 /// `Err` if the size of the buffer located at `out_ptr` is too small to fit `buf`.
@@ -465,7 +458,7 @@ fn write_sandbox_output<E: Ext>(
 }
 
 /// Can be supplied to `write_sandbox_output` to indicate that the gas meter is not be
-/// be charged for the copdied data.
+/// be charged for the copied data.
 fn no_charge(_: u32) -> Option<RuntimeToken> {
 	None
 }

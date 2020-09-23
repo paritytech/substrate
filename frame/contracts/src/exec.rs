@@ -491,20 +491,10 @@ enum TransferCause {
 
 /// Transfer some funds from `transactor` to `dest`.
 ///
-/// All balance changes are performed in the `overlay`.
-///
-/// This function also handles charging the fee. The fee depends
-/// on whether the transfer happening because of contract instantiation
-/// (transferring endowment) or because of a transfer via `call`. This
-/// is specified using the `cause` parameter.
-///
-/// NOTE: that the fee is denominated in `BalanceOf<T>` units, but
-/// charged in `Gas` from the provided `gas_meter`. This means
-/// that the actual amount charged might differ.
-///
-/// NOTE: that we allow for draining all funds of the contract so it
-/// can go below existential deposit, essentially giving a contract
-/// the chance to give up it's life.
+/// We only allow allow for draining all funds of the sender if `cause` is
+/// is specified as`Terminate`. Otherwise, any transfer that would bring the sender below the
+/// subsistence threshold (for contracts) or the existential deposit (for plain accounts)
+/// results in an error.
 fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	cause: TransferCause,
 	origin: TransactorKind,
