@@ -1110,6 +1110,9 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
+	/// The maximum number of locks a user should have on their account.
+	type MaxLocks: Get<u32>;
+
 	/// Create a new balance lock on account `who`.
 	///
 	/// If the new lock is valid (i.e. not already expired), it will push the struct to
@@ -1310,8 +1313,6 @@ impl<T: Clone + Ord> ChangeMembers<T> for () {
 	fn set_prime(_: Option<T>) {}
 }
 
-
-
 /// Trait for type that can handle the initialization of account IDs at genesis.
 pub trait InitializeMembers<AccountId> {
 	/// Initialize the members to the given `members`.
@@ -1345,7 +1346,10 @@ pub trait Randomness<Output> {
 	}
 }
 
-impl<Output: Decode + Default> Randomness<Output> for () {
+/// Provides an implementation of [`Randomness`] that should only be used in tests!
+pub struct TestRandomness;
+
+impl<Output: Decode + Default> Randomness<Output> for TestRandomness {
 	fn random(subject: &[u8]) -> Output {
 		Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default()
 	}
@@ -1374,16 +1378,20 @@ pub trait ValidatorRegistration<ValidatorId> {
 	fn is_registered(id: &ValidatorId) -> bool;
 }
 
-/// Something that can convert a given module into the index of the module in the runtime.
+/// Provides information about the pallet setup in the runtime.
 ///
-/// The index of a module is determined by the position it appears in `construct_runtime!`.
-pub trait ModuleToIndex {
-	/// Convert the given module `M` into an index.
-	fn module_to_index<M: 'static>() -> Option<usize>;
+/// An implementor should be able to provide information about each pallet that
+/// is configured in `construct_runtime!`.
+pub trait PalletInfo {
+	/// Convert the given pallet `P` into its index as configured in the runtime.
+	fn index<P: 'static>() -> Option<usize>;
+	/// Convert the given pallet `P` into its name as configured in the runtime.
+	fn name<P: 'static>() -> Option<&'static str>;
 }
 
-impl ModuleToIndex for () {
-	fn module_to_index<M: 'static>() -> Option<usize> { Some(0) }
+impl PalletInfo for () {
+	fn index<P: 'static>() -> Option<usize> { Some(0) }
+	fn name<P: 'static>() -> Option<&'static str> { Some("test") }
 }
 
 /// The function and pallet name of the Call.

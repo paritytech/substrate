@@ -68,9 +68,9 @@
 //!                              for `cargo check` runs.
 //! - `WASM_BUILD_TYPE` - Sets the build type for building wasm binaries. Supported values are `release` or `debug`.
 //!                       By default the build type is equal to the build type used by the main build.
-//! - `TRIGGER_WASM_BUILD` - Can be set to trigger a wasm build. On subsequent calls the value of the variable
-//!                          needs to change. As wasm builder instructs `cargo` to watch for file changes
-//!                          this environment variable should only be required in certain circumstances.
+//! - `FORCE_WASM_BUILD` - Can be set to force a wasm build. On subsequent calls the value of the variable
+//!                        needs to change. As wasm builder instructs `cargo` to watch for file changes
+//!                        this environment variable should only be required in certain circumstances.
 //! - `WASM_BUILD_RUSTFLAGS` - Extend `RUSTFLAGS` given to `cargo build` while building the wasm binary.
 //! - `WASM_BUILD_NO_COLOR` - Disable color output of the wasm build.
 //! - `WASM_TARGET_DIRECTORY` - Will copy any build wasm binary to the given directory. The path needs
@@ -168,17 +168,29 @@ pub fn build_project_with_default_rustflags(
 		default_rustflags,
 	);
 
+	let (wasm_binary, wasm_binary_bloaty) = if let Some(wasm_binary) = wasm_binary {
+		(
+			wasm_binary.wasm_binary_path_escaped(),
+			bloaty.wasm_binary_bloaty_path_escaped(),
+		)
+	} else {
+		(
+			bloaty.wasm_binary_bloaty_path_escaped(),
+			bloaty.wasm_binary_bloaty_path_escaped(),
+		)
+	};
+
 	write_file_if_changed(
-		file_name.into(),
-		format!(
-			r#"
-				pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
-				pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
-			"#,
-			wasm_binary = wasm_binary.wasm_binary_path_escaped(),
-			wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path_escaped(),
-		),
-	);
+			file_name.into(),
+			format!(
+				r#"
+					pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
+					pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
+				"#,
+				wasm_binary = wasm_binary,
+				wasm_binary_bloaty = wasm_binary_bloaty,
+			),
+		);
 }
 
 /// Checks if the build of the WASM binary should be skipped.
@@ -296,4 +308,9 @@ impl CargoCommand {
 				.unwrap_or_default()
 				.contains("-nightly")
 	}
+}
+
+/// Returns `true` when color output is enabled.
+fn color_output_enabled() -> bool {
+	env::var(crate::WASM_BUILD_NO_COLOR).is_err()
 }

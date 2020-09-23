@@ -28,7 +28,6 @@ use frame_benchmarking::benchmarks;
 use crate::Module as Scheduler;
 use frame_system::Module as System;
 
-const MAX_SCHEDULED: u32 = 50;
 const BLOCK_NUMBER: u32 = 2;
 
 // Add `n` named items to the schedule
@@ -56,7 +55,7 @@ benchmarks! {
 	_ { }
 
 	schedule {
-		let s in 0 .. MAX_SCHEDULED;
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 		let periodic = Some((T::BlockNumber::one(), 100));
 		let priority = 0;
@@ -73,7 +72,7 @@ benchmarks! {
 	}
 
 	cancel {
-		let s in 1 .. MAX_SCHEDULED;
+		let s in 1 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 
 		fill_schedule::<T>(when, s)?;
@@ -92,7 +91,7 @@ benchmarks! {
 	}
 
 	schedule_named {
-		let s in 0 .. MAX_SCHEDULED;
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let id = s.encode();
 		let when = BLOCK_NUMBER.into();
 		let periodic = Some((T::BlockNumber::one(), 100));
@@ -110,7 +109,7 @@ benchmarks! {
 	}
 
 	cancel_named {
-		let s in 1 .. MAX_SCHEDULED;
+		let s in 1 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 
 		fill_schedule::<T>(when, s)?;
@@ -127,8 +126,10 @@ benchmarks! {
 		);
 	}
 
+	// TODO [#7141]: Make this more complex and flexible so it can be used in automation.
+	#[extra]
 	on_initialize {
-		let s in 0 .. MAX_SCHEDULED;
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 		fill_schedule::<T>(when, s)?;
 	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }

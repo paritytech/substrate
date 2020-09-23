@@ -1734,7 +1734,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
 					.collect::<Vec<_>>(),
 				vec![(31, 1000), (21, 1000), (11, 1000)],
 			);
-			assert_eq!(<Nominators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>(), vec![]);
+			assert!(<Nominators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>().is_empty());
 
 			// give the man some money
 			let initial_balance = 1000;
@@ -1782,7 +1782,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election_elected() {
 					.collect::<Vec<_>>(),
 				vec![(31, 100), (21, 1000), (11, 1000)],
 			);
-			assert_eq!(<Nominators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>(), vec![]);
+			assert!(<Nominators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>().is_empty());
 
 			// give the man some money
 			let initial_balance = 1000;
@@ -3615,7 +3615,7 @@ mod offchain_election {
 		// A validator index which is out of bound
 		ExtBuilder::default()
 			.offchain_election_ext()
-			.validator_count(4)
+			.validator_count(2)
 			.has_stakers(false)
 			.build()
 			.execute_with(|| {
@@ -3627,7 +3627,7 @@ mod offchain_election {
 				let (mut compact, winners, score) = prepare_submission_with(true, 2, |_| {});
 
 				// index 4 doesn't exist.
-				compact.votes1.push((3, 4));
+				compact.votes1.iter_mut().for_each(|(_, vidx)| if *vidx == 1 { *vidx = 4 });
 
 				// The error type sadly cannot be more specific now.
 				assert_noop!(
@@ -3689,11 +3689,17 @@ mod offchain_election {
 				assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
 				assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
 				let (compact, winners, score) = prepare_submission_with(true, 2, |a| {
-					a.iter_mut()
-						.find(|x| x.who == 5)
-						// all 3 cannot be among the winners. Although, all of them are validator
-						// candidates.
-						.map(|x| x.distribution = vec![(21, 50), (41, 30), (31, 20)]);
+					// swap all 11 and 41s in the distribution with non-winners. Note that it is
+					// important that the count of winners and the count of unique targets remain
+					// valid.
+					a.iter_mut().for_each(| StakedAssignment { who, distribution } |
+						distribution.iter_mut().for_each(|(t, _)| {
+							if *t == 41 { *t = 31 } else { *t = 21 }
+							// if it is self vote, correct that.
+							if *who == 41 { *who = 31 }
+							if *who == 11 { *who = 21 }
+						})
+					);
 				});
 
 				assert_noop!(
@@ -3703,7 +3709,46 @@ mod offchain_election {
 						compact,
 						score,
 					),
-					Error::<Test>::OffchainElectionBogusEdge,
+					Error::<Test>::OffchainElectionBogusNomination,
+				);
+			})
+	}
+
+	#[test]
+	fn offchain_election_unique_target_count_is_checked() {
+		// Number of unique targets and and winners.len must match.
+		ExtBuilder::default()
+			.offchain_election_ext()
+			.validator_count(2) // we select only 2.
+			.has_stakers(false)
+			.build()
+			.execute_with(|| {
+				build_offchain_election_test_ext();
+				run_to_block(12);
+
+				assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
+				assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
+
+				let (compact, winners, score) = prepare_submission_with(true, 2, |a| {
+					a.iter_mut()
+						.find(|x| x.who == 5)
+						// just add any new target.
+						.map(|x| {
+							// old value.
+							assert_eq!(x.distribution, vec![(41, 100)]);
+							// new value.
+							x.distribution = vec![(21, 50), (41, 50)]
+						});
+				});
+
+				assert_noop!(
+					submit_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+					),
+					Error::<Test>::OffchainElectionBogusWinnerCount,
 				);
 			})
 	}
@@ -4359,7 +4404,7 @@ fn test_payout_stakers() {
 	// We also test that `payout_extra_nominators` works.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
-		// Create three validators:
+		// Create a validator:
 		bond_validator(11, 10, balance); // Default(64)
 
 		// Create nominators, targeting stash of validators
@@ -4597,15 +4642,12 @@ fn on_initialize_weight_is_correct() {
 	});
 }
 
-
 #[test]
 fn payout_creates_controller() {
-	// Here we will test validator can set `max_nominators_payout` and it works.
-	// We also test that `payout_extra_nominators` works.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
-		// Create three validators:
-		bond_validator(11, 10, balance); // Default(64)
+		// Create a validator:
+		bond_validator(11, 10, balance);
 
 		// Create a stash/controller pair
 		bond_nominator(1234, 1337, 100, vec![11]);
@@ -4624,5 +4666,34 @@ fn payout_creates_controller() {
 
 		// Controller is created
 		assert!(Balances::free_balance(1337) > 0);
+	})
+}
+
+#[test]
+fn payout_to_any_account_works() {
+	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+		let balance = 1000;
+		// Create a validator:
+		bond_validator(11, 10, balance); // Default(64)
+
+		// Create a stash/controller pair
+		bond_nominator(1234, 1337, 100, vec![11]);
+
+		// Update payout location
+		assert_ok!(Staking::set_payee(Origin::signed(1337), RewardDestination::Account(42)));
+
+		// Reward Destination account doesn't exist
+		assert_eq!(Balances::free_balance(42), 0);
+
+		mock::start_era(1);
+		Staking::reward_by_ids(vec![(11, 1)]);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
+		mock::start_era(2);
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
+
+		// Payment is successful
+		assert!(Balances::free_balance(42) > 0);
 	})
 }

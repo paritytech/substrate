@@ -463,7 +463,7 @@ mod tests {
 
 	#[test]
 	fn request_is_rescheduled_when_earlier_block_is_finalized() {
-		let _ = ::env_logger::try_init();
+		sp_tracing::try_init_simple();
 
 		let mut finality_proofs = ExtraRequests::<Block>::new("test");
 

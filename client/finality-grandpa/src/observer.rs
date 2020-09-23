@@ -74,11 +74,10 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
-) -> impl Future<Output=Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> where
+) -> impl Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>>
+where
 	NumberFor<Block>: BlockNumberOps,
-	S: Stream<
-		Item = Result<CommunicationIn<Block>, CommandOrError<Block::Hash, NumberFor<Block>>>,
-	>,
+	S: Stream<Item = Result<CommunicationIn<Block>, CommandOrError<Block::Hash, NumberFor<Block>>>>,
 	F: Fn(u64),
 	BE: Backend<Block>,
 	Client: crate::ClientForGrandpa<Block, BE>,
@@ -130,7 +129,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 				finalized_number,
 				(round, commit).into(),
 				false,
-				&justification_sender,
+				justification_sender.as_ref(),
 			) {
 				Ok(_) => {},
 				Err(e) => return future::err(e),

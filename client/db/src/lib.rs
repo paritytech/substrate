@@ -44,8 +44,6 @@ mod utils;
 mod stats;
 #[cfg(feature = "with-parity-db")]
 mod parity_db;
-#[cfg(feature = "with-subdb")]
-mod subdb;
 
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
@@ -54,8 +52,8 @@ use std::collections::{HashMap, HashSet};
 
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
-	backend::{NewBlockState, PrunableStateChangesTrieStorage},
-	leaves::{LeafSet, FinalizationDisplaced},
+	backend::{NewBlockState, PrunableStateChangesTrieStorage, ProvideChtRoots},
+	leaves::{LeafSet, FinalizationDisplaced}, cht,
 };
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
@@ -70,7 +68,7 @@ use sp_core::ChangesTrieConfiguration;
 use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::{generic::BlockId, Justification, Storage};
+use sp_runtime::{generic::{DigestItem, BlockId}, Justification, Storage};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion, HashFor,
 };
@@ -287,12 +285,6 @@ pub enum DatabaseSettingsSrc {
 		path: PathBuf,
 	},
 
-	/// Load a Subdb database from a given path.
-	SubDb {
-		/// Path to the database.
-		path: PathBuf,
-	},
-
 	/// Use a custom already-open database.
 	Custom(Arc<dyn Database<DbHash>>),
 }
@@ -303,7 +295,6 @@ impl DatabaseSettingsSrc {
 		match self {
 			DatabaseSettingsSrc::RocksDb { path, .. } => Some(path.as_path()),
 			DatabaseSettingsSrc::ParityDb { path, .. } => Some(path.as_path()),
-			DatabaseSettingsSrc::SubDb { path, .. } => Some(path.as_path()),
 			DatabaseSettingsSrc::Custom(_) => None,
 		}
 	}
@@ -321,7 +312,6 @@ impl std::fmt::Display for DatabaseSettingsSrc {
 		let name = match self {
 			DatabaseSettingsSrc::RocksDb { .. } => "RocksDb",
 			DatabaseSettingsSrc::ParityDb { .. } => "ParityDb",
-			DatabaseSettingsSrc::SubDb { .. } => "SubDb",
 			DatabaseSettingsSrc::Custom(_) => "Custom",
 		};
 		write!(f, "{}", name)
@@ -404,6 +394,14 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			meta.finalized_number = number;
 			meta.finalized_hash = hash;
 		}
+	}
+
+	// Get block changes trie root, if available.
+	fn changes_trie_root(&self, block: BlockId<Block>) -> ClientResult<Option<Block::Hash>> {
+		self.header(block)
+			.map(|header| header.and_then(|header|
+				header.digest().log(DigestItem::as_changes_trie_root)
+					.cloned()))
 	}
 }
 
@@ -522,6 +520,58 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 
 	fn remove_header_metadata(&self, hash: Block::Hash) {
 		self.header_metadata_cache.remove_header_metadata(hash);
+	}
+}
+
+impl<Block: BlockT> ProvideChtRoots<Block> for BlockchainDb<Block> {
+	fn header_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> sp_blockchain::Result<Option<Block::Hash>> {
+		let cht_number = match cht::block_to_cht_number(cht_size, block) {
+			Some(number) => number,
+			None => return Ok(None),
+		};
+
+		let cht_start: NumberFor<Block> = cht::start_number(cht::size(), cht_number);
+
+		let mut current_num = cht_start;
+		let cht_range = ::std::iter::from_fn(|| {
+			let old_current_num = current_num;
+			current_num = current_num + One::one();
+			Some(old_current_num)
+		});
+
+		cht::compute_root::<Block::Header, HashFor<Block>, _>(
+			cht::size(), cht_number, cht_range.map(|num| self.hash(num))
+		).map(Some)
+	}
+
+	fn changes_trie_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> sp_blockchain::Result<Option<Block::Hash>> {
+		let cht_number = match cht::block_to_cht_number(cht_size, block) {
+			Some(number) => number,
+			None => return Ok(None),
+		};
+
+		let cht_start: NumberFor<Block> = cht::start_number(cht::size(), cht_number);
+
+		let mut current_num = cht_start;
+		let cht_range = ::std::iter::from_fn(|| {
+			let old_current_num = current_num;
+			current_num = current_num + One::one();
+			Some(old_current_num)
+		});
+
+		cht::compute_root::<Block::Header, HashFor<Block>, _>(
+			cht::size(),
+			cht_number,
+			cht_range.map(|num| self.changes_trie_root(BlockId::Number(num))),
+		).map(Some)
 	}
 }
 
@@ -1908,7 +1958,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn delete_only_when_negative_rc() {
-		let _ = ::env_logger::try_init();
+		sp_tracing::try_init_simple();
 		let key;
 		let backend = Backend::<Block>::new_test(1, 0);
 
@@ -2328,5 +2378,30 @@ pub(crate) mod tests {
 			op.mark_finalized(BlockId::Hash(block2), None).unwrap();
 			backend.commit_operation(op).unwrap_err();
 		}
+	}
+
+	#[test]
+	fn header_cht_root_works() {
+		use sc_client_api::ProvideChtRoots;
+
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		// insert 1 + SIZE + SIZE + 1 blocks so that CHT#0 is created
+		let mut prev_hash = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let cht_size: u64 = cht::size();
+		for i in 1..1 + cht_size + cht_size + 1 {
+			prev_hash = insert_header(&backend, i, prev_hash, None, Default::default());
+		}
+
+		let blockchain = backend.blockchain();
+
+		let cht_root_1 = blockchain.header_cht_root(cht_size, cht::start_number(cht_size, 0))
+			.unwrap().unwrap();
+		let cht_root_2 = blockchain.header_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2)
+			.unwrap().unwrap();
+		let cht_root_3 = blockchain.header_cht_root(cht_size, cht::end_number(cht_size, 0))
+			.unwrap().unwrap();
+		assert_eq!(cht_root_1, cht_root_2);
+		assert_eq!(cht_root_2, cht_root_3);
 	}
 }

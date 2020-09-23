@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 #![warn(unused_extern_crates)]
 #![warn(missing_docs)]
 
@@ -252,6 +253,7 @@ mod finality_requests;
 mod light_client_handler;
 mod on_demand_layer;
 mod protocol;
+mod request_responses;
 mod schema;
 mod service;
 mod transport;
@@ -259,15 +261,16 @@ mod utils;
 
 pub mod config;
 pub mod error;
+pub mod gossip;
 pub mod network_state;
 
-pub use service::{NetworkService, NetworkWorker};
-pub use protocol::PeerInfo;
-pub use protocol::event::{Event, DhtEvent, ObservedRole};
-pub use protocol::sync::SyncState;
-pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]
-pub use libp2p::multiaddr;
+pub use libp2p::{multiaddr, Multiaddr, PeerId};
+pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
+pub use service::{
+	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
+	NotificationSenderReady,
+};
 
 pub use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
