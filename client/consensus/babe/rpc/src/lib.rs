@@ -144,7 +144,7 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 
 			for slot_number in epoch_start..epoch_end {
 				if let Some((claim, key)) =
-					authorship::claim_slot_using_keys(slot_number, &epoch, keystore.clone(), &keys)
+					authorship::claim_slot_using_keys(slot_number, &epoch, &keystore, &keys)
 				{
 					match claim {
 						PreDigest::Primary { .. } => {

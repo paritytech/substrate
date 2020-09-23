@@ -122,7 +122,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 			})?;
 
 		// this is a dev node environment, we should always be able to claim a slot.
-		let (predigest, _) = authorship::claim_slot(slot_number, epoch.as_ref(), self.keystore.clone())
+		let (predigest, _) = authorship::claim_slot(slot_number, epoch.as_ref(), &self.keystore)
 			.ok_or_else(|| Error::StringError("failed to claim slot for authorship".into()))?;
 
 		Ok(Digest {

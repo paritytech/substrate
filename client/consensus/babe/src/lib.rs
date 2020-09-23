@@ -1513,7 +1513,7 @@ pub mod test_helpers {
 		authorship::claim_slot(
 			slot_number,
 			&epoch,
-			keystore.into(),
+			&keystore,
 		).map(|(digest, _)| digest)
 	}
 }

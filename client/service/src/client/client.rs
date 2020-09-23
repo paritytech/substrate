@@ -146,10 +146,10 @@ impl<H> PrePostHeader<H> {
 
 /// Create an instance of in-memory client.
 #[cfg(feature="test-helpers")]
-pub fn new_in_mem<E, Block, S, RA, TStore>(
+pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: &S,
-	keystore: Option<TStore>,
+	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
@@ -162,7 +162,6 @@ pub fn new_in_mem<E, Block, S, RA, TStore>(
 	E: CodeExecutor + RuntimeInfo,
 	S: BuildStorage,
 	Block: BlockT,
-	TStore: sp_core::traits::CryptoStore + 'static,
 {
 	new_with_backend(
 		Arc::new(in_mem::Backend::new()),
@@ -187,11 +186,11 @@ pub struct ClientConfig {
 /// Create a client with the explicitly provided backend.
 /// This is useful for testing backend implementations.
 #[cfg(feature="test-helpers")]
-pub fn new_with_backend<B, E, Block, S, RA, TStore>(
+pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
 	build_genesis_storage: &S,
-	keystore: Option<TStore>,
+	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
@@ -201,12 +200,9 @@ pub fn new_with_backend<B, E, Block, S, RA, TStore>(
 		S: BuildStorage,
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
-		TStore: sp_core::traits::CryptoStore + 'static,
 {
-	let sync_keystore: Option<SyncCryptoStorePtr> = keystore.map(|store| Arc::new(store)));
-
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
-	let extensions = ExecutionExtensions::new(Default::default(), sync_keystore);
+	let extensions = ExecutionExtensions::new(Default::default(), keystore);
 	Client::new(
 		backend,
 		call_executor,

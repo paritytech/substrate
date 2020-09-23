@@ -7223,7 +7223,6 @@ dependencies = [
  "sc-client-api",
  "sc-client-db",
  "sc-executor",
- "sc-keystore",
  "sc-light",
  "sc-network",
  "sc-service",
