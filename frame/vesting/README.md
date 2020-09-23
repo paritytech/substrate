@@ -1,7 +1,7 @@
 # Vesting Module
 
-- [`vesting::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
+- [`vesting::Trait`](https://docs.rs/pallet-vesting/latest/pallet_vesting/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-vesting/latest/pallet_vesting/enum.Call.html)
 
 ## Overview
 

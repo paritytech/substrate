@@ -111,10 +111,9 @@ fn submit_candidates_with_self_vote<T: Trait>(c: u32, prefix: &'static str)
 
 /// Submit one voter.
 fn submit_voter<T: Trait>(caller: T::AccountId, votes: Vec<T::AccountId>, stake: BalanceOf<T>)
-	-> Result<frame_support::dispatch::PostDispatchInfo, &'static str>
+	-> frame_support::dispatch::DispatchResultWithPostInfo
 {
 	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
-		.map_err(|_| "failed to submit vote")
 }
 
 /// create `num_voter` voters who randomly vote for at most `votes` of `all_candidates` if
