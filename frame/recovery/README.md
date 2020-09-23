@@ -1,7 +1,7 @@
 # Recovery Pallet
 
-- [`recovery::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
+- [`recovery::Trait`](https://docs.rs/pallet-recovery/latest/pallet_recovery/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-recovery/latest/pallet_recovery/enum.Call.html)
 
 ## Overview
 

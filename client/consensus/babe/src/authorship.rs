@@ -295,10 +295,10 @@ mod tests {
 	#[test]
 	fn claim_secondary_plain_slot_works() {
 		let keystore = sc_keystore::Store::new_in_memory();
-		let valid_public_key = dbg!(keystore.write().sr25519_generate_new(
+		let valid_public_key = keystore.write().sr25519_generate_new(
 			AuthorityId::ID,
 			Some(sp_core::crypto::DEV_PHRASE),
-		).unwrap());
+		).unwrap();
 
 		let authorities = vec![
 			(AuthorityId::from(Pair::generate().0.public()), 5),
