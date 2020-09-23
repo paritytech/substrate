@@ -178,7 +178,7 @@ mod tests {
 
 	#[test]
 	fn test_generation_with_single_char() {
-		let seed = generate_key::<sr25519::Pair>("j", Default::default()).unwrap();
+		let seed = generate_key::<sr25519::Pair>("ab", Default::default()).unwrap();
 		assert!(
 			sr25519::Pair::from_seed_slice(&hex::decode(&seed[2..]).unwrap())
 				.unwrap()
