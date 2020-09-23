@@ -46,6 +46,25 @@ pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 	}
 }
 
+/// Generate the crate access for the `frame-support` crate using 2018 syntax.
+///
+/// Output will for example be `frame_support`.
+pub fn generate_crate_access_2018() -> Result<TokenStream, Error> {
+	if std::env::var("CARGO_PKG_NAME").unwrap() == "frame-support" {
+		Ok(quote::quote!( frame_support ))
+	} else {
+		match crate_name("frame-support") {
+			Ok(name) => {
+				let name = Ident::new(&name, Span::call_site());
+				Ok(quote!( #name ))
+			},
+			Err(e) => {
+				Err(Error::new(Span::call_site(), &e))
+			}
+		}
+	}
+}
+
 /// Generates the hidden includes that are required to make the macro independent from its scope.
 pub fn generate_hidden_includes(unique_id: &str, def_crate: &str) -> TokenStream {
 	if std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {

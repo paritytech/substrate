@@ -184,7 +184,7 @@ mod module3 {
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {}
+		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin, system=system {}
 	}
 }
 
@@ -241,7 +241,7 @@ impl system::Trait for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
-	type ModuleToIndex = ();
+	type PalletInfo = ();
 	type Call = Call;
 }
 

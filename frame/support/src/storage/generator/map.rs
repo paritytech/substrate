@@ -20,7 +20,7 @@ use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
 use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike};
 use crate::{
-	storage::{self, unhashed, StorageAppend},
+	storage::{self, unhashed, StorageAppend, PrefixIterator},
 	Never, hash::{StorageHasher, Twox128, ReversibleStorageHasher},
 };
 
@@ -139,53 +139,56 @@ impl<
 > storage::IterableStorageMap<K, V> for G where
 	G::Hasher: ReversibleStorageHasher
 {
-	type Iterator = StorageMapIterator<K, V, G::Hasher>;
+	type Iterator = PrefixIterator<(K, V)>;
 
 	/// Enumerate all elements in the map.
 	fn iter() -> Self::Iterator {
 		let prefix = G::prefix_hash();
-		Self::Iterator {
+		PrefixIterator {
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			_phantom: Default::default(),
+			closure: |raw_key_without_prefix, mut raw_value| {
+				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
+				Ok((K::decode(&mut key_material)?, V::decode(&mut raw_value)?))
+			},
 		}
 	}
 
 	/// Enumerate all elements in the map.
 	fn drain() -> Self::Iterator {
-		let prefix = G::prefix_hash();
-		Self::Iterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
-			drain: true,
-			_phantom: Default::default(),
-		}
+		let mut iterator = Self::iter();
+		iterator.drain = true;
+		iterator
 	}
 
 	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) {
 		let prefix = G::prefix_hash();
 		let mut previous_key = prefix.clone();
-		loop {
-			match sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix)) {
-				Some(next) => {
-					previous_key = next;
-					let maybe_value = unhashed::get::<O>(&previous_key);
-					match maybe_value {
-						Some(value) => {
-							let mut key_material = G::Hasher::reverse(&previous_key[prefix.len()..]);
-							match K::decode(&mut key_material) {
-								Ok(key) => match f(key, value) {
-									Some(new) => unhashed::put::<V>(&previous_key, &new),
-									None => unhashed::kill(&previous_key),
-								},
-								Err(_) => continue,
-							}
-						}
-						None => continue,
-					}
-				}
-				None => return,
+		while let Some(next) = sp_io::storage::next_key(&previous_key)
+			.filter(|n| n.starts_with(&prefix))
+		{
+			previous_key = next;
+			let value = match unhashed::get::<O>(&previous_key) {
+				Some(value) => value,
+				None => {
+					crate::debug::error!("Invalid translate: fail to decode old value");
+					continue
+				},
+			};
+
+			let mut key_material = G::Hasher::reverse(&previous_key[prefix.len()..]);
+			let key = match K::decode(&mut key_material) {
+				Ok(key) => key,
+				Err(_) => {
+					crate::debug::error!("Invalid translate: fail to decode key");
+					continue
+				},
+			};
+
+			match f(key, value) {
+				Some(new) => unhashed::put::<V>(&previous_key, &new),
+				None => unhashed::kill(&previous_key),
 			}
 		}
 	}
@@ -309,6 +312,94 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 		unhashed::take(old_key.as_ref()).map(|value| {
 			unhashed::put(Self::storage_map_final_key(key).as_ref(), &value);
 			value
+		})
+	}
+}
+
+/// Test iterators for StorageMap
+#[cfg(test)]
+mod test_iterators {
+	use codec::{Encode, Decode};
+	use crate::{
+		hash::StorageHasher,
+		storage::{generator::StorageMap, IterableStorageMap, unhashed},
+	};
+
+	pub trait Trait {
+		type Origin;
+		type BlockNumber;
+	}
+
+	crate::decl_module! {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	}
+
+	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+	struct NoDef(u32);
+
+	crate::decl_storage! {
+		trait Store for Module<T: Trait> as Test {
+			Map: map hasher(blake2_128_concat) u16 => u64;
+		}
+	}
+
+	fn key_before_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
+		let last = prefix.iter_mut().last().unwrap();
+		assert!(*last != 0, "mock function not implemented for this prefix");
+		*last -= 1;
+		prefix
+	}
+
+	fn key_after_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
+		let last = prefix.iter_mut().last().unwrap();
+		assert!(*last != 255, "mock function not implemented for this prefix");
+		*last += 1;
+		prefix
+	}
+
+	#[test]
+	fn map_reversible_reversible_iteration() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			// All map iterator
+			let prefix = Map::prefix_hash();
+
+			unhashed::put(&key_before_prefix(prefix.clone()), &1u64);
+			unhashed::put(&key_after_prefix(prefix.clone()), &1u64);
+
+			for i in 0..4 {
+				Map::insert(i as u16, i as u64);
+			}
+
+			assert_eq!(Map::iter().collect::<Vec<_>>(), vec![(3, 3), (0, 0), (2, 2), (1, 1)]);
+
+			assert_eq!(Map::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1]);
+
+			assert_eq!(Map::drain().collect::<Vec<_>>(), vec![(3, 3), (0, 0), (2, 2), (1, 1)]);
+
+			assert_eq!(Map::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(unhashed::get(&key_before_prefix(prefix.clone())), Some(1u64));
+			assert_eq!(unhashed::get(&key_after_prefix(prefix.clone())), Some(1u64));
+
+			// Translate
+			let prefix = Map::prefix_hash();
+
+			unhashed::put(&key_before_prefix(prefix.clone()), &1u64);
+			unhashed::put(&key_after_prefix(prefix.clone()), &1u64);
+			for i in 0..4 {
+				Map::insert(i as u16, i as u64);
+			}
+
+			// Wrong key
+			unhashed::put(&[prefix.clone(), vec![1, 2, 3]].concat(), &3u64.encode());
+
+			// Wrong value
+			unhashed::put(
+				&[prefix.clone(), crate::Blake2_128Concat::hash(&6u16.encode())].concat(),
+				&vec![1],
+			);
+
+			Map::translate(|_k1, v: u64| Some(v*2));
+			assert_eq!(Map::iter().collect::<Vec<_>>(), vec![(3, 6), (0, 0), (2, 4), (1, 2)]);
 		})
 	}
 }

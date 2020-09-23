@@ -16,8 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::NOT_READY_ERROR_CODE;
-
 #[derive(derive_more::Display, derive_more::From)]
 /// Top-level error type for the RPC handler
 pub enum Error {
@@ -30,13 +28,41 @@ pub enum Error {
 	/// GRANDPA reports voter state with round id or weights larger than 32-bits.
 	#[display(fmt = "GRANDPA reports voter state as unreasonably large")]
 	VoterStateReportsUnreasonablyLargeNumbers,
+	/// GRANDPA prove finality failed.
+	#[display(fmt = "GRANDPA prove finality rpc failed: {}", _0)]
+	ProveFinalityFailed(sp_blockchain::Error),
+}
+
+/// The error codes returned by jsonrpc.
+pub enum ErrorCode {
+	/// Returned when Grandpa RPC endpoint is not ready.
+	NotReady = 1,
+	/// Authority set ID is larger than 32-bits.
+	AuthoritySetTooLarge,
+	/// Voter state with round id or weights larger than 32-bits.
+	VoterStateTooLarge,
+	/// Failed to prove finality.
+	ProveFinality,
+}
+
+impl From<Error> for ErrorCode {
+	fn from(error: Error) -> Self {
+		match error {
+			Error::EndpointNotReady => ErrorCode::NotReady,
+			Error::AuthoritySetIdReportedAsUnreasonablyLarge => ErrorCode::AuthoritySetTooLarge,
+			Error::VoterStateReportsUnreasonablyLargeNumbers => ErrorCode::VoterStateTooLarge,
+			Error::ProveFinalityFailed(_) => ErrorCode::ProveFinality,
+		}
+	}
 }
 
 impl From<Error> for jsonrpc_core::Error {
 	fn from(error: Error) -> Self {
+		let message = format!("{}", error);
+		let code = ErrorCode::from(error);
 		jsonrpc_core::Error {
-			message: format!("{}", error),
-			code: jsonrpc_core::ErrorCode::ServerError(NOT_READY_ERROR_CODE),
+			message,
+			code: jsonrpc_core::ErrorCode::ServerError(code as i64),
 			data: None,
 		}
 	}

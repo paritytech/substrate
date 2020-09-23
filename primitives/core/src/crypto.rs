@@ -409,6 +409,15 @@ macro_rules! ss58_address_format {
 		}
 
 		#[cfg(feature = "std")]
+		impl std::str::FromStr for Ss58AddressFormat {
+			type Err = ParseError;
+
+			fn from_str(data: &str) -> Result<Self, Self::Err> {
+				Self::try_from(data)
+			}
+		}
+
+		#[cfg(feature = "std")]
 		impl std::fmt::Display for ParseError {
 			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 				write!(f, "failed to parse network value as u8")
@@ -463,10 +472,16 @@ ss58_address_format!(
 		(13, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
 	KulupuAccount =>
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
+	DarkAccount =>
+		(17, "dark", "Dark mainnet, standard account (*25519).")
 	DarwiniaAccount =>
 		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
 	StafiAccount =>
 		(20, "stafi", "Stafi mainnet, standard account (*25519).")
+	DockTestAccount =>
+		(21, "dock-testnet", "Dock testnet, standard account (*25519).")
+	DockMainAccount =>
+		(22, "dock-mainnet", "Dock mainnet, standard account (*25519).")
 	ShiftNrg =>
 		(23, "shift", "ShiftNrg mainnet, standard account (*25519).")
 	SubsocialAccount =>
