@@ -3156,7 +3156,7 @@ mod offchain_election {
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 				assert!(Staking::snapshot_validators().is_some());
 
-				let (compact, winners, score) = prepare_submission_with(true, 2, |_| {});
+				let (compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
 				assert_ok!(submit_solution(
 					Origin::signed(10),
 					winners,
@@ -3213,7 +3213,7 @@ mod offchain_election {
 				run_to_block(14);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-				let (compact, winners, score) = prepare_submission_with(true, 2, |_| {});
+				let (compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
 				assert_ok!(submit_solution(Origin::signed(10), winners, compact, score));
 
 				let queued_result = Staking::queued_elected().unwrap();
@@ -3254,7 +3254,7 @@ mod offchain_election {
 
 				// create all the indices just to build the solution.
 				Staking::create_stakers_snapshot();
-				let (compact, winners, score) = prepare_submission_with(true, 2, |_| {});
+				let (compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
 				Staking::kill_stakers_snapshot();
 
 				assert_err_with_weight!(
@@ -3285,7 +3285,7 @@ mod offchain_election {
 				run_to_block(12);
 
 				// a good solution
-				let (compact, winners, score) = prepare_submission_with(true, 2, |_| {});
+				let (compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
 				assert_ok!(submit_solution(
 					Origin::signed(10),
 					winners,
@@ -3330,7 +3330,7 @@ mod offchain_election {
 				));
 
 				// a better solution
-				let (compact, winners, score) = prepare_submission_with(true, 2, |_| {});
+				let (compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
 				assert_ok!(submit_solution(
 					Origin::signed(10),
 					winners,
@@ -3435,7 +3435,7 @@ mod offchain_election {
 		ext.execute_with(|| {
 			run_to_block(12);
 			// put a good solution on-chain
-			let (compact, winners, score) = prepare_submission_with(true, 2, |_| {});
+			let (compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
 			assert_ok!(submit_solution(
 				Origin::signed(10),
 				winners,
@@ -3480,7 +3480,7 @@ mod offchain_election {
 				run_to_block(12);
 
 				ValidatorCount::put(3);
-				let (compact, winners, score) = prepare_submission_with(true, 2, |_| {});
+				let (compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
 				ValidatorCount::put(4);
 
 				assert_eq!(winners.len(), 3);
@@ -3505,7 +3505,7 @@ mod offchain_election {
 			.execute_with(|| {
 				run_to_block(12);
 
-				let (compact, winners, score) = prepare_submission_with(true, 2, |_| {});
+				let (compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
 
 				assert_noop!(
 					Staking::submit_election_solution(
@@ -3534,7 +3534,7 @@ mod offchain_election {
 				run_to_block(12);
 
 				ValidatorCount::put(3);
-				let (compact, winners, score) = prepare_submission_with(true, 2, |_| {});
+				let (compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
 				ValidatorCount::put(4);
 
 				assert_eq!(winners.len(), 3);
@@ -3563,7 +3563,7 @@ mod offchain_election {
 				build_offchain_election_test_ext();
 				run_to_block(12);
 
-				let (compact, winners, score) = prepare_submission_with(true, 2, |_| {});
+				let (compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
 
 				assert_eq!(winners.len(), 4);
 
@@ -3591,7 +3591,7 @@ mod offchain_election {
 
 				assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
 				assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
-				let (mut compact, winners, score) = prepare_submission_with(true, 2, |_| {});
+				let (mut compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
 
 				// index 9 doesn't exist.
 				compact.votes1.push((9, 2));
@@ -3623,7 +3623,7 @@ mod offchain_election {
 
 				assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
 				assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
-				let (mut compact, winners, score) = prepare_submission_with(true, 2, |_| {});
+				let (mut compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
 
 				// index 4 doesn't exist.
 				compact.votes1.iter_mut().for_each(|(_, vidx)| if *vidx == 1 { *vidx = 4 });
@@ -3655,7 +3655,7 @@ mod offchain_election {
 
 				assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
 				assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
-				let (compact, _, score) = prepare_submission_with(true, 2, |_| {});
+				let (compact, _, score) = prepare_submission_with(true, true, 2, |_| {});
 
 				// index 4 doesn't exist.
 				let winners = vec![0, 1, 2, 4];
@@ -3687,7 +3687,7 @@ mod offchain_election {
 
 				assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
 				assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
-				let (compact, winners, score) = prepare_submission_with(true, 2, |a| {
+				let (compact, winners, score) = prepare_submission_with(false, true, 2, |a| {
 					// swap all 11 and 41s in the distribution with non-winners. Note that it is
 					// important that the count of winners and the count of unique targets remain
 					// valid.
@@ -3728,7 +3728,7 @@ mod offchain_election {
 				assert_eq!(Staking::snapshot_nominators().unwrap().len(), 5 + 4);
 				assert_eq!(Staking::snapshot_validators().unwrap().len(), 4);
 
-				let (compact, winners, score) = prepare_submission_with(true, 2, |a| {
+				let (compact, winners, score) = prepare_submission_with(false, true, 2, |a| {
 					a.iter_mut()
 						.find(|x| x.who == 5)
 						// just add any new target.
@@ -3764,7 +3764,7 @@ mod offchain_election {
 				build_offchain_election_test_ext();
 				run_to_block(12);
 
-				let (compact, winners, score) = prepare_submission_with(true, 2, |a| {
+				let (compact, winners, score) = prepare_submission_with(true, true, 2, |a| {
 					// mutate a self vote to target someone else. That someone else is still among the
 					// winners
 					a.iter_mut().find(|x| x.who == 11).map(|x| {
@@ -3799,7 +3799,7 @@ mod offchain_election {
 				build_offchain_election_test_ext();
 				run_to_block(12);
 
-				let (compact, winners, score) = prepare_submission_with(true, 2, |a| {
+				let (compact, winners, score) = prepare_submission_with(true, true, 2, |a| {
 					// Remove the self vote.
 					a.retain(|x| x.who != 11);
 					// add is as a new double vote
@@ -3836,7 +3836,7 @@ mod offchain_election {
 
 				// Note: we don't reduce here to be able to tweak votes3. votes3 will vanish if you
 				// reduce.
-				let (mut compact, winners, score) = prepare_submission_with(false, 0, |_| {});
+				let (mut compact, winners, score) = prepare_submission_with(true, false, 0, |_| {});
 
 				if let Some(c) = compact.votes3.iter_mut().find(|x| x.0 == 0) {
 					// by default it should have been (0, [(2, 33%), (1, 33%)], 0)
@@ -3877,7 +3877,7 @@ mod offchain_election {
 				build_offchain_election_test_ext();
 				run_to_block(12);
 
-				let (compact, winners, score) = prepare_submission_with(false, 0, |a| {
+				let (compact, winners, score) = prepare_submission_with(true, false, 0, |a| {
 					// 3 only voted for 20 and 40. We add a fake vote to 30. The stake sum is still
 					// correctly 100.
 					a.iter_mut()
@@ -3938,7 +3938,7 @@ mod offchain_election {
 				run_to_block(32);
 
 				// a solution that has been prepared after the slash.
-				let (compact, winners, score) = prepare_submission_with(false, 0, |a| {
+				let (compact, winners, score) = prepare_submission_with(true, false, 0, |a| {
 					// no one is allowed to vote for 10, except for itself.
 					a.into_iter()
 						.filter(|s| s.who != 11)
@@ -3956,7 +3956,7 @@ mod offchain_election {
 				));
 
 				// a wrong solution.
-				let (compact, winners, score) = prepare_submission_with(false, 0, |a| {
+				let (compact, winners, score) = prepare_submission_with(true, false, 0, |a| {
 					// add back the vote that has been filtered out.
 					a.push(StakedAssignment {
 						who: 1,
@@ -3989,7 +3989,7 @@ mod offchain_election {
 				build_offchain_election_test_ext();
 				run_to_block(12);
 
-				let (compact, winners, mut score) = prepare_submission_with(true, 2, |_| {});
+				let (compact, winners, mut score) = prepare_submission_with(true, true, 2, |_| {});
 				score[0] += 1;
 
 				assert_noop!(

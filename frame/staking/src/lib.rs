@@ -2929,7 +2929,7 @@ impl<T: Trait> Module<T> {
 
 		if all_validators.len() < Self::minimum_validator_count().max(1) as usize {
 			// If we don't have enough candidates, nothing to do.
-			log!(error, "💸 Chain does not have enough staking candidates to operate.");
+			log!(error, "💸 Chain does not have enough staking candidates to operate. Era {:?}.", Self::current_era());
 			None
 		} else {
 			seq_phragmen::<_, Accuracy>(
