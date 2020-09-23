@@ -198,6 +198,7 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub const MaxLocks: u32 = 1024;
 }
 impl frame_system::Trait for Test {
 	type BaseCallFilter = ();
@@ -227,7 +228,7 @@ impl frame_system::Trait for Test {
 	type SystemWeightInfo = ();
 }
 impl pallet_balances::Trait for Test {
-	type MaxLocks = ();
+	type MaxLocks = MaxLocks;
 	type Balance = Balance;
 	type Event = MetaEvent;
 	type DustRemoval = ();
