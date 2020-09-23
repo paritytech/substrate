@@ -24,7 +24,6 @@ use codec::Encode;
 use sp_core::{
 	ed25519, sr25519,
 	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore},
-	traits::CryptoStorePtr,
 	crypto::{CryptoTypePublicPair, Pair, Public},
 };
 use rpc::futures::Stream as _;
@@ -52,13 +51,13 @@ type FullTransactionPool = BasicPool<
 
 struct TestSetup {
 	pub client: Arc<Client<Backend>>,
-	pub keystore: CryptoStorePtr,
+	pub keystore: Arc<KeyStore>,
 	pub pool: Arc<FullTransactionPool>,
 }
 
 impl Default for TestSetup {
 	fn default() -> Self {
-		let keystore: CryptoStorePtr = Arc::new(KeyStore::new());
+		let keystore = Arc::new(KeyStore::new());
 		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
 		let client = Arc::new(client_builder.set_keystore(keystore.clone()).build());
 
@@ -236,7 +235,7 @@ fn should_insert_key() {
 		key_pair.public().0.to_vec().into(),
 	).expect("Insert key");
 
-	let public_keys = setup.keystore.keys(ED25519).unwrap();
+	let public_keys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
 
 	assert!(public_keys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, key_pair.public().to_raw_vec())));
 }
@@ -251,8 +250,8 @@ fn should_rotate_keys() {
 	let session_keys = SessionKeys::decode(&mut &new_public_keys[..])
 		.expect("SessionKeys decode successfully");
 
-	let ed25519_public_keys = setup.keystore.keys(ED25519).unwrap();
-	let sr25519_public_keys = setup.keystore.keys(SR25519).unwrap();
+	let ed25519_public_keys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
+	let sr25519_public_keys = SyncCryptoStore::keys(&*setup.keystore, SR25519).unwrap();
 
 	assert!(ed25519_public_keys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
 	assert!(sr25519_public_keys.contains(&CryptoTypePublicPair(sr25519::CRYPTO_ID, session_keys.sr25519.to_raw_vec())));

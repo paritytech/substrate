@@ -500,7 +500,7 @@ mod tests {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 			.expect("Creates keystore"));
-		let alice: sp_consensus_babe::AuthorityId = SyncCryptoStore::sr25519_generate_new(&keystore, BABE, Some("//Alice"))
+		let alice: sp_consensus_babe::AuthorityId = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
 			.expect("Creates authority pair").into();
 
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
@@ -606,11 +606,13 @@ mod tests {
 				// sign the pre-sealed hash of the block and then
 				// add it to a digest item.
 				let to_sign = pre_hash.encode();
-				let signature = keystore
-					.sign_with(sp_consensus_babe::AuthorityId::ID, &alice.to_public_crypto_pair(), &to_sign)
-					.unwrap()
-					.try_into()
-					.unwrap();
+				let signature = SyncCryptoStore::sign_with(
+					&*keystore,
+					sp_consensus_babe::AuthorityId::ID,
+					&alice.to_public_crypto_pair(), &to_sign
+				).unwrap()
+				 .try_into()
+				 .unwrap();
 				let item = <DigestItem as CompatibleDigestItem>::babe_seal(
 					signature,
 				);

@@ -26,7 +26,7 @@ use sp_core::{
 		TransactionPoolExt,
 		testing::TestTransactionPoolExt,
 	},
-	traits::{KeystoreExt, CryptoStorePtr, SyncCryptoStore},
+	traits::{KeystoreExt, SyncCryptoStore},
 };
 use frame_system::{
 	offchain::{
@@ -72,7 +72,7 @@ fn should_submit_signed_transaction() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore: CryptoStorePtr = Arc::new(KeyStore::new());
+	let keystore = KeyStore::new();
 	SyncCryptoStore::sr25519_generate_new(
 		&keystore,
 		sr25519::AuthorityId::ID,
@@ -109,7 +109,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore: CryptoStorePtr = Arc::new(KeyStore::new());
+	let keystore = KeyStore::new();
 	SyncCryptoStore::sr25519_generate_new(
 		&keystore,
 		sr25519::AuthorityId::ID,
@@ -161,7 +161,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore: CryptoStorePtr = Arc::new(KeyStore::new());
+	let keystore = KeyStore::new();
 	keystore.sr25519_generate_new(
 		sr25519::AuthorityId::ID,
 		Some(&format!("{}/hunter1", PHRASE))
@@ -226,7 +226,7 @@ fn submitted_transaction_should_be_valid() {
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
-	let keystore: CryptoStorePtr = Arc::new(KeyStore::new());
+	let keystore = KeyStore::new();
 	SyncCryptoStore::sr25519_generate_new(
 		&keystore,
 		sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))

@@ -392,7 +392,7 @@ fn run_one_test(
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 			.expect("Creates keystore"));
-		SyncCryptoStore::sr25519_generate_new(&keystore, BABE, Some(seed)).expect("Generates authority key");
+		SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(seed)).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
 		let mut got_own = false;
@@ -524,7 +524,7 @@ fn can_author_block() {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 	let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 		.expect("Creates keystore"));
-	let public = SyncCryptoStore::sr25519_generate_new(&keystore, BABE, Some("//Alice"))
+	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 
 	let mut i = 0;
@@ -832,7 +832,7 @@ fn babe_transcript_generation_match() {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 	let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 		.expect("Creates keystore"));
-	let public = SyncCryptoStore::sr25519_generate_new(&keystore, BABE, Some("//Alice"))
+	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 
 	let epoch = Epoch {

@@ -22,7 +22,7 @@ use crate::crypto::KeyTypeId;
 use crate::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
-	traits::{CryptoStore, CryptoStorePtr, Error},
+	traits::{CryptoStore, CryptoStorePtr, Error, SyncCryptoStore},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
 #[cfg(feature = "std")]
@@ -261,6 +261,9 @@ impl CryptoStore for KeyStore {
 }
 
 #[cfg(feature = "std")]
+impl SyncCryptoStore for KeyStore {}
+
+#[cfg(feature = "std")]
 impl Into<CryptoStorePtr> for KeyStore {
     fn into(self) -> CryptoStorePtr {
 		Arc::new(self)
@@ -404,19 +407,19 @@ mod tests {
 
 	#[test]
 	fn store_key_and_extract() {
-		let store: CryptoStorePtr = Arc::new(KeyStore::new());
+		let store = KeyStore::new();
 
 		let public = SyncCryptoStore::ed25519_generate_new(&store, ED25519, None)
 			.expect("Generates key");
 
-		let public_keys = store.keys(ED25519).unwrap();
+		let public_keys = SyncCryptoStore::keys(&store, ED25519).unwrap();
 
 		assert!(public_keys.contains(&public.into()));
 	}
 
 	#[test]
 	fn store_unknown_and_extract_it() {
-		let store: CryptoStorePtr = Arc::new(KeyStore::new());
+		let store = KeyStore::new();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
@@ -428,14 +431,14 @@ mod tests {
 			key_pair.public().as_ref(),
 		).expect("Inserts unknown key");
 
-		let public_keys = store.keys(SR25519).unwrap();
+		let public_keys = SyncCryptoStore::keys(&store, SR25519).unwrap();
 
 		assert!(public_keys.contains(&key_pair.public().into()));
 	}
 
 	#[test]
 	fn vrf_sign() {
-		let store: CryptoStorePtr = Arc::new(KeyStore::new());
+		let store = KeyStore::new();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");

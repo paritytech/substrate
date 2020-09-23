@@ -289,9 +289,9 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 
 fn create_keystore(authority: Ed25519Keyring) -> (CryptoStorePtr, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+	let keystore = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 		.expect("Creates keystore"));
-	SyncCryptoStore::ed25519_generate_new(&keystore, GRANDPA, Some(&authority.to_seed()))
+	SyncCryptoStore::ed25519_generate_new(&*keystore, GRANDPA, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 
 	(keystore, keystore_path)

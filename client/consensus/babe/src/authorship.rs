@@ -299,7 +299,7 @@ mod tests {
 	fn claim_secondary_plain_slot_works() {
 		let keystore: CryptoStorePtr = Arc::new(LocalKeystore::in_memory());
 		let valid_public_key = SyncCryptoStore::sr25519_generate_new(
-			&keystore,
+			&*keystore,
 			AuthorityId::ID,
 			Some(sp_core::crypto::DEV_PHRASE),
 		).unwrap();

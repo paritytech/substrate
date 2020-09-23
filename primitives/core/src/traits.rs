@@ -380,7 +380,7 @@ pub type CryptoStorePtr = Arc<dyn CryptoStore>;
 
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
-	pub struct KeystoreExt(Arc<dyn CryptoStore>);
+	pub struct KeystoreExt(CryptoStorePtr);
 }
 
 /// Code execution engine.
