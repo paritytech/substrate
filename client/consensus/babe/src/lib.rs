@@ -375,7 +375,7 @@ pub struct BackoffAuthoringBlocksParam {
 	/// The max interval to backoff when authoring blocks, regardless of delay in finality.
 	pub max_interval: u32,
 	/// The number of unfinalized blocks allowed before the BABE starts to consider to backoff
-	/// authoring blocks. Note that due to the `authoring_bias` BABE might still long until it
+	/// authoring blocks. Note that due to the `authoring_bias` BABE might still wait longer until it
 	/// decides to decline to author a block.
 	pub unfinalized_slack: u32,
 	/// How aggressively BABE should start to decline authoring locks. A small value for
