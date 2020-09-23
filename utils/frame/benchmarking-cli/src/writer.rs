@@ -153,19 +153,11 @@ pub fn write_results(
 		if batch.pallet != current_pallet {
 			// optional header and copyright
 			if let Some(header) = &header_text {
-				write!(
-					file,
-					"{}\n",
-					header,
-				)?;
+				write!(file, "{}\n", header)?;
 			}
 
 			// title of file
-			write!(
-				file,
-				"//! Weights for {}\n",
-				 pallet_string,
-			)?;
+			write!(file, "//! Weights for {}\n", pallet_string)?;
 
 			// auto-generation note
 			write!(
@@ -193,13 +185,8 @@ pub fn write_results(
 			write!(file, "pub struct {}<T>(PhantomData<T>);\n", struct_name)?;
 
 			// trait wrapper
-			write!(
-				file,
-				"impl<T: frame_system::Trait> {}::{} for {}<T> {{\n",
-				pallet_string,
-				trait_name,
-				struct_name
-			)?;
+			let msg = "impl<T: frame_system::Trait> {}::{} for {}<T> {{\n";
+			write!(file, msg, pallet_string, trait_name, struct_name)?;
 
 			current_pallet = batch.pallet.clone()
 		}
