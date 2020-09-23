@@ -198,7 +198,6 @@ mod tests {
 				.contains("ab"));
 	}
 
-
 	#[test]
 	fn test_score_1_char_100() {
 		let score = calculate_score("j", "5jolkadotwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim");
