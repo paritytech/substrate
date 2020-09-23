@@ -302,7 +302,7 @@ impl<T: Trait> Default for Schedule<T> {
 			api_cost_gas: cost_batched!(seal_gas),
 			api_cost_input: cost!(seal_input),
 			api_cost_input_per_byte: cost_byte!(seal_input_per_kb),
-			api_cost_return: cost!(seal_input),
+			api_cost_return: cost!(seal_return),
 			api_cost_return_per_byte: cost_byte!(seal_return_per_kb),
 			api_cost_terminate: cost!(seal_terminate),
 			api_cost_restore_to: cost!(seal_restore_to),
