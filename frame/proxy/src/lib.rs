@@ -293,21 +293,7 @@ decl_module! {
 			delay: T::BlockNumber,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Proxies::<T>::try_mutate(&who, |(ref mut proxies, ref mut deposit)| {
-				ensure!(proxies.len() < T::MaxProxies::get() as usize, Error::<T>::TooMany);
-				let proxy_def = ProxyDefinition { delegate, proxy_type, delay };
-				let i = proxies.binary_search(&proxy_def).err().ok_or(Error::<T>::Duplicate)?;
-				proxies.insert(i, proxy_def);
-				let new_deposit = T::ProxyDepositBase::get()
-					+ T::ProxyDepositFactor::get() * (proxies.len() as u32).into();
-				if new_deposit > *deposit {
-					T::Currency::reserve(&who, new_deposit - *deposit)?;
-				} else if new_deposit < *deposit {
-					T::Currency::unreserve(&who, *deposit - new_deposit);
-				}
-				*deposit = new_deposit;
-				Ok(())
-			})
+			Self::add_proxy_delegate(&who, delegate, proxy_type, delay)
 		}
 
 		/// Unregister a proxy account for the sender.
@@ -328,26 +314,7 @@ decl_module! {
 			delay: T::BlockNumber,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Proxies::<T>::try_mutate_exists(&who, |x| {
-				let (mut proxies, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
-				let proxy_def = ProxyDefinition { delegate, proxy_type, delay };
-				let i = proxies.binary_search(&proxy_def).ok().ok_or(Error::<T>::NotFound)?;
-				proxies.remove(i);
-				let new_deposit = if proxies.is_empty() {
-					BalanceOf::<T>::zero()
-				} else {
-					T::ProxyDepositBase::get() + T::ProxyDepositFactor::get() * (proxies.len() as u32).into()
-				};
-				if new_deposit > old_deposit {
-					T::Currency::reserve(&who, new_deposit - old_deposit)?;
-				} else if new_deposit < old_deposit {
-					T::Currency::unreserve(&who, old_deposit - new_deposit);
-				}
-				if !proxies.is_empty() {
-					*x = Some((proxies, new_deposit))
-				}
-				Ok(())
-			})
+			Self::remove_proxy_delegate(&who, delegate, proxy_type, delay)
 		}
 
 		/// Unregister all proxy accounts for the sender.
@@ -595,6 +562,60 @@ impl<T: Trait> Module<T> {
 		let entropy = (b"modlpy/proxy____", who, height, ext_index, proxy_type, index)
 			.using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+	}
+
+	pub fn add_proxy_delegate(
+		delegator: &T::AccountId,
+		delegatee: T::AccountId,
+		proxy_type: T::ProxyType,
+		delay: T::BlockNumber,
+	) -> DispatchResult {
+		Proxies::<T>::try_mutate(delegator, |(ref mut proxies, ref mut deposit)| {
+			ensure!(proxies.len() < T::MaxProxies::get() as usize, Error::<T>::TooMany);
+			let proxy_def = ProxyDefinition { delegate: delegatee, proxy_type, delay };
+			let i = proxies.binary_search(&proxy_def).err().ok_or(Error::<T>::Duplicate)?;
+			proxies.insert(i, proxy_def);
+			let new_deposit =Self::deposit(proxies.len() as u32);
+			if new_deposit > *deposit {
+				T::Currency::reserve(delegator, new_deposit - *deposit)?;
+			} else if new_deposit < *deposit {
+				T::Currency::unreserve(delegator, *deposit - new_deposit);
+			}
+			*deposit = new_deposit;
+			Ok(())
+		})
+	}
+
+	pub fn remove_proxy_delegate(
+		delegator: &T::AccountId,
+		delegatee: T::AccountId,
+		proxy_type: T::ProxyType,
+		delay: T::BlockNumber,
+	) -> DispatchResult {
+		Proxies::<T>::try_mutate_exists(delegator, |x| {
+			let (mut proxies, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
+			let proxy_def = ProxyDefinition { delegate: delegatee, proxy_type, delay };
+			let i = proxies.binary_search(&proxy_def).ok().ok_or(Error::<T>::NotFound)?;
+			proxies.remove(i);
+			let new_deposit = Self::deposit(proxies.len() as u32);
+			if new_deposit > old_deposit {
+				T::Currency::reserve(delegator, new_deposit - old_deposit)?;
+			} else if new_deposit < old_deposit {
+				T::Currency::unreserve(delegator, old_deposit - new_deposit);
+			}
+			if !proxies.is_empty() {
+				*x = Some((proxies, new_deposit))
+			}
+			Ok(())
+		})
+	}
+
+	pub fn deposit(num_proxies: u32) -> BalanceOf<T> {
+		if num_proxies == 0 {
+			Zero::zero()
+		} else {
+			T::ProxyDepositBase::get() + T::ProxyDepositFactor::get() * num_proxies.into()
+		}
 	}
 
 	fn rejig_deposit(
