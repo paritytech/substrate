@@ -575,7 +575,7 @@ impl<T: Trait> Module<T> {
 			let proxy_def = ProxyDefinition { delegate: delegatee, proxy_type, delay };
 			let i = proxies.binary_search(&proxy_def).err().ok_or(Error::<T>::Duplicate)?;
 			proxies.insert(i, proxy_def);
-			let new_deposit =Self::deposit(proxies.len() as u32);
+			let new_deposit = Self::deposit(proxies.len() as u32);
 			if new_deposit > *deposit {
 				T::Currency::reserve(delegator, new_deposit - *deposit)?;
 			} else if new_deposit < *deposit {
