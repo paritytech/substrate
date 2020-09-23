@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	Trait,
+	Trait, HashingOf,
 	mmr::{
 		Node, NodeOf, Hasher,
 		storage::{Storage, OffchainStorage, RuntimeStorage},
@@ -33,7 +33,7 @@ use sp_std::fmt;
 /// vs [Off-chain](crate::mmr::storage::OffchainStorage)).
 pub struct MMR<StorageType, T, L> where
 	T: Trait,
-	L: codec::Codec + fmt::Debug,
+	L: primitives::LeafData<HashingOf<T>>,
 	Storage<StorageType, T, L>: mmr_lib::MMRStore<NodeOf<T, L>>,
 {
 	mmr: mmr_lib::MMR<
@@ -46,7 +46,7 @@ pub struct MMR<StorageType, T, L> where
 
 impl<StorageType, T, L> MMR<StorageType, T, L> where
 	T: Trait,
-	L: codec::Codec + PartialEq + fmt::Debug + Clone,
+	L: primitives::LeafData<HashingOf<T>>,
 	Storage<StorageType, T, L>: mmr_lib::MMRStore<NodeOf<T, L>>,
 {
 	/// Create a pointer to an existing MMR with given number of leaves.
@@ -89,7 +89,7 @@ impl<StorageType, T, L> MMR<StorageType, T, L> where
 /// Runtime specific MMR functions.
 impl<T, L> MMR<RuntimeStorage, T, L> where
 	T: Trait,
-	L: codec::Codec + PartialEq + fmt::Debug + Clone,
+	L: primitives::LeafData<HashingOf<T>>,
 {
 	/// Push another item to the MMR.
 	///
@@ -119,7 +119,7 @@ impl<T, L> MMR<RuntimeStorage, T, L> where
 /// Off-chain specific MMR functions.
 impl<T, L> MMR<OffchainStorage, T, L> where
 	T: Trait,
-	L: codec::Codec + PartialEq + fmt::Debug + Clone,
+	L: primitives::LeafData<HashingOf<T>>,
 {
 	/// Generate a proof for given leaf index.
 	///

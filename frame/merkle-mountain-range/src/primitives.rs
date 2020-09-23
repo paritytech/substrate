@@ -21,11 +21,36 @@ use frame_support::{
 	traits::Get,
 	weights::Weight,
 };
+use sp_runtime::traits;
+
+/// A SCALE-encodable object with hashing customisation.
+///
+/// This type is automatically implemented for any type that implements
+/// [frame_support::dispatch::Parameter] so usually you don't have to care about it.
+///
+/// The point of the trait is to allow better composition of multiple [LeafDataProvider]s,
+/// for efficient proving. See [LeafTuple] implementation for details.
+pub trait LeafData<H: traits::Hash>: codec::Decode + sp_std::fmt::Debug + PartialEq + Clone {
+	type Data: Parameter;
+
+	/// Get the hash of the object.
+	fn hash(&self) -> H::Output {
+		H::hash_of(self.data())
+	}
+
+	fn data(&self) -> &Self::Data;
+}
+
+impl<H: traits::Hash, T: Parameter> LeafData<H> for T {
+	type Data = T;
+
+	fn data(&self) -> &Self::Data { self }
+}
 
 /// A provider of the MMR's leaf data.
-pub trait LeafDataProvider {
+pub trait LeafDataProvider<H: traits::Hash> {
 	/// A type that should end up in the leaf of MMR.
-	type LeafData: Parameter;
+	type LeafData: LeafData<H>;
 
 	/// The method to return leaf data that should be placed
 	/// in the leaf node appended MMR at this block.
@@ -37,7 +62,7 @@ pub trait LeafDataProvider {
 	fn leaf_data() -> (Self::LeafData, Weight);
 }
 
-impl LeafDataProvider for () {
+impl<H: traits::Hash> LeafDataProvider<H> for () {
 	type LeafData = ();
 
 	fn leaf_data() -> (Self::LeafData, Weight) {
@@ -45,8 +70,8 @@ impl LeafDataProvider for () {
 	}
 }
 
-impl<T: frame_system::Trait> LeafDataProvider for frame_system::Module<T> {
-	type LeafData = T::Hash;
+impl<T: frame_system::Trait + crate::Trait> LeafDataProvider<crate::HashingOf<T>> for frame_system::Module<T> {
+	type LeafData = <T as frame_system::Trait>::Hash;
 
 	fn leaf_data() -> (Self::LeafData, Weight) {
 		let hash = Self::parent_hash();
@@ -54,15 +79,30 @@ impl<T: frame_system::Trait> LeafDataProvider for frame_system::Module<T> {
 	}
 }
 
+impl<A, B, H> LeafData<H> for (A, B) where
+	A: codec::Encode,
+	B: codec::Encode,
+	H: traits::Hash,
+{
+	fn hash(&self) -> H::Output {
+		(self.0.hash(), self.1.hash())
+	}
+}
+
+
 // TODO [ToDr] Impl for all tuples
-impl<A: LeafDataProvider, B: LeafDataProvider> LeafDataProvider for (A, B) {
+impl<A, B, H> LeafDataProvider<H> for (A, B) where
+	A: LeafDataProvider<H>,
+	B: LeafDataProvider<H>,
+	H: traits::Hash,
+{
 	type LeafData = (A::LeafData, B::LeafData);
 
 	fn leaf_data() -> (Self::LeafData, Weight) {
 		let (a_leaf, a_weight) = A::leaf_data();
 		let (b_leaf, b_weight) = B::leaf_data();
 
-		((a_leaf, b_leaf), a_weight.saturating_add(b_weight))
+		(LeafTuple::new((a_leaf, b_leaf)), a_weight.saturating_add(b_weight))
 	}
 }
 

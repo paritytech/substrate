@@ -19,9 +19,9 @@
 
 use codec::Encode;
 use crate::mmr::{NodeOf, Node};
-use crate::{NumberOfLeaves, Nodes, Module, Trait};
+use crate::{NumberOfLeaves, Nodes, Module, Trait, HashingOf};
+use crate::primitives::LeafData;
 use frame_support::{StorageMap, StorageValue};
-use sp_std::fmt;
 
 /// A marker type for runtime-specific storage implementation.
 ///
@@ -53,7 +53,7 @@ impl<StorageType, T, L> Default for Storage<StorageType, T, L> {
 	}
 }
 
-impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<NodeOf<T, L>>
+impl<T: Trait, L: LeafData<HashingOf<T>>> mmr_lib::MMRStore<NodeOf<T, L>>
 	for Storage<OffchainStorage, T, L>
 {
 	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, L>>> {
@@ -70,7 +70,7 @@ impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<NodeOf<T, L>>
  	}
 }
 
-impl<T: Trait, L: codec::Codec + fmt::Debug> mmr_lib::MMRStore<NodeOf<T, L>>
+impl<T: Trait, L: LeafData<HashingOf<T>>> mmr_lib::MMRStore<NodeOf<T, L>>
 	for Storage<RuntimeStorage, T, L>
 {
 	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, L>>> {

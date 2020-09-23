@@ -35,7 +35,7 @@ use sp_runtime::{
 	Perbill,
 	testing::Header,
 	traits::{
-		BlakeTwo256, Keccak256, IdentityLookup,
+		BlakeTwo256, Keccak256, IdentityLookup, Hash,
 	},
 };
 use std::cell::RefCell;
@@ -105,7 +105,7 @@ thread_local! {
 	pub static LEAF_DATA: RefCell<LeafData> = RefCell::new(Default::default());
 }
 
-impl LeafDataProvider for LeafData {
+impl<H: Hash> LeafDataProvider<H> for LeafData {
 	type LeafData = Self;
 
 	fn leaf_data() -> (Self::LeafData, Weight) {
