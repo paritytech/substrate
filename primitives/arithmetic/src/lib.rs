@@ -45,7 +45,7 @@ pub use per_things::{PerThing, InnerOf, UpperOf, Percent, PerU16, Permill, Perbi
 pub use rational::{Rational128, RationalInfinite};
 
 use sp_std::{prelude::*, cmp::Ordering, fmt::Debug, convert::TryInto};
-use traits::{BaseArithmetic, One, Zero, SaturatedConversion, Unsigned, UniqueSaturatedInto};
+use traits::{BaseArithmetic, One, Zero, SaturatedConversion, Unsigned};
 
 /// Trait for comparing two numbers with an threshold.
 ///
