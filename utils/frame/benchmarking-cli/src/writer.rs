@@ -108,6 +108,10 @@ pub fn write_trait(
 pub fn write_results(
 	batches: &[BenchmarkBatch],
 	path: &PathBuf,
+	lowest_range_values: &[u32],
+	highest_range_values: &[u32],
+	steps: &[u32],
+	repeat: u32,
 	header: &Option<PathBuf>,
 	struct_name: &String,
 	trait_name: &String,
@@ -167,7 +171,15 @@ pub fn write_results(
 			)?;
 
 			// date of generation
-			write!(file, "//! ON {}\n\n", date.format("%Y-%m-%d"))?;
+			write!(
+				file,
+				"//! DATE: {}, STEPS: {:?}, REPEAT: {}, LOW RANGE: {:?}, HIGH RANGE: {:?}\n\n",
+				date.format("%Y-%m-%d"),
+				steps,
+				repeat,
+				lowest_range_values,
+				highest_range_values,
+			)?;
 
 			// allow statements
 			write!(

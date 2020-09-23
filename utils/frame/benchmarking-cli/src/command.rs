@@ -103,7 +103,18 @@ impl BenchmarkCmd {
 					if self.trait_def {
 						crate::writer::write_trait(&batches, output_path, &self.r#trait, self.spaces)?;
 					} else {
-						crate::writer::write_results(&batches, output_path, &self.header, &self.r#struct, &self.r#trait, self.spaces)?;
+						crate::writer::write_results(
+							&batches,
+							output_path,
+							&self.lowest_range_values,
+							&self.highest_range_values,
+							&self.steps,
+							self.repeat,
+							&self.header,
+							&self.r#struct,
+							&self.r#trait,
+							self.spaces
+						)?;
 					}
 				}
 
