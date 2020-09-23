@@ -357,7 +357,8 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	/// Force authoring of blocks even if we are offline
 	pub force_authoring: bool,
 
-	/// WIP: JON
+	/// Parameters that control BABE's functionality for backing off block production if finality
+	/// starts to lag behind.
 	pub backoff_authoring_blocks: Option<BackoffAuthoringBlocksParam>,
 
 	/// The source of timestamps for relative slots
@@ -712,12 +713,20 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> whe
 	}
 }
 
+/// Parameters used by BABE to decide how backoff authoring blocks if the number of unfinalized
+/// blocks grows too large.
 #[derive(Clone)]
 pub struct BackoffAuthoringBlocksParam {
-	// WIP: come up with better names!
-	pub x: u32,
-	pub c: u32,
-	pub m: u32,
+	/// The max interval to backoff when authoring blocks, regardless of delay in finality.
+	pub max_interval: u32,
+	/// The number of unfinalized blocks allowed before the BABE starts to consider to backoff
+	/// authoring blocks. Note that due to the `authoring_bias` BABE might still long until it
+	/// decides to decline to author a block.
+	pub unfinalized_slack: u32,
+	/// How aggressively BABE should start to decline authoring locks. A small value for
+	/// `authoring_bias` means BABE will quickly start to backoff block authorship as the length of
+	/// the unfinalized blocks grows.
+	pub authoring_bias: u32,
 }
 
 // The criterion for backing off block authoring when finality is lagging
@@ -731,10 +740,16 @@ fn should_backoff_authoring_blocks<B>(
 where
 	B: BlockT,
 {
-	let BackoffAuthoringBlocksParam { x, c, m } = param.clone();
+	let BackoffAuthoringBlocksParam {
+		max_interval,
+		unfinalized_slack,
+		authoring_bias
+	} = param.clone();
+
 	let unfinalized_block_length = chain_head_number - finalized_number;
-	let interval = unfinalized_block_length.saturating_sub(c.into()) / m.into();
-	let interval = interval.min(x.into()).max(0.into()); // max unnecessary due to saturating_sub?
+	let interval = unfinalized_block_length.saturating_sub(unfinalized_slack.into())
+		/ authoring_bias.into();
+	let interval = interval.min(max_interval.into());
 
 	// We're doing arithmetic between block and slot numbers.
 	let interval = interval.unique_saturated_into();
@@ -1605,7 +1620,11 @@ mod test {
 	#[test]
 	fn should_backoff_authoring_when_finality_lags() {
 		let finalized_number = 2u32.into();
-		let param = BackoffAuthoringBlocksParam { x: 100, c: 5, m: 2 };
+		let param = BackoffAuthoringBlocksParam {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
 
 		let mut head_state = HeadState {
 			head_number: 3,

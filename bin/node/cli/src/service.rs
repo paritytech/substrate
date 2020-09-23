@@ -239,9 +239,9 @@ pub fn new_full_base(
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
 		let backoff_authoring_blocks = Some(sc_consensus_babe::BackoffAuthoringBlocksParam {
-			x: 100,
-			c: 5,
-			m: 2,
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
 		});
 
 		let babe_config = sc_consensus_babe::BabeParams {
