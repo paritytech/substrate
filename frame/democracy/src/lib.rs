@@ -1125,7 +1125,7 @@ decl_module! {
 		/// Permanently place a proposal into the blacklist. This prevents it from ever being
 		/// proposed again.
 		///
-		/// If called on an queued public or external proposal, then this will result in it being
+		/// If called on a queued public or external proposal, then this will result in it being
 		/// removed. If the `ref_index` supplied is an active referendum with the proposal hash,
 		/// then it will be cancelled.
 		///
