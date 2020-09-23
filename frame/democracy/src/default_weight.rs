@@ -84,8 +84,9 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
-	fn cancel_proposal() -> Weight {
+	fn cancel_proposal(p: u32, ) -> Weight {
 		(64238000 as Weight)
+			.saturating_add((694000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(DbWeight::get().reads(3 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}

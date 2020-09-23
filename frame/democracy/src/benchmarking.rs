@@ -322,7 +322,12 @@ benchmarks! {
 	}
 
 	cancel_proposal {
-		let proposal_index = add_proposal::<T>(0)?;
+		let p in 1 .. T::MaxProposals::get();
+
+		// Place our proposal at the end to make sure it's worst case.
+		for i in 0 .. p {
+			add_proposal::<T>(i)?;
+		}
 	}: _(RawOrigin::Root, 0)
 
 	cancel_referendum {

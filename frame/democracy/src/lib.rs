@@ -215,7 +215,7 @@ pub trait WeightInfo {
 	fn fast_track() -> Weight;
 	fn veto_external(v: u32, ) -> Weight;
 	fn cancel_referendum() -> Weight;
-	fn cancel_proposal() -> Weight;
+	fn cancel_proposal(p: u32, ) -> Weight;
 	fn cancel_queued(r: u32, ) -> Weight;
 	fn on_initialize_base(r: u32, ) -> Weight;
 	fn delegate(r: u32, ) -> Weight;
@@ -1184,7 +1184,7 @@ decl_module! {
 		/// - `prop_index`: The index of the proposal to cancel.
 		///
 		/// Weight: `O(p)` where `p = PublicProps::<T>::decode_len()`
-		#[weight = T::WeightInfo::cancel_proposal()]
+		#[weight = T::WeightInfo::cancel_proposal(T::MaxProposals::get())]
 		fn cancel_proposal(origin, #[compact] prop_index: PropIndex) {
 			T::CancelProposalOrigin::ensure_origin(origin)?;
 
