@@ -156,11 +156,11 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Proxy {
 		/// The set of account proxies. Maps the account which has delegated to the accounts
 		/// which are being delegated to, together with the amount held on deposit.
-		pub Proxies: map hasher(twox_64_concat) T::AccountId
+		pub Proxies get(fn proxies): map hasher(twox_64_concat) T::AccountId
 			=> (Vec<ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>>, BalanceOf<T>);
 
 		/// The announcements made by the proxy (key).
-		pub Announcements: map hasher(twox_64_concat) T::AccountId
+		pub Announcements get(fn announcements): map hasher(twox_64_concat) T::AccountId
 			=> (Vec<Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>>, BalanceOf<T>);
 	}
 }
