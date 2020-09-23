@@ -346,7 +346,7 @@ macro_rules! impl_outer_event {
 			$name;
 			$runtime;
 			Modules { $( $rest_events )* };
-			;
+			{};
 		);
 	};
 	// Generic + Instance
@@ -355,17 +355,17 @@ macro_rules! impl_outer_event {
 		$name:ident;
 		$runtime:ident;
 		Modules {
-			$module:ident $instance:ident<T>,
+			$( #[codec(index = $index:tt)] )? $module:ident $instance:ident<T>,
 			$( $rest_event_generic_instance:tt )*
 		};
-		$( $module_name:ident::Event $( <$generic_param:ident> )? $( { $generic_instance:ident } )?, )*;
+		{ $( $parsed:tt )* };
 	) => {
 		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
 			Modules { $( $rest_event_generic_instance )* };
-			$( $module_name::Event $( <$generic_param> )? $( { $generic_instance } )?, )* $module::Event<$runtime>{ $instance },;
+			{ $( $parsed )* $module::Event<$runtime>{ $instance } index { $( $index )? }, };
 		);
 	};
 	// Instance
@@ -374,17 +374,17 @@ macro_rules! impl_outer_event {
 		$name:ident;
 		$runtime:ident;
 		Modules {
-			$module:ident $instance:ident,
+			$( #[codec(index = $index:tt)] )? $module:ident $instance:ident,
 			$( $rest_event_instance:tt )*
 		};
-		$( $module_name:ident::Event $( <$generic_param:ident> )? $( { $generic_instance:ident } )?, )*;
+		{ $( $parsed:tt )* };
 	) => {
 		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
 			Modules { $( $rest_event_instance )* };
-			$( $module_name::Event $( <$generic_param> )* $( { $generic_instance } )?, )* $module::Event { $instance },;
+			{ $( $parsed )* $module::Event { $instance } index { $( $index )? }, };
 		);
 	};
 	// Generic
@@ -393,17 +393,17 @@ macro_rules! impl_outer_event {
 		$name:ident;
 		$runtime:ident;
 		Modules {
-			$module:ident<T>,
+			$( #[codec(index = $index:tt)] )? $module:ident<T>,
 			$( $rest_event_generic:tt )*
 		};
-		$( $module_name:ident::Event $( <$generic_param:ident> )? $( { $generic_instance:ident } )?, )*;
+		{ $( $parsed:tt )* };
 	) => {
 		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
 			Modules { $( $rest_event_generic )* };
-			$( $module_name::Event $( <$generic_param> )? $( { $generic_instance } )?, )* $module::Event<$runtime>,;
+			{ $( $parsed )* $module::Event<$runtime> index { $( $index )? }, };
 		);
 	};
 	// No Generic and no Instance
@@ -412,17 +412,17 @@ macro_rules! impl_outer_event {
 		$name:ident;
 		$runtime:ident;
 		Modules {
-			$module:ident,
+			$( #[codec(index = $index:tt)] )? $module:ident,
 			$( $rest_event_no_generic_no_instance:tt )*
 		};
-		$( $module_name:ident::Event $( <$generic_param:ident> )? $( { $generic_instance:ident } )?, )*;
+		{ $( $parsed:tt )* };
 	) => {
 		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
 			Modules { $( $rest_event_no_generic_no_instance )* };
-			$( $module_name::Event $( <$generic_param> )? $( { $generic_instance } )?, )* $module::Event,;
+			{ $( $parsed )* $module::Event index { $( $index )? }, };
 		);
 	};
 
@@ -432,7 +432,14 @@ macro_rules! impl_outer_event {
 		$name:ident;
 		$runtime:ident;
 		Modules {};
-		$( $module_name:ident::Event $( <$generic_param:ident> )? $( { $generic_instance:ident } )?, )*;
+		{
+			$(
+				$module_name:ident::Event
+				$( <$generic_param:ident> )?
+				$( { $generic_instance:ident } )?
+				index { $( $index:tt )? },
+			)*
+		};
 	) => {
 		$crate::paste::item! {
 			#[derive(
@@ -445,6 +452,7 @@ macro_rules! impl_outer_event {
 			#[allow(non_camel_case_types)]
 			pub enum $name {
 				$(
+					$( #[codec(index = $index)] )?
 					[< $module_name $(_ $generic_instance )? >](
 						$module_name::Event < $( $generic_param )? $(, $module_name::$generic_instance )? >
 					),
@@ -697,7 +705,7 @@ mod tests {
 		pub enum TestEventSystemRenamed for TestRuntime2 {
 			system_renamed,
 			event_module<T>,
-			event_module2<T>,
+			#[codec(index = "5")] event_module2<T>,
 			event_module3,
 		}
 	}
@@ -795,5 +803,23 @@ mod tests {
 	#[test]
 	fn outer_event_metadata() {
 		assert_eq!(EXPECTED_METADATA, TestRuntime::outer_event_metadata());
+	}
+
+	#[test]
+	fn test_codec() {
+		let runtime_1_event_module_2 = TestEvent::event_module2(
+			event_module2::Event::<TestRuntime>::TestEvent(3)
+		);
+		assert_eq!(runtime_1_event_module_2.encode()[0], 2);
+
+		let runtime_2_event_module_2 = TestEventSystemRenamed::event_module2(
+			event_module2::Event::<TestRuntime2>::TestEvent(3)
+		);
+		assert_eq!(runtime_2_event_module_2.encode()[0], 5);
+		
+		let runtime_2_event_module_3 = TestEventSystemRenamed::event_module3(
+			event_module3::Event::HiEvent
+		);
+		assert_eq!(runtime_2_event_module_3.encode()[0], 3);
 	}
 }

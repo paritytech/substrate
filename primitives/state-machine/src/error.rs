@@ -17,7 +17,7 @@
 
 /// State Machine Errors
 
-use std::fmt;
+use sp_std::fmt;
 
 /// State Machine Error bound.
 ///
@@ -34,7 +34,7 @@ impl<T: 'static + fmt::Debug + fmt::Display + Send> Error for T {}
 #[derive(Debug, Eq, PartialEq)]
 pub enum ExecutionError {
 	/// Backend error.
-	Backend(String),
+	Backend(crate::DefaultError),
 	/// The entry `:code` doesn't exist in storage so there's no way we can execute anything.
 	CodeEntryDoesNotExist,
 	/// Backend is incompatible with execution proof generation process.

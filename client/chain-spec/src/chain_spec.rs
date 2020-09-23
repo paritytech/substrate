@@ -401,8 +401,6 @@ where
 pub struct LightSyncState<Block: BlockT> {
 	/// The header of the best finalized block.
 	pub header: <Block as BlockT>::Header,
-	/// A list of all CHTs in the chain.
-	pub chts: Vec<<Block as BlockT>::Hash>,
 }
 
 impl<Block: BlockT> LightSyncState<Block> {
@@ -412,7 +410,6 @@ impl<Block: BlockT> LightSyncState<Block> {
 
 		SerializableLightSyncState {
 			header: StorageData(self.header.encode()),
-			chts: self.chts.iter().map(|hash| StorageData(hash.encode())).collect(),
 		}
 	}
 
@@ -420,9 +417,6 @@ impl<Block: BlockT> LightSyncState<Block> {
 	pub fn from_serializable(serialized: &SerializableLightSyncState) -> Result<Self, codec::Error> {
 		Ok(Self {
 			header: codec::Decode::decode(&mut &serialized.header.0[..])?,
-			chts: serialized.chts.iter()
-				.map(|cht| codec::Decode::decode(&mut &cht.0[..]))
-				.collect::<Result<_, _>>()?,
 		})
 	}
 }
@@ -433,7 +427,6 @@ impl<Block: BlockT> LightSyncState<Block> {
 #[serde(deny_unknown_fields)]
 pub struct SerializableLightSyncState {
 	header: StorageData,
-	chts: Vec<StorageData>,
 }
 
 #[cfg(test)]

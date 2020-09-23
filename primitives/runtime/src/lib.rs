@@ -71,8 +71,9 @@ pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	PerThing, traits::SaturatedConversion, Perquintill, Perbill, Permill, Percent, PerU16, InnerOf,
+	PerThing, Perquintill, Perbill, Permill, Percent, PerU16, InnerOf, UpperOf,
 	Rational128, FixedI64, FixedI128, FixedU128, FixedPointNumber, FixedPointOperand,
+	traits::SaturatedConversion,
 };
 /// Re-export 128 bit helpers.
 pub use sp_arithmetic::helpers_128bit;
@@ -795,7 +796,10 @@ impl SignatureBatching {
 impl Drop for SignatureBatching {
 	fn drop(&mut self) {
 		// Sanity check. If user forgets to actually call `verify()`.
-		if !self.0 {
+		//
+		// We should not panic if the current thread is already panicking,
+		// because Rust otherwise aborts the process.
+		if !self.0 && !sp_std::thread::panicking() {
 			panic!("Signature verification has not been called before `SignatureBatching::drop`")
 		}
 	}
@@ -883,6 +887,20 @@ mod tests {
 				&Vec::new(),
 				&Default::default(),
 			);
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "Hey, I'm an error")]
+	fn batching_does_not_panic_while_thread_is_already_panicking() {
+		let mut ext = sp_state_machine::BasicExternalities::default();
+		ext.register_extension(
+			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
+		);
+
+		ext.execute_with(|| {
+			let _batching = SignatureBatching::start();
+			panic!("Hey, I'm an error");
 		});
 	}
 }

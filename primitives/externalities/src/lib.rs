@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 //! Substrate externalities abstraction
 //!
 //! The externalities mainly provide access to storage and to registered extensions. Extensions
@@ -23,7 +25,7 @@
 //!
 //! This crate exposes the main [`Externalities`] trait.
 
-use std::any::{Any, TypeId};
+use sp_std::{any::{Any, TypeId}, vec::Vec, boxed::Box};
 
 use sp_storage::{ChildInfo, TrackedStorageKey};
 
