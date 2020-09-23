@@ -6548,7 +6548,6 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
- "parking_lot 0.10.2",
  "sc-consensus",
  "sc-consensus-babe",
  "sc-consensus-epochs",
