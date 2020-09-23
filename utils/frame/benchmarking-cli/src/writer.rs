@@ -36,16 +36,16 @@ pub fn open_file(path: PathBuf) -> Result<File, std::io::Error> {
 fn underscore<Number>(i: Number) -> String
 	where Number: std::string::ToString
 {
-    let mut s = String::new();
-    let i_str = i.to_string();
-    let a = i_str.chars().rev().enumerate();
-    for (idx, val) in a {
-        if idx != 0 && idx % 3 == 0 {
-            s.insert(0, '_');
-        }
-        s.insert(0, val);
-    }
-    s
+	let mut s = String::new();
+	let i_str = i.to_string();
+	let a = i_str.chars().rev().enumerate();
+	for (idx, val) in a {
+		if idx != 0 && idx % 3 == 0 {
+			s.insert(0, '_');
+		}
+		s.insert(0, val);
+	}
+	s
 }
 
 pub fn write_trait(
@@ -163,7 +163,7 @@ pub fn write_results(
 			write!(
 				file,
 				"//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {}\n",
-				 VERSION,
+				VERSION,
 			)?;
 
 			// date of generation
@@ -185,8 +185,13 @@ pub fn write_results(
 			write!(file, "pub struct {}<T>(PhantomData<T>);\n", struct_name)?;
 
 			// trait wrapper
-			let msg = "impl<T: frame_system::Trait> {}::{} for {}<T> {{\n";
-			write!(file, msg, pallet_string, trait_name, struct_name)?;
+			write!(
+				file,
+				"impl<T: frame_system::Trait> {}::{} for {}<T> {{\n",
+				pallet_string,
+				trait_name,
+				struct_name,
+			)?;
 
 			current_pallet = batch.pallet.clone()
 		}
