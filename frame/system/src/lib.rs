@@ -524,16 +524,13 @@ decl_module! {
 		/// The weight of runtime database operations the runtime can invoke.
 		const DbWeight: RuntimeDbWeight = T::DbWeight::get();
 
-		/// The maximum length of a block (in bytes).
-		const MaximumBlockLength: u32 = T::BlockWeights::get().max_block;
-
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if !UpgradedToU32RefCount::get() {
 				Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)|
 					Some(AccountInfo { nonce, refcount: rc as RefCount, data })
 				);
 				UpgradedToU32RefCount::put(true);
-				T::MaximumBlockWeight::get()
+				T::block_weights().max_block
 			} else {
 				0
 			}
