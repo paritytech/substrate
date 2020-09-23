@@ -134,6 +134,7 @@ pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
 pub use finality_grandpa::voter::report;
+pub use aux_schema::load_authorities;
 
 use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};

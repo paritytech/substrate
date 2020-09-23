@@ -433,8 +433,7 @@ pub(crate) fn update_consensus_changes<H, N, F, R>(
 	write_aux(&[(CONSENSUS_CHANGES_KEY, set.encode().as_slice())])
 }
 
-#[cfg(test)]
-pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
+pub fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 	-> Option<AuthoritySet<H, N>> {
 	load_decode::<_, AuthoritySet<H, N>>(backend, AUTHORITY_SET_KEY)
 		.expect("backend error")

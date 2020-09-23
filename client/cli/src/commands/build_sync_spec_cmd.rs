@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::{SharedParams, NetworkParams};
+use crate::params::{SharedParams, NetworkParams, ImportParams};
 use crate::CliConfiguration;
 use log::info;
 use sc_network::config::build_multiaddr;
@@ -57,6 +57,10 @@ pub struct BuildSyncSpecCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub network_params: NetworkParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
 }
 
 impl BuildSyncSpecCmd {
@@ -70,7 +74,10 @@ impl BuildSyncSpecCmd {
 	) -> error::Result<()>
 		where
 			B: BlockT,
-			CL: sp_blockchain::HeaderBackend<B>,
+			CL: sp_blockchain::HeaderBackend<B> + sp_api::ProvideRuntimeApi<B> +
+				sc_client_api::AuxStore,
+			<CL as sp_api::ProvideRuntimeApi<B>>::Api:
+				sc_consensus_babe::BabeApi<B, Error=sp_blockchain::Error>,
 	{
         if self.sync_first {
             network_status_sinks.status_stream(std::time::Duration::from_secs(1)).filter(|status| {
@@ -109,5 +116,9 @@ impl CliConfiguration for BuildSyncSpecCmd {
 
 	fn network_params(&self) -> Option<&NetworkParams> {
 		Some(&self.network_params)
+	}
+
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
 	}
 }
