@@ -1131,7 +1131,7 @@ fn is_voter(
 		Some(keystore) => voters
 			.iter()
 			.find(|(p, _)| {
-				SyncCryptoStore::has_keys(keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
+				SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
 			})
 			.map(|(p, _)| p.clone()),
 		None => None,
@@ -1148,7 +1148,7 @@ fn authority_id<'a, I>(
 	match keystore {
 		Some(keystore) => {
 			authorities
-				.find(|p| keystore.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)]))
+				.find(|p| SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)]))
 				.cloned()
 		},
 		None => None,

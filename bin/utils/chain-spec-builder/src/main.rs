@@ -153,7 +153,7 @@ fn generate_authority_keys_and_store(
 
 		let insert_key = |key_type, public| {
 			SyncCryptoStore::insert_unknown(
-				&keystore,
+				&*keystore,
 				key_type,
 				&format!("//{}", seed),
 				public,

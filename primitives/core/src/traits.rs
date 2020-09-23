@@ -26,7 +26,6 @@ use crate::{
 };
 
 use std::{
-	ops::Deref,
 	borrow::Cow,
 	fmt::{Debug, Display},
 	panic::UnwindSafe,
@@ -212,9 +211,12 @@ pub trait CryptoStore: Send + Sync {
 /// substrate's crates that use the keystore are fully transitioned
 /// to async/await. Therefore, this trait should not be relied upon
 /// nor used for any new components.
-pub trait SyncCryptoStore: Send + Sync {
+pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
-	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
+	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
+		block_on(CryptoStore::sr25519_public_keys(self, id))
+	}
+
 	/// Generate a new sr25519 key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
@@ -224,9 +226,15 @@ pub trait SyncCryptoStore: Send + Sync {
 		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<sr25519::Public, Error>;
+	) -> Result<sr25519::Public, Error> {
+		block_on(CryptoStore::sr25519_generate_new(self, id, seed))
+	}
+
 	/// Returns all ed25519 public keys for the given key type.
-	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public>;
+	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
+		block_on(CryptoStore::ed25519_public_keys(self, id))
+	}
+
 	/// Generate a new ed25519 key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
@@ -236,9 +244,15 @@ pub trait SyncCryptoStore: Send + Sync {
 		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<ed25519::Public, Error>;
+	) -> Result<ed25519::Public, Error> {
+		block_on(CryptoStore::ed25519_generate_new(self, id, seed))
+	}
+
 	/// Returns all ecdsa public keys for the given key type.
-	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public>;
+	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+		block_on(CryptoStore::ecdsa_public_keys(self, id))
+	}
+
 	/// Generate a new ecdsa key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
@@ -248,7 +262,9 @@ pub trait SyncCryptoStore: Send + Sync {
 		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<ecdsa::Public, Error>;
+	) -> Result<ecdsa::Public, Error> {
+		block_on(CryptoStore::ecdsa_generate_new(self, id, seed))
+	}
 
 	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.
@@ -256,7 +272,9 @@ pub trait SyncCryptoStore: Send + Sync {
 	/// Places it into the file system store.
 	///
 	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
-	fn insert_unknown(&self, _key_type: KeyTypeId, _suri: &str, _public: &[u8]) -> Result<(), ()>;
+	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
+		block_on(CryptoStore::insert_unknown(self, key_type, suri, public))
+	}
 
 	/// Find intersection between provided keys and supported keys
 	///
@@ -266,16 +284,23 @@ pub trait SyncCryptoStore: Send + Sync {
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
-	) -> Result<Vec<CryptoTypePublicPair>, Error>;
+	) -> Result<Vec<CryptoTypePublicPair>, Error> {
+		block_on(CryptoStore::supported_keys(self, id, keys))
+	}
+
 	/// List all supported keys
 	///
 	/// Returns a set of public keys the signer supports.
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error>;
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
+		block_on(CryptoStore::keys(self, id))
+	}
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns `true` iff all private keys could be found.
-	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+		block_on(CryptoStore::has_keys(self, public_keys))
+	}
 
 	/// Sign with key
 	///
@@ -289,7 +314,9 @@ pub trait SyncCryptoStore: Send + Sync {
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> Result<Vec<u8>, Error>;
+	) -> Result<Vec<u8>, Error> {
+		block_on(CryptoStore::sign_with(self, id, key, msg))
+	}
 
 	/// Sign with any key
 	///
@@ -303,16 +330,7 @@ pub trait SyncCryptoStore: Send + Sync {
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8]
 	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
-		if keys.len() == 1 {
-			return self.sign_with(id, &keys[0], msg).map(|s| (keys[0].clone(), s));
-		} else {
-			for k in self.supported_keys(id, keys)? {
-				if let Ok(sign) = self.sign_with(id, &k, msg) {
-					return Ok((k, sign));
-				}
-			}
-		}
-		Err(Error::KeyNotSupported(id))
+		block_on(CryptoStore::sign_with_any(self, id, keys, msg))
 	}
 
 	/// Sign with all keys
@@ -328,7 +346,7 @@ pub trait SyncCryptoStore: Send + Sync {
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8],
 	) -> Result<Vec<Result<Vec<u8>, Error>>, ()> {
-		Ok(keys.iter().map(|k| self.sign_with(id, k, msg)).collect())
+		block_on(CryptoStore::sign_with_all(self, id, keys, msg))
 	}
 
 	/// Generate VRF signature for given transcript data.
@@ -350,109 +368,19 @@ pub trait SyncCryptoStore: Send + Sync {
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
-	) -> Result<VRFSignature, Error>;
-}
-
-impl SyncCryptoStore for Arc<dyn CryptoStore> {
-	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		block_on(CryptoStore::sr25519_public_keys(self.deref(), id))
-	}
-
-	fn sr25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<sr25519::Public, Error> {
-		block_on(CryptoStore::sr25519_generate_new(self.deref(), id, seed))
-	}
-
-	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		block_on(CryptoStore::ed25519_public_keys(self.deref(), id))
-	}
-
-	fn ed25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<ed25519::Public, Error> {
-		block_on(CryptoStore::ed25519_generate_new(self.deref(), id, seed))
-	}
-
-	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		block_on(CryptoStore::ecdsa_public_keys(self.deref(), id))
-	}
-
-	fn ecdsa_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<ecdsa::Public, Error> {
-		block_on(CryptoStore::ecdsa_generate_new(self.deref(), id, seed))
-	}
-
-	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
-		block_on(CryptoStore::insert_unknown(self.deref(), key_type, suri, public))
-	}
-
-	fn supported_keys(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>
-	) -> Result<Vec<CryptoTypePublicPair>, Error> {
-		block_on(CryptoStore::supported_keys(self.deref(), id, keys))
-	}
-
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
-		block_on(CryptoStore::keys(self.deref(), id))
-	}
-
-	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		block_on(CryptoStore::has_keys(self.deref(), public_keys))
-	}
-
-	fn sign_with(
-		&self,
-		id: KeyTypeId,
-		key: &CryptoTypePublicPair,
-		msg: &[u8],
-	) -> Result<Vec<u8>, Error> {
-		block_on(CryptoStore::sign_with(self.deref(), id, key, msg))
-	}
-
-	fn sign_with_any(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-		msg: &[u8]
-	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
-		block_on(CryptoStore::sign_with_any(self.deref(), id, keys, msg))
-	}
-
-	fn sign_with_all(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-		msg: &[u8],
-	) -> Result<Vec<Result<Vec<u8>, Error>>, ()> {
-		block_on(CryptoStore::sign_with_all(self.deref(), id, keys, msg))
-	}
-
-	fn sr25519_vrf_sign(
-		&self,
-		key_type: KeyTypeId,
-		public: &sr25519::Public,
-		transcript_data: VRFTranscriptData,
 	) -> Result<VRFSignature, Error> {
-		block_on(CryptoStore::sr25519_vrf_sign(self.deref(), key_type, public, transcript_data))
+		block_on(CryptoStore::sr25519_vrf_sign(self, key_type, public, transcript_data))
 	}
 }
+
+impl SyncCryptoStore for dyn CryptoStore {}
 
 /// A pointer to a keystore.
 pub type CryptoStorePtr = Arc<dyn CryptoStore>;
 
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
-	pub struct KeystoreExt(Arc<dyn SyncCryptoStore>);
+	pub struct KeystoreExt(Arc<dyn CryptoStore>);
 }
 
 /// Code execution engine.

@@ -597,7 +597,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 			let public_type_pair = public.clone().into();
 			let public = public.to_raw_vec();
 			let signature = SyncCryptoStore::sign_with(
-				&keystore,
+				&*keystore,
 				<AuthorityId as AppKey>::ID,
 				&public_type_pair,
 				header_hash.as_ref()

@@ -247,8 +247,9 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot_number, epoch_data);
 		expected_author.and_then(|p| {
-			 if self.keystore.has_keys(
-				&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
+			 if SyncCryptoStore::has_keys(
+				 &*self.keystore,
+				 &[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
 			) {
 				Some(p.clone())
 			} else {
@@ -284,15 +285,14 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 			// add it to a digest item.
 			let public_type_pair = public.to_public_crypto_pair();
 			let public = public.to_raw_vec();
-			let signature = keystore
-				.sign_with(
-					<AuthorityId<P> as AppKey>::ID,
-					&public_type_pair,
-					header_hash.as_ref()
-				)
-				.map_err(|e| sp_consensus::Error::CannotSign(
-					public.clone(), e.to_string(),
-				))?;
+			let signature = SyncCryptoStore::sign_with(
+				&*keystore,
+				<AuthorityId<P> as AppKey>::ID,
+				&public_type_pair,
+				header_hash.as_ref()
+			).map_err(|e| sp_consensus::Error::CannotSign(
+				public.clone(), e.to_string(),
+			))?;
 			let signature = signature.clone().try_into()
 				.map_err(|_| sp_consensus::Error::InvalidSignature(
 					signature, public

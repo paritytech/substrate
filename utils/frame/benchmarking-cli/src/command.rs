@@ -58,7 +58,7 @@ impl BenchmarkCmd {
 		);
 
 		let mut extensions = Extensions::default();
-		extensions.register(KeystoreExt(Arc::new(Arc::new(KeyStore::new()) as CryptoStorePtr)));
+		extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as CryptoStorePtr));
 		let (offchain, _) = TestOffchainExt::new();
 		extensions.register(OffchainExt::new(offchain));
 

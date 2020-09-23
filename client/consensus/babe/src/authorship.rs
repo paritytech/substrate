@@ -153,7 +153,8 @@ fn claim_secondary_slot(
 					slot_number,
 					*epoch_index,
 				);
-				let result = keystore.sr25519_vrf_sign(
+				let result = SyncCryptoStore::sr25519_vrf_sign(
+					&**keystore,
 					AuthorityId::ID,
 					authority_id.as_ref(),
 					transcript_data,
@@ -168,7 +169,7 @@ fn claim_secondary_slot(
 				} else {
 					None
 				}
-			} else if keystore.has_keys(&[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
+			} else if SyncCryptoStore::has_keys(&**keystore, &[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
 				Some(PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					slot_number,
 					authority_index: *authority_index as u32,
@@ -258,7 +259,8 @@ fn claim_primary_slot(
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
 		let threshold = super::authorship::calculate_primary_threshold(c, authorities, *authority_index);
 
-		let result = keystore.sr25519_vrf_sign(
+		let result = SyncCryptoStore::sr25519_vrf_sign(
+			&**keystore,
 			AuthorityId::ID,
 			authority_id.as_ref(),
 			transcript_data,

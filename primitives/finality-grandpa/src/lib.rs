@@ -386,7 +386,7 @@ where
 
 	let encoded = localized_payload(round, set_id, &message);
 	let signature = SyncCryptoStore::sign_with(
-		&keystore,
+		&*keystore,
 		AuthorityId::ID,
 		&public.to_public_crypto_pair(),
 		&encoded[..],

@@ -167,7 +167,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 
 		if capabilities.has(offchain::Capability::Keystore) {
 			if let Some(ref keystore) = self.keystore {
-				extensions.register(KeystoreExt(Arc::new(keystore.clone())));
+				extensions.register(KeystoreExt(keystore.clone()));
 			}
 		}
 
