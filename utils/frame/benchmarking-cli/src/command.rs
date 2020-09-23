@@ -28,7 +28,7 @@ use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_core::{
 	testing::KeyStore,
-	traits::KeystoreExt,
+	traits::{CryptoStorePtr, KeystoreExt},
 	offchain::{OffchainExt, testing::TestOffchainExt},
 };
 use std::fmt::Debug;
@@ -58,7 +58,7 @@ impl BenchmarkCmd {
 		);
 
 		let mut extensions = Extensions::default();
-		extensions.register(KeystoreExt(Arc::new(KeyStore::new())));
+		extensions.register(KeystoreExt(Arc::new(Arc::new(KeyStore::new()) as CryptoStorePtr)));
 		let (offchain, _) = TestOffchainExt::new();
 		extensions.register(OffchainExt::new(offchain));
 

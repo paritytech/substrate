@@ -57,9 +57,8 @@ use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
 use sp_core::traits::{
 	CodeExecutor,
-	SpawnNamed,
 	CryptoStorePtr,
-	SyncCryptoStorePtr,
+	SpawnNamed,
 };
 use sp_runtime::BuildStorage;
 use sc_client_api::{
@@ -177,14 +176,14 @@ pub type TLightCallExecutor<TBl, TExecDisp> = sc_light::GenesisCallExecutor<
 type TFullParts<TBl, TRtApi, TExecDisp> = (
 	TFullClient<TBl, TRtApi, TExecDisp>,
 	Arc<TFullBackend<TBl>>,
-	KeystoreContainer,
+	CryptoStorePtr,
 	TaskManager,
 );
 
 type TLightParts<TBl, TRtApi, TExecDisp> = (
 	Arc<TLightClient<TBl, TRtApi, TExecDisp>>,
 	Arc<TLightBackend<TBl>>,
-	KeystoreContainer,
+	CryptoStorePtr,
 	TaskManager,
 	Arc<OnDemand<TBl>>,
 );
@@ -206,41 +205,6 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 	TRtApi,
 >;
 
-/// Construct and hold different layers of Keystore wrappers
-pub struct KeystoreContainer {
-	keystore: CryptoStorePtr,
-	sync_keystore: SyncCryptoStorePtr,
-}
-
-impl KeystoreContainer {
-	/// Construct KeystoreContainer
-	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
-		let keystore = Arc::new(match config {
-			KeystoreConfig::Path { path, password } => LocalKeystore::open(
-				path.clone(),
-				password.clone()
-			)?,
-			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
-		});
-		let sync_keystore = keystore.clone() as SyncCryptoStorePtr;
-
-		Ok(Self {
-			keystore,
-			sync_keystore,
-		})
-	}
-
-	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
-	pub fn keystore(&self) -> CryptoStorePtr {
-		self.keystore.clone()
-	}
-
-	/// Returns the synchrnous keystore wrapper
-	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
-		self.sync_keystore.clone()
-	}
-}
-
 /// Creates a new full client for the given config.
 pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
@@ -258,7 +222,13 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	let keystore_container = KeystoreContainer::new(&config.keystore)?;
+	let keystore = Arc::new(match &config.keystore {
+		KeystoreConfig::Path { path, password } => LocalKeystore::open(
+			path.clone(),
+			password.clone()
+		)?,
+		KeystoreConfig::InMemory => LocalKeystore::in_memory(),
+	});
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
@@ -291,7 +261,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
 			config.execution_strategies.clone(),
-			Some(keystore_container.sync_keystore()),
+			Some(keystore.clone()),
 		);
 
 		new_client(
@@ -313,7 +283,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	Ok((
 		client,
 		backend,
-		keystore_container,
+		keystore,
 		task_manager
 	))
 }
@@ -325,13 +295,18 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
+	let keystore = Arc::new(match &config.keystore {
+		KeystoreConfig::Path { path, password } => LocalKeystore::open(
+			path.clone(),
+			password.clone()
+		)?,
+		KeystoreConfig::InMemory => LocalKeystore::in_memory(),
+	});
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
 		TaskManager::new(config.task_executor.clone(), registry)?
 	};
-
-	let keystore_params = KeystoreContainer::new(&config.keystore)?;
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
@@ -367,7 +342,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 	)?);
 
-	Ok((client, backend, keystore_params, task_manager, on_demand))
+	Ok((client, backend, keystore, task_manager, on_demand))
 }
 
 /// Create an instance of db-backed client.
@@ -426,7 +401,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// A task manager returned by `new_full_parts`/`new_light_parts`.
 	pub task_manager: &'a mut TaskManager,
 	/// A shared keystore returned by `new_full_parts`/`new_light_parts`.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: CryptoStorePtr,
 	/// An optional, shared data fetcher for light clients.
 	pub on_demand: Option<Arc<OnDemand<TBl>>>,
 	/// A shared transaction pool.
@@ -709,7 +684,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
-	keystore: SyncCryptoStorePtr,
+	keystore: CryptoStorePtr,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
 	remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),

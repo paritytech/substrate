@@ -24,7 +24,7 @@ use codec::Encode;
 use sp_core::{
 	ed25519, sr25519,
 	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore},
-	traits::SyncCryptoStorePtr,
+	traits::CryptoStorePtr,
 	crypto::{CryptoTypePublicPair, Pair, Public},
 };
 use rpc::futures::Stream as _;
@@ -52,13 +52,13 @@ type FullTransactionPool = BasicPool<
 
 struct TestSetup {
 	pub client: Arc<Client<Backend>>,
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: CryptoStorePtr,
 	pub pool: Arc<FullTransactionPool>,
 }
 
 impl Default for TestSetup {
 	fn default() -> Self {
-		let keystore: SyncCryptoStorePtr = Arc::new(KeyStore::new());
+		let keystore: CryptoStorePtr = Arc::new(KeyStore::new());
 		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
 		let client = Arc::new(client_builder.set_keystore(keystore.clone()).build());
 

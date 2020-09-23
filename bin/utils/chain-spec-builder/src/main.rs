@@ -24,7 +24,11 @@ use structopt::StructOpt;
 
 use sc_keystore::LocalKeystore;
 use node_cli::chain_spec::{self, AccountId};
-use sp_core::{sr25519, crypto::{Public, Ss58Codec}, traits::SyncCryptoStorePtr};
+use sp_core::{
+	sr25519,
+	crypto::{Public, Ss58Codec},
+	traits::{CryptoStorePtr, SyncCryptoStore},
+};
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
@@ -139,7 +143,7 @@ fn generate_authority_keys_and_store(
 	keystore_path: &Path,
 ) -> Result<(), String> {
 	for (n, seed) in seeds.into_iter().enumerate() {
-		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(
+		let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(
 			keystore_path.join(format!("auth-{}", n)),
 			None,
 		).map_err(|err| err.to_string())?);
@@ -148,7 +152,8 @@ fn generate_authority_keys_and_store(
 			chain_spec::authority_keys_from_seed(seed);
 
 		let insert_key = |key_type, public| {
-			keystore.insert_unknown(
+			SyncCryptoStore::insert_unknown(
+				&keystore,
 				key_type,
 				&format!("//{}", seed),
 				public,

@@ -28,7 +28,7 @@ use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::{U256, blake2_256, crypto::Public, traits::SyncCryptoStorePtr};
+use sp_core::{U256, blake2_256, crypto::Public, traits::{CryptoStorePtr, SyncCryptoStore}};
 use codec::Encode;
 use schnorrkel::{
 	keys::PublicKey,
@@ -130,7 +130,7 @@ fn claim_secondary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	keys: &[(AuthorityId, usize)],
-	keystore: &SyncCryptoStorePtr,
+	keystore: &CryptoStorePtr,
 	author_secondary_vrf: bool,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -193,7 +193,7 @@ fn claim_secondary_slot(
 pub fn claim_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	keystore: &SyncCryptoStorePtr,
+	keystore: &CryptoStorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let authorities = epoch.authorities.iter()
 		.enumerate()
@@ -207,7 +207,7 @@ pub fn claim_slot(
 pub fn claim_slot_using_keys(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	keystore: &SyncCryptoStorePtr,
+	keystore: &CryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
 	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore, &keys)
@@ -236,7 +236,7 @@ fn claim_primary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	c: (u64, u64),
-	keystore: &SyncCryptoStorePtr,
+	keystore: &CryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -295,9 +295,9 @@ mod tests {
 
 	#[test]
 	fn claim_secondary_plain_slot_works() {
-		let keystore = LocalKeystore::in_memory();
-		let sync_keystore: SyncCryptoStorePtr = Arc::new(keystore);
-		let valid_public_key = dbg!(sync_keystore.sr25519_generate_new(
+		let keystore: CryptoStorePtr = Arc::new(LocalKeystore::in_memory());
+		let valid_public_key = dbg!(SyncCryptoStore::sr25519_generate_new(
+			&keystore,
 			AuthorityId::ID,
 			Some(sp_core::crypto::DEV_PHRASE),
 		).unwrap());
@@ -319,9 +319,9 @@ mod tests {
 			},
 		};
 
-		assert!(claim_slot(10, &epoch, &sync_keystore).is_none());
+		assert!(claim_slot(10, &epoch, &keystore).is_none());
 
 		epoch.authorities.push((valid_public_key.clone().into(), 10));
-		assert_eq!(claim_slot(10, &epoch, &sync_keystore).unwrap().1, valid_public_key.into());
+		assert_eq!(claim_slot(10, &epoch, &keystore).unwrap().1, valid_public_key.into());
 	}
 }

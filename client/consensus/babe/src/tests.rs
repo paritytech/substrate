@@ -21,7 +21,10 @@
 #![allow(deprecated)]
 use super::*;
 use authorship::claim_slot;
-use sp_core::{crypto::Pair, vrf::make_transcript as transcript_from_data};
+use sp_core::{
+	crypto::Pair,
+	traits::SyncCryptoStore,
+	vrf::make_transcript as transcript_from_data};
 use sp_consensus_babe::{
 	AuthorityPair,
 	SlotNumber,
@@ -387,9 +390,9 @@ fn run_one_test(
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+		let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 			.expect("Creates keystore"));
-		keystore.sr25519_generate_new(BABE, Some(seed)).expect("Generates authority key");
+		SyncCryptoStore::sr25519_generate_new(&keystore, BABE, Some(seed)).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
 		let mut got_own = false;
@@ -519,9 +522,9 @@ fn sig_is_not_pre_digest() {
 fn can_author_block() {
 	sp_tracing::try_init_simple();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+	let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 		.expect("Creates keystore"));
-	let public = keystore.sr25519_generate_new(BABE, Some("//Alice"))
+	let public = SyncCryptoStore::sr25519_generate_new(&keystore, BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 
 	let mut i = 0;
@@ -827,9 +830,9 @@ fn verify_slots_are_strictly_increasing() {
 fn babe_transcript_generation_match() {
 	sp_tracing::try_init_simple();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+	let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 		.expect("Creates keystore"));
-	let public = keystore.sr25519_generate_new(BABE, Some("//Alice"))
+	let public = SyncCryptoStore::sr25519_generate_new(&keystore, BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 
 	let epoch = Epoch {

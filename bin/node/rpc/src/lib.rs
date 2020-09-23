@@ -32,7 +32,7 @@
 
 use std::sync::Arc;
 
-use sp_core::traits::SyncCryptoStorePtr;
+use sp_core::traits::CryptoStorePtr;
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;
@@ -69,7 +69,7 @@ pub struct BabeDeps {
 	/// BABE pending epoch changes.
 	pub shared_epoch_changes: SharedEpochChanges<Block, Epoch>,
 	/// The keystore that manages the keys of the node.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: CryptoStorePtr,
 }
 
 /// Extra dependencies for GRANDPA

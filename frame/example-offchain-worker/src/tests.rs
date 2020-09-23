@@ -27,7 +27,7 @@ use sp_core::{
 	offchain::{OffchainExt, TransactionPoolExt, testing},
 	sr25519::Signature,
 	testing::KeyStore,
-	traits::{KeystoreExt, SyncCryptoStore},
+	traits::{KeystoreExt, CryptoStorePtr, SyncCryptoStore},
 };
 use sp_runtime::{
 	Perbill, RuntimeAppPublic,
@@ -207,7 +207,7 @@ fn should_submit_signed_transaction_on_chain() {
 
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
-	let keystore = KeyStore::new();
+	let keystore: CryptoStorePtr = Arc::new(KeyStore::new());
 	SyncCryptoStore::sr25519_generate_new(
 		&keystore,
 		crate::crypto::Public::ID,
@@ -240,7 +240,7 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 
-	let keystore = KeyStore::new();
+	let keystore: CryptoStorePtr = Arc::new(KeyStore::new());
 
 	SyncCryptoStore::sr25519_generate_new(
 		&keystore,
@@ -293,7 +293,7 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 
-	let keystore = KeyStore::new();
+	let keystore: CryptoStorePtr = Arc::new(KeyStore::new());
 
 	SyncCryptoStore::sr25519_generate_new(
 		&keystore,
@@ -345,7 +345,7 @@ fn should_submit_raw_unsigned_transaction_on_chain() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 
-	let keystore = KeyStore::new();
+	let keystore: CryptoStorePtr = Arc::new(KeyStore::new());
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
