@@ -19,153 +19,154 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
+use frame_support::{traits::Get, weights::Weight};
+use sp_std::marker::PhantomData;
 
-pub struct WeightInfo;
-impl pallet_democracy::WeightInfo for WeightInfo {
+pub struct WeightInfo<T>(PhantomData<T>);
+impl<T: frame_system::Trait> pallet_democracy::WeightInfo for WeightInfo<T> {
 	fn propose(p: u32, ) -> Weight {
-		(82728000 as Weight)
+		(49113000 as Weight)
 			.saturating_add((11000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(DbWeight::get().reads(3 as Weight))
-			.saturating_add(DbWeight::get().writes(3 as Weight))
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn second(s: u32, ) -> Weight {
-		(54903000 as Weight)
-			.saturating_add((254000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(DbWeight::get().reads(1 as Weight))
-			.saturating_add(DbWeight::get().writes(1 as Weight))
+		(42067000 as Weight)
+			.saturating_add((220000 as Weight).saturating_mul(s as Weight))
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn vote_new(r: u32, ) -> Weight {
-		(67070000 as Weight)
-			.saturating_add((452000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(DbWeight::get().reads(3 as Weight))
-			.saturating_add(DbWeight::get().writes(3 as Weight))
+		(54159000 as Weight)
+			.saturating_add((252000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(3 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn vote_existing(r: u32, ) -> Weight {
-		(66675000 as Weight)
-			.saturating_add((456000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(DbWeight::get().reads(3 as Weight))
-			.saturating_add(DbWeight::get().writes(3 as Weight))
+		(54145000 as Weight)
+			.saturating_add((262000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(3 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn emergency_cancel() -> Weight {
-		(41152000 as Weight)
-			.saturating_add(DbWeight::get().reads(2 as Weight))
-			.saturating_add(DbWeight::get().writes(2 as Weight))
+		(31071000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn blacklist(p: u32, ) -> Weight {
 		(131046000 as Weight)
 			.saturating_add((694000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(DbWeight::get().reads(5 as Weight))
-			.saturating_add(DbWeight::get().writes(6 as Weight))
+			.saturating_add(T::DbWeight::get().reads(5 as Weight))
+			.saturating_add(T::DbWeight::get().writes(6 as Weight))
 	}
 	fn external_propose(v: u32, ) -> Weight {
-		(19552000 as Weight)
-			.saturating_add((112000 as Weight).saturating_mul(v as Weight))
-			.saturating_add(DbWeight::get().reads(2 as Weight))
-			.saturating_add(DbWeight::get().writes(1 as Weight))
+		(14282000 as Weight)
+			.saturating_add((109000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn external_propose_majority() -> Weight {
-		(4582000 as Weight)
-			.saturating_add(DbWeight::get().writes(1 as Weight))
+		(3478000 as Weight)
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn external_propose_default() -> Weight {
-		(4587000 as Weight)
-			.saturating_add(DbWeight::get().writes(1 as Weight))
+		(3442000 as Weight)
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn fast_track() -> Weight {
-		(39833000 as Weight)
-			.saturating_add(DbWeight::get().reads(2 as Weight))
-			.saturating_add(DbWeight::get().writes(3 as Weight))
+		(30820000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn veto_external(v: u32, ) -> Weight {
-		(40935000 as Weight)
-			.saturating_add((188000 as Weight).saturating_mul(v as Weight))
-			.saturating_add(DbWeight::get().reads(2 as Weight))
-			.saturating_add(DbWeight::get().writes(2 as Weight))
+		(30971000 as Weight)
+			.saturating_add((184000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn cancel_proposal(p: u32, ) -> Weight {
 		(64238000 as Weight)
 			.saturating_add((694000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(DbWeight::get().reads(3 as Weight))
-			.saturating_add(DbWeight::get().writes(3 as Weight))
+			.saturating_add(T::DbWeight::get().reads(3 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn cancel_referendum() -> Weight {
-		(25280000 as Weight)
-			.saturating_add(DbWeight::get().writes(1 as Weight))
+		(20431000 as Weight)
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn cancel_queued(r: u32, ) -> Weight {
-		(48033000 as Weight)
-			.saturating_add((3610000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(DbWeight::get().reads(2 as Weight))
-			.saturating_add(DbWeight::get().writes(2 as Weight))
+		(42438000 as Weight)
+			.saturating_add((3284000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn on_initialize_base(r: u32, ) -> Weight {
-		(92992000 as Weight)
-			.saturating_add((14292000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(DbWeight::get().reads(6 as Weight))
-			.saturating_add(DbWeight::get().reads((2 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(DbWeight::get().writes(5 as Weight))
+		(70826000 as Weight)
+			.saturating_add((10716000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(6 as Weight))
+			.saturating_add(T::DbWeight::get().reads((2 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
 	fn delegate(r: u32, ) -> Weight {
-		(87374000 as Weight)
-			.saturating_add((10516000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(DbWeight::get().reads(4 as Weight))
-			.saturating_add(DbWeight::get().reads((1 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(DbWeight::get().writes(4 as Weight))
-			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(r as Weight)))
+		(72046000 as Weight)
+			.saturating_add((7837000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(r as Weight)))
 	}
 	fn undelegate(r: u32, ) -> Weight {
-		(45044000 as Weight)
-			.saturating_add((10474000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(DbWeight::get().reads(2 as Weight))
-			.saturating_add(DbWeight::get().reads((1 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(DbWeight::get().writes(2 as Weight))
-			.saturating_add(DbWeight::get().writes((1 as Weight).saturating_mul(r as Weight)))
+		(41028000 as Weight)
+			.saturating_add((7810000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(r as Weight)))
 	}
 	fn clear_public_proposals() -> Weight {
-		(4538000 as Weight)
-			.saturating_add(DbWeight::get().writes(1 as Weight))
+		(3643000 as Weight)
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn note_preimage(b: u32, ) -> Weight {
 		(61563000 as Weight)
 			.saturating_add((4000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(DbWeight::get().reads(1 as Weight))
-			.saturating_add(DbWeight::get().writes(1 as Weight))
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn note_imminent_preimage(b: u32, ) -> Weight {
 		(41681000 as Weight)
 			.saturating_add((3000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(DbWeight::get().reads(1 as Weight))
-			.saturating_add(DbWeight::get().writes(1 as Weight))
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn reap_preimage(b: u32, ) -> Weight {
 		(56686000 as Weight)
 			.saturating_add((3000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(DbWeight::get().reads(2 as Weight))
-			.saturating_add(DbWeight::get().writes(1 as Weight))
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn unlock_remove(r: u32, ) -> Weight {
-		(56202000 as Weight)
-			.saturating_add((263000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(DbWeight::get().reads(3 as Weight))
-			.saturating_add(DbWeight::get().writes(3 as Weight))
+		(45333000 as Weight)
+			.saturating_add((171000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(3 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn unlock_set(r: u32, ) -> Weight {
-		(51945000 as Weight)
-			.saturating_add((453000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(DbWeight::get().reads(3 as Weight))
-			.saturating_add(DbWeight::get().writes(3 as Weight))
+		(44424000 as Weight)
+			.saturating_add((291000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(3 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn remove_vote(r: u32, ) -> Weight {
-		(31147000 as Weight)
-			.saturating_add((446000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(DbWeight::get().reads(2 as Weight))
-			.saturating_add(DbWeight::get().writes(2 as Weight))
+		(28250000 as Weight)
+			.saturating_add((283000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn remove_other_vote(r: u32, ) -> Weight {
-		(30785000 as Weight)
-			.saturating_add((214000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(DbWeight::get().reads(2 as Weight))
-			.saturating_add(DbWeight::get().writes(2 as Weight))
+		(28250000 as Weight)
+			.saturating_add((283000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 }
