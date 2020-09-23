@@ -357,6 +357,9 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	/// Force authoring of blocks even if we are offline
 	pub force_authoring: bool,
 
+	/// WIP: JON
+	pub backoff_authoring_blocks: Option<BackoffAuthoringBlocksParam>,
+
 	/// The source of timestamps for relative slots
 	pub babe_link: BabeLink<B>,
 
@@ -374,6 +377,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	sync_oracle,
 	inherent_data_providers,
 	force_authoring,
+	backoff_authoring_blocks,
 	babe_link,
 	can_author_with,
 }: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
@@ -402,6 +406,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		env,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
+		backoff_authoring_blocks,
 		keystore,
 		epoch_changes: babe_link.epoch_changes.clone(),
 		slot_notification_sinks: slot_notification_sinks.clone(),
@@ -472,6 +477,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	env: E,
 	sync_oracle: SO,
 	force_authoring: bool,
+	backoff_authoring_blocks: Option<BackoffAuthoringBlocksParam>,
 	keystore: KeyStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
@@ -687,17 +693,19 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> whe
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>>;
 
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
-		let chain_head_slot = find_pre_digest::<B>(&chain_head)
-			.map(|digest| digest.slot_number())
-			.unwrap(); // WIP: REMOVE ME
-		if should_backoff_authoring_blocks::<B>(
-			*chain_head.number(),
-			chain_head_slot,
-			self.client.info().finalized_number,
-			SignedDuration::default().slot_now(slot_info.duration),
-			BackoffAuthoringBlocksParam::default(),
-		) {
-			return Box::pin(future::ready(Ok(())))
+		if let Some(ref backoff_param) = self.backoff_authoring_blocks {
+			let chain_head_slot = find_pre_digest::<B>(&chain_head)
+				.map(|digest| digest.slot_number())
+				.unwrap(); // WIP: REMOVE ME
+			if should_backoff_authoring_blocks::<B>(
+				*chain_head.number(),
+				chain_head_slot,
+				self.client.info().finalized_number,
+				SignedDuration::default().slot_now(slot_info.duration),
+				backoff_param,
+			) {
+				return Box::pin(future::ready(Ok(())))
+			}
 		}
 
 		<Self as sc_consensus_slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
@@ -705,22 +713,11 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> whe
 }
 
 #[derive(Clone)]
-struct BackoffAuthoringBlocksParam {
+pub struct BackoffAuthoringBlocksParam {
 	// WIP: come up with better names!
-	x: u32,
-	c: u32,
-	m: u32,
-}
-
-// WIP: should we expose this in the main babe configuration? Or even to the CLI?
-impl Default for BackoffAuthoringBlocksParam {
-	fn default() -> Self {
-		Self {
-			x: 100,
-			c: 5,
-			m: 2,
-		}
-	}
+	pub x: u32,
+	pub c: u32,
+	pub m: u32,
 }
 
 // The criterion for backing off block authoring when finality is lagging
@@ -729,12 +726,12 @@ fn should_backoff_authoring_blocks<B>(
 	chain_head_slot: u64,
 	finalized_number: NumberFor<B>,
 	slot_now: u64,
-	param: BackoffAuthoringBlocksParam,
+	param: &BackoffAuthoringBlocksParam,
 ) -> bool
 where
 	B: BlockT,
 {
-	let BackoffAuthoringBlocksParam { x, c, m } = param;
+	let BackoffAuthoringBlocksParam { x, c, m } = param.clone();
 	let unfinalized_block_length = chain_head_number - finalized_number;
 	let interval = unfinalized_block_length.saturating_sub(c.into()) / m.into();
 	let interval = interval.min(x.into()).max(0.into()); // max unnecessary due to saturating_sub?
@@ -1608,7 +1605,7 @@ mod test {
 	#[test]
 	fn should_backoff_authoring_when_finality_lags() {
 		let finalized_number = 2u32.into();
-		let param = BackoffAuthoringBlocksParam::default();
+		let param = BackoffAuthoringBlocksParam { x: 100, c: 5, m: 2 };
 
 		let mut head_state = HeadState {
 			head_number: 3,
@@ -1622,7 +1619,7 @@ mod test {
 				head_state.head_slot,
 				finalized_number,
 				head_state.slot_now,
-				param.clone(),
+				&param,
 			)
 		};
 

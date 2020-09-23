@@ -427,6 +427,7 @@ fn run_one_test(
 			sync_oracle: DummyOracle,
 			inherent_data_providers: data.inherent_data_providers.clone(),
 			force_authoring: false,
+			backoff_authoring_blocks: None,
 			babe_link: data.link.clone(),
 			keystore,
 			can_author_with: sp_consensus::AlwaysCanAuthor,

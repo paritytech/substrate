@@ -238,6 +238,12 @@ pub fn new_full_base(
 		let can_author_with =
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
+		let backoff_authoring_blocks = Some(sc_consensus_babe::BackoffAuthoringBlocksParam {
+			x: 100,
+			c: 5,
+			m: 2,
+		});
+
 		let babe_config = sc_consensus_babe::BabeParams {
 			keystore: keystore.clone(),
 			client: client.clone(),
@@ -247,6 +253,7 @@ pub fn new_full_base(
 			sync_oracle: network.clone(),
 			inherent_data_providers: inherent_data_providers.clone(),
 			force_authoring,
+			backoff_authoring_blocks,
 			babe_link,
 			can_author_with,
 		};
