@@ -664,12 +664,14 @@ impl<T: Trait> Module<T> {
 pub mod migration {
 	use super::*;
 
-	/// Migration code for https://github.com/paritytech/substrate/pull/6770 Introduced between
-	/// Substrate 2.0-RC6 and Substrate 2.0 releases. Before this migration, the `Proxies` storage
-	/// item used a tuple of `AccountId` and `ProxyType` to represent the proxy definition. After
-	/// #6770, we switched to use a struct `ProxyDefinition` which additionally included a
-	/// `BlockNumber` delay value. This function, simply takes any existing proxies using the old
-	/// tuple format, and migrates it to the new struct by setting the delay to zero.
+	/// Migration code for https://github.com/paritytech/substrate/pull/6770
+	///
+	/// Details: This migration was introduced between Substrate 2.0-RC6 and Substrate 2.0 releases.
+	/// Before this migration, the `Proxies` storage item used a tuple of `AccountId` and
+	/// `ProxyType` to represent the proxy definition. After #6770, we switched to use a struct
+	/// `ProxyDefinition` which additionally included a `BlockNumber` delay value. This function,
+	/// simply takes any existing proxies using the old tuple format, and migrates it to the new
+	/// struct by setting the delay to zero.
 	pub fn migrate_to_time_delayed_proxies<T: Trait>() -> Weight {
 		Proxies::<T>::translate::<(Vec<(T::AccountId, T::ProxyType)>, BalanceOf<T>), _>(
 			|_, (targets, deposit)| Some((
