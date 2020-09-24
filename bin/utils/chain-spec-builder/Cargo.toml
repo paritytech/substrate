@@ -1,21 +1,22 @@
 [package]
 name = "chain-spec-builder"
-version = "2.0.0-rc6"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 ansi_term = "0.12.1"
-sc-keystore = { version = "2.0.0-rc6", path = "../../../client/keystore" }
-sc-chain-spec = { version = "2.0.0-rc6", path = "../../../client/chain-spec" }
-node-cli = { version = "2.0.0-rc6", path = "../../node/cli" }
-sp-core = { version = "2.0.0-rc6", path = "../../../primitives/core" }
+sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
+sc-chain-spec = { version = "2.0.0", path = "../../../client/chain-spec" }
+node-cli = { version = "2.0.0", path = "../../node/cli" }
+sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 rand = "0.7.2"
 structopt = "0.3.8"
