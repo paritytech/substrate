@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 async-trait = "0.1.30"
 derive_more = "0.99.2"
-async-std = "1.6.2"
+async-std = { version = "1.6.2", optional = true }
 codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
 futures = { version = "0.3.1" }
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false, optional = true }
@@ -32,6 +32,7 @@ rand_chacha = "0.2.2"
 [features]
 default = ["std"]
 std = [
+	"async-std/std",
 	"codec/std",
 	"merlin",
 	"parking_lot",
