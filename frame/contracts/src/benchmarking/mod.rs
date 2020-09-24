@@ -214,7 +214,7 @@ impl<T: Trait> Tombstone<T> {
 	}
 }
 
-/// Crate `stor_num` storage items. Each has the size `stor_size`.
+/// Generate `stor_num` storage items. Each has the size `stor_size`.
 fn create_storage<T: Trait>(
 	stor_num: u32,
 	stor_size: u32
@@ -228,6 +228,7 @@ fn create_storage<T: Trait>(
 	}).collect::<Result<Vec<_>, &'static str>>()
 }
 
+/// The funding that each account that either calls or instantiates contracts is funded with.
 fn caller_funding<T: Trait>() -> BalanceOf<T> {
 	BalanceOf::<T>::max_value() / 2.into()
 }
