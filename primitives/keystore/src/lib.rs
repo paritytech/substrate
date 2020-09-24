@@ -16,21 +16,13 @@
 // limitations under the License.
 
 //! Keystore traits
-#[cfg(feature = "std")]
 pub mod testing;
 #[cfg(feature = "std")]
 pub mod vrf;
 
 use std::sync::Arc;
-// Use `async_std::task::block_on` instead of `futures::executor::block_on` given that the former allows
-// nested `block_on` calls without panics (see https://github.com/rust-lang/futures-rs/issues/2090 for details).
-// By using `async_std::task::block_on` in `SyncCryptoStore` one can `futures::executor::block_on` on a future
-// calling methods on `SyncCryptoStore`. This is e.g. used in unit testing.
-#[cfg(feature = "std")]
-#[cfg(not(target_os = "unknown"))]
-use async_std::task::block_on;
 use async_trait::async_trait;
-use futures::future::join_all;
+use futures::{executor::block_on, future::join_all};
 use sp_core::{
 	crypto::{KeyTypeId, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
@@ -218,8 +210,6 @@ pub trait CryptoStore: Send + Sync {
 /// will be removed as soon as the internal usage has transitioned successfully.
 /// If you are starting out building something new **do not use this**,
 /// instead, use [`CryptoStore`].
-#[cfg(feature = "std")]
-#[cfg(not(target_os = "unknown"))]
 pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
@@ -372,6 +362,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// the public key and key type provided do not match a private
 	/// key in the keystore. Or, in the context of remote signing
 	/// an error could be a network one.
+	#[cfg(feature = "std")]
 	fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
@@ -382,8 +373,6 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	}
 }
 
-#[cfg(feature = "std")]
-#[cfg(not(target_os = "unknown"))]
 impl SyncCryptoStore for dyn CryptoStore {}
 
 /// A pointer to a keystore.
