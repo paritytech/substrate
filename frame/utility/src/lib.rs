@@ -129,9 +129,7 @@ decl_module! {
 		/// bypassing `frame_system::Trait::BaseCallFilter`).
 		///
 		/// # <weight>
-		/// - Base weight: 14.39 + .987 * c µs
-		/// - Plus the sum of the weights of the `calls`.
-		/// - Plus one additional event. (repeat read/write)
+		/// - Complexity: O(C) where C is the number of calls to be batched.
 		/// # </weight>
 		///
 		/// This will return `Ok` in all circumstances. To determine the success of the batch, an
@@ -208,9 +206,7 @@ decl_module! {
 		/// bypassing `frame_system::Trait::BaseCallFilter`).
 		///
 		/// # <weight>
-		/// - Base weight: 14.39 + .987 * c µs
-		/// - Plus the sum of the weights of the `calls`.
-		/// - Plus one additional event. (repeat read/write)
+		/// - Complexity: O(C) where C is the number of calls to be batched.
 		/// # </weight>
 		#[weight = (
 			calls.iter()
@@ -239,7 +235,7 @@ decl_module! {
 				} else {
 					call.dispatch(origin.clone())
 				};
-				weight += extract_actual_weight(&result, &info);
+				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				result.map_err(|mut err| {
 					err.post_info = Some(weight).into();
 					err

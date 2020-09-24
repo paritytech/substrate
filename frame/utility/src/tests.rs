@@ -279,6 +279,9 @@ fn batch_all_works() {
 #[test]
 fn batch_all_revert() {
 	new_test_ext().execute_with(|| {
+		let call = Call::Balances(BalancesCall::transfer(2, 5));
+		let info = call.get_dispatch_info();
+
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
 		assert_noop!(
@@ -289,7 +292,7 @@ fn batch_all_revert() {
 			]),
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
-					actual_weight: Some(381898000),
+					actual_weight: Some(info.weight * 2),
 					pays_fee: Pays::Yes
 				},
 				error: pallet_balances::Error::<Test, _>::InsufficientBalance.into()
