@@ -1329,7 +1329,7 @@ macro_rules! decl_module {
 						<$trait_instance as $system::Trait>::PalletInfo, Self
 					>().expect("Every active pallet has a name in the runtime; qed");
 				let version = $crate::crate_to_pallet_version!();
-				$crate::storage::unhashed::put(&key, &$crate::dispatch::Encode::encode(&version));
+				$crate::storage::unhashed::put(&key, &version);
 
 				result
 			}
@@ -1352,7 +1352,7 @@ macro_rules! decl_module {
 						<$trait_instance as $system::Trait>::PalletInfo, Self
 					>().expect("Every active pallet has a name in the runtime; qed");
 				let version = $crate::crate_to_pallet_version!();
-				$crate::storage::unhashed::put(&key, &$crate::dispatch::Encode::encode(&version));
+				$crate::storage::unhashed::put(&key, &version);
 
 				0
 			}
@@ -1812,6 +1812,8 @@ macro_rules! decl_module {
 			}
 		}
 
+		// Bring `GetPalletVersion` into scope to make it easily usable.
+		pub use $crate::traits::GetPalletVersion as _;
 		// Implement `GetPalletVersion` for `Module`
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::GetPalletVersion
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
