@@ -30,7 +30,7 @@ use parity_wasm::elements::{Instruction, Instructions, FuncBody, ValueType, Bloc
 use sp_runtime::traits::{Hash, Bounded, SaturatedConversion, CheckedDiv};
 use sp_std::{default::Default, convert::{TryFrom, TryInto}};
 
-/// How many batches we do per API benchmark. 
+/// How many batches we do per API benchmark.
 const API_BENCHMARK_BATCHES: u32 = 20;
 
 #[derive(Clone)]
@@ -453,7 +453,7 @@ benchmarks! {
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
 	// The size of the input data influences the runtime because it is hashed in order to determine
-	// the contract address. 
+	// the contract address.
 	// `n`: Size of the data passed to constructor in kilobytes.
 	instantiate {
 		let n in 0 .. max_pages::<T>() * 64;

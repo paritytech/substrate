@@ -878,7 +878,7 @@ define_env!(Env, <E: Ext>,
 	seal_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::InputBase)?;
 		if let Some(input) = ctx.input_data.take() {
-			write_sandbox_output(ctx, buf_ptr, buf_len_ptr, &input, false, |len| {	
+			write_sandbox_output(ctx, buf_ptr, buf_len_ptr, &input, false, |len| {
 				Some(RuntimeToken::InputCopyOut(len))
 			})
 		} else {
