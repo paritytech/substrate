@@ -125,7 +125,6 @@ impl<C: SubstrateCli> Runner<C> {
 			match task_type {
 				TaskType::Async => runtime_handle.spawn(fut).map(drop),
 				TaskType::Blocking => {
-					let handle = runtime_handle.clone();
 					runtime_handle.spawn_blocking(move || futures::executor::block_on(fut))
 						.map(drop)
 				},
