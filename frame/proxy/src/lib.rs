@@ -226,22 +226,6 @@ decl_module! {
 		/// `AnnouncementDepositFactor` metadata shadow.
 		const AnnouncementDepositFactor: BalanceOf<T> = T::AnnouncementDepositFactor::get();
 
-		fn on_runtime_upgrade() -> Weight {
-			Proxies::<T>::translate::<(Vec<(T::AccountId, T::ProxyType)>, BalanceOf<T>), _>(
-				|_, (targets, deposit)| Some((
-					targets.into_iter()
-						.map(|(a, t)| ProxyDefinition {
-							delegate: a,
-							proxy_type: t,
-							delay: Zero::zero(),
-						})
-						.collect::<Vec<_>>(),
-					deposit,
-				))
-			);
-			T::MaximumBlockWeight::get()
-		}
-
 		/// Dispatch the given `call` from an account that the sender is authorised for through
 		/// `add_proxy`.
 		///
@@ -673,5 +657,23 @@ impl<T: Trait> Module<T> {
 		});
 		let e = call.dispatch(origin);
 		Self::deposit_event(RawEvent::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
+	}
+}
+
+pub mod migration {
+	pub fn migrate_to_time_delayed_proxies<T: Trait>() -> Weight {
+		Proxies::<T>::translate::<(Vec<(T::AccountId, T::ProxyType)>, BalanceOf<T>), _>(
+			|_, (targets, deposit)| Some((
+				targets.into_iter()
+					.map(|(a, t)| ProxyDefinition {
+						delegate: a,
+						proxy_type: t,
+						delay: Zero::zero(),
+					})
+					.collect::<Vec<_>>(),
+				deposit,
+			))
+		);
+		T::MaximumBlockWeight::get()
 	}
 }
