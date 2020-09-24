@@ -490,8 +490,8 @@ fn deposit_event_max_value_limit() {
 				Origin::signed(ALICE),
 				BOB,
 				0,
-				GAS_LIMIT * 2, // we are copying a huge buffer
-				Encode::encode(&self::MaxValueSize::get()),
+				GAS_LIMIT * 2, // we are copying a huge buffer,
+				<Test as Trait>::MaxValueSize::get().encode(),
 			));
 
 			// Call contract with too large a storage value.
@@ -501,7 +501,7 @@ fn deposit_event_max_value_limit() {
 					BOB,
 					0,
 					GAS_LIMIT,
-					Encode::encode(&(self::MaxValueSize::get() + 1)),
+					(<Test as Trait>::MaxValueSize::get() + 1).encode(),
 				),
 				Error::<Test>::ValueTooLarge,
 			);
@@ -1358,7 +1358,7 @@ fn storage_max_value_limit() {
 				BOB,
 				0,
 				GAS_LIMIT * 2, // we are copying a huge buffer
-				Encode::encode(&self::MaxValueSize::get()),
+				<Test as Trait>::MaxValueSize::get().encode(),
 			));
 
 			// Call contract with too large a storage value.
@@ -1368,7 +1368,7 @@ fn storage_max_value_limit() {
 					BOB,
 					0,
 					GAS_LIMIT,
-					Encode::encode(&(self::MaxValueSize::get() + 1)),
+					(<Test as Trait>::MaxValueSize::get() + 1).encode(),
 				),
 				Error::<Test>::ValueTooLarge,
 			);
