@@ -1165,10 +1165,10 @@ decl_module! {
 
 			// Remove the referendum, if it's there.
 			if let Some(ref_index) = maybe_ref_index {
-				let status = Self::referendum_status(ref_index)?;
-				let h = status.proposal_hash;
-				if h == proposal_hash {
-					Self::internal_cancel_referendum(ref_index);
+				if let Ok(status) = Self::referendum_status(ref_index) {
+					if status.proposal_hash == proposal_hash {
+						Self::internal_cancel_referendum(ref_index);
+					}
 				}
 			}
 
