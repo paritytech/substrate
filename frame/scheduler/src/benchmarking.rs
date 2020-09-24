@@ -126,7 +126,7 @@ benchmarks! {
 		);
 	}
 
-	// TODO: Make this more complex and flexible so it can be used in automation.
+	// TODO [#7141]: Make this more complex and flexible so it can be used in automation.
 	#[extra]
 	on_initialize {
 		let s in 0 .. T::MaxScheduledPerBlock::get();

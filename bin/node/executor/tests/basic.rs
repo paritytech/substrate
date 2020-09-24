@@ -164,7 +164,7 @@ fn panic_execution_with_foreign_code_gives_error() {
 	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(69u128, 0u8, 0u128, 0u128, 0u128).encode()
+		(69u128, 0u32, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 69_u128.encode());
 	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
@@ -193,7 +193,7 @@ fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(0u32, 0u8, 69u128, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 69u128, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 69_u128.encode());
 	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
@@ -222,11 +222,11 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
-		(0u32, 0u8, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(
 		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
@@ -265,11 +265,11 @@ fn successful_execution_with_foreign_code_gives_ok() {
 	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
-		(0u32, 0u8, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(
 		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
@@ -702,7 +702,7 @@ fn panic_execution_gives_error() {
 	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(0u32, 0u8, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 0_u128.encode());
 	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
@@ -731,11 +731,11 @@ fn successful_execution_gives_ok() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
-		(0u32, 0u8, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(
 		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
