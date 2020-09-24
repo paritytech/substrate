@@ -1156,6 +1156,68 @@ mod solution_type {
 	}
 
 	#[test]
+	fn remove_voter_works() {
+		let mut compact = TestSolutionCompact {
+			votes1: vec![(0, 2), (1, 6)],
+			votes2: vec![
+				(2, (0, TestAccuracy::from_percent(80)), 1),
+				(3, (7, TestAccuracy::from_percent(85)), 8),
+			],
+			votes3: vec![
+				(
+					4,
+					[(3, TestAccuracy::from_percent(50)), (4, TestAccuracy::from_percent(25))],
+					5,
+				),
+			],
+			..Default::default()
+		};
+
+		compact.remove_voter(2);
+		assert_eq!(
+			compact,
+			TestSolutionCompact {
+				votes1: vec![(0, 2), (1, 6)],
+				votes2: vec![
+					(3, (7, TestAccuracy::from_percent(85)), 8),
+				],
+				votes3: vec![
+					(
+						4,
+						[(3, TestAccuracy::from_percent(50)), (4, TestAccuracy::from_percent(25))],
+						5,
+					),
+				],
+				..Default::default()
+			},
+		);
+
+		compact.remove_voter(4);
+		assert_eq!(
+			compact,
+			TestSolutionCompact {
+				votes1: vec![(0, 2), (1, 6)],
+				votes2: vec![
+					(3, (7, TestAccuracy::from_percent(85)), 8),
+				],
+				..Default::default()
+			},
+		);
+
+		compact.remove_voter(1);
+		assert_eq!(
+			compact,
+			TestSolutionCompact {
+				votes1: vec![(0, 2)],
+				votes2: vec![
+					(3, (7, TestAccuracy::from_percent(85)), 8),
+				],
+				..Default::default()
+			},
+		);
+	}
+
+	#[test]
 	fn basic_from_and_into_compact_works_assignments() {
 		let voters = vec![
 			2 as AccountId,

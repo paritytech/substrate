@@ -140,6 +140,15 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
+/// A greedy effort to reduce the size if a solution.
+// pub fn trim_solution_to_fit(
+// 	winners: Vec<ValidatorIndex>,
+// 	compact: CompactAssignments,
+// 	size: ElectionSize,
+// ) -> (Vec<ValidatorIndex>, CompactAssignments, ElectionSize) {
+
+// }
+
 /// Get a random number of iterations to run the balancing.
 ///
 /// Uses the offchain seed to generate a random number.

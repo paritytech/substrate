@@ -152,6 +152,7 @@ fn struct_def(
 	let len_impl = len_impl(count);
 	let edge_count_impl = edge_count_impl(count);
 	let unique_targets_impl = unique_targets_impl(count);
+	let remove_voter_impl = remove_voter_impl(count);
 
 	let derives_and_maybe_compact_encoding = if compact_encoding {
 		// custom compact encoding.
@@ -220,8 +221,41 @@ fn struct_def(
 			pub fn average_edge_count(&self) -> usize {
 				self.edge_count().checked_div(self.len()).unwrap_or(0)
 			}
+
+			/// Remove a certain voter.
+			///
+			/// This is currently O(n), meaning that it searches the entire struct.
+			pub fn remove_voter(&mut self, to_remove: #voter_type) {
+				#remove_voter_impl
+			}
 		}
 	))
+}
+
+fn remove_voter_impl(count: usize) -> TokenStream2 {
+	// 1s
+	let filed_name = field_name_for(1);
+	let single = quote! {
+		self.#filed_name.retain(|(x, _)| *x != to_remove);
+	};
+
+	let filed_name = field_name_for(2);
+	let double = quote! {
+		self.#filed_name.retain(|(x, _, _)| *x != to_remove);
+	};
+
+	let rest = (3..=count).map(|c| {
+		let filed_name = field_name_for(c);
+		quote! {
+			self.#filed_name.retain(|(x, _, _)| *x != to_remove);
+		}
+	}).collect::<TokenStream2>();
+
+	quote! {
+		#single
+		#double
+		#rest
+	}
 }
 
 fn len_impl(count: usize) -> TokenStream2 {
