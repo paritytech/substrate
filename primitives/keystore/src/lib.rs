@@ -21,8 +21,9 @@ pub mod testing;
 pub mod vrf;
 
 use std::sync::Arc;
+use async_std::task::block_on;
 use async_trait::async_trait;
-use futures::{executor::block_on, future::join_all};
+use futures::future::join_all;
 use sp_core::{
 	crypto::{KeyTypeId, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
