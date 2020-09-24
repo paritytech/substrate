@@ -604,7 +604,6 @@ decl_module! {
 		///
 		/// - `proposal_hash`: The hash of the proposal preimage.
 		/// - `value`: The amount of deposit (must be at least `MinimumDeposit`).
-		/// - `prop_count`: Witness data which must be at least `PublicProps::<T>::decode_len()`
 		///
 		/// Emits `Proposed`.
 		///
