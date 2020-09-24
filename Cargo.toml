@@ -85,6 +85,7 @@ members = [
 	"frame/membership",
 	"frame/metadata",
 	"frame/multisig",
+	"frame/name-service",
 	"frame/nicks",
 	"frame/node-authorization",
 	"frame/offences",

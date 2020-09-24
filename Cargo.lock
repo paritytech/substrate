@@ -4642,6 +4642,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-name-service"
+version = "2.0.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-keyring",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-nicks"
 version = "2.0.0"
 dependencies = [
