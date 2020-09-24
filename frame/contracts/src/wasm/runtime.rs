@@ -415,7 +415,7 @@ fn write_sandbox_memory<E: Ext>(
 /// length of the buffer located at `out_ptr`. If that buffer is large enough the actual
 /// `buf.len()` is written to this location.
 ///
-/// If `out_ptr` is set to the sentinel value of `u32::max_value()`  and `allow_skip` is true the
+/// If `out_ptr` is set to the sentinel value of `u32::max_value()` and `allow_skip` is true the
 /// operation is skipped and `Ok` is returned. This is supposed to help callers to make copying
 /// output optional. For example to skip copying back the output buffer of an `seal_call`
 /// when the caller is not interested in the result.
@@ -457,9 +457,12 @@ fn write_sandbox_output<E: Ext>(
 	Ok(())
 }
 
-/// Can be supplied to `write_sandbox_output` to indicate that the gas meter is not be
-/// be charged for the copied data.
-fn no_charge(_: u32) -> Option<RuntimeToken> {
+/// Supply to `write_sandbox_output` to indicate that the gas meter should not be charged.
+///
+/// This is only appropriate when writing out data of constant size that does not depend on user
+/// input. In this case the costs for this copy was already charged as part of the token at
+/// the beginning of the API entry point.
+fn already_charged(_: u32) -> Option<RuntimeToken> {
 	None
 }
 
@@ -833,7 +836,7 @@ define_env!(Env, <E: Ext>,
 		if let Ok((address, output)) = &instantiate_outcome {
 			if !output.flags.contains(ReturnFlags::REVERT) {
 				write_sandbox_output(
-					ctx, address_ptr, address_len_ptr, &address.encode(), true, no_charge,
+					ctx, address_ptr, address_len_ptr, &address.encode(), true, already_charged,
 				)?;
 			}
 			write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true, |len| {
@@ -926,7 +929,7 @@ define_env!(Env, <E: Ext>,
 	seal_caller(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::Caller)?;
 		write_sandbox_output(
-			ctx, out_ptr, out_len_ptr, &ctx.ext.caller().encode(), false, no_charge
+			ctx, out_ptr, out_len_ptr, &ctx.ext.caller().encode(), false, already_charged
 		)
 	},
 
@@ -939,7 +942,7 @@ define_env!(Env, <E: Ext>,
 	seal_address(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::Address)?;
 		write_sandbox_output(
-			ctx, out_ptr, out_len_ptr, &ctx.ext.address().encode(), false, no_charge
+			ctx, out_ptr, out_len_ptr, &ctx.ext.address().encode(), false, already_charged
 		)
 	},
 
@@ -959,7 +962,8 @@ define_env!(Env, <E: Ext>,
 	seal_weight_to_fee(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::WeightToFee)?;
 		write_sandbox_output(
-			ctx, out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode(), false, no_charge
+			ctx, out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode(), false,
+			already_charged
 		)
 	},
 
@@ -974,7 +978,7 @@ define_env!(Env, <E: Ext>,
 	seal_gas_left(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::GasLeft)?;
 		write_sandbox_output(
-			ctx, out_ptr, out_len_ptr, &ctx.gas_meter.gas_left().encode(), false, no_charge
+			ctx, out_ptr, out_len_ptr, &ctx.gas_meter.gas_left().encode(), false, already_charged
 		)
 	},
 
@@ -989,7 +993,7 @@ define_env!(Env, <E: Ext>,
 	seal_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::Balance)?;
 		write_sandbox_output(
-			ctx, out_ptr, out_len_ptr, &ctx.ext.balance().encode(), false, no_charge
+			ctx, out_ptr, out_len_ptr, &ctx.ext.balance().encode(), false, already_charged
 		)
 	},
 
@@ -1004,7 +1008,8 @@ define_env!(Env, <E: Ext>,
 	seal_value_transferred(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::ValueTransferred)?;
 		write_sandbox_output(
-			ctx, out_ptr, out_len_ptr, &ctx.ext.value_transferred().encode(), false, no_charge
+			ctx, out_ptr, out_len_ptr, &ctx.ext.value_transferred().encode(), false,
+			already_charged
 		)
 	},
 
@@ -1024,7 +1029,8 @@ define_env!(Env, <E: Ext>,
 		}
 		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
 		write_sandbox_output(
-			ctx, out_ptr, out_len_ptr, &ctx.ext.random(&subject_buf).encode(), false, no_charge
+			ctx, out_ptr, out_len_ptr, &ctx.ext.random(&subject_buf).encode(), false,
+			already_charged
 		)
 	},
 
@@ -1037,7 +1043,7 @@ define_env!(Env, <E: Ext>,
 	seal_now(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::Now)?;
 		write_sandbox_output(
-			ctx, out_ptr, out_len_ptr, &ctx.ext.now().encode(), false, no_charge
+			ctx, out_ptr, out_len_ptr, &ctx.ext.now().encode(), false, already_charged
 		)
 	},
 
@@ -1047,7 +1053,7 @@ define_env!(Env, <E: Ext>,
 	seal_minimum_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::MinimumBalance)?;
 		write_sandbox_output(
-			ctx, out_ptr, out_len_ptr, &ctx.ext.minimum_balance().encode(), false, no_charge
+			ctx, out_ptr, out_len_ptr, &ctx.ext.minimum_balance().encode(), false, already_charged
 		)
 	},
 
@@ -1069,7 +1075,8 @@ define_env!(Env, <E: Ext>,
 	seal_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::TombstoneDeposit)?;
 		write_sandbox_output(
-			ctx, out_ptr, out_len_ptr, &ctx.ext.tombstone_deposit().encode(), false, no_charge
+			ctx, out_ptr, out_len_ptr, &ctx.ext.tombstone_deposit().encode(), false,
+			already_charged
 		)
 	},
 
@@ -1215,7 +1222,7 @@ define_env!(Env, <E: Ext>,
 	seal_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::RentAllowance)?;
 		write_sandbox_output(
-			ctx, out_ptr, out_len_ptr, &ctx.ext.rent_allowance().encode(), false, no_charge
+			ctx, out_ptr, out_len_ptr, &ctx.ext.rent_allowance().encode(), false, already_charged
 		)
 	},
 
@@ -1239,7 +1246,7 @@ define_env!(Env, <E: Ext>,
 	seal_block_number(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::BlockNumber)?;
 		write_sandbox_output(
-			ctx, out_ptr, out_len_ptr, &ctx.ext.block_number().encode(), false, no_charge
+			ctx, out_ptr, out_len_ptr, &ctx.ext.block_number().encode(), false, already_charged
 		)
 	},
 
