@@ -403,6 +403,8 @@ fn create_project(
 		project_folder.join("src/main.rs"),
 		format!(
 			r#"
+				//! WASM builder
+
 				use substrate_wasm_builder::build_project_with_default_rustflags;
 
 				fn main() {{
