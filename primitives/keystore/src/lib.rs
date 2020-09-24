@@ -16,13 +16,18 @@
 // limitations under the License.
 
 //! Keystore traits
+#[cfg(feature = "std")]
 pub mod testing;
 #[cfg(feature = "std")]
 pub mod vrf;
 
 use std::sync::Arc;
+// Use `async_std::task::block_on` instead of `futures::executor::block_on` given that the former allows
+// nested `block_on` calls without panics (see https://github.com/rust-lang/futures-rs/issues/2090 for details).
+// By using `async_std::task::block_on` in `SyncCryptoStore` one can `futures::executor::block_on` on a future
+// calling methods on `SyncCryptoStore`. This is e.g. used in unit testing.
 #[cfg(feature = "std")]
-// Use `async_std::task::block_on` instead of `futures::executor::block_on` given that the former allows nested `block_on` calls without panics (see https://github.com/rust-lang/futures-rs/issues/2090 for details). By using `async_std::task::block_on` in `SyncCryptoStore` one can `futures::executor::block_on` on a future calling methods on `SyncCryptoStore`. This is e.g. used in unit testing.
+#[cfg(not(target_os = "unknown"))]
 use async_std::task::block_on;
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -378,6 +383,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 }
 
 #[cfg(feature = "std")]
+#[cfg(not(target_os = "unknown"))]
 impl SyncCryptoStore for dyn CryptoStore {}
 
 /// A pointer to a keystore.
