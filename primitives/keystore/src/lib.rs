@@ -213,6 +213,7 @@ pub trait CryptoStore: Send + Sync {
 /// If you are starting out building something new **do not use this**,
 /// instead, use [`CryptoStore`].
 #[cfg(feature = "std")]
+#[cfg(not(target_os = "unknown"))]
 pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
@@ -365,7 +366,6 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// the public key and key type provided do not match a private
 	/// key in the keystore. Or, in the context of remote signing
 	/// an error could be a network one.
-	#[cfg(feature = "std")]
 	fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
