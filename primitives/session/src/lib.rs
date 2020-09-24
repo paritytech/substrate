@@ -55,15 +55,28 @@ sp_api::decl_runtime_apis! {
 /// Number of validators in a given session.
 pub type ValidatorCount = u32;
 
+/// A tuple of the validator's ID and their full identification.:w
 pub type IdentificationTuple<AccountId, T> = (<T as ValidatorIdentification<AccountId>>::ValidatorId, <T as ValidatorIdentification<AccountId>>::FullIdentification);
 
 pub trait ValidatorIdentification<AccountId> {
+	/// A stable ID for a validator.
 	type ValidatorId: Member + Parameter;
 
+	/// A conversion from account ID to validator ID.
+	///
+	/// Its cost must be at most one storage read.
 	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
 
+	/// Full identification of the validator.
 	type FullIdentification: Parameter;
 
+	/// A conversion from validator ID to full identification.
+	///
+	/// This should contain any references to economic actors associated with the
+	/// validator, since they may be outdated by the time this is queried from a
+	/// historical trie.
+	///
+	/// It must return the identification for the current session index.
 	type FullIdentificationOf: Convert<Self::ValidatorId, Option<Self::FullIdentification>>;
 }
 

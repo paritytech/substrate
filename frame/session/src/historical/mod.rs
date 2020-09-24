@@ -150,9 +150,6 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 	}
 }
 
-/// A tuple of the validator's ID and their full identification.
-// pub type IdentificationTuple<T> = (<T as crate::Trait>::ValidatorId, <T as Trait>::FullIdentification);
-
 /// A trie instance for checking and generating proofs.
 pub struct ProvingTrie<T: Trait> {
 	db: MemoryDB<T::Hashing>,
