@@ -32,7 +32,7 @@
 
 use std::sync::Arc;
 
-use sp_core::traits::CryptoStorePtr;
+use sp_keystore::CryptoStorePtr;
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;

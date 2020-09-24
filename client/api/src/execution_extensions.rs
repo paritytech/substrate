@@ -25,8 +25,8 @@ use codec::Decode;
 use sp_core::{
 	ExecutionContext,
 	offchain::{self, OffchainExt, TransactionPoolExt},
-	traits::{KeystoreExt, CryptoStorePtr},
 };
+use sp_keystore::{KeystoreExt, CryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
 	traits,

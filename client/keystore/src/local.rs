@@ -9,10 +9,15 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use sp_core::{
 	crypto::{CryptoTypePublicPair, KeyTypeId, Pair as PairT, ExposeSecret, SecretString, Public},
-	traits::{CryptoStore, CryptoStorePtr, Error as TraitError, SyncCryptoStore},
 	sr25519::{Public as Sr25519Public, Pair as Sr25519Pair},
-	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 	Encode,
+};
+use sp_keystore::{
+	CryptoStore,
+	CryptoStorePtr,
+	Error as TraitError,
+	SyncCryptoStore,
+	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
 use sp_application_crypto::{ed25519, sr25519, ecdsa};
 

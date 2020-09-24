@@ -26,7 +26,7 @@ use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
 };
 use log::{debug, info, warn};
-use sp_core::traits::CryptoStorePtr;
+use sp_keystore::CryptoStorePtr;
 use sp_consensus::SelectChain;
 use sc_client_api::backend::Backend;
 use sp_utils::mpsc::TracingUnboundedReceiver;

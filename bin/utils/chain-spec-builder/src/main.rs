@@ -27,8 +27,8 @@ use node_cli::chain_spec::{self, AccountId};
 use sp_core::{
 	sr25519,
 	crypto::{Public, Ss58Codec},
-	traits::{CryptoStorePtr, SyncCryptoStore},
 };
+use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.

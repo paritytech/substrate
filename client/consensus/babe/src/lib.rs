@@ -82,8 +82,9 @@ use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
-use sp_core::{crypto::Public, traits::{CryptoStorePtr, SyncCryptoStore}};
+use sp_core::crypto::Public;
 use sp_application_crypto::AppKey;
+use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},

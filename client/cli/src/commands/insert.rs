@@ -20,7 +20,8 @@
 use crate::{Error, KeystoreParams, CryptoSchemeFlag, SharedParams, utils, with_crypto_scheme};
 use std::sync::Arc;
 use structopt::StructOpt;
-use sp_core::{crypto::KeyTypeId, traits::{CryptoStorePtr, SyncCryptoStore}};
+use sp_core::crypto::KeyTypeId;
+use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
 use std::convert::TryFrom;
 use sc_service::config::KeystoreConfig;
 use sc_keystore::LocalKeystore;

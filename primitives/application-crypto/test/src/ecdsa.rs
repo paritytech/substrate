@@ -19,8 +19,11 @@ use std::sync::Arc;
 use sp_runtime::generic::BlockId;
 use sp_core::{
 	crypto::Pair,
-	traits::SyncCryptoStore,
-	testing::{KeyStore, ECDSA},
+	testing::ECDSA,
+};
+use sp_keystore::{
+	SyncCryptoStore,
+	testing::KeyStore,
 };
 use substrate_test_runtime_client::{
 	TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,

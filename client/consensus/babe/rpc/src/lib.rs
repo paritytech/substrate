@@ -34,9 +34,9 @@ use sp_consensus_babe::{
 use serde::{Deserialize, Serialize};
 use sp_core::{
 	crypto::Public,
-	traits::{CryptoStorePtr, SyncCryptoStore},
 };
 use sp_application_crypto::AppKey;
+use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
 use sc_rpc_api::DenyUnsafe;
 use sp_api::{ProvideRuntimeApi, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as _};
@@ -235,7 +235,8 @@ mod tests {
 	};
 	use sp_application_crypto::AppPair;
 	use sp_keyring::Sr25519Keyring;
-	use sp_core::{crypto::key_types::BABE, traits::{CryptoStorePtr, SyncCryptoStore}};
+	use sp_core::{crypto::key_types::BABE};
+	use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
 	use sc_keystore::LocalKeystore;
 
 	use std::sync::Arc;

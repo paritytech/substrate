@@ -38,11 +38,13 @@ use tracing;
 #[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
-	traits::{KeystoreExt, SyncCryptoStore, CallInWasmExt, TaskExecutorExt},
+	traits::{CallInWasmExt, TaskExecutorExt},
 	offchain::{OffchainExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
 	storage::ChildInfo,
 };
+#[cfg(feature = "std")]
+use sp_keystore::{KeystoreExt, SyncCryptoStore};
 
 use sp_core::{
 	OpaquePeerId, crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,

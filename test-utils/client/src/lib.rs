@@ -33,7 +33,7 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring,
 	sr25519::Keyring as Sr25519Keyring,
 };
-pub use sp_core::traits::{CryptoStorePtr, SyncCryptoStore};
+pub use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
 pub use sc_service::{RpcHandlers, RpcSession, client};

@@ -33,7 +33,7 @@ use sp_core::{
 	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
 };
 #[cfg(feature="test-helpers")]
-use sp_core::traits::CryptoStorePtr;
+use sp_keystore::CryptoStorePtr;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
 	Justification, BuildStorage,

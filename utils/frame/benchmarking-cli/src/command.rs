@@ -26,10 +26,10 @@ use sp_state_machine::StateMachine;
 use sp_externalities::Extensions;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_core::{
+use sp_core::offchain::{OffchainExt, testing::TestOffchainExt};
+use sp_keystore::{
+	CryptoStorePtr, KeystoreExt,
 	testing::KeyStore,
-	traits::{CryptoStorePtr, KeystoreExt},
-	offchain::{OffchainExt, testing::TestOffchainExt},
 };
 use std::fmt::Debug;
 

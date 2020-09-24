@@ -18,10 +18,8 @@
 
 #![warn(missing_docs)]
 use std::io;
-use sp_core::{
-	crypto::KeyTypeId,
-	traits::Error as TraitError,
-};
+use sp_core::crypto::KeyTypeId;
+use sp_keystore::Error as TraitError;
 
 /// Local keystore implementation
 mod local;
@@ -86,7 +84,8 @@ impl std::error::Error for Error {
 mod tests {
 	use super::*;
 	use tempfile::TempDir;
-	use sp_core::{Pair, testing::SR25519, crypto::Ss58Codec, traits::CryptoStore};
+	use sp_core::{Pair, testing::SR25519, crypto::Ss58Codec};
+	use sp_keystore::CryptoStore;
 	use sp_application_crypto::{ed25519, sr25519};
 	use futures::executor::block_on;
 	use std::{

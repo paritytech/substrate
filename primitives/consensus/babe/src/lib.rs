@@ -30,7 +30,7 @@ pub use sp_consensus_vrf::schnorrkel::{
 
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use sp_core::vrf::{VRFTranscriptData, VRFTranscriptValue};
+use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
 use sp_runtime::{traits::Header, ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 

@@ -76,8 +76,8 @@ use sp_inherents::InherentDataProviders;
 use sp_consensus::{SelectChain, BlockImport};
 use sp_core::{
 	crypto::Public,
-	traits::{CryptoStorePtr, SyncCryptoStore},
 };
+use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
 use sp_application_crypto::AppKey;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};

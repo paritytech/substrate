@@ -21,10 +21,11 @@
 #![allow(deprecated)]
 use super::*;
 use authorship::claim_slot;
-use sp_core::{
-	crypto::Pair,
-	traits::SyncCryptoStore,
-	vrf::make_transcript as transcript_from_data};
+use sp_core::crypto::Pair;
+use sp_keystore::{
+	SyncCryptoStore,
+	vrf::make_transcript as transcript_from_data,
+};
 use sp_consensus_babe::{
 	AuthorityPair,
 	SlotNumber,

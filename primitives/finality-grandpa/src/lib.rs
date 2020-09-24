@@ -28,7 +28,7 @@ use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
 use sp_std::borrow::Cow;
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
-use sp_core::traits::{CryptoStorePtr, SyncCryptoStore};
+use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
 
 #[cfg(feature = "std")]
 use log::debug;

@@ -28,7 +28,8 @@ use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::{U256, blake2_256, crypto::Public, traits::{CryptoStorePtr, SyncCryptoStore}};
+use sp_core::{U256, blake2_256, crypto::Public};
+use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
 use codec::Encode;
 use schnorrkel::{
 	keys::PublicKey,

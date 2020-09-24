@@ -57,9 +57,9 @@ use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
 use sp_core::traits::{
 	CodeExecutor,
-	CryptoStorePtr,
 	SpawnNamed,
 };
+use sp_keystore::CryptoStorePtr;
 use sp_runtime::BuildStorage;
 use sc_client_api::{
 	BlockBackend, BlockchainEvents,

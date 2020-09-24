@@ -20,14 +20,13 @@ use node_runtime::{
 	Executive, Indices, Runtime, UncheckedExtrinsic,
 };
 use sp_application_crypto::AppKey;
-use sp_core::testing::KeyStore;
 use sp_core::{
 	offchain::{
 		TransactionPoolExt,
 		testing::TestTransactionPoolExt,
 	},
-	traits::{KeystoreExt, SyncCryptoStore},
 };
+use sp_keystore::{KeystoreExt, SyncCryptoStore, testing::KeyStore};
 use frame_system::{
 	offchain::{
 		Signer,

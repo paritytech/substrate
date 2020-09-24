@@ -472,9 +472,9 @@ mod tests {
 	use sp_core::{
 		crypto::Pair as CryptoPair,
 		H256,
-		traits::{CryptoStorePtr, SyncCryptoStore},
 		Public
 	};
+	use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
 	use sp_runtime::{
 		generic::{BlockId, Era, Digest, SignedPayload},
 		traits::{Block as BlockT, Header as HeaderT},

@@ -26,8 +26,11 @@ use sp_core::{
 	H256,
 	offchain::{OffchainExt, TransactionPoolExt, testing},
 	sr25519::Signature,
+};
+
+use sp_keystore::{
+	{KeystoreExt, SyncCryptoStore},
 	testing::KeyStore,
-	traits::{KeystoreExt, SyncCryptoStore},
 };
 use sp_runtime::{
 	Perbill, RuntimeAppPublic,

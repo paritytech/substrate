@@ -38,7 +38,7 @@ use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::BlockImportParams;
 use sp_consensus_babe::{BabeApi, inherents::BabeInherentData};
-use sp_core::traits::CryptoStorePtr;
+use sp_keystore::CryptoStorePtr;
 use sp_inherents::{InherentDataProviders, InherentData, ProvideInherentData, InherentIdentifier};
 use sp_runtime::{
 	traits::{DigestItemFor, DigestFor, Block as BlockT, Header as _},

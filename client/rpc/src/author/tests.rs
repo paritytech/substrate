@@ -23,9 +23,10 @@ use assert_matches::assert_matches;
 use codec::Encode;
 use sp_core::{
 	ed25519, sr25519,
-	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore},
+	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519},
 	crypto::{CryptoTypePublicPair, Pair, Public},
 };
+use sp_keystore::testing::KeyStore;
 use rpc::futures::Stream as _;
 use substrate_test_runtime_client::{
 	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys, Block},

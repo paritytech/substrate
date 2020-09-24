@@ -24,7 +24,7 @@ use libp2p::core::{multiaddr::{Multiaddr, Protocol}, PeerId};
 
 use sp_authority_discovery::AuthorityId;
 use sp_core::crypto::key_types;
-use sp_core::{traits::CryptoStore, testing::KeyStore};
+use sp_keystore::{CryptoStore, testing::KeyStore};
 
 #[test]
 fn get_addresses_and_authority_id() {
