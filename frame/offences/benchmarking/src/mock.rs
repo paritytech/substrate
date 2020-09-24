@@ -90,7 +90,7 @@ impl pallet_timestamp::Trait for Test {
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
-impl sp_session::ValidatorIdentification<AccountId> for Test {
+impl pallet_session::ValidatorIdentification<AccountId> for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
@@ -187,8 +187,8 @@ impl pallet_staking::Trait for Test {
 	type WeightInfo = ();
 }
 
-impl pallet_im_online::ValidatorSet<<Self as sp_session::ValidatorIdentification<AccountId>>::ValidatorId> for Test {
-	fn validators() -> Vec<<Self as sp_session::ValidatorIdentification<AccountId>>::ValidatorId> {
+impl pallet_im_online::ValidatorSet<<Self as pallet_session::ValidatorIdentification<AccountId>>::ValidatorId> for Test {
+	fn validators() -> Vec<<Self as pallet_session::ValidatorIdentification<AccountId>>::ValidatorId> {
 		Session::validators()
 	}
 }
@@ -216,7 +216,7 @@ parameter_types! {
 
 impl pallet_offences::Trait for Test {
 	type Event = Event;
-	type IdentificationTuple = sp_session::IdentificationTuple<AccountId, Self>;
+	type IdentificationTuple = pallet_session::IdentificationTuple<AccountId, Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }

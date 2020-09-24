@@ -106,7 +106,7 @@ impl pallet_timestamp::Trait for Test {
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
-impl sp_session::ValidatorIdentification<AccountId> for Test {
+impl pallet_session::ValidatorIdentification<AccountId> for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;

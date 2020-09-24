@@ -30,7 +30,6 @@ use frame_support::traits::{Currency, OnInitialize};
 
 use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto}};
 use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
-use sp_session::{IdentificationTuple, ValidatorIdentification};
 
 use pallet_balances::{Trait as BalancesTrait};
 use pallet_babe::BabeEquivocationOffence;
@@ -38,7 +37,7 @@ use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
 use pallet_im_online::{Trait as ImOnlineTrait, Module as ImOnline, UnresponsivenessOffence};
 use pallet_offences::{Trait as OffencesTrait, Module as Offences};
 use pallet_session::historical::{Trait as HistoricalTrait};
-use pallet_session::{Trait as SessionTrait, SessionManager};
+use pallet_session::{Trait as SessionTrait, SessionManager, IdentificationTuple, ValidatorIdentification};
 use pallet_staking::{
 	Module as Staking, Trait as StakingTrait, RewardDestination, ValidatorPrefs,
 	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS, Event as StakingEvent

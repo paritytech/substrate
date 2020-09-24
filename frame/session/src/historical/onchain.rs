@@ -26,7 +26,7 @@ use super::Trait as HistoricalTrait;
 
 use super::shared;
 use sp_std::prelude::*;
-use sp_session::ValidatorIdentification;
+use pallet_session_common::ValidatorIdentification;
 
 /// Store the validator-set associated to the `session_index` to the off-chain database.
 ///

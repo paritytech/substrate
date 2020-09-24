@@ -152,7 +152,7 @@ mod tests {
 	};
 
 	use sp_runtime::testing::UintAuthorityId;
-	use sp_session::ValidatorIdentification;
+	use crate::ValidatorIdentification;
 
 	type Historical = Module<Test>;
 

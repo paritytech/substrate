@@ -211,7 +211,7 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 
-impl sp_session::ValidatorIdentification<u64> for Test {
+impl crate::ValidatorIdentification<u64> for Test {
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type FullIdentification = u64;

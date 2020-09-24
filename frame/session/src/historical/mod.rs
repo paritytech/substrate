@@ -37,7 +37,7 @@ use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use sp_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
 
-pub use sp_session::IdentificationTuple;
+pub use pallet_session_common::IdentificationTuple;
 
 mod shared;
 pub mod offchain;

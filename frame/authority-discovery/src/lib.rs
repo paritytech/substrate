@@ -113,7 +113,7 @@ mod tests {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 	}
 
-	impl sp_session::ValidatorIdentification<AuthorityId> for Test {
+	impl pallet_session::ValidatorIdentification<AuthorityId> for Test {
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
 		type FullIdentification = ();

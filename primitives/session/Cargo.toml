@@ -19,7 +19,6 @@ sp-core = { version = "2.0.0", default-features = false, path = "../core" }
 sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 sp-staking = { version = "2.0.0", default-features = false, path = "../staking" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
-frame-support = { version = "2.0.0", default-features = false, path = "../../frame/support" }
 
 [features]
 default = [ "std" ]
@@ -30,5 +29,4 @@ std = [
 	"sp-std/std",
 	"sp-staking/std",
 	"sp-runtime/std",
-	"frame-support/std",
 ]

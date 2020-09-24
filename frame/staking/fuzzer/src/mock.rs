@@ -114,7 +114,7 @@ impl pallet_timestamp::Trait for Test {
 impl pallet_session::historical::Trait for Test {
 }
 
-impl sp_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId> for Test {
+impl pallet_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId> for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;

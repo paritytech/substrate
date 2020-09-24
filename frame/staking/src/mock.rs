@@ -246,7 +246,7 @@ sp_runtime::impl_opaque_keys! {
 	}
 }
 
-impl sp_session::ValidatorIdentification<AccountId> for Test {
+impl pallet_session::ValidatorIdentification<AccountId> for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type FullIdentification = crate::Exposure<AccountId, Balance>;
@@ -742,7 +742,7 @@ pub(crate) fn validator_controllers() -> Vec<AccountId> {
 pub(crate) fn on_offence_in_era(
 	offenders: &[OffenceDetails<
 		AccountId,
-		sp_session::IdentificationTuple<AccountId, Test>,
+		pallet_session::IdentificationTuple<AccountId, Test>,
 	>],
 	slash_fraction: &[Perbill],
 	era: EraIndex,
@@ -770,7 +770,7 @@ pub(crate) fn on_offence_in_era(
 }
 
 pub(crate) fn on_offence_now(
-	offenders: &[OffenceDetails<AccountId, sp_session::IdentificationTuple<AccountId, Test>>],
+	offenders: &[OffenceDetails<AccountId, pallet_session::IdentificationTuple<AccountId, Test>>],
 	slash_fraction: &[Perbill],
 ) {
 	let now = Staking::active_era().unwrap().index;

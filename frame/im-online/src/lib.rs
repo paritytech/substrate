@@ -79,7 +79,6 @@ use codec::{Encode, Decode};
 use sp_core::offchain::OpaqueNetworkState;
 use sp_std::prelude::*;
 use sp_std::convert::TryInto;
-use sp_session::{IdentificationTuple, ValidatorIdentification};
 use sp_runtime::{
 	offchain::storage::StorageValueRef,
 	RuntimeDebug,
@@ -103,6 +102,7 @@ use frame_system::offchain::{
 	SendTransactionTypes,
 	SubmitTransaction,
 };
+use pallet_session_common::{IdentificationTuple, ValidatorIdentification};
 
 pub mod sr25519 {
 	mod app_sr25519 {

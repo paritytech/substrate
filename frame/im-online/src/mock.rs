@@ -28,7 +28,7 @@ use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use sp_core::H256;
 use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
-use sp_session::ValidatorIdentification;
+use pallet_session::ValidatorIdentification;
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -147,7 +147,7 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 
-impl sp_session::ValidatorIdentification<u64> for Runtime {
+impl pallet_session::ValidatorIdentification<u64> for Runtime {
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type FullIdentification = u64;

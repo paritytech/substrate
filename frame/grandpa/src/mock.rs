@@ -121,7 +121,7 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
-impl sp_session::ValidatorIdentification<u64> for Test {
+impl pallet_session::ValidatorIdentification<u64> for Test {
 	type ValidatorId = u64;
 	type ValidatorIdOf = pallet_staking::StashOf<Self>;
 	type FullIdentification = pallet_staking::Exposure<u64, u128>;
@@ -244,7 +244,7 @@ parameter_types! {
 
 impl pallet_offences::Trait for Test {
 	type Event = TestEvent;
-	type IdentificationTuple = sp_session::IdentificationTuple<u64, Self>;
+	type IdentificationTuple = pallet_session::IdentificationTuple<u64, Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }

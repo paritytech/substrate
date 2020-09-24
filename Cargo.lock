@@ -4585,6 +4585,7 @@ dependencies = [
  "frame-system",
  "pallet-authorship",
  "pallet-session",
+ "pallet-session-common",
  "parity-scale-codec",
  "serde",
  "sp-application-crypto",
@@ -4800,6 +4801,7 @@ dependencies = [
  "frame-system",
  "impl-trait-for-tuples",
  "lazy_static",
+ "pallet-session-common",
  "pallet-timestamp",
  "parity-scale-codec",
  "serde",
@@ -4833,6 +4835,14 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-session-common"
+version = "2.0.0"
+dependencies = [
+ "frame-support",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -8333,7 +8343,6 @@ dependencies = [
 name = "sp-session"
 version = "2.0.0"
 dependencies = [
- "frame-support",
  "parity-scale-codec",
  "sp-api",
  "sp-core",

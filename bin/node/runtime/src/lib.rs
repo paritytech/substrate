@@ -403,7 +403,7 @@ parameter_types! {
 }
 
 
-impl sp_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId> for Runtime {
+impl pallet_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId> for Runtime {
 	type ValidatorId = <Self as frame_system::Trait>::AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Self>;
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
@@ -757,8 +757,8 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime where
 	type OverarchingCall = Call;
 }
 
-impl pallet_im_online::ValidatorSet<<Self as sp_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId>>::ValidatorId> for Runtime {
-	fn validators() -> Vec<<Self as sp_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId>>::ValidatorId> {
+impl pallet_im_online::ValidatorSet<<Self as pallet_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId>>::ValidatorId> for Runtime {
+	fn validators() -> Vec<<Self as pallet_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId>>::ValidatorId> {
 		Session::validators()
 	}
 }
@@ -786,7 +786,7 @@ parameter_types! {
 
 impl pallet_offences::Trait for Runtime {
 	type Event = Event;
-	type IdentificationTuple = sp_session::IdentificationTuple<<Self as frame_system::Trait>::AccountId, Self>;
+	type IdentificationTuple = pallet_session::IdentificationTuple<<Self as frame_system::Trait>::AccountId, Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }

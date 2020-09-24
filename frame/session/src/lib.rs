@@ -102,7 +102,6 @@
 
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sp_session::ValidatorIdentification;
 use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys, Saturating};
 use sp_staking::SessionIndex;
@@ -115,6 +114,8 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::ensure_signed;
+
+pub use pallet_session_common::{IdentificationTuple, ValidatorIdentification};
 
 #[cfg(test)]
 mod mock;
