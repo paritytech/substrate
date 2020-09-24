@@ -719,7 +719,7 @@ publish-to-crates-io:
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
-    - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}
+    - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
   allow_failure:                   true
 
 
