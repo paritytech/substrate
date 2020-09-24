@@ -1682,7 +1682,7 @@ pub const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
 ///
 /// Each pallet version is stored in the state under a fixed key. See
 /// [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] for how this key is build.
-#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode)]
+#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord)]
 pub struct PalletVersion {
 	/// The major version of the pallet.
 	pub major: u16,
@@ -1693,6 +1693,15 @@ pub struct PalletVersion {
 }
 
 impl PalletVersion {
+	/// Creates a new instance of `Self`.
+	pub fn new(major: u16, minor: u8, patch: u8) -> Self {
+		Self {
+			major,
+			minor,
+			patch,
+		}
+	}
+
 	/// Returns the storage key for a pallet version.
 	///
 	/// See [`PALLET_VERSION_STORAGE_KEY_POSTIFX`] on how this key is build.
@@ -1709,6 +1718,20 @@ impl PalletVersion {
 		key.extend(PALLET_VERSION_STORAGE_KEY_POSTFIX);
 
 		Some(sp_io::hashing::twox_128(&key))
+	}
+}
+
+impl sp_std::cmp::PartialOrd for PalletVersion {
+	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
+		let res = self.major
+			.cmp(&other.major)
+			.then_with(||
+				self.minor
+					.cmp(&other.minor)
+					.then_with(|| self.patch.cmp(&other.patch)
+			));
+
+		Some(res)
 	}
 }
 
@@ -1758,5 +1781,19 @@ mod tests {
 
 		assert_eq!(<(Test, Test)>::on_initialize(0), 20);
 		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), 40);
+	}
+
+	#[test]
+	fn check_pallet_version_ordering() {
+		let version = PalletVersion::new(1, 0, 0);
+		assert!(version > PalletVersion::new(0, 1, 2));
+		assert!(version == PalletVersion::new(1, 0, 0));
+		assert!(version < PalletVersion::new(1, 0, 1));
+		assert!(version < PalletVersion::new(1, 1, 0));
+
+		let version = PalletVersion::new(2, 50, 50);
+		assert!(version < PalletVersion::new(2, 50, 51));
+		assert!(version > PalletVersion::new(2, 49, 51));
+		assert!(version < PalletVersion::new(3, 49, 51));
 	}
 }
