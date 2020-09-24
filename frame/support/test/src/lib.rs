@@ -26,11 +26,13 @@
 mod pallet_version;
 
 /// The configuration trait
-pub trait Trait {
+pub trait Trait: 'static {
 	/// The runtime origin type.
-	type Origin;
+	type Origin: codec::Codec + codec::EncodeLike + Default;
 	/// The block number type.
-	type BlockNumber;
+	type BlockNumber: codec::Codec + codec::EncodeLike + Default;
+	/// The information about the pallet setup in the runtime.
+	type PalletInfo: frame_support::traits::PalletInfo;
 }
 
 frame_support::decl_module! {

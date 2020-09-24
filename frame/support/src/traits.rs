@@ -1669,10 +1669,19 @@ impl<T> IsType<T> for T {
 /// "InstanceNMyModule".
 pub trait Instance: 'static {
 	/// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
-	const PREFIX: &'static str ;
+	const PREFIX: &'static str;
 }
 
+/// The storage key postfix that is used to store the [`PalletVersion`] per pallet.
+///
+/// The full storage key is build by using:
+/// Twox128([`PalletInfo::name`] ++ [`PALLET_VERSION_STORAGE_POSTFIX`])
+pub const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
+
 /// The version of a pallet.
+///
+/// Each pallet version is stored in the state under a fixed key. See
+/// [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] for how this key is build.
 #[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode)]
 pub struct PalletVersion {
 	/// The major version of the pallet.
@@ -1683,7 +1692,31 @@ pub struct PalletVersion {
 	pub patch: u8,
 }
 
-/// A trait t
+impl PalletVersion {
+	/// Returns the storage key for a pallet version.
+	///
+	/// See [`PALLET_VERSION_STORAGE_KEY_POSTIFX`] on how this key is build.
+	///
+	/// Returns `None` if the given `PI` returned a `None` as name for the given
+	/// `Pallet`.
+	pub fn storage_key<PI: PalletInfo, Pallet: 'static>() -> Option<[u8; 16]> {
+		let pallet_name = PI::name::<Pallet>()?;
+
+		let mut key = Vec::with_capacity(
+			pallet_name.as_bytes().len() + PALLET_VERSION_STORAGE_KEY_POSTFIX.len(),
+		);
+		key.extend(pallet_name.as_bytes());
+		key.extend(PALLET_VERSION_STORAGE_KEY_POSTFIX);
+
+		Some(sp_io::hashing::twox_128(&key))
+	}
+}
+
+/// Provides version information about a pallet.
+///
+/// This trait provides two functions for returning the version of a
+/// pallet. There is a state where both functions can return distinct versions.
+/// See [`GetPalletVersion::storage_version`] for more information about this.
 pub trait GetPalletVersion {
 	/// Returns the current version of the pallet.
 	fn current_version() -> PalletVersion;
@@ -1697,6 +1730,11 @@ pub trait GetPalletVersion {
 	/// different(the previous, seen from the time of calling) version.
 	///
 	/// See [`PalletVersion`] for more information.
+	///
+	/// # Note
+	///
+	/// If there was no previous version of the pallet stored in the state,
+	/// this function will return [`GetPalletVersion::current_version`]
 	fn storage_version() -> PalletVersion;
 }
 

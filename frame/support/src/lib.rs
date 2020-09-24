@@ -279,7 +279,7 @@ pub use frame_support_procedural::{decl_storage, construct_runtime, transactiona
 /// # Example
 ///
 /// ```
-/// #use frame_support::{traits::PalletVersion, crate_to_pallet_version};
+/// # use frame_support::{traits::PalletVersion, crate_to_pallet_version};
 /// const Version: PalletVersion = crate_to_pallet_version!();
 /// ```
 pub use frame_support_procedural::crate_to_pallet_version;
@@ -394,9 +394,10 @@ mod tests {
 	use sp_std::{marker::PhantomData, result};
 	use sp_io::TestExternalities;
 
-	pub trait Trait {
+	pub trait Trait: 'static {
 		type BlockNumber: Codec + EncodeLike + Default;
 		type Origin;
+		type PalletInfo: crate::traits::PalletInfo;
 	}
 
 	mod module {
@@ -405,7 +406,7 @@ mod tests {
 		use super::Trait;
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self  {}
 		}
 	}
 	use self::module::Module;
@@ -436,6 +437,7 @@ mod tests {
 	impl Trait for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
+		type PalletInfo = ();
 	}
 
 	fn new_test_ext() -> TestExternalities {

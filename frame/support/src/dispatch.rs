@@ -232,11 +232,11 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, ensure_signed};
+/// # use frame_system::ensure_signed;
 /// # pub struct DefaultInstance;
-/// # pub trait Instance {}
+/// # pub trait Instance: 'static {}
 /// # impl Instance for DefaultInstance {}
-/// pub trait Trait<I: Instance=DefaultInstance>: system::Trait {}
+/// pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {}
 ///
 /// decl_module! {
 /// 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
@@ -1312,6 +1312,7 @@ macro_rules! decl_module {
 	};
 
 	(@impl_on_runtime_upgrade
+		{ $system:ident }
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		{ $( $other_where_bounds:tt )* }
 		fn on_runtime_upgrade() -> $return:ty { $( $impl:tt )* }
@@ -1324,12 +1325,19 @@ macro_rules! decl_module {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
 				let result = { $( $impl )* };
 
-                result
+				let key = $crate::traits::PalletVersion::storage_key::<
+						<$trait_instance as $system::Trait>::PalletInfo, Self
+					>().expect("Every active pallet has a name in the runtime; qed");
+				let version = $crate::crate_to_pallet_version!();
+				$crate::storage::unhashed::put(&key, &$crate::dispatch::Encode::encode(&version));
+
+				result
 			}
 		}
 	};
 
 	(@impl_on_runtime_upgrade
+		{ $system:ident }
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		{ $( $other_where_bounds:tt )* }
 	) => {
@@ -1339,6 +1347,13 @@ macro_rules! decl_module {
 		{
 			fn on_runtime_upgrade() -> $crate::dispatch::Weight {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
+
+				let key = $crate::traits::PalletVersion::storage_key::<
+						<$trait_instance as $system::Trait>::PalletInfo, Self
+					>().expect("Every active pallet has a name in the runtime; qed");
+				let version = $crate::crate_to_pallet_version!();
+				$crate::storage::unhashed::put(&key, &$crate::dispatch::Encode::encode(&version));
+
 				0
 			}
 		}
@@ -1661,6 +1676,7 @@ macro_rules! decl_module {
 
 		$crate::decl_module! {
 			@impl_on_runtime_upgrade
+			{ $system }
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			{ $( $other_where_bounds )* }
 			$( $on_runtime_upgrade )*
@@ -1796,6 +1812,29 @@ macro_rules! decl_module {
 			}
 		}
 
+		// Implement `GetPalletVersion` for `Module`
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::GetPalletVersion
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn current_version() -> $crate::traits::PalletVersion {
+				$crate::crate_to_pallet_version!()
+			}
+
+			fn storage_version() -> $crate::traits::PalletVersion {
+				let key = $crate::traits::PalletVersion::storage_key::<
+						<$trait_instance as $system::Trait>::PalletInfo, Self
+					>().expect("Every active pallet has a name in the runtime; qed");
+
+				let value: Option<$crate::traits::PalletVersion> =
+					$crate::storage::unhashed::get(&key);
+
+				match value {
+					Some(version) => version,
+					None => $crate::crate_to_pallet_version!(),
+				}
+			}
+		}
+
 		// manual implementation of clone/eq/partialeq because using derive erroneously requires
 		// clone/eq/partialeq from T.
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Clone
@@ -1811,6 +1850,7 @@ macro_rules! decl_module {
 				}
 			}
 		}
+
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::PartialEq
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
@@ -1833,6 +1873,7 @@ macro_rules! decl_module {
 				}
 			}
 		}
+
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Eq
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{}
@@ -2373,12 +2414,13 @@ mod tests {
 	pub mod system {
 		use codec::{Encode, Decode};
 
-		pub trait Trait {
+		pub trait Trait: 'static {
 			type AccountId;
 			type Call;
 			type BaseCallFilter;
 			type Origin: crate::traits::OriginTrait<Call = Self::Call>;
 			type BlockNumber: Into<u32>;
+			type PalletInfo: crate::traits::PalletInfo;
 		}
 
 		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
@@ -2522,6 +2564,7 @@ mod tests {
 		type Call = OuterCall;
 		type BaseCallFilter = ();
 		type BlockNumber = u32;
+		type PalletInfo = ();
 	}
 
 	#[test]
@@ -2577,7 +2620,9 @@ mod tests {
 
 	#[test]
 	fn on_runtime_upgrade_should_work() {
-		assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10);
+		sp_io::TestExternalities::default().execute_with(||
+			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10)
+		);
 	}
 
 	#[test]
