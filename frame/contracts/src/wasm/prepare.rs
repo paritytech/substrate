@@ -404,6 +404,12 @@ pub fn prepare_contract<C: ImportSatisfyCheck, T: Trait>(
 	})
 }
 
+/// Alternate (possibly unsafe) preparation functions used only for benchmarking.
+///
+/// For benchmarking we need to construct special contracts that might not pass our
+/// sanity checks or need to skip instrumentation for correct results. We hide functions
+/// allowing this behind a feature that is only set during benchmarking to prevent usage
+/// in production code.
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking {
 	use super::{
