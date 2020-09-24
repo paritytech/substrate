@@ -49,7 +49,10 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion, Hash, HashFor}
 };
 use sp_arithmetic::traits::Saturating;
-use std::{fmt, ops::Range, collections::{HashMap, HashSet, VecDeque}, sync::Arc, pin::Pin};
+use std::{
+	fmt, ops::Range, collections::{HashMap, hash_map::Entry, HashSet, VecDeque},
+	sync::Arc, pin::Pin,
+};
 use futures::{task::Poll, Future, stream::FuturesUnordered, FutureExt, StreamExt};
 
 mod blocks;
@@ -63,6 +66,17 @@ const MAX_IMPORTING_BLOCKS: usize = 2048;
 
 /// Maximum blocks to download ahead of any gap.
 const MAX_DOWNLOAD_AHEAD: u32 = 2048;
+
+/// Maximum number of concurrent block announce validations.
+///
+/// If the queue reaches the maximum, we drop any new block
+/// announcements.
+const MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS: usize = 256;
+
+/// Maximum number of concurrent block announce validations per peer.
+///
+/// See [`MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS`] for more information.
+const MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS_PER_PEER: usize = 4;
 
 /// We use a heuristic that with a high likelihood, by the time
 /// `MAJOR_SYNC_BLOCKS` have been imported we'll be on the same
@@ -193,10 +207,12 @@ pub struct ChainSync<B: BlockT> {
 	max_parallel_downloads: u32,
 	/// Total number of downloaded blocks.
 	downloaded_blocks: usize,
-	/// All block announcement pre-validations that are currently being validated.
-	block_announce_pre_validation: FuturesUnordered<
+	/// All block announcement that are currently being validated.
+	block_announce_validation: FuturesUnordered<
 		Pin<Box<dyn Future<Output = PreValidateBlockAnnounce<B::Header>> + Send>>
 	>,
+	/// Stats per peer about the number of concurrent block announce validations.
+	block_announce_validation_per_peer_stats: HashMap<PeerId, usize>,
 }
 
 /// All the data we have about a Peer that we are trying to sync with
@@ -341,7 +357,7 @@ pub enum BlockAnnounceResult<H> {
 	},
 }
 
-/// Result of [`ChainSync::block_announce_pre_validation`].
+/// Result of [`ChainSync::block_announce_validation`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PreValidateBlockAnnounce<H> {
 	/// The announcement failed at validation.
@@ -400,6 +416,16 @@ pub enum OnBlockFinalityProof<B: BlockT> {
 	}
 }
 
+/// Result of [`ChainSync::has_slot_for_block_announce_validation`].
+enum HasSlotForBlockAnnounceValidation {
+	/// Yes, there is a slot for the block announce validation.
+	Yes,
+	/// We reached the total maximum number of validation slots.
+	TotalMaximumSlotsReached,
+	/// We reached the maximum number of validation slots for the given peer.
+	MaximumPeerSlotsReached,
+}
+
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance.
 	pub fn new(
@@ -434,7 +460,8 @@ impl<B: BlockT> ChainSync<B> {
 			block_announce_validator,
 			max_parallel_downloads,
 			downloaded_blocks: 0,
-			block_announce_pre_validation: Default::default(),
+			block_announce_validation: Default::default(),
+			block_announce_validation_per_peer_stats: Default::default(),
 		}
 	}
 
@@ -1214,6 +1241,33 @@ impl<B: BlockT> ChainSync<B> {
 		self.pending_requests.set_all();
 	}
 
+	/// Checks if there is a slot for a block announce validation.
+	///
+	/// The total number and the number per peer of concurrent block announce validations
+	/// is caped.
+	///
+	/// It will return `true` when there is still a slot for a block announce validation.
+	fn has_slot_for_block_announce_validation(&mut self, peer: &PeerId) -> HasSlotForBlockAnnounceValidation {
+		if self.block_announce_validation.len() >= MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS {
+			return HasSlotForBlockAnnounceValidation::TotalMaximumSlotsReached
+		}
+
+		match self.block_announce_validation_per_peer_stats.entry(peer.clone()) {
+			Entry::Vacant(entry) => {
+				entry.insert(1);
+				HasSlotForBlockAnnounceValidation::Yes
+			},
+			Entry::Occupied(mut entry) => {
+				if *entry.get() < MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS_PER_PEER {
+					*entry.get_mut() += 1;
+					HasSlotForBlockAnnounceValidation::Yes
+				} else {
+					HasSlotForBlockAnnounceValidation::MaximumPeerSlotsReached
+				}
+			},
+		}
+	}
+
 	/// Push a block announce validation.
 	///
 	/// It is required that [`ChainSync::poll_block_announce_validation`] is called
@@ -1247,12 +1301,37 @@ impl<B: BlockT> ChainSync<B> {
 			return Some(BlockAnnounceResult::Nothing { is_best, who, header: announce.header })
 		}
 
+		// Check if there is a slot for this block announce validation.
+		match self.has_slot_for_block_announce_validation(&who) {
+			HasSlotForBlockAnnounceValidation::Yes => {},
+			HasSlotForBlockAnnounceValidation::TotalMaximumSlotsReached => {
+				warn!(
+					target: "sync",
+					"💔 Ignored block (#{} -- {}) announcement from {} because all validation slots are occupied.",
+					number,
+					hash,
+					who,
+				);
+				return Some(BlockAnnounceResult::Nothing { is_best, who, header: announce.header })
+			}
+			HasSlotForBlockAnnounceValidation::MaximumPeerSlotsReached => {
+				warn!(
+					target: "sync",
+					"💔 Ignored block (#{} -- {}) announcement from {} because all validation slots for this peer are occupied.",
+					number,
+					hash,
+					who,
+				);
+				return Some(BlockAnnounceResult::Nothing { is_best, who, header: announce.header })
+			}
+		}
+
 		// Let external validator check the block announcement.
 		let assoc_data = announce.data.as_ref().map_or(&[][..], |v| v.as_slice());
 		let future = self.block_announce_validator.validate(&header, assoc_data);
 		let hash = hash.clone();
 
-		self.block_announce_pre_validation.push(async move {
+		self.block_announce_validation.push(async move {
 			match future.await {
 				Ok(Validation::Success { is_new_best }) => PreValidateBlockAnnounce::Process {
 					is_new_best: is_new_best || is_best,
@@ -1291,9 +1370,28 @@ impl<B: BlockT> ChainSync<B> {
 		&mut self,
 		cx: &mut std::task::Context,
 	) -> Poll<BlockAnnounceResult<B::Header>> {
-		match self.block_announce_pre_validation.poll_next_unpin(cx) {
+		match self.block_announce_validation.poll_next_unpin(cx) {
 			Poll::Ready(Some(res)) => Poll::Ready(self.finish_block_announce_validation(res)),
 			_ => Poll::Pending,
+		}
+	}
+
+	/// Should be called when a block announce validation was finished, to update the stats
+	/// of the given peer.
+	fn peer_block_announce_validation_finished(&mut self, peer: &PeerId) {
+		match self.block_announce_validation_per_peer_stats.entry(peer.clone()) {
+			Entry::Vacant(_) => {
+				error!(
+					target: "sync",
+					"💔 Block announcement validation from peer {} finished for that no slot was allocated!",
+					peer,
+				);
+			},
+			Entry::Occupied(mut entry) => {
+				if entry.get_mut().saturating_sub(1) == 0 {
+					entry.remove();
+				}
+			}
 		}
 	}
 
@@ -1303,12 +1401,18 @@ impl<B: BlockT> ChainSync<B> {
 		pre_validation_result: PreValidateBlockAnnounce<B::Header>,
 	) -> BlockAnnounceResult<B::Header> {
 		let (announce, is_best, who) = match pre_validation_result {
-			PreValidateBlockAnnounce::Nothing { is_best, who, announce } =>
-				return BlockAnnounceResult::Nothing { is_best, who, header: announce.header },
-			PreValidateBlockAnnounce::Failure { who } =>
-				return BlockAnnounceResult::Failure { who },
-			PreValidateBlockAnnounce::Process { announce, is_new_best, who } =>
-				(announce, is_new_best, who),
+			PreValidateBlockAnnounce::Nothing { is_best, who, announce } => {
+				self.peer_block_announce_validation_finished(&who);
+				return BlockAnnounceResult::Nothing { is_best, who, header: announce.header }
+			},
+			PreValidateBlockAnnounce::Failure { who } => {
+				self.peer_block_announce_validation_finished(&who);
+				return BlockAnnounceResult::Failure { who }
+			},
+			PreValidateBlockAnnounce::Process { announce, is_new_best, who } => {
+				self.peer_block_announce_validation_finished(&who);
+				(announce, is_new_best, who)
+			},
 		};
 
 		let header = announce.header;
