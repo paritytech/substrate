@@ -103,13 +103,11 @@ fn invalid_max_proposals_should_fail() {
 			Origin::signed(1),
 			set_balance_proposal_hash(2),
 			2,
-			0,
 		));
 		assert_noop!(Democracy::propose(
 			Origin::signed(1),
 			set_balance_proposal_hash(2),
 			2,
-			0,
 		), Error::<Test>::InvalidWitness);
 	});
 }

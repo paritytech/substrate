@@ -24,9 +24,8 @@ use sp_std::marker::PhantomData;
 
 pub struct WeightInfo<T>(PhantomData<T>);
 impl<T: frame_system::Trait> pallet_democracy::WeightInfo for WeightInfo<T> {
-	fn propose(p: u32, ) -> Weight {
+	fn propose() -> Weight {
 		(49113000 as Weight)
-			.saturating_add((11000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}

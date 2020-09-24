@@ -203,7 +203,7 @@ type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait WeightInfo {
-	fn propose(p: u32, ) -> Weight;
+	fn propose() -> Weight;
 	fn second(s: u32, ) -> Weight;
 	fn vote_new(r: u32, ) -> Weight;
 	fn vote_existing(r: u32, ) -> Weight;
@@ -609,18 +609,16 @@ decl_module! {
 		/// Emits `Proposed`.
 		///
 		/// Weight: `O(p)`
-		#[weight = T::WeightInfo::propose(*prop_count)]
+		#[weight = T::WeightInfo::propose()]
 		fn propose(origin,
 			proposal_hash: T::Hash,
 			#[compact] value: BalanceOf<T>,
-			#[compact] prop_count: u32,
 		) {
 			let who = ensure_signed(origin)?;
 			ensure!(value >= T::MinimumDeposit::get(), Error::<T>::ValueLow);
 
 			let index = Self::public_prop_count();
 			let real_prop_count = PublicProps::<T>::decode_len().unwrap_or(0) as u32;
-			ensure!(real_prop_count <= prop_count, Error::<T>::InvalidWitness);
 			let max_proposals = T::MaxProposals::get();
 			ensure!(real_prop_count < max_proposals, Error::<T>::TooManyProposals);
 

@@ -57,7 +57,6 @@ fn add_proposal<T: Trait>(n: u32) -> Result<T::Hash, &'static str> {
 		RawOrigin::Signed(other).into(),
 		proposal_hash,
 		value.into(),
-		T::MaxProposals::get(),
 	)?;
 
 	Ok(proposal_hash)
@@ -101,8 +100,7 @@ benchmarks! {
 	_ { }
 
 	propose {
-		let p in 1 .. T::MaxProposals::get();
-		for i in 0 .. (p - 1) {
+		for i in 0 .. (T::MaxProposals::get() - 1) {
 			add_proposal::<T>(i)?;
 		}
 
@@ -110,7 +108,7 @@ benchmarks! {
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&0);
 		let value = T::MinimumDeposit::get();
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller), proposal_hash, value.into(), T::MaxProposals::get())
+	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
 	verify {
 		assert_eq!(Democracy::<T>::public_props().len(), p as usize, "Proposals not created.");
 	}
