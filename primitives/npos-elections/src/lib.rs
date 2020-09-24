@@ -151,6 +151,8 @@ pub enum Error {
 	CompactInvalidIndex,
 	/// An error occurred in some arithmetic operation.
 	ArithmeticError(&'static str),
+	/// The data provided to create support map was invalid.
+	InvalidSupportEdge,
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the
@@ -479,7 +481,7 @@ impl<AccountId> StakedAssignment<AccountId> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet they
 /// do not necessarily have to be the same.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Encode, Decode, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Eq, PartialEq))]
 pub struct Support<AccountId> {
 	/// Total support.
@@ -490,6 +492,11 @@ pub struct Support<AccountId> {
 
 /// A linkage from a candidate and its [`Support`].
 pub type SupportMap<A> = BTreeMap<A, Support<A>>;
+
+/// A flat variant of [`SupportMap`].
+///
+/// The main advantage of this is that it is encodable.
+pub type FlatSupportMap<A> = Vec<(A, Support<A>)>;
 
 /// Build the support map from the given election result. It maps a flat structure like
 ///
@@ -525,7 +532,8 @@ pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 pub fn build_support_map<AccountId>(
 	winners: &[AccountId],
 	assignments: &[StakedAssignment<AccountId>],
-) -> Result<SupportMap<AccountId>, AccountId> where
+) -> Result<SupportMap<AccountId>, Error>
+where
 	AccountId: IdentifierT,
 {
 	// Initialize the support of each candidate.
@@ -541,7 +549,7 @@ pub fn build_support_map<AccountId>(
 				support.total = support.total.saturating_add(*weight_extended);
 				support.voters.push((who.clone(), *weight_extended));
 			} else {
-				return Err(c.clone())
+				return Err(Error::InvalidSupportEdge)
 			}
 		}
 	}

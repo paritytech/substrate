@@ -25,6 +25,7 @@ frame-support = { version = "2.0.0", default-features = false, path = "../suppor
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 pallet-session = { version = "2.0.0", default-features = false, features = ["historical"], path = "../session" }
 pallet-authorship = { version = "2.0.0", default-features = false, path = "../authorship" }
+frame-election-providers = { version = "2.0.0", default-features = false, path = "../election-providers" }
 sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../primitives/application-crypto" }
 
 # Optional imports for benchmarking
@@ -59,6 +60,7 @@ std = [
 	"frame-system/std",
 	"pallet-authorship/std",
 	"sp-application-crypto/std",
+	"frame-election-providers/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

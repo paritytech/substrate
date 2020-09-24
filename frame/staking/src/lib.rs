@@ -885,6 +885,8 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	type ElectionProvider: frame_election_providers::ElectionProvider<Self::AccountId>;
 }
 
 /// Mode of era-forcing.
@@ -2938,7 +2940,7 @@ impl<T: Trait> Module<T> {
 				all_nominators,
 				Some((iterations, 0)), // exactly run `iterations` rounds.
 			)
-			.map_err(|err| log!(error, "Call to seq-phragmen failed due to {}", err))
+			.map_err(|err| log!(error, "Call to seq-phragmen failed due to {:?}", err))
 			.ok()
 		}
 	}

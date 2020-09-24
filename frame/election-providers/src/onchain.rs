@@ -1,19 +1,21 @@
 use crate::{ElectionProvider, Error};
-use sp_npos_elections::{VoteWeight, ElectionResult, SupportMap, IdentifierT, ExtendedBalance};
 use sp_arithmetic::PerThing;
-use sp_std::collections::btree_map::BTreeMap;
+use sp_npos_elections::{
+	ElectionResult, ExtendedBalance, FlatSupportMap, IdentifierT, SupportMap, VoteWeight,
+};
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 pub struct OnChainSequentialPhragmen;
-impl<AccountId: IdentifierT> ElectionProvider<AccountId, VoteWeight> for OnChainSequentialPhragmen {
+impl<AccountId: IdentifierT> ElectionProvider<AccountId> for OnChainSequentialPhragmen {
 	fn elect<P: sp_arithmetic::PerThing>(
 		to_elect: usize,
-		candidates: Vec<AccountId>,
+		targets: Vec<AccountId>,
 		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	) -> Result<SupportMap<AccountId>, Error> where
+	) -> Result<FlatSupportMap<AccountId>, Error>
+	where
 		ExtendedBalance: From<<P as PerThing>::Inner>,
-		P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>
+		P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 	{
-		// TODO: so henceforth, we will always return a Result here.
 		// TODO: we really don't need to do this conversion all the time. With
 		// https://github.com/paritytech/substrate/pull/6685 merged, we should make variants of
 		// seq_phragmen and others that return a different return type. In fact, I think I should
@@ -29,22 +31,25 @@ impl<AccountId: IdentifierT> ElectionProvider<AccountId, VoteWeight> for OnChain
 			stake_map.get(w).cloned().unwrap_or_default()
 		});
 
-		sp_npos_elections::seq_phragmen::<_, P>(
-			to_elect,
-			0,
-			candidates,
-			voters,
-		).map(| ElectionResult { winners, assignments } | {
-			let staked = sp_npos_elections::assignment_ratio_to_staked_normalized(
-				assignments,
-				&stake_of,
-			).unwrap();
+		sp_npos_elections::seq_phragmen::<_, P>(to_elect, targets, voters, None)
+			.and_then(|e| {
+				let ElectionResult {
+					winners,
+					assignments,
+				} = e;
+				let staked = sp_npos_elections::assignment_ratio_to_staked_normalized(
+					assignments,
+					&stake_of,
+				)?;
+				let winners = sp_npos_elections::to_without_backing(winners);
 
-			let winners = sp_npos_elections::to_without_backing(winners);
-			let (supports, _error) = sp_npos_elections::build_support_map(&winners, &staked);
+				sp_npos_elections::build_support_map(&winners, &staked)
+					.map(|s| s.into_iter().map(|(k, v)| (k, v)).collect::<Vec<_>>())
+			})
+			.map_err(From::from)
+	}
 
-			debug_assert_eq!(_error, 0);
-			supports
-		}).ok_or(Error::ElectionFailed)
+	fn ongoing() -> bool {
+		false
 	}
 }
