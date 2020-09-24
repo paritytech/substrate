@@ -1179,7 +1179,7 @@ decl_module! {
 
 		/// Remove a proposal.
 		///
-		/// The dispatch origin of this call must be _Root_.
+		/// The dispatch origin of this call must be `CancelProposalOrigin`.
 		///
 		/// - `prop_index`: The index of the proposal to cancel.
 		///
