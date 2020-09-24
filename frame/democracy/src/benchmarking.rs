@@ -110,6 +110,7 @@ benchmarks! {
 		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
 	verify {
+		let p = T::MaxProposals::get();
 		assert_eq!(Democracy::<T>::public_props().len(), p as usize, "Proposals not created.");
 	}
 
