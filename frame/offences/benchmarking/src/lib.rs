@@ -66,13 +66,17 @@ pub trait Trait:
 /// and the one required by offences.
 pub trait IdTupleConvert<T: HistoricalTrait + OffencesTrait> {
 	/// Convert identification tuple from `historical` trait to the one expected by `offences`.
-	fn convert(id: IdentificationTuple<<T as frame_system::Trait>::AccountId, T>) -> <T as OffencesTrait>::IdentificationTuple;
+	fn convert(
+		id: IdentificationTuple<<T as frame_system::Trait>::AccountId, T>,
+	) -> <T as OffencesTrait>::IdentificationTuple;
 }
 
 impl<T: HistoricalTrait + OffencesTrait> IdTupleConvert<T> for T where
 	<T as OffencesTrait>::IdentificationTuple: From<IdentificationTuple<<T as frame_system::Trait>::AccountId, T>>
 {
-	fn convert(id: IdentificationTuple<<T as frame_system::Trait>::AccountId, T>) -> <T as OffencesTrait>::IdentificationTuple {
+	fn convert(
+		id: IdentificationTuple<<T as frame_system::Trait>::AccountId, T>,
+	) -> <T as OffencesTrait>::IdentificationTuple {
 		id.into()
 	}
 }
@@ -163,12 +167,15 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<
 
 	Staking::<T>::start_session(0);
 
+	let validator_id_of =
+		<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::ValidatorIdOf::convert;
+	let full_identification_of =
+		<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::FullIdentificationOf::convert;
+
 	let id_tuples = offenders.iter()
-		.map(|offender|
-			<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::ValidatorIdOf::convert(offender.controller.clone())
-				.expect("failed to get validator id from account id"))
-		.map(|validator_id|
-			<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::FullIdentificationOf::convert(validator_id.clone())
+		.map(|offender| validator_id_of(offender.controller.clone())
+			.expect("failed to get validator id from account id"))
+		.map(|validator_id| full_identification_of(validator_id.clone())
 			.map(|full_id| (validator_id, full_id))
 			.expect("failed to convert validator id to full identification"))
 		.collect::<Vec<IdentificationTuple<<T as frame_system::Trait>::AccountId, T>>>();

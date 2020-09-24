@@ -421,8 +421,7 @@ impl pallet_session::Trait for Runtime {
 	type WeightInfo = weights::pallet_session::WeightInfo<Runtime>;
 }
 
-impl pallet_session::historical::Trait for Runtime {
-}
+impl pallet_session::historical::Trait for Runtime {}
 
 pallet_staking_reward_curve::build! {
 	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
@@ -757,23 +756,10 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime where
 	type OverarchingCall = Call;
 }
 
-impl pallet_im_online::ValidatorSet<<Self as pallet_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId>>::ValidatorId> for Runtime {
-	fn validators() -> Vec<<Self as pallet_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId>>::ValidatorId> {
-		Session::validators()
-	}
-}
-
-impl pallet_im_online::SessionInterface for Runtime {
-	fn current_index() -> sp_staking::SessionIndex {
-		Session::current_index()
-	}
-}
-
 impl pallet_im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Event = Event;
 	type SessionInterface = Self;
-	type ValidatorSet = Self;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ImOnlineUnsignedPriority;
@@ -786,7 +772,7 @@ parameter_types! {
 
 impl pallet_offences::Trait for Runtime {
 	type Event = Event;
-	type IdentificationTuple = pallet_session::IdentificationTuple<<Self as frame_system::Trait>::AccountId, Self>;
+	type IdentificationTuple = pallet_session::IdentificationTuple<AccountId, Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }

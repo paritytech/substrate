@@ -21,7 +21,6 @@ sp-npos-elections = { version = "2.0.0", default-features = false, path = "../..
 sp-io ={ version = "2.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
-sp-session = { version = "2.0.0", default-features = false, path = "../../primitives/session" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 pallet-session = { version = "2.0.0", default-features = false, features = ["historical"], path = "../session" }
@@ -56,7 +55,6 @@ std = [
 	"frame-support/std",
 	"sp-runtime/std",
 	"sp-staking/std",
-	"sp-session/std",
 	"pallet-session/std",
 	"frame-system/std",
 	"pallet-authorship/std",

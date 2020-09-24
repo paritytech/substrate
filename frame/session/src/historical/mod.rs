@@ -35,17 +35,14 @@ use frame_support::{decl_module, decl_storage};
 use frame_support::print;
 use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use sp_trie::trie_types::{TrieDBMut, TrieDB};
-use super::{SessionIndex, Module as SessionModule};
-
-pub use pallet_session_common::IdentificationTuple;
+use super::{SessionIndex, Module as SessionModule, IdentificationTuple};
 
 mod shared;
 pub mod offchain;
 pub mod onchain;
 
 /// Trait necessary for the historical module.
-pub trait Trait: super::Trait {
-}
+pub trait Trait: super::Trait {}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {

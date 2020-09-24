@@ -21,14 +21,13 @@
 
 use std::cell::RefCell;
 
-use crate::{Module, Trait, ValidatorSet};
+use crate::{Module, Trait};
 use sp_runtime::Perbill;
 use sp_staking::{SessionIndex, offence::{ReportOffence, OffenceError}};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use sp_core::H256;
 use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
-use pallet_session::ValidatorIdentification;
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -182,23 +181,10 @@ parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
-impl ValidatorSet<<Self as ValidatorIdentification<u64>>::ValidatorId> for Runtime {
-	fn validators() -> Vec<<Self as ValidatorIdentification<u64>>::ValidatorId> {
-		Session::validators()
-	}
-}
-
-impl crate::SessionInterface for Runtime {
-	fn current_index() -> SessionIndex {
-		Session::current_index()
-	}
-}
-
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;
-	type ValidatorSet = Self;
 	type SessionInterface = Self;
 	type SessionDuration = Period;
 	type UnsignedPriority = UnsignedPriority;

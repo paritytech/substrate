@@ -231,17 +231,39 @@ pub trait WeightInfo {
 	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
 }
 
-/// The set of validators that are considered to be running an authority node.
-pub trait ValidatorSet<ValidatorId> {
-	/// Returns all the validators ought to be online.
+/// Trait for retrieving the session info needed for online node inspection.
+///
+/// This trait is used for decouple the pallet-session dependency from im-online
+/// module so that the user of im-online & offences modules can pass any list of
+/// validators that are considered to be online in each session, particularly useful
+/// for the Substrate-based projects having their own staking implementation
+/// instead of using pallet-staking directly.
+pub trait SessionInterface<ValidatorId> {
+	/// Returns current session index.
+	fn current_index() -> SessionIndex;
+
+	/// Returns all the validators ought to be online in a session.
+	///
+	/// The returned validators are all expected to be running an authority node.
 	fn validators() -> Vec<ValidatorId>;
 }
 
-pub trait SessionInterface {
-	fn current_index() -> SessionIndex;
+impl<T: pallet_session::Trait>
+	SessionInterface<<Self as ValidatorIdentification<<Self as frame_system::Trait>::AccountId>>::ValidatorId> for T
+{
+	fn current_index() -> sp_staking::SessionIndex {
+		pallet_session::Module::<T>::current_index()
+	}
+	fn validators() -> Vec<<Self as ValidatorIdentification<<Self as frame_system::Trait>::AccountId>>::ValidatorId> {
+		pallet_session::Module::<T>::validators()
+	}
 }
 
-pub trait Trait: SendTransactionTypes<Call<Self>> + ValidatorIdentification<<Self as frame_system::Trait>::AccountId> + frame_system::Trait {
+pub trait Trait:
+	SendTransactionTypes<Call<Self>>
+	+ ValidatorIdentification<<Self as frame_system::Trait>::AccountId>
+	+ frame_system::Trait
+{
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
@@ -256,10 +278,11 @@ pub trait Trait: SendTransactionTypes<Call<Self>> + ValidatorIdentification<<Sel
 	/// there is a chance the authority will produce a block and they won't be necessary.
 	type SessionDuration: Get<Self::BlockNumber>;
 
-	type SessionInterface: SessionInterface;
-
-	/// A set of validators expected to be online.
-	type ValidatorSet: ValidatorSet<<Self as ValidatorIdentification<<Self as frame_system::Trait>::AccountId>>::ValidatorId>;
+	/// A type for retrieving the necessary session info.
+	///
+	/// This is currently used to get the session index and list of validators expected to be online.
+	type SessionInterface:
+		SessionInterface<<Self as ValidatorIdentification<<Self as frame_system::Trait>::AccountId>>::ValidatorId>;
 
 	/// A type that gives us the ability to submit unresponsiveness offence reports.
 	type ReportUnresponsiveness:
@@ -312,10 +335,11 @@ decl_storage! {
 			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) AuthIndex
 			=> Option<Vec<u8>>;
 
-		/// For each session index, we keep a mapping of `<T as Trait>::ValidatorId` to the
-		/// number of blocks authored by the given authority.
+		/// For each session index, we keep a mapping of `<T as ValidatorIdentification<T::AccountId>>::ValidatorId`
+		/// to the number of blocks authored by the given authority.
 		AuthoredBlocks get(fn authored_blocks):
-			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) <T as ValidatorIdentification<T::AccountId>>::ValidatorId
+			double_map hasher(twox_64_concat) SessionIndex,
+					   hasher(twox_64_concat) <T as ValidatorIdentification<T::AccountId>>::ValidatorId
 			=> u32;
 	}
 	add_extra_genesis {
@@ -416,7 +440,12 @@ type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Trait>::Bl
 
 /// Keep track of number of authored blocks per authority, uncles are counted as
 /// well since they're a valid proof of being online.
-impl<T: Trait + pallet_authorship::Trait> pallet_authorship::EventHandler<<T as ValidatorIdentification<T::AccountId>>::ValidatorId, T::BlockNumber> for Module<T> {
+impl<T: Trait + pallet_authorship::Trait>
+	pallet_authorship::EventHandler<
+		<T as ValidatorIdentification<T::AccountId>>::ValidatorId,
+		T::BlockNumber,
+	> for Module<T>
+{
 	fn note_author(author: <T as ValidatorIdentification<T::AccountId>>::ValidatorId) {
 		Self::note_authorship(author);
 	}
@@ -432,7 +461,7 @@ impl<T: Trait> Module<T> {
 	/// authored at least one block, during the current session. Otherwise
 	/// `false`.
 	pub fn is_online(authority_index: AuthIndex) -> bool {
-		let current_validators = T::ValidatorSet::validators();
+		let current_validators = T::SessionInterface::validators();
 
 		if authority_index >= current_validators.len() as u32 {
 			return false;
@@ -443,7 +472,10 @@ impl<T: Trait> Module<T> {
 		Self::is_online_aux(authority_index, authority)
 	}
 
-	fn is_online_aux(authority_index: AuthIndex, authority: &<T as ValidatorIdentification<T::AccountId>>::ValidatorId) -> bool {
+	fn is_online_aux(
+		authority_index: AuthIndex,
+		authority: &<T as ValidatorIdentification<T::AccountId>>::ValidatorId,
+	) -> bool {
 		let current_session = T::SessionInterface::current_index();
 
 		<ReceivedHeartbeats>::contains_key(&current_session, &authority_index) ||
@@ -480,7 +512,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		let session_index = T::SessionInterface::current_index();
-		let validators_len = T::ValidatorSet::validators().len() as u32;
+		let validators_len = T::SessionInterface::validators().len() as u32;
 
 		Ok(Self::local_authority_keys()
 			.map(move |(authority_index, key)|
@@ -660,7 +692,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_before_session_ending() {
 		let session_index = T::SessionInterface::current_index();
 		let keys = Keys::<T>::get();
-		let current_validators = T::ValidatorSet::validators();
+		let current_validators = T::SessionInterface::validators();
 
 		let offenders = current_validators.into_iter().enumerate()
 			.filter(|(index, id)|

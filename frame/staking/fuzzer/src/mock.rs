@@ -111,8 +111,7 @@ impl pallet_timestamp::Trait for Test {
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
-impl pallet_session::historical::Trait for Test {
-}
+impl pallet_session::historical::Trait for Test {}
 
 impl pallet_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId> for Test {
 	type ValidatorId = AccountId;

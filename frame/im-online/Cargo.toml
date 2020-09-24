@@ -21,7 +21,6 @@ sp-std = { version = "2.0.0", default-features = false, path = "../../primitives
 serde = { version = "1.0.101", optional = true }
 pallet-session = { version = "2.0.0", default-features = false, path = "../session" }
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
-sp-session = { version = "2.0.0", default-features = false, path = "../../primitives/session" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
@@ -41,11 +40,11 @@ std = [
 	"serde",
 	"pallet-session/std",
 	"sp-io/std",
-	"sp-session/std",
 	"sp-runtime/std",
 	"sp-staking/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-session/std",
 	"pallet-session-common/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]

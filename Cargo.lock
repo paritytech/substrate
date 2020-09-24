@@ -4255,7 +4255,6 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-session",
  "sp-staking",
  "sp-std",
 ]
@@ -4592,7 +4591,6 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-session",
  "sp-staking",
  "sp-std",
 ]
@@ -4710,7 +4708,6 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-session",
  "sp-staking",
  "sp-std",
 ]
@@ -4883,7 +4880,6 @@ dependencies = [
  "sp-io",
  "sp-npos-elections",
  "sp-runtime",
- "sp-session",
  "sp-staking",
  "sp-std",
  "sp-storage",
@@ -4910,7 +4906,6 @@ dependencies = [
  "sp-io",
  "sp-npos-elections",
  "sp-runtime",
- "sp-session",
  "sp-std",
 ]
 
