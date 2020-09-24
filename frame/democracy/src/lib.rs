@@ -1628,7 +1628,7 @@ impl<T: Trait> Module<T> {
 	///
 	///
 	/// # <weight>
-	/// If a referendum is launched or maturing take full block weight. Otherwise:
+	/// If a referendum is launched or maturing, this will take full block weight. Otherwise:
 	/// - Complexity: `O(R)` where `R` is the number of unbaked referenda.
 	/// - Db reads: `LastTabledWasExternal`, `NextExternal`, `PublicProps`, `account`,
 	///   `ReferendumCount`, `LowestUnbaked`

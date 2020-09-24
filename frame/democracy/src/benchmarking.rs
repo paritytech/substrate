@@ -100,7 +100,9 @@ benchmarks! {
 	_ { }
 
 	propose {
-		for i in 0 .. (T::MaxProposals::get() - 1) {
+		let p = T::MaxProposals::get();
+
+		for i in 0 .. (p - 1) {
 			add_proposal::<T>(i)?;
 		}
 
@@ -110,7 +112,6 @@ benchmarks! {
 		whitelist_account!(caller);
 	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
 	verify {
-		let p = T::MaxProposals::get();
 		assert_eq!(Democracy::<T>::public_props().len(), p as usize, "Proposals not created.");
 	}
 
@@ -343,7 +344,8 @@ benchmarks! {
 		let referendum_index = add_referendum::<T>(r)?;
 	}: _(RawOrigin::Root, referendum_index)
 
-	// Note that we have a separate benchmark for `launch_next`
+	// This measures the path of `launch_next` external. Not currently used as we simply
+	// assume the weight is `MaxBlockWeight` when executing.
 	#[extra]
 	on_initialize_external {
 		let r in 0 .. MAX_REFERENDUMS;
@@ -383,6 +385,8 @@ benchmarks! {
 		}
 	}
 
+	// This measures the path of `launch_next` public. Not currently used as we simply
+	// assume the weight is `MaxBlockWeight` when executing.
 	#[extra]
 	on_initialize_public {
 		let r in 1 .. MAX_REFERENDUMS;
