@@ -260,7 +260,9 @@ decl_module! {
 		#[weight = {
 			let di = call.get_dispatch_info();
 			(T::WeightInfo::proxy(T::MaxProxies::get().into())
-				.saturating_add(di.weight),
+				.saturating_add(di.weight)
+				 // AccountData for inner call origin accountdata.
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 			di.class)
 		}]
 		fn proxy(origin,
@@ -558,7 +560,9 @@ decl_module! {
 		#[weight = {
 			let di = call.get_dispatch_info();
 			(T::WeightInfo::proxy_announced(T::MaxPending::get(), T::MaxProxies::get().into())
-				.saturating_add(di.weight),
+				.saturating_add(di.weight)
+				 // AccountData for inner call origin accountdata.
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 			di.class)
 		}]
 		fn proxy_announced(origin,
