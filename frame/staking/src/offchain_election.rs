@@ -25,10 +25,10 @@ use crate::{
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
 	build_support_map, evaluate_support, reduce, Assignment, ExtendedBalance, ElectionResult,
-	ElectionScore, balance_solution,
+	ElectionScore,
 };
 use sp_runtime::offchain::storage::StorageValueRef;
-use sp_runtime::{PerThing, RuntimeDebug, traits::{TrailingZeroInput, Zero}};
+use sp_runtime::{PerThing, RuntimeDebug, traits::TrailingZeroInput};
 use frame_support::traits::Get;
 use sp_std::{convert::TryInto, prelude::*};
 
@@ -106,15 +106,23 @@ pub(crate) fn set_check_offchain_execution_status<T: Trait>(
 /// compacts and reduces the solution, computes the score and submits it back to the chain as an
 /// unsigned transaction, without any signature.
 pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElectionError> {
+	let iters = get_balancing_iters::<T>();
 	// compute raw solution. Note that we use `OffchainAccuracy`.
 	let ElectionResult {
 		winners,
 		assignments,
-	} = <Module<T>>::do_phragmen::<OffchainAccuracy>()
+	} = <Module<T>>::do_phragmen::<OffchainAccuracy>(iters)
 		.ok_or(OffchainElectionError::ElectionFailed)?;
 
 	// process and prepare it for submission.
 	let (winners, compact, score, size) = prepare_submission::<T>(assignments, winners, true)?;
+
+	crate::log!(
+		info,
+		"prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
+		iters,
+		score,
+	);
 
 	// defensive-only: current era can never be none except genesis.
 	let current_era = <Module<T>>::current_era().unwrap_or_default();
@@ -132,6 +140,20 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
+/// Get a random number of iterations to run the balancing.
+///
+/// Uses the offchain seed to generate a random number.
+pub fn get_balancing_iters<T: Trait>() -> usize {
+	match T::MaxIterations::get() {
+		0 => 0,
+		max @ _ => {
+			let seed = sp_io::offchain::random_seed();
+			let random = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
+				.expect("input is padded with zeroes; qed") % max.saturating_add(1);
+			random as usize
+		}
+	}
+}
 
 /// Takes an election result and spits out some data that can be submitted to the chain.
 ///
@@ -177,26 +199,6 @@ pub fn prepare_submission<T: Trait>(
 		<Module<T>>::slashable_balance_of_vote_weight,
 	);
 
-	let (mut support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
-	// balance a random number of times.
-	let iterations_executed = match T::MaxIterations::get() {
-		0 => {
-			// Don't run balance_solution at all
-			0
-		}
-		iterations @ _ => {
-			let seed = sp_io::offchain::random_seed();
-			let iterations = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
-				.expect("input is padded with zeroes; qed") % iterations.saturating_add(1);
-			balance_solution(
-				&mut staked,
-				&mut support_map,
-				Zero::zero(),
-				iterations as usize,
-			)
-		}
-	};
-
 	// reduce
 	if do_reduce {
 		reduce(&mut staked);
@@ -220,7 +222,8 @@ pub fn prepare_submission<T: Trait>(
 			<Module<T>>::slashable_balance_of_vote_weight,
 		);
 
-		let (support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
+		let support_map = build_support_map::<T::AccountId>(&winners, &staked)
+			.map_err(|_| OffchainElectionError::ElectionFailed)?;
 		evaluate_support::<T::AccountId>(&support_map)
 	};
 
@@ -249,13 +252,6 @@ pub fn prepare_submission<T: Trait>(
 		validators: snapshot_validators.len() as ValidatorIndex,
 		nominators: snapshot_nominators.len() as NominatorIndex,
 	};
-
-	crate::log!(
-		info,
-		"prepared solution after {} equalization iterations with score {:?}",
-		iterations_executed,
-		score,
-	);
 
 	Ok((winners_indexed, compact, score, size))
 }

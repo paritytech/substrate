@@ -253,13 +253,13 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         NodeBlock = runtime::Block,
 ///         UncheckedExtrinsic = UncheckedExtrinsic
 ///     {
-///         System: system::{Module, Call, Event<T>, Config<T>},
-///         Test: test::{Module, Call},
-///         Test2: test_with_long_module::{Module},
+///         System: system::{Module, Call, Event<T>, Config<T>} = 0,
+///         Test: test::{Module, Call} = 1,
+///         Test2: test_with_long_module::{Module, Event<T>},
 ///
 ///         // Module with instances
 ///         Test3_Instance1: test3::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
-///         Test3_DefaultInstance: test3::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>},
+///         Test3_DefaultInstance: test3::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
 ///     }
 /// )
 /// ```
@@ -279,6 +279,18 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// - `Config` or `Config<T>` (if the config is generic)
 /// - `Inherent` - If the module provides/can check inherents.
 /// - `ValidateUnsigned` - If the module validates unsigned extrinsics.
+///
+/// `= $n` is an optional part allowing to define at which index the module variants in
+/// `OriginCaller`, `Call` and `Event` are encoded, and to define the ModuleToIndex value.
+///
+/// if `= $n` is not given, then index is resolved same as fieldless enum in Rust
+/// (i.e. incrementedly from previous index):
+/// ```nocompile
+/// module1 .. = 2,
+/// module2 .., // Here module2 is given index 3
+/// module3 .. = 0,
+/// module4 .., // Here module4 is given index 1
+/// ```
 ///
 /// # Note
 ///

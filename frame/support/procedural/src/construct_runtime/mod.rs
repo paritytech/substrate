@@ -19,14 +19,85 @@ mod parse;
 
 use frame_support_procedural_tools::syn_ext as ext;
 use frame_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
-use parse::{ModuleDeclaration, RuntimeDefinition, WhereSection};
+use parse::{ModuleDeclaration, RuntimeDefinition, WhereSection, ModulePart};
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{TokenStream as TokenStream2};
 use quote::quote;
 use syn::{Ident, Result, TypePath};
+use std::collections::HashMap;
 
 /// The fixed name of the system module.
 const SYSTEM_MODULE_NAME: &str = "System";
+
+/// The complete definition of a module with the resulting fixed index.
+#[derive(Debug, Clone)]
+pub struct Module {
+	pub name: Ident,
+	pub index: u8,
+	pub module: Ident,
+	pub instance: Option<Ident>,
+	pub module_parts: Vec<ModulePart>,
+}
+
+impl Module {
+	/// Get resolved module parts
+	fn module_parts(&self) -> &[ModulePart] {
+		&self.module_parts
+	}
+
+	/// Find matching parts
+	fn find_part(&self, name: &str) -> Option<&ModulePart> {
+		self.module_parts.iter().find(|part| part.name() == name)
+	}
+
+	/// Return whether module contains part
+	fn exists_part(&self, name: &str) -> bool {
+		self.find_part(name).is_some()
+	}
+}
+
+/// Convert from the parsed module to their final information.
+/// Assign index to each modules using same rules as rust for fieldless enum.
+/// I.e. implicit are assigned number incrementedly from last explicit or 0.
+fn complete_modules(decl: impl Iterator<Item = ModuleDeclaration>) -> syn::Result<Vec<Module>> {
+	let mut indices = HashMap::new();
+	let mut last_index: Option<u8> = None;
+
+	decl
+		.map(|module| {
+			let final_index = match module.index {
+				Some(i) => i,
+				None => last_index.map_or(Some(0), |i| i.checked_add(1))
+					.ok_or_else(|| {
+						let msg = "Module index doesn't fit into u8, index is 256";
+						syn::Error::new(module.name.span(), msg)
+					})?,
+			};
+
+			last_index = Some(final_index);
+
+			if let Some(used_module) = indices.insert(final_index, module.name.clone()) {
+				let msg = format!(
+					"Module indices are conflicting: Both modules {} and {} are at index {}",
+					used_module,
+					module.name,
+					final_index,
+				);
+				let mut err = syn::Error::new(used_module.span(), &msg);
+				err.combine(syn::Error::new(module.name.span(), msg));
+				return Err(err);
+			}
+
+			Ok(Module {
+				name: module.name,
+				index: final_index,
+				module: module.module,
+				instance: module.instance,
+				module_parts: module.module_parts,
+			})
+		})
+		.collect()
+}
 
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let definition = syn::parse_macro_input!(input as RuntimeDefinition);
@@ -52,19 +123,16 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		..
 	} = definition;
 
-	let modules = modules.into_pairs().map(|v| v.into_value()).collect::<Vec<_>>();
+	let modules = complete_modules(modules.into_iter())?;
 
-	// Assert we have system module declared
-	let system_module = match find_system_module(modules.iter()) {
-		Some(sm) => sm,
-		None => {
-			return Err(syn::Error::new(
-				modules_token.span,
-				"`System` module declaration is missing. \
-				 Please add this line: `System: frame_system::{Module, Call, Storage, Config, Event<T>},`",
-			))
-		}
-	};
+	let system_module = modules.iter()
+		.find(|decl| decl.name == SYSTEM_MODULE_NAME)
+		.ok_or_else(|| syn::Error::new(
+			modules_token.span,
+			"`System` module declaration is missing. \
+			 Please add this line: `System: frame_system::{Module, Call, Storage, Config, Event<T>},`",
+		))?;
+
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "frame-support");
@@ -79,7 +147,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 
 	let outer_origin = decl_outer_origin(
 		&name,
-		all_but_system_modules.clone(),
+		all_but_system_modules,
 		&system_module,
 		&scrate,
 	)?;
@@ -136,7 +204,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 
 fn decl_validate_unsigned<'a>(
 	runtime: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a Module>,
 	scrate: &'a TokenStream2,
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations
@@ -154,7 +222,7 @@ fn decl_validate_unsigned<'a>(
 fn decl_outer_inherent<'a>(
 	block: &'a syn::TypePath,
 	unchecked_extrinsic: &'a syn::TypePath,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a Module>,
 	scrate: &'a TokenStream2,
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations.filter_map(|module_declaration| {
@@ -178,7 +246,7 @@ fn decl_outer_inherent<'a>(
 
 fn decl_outer_config<'a>(
 	runtime: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a Module>,
 	scrate: &'a TokenStream2,
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations
@@ -216,7 +284,7 @@ fn decl_outer_config<'a>(
 
 fn decl_runtime_metadata<'a>(
 	runtime: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a Module>,
 	scrate: &'a TokenStream2,
 	extrinsic: &TypePath,
 ) -> TokenStream2 {
@@ -240,7 +308,12 @@ fn decl_runtime_metadata<'a>(
 				.as_ref()
 				.map(|name| quote!(<#name>))
 				.into_iter();
-			quote!(#module::Module #(#instance)* as #name with #(#filtered_names)* ,)
+
+			let index = module_declaration.index;
+
+			quote!(
+				#module::Module #(#instance)* as #name { index #index } with #(#filtered_names)*,
+			)
 		});
 	quote!(
 		#scrate::impl_runtime_metadata!{
@@ -252,7 +325,7 @@ fn decl_runtime_metadata<'a>(
 
 fn decl_outer_dispatch<'a>(
 	runtime: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a Module>,
 	scrate: &'a TokenStream2,
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations
@@ -260,8 +333,10 @@ fn decl_outer_dispatch<'a>(
 		.map(|module_declaration| {
 			let module = &module_declaration.module;
 			let name = &module_declaration.name;
-			quote!(#module::#name)
+			let index = module_declaration.index.to_string();
+			quote!(#[codec(index = #index)] #module::#name)
 		});
+
 	quote!(
 		#scrate::impl_outer_dispatch! {
 			pub enum Call for #runtime where origin: Origin {
@@ -273,12 +348,12 @@ fn decl_outer_dispatch<'a>(
 
 fn decl_outer_origin<'a>(
 	runtime_name: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
-	system_name: &'a Ident,
+	modules_except_system: impl Iterator<Item = &'a Module>,
+	system_module: &'a Module,
 	scrate: &'a TokenStream2,
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
-	for module_declaration in module_declarations {
+	for module_declaration in modules_except_system {
 		match module_declaration.find_part("Origin") {
 			Some(module_entry) => {
 				let module = &module_declaration.module;
@@ -292,16 +367,23 @@ fn decl_outer_origin<'a>(
 					);
 					return Err(syn::Error::new(module_declaration.name.span(), msg));
 				}
-				let tokens = quote!(#module #instance #generics ,);
+				let index = module_declaration.index.to_string();
+				let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
 				modules_tokens.extend(tokens);
 			}
 			None => {}
 		}
 	}
 
+	let system_name = &system_module.module;
+	let system_index = system_module.index.to_string();
+
 	Ok(quote!(
 		#scrate::impl_outer_origin! {
-			pub enum Origin for #runtime_name where system = #system_name {
+			pub enum Origin for #runtime_name where
+				system = #system_name,
+				system_index = #system_index
+			{
 				#modules_tokens
 			}
 		}
@@ -310,7 +392,7 @@ fn decl_outer_origin<'a>(
 
 fn decl_outer_event<'a>(
 	runtime_name: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a Module>,
 	scrate: &'a TokenStream2,
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
@@ -328,7 +410,9 @@ fn decl_outer_event<'a>(
 					);
 					return Err(syn::Error::new(module_declaration.name.span(), msg));
 				}
-				let tokens = quote!(#module #instance #generics ,);
+
+				let index = module_declaration.index.to_string();
+				let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
 				modules_tokens.extend(tokens);
 			}
 			None => {}
@@ -346,7 +430,7 @@ fn decl_outer_event<'a>(
 
 fn decl_all_modules<'a>(
 	runtime: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a Module>,
 ) -> TokenStream2 {
 	let mut types = TokenStream2::new();
 	let mut names = Vec::new();
@@ -379,13 +463,14 @@ fn decl_all_modules<'a>(
 }
 
 fn decl_pallet_runtime_setup(
-	module_declarations: &[ModuleDeclaration],
+	module_declarations: &[Module],
 	scrate: &TokenStream2,
 ) -> TokenStream2 {
 	let names = module_declarations.iter().map(|d| &d.name);
 	let names2 = module_declarations.iter().map(|d| &d.name);
 	let name_strings = module_declarations.iter().map(|d| d.name.to_string());
-	let indices = 0..module_declarations.len();
+	let indices = module_declarations.iter()
+		.map(|module| module.index as usize);
 
 	quote!(
 		/// Provides an implementation of `PalletInfo` to provide information
@@ -416,14 +501,6 @@ fn decl_pallet_runtime_setup(
 			}
 		}
 	)
-}
-
-fn find_system_module<'a>(
-	mut module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
-) -> Option<&'a Ident> {
-	module_declarations
-		.find(|decl| decl.name == SYSTEM_MODULE_NAME)
-		.map(|decl| &decl.module)
 }
 
 fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {

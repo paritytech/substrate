@@ -91,19 +91,20 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
+	weights::Weight,
 	storage::{StorageMap, IterableStorageMap},
 	dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo},
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
-		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus, InitializeMembers,
+		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, InitializeMembers, BalanceStatus,
 		ContainsLengthBound,
 	}
 };
-use sp_npos_elections::{build_support_map, ExtendedBalance, VoteWeight, ElectionResult};
+use sp_npos_elections::{ExtendedBalance, VoteWeight, ElectionResult};
 use frame_system::{ensure_signed, ensure_root};
 
 mod benchmarking;
+mod default_weights;
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
@@ -138,35 +139,17 @@ pub struct DefunctVoter<AccountId> {
 }
 
 pub trait WeightInfo {
-	fn vote(u: u32, ) -> Weight;
-	fn vote_update(u: u32, ) -> Weight;
-	fn remove_voter(u: u32, ) -> Weight;
+	fn vote(v: u32, ) -> Weight;
+	fn vote_update(v: u32, ) -> Weight;
+	fn remove_voter() -> Weight;
 	fn report_defunct_voter_correct(c: u32, v: u32, ) -> Weight;
 	fn report_defunct_voter_incorrect(c: u32, v: u32, ) -> Weight;
 	fn submit_candidacy(c: u32, ) -> Weight;
 	fn renounce_candidacy_candidate(c: u32, ) -> Weight;
-	fn renounce_candidacy_member_runner_up(u: u32, ) -> Weight;
-	fn remove_member_without_replacement(c: u32, ) -> Weight;
-	fn remove_member_with_replacement(u: u32, ) -> Weight;
-	fn remove_member_wrong_refund(u: u32, ) -> Weight;
-	fn on_initialize(c: u32, ) -> Weight;
-	fn phragmen(c: u32, v: u32, e: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn vote(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn vote_update(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_voter(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn report_defunct_voter_correct(_c: u32, _v: u32, ) -> Weight { 1_000_000_000 }
-	fn report_defunct_voter_incorrect(_c: u32, _v: u32, ) -> Weight { 1_000_000_000 }
-	fn submit_candidacy(_c: u32, ) -> Weight { 1_000_000_000 }
-	fn renounce_candidacy_candidate(_c: u32, ) -> Weight { 1_000_000_000 }
-	fn renounce_candidacy_member_runner_up(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_member_without_replacement(_c: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_member_with_replacement(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn remove_member_wrong_refund(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn on_initialize(_c: u32, ) -> Weight { 1_000_000_000 }
-	fn phragmen(_c: u32, _v: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn renounce_candidacy_members() -> Weight;
+	fn renounce_candidacy_runners_up() -> Weight;
+	fn remove_member_with_replacement() -> Weight;
+	fn remove_member_wrong_refund() -> Weight;
 }
 
 pub trait Trait: frame_system::Trait {
@@ -226,7 +209,7 @@ decl_storage! {
 		// ---- State
 		/// The current elected membership. Sorted based on account id.
 		pub Members get(fn members): Vec<(T::AccountId, BalanceOf<T>)>;
-		/// The current runners_up. Sorted based on low to high merit (worse to best runner).
+		/// The current runners_up. Sorted based on low to high merit (worse to best).
 		pub RunnersUp get(fn runners_up): Vec<(T::AccountId, BalanceOf<T>)>;
 		/// The total number of vote rounds that have happened, excluding the upcoming one.
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
@@ -350,13 +333,14 @@ decl_module! {
 		/// State reads:
 		/// 	- Candidates.len() + Members.len() + RunnersUp.len()
 		/// 	- Voting (is_voter)
+		/// 	- Lock
 		/// 	- [AccountBalance(who) (unreserve + total_balance)]
 		/// State writes:
 		/// 	- Voting
 		/// 	- Lock
 		/// 	- [AccountBalance(who) (unreserve -- only when creating a new voter)]
 		/// # </weight>
-		#[weight = 50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)]
+		#[weight = T::WeightInfo::vote(votes.len() as u32)]
 		fn vote(
 			origin,
 			votes: Vec<T::AccountId>,
@@ -412,7 +396,7 @@ decl_module! {
 		/// 	- Locks
 		/// 	- [AccountData(who)]
 		/// # </weight>
-		#[weight = 35 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 2)]
+		#[weight = T::WeightInfo::remove_voter()]
 		fn remove_voter(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_voter(&who), Error::<T>::MustBeVoter);
@@ -447,15 +431,14 @@ decl_module! {
 		/// 	- Voting(reporter || target)
 		/// Note: the db access is worse with respect to db, which is when the report is correct.
 		/// # </weight>
-		#[weight =
-			Weight::from(defunct.candidate_count).saturating_mul(2 * WEIGHT_PER_MICROS)
-			.saturating_add(Weight::from(defunct.vote_count).saturating_mul(19 * WEIGHT_PER_MICROS))
-			.saturating_add(T::DbWeight::get().reads_writes(6, 3))
-		]
+		#[weight = T::WeightInfo::report_defunct_voter_correct(
+			defunct.candidate_count,
+			defunct.vote_count,
+		)]
 		fn report_defunct_voter(
 			origin,
 			defunct: DefunctVoter<<T::Lookup as StaticLookup>::Source>,
-		) {
+		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 			let target = T::Lookup::lookup(defunct.who)?;
 
@@ -482,19 +465,25 @@ decl_module! {
 			);
 
 			let valid = Self::is_defunct_voter(&votes);
-			if valid {
+			let maybe_refund = if valid {
 				// reporter will get the voting bond of the target
 				T::Currency::repatriate_reserved(&target, &reporter, T::VotingBond::get(), BalanceStatus::Free)?;
 				// remove the target. They are defunct.
 				Self::do_remove_voter(&target, false);
+				None
 			} else {
 				// slash the bond of the reporter.
 				let imbalance = T::Currency::slash_reserved(&reporter, T::VotingBond::get()).0;
 				T::BadReport::on_unbalanced(imbalance);
 				// remove the reporter.
 				Self::do_remove_voter(&reporter, false);
-			}
+				Some(T::WeightInfo::report_defunct_voter_incorrect(
+					defunct.candidate_count,
+					defunct.vote_count,
+				))
+			};
 			Self::deposit_event(RawEvent::VoterReported(target, reporter, valid));
+			Ok(maybe_refund.into())
 		}
 
 		/// Submit oneself for candidacy.
@@ -509,7 +498,6 @@ decl_module! {
 		/// Base weight = 33.33 µs
 		/// Complexity of candidate_count: 0.375 µs
 		/// State reads:
-		/// 	- Candidates.len()
 		/// 	- Candidates
 		/// 	- Members
 		/// 	- RunnersUp
@@ -518,11 +506,7 @@ decl_module! {
 		/// 	- [AccountBalance(who)]
 		/// 	- Candidates
 		/// # </weight>
-		#[weight =
-			(35 * WEIGHT_PER_MICROS)
-			.saturating_add(Weight::from(*candidate_count).saturating_mul(375 * WEIGHT_PER_NANOS))
-			.saturating_add(T::DbWeight::get().reads_writes(4, 1))
-		]
+		#[weight = T::WeightInfo::submit_candidacy(*candidate_count)]
 		fn submit_candidacy(origin, #[compact] candidate_count: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -582,23 +566,11 @@ decl_module! {
 		/// 	State writes:
 		/// 		- RunnersUp (remove_and_replace_member),
 		/// 		- [AccountData(who) (unreserve)]
-		///
-		/// Weight note: The call into changeMembers need to be accounted for.
 		/// </weight>
 		#[weight =  match *renouncing {
-			Renouncing::Candidate(count) => {
-				(18 * WEIGHT_PER_MICROS)
-				.saturating_add(Weight::from(count).saturating_mul(235 * WEIGHT_PER_NANOS))
-				.saturating_add(T::DbWeight::get().reads_writes(1, 1))
-			},
-			Renouncing::Member => {
-				46 * WEIGHT_PER_MICROS +
-				T::DbWeight::get().reads_writes(2, 2)
-			},
-			Renouncing::RunnerUp => {
-				46 * WEIGHT_PER_MICROS +
-				T::DbWeight::get().reads_writes(1, 1)
-			}
+			Renouncing::Candidate(count) => T::WeightInfo::renounce_candidacy_candidate(count),
+			Renouncing::Member => T::WeightInfo::renounce_candidacy_members(),
+			Renouncing::RunnerUp => T::WeightInfo::renounce_candidacy_runners_up(),
 		}]
 		fn renounce_candidacy(origin, renouncing: Renouncing) {
 			let who = ensure_signed(origin)?;
@@ -659,7 +631,7 @@ decl_module! {
 		/// Else, since this is a root call and will go into phragmen, we assume full block for now.
 		/// # </weight>
 		#[weight = if *has_replacement {
-			50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(3, 2)
+			T::WeightInfo::remove_member_with_replacement()
 		} else {
 			T::MaximumBlockWeight::get()
 		}]
@@ -677,7 +649,7 @@ decl_module! {
 				return Err(Error::<T>::InvalidReplacement.with_weight(
 					// refund. The weight value comes from a benchmark which is special to this.
 					//  5.751 µs
-					6 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 0)
+					T::WeightInfo::remove_member_wrong_refund()
 				));
 			} // else, prediction was correct.
 
@@ -717,7 +689,9 @@ decl_event!(
 		/// No (or not enough) candidates existed for this round. This is different from
 		/// `NewTerm(\[\])`. See the description of `NewTerm`.
 		EmptyTerm,
-		/// A \[member\] has been removed. This should always be followed by either `NewTerm` ot
+		/// Internal error happened while trying to perform election.
+		ElectionError,
+		/// A \[member\] has been removed. This should always be followed by either `NewTerm` or
 		/// `EmptyTerm`.
 		MemberKicked(AccountId),
 		/// A \[member\] has renounced their candidacy.
@@ -832,7 +806,9 @@ impl<T: Trait> Module<T> {
 	/// Reads Members, RunnersUp, Candidates and Voting(who) from database.
 	fn is_defunct_voter(votes: &[T::AccountId]) -> bool {
 		votes.iter().all(|v|
-			!Self::is_member(v) && !Self::is_runner_up(v) && !Self::is_candidate(v).is_ok()
+			!Self::is_member(v) &&
+			!Self::is_runner_up(v) &&
+			!Self::is_candidate(v).is_ok()
 		)
 	}
 
@@ -853,11 +829,6 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// The locked stake of a voter.
-	fn locked_stake_of(who: &T::AccountId) -> BalanceOf<T> {
-		Voting::<T>::get(who).0
-	}
-
 	/// Check there's nothing to do this block.
 	///
 	/// Runs phragmen election and cleans all the previous candidate state. The voter state is NOT
@@ -872,7 +843,8 @@ impl<T: Trait> Module<T> {
 		0
 	}
 
-	/// Run the phragmen election with all required side processes and state updates.
+	/// Run the phragmen election with all required side processes and state updates, if election
+	/// succeeds. Else, it will emit an `ElectionError` event.
 	///
 	/// Calls the appropriate [`ChangeMembers`] function variant internally.
 	///
@@ -893,6 +865,11 @@ impl<T: Trait> Module<T> {
 		// previous runners_up are also always candidates for the next round.
 		candidates.append(&mut Self::runners_up_ids());
 
+		if candidates.len().is_zero() {
+			Self::deposit_event(RawEvent::EmptyTerm);
+			return;
+		}
+
 		// helper closures to deal with balance/stake.
 		let to_votes = |b: BalanceOf<T>| -> VoteWeight {
 			<T::CurrencyToVote as Convert<BalanceOf<T>, VoteWeight>>::convert(b)
@@ -900,27 +877,23 @@ impl<T: Trait> Module<T> {
 		let to_balance = |e: ExtendedBalance| -> BalanceOf<T> {
 			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e)
 		};
-		let stake_of = |who: &T::AccountId| -> VoteWeight {
-			to_votes(Self::locked_stake_of(who))
-		};
 
 		// used for prime election.
 		let voters_and_stakes = Voting::<T>::iter()
-			.map(|(voter, (stake, targets))| { (voter, stake, targets) })
+			.map(|(voter, (stake, votes))| { (voter, stake, votes) })
 			.collect::<Vec<_>>();
 		// used for phragmen.
 		let voters_and_votes = voters_and_stakes.iter()
 			.cloned()
-			.map(|(voter, stake, targets)| { (voter, to_votes(stake), targets)} )
+			.map(|(voter, stake, votes)| { (voter, to_votes(stake), votes)} )
 			.collect::<Vec<_>>();
-		let maybe_phragmen_result = sp_npos_elections::seq_phragmen::<T::AccountId, Perbill>(
-			num_to_elect,
-			0,
-			candidates,
-			voters_and_votes,
-		);
 
-		if let Some(ElectionResult { winners, assignments }) = maybe_phragmen_result {
+		let _ = sp_npos_elections::seq_phragmen::<T::AccountId, Perbill>(
+			num_to_elect,
+			candidates,
+			voters_and_votes.clone(),
+			None,
+		).map(|ElectionResult { winners, assignments: _ }| {
 			let old_members_ids = <Members<T>>::take().into_iter()
 				.map(|(m, _)| m)
 				.collect::<Vec<T::AccountId>>();
@@ -928,40 +901,16 @@ impl<T: Trait> Module<T> {
 				.map(|(r, _)| r)
 				.collect::<Vec<T::AccountId>>();
 
-			// filter out those who had literally no votes at all.
-			// NOTE: the need to do this is because all candidates, even those who have no
-			// vote are still considered by phragmen and when good candidates are scarce, then these
-			// cheap ones might get elected. We might actually want to remove the filter and allow
-			// zero-voted candidates to also make it to the membership set.
-			let new_set_with_approval = winners;
-			let new_set = new_set_with_approval
+			// filter out those who end up with no backing stake.
+			let new_set_with_stake = winners
 				.into_iter()
-				.filter_map(|(m, a)| if a.is_zero() { None } else { Some(m) } )
-				.collect::<Vec<T::AccountId>>();
+				.filter_map(|(m, b)| if b.is_zero() { None } else { Some((m, to_balance(b))) })
+				.collect::<Vec<(T::AccountId, BalanceOf<T>)>>();
 
 			// OPTIMISATION NOTE: we could bail out here if `new_set.len() == 0`. There isn't much
 			// left to do. Yet, re-arranging the code would require duplicating the slashing of
 			// exposed candidates, cleaning any previous members, and so on. For now, in favour of
 			// readability and veracity, we keep it simple.
-
-			let staked_assignments = sp_npos_elections::assignment_ratio_to_staked(
-				assignments,
-				stake_of,
-			);
-
-			let (support_map, _) = build_support_map::<T::AccountId>(&new_set, &staked_assignments);
-
-			let new_set_with_stake = new_set
-				.into_iter()
-				.map(|ref m| {
-					let support = support_map.get(m)
-						.expect(
-							"entire new_set was given to build_support_map; en entry must be \
-							created for each item; qed"
-						);
-					(m.clone(), to_balance(support.total))
-				})
-				.collect::<Vec<(T::AccountId, BalanceOf<T>)>>();
 
 			// split new set into winners and runners up.
 			let split_point = desired_seats.min(new_set_with_stake.len());
@@ -976,8 +925,8 @@ impl<T: Trait> Module<T> {
 			// of the votes. i.e. the first person a voter votes for gets a 16x multiplier,
 			// the next person gets a 15x multiplier, an so on... (assuming `MAXIMUM_VOTE` = 16)
 			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
-			for (_, stake, targets) in voters_and_stakes.into_iter() {
-				for (vote_multiplier, who) in targets.iter()
+			for (_, stake, votes) in voters_and_stakes.into_iter() {
+				for (vote_multiplier, who) in votes.iter()
 					.enumerate()
 					.map(|(vote_position, who)| ((MAXIMUM_VOTE - vote_position) as u32, who))
 				{
@@ -1057,14 +1006,15 @@ impl<T: Trait> Module<T> {
 			<RunnersUp<T>>::put(new_runners_up);
 
 			Self::deposit_event(RawEvent::NewTerm(new_members.clone().to_vec()));
-		} else {
-			Self::deposit_event(RawEvent::EmptyTerm);
-		}
 
-		// clean candidates.
-		<Candidates<T>>::kill();
+			// clean candidates.
+			<Candidates<T>>::kill();
 
-		ElectionRounds::mutate(|v| *v += 1);
+			ElectionRounds::mutate(|v| *v += 1);
+		}).map_err(|e| {
+			frame_support::debug::error!("elections-phragmen: failed to run election [{:?}].", e);
+			Self::deposit_event(RawEvent::ElectionError);
+		});
 	}
 }
 
@@ -1392,6 +1342,10 @@ mod tests {
 		assert_eq!(Elections::candidates(), candidates);
 	}
 
+	fn locked_stake_of(who: &u64) -> u64 {
+		Voting::<Test>::get(who).0
+	}
+
 	fn ensure_members_has_approval_stake() {
 		// we filter members that have no approval state. This means that even we have more seats
 		// than candidates, we will never ever chose a member with no votes.
@@ -1710,13 +1664,13 @@ mod tests {
 
 			assert_eq!(balances(&2), (18, 2));
 			assert_eq!(has_lock(&2), 20);
-			assert_eq!(Elections::locked_stake_of(&2), 20);
+			assert_eq!(locked_stake_of(&2), 20);
 
 			// can update; different stake; different lock and reserve.
 			assert_ok!(vote(Origin::signed(2), vec![5, 4], 15));
 			assert_eq!(balances(&2), (18, 2));
 			assert_eq!(has_lock(&2), 15);
-			assert_eq!(Elections::locked_stake_of(&2), 15);
+			assert_eq!(locked_stake_of(&2), 15);
 		});
 	}
 
@@ -1854,7 +1808,7 @@ mod tests {
 
 			assert_ok!(vote(Origin::signed(2), vec![4, 5], 30));
 			// you can lie but won't get away with it.
-			assert_eq!(Elections::locked_stake_of(&2), 20);
+			assert_eq!(locked_stake_of(&2), 20);
 			assert_eq!(has_lock(&2), 20);
 		});
 	}
@@ -1868,8 +1822,8 @@ mod tests {
 			assert_ok!(vote(Origin::signed(3), vec![5], 30));
 
 			assert_eq_uvec!(all_voters(), vec![2, 3]);
-			assert_eq!(Elections::locked_stake_of(&2), 20);
-			assert_eq!(Elections::locked_stake_of(&3), 30);
+			assert_eq!(locked_stake_of(&2), 20);
+			assert_eq!(locked_stake_of(&3), 30);
 			assert_eq!(votes_of(&2), vec![5]);
 			assert_eq!(votes_of(&3), vec![5]);
 
@@ -1877,7 +1831,7 @@ mod tests {
 
 			assert_eq_uvec!(all_voters(), vec![3]);
 			assert!(votes_of(&2).is_empty());
-			assert_eq!(Elections::locked_stake_of(&2), 0);
+			assert_eq!(locked_stake_of(&2), 0);
 
 			assert_eq!(balances(&2), (20, 0));
 			assert_eq!(Balances::locks(&2).len(), 0);
@@ -2119,6 +2073,57 @@ mod tests {
 			assert_eq!(<Candidates<Test>>::decode_len(), None);
 
 			assert_eq!(Elections::election_rounds(), 1);
+		});
+	}
+
+	#[test]
+	fn empty_term() {
+		ExtBuilder::default().build_and_execute(|| {
+			// no candidates, no nothing.
+			System::set_block_number(5);
+			Elections::end_block(System::block_number());
+
+			assert_eq!(
+				System::events().iter().last().unwrap().event,
+				Event::elections_phragmen(RawEvent::EmptyTerm),
+			)
+		})
+	}
+
+	#[test]
+	fn all_outgoing() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(submit_candidacy(Origin::signed(5)));
+			assert_ok!(submit_candidacy(Origin::signed(4)));
+
+			assert_ok!(vote(Origin::signed(5), vec![5], 50));
+			assert_ok!(vote(Origin::signed(4), vec![4], 40));
+
+			System::set_block_number(5);
+			Elections::end_block(System::block_number());
+
+			assert_eq!(
+				System::events().iter().last().unwrap().event,
+				Event::elections_phragmen(RawEvent::NewTerm(vec![(4, 40), (5, 50)])),
+			);
+
+			assert_eq!(Elections::members(), vec![(4, 40), (5, 50)]);
+			assert_eq!(Elections::runners_up(), vec![]);
+
+			assert_ok!(Elections::remove_voter(Origin::signed(5)));
+			assert_ok!(Elections::remove_voter(Origin::signed(4)));
+
+			System::set_block_number(10);
+			Elections::end_block(System::block_number());
+
+			assert_eq!(
+				System::events().iter().last().unwrap().event,
+				Event::elections_phragmen(RawEvent::NewTerm(vec![])),
+			);
+
+			// outgoing have lost their bond.
+			assert_eq!(balances(&4), (37, 0));
+			assert_eq!(balances(&5), (47, 0));
 		});
 	}
 
@@ -2434,7 +2439,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, true),
 				Error::<Test>::InvalidReplacement,
-				Some(6000000),
+				Some(33777000), // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 
@@ -2456,7 +2461,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, false),
 				Error::<Test>::InvalidReplacement,
-				Some(6000000) // only thing that matters for now is that it is NOT the full block.
+				Some(33777000) // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 	}
@@ -2696,29 +2701,29 @@ mod tests {
 		})
 	}
 
-	// #[test]
-	// fn runner_up_replacement_works_when_out_of_order() {
-	// 	ExtBuilder::default().desired_runners_up(2).build_and_execute(|| {
-	// 		assert_ok!(submit_candidacy(Origin::signed(5)));
-	// 		assert_ok!(submit_candidacy(Origin::signed(4)));
-	// 		assert_ok!(submit_candidacy(Origin::signed(3)));
-	// 		assert_ok!(submit_candidacy(Origin::signed(2)));
+	#[test]
+	fn runner_up_replacement_works_when_out_of_order() {
+		ExtBuilder::default().desired_runners_up(2).build_and_execute(|| {
+			assert_ok!(submit_candidacy(Origin::signed(5)));
+			assert_ok!(submit_candidacy(Origin::signed(4)));
+			assert_ok!(submit_candidacy(Origin::signed(3)));
+			assert_ok!(submit_candidacy(Origin::signed(2)));
 
-	// 		assert_ok!(vote(Origin::signed(2), vec![5], 20));
-	// 		assert_ok!(vote(Origin::signed(3), vec![3], 30));
-	// 		assert_ok!(vote(Origin::signed(4), vec![4], 40));
-	// 		assert_ok!(vote(Origin::signed(5), vec![2], 50));
+			assert_ok!(vote(Origin::signed(2), vec![5], 20));
+			assert_ok!(vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(vote(Origin::signed(5), vec![2], 50));
 
-	// 		System::set_block_number(5);
-	// 		Elections::end_block(System::block_number());
+			System::set_block_number(5);
+			Elections::end_block(System::block_number());
 
-	// 		assert_eq!(Elections::members_ids(), vec![2, 4]);
-	// 		assert_eq!(ELections::runners_up_ids(), vec![3, 5]);
-	// 		assert_ok!(Elections::renounce_candidacy(Origin::signed(3), Renouncing::RunnerUp));
-	// 		assert_eq!(Elections::members_ids(), vec![2, 4]);
-	// 		assert_eq!(ELections::runners_up_ids(), vec![5]);
-	// 	});
-	// }
+			assert_eq!(Elections::members_ids(), vec![2, 4]);
+			assert_eq!(Elections::runners_up_ids(), vec![5, 3]);
+			assert_ok!(Elections::renounce_candidacy(Origin::signed(3), Renouncing::RunnerUp));
+			assert_eq!(Elections::members_ids(), vec![2, 4]);
+			assert_eq!(Elections::runners_up_ids(), vec![5]);
+		});
+	}
 
 	#[test]
 	fn can_renounce_candidacy_candidate() {
