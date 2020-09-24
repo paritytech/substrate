@@ -661,6 +661,8 @@ impl<T: Trait> Module<T> {
 }
 
 pub mod migration {
+	use super::*;
+
 	pub fn migrate_to_time_delayed_proxies<T: Trait>() -> Weight {
 		Proxies::<T>::translate::<(Vec<(T::AccountId, T::ProxyType)>, BalanceOf<T>), _>(
 			|_, (targets, deposit)| Some((
