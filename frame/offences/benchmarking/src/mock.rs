@@ -90,10 +90,13 @@ impl pallet_timestamp::Trait for Test {
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
-impl pallet_session::historical::Trait for Test {
+impl sp_session::ValidatorIdentification<AccountId> for Test {
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
 }
+impl pallet_session::historical::Trait for Test {}
 
 sp_runtime::impl_opaque_keys! {
 	pub struct SessionKeys {
@@ -128,8 +131,6 @@ impl pallet_session::Trait for Test {
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
 	type Event = Event;
-	type ValidatorId = AccountId;
-	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type DisabledValidatorsThreshold = ();
 	type WeightInfo = ();
 }
@@ -186,9 +187,15 @@ impl pallet_staking::Trait for Test {
 	type WeightInfo = ();
 }
 
-impl pallet_im_online::ValidatorSet<<Self as pallet_session::Trait>::ValidatorId> for Test {
-	fn validators() -> Vec<<Self as pallet_session::Trait>::ValidatorId> {
+impl pallet_im_online::ValidatorSet<<Self as sp_session::ValidatorIdentification<AccountId>>::ValidatorId> for Test {
+	fn validators() -> Vec<<Self as sp_session::ValidatorIdentification<AccountId>>::ValidatorId> {
 		Session::validators()
+	}
+}
+
+impl pallet_im_online::SessionInterface for Test {
+	fn current_index() -> sp_staking::SessionIndex {
+		Session::current_index()
 	}
 }
 
@@ -196,6 +203,7 @@ impl pallet_im_online::Trait for Test {
 	type AuthorityId = UintAuthorityId;
 	type Event = Event;
 	type ValidatorSet = Self;
+	type SessionInterface = Self;
 	type SessionDuration = Period;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();
@@ -208,7 +216,7 @@ parameter_types! {
 
 impl pallet_offences::Trait for Test {
 	type Event = Event;
-	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
+	type IdentificationTuple = sp_session::IdentificationTuple<AccountId, Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }

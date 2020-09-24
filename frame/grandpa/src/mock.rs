@@ -121,11 +121,16 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
+impl sp_session::ValidatorIdentification<u64> for Test {
+	type ValidatorId = u64;
+	type ValidatorIdOf = pallet_staking::StashOf<Self>;
+	type FullIdentification = pallet_staking::Exposure<u64, u128>;
+	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
+}
+
 /// Custom `SessionHandler` since we use `TestSessionKeys` as `Keys`.
 impl pallet_session::Trait for Test {
 	type Event = TestEvent;
-	type ValidatorId = u64;
-	type ValidatorIdOf = pallet_staking::StashOf<Self>;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
@@ -135,10 +140,7 @@ impl pallet_session::Trait for Test {
 	type WeightInfo = ();
 }
 
-impl pallet_session::historical::Trait for Test {
-	type FullIdentification = pallet_staking::Exposure<u64, u128>;
-	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
-}
+impl pallet_session::historical::Trait for Test {}
 
 parameter_types! {
 	pub const UncleGenerations: u64 = 0;
@@ -242,7 +244,7 @@ parameter_types! {
 
 impl pallet_offences::Trait for Test {
 	type Event = TestEvent;
-	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
+	type IdentificationTuple = sp_session::IdentificationTuple<u64, Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }

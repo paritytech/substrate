@@ -4576,7 +4576,7 @@ fn offences_weight_calculated_correctly() {
 		let n_offence_unapplied_weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 1)
 			+ <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 5);
 
-		let offenders: Vec<OffenceDetails<<Test as frame_system::Trait>::AccountId, pallet_session::historical::IdentificationTuple<Test>>>
+		let offenders: Vec<OffenceDetails<<Test as frame_system::Trait>::AccountId, sp_session::IdentificationTuple<<Test as frame_system::Trait>::AccountId, Test>>>
 			= (1..10).map(|i|
 				OffenceDetails {
 					offender: (i, Staking::eras_stakers(Staking::active_era().unwrap().index, i)),

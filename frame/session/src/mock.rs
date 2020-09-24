@@ -211,6 +211,13 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 
+impl sp_session::ValidatorIdentification<u64> for Test {
+	type ValidatorId = u64;
+	type ValidatorIdOf = ConvertInto;
+	type FullIdentification = u64;
+	type FullIdentificationOf = sp_runtime::traits::ConvertInto;
+}
+
 impl Trait for Test {
 	type ShouldEndSession = TestShouldEndSession;
 	#[cfg(feature = "historical")]
@@ -218,8 +225,6 @@ impl Trait for Test {
 	#[cfg(not(feature = "historical"))]
 	type SessionManager = TestSessionManager;
 	type SessionHandler = TestSessionHandler;
-	type ValidatorId = u64;
-	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
 	type Event = ();
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
@@ -228,10 +233,7 @@ impl Trait for Test {
 }
 
 #[cfg(feature = "historical")]
-impl crate::historical::Trait for Test {
-	type FullIdentification = u64;
-	type FullIdentificationOf = sp_runtime::traits::ConvertInto;
-}
+impl crate::historical::Trait for Test {}
 
 pub type System = frame_system::Module<Test>;
 pub type Session = Module<Test>;

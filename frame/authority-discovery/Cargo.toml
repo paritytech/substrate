@@ -26,6 +26,7 @@ frame-system = { version = "2.0.0", default-features = false, path = "../system"
 [dev-dependencies]
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-io = { version = "2.0.0", path = "../../primitives/io" }
+sp-session = { version = "2.0.0", path = "../../primitives/session" }
 sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
 
 [features]

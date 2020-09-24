@@ -28,6 +28,7 @@ use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use sp_core::H256;
 use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
+use sp_session::ValidatorIdentification;
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -146,12 +147,17 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 
+impl sp_session::ValidatorIdentification<u64> for Runtime {
+	type ValidatorId = u64;
+	type ValidatorIdOf = ConvertInto;
+	type FullIdentification = u64;
+	type FullIdentificationOf = ConvertInto;
+}
+
 impl pallet_session::Trait for Runtime {
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Runtime, TestSessionManager>;
 	type SessionHandler = (ImOnline, );
-	type ValidatorId = u64;
-	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = ();
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
@@ -159,10 +165,7 @@ impl pallet_session::Trait for Runtime {
 	type WeightInfo = ();
 }
 
-impl pallet_session::historical::Trait for Runtime {
-	type FullIdentification = u64;
-	type FullIdentificationOf = ConvertInto;
-}
+impl pallet_session::historical::Trait for Runtime {}
 
 parameter_types! {
 	pub const UncleGenerations: u32 = 5;
@@ -179,9 +182,15 @@ parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
-impl ValidatorSet<<Self as pallet_session::Trait>::ValidatorId> for Runtime {
-	fn validators() -> Vec<<Self as pallet_session::Trait>::ValidatorId> {
+impl ValidatorSet<<Self as ValidatorIdentification<u64>>::ValidatorId> for Runtime {
+	fn validators() -> Vec<<Self as ValidatorIdentification<u64>>::ValidatorId> {
 		Session::validators()
+	}
+}
+
+impl crate::SessionInterface for Runtime {
+	fn current_index() -> SessionIndex {
+		Session::current_index()
 	}
 }
 
@@ -190,6 +199,7 @@ impl Trait for Runtime {
 	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;
 	type ValidatorSet = Self;
+	type SessionInterface = Self;
 	type SessionDuration = Period;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();
