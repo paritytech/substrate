@@ -282,6 +282,8 @@ decl_module! {
 		/// Parameters:
 		/// - `proxy`: The account that the `caller` would like to make a proxy.
 		/// - `proxy_type`: The permissions allowed for this proxy account.
+		/// - `delay`: The announcement period required of the initial proxy. Will generally be
+		/// zero.
 		///
 		/// # <weight>
 		/// Weight is a function of the number of proxies the user has (P).
@@ -549,6 +551,18 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+
+	/// Calculate the address of an anonymous account.
+	///
+	/// - `who`: The spawner account.
+	/// - `proxy_type`: The type of the proxy that the sender will be registered as over the
+	/// new account. This will almost always be the most permissive `ProxyType` possible to
+	/// allow for maximum flexibility.
+	/// - `index`: A disambiguation index, in case this is called multiple times in the same
+	/// transaction (e.g. with `utility::batch`). Unless you're using `batch` you probably just
+	/// want to use `0`.
+	/// - `maybe_when`: The block height and extrinsic index of when the anonymous account was
+	/// created. None to use current block height and extrinsic index.
 	pub fn anonymous_account(
 		who: &T::AccountId,
 		proxy_type: &T::ProxyType,
@@ -564,6 +578,14 @@ impl<T: Trait> Module<T> {
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 	}
 
+	/// Register a proxy account for the delegator that is able to make calls on its behalf.
+	///
+	/// Parameters:
+	/// - `delegator`: The delegator account.
+	/// - `delegatee`: The account that the `delegator` would like to make a proxy.
+	/// - `proxy_type`: The permissions allowed for this proxy account.
+	/// - `delay`: The announcement period required of the initial proxy. Will generally be
+	/// zero.
 	pub fn add_proxy_delegate(
 		delegator: &T::AccountId,
 		delegatee: T::AccountId,
@@ -586,6 +608,14 @@ impl<T: Trait> Module<T> {
 		})
 	}
 
+	/// Unregister a proxy account for the delegator.
+	///
+	/// Parameters:
+	/// - `delegator`: The delegator account.
+	/// - `delegatee`: The account that the `delegator` would like to make a proxy.
+	/// - `proxy_type`: The permissions allowed for this proxy account.
+	/// - `delay`: The announcement period required of the initial proxy. Will generally be
+	/// zero.
 	pub fn remove_proxy_delegate(
 		delegator: &T::AccountId,
 		delegatee: T::AccountId,
