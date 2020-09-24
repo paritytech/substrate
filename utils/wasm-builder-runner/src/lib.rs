@@ -403,7 +403,7 @@ fn create_project(
 		project_folder.join("src/main.rs"),
 		format!(
 			r#"
-				//! WASM builder
+				//! This is automatically generated code by `substrate-wasm-builder`.
 
 				use substrate_wasm_builder::build_project_with_default_rustflags;
 
