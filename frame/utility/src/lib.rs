@@ -61,7 +61,7 @@ use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_storage, Parameter};
 use frame_support::{
-	traits::{OriginTrait, UnfilteredDispatchable},
+	traits::{OriginTrait, UnfilteredDispatchable, Get},
 	weights::{Weight, GetDispatchInfo, DispatchClass}, dispatch::PostDispatchInfo,
 };
 use frame_system::{ensure_signed, ensure_root};

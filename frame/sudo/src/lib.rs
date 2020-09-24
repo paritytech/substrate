@@ -95,7 +95,7 @@ use frame_support::{
 };
 use frame_support::{
 	weights::{Weight, GetDispatchInfo, Pays},
-	traits::UnfilteredDispatchable,
+	traits::{UnfilteredDispatchable, Get},
 	dispatch::DispatchResultWithPostInfo,
 };
 use frame_system::ensure_signed;
