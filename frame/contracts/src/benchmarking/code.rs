@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Functions to prodecurally construct contract code used for benchmarking.
+//! Functions to procedurally construct contract code used for benchmarking.
 //!
 //! In order to be able to benchmark events that are triggered by contract execution
 //! (API calls into seal, individual instructions), we need to generate contracts that
