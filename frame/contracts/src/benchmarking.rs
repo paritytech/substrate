@@ -24,7 +24,7 @@ use crate::Module as Contracts;
 use crate::exec::StorageKey;
 use crate::schedule::API_BENCHMARK_BATCH_SIZE;
 
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use frame_system::{Module as System, RawOrigin};
 use parity_wasm::elements::{Instruction, Instructions, FuncBody, ValueType, BlockType};
 use sp_runtime::traits::{Hash, Bounded, SaturatedConversion, CheckedDiv};
@@ -410,12 +410,6 @@ fn max_endowment<T: Trait>() -> BalanceOf<T> {
 	funding::<T>().saturating_sub(T::Currency::minimum_balance())
 }
 
-fn create_funded_user<T: Trait>(string: &'static str, n: u32) -> T::AccountId {
-	let user = account(string, n, 0);
-	T::Currency::make_free_balance_be(&user, funding::<T>());
-	user
-}
-
 fn eviction_at<T: Trait>(addr: &T::AccountId) -> Result<T::BlockNumber, &'static str> {
 	match crate::rent::compute_rent_projection::<T>(addr).map_err(|_| "Invalid acc for rent")? {
 		RentProjection::EvictionAt(at) => Ok(at),
@@ -451,7 +445,8 @@ benchmarks! {
 	// `n`: Size of the code in kilobytes.
 	put_code {
 		let n in 0 .. Contracts::<T>::current_schedule().max_code_size / 1024;
-		let caller = create_funded_user::<T>("caller", 0);
+		let caller = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, funding::<T>());
 		let module = sized_code::<T>(n * 1024);
 		let origin = RawOrigin::Signed(caller);
 	}: _(origin, module.code)
@@ -464,7 +459,8 @@ benchmarks! {
 		let n in 0 .. max_pages::<T>() * 64;
 		let data = vec![42u8; (n * 1024) as usize];
 		let endowment = Config::<T>::subsistence_threshold_uncached();
-		let caller = create_funded_user::<T>("caller", 0);
+		let caller = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, funding::<T>());
 		let WasmModule { code, hash } = dummy_code::<T>();
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = T::DetermineContractAddress::contract_address_for(&hash, &data, &caller);
@@ -486,7 +482,9 @@ benchmarks! {
 	// part of `seal_input`.
 	call {
 		let data = vec![42u8; 1024];
-		let instance = instantiate_contract::<T>(dummy_code(), vec![], Endow::CollectRent)?;
+		let instance = instantiate_contract_from_account::<T>(
+			whitelisted_caller(), dummy_code(), vec![], Endow::CollectRent
+		)?;
 		let value = T::Currency::minimum_balance() * 100.into();
 		let origin = RawOrigin::Signed(instance.caller.clone());
 
@@ -513,7 +511,9 @@ benchmarks! {
 	// no incentive to remove large contracts when the removal is more expensive than
 	// the reward for removing them.
 	claim_surcharge {
-		let instance = instantiate_contract::<T>(dummy_code(), vec![], Endow::CollectRent)?;
+		let instance = instantiate_contract_from_account::<T>(
+			whitelisted_caller(), dummy_code(), vec![], Endow::CollectRent
+		)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let account_id = instance.account_id.clone();
 
