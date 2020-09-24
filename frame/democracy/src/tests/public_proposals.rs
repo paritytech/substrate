@@ -97,22 +97,6 @@ fn invalid_seconds_upper_bound_should_not_work() {
 }
 
 #[test]
-fn invalid_max_proposals_should_fail() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Democracy::propose(
-			Origin::signed(1),
-			set_balance_proposal_hash(2),
-			2,
-		));
-		assert_noop!(Democracy::propose(
-			Origin::signed(1),
-			set_balance_proposal_hash(2),
-			2,
-		), Error::<Test>::InvalidWitness);
-	});
-}
-
-#[test]
 fn cancel_proposal_should_work() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
