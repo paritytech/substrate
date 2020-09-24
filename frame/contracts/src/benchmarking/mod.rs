@@ -232,7 +232,6 @@ fn caller_funding<T: Trait>() -> BalanceOf<T> {
 	BalanceOf::<T>::max_value() / 2.into()
 }
 
-
 /// Set the block number to one.
 ///
 /// The default block number is zero. The benchmarking system bumps the block number
