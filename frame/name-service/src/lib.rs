@@ -66,10 +66,18 @@ pub trait Trait: frame_system::Trait {
 	/// Minimum Bid for a name.
 	type MinBid: Get<BalanceOf<Self>>;
 
-	type MultiAddress: codec::Codec + Clone + PartialEq + sp_std::fmt::Debug;
+	/// Configuration for ownership extensions of a name.
+	type ExtensionConfig: Get<ExtensionConfig<Self::BlockNumber, BalanceOf<Self>>>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+}
+
+#[derive(Default, RuntimeDebug)]
+pub struct ExtensionConfig<BlockNumber, Balance> {
+	enabled: bool,
+	extension_period: BlockNumber,
+	extension_fee: Balance,
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -140,6 +148,8 @@ decl_error! {
 		NotOwner,
 		/// You are not assigned to this domain.
 		NotAssigned,
+		/// Ownership extensions are not available.
+		NoExtensions,
 	}
 }
 
@@ -344,6 +354,36 @@ decl_module! {
 				Lookup::<T>::remove(&name);
 				Self::deposit_event(RawEvent::NameUnassigned(name));
 			}
+		}
+
+		#[weight = 0]
+		fn extend_ownership(origin, name: Name) {
+			// Anyone can make this call for any name on behalf of the owner.
+			let caller = ensure_signed(origin)?;
+			let ExtensionConfig { enabled, extension_period, extension_fee } = T::ExtensionConfig::get();
+			ensure!(enabled, Error::<T>::NoExtensions);
+
+			Registration::<T>::try_mutate(&name, |state| -> DispatchResult {
+				match state {
+					NameStatus::Available | NameStatus::Bidding { .. } => Err(Error::<T>::UnexpectedState)?,
+					NameStatus::Owned { expiration, .. } => {
+						// If the name can expire...
+						if let Some(expiration_block) = expiration {
+							let credit = T::Currency::withdraw(
+								&caller,
+								extension_fee,
+								WithdrawReason::Fee.into(),
+								KeepAlive
+							)?;
+							T::PaymentDestination::on_unbalanced(credit);
+							*expiration_block = expiration_block.saturating_add(extension_period);
+							Ok(())
+						} else {
+							Err(Error::<T>::Permanent)?
+						}
+					},
+				}
+			})?;
 		}
 	}
 }
