@@ -164,6 +164,15 @@
 			"website": null
 		},
 		{
+			"prefix": 19,
+			"network": "geek",
+			"displayName": "GeekCash",
+			"symbols": "GEEK",
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": "https://geekcash.org"
+		},
+		{
 			"prefix": 20,
 			"network": "stafi",
 			"displayName": "Stafi",
