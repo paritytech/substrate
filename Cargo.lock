@@ -6916,6 +6916,7 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-peerset",
+ "sc-telemetry",
  "serde",
  "serde_json",
  "slog",

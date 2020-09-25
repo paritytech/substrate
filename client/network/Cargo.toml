@@ -57,6 +57,7 @@ sp-consensus = { version = "0.8.0", path = "../../primitives/consensus/common" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-utils = { version = "2.0.0", path = "../../primitives/utils" }
+sc-telemetry = { version = "2.0.0", path = "../telemetry" }
 thiserror = "1"
 unsigned-varint = { version = "0.4.0", features = ["futures", "futures-codec"] }
 void = "1.0.2"

@@ -34,6 +34,7 @@ use sp_consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
 	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}
 };
+use sc_telemetry::{telemetry, CONSENSUS_TRACE};
 use crate::{
 	config::BoxFinalityProofRequestBuilder,
 	protocol::message::{self, generic::FinalityProofRequest, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse,
@@ -887,6 +888,9 @@ impl<B: BlockT> ChainSync<B> {
 			};
 
 		if let Some((h, n)) = new_blocks.last().and_then(|b| b.header.as_ref().map(|h| (&b.hash, *h.number()))) {
+			if origin == BlockOrigin::NetworkInitialSync {
+				telemetry!(CONSENSUS_TRACE; "initial_sync.status"; "to_sync" => new_blocks.len());
+			}
 			trace!(target:"sync", "Accepted {} blocks ({:?}) with origin {:?}", new_blocks.len(), h, origin);
 			self.on_block_queued(h, n)
 		}
