@@ -62,12 +62,6 @@ pub trait Trait: frame_system::Trait {
 	/// Handler for the unbalanced decrease when funds are burned.
 	type BurnDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
-	/// Minimum length for a publicly available name.
-	type MinLength: Get<usize>;
-
-	/// Maximum length for a publicly available name.
-	type MaxLength: Get<usize>;
-
 	/// Minimum Bid for a name.
 	type MinBid: Get<BalanceOf<Self>>;
 
@@ -95,7 +89,7 @@ impl<AccountId, BlockNumber, Balance> Default for NameStatus<AccountId, BlockNum
 	}
 }
 
-type Name = Vec<u8>;
+type Name = [u8; 32];
 
 decl_storage! {
 	trait Store for Module<T: Trait> as NameService {
@@ -178,7 +172,7 @@ decl_module! {
 		#[weight = 0]
 		fn bid(origin, name: Name, new_bid: BalanceOf<T>) {
 			let new_bidder = ensure_signed(origin)?;
-			Self::ensure_name_rules(&name, new_bid)?;
+			ensure!(new_bid > T::MinBid::get(), Error::<T>::InvalidBid);
 
 			let block_number = frame_system::Module::<T>::block_number();
 			let new_bid_end = block_number.saturating_add(T::BiddingPeriod::get());
@@ -353,13 +347,6 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
-
-	fn ensure_name_rules(name: &[u8], amount: BalanceOf<T>) -> DispatchResult {
-		ensure!(name.len() >= T::MinLength::get(), Error::<T>::InvalidName);
-		ensure!(name.len() <= T::MaxLength::get(), Error::<T>::InvalidName);
-		ensure!(amount > T::MinBid::get(), Error::<T>::InvalidBid);
-		Ok(())
-	}
 
 	// /// Lookup a name to get an AccountId, if there's one there.
 	// pub fn lookup_name(name: Name) -> Option<T::AccountId> {
