@@ -92,6 +92,7 @@ use sp_staking::{
 	SessionIndex,
 	offence::{ReportOffence, Offence, Kind},
 };
+use sp_session::SessionInterface;
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
 	traits::Get,
@@ -229,34 +230,6 @@ pub struct Heartbeat<BlockNumber>
 
 pub trait WeightInfo {
 	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
-}
-
-/// Trait for retrieving the session info needed for online node inspection.
-///
-/// This trait is used for decouple the pallet-session dependency from im-online
-/// module so that the user of im-online & offences modules can pass any list of
-/// validators that are considered to be online in each session, particularly useful
-/// for the Substrate-based projects having their own staking implementation
-/// instead of using pallet-staking directly.
-pub trait SessionInterface<ValidatorId> {
-	/// Returns current session index.
-	fn current_index() -> SessionIndex;
-
-	/// Returns all the validators ought to be online in a session.
-	///
-	/// The returned validators are all expected to be running an authority node.
-	fn validators() -> Vec<ValidatorId>;
-}
-
-impl<T: pallet_session::Trait>
-	SessionInterface<<Self as ValidatorIdentification<<Self as frame_system::Trait>::AccountId>>::ValidatorId> for T
-{
-	fn current_index() -> sp_staking::SessionIndex {
-		pallet_session::Module::<T>::current_index()
-	}
-	fn validators() -> Vec<<Self as ValidatorIdentification<<Self as frame_system::Trait>::AccountId>>::ValidatorId> {
-		pallet_session::Module::<T>::validators()
-	}
 }
 
 pub trait Trait:

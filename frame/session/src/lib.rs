@@ -826,3 +826,16 @@ impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 		T::NextSessionRotation::weight(now)
 	}
 }
+
+impl<T: Trait>
+	sp_session::SessionInterface<
+		<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::ValidatorId
+	> for Module<T>
+{
+	fn current_index() -> sp_staking::SessionIndex {
+		Module::<T>::current_index()
+	}
+	fn validators() -> Vec<<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::ValidatorId> {
+		Module::<T>::validators()
+	}
+}

@@ -185,7 +185,7 @@ impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;
-	type SessionInterface = Self;
+	type SessionInterface = Session;
 	type SessionDuration = Period;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();

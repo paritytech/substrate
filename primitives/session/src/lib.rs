@@ -106,6 +106,23 @@ impl GetValidatorCount for MembershipProof {
 	}
 }
 
+/// Trait for retrieving the session info needed for online node inspection.
+///
+/// This trait is used for decouple the pallet-session dependency from im-online
+/// module so that the user of im-online & offences modules can pass any list of
+/// validators that are considered to be online in each session, particularly useful
+/// for the Substrate-based projects having their own staking implementation
+/// instead of using pallet-staking directly.
+pub trait SessionInterface<ValidatorId> {
+	/// Returns current session index.
+	fn current_index() -> SessionIndex;
+
+	/// Returns all the validators ought to be online in a session.
+	///
+	/// The returned validators are all expected to be running an authority node.
+	fn validators() -> Vec<ValidatorId>;
+}
+
 /// Generate the initial session keys with the given seeds, at the given block and store them in
 /// the client's keystore.
 #[cfg(feature = "std")]

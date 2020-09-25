@@ -759,7 +759,7 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime where
 impl pallet_im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Event = Event;
-	type SessionInterface = Self;
+	type SessionInterface = Session;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ImOnlineUnsignedPriority;

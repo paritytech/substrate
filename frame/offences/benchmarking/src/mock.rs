@@ -190,7 +190,7 @@ impl pallet_staking::Trait for Test {
 impl pallet_im_online::Trait for Test {
 	type AuthorityId = UintAuthorityId;
 	type Event = Event;
-	type SessionInterface = Self;
+	type SessionInterface = Session;
 	type SessionDuration = Period;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();
