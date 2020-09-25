@@ -66,7 +66,7 @@ pub trait Trait: frame_system::Trait {
 	///
 	/// By default every leaf node will always include a (parent) block hash and
 	/// any additional [LeafData](primitives::LeafDataProvider) defined by this type.
-	type LeafData: primitives::LeafDataProvider<<Self as Trait>::Hashing>;
+	type LeafData: primitives::LeafDataProvider;
 }
 
 decl_storage! {
@@ -118,7 +118,7 @@ decl_module! {
 type ModuleMMR<StorageType, T> = mmr::MMR<StorageType, T, LeafOf<T>>;
 
 /// Leaf data.
-type LeafOf<T> = <<T as Trait>::LeafData as primitives::LeafDataProvider<HashingOf<T>>>::LeafData;
+type LeafOf<T> = <<T as Trait>::LeafData as primitives::LeafDataProvider>::LeafData;
 
 /// Hashing used for the pallet.
 pub(crate) type HashingOf<T> = <T as crate::Trait>::Hashing;

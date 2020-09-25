@@ -33,12 +33,12 @@ use sp_std::fmt;
 /// vs [Off-chain](crate::mmr::storage::OffchainStorage)).
 pub struct MMR<StorageType, T, L> where
 	T: Trait,
-	L: primitives::LeafData<HashingOf<T>>,
+	L: primitives::FullLeaf,
 	Storage<StorageType, T, L>: mmr_lib::MMRStore<NodeOf<T, L>>,
 {
 	mmr: mmr_lib::MMR<
 		NodeOf<T, L>,
-		Hasher<<T as Trait>::Hashing, L>,
+		Hasher<HashingOf<T>, L>,
 		Storage<StorageType, T, L>
 	>,
 	leaves: u64,
@@ -46,7 +46,7 @@ pub struct MMR<StorageType, T, L> where
 
 impl<StorageType, T, L> MMR<StorageType, T, L> where
 	T: Trait,
-	L: primitives::LeafData<HashingOf<T>>,
+	L: primitives::FullLeaf,
 	Storage<StorageType, T, L>: mmr_lib::MMRStore<NodeOf<T, L>>,
 {
 	/// Create a pointer to an existing MMR with given number of leaves.
@@ -66,16 +66,16 @@ impl<StorageType, T, L> MMR<StorageType, T, L> where
 	) -> Result<bool, Error> {
 		let p = mmr_lib::MerkleProof::<
 			NodeOf<T, L>,
-			Hasher<<T as Trait>::Hashing, L>,
+			Hasher<HashingOf<T>, L>,
 		>::new(
 			self.mmr.mmr_size(),
-			proof.items.into_iter().map(Node::Inner).collect(),
+			proof.items.into_iter().map(Node::Hash).collect(),
 		);
 		let position = mmr_lib::leaf_index_to_pos(proof.leaf_index);
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.debug(e))?;
 		p.verify(
 			root,
-			vec![(position, Node::Leaf(leaf))],
+			vec![(position, Node::Data(leaf))],
 		).map_err(|e| Error::Verify.debug(e))
 	}
 
@@ -89,13 +89,14 @@ impl<StorageType, T, L> MMR<StorageType, T, L> where
 /// Runtime specific MMR functions.
 impl<T, L> MMR<RuntimeStorage, T, L> where
 	T: Trait,
-	L: primitives::LeafData<HashingOf<T>>,
+	L: primitives::FullLeaf,
 {
+
 	/// Push another item to the MMR.
 	///
 	/// Returns element position (index) in the MMR.
 	pub fn push(&mut self, leaf: L) -> Option<u64> {
-		let res = self.mmr.push(Node::Leaf(leaf)).map_err(|e| {
+		let res = self.mmr.push(Node::Data(leaf)).map_err(|e| {
 			debug::native::error!("Error while pushing MMR node: {:?}", e);
 			()
 		}).map_err(|e| Error::Push.debug(e)).ok();
@@ -119,7 +120,7 @@ impl<T, L> MMR<RuntimeStorage, T, L> where
 /// Off-chain specific MMR functions.
 impl<T, L> MMR<OffchainStorage, T, L> where
 	T: Trait,
-	L: primitives::LeafData<HashingOf<T>>,
+	L: primitives::FullLeaf,
 {
 	/// Generate a proof for given leaf index.
 	///
@@ -132,7 +133,7 @@ impl<T, L> MMR<OffchainStorage, T, L> where
 		let position = mmr_lib::leaf_index_to_pos(leaf_index);
 		let store = <Storage<OffchainStorage, T, L>>::default();
 		let leaf = match mmr_lib::MMRStore::get_elem(&store, position) {
-			Ok(Some(Node::Leaf(leaf))) => leaf,
+			Ok(Some(Node::Data(leaf))) => leaf,
 			e => return Err(Error::LeafNotFound.debug(e)),
 		};
 		let leaf_count = self.leaves;

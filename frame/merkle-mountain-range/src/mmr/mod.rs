@@ -19,8 +19,7 @@ pub mod storage;
 pub mod utils;
 mod mmr;
 
-use crate::primitives::LeafData;
-use frame_support::RuntimeDebug;
+use crate::primitives::FullLeaf;
 use sp_runtime::traits;
 
 pub use self::mmr::{MMR, Error};
@@ -28,56 +27,16 @@ pub use self::mmr::{MMR, Error};
 /// Node type for runtime `T`.
 pub type NodeOf<T, L> = Node<<T as crate::Trait>::Hashing, L>;
 
+/// A node stored in the MMR.
+pub type Node<H, L> = crate::primitives::DataOrHash<H, L>;
+
 /// Default Merging & Hashing behavior for MMR.
 pub struct Hasher<H, L>(sp_std::marker::PhantomData<(H, L)>);
 
-impl<H: traits::Hash, L: LeafData<H>> mmr_lib::Merge for Hasher<H, L> {
+impl<H: traits::Hash, L: FullLeaf> mmr_lib::Merge for Hasher<H, L> {
 	type Item = Node<H, L>;
 
 	fn merge(left: &Self::Item, right: &Self::Item) -> Self::Item {
-		Node::Inner(H::hash_of(&(left.hash(), right.hash())))
+		Node::Hash(H::hash_of(&(left.hash(), right.hash())))
 	}
-}
-
-// TODO Rename to DataOrHash
-
-/// A node stored in the MMR.
-#[derive(RuntimeDebug, Clone, PartialEq, codec::Decode)]
-pub enum Node<H: traits::Hash, L: LeafData<H>> {
-	/// A terminal leaf node, storing arbitrary content.
-	Leaf(L),
-	/// An inner node - always just a hash.
-	Inner(H::Output),
-}
-
-impl<H: traits::Hash, L: LeafData<H>> codec::Encode for Node<H, L> {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		match *self {
-			Node::Leaf(ref leaf) => leaf.data().using_encoded(f),
-			Node::Inner(ref hash) => hash.using_encoded(f),
-		}
-	}
-}
-
-impl<H: traits::Hash, L: LeafData<H>> Node<H, L> {
-	/// Retrieve a hash of the node.
-	///
-	/// Depending on the node type it's going to either be a contained value for [Node::Inner]
-	/// node, or a hash of SCALE-encoded [Node::Leaf] data.
-	pub fn hash(&self) -> H::Output {
-		match *self {
-			Node::Leaf(ref leaf) => leaf.hash(),
-			Node::Inner(ref hash) => hash.clone(),
-		}
-	}
-}
-
-impl<H: traits::Hash, L: LeafData<H>> LeafData<H> for Node<H, L> {
-	type Data = L;
-
-	fn hash(&self) -> H::Output {
-		Node::hash(self)
-	}
-
-	fn data(&self) ->
 }

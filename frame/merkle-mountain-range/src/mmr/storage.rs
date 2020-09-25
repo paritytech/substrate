@@ -19,8 +19,7 @@
 
 use codec::Encode;
 use crate::mmr::{NodeOf, Node};
-use crate::{NumberOfLeaves, Nodes, Module, Trait, HashingOf};
-use crate::primitives::LeafData;
+use crate::{NumberOfLeaves, Nodes, Module, Trait, primitives};
 use frame_support::{StorageMap, StorageValue};
 
 /// A marker type for runtime-specific storage implementation.
@@ -53,8 +52,9 @@ impl<StorageType, T, L> Default for Storage<StorageType, T, L> {
 	}
 }
 
-impl<T: Trait, L: LeafData<HashingOf<T>>> mmr_lib::MMRStore<NodeOf<T, L>>
-	for Storage<OffchainStorage, T, L>
+impl<T, L> mmr_lib::MMRStore<NodeOf<T, L>> for Storage<OffchainStorage, T, L> where
+	T: Trait,
+	L: primitives::FullLeaf,
 {
 	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, L>>> {
 		let key = Module::<T>::offchain_key(pos);
@@ -70,12 +70,13 @@ impl<T: Trait, L: LeafData<HashingOf<T>>> mmr_lib::MMRStore<NodeOf<T, L>>
  	}
 }
 
-impl<T: Trait, L: LeafData<HashingOf<T>>> mmr_lib::MMRStore<NodeOf<T, L>>
-	for Storage<RuntimeStorage, T, L>
+impl<T, L> mmr_lib::MMRStore<NodeOf<T, L>> for Storage<RuntimeStorage, T, L> where
+	T: Trait,
+	L: primitives::FullLeaf,
 {
 	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, L>>> {
 		Ok(<Nodes<T>>::get(pos)
-			.map(Node::Inner)
+			.map(Node::Hash)
 		)
 	}
 
@@ -95,7 +96,7 @@ impl<T: Trait, L: LeafData<HashingOf<T>>> mmr_lib::MMRStore<NodeOf<T, L>>
 			});
 			size += 1;
 
-			if let Node::Leaf(..) = elem {
+			if let Node::Data(..) = elem {
 				leaves += 1;
 			}
 		}
