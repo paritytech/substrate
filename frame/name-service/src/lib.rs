@@ -60,7 +60,7 @@ pub trait Trait: frame_system::Trait {
 	type OwnershipPeriod: Get<Self::BlockNumber>;
 
 	/// Handler for the unbalanced decrease when funds are burned.
-	type BurnDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
+	type PaymentDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// Minimum Bid for a name.
 	type MinBid: Get<BalanceOf<Self>>;
@@ -253,7 +253,7 @@ decl_module! {
 						};
 						// Remove the rest from reserve
 						credit.subsume(T::Currency::slash_reserved(current_bidder, *amount).0);
-						T::BurnDestination::on_unbalanced(credit);
+						T::PaymentDestination::on_unbalanced(credit);
 						// Grant ownership
 						let ownership_expiration = T::OwnershipPeriod::get().saturating_mul(num_of_periods.into());
 						*state = NameStatus::Owned {
@@ -285,7 +285,7 @@ decl_module! {
 						ensure!(free_block < block_number, Error::<T>::NotExpired);
 						// Remove the bid, slashing the reserve.
 						let credit = T::Currency::slash_reserved(current_bidder, *amount).0;
-						T::BurnDestination::on_unbalanced(credit);
+						T::PaymentDestination::on_unbalanced(credit);
 						*state = NameStatus::Available;
 						Ok(())
 					},
