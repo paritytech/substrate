@@ -20,7 +20,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::traits::{Saturating};
+use sp_runtime::MultiAddress;
+use sp_runtime::traits::{LookupError, Saturating, StaticLookup};
 use frame_support::{decl_module, decl_error, decl_event, decl_storage, ensure, RuntimeDebug};
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{
@@ -64,6 +65,8 @@ pub trait Trait: frame_system::Trait {
 
 	/// Minimum Bid for a name.
 	type MinBid: Get<BalanceOf<Self>>;
+
+	type MultiAddress: codec::Codec + Clone + PartialEq + sp_std::fmt::Debug;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -345,38 +348,23 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
-	// PUBLIC IMMUTABLES
+impl<T: Trait> Module<T> {}
 
-	// /// Lookup a name to get an AccountId, if there's one there.
-	// pub fn lookup_name(name: Name) -> Option<T::AccountId> {
-	// 	Registration::<T>::get(name).map(|x| match x {
-	// 		NameStatus::Owned { who, .. } => Some(who),
-	// 		_ => None,
-	// 	})
-	// }
+impl<T: Trait> StaticLookup for Module<T> {
+	type Source = MultiAddress<T::AccountId, ()>;
+	type Target = T::AccountId;
 
-	// /// Lookup an address to get an Id, if there's one there.
-	// pub fn lookup_address(
-	// 	a: address::Address<T::AccountId, T::AccountIndex>
-	// ) -> Option<T::AccountId> {
-	// 	match a {
-	// 		address::Address::Id(i) => Some(i),
-	// 		address::Address::Index(i) => Self::lookup_index(i),
-	// 	}
-	// }
+	fn lookup(a: Self::Source) -> Result<Self::Target, LookupError> {
+		match a {
+			MultiAddress::Id(id) => Ok(id),
+			MultiAddress::Hash256(hash) => {
+				Lookup::<T>::get(hash).ok_or(LookupError)
+			},
+			_ => Err(LookupError),
+		}
+	}
+
+	fn unlookup(a: Self::Target) -> Self::Source {
+		MultiAddress::Id(a)
+	}
 }
-
-// impl<T: Trait> StaticLookup for Module<T> {
-// 	type Source = address::Address<T::AccountId, Name>;
-// 	type Target = T::AccountId;
-
-// 	fn lookup(a: Self::Source) -> Result<Self::Target, LookupError> {
-// 		Self::lookup_name(a).ok_or(LookupError)
-// 	}
-
-// 	fn unlookup(a: Self::Target) -> Self::Source {
-// 		Default::default();
-// 		//address::Address::Id(a)
-// 	}
-// }
