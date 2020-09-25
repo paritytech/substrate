@@ -29,7 +29,7 @@ use crate::Module as Contracts;
 
 use parity_wasm::elements::{Instruction, Instructions, FuncBody, ValueType, BlockType};
 use sp_runtime::traits::Hash;
-use std::convert::TryFrom;
+use sp_std::{prelude::*, convert::TryFrom};
 
 /// Pass to `create_code` in order to create a compiled `WasmModule`.
 pub struct ModuleDefinition {
