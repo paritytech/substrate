@@ -1173,7 +1173,8 @@ mod solution_type {
 			..Default::default()
 		};
 
-		compact.remove_voter(2);
+		assert!(!compact.remove_voter(11));
+		assert!(compact.remove_voter(2));
 		assert_eq!(
 			compact,
 			TestSolutionCompact {
@@ -1192,7 +1193,7 @@ mod solution_type {
 			},
 		);
 
-		compact.remove_voter(4);
+		assert!(compact.remove_voter(4));
 		assert_eq!(
 			compact,
 			TestSolutionCompact {
@@ -1204,7 +1205,7 @@ mod solution_type {
 			},
 		);
 
-		compact.remove_voter(1);
+		assert!(compact.remove_voter(1));
 		assert_eq!(
 			compact,
 			TestSolutionCompact {

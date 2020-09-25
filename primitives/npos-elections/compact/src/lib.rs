@@ -224,9 +224,14 @@ fn struct_def(
 
 			/// Remove a certain voter.
 			///
-			/// This is currently O(n), meaning that it searches the entire struct.
-			pub fn remove_voter(&mut self, to_remove: #voter_type) {
+			/// This will only search until the first instance of `to_remove`, and return true. If
+			/// no instance is found (no-op), then it returns false.
+			///
+			/// In other words, if this return true, exactly one element must have been removed from
+			/// `self.len()`.
+			pub fn remove_voter(&mut self, to_remove: #voter_type) -> bool {
 				#remove_voter_impl
+				return false
 			}
 		}
 	))
@@ -236,20 +241,31 @@ fn remove_voter_impl(count: usize) -> TokenStream2 {
 	// 1s
 	let filed_name = field_name_for(1);
 	let single = quote! {
-		self.#filed_name.retain(|(x, _)| *x != to_remove);
+		if let Some(idx) = self.#filed_name.iter().position(|(x, _)| *x == to_remove) {
+			self.#filed_name.remove(idx);
+			return true
+		}
 	};
 
 	let filed_name = field_name_for(2);
 	let double = quote! {
-		self.#filed_name.retain(|(x, _, _)| *x != to_remove);
+		if let Some(idx) = self.#filed_name.iter().position(|(x, _, _)| *x == to_remove) {
+			self.#filed_name.remove(idx);
+			return true
+		}
 	};
 
-	let rest = (3..=count).map(|c| {
-		let filed_name = field_name_for(c);
-		quote! {
-			self.#filed_name.retain(|(x, _, _)| *x != to_remove);
-		}
-	}).collect::<TokenStream2>();
+	let rest = (3..=count)
+		.map(|c| {
+			let filed_name = field_name_for(c);
+			quote! {
+				if let Some(idx) = self.#filed_name.iter().position(|(x, _, _)| *x == to_remove) {
+					self.#filed_name.remove(idx);
+					return true
+				}
+			}
+		})
+		.collect::<TokenStream2>();
 
 	quote! {
 		#single

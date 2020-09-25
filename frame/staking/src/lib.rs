@@ -695,7 +695,7 @@ pub enum ElectionStatus<BlockNumber> {
 /// Note that these values must reflect the __total__ number, not only those that are present in the
 /// solution. In short, these should be the same size as the size of the values dumped in
 /// `SnapshotValidators` and `SnapshotNominators`.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
 pub struct ElectionSize {
 	/// Number of validators in the snapshot of the current election round.
 	#[codec(compact)]
@@ -882,6 +882,9 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// This is exposed so that it can be tuned for particular runtime, when
 	/// multiple pallets send unsigned transactions.
 	type UnsignedPriority: Get<TransactionPriority>;
+
+	/// Maximum weight that the unsigned transaction can have.
+	type MaximumUnsignedWeight: Get<Weight>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -2143,12 +2146,13 @@ decl_module! {
 		/// # <weight>
 		/// See `crate::weight` module.
 		/// # </weight>
-		#[weight = T::WeightInfo::submit_solution_better(
+		#[weight = (
+			T::WeightInfo::submit_solution_better(
 			size.validators.into(),
 			size.nominators.into(),
 			compact.len() as u32,
 			winners.len() as u32,
-		)]
+		), frame_support::weights::DispatchClass::Operational)]
 		pub fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<ValidatorIndex>,
