@@ -183,8 +183,9 @@ pub struct AssetDetails<
 	freezer: AccountId,
 	/// The total supply across all accounts.
 	supply: Balance,
-	/// The balance deposited for this asset; this pays for the data stored here together with any
-	/// virtual accounts.
+	/// The balance deposited for this asset.
+	///
+	/// This pays for the data stored here together with any virtual accounts.
 	deposit: DepositBalance,
 	/// The number of balance-holding accounts that this asset may have, excluding those that were
 	/// created when they had a system-level ED.
