@@ -102,7 +102,7 @@ use frame_system::offchain::{
 	SendTransactionTypes,
 	SubmitTransaction,
 };
-use pallet_session_common::{IdentificationTuple, ValidatorIdentification};
+use pallet_session::{IdentificationTuple, ValidatorIdentification};
 
 pub mod sr25519 {
 	mod app_sr25519 {

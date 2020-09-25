@@ -21,12 +21,11 @@ use codec::Encode;
 use sp_runtime::traits::Convert;
 
 use super::super::Trait as SessionTrait;
-use super::super::{Module as SessionModule, SessionIndex};
+use super::super::{Module as SessionModule, SessionIndex, ValidatorIdentification};
 use super::Trait as HistoricalTrait;
 
 use super::shared;
 use sp_std::prelude::*;
-use pallet_session_common::ValidatorIdentification;
 
 /// Store the validator-set associated to the `session_index` to the off-chain database.
 ///

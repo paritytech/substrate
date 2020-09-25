@@ -95,7 +95,6 @@ members = [
 	"frame/scored-pool",
 	"frame/session",
 	"frame/session/benchmarking",
-	"frame/session/common",
 	"frame/society",
 	"frame/staking",
 	"frame/staking/reward-curve",
