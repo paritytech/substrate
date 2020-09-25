@@ -1,12 +1,13 @@
 [package]
 description = "Endpoint to expose Prometheus metrics"
 name = "substrate-prometheus-endpoint"
-version = "0.8.0-rc6"
+version = "0.8.0"
 license = "Apache-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

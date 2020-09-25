@@ -193,6 +193,9 @@ cargo-deny:
     - schedules
     - tags
     - web
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-checks/
   script:
     - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
   after_script:
@@ -273,6 +276,9 @@ unleash-check:
   only:
     - master
     - tags
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-checks/
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
@@ -336,6 +342,9 @@ check-web-wasm:
     - time cargo build --target=wasm32-unknown-unknown -p sc-telemetry
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
     - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features browser --target=wasm32-unknown-unknown -Z features=itarget
+    # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
+    - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features
+    - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
     - sccache -s
 
 test-full-crypto-feature:
@@ -492,7 +501,7 @@ build-rust-doc:
     - ./crate-docs/
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"  
+    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
         time cargo +nightly doc --no-deps --workspace --all-features --verbose
     - mv ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
@@ -522,7 +531,7 @@ docker-build-chaos:                &docker-build-chaos
   needs:
     - job:                         build-linux-substrate
   image:                           docker:stable
-  tags: 
+  tags:
     - kubernetes-parity-build
   variables:
     <<:                            *default-vars
@@ -561,7 +570,7 @@ chaos-test-singlenodeheight:
   image:                           parity/chaostools:latest
   needs:
     - job:                         docker-build-chaos
-  tags: 
+  tags:
     - parity-chaos
   variables:
     <<:                            *default-vars
@@ -710,7 +719,7 @@ publish-to-crates-io:
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
-    - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}
+    - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
   allow_failure:                   true
 
 

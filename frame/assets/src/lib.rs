@@ -733,8 +733,8 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
-		type ModuleToIndex = ();
-		type AccountData = pallet_balances::AccountData<u64>;
+		type PalletInfo = ();
+		type pallet_balances::AccountData<u64> = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();

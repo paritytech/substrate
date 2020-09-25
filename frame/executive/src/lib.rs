@@ -207,6 +207,8 @@ where
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
+		sp_io::init_tracing();
+		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
 		let digests = Self::extract_pre_digest(&header);
 		Self::initialize_block_impl(
 			header.number(),
@@ -270,6 +272,7 @@ where
 	}
 
 	fn initial_checks(block: &Block) {
+		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
 
 		// Check that `parent_hash` is correct.
@@ -288,23 +291,28 @@ where
 
 	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
-		Self::initialize_block(block.header());
+		sp_io::init_tracing();
+		sp_tracing::within_span! {
+			sp_tracing::info_span!( "execute_block", ?block);
+		{
+			Self::initialize_block(block.header());
 
-		// any initial checks
-		Self::initial_checks(&block);
+			// any initial checks
+			Self::initial_checks(&block);
 
-		let signature_batching = sp_runtime::SignatureBatching::start();
+			let signature_batching = sp_runtime::SignatureBatching::start();
 
-		// execute extrinsics
-		let (header, extrinsics) = block.deconstruct();
-		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+			// execute extrinsics
+			let (header, extrinsics) = block.deconstruct();
+			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
-		if !signature_batching.verify() {
-			panic!("Signature verification failed.");
-		}
+			if !signature_batching.verify() {
+				panic!("Signature verification failed.");
+			}
 
-		// any final checks
-		Self::final_checks(&header);
+			// any final checks
+			Self::final_checks(&header);
+		} };
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
@@ -320,6 +328,8 @@ where
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
 	pub fn finalize_block() -> System::Header {
+		sp_io::init_tracing();
+		sp_tracing::enter_span!( sp_tracing::Level::TRACE, "finalize_block" );
 		<frame_system::Module<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Module<System>>::block_number();
 		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
@@ -335,6 +345,7 @@ where
 	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
 	/// hashes.
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
+		sp_io::init_tracing();
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
 		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded))
@@ -355,6 +366,10 @@ where
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
 	) -> ApplyExtrinsicResult {
+		sp_tracing::enter_span!(
+			sp_tracing::info_span!("apply_extrinsic",
+				ext=?sp_core::hexdisplay::HexDisplay::from(&uxt.encode()))
+		);
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 
@@ -377,6 +392,7 @@ where
 	}
 
 	fn final_checks(header: &System::Header) {
+		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "final_checks");
 		// remove temporaries
 		let new_header = <frame_system::Module<System>>::finalize();
 
@@ -406,24 +422,32 @@ where
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
 	) -> TransactionValidity {
-		use sp_tracing::tracing_span;
+		sp_io::init_tracing();
+		use sp_tracing::{enter_span, within_span};
 
-		sp_tracing::enter_span!("validate_transaction");
+		enter_span!{ sp_tracing::Level::TRACE, "validate_transaction" };
 
-		let encoded_len = tracing_span!{ "using_encoded"; uxt.using_encoded(|d| d.len()) };
+		let encoded_len = within_span!{ sp_tracing::Level::TRACE, "using_encoded";
+			uxt.using_encoded(|d| d.len())
+		};
 
-		let xt = tracing_span!{ "check"; uxt.check(&Default::default())? };
+		let xt = within_span!{ sp_tracing::Level::TRACE, "check";
+			uxt.check(&Default::default())
+		}?;
 
-		let dispatch_info = tracing_span!{ "dispatch_info"; xt.get_dispatch_info() };
+		let dispatch_info = within_span!{ sp_tracing::Level::TRACE, "dispatch_info";
+			xt.get_dispatch_info()
+		};
 
-		tracing_span! {
-			"validate";
+		within_span! {
+			sp_tracing::Level::TRACE, "validate";
 			xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
 		}
 	}
 
 	/// Start an offchain worker and generate extrinsics.
 	pub fn offchain_worker(header: &System::Header) {
+		sp_io::init_tracing();
 		// We need to keep events available for offchain workers,
 		// hence we initialize the block manually.
 		// OffchainWorker RuntimeApi should skip initialization.
@@ -567,7 +591,7 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = RuntimeVersion;
-		type ModuleToIndex = ();
+		type PalletInfo = ();
 		type AccountData = pallet_balances::AccountData<Balance>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -714,7 +738,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("e8ff7b3dd4375f6f3a76e24a1999e2a7be2d15b353e49ac94ace1eae3e80eb87").into(),
+					state_root: hex!("465a1569d309039bdf84b0479d28064ea29e6584584dc7d788904bb14489c6f6").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
