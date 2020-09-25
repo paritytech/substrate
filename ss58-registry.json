@@ -167,8 +167,8 @@
 			"prefix": 19,
 			"network": "geek",
 			"displayName": "GeekCash",
-			"symbols": "GEEK",
-			"decimals": null,
+			"symbols": ["GEEK"],
+			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://geekcash.org"
 		},
