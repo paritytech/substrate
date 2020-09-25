@@ -24,7 +24,7 @@
 
 use frame_support::{Weight, constants::RocksDbWeight as DbWeight};
 
-impl crate::WeightInfo for WeightInfo {
+impl crate::WeightInfo for () {
 	fn bond() -> Weight {
 		(112_277_000 as Weight)
 			.saturating_add(DbWeight::get().reads(5 as Weight))
