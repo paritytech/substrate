@@ -80,7 +80,7 @@ pub enum NameStatus<AccountId, BlockNumber, Balance> {
 	Available,
 	Bidding {
 		who: AccountId,
-		expiration: BlockNumber,
+		bid_end: BlockNumber,
 		amount: Balance,
 	},
 	Owned {
@@ -181,7 +181,7 @@ decl_module! {
 			Self::ensure_name_rules(&name, new_bid)?;
 
 			let block_number = frame_system::Module::<T>::block_number();
-			let new_expiration = block_number.saturating_add(T::BiddingPeriod::get());
+			let new_bid_end = block_number.saturating_add(T::BiddingPeriod::get());
 
 			Registration::<T>::try_mutate(&name, |state| -> DispatchResult {
 				match state {
@@ -190,15 +190,15 @@ decl_module! {
 						T::Currency::reserve(&new_bidder, new_bid)?;
 						*state = NameStatus::Bidding {
 							who: new_bidder.clone(),
-							expiration: new_expiration,
+							bid_end: new_bid_end,
 							amount: new_bid
 						};
 						Ok(())
 					},
 					// Bid is ongoing, we need to check if the new bid is valid.
-					NameStatus::Bidding { who: current_bidder, expiration: current_expiration, amount: current_bid } => {
+					NameStatus::Bidding { who: current_bidder, bid_end: current_bid_end, amount: current_bid } => {
 						// New bid must be before expiration and more than the current bid.
-						if block_number < *current_expiration && *current_bid < new_bid {
+						if block_number < *current_bid_end && *current_bid < new_bid {
 							// Try to reserve the new amount and unreserve the old amount, handling the same bidder.
 							if new_bidder == *current_bidder {
 								// We check that new bid is greater than current bid, so this is safe.
@@ -210,7 +210,7 @@ decl_module! {
 							}
 							*state = NameStatus::Bidding {
 								who: new_bidder.clone(),
-								expiration: new_expiration,
+								bid_end: new_bid_end,
 								amount: new_bid
 							};
 							Ok(())
@@ -224,7 +224,7 @@ decl_module! {
 					}
 				}
 			})?;
-			Self::deposit_event(RawEvent::BidPlaced(name, new_bidder, new_bid, new_expiration));
+			Self::deposit_event(RawEvent::BidPlaced(name, new_bidder, new_bid, new_bid_end));
 		}
 
 		/// Allow the winner of a bid to claim their name and pay their registration costs.
@@ -238,9 +238,9 @@ decl_module! {
 			Registration::<T>::try_mutate(&name, |state| -> DispatchResult {
 				match state {
 					NameStatus::Available | NameStatus::Owned { .. } => Err(Error::<T>::InvalidClaim)?,
-					NameStatus::Bidding { who: current_bidder, expiration, amount } => {
+					NameStatus::Bidding { who: current_bidder, bid_end, amount } => {
 						ensure!(caller == *current_bidder, Error::<T>::NotBidder);
-						ensure!(*expiration < block_number, Error::<T>::NotExpired);
+						ensure!(*bid_end < block_number, Error::<T>::NotExpired);
 						// If user only wants 1 period, just slash the reserve we already have.
 						let mut credit = if num_of_periods == 1 {
 							NegativeImbalanceOf::<T>::zero()
@@ -284,8 +284,8 @@ decl_module! {
 					// Name is already free, do nothing.
 					NameStatus::Available => Err(Error::<T>::AlreadyAvailable)?,
 					// Name is in bidding period, check that it is past the bid expiration + claim period.
-					NameStatus::Bidding { who: current_bidder, expiration, amount } => {
-						let free_block = expiration
+					NameStatus::Bidding { who: current_bidder, bid_end, amount } => {
+						let free_block = bid_end
 							.saturating_add(T::BiddingPeriod::get())
 							.saturating_add(T::ClaimPeriod::get());
 						ensure!(free_block < block_number, Error::<T>::NotExpired);
