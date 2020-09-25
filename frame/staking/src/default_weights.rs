@@ -22,7 +22,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{Weight, constants::RocksDbWeight as DbWeight};
+use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 
 impl crate::WeightInfo for () {
 	fn bond() -> Weight {
