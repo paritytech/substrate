@@ -30,10 +30,6 @@ use frame_support::traits::{
 use frame_system::ensure_signed;
 use codec::{Encode, Decode};
 
-mod mock;
-mod tests;
-mod benchmarking;
-
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
@@ -80,7 +76,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum Name<AccountId, BlockNumber, Balance> {
+pub enum NameStatus<AccountId, BlockNumber, Balance> {
 	Available,
 	Bidding {
 		who: AccountId,
@@ -93,16 +89,20 @@ pub enum Name<AccountId, BlockNumber, Balance> {
 	}
 }
 
-impl<AccountId, BlockNumber, Balance> Default for Name<AccountId, BlockNumber, Balance> {
+impl<AccountId, BlockNumber, Balance> Default for NameStatus<AccountId, BlockNumber, Balance> {
 	fn default() -> Self {
-		Name::Available
+		NameStatus::Available
 	}
 }
 
+type Name = Vec<u8>;
+
 decl_storage! {
 	trait Store for Module<T: Trait> as NameService {
+		/// Registration information for a given name.
+		pub Registration: map hasher(blake2_128_concat) Name => NameStatus<T::AccountId, T::BlockNumber, BalanceOf<T>>;
 		/// The lookup from name to account.
-		pub Accounts: map hasher(blake2_128_concat) Vec<u8> => Name<T::AccountId, T::BlockNumber, BalanceOf<T>>;
+		pub Lookup: map hasher(blake2_128_concat) Name => Option<T::AccountId>;
 	}
 }
 
@@ -112,10 +112,12 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as frame_system::Trait>::BlockNumber,
 	{
-		BidPlaced(AccountId, Vec<u8>, Balance, BlockNumber),
-		NameClaimed(AccountId, Vec<u8>, BlockNumber),
-		NameFreed(Vec<u8>),
-		NameSet(Vec<u8>),
+		BidPlaced(Name, AccountId, Balance, BlockNumber),
+		NameClaimed(Name, AccountId, BlockNumber),
+		NameFreed(Name),
+		NameSet(Name),
+		NameAssigned(Name, AccountId),
+		NameUnassigned(Name),
 	}
 );
 
@@ -137,6 +139,10 @@ decl_error! {
 		AlreadyAvailable,
 		/// The name is permanent.
 		Permanent,
+		/// You are not the owner of this name.
+		NotOwner,
+		/// You are not assigned to this domain.
+		NotAssigned,
 	}
 }
 
@@ -147,19 +153,19 @@ decl_module! {
 		fn deposit_event() = default;
 
 		#[weight = 0]
-		fn set_name(origin, name: Vec<u8>, state: Name<T::AccountId, T::BlockNumber, BalanceOf<T>>) {
+		fn set_name(origin, name: Name, state: NameStatus<T::AccountId, T::BlockNumber, BalanceOf<T>>) {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			// TODO: Make safer with regards to setting or removing `Bidding` state.
-			Accounts::<T>::insert(&name, state);
+			Registration::<T>::insert(&name, state);
 			Self::deposit_event(RawEvent::NameSet(name));
 		}
 
 		#[weight = 0]
-		fn make_permanent(origin, name: Vec<u8>) {
+		fn make_permanent(origin, name: Name) {
 			T::PermanenceOrigin::ensure_origin(origin)?;
-			Accounts::<T>::try_mutate(&name, |state| -> DispatchResult {
+			Registration::<T>::try_mutate(&name, |state| -> DispatchResult {
 				match state {
-					Name::Owned { expiration, .. } => {
+					NameStatus::Owned { expiration, .. } => {
 						*expiration = None;
 						Ok(())
 					},
@@ -168,20 +174,21 @@ decl_module! {
 			})?;
 		}
 
+		/// Allow anyone to place a bid for a name.
 		#[weight = 0]
-		fn bid(origin, name: Vec<u8>, new_bid: BalanceOf<T>) {
+		fn bid(origin, name: Name, new_bid: BalanceOf<T>) {
 			let new_bidder = ensure_signed(origin)?;
 			Self::ensure_name_rules(&name, new_bid)?;
 
 			let block_number = frame_system::Module::<T>::block_number();
 			let new_expiration = block_number.saturating_add(T::BiddingPeriod::get());
 
-			Accounts::<T>::try_mutate(&name, |state| -> DispatchResult {
+			Registration::<T>::try_mutate(&name, |state| -> DispatchResult {
 				match state {
 					// Name is available, we can directly transition this to Bidding.
-					Name::Available => {
+					NameStatus::Available => {
 						T::Currency::reserve(&new_bidder, new_bid)?;
-						*state = Name::Bidding {
+						*state = NameStatus::Bidding {
 							who: new_bidder.clone(),
 							expiration: new_expiration,
 							amount: new_bid
@@ -189,7 +196,7 @@ decl_module! {
 						Ok(())
 					},
 					// Bid is ongoing, we need to check if the new bid is valid.
-					Name::Bidding { who: current_bidder, expiration: current_expiration, amount: current_bid } => {
+					NameStatus::Bidding { who: current_bidder, expiration: current_expiration, amount: current_bid } => {
 						// New bid must be before expiration and more than the current bid.
 						if block_number < *current_expiration && *current_bid < new_bid {
 							// Try to reserve the new amount and unreserve the old amount, handling the same bidder.
@@ -201,7 +208,7 @@ decl_module! {
 								T::Currency::reserve(&new_bidder, new_bid)?;
 								T::Currency::unreserve(&current_bidder, *current_bid);
 							}
-							*state = Name::Bidding {
+							*state = NameStatus::Bidding {
 								who: new_bidder.clone(),
 								expiration: new_expiration,
 								amount: new_bid
@@ -212,25 +219,26 @@ decl_module! {
 						}
 					},
 					// Name is already owned, this is an invalid bid.
-					Name::Owned { .. } => {
+					NameStatus::Owned { .. } => {
 						Err(Error::<T>::InvalidBid)?
 					}
 				}
 			})?;
-			Self::deposit_event(RawEvent::BidPlaced(new_bidder, name, new_bid, new_expiration));
+			Self::deposit_event(RawEvent::BidPlaced(name, new_bidder, new_bid, new_expiration));
 		}
 
+		/// Allow the winner of a bid to claim their name and pay their registration costs.
 		#[weight = 0]
-		fn claim(origin, name: Vec<u8>, num_of_periods: u32) {
+		fn claim(origin, name: Name, num_of_periods: u32) {
 			let caller = ensure_signed(origin)?;
 			ensure!(num_of_periods > 0, Error::<T>::InvalidClaim);
 
 			let block_number = frame_system::Module::<T>::block_number();
 
-			Accounts::<T>::try_mutate(&name, |state| -> DispatchResult {
+			Registration::<T>::try_mutate(&name, |state| -> DispatchResult {
 				match state {
-					Name::Available | Name::Owned { .. } => Err(Error::<T>::InvalidClaim)?,
-					Name::Bidding { who: current_bidder, expiration, amount } => {
+					NameStatus::Available | NameStatus::Owned { .. } => Err(Error::<T>::InvalidClaim)?,
+					NameStatus::Bidding { who: current_bidder, expiration, amount } => {
 						ensure!(caller == *current_bidder, Error::<T>::NotBidder);
 						ensure!(*expiration < block_number, Error::<T>::NotExpired);
 						// If user only wants 1 period, just slash the reserve we already have.
@@ -254,28 +262,29 @@ decl_module! {
 						T::BurnDestination::on_unbalanced(credit);
 						// Grant ownership
 						let ownership_expiration = T::OwnershipPeriod::get().saturating_mul(num_of_periods.into());
-						*state = Name::Owned {
+						*state = NameStatus::Owned {
 							who: current_bidder.clone(),
 							expiration: Some(ownership_expiration),
 						};
-						Self::deposit_event(RawEvent::NameClaimed(caller, name.clone(), ownership_expiration));
+						Self::deposit_event(RawEvent::NameClaimed(name.clone(), caller, ownership_expiration));
 						Ok(())
 					},
 				}
 			})?;
 		}
 
+		/// Allow anyone to make a name available if it is past the claiming period or expiration date.
 		#[weight = 0]
-		fn free(origin, name: Vec<u8>) {
+		fn free(origin, name: Name) {
 			let caller = ensure_signed(origin)?;
 			let block_number = frame_system::Module::<T>::block_number();
 
-			Accounts::<T>::try_mutate(&name, |state| -> DispatchResult {
+			Registration::<T>::try_mutate(&name, |state| -> DispatchResult {
 				match state {
 					// Name is already free, do nothing.
-					Name::Available => Err(Error::<T>::AlreadyAvailable)?,
+					NameStatus::Available => Err(Error::<T>::AlreadyAvailable)?,
 					// Name is in bidding period, check that it is past the bid expiration + claim period.
-					Name::Bidding { who: current_bidder, expiration, amount } => {
+					NameStatus::Bidding { who: current_bidder, expiration, amount } => {
 						let free_block = expiration
 							.saturating_add(T::BiddingPeriod::get())
 							.saturating_add(T::ClaimPeriod::get());
@@ -283,17 +292,17 @@ decl_module! {
 						// Remove the bid, slashing the reserve.
 						let credit = T::Currency::slash_reserved(current_bidder, *amount).0;
 						T::BurnDestination::on_unbalanced(credit);
-						*state = Name::Available;
+						*state = NameStatus::Available;
 						Ok(())
 					},
 					// Name is owned, check that it is past the ownership expiration or the current owner
 					// is calling this function.
-					Name::Owned { who: current_owner, expiration: maybe_expiration } => {
+					NameStatus::Owned { who: current_owner, expiration: maybe_expiration } => {
 						if let Some(expiration) = maybe_expiration {
 							if caller != *current_owner {
 								ensure!(*expiration < block_number, Error::<T>::NotExpired);
 							}
-							*state = Name::Available;
+							*state = NameStatus::Available;
 							Ok(())
 						} else {
 							Err(Error::<T>::Permanent)?
@@ -303,6 +312,41 @@ decl_module! {
 			})?;
 
 			Self::deposit_event(RawEvent::NameFreed(name));
+		}
+
+		/// Allow the owner of a name to assign or unassign a target.
+		#[weight = 0]
+		fn assign(origin, name: Name, target: Option<T::AccountId>) {
+			let caller = ensure_signed(origin)?;
+
+			let registration = Registration::<T>::get(&name);
+			let owner = match registration {
+				NameStatus::Available | NameStatus::Bidding { .. } => Err(Error::<T>::NotOwner)?,
+				NameStatus::Owned { who, .. } => who,
+			};
+
+			ensure!(owner == caller, Error::<T>::NotOwner);
+
+			if let Some(account) = target {
+				Lookup::<T>::insert(&name, account.clone());
+				Self::deposit_event(RawEvent::NameAssigned(name, account));
+			} else {
+				Lookup::<T>::remove(&name);
+				Self::deposit_event(RawEvent::NameUnassigned(name));
+			}
+		}
+
+		/// Allow the target of a name to unassign themselves from the name.
+		#[weight = 0]
+		fn unassign(origin, name: Name) {
+			let caller = ensure_signed(origin)?;
+
+			let lookup = Lookup::<T>::get(&name);
+			if let Some(account) = lookup {
+				ensure!(account == caller, Error::<T>::NotAssigned);
+				Lookup::<T>::remove(&name);
+				Self::deposit_event(RawEvent::NameUnassigned(name));
+			}
 		}
 	}
 }
@@ -318,9 +362,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	// /// Lookup a name to get an AccountId, if there's one there.
-	// pub fn lookup_name(name: Vec<u8>) -> Option<T::AccountId> {
-	// 	Accounts::<T>::get(name).map(|x| match x {
-	// 		Name::Owned { who, .. } => Some(who),
+	// pub fn lookup_name(name: Name) -> Option<T::AccountId> {
+	// 	Registration::<T>::get(name).map(|x| match x {
+	// 		NameStatus::Owned { who, .. } => Some(who),
 	// 		_ => None,
 	// 	})
 	// }
@@ -337,7 +381,7 @@ impl<T: Trait> Module<T> {
 }
 
 // impl<T: Trait> StaticLookup for Module<T> {
-// 	type Source = address::Address<T::AccountId, Vec<u8>>;
+// 	type Source = address::Address<T::AccountId, Name>;
 // 	type Target = T::AccountId;
 
 // 	fn lookup(a: Self::Source) -> Result<Self::Target, LookupError> {
