@@ -27,11 +27,14 @@ pub trait Trait: 'static + Eq + Clone {
 	type AccountId: Encode + EncodeLike + Decode;
 	type Call;
 	type Event: From<Event<Self>>;
-	type ModuleToIndex: frame_support::traits::ModuleToIndex;
+	type PalletInfo: frame_support::traits::PalletInfo;
 }
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, {}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
+		#[weight = 0]
+		fn noop(origin) {}
+	}
 }
 
 impl<T: Trait> Module<T> {

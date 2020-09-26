@@ -25,12 +25,15 @@ use sp_runtime::{
 	traits::{SignedExtension, DispatchInfoOf, Dispatchable, One},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
-		TransactionLongevity, TransactionPriority,
+		TransactionLongevity,
 	},
 };
 use sp_std::vec;
 
 /// Nonce check and increment to give replay protection for transactions.
+///
+/// Note that this does not set any priority by default. Make sure that AT LEAST one of the signed
+/// extension sets some kind of priority upon validating transactions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckNonce<T: Trait>(#[codec(compact)] T::Index);
 
@@ -90,7 +93,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> where
 		&self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		// check index
@@ -107,7 +110,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> where
 		};
 
 		Ok(ValidTransaction {
-			priority: info.weight as TransactionPriority,
+			priority: 0,
 			requires,
 			provides,
 			longevity: TransactionLongevity::max_value(),

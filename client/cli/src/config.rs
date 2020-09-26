@@ -24,6 +24,7 @@ use crate::{
 	init_logger, DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
 	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
+use log::warn;
 use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
@@ -38,8 +39,11 @@ use std::path::PathBuf;
 /// The maximum number of characters for a node name.
 pub(crate) const NODE_NAME_MAX_LENGTH: usize = 64;
 
-/// default sub directory to store network config
+/// Default sub directory to store network config.
 pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";
+
+/// The recommended open file descriptor limit to be configured for the process.
+const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
 
 /// Default configuration values used by Substrate
 ///
@@ -217,9 +221,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			Database::RocksDb => DatabaseConfig::RocksDb {
 				path: base_path.join("db"),
 				cache_size,
-			},
-			Database::SubDb => DatabaseConfig::SubDb {
-				path: base_path.join("subdb"),
 			},
 			Database::ParityDb => DatabaseConfig::ParityDb {
 				path: base_path.join("paritydb"),
@@ -527,20 +528,33 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.shared_params().log_filters().join(","))
 	}
 
-	/// Initialize substrate. This must be done only once.
+	/// Initialize substrate. This must be done only once per process.
 	///
 	/// This method:
 	///
-	/// 1. Set the panic handler
-	/// 2. Raise the FD limit
-	/// 3. Initialize the logger
+	/// 1. Sets the panic handler
+	/// 2. Initializes the logger
+	/// 3. Raises the FD limit
 	fn init<C: SubstrateCli>(&self) -> Result<()> {
 		let logger_pattern = self.log_filters()?;
+		let tracing_receiver = self.tracing_receiver()?;
+		let tracing_targets = self.tracing_targets()?;
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		fdlimit::raise_fd_limit();
-		init_logger(&logger_pattern);
+		if let Err(e) = init_logger(&logger_pattern, tracing_receiver, tracing_targets) {
+			log::warn!("💬 Problem initializing global logging framework: {:}", e)
+		}
+
+		if let Some(new_limit) = fdlimit::raise_fd_limit() {
+			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {
+				warn!(
+					"Low open file descriptor limit configured for the process. \
+					 Current value: {:?}, recommended value: {:?}.",
+					new_limit, RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT,
+				);
+			}
+		}
 
 		Ok(())
 	}

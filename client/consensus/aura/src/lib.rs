@@ -991,7 +991,7 @@ mod tests {
 	#[test]
 	#[allow(deprecated)]
 	fn authoring_blocks() {
-		let _ = env_logger::try_init();
+		sp_tracing::try_init_simple();
 		let net = AuraTestNet::new(3);
 
 		let peers = &[

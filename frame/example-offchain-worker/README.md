@@ -6,9 +6,9 @@ concepts, APIs and structures common to most offchain workers.
 Run `cargo doc --package pallet-example-offchain-worker --open` to view this module's
 documentation.
 
-- [`pallet_example_offchain_worker::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
-- [`Module`](./struct.Module.html)
+- [`pallet_example_offchain_worker::Trait`](https://docs.rs/pallet-example-offchain-worker/latest/pallet_example_offchain_worker/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-example-offchain-worker/latest/pallet_example_offchain_worker/enum.Call.html)
+- [`Module`](https://docs.rs/pallet-example-offchain-worker/latest/pallet_example_offchain_worker/struct.Module.html)
 
 
 ## Overview
