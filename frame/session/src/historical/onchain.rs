@@ -22,7 +22,7 @@ use sp_runtime::traits::Convert;
 
 use super::super::Trait as SessionTrait;
 use super::super::{Module as SessionModule, SessionIndex, ValidatorIdentification};
-use super::Trait as HistoricalTrait;
+use super::{Trait as HistoricalTrait, FullValidatorIdentification};
 
 use super::shared;
 use sp_std::prelude::*;
@@ -42,7 +42,7 @@ pub fn store_session_validator_set_to_offchain<T: HistoricalTrait + SessionTrait
 		.into_iter()
 		.filter_map(|validator_id: <T as ValidatorIdentification<T::AccountId>>::ValidatorId| {
 			let full_identification =
-				<<T as ValidatorIdentification<T::AccountId>>::FullIdentificationOf>::convert(validator_id.clone());
+				<<T as FullValidatorIdentification<T::AccountId>>::FullIdentificationOf>::convert(validator_id.clone());
 			full_identification.map(|full_identification| (validator_id, full_identification))
 		})
 		.collect::<Vec<_>>();

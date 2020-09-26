@@ -124,6 +124,8 @@ parameter_types! {
 impl pallet_session::ValidatorIdentification<u64> for Test {
 	type ValidatorId = u64;
 	type ValidatorIdOf = pallet_staking::StashOf<Self>;
+}
+impl pallet_session::historical::FullValidatorIdentification<u64> for Test {
 	type FullIdentification = pallet_staking::Exposure<u64, u128>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
 }
@@ -139,8 +141,6 @@ impl pallet_session::Trait for Test {
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type WeightInfo = ();
 }
-
-impl pallet_session::historical::Trait for Test {}
 
 parameter_types! {
 	pub const UncleGenerations: u64 = 0;
@@ -244,7 +244,7 @@ parameter_types! {
 
 impl pallet_offences::Trait for Test {
 	type Event = TestEvent;
-	type IdentificationTuple = pallet_session::IdentificationTuple<u64, Self>;
+	type IdentificationTuple = pallet_session::historical::IdentificationTuple<u64, Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }

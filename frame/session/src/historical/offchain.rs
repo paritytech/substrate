@@ -193,7 +193,7 @@ mod tests {
 
 		let sample = (
 				22u32 as <Test as ValidatorIdentification<u64>>::ValidatorId,
-				7_777_777 as <Test as ValidatorIdentification<u64>>::FullIdentification);
+				7_777_777 as <Test as crate::historical::FullValidatorIdentification<u64>>::FullIdentification);
 
 		let encoded = sample.encode();
 		let decoded = Decode::decode(&mut encoded.as_slice()).expect("Must decode");

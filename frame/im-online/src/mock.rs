@@ -149,6 +149,8 @@ parameter_types! {
 impl pallet_session::ValidatorIdentification<u64> for Runtime {
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
+}
+impl pallet_session::historical::FullValidatorIdentification<u64> for Runtime {
 	type FullIdentification = u64;
 	type FullIdentificationOf = ConvertInto;
 }
@@ -163,8 +165,6 @@ impl pallet_session::Trait for Runtime {
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
 }
-
-impl pallet_session::historical::Trait for Runtime {}
 
 parameter_types! {
 	pub const UncleGenerations: u32 = 5;

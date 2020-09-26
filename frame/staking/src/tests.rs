@@ -4578,7 +4578,7 @@ fn offences_weight_calculated_correctly() {
 
 		let offenders: Vec<OffenceDetails<
 						<Test as frame_system::Trait>::AccountId,
-						pallet_session::IdentificationTuple<<Test as frame_system::Trait>::AccountId, Test>,
+						pallet_session::historical::IdentificationTuple<<Test as frame_system::Trait>::AccountId, Test>,
 					>>
 			= (1..10).map(|i|
 				OffenceDetails {

@@ -31,18 +31,40 @@ use codec::{Encode, Decode};
 use sp_runtime::KeyTypeId;
 use sp_runtime::traits::{Convert, OpaqueKeys};
 use sp_session::{MembershipProof, ValidatorCount};
-use frame_support::{decl_module, decl_storage};
+use frame_support::{decl_module, decl_storage, Parameter};
 use frame_support::print;
 use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use sp_trie::trie_types::{TrieDBMut, TrieDB};
-use super::{SessionIndex, Module as SessionModule, IdentificationTuple};
+use super::{SessionIndex, Module as SessionModule, ValidatorIdentification};
 
 mod shared;
 pub mod offchain;
 pub mod onchain;
 
+pub trait FullValidatorIdentification<AccountId>: ValidatorIdentification<AccountId> {
+	/// Full identification of the validator.
+	type FullIdentification: Parameter;
+
+	/// A conversion from validator ID to full identification.
+	///
+	/// This should contain any references to economic actors associated with the
+	/// validator, since they may be outdated by the time this is queried from a
+	/// historical trie.
+	///
+	/// It must return the identification for the current session index.
+	type FullIdentificationOf: Convert<Self::ValidatorId, Option<Self::FullIdentification>>;
+}
+
+/// A tuple of the validator's ID and their full identification.
+pub type IdentificationTuple<AccountId, T> = (
+	<T as ValidatorIdentification<AccountId>>::ValidatorId,
+	<T as FullValidatorIdentification<AccountId>>::FullIdentification
+);
+
 /// Trait necessary for the historical module.
-pub trait Trait: super::Trait {}
+pub trait Trait: FullValidatorIdentification<<Self as frame_system::Trait>::AccountId> + super::Trait {}
+
+impl<T: FullValidatorIdentification<<Self as frame_system::Trait>::AccountId> + super::Trait> Trait for T {}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {

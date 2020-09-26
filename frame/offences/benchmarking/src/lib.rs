@@ -37,7 +37,10 @@ use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
 use pallet_im_online::{Trait as ImOnlineTrait, Module as ImOnline, UnresponsivenessOffence};
 use pallet_offences::{Trait as OffencesTrait, Module as Offences};
 use pallet_session::historical::{Trait as HistoricalTrait};
-use pallet_session::{Trait as SessionTrait, SessionManager, IdentificationTuple, ValidatorIdentification};
+use pallet_session::{
+	Trait as SessionTrait, SessionManager, ValidatorIdentification,
+	historical::{IdentificationTuple, FullValidatorIdentification},
+};
 use pallet_staking::{
 	Module as Staking, Trait as StakingTrait, RewardDestination, ValidatorPrefs,
 	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS, Event as StakingEvent
@@ -170,7 +173,7 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<
 	let validator_id_of =
 		<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::ValidatorIdOf::convert;
 	let full_identification_of =
-		<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::FullIdentificationOf::convert;
+		<T as FullValidatorIdentification<<T as frame_system::Trait>::AccountId>>::FullIdentificationOf::convert;
 
 	let id_tuples = offenders.iter()
 		.map(|offender| validator_id_of(offender.controller.clone())

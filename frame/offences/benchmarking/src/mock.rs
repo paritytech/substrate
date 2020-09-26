@@ -93,10 +93,11 @@ impl pallet_timestamp::Trait for Test {
 impl pallet_session::ValidatorIdentification<AccountId> for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
+}
+impl pallet_session::historical::FullValidatorIdentification<AccountId> for Test {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
 }
-impl pallet_session::historical::Trait for Test {}
 
 sp_runtime::impl_opaque_keys! {
 	pub struct SessionKeys {
@@ -203,7 +204,7 @@ parameter_types! {
 
 impl pallet_offences::Trait for Test {
 	type Event = Event;
-	type IdentificationTuple = pallet_session::IdentificationTuple<AccountId, Self>;
+	type IdentificationTuple = pallet_session::historical::IdentificationTuple<AccountId, Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }

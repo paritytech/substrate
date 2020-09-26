@@ -103,7 +103,10 @@ use frame_system::offchain::{
 	SendTransactionTypes,
 	SubmitTransaction,
 };
-use pallet_session::{IdentificationTuple, ValidatorIdentification};
+use pallet_session::{
+	historical::{FullValidatorIdentification, IdentificationTuple},
+	ValidatorIdentification,
+};
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -234,7 +237,7 @@ pub trait WeightInfo {
 
 pub trait Trait:
 	SendTransactionTypes<Call<Self>>
-	+ ValidatorIdentification<<Self as frame_system::Trait>::AccountId>
+	+ FullValidatorIdentification<<Self as frame_system::Trait>::AccountId>
 	+ frame_system::Trait
 {
 	/// The identifier type for an authority.
@@ -671,7 +674,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 			.filter(|(index, id)|
 				!Self::is_online_aux(*index as u32, id)
 			).filter_map(|(_, id)|
-				<T as ValidatorIdentification<T::AccountId>>::FullIdentificationOf::convert(id.clone()).map(|full_id| (id, full_id))
+				<T as FullValidatorIdentification<T::AccountId>>::FullIdentificationOf::convert(id.clone()).map(|full_id| (id, full_id))
 			).collect::<Vec<IdentificationTuple<T::AccountId, T>>>();
 
 		// Remove all received heartbeats and number of authored blocks from the

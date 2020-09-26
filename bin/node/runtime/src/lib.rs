@@ -402,10 +402,11 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
-
 impl pallet_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId> for Runtime {
 	type ValidatorId = <Self as frame_system::Trait>::AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Self>;
+}
+impl pallet_session::historical::FullValidatorIdentification<<Self as frame_system::Trait>::AccountId> for Runtime {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Runtime>;
 }
@@ -420,8 +421,6 @@ impl pallet_session::Trait for Runtime {
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type WeightInfo = weights::pallet_session::WeightInfo<Runtime>;
 }
-
-impl pallet_session::historical::Trait for Runtime {}
 
 pallet_staking_reward_curve::build! {
 	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
@@ -772,7 +771,7 @@ parameter_types! {
 
 impl pallet_offences::Trait for Runtime {
 	type Event = Event;
-	type IdentificationTuple = pallet_session::IdentificationTuple<AccountId, Self>;
+	type IdentificationTuple = pallet_session::historical::IdentificationTuple<AccountId, Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }

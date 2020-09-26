@@ -116,6 +116,8 @@ mod tests {
 	impl pallet_session::ValidatorIdentification<AuthorityId> for Test {
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
+	}
+	impl pallet_session::historical::FullValidatorIdentification<AuthorityId> for Test {
 		type FullIdentification = ();
 		type FullIdentificationOf = ();
 	}
@@ -130,8 +132,6 @@ mod tests {
 		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 		type WeightInfo = ();
 	}
-
-	impl pallet_session::historical::Trait for Test {}
 
 	pub type BlockNumber = u64;
 

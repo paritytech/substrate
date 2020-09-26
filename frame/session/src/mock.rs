@@ -214,6 +214,8 @@ parameter_types! {
 impl crate::ValidatorIdentification<u64> for Test {
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
+}
+impl crate::historical::FullValidatorIdentification<u64> for Test {
 	type FullIdentification = u64;
 	type FullIdentificationOf = sp_runtime::traits::ConvertInto;
 }
@@ -231,9 +233,6 @@ impl Trait for Test {
 	type NextSessionRotation = ();
 	type WeightInfo = ();
 }
-
-#[cfg(feature = "historical")]
-impl crate::historical::Trait for Test {}
 
 pub type System = frame_system::Module<Test>;
 pub type Session = Module<Test>;
