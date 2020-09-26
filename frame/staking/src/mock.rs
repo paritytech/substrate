@@ -773,8 +773,8 @@ pub(crate) fn on_offence_in_era(
 pub(crate) fn on_offence_now(
 	offenders: &[OffenceDetails<
 		AccountId,
-		pallet_session::historical::IdentificationTuple<AccountId, Test>>,
-	],
+		pallet_session::historical::IdentificationTuple<AccountId, Test>,
+	>],
 	slash_fraction: &[Perbill],
 ) {
 	let now = Staking::active_era().unwrap().index;
