@@ -1532,6 +1532,7 @@ dependencies = [
 name = "frame-benchmarking-cli"
 version = "2.0.0"
 dependencies = [
+ "chrono",
  "frame-benchmarking",
  "parity-scale-codec",
  "sc-cli",
@@ -2205,9 +2206,9 @@ dependencies = [
 
 [[package]]
 name = "honggfuzz"
-version = "0.5.49"
+version = "0.5.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "832bac18a82ec7d6c21887daa8616b238fe90d5d5e762d0d4b9372cdaa9e097f"
+checksum = "6f085725a5828d7e959f014f624773094dfe20acc91be310ef106923c30594bc"
 dependencies = [
  "arbitrary",
  "lazy_static",
@@ -4712,7 +4713,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-proxy"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
