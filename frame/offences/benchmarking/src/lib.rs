@@ -75,7 +75,8 @@ pub trait IdTupleConvert<T: HistoricalTrait + OffencesTrait> {
 }
 
 impl<T: HistoricalTrait + OffencesTrait> IdTupleConvert<T> for T where
-	<T as OffencesTrait>::IdentificationTuple: From<IdentificationTuple<<T as frame_system::Trait>::AccountId, T>>
+	<T as OffencesTrait>::IdentificationTuple:
+		From<IdentificationTuple<<T as frame_system::Trait>::AccountId, T>>
 {
 	fn convert(
 		id: IdentificationTuple<<T as frame_system::Trait>::AccountId, T>,

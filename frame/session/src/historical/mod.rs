@@ -62,9 +62,12 @@ pub type IdentificationTuple<AccountId, T> = (
 );
 
 /// Trait necessary for the historical module.
-pub trait Trait: FullValidatorIdentification<<Self as frame_system::Trait>::AccountId> + super::Trait {}
+pub trait Trait:
+	FullValidatorIdentification<<Self as frame_system::Trait>::AccountId> + super::Trait {}
 
-impl<T: FullValidatorIdentification<<Self as frame_system::Trait>::AccountId> + super::Trait> Trait for T {}
+impl<T> Trait for T
+	where T: FullValidatorIdentification<<Self as frame_system::Trait>::AccountId> + super::Trait {}
+
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {

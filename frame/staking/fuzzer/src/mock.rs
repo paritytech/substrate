@@ -117,7 +117,9 @@ impl pallet_session::ValidatorIdentification<<Self as frame_system::Trait>::Acco
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 }
 
-impl pallet_session::historical::FullValidatorIdentification<<Self as frame_system::Trait>::AccountId> for Test {
+impl pallet_session::historical::FullValidatorIdentification<<Self as frame_system::Trait>::AccountId>
+	for Test
+{
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
 }

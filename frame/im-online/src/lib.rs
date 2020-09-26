@@ -674,7 +674,9 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 			.filter(|(index, id)|
 				!Self::is_online_aux(*index as u32, id)
 			).filter_map(|(_, id)|
-				<T as FullValidatorIdentification<T::AccountId>>::FullIdentificationOf::convert(id.clone()).map(|full_id| (id, full_id))
+				<T as FullValidatorIdentification<T::AccountId>>::FullIdentificationOf::convert(
+					id.clone()
+				).map(|full_id| (id, full_id))
 			).collect::<Vec<IdentificationTuple<T::AccountId, T>>>();
 
 		// Remove all received heartbeats and number of authored blocks from the
