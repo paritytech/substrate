@@ -55,12 +55,6 @@ pub trait FullValidatorIdentification<AccountId>: ValidatorIdentification<Accoun
 	type FullIdentificationOf: Convert<Self::ValidatorId, Option<Self::FullIdentification>>;
 }
 
-/// A tuple of the validator's ID and their full identification.
-pub type IdentificationTuple<AccountId, T> = (
-	<T as ValidatorIdentification<AccountId>>::ValidatorId,
-	<T as FullValidatorIdentification<AccountId>>::FullIdentification
-);
-
 /// Trait necessary for the historical module.
 pub trait Trait:
 	FullValidatorIdentification<<Self as frame_system::Trait>::AccountId> + super::Trait {}
@@ -68,6 +62,11 @@ pub trait Trait:
 impl<T> Trait for T
 	where T: FullValidatorIdentification<<Self as frame_system::Trait>::AccountId> + super::Trait {}
 
+/// A tuple of the validator's ID and their full identification.
+pub type IdentificationTuple<AccountId, T> = (
+	<T as ValidatorIdentification<AccountId>>::ValidatorId,
+	<T as FullValidatorIdentification<AccountId>>::FullIdentification
+);
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
@@ -258,7 +257,11 @@ impl<T: Trait> ProvingTrie<T> {
 
 	// Check a proof contained within the current memory-db. Returns `None` if the
 	// nodes within the current `MemoryDB` are insufficient to query the item.
-	fn query(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<IdentificationTuple<T::AccountId, T>> {
+	fn query(
+		&self,
+		key_id: KeyTypeId,
+		key_data: &[u8],
+	) -> Option<IdentificationTuple<T::AccountId, T>> {
 		let trie = TrieDB::new(&self.db, &self.root).ok()?;
 		let val_idx = (key_id, key_data).using_encoded(|s| trie.get(s))
 			.ok()?
@@ -299,7 +302,10 @@ impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTy
 			})
 	}
 
-	fn check_proof(key: (KeyTypeId, D), proof: Self::Proof) -> Option<IdentificationTuple<T::AccountId, T>> {
+	fn check_proof(
+		key: (KeyTypeId, D),
+		proof: Self::Proof,
+	) -> Option<IdentificationTuple<T::AccountId, T>> {
 		let (id, data) = key;
 
 		if proof.session == <SessionModule<T>>::current_index() {

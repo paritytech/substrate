@@ -4568,6 +4568,8 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 #[test]
 fn offences_weight_calculated_correctly() {
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
+		use pallet_session::historical::IdentificationTuple;
+
 		// On offence with zero offenders: 4 Reads, 1 Write
 		let zero_offence_weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 1);
 		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0), Ok(zero_offence_weight));
@@ -4576,13 +4578,11 @@ fn offences_weight_calculated_correctly() {
 		let n_offence_unapplied_weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 1)
 			+ <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 5);
 
-		let offenders: Vec<OffenceDetails<
-						<Test as frame_system::Trait>::AccountId,
-						pallet_session::historical::IdentificationTuple<
-							<Test as frame_system::Trait>::AccountId,
-							Test,
-						>,
-					>>
+		let offenders: Vec<
+			OffenceDetails<
+				<Test as frame_system::Trait>::AccountId,
+				IdentificationTuple<<Test as frame_system::Trait>::AccountId, Test>>
+			>
 			= (1..10).map(|i|
 				OffenceDetails {
 					offender: (i, Staking::eras_stakers(Staking::active_era().unwrap().index, i)),

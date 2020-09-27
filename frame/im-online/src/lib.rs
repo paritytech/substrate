@@ -311,11 +311,10 @@ decl_storage! {
 			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) AuthIndex
 			=> Option<Vec<u8>>;
 
-		/// For each session index, we keep a mapping of `<T as ValidatorIdentification<T::AccountId>>::ValidatorId`
-		/// to the number of blocks authored by the given authority.
+		/// For each session index, we keep a mapping of `ValidatorId<T>` to the
+		/// number of blocks authored by the given authority.
 		AuthoredBlocks get(fn authored_blocks):
-			double_map hasher(twox_64_concat) SessionIndex,
-					   hasher(twox_64_concat) <T as ValidatorIdentification<T::AccountId>>::ValidatorId
+			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) ValidatorId<T>
 			=> u32;
 	}
 	add_extra_genesis {
@@ -416,8 +415,7 @@ type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Trait>::Bl
 
 /// Keep track of number of authored blocks per authority, uncles are counted as
 /// well since they're a valid proof of being online.
-impl<T: Trait + pallet_authorship::Trait>
-	pallet_authorship::EventHandler<ValidatorId<T>, T::BlockNumber> for Module<T>
+impl<T: Trait + pallet_authorship::Trait> pallet_authorship::EventHandler<ValidatorId<T>, T::BlockNumber> for Module<T>
 {
 	fn note_author(author: ValidatorId<T>) {
 		Self::note_authorship(author);
@@ -445,10 +443,7 @@ impl<T: Trait> Module<T> {
 		Self::is_online_aux(authority_index, authority)
 	}
 
-	fn is_online_aux(
-		authority_index: AuthIndex,
-		authority: &<T as ValidatorIdentification<T::AccountId>>::ValidatorId,
-	) -> bool {
+	fn is_online_aux(authority_index: AuthIndex, authority: &ValidatorId<T>) -> bool {
 		let current_session = T::SessionInterface::current_index();
 
 		<ReceivedHeartbeats>::contains_key(&current_session, &authority_index) ||

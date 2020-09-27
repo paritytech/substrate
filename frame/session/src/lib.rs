@@ -371,7 +371,9 @@ pub trait WeightInfo {
 	fn purge_keys() -> Weight;
 }
 
-pub trait Trait: ValidatorIdentification<<Self as frame_system::Trait>::AccountId> + frame_system::Trait {
+pub trait Trait:
+	ValidatorIdentification<<Self as frame_system::Trait>::AccountId> + frame_system::Trait
+{
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 
