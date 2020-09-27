@@ -105,7 +105,7 @@ use frame_system::offchain::{
 };
 use pallet_session::{
 	historical::{FullValidatorIdentification, IdentificationTuple},
-	ValidatorIdentification,
+	ValidatorIdentification, ValidatorId
 };
 
 pub mod sr25519 {
@@ -417,16 +417,13 @@ type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Trait>::Bl
 /// Keep track of number of authored blocks per authority, uncles are counted as
 /// well since they're a valid proof of being online.
 impl<T: Trait + pallet_authorship::Trait>
-	pallet_authorship::EventHandler<
-		<T as ValidatorIdentification<T::AccountId>>::ValidatorId,
-		T::BlockNumber,
-	> for Module<T>
+	pallet_authorship::EventHandler<ValidatorId<T>, T::BlockNumber> for Module<T>
 {
-	fn note_author(author: <T as ValidatorIdentification<T::AccountId>>::ValidatorId) {
+	fn note_author(author: ValidatorId<T>) {
 		Self::note_authorship(author);
 	}
 
-	fn note_uncle(author: <T as ValidatorIdentification<T::AccountId>>::ValidatorId, _age: T::BlockNumber) {
+	fn note_uncle(author: ValidatorId<T>, _age: T::BlockNumber) {
 		Self::note_authorship(author);
 	}
 }
@@ -469,7 +466,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Note that the given authority has authored a block in the current session.
-	fn note_authorship(author: <T as ValidatorIdentification<T::AccountId>>::ValidatorId) {
+	fn note_authorship(author: ValidatorId<T>) {
 		let current_session = T::SessionInterface::current_index();
 
 		<AuthoredBlocks<T>>::mutate(

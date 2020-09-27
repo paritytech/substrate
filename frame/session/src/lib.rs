@@ -88,9 +88,7 @@
 //! ```
 //! use pallet_session as session;
 //!
-//! fn validators<T: pallet_session::Trait>() -> Vec<
-//! 	<T as pallet_session::ValidatorIdentification<<T as frame_system::Trait>::AccountId>::ValidatorId
-//! > {
+//! fn validators<T: pallet_session::Trait>() -> Vec<pallet_session::ValidatorId<T>> {
 //!	<pallet_session::Module<T>>::validators()
 //! }
 //! # fn main(){}
@@ -136,6 +134,9 @@ pub trait ValidatorIdentification<AccountId> {
 	/// Its cost must be at most one storage read.
 	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
 }
+
+pub type ValidatorId<T> =
+	<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::ValidatorId;
 
 /// Decides whether the session should be ended.
 pub trait ShouldEndSession<BlockNumber> {
@@ -811,15 +812,11 @@ impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 	}
 }
 
-impl<T: Trait>
-	sp_session::SessionInterface<
-		<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::ValidatorId
-	> for Module<T>
-{
+impl<T: Trait> sp_session::SessionInterface<ValidatorId<T>> for Module<T> {
 	fn current_index() -> sp_staking::SessionIndex {
 		Module::<T>::current_index()
 	}
-	fn validators() -> Vec<<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::ValidatorId> {
+	fn validators() -> Vec<ValidatorId<T>> {
 		Module::<T>::validators()
 	}
 }

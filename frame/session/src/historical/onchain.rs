@@ -21,7 +21,7 @@ use codec::Encode;
 use sp_runtime::traits::Convert;
 
 use super::super::Trait as SessionTrait;
-use super::super::{Module as SessionModule, SessionIndex, ValidatorIdentification};
+use super::super::{Module as SessionModule, SessionIndex, ValidatorId};
 use super::{Trait as HistoricalTrait, FullValidatorIdentification};
 
 use super::shared;
@@ -40,7 +40,7 @@ pub fn store_session_validator_set_to_offchain<T: HistoricalTrait + SessionTrait
 ) {
 	let encoded_validator_list = <SessionModule<T>>::validators()
 		.into_iter()
-		.filter_map(|validator_id: <T as ValidatorIdentification<T::AccountId>>::ValidatorId| {
+		.filter_map(|validator_id: ValidatorId<T>| {
 			let full_identification =
 				<<T as FullValidatorIdentification<T::AccountId>>::FullIdentificationOf>::convert(
 					validator_id.clone(),
