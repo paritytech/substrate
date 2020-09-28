@@ -203,6 +203,9 @@ pub fn maximum_compact_len<W: crate::WeightInfo>(
 			}
 			// For the opposite case.
 			while weight_with(voters + 1) < max_weight {
+				if voters + 1 >= size.nominators {
+					break
+				}
 				voters += 1;
 			}
 			break;
