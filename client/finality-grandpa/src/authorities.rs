@@ -101,11 +101,11 @@ pub(crate) struct Status<H, N> {
 
 /// A set of authorities.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
-pub struct AuthoritySet<H, N> {
+pub(crate) struct AuthoritySet<H, N> {
 	/// The current active authorities.
-	pub current_authorities: AuthorityList,
+	pub(crate) current_authorities: AuthorityList,
 	/// The current set id.
-	pub set_id: u64,
+	pub(crate) set_id: u64,
 	/// Tree of pending standard changes across forks. Standard changes are
 	/// enacted on finality and must be enacted (i.e. finalized) in-order across
 	/// a given branch
@@ -494,7 +494,7 @@ where
 
 /// Kinds of delays for pending changes.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
-pub enum DelayKind<N> {
+pub(crate) enum DelayKind<N> {
 	/// Depth in finalized chain.
 	Finalized,
 	/// Depth in best chain. The median last finalized block is calculated at the time the
@@ -507,7 +507,7 @@ pub enum DelayKind<N> {
 /// This will be applied when the announcing block is at some depth within
 /// the finalized or unfinalized chain.
 #[derive(Debug, Clone, Encode, PartialEq)]
-pub struct PendingChange<H, N> {
+pub(crate) struct PendingChange<H, N> {
 	/// The new authorities and weights to apply.
 	pub(crate) next_authorities: AuthorityList,
 	/// How deep in the chain the announcing block must be
