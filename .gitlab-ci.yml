@@ -76,17 +76,17 @@ default:
   tags:
     - linux-docker
 
-# workflow:
-#   rules:
-#     - if: $CI_COMMIT_TAG
-#     - if: $CI_COMMIT_BRANCH
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH
 
 .docker-env-rules:                 &docker-env-rules
   rules:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
 
 .build-rules:                      &build-rules
@@ -110,7 +110,7 @@ skip-if-draft:
   <<:                              *kubernetes-build
   stage:                           .pre
   rules:
-    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/     # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/     # PRs
   script:
      - echo "Commit message is ${CI_COMMIT_MESSAGE}"
      - echo "Ref is ${CI_COMMIT_REF_NAME}"
@@ -124,7 +124,7 @@ check-runtime:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   rules:
-    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/     # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/     # PRs
   variables:
     <<:                            *default-vars
     GITLAB_API:                    "https://gitlab.parity.io/api/v4"
@@ -148,7 +148,7 @@ check-line-width:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   rules:
-    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/     # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/     # PRs
   script:
     - ./.maintain/gitlab/check_line_width.sh
   allow_failure:                   true
@@ -166,7 +166,7 @@ cargo-audit:
   stage:                           test
   <<:                              *docker-env
   rules:
-    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -186,7 +186,7 @@ cargo-deny:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
@@ -265,7 +265,7 @@ unleash-check:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
@@ -372,7 +372,7 @@ check-polkadot-companion-status:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   rules:
-    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/                        # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                        # PRs
   script:
     - ./.maintain/gitlab/check_polkadot_companion_status.sh
 
@@ -781,6 +781,6 @@ check-labels:
   image:                          paritytech/tools:latest
   <<:                             *kubernetes-build
   rules:
-    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/                        # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                        # PRs
   script:
     - ./.maintain/gitlab/check_labels.sh
