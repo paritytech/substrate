@@ -86,13 +86,15 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
 
 .build-rules:                      &build-rules
   rules:
-    - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
     - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
     - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
@@ -182,11 +184,10 @@ cargo-deny:
   rules:
     - if: $CI_COMMIT_MESSAGE =~ /skip-checks/
       when: never
-      # .docker-env-rules
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
@@ -225,15 +226,16 @@ test-deterministic-wasm:
   <<:                              *docker-env-rules
   variables:
     <<:                            *default-vars
+    WASM_BUILD_NO_COLOR:           1
   script:
     # build runtime
-    - WASM_BUILD_NO_COLOR=1 cargo build --verbose --release -p node-runtime
+    - cargo build --verbose --release -p node-runtime
     # make checksum
     - sha256sum target/release/wbuild/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
     # clean up – FIXME: can we reuse some of the artifacts?
     - cargo clean
     # build again
-    - WASM_BUILD_NO_COLOR=1 cargo build --verbose --release -p node-runtime
+    - cargo build --verbose --release -p node-runtime
     # confirm checksum
     - sha256sum -c checksum.sha256
     - sccache -s
@@ -249,10 +251,11 @@ test-linux-stable:                 &test-linux
     RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE:                1
     WASM_BUILD_NO_COLOR:           1
+    SUBSTRATE_TEST_TIMEOUT:        1
   script:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
-    - WASM_BUILD_NO_COLOR=1 SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
+    - time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - sccache -s
 
 unleash-check:
@@ -262,10 +265,8 @@ unleash-check:
     - if: $CI_COMMIT_MESSAGE =~ /skip-checks/
       when: never
       # .docker-env-rules
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
@@ -431,7 +432,6 @@ build-linux-substrate:             &build-binary
     - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
 
-
 build-linux-subkey:                &build-subkey
   stage:                           build
   <<:                              *collect-artifacts
@@ -544,6 +544,7 @@ docker-build-chaos:
     - docker logout
 
 #### stage:                        chaos
+
 chaos-test-singlenodeheight:
   <<:                              *chaos-only
   stage:                           chaos
@@ -655,7 +656,6 @@ publish-s3-release:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
 
-
 publish-s3-doc:
   stage:                           publish
   image:                           paritytech/awscli:latest
@@ -702,8 +702,6 @@ publish-to-crates-io:
     - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
   allow_failure:                   true
 
-
-
 deploy-kubernetes-alerting-rules:
   stage:                           deploy
   interruptible:                   true
@@ -726,8 +724,6 @@ deploy-kubernetes-alerting-rules:
     - changes:
         - .gitlab-ci.yml
         - .maintain/monitoring/
-
-
 
 .validator-deploy:                 &validator-deploy
   stage:                           flaming-fir
