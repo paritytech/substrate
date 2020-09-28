@@ -21,10 +21,7 @@ use crate::*;
 use frame_support::{
 	assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	traits::{Currency, FindAuthor, Get, OnFinalize, OnInitialize},
-	weights::{
-		constants::{RocksDbWeight, WEIGHT_PER_SECOND},
-		Weight,
-	},
+	weights::{constants::RocksDbWeight, Weight},
 	IterableStorageMap, StorageDoubleMap, StorageMap, StorageValue,
 };
 use sp_core::H256;

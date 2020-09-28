@@ -22,7 +22,7 @@ use crate::{
 	Trait, ValidatorIndex, WeightInfo,
 };
 use codec::Decode;
-use frame_support::{traits::Get, weights::Weight};
+use frame_support::{traits::Get, weights::Weight, IterableStorageMap};
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
 	build_support_map, evaluate_support, reduce, Assignment, ElectionResult, ElectionScore,
@@ -142,15 +142,6 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
-/// A greedy effort to reduce the size if a solution.
-// pub fn trim_solution_to_fit(
-// 	winners: Vec<ValidatorIndex>,
-// 	compact: CompactAssignments,
-// 	size: ElectionSize,
-// ) -> (Vec<ValidatorIndex>, CompactAssignments, ElectionSize) {
-
-// }
-
 /// Get a random number of iterations to run the balancing.
 ///
 /// Uses the offchain seed to generate a random number.
@@ -167,27 +158,55 @@ pub fn get_balancing_iters<T: Trait>() -> usize {
 }
 
 /// Find the maximum `len` that a compact can have in order to fit into the block weight.
-pub fn maximum_compact_len<T: Trait>(
+///
+/// We start by assuming `voters == size.nominators`, i.e. all nominators are active in the
+/// solution. Then we do a binary search until we find the ideal value.
+///
+/// Thus, this only returns a value between zero and `size.nominators`.
+pub fn maximum_compact_len<W: crate::WeightInfo>(
 	winners_len: u32,
 	size: ElectionSize,
 	max_weight: Weight,
 ) -> u32 {
-	// TODO: ofc we can do this nicer, if we rely on the internals of the weight function :\
-	// TODO: check infinite loop is not possible.
-	let mut voters = 0;
-	loop {
-		let weight = T::WeightInfo::submit_solution_better(
+	use sp_std::cmp::Ordering;
+	let weight_with = |voters: u32| -> Weight {
+		W::submit_solution_better(
 			size.validators.into(),
 			size.nominators.into(),
 			voters,
 			winners_len,
-		);
-		if weight < max_weight {
-			voters += 1;
-		} else {
+		)
+	};
+
+	let mut voters = size.nominators.max(2);
+	let mut step = voters;
+	loop {
+		let current = weight_with(voters);
+		step = step / 2;
+		if step == 0 {
+			// We might have reduced less than expected due to rounding error. Reduce one last time.
+			while weight_with(voters) > max_weight {
+				voters -= 1;
+			}
+			// For the opposite case.
+			while weight_with(voters + 1) < max_weight {
+				voters += 1;
+			}
 			break;
 		}
+		match current.cmp(&max_weight) {
+			Ordering::Less => {
+				voters += step;
+			}
+			Ordering::Greater => {
+				voters -= step;
+			}
+			Ordering::Equal => {
+				break;
+			}
+		}
 	}
+
 	voters
 }
 
@@ -214,8 +233,6 @@ pub fn trim_to_weight<T: Trait, FN>(
 where
 	for<'r> FN: Fn(&'r T::AccountId) -> Option<NominatorIndex>,
 {
-	use frame_support::IterableStorageMap;
-
 	if let Some(to_remove) = compact.len().checked_sub(maximum_allowed_voters as usize) {
 		// grab all voters and sort them by least stake.
 		let mut voters_sorted = <Nominators<T>>::iter()
@@ -346,7 +363,7 @@ where
 
 	// potentially reduce the size of the compact to fit weight.
 	let maximum_allowed_voters =
-		maximum_compact_len::<T>(winners.len() as u32, size, maximum_weight);
+		maximum_compact_len::<T::WeightInfo>(winners.len() as u32, size, maximum_weight);
 
 	crate::log!(info, "Maximum weight = {:?} // current weight = {:?} // maximum voters = {:?} // current votes = {:?}",
 		maximum_weight,
@@ -390,4 +407,109 @@ where
 	}
 
 	Ok((winners_indexed, compact, score, size))
+}
+
+#[cfg(test)]
+mod test {
+	#![allow(unused_variables)]
+	use super::*;
+	use crate::ElectionSize;
+
+	struct Staking;
+
+	impl crate::WeightInfo for Staking {
+		fn bond() -> Weight {
+			unimplemented!()
+		}
+		fn bond_extra() -> Weight {
+			unimplemented!()
+		}
+		fn unbond() -> Weight {
+			unimplemented!()
+		}
+		fn withdraw_unbonded_update(s: u32) -> Weight {
+			unimplemented!()
+		}
+		fn withdraw_unbonded_kill(s: u32) -> Weight {
+			unimplemented!()
+		}
+		fn validate() -> Weight {
+			unimplemented!()
+		}
+		fn nominate(n: u32) -> Weight {
+			unimplemented!()
+		}
+		fn chill() -> Weight {
+			unimplemented!()
+		}
+		fn set_payee() -> Weight {
+			unimplemented!()
+		}
+		fn set_controller() -> Weight {
+			unimplemented!()
+		}
+		fn set_validator_count() -> Weight {
+			unimplemented!()
+		}
+		fn force_no_eras() -> Weight {
+			unimplemented!()
+		}
+		fn force_new_era() -> Weight {
+			unimplemented!()
+		}
+		fn force_new_era_always() -> Weight {
+			unimplemented!()
+		}
+		fn set_invulnerables(v: u32) -> Weight {
+			unimplemented!()
+		}
+		fn force_unstake(s: u32) -> Weight {
+			unimplemented!()
+		}
+		fn cancel_deferred_slash(s: u32) -> Weight {
+			unimplemented!()
+		}
+		fn payout_stakers_dead_controller(n: u32) -> Weight {
+			unimplemented!()
+		}
+		fn payout_stakers_alive_staked(n: u32) -> Weight {
+			unimplemented!()
+		}
+		fn rebond(l: u32) -> Weight {
+			unimplemented!()
+		}
+		fn set_history_depth(e: u32) -> Weight {
+			unimplemented!()
+		}
+		fn reap_stash(s: u32) -> Weight {
+			unimplemented!()
+		}
+		fn new_era(v: u32, n: u32) -> Weight {
+			unimplemented!()
+		}
+		fn submit_solution_better(v: u32, n: u32, a: u32, w: u32) -> Weight {
+			(0 * v + 0 * n + 1000 * a + 0 * w) as Weight
+		}
+	}
+
+	#[test]
+	fn find_max_voter_binary_search_works() {
+		let size = ElectionSize {
+			validators: 0,
+			nominators: 10,
+		};
+
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 999), 0);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1000), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1001), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1999), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2000), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 3333), 3);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 5500), 5);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 7777), 7);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 9999), 9);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 10_000), 10);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 10_999), 10);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 11_000), 11);
+	}
 }
