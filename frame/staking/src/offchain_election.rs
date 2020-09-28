@@ -228,7 +228,7 @@ where
 			.collect::<Vec<_>>();
 		voters_sorted.sort_by_key(|(_, y)| *y);
 
-		// start removing from the leas stake. Iterate until we know enough have been removed.
+		// start removing from the least stake. Iterate until we know enough have been removed.
 		let mut removed = 0;
 		for (i, _stake) in voters_sorted
 			.iter()
