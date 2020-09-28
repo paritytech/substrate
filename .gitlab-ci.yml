@@ -3,7 +3,6 @@
 # substrate
 #
 # pipelines can be triggered manually in the web
-# setting DEPLOY_TAG will only deploy the tagged image
 
 # SAMPLE JOB TEMPLATE - This is not a complete example but is enough to build a
 # simple CI job. For full documentation, visit https://docs.gitlab.com/ee/ci/yaml/
@@ -91,8 +90,6 @@ workflow:
 
 .build-rules:                      &build-rules
   rules:
-    - if: '$DEPLOY_TAG'
-      when: never
     - if: '$CI_COMMIT_REF_NAME == "master"'
     - if: '$CI_PIPELINE_SOURCE == "web"'
     - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
@@ -117,7 +114,6 @@ skip-if-draft:
      - echo "Commit message is ${CI_COMMIT_MESSAGE}"
      - echo "Ref is ${CI_COMMIT_REF_NAME}"
      - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
-     - echo "deploy tag is ${DEPLOY_TAG}"
      - ./.maintain/gitlab/skip_if_draft.sh
 
 #### stage:                        check
@@ -160,9 +156,6 @@ test-dependency-rules:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
-  rules:
-    - if: $DEPLOY_TAG
-      when: never
   script:
     - .maintain/ensure-deps.sh
 
@@ -228,17 +221,9 @@ cargo-check-subkey:
 test-deterministic-wasm:
   stage:                           test
   <<:                              *docker-env
+  <<:                              *docker-env-rules
   variables:
     <<:                            *default-vars
-  rules:
-    - if: $DEPLOY_TAG
-      when: never
-  # .docker-env-rules
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_COMMIT_REF_NAME == "master"'
-    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
-    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
   script:
     # build runtime
     - WASM_BUILD_NO_COLOR=1 cargo build --verbose --release -p node-runtime
@@ -255,6 +240,7 @@ test-deterministic-wasm:
 test-linux-stable:                 &test-linux
   stage:                           test
   <<:                              *docker-env
+  <<:                              *docker-env-rules
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
@@ -262,15 +248,6 @@ test-linux-stable:                 &test-linux
     RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE:                1
     WASM_BUILD_NO_COLOR:           1
-  rules:
-    - if: $DEPLOY_TAG
-      when: never
-  # .docker-env-rules
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_COMMIT_REF_NAME == "master"'
-    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
-    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
   script:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
@@ -297,15 +274,7 @@ test-frame-examples-compile-to-wasm:
   # into one job
   stage:                           test
   <<:                              *docker-env
-  rules:
-    - if: $DEPLOY_TAG
-      when: never
-  # .docker-env-rules
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_COMMIT_REF_NAME == "master"'
-    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
-    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
+  <<:                              *docker-env-rules
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
@@ -362,15 +331,7 @@ check-web-wasm:
 test-full-crypto-feature:
   stage:                           test
   <<:                              *docker-env
-  rules:
-    - if: $DEPLOY_TAG
-      when: never
-  # .docker-env-rules
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_COMMIT_REF_NAME == "master"'
-    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
-    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
+  <<:                              *docker-env-rules
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
