@@ -11,8 +11,9 @@
 #   stage:                           test # One of the stages listed below this job (required)
 #   image:                           paritytech/tools:latest # Any docker image (required)
 #   allow_failure:                   true # Allow the pipeline to continue if this job fails (default: false)
-#   dependencies:
-#     - build-rust-doc # Any jobs that are required to run before this job (optional)
+#   needs:
+#   - job:                           test-linux # Any jobs that are required to run before this job (optional)
+#     - build-rust-doc 
 #   variables:
 #     MY_ENVIRONMENT_VARIABLE:       "some useful value" # Environment variables passed to the job (optional)
 #   script:
@@ -85,7 +86,8 @@ workflow:
     - if: '$CI_PIPELINE_SOURCE == "web"'
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_COMMIT_REF_NAME == "master"'
-    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
+    # - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
+    - if: '$CI_COMMIT_REF_NAME == "7229"'                         # PRs
     - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
 
 .build-rules:                      &build-rules
