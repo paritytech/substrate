@@ -215,10 +215,16 @@ pub fn read_message(msg: Option<&String>, should_decode: bool) -> Result<Vec<u8>
 /// Allows for calling $method with appropriate crypto impl.
 #[macro_export]
 macro_rules! with_crypto_scheme {
-	($scheme:expr, $method:ident($($params:expr),*)) => {
-		with_crypto_scheme!($scheme, $method<>($($params),*))
+	(
+		$scheme:expr,
+		$method:ident ( $($params:expr),* $(,)?) $(,)?
+	) => {
+		$crate::with_crypto_scheme!($scheme, $method<>($($params),*))
 	};
-	($scheme:expr, $method:ident<$($generics:ty),*>($($params:expr),*)) => {
+	(
+		$scheme:expr,
+		$method:ident<$($generics:ty),*>( $( $params:expr ),* $(,)?) $(,)?
+	) => {
 		match $scheme {
 			$crate::CryptoScheme::Ecdsa => {
 				$method::<sp_core::ecdsa::Pair, $($generics),*>($($params),*)
