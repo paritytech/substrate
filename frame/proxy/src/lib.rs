@@ -685,6 +685,6 @@ pub mod migration {
 				deposit,
 			))
 		);
-		T::MaximumBlockWeight::get()
+		T::block_weights().max_block
 	}
 }
