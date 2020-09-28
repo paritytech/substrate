@@ -47,6 +47,8 @@ pub enum OffchainElectionError {
 	InternalElectionError(sp_npos_elections::Error),
 	/// One of the computed winners is invalid.
 	InvalidWinner,
+	/// A nominator is not available in the snapshot.
+	NominatorSnapshotCorrupt,
 }
 
 impl From<sp_npos_elections::Error> for OffchainElectionError {
@@ -245,7 +247,7 @@ pub fn trim_to_weight<T: Trait, FN>(
 	maximum_allowed_voters: u32,
 	mut compact: CompactAssignments,
 	nominator_index: FN,
-) -> CompactAssignments
+) -> Result<CompactAssignments, OffchainElectionError>
 where
 	for<'r> FN: Fn(&'r T::AccountId) -> Option<NominatorIndex>,
 {
@@ -263,15 +265,16 @@ where
 
 		// start removing from the least stake. Iterate until we know enough have been removed.
 		let mut removed = 0;
-		for (i, _stake) in voters_sorted
+		for (maybe_index, _stake) in voters_sorted
 			.iter()
-			.map(|(who, stake)| (nominator_index(&who).unwrap(), stake))
+			.map(|(who, stake)| (nominator_index(&who), stake))
 		{
-			if compact.remove_voter(i) {
+			let index = maybe_index.ok_or(OffchainElectionError::NominatorSnapshotCorrupt)?;
+			if compact.remove_voter(index) {
 				crate::log!(
 					debug,
 					"removed a voter at index {} with stake {:?} from compact to reduce the size",
-					i,
+					index,
 					_stake,
 				);
 				removed += 1
@@ -288,14 +291,14 @@ where
 			removed,
 			compact.len() + removed,
 		);
-		compact
+		Ok(compact)
 	} else {
 		// nada, return as-is
 		crate::log!(
 			info,
 			"Compact solution did not get trimmed due to block weight limits.",
 		);
-		compact
+		Ok(compact)
 	}
 }
 
@@ -394,7 +397,7 @@ where
 		compact.len(),
 	);
 
-	let compact = trim_to_weight::<T, _>(maximum_allowed_voters, compact, &nominator_index);
+	let compact = trim_to_weight::<T, _>(maximum_allowed_voters, compact, &nominator_index)?;
 
 	// re-compute the score. We re-create what the chain will do.
 	let score = {
