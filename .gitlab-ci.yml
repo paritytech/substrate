@@ -13,7 +13,7 @@
 #   allow_failure:                   true # Allow the pipeline to continue if this job fails (default: false)
 #   needs:
 #   - job:                           test-linux # Any jobs that are required to run before this job (optional)
-#     - build-rust-doc 
+#     - build-rust-doc
 #   variables:
 #     MY_ENVIRONMENT_VARIABLE:       "some useful value" # Environment variables passed to the job (optional)
 #   script:
@@ -112,7 +112,7 @@ skip-if-draft:
   <<:                              *kubernetes-build
   stage:                           .pre
   rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/     # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
      - echo "Commit message is ${CI_COMMIT_MESSAGE}"
      - echo "Ref is ${CI_COMMIT_REF_NAME}"
@@ -126,7 +126,7 @@ check-runtime:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/     # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   variables:
     <<:                            *default-vars
     GITLAB_API:                    "https://gitlab.parity.io/api/v4"
@@ -150,7 +150,7 @@ check-line-width:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/     # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
     - ./.maintain/gitlab/check_line_width.sh
   allow_failure:                   true
@@ -251,11 +251,10 @@ test-linux-stable:                 &test-linux
     RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE:                1
     WASM_BUILD_NO_COLOR:           1
-    SUBSTRATE_TEST_TIMEOUT:        1
   script:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
-    - time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
+    - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - sccache -s
 
 unleash-check:
@@ -373,7 +372,7 @@ check-polkadot-companion-status:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                        # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
     - ./.maintain/gitlab/check_polkadot_companion_status.sh
 
@@ -693,10 +692,16 @@ publish-draft-release:
 publish-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
-  <<:                              *docker-env-rules
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+    # .docker-env-rules
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "tags"
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
@@ -777,6 +782,6 @@ check-labels:
   image:                          paritytech/tools:latest
   <<:                             *kubernetes-build
   rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                        # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
     - ./.maintain/gitlab/check_labels.sh
