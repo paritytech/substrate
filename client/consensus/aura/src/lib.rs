@@ -219,6 +219,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 	type Proposer = E::Proposer;
 	type Claim = P::Public;
 	type EpochData = Vec<AuthorityId<P>>;
+	type BackoffAuthoringBlocksStrategy = sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy;
 
 	fn logging_target(&self) -> &'static str {
 		"aura"
@@ -325,7 +326,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 	fn proposing_remaining_duration(
 		&self,
 		head: &B::Header,
-		slot_info: &SlotInfo,
+		slot_info: &SlotInfo<B>,
 	) -> Option<std::time::Duration> {
 		let slot_remaining = self.slot_remaining_duration(slot_info);
 
@@ -365,7 +366,7 @@ impl<B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, 
 {
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>>;
 
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
+	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo<B>) -> Self::OnSlot {
 		<Self as sc_consensus_slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
 	}
 }

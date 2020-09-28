@@ -86,10 +86,7 @@ use sp_core::{crypto::Public, traits::BareCryptoStore};
 use sp_application_crypto::AppKey;
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
-	traits::{
-		Block as BlockT, Header, DigestItemFor, Zero,
-		UniqueSaturatedInto, Saturating,
-	},
+	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use sc_keystore::KeyStorePtr;
@@ -117,7 +114,7 @@ use log::{debug, info, log, trace, warn};
 use prometheus_endpoint::Registry;
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
-	SignedDuration,
+	SimpleBackoffAuthoringBlocksStrategy,
 };
 use sc_consensus_epochs::{
 	descendent_query, SharedEpochChanges, EpochChangesFor, Epoch as EpochT, ViableEpochDescriptor,
@@ -357,31 +354,14 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	/// Force authoring of blocks even if we are offline
 	pub force_authoring: bool,
 
-	/// Parameters that control BABE's functionality for backing off block production if finality
-	/// starts to lag behind.
-	pub backoff_authoring_blocks: Option<BackoffAuthoringBlocksParam>,
+	/// Strategy and parameters for backing off block production if finality starts to lag behind.
+	pub backoff_authoring_blocks: Option<SimpleBackoffAuthoringBlocksStrategy>,
 
 	/// The source of timestamps for relative slots
 	pub babe_link: BabeLink<B>,
 
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
-}
-
-/// Parameters used by BABE to decide how backoff authoring blocks if the number of unfinalized
-/// blocks grows too large.
-#[derive(Clone)]
-pub struct BackoffAuthoringBlocksParam {
-	/// The max interval to backoff when authoring blocks, regardless of delay in finality.
-	pub max_interval: u32,
-	/// The number of unfinalized blocks allowed before the BABE starts to consider to backoff
-	/// authoring blocks. Note that due to the `authoring_bias` BABE might still wait longer until it
-	/// decides to decline to author a block.
-	pub unfinalized_slack: u32,
-	/// How aggressively BABE should start to decline authoring locks. A small value for
-	/// `authoring_bias` means BABE will quickly start to backoff block authorship as the length of
-	/// the unfinalized blocks grows.
-	pub authoring_bias: u32,
 }
 
 /// Start the babe worker.
@@ -494,7 +474,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	env: E,
 	sync_oracle: SO,
 	force_authoring: bool,
-	backoff_authoring_blocks: Option<BackoffAuthoringBlocksParam>,
+	backoff_authoring_blocks: Option<SimpleBackoffAuthoringBlocksStrategy>,
 	keystore: KeyStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
@@ -522,6 +502,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 	>>;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
+	type BackoffAuthoringBlocksStrategy = sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy;
 
 	fn logging_target(&self) -> &'static str {
 		"babe"
@@ -656,6 +637,10 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 		self.force_authoring
 	}
 
+	fn backoff_authoring_blocks_strategy(&self) -> Option<&Self::BackoffAuthoringBlocksStrategy> {
+		self.backoff_authoring_blocks.as_ref()
+	}
+
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle {
 		&mut self.sync_oracle
 	}
@@ -669,7 +654,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 	fn proposing_remaining_duration(
 		&self,
 		head: &B::Header,
-		slot_info: &SlotInfo,
+		slot_info: &SlotInfo<B>,
 	) -> Option<std::time::Duration> {
 		let slot_remaining = self.slot_remaining_duration(slot_info);
 
@@ -709,57 +694,21 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> whe
 {
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>>;
 
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
-		if let Some(ref backoff_param) = self.backoff_authoring_blocks {
-			if let Ok(chain_head_slot) = find_pre_digest::<B>(&chain_head)
-				.map(|digest| digest.slot_number())
-			{
-				if should_backoff_authoring_blocks::<B>(
-					*chain_head.number(),
+	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo<B>) -> Self::OnSlot {
+		// Append SlotInfo with chain info
+		let mut slot_info = slot_info.clone();
+		slot_info.chain_info = find_pre_digest::<B>(&chain_head)
+			.map(|digest| digest.slot_number())
+			.map(|chain_head_slot| {
+				sc_consensus_slots::AppendedChainInfo::<B> {
+					chain_head_number: *chain_head.number(),
 					chain_head_slot,
-					self.client.info().finalized_number,
-					SignedDuration::default().slot_now(slot_info.duration),
-					backoff_param,
-				) {
-					return Box::pin(future::ready(Ok(())))
+					finalized_number: self.client.info().finalized_number,
 				}
-			}
-		}
+			})
+			.ok();
 
 		<Self as sc_consensus_slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
-	}
-}
-
-// The criterion for backing off block authoring when finality is lagging
-fn should_backoff_authoring_blocks<B>(
-	chain_head_number: NumberFor<B>,
-	chain_head_slot: u64,
-	finalized_number: NumberFor<B>,
-	slot_now: u64,
-	param: &BackoffAuthoringBlocksParam,
-) -> bool
-where
-	B: BlockT,
-{
-	let BackoffAuthoringBlocksParam {
-		max_interval,
-		unfinalized_slack,
-		authoring_bias
-	} = param.clone();
-
-	let unfinalized_block_length = chain_head_number - finalized_number;
-	let interval = unfinalized_block_length.saturating_sub(unfinalized_slack.into())
-		/ authoring_bias.into();
-	let interval = interval.min(max_interval.into());
-
-	// We're doing arithmetic between block and slot numbers.
-	let interval = interval.unique_saturated_into();
-
-	if u128::from(slot_now) <= u128::from(chain_head_slot) + interval {
-		info!(target: "babe", "Backing off authoring blocks due to too many unfinalized blocks");
-		true
-	} else {
-		false
 	}
 }
 
@@ -1594,76 +1543,3 @@ pub mod test_helpers {
 		).map(|(digest, _)| digest)
 	}
 }
-
-#[cfg(test)]
-mod test {
-	use crate::{should_backoff_authoring_blocks, BackoffAuthoringBlocksParam};
-	use substrate_test_runtime_client::runtime::Block;
-
-	struct HeadState {
-		head_number: u64,
-		head_slot: u64,
-		slot_now: u64,
-	}
-
-	impl HeadState {
-		fn author_block(&mut self) {
-			self.head_number += 1;
-			self.head_slot += 1;
-			self.slot_now += 1;
-		}
-
-		fn dont_author_block(&mut self) {
-			self.slot_now += 1;
-		}
-	}
-
-	#[test]
-	fn should_backoff_authoring_when_finality_lags() {
-		let finalized_number = 2u32.into();
-		let param = BackoffAuthoringBlocksParam {
-			max_interval: 100,
-			unfinalized_slack: 5,
-			authoring_bias: 2,
-		};
-
-		let mut head_state = HeadState {
-			head_number: 3,
-			head_slot: 10,
-			slot_now: 11
-		};
-
-		let should_backoff = |head_state: &HeadState| -> bool {
-			should_backoff_authoring_blocks::<Block>(
-				head_state.head_number,
-				head_state.head_slot,
-				finalized_number,
-				head_state.slot_now,
-				&param,
-			)
-		};
-
-		while head_state.slot_now < 17 {
-			assert!(!should_backoff(&head_state));
-			head_state.author_block();
-		}
-
-		// Once the unfinalized head of the chain grows too long we start backing off block
-		// production
-		assert_eq!(head_state.head_number, 9);
-		assert_eq!(head_state.head_slot, 16);
-		assert_eq!(head_state.slot_now, 17);
-		assert!(should_backoff(&head_state));
-		head_state.dont_author_block();
-
-		// But we don't stop entirely
-		while head_state.slot_now < 20 {
-			assert!(!should_backoff(&head_state));
-			head_state.author_block();
-		}
-
-		// Back off again
-		assert!(should_backoff(&head_state));
-	}
-}
-

@@ -25,7 +25,7 @@
 mod slots;
 mod aux_schema;
 
-pub use slots::{SignedDuration, SlotInfo};
+pub use slots::{SignedDuration, SlotInfo, AppendedChainInfo};
 use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
@@ -36,7 +36,7 @@ use futures_timer::Delay;
 use sp_inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor, Saturating, UniqueSaturatedInto};
 use sp_api::{ProvideRuntimeApi, ApiRef};
 use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
@@ -55,7 +55,7 @@ pub trait SlotWorker<B: BlockT> {
 	type OnSlot: Future<Output = Result<(), sp_consensus::Error>>;
 
 	/// Called when a new slot is triggered.
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot;
+	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo<B>) -> Self::OnSlot;
 }
 
 /// A skeleton implementation for `SlotWorker` which tries to claim a slot at
@@ -81,6 +81,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	/// Epoch data necessary for authoring.
 	type EpochData: Send + 'static;
+
+	/// Strategy for deciding if and when to backoff authoring new blocks if finality starts to lag.
+	type BackoffAuthoringBlocksStrategy: BackoffAuthoringBlocksStrategy<B>;
 
 	/// The logging target to use when logging messages.
 	fn logging_target(&self) -> &'static str;
@@ -138,6 +141,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Whether to force authoring if offline.
 	fn force_authoring(&self) -> bool;
 
+	/// The strategy for backing off block authorship is not set by default, since it usually
+	/// requires state that we do don't have here.
+	fn backoff_authoring_blocks_strategy(&self) -> Option<&Self::BackoffAuthoringBlocksStrategy> {
+		None
+	}
+
 	/// Returns a handle to a `SyncOracle`.
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle;
 
@@ -145,7 +154,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer;
 
 	/// Remaining duration of the slot.
-	fn slot_remaining_duration(&self, slot_info: &SlotInfo) -> Duration {
+	fn slot_remaining_duration(&self, slot_info: &SlotInfo<B>) -> Duration {
 		let now = Instant::now();
 		if now < slot_info.ends_at {
 			slot_info.ends_at.duration_since(now)
@@ -158,13 +167,13 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn proposing_remaining_duration(
 		&self,
 		_head: &B::Header,
-		slot_info: &SlotInfo
+		slot_info: &SlotInfo<B>
 	) -> Option<Duration> {
 		Some(self.slot_remaining_duration(slot_info))
 	}
 
 	/// Implements the `on_slot` functionality from `SlotWorker`.
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo)
+	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo<B>)
 		-> Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>> where
 		Self: Send + Sync,
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
@@ -222,6 +231,20 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			None => return Box::pin(future::ready(Ok(()))),
 			Some(claim) => claim,
 		};
+
+		if let Some(strategy) = self.backoff_authoring_blocks_strategy() {
+			if let Some(ref chain_info) = slot_info.chain_info {
+				if strategy.should_backoff(
+					chain_info.chain_head_number,
+					chain_info.chain_head_slot,
+					chain_info.finalized_number,
+					slot_number,
+				) {
+					info!("Backing off authoring new new blocks");
+					return Box::pin(future::ready(Ok(())));
+				}
+			}
+		}
 
 		debug!(
 			target: self.logging_target(), "Starting authorship at slot {}; timestamp = {}",
@@ -370,7 +393,7 @@ where
 	let SlotDuration(slot_duration) = slot_duration;
 
 	// rather than use a timer interval, we schedule our waits ourselves
-	Slots::<SC>::new(
+	Slots::<SC, B>::new(
 		slot_duration.slot_duration(),
 		inherent_data_providers,
 		timestamp_extractor,
@@ -511,7 +534,7 @@ impl<T: Clone> SlotDuration<T> {
 /// to parent. If the number of skipped slots is greated than 0 this method will apply
 /// an exponential backoff of at most `2^7 * slot_duration`, if no slots were skipped
 /// this method will return `None.`
-pub fn slot_lenience_exponential(parent_slot: u64, slot_info: &SlotInfo) -> Option<Duration> {
+pub fn slot_lenience_exponential<B: BlockT>(parent_slot: u64, slot_info: &SlotInfo<B>) -> Option<Duration> {
 	// never give more than 2^this times the lenience.
 	const BACKOFF_CAP: u64 = 7;
 
@@ -540,7 +563,7 @@ pub fn slot_lenience_exponential(parent_slot: u64, slot_info: &SlotInfo) -> Opti
 /// to parent. If the number of skipped slots is greated than 0 this method will apply
 /// a linear backoff of at most `20 * slot_duration`, if no slots were skipped
 /// this method will return `None.`
-pub fn slot_lenience_linear(parent_slot: u64, slot_info: &SlotInfo) -> Option<Duration> {
+pub fn slot_lenience_linear<B: BlockT>(parent_slot: u64, slot_info: &SlotInfo<B>) -> Option<Duration> {
 	// never give more than 20 times more lenience.
 	const BACKOFF_CAP: u64 = 20;
 
@@ -560,13 +583,71 @@ pub fn slot_lenience_linear(parent_slot: u64, slot_info: &SlotInfo) -> Option<Du
 	}
 }
 
+/// Trait for providing the strategy for when to backoff block authoring.
+pub trait BackoffAuthoringBlocksStrategy<B>
+where
+	B: BlockT
+{
+	/// Returns true if we should backoff authoring new blocks.
+	fn should_backoff(
+		&self,
+		chain_head_number: NumberFor<B>,
+		chain_head_slot: u64,
+		finalized_number: NumberFor<B>,
+		slow_now: u64,
+	) -> bool;
+}
+
+/// A simple default strategy for how to decide backing off authoring blocks if the number of
+/// unfinalized blocks grows too large.
+#[derive(Clone)]
+pub struct SimpleBackoffAuthoringBlocksStrategy {
+	/// The max interval to backoff when authoring blocks, regardless of delay in finality.
+	pub max_interval: u32,
+	/// The number of unfinalized blocks allowed before starting to consider to backoff authoring
+	/// blocks. Note that depending on the value for `authoring_bias`, there might still be an
+	/// additional wait until block authorships starts getting declined.
+	pub unfinalized_slack: u32,
+	/// How persistant block authorship is in the face of a growing unfinalized chain of blocks. A
+	/// small value for `authoring_bias` means to quickly start backing off block authorship as the
+	/// length of the unfinalized blocks grows.
+	pub authoring_bias: u32,
+}
+
+impl<B> BackoffAuthoringBlocksStrategy<B> for SimpleBackoffAuthoringBlocksStrategy
+where
+	B: BlockT
+{
+	fn should_backoff(
+		&self,
+		chain_head_number: NumberFor<B>,
+		chain_head_slot: u64,
+		finalized_number: NumberFor<B>,
+		slot_now: u64,
+	) -> bool {
+		let unfinalized_block_length = chain_head_number - finalized_number;
+		let interval = unfinalized_block_length.saturating_sub(self.unfinalized_slack.into())
+			/ self.authoring_bias.into();
+		let interval = interval.min(self.max_interval.into());
+
+		// We're doing arithmetic between block and slot numbers.
+		let interval = interval.unique_saturated_into();
+
+		// Backoff is the current slot isn't far enough ahead of the chain head.
+		u128::from(slot_now) <= u128::from(chain_head_slot) + interval
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use std::time::{Duration, Instant};
+	use crate::{SimpleBackoffAuthoringBlocksStrategy, BackoffAuthoringBlocksStrategy};
+	use substrate_test_runtime_client::runtime::Block;
+	use sp_api::NumberFor;
 
 	const SLOT_DURATION: Duration = Duration::from_millis(6000);
 
-	fn slot(n: u64) -> super::slots::SlotInfo {
+	fn slot(n: u64) -> super::slots::SlotInfo<Block> {
 		super::slots::SlotInfo {
 			number: n,
 			last_number: n - 1,
@@ -574,6 +655,7 @@ mod test {
 			timestamp: Default::default(),
 			inherent_data: Default::default(),
 			ends_at: Instant::now(),
+			chain_info: None,
 		}
 	}
 
@@ -622,4 +704,71 @@ mod test {
 			Some(SLOT_DURATION * 2u32.pow(7)),
 		);
 	}
+
+	struct HeadState {
+		head_number: NumberFor<Block>,
+		head_slot: u64,
+		slot_now: NumberFor<Block>,
+	}
+
+	impl HeadState {
+		fn author_block(&mut self) {
+			self.head_number += 1;
+			self.head_slot += 1;
+			self.slot_now += 1;
+		}
+
+		fn dont_author_block(&mut self) {
+			self.slot_now += 1;
+		}
+	}
+
+	#[test]
+	fn should_backoff_authoring_when_finality_lags() {
+		let param = SimpleBackoffAuthoringBlocksStrategy {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
+
+		let finalized_number = 2;
+		let mut head_state = HeadState {
+			head_number: 3,
+			head_slot: 10,
+			slot_now: 11,
+		};
+
+		let should_backoff = |head_state: &HeadState| -> bool {
+			<dyn BackoffAuthoringBlocksStrategy<Block>>::should_backoff(
+				&param,
+				head_state.head_number,
+				head_state.head_slot,
+				finalized_number,
+				head_state.slot_now,
+			)
+		};
+
+		while head_state.slot_now < 17 {
+			assert!(!should_backoff(&head_state));
+			head_state.author_block();
+		}
+
+		// Once the unfinalized head of the chain grows too long we start backing off block
+		// production
+		assert_eq!(head_state.head_number, 9);
+		assert_eq!(head_state.head_slot, 16);
+		assert_eq!(head_state.slot_now, 17);
+		assert!(should_backoff(&head_state));
+		head_state.dont_author_block();
+
+		// But we don't stop entirely
+		while head_state.slot_now < 20 {
+			assert!(!should_backoff(&head_state));
+			head_state.author_block();
+		}
+
+		// Back off again
+		assert!(should_backoff(&head_state));
+	}
 }
+

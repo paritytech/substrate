@@ -21,7 +21,9 @@
 use super::SlotCompatible;
 use sp_consensus::Error;
 use futures::{prelude::*, task::Context, task::Poll};
+use sp_api::NumberFor;
 use sp_inherents::{InherentData, InherentDataProviders};
+use sp_runtime::traits::Block as BlockT;
 
 use std::{pin::Pin, time::{Duration, Instant}};
 use futures_timer::Delay;
@@ -68,7 +70,8 @@ pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 }
 
 /// Information about a slot.
-pub struct SlotInfo {
+#[derive(Clone)]
+pub struct SlotInfo<B: BlockT> {
 	/// The slot number.
 	pub number: u64,
 	/// The last slot number produced.
@@ -81,18 +84,34 @@ pub struct SlotInfo {
 	pub inherent_data: InherentData,
 	/// Slot duration.
 	pub duration: u64,
+	/// Additional data for the chain that, if it's available, can provide a more informed handling
+	/// of slots. In particular, it can used to decide to backoff authoring blocks should finality
+	/// start to lag.
+	pub chain_info: Option<AppendedChainInfo<B>>,
+}
+
+/// Chain data that can be appended to `SlotInfo` if it's available.
+#[derive(Clone)]
+pub struct AppendedChainInfo<B: BlockT> {
+	/// The block number for the head of the chain.
+	pub chain_head_number: NumberFor<B>,
+	/// The slot number for the head of the chain.
+	pub chain_head_slot: u64,
+	/// The block number for the last finalized block in the chain.
+	pub finalized_number: NumberFor<B>,
 }
 
 /// A stream that returns every time there is a new slot.
-pub(crate) struct Slots<SC> {
+pub(crate) struct Slots<SC, B> {
 	last_slot: u64,
 	slot_duration: u64,
 	inner_delay: Option<Delay>,
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
+	block_type: std::marker::PhantomData<B>,
 }
 
-impl<SC> Slots<SC> {
+impl<SC, B> Slots<SC, B> {
 	/// Create a new `Slots` stream.
 	pub fn new(
 		slot_duration: u64,
@@ -105,12 +124,13 @@ impl<SC> Slots<SC> {
 			inner_delay: None,
 			inherent_data_providers,
 			timestamp_extractor,
+			block_type: std::marker::PhantomData,
 		}
 	}
 }
 
-impl<SC: SlotCompatible> Stream for Slots<SC> {
-	type Item = Result<SlotInfo, Error>;
+impl<SC: SlotCompatible, B: BlockT> Stream for Slots<SC, B> {
+	type Item = Result<SlotInfo<B>, Error>;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		loop {
@@ -160,11 +180,12 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 					timestamp,
 					ends_at,
 					inherent_data,
+					chain_info: None,
 				})))
 			}
 		}
 	}
 }
 
-impl<SC> Unpin for Slots<SC> {
+impl<SC, B> Unpin for Slots<SC, B> {
 }
