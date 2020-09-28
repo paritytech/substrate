@@ -76,50 +76,43 @@ default:
   tags:
     - linux-docker
 
-.docker-env-only:                       &docker-env-only
-  only:
-    - master
-    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
-    - schedules
-    - web
-    - /^[0-9]+$/                   # PRs
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH
 
-.build-only:                       &build-only
-  only:
-    - master
-    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
-    - /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
-    - web
+.docker-env-rules:                 &docker-env-rules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
 
-.build-rules:                       &build-rules
+.build-rules:                      &build-rules
   rules:
     - if: '$DEPLOY_TAG'
       when: never
-    - if: $CI_COMMIT_REF_NAME=="master"
-      when: always
-    - if: $CI_PIPELINE_SOURCE=="web"
-      when: always
-    - if: $CI_COMMIT_REF_NAME=~ /^v[0-9]+\.[0-9]+.*$/
-      when: always
-    - if: $CI_COMMIT_REF_NAME=~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
-      when: always
-    - if: '$CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME=~ /^[0-9]+$/'  # i.e add [chaos:basic] in commit message to trigger
-      when: always
-    - when: never
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
+    - if: '$CI_COMMIT_REF_NAME =~ "/^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/"'  # i.e. pre-v1.0, pre-v2.1rc1
+    - if: '$CI_COMMIT_MESSAGE =~ "/\[chaos:(basic|medium|large)\]/"
+           && $CI_COMMIT_REF_NAME =~ "/^[0-9]+$/"'  # i.e add [chaos:basic] in commit message to trigger
 
 .chaos-only:                       &chaos-only
-  only:
-    variables:
-      - '$CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME=~ /^[0-9]+$/'  # i.e add [chaos:basic] in commit message to trigger
+  rules:
+    - if: '$CI_COMMIT_MESSAGE =~ "/\[chaos:(basic|medium|large)\]/"
+           && $CI_COMMIT_REF_NAME =~ "/^[0-9]+$/"'  # i.e add [chaos:basic] in commit message to trigger
 
 #### stage:                       .pre
 
 skip-if-draft:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
-  stage:                          .pre
-  only:
-    - /^[0-9]+$/                  # Pull requests
+  stage:                           .pre
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'     # PRs
   script:
      - echo "Commit message is ${CI_COMMIT_MESSAGE}"
      - echo "Ref is ${CI_COMMIT_REF_NAME}"
@@ -133,8 +126,8 @@ check-runtime:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
-  only:
-    - /^[0-9]+$/
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'     # PRs
   variables:
     <<:                            *default-vars
     GITLAB_API:                    "https://gitlab.parity.io/api/v4"
@@ -147,9 +140,9 @@ check-signed-tag:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
-  only:
-    - /^ci-release-.*$/
-    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  rules:
+    - if: '$CI_COMMIT_REF_NAME =~ "/^ci-release-.*$/"'
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+\.[0-9]+.*$/"'
   script:
     - ./.maintain/gitlab/check_signed.sh
 
@@ -157,8 +150,8 @@ check-line-width:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
-  only:
-    - /^[0-9]+$/
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'     # PRs
   script:
     - ./.maintain/gitlab/check_line_width.sh
   allow_failure:                   true
@@ -167,9 +160,9 @@ test-dependency-rules:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
-  except:
-    variables:
-      - $DEPLOY_TAG
+  rules:
+    - if: $DEPLOY_TAG
+      when: never
   script:
     - .maintain/ensure-deps.sh
 
@@ -178,9 +171,13 @@ test-dependency-rules:
 cargo-audit:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-only
-  except:
-    - /^[0-9]+$/
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
   script:
     - cargo audit
   allow_failure:                   true
@@ -188,14 +185,15 @@ cargo-audit:
 cargo-deny:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-only
-  only:
-    - schedules
-    - tags
-    - web
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-checks/
+  rules:
+    - if: '$CI_COMMIT_MESSAGE =~ "/skip-checks/"'
+      when: never
+      # .docker-env-rules
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
   script:
     - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
   after_script:
@@ -211,7 +209,7 @@ cargo-deny:
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-only
+  <<:                              *docker-env-rules
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly check --benches --all
     - cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small
@@ -221,7 +219,7 @@ cargo-check-benches:
 cargo-check-subkey:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-only
+  <<:                              *docker-env-rules
   script:
     - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
@@ -230,12 +228,17 @@ cargo-check-subkey:
 test-deterministic-wasm:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-only
   variables:
     <<:                            *default-vars
-  except:
-    variables:
-      - $DEPLOY_TAG
+  rules:
+    - if: $DEPLOY_TAG
+      when: never
+  # .docker-env-rules
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
   script:
     # build runtime
     - WASM_BUILD_NO_COLOR=1 cargo build --verbose --release -p node-runtime
@@ -252,7 +255,6 @@ test-deterministic-wasm:
 test-linux-stable:                 &test-linux
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-only
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
@@ -260,9 +262,15 @@ test-linux-stable:                 &test-linux
     RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE:                1
     WASM_BUILD_NO_COLOR:           1
-  except:
-    variables:
-      - $DEPLOY_TAG
+  rules:
+    - if: $DEPLOY_TAG
+      when: never
+  # .docker-env-rules
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
   script:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
@@ -272,13 +280,15 @@ test-linux-stable:                 &test-linux
 unleash-check:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-only
-  only:
-    - master
-    - tags
-  except:
-    variables:
-      - $CI_COMMIT_MESSAGE =~ /skip-checks/
+  rules:
+    - if: '$CI_COMMIT_MESSAGE =~ "/skip-checks/"'
+      when: never
+      # .docker-env-rules
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
@@ -287,16 +297,21 @@ test-frame-examples-compile-to-wasm:
   # into one job
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-only
+  rules:
+    - if: $DEPLOY_TAG
+      when: never
+  # .docker-env-rules
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS: -Cdebug-assertions=y
     RUST_BACKTRACE: 1
-  except:
-    variables:
-      - $DEPLOY_TAG
   script:
     - cd frame/example-offchain-worker/
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
@@ -306,9 +321,6 @@ test-frame-examples-compile-to-wasm:
 
 test-linux-stable-int:
   <<:                              *test-linux
-  except:
-    variables:
-      - $DEPLOY_TAG
   script:
     - echo "___Logs will be partly shown at the end in case of failure.___"
     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
@@ -329,7 +341,7 @@ test-linux-stable-int:
 check-web-wasm:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-only
+  <<:                              *docker-env-rules
   script:
     # WASM support is in progress. As more and more crates support WASM, we
     # should add entries here. See https://github.com/paritytech/substrate/issues/2416
@@ -350,16 +362,21 @@ check-web-wasm:
 test-full-crypto-feature:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-only
+  rules:
+    - if: $DEPLOY_TAG
+      when: never
+  # .docker-env-rules
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                         # PRs
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS: -Cdebug-assertions=y
     RUST_BACKTRACE: 1
-  except:
-    variables:
-      - $DEPLOY_TAG
   script:
     - cd primitives/core/
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
@@ -371,7 +388,7 @@ cargo-check-macos:
   stage:                           test
   # shell runner on mac ignores the image set in *docker-env
   <<:                              *docker-env
-  <<:                              *docker-env-only
+  <<:                              *docker-env-rules
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
@@ -392,15 +409,15 @@ check-polkadot-companion-status:
   stage:                           build
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
-  only:
-    - /^[0-9]+$/                   # PRs
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                        # PRs
   script:
     - ./.maintain/gitlab/check_polkadot_companion_status.sh
 
 check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
-  <<:                              *docker-env-only
+  <<:                              *docker-env-rules
   needs:
     - job:                         test-linux-stable-int
       artifacts:                   false
@@ -413,7 +430,7 @@ check-polkadot-companion-build:
 test-browser-node:
   stage:                           build
   <<:                              *docker-env
-  <<:                              *docker-env-only
+  <<:                              *docker-env-rules
   needs:
     - job:                         check-web-wasm
       artifacts:                   false
@@ -457,8 +474,7 @@ build-linux-subkey:                &build-subkey
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  <<:                              *docker-env-only
-  <<:                              *build-only
+  <<:                              *build-rules
   needs:
     - job:                         cargo-check-subkey
       artifacts:                   false
@@ -479,16 +495,16 @@ build-linux-subkey:                &build-subkey
 
 build-macos-subkey:
   <<:                              *build-subkey
-  only:
-    - master
-    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'             # i.e. v1.0, v2.1rc1
   tags:
     - osx
 
 build-rust-doc:
   stage:                           build
   <<:                              *docker-env
-  <<:                              *docker-env-only
+  <<:                              *docker-env-rules
   allow_failure:                   true
   variables:
     <<:                            *default-vars
@@ -520,12 +536,14 @@ trigger-contracts-ci:
     project:                       parity/srml-contracts-waterfall
     branch:                        master
     strategy:                      depend
-  only:
-    - master
-    - schedules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
 
 #### stage:                        docker
-docker-build-chaos:                &docker-build-chaos
+
+docker-build-chaos:
   <<:                              *chaos-only
   stage:                           docker
   needs:
@@ -594,7 +612,7 @@ chaos-test-singlenodeheight:
 #### stage:                        publish
 
 .build-push-docker-image:          &build-push-docker-image
-  <<:                              *build-only
+  <<:                              *build-rules
   <<:                              *kubernetes-build
   image:                           docker:stable
   services:
@@ -655,7 +673,7 @@ publish-docker-subkey:
 
 publish-s3-release:
   stage:                           publish
-  <<:                              *build-only
+  <<:                              *build-rules
   <<:                              *kubernetes-build
   needs:
     - job:                         build-linux-substrate
@@ -683,7 +701,7 @@ publish-s3-doc:
   needs:
     - job:                         build-rust-doc
       artifacts:                   true
-  <<:                              *build-only
+  <<:                              *build-rules
   <<:                              *kubernetes-build
   variables:
     GIT_STRATEGY:                  none
@@ -703,9 +721,9 @@ publish-s3-doc:
 publish-draft-release:
   stage:                           publish
   image:                           paritytech/tools:latest
-  only:
-    - /^ci-release-.*$/
-    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  rules:
+    - if: '$CI_COMMIT_REF_NAME =~ "/^ci-release-.*$/"'
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+\.[0-9]+.*$/"'
   script:
     - ./.maintain/gitlab/publish_draft_release.sh
   allow_failure:                   true
@@ -713,10 +731,10 @@ publish-draft-release:
 publish-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
-  <<:                              *docker-env-only
-  only:
-    - /^ci-release-.*$/
-    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  <<:                              *docker-env-rules
+  rules:
+    - if: '$CI_COMMIT_REF_NAME =~ "/^ci-release-.*$/"'
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+\.[0-9]+.*$/"'
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
@@ -741,25 +759,35 @@ deploy-kubernetes-alerting-rules:
     - echo "deploying prometheus alerting rules"
     - kubectl -n ${NAMESPACE} patch prometheusrule ${PROMETHEUSRULE}
         --type=merge --patch "$(sed 's/^/  /;1s/^/spec:\n/' ${RULES})"
-  only:
-    refs:
-      - master
-    changes:
-      - .gitlab-ci.yml
-      - .maintain/monitoring/
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - changes:
+        - .gitlab-ci.yml
+        - .maintain/monitoring/
 
 
 
 .validator-deploy:                 &validator-deploy
-  <<:                              *build-only
   stage:                           flaming-fir
+  rules:
+    # .build-rules, but manual
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+      when: manual
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+    - if: '$CI_COMMIT_REF_NAME =~ "/^v[0-9]+\.[0-9]+.*$/"'              # i.e. v1.0, v2.1rc1
+      when: manual
+    - if: '$CI_COMMIT_REF_NAME =~ "/^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/"'  # i.e. pre-v1.0, pre-v2.1rc1
+      when: manual
+    - if: '$CI_COMMIT_MESSAGE =~ "/\[chaos:(basic|medium|large)\]/"
+            && $CI_COMMIT_REF_NAME =~ "/^[0-9]+$/"'  # i.e add [chaos:basic] in commit message to trigger
+      when: manual
   needs:
     # script will fail if there is no artifacts/substrate/VERSION
     - job:                         publish-docker-substrate
       artifacts:                   true
   image:                           parity/azure-ansible:v1
   allow_failure:                   true
-  when:                            manual
   interruptible:                   true
   tags:
     - linux-docker
@@ -790,7 +818,7 @@ check-labels:
   stage:                          .post
   image:                          paritytech/tools:latest
   <<:                             *kubernetes-build
-  only:
-    - /^[0-9]+$/
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "/^[0-9]+$/"'                        # PRs
   script:
     - ./.maintain/gitlab/check_labels.sh
