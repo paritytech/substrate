@@ -191,7 +191,7 @@ pub fn maximum_compact_len<T: Trait>(
 	voters
 }
 
-/// Greedily reduce the size of the a solution to fit into the block, wrt weight.
+/// Greedily reduce the size of the a solution to fit into the block, w.r.t. weight.
 ///
 /// The weight of the solution is foremost a function of the number of voters (i.e.
 /// `compact.len()`). Aside from this, the other components of the weight are invariant. The number
