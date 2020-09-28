@@ -24,6 +24,7 @@ use std::{
 	collections::{BTreeMap, VecDeque},
 	sync::Arc,
 };
+use crate::OpaquePeerId;
 use crate::offchain::{
 	self,
 	storage::{InMemOffchainStorage, OffchainOverlayedChange, OffchainOverlayedChanges},
@@ -381,6 +382,10 @@ impl offchain::Externalities for TestOffchainExt {
 		} else {
 			Err(HttpError::IoError)
 		}
+	}
+
+	fn set_authorized_nodes(&mut self, _nodes: Vec<OpaquePeerId>, _authorized_only: bool) {
+		unimplemented!()
 	}
 }
 

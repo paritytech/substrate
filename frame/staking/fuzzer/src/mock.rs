@@ -77,7 +77,7 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = ();
 	type MaximumBlockLength = ();
 	type Version = ();
-	type ModuleToIndex = ();
+	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = (Balances,);
@@ -87,6 +87,7 @@ parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
 }
 impl pallet_balances::Trait for Test {
+	type MaxLocks = ();
 	type Balance = Balance;
 	type Event = ();
 	type DustRemoval = ();

@@ -98,7 +98,7 @@ decl_event! {
 	/// Events type.
 	pub enum Event {
 		/// Batch of dispatches did not complete fully. Index of first failing dispatch given, as
-		/// well as the error. [index, error]
+		/// well as the error. \[index, error\]
 		BatchInterrupted(u32, DispatchError),
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,

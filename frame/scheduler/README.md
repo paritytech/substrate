@@ -1,9 +1,9 @@
 # Scheduler
 A module for scheduling dispatches.
 
-- [`scheduler::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
-- [`Module`](./struct.Module.html)
+- [`scheduler::Trait`](https://docs.rs/pallet-scheduler/latest/pallet_scheduler/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-scheduler/latest/pallet_scheduler/enum.Call.html)
+- [`Module`](https://docs.rs/pallet-scheduler/latest/pallet_scheduler/struct.Module.html)
 
 ## Overview
 

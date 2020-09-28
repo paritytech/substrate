@@ -1,6 +1,14 @@
 {
   "__inputs": [
     {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    },
+    {
       "name": "VAR_METRIC_NAMESPACE",
       "type": "constant",
       "label": "Prefix of the metrics",
@@ -68,7 +76,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1594715467007,
+  "iteration": 1600780210197,
   "links": [],
   "panels": [
     {
@@ -139,7 +147,7 @@
       "title": "Number of peer slots filled",
       "tooltip": {
         "shared": true,
-        "sort": 2,
+        "sort": 1,
         "value_type": "individual"
       },
       "type": "graph",
@@ -317,7 +325,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "irate(${metric_namespace}_sub_libp2p_requests_in_total_count{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])",
+          "expr": "irate(${metric_namespace}_sub_libp2p_requests_in_success_total_count{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])",
           "interval": "",
           "legendFormat": "{{instance}}",
           "refId": "A"
@@ -379,7 +387,7 @@
         "y": 11
       },
       "hiddenSeries": false,
-      "id": 146,
+      "id": 256,
       "legend": {
         "avg": false,
         "current": false,
@@ -405,7 +413,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum(rate(${metric_namespace}_sub_libp2p_requests_out_finished_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance, le)) > 0",
+          "expr": "histogram_quantile(0.5, sum(rate(${metric_namespace}_sub_libp2p_requests_out_success_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance, le)) > 0",
           "instant": false,
           "interval": "",
           "legendFormat": "{{instance}}",
@@ -468,7 +476,7 @@
         "y": 11
       },
       "hiddenSeries": false,
-      "id": 145,
+      "id": 258,
       "legend": {
         "avg": false,
         "current": false,
@@ -494,7 +502,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum(rate(${metric_namespace}_sub_libp2p_requests_in_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance, le))",
+          "expr": "histogram_quantile(0.5, sum(rate(${metric_namespace}_sub_libp2p_requests_in_success_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance, le))",
           "interval": "",
           "legendFormat": "{{instance}}",
           "refId": "A"
@@ -556,7 +564,7 @@
         "y": 15
       },
       "hiddenSeries": false,
-      "id": 150,
+      "id": 257,
       "legend": {
         "avg": false,
         "current": false,
@@ -582,7 +590,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum(rate(${metric_namespace}_sub_libp2p_requests_out_finished_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance, le)) > 0",
+          "expr": "histogram_quantile(0.99, sum(rate(${metric_namespace}_sub_libp2p_requests_out_success_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance, le)) > 0",
           "instant": false,
           "interval": "",
           "legendFormat": "{{instance}}",
@@ -645,7 +653,7 @@
         "y": 15
       },
       "hiddenSeries": false,
-      "id": 149,
+      "id": 259,
       "legend": {
         "avg": false,
         "current": false,
@@ -671,7 +679,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum(rate(${metric_namespace}_sub_libp2p_requests_in_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance, le))",
+          "expr": "histogram_quantile(0.99, sum(rate(${metric_namespace}_sub_libp2p_requests_in_success_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance, le))",
           "interval": "",
           "legendFormat": "{{instance}}",
           "refId": "A"
@@ -719,13 +727,191 @@
       }
     },
     {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 19
+      },
+      "hiddenSeries": false,
+      "id": 287,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null as zero",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "avg(irate(${metric_namespace}_sub_libp2p_requests_out_failure_total{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (reason)",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Outgoing request failures per second",
+      "tooltip": {
+        "shared": true,
+        "sort": 2,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "hiddenSeries": false,
+      "id": 286,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null as zero",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "avg(irate(${metric_namespace}_sub_libp2p_requests_in_failure_total{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (reason)",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Ingoing request failures per second",
+      "tooltip": {
+        "shared": true,
+        "sort": 2,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
       "collapsed": false,
       "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 40
       },
       "id": 23,
       "panels": [],
@@ -745,7 +931,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 33
+        "y": 41
       },
       "hiddenSeries": false,
       "id": 31,
@@ -847,7 +1033,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 33
+        "y": 41
       },
       "hiddenSeries": false,
       "id": 37,
@@ -953,7 +1139,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 40
+        "y": 48
       },
       "hiddenSeries": false,
       "id": 16,
@@ -1041,7 +1227,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 40
+        "y": 48
       },
       "hiddenSeries": false,
       "id": 21,
@@ -1132,7 +1318,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 46
+        "y": 54
       },
       "hiddenSeries": false,
       "id": 14,
@@ -1237,7 +1423,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 46
+        "y": 54
       },
       "hiddenSeries": false,
       "id": 134,
@@ -1322,7 +1508,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 96
+        "y": 60
       },
       "id": 27,
       "panels": [],
@@ -1341,7 +1527,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 97
+        "y": 61
       },
       "hiddenSeries": false,
       "id": 19,
@@ -1478,7 +1664,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 103
+        "y": 67
       },
       "hiddenSeries": false,
       "id": 189,
@@ -1574,7 +1760,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 109
+        "y": 73
       },
       "hiddenSeries": false,
       "id": 39,
@@ -1683,7 +1869,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 109
+        "y": 73
       },
       "heatmap": {},
       "hideZeroBuckets": false,
@@ -1740,7 +1926,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 115
+        "y": 79
       },
       "hiddenSeries": false,
       "id": 81,
@@ -1835,7 +2021,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 115
+        "y": 79
       },
       "hiddenSeries": false,
       "id": 46,
@@ -1923,7 +2109,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 122
+        "y": 86
       },
       "id": 52,
       "panels": [],
@@ -1942,7 +2128,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 123
+        "y": 87
       },
       "hiddenSeries": false,
       "id": 54,
@@ -2047,7 +2233,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 129
+        "y": 93
       },
       "id": 25,
       "panels": [],
@@ -2068,7 +2254,7 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 130
+        "y": 94
       },
       "hiddenSeries": false,
       "id": 33,
@@ -2098,7 +2284,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "${metric_namespace}_sub_libp2p_kbuckets_num_nodes{instance=~\"${nodename}\"}",
+          "expr": "sum(${metric_namespace}_sub_libp2p_kbuckets_num_nodes{instance=~\"${nodename}\"}) by (instance)",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -2161,7 +2347,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 130
+        "y": 94
       },
       "hiddenSeries": false,
       "id": 35,
@@ -2250,7 +2436,7 @@
         "h": 4,
         "w": 12,
         "x": 0,
-        "y": 135
+        "y": 99
       },
       "hiddenSeries": false,
       "id": 111,
@@ -2338,7 +2524,7 @@
         "h": 4,
         "w": 12,
         "x": 12,
-        "y": 135
+        "y": 99
       },
       "hiddenSeries": false,
       "id": 112,
@@ -2427,7 +2613,7 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 139
+        "y": 103
       },
       "hiddenSeries": false,
       "id": 211,
@@ -2521,7 +2707,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 139
+        "y": 103
       },
       "hiddenSeries": false,
       "id": 233,
@@ -2614,7 +2800,7 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 144
+        "y": 108
       },
       "hiddenSeries": false,
       "id": 68,
@@ -2646,7 +2832,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_found\"}[2h]) / ignoring(name) (\n  rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_found\"}[2h]) +\n  ignoring(name) rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_not_found\"}[2h])\n)",
+          "expr": "rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_found\", instance=~\"${nodename}\"}[2h]) / ignoring(name) (\n  rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_found\", instance=~\"${nodename}\"}[2h]) +\n  ignoring(name) rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_not_found\", instance=~\"${nodename}\"}[2h])\n)",
           "interval": "",
           "legendFormat": "{{instance}}",
           "refId": "B"
@@ -2705,7 +2891,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 144
+        "y": 108
       },
       "hiddenSeries": false,
       "id": 234,
@@ -2736,7 +2922,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_put\"}[2h]) / ignoring(name) (\n  rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_put\"}[2h]) +\n  ignoring(name) rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_put_failed\"}[2h])\n)",
+          "expr": "rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_put\", instance=~\"${nodename}\"}[2h]) / ignoring(name) (\n  rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_put\", instance=~\"${nodename}\"}[2h]) +\n  ignoring(name) rate(${metric_namespace}_authority_discovery_dht_event_received{name=\"value_put_failed\", instance=~\"${nodename}\"}[2h])\n)",
           "interval": "",
           "legendFormat": "{{instance}}",
           "refId": "B"
@@ -2794,7 +2980,7 @@
         "allValue": null,
         "current": {},
         "datasource": "$data_source",
-        "definition": "${metric_namespace}_cpu_usage_percentage",
+        "definition": "${metric_namespace}_process_start_time_seconds",
         "hide": 0,
         "includeAll": true,
         "index": -1,
@@ -2802,7 +2988,7 @@
         "multi": true,
         "name": "nodename",
         "options": [],
-        "query": "${metric_namespace}_cpu_usage_percentage",
+        "query": "${metric_namespace}_process_start_time_seconds",
         "refresh": 1,
         "regex": "/instance=\"(.*?)\"/",
         "skipUrlSync": false,
@@ -2862,8 +3048,8 @@
       {
         "current": {
           "selected": false,
-          "text": "prometheus.parity-mgmt",
-          "value": "prometheus.parity-mgmt"
+          "text": "Prometheus",
+          "value": "Prometheus"
         },
         "hide": 0,
         "includeAll": false,
@@ -2898,7 +3084,7 @@
     ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-12h",
     "to": "now"
   },
   "timepicker": {
@@ -2921,5 +3107,5 @@
   "variables": {
     "list": []
   },
-  "version": 113
+  "version": 121
 }

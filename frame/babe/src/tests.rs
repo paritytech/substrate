@@ -21,6 +21,7 @@ use super::{Call, *};
 use frame_support::{
 	assert_err, assert_ok,
 	traits::{Currency, OnFinalize},
+	weights::{GetDispatchInfo, Pays},
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
@@ -592,7 +593,7 @@ fn report_equivocation_has_valid_weight() {
 	// but there's a lower bound of 100 validators.
 	assert!(
 		(1..=100)
-			.map(weight_for::report_equivocation::<Test>)
+			.map(<Test as Trait>::WeightInfo::report_equivocation)
 			.collect::<Vec<_>>()
 			.windows(2)
 			.all(|w| w[0] == w[1])
@@ -602,9 +603,67 @@ fn report_equivocation_has_valid_weight() {
 	// with every extra validator.
 	assert!(
 		(100..=1000)
-			.map(weight_for::report_equivocation::<Test>)
+			.map(<Test as Trait>::WeightInfo::report_equivocation)
 			.collect::<Vec<_>>()
 			.windows(2)
 			.all(|w| w[0] < w[1])
 	);
+}
+
+#[test]
+fn valid_equivocation_reports_dont_pay_fees() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(3);
+
+	ext.execute_with(|| {
+		start_era(1);
+
+		let offending_authority_pair = &pairs[0];
+
+		// generate an equivocation proof.
+		let equivocation_proof =
+			generate_equivocation_proof(0, &offending_authority_pair, CurrentSlot::get());
+
+		// create the key ownership proof.
+		let key_owner_proof = Historical::prove((
+			sp_consensus_babe::KEY_TYPE,
+			&offending_authority_pair.public(),
+		))
+		.unwrap();
+
+		// check the dispatch info for the call.
+		let info = Call::<Test>::report_equivocation_unsigned(
+			equivocation_proof.clone(),
+			key_owner_proof.clone(),
+		)
+		.get_dispatch_info();
+
+		// it should have non-zero weight and the fee has to be paid.
+		assert!(info.weight > 0);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// report the equivocation.
+		let post_info = Babe::report_equivocation_unsigned(
+			Origin::none(),
+			equivocation_proof.clone(),
+			key_owner_proof.clone(),
+		)
+		.unwrap();
+
+		// the original weight should be kept, but given that the report
+		// is valid the fee is waived.
+		assert!(post_info.actual_weight.is_none());
+		assert_eq!(post_info.pays_fee, Pays::No);
+
+		// report the equivocation again which is invalid now since it is
+		// duplicate.
+		let post_info =
+			Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
+				.err()
+				.unwrap()
+				.post_info;
+
+		// the fee is not waived and the original weight is kept.
+		assert!(post_info.actual_weight.is_none());
+		assert_eq!(post_info.pays_fee, Pays::Yes);
+	})
 }
