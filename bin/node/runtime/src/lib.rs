@@ -806,11 +806,6 @@ impl pallet_grandpa::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const WindowSize: BlockNumber = 101;
-	pub const ReportLatency: BlockNumber = 1000;
-}
-
-parameter_types! {
 	pub const BasicDeposit: Balance = 10 * DOLLARS;       // 258 bytes on-chain
 	pub const FieldDeposit: Balance = 250 * CENTS;        // 66 bytes on-chain
 	pub const SubAccountDeposit: Balance = 2 * DOLLARS;   // 53 bytes on-chain
