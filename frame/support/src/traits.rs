@@ -1674,14 +1674,14 @@ pub trait Instance: 'static {
 
 /// The storage key postfix that is used to store the [`PalletVersion`] per pallet.
 ///
-/// The full storage key is build by using:
-/// Twox128([`PalletInfo::name`] ++ [`PALLET_VERSION_STORAGE_POSTFIX`])
+/// The full storage key is built by using:
+/// Twox128([`PalletInfo::name`] ++ [`PALLET_VERSION_STORAGE_KEY_POSTFIX`])
 pub const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
 
 /// The version of a pallet.
 ///
 /// Each pallet version is stored in the state under a fixed key. See
-/// [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] for how this key is build.
+/// [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] for how this key is built.
 #[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord)]
 pub struct PalletVersion {
 	/// The major version of the pallet.
@@ -1704,7 +1704,7 @@ impl PalletVersion {
 
 	/// Returns the storage key for a pallet version.
 	///
-	/// See [`PALLET_VERSION_STORAGE_KEY_POSTIFX`] on how this key is build.
+	/// See [`PALLET_VERSION_STORAGE_KEY_POSTIFX`] on how this key is built.
 	///
 	/// Returns `None` if the given `PI` returned a `None` as name for the given
 	/// `Pallet`.
