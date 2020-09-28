@@ -1532,6 +1532,7 @@ dependencies = [
 name = "frame-benchmarking-cli"
 version = "2.0.0"
 dependencies = [
+ "chrono",
  "frame-benchmarking",
  "parity-scale-codec",
  "sc-cli",
@@ -4712,7 +4713,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-proxy"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
