@@ -317,7 +317,6 @@ pub fn new_full_base(
 			config,
 			link: grandpa_link,
 			network: network.clone(),
-			inherent_data_providers: inherent_data_providers.clone(),
 			telemetry_on_connect: Some(telemetry_connection_sinks.on_connect_stream()),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
@@ -331,16 +330,16 @@ pub fn new_full_base(
 			grandpa::run_grandpa_voter(grandpa_config)?
 		);
 	} else {
-		grandpa::setup_disabled_grandpa(
-			client.clone(),
-			&inherent_data_providers,
-			network.clone(),
-		)?;
+		grandpa::setup_disabled_grandpa(network.clone())?;
 	}
 
 	network_starter.start_network();
 	Ok(NewFullBase {
-		task_manager, inherent_data_providers, client, network, network_status_sinks,
+		task_manager,
+		inherent_data_providers,
+		client,
+		network,
+		network_status_sinks,
 		transaction_pool,
 	})
 }
@@ -476,7 +475,6 @@ mod tests {
 		traits::Verify,
 	};
 	use sp_timestamp;
-	use sp_finality_tracker;
 	use sp_keyring::AccountKeyring;
 	use sc_service_test::TestNetNode;
 	use crate::service::{new_full_base, new_light_base, NewFullBase};
@@ -535,7 +533,6 @@ mod tests {
 				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
 					.expect("Creates inherent data.");
-				inherent_data.replace_data(sp_finality_tracker::INHERENT_IDENTIFIER, &1u64);
 
 				let parent_id = BlockId::number(service.client().chain_info().best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
