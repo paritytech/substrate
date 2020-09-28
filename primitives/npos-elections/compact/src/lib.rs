@@ -238,29 +238,28 @@ fn struct_def(
 }
 
 fn remove_voter_impl(count: usize) -> TokenStream2 {
-	// 1s
-	let filed_name = field_name_for(1);
+	let field_name = field_name_for(1);
 	let single = quote! {
-		if let Some(idx) = self.#filed_name.iter().position(|(x, _)| *x == to_remove) {
-			self.#filed_name.remove(idx);
+		if let Some(idx) = self.#field_name.iter().position(|(x, _)| *x == to_remove) {
+			self.#field_name.remove(idx);
 			return true
 		}
 	};
 
-	let filed_name = field_name_for(2);
+	let field_name = field_name_for(2);
 	let double = quote! {
-		if let Some(idx) = self.#filed_name.iter().position(|(x, _, _)| *x == to_remove) {
-			self.#filed_name.remove(idx);
+		if let Some(idx) = self.#field_name.iter().position(|(x, _, _)| *x == to_remove) {
+			self.#field_name.remove(idx);
 			return true
 		}
 	};
 
 	let rest = (3..=count)
 		.map(|c| {
-			let filed_name = field_name_for(c);
+			let field_name = field_name_for(c);
 			quote! {
-				if let Some(idx) = self.#filed_name.iter().position(|(x, _, _)| *x == to_remove) {
-					self.#filed_name.remove(idx);
+				if let Some(idx) = self.#field_name.iter().position(|(x, _, _)| *x == to_remove) {
+					self.#field_name.remove(idx);
 					return true
 				}
 			}

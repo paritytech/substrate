@@ -884,7 +884,7 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	type UnsignedPriority: Get<TransactionPriority>;
 
 	/// Maximum weight that the unsigned transaction can have.
-	type MaximumUnsignedWeight: Get<Weight>;
+	type OffchainSolutionWeightLimit: Get<Weight>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -1373,6 +1373,16 @@ decl_module! {
 					"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
 					T::SlashDeferDuration::get(),
 					T::BondingDuration::get(),
+				)
+			);
+
+			// Offchain solution is operational, so it can consume all the block weight except for
+			// `System::BlockExecutionWeight`. So setting the limit above this is invalid.
+			assert!(
+				T::OffchainSolutionWeightLimit::get() <=
+				(
+					<T as frame_system::Trait>::MaximumBlockWeight::get() -
+					<T as frame_system::Trait>::BlockExecutionWeight::get()
 				)
 			);
 

@@ -195,6 +195,6 @@ impl pallet_staking::Trait for Test {
 	type MinSolutionScoreBump = ();
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = ();
-	type MaximumUnsignedWeight = (); // TODO: this will now break the fuzzer.. this is complicated.
+	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();
 }

@@ -20,10 +20,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
-#![recursion_limit="256"]
+#![recursion_limit = "256"]
+
 
 use sp_std::prelude::*;
-
 use frame_support::{
 	construct_runtime, parameter_types, debug, RuntimeDebug,
 	weights::{
@@ -443,7 +443,8 @@ parameter_types! {
 	pub MinSolutionScoreBump: Perbill = Perbill::from_rational_approximation(5u32, 10_000);
 	// The unsigned solution is allowed to take almost the entire block. Note that it is also
 	// operational.
-	pub MaximumUnsignedWeight: Weight = Perbill::from_percent(90) * MaximumBlockWeight::get();
+	pub OffchainSolutionWeightLimit: Weight =
+		MaximumBlockWeight::get().saturating_sub(BlockExecutionWeight::get());
 }
 
 impl pallet_staking::Trait for Runtime {
@@ -472,7 +473,7 @@ impl pallet_staking::Trait for Runtime {
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = StakingUnsignedPriority;
-	type MaximumUnsignedWeight = StakingUnsignedPriority;
+	type OffchainSolutionWeightLimit = OffchainSolutionWeightLimit;
 	type WeightInfo = weights::pallet_staking::WeightInfo<Runtime>;
 }
 

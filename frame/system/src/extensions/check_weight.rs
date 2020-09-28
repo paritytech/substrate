@@ -35,8 +35,9 @@ use frame_support::{
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Default)]
 pub struct CheckWeight<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
 
-impl<T: Trait + Send + Sync> CheckWeight<T> where
-	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
+impl<T: Trait + Send + Sync> CheckWeight<T>
+where
+	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
 	/// Get the quota ratio of each dispatch class type. This indicates that all operational and mandatory
 	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
@@ -59,9 +60,9 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 			DispatchClass::Mandatory => Ok(()),
 			// Normal transactions must not exceed `MaximumExtrinsicWeight`.
 			DispatchClass::Normal => {
-				let maximum_weight = T::MaximumExtrinsicWeight::get();
+				let maximum_extrinsic_weight = T::MaximumExtrinsicWeight::get();
 				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
-				if extrinsic_weight > maximum_weight {
+				if extrinsic_weight > maximum_extrinsic_weight {
 					Err(InvalidTransaction::ExhaustsResources.into())
 				} else {
 					Ok(())
@@ -70,11 +71,12 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 			// For operational transactions we make sure it doesn't exceed
 			// the space alloted for `Operational` class.
 			DispatchClass::Operational => {
-				let maximum_weight = T::MaximumBlockWeight::get();
+				let maximum_block_weight = T::MaximumBlockWeight::get();
 				let operational_limit =
-					Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
+					Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_block_weight;
 				let operational_limit =
 					operational_limit.saturating_sub(T::BlockExecutionWeight::get());
+
 				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
 				if extrinsic_weight > operational_limit {
 					Err(InvalidTransaction::ExhaustsResources.into())
