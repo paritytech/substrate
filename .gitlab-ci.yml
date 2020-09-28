@@ -76,10 +76,10 @@ default:
   tags:
     - linux-docker
 
-workflow:
-  rules:
-    - if: $CI_COMMIT_TAG
-    - if: $CI_COMMIT_BRANCH
+# workflow:
+#   rules:
+#     - if: $CI_COMMIT_TAG
+#     - if: $CI_COMMIT_BRANCH
 
 .docker-env-rules:                 &docker-env-rules
   rules:
