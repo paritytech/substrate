@@ -441,10 +441,13 @@ parameter_types! {
 	pub const MaxIterations: u32 = 10;
 	// 0.05%. The higher the value, the more strict solution acceptance becomes.
 	pub MinSolutionScoreBump: Perbill = Perbill::from_rational_approximation(5u32, 10_000);
-	// The unsigned solution is allowed to take almost the entire block. Note that it is also
-	// operational.
+	// The unsigned solution is operational, so as long as the average on_initialize weights are
+	// less than `MaximumBlockWeight * (1 - T::AvailableRatio)`, it can consume at most most this
+	// amount.
 	pub OffchainSolutionWeightLimit: Weight =
-		MaximumBlockWeight::get().saturating_sub(BlockExecutionWeight::get());
+		MaximumBlockWeight::get()
+			.saturating_sub(BlockExecutionWeight::get())
+			.saturating_sub(ExtrinsicBaseWeight::get());
 }
 
 impl pallet_staking::Trait for Runtime {
