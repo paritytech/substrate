@@ -14,12 +14,38 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sp_runtime::traits::Block as BlockT;
-use sp_runtime::traits::One;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, One};
 use sp_blockchain::HeaderBackend;
 use std::sync::Arc;
+use sp_runtime::ConsensusEngineId;
 use sp_runtime::generic::BlockId;
-use sp_api::NumberFor;
+use sc_client_api::{CallExecutor, ExecutorProvider};
+
+fn backwards_consensus_log_iter<'a, TBl, TCl, CL, FN, T>(
+	client: Arc<TCl>, mut number: NumberFor<TBl>, engine_id: &'a ConsensusEngineId, func: FN,
+) -> impl Iterator<Item = Result<T, sp_blockchain::Error>> + 'a
+	where
+		TBl: BlockT,
+		TCl: HeaderBackend<TBl> + 'a,
+		CL: codec::Decode,
+		FN: Fn(CL) -> Option<T> + 'a,
+{
+	let id = sp_runtime::generic::OpaqueDigestItemId::Consensus(engine_id);
+
+	std::iter::from_fn(move || {
+		let header = match client.header(BlockId::Number(number)) {
+			Ok(Some(header)) => header,
+			Ok(None) => return Some(Some(Err(sp_blockchain::Error::Msg("Missing header".into())))),
+			Err(err) => return Some(Some(Err(err))),
+		};
+
+		let change = header.digest()
+			.convert_first(|l| l.try_to(id).and_then(&func));
+
+		number -= NumberFor::<TBl>::one();
+		Some(change.map(Ok))
+	}).filter_map(|optional_log_item| optional_log_item)
+}
 
 /// Build a `LightSyncState` from the CHT roots stored in a backend.
 pub fn build_light_sync_state<TBl, TCl>(
@@ -35,37 +61,35 @@ pub fn build_light_sync_state<TBl, TCl>(
 	let finalized_hash = client.info().finalized_hash;
 	let finalized_header = client.header(BlockId::Hash(finalized_hash))?.unwrap();
 
-	let babe_config = sc_consensus_babe::Config::get_or_compute(&*client)?;
+	let mut scheduled_changes = backwards_consensus_log_iter(
+		client.clone(), finalized_number, &grandpa_primitives::GRANDPA_ENGINE_ID,
+		|log| match log {
+			grandpa_primitives::ConsensusLog::<NumberFor<TBl>>::ScheduledChange(change) => Some(change),
+			grandpa_primitives::ConsensusLog::<NumberFor<TBl>>::ForcedChange(_, change) => Some(change),
+			_ => None
+		}
+	);
+	let future_change = scheduled_changes.next().unwrap()?;
+	let current_authorities = scheduled_changes.next().unwrap()?.next_authorities;
 
-	let babe_epoch_changes =
-		sc_consensus_babe::aux_schema::load_epoch_changes::<TBl, _>(&*client, &babe_config)?;
+	let mut babe_epoch_descriptors = backwards_consensus_log_iter(
+		client.clone(), finalized_number, &sp_consensus_babe::BABE_ENGINE_ID,
+		|log| match log {
+			sp_consensus_babe::ConsensusLog::NextEpochData(descriptor)=> Some(descriptor),
+			_ => None
+		}
+	);
 
-	let block1_number = NumberFor::<TBl>::one();
-	let block1_hash = client.hash(block1_number)?.unwrap();
-
-	let babe_epoch_changes_lock = babe_epoch_changes.lock();
-
-	let epoch_1 = babe_epoch_changes_lock.epoch(&sc_consensus_epochs::EpochIdentifier {
-		position: sc_consensus_epochs::EpochIdentifierPosition::Genesis0,
-		number: block1_number,
-		hash: block1_hash,
-	}).unwrap();
-
-	let finalized_epoch = babe_epoch_changes_lock.epoch(&sc_consensus_epochs::EpochIdentifier {
-		position: sc_consensus_epochs::EpochIdentifierPosition::Regular,
-		number: finalized_number,
-		hash: finalized_hash
-	}).unwrap().clone();
-
-	let authorities =
-		grandpa::load_authorities::<_, <TBl as BlockT>::Hash, NumberFor<TBl>>(&*client).unwrap();
+	let next_desc = babe_epoch_descriptors.next().unwrap()?;
+	let current_desc = babe_epoch_descriptors.next().unwrap()?;
 
 	Ok(sc_chain_spec::LightSyncState {
-		header: finalized_header,
-		babe_finalized_block1_slot_number: epoch_1.start_slot,
-		babe_finalized_block_epoch_information: finalized_epoch.clone(),
-		babe_finalized_next_epoch_transition: finalized_epoch,
-		grandpa_finalized_triggered_authorities: authorities.current_authorities,
-		grandpa_after_finalized_block_authorities_set_id: authorities.set_id,
+		finalized_block_header: finalized_header,
+		babe_finalized_block1_slot_number: 0,
+		babe_finalized_block_epoch_information: current_desc,
+		babe_finalized_next_epoch_transition: next_desc,
+		grandpa_finalized_triggered_authorities: current_authorities,
+		grandpa_after_finalized_block_authorities_set_id: 0,
+		grandpa_finalized_scheduled_change: future_change,
 	})
 }

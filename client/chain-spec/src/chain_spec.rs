@@ -27,7 +27,7 @@ use serde_json as json;
 use crate::{RuntimeGenesis, ChainType, extension::GetExtension, Properties};
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 enum GenesisSource<G> {
 	File(PathBuf),
@@ -264,7 +264,7 @@ impl<G, E> ChainSpec<G, E> {
 
 	/// Hardcode infomation to allow light clients to sync quickly into the chain spec.
 	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState) {
-		self.client_spec.light_sync_state = Some(light_sync_state);	
+		self.client_spec.light_sync_state = Some(light_sync_state);
 	}
 }
 
@@ -400,12 +400,13 @@ where
 /// Hardcoded infomation that allows light clients to sync quickly.
 pub struct LightSyncState<Block: BlockT> {
 	/// The header of the best finalized block.
-	pub header: <Block as BlockT>::Header,
+	pub finalized_block_header: <Block as BlockT>::Header,
 	pub babe_finalized_block1_slot_number: sp_consensus_slots::SlotNumber,
-	pub babe_finalized_block_epoch_information: sc_consensus_babe::Epoch,
-	pub babe_finalized_next_epoch_transition: sc_consensus_babe::Epoch,
-	pub grandpa_finalized_triggered_authorities: sp_finality_grandpa::AuthorityList,
+	pub babe_finalized_block_epoch_information: sc_consensus_babe::NextEpochDescriptor,
+	pub babe_finalized_next_epoch_transition: sc_consensus_babe::NextEpochDescriptor,
 	pub grandpa_after_finalized_block_authorities_set_id: sp_finality_grandpa::SetId,
+	pub grandpa_finalized_triggered_authorities: sp_finality_grandpa::AuthorityList,
+	pub grandpa_finalized_scheduled_change: sp_finality_grandpa::ScheduledChange<NumberFor<Block>>,
 }
 
 impl<Block: BlockT> LightSyncState<Block> {
@@ -414,32 +415,36 @@ impl<Block: BlockT> LightSyncState<Block> {
 		use codec::Encode;
 
 		SerializableLightSyncState {
-			header: StorageData(self.header.encode()),
+			finalized_block_header: StorageData(self.finalized_block_header.encode()),
 			babe_finalized_block1_slot_number: self.babe_finalized_block1_slot_number,
 			babe_finalized_block_epoch_information:
 				StorageData(self.babe_finalized_block_epoch_information.encode()),
 			babe_finalized_next_epoch_transition:
 				StorageData(self.babe_finalized_next_epoch_transition.encode()),
-			grandpa_finalized_triggered_authorities:
-				StorageData(self.grandpa_finalized_triggered_authorities.encode()),
 			grandpa_after_finalized_block_authorities_set_id:
 				self.grandpa_after_finalized_block_authorities_set_id,
+			grandpa_finalized_triggered_authorities:
+				StorageData(self.grandpa_finalized_triggered_authorities.encode()),
+			grandpa_finalized_scheduled_change:
+				StorageData(self.grandpa_finalized_scheduled_change.encode()),
 		}
 	}
 
 	/// Convert from a `SerializableLightSyncState`.
 	pub fn from_serializable(serialized: &SerializableLightSyncState) -> Result<Self, codec::Error> {
 		Ok(Self {
-			header: codec::Decode::decode(&mut &serialized.header.0[..])?,
+			finalized_block_header: codec::Decode::decode(&mut &serialized.finalized_block_header.0[..])?,
 			babe_finalized_block1_slot_number: serialized.babe_finalized_block1_slot_number,
 			babe_finalized_block_epoch_information:
 				codec::Decode::decode(&mut &serialized.babe_finalized_block_epoch_information.0[..])?,
 			babe_finalized_next_epoch_transition:
 				codec::Decode::decode(&mut &serialized.babe_finalized_next_epoch_transition.0[..])?,
-			grandpa_finalized_triggered_authorities:
-				codec::Decode::decode(&mut &serialized.grandpa_finalized_triggered_authorities.0[..])?,
 			grandpa_after_finalized_block_authorities_set_id:
 				serialized.grandpa_after_finalized_block_authorities_set_id,
+			grandpa_finalized_triggered_authorities:
+				codec::Decode::decode(&mut &serialized.grandpa_finalized_triggered_authorities.0[..])?,
+			grandpa_finalized_scheduled_change:
+				codec::Decode::decode(&mut &serialized.grandpa_finalized_scheduled_change.0[..])?,
 		})
 	}
 }
@@ -449,12 +454,13 @@ impl<Block: BlockT> LightSyncState<Block> {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct SerializableLightSyncState {
-	header: StorageData,
+	finalized_block_header: StorageData,
 	babe_finalized_block1_slot_number: sp_consensus_slots::SlotNumber,
 	babe_finalized_block_epoch_information: StorageData,
 	babe_finalized_next_epoch_transition: StorageData,
-	grandpa_finalized_triggered_authorities: StorageData,
 	grandpa_after_finalized_block_authorities_set_id: sp_finality_grandpa::SetId,
+	grandpa_finalized_triggered_authorities: StorageData,
+	grandpa_finalized_scheduled_change: StorageData,
 }
 
 #[cfg(test)]
