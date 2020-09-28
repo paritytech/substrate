@@ -83,25 +83,25 @@ workflow:
 
 .docker-env-rules:                 &docker-env-rules
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_COMMIT_REF_NAME == "master"'
-    - if: '$CI_COMMIT_REF_NAME == /^[0-9]+$/'                         # PRs
-    - if: '$CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/'              # i.e. v1.0, v2.1rc1
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
 
 .build-rules:                      &build-rules
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "master"'
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/'              # i.e. v1.0, v2.1rc1
-    - if: '$CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/'  # i.e. pre-v1.0, pre-v2.1rc1
-    - if: '$CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
-           && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/'  # i.e add [chaos:basic] in commit message to trigger
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
+    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
+           && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
 
 .chaos-only:                       &chaos-only
   rules:
-    - if: '$CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
-           && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/'  # i.e add [chaos:basic] in commit message to trigger
+    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
+           && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
 
 #### stage:                       .pre
 
@@ -110,7 +110,7 @@ skip-if-draft:
   <<:                              *kubernetes-build
   stage:                           .pre
   rules:
-    - if: '$CI_COMMIT_REF_NAME == /^[0-9]+$/'     # PRs
+    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/     # PRs
   script:
      - echo "Commit message is ${CI_COMMIT_MESSAGE}"
      - echo "Ref is ${CI_COMMIT_REF_NAME}"
@@ -124,7 +124,7 @@ check-runtime:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   rules:
-    - if: '$CI_COMMIT_REF_NAME == /^[0-9]+$/'     # PRs
+    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/     # PRs
   variables:
     <<:                            *default-vars
     GITLAB_API:                    "https://gitlab.parity.io/api/v4"
@@ -138,8 +138,8 @@ check-signed-tag:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   rules:
-    - if: '$CI_COMMIT_REF_NAME =~ /^ci-release-.*$/'
-    - if: '$CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+.*$/'
+    - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - ./.maintain/gitlab/check_signed.sh
 
@@ -148,7 +148,7 @@ check-line-width:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   rules:
-    - if: '$CI_COMMIT_REF_NAME == /^[0-9]+$/'     # PRs
+    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/     # PRs
   script:
     - ./.maintain/gitlab/check_line_width.sh
   allow_failure:                   true
@@ -166,12 +166,12 @@ cargo-audit:
   stage:                           test
   <<:                              *docker-env
   rules:
-    - if: '$CI_COMMIT_REF_NAME == /^[0-9]+$/'                         # PRs
+    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/                         # PRs
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_COMMIT_REF_NAME == "master"'
-    - if: '$CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/'              # i.e. v1.0, v2.1rc1
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo audit
   allow_failure:                   true
@@ -180,14 +180,14 @@ cargo-deny:
   stage:                           test
   <<:                              *docker-env
   rules:
-    - if: '$CI_COMMIT_MESSAGE =~ /skip-checks/'
+    - if: $CI_COMMIT_MESSAGE =~ /skip-checks/
       when: never
       # .docker-env-rules
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_COMMIT_REF_NAME == "master"'
-    - if: '$CI_COMMIT_REF_NAME == /^[0-9]+$/'                         # PRs
-    - if: '$CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/'              # i.e. v1.0, v2.1rc1
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
   after_script:
@@ -259,14 +259,14 @@ unleash-check:
   stage:                           test
   <<:                              *docker-env
   rules:
-    - if: '$CI_COMMIT_MESSAGE =~ /skip-checks/'
+    - if: $CI_COMMIT_MESSAGE =~ /skip-checks/
       when: never
       # .docker-env-rules
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_COMMIT_REF_NAME == "master"'
-    - if: '$CI_COMMIT_REF_NAME == /^[0-9]+$/'                         # PRs
-    - if: '$CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/'              # i.e. v1.0, v2.1rc1
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
@@ -372,7 +372,7 @@ check-polkadot-companion-status:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   rules:
-    - if: '$CI_COMMIT_REF_NAME == /^[0-9]+$/'                        # PRs
+    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/                        # PRs
   script:
     - ./.maintain/gitlab/check_polkadot_companion_status.sh
 
@@ -458,8 +458,8 @@ build-linux-subkey:                &build-subkey
 build-macos-subkey:
   <<:                              *build-subkey
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "master"'
-    - if: '$CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/'             # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/             # i.e. v1.0, v2.1rc1
   tags:
     - osx
 
@@ -499,9 +499,9 @@ trigger-contracts-ci:
     branch:                        master
     strategy:                      depend
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
 
 #### stage:                        docker
 
@@ -684,8 +684,8 @@ publish-draft-release:
   stage:                           publish
   image:                           paritytech/tools:latest
   rules:
-    - if: '$CI_COMMIT_REF_NAME =~ /^ci-release-.*$/'
-    - if: '$CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+.*$/'
+    - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - ./.maintain/gitlab/publish_draft_release.sh
   allow_failure:                   true
@@ -695,8 +695,8 @@ publish-to-crates-io:
   <<:                              *docker-env
   <<:                              *docker-env-rules
   rules:
-    - if: '$CI_COMMIT_REF_NAME =~ /^ci-release-.*$/'
-    - if: '$CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+.*$/'
+    - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
@@ -722,7 +722,7 @@ deploy-kubernetes-alerting-rules:
     - kubectl -n ${NAMESPACE} patch prometheusrule ${PROMETHEUSRULE}
         --type=merge --patch "$(sed 's/^/  /;1s/^/spec:\n/' ${RULES})"
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: $CI_COMMIT_REF_NAME == "master"
     - changes:
         - .gitlab-ci.yml
         - .maintain/monitoring/
@@ -733,16 +733,16 @@ deploy-kubernetes-alerting-rules:
   stage:                           flaming-fir
   rules:
     # .build-rules, but manual
-    - if: '$CI_COMMIT_REF_NAME == "master"'
+    - if: $CI_COMMIT_REF_NAME == "master"
       when: manual
-    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: $CI_PIPELINE_SOURCE == "web"
       when: manual
-    - if: '$CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/'              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
       when: manual
-    - if: '$CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/'  # i.e. pre-v1.0, pre-v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
       when: manual
-    - if: '$CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
-            && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/'  # i.e add [chaos:basic] in commit message to trigger
+    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
+            && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
       when: manual
   needs:
     # script will fail if there is no artifacts/substrate/VERSION
@@ -781,6 +781,6 @@ check-labels:
   image:                          paritytech/tools:latest
   <<:                             *kubernetes-build
   rules:
-    - if: '$CI_COMMIT_REF_NAME == /^[0-9]+$/'                        # PRs
+    - if: $CI_COMMIT_REF_NAME == /^[0-9]+$/                        # PRs
   script:
     - ./.maintain/gitlab/check_labels.sh
