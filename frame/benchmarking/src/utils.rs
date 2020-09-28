@@ -219,3 +219,12 @@ pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed
 pub fn whitelisted_caller<AccountId: Decode + Default>() -> AccountId {
 	account::<AccountId>("whitelisted_caller", 0, 0)
 }
+
+#[macro_export]
+macro_rules! whitelist_account {
+	($acc:ident) => {
+		frame_benchmarking::benchmarking::add_to_whitelist(
+			frame_system::Account::<T>::hashed_key_for(&$acc).into()
+		);
+	}
+}
