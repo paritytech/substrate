@@ -210,7 +210,7 @@ pub fn maximum_compact_len<W: crate::WeightInfo>(
 	voters
 }
 
-/// Greedily reduce the size of the a solution to fit into the block, wrt weight.
+/// Greedily reduce the size of the a solution to fit into the block, w.r.t. weight.
 ///
 /// The weight of the solution is foremost a function of the number of voters (i.e.
 /// `compact.len()`). Aside from this, the other components of the weight are invariant. The number
@@ -245,7 +245,7 @@ where
 			.collect::<Vec<_>>();
 		voters_sorted.sort_by_key(|(_, y)| *y);
 
-		// start removing from the leas stake. Iterate until we know enough have been removed.
+		// start removing from the least stake. Iterate until we know enough have been removed.
 		let mut removed = 0;
 		for (i, _stake) in voters_sorted
 			.iter()
