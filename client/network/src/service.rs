@@ -236,7 +236,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_peer_id_legacy = bs58::encode(Borrow::<[u8]>::borrow(&local_peer_id)).into_string();
 		info!(
 			target: "sub-libp2p",
-			"🏷  Local node identity is: {} (legacy representation: {})",
+			"🏷 Local node identity is: {} (legacy representation: {})",
 			local_peer_id.to_base58(),
 			local_peer_id_legacy
 		);
