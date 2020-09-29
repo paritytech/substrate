@@ -115,7 +115,14 @@ impl<T: Trait> Contract<T> {
 		};
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let addr = T::DetermineContractAddress::contract_address_for(&module.hash, &data, &caller);
-		init_block_number::<T>();
+
+		// The default block number is zero. The benchmarking system bumps the block number
+		// to one for the benchmarking closure when it is set to zero. In order to prevent this
+		// undesired implicit bump (which messes with rent collection), wo do the bump ourselfs
+		// in the setup closure so that both the instantiate and subsequent call are run with the
+		// same block number.
+		System::<T>::set_block_number(1.into());
+
 		Contracts::<T>::put_code_raw(module.code)?;
 		Contracts::<T>::instantiate(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -231,17 +238,6 @@ fn create_storage<T: Trait>(
 /// The funding that each account that either calls or instantiates contracts is funded with.
 fn caller_funding<T: Trait>() -> BalanceOf<T> {
 	BalanceOf::<T>::max_value() / 2.into()
-}
-
-/// Set the block number to one.
-///
-/// The default block number is zero. The benchmarking system bumps the block number
-/// to one for the benchmarking closure when it is set to zero. In order to prevent this
-/// undesired implicit bump (which messes with rent collection), wo do the bump ourselfs
-/// in the setup closure so that both the instantiate and subsequent call are run with the
-/// same block number.
-fn init_block_number<T: Trait>() {
-	System::<T>::set_block_number(1.into());
 }
 
 benchmarks! {
