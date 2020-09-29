@@ -172,10 +172,15 @@ pub fn maximum_compact_len<W: crate::WeightInfo>(
 	max_weight: Weight,
 ) -> u32 {
 	use sp_std::cmp::Ordering;
+
 	if size.nominators < 1 {
 		return size.nominators;
 	}
 
+	let max_voters = size.nominators.max(1);
+	let mut voters = max_voters;
+
+	// helper closures.
 	let weight_with = |voters: u32| -> Weight {
 		W::submit_solution_better(
 			size.validators.into(),
@@ -185,48 +190,70 @@ pub fn maximum_compact_len<W: crate::WeightInfo>(
 		)
 	};
 
-	let mut voters = size.nominators.max(2);
-	let mut step = voters;
-	while voters <= size.nominators.max(2) {
-		let current = weight_with(voters);
-		step = step / 2;
-		if step == 0 {
-			// Time to finish.
-			// We might have reduced less than expected due to rounding error. Reduce linearly one
-			// last time.
-			while weight_with(voters) > max_weight {
-				if let Some(next) = voters.checked_sub(1) {
-					voters = next
-				} else {
-					break;
-				}
-			}
-			// For the opposite case.
-			while weight_with(voters + 1) < max_weight {
-				if voters + 1 > size.nominators {
-					break
-				}
-				voters += 1;
-			}
-			break;
-		}
-		match current.cmp(&max_weight) {
+	let next_voters = |current_weight: Weight, voters: u32, step: u32| -> Result<u32, ()> {
+		match current_weight.cmp(&max_weight) {
 			Ordering::Less => {
-				voters += step;
-				if voters > size.nominators {
-					break;
+				let next_voters = voters.checked_add(step);
+				match next_voters {
+					Some(voters) if voters < max_voters => Ok(voters),
+					_ => Err(()),
 				}
-			}
-			Ordering::Greater => {
-				voters -= step;
-			}
-			Ordering::Equal => {
-				break;
-			}
+			},
+			Ordering::Greater => voters.checked_sub(step).ok_or(()),
+			Ordering::Equal => Ok(voters),
 		}
+	};
+
+	// First binary-search the right amount of voters
+	let mut step = voters / 2;
+	let mut current_weight = weight_with(voters);
+	while step > 0 {
+		match next_voters(current_weight, voters, step) {
+			// proceed with the binary search
+			Ok(next) if next != voters => {
+				voters = next;
+			},
+			// we are out of bounds, break out of the loop.
+			Err(()) => {
+				break;
+			},
+			// we found the right value - early exit the function.
+			Ok(next) => return next
+		}
+		step = step / 2;
+		current_weight = weight_with(voters);
 	}
 
-	// defensive only. We will never exceed `size.nominators`.
+
+	// Time to finish.
+	// We might have reduced less than expected due to rounding error. Reduce linearly one last
+	// time.
+	let mut initialized = false;
+	let mut prev_voters = voters;
+	loop {
+		let next = next_voters(current_weight, voters, 1).unwrap_or(voters);
+		// no change? break.
+		if next == voters {
+			break
+		}
+
+		// then we are stuck in a loop;
+		if prev_voters == next {
+			break;
+		}
+
+		// skip 1 loop, then update these 3 variables in a sequence:
+		// prev_voters --> voter --> next
+		if !initialized {
+			initialized = true
+		} else {
+			prev_voters = voters
+		}
+
+		voters = next;
+		current_weight = weight_with(voters);
+	}
+
 	voters.min(size.nominators)
 }
 
@@ -401,7 +428,9 @@ where
 
 	let compact = trim_to_weight::<T, _>(maximum_allowed_voters, compact, &nominator_index)?;
 
-	// re-compute the score. We re-create what the chain will do.
+	// re-compute the score. We re-create what the chain will do. This is a bit verbose and wastes
+	// CPU time, but it is necessary to ensure that the score that we claim is the same as the one
+	// calculated by the chain.
 	let score = {
 		let compact = compact.clone();
 		let assignments = compact.into_assignment(nominator_at, validator_at).unwrap();
@@ -521,6 +550,7 @@ mod test {
 			nominators: 10,
 		};
 
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 0), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 999), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1000), 1);
@@ -541,6 +571,7 @@ mod test {
 			nominators: 1,
 		};
 
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 0), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 999), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1000), 1);
@@ -554,6 +585,7 @@ mod test {
 			nominators: 2,
 		};
 
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 0), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 999), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1000), 1);
