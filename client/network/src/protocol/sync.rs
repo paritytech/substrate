@@ -327,9 +327,9 @@ pub enum OnBlockData<B: BlockT> {
 	Request(PeerId, BlockRequest<B>)
 }
 
-/// Result of [`ChainSync::process_block_announce_pre_validation`].
+/// Result of [`ChainSync::poll_block_announce_validation`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BlockAnnounceResult<H> {
+pub enum PollBlockAnnounceValidation<H> {
 	/// The announcement failed at validation.
 	///
 	/// The peer reputation should be decreased.
@@ -1280,7 +1280,7 @@ impl<B: BlockT> ChainSync<B> {
 		hash: &B::Hash,
 		announce: BlockAnnounce<B::Header>,
 		is_best: bool,
-	) -> Option<BlockAnnounceResult<B::Header>> {
+	) -> Option<PollBlockAnnounceValidation<B::Header>> {
 		let header = &announce.header;
 		let number = *header.number();
 		debug!(
@@ -1298,7 +1298,7 @@ impl<B: BlockT> ChainSync<B> {
 				who,
 				hash,
 			);
-			return Some(BlockAnnounceResult::Nothing { is_best, who, header: announce.header })
+			return Some(PollBlockAnnounceValidation::Nothing { is_best, who, header: announce.header })
 		}
 
 		// Check if there is a slot for this block announce validation.
@@ -1312,7 +1312,7 @@ impl<B: BlockT> ChainSync<B> {
 					hash,
 					who,
 				);
-				return Some(BlockAnnounceResult::Nothing { is_best, who, header: announce.header })
+				return Some(PollBlockAnnounceValidation::Nothing { is_best, who, header: announce.header })
 			}
 			HasSlotForBlockAnnounceValidation::MaximumPeerSlotsReached => {
 				warn!(
@@ -1322,7 +1322,7 @@ impl<B: BlockT> ChainSync<B> {
 					hash,
 					who,
 				);
-				return Some(BlockAnnounceResult::Nothing { is_best, who, header: announce.header })
+				return Some(PollBlockAnnounceValidation::Nothing { is_best, who, header: announce.header })
 			}
 		}
 
@@ -1364,12 +1364,12 @@ impl<B: BlockT> ChainSync<B> {
 	///
 	/// This should be polled until it returns [`Poll::Pending`].
 	///
-	/// If [`BlockAnnounceResult::ImportHeader`] is returned, then the caller MUST try to import passed
+	/// If [`PollBlockAnnounceValidation::ImportHeader`] is returned, then the caller MUST try to import passed
 	/// header (call `on_block_data`). The network request isn't sent in this case.
 	pub fn poll_block_announce_validation(
 		&mut self,
 		cx: &mut std::task::Context,
-	) -> Poll<BlockAnnounceResult<B::Header>> {
+	) -> Poll<PollBlockAnnounceValidation<B::Header>> {
 		match self.block_announce_validation.poll_next_unpin(cx) {
 			Poll::Ready(Some(res)) => Poll::Ready(self.finish_block_announce_validation(res)),
 			_ => Poll::Pending,
@@ -1399,15 +1399,15 @@ impl<B: BlockT> ChainSync<B> {
 	fn finish_block_announce_validation(
 		&mut self,
 		pre_validation_result: PreValidateBlockAnnounce<B::Header>,
-	) -> BlockAnnounceResult<B::Header> {
+	) -> PollBlockAnnounceValidation<B::Header> {
 		let (announce, is_best, who) = match pre_validation_result {
 			PreValidateBlockAnnounce::Nothing { is_best, who, announce } => {
 				self.peer_block_announce_validation_finished(&who);
-				return BlockAnnounceResult::Nothing { is_best, who, header: announce.header }
+				return PollBlockAnnounceValidation::Nothing { is_best, who, header: announce.header }
 			},
 			PreValidateBlockAnnounce::Failure { who } => {
 				self.peer_block_announce_validation_finished(&who);
-				return BlockAnnounceResult::Failure { who }
+				return PollBlockAnnounceValidation::Failure { who }
 			},
 			PreValidateBlockAnnounce::Process { announce, is_new_best, who } => {
 				self.peer_block_announce_validation_finished(&who);
@@ -1427,7 +1427,7 @@ impl<B: BlockT> ChainSync<B> {
 			peer
 		} else {
 			error!(target: "sync", "💔 Called on_block_announce with a bad peer ID");
-			return BlockAnnounceResult::Nothing { is_best, who, header }
+			return PollBlockAnnounceValidation::Nothing { is_best, who, header }
 		};
 
 		while peer.recently_announced.len() >= ANNOUNCE_HISTORY_SIZE {
@@ -1442,7 +1442,7 @@ impl<B: BlockT> ChainSync<B> {
 		}
 
 		if let PeerSyncState::AncestorSearch {..} = peer.state {
-			return BlockAnnounceResult::Nothing { is_best, who, header }
+			return PollBlockAnnounceValidation::Nothing { is_best, who, header }
 		}
 
 		// If the announced block is the best they have and is not ahead of us, our common number
@@ -1464,18 +1464,18 @@ impl<B: BlockT> ChainSync<B> {
 			if let Some(target) = self.fork_targets.get_mut(&hash) {
 				target.peers.insert(who.clone());
 			}
-			return BlockAnnounceResult::Nothing { is_best, who, header }
+			return PollBlockAnnounceValidation::Nothing { is_best, who, header }
 		}
 
 		if ancient_parent {
 			trace!(target: "sync", "Ignored ancient block announced from {}: {} {:?}", who, hash, header);
-			return BlockAnnounceResult::Nothing { is_best, who, header }
+			return PollBlockAnnounceValidation::Nothing { is_best, who, header }
 		}
 
 		let requires_additional_data = !self.role.is_light() || !known_parent;
 		if !requires_additional_data {
 			trace!(target: "sync", "Importing new header announced from {}: {} {:?}", who, hash, header);
-			return BlockAnnounceResult::ImportHeader { is_best, header, who }
+			return PollBlockAnnounceValidation::ImportHeader { is_best, header, who }
 		}
 
 		if number <= self.best_queued_number {
@@ -1493,7 +1493,7 @@ impl<B: BlockT> ChainSync<B> {
 				.peers.insert(who.clone());
 		}
 
-		BlockAnnounceResult::Nothing { is_best, who, header }
+		PollBlockAnnounceValidation::Nothing { is_best, who, header }
 	}
 
 	/// Call when a peer has disconnected.

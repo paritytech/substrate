@@ -1195,10 +1195,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Process the result of the block announce validation.
 	fn process_block_announce_validation_result(
 		&mut self,
-		validation_result: sync::BlockAnnounceResult<B::Header>,
+		validation_result: sync::PollBlockAnnounceValidation<B::Header>,
 	) -> CustomMessageOutcome<B> {
 		let (header, is_best, who) = match validation_result {
-			sync::BlockAnnounceResult::Nothing { is_best, who, header } => {
+			sync::PollBlockAnnounceValidation::Nothing { is_best, who, header } => {
 				self.update_peer_info(&who);
 
 				// `on_block_announce` returns `OnBlockAnnounce::ImportHeader`
@@ -1213,11 +1213,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					return CustomMessageOutcome::None
 				}
 			}
-			sync::BlockAnnounceResult::ImportHeader { header, is_best, who } => {
+			sync::PollBlockAnnounceValidation::ImportHeader { header, is_best, who } => {
 				self.update_peer_info(&who);
 				(header, is_best, who)
 			}
-			sync::BlockAnnounceResult::Failure { who } => {
+			sync::PollBlockAnnounceValidation::Failure { who } => {
 				self.report_peer(who, rep::BAD_BLOCK_ANNOUNCEMENT);
 				return CustomMessageOutcome::None
 			}
