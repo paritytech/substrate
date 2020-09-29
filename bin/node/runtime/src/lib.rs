@@ -639,12 +639,12 @@ impl pallet_treasury::Trait for Runtime {
 	type ApproveOrigin = EnsureOneOf<
 		AccountId,
 		EnsureRoot<AccountId>,
-		pallet_collective::EnsureMembers<_4, AccountId, CouncilCollective>
+		pallet_collective::EnsureProportionAtLeast<_3, _5, AccountId, CouncilCollective>
 	>;
 	type RejectOrigin = EnsureOneOf<
 		AccountId,
 		EnsureRoot<AccountId>,
-		pallet_collective::EnsureMembers<_2, AccountId, CouncilCollective>
+		pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>
 	>;
 	type Tippers = Elections;
 	type TipCountdown = TipCountdown;
