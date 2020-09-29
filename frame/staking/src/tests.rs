@@ -346,15 +346,6 @@ fn staking_should_work() {
 		});
 }
 
-#[test]
-fn maximum_validator_set() {
-	ExtBuilder::default()
-		.maximum_validator_count(4)
-		.build()
-		.execute_with(|| {
-			assert_eq!(Staking::maximum_validator_count(), 4);
-		});
-}
 
 #[test]
 fn validator_adjust_up() {
