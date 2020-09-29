@@ -599,9 +599,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		match message {
 			GenericMessage::Status(_) =>
 				debug!(target: "sub-libp2p", "Received unexpected Status"),
-			GenericMessage::BlockAnnounce(announce) => {
-				return self.push_block_announce_validation(who.clone(), announce)
-			},
+			GenericMessage::BlockAnnounce(announce) =>
+				self.push_block_announce_validation(who.clone(), announce),
 			GenericMessage::Transactions(m) =>
 				self.on_transactions(who, m),
 			GenericMessage::BlockResponse(_) =>
@@ -1173,7 +1172,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		&mut self,
 		who: PeerId,
 		announce: BlockAnnounce<B::Header>,
-	) -> CustomMessageOutcome<B> {
+	) {
 		let hash = announce.header.hash();
 
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
@@ -1185,11 +1184,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			message::BlockState::Normal => false,
 		};
 
-		if let Some(res) = self.sync.push_block_announce_validation(who, &hash, announce, is_best) {
-			self.process_block_announce_validation_result(res)
-		} else {
-			CustomMessageOutcome::None
-		}
+		self.sync.push_block_announce_validation(who, hash, announce, is_best);
 	}
 
 	/// Process the result of the block announce validation.
@@ -1680,11 +1675,12 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					}
 					Some(Fallback::BlockAnnounce) => {
 						if let Ok(announce) = message::BlockAnnounce::decode(&mut message.as_ref()) {
-							self.push_block_announce_validation(peer_id, announce)
+							self.push_block_announce_validation(peer_id, announce);
 						} else {
 							warn!(target: "sub-libp2p", "Failed to decode block announce");
-							CustomMessageOutcome::None
 						}
+
+						CustomMessageOutcome::None
 					}
 					None => {
 						debug!(target: "sub-libp2p", "Received notification from unknown protocol {:?}", protocol_name);

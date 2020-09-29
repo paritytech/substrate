@@ -1272,15 +1272,13 @@ impl<B: BlockT> ChainSync<B> {
 	///
 	/// It is required that [`ChainSync::poll_block_announce_validation`] is called
 	/// to check for finished block announce validations.
-	///
-	/// Returns `Some(_)` if the block announce was validated immediately.
 	pub fn push_block_announce_validation(
 		&mut self,
 		who: PeerId,
-		hash: &B::Hash,
+		hash: B::Hash,
 		announce: BlockAnnounce<B::Header>,
 		is_best: bool,
-	) -> Option<PollBlockAnnounceValidation<B::Header>> {
+	) {
 		let header = &announce.header;
 		let number = *header.number();
 		debug!(
@@ -1292,37 +1290,46 @@ impl<B: BlockT> ChainSync<B> {
 		);
 
 		if number.is_zero() {
-			warn!(
-				target: "sync",
-				"💔 Ignored genesis block (#0) announcement from {}: {}",
-				who,
-				hash,
-			);
-			return Some(PollBlockAnnounceValidation::Nothing { is_best, who, header: announce.header })
+			self.block_announce_validation.push(async move {
+				warn!(
+					target: "sync",
+					"💔 Ignored genesis block (#0) announcement from {}: {}",
+					who,
+					hash,
+				);
+				PreValidateBlockAnnounce::Nothing { is_best, who, announce }
+			}.boxed());
+			return
 		}
 
 		// Check if there is a slot for this block announce validation.
 		match self.has_slot_for_block_announce_validation(&who) {
 			HasSlotForBlockAnnounceValidation::Yes => {},
 			HasSlotForBlockAnnounceValidation::TotalMaximumSlotsReached => {
-				warn!(
-					target: "sync",
-					"💔 Ignored block (#{} -- {}) announcement from {} because all validation slots are occupied.",
-					number,
-					hash,
-					who,
-				);
-				return Some(PollBlockAnnounceValidation::Nothing { is_best, who, header: announce.header })
+				self.block_announce_validation.push(async move {
+					warn!(
+						target: "sync",
+						"💔 Ignored block (#{} -- {}) announcement from {} because all validation slots are occupied.",
+						number,
+						hash,
+						who,
+					);
+					PreValidateBlockAnnounce::Nothing { is_best, who, announce }
+				}.boxed());
+				return
 			}
 			HasSlotForBlockAnnounceValidation::MaximumPeerSlotsReached => {
-				warn!(
-					target: "sync",
-					"💔 Ignored block (#{} -- {}) announcement from {} because all validation slots for this peer are occupied.",
-					number,
-					hash,
-					who,
-				);
-				return Some(PollBlockAnnounceValidation::Nothing { is_best, who, header: announce.header })
+				self.block_announce_validation.push(async move {
+					warn!(
+						target: "sync",
+						"💔 Ignored block (#{} -- {}) announcement from {} because all validation slots for this peer are occupied.",
+						number,
+						hash,
+						who,
+					);
+					PreValidateBlockAnnounce::Nothing { is_best, who, announce }
+				}.boxed());
+				return
 			}
 		}
 
@@ -1353,8 +1360,6 @@ impl<B: BlockT> ChainSync<B> {
 				}
 			}
 		}.boxed());
-
-		None
 	}
 
 	/// Poll block announce validation.
