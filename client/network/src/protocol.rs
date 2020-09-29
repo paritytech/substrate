@@ -1168,7 +1168,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// It is required that [`ChainSync::poll_block_announce_validation`] is
 	/// called later to check for finished validations. The result of the validation
 	/// needs to be passed to [`Protocol::process_block_announce_validation_result`]
-	/// finish the processing.
+	/// to finish the processing.
 	fn push_block_announce_validation(
 		&mut self,
 		who: PeerId,

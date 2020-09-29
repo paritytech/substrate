@@ -51,8 +51,8 @@ pub trait BlockAnnounceValidator<B: Block> {
 	///
 	/// # Note
 	///
-	/// Returning [`Validation::Failure`] will led to a decrease of the
-	/// peers reputation as it send us invalid data.
+	/// Returning [`Validation::Failure`] will lead to a decrease of the
+	/// peers reputation as it sent us invalid data.
 	fn validate(
 		&mut self,
 		header: &B::Header,
