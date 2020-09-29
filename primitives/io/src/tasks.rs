@@ -34,7 +34,7 @@
 //!     );
 //! ```
 //!
-//! When allowing unbounded parallelism, malicios trasactions can exploit it and parition
+//! When allowing unbounded parallelism, malicious transactions can exploit it and partition
 //! network consensus based on how much resources nodes have.
 //!
 #[cfg(feature = "std")]
@@ -224,4 +224,3 @@ mod tests {
 		}).expect("Failed to run with externalities");
 	}
 }
-
