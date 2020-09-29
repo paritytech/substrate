@@ -242,16 +242,19 @@ pub fn write_results(
 			.map(|(name, _)| -> String { return name.to_string() })
 			.collect::<Vec<String>>();
 		if all_components.len() != used_components.len() {
-			let mut unused_components = all_components;
+			let mut unused_components = all_components.clone();
 			unused_components.retain(|x| !used_components.contains(&x));
-			write!(file, "{}// WARNING! Some components were not used: {:?}\n", indent, unused_components)?;
 		}
 
 		// function name
 		write!(file, "{}fn {}(", indent, benchmark_string)?;
 		// params
-		for component in used_components {
-			write!(file, "{}: u32, ", component)?;
+		for component in all_components {
+			if used_components.contains(&&component) {
+				write!(file, "{}: u32, ", component)?;
+			} else {
+				write!(file, "_{}: u32, ", component)?;
+			}
 		}
 		// return value
 		write!(file, ") -> Weight {{\n")?;
