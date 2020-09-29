@@ -53,7 +53,7 @@ impl<H, N> Clone for SharedAuthoritySet<H, N> {
 
 impl<H, N> SharedAuthoritySet<H, N> {
 	/// Acquire a reference to the inner read-write lock.
-	pub(crate) fn inner(&self) -> &RwLock<AuthoritySet<H, N>> {
+	pub fn inner(&self) -> &RwLock<AuthoritySet<H, N>> {
 		&*self.inner
 	}
 }
@@ -101,7 +101,7 @@ pub(crate) struct Status<H, N> {
 
 /// A set of authorities.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
-pub(crate) struct AuthoritySet<H, N> {
+pub struct AuthoritySet<H, N> {
 	/// The current active authorities.
 	pub(crate) current_authorities: AuthorityList,
 	/// The current set id.
@@ -494,7 +494,7 @@ where
 
 /// Kinds of delays for pending changes.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
-pub(crate) enum DelayKind<N> {
+pub enum DelayKind<N> {
 	/// Depth in finalized chain.
 	Finalized,
 	/// Depth in best chain. The median last finalized block is calculated at the time the
@@ -507,7 +507,7 @@ pub(crate) enum DelayKind<N> {
 /// This will be applied when the announcing block is at some depth within
 /// the finalized or unfinalized chain.
 #[derive(Debug, Clone, Encode, PartialEq)]
-pub(crate) struct PendingChange<H, N> {
+pub struct PendingChange<H, N> {
 	/// The new authorities and weights to apply.
 	pub(crate) next_authorities: AuthorityList,
 	/// How deep in the chain the announcing block must be

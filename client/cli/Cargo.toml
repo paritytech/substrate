@@ -44,8 +44,9 @@ sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" 
 sc-telemetry = { version = "2.0.0", path = "../telemetry" }
 substrate-prometheus-endpoint = { path = "../../utils/prometheus" , version = "0.8.0"}
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
-sp-api = { version = "2.0.0", path = "../../primitives/api" }
 sc-consensus-babe = { version = "0.8.0", path = "../consensus/babe" }
+sc-consensus-epochs = { version = "0.8.0", path = "../consensus/epochs" }
+sc-finality-grandpa = { version = "0.8.0", path = "../finality-grandpa" }
 names = "0.11.0"
 structopt = "0.3.8"
 sc-tracing = { version = "2.0.0", path = "../tracing" }

@@ -25,7 +25,7 @@ use sc_service::{config::{MultiaddrWithPeerId, NetworkConfiguration}, ChainSpec}
 use structopt::StructOpt;
 use std::io::Write;
 use std::sync::Arc;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sc_service::chain_ops::build_light_sync_state;
 use sc_service::NetworkStatusSinks;
 use futures::{FutureExt, StreamExt};
@@ -71,13 +71,12 @@ impl BuildSyncSpecCmd {
 		network_config: NetworkConfiguration,
 		client: Arc<CL>,
 		network_status_sinks: NetworkStatusSinks<B>,
+		shared_authority_set: sc_finality_grandpa::SharedAuthoritySet<<B as BlockT>::Hash, NumberFor<B>>,
+		shared_epoch_changes: sc_consensus_epochs::SharedEpochChanges<B, sc_consensus_babe::Epoch>,
 	) -> error::Result<()>
 		where
 			B: BlockT,
-			CL: sp_blockchain::HeaderBackend<B> + sp_api::ProvideRuntimeApi<B> +
-				sc_client_api::AuxStore,
-			<CL as sp_api::ProvideRuntimeApi<B>>::Api:
-				sc_consensus_babe::BabeApi<B, Error=sp_blockchain::Error>,
+			CL: sp_blockchain::HeaderBackend<B>,
 	{
         if self.sync_first {
             network_status_sinks.status_stream(std::time::Duration::from_secs(1)).filter(|status| {
@@ -85,7 +84,7 @@ impl BuildSyncSpecCmd {
             }).into_future().map(drop).await;
         }
 
-        let light_sync_state = build_light_sync_state(client)?;
+        let light_sync_state = build_light_sync_state(client, shared_authority_set, shared_epoch_changes)?;
         spec.set_light_sync_state(light_sync_state.to_serializable());
 
 		info!("Building chain spec");

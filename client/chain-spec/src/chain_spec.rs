@@ -401,12 +401,10 @@ where
 pub struct LightSyncState<Block: BlockT> {
 	/// The header of the best finalized block.
 	pub finalized_block_header: <Block as BlockT>::Header,
-	pub babe_finalized_block1_slot_number: sp_consensus_slots::SlotNumber,
-	pub babe_finalized_block_epoch_information: sc_consensus_babe::NextEpochDescriptor,
-	pub babe_finalized_next_epoch_transition: sc_consensus_babe::NextEpochDescriptor,
-	pub grandpa_after_finalized_block_authorities_set_id: sp_finality_grandpa::SetId,
-	pub grandpa_finalized_triggered_authorities: sp_finality_grandpa::AuthorityList,
-	pub grandpa_finalized_scheduled_change: sp_finality_grandpa::ScheduledChange<NumberFor<Block>>,
+	/// The epoch changes tree for babe.
+	pub babe_epoch_changes: sc_consensus_epochs::EpochChangesFor<Block, sc_consensus_babe::Epoch>,
+	/// The authority set for grandpa.
+	pub grandpa_authority_set: sc_finality_grandpa::AuthoritySet<<Block as BlockT>::Hash, NumberFor<Block>>,
 }
 
 impl<Block: BlockT> LightSyncState<Block> {
@@ -416,17 +414,10 @@ impl<Block: BlockT> LightSyncState<Block> {
 
 		SerializableLightSyncState {
 			finalized_block_header: StorageData(self.finalized_block_header.encode()),
-			babe_finalized_block1_slot_number: self.babe_finalized_block1_slot_number,
-			babe_finalized_block_epoch_information:
-				StorageData(self.babe_finalized_block_epoch_information.encode()),
-			babe_finalized_next_epoch_transition:
-				StorageData(self.babe_finalized_next_epoch_transition.encode()),
-			grandpa_after_finalized_block_authorities_set_id:
-				self.grandpa_after_finalized_block_authorities_set_id,
-			grandpa_finalized_triggered_authorities:
-				StorageData(self.grandpa_finalized_triggered_authorities.encode()),
-			grandpa_finalized_scheduled_change:
-				StorageData(self.grandpa_finalized_scheduled_change.encode()),
+			babe_epoch_changes:
+				StorageData(self.babe_epoch_changes.encode()),
+			grandpa_authority_set:
+				StorageData(self.grandpa_authority_set.encode()),
 		}
 	}
 
@@ -434,17 +425,10 @@ impl<Block: BlockT> LightSyncState<Block> {
 	pub fn from_serializable(serialized: &SerializableLightSyncState) -> Result<Self, codec::Error> {
 		Ok(Self {
 			finalized_block_header: codec::Decode::decode(&mut &serialized.finalized_block_header.0[..])?,
-			babe_finalized_block1_slot_number: serialized.babe_finalized_block1_slot_number,
-			babe_finalized_block_epoch_information:
-				codec::Decode::decode(&mut &serialized.babe_finalized_block_epoch_information.0[..])?,
-			babe_finalized_next_epoch_transition:
-				codec::Decode::decode(&mut &serialized.babe_finalized_next_epoch_transition.0[..])?,
-			grandpa_after_finalized_block_authorities_set_id:
-				serialized.grandpa_after_finalized_block_authorities_set_id,
-			grandpa_finalized_triggered_authorities:
-				codec::Decode::decode(&mut &serialized.grandpa_finalized_triggered_authorities.0[..])?,
-			grandpa_finalized_scheduled_change:
-				codec::Decode::decode(&mut &serialized.grandpa_finalized_scheduled_change.0[..])?,
+			babe_epoch_changes:
+				codec::Decode::decode(&mut &serialized.babe_epoch_changes.0[..])?,
+			grandpa_authority_set:
+				codec::Decode::decode(&mut &serialized.grandpa_authority_set.0[..])?,
 		})
 	}
 }
@@ -455,12 +439,8 @@ impl<Block: BlockT> LightSyncState<Block> {
 #[serde(deny_unknown_fields)]
 pub struct SerializableLightSyncState {
 	finalized_block_header: StorageData,
-	babe_finalized_block1_slot_number: sp_consensus_slots::SlotNumber,
-	babe_finalized_block_epoch_information: StorageData,
-	babe_finalized_next_epoch_transition: StorageData,
-	grandpa_after_finalized_block_authorities_set_id: sp_finality_grandpa::SetId,
-	grandpa_finalized_triggered_authorities: StorageData,
-	grandpa_finalized_scheduled_change: StorageData,
+	babe_epoch_changes: StorageData,
+	grandpa_authority_set: StorageData,
 }
 
 #[cfg(test)]

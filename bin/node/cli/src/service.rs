@@ -31,7 +31,7 @@ use sc_service::{
 };
 use sp_inherents::InherentDataProviders;
 use sc_network::{Event, NetworkService};
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sp_core::traits::BareCryptoStorePtr;
@@ -164,6 +164,8 @@ pub struct NewFullBase {
 	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	pub network_status_sinks: sc_service::NetworkStatusSinks<Block>,
 	pub transaction_pool: Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
+	pub shared_authority_set: grandpa::SharedAuthoritySet<<Block as BlockT>::Hash, NumberFor<Block>>,
+	pub shared_epoch_changes: sc_consensus_epochs::SharedEpochChanges<Block, sc_consensus_babe::Epoch>,
 }
 
 /// Creates a full service from the configuration.
@@ -227,6 +229,8 @@ pub fn new_full_base(
 	let (block_import, grandpa_link, babe_link) = import_setup;
 
 	(with_startup_data)(&block_import, &babe_link);
+
+	let shared_epoch_changes = babe_link.epoch_changes().clone();
 
 	if let sc_service::config::Role::Authority { .. } = &role {
 		let proposer = sc_basic_authorship::ProposerFactory::new(
@@ -306,6 +310,8 @@ pub fn new_full_base(
 		is_authority: role.is_network_authority(),
 	};
 
+	let shared_authority_set = grandpa_link.shared_authority_set().clone();
+
 	if enable_grandpa {
 		// start the full GRANDPA voter
 		// NOTE: non-authorities could run the GRANDPA observer protocol, but at
@@ -341,7 +347,7 @@ pub fn new_full_base(
 	network_starter.start_network();
 	Ok(NewFullBase {
 		task_manager, inherent_data_providers, client, network, network_status_sinks,
-		transaction_pool,
+		transaction_pool, shared_authority_set, shared_epoch_changes,
 	})
 }
 
