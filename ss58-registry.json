@@ -66,8 +66,8 @@
 		},
 		{
 			"prefix": 6,
-			"network": "bitfrost",
-			"displayName": "Bitfrost",
+			"network": "bifrost",
+			"displayName": "Bifrost",
 			"symbols": ["BNC"],
 			"decimals": [12],
 			"standardAccount": "*25519",
