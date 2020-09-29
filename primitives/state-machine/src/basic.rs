@@ -33,7 +33,7 @@ use sp_core::{
 };
 use log::warn;
 use codec::Encode;
-use sp_externalities::{Extensions, Extension};
+use sp_externalities::{Extensions, Extension, RegistrationSource};
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
@@ -99,7 +99,7 @@ impl BasicExternalities {
 
 	/// Register an extension.
 	pub fn register_extension(&mut self, ext: impl Extension) {
-		self.extensions.register(ext);
+		self.extensions.register(ext, RegistrationSource::Client);
 	}
 }
 
@@ -344,7 +344,7 @@ impl sp_externalities::ExtensionStore for BasicExternalities {
 		type_id: TypeId,
 		extension: Box<dyn sp_externalities::Extension>,
 	) -> Result<(), sp_externalities::Error> {
-		self.extensions.register_with_type_id(type_id, extension)
+		self.extensions.register_with_type_id(type_id, extension, RegistrationSource::Runtime)
 	}
 
 	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {

@@ -753,7 +753,11 @@ where
 		extension: Box<dyn Extension>,
 	) -> Result<(), sp_externalities::Error> {
 		if let Some(ref mut extensions) = self.extensions {
-			extensions.register_with_type_id(type_id, extension)
+			extensions.register_with_type_id(
+				type_id,
+				extension,
+				sp_externalities::RegistrationSource::Runtime,
+			)
 		} else {
 			Err(sp_externalities::Error::ExtensionsAreNotSupported)
 		}

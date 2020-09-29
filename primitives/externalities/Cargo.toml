@@ -24,6 +24,6 @@ default = ["std"]
 std = [
 	"codec/std",
 	"environmental/std",
-  "sp-std/std",
-  "sp-storage/std",
+	"sp-std/std",
+	"sp-storage/std",
 ]

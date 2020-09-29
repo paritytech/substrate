@@ -23,7 +23,8 @@
 //! It is required that each extension implements the [`Extension`] trait.
 
 use sp_std::{
-	collections::btree_map::{BTreeMap, Entry}, any::{Any, TypeId}, ops::DerefMut, boxed::Box,
+	collections::{btree_set::BTreeSet, btree_map::{BTreeMap, Entry}}, any::{Any, TypeId},
+	ops::DerefMut, boxed::Box, mem,
 };
 use crate::Error;
 
@@ -103,10 +104,31 @@ pub trait ExtensionStore {
 	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), Error>;
 }
 
+/// The source from where an [`Extension`] is registered.
+pub enum RegistrationSource {
+	/// An extension is being registered from the runtime.
+	Runtime,
+	/// An extension is being registered from the client.
+	Client,
+}
+
+impl RegistrationSource {
+	/// Is the source the runtime?
+	fn is_runtime(&self) -> bool {
+		matches!(self, Self::Runtime)
+	}
+}
+
 /// Stores extensions that should be made available through the externalities.
 #[derive(Default)]
 pub struct Extensions {
 	extensions: BTreeMap<TypeId, Box<dyn Extension>>,
+	/// Extensions that got registered from the runtime side.
+	///
+	/// If an extensions gets registered from the runtime side, it will be inserted here.
+	///
+	/// It will also be removed from the set when the extension is deregistered.
+	runtime_registered_extensions: BTreeSet<TypeId>,
 }
 
 #[cfg(feature = "std")]
@@ -123,16 +145,38 @@ impl Extensions {
 	}
 
 	/// Register the given extension.
-	pub fn register<E: Extension>(&mut self, ext: E) {
-		self.extensions.insert(ext.type_id(), Box::new(ext));
+	pub fn register<E: Extension>(
+		&mut self,
+		ext: E,
+		registration_source: RegistrationSource,
+	) {
+		let type_id = ext.type_id();
+		self.extensions.insert(type_id, Box::new(ext));
+
+		if registration_source.is_runtime() {
+			self.runtime_registered_extensions.insert(type_id);
+		}
 	}
 
 	/// Register extension `ext`.
-	pub fn register_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) -> Result<(), Error> {
+	pub fn register_with_type_id(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn Extension>,
+		registration_source: RegistrationSource,
+	) -> Result<(), Error> {
 		match self.extensions.entry(type_id) {
-			Entry::Vacant(vacant) => { vacant.insert(extension); Ok(()) },
-			Entry::Occupied(_) => Err(Error::ExtensionAlreadyRegistered),
+			Entry::Vacant(vacant) => {
+				vacant.insert(extension);
+			},
+			Entry::Occupied(_) => return Err(Error::ExtensionAlreadyRegistered),
 		}
+
+		if registration_source.is_runtime() {
+			self.runtime_registered_extensions.insert(type_id);
+		}
+
+		Ok(())
 	}
 
 	/// Return a mutable reference to the requested extension.
@@ -142,7 +186,21 @@ impl Extensions {
 
 	/// Deregister extension of type `E`.
 	pub fn deregister(&mut self, type_id: TypeId) -> Option<Box<dyn Extension>> {
-		self.extensions.remove(&type_id)
+		let res = self.extensions.remove(&type_id);
+
+		if res.is_some() {
+			self.runtime_registered_extensions.remove(&type_id);
+		}
+
+		res
+	}
+
+	/// Remove all extensions that were registered from the runtime.
+	pub fn remove_runtime_registered_extensions(&mut self) {
+		let exts = mem::take(&mut self.runtime_registered_extensions);
+		exts.into_iter().for_each(|ext| {
+			self.extensions.remove(&ext);
+		});
 	}
 }
 
@@ -160,12 +218,42 @@ mod tests {
 	#[test]
 	fn register_and_retrieve_extension() {
 		let mut exts = Extensions::new();
-		exts.register(DummyExt(1));
-		exts.register(DummyExt2(2));
+		exts.register(DummyExt(1), RegistrationSource::Client);
+		exts.register(DummyExt2(2), RegistrationSource::Client);
 
 		let ext = exts.get_mut(TypeId::of::<DummyExt>()).expect("Extension is registered");
 		let ext_ty = ext.downcast_mut::<DummyExt>().expect("Downcasting works");
 
 		assert_eq!(ext_ty.0, 1);
+	}
+
+	#[test]
+	fn runtime_registered_extensions_is_maintained() {
+		let mut exts = Extensions::new();
+		exts.register(DummyExt(1), RegistrationSource::Runtime);
+		assert!(exts.runtime_registered_extensions.contains(&TypeId::of::<DummyExt>()));
+		exts.deregister(TypeId::of::<DummyExt>());
+		assert!(!exts.runtime_registered_extensions.contains(&TypeId::of::<DummyExt>()));
+
+		exts.register_with_type_id(
+			TypeId::of::<DummyExt>(),
+			Box::new(DummyExt(1)),
+			RegistrationSource::Runtime,
+		).unwrap();
+		assert!(exts.runtime_registered_extensions.contains(&TypeId::of::<DummyExt>()));
+		exts.deregister(TypeId::of::<DummyExt>());
+		assert!(!exts.runtime_registered_extensions.contains(&TypeId::of::<DummyExt>()));
+	}
+
+	#[test]
+	fn remove_runtime_registered_extensions_work() {
+		let mut exts = Extensions::new();
+		exts.register(DummyExt(1), RegistrationSource::Runtime);
+		exts.register(DummyExt2(1), RegistrationSource::Client);
+
+		exts.remove_runtime_registered_extensions();
+		assert_eq!(1, exts.extensions.len());
+		assert!(exts.runtime_registered_extensions.is_empty());
+		assert!(exts.extensions.contains_key(&TypeId::of::<DummyExt2>()));
 	}
 }

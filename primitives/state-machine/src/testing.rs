@@ -43,7 +43,7 @@ use sp_core::{
 	testing::TaskExecutor,
 };
 use codec::Encode;
-use sp_externalities::{Extensions, Extension};
+use sp_externalities::{Extensions, Extension, RegistrationSource};
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber = u64>
@@ -111,7 +111,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		let offchain_overlay = OffchainOverlayedChanges::enabled();
 
 		let mut extensions = Extensions::default();
-		extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
+		extensions.register(TaskExecutorExt::new(TaskExecutor::new()), RegistrationSource::Client);
 
 		let offchain_db = TestPersistentOffchainDB::new();
 
@@ -144,7 +144,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 
 	/// Registers the given extension for this instance.
 	pub fn register_extension<E: Any + Extension>(&mut self, ext: E) {
-		self.extensions.register(ext);
+		self.extensions.register(ext, RegistrationSource::Client);
 	}
 
 	/// Get mutable reference to changes trie storage.
@@ -229,7 +229,7 @@ impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N> where
 		type_id: TypeId,
 		extension: Box<dyn Extension>,
 	) -> Result<(), sp_externalities::Error> {
-		self.extensions.register_with_type_id(type_id, extension)
+		self.extensions.register_with_type_id(type_id, extension, RegistrationSource::Runtime)
 	}
 
 	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
