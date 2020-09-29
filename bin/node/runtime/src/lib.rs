@@ -37,7 +37,7 @@ use frame_support::traits::InstanceFilter;
 use codec::{Encode, Decode};
 use sp_core::{
 	crypto::KeyTypeId,
-	u32_trait::{_1, _2, _3, _4},
+	u32_trait::{_1, _2, _3, _4, _5},
 	OpaqueMetadata,
 };
 pub use node_primitives::{AccountId, Signature};
