@@ -20,7 +20,8 @@ frame-support = { version = "2.0.0", default-features = false, path = "../suppor
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "common" }
 parity-wasm = { version = "0.41.0", default-features = false }
-pwasm-utils = { version = "0.14.0", default-features = false }
+pwasm-utils = { default-features = false, git = "https://github.com/paritytech/wasm-utils.git", rev = "e0a05c6329fdb9ba99f206b2395fd77d7906b640" }
+rand = { version = "0.7.0", optional = true, default-features = false, features = ["small_rng"] }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
@@ -58,4 +59,5 @@ std = [
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
+	"rand",
 ]
