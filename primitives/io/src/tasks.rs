@@ -18,7 +18,25 @@
 //! Runtime tasks.
 //!
 //! Contains runtime-usable functions for spawning parallel purely computational tasks.
-
+//!
+//! NOTE: This is experimental API.
+//! NOTE: When using in actual runtime, make sure you don't produce unbounded parallelism.
+//! So this is bad example to use it:
+//! ```rust
+//!     for _ in 0..dynamic_variable { sp_io::tasks::spawn(my_parallel_computator, vec![]); }
+//! ```
+//!
+//! While this is a good example:
+//! ```rust
+//!     let computation_payload;
+//!     let parallel_tasks = (0..STATIC_VARIABLE).map(|idx|
+//!         sp_io::tasks::spawn(my_parallel_computator, computation_payload.chunks(10).encode())
+//!     );
+//! ```
+//!
+//! When allowing unbounded parallelism, malicios trasactions can exploit it and parition
+//! network consensus based on how much resources nodes have.
+//!
 #[cfg(feature = "std")]
 mod inner {
 	use std::{panic::AssertUnwindSafe, sync::mpsc};

@@ -43,6 +43,7 @@ impl frame_system::Trait for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = ();
+	type PalletInfo = ();
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -60,7 +61,6 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
-	type ModuleToIndex = ();
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
