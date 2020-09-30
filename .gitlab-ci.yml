@@ -12,8 +12,7 @@
 #   image:                           paritytech/tools:latest # Any docker image (required)
 #   allow_failure:                   true # Allow the pipeline to continue if this job fails (default: false)
 #   needs:
-#   - job:                           test-linux # Any jobs that are required to run before this job (optional)
-#     - build-rust-doc
+#     - job:                         test-linux # Any jobs that are required to run before this job (optional)
 #   variables:
 #     MY_ENVIRONMENT_VARIABLE:       "some useful value" # Environment variables passed to the job (optional)
 #   script:
