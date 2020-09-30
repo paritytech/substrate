@@ -151,7 +151,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	can_author_with: CAW,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
@@ -353,7 +353,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 
 impl<B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync + Send,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync + Send + HeaderBackend<B>,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error = Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -367,6 +367,18 @@ impl<B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, 
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>>;
 
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo<B>) -> Self::OnSlot {
+		// Append SlotInfo with chain info for use by the (optional) BackoffAuthoringBlockStrategy
+		let mut slot_info = slot_info.clone();
+		slot_info.chain_info = find_pre_digest::<B, P>(&chain_head)
+			.map(|chain_head_slot| {
+				sc_consensus_slots::AppendedChainInfo::<B> {
+					chain_head_number: *chain_head.number(),
+					chain_head_slot,
+					finalized_number: self.client.info().finalized_number,
+				}
+			})
+			.ok();
+
 		<Self as sc_consensus_slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
 	}
 }
