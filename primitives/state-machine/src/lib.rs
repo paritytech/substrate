@@ -31,7 +31,7 @@ mod ext;
 mod testing;
 #[cfg(feature = "std")]
 mod basic;
-mod overlayed_changes;
+pub(crate) mod overlayed_changes;
 #[cfg(feature = "std")]
 mod proving_backend;
 mod trie_backend;
@@ -337,8 +337,8 @@ mod execution {
 			runtime_code: &'a RuntimeCode,
 			spawn_handle: impl SpawnNamed + Send + 'static,
 		) -> Self {
-			extensions.register(CallInWasmExt::new(exec.clone()), sp_externalities::RegistrationSource::Client);
-			extensions.register(sp_core::traits::TaskExecutorExt::new(spawn_handle), sp_externalities::RegistrationSource::Client);
+			extensions.register(CallInWasmExt::new(exec.clone()));
+			extensions.register(sp_core::traits::TaskExecutorExt::new(spawn_handle));
 
 			Self {
 				backend,
@@ -434,8 +434,6 @@ mod execution {
 
 			self.overlay.exit_runtime()
 				.expect("Runtime is not able to call this function in the overlay; qed");
-
-			self.extensions.remove_runtime_registered_extensions();
 
 			trace!(
 				target: "state", "{:04x}: Return. Native={:?}, Result={:?}",

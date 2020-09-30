@@ -30,7 +30,7 @@ use sp_std::{any::{Any, TypeId}, vec::Vec, boxed::Box};
 use sp_storage::{ChildInfo, TrackedStorageKey};
 
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
-pub use extensions::{Extension, Extensions, ExtensionStore, RegistrationSource};
+pub use extensions::{Extension, Extensions, ExtensionStore};
 
 mod extensions;
 mod scope_limited;

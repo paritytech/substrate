@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits,
 };
 use sp_state_machine::{ExecutionStrategy, ExecutionManager, DefaultHandler};
-use sp_externalities::{Extensions, RegistrationSource};
+use sp_externalities::Extensions;
 use parking_lot::RwLock;
 
 /// Execution strategies settings.
@@ -162,7 +162,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 
 		if capabilities.has(offchain::Capability::Keystore) {
 			if let Some(keystore) = self.keystore.as_ref() {
-				extensions.register(KeystoreExt(keystore.clone()), RegistrationSource::Client);
+				extensions.register(KeystoreExt(keystore.clone()));
 			}
 		}
 
@@ -175,7 +175,6 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 							pool,
 						}) as _
 					),
-					RegistrationSource::Client,
 				);
 			}
 		}
@@ -183,7 +182,6 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		if let ExecutionContext::OffchainCall(Some(ext)) = context {
 			extensions.register(
 				OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0)),
-				RegistrationSource::Client,
 			);
 		}
 
