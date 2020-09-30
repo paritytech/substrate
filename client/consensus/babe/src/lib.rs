@@ -355,7 +355,7 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	pub force_authoring: bool,
 
 	/// Strategy and parameters for backing off block production if finality starts to lag behind.
-	pub backoff_authoring_blocks: Option<SimpleBackoffAuthoringBlocksStrategy>,
+	pub backoff_authoring_blocks: Option<SimpleBackoffAuthoringBlocksStrategy<B>>,
 
 	/// The source of timestamps for relative slots
 	pub babe_link: BabeLink<B>,
@@ -474,7 +474,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	env: E,
 	sync_oracle: SO,
 	force_authoring: bool,
-	backoff_authoring_blocks: Option<SimpleBackoffAuthoringBlocksStrategy>,
+	backoff_authoring_blocks: Option<SimpleBackoffAuthoringBlocksStrategy<B>>,
 	keystore: KeyStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
@@ -502,7 +502,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 	>>;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
-	type BackoffAuthoringBlocksStrategy = sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy;
+	type BackoffAuthoringBlocksStrategy = sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy<B>;
 
 	fn logging_target(&self) -> &'static str {
 		"babe"

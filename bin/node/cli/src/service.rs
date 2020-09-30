@@ -238,7 +238,6 @@ pub fn new_full_base(
 		let can_author_with =
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
-		// WIP: move these hardcoded parameters
 		let backoff_authoring_blocks = Some(sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy {
 			max_interval: 100,
 			unfinalized_slack: 5,

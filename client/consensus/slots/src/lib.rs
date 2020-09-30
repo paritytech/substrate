@@ -601,20 +601,20 @@ where
 /// A simple default strategy for how to decide backing off authoring blocks if the number of
 /// unfinalized blocks grows too large.
 #[derive(Clone)]
-pub struct SimpleBackoffAuthoringBlocksStrategy {
+pub struct SimpleBackoffAuthoringBlocksStrategy<B: BlockT> {
 	/// The max interval to backoff when authoring blocks, regardless of delay in finality.
-	pub max_interval: u32,
+	pub max_interval: NumberFor<B>,
 	/// The number of unfinalized blocks allowed before starting to consider to backoff authoring
 	/// blocks. Note that depending on the value for `authoring_bias`, there might still be an
 	/// additional wait until block authorships starts getting declined.
-	pub unfinalized_slack: u32,
+	pub unfinalized_slack: NumberFor<B>,
 	/// How persistant block authorship is in the face of a growing unfinalized chain of blocks. A
 	/// small value for `authoring_bias` means to quickly start backing off block authorship as the
 	/// length of the unfinalized blocks grows.
-	pub authoring_bias: u32,
+	pub authoring_bias: NumberFor<B>,
 }
 
-impl<B> BackoffAuthoringBlocksStrategy<B> for SimpleBackoffAuthoringBlocksStrategy
+impl<B> BackoffAuthoringBlocksStrategy<B> for SimpleBackoffAuthoringBlocksStrategy<B>
 where
 	B: BlockT
 {
@@ -626,14 +626,15 @@ where
 		slot_now: u64,
 	) -> bool {
 		let unfinalized_block_length = chain_head_number - finalized_number;
-		let interval = unfinalized_block_length.saturating_sub(self.unfinalized_slack.into())
-			/ self.authoring_bias.into();
-		let interval = interval.min(self.max_interval.into());
+		let interval = unfinalized_block_length.saturating_sub(self.unfinalized_slack)
+			/ self.authoring_bias;
+		let interval = interval.min(self.max_interval);
 
 		// We're doing arithmetic between block and slot numbers.
 		let interval = interval.unique_saturated_into();
 
-		// Backoff is the current slot isn't far enough ahead of the chain head.
+		// If interval is nonzero we backoff if the current slot isn't far enough ahead of the chain
+		// head.
 		u128::from(slot_now) <= u128::from(chain_head_slot) + interval
 	}
 }
