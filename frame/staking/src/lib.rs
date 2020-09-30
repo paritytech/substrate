@@ -3142,10 +3142,11 @@ impl<T: Trait> Module<T> {
 	/// Use a damping function to update the target number of validators for the next selection.
 	fn update_target_validators(mut exposure_totals: Vec<BalanceOf<T>>) -> u32 {
 		let average = |all: &[BalanceOf<T>]| -> BalanceOf<T> {
+			let all_len = all.len().max(1) as u32;
 			all.iter().fold(Zero::zero(), |total: BalanceOf<T>, x: &BalanceOf<T>| {
-				// `total` should never saturate since total issuance fits inside `Balance`
+				// `total` should never saturate since total issuance fits inside `Balance`		
 				total.saturating_add(*x)
-			}) / BalanceOf::<T>::saturated_from(all.len() as u128)
+			}) / BalanceOf::<T>::from(all_len)
 		};
 		// Current validator count should never be zero.
 		let current_validator_count = Self::validator_count().max(1);
