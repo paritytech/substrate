@@ -87,6 +87,7 @@ pub fn create_validator_with_nominators<T: Trait>(
 	let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 
 	assert!(new_validators.len() == 1);
+	assert!(new_validators[0] == v_stash, "Our validator was not selected!");
 
 	// Give Era Points
 	let reward = EraRewardPoints::<T::AccountId> {
@@ -285,6 +286,8 @@ benchmarks! {
 
 	payout_stakers_dead_controller {
 		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
+		// Clean up existing validators
+		Validators::<T>::remove_all();
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
@@ -301,25 +304,25 @@ benchmarks! {
 		let balance_before = T::Currency::free_balance(&validator_controller);
 		for (_, controller) in &nominators {
 			let balance = T::Currency::free_balance(&controller);
-			assert!(balance.is_zero(), "Controller has balance, but should be dead.");
+			ensure!(balance.is_zero(), "Controller has balance, but should be dead.");
 		}
 	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era)
 	verify {
 		let balance_after = T::Currency::free_balance(&validator_controller);
-		assert!(
+		ensure!(
 			balance_before < balance_after,
-			"Balance of controller {:?} should have increased after payout.",
-			validator,
+			"Balance of validator controller should have increased after payout.",
 		);
-
 		for (_, controller) in &nominators {
 			let balance = T::Currency::free_balance(&controller);
-			assert!(!balance.is_zero(), "Payout not given to controller.");
+			ensure!(!balance.is_zero(), "Payout not given to controller.");
 		}
 	}
 
 	payout_stakers_alive_staked {
 		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
+		// Clean up existing validators
+		Validators::<T>::remove_all();
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
@@ -341,17 +344,15 @@ benchmarks! {
 	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era)
 	verify {
 		let balance_after = T::Currency::free_balance(&validator);
-		assert!(
+		ensure!(
 			balance_before < balance_after,
-			"Balance of stash {:?} should have increased after payout.",
-			validator,
+			"Balance of validator stash should have increased after payout.",
 		);
 		for ((stash, _), balance_before) in nominators.iter().zip(nominator_balances_before.iter()) {
 			let balance_after = T::Currency::free_balance(&stash);
-			assert!(
+			ensure!(
 				balance_before < &balance_after,
-				"Balance of nominator stash {:?} should have increased after payout.",
-				stash,
+				"Balance of nominator stash should have increased after payout.",
 			);
 		}
 	}
