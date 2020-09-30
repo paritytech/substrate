@@ -1246,7 +1246,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// The total number and the number per peer of concurrent block announce validations
 	/// is capped.
 	///
-	/// It will return `true` when there is still a slot for a block announce validation.
+	/// Returns [`HasSlotForBlockAnnounceValidation`] to inform about the result.
 	fn has_slot_for_block_announce_validation(&mut self, peer: &PeerId) -> HasSlotForBlockAnnounceValidation {
 		if self.block_announce_validation.len() >= MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS {
 			return HasSlotForBlockAnnounceValidation::TotalMaximumSlotsReached
