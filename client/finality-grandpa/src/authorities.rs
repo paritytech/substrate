@@ -103,9 +103,9 @@ pub(crate) struct Status<H, N> {
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub struct AuthoritySet<H, N> {
 	/// The current active authorities.
-	pub(crate) current_authorities: AuthorityList,
+	pub current_authorities: AuthorityList,
 	/// The current set id.
-	pub(crate) set_id: u64,
+	pub set_id: u64,
 	/// Tree of pending standard changes across forks. Standard changes are
 	/// enacted on finality and must be enacted (i.e. finalized) in-order across
 	/// a given branch
@@ -314,7 +314,7 @@ where
 	/// Inspect pending changes. Standard pending changes are iterated first,
 	/// and the changes in the tree are traversed in pre-order, afterwards all
 	/// forced changes are iterated.
-	pub(crate) fn pending_changes(&self) -> impl Iterator<Item=&PendingChange<H, N>> {
+	pub fn pending_changes(&self) -> impl Iterator<Item=&PendingChange<H, N>> {
 		self.pending_standard_changes.iter().map(|(_, _, c)| c)
 			.chain(self.pending_forced_changes.iter())
 	}

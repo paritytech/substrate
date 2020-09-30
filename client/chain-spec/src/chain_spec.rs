@@ -403,8 +403,9 @@ pub struct LightSyncState<Block: BlockT> {
 	pub finalized_block_header: <Block as BlockT>::Header,
 	/// The epoch changes tree for babe.
 	pub babe_epoch_changes: sc_consensus_epochs::EpochChangesFor<Block, sc_consensus_babe::Epoch>,
-	/// The authority set for grandpa.
-	pub grandpa_authority_set: sc_finality_grandpa::AuthoritySet<<Block as BlockT>::Hash, NumberFor<Block>>,
+	pub grandpa_finalized_triggered_authorities: sp_finality_grandpa::AuthorityList,
+	pub grandpa_after_finalized_block_authorities_set_id: u64,
+	pub grandpa_finalized_scheduled_change: sc_finality_grandpa::PendingChange<<Block as BlockT>::Hash, NumberFor<Block>>
 }
 
 impl<Block: BlockT> LightSyncState<Block> {
@@ -416,8 +417,12 @@ impl<Block: BlockT> LightSyncState<Block> {
 			finalized_block_header: StorageData(self.finalized_block_header.encode()),
 			babe_epoch_changes:
 				StorageData(self.babe_epoch_changes.encode()),
-			grandpa_authority_set:
-				StorageData(self.grandpa_authority_set.encode()),
+			grandpa_finalized_triggered_authorities:
+				StorageData(self.grandpa_finalized_triggered_authorities.encode()),
+			grandpa_after_finalized_block_authorities_set_id:
+				self.grandpa_after_finalized_block_authorities_set_id,
+			grandpa_finalized_scheduled_change:
+				StorageData(self.grandpa_finalized_scheduled_change.encode()),
 		}
 	}
 
@@ -427,8 +432,12 @@ impl<Block: BlockT> LightSyncState<Block> {
 			finalized_block_header: codec::Decode::decode(&mut &serialized.finalized_block_header.0[..])?,
 			babe_epoch_changes:
 				codec::Decode::decode(&mut &serialized.babe_epoch_changes.0[..])?,
-			grandpa_authority_set:
-				codec::Decode::decode(&mut &serialized.grandpa_authority_set.0[..])?,
+			grandpa_finalized_triggered_authorities:
+				codec::Decode::decode(&mut &serialized.grandpa_finalized_triggered_authorities.0[..])?,
+			grandpa_after_finalized_block_authorities_set_id:
+				serialized.grandpa_after_finalized_block_authorities_set_id,
+			grandpa_finalized_scheduled_change:
+				codec::Decode::decode(&mut &serialized.grandpa_finalized_scheduled_change.0[..])?,
 		})
 	}
 }
@@ -440,7 +449,9 @@ impl<Block: BlockT> LightSyncState<Block> {
 pub struct SerializableLightSyncState {
 	finalized_block_header: StorageData,
 	babe_epoch_changes: StorageData,
-	grandpa_authority_set: StorageData,
+	grandpa_finalized_triggered_authorities: StorageData,
+	grandpa_after_finalized_block_authorities_set_id: u64,
+	grandpa_finalized_scheduled_change: StorageData,
 }
 
 #[cfg(test)]
