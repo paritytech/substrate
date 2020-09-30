@@ -739,7 +739,7 @@ deploy-kubernetes-alerting-rules:
     - if: $CI_COMMIT_REF_NAME == "master"
       changes:
         - .gitlab-ci.yml
-        - .maintain/monitoring/
+        - .maintain/monitoring/**/*
 
 .validator-deploy:                 &validator-deploy
   stage:                           flaming-fir
