@@ -306,3 +306,47 @@ pub fn init_logger(
 	}
 	Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use tracing::{metadata::Kind, subscriber::Interest, Callsite, Level, Metadata};
+
+	#[test]
+	fn test_logger_filters() {
+		let test_pattern = "afg=debug,sync=trace,client=warn,telemetry";
+		init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
+
+		tracing::dispatcher::get_default(|dispatcher| {
+			let test_filter = |target, level| {
+				struct DummyCallSite;
+				impl Callsite for DummyCallSite {
+					fn set_interest(&self, _: Interest) {}
+					fn metadata(&self) -> &Metadata<'_> {
+						unreachable!();
+					}
+				}
+
+				let metadata = tracing::metadata!(
+					name: "",
+					target: target,
+					level: level,
+					fields: &[],
+					callsite: &DummyCallSite,
+					kind: Kind::SPAN,
+				);
+
+				dispatcher.enabled(&metadata)
+			};
+
+			assert!(test_filter("afg", Level::INFO));
+			assert!(test_filter("afg", Level::DEBUG));
+			assert!(!test_filter("afg", Level::TRACE));
+
+			assert!(test_filter("sync", Level::TRACE));
+			assert!(test_filter("client", Level::WARN));
+
+			assert!(test_filter("telemetry", Level::TRACE));
+		});
+	}
+}
