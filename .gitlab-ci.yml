@@ -26,7 +26,7 @@ stages:
   - test
   - build
   - post-build-test
-  - docker
+  - chaos-env
   - chaos
   - publish
   - deploy
@@ -81,7 +81,7 @@ workflow:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH
 
-.docker-env-rules:                 &docker-env-rules
+.test-refs:                        &test-refs
   rules:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -90,20 +90,13 @@ workflow:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
 
-.build-rules:                      &build-rules
+.build-refs:                       &build-refs
   rules:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
     - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
-    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
-           && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
-
-.chaos-only:                       &chaos-only
-  rules:
-    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
-           && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
 
 #### stage:                       .pre
 
@@ -204,7 +197,7 @@ cargo-deny:
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-rules
+  <<:                              *test-refs
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly check --benches --all
     - cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small
@@ -214,7 +207,7 @@ cargo-check-benches:
 cargo-check-subkey:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-rules
+  <<:                              *test-refs
   script:
     - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
@@ -223,7 +216,7 @@ cargo-check-subkey:
 test-deterministic-wasm:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-rules
+  <<:                              *test-refs
   variables:
     <<:                            *default-vars
     WASM_BUILD_NO_COLOR:           1
@@ -243,7 +236,7 @@ test-deterministic-wasm:
 test-linux-stable:                 &test-linux
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-rules
+  <<:                              *test-refs
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
@@ -263,7 +256,7 @@ unleash-check:
   rules:
     - if: $CI_COMMIT_MESSAGE =~ /skip-checks/
       when: never
-      # .docker-env-rules
+      # .test-refs
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
@@ -275,7 +268,7 @@ test-frame-examples-compile-to-wasm:
   # into one job
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-rules
+  <<:                              *test-refs
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
@@ -311,7 +304,7 @@ test-linux-stable-int:
 check-web-wasm:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-rules
+  <<:                              *test-refs
   script:
     # WASM support is in progress. As more and more crates support WASM, we
     # should add entries here. See https://github.com/paritytech/substrate/issues/2416
@@ -332,7 +325,7 @@ check-web-wasm:
 test-full-crypto-feature:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *docker-env-rules
+  <<:                              *test-refs
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
@@ -350,7 +343,7 @@ cargo-check-macos:
   stage:                           test
   # shell runner on mac ignores the image set in *docker-env
   <<:                              *docker-env
-  <<:                              *docker-env-rules
+  <<:                              *test-refs
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
@@ -379,7 +372,7 @@ check-polkadot-companion-status:
 check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
-  <<:                              *docker-env-rules
+  <<:                              *test-refs
   needs:
     - job:                         test-linux-stable-int
       artifacts:                   false
@@ -392,7 +385,7 @@ check-polkadot-companion-build:
 test-browser-node:
   stage:                           build
   <<:                              *docker-env
-  <<:                              *docker-env-rules
+  <<:                              *test-refs
   needs:
     - job:                         check-web-wasm
       artifacts:                   false
@@ -409,16 +402,16 @@ build-linux-substrate:             &build-binary
   <<:                              *collect-artifacts
   <<:                              *docker-env
   rules:
-    # .build-rules with manual on PRs
+    # .build-refs with manual on PRs and chaos
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
     - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
-    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
-            && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
+    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
       when: manual
+      allow_failure: true
   needs:
     - job:                         test-linux-stable
       artifacts:                   false
@@ -445,7 +438,7 @@ build-linux-subkey:                &build-subkey
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  <<:                              *build-rules
+  <<:                              *build-refs
   needs:
     - job:                         cargo-check-subkey
       artifacts:                   false
@@ -475,7 +468,7 @@ build-macos-subkey:
 build-rust-doc:
   stage:                           build
   <<:                              *docker-env
-  <<:                              *docker-env-rules
+  <<:                              *test-refs
   allow_failure:                   true
   variables:
     <<:                            *default-vars
@@ -512,11 +505,18 @@ trigger-contracts-ci:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
 
-#### stage:                        docker
+#### stage:                        chaos-env
 
-docker-build-chaos:
-  <<:                              *chaos-only
-  stage:                           docker
+build-chaos-docker:
+  stage:                           chaos-env
+  rules:
+    # .build-refs with chaos
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "tags"
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
+    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
   needs:
     - job:                         build-linux-substrate
   image:                           docker:stable
@@ -555,11 +555,18 @@ docker-build-chaos:
 #### stage:                        chaos
 
 chaos-test-singlenodeheight:
-  <<:                              *chaos-only
   stage:                           chaos
+  rules:
+    # .build-refs with chaos
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "tags"
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
+    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
   image:                           parity/chaostools:latest
   needs:
-    - job:                         docker-build-chaos
+    - job:                         build-chaos-docker
   tags:
     - parity-chaos
   variables:
@@ -584,7 +591,7 @@ chaos-test-singlenodeheight:
 #### stage:                        publish
 
 .build-push-docker-image:          &build-push-docker-image
-  <<:                              *build-rules
+  <<:                              *build-refs
   <<:                              *kubernetes-build
   image:                           docker:stable
   services:
@@ -645,7 +652,7 @@ publish-docker-subkey:
 
 publish-s3-release:
   stage:                           publish
-  <<:                              *build-rules
+  <<:                              *build-refs
   <<:                              *kubernetes-build
   needs:
     - job:                         build-linux-substrate
@@ -672,7 +679,7 @@ publish-s3-doc:
   needs:
     - job:                         build-rust-doc
       artifacts:                   true
-  <<:                              *build-rules
+  <<:                              *build-refs
   <<:                              *kubernetes-build
   variables:
     GIT_STRATEGY:                  none
@@ -729,14 +736,14 @@ deploy-kubernetes-alerting-rules:
         --type=merge --patch "$(sed 's/^/  /;1s/^/spec:\n/' ${RULES})"
   rules:
     - if: $CI_COMMIT_REF_NAME == "master"
-    - changes:
+      changes:
         - .gitlab-ci.yml
         - .maintain/monitoring/
 
 .validator-deploy:                 &validator-deploy
   stage:                           flaming-fir
   rules:
-    # .build-rules, but manual
+    # .build-refs, but manual
     - if: $CI_COMMIT_REF_NAME == "master"
       when: manual
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -744,9 +751,6 @@ deploy-kubernetes-alerting-rules:
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
       when: manual
     - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
-      when: manual
-    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
-            && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
       when: manual
   needs:
     # script will fail if there is no artifacts/substrate/VERSION
