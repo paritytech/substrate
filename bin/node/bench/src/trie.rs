@@ -179,31 +179,6 @@ impl core::Benchmark for TrieReadBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
 		let mut db = self.database.clone();
 
-		// We clear system cache after db clone but before warmup keys query
-		// This populates system cache with some data unrelated to actual
-		// keys we are quering under benchmark (like what would have happened
-		// in real system that queries random keys).
-		#[cfg(target_os = "linux")] {
-			log::trace!(target: "benchmark-logistics", "Clearing system cache...");
-			std::process::Command::new("echo")
-				.args(&["1", ">", "/proc/sys/vm/drop_caches"])
-				.status()
-				.expect("Failed to execute system cache clear");
-			log::trace!(target: "benchmark-logistics", "Clearing system cache done!");
-		}
-
-		#[cfg(target_os = "macos")] {
-			log::trace!(target: "benchmark-logistics", "Clearing system cache...");
-			std::process::Command::new("sync")
-				.status()
-				.expect("Failed to execute sync");
-			std::process::Command::new("sudo")
-				.arg("purge")
-				.status()
-				.expect("Failed to execute sudo purge");
-			log::trace!(target: "benchmark-logistics", "Clearing system cache done!");
-		}
-
 		let storage: Arc<dyn sp_state_machine::Storage<sp_core::Blake2Hasher>> =
 			Arc::new(Storage(db.open(self.database_type)));
 

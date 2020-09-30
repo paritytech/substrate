@@ -88,6 +88,33 @@ impl BenchPair {
 	}
 }
 
+/// Drop system cache.
+/// 
+/// Will panic if cache drop is impossbile.
+pub fn drop_system_cache() {
+	#[cfg(target_os = "linux")] {
+		log::trace!(target: "bench-logistics", "Clearing system cache...");
+		std::process::Command::new("echo")
+			.args(&["1", ">", "/proc/sys/vm/drop_caches", "2>", "/dev/null"])
+			.output()
+			.expect("Failed to execute system cache clear");
+		log::trace!(target: "bench-logistics", "Clearing system cache done!");
+	}
+
+	#[cfg(target_os = "macos")] {
+		log::trace!(target: "bench-logistics", "Clearing system cache...");
+		std::process::Command::new("sync")
+			.output()
+			.expect("Failed to execute sync");
+		if let Err(err) = std::process::Command::new("purge").output() {
+			log::error!("purge error {:?}: ", err);
+			panic!("Could not clear system cache. Run under sudo?");
+		}
+		log::trace!(target: "bench-logistics", "Clearing system cache done!");
+	}
+
+}
+
 /// Pre-initialized benchmarking database.
 ///
 /// This is prepared database with genesis and keyring
@@ -123,6 +150,13 @@ impl Clone for BenchDb {
 			dir.path(),
 			&fs_extra::dir::CopyOptions::new(),
 		).expect("Copy of seed database is ok");
+
+		// We clear system cache after db clone but before any warmups.
+		// This populates system cache with some data unrelated to actual
+		// data we will be quering further under benchmark (like what 
+		// would have happened in real system that queries random entries 
+		// from database).
+		drop_system_cache();
 
 		BenchDb { keyring, directory_guard: Guard(dir), database_type }
 	}
