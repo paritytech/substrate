@@ -601,7 +601,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			GenericMessage::Status(_) =>
 				debug!(target: "sub-libp2p", "Received unexpected Status"),
 			GenericMessage::BlockAnnounce(announce) =>
-				return self.push_block_announce_validation(who.clone(), announce, cx),
+				self.push_block_announce_validation(who.clone(), announce),
 			GenericMessage::Transactions(m) =>
 				self.on_transactions(who, m),
 			GenericMessage::BlockResponse(_) =>
@@ -1170,17 +1170,17 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// needs to be passed to [`Protocol::process_block_announce_validation_result`]
 	/// to finish the processing.
 	///
-	/// This function ensures that the block announce validation future is polled
-	/// at least once so that the task is woken up when the future is ready.
+	/// # Note
 	///
-	/// Returns the message outcome from polling and processing a potential finished
-	/// block announce validation.
+	/// This will internally create a future, but this future will not be registered
+	/// in the task before being polled once. So, it is required to call
+	/// [`ChainSync::poll_block_announce_validation`] to ensure that the future is
+	/// registered properly and will wake up the task when being ready.
 	fn push_block_announce_validation(
 		&mut self,
 		who: PeerId,
 		announce: BlockAnnounce<B::Header>,
-		cx: &mut std::task::Context,
-	) -> CustomMessageOutcome<B> {
+	) {
 		let hash = announce.header.hash();
 
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
@@ -1193,14 +1193,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		};
 
 		self.sync.push_block_announce_validation(who, hash, announce, is_best);
-
-		// Make sure that the newly added block announce validation future was
-		// polled once to be registered in the task.
-		if let Poll::Ready(res) = self.sync.poll_block_announce_validation(cx) {
-			self.process_block_announce_validation_result(res)
-		} else {
-			CustomMessageOutcome::None
-		}
 	}
 
 	/// Process the result of the block announce validation.
@@ -1700,7 +1692,15 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					}
 					Some(Fallback::BlockAnnounce) => {
 						if let Ok(announce) = message::BlockAnnounce::decode(&mut message.as_ref()) {
-							self.push_block_announce_validation(peer_id, announce, cx)
+							self.push_block_announce_validation(peer_id, announce);
+
+							// Make sure that the newly added block announce validation future was
+							// polled once to be registered in the task.
+							if let Poll::Ready(res) = self.sync.poll_block_announce_validation(cx) {
+								self.process_block_announce_validation_result(res)
+							} else {
+								CustomMessageOutcome::None
+							}
 						} else {
 							warn!(target: "sub-libp2p", "Failed to decode block announce");
 							CustomMessageOutcome::None
