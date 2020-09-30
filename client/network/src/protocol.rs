@@ -572,10 +572,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.context_data.peers.iter().map(|(id, peer)| (id, &peer.info))
 	}
 
-	pub fn on_custom_message(
+	fn on_custom_message(
 		&mut self,
 		who: PeerId,
 		data: BytesMut,
+		cx: &mut std::task::Context,
 	) -> CustomMessageOutcome<B> {
 		let message = match <Message<B> as Decode>::decode(&mut &data[..]) {
 			Ok(message) => message,
@@ -600,7 +601,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			GenericMessage::Status(_) =>
 				debug!(target: "sub-libp2p", "Received unexpected Status"),
 			GenericMessage::BlockAnnounce(announce) =>
-				self.push_block_announce_validation(who.clone(), announce),
+				return self.push_block_announce_validation(who.clone(), announce, cx),
 			GenericMessage::Transactions(m) =>
 				self.on_transactions(who, m),
 			GenericMessage::BlockResponse(_) =>
@@ -1168,11 +1169,18 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// called later to check for finished validations. The result of the validation
 	/// needs to be passed to [`Protocol::process_block_announce_validation_result`]
 	/// to finish the processing.
+	///
+	/// This function ensures that the block announce validation future is polled
+	/// at least once so that the task is woken up when the future is ready.
+	///
+	/// Returns the message outcome from polling and processing a potential finished
+	/// block announce validation.
 	fn push_block_announce_validation(
 		&mut self,
 		who: PeerId,
 		announce: BlockAnnounce<B::Header>,
-	) {
+		cx: &mut std::task::Context,
+	) -> CustomMessageOutcome<B> {
 		let hash = announce.header.hash();
 
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
@@ -1185,6 +1193,14 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		};
 
 		self.sync.push_block_announce_validation(who, hash, announce, is_best);
+
+		// Make sure that the newly added block announce validation future was
+		// polled once to be registered in the task.
+		if let Poll::Ready(res) = self.sync.poll_block_announce_validation(cx) {
+			self.process_block_announce_validation_result(res)
+		} else {
+			CustomMessageOutcome::None
+		}
 	}
 
 	/// Process the result of the block announce validation.
@@ -1581,6 +1597,15 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				warn!(target: "sub-libp2p", "Inconsistent state, no peers for pending transaction!");
 			}
 		}
+
+		// Check if there is any block announcement validation finished.
+		while let Poll::Ready(result) = self.sync.poll_block_announce_validation(cx) {
+			match self.process_block_announce_validation_result(result) {
+				CustomMessageOutcome::None => {},
+				outcome => self.pending_messages.push_back(outcome),
+			}
+		}
+
 		if let Some(message) = self.pending_messages.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message));
 		}
@@ -1656,7 +1681,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				self.on_peer_disconnected(peer_id)
 			},
 			GenericProtoOut::LegacyMessage { peer_id, message } =>
-				self.on_custom_message(peer_id, message),
+				self.on_custom_message(peer_id, message, cx),
 			GenericProtoOut::Notification { peer_id, protocol_name, message } =>
 				match self.legacy_equiv_by_name.get(&protocol_name) {
 					Some(Fallback::Consensus(engine_id)) => {
@@ -1675,12 +1700,11 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					}
 					Some(Fallback::BlockAnnounce) => {
 						if let Ok(announce) = message::BlockAnnounce::decode(&mut message.as_ref()) {
-							self.push_block_announce_validation(peer_id, announce);
+							self.push_block_announce_validation(peer_id, announce, cx)
 						} else {
 							warn!(target: "sub-libp2p", "Failed to decode block announce");
+							CustomMessageOutcome::None
 						}
-
-						CustomMessageOutcome::None
 					}
 					None => {
 						debug!(target: "sub-libp2p", "Received notification from unknown protocol {:?}", protocol_name);
@@ -1690,14 +1714,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		};
 
 		if let CustomMessageOutcome::None = outcome {
-			// Check if there is any block announcement validation finished.
-			while let Poll::Ready(result) = self.sync.poll_block_announce_validation(cx) {
-				match self.process_block_announce_validation_result(result) {
-					CustomMessageOutcome::None => continue,
-					outcome => return Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
-				}
-			}
-
 			Poll::Pending
 		} else {
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
