@@ -96,7 +96,6 @@ workflow:
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
 
 #### stage:                       .pre
 
@@ -407,7 +406,6 @@ build-linux-substrate:             &build-binary
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
     - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
       when: manual
@@ -444,7 +442,6 @@ build-linux-subkey:                &build-subkey
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
       when: manual
       allow_failure: true
@@ -524,7 +521,6 @@ build-chaos-docker:
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
     - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
   needs:
     - job:                         build-linux-substrate
@@ -571,7 +567,6 @@ chaos-test-singlenodeheight:
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
     - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
   image:                           parity/chaostools:latest
   needs:
@@ -758,8 +753,6 @@ deploy-kubernetes-alerting-rules:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: manual
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-      when: manual
-    - if: $CI_COMMIT_REF_NAME =~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/  # i.e. pre-v1.0, pre-v2.1rc1
       when: manual
   needs:
     # script will fail if there is no artifacts/substrate/VERSION
