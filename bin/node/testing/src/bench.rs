@@ -92,10 +92,21 @@ impl BenchPair {
 /// 
 /// Will panic if cache drop is impossbile.
 pub fn drop_system_cache() {
+
+	#[cfg(target_os = "windows")] {
+		log::warn!(target: "bench-logistics", 
+			"Clearing system cache on windows is not supported. Benchmark might totally be wrong.");
+		return;		
+	}
+
+	std::process::Command::new("sync")
+		.output()
+		.expect("Failed to execute system cache clear");
+
 	#[cfg(target_os = "linux")] {
 		log::trace!(target: "bench-logistics", "Clearing system cache...");
 		std::process::Command::new("echo")
-			.args(&["1", ">", "/proc/sys/vm/drop_caches", "2>", "/dev/null"])
+			.args(&["3", ">", "/proc/sys/vm/drop_caches", "2>", "/dev/null"])
 			.output()
 			.expect("Failed to execute system cache clear");
 		log::trace!(target: "bench-logistics", "Clearing system cache done!");
@@ -103,9 +114,6 @@ pub fn drop_system_cache() {
 
 	#[cfg(target_os = "macos")] {
 		log::trace!(target: "bench-logistics", "Clearing system cache...");
-		std::process::Command::new("sync")
-			.output()
-			.expect("Failed to execute sync");
 		if let Err(err) = std::process::Command::new("purge").output() {
 			log::error!("purge error {:?}: ", err);
 			panic!("Could not clear system cache. Run under sudo?");
