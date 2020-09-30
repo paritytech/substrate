@@ -481,7 +481,9 @@ mod tests {
 	use sp_runtime::{
 		generic::Era, Perbill, DispatchError, testing::{Digest, Header, Block},
 		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup},
-		transaction_validity::{InvalidTransaction, ValidTransaction},
+		transaction_validity::{
+			InvalidTransaction, ValidTransaction, TransactionValidityError, UnknownTransaction
+		},
 	};
 	use frame_support::{
 		parameter_types,
@@ -519,6 +521,11 @@ mod tests {
 
 				#[weight = 0]
 				fn allowed_unsigned(origin) {
+					let _ = frame_system::ensure_root(origin)?;
+				}
+
+				#[weight = 0]
+				fn unallowed_unsigned(origin) {
 					let _ = frame_system::ensure_root(origin)?;
 				}
 
@@ -896,17 +903,23 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned() {
-		let xt = TestXt::new(Call::Custom(custom::Call::allowed_unsigned()), None);
+		let valid = TestXt::new(Call::Custom(custom::Call::allowed_unsigned()), None);
+		let invalid = TestXt::new(Call::Custom(custom::Call::unallowed_unsigned()), None);
 		let mut t = new_test_ext(1);
 
 		let mut default_with_prio_3 = ValidTransaction::default();
 		default_with_prio_3.priority = 3;
 		t.execute_with(|| {
 			assert_eq!(
-				Executive::validate_transaction(TransactionSource::InBlock, xt.clone()),
+				Executive::validate_transaction(TransactionSource::InBlock, valid.clone()),
 				Ok(default_with_prio_3),
 			);
-			assert_eq!(Executive::apply_extrinsic(xt), Ok(Err(DispatchError::BadOrigin)));
+			assert_eq!(
+				Executive::validate_transaction(TransactionSource::InBlock, invalid.clone()),
+				Err(TransactionValidityError::Unknown(UnknownTransaction::NoUnsignedValidator)),
+			);
+			assert_eq!(Executive::apply_extrinsic(valid), Ok(Err(DispatchError::BadOrigin)));
+			assert_eq!(Executive::apply_extrinsic(invalid), Ok(Err(DispatchError::BadOrigin)));
 		});
 	}
 
