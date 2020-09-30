@@ -93,7 +93,7 @@ where
 	fn check_block_weight(
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<crate::weights::ExtrinsicsWeight, TransactionValidityError> {
-		let maximum_weight = T::MaximumBlockWeight::get();
+		let maximum_block_weight = T::MaximumBlockWeight::get();
 		let mut all_weight = Module::<T>::block_weight();
 		match info.class {
 			// If we have a dispatch that must be included in the block, it ignores all the limits.
@@ -101,36 +101,46 @@ where
 				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
 				all_weight.add(extrinsic_weight, DispatchClass::Mandatory);
 				Ok(all_weight)
-			},
+			}
 			// If we have a normal dispatch, we follow all the normal rules and limits.
 			DispatchClass::Normal => {
-				let normal_limit = Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_weight;
-				let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
+				let normal_limit =
+					Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_block_weight;
+				let extrinsic_weight = info
+					.weight
+					.checked_add(T::ExtrinsicBaseWeight::get())
 					.ok_or(InvalidTransaction::ExhaustsResources)?;
-				all_weight.checked_add(extrinsic_weight, DispatchClass::Normal)
+				all_weight
+					.checked_add(extrinsic_weight, DispatchClass::Normal)
 					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 				if all_weight.get(DispatchClass::Normal) > normal_limit {
 					Err(InvalidTransaction::ExhaustsResources.into())
 				} else {
 					Ok(all_weight)
 				}
-			},
+			}
 			// If we have an operational dispatch, allow it if we have not used our full
 			// "operational space" (independent of existing fullness).
 			DispatchClass::Operational => {
-				let operational_limit = Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
-				let normal_limit = Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_weight;
+				let operational_limit = Self::get_dispatch_limit_ratio(DispatchClass::Operational)
+					* maximum_block_weight;
+				let normal_limit =
+					Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_block_weight;
 				let operational_space = operational_limit.saturating_sub(normal_limit);
 
-				let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
+				let extrinsic_weight = info
+					.weight
+					.checked_add(T::ExtrinsicBaseWeight::get())
 					.ok_or(InvalidTransaction::ExhaustsResources)?;
-				all_weight.checked_add(extrinsic_weight, DispatchClass::Operational)
+				all_weight
+					.checked_add(extrinsic_weight, DispatchClass::Operational)
 					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 
 				// If it would fit in normally, its okay
-				if all_weight.total() <= maximum_weight ||
+				if all_weight.total() <= maximum_block_weight ||
 				// If we have not used our operational space
-				all_weight.get(DispatchClass::Operational) <= operational_space {
+				all_weight.get(DispatchClass::Operational) <= operational_space
+				{
 					Ok(all_weight)
 				} else {
 					Err(InvalidTransaction::ExhaustsResources.into())
@@ -373,6 +383,7 @@ mod tests {
 			let operational_limit = CheckWeight::<Test>::get_dispatch_limit_ratio(
 				DispatchClass::Operational
 			) * <Test as Trait>::MaximumBlockWeight::get();
+
 			let base_weight = <Test as Trait>::ExtrinsicBaseWeight::get();
 			let block_base = <Test as Trait>::BlockExecutionWeight::get();
 
@@ -382,7 +393,7 @@ mod tests {
 				class: DispatchClass::Operational,
 				..Default::default()
 			};
-			let max = DispatchInfo {
+			let error = DispatchInfo {
 				weight: weight + 1,
 				class: DispatchClass::Operational,
 				..Default::default()
@@ -397,14 +408,14 @@ mod tests {
 				})
 			);
 			assert_noop!(
-				CheckWeight::<Test>::do_validate(&max, len),
+				CheckWeight::<Test>::do_validate(&error, len),
 				InvalidTransaction::ExhaustsResources
 			);
 		});
 	}
 
 	#[test]
-	fn register_extra_weight_unchecked_doesnt_care_about_limits() {
+	fn register_extra_weight_unchecked_does_not_care_about_limits() {
 		new_test_ext().execute_with(|| {
 			System::register_extra_weight_unchecked(Weight::max_value(), DispatchClass::Normal);
 			assert_eq!(System::block_weight().total(), Weight::max_value());
@@ -481,8 +492,15 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_works_operational_tx() {
 		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, ..Default::default() };
-			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: Pays::Yes };
+			let normal = DispatchInfo {
+				weight: 100,
+				..Default::default()
+			};
+			let op = DispatchInfo {
+				weight: 100,
+				class: DispatchClass::Operational,
+				pays_fee: Pays::Yes,
+			};
 			let len = 0_usize;
 			let normal_limit = normal_weight_limit();
 

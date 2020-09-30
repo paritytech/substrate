@@ -127,7 +127,7 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 
 	crate::log!(
 		info,
-		"prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
+		"💸 prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
 		iters,
 		score,
 	);
@@ -281,54 +281,57 @@ pub fn trim_to_weight<T: Trait, FN>(
 where
 	for<'r> FN: Fn(&'r T::AccountId) -> Option<NominatorIndex>,
 {
-	if let Some(to_remove) = compact.len().checked_sub(maximum_allowed_voters as usize) {
-		// grab all voters and sort them by least stake.
-		let mut voters_sorted = <Nominators<T>>::iter()
-			.map(|(who, _)| {
-				(
-					who.clone(),
-					<Module<T>>::slashable_balance_of_vote_weight(&who),
-				)
-			})
-			.collect::<Vec<_>>();
-		voters_sorted.sort_by_key(|(_, y)| *y);
+	match compact.len().checked_sub(maximum_allowed_voters as usize) {
+		Some(to_remove) if to_remove > 0 => {
+			// grab all voters and sort them by least stake.
+			let mut voters_sorted = <Nominators<T>>::iter()
+				.map(|(who, _)| {
+					(
+						who.clone(),
+						<Module<T>>::slashable_balance_of_vote_weight(&who),
+					)
+				})
+				.collect::<Vec<_>>();
+			voters_sorted.sort_by_key(|(_, y)| *y);
 
-		// start removing from the least stake. Iterate until we know enough have been removed.
-		let mut removed = 0;
-		for (maybe_index, _stake) in voters_sorted
-			.iter()
-			.map(|(who, stake)| (nominator_index(&who), stake))
-		{
-			let index = maybe_index.ok_or(OffchainElectionError::NominatorSnapshotCorrupt)?;
-			if compact.remove_voter(index) {
-				crate::log!(
-					debug,
-					"removed a voter at index {} with stake {:?} from compact to reduce the size",
-					index,
-					_stake,
+			// start removing from the least stake. Iterate until we know enough have been removed.
+			let mut removed = 0;
+			for (maybe_index, _stake) in voters_sorted
+				.iter()
+				.map(|(who, stake)| (nominator_index(&who), stake))
+			{
+				let index = maybe_index.ok_or(OffchainElectionError::NominatorSnapshotCorrupt)?;
+				if compact.remove_voter(index) {
+					crate::log!(
+						trace,
+						"💸 removed a voter at index {} with stake {:?} from compact to reduce the size",
+						index,
+						_stake,
+					);
+					removed += 1
+				}
+
+				if removed >= to_remove {
+					break;
+				}
+			}
+
+			crate::log!(
+					warn,
+					"💸 {} nominators out of {} had to be removed from compact solution due to size limits.",
+					removed,
+					compact.len() + removed,
 				);
-				removed += 1
-			}
-
-			if removed >= to_remove {
-				break;
-			}
+			Ok(compact)
 		}
-
-		crate::log!(
-			warn,
-			"{} voters of {} had to be removed from compact solution due to size limits.",
-			removed,
-			compact.len() + removed,
-		);
-		Ok(compact)
-	} else {
-		// nada, return as-is
-		crate::log!(
-			info,
-			"Compact solution did not get trimmed due to block weight limits.",
-		);
-		Ok(compact)
+		_ => {
+			// nada, return as-is
+			crate::log!(
+				info,
+				"💸 Compact solution did not get trimmed due to block weight limits.",
+			);
+			Ok(compact)
+		}
 	}
 }
 
@@ -415,7 +418,7 @@ where
 	let maximum_allowed_voters =
 		maximum_compact_len::<T::WeightInfo>(winners.len() as u32, size, maximum_weight);
 
-	crate::log!(info, "Maximum weight = {:?} // current weight = {:?} // maximum voters = {:?} // current votes = {:?}",
+	crate::log!(debug, "💸 Maximum weight = {:?} // current weight = {:?} // maximum voters = {:?} // current votes = {:?}",
 		maximum_weight,
 		T::WeightInfo::submit_solution_better(
 				size.validators.into(),

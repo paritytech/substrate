@@ -1239,6 +1239,8 @@ decl_error! {
 		OffchainElectionBogusScore,
 		/// The election size is invalid.
 		OffchainElectionBogusElectionSize,
+		/// The election weight is invalid.
+		OffchainElectionBogusElectionWeight,
 		/// The call is not allowed at the given time due to restrictions of election period.
 		CallNotAllowed,
 		/// Incorrect previous history depth input provided.
@@ -1346,12 +1348,12 @@ decl_module! {
 			if Self::era_election_status().is_open_at(now) {
 				let offchain_status = set_check_offchain_execution_status::<T>(now);
 				if let Err(why) = offchain_status {
-					log!(debug, "skipping offchain worker in open election window due to [{}]", why);
+					log!(warn, "💸 skipping offchain worker in open election window due to [{}]", why);
 				} else {
 					if let Err(e) = compute_offchain_election::<T>() {
 						log!(error, "💸 Error in election offchain worker: {:?}", e);
 					} else {
-						log!(debug, "Executed offchain worker thread without errors.");
+						log!(debug, "💸 Executed offchain worker thread without errors.");
 					}
 				}
 			}
@@ -1377,17 +1379,6 @@ decl_module! {
 					"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
 					T::SlashDeferDuration::get(),
 					T::BondingDuration::get(),
-				)
-			);
-
-			// Offchain solution is operational, so it can consume all the block weight except for
-			// `System::BlockExecutionWeight`. So setting the limit above this is invalid.
-			assert!(
-				T::OffchainSolutionWeightLimit::get() <=
-				(
-					<T as frame_system::Trait>::MaximumBlockWeight::get() -
-					<T as frame_system::Trait>::BlockExecutionWeight::get() -
-					<T as frame_system::Trait>::ExtrinsicBaseWeight::get()
 				)
 			);
 
@@ -2159,15 +2150,15 @@ decl_module! {
 		/// transaction in the block.
 		///
 		/// # <weight>
-		/// See `crate::weight` module.
+		/// The weight of this call is not enforced by the system module and is enforced in this
+		/// module directly.
 		/// # </weight>
-		#[weight = (
-			T::WeightInfo::submit_solution_better(
+		#[weight = (T::WeightInfo::submit_solution_better(
 			size.validators.into(),
 			size.nominators.into(),
 			compact.len() as u32,
 			winners.len() as u32,
-		), frame_support::weights::DispatchClass::Operational)]
+		), frame_support::weights::DispatchClass::Mandatory)]
 		pub fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<ValidatorIndex>,
@@ -2177,6 +2168,13 @@ decl_module! {
 			size: ElectionSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
+			// The signed solution is `Normal` and the system module checks the weight. But for this
+			// mandatory one, we need to do it.
+			ensure!(
+				Self::check_unsigned_solution_weight(&winners, &compact, &size),
+				Error::<T>::OffchainElectionBogusElectionWeight.with_weight(0),
+			);
+
 			let adjustments = Self::check_and_replace_solution(
 				winners,
 				compact,
@@ -2190,6 +2188,7 @@ decl_module! {
 				effectively depriving the validators from their authoring reward. Hence, this panic
 				is expected."
 			);
+
 			Ok(adjustments)
 		}
 	}
@@ -2207,6 +2206,21 @@ impl<T: Trait> Module<T> {
 		<T::CurrencyToVote as Convert<BalanceOf<T>, VoteWeight>>::convert(
 			Self::slashable_balance_of(stash)
 		)
+	}
+
+	/// Check the weight of an unsigned solution. Returns true of the weight is below the designated
+	/// limit .
+	pub fn check_unsigned_solution_weight(
+		winners: &Vec<ValidatorIndex>,
+		compact: &CompactAssignments,
+		size: &ElectionSize,
+	) -> bool {
+		T::WeightInfo::submit_solution_better(
+			size.validators.into(),
+			size.nominators.into(),
+			compact.len() as u32,
+			winners.len() as u32,
+		) <= T::OffchainSolutionWeightLimit::get()
 	}
 
 	/// Dump the list of validators and nominators into vectors and keep them on-chain.
@@ -3101,7 +3115,6 @@ impl<T: Trait> Module<T> {
 	pub fn set_slash_reward_fraction(fraction: Perbill) {
 		SlashRewardFraction::put(fraction);
 	}
-
 }
 
 /// In this implementation `new_session(session)` must be called before `end_session(session-1)`
@@ -3365,11 +3378,11 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 		if let Call::submit_election_solution_unsigned(
-			_,
-			_,
+			winners,
+			compact,
 			score,
 			era,
-			_,
+			size,
 		) = call {
 			use offchain_election::DEFAULT_LONGEVITY;
 
@@ -3382,17 +3395,22 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				}
 			}
 
+			// discard solution if it is too big.
+			if !Self::check_unsigned_solution_weight(winners, compact, size) {
+				return Err(InvalidTransaction::ExhaustsResources.into())
+			}
+
 			if let Err(error_with_post_info) = Self::pre_dispatch_checks(*score, *era) {
 				let invalid = to_invalid(error_with_post_info);
 				log!(
 					debug,
-					"validate unsigned pre dispatch checks failed due to error #{:?}.",
+					"💸 validate unsigned pre dispatch checks failed due to error #{:?}.",
 					invalid,
 				);
-				return invalid .into();
+				return invalid.into();
 			}
 
-			log!(debug, "validateUnsigned succeeded for a solution at era {}.", era);
+			log!(debug, "💸 validateUnsigned succeeded for a solution at era {}.", era);
 
 			ValidTransaction::with_tag_prefix("StakingOffchain")
 				// The higher the score[0], the better a solution is.
