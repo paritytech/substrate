@@ -109,6 +109,23 @@ pub fn drop_system_cache() {
 			.args(&["3", ">", "/proc/sys/vm/drop_caches", "2>", "/dev/null"])
 			.output()
 			.expect("Failed to execute system cache clear");
+
+		// this should refill write cache with 2GB of garbage
+		std::process::Command::new("dd")
+			.args(&["if=/dev/urandom", "of=./benchmark-tmp", "bs=64M", "count=32"])
+			.output()
+			.expect("Failed to execute dd for cache clear");
+
+		// remove tempfile of previous command
+		std::process::Command::new("rm")
+			.arg("./benchmark-tmp")
+			.output()
+			.expect("Failed to execute dd for cache clear");
+
+		std::process::Command::new("sync")
+			.output()
+			.expect("Failed to execute system cache clear");
+	
 		log::trace!(target: "bench-logistics", "Clearing system cache done!");
 	}
 
