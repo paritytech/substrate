@@ -576,7 +576,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		&mut self,
 		who: PeerId,
 		data: BytesMut,
-		cx: &mut std::task::Context,
 	) -> CustomMessageOutcome<B> {
 		let message = match <Message<B> as Decode>::decode(&mut &data[..]) {
 			Ok(message) => message,
@@ -1673,7 +1672,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				self.on_peer_disconnected(peer_id)
 			},
 			GenericProtoOut::LegacyMessage { peer_id, message } =>
-				self.on_custom_message(peer_id, message, cx),
+				self.on_custom_message(peer_id, message),
 			GenericProtoOut::Notification { peer_id, protocol_name, message } =>
 				match self.legacy_equiv_by_name.get(&protocol_name) {
 					Some(Fallback::Consensus(engine_id)) => {
