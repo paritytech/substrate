@@ -44,8 +44,6 @@ mod utils;
 mod stats;
 #[cfg(feature = "with-parity-db")]
 mod parity_db;
-#[cfg(feature = "with-subdb")]
-mod subdb;
 
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
@@ -287,12 +285,6 @@ pub enum DatabaseSettingsSrc {
 		path: PathBuf,
 	},
 
-	/// Load a Subdb database from a given path.
-	SubDb {
-		/// Path to the database.
-		path: PathBuf,
-	},
-
 	/// Use a custom already-open database.
 	Custom(Arc<dyn Database<DbHash>>),
 }
@@ -303,7 +295,6 @@ impl DatabaseSettingsSrc {
 		match self {
 			DatabaseSettingsSrc::RocksDb { path, .. } => Some(path.as_path()),
 			DatabaseSettingsSrc::ParityDb { path, .. } => Some(path.as_path()),
-			DatabaseSettingsSrc::SubDb { path, .. } => Some(path.as_path()),
 			DatabaseSettingsSrc::Custom(_) => None,
 		}
 	}
@@ -321,7 +312,6 @@ impl std::fmt::Display for DatabaseSettingsSrc {
 		let name = match self {
 			DatabaseSettingsSrc::RocksDb { .. } => "RocksDb",
 			DatabaseSettingsSrc::ParityDb { .. } => "ParityDb",
-			DatabaseSettingsSrc::SubDb { .. } => "SubDb",
 			DatabaseSettingsSrc::Custom(_) => "Custom",
 		};
 		write!(f, "{}", name)
@@ -1998,7 +1988,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn delete_only_when_negative_rc() {
-		let _ = ::env_logger::try_init();
+		sp_tracing::try_init_simple();
 		let key;
 		let backend = Backend::<Block>::new_test(1, 0);
 

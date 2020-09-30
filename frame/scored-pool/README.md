@@ -20,9 +20,9 @@ time. If an entity is currently a member, this results in removal
 from the `Pool` and `Members`; the entity is immediately replaced
 by the next highest scoring candidate in the pool, if available.
 
-- [`scored_pool::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
-- [`Module`](./struct.Module.html)
+- [`scored_pool::Trait`](https://docs.rs/pallet-scored-pool/latest/pallet_scored_pool/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-scored-pool/latest/pallet_scored_pool/enum.Call.html)
+- [`Module`](https://docs.rs/pallet-scored-pool/latest/pallet_scored_pool/struct.Module.html)
 
 ## Interface
 
@@ -61,6 +61,6 @@ decl_module! {
 
 ## Dependencies
 
-This module depends on the [System module](../frame_system/index.html).
+This module depends on the [System module](https://docs.rs/frame-system/latest/frame_system/).
 
 License: Apache-2.0

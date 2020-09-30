@@ -37,12 +37,18 @@ impl Service {
 		}
 	}
 
-	/// Get the addresses for the given [`AuthorityId`] from the local address cache.
+	/// Get the addresses for the given [`AuthorityId`] from the local address
+	/// cache.
 	///
-	/// Returns `None` if no entry was present or connection to the [`crate::Worker`] failed.
+	/// Returns `None` if no entry was present or connection to the
+	/// [`crate::Worker`] failed.
 	///
-	/// [`Multiaddr`]s returned always include a [`libp2p::core::multiaddr:Protocol::P2p`]
-	/// component.
+	/// [`Multiaddr`]s returned always include a [`PeerId`] via a
+	/// [`libp2p::core::multiaddr:Protocol::P2p`] component. [`Multiaddr`]s
+	/// might differ in their [`PeerId`], e.g. when each [`Multiaddr`]
+	/// represents a different sentry node. This might change once support for
+	/// sentry nodes is removed (see
+	/// https://github.com/paritytech/substrate/issues/6845).
 	pub async fn get_addresses_by_authority_id(&mut self, authority: AuthorityId) -> Option<Vec<Multiaddr>> {
 		let (tx, rx) = oneshot::channel();
 
@@ -54,9 +60,11 @@ impl Service {
 		rx.await.ok().flatten()
 	}
 
-	/// Get the [`AuthorityId`] for the given [`PeerId`] from the local address cache.
+	/// Get the [`AuthorityId`] for the given [`PeerId`] from the local address
+	/// cache.
 	///
-	/// Returns `None` if no entry was present or connection to the [`crate::Worker`] failed.
+	/// Returns `None` if no entry was present or connection to the
+	/// [`crate::Worker`] failed.
 	pub async fn get_authority_id_by_peer_id(&mut self, peer_id: PeerId) -> Option<AuthorityId> {
 		let (tx, rx) = oneshot::channel();
 
