@@ -43,7 +43,7 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
-use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::{filter::Directive, layer::SubscriberExt};
 
 /// Substrate client CLI
 ///
@@ -234,6 +234,13 @@ pub fn init_logger(
 	tracing_receiver: sc_tracing::TracingReceiver,
 	tracing_targets: Option<String>,
 ) -> std::result::Result<(), String> {
+	fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
+		dirs.as_ref()
+			.split(',')
+			.filter_map(|s| s.parse().ok())
+			.collect()
+	}
+
 	if let Err(e) = tracing_log::LogTracer::init() {
 		return Err(format!(
 			"Registering Substrate logger failed: {:}!", e
@@ -257,7 +264,7 @@ pub fn init_logger(
 		if lvl != "" {
 			// We're not sure if log or tracing is available at this moment, so silently ignore the
 			// parse error.
-			if let Ok(directive) = lvl.parse() {
+			for directive in parse_directives(lvl) {
 				env_filter = env_filter.add_directive(directive);
 			}
 		}
@@ -266,7 +273,7 @@ pub fn init_logger(
 	if pattern != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
 		// parse error.
-		if let Ok(directive) = pattern.parse() {
+		for directive in parse_directives(pattern) {
 			env_filter = env_filter.add_directive(directive);
 		}
 	}
