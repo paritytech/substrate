@@ -3140,7 +3140,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Use a damping function to update the target number of validators for the next selection.
-	fn update_target_validators(mut exposures: Vec<BalanceOf<T>>) -> u32 {
+	fn update_target_validators(mut exposure_totals: Vec<BalanceOf<T>>) -> u32 {
 		let average = |all: &[BalanceOf<T>]| -> BalanceOf<T> {
 			all.iter().fold(Zero::zero(), |total: BalanceOf<T>, x: &BalanceOf<T>| {
 				// `total` should never saturate since total issuance fits inside `Balance`
@@ -3150,19 +3150,19 @@ impl<T: Trait> Module<T> {
 		// Current validator count should never be zero.
 		let current_validator_count = Self::validator_count().max(1);
 		let one_percent_count = 1 + (current_validator_count - 1) / 100;
-		let global_average = average(&exposures);
+		let global_average = average(&exposure_totals);
 		// Sort exposures by balance
-		exposures.sort();
+		exposure_totals.sort();
 
 		// Rule 1: If the bottom 1% of validators (more precisely, ceil(0.01 k) validators) have an
 		// average staked value strictly above 40% of the global average, in the next era increase
 		// the number of active validators by 1%, i.e. k <-- min{max_limit, k + ceil(0.01 k)}.
-		let one_percent_average = average(&exposures[0..(one_percent_count as usize)]);
+		let one_percent_average = average(&exposure_totals[0..(one_percent_count as usize)]);
 		if one_percent_average > Percent::from_percent(40) * global_average {
 			return (current_validator_count + one_percent_count).min(MaximumValidatorCount::get())
 		} else if current_validator_count > 1 {
 			let one_percent_times_two_count = one_percent_count.saturating_mul(2);
-			let two_percent_average = average(&exposures[0..(one_percent_times_two_count as usize)]);
+			let two_percent_average = average(&exposure_totals[0..(one_percent_times_two_count as usize)]);
 			// Rule 2: If the bottom 2% of validators (more precisely, 2 ceil(0.01 k) validators) have
 			// an average stake value strictly below 20% of the global average, in the next era decrease
 			// the number of active validators by 1%, i.e. k <-- max{min_limit, k - ceil(0.01 k)}.
