@@ -46,11 +46,8 @@ mod stats;
 mod parity_db;
 
 use historied_db::{
-	StateDBRef, InMemoryStateDBRef, StateDB, ManagementRef, Management,
-	ForkableManagement, Latest, UpdateResult,
-	historied::{InMemoryValue, Value},
-	historied::tree::Tree,
-	management::tree::{Tree as TreeMgmt, ForkPlan},
+	Management, ForkableManagement,
+	historied::Value,
 	simple_db::TransactionalSerializeDB,
 };
 
@@ -111,65 +108,21 @@ pub type DbState<B> = sp_state_machine::TrieBackend<
 	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
 >;
 
-/// Key value db at a given block for an historied DB.
-pub struct HistoriedDB {
-	current_state: historied_db::management::tree::ForkPlan<u32, u32>,
-	db: Arc<dyn Database<DbHash>>,
-}
-
-type LinearBackend<'a> = historied_db::backend::encoded_array::EncodedArray<
-	'a,
-	Vec<u8>,
-	historied_db::backend::encoded_array::NoVersion,
->;
-/*
-type TreeBackend<'a> = historied_db::historied::encoded_array::EncodedArray<
-	'a,
-	historied_db::historied::linear::Linear<Vec<u8>, u32, LinearBackend<'a>>,
-	historied_db::historied::encoded_array::NoVersion,
->;
-*/
-type TreeBackend<'a> = historied_db::backend::in_memory::MemoryOnly<
-	historied_db::historied::linear::Linear<Vec<u8>, u32, LinearBackend<'a>>,
-	u32,
->;
-
-// Warning we use Vec<u8> instead of Some(Vec<u8>) to be able to use encoded_array.
-// None is &[0] when Some are postfixed with a 1. TODO use a custom type instead.
-/// Historied value with multiple parallel branches.
-pub type HValue<'a> = Tree<u32, u32, Vec<u8>, TreeBackend<'a>, LinearBackend<'a>>;
-
-impl HistoriedDB {
-	fn storage_inner(&self, key: &[u8], column: u32) -> Result<Option<Vec<u8>>, String> {
-		if let Some(v) = self.db.get(column, key) {
-			let v: HValue = Decode::decode(&mut &v[..])
-				.map_err(|e| format!("KVDatabase decode error: {:?}", e))?;
-			use historied_db::historied::ValueRef;
-			let v = v.get(&self.current_state);
-			Ok(v.and_then(|mut v| {
-				match v.pop() {
-					Some(0u8) => None,
-					Some(1u8) => Some(v),
-					None | Some(_) => panic!("inconsistent value, DB corrupted"),
-				}
-			}))
-		} else {
-			Ok(None)
-		}
-	}
-}
-
 /// Key value db change for at a given block of an historied DB.
 pub struct HistoriedDBMut {
+	/// Branch head indexes to change values of a latest block.
 	pub current_state: historied_db::Latest<(u32, u32)>,
+	/// Inner database to modify historied values.
 	pub db: Arc<dyn Database<DbHash>>,
 }
 
 impl HistoriedDBMut {
+	/// Create a transaction for this historied db.
 	pub fn transaction(&self) -> Transaction<DbHash> {
 		Transaction::new()
 	}
 
+	/// Update transaction for a offchain local storage historied value.
 	pub fn update_single_offchain(&mut self, k: &[u8], change: Option<Vec<u8>>, change_set: &mut Transaction<DbHash>) {
 		use sp_core::offchain::storage::HValue;
 		let column = crate::columns::OFFCHAIN;
@@ -599,7 +552,7 @@ impl<H> historied_db::simple_db::SerializeDB for DatabaseStorage<H>
 
 	fn clear(&mut self, c: &'static [u8]) {
 		// Inefficient implementation.
-		let mut keys: Vec<Vec<u8>> = self.iter(c).map(|kv| kv.0).collect();
+		let keys: Vec<Vec<u8>> = self.iter(c).map(|kv| kv.0).collect();
 		for key in keys {
 			self.remove(c, key.as_slice());
 		}
@@ -636,6 +589,7 @@ pub mod historied_tree_bindings {
 	macro_rules! static_instance {
 		($name: ident, $col: expr) => {
 
+		/// Simple db map or instance definition for $name.
 		#[derive(Default, Clone)]
 		pub struct $name;
 		impl historied_db::simple_db::SerializeInstanceMap for $name {
@@ -1160,9 +1114,8 @@ impl<T: Clone> FrozenForDuration<T> {
 	}
 }
 
-/// Holder for state of historied.
-type HistoriedState = ();
-
+/// Tree management for substrate. Inedxes are `u32` and values ar encoded as
+/// `Vec<u8>`.
 pub type TreeManagement<H, S> = historied_db::management::tree::TreeManagement<
 	H,
 	u32,
@@ -1782,9 +1735,6 @@ impl<Block: BlockT> Backend<Block> {
 	}
 }
 
-/// Avoid finalizing at every block.
-const HISTORIED_FINALIZATION_WINDOWS: u8 = 101;
-
 fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db::CommitSet<Vec<u8>>) {
 	for (key, val) in commit.data.inserted.into_iter() {
 		transaction.set_from_vec(columns::STATE, &key[..], val);
@@ -1873,7 +1823,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	) -> ClientResult<()> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
-		let last_final = operation.finalized_blocks.last().cloned();
 		let hashes = operation.pending_block.as_ref().map(|pending_block| {
 			let hash = pending_block.header.hash();
 			let parent_hash = *pending_block.header.parent_hash();

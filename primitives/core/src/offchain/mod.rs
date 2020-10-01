@@ -81,7 +81,7 @@ pub trait BlockChainOffchainStorage: Clone + Send + Sync {
 	/// and got no concurrent write, all writes are therefore guaranted to succeed.
 	fn at_new(&self, id: Self::BlockId) -> Option<Self::OffchainStorageNew>;
 
-	/// Get latest added state. 
+	/// Get latest added state.
 	fn latest(&self) -> Option<Self::BlockId>;
 }
 

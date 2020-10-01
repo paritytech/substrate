@@ -398,13 +398,17 @@ impl BlockChainLocalAt {
 						let mut tx = Transaction::new();
 						tx.set(columns::OFFCHAIN, &key, new_value.as_slice());
 
-						self.db.commit(tx);
+						if self.db.commit(tx).is_err() {
+							return false;
+						};
 					},
 					UpdateResult::Cleared(()) => {
 						let mut tx = Transaction::new();
 						tx.remove(columns::OFFCHAIN, &key);
 
-						self.db.commit(tx);
+						if self.db.commit(tx).is_err() {
+							return false;
+						};
 					},
 					UpdateResult::Unchanged => (),
 				}
