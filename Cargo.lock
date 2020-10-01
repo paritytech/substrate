@@ -1270,9 +1270,9 @@ dependencies = [
 
 [[package]]
 name = "environmental"
-version = "1.1.1"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "516aa8d7a71cb00a1c4146f0798549b93d083d4f189b3ced8f3de6b8f11ee6c4"
+checksum = "6576a1755ddffd988788025e75bce9e74b018f7cc226198fe931d077911c6d7e"
 
 [[package]]
 name = "erased-serde"
@@ -2208,9 +2208,9 @@ dependencies = [
 
 [[package]]
 name = "honggfuzz"
-version = "0.5.51"
+version = "0.5.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f085725a5828d7e959f014f624773094dfe20acc91be310ef106923c30594bc"
+checksum = "832bac18a82ec7d6c21887daa8616b238fe90d5d5e762d0d4b9372cdaa9e097f"
 dependencies = [
  "arbitrary",
  "lazy_static",
