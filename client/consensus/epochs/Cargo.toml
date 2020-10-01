@@ -13,8 +13,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+futures-util = "0.3.4"
 codec = { package = "parity-scale-codec", version = "1.3.4", features = ["derive"] }
-parking_lot = "0.10.0"
 fork-tree = { version = "2.0.0", path = "../../../utils/fork-tree" }
 sp-runtime = {  path = "../../../primitives/runtime" , version = "2.0.0"}
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
