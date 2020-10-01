@@ -973,23 +973,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
 	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
-		let peers = peers.into_iter()
-			.map(|mut addr| {
-				let peer = match addr.pop() {
-					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
-						.map_err(|_| "Invalid PeerId format".to_string())?,
-					_ => return Err("Missing PeerId from address".to_string()),
-				};
-
-				// Make sure the local peer ID is never added to the PSM
-				// or added as a "known address", even if given.
-				if peer == self.local_peer_id {
-					Err("Local peer ID in priority group.".to_string())
-				} else {
-					Ok((peer, addr))
-				}
-			})
-			.collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()?;
+		let peers = self.parse_multiaddr(peers)?;
 
 		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
 
@@ -1001,6 +985,40 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 				.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 		}
 
+		Ok(())
+	}
+
+	/// Add peers to a peerset priority group.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	pub fn add_to_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+		let peers = self.parse_multiaddr(peers)?;
+
+		for (peer_id, addr) in peers.into_iter() {
+			self.peerset.add_to_priority_group(group_id.clone(), peer_id.clone());
+
+			let _ = self
+				.to_worker
+				.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+		}
+
+		Ok(())
+	}
+
+	/// Remove peers to a peerset priority group.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	pub fn remove_from_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+		let peers = self.parse_multiaddr(peers)?;
+		for (peer_id, _) in peers.into_iter() {
+			self.peerset.remove_from_priority_group(group_id.clone(), peer_id);
+		}
 		Ok(())
 	}
 
@@ -1024,6 +1042,27 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
+	}
+
+	// Utility function to extract `PeerId` from each `Multiaddr` for priority group updates.
+	fn parse_multiaddr(&self, peers: HashSet<Multiaddr>) -> Result<Vec<(PeerId, Multiaddr)>, String> {
+		peers.into_iter()
+			.map(|mut addr| {
+				let peer = match addr.pop() {
+					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
+						.map_err(|_| "Invalid PeerId format".to_string())?,
+					_ => return Err("Missing PeerId from address".to_string()),
+				};
+
+				// Make sure the local peer ID is never added to the PSM
+				// or added as a "known address", even if given.
+				if peer == self.local_peer_id {
+					Err("Local peer ID in priority group.".to_string())
+				} else {
+					Ok((peer, addr))
+				}
+			})
+			.collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()
 	}
 }
 
