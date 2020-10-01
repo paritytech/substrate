@@ -14,6 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+async-trait = "0.1.30"
 codec = { package = "parity-scale-codec", version = "1.3.4" }
 sc-client-api = { version = "2.0.0", path = "../../api" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
@@ -28,7 +29,7 @@ sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
 futures = "0.3.4"
 futures-timer = "3.0.1"
-parking_lot = "0.10.0"
+futures-util = "0.3.4"
 log = "0.4.8"
 
 [dev-dependencies]

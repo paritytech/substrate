@@ -20,10 +20,9 @@
 
 use super::SlotCompatible;
 use sp_consensus::Error;
-use futures::{prelude::*, task::Context, task::Poll};
 use sp_inherents::{InherentData, InherentDataProviders};
 
-use std::{pin::Pin, time::{Duration, Instant}};
+use std::time::{Duration, Instant};
 use futures_timer::Delay;
 
 /// Returns current duration since unix epoch.
@@ -92,7 +91,7 @@ pub(crate) struct Slots<SC> {
 	timestamp_extractor: SC,
 }
 
-impl<SC> Slots<SC> {
+impl<SC: SlotCompatible> Slots<SC> {
 	/// Create a new `Slots` stream.
 	pub fn new(
 		slot_duration: u64,
@@ -107,12 +106,8 @@ impl<SC> Slots<SC> {
 			timestamp_extractor,
 		}
 	}
-}
 
-impl<SC: SlotCompatible> Stream for Slots<SC> {
-	type Item = Result<SlotInfo, Error>;
-
-	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+	pub async fn next(&mut self) -> Result<SlotInfo, Error> {
 		loop {
 			let slot_duration = self.slot_duration;
 			self.inner_delay = match self.inner_delay.take() {
@@ -125,23 +120,17 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 			};
 
 			if let Some(ref mut inner_delay) = self.inner_delay {
-				match Future::poll(Pin::new(inner_delay), cx) {
-					Poll::Pending => return Poll::Pending,
-					Poll::Ready(()) => {}
-				}
+				inner_delay.await;
 			}
 
 			// timeout has fired.
 
 			let inherent_data = match self.inherent_data_providers.create_inherent_data() {
 				Ok(id) => id,
-				Err(err) => return Poll::Ready(Some(Err(sp_consensus::Error::InherentData(err)))),
+				Err(err) => return Err(sp_consensus::Error::InherentData(err)),
 			};
-			let result = self.timestamp_extractor.extract_timestamp_and_slot(&inherent_data);
-			let (timestamp, slot_num, offset) = match result {
-				Ok(v) => v,
-				Err(err) => return Poll::Ready(Some(Err(err))),
-			};
+			let (timestamp, slot_num, offset) = self.timestamp_extractor.extract_timestamp_and_slot(&inherent_data).await?;
+
 			// reschedule delay for next slot.
 			let ends_in = offset +
 				time_until_next(Duration::from_millis(timestamp), slot_duration);
@@ -153,14 +142,14 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 				let last_slot = self.last_slot;
 				self.last_slot = slot_num;
 
-				break Poll::Ready(Some(Ok(SlotInfo {
+				break Ok(SlotInfo {
 					number: slot_num,
 					duration: self.slot_duration,
 					last_number: last_slot,
 					timestamp,
 					ends_at,
 					inherent_data,
-				})))
+				})
 			}
 		}
 	}
