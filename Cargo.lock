@@ -6457,12 +6457,13 @@ name = "sc-consensus-aura"
 version = "0.8.0"
 dependencies = [
  "async-std",
+ "async-trait",
  "derive_more",
  "futures 0.3.5",
  "futures-timer 3.0.2",
+ "futures-util",
  "log",
  "parity-scale-codec",
- "parking_lot 0.10.2",
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus-slots",
@@ -6497,10 +6498,12 @@ name = "sc-consensus-babe"
 version = "0.8.0"
 dependencies = [
  "async-std",
+ "async-trait",
  "derive_more",
  "fork-tree",
  "futures 0.3.5",
  "futures-timer 3.0.2",
+ "futures-util",
  "log",
  "merlin",
  "num-bigint",
@@ -6581,8 +6584,8 @@ name = "sc-consensus-epochs"
 version = "0.8.0"
 dependencies = [
  "fork-tree",
+ "futures-util",
  "parity-scale-codec",
- "parking_lot 0.10.2",
  "sc-client-api",
  "sp-blockchain",
  "sp-runtime",
@@ -6651,11 +6654,12 @@ dependencies = [
 name = "sc-consensus-slots"
 version = "0.8.0"
 dependencies = [
+ "async-trait",
  "futures 0.3.5",
  "futures-timer 3.0.2",
+ "futures-util",
  "log",
  "parity-scale-codec",
- "parking_lot 0.10.2",
  "sc-client-api",
  "sc-telemetry",
  "sp-api",
@@ -6775,6 +6779,7 @@ name = "sc-finality-grandpa"
 version = "0.8.0"
 dependencies = [
  "assert_matches",
+ "async-trait",
  "derive_more",
  "finality-grandpa",
  "fork-tree",
@@ -6984,8 +6989,10 @@ dependencies = [
 name = "sc-network-test"
 version = "0.8.0"
 dependencies = [
+ "async-trait",
  "futures 0.3.5",
  "futures-timer 3.0.2",
+ "futures-util",
  "libp2p",
  "log",
  "parking_lot 0.10.2",
@@ -7158,6 +7165,7 @@ name = "sc-service"
 version = "0.8.0"
 dependencies = [
  "async-std",
+ "async-trait",
  "derive_more",
  "directories",
  "exit-future",
@@ -8761,6 +8769,7 @@ dependencies = [
 name = "substrate-test-client"
 version = "2.0.0"
 dependencies = [
+ "async-trait",
  "futures 0.1.29",
  "futures 0.3.5",
  "hash-db",
