@@ -58,7 +58,7 @@ impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
 	Block: BlockT,
 	C: sp_api::ProvideRuntimeApi<Block>,
 	Algorithm: PowAlgorithm<Block>,
-	Algorithm::Difficulty: 'static,
+	Algorithm::Difficulty: Send + 'static,
 {
 	/// Get the current best hash. `None` if the worker has just started or the client is doing
 	/// major syncing.
@@ -84,7 +84,7 @@ impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
 
 	/// Submit a mined seal. The seal will be validated again. Returns true if the submission is
 	/// successful.
-	pub fn submit(&mut self, seal: Seal) -> bool {
+	pub async fn submit(&mut self, seal: Seal) -> bool {
 		if let Some(build) = self.build.take() {
 			match self.algorithm.verify(
 				&BlockId::Hash(build.metadata.best_hash),
@@ -125,10 +125,10 @@ impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
 
 			import_block.intermediates.insert(
 				Cow::from(INTERMEDIATE_KEY),
-				Box::new(intermediate) as Box<dyn Any>
+				Box::new(intermediate) as Box<dyn Any + Send>
 			);
 
-			match self.block_import.import_block(import_block, HashMap::default()) {
+			match self.block_import.import_block(import_block, HashMap::default()).await {
 				Ok(_) => {
 					info!(
 						target: "pow",

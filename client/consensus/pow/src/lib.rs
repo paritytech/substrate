@@ -39,6 +39,7 @@ use std::{
 	sync::Arc, any::Any, borrow::Cow, collections::HashMap, marker::PhantomData,
 	cmp::Ordering, time::Duration,
 };
+use async_trait::async_trait;
 use futures::{prelude::*, future::Either};
 use parking_lot::Mutex;
 use sc_client_api::{BlockOf, backend::AuxStore, BlockchainEvents};
@@ -308,6 +309,7 @@ impl<B, I, C, S, Algorithm, CAW> PowBlockImport<B, I, C, S, Algorithm, CAW> wher
 	}
 }
 
+#[async_trait]
 impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, Algorithm, CAW> where
 	B: BlockT,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
@@ -315,21 +317,21 @@ impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, A
 	S: SelectChain<B>,
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
-	Algorithm: PowAlgorithm<B>,
-	Algorithm::Difficulty: 'static,
-	CAW: CanAuthorWith<B>,
+	Algorithm: PowAlgorithm<B> + Send,
+	Algorithm::Difficulty: Send + 'static,
+	CAW: CanAuthorWith<B> + Send,
 {
 	type Error = ConsensusError;
 	type Transaction = sp_api::TransactionFor<C, B>;
 
-	fn check_block(
+	async fn check_block(
 		&mut self,
 		block: BlockCheckParams<B>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.check_block(block).map_err(Into::into)
+		self.inner.check_block(block).await.map_err(Into::into)
 	}
 
-	fn import_block(
+	async fn import_block(
 		&mut self,
 		mut block: BlockImportParams<B, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
@@ -404,7 +406,7 @@ impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, A
 			));
 		}
 
-		self.inner.import_block(block, new_cache).map_err(Into::into)
+		self.inner.import_block(block, new_cache).map_err(Into::into).await
 	}
 }
 
@@ -450,11 +452,12 @@ impl<B: BlockT, Algorithm> PowVerifier<B, Algorithm> {
 	}
 }
 
+#[async_trait]
 impl<B: BlockT, Algorithm> Verifier<B> for PowVerifier<B, Algorithm> where
 	Algorithm: PowAlgorithm<B> + Send + Sync,
-	Algorithm::Difficulty: 'static,
+	Algorithm::Difficulty: Send + 'static,
 {
-	fn verify(
+	async fn verify(
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
@@ -474,7 +477,7 @@ impl<B: BlockT, Algorithm> Verifier<B> for PowVerifier<B, Algorithm> where
 		import_block.justification = justification;
 		import_block.intermediates.insert(
 			Cow::from(INTERMEDIATE_KEY),
-			Box::new(intermediate) as Box<dyn Any>
+			Box::new(intermediate) as Box<dyn Any + Send>
 		);
 		import_block.post_hash = Some(hash);
 
@@ -515,6 +518,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	B: BlockT,
 	Transaction: Send + Sync + 'static,
 	Algorithm: PowAlgorithm<B> + Clone + Send + Sync + 'static,
+	Algorithm::Difficulty: Send,
 {
 	register_pow_inherent_data_provider(&inherent_data_providers)?;
 
@@ -556,7 +560,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW>(
 	C: ProvideRuntimeApi<Block> + BlockchainEvents<Block> + 'static,
 	S: SelectChain<Block> + 'static,
 	Algorithm: PowAlgorithm<Block> + Clone,
-	Algorithm::Difficulty: 'static,
+	Algorithm::Difficulty: Send + 'static,
 	E: Environment<Block> + Send + Sync + 'static,
 	E::Error: std::fmt::Debug,
 	E::Proposer: Proposer<Block, Transaction = sp_api::TransactionFor<C, Block>>,
