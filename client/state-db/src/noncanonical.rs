@@ -214,7 +214,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			Some(buffer) => Some(<(BlockHash, u64)>::decode(&mut buffer.as_slice())?),
 			None => None,
 		};
-		if let Some((ref hash, mut block)) = last_canonicalized {
+		if let Some((_hash, mut block)) = last_canonicalized {
 			for level in self.levels.iter() {
 				for (index, _journal) in level.iter().enumerate() {
 					let journal_key = to_journal_key(block, index as u64);

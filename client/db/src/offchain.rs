@@ -26,8 +26,7 @@ use std::{
 use crate::{columns, Database, DbHash, Transaction};
 use parking_lot::{Mutex, RwLock};
 use historied_db::{Latest, Management, ManagementRef, UpdateResult,
-	management::tree::{TreeManagementStorage, ForkPlan},
-	historied::tree::Tree};
+	management::tree::{TreeManagementStorage, ForkPlan}};
 use codec::{Decode, Encode, Codec};
 use sp_core::offchain::storage::HValue;
 use log::error;
@@ -362,13 +361,6 @@ impl BlockChainLocalAt {
 			let val = histo.as_ref().and_then(|h| {
 				use historied_db::historied::ValueRef;
 				h.get(&self.at_read).flatten()
-				/*v.and_then(|mut v| {
-					match v.pop() {
-						Some(0u8) => None,
-						Some(1u8) => Some(v),
-						None | Some(_) => panic!("inconsistent value, DB corrupted"),
-					}
-				})*/
 			});
 
 			is_set = condition.map(|c| c(val.as_ref().map(|v| v.as_slice()))).unwrap_or(true);
@@ -376,14 +368,6 @@ impl BlockChainLocalAt {
 			if is_set {
 				use historied_db::historied::Value;
 				let is_insert = new_value.is_some();
-				/*let new_value = if let Some(new_value) = new_value {
-					let mut new_value = new_value.to_vec();
-					new_value.push(1u8);
-					new_value
-				} else {
-					//vec![0]
-					None
-				};*/
 				let new_value = new_value.map(|v| v.to_vec());
 				let (new_value, update_result) = if let Some(mut histo) = histo {
 					let update_result = if is_new {
@@ -438,7 +422,6 @@ impl BlockChainLocalAt {
 		}
 		is_set
 	}
-	
 }
 
 #[cfg(test)]

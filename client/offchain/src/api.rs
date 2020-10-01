@@ -24,7 +24,6 @@ use std::{
 
 use crate::NetworkProvider;
 use futures::Future;
-use log::error;
 use sc_network::{PeerId, Multiaddr};
 use codec::{Encode, Decode};
 use sp_core::OpaquePeerId;
@@ -59,14 +58,6 @@ pub(crate) struct Api<PersistentStorage, LocalStorage> {
 	is_validator: bool,
 	/// Everything HTTP-related is handled by a different struct.
 	http: http::HttpApi,
-}
-
-fn unavailable_yet<R: Default>(name: &str) -> R {
-	error!(
-		"The {:?} API is not available for offchain workers yet. Follow \
-		https://github.com/paritytech/substrate/issues/1458 for details", name
-	);
-	Default::default()
 }
 
 impl<

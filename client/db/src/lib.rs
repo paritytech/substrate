@@ -195,7 +195,7 @@ impl HistoriedDBMut {
 			historied_db::UpdateResult::Cleared(()) => {
 				change_set.remove(column, k);
 			},
-			historied_db::UpdateResult::Unchanged => (), 
+			historied_db::UpdateResult::Unchanged => (),
 		}
 	}
 }
@@ -434,25 +434,11 @@ pub(crate) mod columns {
 	/// Offchain workers local storage
 	pub const OFFCHAIN: u32 = 9;
 	pub const CACHE: u32 = 10;
-	/// Map 1 tree management for historied db
-	/// TODO dynamic collection in state_meta
-	pub const TreeRefs: u32 = 11;
-	/// Map 2 tree management for historied db
-	/// TODO dynamic collection in state_meta
-	pub const TreeBranchs: u32 = 12;
-	pub const StateValues: u32 = 13;
-	pub const StateIndexes: u32 = 14;
-	pub const JournalDelete: u32 = 15;
 }
 
 #[derive(Clone)]
 /// Database backed tree management.
 pub struct TreeManagementPersistence;
-
-#[derive(Clone)]
-/// Database backed tree management, no transaction.
-pub struct TreeManagementPersistenceNoTx;
-
 
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
 /// Database backed tree management for a rocksdb database.
@@ -467,23 +453,6 @@ pub struct DatabaseStorage<H: Clone + PartialEq + std::fmt::Debug>(RadixTreeData
 impl historied_db::management::tree::TreeManagementStorage for TreeManagementPersistence {
 	const JOURNAL_DELETE: bool = true;
 	type Storage = TransactionalSerializeDB<historied_db::simple_db::SerializeDBDyn>;
-	type Mapping = historied_tree_bindings::Mapping;
-	type JournalDelete = historied_tree_bindings::JournalDelete;
-	type TouchedGC = historied_tree_bindings::TouchedGC;
-	type CurrentGC = historied_tree_bindings::CurrentGC;
-	type LastIndex = historied_tree_bindings::LastIndex;
-	type NeutralElt = historied_tree_bindings::NeutralElt;
-	type TreeMeta = historied_tree_bindings::TreeMeta;
-	type TreeState = historied_tree_bindings::TreeState;
-
-	fn init() -> Self::Storage {
-		unimplemented!("unused")
-	}
-}
-
-impl historied_db::management::tree::TreeManagementStorage for TreeManagementPersistenceNoTx {
-	const JOURNAL_DELETE: bool = true;
-	type Storage = historied_db::simple_db::SerializeDBDyn;
 	type Mapping = historied_tree_bindings::Mapping;
 	type JournalDelete = historied_tree_bindings::JournalDelete;
 	type TouchedGC = historied_tree_bindings::TouchedGC;
@@ -672,7 +641,6 @@ pub mod historied_tree_bindings {
 		impl historied_db::simple_db::SerializeInstanceMap for $name {
 			const STATIC_COL: &'static [u8] = $col;
 		}
-		
 	}}
 	macro_rules! static_instance_variable {
 		($name: ident, $col: expr, $path: expr, $lazy: expr) => {
@@ -682,11 +650,10 @@ pub mod historied_tree_bindings {
 			const LAZY: bool = $lazy;
 		}
 	}}
-
-	static_instance!(Mapping, &[11u8, 0, 0, 0]);
-	static_instance!(TreeState, &[12u8, 0, 0, 0]);
-	static_instance!(JournalDelete, &[15u8, 0, 0, 0]);
-	const CST: &'static[u8] = &[2u8, 0, 0, 0]; // STATE_META collection
+	static_instance!(Mapping, b"\x08\x00\x00\x00tree_mgmt/mapping");
+	static_instance!(TreeState, b"\x08\x00\x00\x00tree_mgmt/state");
+	static_instance!(JournalDelete, b"\x08\x00\x00\x00tree_mgmt/journal_delete");
+	const CST: &'static[u8] = &[8u8, 0, 0, 0]; // AUX collection
 	static_instance_variable!(TouchedGC, CST, b"tree_mgmt/touched_gc", false);
 	static_instance_variable!(CurrentGC, CST, b"tree_mgmt/current_gc", false);
 	static_instance_variable!(LastIndex, CST, b"tree_mgmt/last_index", false);
@@ -1504,7 +1471,7 @@ impl<Block: BlockT> Backend<Block> {
 				for (key, change) in changes {
 					subcollection_prefixed_key!(p, key);
 					match change {
-						Some(value) => transaction.set_from_vec(col, key, value), 
+						Some(value) => transaction.set_from_vec(col, key, value),
 						None => transaction.remove(col, key),
 					}
 				}
@@ -1938,7 +1905,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					update_plan
 				} else {
 					// TODO EMCH rollback? Not that we could write the change in mgmt first
-					// and includ the later change in rollback 
+					// and includ the later change in rollback
 					panic!("missing update plan");
 				}
 			};

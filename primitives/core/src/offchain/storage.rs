@@ -20,7 +20,7 @@
 use std::collections::hash_map::{HashMap, Entry};
 use crate::offchain::OffchainStorage;
 use std::iter::Iterator;
-use historied_db::management::tree::{Tree as TreeMgmt, TreeManagement, ForkPlan};
+use historied_db::management::tree::{TreeManagement, ForkPlan};
 use historied_db::{Latest, Management, ManagementRef};
 use historied_db::historied::tree::Tree;
 use historied_db::historied::{InMemoryValueRef, InMemoryValue};
@@ -267,9 +267,8 @@ impl BlockChainInMemOffchainStorageAt {
 		let key: Vec<u8> = prefix.iter().chain(item_key).cloned().collect();
 		let is_set;
 		let mut storage_write = self.storage.write();
-		let mut histo = storage_write.get_mut(&key);
+		let histo = storage_write.get_mut(&key);
 		let val = histo.as_ref().and_then(|h| {
-			use historied_db::historied::ValueRef;
 			h.get_ref(&self.at_read).cloned().flatten()
 		});
 
@@ -279,7 +278,7 @@ impl BlockChainInMemOffchainStorageAt {
 			use historied_db::historied::Value;
 			let is_insert = new_value.is_some();
 			let new_value = new_value.map(|v| v.to_vec());
-			if let Some(mut histo) = histo {
+			if let Some(histo) = histo {
 				if is_new {
 					let _update_result = histo.set_mut(new_value, self.at_write.as_ref().expect("Synch at start"));
 				} else {
