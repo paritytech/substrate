@@ -420,7 +420,7 @@ pub trait Crypto {
 	/// Returns all `ed25519` public keys for the given key id from the keystore.
 	fn ed25519_public_keys(&mut self, id: KeyTypeId) -> Vec<ed25519::Public> {
 		let keystore = &***self.extension::<KeystoreExt>()
-							.expect("No `keystore` associated for the current context!");
+			.expect("No `keystore` associated for the current context!");
 		SyncCryptoStore::ed25519_public_keys(keystore, id)
 	}
 
