@@ -476,6 +476,8 @@ ss58_address_format!(
 		(17, "dark", "Dark mainnet, standard account (*25519).")
 	DarwiniaAccount =>
 		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
+	GeekAccount =>
+		(19, "geek", "GeekCash mainnet, standard account (*25519).")
 	StafiAccount =>
 		(20, "stafi", "Stafi mainnet, standard account (*25519).")
 	DockTestAccount =>
