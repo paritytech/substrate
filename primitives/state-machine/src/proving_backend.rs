@@ -145,7 +145,13 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 			backend: essence.backend_storage(),
 			proof_recorder,
 		};
-		ProvingBackend(TrieBackend::new(recorder, root))
+		ProvingBackend(TrieBackend::new(
+			recorder,
+			root,
+			backend.alternative.clone(),
+			backend.alternative_trie_values.clone(),
+			backend.alternative_indexes.clone(),
+		))
 	}
 
 	/// Extracting the gathered unordered proof.
@@ -291,7 +297,17 @@ where
 	let db = proof.into_memory_db();
 
 	if db.contains(&root, EMPTY_PREFIX) {
-		Ok(TrieBackend::new(db, root))
+		let alternative = crate::in_memory_backend::KVInMem::default();
+		// this does not share values with kvdb that is bad TODO ??
+		let kv_db_2 = std::collections::BTreeMap::new();
+		let indexes = std::collections::BTreeMap::new();
+		Ok(TrieBackend::new(
+			db,
+			root,
+			Arc::new(alternative),
+			Arc::new(kv_db_2),
+			Arc::new(indexes),
+		))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}
@@ -303,12 +319,12 @@ mod tests {
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
 	use crate::proving_backend::create_proof_check_backend;
-	use sp_trie::PrefixedMemoryDB;
+	use crate::OverlayWithIndexes;
 	use sp_runtime::traits::BlakeTwo256;
 
 	fn test_proving<'a>(
-		trie_backend: &'a TrieBackend<PrefixedMemoryDB<BlakeTwo256>,BlakeTwo256>,
-	) -> ProvingBackend<'a, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
+		trie_backend: &'a TrieBackend<OverlayWithIndexes<BlakeTwo256>,BlakeTwo256>,
+	) -> ProvingBackend<'a, OverlayWithIndexes<BlakeTwo256>, BlakeTwo256> {
 		ProvingBackend::new(trie_backend)
 	}
 
@@ -346,7 +362,7 @@ mod tests {
 		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
 		let (proving_root, mut proving_mdb) = proving_backend.storage_root(::std::iter::empty());
 		assert_eq!(trie_root, proving_root);
-		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
+		assert_eq!(trie_mdb.db.drain(), proving_mdb.db.drain());
 	}
 
 	#[test]

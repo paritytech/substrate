@@ -23,6 +23,8 @@ mod kvdb;
 
 pub use mem::MemDb;
 pub use crate::kvdb::as_database;
+pub use crate::kvdb::as_database2;
+pub use ordered::RadixTreeDatabase;
 
 /// An identifier for a column.
 pub type ColumnId = u32;
@@ -168,9 +170,29 @@ pub trait Database<H: Clone>: Send + Sync {
 	}
 }
 
+pub trait OrderedDatabase<H: Clone>: Database<H> {
+	/// Iterate on value from the database.
+	fn iter(&self, col: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>>;
+
+	/// Iterate on value over a given prefix, the prefix can be removed from
+	/// the resulting keys.
+	fn prefix_iter(
+		&self,
+		col: ColumnId,
+		prefix: &[u8],
+		trim_prefix: bool,
+	) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>>;
+}
+
 impl<H> std::fmt::Debug for dyn Database<H> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "Database")
+	}
+}
+
+impl<H> std::fmt::Debug for dyn OrderedDatabase<H> {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "OrderedDatabase")
 	}
 }
 
@@ -194,4 +216,169 @@ pub fn with_lookup<R, H: Clone>(db: &dyn Database<H>, hash: &H, mut f: impl FnMu
 	let mut adapter = |k: &_| { result = Some(f(k)); };
 	db.with_lookup(hash, &mut adapter);
 	result
+}
+
+mod ordered {
+	use super::*;
+	use std::sync::Arc;
+	use parking_lot::RwLock;
+	use radix_tree::{Derivative, RadixConf, Children, NodeConf, Node,
+		Children256, Radix256Conf};
+
+	use core::fmt::Debug;
+
+	radix_tree::flatten_children!(
+		Children256Flatten,
+		Node256Flatten,
+		Node256LazyHashBackend,
+		Children256,
+		Radix256Conf,
+		radix_tree::backend::LazyExt<radix_tree::backend::ArcBackend<radix_tree::backend::TransactionBackend<WrapColumnDb<H>>>>,
+		H,
+		{ H: Debug + PartialEq + Clone}
+	);
+
+	#[derive(Clone)]
+	struct WrapColumnDb<H> {
+		inner: Arc<dyn Database<H>>,
+		col: ColumnId,
+		prefix: Option<&'static [u8]>,
+	}
+
+	macro_rules! subcollection_prefixed_key {
+		($prefix: ident, $key: ident) => {
+			let mut prefixed_key;
+			let $key = if let Some(k) = $prefix {
+				prefixed_key = Vec::with_capacity(k.len() + $key.len());
+				prefixed_key.extend_from_slice(&k[..]);
+				prefixed_key.extend_from_slice(&$key[..]);
+				&prefixed_key[..]
+			} else {
+				&$key[..]
+			};
+		}
+	}
+
+	impl<H: Clone> radix_tree::backend::ReadBackend for WrapColumnDb<H> {
+		fn read(&self, k: &[u8]) -> Option<Vec<u8>> {
+			let prefix = &self.prefix;
+			subcollection_prefixed_key!(prefix, k);
+			self.inner.get(self.col, k)
+		}
+	}
+
+	#[derive(Clone)]
+	/// Ordered database implementation through a indexing radix tree overlay.
+	pub struct RadixTreeDatabase<H: Clone + PartialEq + Debug> {
+		inner: Arc<dyn Database<H>>,
+		// Small vec?
+		trees: Arc<RwLock<Vec<radix_tree::Tree<Node256LazyHashBackend<H>>>>>, // TODO not the right type
+	}
+
+	impl<H: Clone + PartialEq + Debug> RadixTreeDatabase<H> {
+		/// Create new radix tree database.
+		pub fn new(inner: Arc<dyn Database<H>>) -> Self {
+			RadixTreeDatabase {
+				inner,
+				trees: Arc::new(RwLock::new(Vec::<radix_tree::Tree<Node256LazyHashBackend<H>>>::new())),
+			}
+		}
+		fn lazy_column_init(&self, col: ColumnId) {
+			let index = col as usize;
+			loop {
+				let len = self.trees.read().len();
+				if len <= index {
+					self.trees.write().push(radix_tree::Tree::from_backend(
+						radix_tree::backend::ArcBackend::new(
+							radix_tree::backend::TransactionBackend::new(
+								WrapColumnDb {
+									inner: self.inner.clone(),
+									col: len as u32,
+									prefix: None,
+								}
+							)
+						)
+					))
+				} else {
+					break;
+				}
+			}
+		}
+	}
+
+	impl<H: Clone + PartialEq + Debug + Default> Database<H> for RadixTreeDatabase<H> {
+		fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
+			self.lazy_column_init(col);
+			self.trees.write()[col as usize].get_mut(key).cloned()
+		}
+		fn lookup(&self, _hash: &H) -> Option<Vec<u8>> {
+			unimplemented!("No hash lookup on radix tree layer");
+		}
+		fn commit(&self, transaction: Transaction<H>) -> error::Result<()> {
+			for change in transaction.0.into_iter() {
+				match change {
+					Change::Set(col, key, value) => {
+						self.lazy_column_init(col);
+						self.trees.write()[col as usize].insert(key.as_slice(), value);
+					},
+					Change::Remove(col, key) => {
+						self.lazy_column_init(col);
+						self.trees.write()[col as usize].remove(key.as_slice());
+					},
+					Change::Store(_hash, _preimage) => {
+						unimplemented!("No hash lookup on radix tree layer");
+					},
+					Change::Release(_hash) => {
+						unimplemented!("No hash lookup on radix tree layer");
+					},
+				};
+			}
+
+			let len = self.trees.read().len();
+			let mut transaction = Transaction::<H>::default();
+			for i in 0..len {
+				self.trees.write()[i].commit();
+			}
+			for i in 0..len {
+				for (key, change) in {
+					let tree = &self.trees.read()[i];
+					let change = tree.init.0.write().drain_changes();
+					change
+				} {
+					if let Some(value) = change {
+						transaction.set(i as u32, key.as_slice(), value.as_slice());
+					} else {
+						transaction.remove(i as u32, key.as_slice());
+					}
+				}
+			}
+
+			Ok(())
+		}
+	}
+
+	impl<H: Clone + PartialEq + Debug + Default + 'static> OrderedDatabase<H> for RadixTreeDatabase<H> {
+		fn iter(&self, col: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>> {
+			self.lazy_column_init(col);
+			let tree = self.trees.read()[col as usize].clone();
+			Box::new(tree.owned_iter())
+		}
+		fn prefix_iter(
+			&self, col: ColumnId,
+			prefix: &[u8],
+			trim_prefix: bool,
+		) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>> {
+			self.lazy_column_init(col);
+			let tree = self.trees.read()[col as usize].clone();
+			if trim_prefix {
+				let len = prefix.len();
+				Box::new(tree.owned_prefix_iter(prefix).map(move |mut kv| {
+					kv.0 = kv.0.split_off(len);
+					kv
+				}))
+			} else {
+				Box::new(tree.owned_prefix_iter(prefix))
+			}
+		}
+	}
 }

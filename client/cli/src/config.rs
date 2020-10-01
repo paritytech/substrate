@@ -30,7 +30,7 @@ use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
 	BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
 	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
-	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod, ExpCacheConf,
 };
 use sc_service::{ChainSpec, TracingReceiver};
 use std::net::SocketAddr;
@@ -293,6 +293,19 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.unwrap_or_default())
 	}
 
+	/// Get the experimental cache config..
+	///
+	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
+	/// `ExpCacheConf::default()`.
+	fn experimental_cache(
+		&self,
+	) -> Result<ExpCacheConf> {
+		Ok(self
+			.import_params()
+			.map(|x| x.experimental_cache())
+			.unwrap_or(Default::default()))
+	}
+
 	/// Get the RPC HTTP address (`None` if disabled).
 	///
 	/// By default this is `None`.
@@ -514,6 +527,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			announce_block: self.announce_block()?,
 			role,
 			base_path: Some(base_path),
+			experimental_cache: self.experimental_cache()?, 
 			informant_output_format: Default::default(),
 		})
 	}

@@ -40,18 +40,19 @@ use std::{
 
 use parking_lot::Mutex;
 use threadpool::ThreadPool;
-use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_api::{ApiExt, ProvideRuntimeApi, Hasher};
 use futures::future::Future;
 use log::{debug, warn};
 use sc_network::{ExHashT, NetworkService, NetworkStateInfo, PeerId};
-use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext, traits::SpawnNamed};
-use sp_runtime::{generic::BlockId, traits::{self, Header}};
+use sp_core::{offchain::{self, OffchainStorage, BlockChainOffchainStorage},
+	ExecutionContext, traits::SpawnNamed};
+use sp_runtime::{generic::BlockId, traits::{self, Header, HashFor}};
 use futures::{prelude::*, future::ready};
 
 mod api;
 use api::SharedClient;
 
-pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
+pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX, LOCAL_STORAGE_PREFIX};
 
 /// NetworkProvider provides [`OffchainWorkers`] with all necessary hooks into the
 /// underlying Substrate networking.
@@ -78,21 +79,28 @@ where
 }
 
 /// An offchain workers manager.
-pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
+pub struct OffchainWorkers<Client, PersistentStorage, LocalStorage, Block: traits::Block> {
 	client: Arc<Client>,
-	db: Storage,
+	db: PersistentStorage,
+	local_db: LocalStorage,
 	_block: PhantomData<Block>,
 	thread_pool: Mutex<ThreadPool>,
 	shared_client: SharedClient,
 }
 
-impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Block> {
+impl<
+	Client,
+	PersistentStorage,
+	LocalStorage,
+	Block: traits::Block,
+> OffchainWorkers<Client, PersistentStorage, LocalStorage, Block> {
 	/// Creates new `OffchainWorkers`.
-	pub fn new(client: Arc<Client>, db: Storage) -> Self {
+	pub fn new(client: Arc<Client>, db: PersistentStorage, local_db: LocalStorage) -> Self {
 		let shared_client = SharedClient::new();
 		Self {
 			client,
 			db,
+			local_db,
 			_block: PhantomData,
 			thread_pool: Mutex::new(ThreadPool::new(num_cpus::get())),
 			shared_client,
@@ -100,9 +108,10 @@ impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Blo
 	}
 }
 
-impl<Client, Storage, Block: traits::Block> fmt::Debug for OffchainWorkers<
+impl<Client, PersistentStorage, LocalStorage, Block: traits::Block> fmt::Debug for OffchainWorkers<
 	Client,
-	Storage,
+	PersistentStorage,
+	LocalStorage,
 	Block,
 > {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -110,15 +119,17 @@ impl<Client, Storage, Block: traits::Block> fmt::Debug for OffchainWorkers<
 	}
 }
 
-impl<Client, Storage, Block> OffchainWorkers<
+impl<Client, PersistentStorage, LocalStorage, Block> OffchainWorkers<
 	Client,
-	Storage,
+	PersistentStorage,
+	LocalStorage,
 	Block,
 > where
 	Block: traits::Block,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static,
 	Client::Api: OffchainWorkerApi<Block>,
-	Storage: OffchainStorage + 'static,
+	PersistentStorage: OffchainStorage + 'static,
+	LocalStorage: BlockChainOffchainStorage<BlockId = <HashFor<Block> as Hasher>::Out> + 'static,
 {
 	/// Start the offchain workers after given block.
 	#[must_use]
@@ -147,8 +158,15 @@ impl<Client, Storage, Block> OffchainWorkers<
 		};
 		debug!("Checking offchain workers at {:?}: version:{}", at, version);
 		if version > 0 {
+			let local_db_at = if let Some(local_db_at) = self.local_db.at(header.hash()) {
+				local_db_at
+			} else {
+				log::error!("Error no chain state for offchain local db at {:?}", at);
+				return futures::future::Either::Right(futures::future::ready(()));
+			};
 			let (api, runner) = api::AsyncApi::new(
 				self.db.clone(),
+				local_db_at.clone(),
 				network_provider,
 				is_validator,
 				self.shared_client.clone(),
@@ -195,10 +213,10 @@ impl<Client, Storage, Block> OffchainWorkers<
 }
 
 /// Inform the offchain worker about new imported blocks
-pub async fn notification_future<Client, Storage, Block, Spawner>(
+pub async fn notification_future<Client, PersistentStorage, LocalStorage, Block, Spawner>(
 	is_validator: bool,
 	client: Arc<Client>,
-	offchain: Arc<OffchainWorkers<Client, Storage, Block>>,
+	offchain: Arc<OffchainWorkers<Client, PersistentStorage, LocalStorage, Block>>,
 	spawner: Spawner,
 	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 )
@@ -206,7 +224,8 @@ pub async fn notification_future<Client, Storage, Block, Spawner>(
 		Block: traits::Block,
 		Client: ProvideRuntimeApi<Block> + sc_client_api::BlockchainEvents<Block> + Send + Sync + 'static,
 		Client::Api: OffchainWorkerApi<Block>,
-		Storage: OffchainStorage + 'static,
+		PersistentStorage: OffchainStorage + 'static,
+		LocalStorage: BlockChainOffchainStorage<BlockId = <HashFor<Block> as Hasher>::Out> + 'static,
 		Spawner: SpawnNamed
 {
 	client.import_notification_stream().for_each(move |n| {
@@ -292,11 +311,12 @@ mod tests {
 			client.clone(),
 		));
 		let db = sc_client_db::offchain::LocalStorage::new_test();
+		let local_db = sc_client_db::offchain::BlockChainLocalStorage::new_test();
 		let network = Arc::new(TestNetwork());
 		let header = client.header(&BlockId::number(0)).unwrap().unwrap();
 
 		// when
-		let offchain = OffchainWorkers::new(client, db);
+		let offchain = OffchainWorkers::new(client, db, local_db);
 		futures::executor::block_on(
 			offchain.on_block_imported(&header, network, false)
 		);

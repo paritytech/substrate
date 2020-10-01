@@ -38,12 +38,21 @@ mod children;
 mod cache;
 mod changes_tries_storage;
 mod storage_cache;
-#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+// #[cfg(any(feature = "with-kvdb-rocksdb", test))] // TODO restore when historied db conditional
 mod upgrade;
 mod utils;
 mod stats;
 #[cfg(feature = "with-parity-db")]
 mod parity_db;
+
+use historied_db::{
+	StateDBRef, InMemoryStateDBRef, StateDB, ManagementRef, Management,
+	ForkableManagement, Latest, UpdateResult,
+	historied::{InMemoryValue, Value},
+	historied::tree::Tree,
+	management::tree::{Tree as TreeMgmt, ForkPlan},
+	simple_db::TransactionalSerializeDB,
+};
 
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
@@ -61,10 +70,10 @@ use sp_blockchain::{
 };
 use codec::{Decode, Encode};
 use hash_db::Prefix;
-use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
-use sp_database::Transaction;
+use sp_trie::{MemoryDB, prefixed_key};
+use sp_database::{Transaction, RadixTreeDatabase};
 use parking_lot::RwLock;
-use sp_core::ChangesTrieConfiguration;
+use sp_core::{ChangesTrieConfiguration, Hasher};
 use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_arithmetic::traits::Saturating;
@@ -76,12 +85,15 @@ use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, UsageInfo as StateUsageInfo,
 	StorageCollection, ChildStorageCollection,
 	backend::Backend as StateBackend, StateMachineStats,
+	kv_backend::KVBackend, OverlayWithIndexes,
 };
 use crate::utils::{DatabaseType, Meta, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
 use sc_state_db::StateDb;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
-use crate::storage_cache::{CachingState, SyncingCachingState, SharedCache, new_shared_cache};
+use crate::storage_cache::{CachingState, SyncingCachingState, SharedCache, new_shared_cache,
+	SyncExperimentalCache};
+use sc_client_api::ExpCacheConf;
 use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
 
@@ -102,6 +114,340 @@ pub type DbState<B> = sp_state_machine::TrieBackend<
 	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
 >;
 
+/// Key value db at a given block for an historied DB.
+pub struct HistoriedDB {
+	current_state: historied_db::management::tree::ForkPlan<u32, u32>,
+	db: Arc<kvdb_rocksdb::Database>,
+	// only assert when spawned from cli command (so tests pass)
+	do_assert: bool,
+}
+
+type LinearBackend<'a> = historied_db::backend::encoded_array::EncodedArray<
+	'a,
+	Vec<u8>,
+	historied_db::backend::encoded_array::NoVersion,
+>;
+/*
+type TreeBackend<'a> = historied_db::historied::encoded_array::EncodedArray<
+	'a,
+	historied_db::historied::linear::Linear<Vec<u8>, u32, LinearBackend<'a>>,
+	historied_db::historied::encoded_array::NoVersion,
+>;
+*/
+type TreeBackend<'a> = historied_db::backend::in_memory::MemoryOnly<
+	historied_db::historied::linear::Linear<Vec<u8>, u32, LinearBackend<'a>>,
+	u32,
+>;
+
+// Warning we use Vec<u8> instead of Some(Vec<u8>) to be able to use encoded_array.
+// None is &[0] when Some are postfixed with a 1. TODO use a custom type instead.
+/// Historied value with multiple parallel branches.
+pub type HValue<'a> = Tree<u32, u32, Vec<u8>, TreeBackend<'a>, LinearBackend<'a>>;
+
+impl HistoriedDB {
+	fn storage_inner(&self, key: &[u8], column: u32) -> Result<Option<Vec<u8>>, String> {
+		if let Some(v) = self.db.get(column, key)
+			.map_err(|e| format!("KVDatabase backend error: {:?}", e))? {
+			let v: HValue = Decode::decode(&mut &v[..])
+				.map_err(|e| format!("KVDatabase decode error: {:?}", e))?;
+			use historied_db::historied::ValueRef;
+			let v = v.get(&self.current_state);
+			Ok(v.and_then(|mut v| {
+				match v.pop() {
+					Some(0u8) => None,
+					Some(1u8) => Some(v),
+					None | Some(_) => panic!("inconsistent value, DB corrupted"),
+				}
+			}))
+		} else {
+			Ok(None)
+		}
+	}
+
+}
+impl KVBackend for HistoriedDB {
+	fn assert_value(&self) -> bool {
+		self.do_assert
+	}
+
+	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		self.storage_inner(key, crate::columns::StateValues)
+	}
+}
+
+// TODO those trait needs error handling
+// TODO split trait between mut and not mut.
+impl trie_db::partial_db::KVBackend for HistoriedDB {
+	fn read(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.storage_inner(key, crate::columns::StateValues)
+			.unwrap()
+	}
+	fn write(&mut self, _key: &[u8], _value: &[u8]) {
+		unimplemented!("Historied db is read only")
+	}
+	fn remove(&mut self, _key: &[u8]) {
+		unimplemented!("Historied db is read only")
+	}
+	fn iter<'a>(&'a self) -> trie_db::partial_db::KVBackendIter<'a> {
+		Box::new(self.iter().map(|(k, v)| (k.to_vec(), v)))
+	}
+	fn iter_from<'a>(&'a self, start: &[u8]) -> trie_db::partial_db::KVBackendIter<'a> {
+		Box::new(self.iter_from(start, crate::columns::StateValues).map(|(k, v)| (k.to_vec(), v)))
+	}
+}
+fn decode_index(mut encoded: Vec<u8>) -> trie_db::partial_db::Index {
+	let mut buff: [u8; 4] = [0, 0, 0, 0]; 
+	let start = encoded.len() - 9;
+	buff.copy_from_slice(&encoded[start..start + 4]);
+	let actual_depth = u32::from_le_bytes(buff) as usize;
+	buff.copy_from_slice(&encoded[start + 4..start + 8]);
+	let top_depth = u32::from_le_bytes(buff) as usize;
+	let is_top_index = encoded[start + 8] == 1;
+	encoded.truncate(start);
+	trie_db::partial_db::Index {
+		hash: encoded,
+		actual_depth,
+		top_depth,
+		is_top_index,
+	}
+}
+fn encode_index(index: trie_db::partial_db::Index) -> Vec<u8> {
+	let mut result = index.hash;
+	let depth = (index.actual_depth as u32).to_le_bytes();
+	result.extend_from_slice(&depth[..]);
+	let top_depth = (index.top_depth as u32).to_le_bytes();
+	result.extend_from_slice(&top_depth[..]);
+	if index.is_top_index {
+		result.push(1);
+	} else {
+		result.push(0);
+	}
+	result
+}
+#[test]
+fn enc_dec() {
+	let index = trie_db::partial_db::Index {
+		hash: vec![1u8, 2, 3],
+		actual_depth: 18,
+		top_depth: 26,
+		is_top_index: false,
+	};
+	let index2 = decode_index(encode_index(index.clone()));
+	assert_eq!(index.hash, index2.hash);
+	assert_eq!(index.actual_depth, index2.actual_depth);
+	assert_eq!(index.top_depth, index2.top_depth);
+	assert_eq!(index.is_top_index, index2.is_top_index);
+}
+mod impl_index_backend {
+	use super::*;
+	use trie_db::partial_db::{index_tree_key, value_prefix_index, Index, IndexPosition, IndexBackendIter};
+	// TODO those trait needs error handling
+	impl trie_db::partial_db::IndexBackend for HistoriedDB {
+		fn read(&self, depth: usize, index: &[u8]) -> Option<Index> {
+			self.storage_inner(&index_tree_key(depth, index)[..], crate::columns::StateIndexes)
+				.unwrap()
+				.map(decode_index)
+		}
+		fn write(&mut self, _depth: usize, _position: IndexPosition, _index: Index) {
+			unimplemented!("Historied db is read only")
+		}
+		fn remove(&mut self, _depth: usize, _index: IndexPosition) {
+			unimplemented!("Historied db is read only")
+		}
+		fn iter<'a>(&'a self, depth: usize, depth_base: usize, change: &[u8]) -> IndexBackendIter<'a> {
+			let l_size = std::mem::size_of::<u32>();
+			let depth_prefix = &(depth as u32).to_be_bytes()[..];
+			let base = depth_prefix.len();
+			let start = if depth_base > 0 {
+
+				let mut start = index_tree_key(depth, change);
+				let truncate = ((depth_base - 1) / trie_db::nibble_ops::NIBBLE_PER_BYTE) + 1;
+				start.truncate(truncate + base);
+				let unaligned = depth_base % trie_db::nibble_ops::NIBBLE_PER_BYTE;
+				if unaligned != 0 {
+					start.last_mut().map(|l| 
+						*l = *l & !(255 >> (unaligned * trie_db::nibble_ops::BIT_PER_NIBBLE))
+					);
+				}
+				start
+			} else {
+				index_tree_key(depth, &[])
+			};
+	
+			let iter = self.iter_from(&start, crate::columns::StateIndexes);
+			// TODO switch to IndexPosition instead of vecs
+			let end = value_prefix_index(depth_base, start.to_vec(), base);
+			// TODO the end filter is not optimal, can result in more query
+			// and there is primitive to do it in rocksdb
+			Box::new(iter.into_iter().filter_map(move |(k, ix)| {
+				if end.as_ref().map(|end| &k[..] < &end[..]).unwrap_or(true) {
+					let k = k[l_size..].to_vec();
+					Some((k, decode_index(ix)))
+				} else {
+					None
+				}
+			}))
+		}
+	}
+}
+
+impl HistoriedDB {
+	pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Box<[u8]>, Vec<u8>)> + 'a {
+		let current_state = &self.current_state;
+		self.db.iter(crate::columns::StateValues).filter_map(move |(k, v)| {
+			let v: HValue = Decode::decode(&mut &v[..])
+				.map_err(|e| {
+					warn!("k {:?}, v {:?}", k, v);
+					e
+				})
+				.expect("Invalid encoded historied value, DB corrupted");
+			use historied_db::historied::ValueRef;
+			if let Some(mut v) = v.get(&current_state) {
+				match v.pop() {
+					Some(0u8) => None,
+					Some(1u8) => Some((k, v)),
+					None | Some(_) => panic!("inconsistent value, DB corrupted"),
+				}
+			} else {
+				None
+			}
+		})
+	}
+	pub fn iter_from<'a>(&'a self, start: &[u8], column: u32) -> impl Iterator<Item = (Box<[u8]>, Vec<u8>)> + 'a {
+		let current_state = &self.current_state;
+		self.db.iter_from(column, start).filter_map(move |(k, v)| {
+			let v: HValue = Decode::decode(&mut &v[..])
+				.map_err(|e| {
+					warn!("k {:?}, v {:?}", k, v);
+					e
+				})
+				.expect("Invalid encoded historied value, DB corrupted");
+			use historied_db::historied::ValueRef;
+			if let Some(mut v) = v.get(&current_state) {
+				match v.pop() {
+					Some(0u8) => None,
+					Some(1u8) => Some((k, v)),
+					None | Some(_) => panic!("inconsistent value, DB corrupted"),
+				}
+			} else {
+				None
+			}
+		})
+	}
+
+}
+
+/// Key value db change for at a given block of an historied DB.
+pub struct HistoriedDBMut {
+	pub current_state: historied_db::Latest<(u32, u32)>,
+	pub db: Arc<kvdb_rocksdb::Database>,
+}
+
+impl HistoriedDBMut {
+	pub fn transaction(&self) -> kvdb::DBTransaction {
+		self.db.transaction()
+	}
+	pub fn process_change_set(&mut self, change_set: StorageCollection) -> (kvdb::DBTransaction, usize) {
+		let mut tx = self.db.transaction();
+		let mut nb = 0;
+		for (k, change) in change_set {
+			self.update_single(k.as_slice(), change, &mut tx);
+			nb += 1;
+		}
+		(tx, nb)
+	}
+
+	pub fn write_change_set(&mut self, change_set: kvdb::DBTransaction) -> ClientResult<()> {
+		Ok(self.db.write(change_set)
+			.map_err(|e| format!("historied db batch commit failure: {:?}", e))?)
+	}
+
+	/// write a single value in change set.
+	pub fn update_single(&mut self, k: &[u8], change: Option<Vec<u8>>, change_set: &mut kvdb::DBTransaction) {
+		self.update_single_inner(k, change, change_set, crate::columns::StateValues)
+	}
+	pub fn update_single_index(&mut self, k: &[u8], change: Option<Vec<u8>>, change_set: &mut kvdb::DBTransaction) {
+		self.update_single_inner(k, change, change_set, crate::columns::StateIndexes)
+	}
+	pub fn update_single_offchain(&mut self, k: &[u8], change: Option<Vec<u8>>, change_set: &mut kvdb::DBTransaction) {
+		// TODO could use update_single_inner if same HValue
+		use sp_core::offchain::storage::HValue;
+		let column = crate::columns::OFFCHAIN;
+		let histo = if let Ok(Some(histo)) = self.db.get(column, k) {
+			Some(HValue::decode(&mut &histo[..]).expect("Bad encoded value in db, closing"))
+		} else {
+			if change.is_none() {
+				return;
+			}
+			None
+		};
+		let mut new_value;
+		match if let Some(histo) = histo {
+			new_value = histo;
+			new_value.set(change, &self.current_state)
+		} else {
+			new_value = HValue::new(change, &self.current_state, ((), ()));
+			historied_db::UpdateResult::Changed(())
+		} {
+			historied_db::UpdateResult::Changed(()) => {
+				change_set.put(column, k, new_value.encode().as_slice());
+			},
+			historied_db::UpdateResult::Cleared(()) => {
+				change_set.delete(column, k);
+			},
+			historied_db::UpdateResult::Unchanged => (), 
+		}
+	}
+	/// write a single value in change set.
+	pub fn update_single_inner(&mut self, k: &[u8], change: Option<Vec<u8>>, change_set: &mut kvdb::DBTransaction, column: u32) {
+		let histo = if let Ok(Some(histo)) = self.db.get(column, k) {
+			Some(HValue::decode(&mut &histo[..]).expect("Bad encoded value in db, closing"))
+		} else {
+			if change.is_none() {
+				return;
+			}
+			None
+		};
+		let mut new_value;
+		match if let Some(mut v) = change {
+			v.push(1);
+			if let Some(histo) = histo {
+				new_value = histo;
+				new_value.set(v, &self.current_state)
+			} else {
+				new_value = HValue::new(v, &self.current_state, ((), ()));
+				historied_db::UpdateResult::Changed(())
+			}
+		} else {
+			new_value = histo.expect("returned above.");
+			new_value.set(vec![0], &self.current_state)
+		} {
+			historied_db::UpdateResult::Changed(()) => {
+				change_set.put(column, k, new_value.encode().as_slice());
+			},
+			historied_db::UpdateResult::Cleared(()) => {
+				change_set.delete(column, k);
+			},
+			historied_db::UpdateResult::Unchanged => (), 
+		}
+	}
+	/// write a single value, without checking current state,
+	/// please only use on new empty db.
+	pub fn unchecked_new_single(&mut self, k: &[u8], v: Vec<u8>, change_set: &mut kvdb::DBTransaction) {
+		self.unchecked_new_single_inner(k, v, change_set, crate::columns::StateValues)
+	}
+	pub fn unchecked_new_single_index(&mut self, k: &[u8], v: Vec<u8>, change_set: &mut kvdb::DBTransaction) {
+		self.unchecked_new_single_inner(k, v, change_set, crate::columns::StateIndexes)
+	}
+	pub fn unchecked_new_single_inner(&mut self, k: &[u8], mut v: Vec<u8>, change_set: &mut kvdb::DBTransaction, column: u32) {
+		v.push(1);
+		let value = HValue::new(v, &self.current_state, ((), ()));
+		let value = value.encode();
+		change_set.put(column, k, value.as_slice());
+		// no need for no value set
+	}
+}
+
 const DB_HASH_LEN: usize = 32;
 /// Hash type that this backend uses for the database.
 pub type DbHash = [u8; DB_HASH_LEN];
@@ -117,7 +463,11 @@ pub struct RefTrackingState<Block: BlockT> {
 }
 
 impl<B: BlockT> RefTrackingState<B> {
-	fn new(state: DbState<B>, storage: Arc<StorageDb<B>>, parent_hash: Option<B::Hash>) -> Self {
+	fn new(
+		state: DbState<B>,
+		storage: Arc<StorageDb<B>>,
+		parent_hash: Option<B::Hash>,
+	) -> Self {
 		RefTrackingState {
 			state,
 			parent_hash,
@@ -262,6 +612,8 @@ pub struct DatabaseSettings {
 	pub state_cache_size: usize,
 	/// Ratio of cache size dedicated to child tries.
 	pub state_cache_child_ratio: Option<(usize, usize)>,
+	/// Use experimental cache implementation.
+	pub experimental_cache: ExpCacheConf,
 	/// Pruning mode.
 	pub pruning: PruningMode,
 	/// Where to find the database.
@@ -332,6 +684,262 @@ pub(crate) mod columns {
 	/// Offchain workers local storage
 	pub const OFFCHAIN: u32 = 9;
 	pub const CACHE: u32 = 10;
+	/// Map 1 tree management for historied db
+	/// TODO dynamic collection in state_meta
+	pub const TreeRefs: u32 = 11;
+	/// Map 2 tree management for historied db
+	/// TODO dynamic collection in state_meta
+	pub const TreeBranchs: u32 = 12;
+	pub const StateValues: u32 = 13;
+	pub const StateIndexes: u32 = 14;
+	pub const JournalDelete: u32 = 15;
+}
+
+#[derive(Clone)]
+/// Database backed tree management.
+pub struct TreeManagementPersistence;
+
+#[derive(Clone)]
+/// Database backed tree management, no transaction.
+pub struct TreeManagementPersistenceNoTx;
+
+
+/// Database backed tree management for a rocksdb database.
+/// TODO consider switching to use of kvdb trait instead of
+/// rocksdb database.
+pub struct RocksdbStorage(Arc<kvdb_rocksdb::Database>);
+
+/// Database backed tree management for an unoredered database.
+/// We set any Hash as inner type,
+pub struct DatabaseStorage<H: Clone + PartialEq + std::fmt::Debug>(RadixTreeDatabase<H>);
+
+impl historied_db::management::tree::TreeManagementStorage for TreeManagementPersistence {
+	const JOURNAL_DELETE: bool = true;
+	type Storage = TransactionalSerializeDB<historied_db::simple_db::SerializeDBDyn>;
+	type Mapping = historied_tree_bindings::Mapping;
+	type JournalDelete = historied_tree_bindings::JournalDelete;
+	type TouchedGC = historied_tree_bindings::TouchedGC;
+	type CurrentGC = historied_tree_bindings::CurrentGC;
+	type LastIndex = historied_tree_bindings::LastIndex;
+	type NeutralElt = historied_tree_bindings::NeutralElt;
+	type TreeMeta = historied_tree_bindings::TreeMeta;
+	type TreeState = historied_tree_bindings::TreeState;
+
+	fn init() -> Self::Storage {
+		unimplemented!("unused")
+	}
+}
+
+impl historied_db::management::tree::TreeManagementStorage for TreeManagementPersistenceNoTx {
+	const JOURNAL_DELETE: bool = true;
+	type Storage = RocksdbStorage;
+	type Mapping = historied_tree_bindings::Mapping;
+	type JournalDelete = historied_tree_bindings::JournalDelete;
+	type TouchedGC = historied_tree_bindings::TouchedGC;
+	type CurrentGC = historied_tree_bindings::CurrentGC;
+	type LastIndex = historied_tree_bindings::LastIndex;
+	type NeutralElt = historied_tree_bindings::NeutralElt;
+	type TreeMeta = historied_tree_bindings::TreeMeta;
+	type TreeState = historied_tree_bindings::TreeState;
+
+	fn init() -> Self::Storage {
+		unimplemented!("unused")
+	}
+}
+
+macro_rules! subcollection_prefixed_key {
+	($prefix: ident, $key: ident) => {
+		let mut prefixed_key;
+		let $key = if let Some(k) = $prefix {
+			prefixed_key = Vec::with_capacity(k.len() + $key.len());
+			prefixed_key.extend_from_slice(&k[..]);
+			prefixed_key.extend_from_slice(&$key[..]);
+			&prefixed_key[..]
+		} else {
+			&$key[..]
+		};
+	}
+}
+
+/// We resolve rocksdb collection or subcollection.
+/// Collections are defined by four byte encoding of their index.
+/// Subcollection are located into the collection defined by four first byte,
+/// and behind a prefixed location (remaining bytes).
+/// Note that subcollection should define their prefix in a way that no key
+/// collision happen.
+pub fn resolve_collection<'a>(c: &'a [u8]) -> Option<(u32, Option<&'a [u8]>)> {
+	if c.len() < 4 {
+		return None;
+	}
+	let index = resolve_collection_inner(&c[..4]);
+	let prefix = if c.len() == 4 {
+		None
+	} else {
+		Some(&c[4..])
+	};
+	if index < crate::utils::NUM_COLUMNS {
+		return Some((index, prefix));
+	}
+	None
+}
+const fn resolve_collection_inner<'a>(c: &'a [u8]) -> u32 {
+	let mut buf = [0u8; 4];
+	buf[0] = c[0];
+	buf[1] = c[1];
+	buf[2] = c[2];
+	buf[3] = c[3];
+	u32::from_le_bytes(buf)
+}
+
+impl historied_db::simple_db::SerializeDB for RocksdbStorage {
+	#[inline(always)]
+	fn is_active(&self) -> bool {
+		true
+	}
+
+	fn write(&mut self, c: &'static [u8], k: &[u8], v: &[u8]) {
+		resolve_collection(c).map(|(c, p)| {
+			subcollection_prefixed_key!(p, k);
+			let mut tx = self.0.transaction();
+			tx.put(c, k, v);
+			self.0.write(tx)
+				.expect("Unsupported serialize error")
+		});
+	}
+
+	fn remove(&mut self, c: &'static [u8], k: &[u8]) {
+		resolve_collection(c).map(|(c, p)| {
+			subcollection_prefixed_key!(p, k);
+			let mut tx = self.0.transaction();
+			tx.delete(c, k);
+			self.0.write(tx)
+				.expect("Unsupported serialize error")
+		});
+	}
+
+	fn clear(&mut self, c: &'static [u8]) {
+		resolve_collection(c).map(|(c, p)| {
+			let mut tx = self.0.transaction();
+			tx.delete_prefix(c, p.unwrap_or(&[]));
+			self.0.write(tx)
+				.expect("Unsupported serialize error")
+		});
+	}
+
+	fn read(&self, c: &'static [u8], k: &[u8]) -> Option<Vec<u8>> {
+		resolve_collection(c).and_then(|(c, p)| {
+			subcollection_prefixed_key!(p, k);
+			self.0.get(c, k)
+				.expect("Unsupported readdb error")
+		})
+	}
+
+	fn iter<'a>(&'a self, c: &'static [u8]) -> historied_db::simple_db::SerializeDBIter<'a> {
+		let iter = resolve_collection(c).map(|(c, p)| {
+			use kvdb::KeyValueDB;
+			if let Some(p) = p {
+				self.0.iter_with_prefix(c, p)
+			} else {
+				<kvdb_rocksdb::Database as KeyValueDB>::iter(&*self.0, c)
+			}.map(|(k, v)| (Vec::<u8>::from(k), Vec::<u8>::from(v)))
+		}).into_iter().flat_map(|i| i);
+
+		Box::new(iter)
+	}
+
+	fn contains_collection(&self, collection: &'static [u8]) -> bool {
+		resolve_collection(collection).is_some()
+	}
+}
+
+impl<H> historied_db::simple_db::SerializeDB for DatabaseStorage<H>
+	where H: Clone + PartialEq + std::fmt::Debug + Default + 'static,
+{
+	#[inline(always)]
+	fn is_active(&self) -> bool {
+		true
+	}
+
+	fn write(&mut self, c: &'static [u8], k: &[u8], v: &[u8]) {
+		resolve_collection(c).map(|(c, p)| {
+			subcollection_prefixed_key!(p, k);
+			self.0.set(c, k, v)
+				.expect("Unsupported database error");
+		});
+	}
+
+	fn remove(&mut self, c: &'static [u8], k: &[u8]) {
+		resolve_collection(c).map(|(c, p)| {
+			subcollection_prefixed_key!(p, k);
+			self.0.remove(c, k)
+				.expect("Unsupported database error");
+		});
+	}
+
+	fn clear(&mut self, c: &'static [u8]) {
+		// Inefficient implementation.
+		let mut keys: Vec<Vec<u8>> = self.iter(c).map(|kv| kv.0).collect();
+		for key in keys {
+			self.remove(c, key.as_slice());
+		}
+	}
+
+	fn read(&self, c: &'static [u8], k: &[u8]) -> Option<Vec<u8>> {
+		resolve_collection(c).and_then(|(c, p)| {
+			subcollection_prefixed_key!(p, k);
+			self.0.get(c, k)
+		})
+	}
+
+	fn iter<'a>(&'a self, c: &'static [u8]) -> historied_db::simple_db::SerializeDBIter<'a> {
+		use sp_database::OrderedDatabase;
+		let iter = resolve_collection(c).map(|(c, p)| {
+			if let Some(p) = p {
+				self.0.prefix_iter(c, p, true)
+			} else {
+				self.0.iter(c)
+			}
+		}).into_iter().flat_map(|i| i);
+
+		Box::new(iter)
+	}
+
+	fn contains_collection(&self, collection: &'static [u8]) -> bool {
+		resolve_collection(collection).is_some()
+	}
+}
+
+//pub struct TreeManagement<H: Ord, I: Ord, BI, V, S: TreeManagementStorage> {
+/// Trait for serializing historied db tree management.
+pub mod historied_tree_bindings {
+	macro_rules! static_instance {
+		($name: ident, $col: expr) => {
+
+		#[derive(Default, Clone)]
+		pub struct $name;
+		impl historied_db::simple_db::SerializeInstanceMap for $name {
+			const STATIC_COL: &'static [u8] = $col;
+		}
+		
+	}}
+	macro_rules! static_instance_variable {
+		($name: ident, $col: expr, $path: expr, $lazy: expr) => {
+			static_instance!($name, $col);
+		impl historied_db::simple_db::SerializeInstanceVariable for $name {
+			const PATH: &'static [u8] = $path;
+			const LAZY: bool = $lazy;
+		}
+	}}
+
+	static_instance!(Mapping, &[11u8, 0, 0, 0]);
+	static_instance!(TreeState, &[12u8, 0, 0, 0]);
+	static_instance!(JournalDelete, &[15u8, 0, 0, 0]);
+	const CST: &'static[u8] = &[2u8, 0, 0, 0]; // STATE_META collection
+	static_instance_variable!(TouchedGC, CST, b"tree_mgmt/touched_gc", false);
+	static_instance_variable!(CurrentGC, CST, b"tree_mgmt/current_gc", false);
+	static_instance_variable!(LastIndex, CST, b"tree_mgmt/last_index", false);
+	static_instance_variable!(NeutralElt,CST, b"tree_mgmt/neutral_elt", false);
+	static_instance_variable!(TreeMeta, CST, b"tree_mgmt/tree_meta", true);
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -578,7 +1186,7 @@ impl<Block: BlockT> ProvideChtRoots<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
 	old_state: SyncingCachingState<RefTrackingState<Block>, Block>,
-	db_updates: PrefixedMemoryDB<HashFor<Block>>,
+	db_updates: OverlayWithIndexes<HashFor<Block>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	offchain_storage_updates: OffchainOverlayedChanges,
@@ -593,7 +1201,11 @@ pub struct BlockImportOperation<Block: BlockT> {
 }
 
 impl<Block: BlockT> BlockImportOperation<Block> {
-	fn apply_offchain(&mut self, transaction: &mut Transaction<DbHash>) {
+	fn apply_offchain(
+		&mut self,
+		transaction: &mut Transaction<DbHash>,
+		historied: &mut Option<(&mut HistoriedDBMut, kvdb::DBTransaction)>,
+	) {
 		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain() {
 			let key: Vec<u8> = prefix
 				.into_iter()
@@ -603,6 +1215,16 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 			match value_operation {
 				OffchainOverlayedChange::SetValue(val) => transaction.set_from_vec(columns::OFFCHAIN, &key, val),
 				OffchainOverlayedChange::Remove => transaction.remove(columns::OFFCHAIN, &key),
+				OffchainOverlayedChange::SetLocalValue(val) => {
+					historied.as_mut().map(|(historied_db, transaction_offchain)|
+						historied_db.update_single_offchain(&key, Some(val), transaction_offchain)
+					);
+				},
+				OffchainOverlayedChange::RemoveLocal => {
+					historied.as_mut().map(|(historied_db, transaction_offchain)|
+						historied_db.update_single_offchain(&key, None, transaction_offchain)
+					);
+				},
 			}
 		}
 	}
@@ -648,7 +1270,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		// Currently cache isn't implemented on full nodes.
 	}
 
-	fn update_db_storage(&mut self, update: PrefixedMemoryDB<HashFor<Block>>) -> ClientResult<()> {
+	fn update_db_storage(&mut self, update: OverlayWithIndexes<HashFor<Block>>) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
 	}
@@ -819,6 +1441,17 @@ impl<T: Clone> FrozenForDuration<T> {
 	}
 }
 
+/// Holder for state of historied.
+type HistoriedState = ();
+
+pub type TreeManagement<H, S> = historied_db::management::tree::TreeManagement<
+	H,
+	u32,
+	u32,
+	Vec<u8>,
+	S,
+>;
+
 /// Disk backend.
 ///
 /// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
@@ -826,14 +1459,26 @@ impl<T: Clone> FrozenForDuration<T> {
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
 	offchain_storage: offchain::LocalStorage,
+	offchain_local_storage: offchain::BlockChainLocalStorage<
+		<HashFor<Block> as Hasher>::Out,
+		TreeManagementPersistence,
+	>,
 	changes_tries_storage: DbChangesTrieStorage<Block>,
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block>,
+	experimental_cache: Option<SyncExperimentalCache<Block>>,
 	import_lock: Arc<RwLock<()>>,
 	is_archive: bool,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
+	historied_management: Arc<RwLock<TreeManagement<
+		<HashFor<Block> as Hasher>::Out,
+		TreeManagementPersistence,
+	>>>,
+	historied_state: Arc<kvdb_rocksdb::Database>,
+	historied_next_finalizable: Arc<RwLock<Option<NumberFor<Block>>>>,
+	historied_state_do_assert: bool,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -841,13 +1486,20 @@ impl<Block: BlockT> Backend<Block> {
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Full)?;
-		Self::from_database(db as Arc<_>, canonicalization_delay, &config)
+		let (db, ordered, r) = crate::utils::open_database_and_historied::<Block>(
+			&config,
+			DatabaseType::Full,
+		)?;
+		Self::from_database(db as Arc<_>, ordered, r, canonicalization_delay, &config)
 	}
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
+	pub fn new_test(
+		keep_blocks: u32,
+		canonicalization_delay: u64,
+		experimental_cache: ExpCacheConf,
+	) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
@@ -855,6 +1507,7 @@ impl<Block: BlockT> Backend<Block> {
 			state_cache_child_ratio: Some((50, 100)),
 			pruning: PruningMode::keep_blocks(keep_blocks),
 			source: DatabaseSettingsSrc::Custom(db),
+			experimental_cache,
 		};
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
@@ -862,6 +1515,8 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
+		ordered_db: historied_db::simple_db::SerializeDBDyn,
+		rocks_histo: Arc<kvdb_rocksdb::Database>,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
 	) -> ClientResult<Self> {
@@ -883,7 +1538,7 @@ impl<Block: BlockT> Backend<Block> {
 		};
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
 		let changes_tries_storage = DbChangesTrieStorage::new(
-			db,
+			db.clone(),
 			blockchain.header_metadata_cache.clone(),
 			columns::META,
 			columns::CHANGES_TRIE,
@@ -898,21 +1553,41 @@ impl<Block: BlockT> Backend<Block> {
 			},
 		)?;
 
+		let (shared_cache, experimental_cache) = new_shared_cache(
+			config.state_cache_size,
+			config.state_cache_child_ratio.unwrap_or(DEFAULT_CHILD_RATIO),
+			config.experimental_cache,
+		);
+		let historied_state = rocks_histo;
+		let historied_persistence = TransactionalSerializeDB {
+			db: ordered_db,
+			pending: Default::default(),
+		};
+		let historied_management = Arc::new(RwLock::new(TreeManagement::from_ser(historied_persistence)));
+		let offchain_local_storage = offchain::BlockChainLocalStorage::new(db, historied_management.clone());
 		Ok(Backend {
 			storage: Arc::new(storage_db),
 			offchain_storage,
+			offchain_local_storage,
 			changes_tries_storage,
 			blockchain,
 			canonicalization_delay,
-			shared_cache: new_shared_cache(
-				config.state_cache_size,
-				config.state_cache_child_ratio.unwrap_or(DEFAULT_CHILD_RATIO),
-			),
+			shared_cache,
+			experimental_cache,
 			import_lock: Default::default(),
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: Arc::new(StateUsageStats::new()),
+			historied_management,
+			historied_state,
+			historied_next_finalizable: Arc::new(RwLock::new(None)),
+			historied_state_do_assert: false,
 		})
+	}
+
+	/// Compare historied state with trie state results.
+	pub fn do_assert_state_machine(&mut self) {
+		self.historied_state_do_assert = true;
 	}
 
 	/// Handle setting head within a transaction. `route_to` should be the last
@@ -927,9 +1602,10 @@ impl<Block: BlockT> Backend<Block> {
 		transaction: &mut Transaction<DbHash>,
 		route_to: Block::Hash,
 		best_to: (NumberFor<Block>, Block::Hash),
-	) -> ClientResult<(Vec<Block::Hash>, Vec<Block::Hash>)> {
+	) -> ClientResult<(Option<Block::Hash>, Vec<Block::Hash>, Vec<Block::Hash>)> {
 		let mut enacted = Vec::default();
 		let mut retracted = Vec::default();
+		let mut pivot = None;
 
 		let meta = self.blockchain.meta.read();
 
@@ -941,6 +1617,7 @@ impl<Block: BlockT> Backend<Block> {
 				route_to,
 			)?;
 
+			pivot = Some(tree_route.common_block().hash.clone());
 			// uncanonicalize: check safety violations and ensure the numbers no longer
 			// point to these block hashes in the key mapping.
 			for r in tree_route.retracted() {
@@ -982,7 +1659,7 @@ impl<Block: BlockT> Backend<Block> {
 			best_to.1,
 		)?;
 
-		Ok((enacted, retracted))
+		Ok((pivot, enacted, retracted))
 	}
 
 	fn ensure_sequential_finalization(
@@ -1069,12 +1746,17 @@ impl<Block: BlockT> Backend<Block> {
 	fn try_commit_operation(
 		&self,
 		mut operation: BlockImportOperation<Block>,
+		historied_db: &mut Option<HistoriedDBMut>,
 	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let mut finalization_displaced_leaves = None;
 
 		operation.apply_aux(&mut transaction);
-		operation.apply_offchain(&mut transaction);
+		let mut historied = historied_db.as_mut().map(|h| {
+			let transaction = h.transaction();
+			(h, transaction)
+		});
+		operation.apply_offchain(&mut transaction, &mut historied);
 
 		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
@@ -1104,10 +1786,10 @@ impl<Block: BlockT> Backend<Block> {
 			// blocks are keyed by number + hash.
 			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash)?;
 
-			let (enacted, retracted) = if pending_block.leaf_state.is_best() {
+			let (pivot, enacted, retracted) = if pending_block.leaf_state.is_best() {
 				self.set_head_with_transaction(&mut transaction, parent_hash, (number, hash))?
 			} else {
-				(Default::default(), Default::default())
+				(None, Default::default(), Default::default())
 			};
 
 			utils::insert_hash_to_key_mapping(
@@ -1147,7 +1829,7 @@ impl<Block: BlockT> Backend<Block> {
 				let mut bytes: u64 = 0;
 				let mut removal: u64 = 0;
 				let mut bytes_removal: u64 = 0;
-				for (mut key, (val, rc)) in operation.db_updates.drain() {
+				for (mut key, (val, rc)) in operation.db_updates.db.drain() {
 					if !self.storage.prefix_keys {
 						// Strip prefix
 						key.drain(0 .. key.len() - DB_HASH_LEN);
@@ -1271,7 +1953,7 @@ impl<Block: BlockT> Backend<Block> {
 
 			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
 
-			Some((number, hash, enacted, retracted, displaced_leaf, is_best, cache))
+			Some((number, hash, pivot, enacted, retracted, displaced_leaf, is_best, cache))
 		} else {
 			None
 		};
@@ -1281,13 +1963,13 @@ impl<Block: BlockT> Backend<Block> {
 				let number = header.number();
 				let hash = header.hash();
 
-				let (enacted, retracted) = self.set_head_with_transaction(
+				let (pivot, enacted, retracted) = self.set_head_with_transaction(
 					&mut transaction,
 					hash.clone(),
 					(number.clone(), hash.clone())
 				)?;
 				meta_updates.push((hash, *number, true, false));
-				Some((enacted, retracted))
+				Some((pivot, enacted, retracted))
 			} else {
 				return Err(sp_blockchain::Error::UnknownBlock(format!("Cannot set head {:?}", set_head)))
 			}
@@ -1296,10 +1978,14 @@ impl<Block: BlockT> Backend<Block> {
 		};
 
 		self.storage.db.commit(transaction)?;
+		if let Some((historied_db, transaction)) = historied {
+			historied_db.write_change_set(transaction)?;
+		}
 
 		if let Some((
 			number,
 			hash,
+			pivot,
 			enacted,
 			retracted,
 			_displaced_leaf,
@@ -1307,6 +1993,7 @@ impl<Block: BlockT> Backend<Block> {
 			mut cache,
 		)) = imported {
 			cache.sync_cache(
+				pivot.as_ref(),
 				&enacted,
 				&retracted,
 				operation.storage_updates,
@@ -1322,8 +2009,13 @@ impl<Block: BlockT> Backend<Block> {
 		}
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 
-		if let Some((enacted, retracted)) = cache_update {
-			self.shared_cache.lock().sync(&enacted, &retracted);
+		if let Some((pivot, enacted, retracted)) = cache_update {
+			if let Some(cache) = self.experimental_cache.as_ref() {
+				let mut cache = cache.0.write();
+				cache.sync(pivot.as_ref(), &enacted, &retracted, None, None, None);
+			} // else { TODO disable for experimental use
+				self.shared_cache.lock().sync(&enacted, &retracted);
+			// }
 		}
 
 		for (hash, number, is_best, is_finalized) in meta_updates {
@@ -1376,7 +2068,29 @@ impl<Block: BlockT> Backend<Block> {
 
 		Ok(())
 	}
+
+
+	fn historied_new_finalized(&self, hash: &Block::Hash, number: NumberFor<Block>, force: bool)
+		-> ClientResult<()> {
+		let do_finalize = force && &number > &self.historied_next_finalizable.read().as_ref().unwrap_or(&0.into());
+		if !do_finalize {
+			return Ok(())
+		}
+
+		let switch_index = self.historied_management.write().get_db_state_for_fork(hash);
+		
+		// TODO current canonicalize is broken (uses a path, but remove all that is afterward too), we just need to change composite treshold
+		// and migrate. Or we canonicallize over ptha to hash and only ever migrate less often
+		// (composite index).
+		//self.historied_management.canonicalize(switch_index);
+		// TODO EMCH do migrate data
+		*self.historied_next_finalizable.write() = Some(number + HISTORIED_FINALIZATION_WINDOWS.into());
+		Ok(())
+	}
 }
+
+/// Avoid finalizing at every block.
+const HISTORIED_FINALIZATION_WINDOWS: u8 = 101;
 
 fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db::CommitSet<Vec<u8>>) {
 	for (key, val) in commit.data.inserted.into_iter() {
@@ -1421,7 +2135,11 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = SyncingCachingState<RefTrackingState<Block>, Block>;
-	type OffchainStorage = offchain::LocalStorage;
+	type OffchainPersistentStorage = offchain::LocalStorage;
+	type OffchainLocalStorage = offchain::BlockChainLocalStorage<
+		<HashFor<Block> as Hasher>::Out,
+		TreeManagementPersistence,
+	>;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		let mut old_state = self.state_at(BlockId::Hash(Default::default()))?;
@@ -1430,7 +2148,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok(BlockImportOperation {
 			pending_block: None,
 			old_state,
-			db_updates: PrefixedMemoryDB::default(),
+			db_updates: OverlayWithIndexes::default(),
 			storage_updates: Default::default(),
 			child_storage_updates: Default::default(),
 			offchain_storage_updates: Default::default(),
@@ -1462,9 +2180,105 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	) -> ClientResult<()> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
+		let last_final = operation.finalized_blocks.last().cloned();
+		let hashes = operation.pending_block.as_ref().map(|pending_block| {
+			let hash = pending_block.header.hash();
+			let parent_hash = *pending_block.header.parent_hash();
+			(hash, parent_hash)
+		});
 
-		match self.try_commit_operation(operation) {
+		let mut historied_db = if let Some((hash, parent_hash)) = hashes {
+			if self.historied_next_finalizable.read().is_none() {
+				let parent_block = BlockId::Hash(parent_hash.clone());
+				if let Some(nb) = self.blockchain.block_number_from_id(&parent_block)? {
+					*self.historied_next_finalizable.write() = Some(nb + HISTORIED_FINALIZATION_WINDOWS.into());
+				}
+			}
+			let update_plan = {
+				// lock does notinclude update of value as we do not have concurrent block creation
+				let mut management = self.historied_management.write();
+				if let Some(state) = Some(management.get_db_state_for_fork(&parent_hash)
+					.unwrap_or_else(|| {
+						// allow this to start from existing state TODO EMCH add a stored boolean to only allow
+						// that once in genesis
+						warn!("state not found for parent hash, THISISABUG, appending to latest");
+						management.latest_state_fork()
+					}))
+				{
+					// TODO this require to support rollback!! actually we could drop a state
+					// without invalidating next value.
+					// (concurrency would fork here).
+					let query_plan = management.append_external_state(hash.clone(), &state)
+						.expect("correct state resolution");
+					warn!("qp for {:?}, {:?}", hash, query_plan);
+					// TODO EMCH this should be return by append operation!!!
+					let update_plan = management.get_db_state_mut(&hash)
+						.expect("correct state resolution");
+					warn!("up for {:?}, {:?}", hash, update_plan);
+					update_plan
+				} else {
+					// TODO EMCH rollback? Not that we could write the change in mgmt first
+					// and includ the later change in rollback 
+					panic!("missing update plan");
+				}
+			};
+			Some(HistoriedDBMut {
+				current_state: update_plan,
+				db: self.historied_state.clone(),
+			})
+		} else {
+			None
+		};
+
+		let historied_update = operation.storage_updates.clone();
+		let index_changeset = operation.db_updates.indexes.clone(); // TODO see how to avoid this clone later (using a single tx would do the trick)
+		match self.try_commit_operation(operation, &mut historied_db) {
 			Ok(_) => {
+				// TODO avoid failure or manage pending on those historied operation
+				// -> could put in try commit (mgmt change are synch at this point).
+				if let Some(historied_db) = historied_db.as_mut() {
+					let (tx, nb) = historied_db.process_change_set(historied_update);
+					warn!("committed {:?} change in historied db", nb);
+					historied_db.write_change_set(tx)?;
+					// write indexes
+					let mut tx = historied_db.transaction();
+					let mut nb = 0;
+					for (k, index) in index_changeset {
+						nb += 1;
+						historied_db.update_single_index(
+							k.as_slice(),
+							Some(crate::encode_index(index)),
+							&mut tx,
+						); 
+					}
+					warn!("committed {:?} index in historied db", nb);
+					// write management state changes
+					let pending = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
+					for (col, (changes, dropped)) in pending {
+						if let Some((col, p)) = resolve_collection(col) {
+							if dropped {
+								tx.delete_prefix(col, p.unwrap_or(&[]));
+							}
+							for (key, change) in changes {
+								subcollection_prefixed_key!(p, key);
+								match change {
+									Some(value) => tx.put(col, key, value.as_slice()), 
+									None => tx.delete(col, key),
+								}
+							}
+						} else {
+							warn!("Unknown collection for tree management pending transaction {:?}", col);
+						}
+					}
+					historied_db.write_change_set(tx)?;
+				}
+				if let Some(latest_final) = last_final {
+					let block = latest_final.0;
+					if let (Some(number), Some(hash)) = (self.blockchain.block_number_from_id(&block)?,
+						self.blockchain.block_hash_from_id(&block)?) {
+						self.historied_new_finalized(&hash, number, false)?;
+					}
+				}
 				self.storage.state_db.apply_pending();
 				Ok(())
 			},
@@ -1498,6 +2312,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		self.storage.db.commit(transaction)?;
 		self.blockchain.update_meta(hash, number, is_best, is_finalized);
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
+		if let Some(number) = self.blockchain.block_number_from_id(&block)? {
+			self.historied_new_finalized(&hash, number, true)?;
+		}
 		Ok(())
 	}
 
@@ -1505,8 +2322,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Some(&self.changes_tries_storage)
 	}
 
-	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
+	fn offchain_persistent_storage(&self) -> Option<Self::OffchainPersistentStorage> {
 		Some(self.offchain_storage.clone())
+	}
+
+	fn offchain_local_storage(&self) -> Option<Self::OffchainLocalStorage> {
+		Some(self.offchain_local_storage.clone())
 	}
 
 	fn usage_info(&self) -> Option<UsageInfo> {
@@ -1655,11 +2476,35 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			BlockId::Hash(h) if h == Default::default() => {
 				let genesis_storage = DbGenesisStorage::<Block>::new();
 				let root = genesis_storage.0.clone();
-				let db_state = DbState::<Block>::new(Arc::new(genesis_storage), root);
+				let alternative = {
+					let mut management = self.historied_management.write();
+					let state = management.latest_state_fork();
+					// starting a new state at default hash is not strictly necessary,
+					// but we lack a historied db primitive to get default query state
+					// on (0, 0).
+					let current_state = management.get_db_state(&h)
+						.or_else(|| management.append_external_state(h.clone(), &state)
+							.and_then(|_| management.get_db_state(&h))
+						).ok_or("Historied management error")?;
+					HistoriedDB {
+						current_state,
+						db: self.historied_state.clone(),
+						do_assert: self.historied_state_do_assert,
+					}
+				};
+				let alternative = Arc::new(alternative);
+				let db_state = DbState::<Block>::new(
+					Arc::new(genesis_storage),
+					root,
+					alternative.clone(),
+					alternative.clone(),
+					alternative.clone(),
+				);
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				let caching_state = CachingState::new(
 					state,
 					self.shared_cache.clone(),
+					self.experimental_cache.clone(),
 					None,
 				);
 				return Ok(SyncingCachingState::new(
@@ -1690,7 +2535,29 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = hdr.state_root;
-					let db_state = DbState::<Block>::new(self.storage.clone(), root);
+					let alternative = {
+						let mut management = self.historied_management.write();
+						let current_state = management.get_db_state(&hash)
+							.unwrap_or_else(|| {
+								warn!("Historied management missing state");
+								Default::default()
+							}); // TODO get rid of this, just to restore state
+//							.ok_or_else(|| format!("Historied management missing state for hash {:?}", hash))?;
+						HistoriedDB {
+							current_state,
+							db: self.historied_state.clone(),
+							do_assert: self.historied_state_do_assert,
+						}
+					};
+
+					let alternative = Arc::new(alternative);
+					let db_state = DbState::<Block>::new(
+						self.storage.clone(),
+						root,
+						alternative.clone(),
+						alternative.clone(),
+						alternative.clone(),
+					);
 					let state = RefTrackingState::new(
 						db_state,
 						self.storage.clone(),
@@ -1699,6 +2566,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					let caching_state = CachingState::new(
 						state,
 						self.shared_cache.clone(),
+						self.experimental_cache.clone(),
 						Some(hash),
 					);
 					Ok(SyncingCachingState::new(
@@ -1817,7 +2685,7 @@ pub(crate) mod tests {
 	#[test]
 	fn block_hash_inserted_correctly() {
 		let backing = {
-			let db = Backend::<Block>::new_test(1, 0);
+			let db = Backend::<Block>::new_test(1, 0, Default::default());
 			for i in 0..10 {
 				assert!(db.blockchain().hash(i).unwrap().is_none());
 
@@ -1861,6 +2729,7 @@ pub(crate) mod tests {
 			state_cache_child_ratio: Some((50, 100)),
 			pruning: PruningMode::keep_blocks(1),
 			source: DatabaseSettingsSrc::Custom(backing),
+			experimental_cache: Default::default(),
 		}, 0).unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);
 		for i in 0..10 {
@@ -1870,7 +2739,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn set_state_data() {
-		let db = Backend::<Block>::new_test(2, 0);
+		let db = Backend::<Block>::new_test(2, 0, Default::default());
 		let hash = {
 			let mut op = db.begin_operation().unwrap();
 			db.begin_state_operation(&mut op, BlockId::Hash(Default::default())).unwrap();
@@ -1960,7 +2829,7 @@ pub(crate) mod tests {
 	fn delete_only_when_negative_rc() {
 		sp_tracing::try_init_simple();
 		let key;
-		let backend = Backend::<Block>::new_test(1, 0);
+		let backend = Backend::<Block>::new_test(1, 0, Default::default());
 
 		let hash = {
 			let mut op = backend.begin_operation().unwrap();
@@ -2115,7 +2984,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn tree_route_works() {
-		let backend = Backend::<Block>::new_test(1000, 100);
+		let backend = Backend::<Block>::new_test(1000, 100, Default::default());
 		let blockchain = backend.blockchain();
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 
@@ -2163,7 +3032,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn tree_route_child() {
-		let backend = Backend::<Block>::new_test(1000, 100);
+		let backend = Backend::<Block>::new_test(1000, 100, Default::default());
 		let blockchain = backend.blockchain();
 
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
@@ -2180,7 +3049,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn lowest_common_ancestor_works() {
-		let backend = Backend::<Block>::new_test(1000, 100);
+		let backend = Backend::<Block>::new_test(1000, 100, Default::default());
 		let blockchain = backend.blockchain();
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 
@@ -2245,7 +3114,7 @@ pub(crate) mod tests {
 		// triggering the issue being eviction of a previously fetched record
 		// from the cache, therefore this test is dependent on the LRU cache
 		// size for header metadata, which is currently set to 5000 elements.
-		let backend = Backend::<Block>::new_test(10000, 10000);
+		let backend = Backend::<Block>::new_test(10000, 10000, Default::default());
 		let blockchain = backend.blockchain();
 
 		let genesis = insert_header(&backend, 0, Default::default(), None, Default::default());
@@ -2272,25 +3141,25 @@ pub(crate) mod tests {
 
 	#[test]
 	fn test_leaves_with_complex_block_tree() {
-		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
+		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20, Default::default()));
 		substrate_test_runtime_client::trait_tests::test_leaves_for_backend(backend);
 	}
 
 	#[test]
 	fn test_children_with_complex_block_tree() {
-		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
+		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20, Default::default()));
 		substrate_test_runtime_client::trait_tests::test_children_for_backend(backend);
 	}
 
 	#[test]
 	fn test_blockchain_query_by_number_gets_canonical() {
-		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
+		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20, Default::default()));
 		substrate_test_runtime_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
 	}
 
 	#[test]
 	fn test_leaves_pruned_on_finality() {
-		let backend: Backend<Block> = Backend::new_test(10, 10);
+		let backend: Backend<Block> = Backend::new_test(10, 10, Default::default());
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 
 		let block1_a = insert_header(&backend, 1, block0, None, Default::default());
@@ -2314,7 +3183,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn test_aux() {
-		let backend: Backend<substrate_test_runtime_client::runtime::Block> = Backend::new_test(0, 0);
+		let backend: Backend<substrate_test_runtime_client::runtime::Block> = Backend::new_test(0, 0, Default::default());
 		assert!(backend.get_aux(b"test").unwrap().is_none());
 		backend.insert_aux(&[(&b"test"[..], &b"hello"[..])], &[]).unwrap();
 		assert_eq!(b"hello", &backend.get_aux(b"test").unwrap().unwrap()[..]);
@@ -2326,7 +3195,7 @@ pub(crate) mod tests {
 	fn test_finalize_block_with_justification() {
 		use sc_client_api::blockchain::{Backend as BlockChainBackend};
 
-		let backend = Backend::<Block>::new_test(10, 10);
+		let backend = Backend::<Block>::new_test(10, 10, Default::default());
 
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 		let _ = insert_header(&backend, 1, block0, None, Default::default());
@@ -2342,7 +3211,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn test_finalize_multiple_blocks_in_single_op() {
-		let backend = Backend::<Block>::new_test(10, 10);
+		let backend = Backend::<Block>::new_test(10, 10, Default::default());
 
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 		let block1 = insert_header(&backend, 1, block0, None, Default::default());
@@ -2367,7 +3236,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn test_finalize_non_sequential() {
-		let backend = Backend::<Block>::new_test(10, 10);
+		let backend = Backend::<Block>::new_test(10, 10, Default::default());
 
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 		let block1 = insert_header(&backend, 1, block0, None, Default::default());
@@ -2384,7 +3253,7 @@ pub(crate) mod tests {
 	fn header_cht_root_works() {
 		use sc_client_api::ProvideChtRoots;
 
-		let backend = Backend::<Block>::new_test(10, 10);
+		let backend = Backend::<Block>::new_test(10, 10, Default::default());
 
 		// insert 1 + SIZE + SIZE + 1 blocks so that CHT#0 is created
 		let mut prev_hash = insert_header(&backend, 0, Default::default(), None, Default::default());

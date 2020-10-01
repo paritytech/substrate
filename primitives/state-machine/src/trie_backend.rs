@@ -21,24 +21,40 @@ use crate::{warn, debug};
 use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
+use trie_db::partial_db::{KVBackend as TKVBackend, IndexBackend};
 use sp_core::storage::{ChildInfo, ChildType};
 use codec::{Codec, Decode};
 use crate::{
 	StorageKey, StorageValue, Backend,
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral},
 };
-use sp_std::{boxed::Box, vec::Vec};
+use crate::kv_backend::KVBackend;
+#[cfg(feature = "std")]
+use std::time::{Duration, Instant};
+use sp_std::{boxed::Box, vec::Vec, collections::btree_map::BTreeMap, sync::Arc};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	pub (crate) essence: TrieBackendEssence<S, H>,
+	pub alternative: Arc<dyn KVBackend>,
+	pub alternative_trie_values: Arc<dyn TKVBackend + Send + Sync + 'static>,
+	pub alternative_indexes: Arc<dyn IndexBackend + Send + Sync + 'static>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out) -> Self {
+	pub fn new(
+		storage: S,
+		root: H::Out,
+		alternative: Arc<dyn KVBackend>,
+		alternative_trie_values: Arc<dyn TKVBackend + Send + Sync + 'static>,
+		alternative_indexes: Arc<dyn IndexBackend + Send + Sync + 'static>,
+	) -> Self {
 		TrieBackend {
 			essence: TrieBackendEssence::new(storage, root),
+			alternative,
+			alternative_trie_values,
+			alternative_indexes,
 		}
 	}
 
@@ -82,7 +98,18 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
-		self.essence.storage(key)
+		if self.alternative.assert_value() {
+			let reference = self.essence.storage(key);
+			let alter = self.alternative.storage(key);
+			/*if alter != reference {
+				warn!("###Different values in sm!!!!!!!!!!!! {:?}", key);
+			}*/
+			assert!(alter == reference, "mistmatch in sm for key {:?}", key);
+			//warn!("a match");
+			reference
+		} else {
+			self.essence.storage(key)
+		}
 	}
 
 	fn child_storage(
@@ -175,19 +202,98 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
 
-		{
-			let mut eph = Ephemeral::new(
-				self.essence.backend_storage(),
-				&mut write_overlay,
-			);
+		let mut delta2: Option<Vec<_>> = if self.alternative.assert_value() {
+			Some(delta.map(|(k, v)| (k.to_vec(), v.map(|v| v.to_vec()))).collect())
+		} else {
+			{
+				let mut eph = Ephemeral::new(
+					self.essence.backend_storage(),
+					&mut write_overlay,
+				);
 
-			match delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta) {
-				Ok(ret) => root = ret,
-				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
+				match delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta) {
+					Ok(ret) => root = ret,
+					Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
+				}
 			}
+			return (root, write_overlay);
+		};
+
+		if let Some(delta) = delta2 {
+			#[cfg(feature = "std")]
+			let now = Instant::now();
+			{
+				let mut eph = Ephemeral::new(
+					self.essence.backend_storage(),
+					&mut write_overlay,
+				);
+
+				match delta_trie_root::<Layout<H>, _, _, _, _, _>(
+					&mut eph,
+					root,
+					delta.iter().map(|(k, v)| (k.as_slice(), v.as_ref().map(|v| v.as_slice()))),
+				) {
+					Ok(ret) => root = ret,
+					Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
+				}
+			}
+			#[cfg(feature = "std")]
+			println!("old block root calculation: {:?}", now.elapsed().as_millis());
+
+			use trie_db::partial_db::RootIndexIterator;
+
+			#[cfg(feature = "std")]
+			let now = Instant::now();
+			// TODO put depth indexes in trait: here need copy with upgrade client static def.
+			let indexes = trie_db::partial_db::DepthIndexes::new(&[]);
+			let mut result_indexes = BTreeMap::new();
+			let root_new: <H as Hasher>::Out = {
+				let mut cb = trie_db::TrieRootIndexes::<H, _, _>::new(&mut result_indexes, &indexes);
+				let iter = RootIndexIterator::new(
+					&self.alternative_trie_values,
+					&self.alternative_indexes,
+					&indexes,
+					delta.clone().into_iter(),
+					Vec::new(),
+				);
+				trie_db::trie_visit_with_indexes::<sp_trie::Layout<H>, _, _, _>(iter, &mut cb);
+				cb.root.unwrap_or(Default::default())
+			};
+
+			#[cfg(feature = "std")]
+			println!("block root calculation no index: {:?}, {:?}", now.elapsed().as_millis(), root == root_new);
+
+			#[cfg(feature = "std")]
+			let now = Instant::now();
+			// TODO put depth indexes in trait: here need copy with upgrade client static def.
+	let every_five = &
+[5u32, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125, 130, 135, 140, 145, 150, 155, 160, 165, 170, 175, 180, 185, 190, 195, 200, 205, 210, 215, 220, 225, 230, 235];
+			let indexes = trie_db::partial_db::DepthIndexes::new(every_five);
+			let mut result_indexes = BTreeMap::new();
+			let root_new: <H as Hasher>::Out = {
+				let mut cb = trie_db::TrieRootIndexes::<H, _, _>::new(&mut result_indexes, &indexes);
+				let iter = RootIndexIterator::new(
+					&self.alternative_trie_values,
+					&self.alternative_indexes,
+					&indexes,
+					delta.into_iter(),
+					Vec::new(),
+				);
+				trie_db::trie_visit_with_indexes::<sp_trie::Layout<H>, _, _, _>(iter, &mut cb);
+				cb.root.unwrap_or(Default::default())
+			};
+
+			#[cfg(feature = "std")]
+			println!("block root calculation with index {:?}: {:?}, {:?}", result_indexes.len(), now.elapsed().as_millis(), root == root_new);
+
+			use crate::trie_backend_essence::IndexChanges;
+			write_overlay.push_index_change(result_indexes);
+
+			(root, write_overlay)
+		} else {
+			unreachable!()
 		}
 
-		(root, write_overlay)
 	}
 
 	fn child_storage_root<'a>(
@@ -252,16 +358,17 @@ pub mod tests {
 	use std::{collections::HashSet, iter};
 	use sp_core::H256;
 	use codec::Encode;
-	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
+	use sp_trie::{TrieMut, trie_types::TrieDBMut, KeySpacedDBMut};
+	use crate::OverlayWithIndexes;
 	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
 
-	fn test_db() -> (PrefixedMemoryDB<BlakeTwo256>, H256) {
+	fn test_db() -> (OverlayWithIndexes<BlakeTwo256>, H256) {
 		let child_info = ChildInfo::new_default(CHILD_KEY_1);
 		let mut root = H256::default();
-		let mut mdb = PrefixedMemoryDB::<BlakeTwo256>::default();
+		let mut mdb = OverlayWithIndexes::<BlakeTwo256>::default();
 		{
 			let mut mdb = KeySpacedDBMut::new(&mut mdb, child_info.keyspace());
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
@@ -286,9 +393,15 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
+	pub(crate) fn test_trie() -> TrieBackend<OverlayWithIndexes<BlakeTwo256>, BlakeTwo256> {
 		let (mdb, root) = test_db();
-		TrieBackend::new(mdb, root)
+		TrieBackend::new(
+			mdb,
+			root,
+			Arc::new(crate::in_memory_backend::KVInMem::default()),
+			Arc::new(BTreeMap::new()),
+			Arc::new(BTreeMap::new()),
+		)	
 	}
 
 	#[test]
@@ -317,9 +430,12 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		assert!(TrieBackend::<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>::new(
-			PrefixedMemoryDB::default(),
+		assert!(TrieBackend::<OverlayWithIndexes<BlakeTwo256>, BlakeTwo256>::new(
+			OverlayWithIndexes::default(),
 			Default::default(),
+			Arc::new(crate::in_memory_backend::KVInMem::default()),
+			Arc::new(BTreeMap::new()),
+			Arc::new(BTreeMap::new()),
 		).pairs().is_empty());
 	}
 
@@ -330,7 +446,7 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_transaction_is_empty() {
-		assert!(test_trie().storage_root(iter::empty()).1.drain().is_empty());
+		assert!(test_trie().storage_root(iter::empty()).1.db.drain().is_empty());
 	}
 
 	#[test]
@@ -338,7 +454,7 @@ pub mod tests {
 		let (new_root, mut tx) = test_trie().storage_root(
 			iter::once((&b"new-key"[..], Some(&b"new-value"[..]))),
 		);
-		assert!(!tx.drain().is_empty());
+		assert!(!tx.db.drain().is_empty());
 		assert!(new_root != test_trie().storage_root(iter::empty()).0);
 	}
 

@@ -37,6 +37,53 @@ pub fn as_database<D: KeyValueDB + 'static, H: Clone>(db: D) -> std::sync::Arc<d
 	std::sync::Arc::new(DbAdapter(db))
 }
 
+/// Wrap RocksDb database into a trait object that implements `sp_database::Database`
+pub fn as_database2<D: KeyValueDB + 'static, H: Clone>(db: std::sync::Arc<D>) -> std::sync::Arc<dyn Database<H>> {
+	std::sync::Arc::new(DbAdapter(WrapArc(db)))
+}
+
+struct WrapArc<D: KeyValueDB>(std::sync::Arc<D>);
+
+impl<D: KeyValueDB> parity_util_mem::MallocSizeOf for WrapArc<D> {
+	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+		<D as parity_util_mem::MallocSizeOf>::size_of(&self.0, ops)
+	}
+}
+
+impl<D: KeyValueDB> KeyValueDB for WrapArc<D> {
+	fn transaction(&self) -> DBTransaction {
+		<D as KeyValueDB>::transaction(&self.0)
+	}
+
+	fn get(&self, col: u32, key: &[u8]) -> std::io::Result<Option<Vec<u8>>> {
+		<D as KeyValueDB>::get(&self.0, col, key)
+	}
+
+	fn get_by_prefix(&self, col: u32, prefix: &[u8]) -> Option<Box<[u8]>> {
+		<D as KeyValueDB>::get_by_prefix(&self.0, col, prefix)
+	}
+
+	fn write(&self, transaction: DBTransaction) -> std::io::Result<()> {
+		<D as KeyValueDB>::write(&self.0, transaction)
+	}
+
+	fn iter<'a>(&'a self, col: u32) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
+		<D as KeyValueDB>::iter(&self.0, col)
+	}
+
+	fn iter_with_prefix<'a>(
+		&'a self,
+		col: u32,
+		prefix: &'a [u8],
+	) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
+		<D as KeyValueDB>::iter_with_prefix(&self.0, col, prefix)
+	}
+
+	fn restore(&self, new_db: &str) -> std::io::Result<()> {
+		<D as KeyValueDB>::restore(&self.0, new_db)
+	}
+}
+
 impl<D: KeyValueDB, H: Clone> Database<H> for DbAdapter<D> {
 	fn commit(&self, transaction: Transaction<H>) -> error::Result<()> {
 		let mut tx = DBTransaction::new();

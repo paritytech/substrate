@@ -102,6 +102,7 @@ where
 		max_runtime_instances: 8,
 		announce_block: true,
 		base_path: None,
+		experimental_cache: Default::default(),
 		informant_output_format: sc_informant::OutputFormat {
 			enable_color: false,
 			prefix: String::new(),

@@ -32,6 +32,10 @@ pub mod testing;
 /// Local storage prefix used by the Offchain Worker API to
 pub const STORAGE_PREFIX : &'static [u8] = b"storage";
 
+/// Local storage prefix used by the Offchain Worker API to
+/// store data with chain history.
+pub const LOCAL_STORAGE_PREFIX : &'static [u8] = b"history";
+
 /// Offchain workers local storage.
 pub trait OffchainStorage: Clone + Send + Sync {
 	/// Persist a value in storage under given key and prefix.
@@ -53,6 +57,32 @@ pub trait OffchainStorage: Clone + Send + Sync {
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool;
+}
+
+/// Local storage for different blockchain state.
+pub trait BlockChainOffchainStorage: Clone + Send + Sync {
+	/// OffChainStorage to use at a given block.
+	type OffchainStorage: OffchainStorage;
+
+	/// OffChainStorage to use at a given block with
+	/// guarantie that writes succed.
+	type OffchainStorageNew: OffchainStorage;
+
+	/// Block Identifier.
+	type BlockId;
+
+	/// Get offchain storage for the given block if the id is defined.
+	/// Writes in the resulting offchain storage only succeed if at
+	/// the latest value, panic otherwise.
+	fn at(&self, id: Self::BlockId) -> Option<Self::OffchainStorage>;
+
+	/// Get offchain storage for the given block if the id is defined.
+	/// This variant is using a block that is latest from a block
+	/// and got no concurrent write, all writes are therefore guaranted to succeed.
+	fn at_new(&self, id: Self::BlockId) -> Option<Self::OffchainStorageNew>;
+
+	/// Get latest added state. 
+	fn latest(&self) -> Option<Self::BlockId>;
 }
 
 /// A type of supported crypto.

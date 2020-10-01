@@ -18,6 +18,7 @@
 
 //! Service configuration.
 
+pub use sc_client_api::ExpCacheConf;
 pub use sc_client_db::{Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig};
 pub use sc_network::Multiaddr;
 pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
@@ -105,6 +106,8 @@ pub struct Configuration {
 	///
 	/// The default value is 8.
 	pub max_runtime_instances: usize,
+	/// Experimental cache config.
+	pub experimental_cache: ExpCacheConf,
 	/// Announce block automatically after they have been imported
 	pub announce_block: bool,
 	/// Base path of the configuration

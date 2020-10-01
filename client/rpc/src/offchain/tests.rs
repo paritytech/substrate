@@ -18,12 +18,14 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use sp_core::{Bytes, offchain::storage::InMemOffchainStorage};
+use sp_core::{Bytes, offchain::storage::InMemOffchainStorage,
+	offchain::storage::BlockChainInMemOffchainStorage};
 
 #[test]
 fn local_storage_should_work() {
 	let storage = InMemOffchainStorage::default();
-	let offchain = Offchain::new(storage, DenyUnsafe::No);
+	let local_storage = BlockChainInMemOffchainStorage::<Vec<u8>>::default();
+	let offchain = Offchain::new(storage, local_storage, DenyUnsafe::No);
 	let key = Bytes(b"offchain_storage".to_vec());
 	let value = Bytes(b"offchain_value".to_vec());
 
@@ -40,7 +42,8 @@ fn local_storage_should_work() {
 #[test]
 fn offchain_calls_considered_unsafe() {
 	let storage = InMemOffchainStorage::default();
-	let offchain = Offchain::new(storage, DenyUnsafe::Yes);
+	let local_storage = BlockChainInMemOffchainStorage::<Vec<u8>>::default();
+	let offchain = Offchain::new(storage, local_storage, DenyUnsafe::Yes);
 	let key = Bytes(b"offchain_storage".to_vec());
 	let value = Bytes(b"offchain_value".to_vec());
 

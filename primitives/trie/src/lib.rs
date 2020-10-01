@@ -237,7 +237,7 @@ pub fn child_trie_root<L: TrieConfiguration, I, A, B>(
 	where
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>,
+		B: AsRef<[u8]> + Clone,
 {
 	L::trie_root(input)
 }

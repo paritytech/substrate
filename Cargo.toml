@@ -56,6 +56,7 @@ members = [
 	"client/telemetry",
 	"client/transaction-pool",
 	"client/transaction-pool/graph",
+	"utils/historied-db",
 	"utils/prometheus",
 	"utils/wasm-builder-runner",
 	"frame/assets",
@@ -183,6 +184,7 @@ members = [
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
 	"utils/wasm-builder",
+	"utils/radix-tree",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
@@ -254,3 +256,14 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+
+[patch.crates-io]
+trie-db = { git="https://github.com/cheme/trie", branch="key_val_indexed2" }
+memory-db = { git="https://github.com/cheme/trie", branch="key_val_indexed2" }
+hash-db = { git="https://github.com/cheme/trie", branch="key_val_indexed2" }
+trie-root = { git="https://github.com/cheme/trie", branch="key_val_indexed2" }
+trie-bench = { git="https://github.com/cheme/trie", branch="key_val_indexed2" }
+trie-standardmap = { git="https://github.com/cheme/trie", branch="key_val_indexed2" }
+
+kvdb-rocksdb = { git="https://github.com/cheme/parity-common", branch="historied-db-cache" }

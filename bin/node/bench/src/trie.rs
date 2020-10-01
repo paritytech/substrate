@@ -181,9 +181,13 @@ impl core::Benchmark for TrieReadBenchmark {
 		let storage: Arc<dyn sp_state_machine::Storage<sp_core::Blake2Hasher>> =
 			Arc::new(Storage(db.open(self.database_type)));
 
+		let alternative = sp_state_machine::KVInMem::default();
 		let trie_backend = sp_state_machine::TrieBackend::new(
 			storage,
 			self.root,
+			Arc::new(alternative),
+			Arc::new(std::collections::BTreeMap::new()),
+			Arc::new(std::collections::BTreeMap::new()),
 		);
 		for (warmup_key, warmup_value) in self.warmup_keys.iter() {
 			let value = trie_backend.storage(&warmup_key[..])

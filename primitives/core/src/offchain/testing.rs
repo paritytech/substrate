@@ -84,6 +84,8 @@ impl TestPersistentOffchainDB {
 			match value_operation {
 				OffchainOverlayedChange::SetValue(val) => me.set(b"", key.as_slice(), val.as_slice()),
 				OffchainOverlayedChange::Remove => me.remove(b"", key.as_slice()),
+				OffchainOverlayedChange::SetLocalValue(..)
+				| OffchainOverlayedChange::RemoveLocal => unimplemented!("Missing blockchain local tests"),
 			}
 		}
 	}
