@@ -124,7 +124,7 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 				.map_err(|err| {
 					Error::StringError(format!("{:?}", err))
 				})?;
-			let epoch = epoch_data(&shared_epoch, &client, &babe_config, epoch_start, &select_chain)?;
+			let epoch = epoch_data(&shared_epoch, &client, &babe_config, epoch_start, &select_chain).await?;
 			let (epoch_start, epoch_end) = (epoch.start_slot(), epoch.end_slot());
 
 			let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
@@ -144,7 +144,7 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 
 			for slot_number in epoch_start..epoch_end {
 				if let Some((claim, key)) =
-					authorship::claim_slot_using_keys(slot_number, &epoch, &keystore, &keys)
+					authorship::claim_slot_using_keys(slot_number, &epoch, &keystore, &keys).await
 				{
 					match claim {
 						PreDigest::Primary { .. } => {
@@ -198,7 +198,7 @@ impl From<Error> for jsonrpc_core::Error {
 }
 
 /// fetches the epoch data for a given slot_number.
-fn epoch_data<B, C, SC>(
+async fn epoch_data<B, C, SC>(
 	epoch_changes: &SharedEpochChanges<B, Epoch>,
 	client: &Arc<C>,
 	babe_config: &Config,
@@ -211,7 +211,7 @@ fn epoch_data<B, C, SC>(
 		SC: SelectChain<B>,
 {
 	let parent = select_chain.best_chain()?;
-	epoch_changes.lock().epoch_data_for_child_of(
+	epoch_changes.lock().await.epoch_data_for_child_of(
 		descendent_query(&**client),
 		&parent.hash(),
 		parent.number().clone(),
@@ -240,6 +240,7 @@ mod tests {
 	use sc_keystore::LocalKeystore;
 
 	use std::sync::Arc;
+	use futures::executor::block_on;
 	use sc_consensus_babe::{Config, block_import, AuthorityPair};
 	use jsonrpc_core::IoHandler;
 
@@ -263,11 +264,11 @@ mod tests {
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let config = Config::get_or_compute(&*client).expect("config available");
-		let (_, link) = block_import(
+		let (_, link) = block_on(block_import(
 			config.clone(),
 			client.clone(),
 			client.clone(),
-		).expect("can initialize block-import");
+		)).expect("can initialize block-import");
 
 		let epoch_changes = link.epoch_changes().clone();
 		let keystore = create_temp_keystore::<AuthorityPair>(Sr25519Keyring::Alice).0;

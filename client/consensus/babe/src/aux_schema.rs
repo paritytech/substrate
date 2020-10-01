@@ -17,9 +17,9 @@
 //! Schema for BABE epoch changes in the aux-db.
 
 use std::sync::Arc;
-use parking_lot::Mutex;
 use log::info;
 use codec::{Decode, Encode};
+use futures_util::lock::Mutex;
 
 use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
@@ -51,7 +51,7 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 }
 
 /// Load or initialize persistent epoch change data from backend.
-pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
+pub async fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	backend: &B,
 	config: &BabeGenesisConfiguration,
 ) -> ClientResult<SharedEpochChanges<Block, Epoch>> {
@@ -88,7 +88,7 @@ pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	// since the tree is now rebalanced on every update operation. but since the
 	// tree wasn't rebalanced initially it's useful to temporarily leave it here
 	// to avoid having to wait until an import for rebalancing.
-	epoch_changes.lock().rebalance();
+	epoch_changes.lock().await.rebalance();
 
 	Ok(epoch_changes)
 }

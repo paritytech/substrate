@@ -29,7 +29,7 @@ use sp_consensus_babe::digests::{
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{U256, blake2_256, crypto::Public};
-use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
+use sp_keystore::CryptoStorePtr;
 use codec::Encode;
 use schnorrkel::{
 	keys::PublicKey,
@@ -127,7 +127,7 @@ pub(super) fn secondary_slot_author(
 /// Claim a secondary slot if it is our turn to propose, returning the
 /// pre-digest to use when authoring the block, or `None` if it is not our turn
 /// to propose.
-fn claim_secondary_slot(
+async fn claim_secondary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	keys: &[(AuthorityId, usize)],
@@ -154,12 +154,11 @@ fn claim_secondary_slot(
 					slot_number,
 					*epoch_index,
 				);
-				let result = SyncCryptoStore::sr25519_vrf_sign(
-					&**keystore,
+				let result = keystore.sr25519_vrf_sign(
 					AuthorityId::ID,
 					authority_id.as_ref(),
 					transcript_data,
-				);
+				).await;
 				if let Ok(signature)  = result {
 					Some(PreDigest::SecondaryVRF(SecondaryVRFPreDigest {
 						slot_number,
@@ -170,7 +169,7 @@ fn claim_secondary_slot(
 				} else {
 					None
 				}
-			} else if SyncCryptoStore::has_keys(&**keystore, &[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
+			} else if keystore.has_keys(&[(authority_id.to_raw_vec(), AuthorityId::ID)]).await {
 				Some(PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					slot_number,
 					authority_index: *authority_index as u32,
@@ -192,7 +191,7 @@ fn claim_secondary_slot(
 /// a primary VRF based slot. If we are not able to claim it, then if we have
 /// secondary slots enabled for the given epoch, we will fallback to trying to
 /// claim a secondary slot.
-pub fn claim_slot(
+pub async fn claim_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	keystore: &CryptoStorePtr,
@@ -201,40 +200,49 @@ pub fn claim_slot(
 		.enumerate()
 		.map(|(index, a)| (a.0.clone(), index))
 		.collect::<Vec<_>>();
-	claim_slot_using_keys(slot_number, epoch, keystore, &authorities)
+	claim_slot_using_keys(slot_number, epoch, keystore, &authorities).await
 }
 
 /// Like `claim_slot`, but allows passing an explicit set of key pairs. Useful if we intend
 /// to make repeated calls for different slots using the same key pairs.
-pub fn claim_slot_using_keys(
+pub async fn claim_slot_using_keys(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	keystore: &CryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore, &keys)
-		.or_else(|| {
-			if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
-				epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
-			{
-				claim_secondary_slot(
-					slot_number,
-					&epoch,
-					keys,
-					&keystore,
-					epoch.config.allowed_slots.is_secondary_vrf_slots_allowed(),
-				)
-			} else {
-				None
-			}
-		})
+	let slot = claim_primary_slot(
+		slot_number,
+		epoch,
+		epoch.config.c,
+		keystore,
+		&keys
+	).await;
+
+	if slot.is_some() {
+		return slot;
+	}
+
+	if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
+		epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
+	{
+		claim_secondary_slot(
+			slot_number,
+			&epoch,
+			keys,
+			&keystore,
+			epoch.config.allowed_slots.is_secondary_vrf_slots_allowed(),
+		).await
+	} else {
+		None
+	}
 }
 
 /// Claim a primary slot if it is our turn.  Returns `None` if it is not our turn.
 /// This hashes the slot number, epoch, genesis hash, and chain randomness into
 /// the VRF.  If the VRF produces a value less than `threshold`, it is our turn,
 /// so it returns `Some(_)`. Otherwise, it returns `None`.
-fn claim_primary_slot(
+async fn claim_primary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	c: (u64, u64),
@@ -260,12 +268,11 @@ fn claim_primary_slot(
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
 		let threshold = super::authorship::calculate_primary_threshold(c, authorities, *authority_index);
 
-		let result = SyncCryptoStore::sr25519_vrf_sign(
-			&**keystore,
+		let result = keystore.sr25519_vrf_sign(
 			AuthorityId::ID,
 			authority_id.as_ref(),
 			transcript_data,
-		);
+		).await;
 		if let Ok(signature)  = result {
 			let public = PublicKey::from_bytes(&authority_id.to_raw_vec()).ok()?;
 			let inout = match signature.output.attach_input_hash(&public, transcript) {
