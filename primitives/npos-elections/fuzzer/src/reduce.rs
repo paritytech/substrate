@@ -110,8 +110,8 @@ fn assert_assignments_equal(
 	ass2: &Vec<StakedAssignment<AccountId>>,
 ) {
 
-	let (support_1, _) = build_support_map::<AccountId>(winners, ass1);
-	let (support_2, _) = build_support_map::<AccountId>(winners, ass2);
+	let support_1 = build_support_map::<AccountId>(winners, ass1).unwrap();
+	let support_2 = build_support_map::<AccountId>(winners, ass2).unwrap();
 
 	for (who, support) in support_1.iter() {
 		assert_eq!(support.total, support_2.get(who).unwrap().total);

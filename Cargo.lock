@@ -1269,9 +1269,9 @@ dependencies = [
 
 [[package]]
 name = "environmental"
-version = "1.1.1"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "516aa8d7a71cb00a1c4146f0798549b93d083d4f189b3ced8f3de6b8f11ee6c4"
+checksum = "6576a1755ddffd988788025e75bce9e74b018f7cc226198fe931d077911c6d7e"
 
 [[package]]
 name = "erased-serde"
@@ -1532,6 +1532,7 @@ dependencies = [
 name = "frame-benchmarking-cli"
 version = "2.0.0"
 dependencies = [
+ "chrono",
  "frame-benchmarking",
  "parity-scale-codec",
  "sc-cli",
@@ -4712,7 +4713,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-proxy"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
