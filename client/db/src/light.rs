@@ -200,7 +200,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for LightStorage<Block> {
 					header_metadata.clone(),
 				);
 				header_metadata
-			}).ok_or_else(|| panic!("header not found in db: {:?}", hash))
+			}).ok_or_else(|| panic!("header not found in db: {:?}. info: {:?}", hash, self.info()))
 		}, Ok)
 	}
 
