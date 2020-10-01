@@ -123,7 +123,7 @@ impl<B: BlockT> GossipEngine<B> {
 		// contains a single message.
 		let (mut tx, rx) = channel(usize::max(past_messages.len(), 10));
 
-		for notification in past_messages{
+		for notification in past_messages {
 			tx.try_send(notification)
 				.expect("receiver known to be live, and buffer size known to suffice; qed");
 		}

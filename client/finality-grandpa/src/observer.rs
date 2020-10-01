@@ -18,7 +18,6 @@
 
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 
 use futures::prelude::*;
 
@@ -163,7 +162,7 @@ where
 /// NOTE: this is currently not part of the crate's public API since we don't consider
 /// it stable enough to use on a live network.
 #[allow(unused)]
-pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, SC>(
+pub async fn run_grandpa_observer<BE, Block: BlockT, Client, N, SC>(
 	config: Config,
 	link: LinkHalf<Block, Client, SC>,
 	network: N,
@@ -198,13 +197,13 @@ where
 		config.keystore,
 		voter_commands_rx,
 		Some(justification_sender),
-	);
+	).await;
 
-	let observer_work = observer_work
+	let observer_work = Box::pin(observer_work.run()
 		.map_ok(|_| ())
 		.map_err(|e| {
 			warn!("GRANDPA Observer failed: {:?}", e);
-		});
+		}));
 
 	Ok(observer_work.map(drop))
 }
@@ -230,7 +229,7 @@ where
 	Network: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 {
-	fn new(
+	async fn new(
 		client: Arc<Client>,
 		network: NetworkBridge<B, Network>,
 		persistent_data: PersistentData<B>,
@@ -251,16 +250,16 @@ where
 			justification_sender,
 			_phantom: PhantomData,
 		};
-		work.rebuild_observer();
+		work.rebuild_observer().await;
 		work
 	}
 
 	/// Rebuilds the `self.observer` field using the current authority set
 	/// state. This method should be called when we know that the authority set
 	/// has changed (e.g. as signalled by a voter command).
-	fn rebuild_observer(&mut self) {
+	async fn rebuild_observer(&mut self) {
 		let set_id = self.persistent_data.authority_set.set_id();
-		let voters = Arc::new(self.persistent_data.authority_set.current_authorities());
+		let voters = Arc::new(self.persistent_data.authority_set.current_authorities().await);
 
 		// start global communication stream for the current set
 		let (global_in, _) = global_communication(
@@ -270,7 +269,7 @@ where
 			&self.network,
 			self.keystore.as_ref(),
 			None,
-		);
+		).await;
 
 		let last_finalized_number = self.client.info().finalized_number;
 
@@ -304,7 +303,7 @@ where
 		self.observer = Box::pin(observer);
 	}
 
-	fn handle_voter_command(
+	async fn handle_voter_command(
 		&mut self,
 		command: VoterCommand<B::Hash, NumberFor<B>>,
 	) -> Result<(), Error> {
@@ -326,7 +325,7 @@ where
 				// set changed (not where the signal happened!) as the base.
 				let set_state = VoterSetState::live(
 					new.set_id,
-					&*self.persistent_data.authority_set.inner().read(),
+					&*self.persistent_data.authority_set.inner().read().await,
 					(new.canon_hash, new.canon_number),
 				);
 
@@ -339,50 +338,37 @@ where
 		self.rebuild_observer();
 		Ok(())
 	}
-}
 
-impl<B, BE, C, N> Future for ObserverWork<B, BE, C, N>
-where
-	B: BlockT,
-	BE: Backend<B> + Unpin + 'static,
-	C: crate::ClientForGrandpa<B, BE> + 'static,
-	N: NetworkT<B>,
-	NumberFor<B>: BlockNumberOps,
-{
-	type Output = Result<(), Error>;
+	async fn run(mut self) -> Result<(), Error> {
+		loop {
+			match (&mut self.observer).await {
+				Ok(()) => {
+					// observer commit stream doesn't conclude naturally; this could reasonably be an error.
+					return Ok(())
+				}
+				Err(CommandOrError::Error(e)) => {
+					// return inner observer error
+					return Err(e)
+				}
+				Err(CommandOrError::VoterCommand(command)) => {
+					// some command issued internally
+					self.handle_voter_command(command).await?;
+				}
+			}
 
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		match Future::poll(Pin::new(&mut self.observer), cx) {
-			Poll::Pending => {}
-			Poll::Ready(Ok(())) => {
-				// observer commit stream doesn't conclude naturally; this could reasonably be an error.
-				return Poll::Ready(Ok(()))
+			match (&mut self.voter_commands_rx).next().await {
+				None => {
+					// the `voter_commands_rx` stream should never conclude since it's never closed.
+					return Ok(())
+				}
+				Some(command) => {
+					// some command issued externally
+					self.handle_voter_command(command).await?;
+				}
 			}
-			Poll::Ready(Err(CommandOrError::Error(e))) => {
-				// return inner observer error
-				return Poll::Ready(Err(e))
-			}
-			Poll::Ready(Err(CommandOrError::VoterCommand(command))) => {
-				// some command issued internally
-				self.handle_voter_command(command)?;
-				cx.waker().wake_by_ref();
-			}
+
+			(&mut self.network).await;
 		}
-
-		match Stream::poll_next(Pin::new(&mut self.voter_commands_rx), cx) {
-			Poll::Pending => {}
-			Poll::Ready(None) => {
-				// the `voter_commands_rx` stream should never conclude since it's never closed.
-				return Poll::Ready(Ok(()))
-			}
-			Poll::Ready(Some(command)) => {
-				// some command issued externally
-				self.handle_voter_command(command)?;
-				cx.waker().wake_by_ref();
-			}
-		}
-
-		Future::poll(Pin::new(&mut self.network), cx)
 	}
 }
 

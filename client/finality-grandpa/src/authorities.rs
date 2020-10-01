@@ -19,7 +19,8 @@
 //! Utilities for dealing with authorities, authority sets, and handoffs.
 
 use fork_tree::ForkTree;
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
+use futures::executor::block_on;
 use finality_grandpa::voter_set::VoterSet;
 use parity_scale_codec::{Encode, Decode};
 use log::debug;
@@ -65,17 +66,17 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 	/// Get the earliest limit-block number that's higher or equal to the given
 	/// min number, if any.
 	pub(crate) fn current_limit(&self, min: N) -> Option<N> {
-		self.inner.read().current_limit(min)
+		block_on(self.inner.read()).current_limit(min)
 	}
 
 	/// Get the current set ID. This is incremented every time the set changes.
 	pub fn set_id(&self) -> u64 {
-		self.inner.read().set_id
+		block_on(self.inner.read()).set_id
 	}
 
 	/// Get the current authorities and their weights (for the current set ID).
-	pub fn current_authorities(&self) -> VoterSet<AuthorityId> {
-		VoterSet::new(self.inner.read().current_authorities.iter().cloned()).expect(
+	pub async fn current_authorities(&self) -> VoterSet<AuthorityId> {
+		VoterSet::new(block_on(self.inner.read()).current_authorities.iter().cloned()).expect(
 			"current_authorities is non-empty and weights are non-zero; \
 			 constructor and all mutating operations on `AuthoritySet` ensure this; \
 			 qed.",

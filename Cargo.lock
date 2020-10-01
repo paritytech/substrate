@@ -6785,6 +6785,7 @@ dependencies = [
  "fork-tree",
  "futures 0.3.5",
  "futures-timer 3.0.2",
+ "futures-util",
  "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",

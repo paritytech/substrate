@@ -17,10 +17,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{sync::Arc, collections::HashMap};
-
+use async_trait::async_trait;
 use log::debug;
 use parity_scale_codec::Encode;
-use parking_lot::RwLockWriteGuard;
+use futures::executor::block_on;
+use tokio::sync::RwLockWriteGuard;
 
 use sp_blockchain::{BlockStatus, well_known_cache_keys};
 use sc_client_api::{backend::Backend, utils::is_descendent_of};
@@ -99,7 +100,7 @@ impl<BE, Block: BlockT, Client, SC> JustificationImport<Block>
 		let chain_info = self.inner.info();
 
 		// request justifications for all pending changes for which change blocks have already been imported
-		let authorities = self.authority_set.inner().read();
+		let authorities = block_on(self.authority_set.inner().read());
 		for pending_change in authorities.pending_changes() {
 			if pending_change.delay_kind == DelayKind::Finalized &&
 				pending_change.effective_number() > chain_info.finalized_number &&
@@ -138,7 +139,9 @@ impl<BE, Block: BlockT, Client, SC> JustificationImport<Block>
 		// request made as part of initial sync but that means the justification
 		// wasn't part of the block and was requested asynchronously, probably
 		// makes sense to log in that case.
-		GrandpaBlockImport::import_justification(self, hash, number, justification, false, false)
+		block_on(
+			GrandpaBlockImport::import_justification(self, hash, number, justification, false, false)
+		)
 	}
 }
 
@@ -256,12 +259,12 @@ where
 		})
 	}
 
-	fn make_authorities_changes(
+	async fn make_authorities_changes(
 		&self,
 		block: &mut BlockImportParams<Block, TransactionFor<Client, Block>>,
 		hash: Block::Hash,
 		initial_sync: bool,
-	) -> Result<PendingSetChanges<Block>, ConsensusError> {
+	) -> Result<PendingSetChanges<'_, Block>, ConsensusError> {
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
 		// the old authority set on error or panic.
@@ -311,7 +314,7 @@ where
 		let is_descendent_of = is_descendent_of(&*self.inner, Some((hash, parent_hash)));
 
 		let mut guard = InnerGuard {
-			guard: Some(self.authority_set.inner().write()),
+			guard: Some(self.authority_set.inner().write().await),
 			old: None,
 		};
 
@@ -404,19 +407,22 @@ where
 	}
 }
 
-impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
+#[async_trait]
+impl<BE, Block: BlockT, Client, SC: Send> BlockImport<Block>
 	for GrandpaBlockImport<BE, Block, Client, SC> where
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
 		BE: Backend<Block>,
 		Client: crate::ClientForGrandpa<Block, BE>,
+		SC: Sync,
+		TransactionFor<Client, Block>: 'static,
 		for<'a> &'a Client:
 			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
 {
 	type Error = ConsensusError;
 	type Transaction = TransactionFor<Client, Block>;
 
-	fn import_block(
+	async fn import_block(
 		&mut self,
 		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
@@ -435,12 +441,12 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		// on initial sync we will restrict logging under info to avoid spam.
 		let initial_sync = block.origin == BlockOrigin::NetworkInitialSync;
 
-		let pending_changes = self.make_authorities_changes(&mut block, hash, initial_sync)?;
+		let pending_changes = self.make_authorities_changes(&mut block, hash, initial_sync).await?;
 
 		// we don't want to finalize on `inner.import_block`
 		let mut justification = block.justification.take();
 		let enacts_consensus_change = !new_cache.is_empty();
-		let import_result = (&*self.inner).import_block(block, new_cache);
+		let import_result = (&*self.inner).import_block(block, new_cache).await;
 
 		let mut imported_aux = {
 			match import_result {
@@ -514,7 +520,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 					justification,
 					needs_justification,
 					initial_sync,
-				);
+				).await;
 
 				import_res.unwrap_or_else(|err| {
 					if needs_justification || enacts_consensus_change {
@@ -547,16 +553,16 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		Ok(ImportResult::Imported(imported_aux))
 	}
 
-	fn check_block(
+	async fn check_block(
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.check_block(block)
+		self.inner.check_block(block).await
 	}
 }
 
 impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Client, SC> {
-	pub(crate) fn new(
+	pub(crate) async fn new(
 		inner: Arc<Client>,
 		select_chain: SC,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
@@ -571,7 +577,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 			.iter()
 			.find(|(set_id, _)| *set_id == authority_set.set_id())
 		{
-			let mut authority_set = authority_set.inner().write();
+			let mut authority_set = authority_set.inner().write().await;
 			authority_set.current_authorities = change.next_authorities.clone();
 		}
 
@@ -587,7 +593,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 		// any *pending* standard changes, checking by the block hash at which
 		// they were announced.
 		{
-			let mut authority_set = authority_set.inner().write();
+			let mut authority_set = authority_set.inner().write().await;
 
 			authority_set.pending_standard_changes = authority_set
 				.pending_standard_changes
@@ -623,7 +629,7 @@ where
 	///
 	/// If `enacts_change` is set to true, then finalizing this block *must*
 	/// enact an authority set change, the function will panic otherwise.
-	fn import_justification(
+	async fn import_justification(
 		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
@@ -635,7 +641,7 @@ where
 			&justification,
 			(hash, number),
 			self.authority_set.set_id(),
-			&self.authority_set.current_authorities(),
+			&self.authority_set.current_authorities().await,
 		);
 
 		let justification = match justification {

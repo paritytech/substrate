@@ -25,8 +25,9 @@ use std::time::Duration;
 use log::{debug, warn};
 use parity_scale_codec::{Decode, Encode};
 use futures::prelude::*;
+use futures::executor::block_on;
 use futures_timer::Delay;
-use parking_lot::RwLock;
+use tokio::sync::{RwLock, RwLockReadGuard};
 use std::marker::PhantomData;
 
 use sc_client_api::{backend::{Backend, apply_aux}, utils::is_descendent_of};
@@ -347,13 +348,13 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 	}
 
 	/// Read the inner voter set state.
-	pub(crate) fn read(&self) -> parking_lot::RwLockReadGuard<VoterSetState<Block>> {
-		self.inner.read()
+	pub(crate) fn read(&self) -> RwLockReadGuard<VoterSetState<Block>> {
+		block_on(self.inner.read())
 	}
 
 	/// Return vote status information for the current round.
 	pub(crate) fn has_voted(&self, round: RoundNumber) -> HasVoted<Block> {
-		match &*self.inner.read() {
+		match &*block_on(self.inner.read()) {
 			VoterSetState::Live { current_rounds, .. } => {
 				current_rounds.get(&round).and_then(|has_voted| match has_voted {
 					HasVoted::Yes(id, vote) =>
@@ -370,7 +371,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 	fn with<F, R>(&self, f: F) -> R
 		where F: FnOnce(&mut VoterSetState<Block>) -> R
 	{
-		f(&mut *self.inner.write())
+		f(&mut *block_on(self.inner.write()))
 	}
 }
 
@@ -477,7 +478,7 @@ where
 			.best_chain()
 			.map_err(|e| Error::Blockchain(e.to_string()))?;
 
-		let authority_set = self.authority_set.inner().read();
+		let authority_set = block_on(self.authority_set.inner().read());
 
 		// block hash and number of the next pending authority set change in the
 		// given best chain.
@@ -724,7 +725,7 @@ where
 		let prevote_timer = Delay::new(self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(self.config.gossip_duration * 4);
 
-		let local_key = crate::is_voter(&self.voters, self.config.keystore.as_ref());
+		let local_key = block_on(crate::is_voter(&self.voters, self.config.keystore.as_ref()));
 
 		let has_voted = match self.voter_set_state.has_voted(round) {
 			HasVoted::Yes(id, vote) => {
@@ -776,7 +777,7 @@ where
 	}
 
 	fn proposed(&self, round: RoundNumber, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
+		let local_id = block_on(crate::is_voter(&self.voters, self.config.keystore.as_ref()));
 
 		let local_id = match local_id {
 			Some(id) => id,
@@ -815,7 +816,7 @@ where
 	}
 
 	fn prevoted(&self, round: RoundNumber, prevote: Prevote<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
+		let local_id = block_on(crate::is_voter(&self.voters, self.config.keystore.as_ref()));
 
 		let local_id = match local_id {
 			Some(id) => id,
@@ -876,7 +877,7 @@ where
 		round: RoundNumber,
 		precommit: Precommit<Block>,
 	) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
+		let local_id = block_on(crate::is_voter(&self.voters, self.config.keystore.as_ref()));
 
 		let local_id = match local_id {
 			Some(id) => id,
@@ -1152,7 +1153,7 @@ where
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
 	//       also implicitly synchronizes the check for last finalized number
 	//       below.
-	let mut authority_set = authority_set.inner().write();
+	let mut authority_set = block_on(authority_set.inner().write());
 
 	let status = client.info();
 

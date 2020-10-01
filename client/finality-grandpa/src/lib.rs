@@ -77,11 +77,11 @@ use sp_consensus::{SelectChain, BlockImport};
 use sp_core::{
 	crypto::Public,
 };
-use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
+use sp_keystore::CryptoStorePtr;
 use sp_application_crypto::AppKey;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 
 use finality_grandpa::Error as GrandpaError;
 use finality_grandpa::{voter, voter_set::VoterSet};
@@ -91,7 +91,6 @@ use std::{fmt, io};
 use std::sync::Arc;
 use std::time::Duration;
 use std::pin::Pin;
-use std::task::{Poll, Context};
 
 // utility logging macro that takes as first argument a conditional to
 // decide whether to log under debug or info level (useful to restrict
@@ -229,21 +228,22 @@ impl SharedVoterState {
 		}
 	}
 
-	fn reset(
+	async fn reset(
 		&self,
 		voter_state: Box<dyn voter::VoterState<AuthorityId> + Sync + Send>,
 	) -> Option<()> {
 		let mut shared_voter_state = self
 			.inner
-			.try_write_for(Duration::from_secs(1))?;
+			.write()
+			.await;
 
 		*shared_voter_state = Some(voter_state);
 		Some(())
 	}
 
 	/// Get the inner `VoterState` instance.
-	pub fn voter_state(&self) -> Option<voter::report::VoterState<AuthorityId>> {
-		self.inner.read().as_ref().map(|vs| vs.get())
+	pub async fn voter_state(&self) -> Option<voter::report::VoterState<AuthorityId>> {
+		self.inner.read().await.as_ref().map(|vs| vs.get())
 	}
 }
 
@@ -498,7 +498,7 @@ impl<Block: BlockT, E> GenesisAuthoritySetProvider<Block> for Arc<dyn ExecutorPr
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<BE, Block: BlockT, Client, SC>(
+pub async fn block_import<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
@@ -519,7 +519,7 @@ where
 		genesis_authorities_provider,
 		select_chain,
 		Default::default(),
-	)
+	).await
 }
 
 /// Make block importer and link half necessary to tie the background voter to
@@ -527,7 +527,7 @@ where
 /// change signaled at the given block (either already signalled or in a further
 /// block when importing it) will be replaced by a standard change with the
 /// given static authorities.
-pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>(
+pub async fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
@@ -592,7 +592,7 @@ where
 			persistent_data.consensus_changes.clone(),
 			authority_set_hard_forks,
 			justification_sender.clone(),
-		),
+		).await,
 		LinkHalf {
 			client,
 			select_chain,
@@ -604,7 +604,7 @@ where
 	))
 }
 
-fn global_communication<BE, Block: BlockT, C, N>(
+async fn global_communication<BE, Block: BlockT, C, N>(
 	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: Arc<C>,
@@ -625,7 +625,7 @@ fn global_communication<BE, Block: BlockT, C, N>(
 	N: NetworkT<Block>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	let is_voter = is_voter(voters, keystore).is_some();
+	let is_voter = is_voter(voters, keystore).await.is_some();
 
 	// verification stream
 	let (global_in, global_out) = network.global_communication(
@@ -699,7 +699,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
+pub async fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 	grandpa_params: GrandpaParams<Block, C, N, SC, VR>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
 	Block::Hash: Ord,
@@ -748,28 +748,9 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
 	let conf = config.clone();
+	let authorities = persistent_data.authority_set.clone();
 	let telemetry_task = if let Some(telemetry_on_connect) = telemetry_on_connect {
-		let authorities = persistent_data.authority_set.clone();
-		let events = telemetry_on_connect
-			.for_each(move |_| {
-				let curr = authorities.current_authorities();
-				let mut auths = curr.iter().map(|(p, _)| p);
-				let maybe_authority_id = authority_id(&mut auths, conf.keystore.as_ref())
-					.unwrap_or_default();
-
-				telemetry!(CONSENSUS_INFO; "afg.authority_set";
-					"authority_id" => maybe_authority_id.to_string(),
-					"authority_set_id" => ?authorities.set_id(),
-					"authorities" => {
-						let authorities: Vec<String> = curr.iter()
-							.map(|(id, _)| id.to_string()).collect();
-						serde_json::to_string(&authorities)
-							.expect("authorities is always at least an empty vector; elements are always of type string")
-					}
-				);
-				future::ready(())
-			});
-		future::Either::Left(events)
+		future::Either::Left(run_telemetry::<Block>(authorities, telemetry_on_connect, conf))
 	} else {
 		future::Either::Right(future::pending())
 	};
@@ -785,20 +766,46 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		prometheus_registry,
 		shared_voter_state,
 		justification_sender,
-	);
+	).await;
 
-	let voter_work = voter_work.map(|res| match res {
+	let voter_work = Box::pin(voter_work.run().map(|res| match res {
 		Ok(()) => error!(target: "afg",
 			"GRANDPA voter future has concluded naturally, this should be unreachable."
 		),
 		Err(e) => error!(target: "afg", "GRANDPA voter error: {:?}", e),
-	});
+	}));
 
 	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
-	let telemetry_task = telemetry_task
-		.then(|_| future::pending::<()>());
+	let telemetry_task = Box::pin(telemetry_task
+		.then(|_| future::pending::<()>()));
 
 	Ok(future::select(voter_work, telemetry_task).map(drop))
+}
+
+async fn run_telemetry<Block: BlockT>(
+	authorities: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	mut telemetry_on_connect: TracingUnboundedReceiver<()>,
+	config: Config,
+) {
+	let events = for _ in telemetry_on_connect.next().await {
+		let curr = authorities.current_authorities().await;
+		let mut auths = curr.iter().map(|(p, _)| p);
+		let maybe_authority_id = authority_id(&mut auths, config.keystore.as_ref())
+			.await
+			.unwrap_or_default();
+
+		telemetry!(CONSENSUS_INFO; "afg.authority_set";
+			"authority_id" => maybe_authority_id.to_string(),
+			"authority_set_id" => ?authorities.set_id(),
+			"authorities" => {
+				let authorities: Vec<String> = curr.iter()
+					.map(|(id, _)| id.to_string()).collect();
+				serde_json::to_string(&authorities)
+					.expect("authorities is always at least an empty vector; elements are always of type string")
+			}
+		);
+	};
+	events
 }
 
 struct Metrics {
@@ -839,7 +846,7 @@ where
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, C> + Clone + 'static,
 {
-	fn new(
+	async fn new(
 		client: Arc<C>,
 		config: Config,
 		network: NetworkBridge<Block, N>,
@@ -860,7 +867,7 @@ where
 			None => None,
 		};
 
-		let voters = persistent_data.authority_set.current_authorities();
+		let voters = persistent_data.authority_set.current_authorities().await;
 		let env = Arc::new(Environment {
 			client,
 			select_chain,
@@ -887,17 +894,18 @@ where
 			network,
 			metrics,
 		};
-		work.rebuild_voter();
+		work.rebuild_voter().await;
 		work
 	}
 
 	/// Rebuilds the `self.voter` field using the current authority set
 	/// state. This method should be called when we know that the authority set
 	/// has changed (e.g. as signalled by a voter command).
-	fn rebuild_voter(&mut self) {
+	async fn rebuild_voter(&mut self) {
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
 
 		let authority_id = is_voter(&self.env.voters, self.env.config.keystore.as_ref())
+			.await
 			.unwrap_or_default();
 
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
@@ -934,7 +942,7 @@ where
 					&self.env.network,
 					self.env.config.keystore.as_ref(),
 					self.metrics.as_ref().map(|m| m.until_imported.clone()),
-				);
+				).await;
 
 				let last_completed_round = completed_rounds.last();
 
@@ -949,7 +957,7 @@ where
 				);
 
 				// Repoint shared_voter_state so that the RPC endpoint can query the state
-				if self.shared_voter_state.reset(voter.voter_state()).is_none() {
+				if self.shared_voter_state.reset(voter.voter_state()).await.is_none() {
 					info!(target: "afg",
 						"Timed out trying to update shared GRANDPA voter state. \
 						RPC endpoints may return stale data."
@@ -963,7 +971,7 @@ where
 		};
 	}
 
-	fn handle_voter_command(
+	async fn handle_voter_command(
 		&mut self,
 		command: VoterCommand<Block::Hash, NumberFor<Block>>
 	) -> Result<(), Error> {
@@ -979,18 +987,21 @@ where
 					"set_id" => ?new.set_id,
 				);
 
-				self.env.update_voter_set_state(|_| {
-					// start the new authority set using the block where the
-					// set changed (not where the signal happened!) as the base.
-					let set_state = VoterSetState::live(
-						new.set_id,
-						&*self.env.authority_set.inner().read(),
-						(new.canon_hash, new.canon_number),
-					);
+				{
+					let read_lock = &*self.env.authority_set.inner().read().await;
+					self.env.update_voter_set_state(|_| {
+						// start the new authority set using the block where the
+						// set changed (not where the signal happened!) as the base.
+						let set_state = VoterSetState::live(
+							new.set_id,
+							read_lock,
+							(new.canon_hash, new.canon_number),
+						);
 
-					aux_schema::write_voter_set_state(&*self.env.client, &set_state)?;
-					Ok(Some(set_state))
-				})?;
+						aux_schema::write_voter_set_state(&*self.env.client, &set_state)?;
+						Ok(Some(set_state))
+					})?;
+				}
 
 				let voters = Arc::new(VoterSet::new(new.authorities.into_iter())
 					.expect("new authorities come from pending change; \
@@ -1016,7 +1027,7 @@ where
 					_phantom: PhantomData,
 				});
 
-				self.rebuild_voter();
+				self.rebuild_voter().await;
 				Ok(())
 			}
 			VoterCommand::Pause(reason) => {
@@ -1031,62 +1042,46 @@ where
 					Ok(Some(set_state))
 				})?;
 
-				self.rebuild_voter();
+				self.rebuild_voter().await;
 				Ok(())
 			}
 		}
 	}
-}
 
-impl<B, Block, C, N, SC, VR> Future for VoterWork<B, Block, C, N, SC, VR>
-where
-	Block: BlockT,
-	B: Backend<Block> + 'static,
-	N: NetworkT<Block> + Sync,
-	NumberFor<Block>: BlockNumberOps,
-	SC: SelectChain<Block> + 'static,
-	C: ClientForGrandpa<Block, B> + 'static,
-	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
-	VR: VotingRule<Block, C> + Clone + 'static,
-{
-	type Output = Result<(), Error>;
+	pub async fn run(mut self) -> Result<(), Error> {
+		loop {
+			match (&mut self.voter).await {
+				Ok(()) => {
+					// voters don't conclude naturally
+					return Err(
+						Error::Safety("finality-grandpa inner voter has concluded.".into())
+					)
+				}
+				Err(CommandOrError::Error(e)) => {
+					// return inner observer error
+					return Err(e)
+				}
+				Err(CommandOrError::VoterCommand(command)) => {
+					// some command issued internally
+					self.handle_voter_command(command).await?;
+				}
+			}
 
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		match Future::poll(Pin::new(&mut self.voter), cx) {
-			Poll::Pending => {}
-			Poll::Ready(Ok(())) => {
-				// voters don't conclude naturally
-				return Poll::Ready(
-					Err(Error::Safety("finality-grandpa inner voter has concluded.".into()))
-				)
+			match self.voter_commands_rx.next().await {
+				None => {
+					// the `voter_commands_rx` stream should never conclude since it's never closed.
+					return Err(
+						Error::Safety("`voter_commands_rx` was closed.".into())
+					)
+				}
+				Some(command) => {
+					// some command issued externally
+					self.handle_voter_command(command).await?;
+				}
 			}
-			Poll::Ready(Err(CommandOrError::Error(e))) => {
-				// return inner observer error
-				return Poll::Ready(Err(e))
-			}
-			Poll::Ready(Err(CommandOrError::VoterCommand(command))) => {
-				// some command issued internally
-				self.handle_voter_command(command)?;
-				cx.waker().wake_by_ref();
-			}
+
+			(&mut self.network).await;
 		}
-
-		match Stream::poll_next(Pin::new(&mut self.voter_commands_rx), cx) {
-			Poll::Pending => {}
-			Poll::Ready(None) => {
-				// the `voter_commands_rx` stream should never conclude since it's never closed.
-				return Poll::Ready(
-					Err(Error::Safety("`voter_commands_rx` was closed.".into()))
-				)
-			}
-			Poll::Ready(Some(command)) => {
-				// some command issued externally
-				self.handle_voter_command(command)?;
-				cx.waker().wake_by_ref();
-			}
-		}
-
-		Future::poll(Pin::new(&mut self.network), cx)
 	}
 }
 
@@ -1123,23 +1118,25 @@ pub fn setup_disabled_grandpa<Block: BlockT, Client, N>(
 /// Checks if this node is a voter in the given voter set.
 ///
 /// Returns the key pair of the node that is being used in the current voter set or `None`.
-fn is_voter(
+async fn is_voter(
 	voters: &Arc<VoterSet<AuthorityId>>,
 	keystore: Option<& CryptoStorePtr>,
 ) -> Option<AuthorityId> {
 	match keystore {
-		Some(keystore) => voters
-			.iter()
-			.find(|(p, _)| {
-				SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
-			})
-			.map(|(p, _)| p.clone()),
+		Some(keystore) => {
+			for (voter, _) in voters.iter() {
+				if keystore.has_keys(&[(voter.to_raw_vec(), AuthorityId::ID)]).await {
+					return Some(voter.clone());
+				}
+			}
+			None
+		}
 		None => None,
 	}
 }
 
 /// Returns the authority id of this node, if available.
-fn authority_id<'a, I>(
+async fn authority_id<'a, I>(
 	authorities: &mut I,
 	keystore: Option<&CryptoStorePtr>,
 ) -> Option<AuthorityId> where
@@ -1147,9 +1144,12 @@ fn authority_id<'a, I>(
 {
 	match keystore {
 		Some(keystore) => {
-			authorities
-				.find(|p| SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)]))
-				.cloned()
+			for public in authorities {
+				if keystore.has_keys(&[(public.to_raw_vec(), AuthorityId::ID)]).await {
+					return Some(public.clone());
+				}
+			}
+			None
 		},
 		None => None,
 	}
