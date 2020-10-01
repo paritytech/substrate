@@ -1008,7 +1008,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		Ok(())
 	}
 
-	/// Remove peers to a peerset priority group.
+	/// Remove peers from a peerset priority group.
 	///
 	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
 	///
