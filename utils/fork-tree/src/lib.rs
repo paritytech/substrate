@@ -166,6 +166,21 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 		Ok(RemovedIterator { stack: removed })
 	}
+
+	pub fn filter(&self, number: N) -> ForkTree<H, N, V> {
+		let mut roots = vec![];
+
+		for root in &self.roots {
+			if root.number <= number {
+				roots.push(root.filter(number.clone()));
+			}
+		}
+
+		ForkTree {
+			roots,
+			best_finalized_number: self.best_finalized_number.clone(),
+		}
+	}
 }
 
 impl<H, N, V> ForkTree<H, N, V> where
@@ -649,6 +664,25 @@ mod node_implementation {
 		pub number: N,
 		pub data: V,
 		pub children: Vec<Node<H, N, V>>,
+	}
+
+	impl<H: Clone + PartialEq, N: Clone + Ord, V: Clone> Node<H, N, V> {
+		pub fn filter(&self, number: N) -> Node<H, N, V> {
+			let mut children = vec![];
+
+			for node in &self.children {
+				if node.number <= number {
+					children.push(node.filter(number.clone()));
+				}
+			}
+
+			Node {
+				hash: self.hash.clone(),
+				number: self.number.clone(),
+				data: self.data.clone(),
+				children,
+			}
+		}
 	}
 
 	impl<H: PartialEq, N: Ord, V> Node<H, N, V> {

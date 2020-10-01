@@ -76,7 +76,7 @@ pub trait Epoch {
 	/// Descriptor for the next epoch.
 	type NextEpochDescriptor;
 	/// Type of the slot number.
-	type SlotNumber: Ord + Copy;
+	type SlotNumber: Ord + Copy + std::fmt::Debug;
 
 	/// The starting slot of the epoch.
 	fn start_slot(&self) -> Self::SlotNumber;
@@ -249,7 +249,7 @@ impl<'a, E: Epoch> From<&'a PersistedEpoch<E>> for PersistedEpochHeader<E> {
 }
 
 /// Persisted epoch header stored in ForkTree.
-#[derive(Encode, Decode, PartialEq, Eq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub enum PersistedEpochHeader<E: Epoch> {
 	/// Genesis persisted epoch header. epoch_0, epoch_1.
 	Genesis(EpochHeader<E>, EpochHeader<E>),
@@ -327,6 +327,16 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 	/// Create a new epoch change.
 	pub fn new() -> Self {
 		Self::default()
+	}
+
+	pub fn filter(&mut self, number: Number) {
+		let epochs = std::mem::replace(&mut self.epochs, BTreeMap::new());
+
+		for (k, v) in epochs.into_iter().filter(|((_, n), _)| *n <= number) {
+			self.epochs.insert(k, v);
+		}
+
+		self.inner = self.inner.filter(number);
 	}
 
 	/// Rebalances the tree of epoch changes so that it is sorted by length of

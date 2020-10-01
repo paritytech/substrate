@@ -342,13 +342,20 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 
 	if client.chain_info().best_number == NumberFor::<TBl>::zero() {
 		if let Some(sync_state) = config.chain_spec.get_light_sync_state() {
-			let sync_state = sc_chain_spec::LightSyncState::<TBl>::from_serializable(sync_state)
+			let mut sync_state = sc_chain_spec::LightSyncState::<TBl>::from_serializable(sync_state)
 				.map_err(|err| err.to_string())?;
 
 			let las = grandpa::LightAuthoritySet {
 				set_id: sync_state.grandpa_after_finalized_block_authorities_set_id,
 				authorities: sync_state.grandpa_finalized_triggered_authorities,
 			};
+
+			println!("light state");
+			println!("============");
+			println!("finalized block: #{} {:?}", sync_state.finalized_block_header.number(), sync_state.finalized_block_header.hash());
+			println!("babe epoch changes: {:?}", sync_state.babe_epoch_changes.tree().iter().collect::<Vec<_>>());
+			sync_state.babe_epoch_changes.filter(sync_state.finalized_block_header.number().clone());
+			println!("pruned babe epoch changes: {:?}", sync_state.babe_epoch_changes.tree().iter().collect::<Vec<_>>());
 
 			client.insert_aux(
 				&[
