@@ -396,10 +396,14 @@ decl_storage! {
 	add_extra_genesis {
 		build(|_config| {
 			// Create Treasury account
-			let _ = T::Currency::make_free_balance_be(
-				&<Module<T, I>>::account_id(),
-				T::Currency::minimum_balance(),
-			);
+			let account_id = <Module<T, I>>::account_id();
+			let min = T::Currency::minimum_balance();
+			if T::Currency::free_balance(&account_id) < min {
+				let _ = T::Currency::make_free_balance_be(
+					&account_id,
+					min,
+				);
+			}
 		});
 	}
 }
