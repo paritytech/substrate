@@ -200,6 +200,9 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Mark a block as new head. If both block import and set head are specified, set head
 	/// overrides block import's best block rule.
 	fn mark_head(&mut self, id: BlockId<Block>) -> sp_blockchain::Result<()>;
+
+	/// Can the block still be imported if the parent block is not found.
+	fn allow_missing_parent(&mut self, allow: bool);
 }
 
 /// Interface for performing operations on the backend.

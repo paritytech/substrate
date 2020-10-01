@@ -266,6 +266,10 @@ impl<G, E> ChainSpec<G, E> {
 	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState) {
 		self.client_spec.light_sync_state = Some(light_sync_state);
 	}
+
+	fn get_light_sync_state(&self) -> Option<&SerializableLightSyncState> {
+		self.client_spec.light_sync_state.as_ref()
+	}
 }
 
 impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
@@ -395,6 +399,10 @@ where
 	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState) {
 		ChainSpec::set_light_sync_state(self, light_sync_state)
 	}
+
+	fn get_light_sync_state(&self) -> Option<&SerializableLightSyncState> {
+		ChainSpec::get_light_sync_state(self)
+	}
 }
 
 /// Hardcoded infomation that allows light clients to sync quickly.
@@ -405,7 +413,8 @@ pub struct LightSyncState<Block: BlockT> {
 	pub babe_epoch_changes: sc_consensus_epochs::EpochChangesFor<Block, sc_consensus_babe::Epoch>,
 	pub grandpa_finalized_triggered_authorities: sp_finality_grandpa::AuthorityList,
 	pub grandpa_after_finalized_block_authorities_set_id: u64,
-	pub grandpa_finalized_scheduled_change: sc_finality_grandpa::PendingChange<<Block as BlockT>::Hash, NumberFor<Block>>
+	pub grandpa_finalized_scheduled_change: sc_finality_grandpa::PendingChange<<Block as BlockT>::Hash, NumberFor<Block>>,
+	pub babe_finalized_block_weight: sp_consensus_babe::BabeBlockWeight,
 }
 
 impl<Block: BlockT> LightSyncState<Block> {
@@ -423,6 +432,8 @@ impl<Block: BlockT> LightSyncState<Block> {
 				self.grandpa_after_finalized_block_authorities_set_id,
 			grandpa_finalized_scheduled_change:
 				StorageData(self.grandpa_finalized_scheduled_change.encode()),
+			babe_finalized_block_weight:
+				self.babe_finalized_block_weight,
 		}
 	}
 
@@ -438,6 +449,8 @@ impl<Block: BlockT> LightSyncState<Block> {
 				serialized.grandpa_after_finalized_block_authorities_set_id,
 			grandpa_finalized_scheduled_change:
 				codec::Decode::decode(&mut &serialized.grandpa_finalized_scheduled_change.0[..])?,
+			babe_finalized_block_weight:
+				serialized.babe_finalized_block_weight,
 		})
 	}
 }
@@ -452,6 +465,7 @@ pub struct SerializableLightSyncState {
 	grandpa_finalized_triggered_authorities: StorageData,
 	grandpa_after_finalized_block_authorities_set_id: u64,
 	grandpa_finalized_scheduled_change: StorageData,
+	babe_finalized_block_weight: sp_consensus_babe::BabeBlockWeight,
 }
 
 #[cfg(test)]

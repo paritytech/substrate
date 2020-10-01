@@ -103,9 +103,9 @@ struct LightImportData<Block: BlockT> {
 
 /// Latest authority set tracker.
 #[derive(Debug, Encode, Decode)]
-struct LightAuthoritySet {
-	set_id: u64,
-	authorities: AuthorityList,
+pub struct LightAuthoritySet {
+	pub set_id: u64,
+	pub authorities: AuthorityList,
 }
 
 impl<BE, Block: BlockT, Client> GrandpaLightBlockImport<BE, Block, Client> {

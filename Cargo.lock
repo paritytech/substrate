@@ -6298,6 +6298,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-chain-spec",
+ "sp-consensus-babe",
  "sp-core",
  "sp-finality-grandpa",
  "sp-runtime",

@@ -200,7 +200,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for LightStorage<Block> {
 					header_metadata.clone(),
 				);
 				header_metadata
-			}).ok_or_else(|| ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
+			}).ok_or_else(|| panic!("header not found in db: {:?}", hash))
 		}, Ok)
 	}
 
@@ -234,12 +234,13 @@ impl<Block: BlockT> LightStorage<Block> {
 		transaction: &mut Transaction<DbHash>,
 		route_to: Block::Hash,
 		best_to: (NumberFor<Block>, Block::Hash),
+		allow_missing_parent: bool,
 	) -> ClientResult<()> {
 		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1)?;
 
 		// handle reorg.
 		let meta = self.meta.read();
-		if meta.best_hash != Default::default() {
+		if meta.best_hash != Default::default() && !allow_missing_parent {
 			let tree_route = sp_blockchain::tree_route(self, meta.best_hash, route_to)?;
 
 			// update block number to hash lookup entries.
@@ -284,9 +285,10 @@ impl<Block: BlockT> LightStorage<Block> {
 		transaction: &mut Transaction<DbHash>,
 		header: &Block::Header,
 		hash: Block::Hash,
+		allow_missing_parent: bool,
 	) -> ClientResult<()> {
 		let meta = self.meta.read();
-		if &meta.finalized_hash != header.parent_hash() {
+		if &meta.finalized_hash != header.parent_hash() && !allow_missing_parent {
 			return Err(::sp_blockchain::Error::NonSequentialFinalization(
 				format!("Last finalized {:?} not parent of {:?}",
 					meta.finalized_hash, hash),
@@ -421,6 +423,7 @@ impl<Block> Storage<Block> for LightStorage<Block>
 		mut cache_at: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		leaf_state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		allow_missing_parent: bool,
 	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 
@@ -439,7 +442,9 @@ impl<Block> Storage<Block> for LightStorage<Block>
 		let lookup_key = utils::number_and_hash_to_lookup_key(number, &hash)?;
 
 		if leaf_state.is_best() {
-			self.set_head_with_transaction(&mut transaction, parent_hash, (number, hash))?;
+			self.set_head_with_transaction(
+				&mut transaction, parent_hash, (number, hash), allow_missing_parent,
+			)?;
 		}
 
 		utils::insert_hash_to_key_mapping(
@@ -473,6 +478,7 @@ impl<Block> Storage<Block> for LightStorage<Block>
 				&mut transaction,
 				&header,
 				hash,
+				allow_missing_parent,
 			)?;
 		}
 
@@ -513,7 +519,9 @@ impl<Block> Storage<Block> for LightStorage<Block>
 			let number = header.number();
 
 			let mut transaction = Transaction::new();
-			self.set_head_with_transaction(&mut transaction, hash.clone(), (number.clone(), hash.clone()))?;
+			self.set_head_with_transaction(
+				&mut transaction, hash.clone(), (number.clone(), hash.clone()), false,
+			)?;
 			self.db.commit(transaction)?;
 			self.update_meta(hash, header.number().clone(), true, false);
 
@@ -528,7 +536,7 @@ impl<Block> Storage<Block> for LightStorage<Block>
 			let mut transaction = Transaction::new();
 			let hash = header.hash();
 			let number = *header.number();
-			self.note_finalized(&mut transaction, &header, hash.clone())?;
+			self.note_finalized(&mut transaction, &header, hash.clone(), false)?;
 			{
 				let mut cache = self.cache.0.write();
 				let cache_ops = cache.transaction(&mut transaction)

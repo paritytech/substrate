@@ -245,6 +245,7 @@ pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block>
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		allow_missing_parent: bool,
 	) -> ClientResult<()>;
 
 	/// Set an existing block as new best block.

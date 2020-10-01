@@ -76,7 +76,7 @@ impl BuildSyncSpecCmd {
 	) -> error::Result<()>
 		where
 			B: BlockT,
-			CL: sp_blockchain::HeaderBackend<B>,
+			CL: sp_blockchain::HeaderBackend<B> + sc_client_api::AuxStore,
 	{
         if self.sync_first {
             network_status_sinks.status_stream(std::time::Duration::from_secs(1)).filter(|status| {

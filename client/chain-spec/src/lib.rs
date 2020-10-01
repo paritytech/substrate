@@ -159,6 +159,8 @@ pub trait ChainSpec: BuildStorage + Send {
 	fn set_storage(&mut self, storage: Storage);
 	/// Hardcode infomation to allow light clients to sync quickly into the chain spec.
 	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState);
+	/// Get the light sync state, if available.
+	fn get_light_sync_state(&self) -> Option<&SerializableLightSyncState>;
 }
 
 impl std::fmt::Debug for dyn ChainSpec {

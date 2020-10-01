@@ -27,7 +27,7 @@ pub fn build_light_sync_state<TBl, TCl>(
 ) -> Result<sc_chain_spec::LightSyncState<TBl>, sp_blockchain::Error>
 	where
 		TBl: BlockT,
-		TCl: HeaderBackend<TBl>,
+		TCl: HeaderBackend<TBl> + sc_client_api::AuxStore,
 {
 	let finalized_hash = client.info().finalized_hash;
 	let finalized_header = client.header(BlockId::Hash(finalized_hash))?.unwrap();
@@ -36,11 +36,17 @@ pub fn build_light_sync_state<TBl, TCl>(
 
 	let pending_change = authority_set.pending_changes().next().unwrap();
 
+	let finalized_block_weight = sc_consensus_babe::aux_schema::load_block_weight(
+		&*client,
+		finalized_hash,
+	)?.unwrap();
+
 	Ok(sc_chain_spec::LightSyncState {
 		finalized_block_header: finalized_header,
 		babe_epoch_changes: shared_epoch_changes.lock().clone(),
 		grandpa_finalized_triggered_authorities: authority_set.current_authorities.clone(),
 		grandpa_after_finalized_block_authorities_set_id: authority_set.set_id,
 		grandpa_finalized_scheduled_change: pending_change.clone(),
+		babe_finalized_block_weight: finalized_block_weight,
 	})
 }

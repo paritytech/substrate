@@ -70,6 +70,7 @@ pub struct ImportOperation<Block: BlockT, S> {
 	storage_update: Option<InMemoryBackend<HashFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	_phantom: std::marker::PhantomData<S>,
+	allow_missing_parent: bool,
 }
 
 /// Either in-memory genesis state, or locally-unavailable state.
@@ -135,6 +136,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 			storage_update: None,
 			changes_trie_config_update: None,
 			_phantom: Default::default(),
+			allow_missing_parent: false,
 		})
 	}
 
@@ -166,6 +168,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 				operation.cache,
 				operation.leaf_state,
 				operation.aux_ops,
+				operation.allow_missing_parent,
 			)?;
 
 			// when importing genesis block => remember its state
@@ -365,6 +368,10 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 	fn mark_head(&mut self, block: BlockId<Block>) -> ClientResult<()> {
 		self.set_head = Some(block);
 		Ok(())
+	}
+
+	fn allow_missing_parent(&mut self, allow: bool) {
+		self.allow_missing_parent = allow;
 	}
 }
 

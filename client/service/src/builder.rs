@@ -31,7 +31,7 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_chain_spec::get_extension;
 use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator, Chain},
-	import_queue::ImportQueue,
+	import_queue::ImportQueue, BlockImport,
 };
 use futures::{FutureExt, StreamExt, future::ready, channel::oneshot};
 use jsonrpc_pubsub::manager::SubscriptionManager;
@@ -42,10 +42,11 @@ use sc_network::NetworkService;
 use parking_lot::RwLock;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo,
+	Block as BlockT, Header as HeaderT, SaturatedConversion, HashFor, Zero, BlockIdTo, NumberFor,
 };
 use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
+use std::collections::HashMap;
 use std::sync::Arc;
 use wasm_timer::SystemTime;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -282,6 +283,11 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 ) -> Result<TLightParts<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
+	TRtApi: sp_api::ConstructRuntimeApi<TBl, TLightClient<TBl, TRtApi, TExecDisp>>,
+	<TRtApi as sp_api::ConstructRuntimeApi<TBl, TLightClient<TBl, TRtApi, TExecDisp>>>::RuntimeApi:
+		sp_api::Core<TBl> +
+		sp_api::ApiErrorExt<Error = sp_blockchain::Error> +
+		sp_api::ApiExt<TBl, StateBackend = <TLightBackend<TBl> as sc_client_api::Backend<TBl>>::State>,
 {
 
 	let task_manager = {
@@ -323,13 +329,63 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	);
 	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
 	let backend = sc_light::new_light_backend(light_blockchain);
-	let client = Arc::new(light::new_light(
+	let mut client = Arc::new(light::new_light(
 		backend.clone(),
 		config.chain_spec.as_storage_builder(),
 		executor,
 		Box::new(task_manager.spawn_handle()),
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 	)?);
+
+	use sc_client_api::AuxStore;
+	use codec::Encode;
+
+	if client.chain_info().best_number == NumberFor::<TBl>::zero() {
+		if let Some(sync_state) = config.chain_spec.get_light_sync_state() {
+			let sync_state = sc_chain_spec::LightSyncState::<TBl>::from_serializable(sync_state)
+				.map_err(|err| err.to_string())?;
+
+			let las = grandpa::LightAuthoritySet {
+				set_id: sync_state.grandpa_after_finalized_block_authorities_set_id,
+				authorities: sync_state.grandpa_finalized_triggered_authorities,
+			};
+
+			client.insert_aux(
+				&[
+					(&b"babe_epoch_changes_version"[..], &(2_u32).encode()[..]),
+					(&b"babe_epoch_changes"[..], &sync_state.babe_epoch_changes.encode()[..]),
+					(&b"grandpa_voters"[..], &las.encode()[..]),
+				],
+				&[]
+			)?;
+
+			sc_consensus_babe::aux_schema::write_block_weight(
+				sync_state.finalized_block_header.hash(),
+				sync_state.babe_finalized_block_weight,
+				|aux| {
+					let mut v = Vec::new();
+					for (key, value) in aux.iter() {
+						v.push((&key[..], *value));
+					}
+					client.insert_aux(&v, &[])
+				}
+			)?;
+
+			log::info!(
+				"Importing block {:?} ({:?})",
+				sync_state.finalized_block_header.hash(), sync_state.finalized_block_header.number()
+			);
+			let origin = sp_consensus::BlockOrigin::File;
+			let mut block_import_params = sp_consensus::BlockImportParams::new(
+				origin, sync_state.finalized_block_header,
+			);
+			block_import_params.allow_missing_parent = true;
+			block_import_params.finalized = true;
+			block_import_params.fork_choice = Some(sp_consensus::ForkChoiceStrategy::LongestChain);
+			let res = client.import_block(block_import_params, HashMap::new())?;
+			assert!(matches!(res, sp_consensus::ImportResult::Imported(_)));
+		}
+	}
 
 	Ok((client, backend, keystore, task_manager, on_demand))
 }

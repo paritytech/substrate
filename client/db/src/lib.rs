@@ -734,6 +734,8 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		self.set_head = Some(block);
 		Ok(())
 	}
+
+	fn allow_missing_parent(&mut self, _allow: bool) {}
 }
 
 struct StorageDb<Block: BlockT> {

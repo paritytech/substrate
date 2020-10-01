@@ -129,7 +129,7 @@ pub use finality_proof::{FinalityProofFragment, FinalityProofProvider, StorageAn
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
-pub use light_import::{light_block_import, GrandpaLightBlockImport};
+pub use light_import::{light_block_import, GrandpaLightBlockImport, LightAuthoritySet};
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };

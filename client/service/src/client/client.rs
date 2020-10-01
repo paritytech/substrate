@@ -613,6 +613,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			fork_choice,
 			intermediates,
 			import_existing,
+			allow_missing_parent,
 			..
 		} = import_block;
 
@@ -652,6 +653,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			auxiliary,
 			fork_choice,
 			import_existing,
+			allow_missing_parent,
 		);
 
 		if let Ok(ImportResult::Imported(ref aux)) = result {
@@ -688,11 +690,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		fork_choice: ForkChoiceStrategy,
 		import_existing: bool,
+		allow_missing_parent: bool,
 	) -> sp_blockchain::Result<ImportResult> where
 		Self: ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
 				ApiExt<Block, StateBackend = B::State>,
 	{
+		operation.op.allow_missing_parent(allow_missing_parent);
+		
 		let parent_hash = import_headers.post().parent_hash().clone();
 		let status = self.backend.blockchain().status(BlockId::Hash(hash))?;
 		match (import_existing, status) {
@@ -774,7 +779,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			NewBlockState::Normal
 		};
 
-		let tree_route = if is_new_best && info.best_hash != parent_hash {
+		let tree_route = if is_new_best && info.best_hash != parent_hash &&!allow_missing_parent {
 			let route_from_best = sp_blockchain::tree_route(
 				self.backend.blockchain(),
 				info.best_hash,
@@ -837,8 +842,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	{
 		let parent_hash = import_block.header.parent_hash();
 		let at = BlockId::Hash(*parent_hash);
+		let number = import_block.header.number();
+		let hash = import_block.header.hash();
 		let enact_state = match self.block_status(&at)? {
-			BlockStatus::Unknown => return Ok(Some(ImportResult::UnknownParent)),
+			BlockStatus::Unknown if import_block.allow_missing_parent => true,
+			BlockStatus::Unknown => {
+				warn!("Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent_hash);
+				return Ok(Some(ImportResult::UnknownParent))
+			},
 			BlockStatus::InChainWithState | BlockStatus::Queued => true,
 			BlockStatus::InChainPruned if import_block.allow_missing_state => false,
 			BlockStatus::InChainPruned => return Ok(Some(ImportResult::MissingState)),

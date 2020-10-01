@@ -167,10 +167,11 @@ impl<Block: BlockT> Blockchain<Block> {
 		justification: Option<Justification>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
+		allow_missing_parent: bool,
 	) -> sp_blockchain::Result<()> {
 		let number = header.number().clone();
 		if new_state.is_best() {
-			self.apply_head(&header)?;
+			self.apply_head(&header, allow_missing_parent)?;
 		}
 
 		{
@@ -231,10 +232,10 @@ impl<Block: BlockT> Blockchain<Block> {
 			None => return Err(sp_blockchain::Error::UnknownBlock(format!("{}", id))),
 		};
 
-		self.apply_head(&header)
+		self.apply_head(&header, false)
 	}
 
-	fn apply_head(&self, header: &<Block as BlockT>::Header) -> sp_blockchain::Result<()> {
+	fn apply_head(&self, header: &<Block as BlockT>::Header, allow_missing_parent: bool) -> sp_blockchain::Result<()> {
 		let hash = header.hash();
 		let number = header.number();
 
@@ -242,7 +243,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		// write lock.
 		let best_tree_route = {
 			let best_hash = self.storage.read().best_hash;
-			if &best_hash == header.parent_hash() {
+			if &best_hash == header.parent_hash() || allow_missing_parent {
 				None
 			} else {
 				let route = sp_blockchain::tree_route(self, best_hash, *header.parent_hash())?;
@@ -427,9 +428,10 @@ impl<Block: BlockT> light::Storage<Block> for Blockchain<Block>
 		_cache: HashMap<CacheKeyId, Vec<u8>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		allow_missing_parent: bool,
 	) -> sp_blockchain::Result<()> {
 		let hash = header.hash();
-		self.insert(hash, header, None, None, state)?;
+		self.insert(hash, header, None, None, state, allow_missing_parent)?;
 
 		self.write_aux(aux_ops);
 		Ok(())
@@ -487,6 +489,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 	set_head: Option<BlockId<Block>>,
+	allow_missing_parent: bool,
 }
 
 impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> where
@@ -581,6 +584,10 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		self.set_head = Some(block);
 		Ok(())
 	}
+
+	fn allow_missing_parent(&mut self, allow: bool) {
+		self.allow_missing_parent = allow;
+	}
 }
 
 /// In-memory backend. Keeps all states and blocks in memory.
@@ -636,6 +643,7 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 			aux: Default::default(),
 			finalized_blocks: Default::default(),
 			set_head: None,
+			allow_missing_parent: false,
 		})
 	}
 
@@ -671,7 +679,10 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 
 			self.states.write().insert(hash, new_state);
 
-			self.blockchain.insert(hash, header, justification, body, pending_block.state)?;
+			self.blockchain.insert(
+				hash, header, justification, body, pending_block.state,
+				operation.allow_missing_parent,
+			)?;
 		}
 
 		if !operation.aux.is_empty() {

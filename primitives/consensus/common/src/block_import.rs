@@ -162,6 +162,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	pub fork_choice: Option<ForkChoiceStrategy>,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
+	pub allow_missing_parent: bool,
 	/// Re-validate existing block.
 	pub import_existing: bool,
 	/// Cached full header hash (with post-digests applied).
@@ -185,6 +186,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			auxiliary: Vec::new(),
 			fork_choice: None,
 			allow_missing_state: false,
+			allow_missing_parent: false,
 			import_existing: false,
 			post_hash: None,
 		}
@@ -224,6 +226,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			auxiliary: self.auxiliary,
 			intermediates: self.intermediates,
 			allow_missing_state: self.allow_missing_state,
+			allow_missing_parent: self.allow_missing_parent,
 			fork_choice: self.fork_choice,
 			import_existing: self.import_existing,
 			post_hash: self.post_hash,
