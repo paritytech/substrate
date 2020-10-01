@@ -17,7 +17,6 @@
 
 //! Keystore traits
 pub mod testing;
-#[cfg(feature = "std")]
 pub mod vrf;
 
 use std::sync::Arc;
@@ -27,7 +26,6 @@ use sp_core::{
 	crypto::{KeyTypeId, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
 };
-#[cfg(feature = "std")]
 use crate::vrf::{VRFTranscriptData, VRFSignature};
 
 /// CryptoStore error
@@ -193,7 +191,6 @@ pub trait CryptoStore: Send + Sync {
 	/// the public key and key type provided do not match a private
 	/// key in the keystore. Or, in the context of remote signing
 	/// an error could be a network one.
-	#[cfg(feature = "std")]
 	async fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
@@ -362,7 +359,6 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// the public key and key type provided do not match a private
 	/// key in the keystore. Or, in the context of remote signing
 	/// an error could be a network one.
-	#[cfg(feature = "std")]
 	fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
@@ -378,7 +374,6 @@ impl SyncCryptoStore for dyn CryptoStore {}
 /// A pointer to a keystore.
 pub type CryptoStorePtr = Arc<dyn CryptoStore>;
 
-#[cfg(feature = "std")]
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
 	pub struct KeystoreExt(CryptoStorePtr);

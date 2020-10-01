@@ -17,12 +17,12 @@ async-trait = "0.1.30"
 derive_more = "0.99.2"
 codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
 futures = { version = "0.3.1" }
-schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false, optional = true }
-merlin = { version = "2.0", default-features = false, optional = true }
+schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false }
+merlin = { version = "2.0", default-features = false }
 parking_lot = { version = "0.10.0", default-features = false, optional = true }
 
 sp-core = { version = "2.0.0", path = "../core", default-features = false }
-sp-externalities = { version = "0.8.0", path = "../externalities", default-features = false, optional = true }
+sp-externalities = { version = "0.8.0", path = "../externalities", default-features = false }
 
 [dev-dependencies]
 rand = "0.7.2"
@@ -32,10 +32,6 @@ rand_chacha = "0.2.2"
 default = ["std"]
 std = [
 	"codec/std",
-	"merlin",
 	"parking_lot",
-	"schnorrkel",
-	"schnorrkel/std",
 	"sp-core/std",
-	"sp-externalities",
 ]
