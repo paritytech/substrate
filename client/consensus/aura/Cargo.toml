@@ -20,12 +20,13 @@ sc-block-builder = { version = "0.8.0", path = "../../../client/block-builder" }
 sc-client-api = { version = "2.0.0", path = "../../api" }
 codec = { package = "parity-scale-codec", version = "1.3.4" }
 sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
+async-trait = "0.1.30"
 derive_more = "0.99.2"
 futures = "0.3.4"
 futures-timer = "3.0.1"
+futures-util = "0.3.4"
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
 log = "0.4.8"
-parking_lot = "0.10.0"
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 sp-io = { version = "2.0.0", path = "../../../primitives/io" }

@@ -31,12 +31,12 @@
 //! NOTE: Aura itself is designed to be generic over the crypto used.
 #![forbid(missing_docs, unsafe_code)]
 use std::{
-	sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin,
+	sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug,
 	collections::HashMap, convert::{TryFrom, TryInto},
 };
-
+use async_trait::async_trait;
 use futures::prelude::*;
-use parking_lot::Mutex;
+use futures_util::lock::Mutex;
 use log::{debug, info, trace};
 use prometheus_endpoint::Registry;
 
@@ -64,7 +64,7 @@ use sp_runtime::{
 use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
-use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
+use sp_keystore::CryptoStorePtr;
 use sp_inherents::{InherentDataProviders, InherentData};
 use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
@@ -124,8 +124,9 @@ fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 struct AuraSlotCompatible;
 
+#[async_trait]
 impl SlotCompatible for AuraSlotCompatible {
-	fn extract_timestamp_and_slot(
+	async fn extract_timestamp_and_slot(
 		&self,
 		data: &InherentData
 	) -> Result<(TimestampInherent, AuraInherent, std::time::Duration), sp_consensus::Error> {
@@ -198,24 +199,22 @@ struct AuraWorker<C, E, I, P, SO> {
 	_key_type: PhantomData<P>,
 }
 
+#[async_trait]
 impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraWorker<C, E, I, P, SO> where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
-	E: Environment<B, Error = Error>,
+	E: Environment<B, Error = Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
 	P::Public: AppPublic + Public + Member + Encode + Decode + Hash,
 	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
-	SO: SyncOracle + Send + Clone,
+	SO: SyncOracle + Send + Sync + Clone,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	type BlockImport = I;
 	type SyncOracle = SO;
-	type CreateProposer = Pin<Box<
-		dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static
-	>>;
 	type Proposer = E::Proposer;
 	type Claim = P::Public;
 	type EpochData = Vec<AuthorityId<P>>;
@@ -228,7 +227,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		self.block_import.clone()
 	}
 
-	fn epoch_data(
+	async fn epoch_data(
 		&self,
 		header: &B::Header,
 		_slot_number: u64,
@@ -236,27 +235,24 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
 	}
 
-	fn authorities_len(&self, epoch_data: &Self::EpochData) -> Option<usize> {
+	async fn authorities_len(&self, epoch_data: &Self::EpochData) -> Option<usize> {
 		Some(epoch_data.len())
 	}
 
-	fn claim_slot(
+	async fn claim_slot(
 		&self,
 		_header: &B::Header,
 		slot_number: u64,
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim> {
-		let expected_author = slot_author::<P>(slot_number, epoch_data);
-		expected_author.and_then(|p| {
-			 if SyncCryptoStore::has_keys(
-				 &*self.keystore,
-				 &[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
-			) {
-				Some(p.clone())
-			} else {
-				None
+		if let Some(author) = slot_author::<P>(slot_number, epoch_data) {
+			if self.keystore.has_keys(
+				&[(author.to_raw_vec(), sp_application_crypto::key_types::AURA)],
+			).await {
+				return Some(author.clone());
 			}
-		})
+		}
+		None
 	}
 
 	fn pre_digest_data(
@@ -269,46 +265,44 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		]
 	}
 
-	fn block_import_params(&self) -> Box<dyn Fn(
-		B::Header,
-		&B::Hash,
-		Vec<B::Extrinsic>,
-		StorageChanges<sp_api::TransactionFor<C, B>, B>,
-		Self::Claim,
-		Self::EpochData,
+	async fn block_import_params(
+		&self,
+		header: B::Header,
+		header_hash: &B::Hash,
+		body: Vec<B::Extrinsic>,
+		storage_changes: StorageChanges<sp_api::TransactionFor<C, B>, B>,
+		claim: Self::Claim,
+		_epoch_descriptor: Self::EpochData,
 	) -> Result<
-		sp_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>>,
-		sp_consensus::Error> + Send + 'static>
+			sp_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+			sp_consensus::Error>
 	{
 		let keystore = self.keystore.clone();
-		Box::new(move |header, header_hash, body, storage_changes, public, _epoch| {
-			// sign the pre-sealed hash of the block and then
-			// add it to a digest item.
-			let public_type_pair = public.to_public_crypto_pair();
-			let public = public.to_raw_vec();
-			let signature = SyncCryptoStore::sign_with(
-				&*keystore,
-				<AuthorityId<P> as AppKey>::ID,
-				&public_type_pair,
-				header_hash.as_ref()
-			).map_err(|e| sp_consensus::Error::CannotSign(
-				public.clone(), e.to_string(),
+		// sign the pre-sealed hash of the block and then
+		// add it to a digest item.
+		let public_type_pair = claim.to_public_crypto_pair();
+		let public = claim.to_raw_vec();
+		let signature = keystore.sign_with(
+			<AuthorityId<P> as AppKey>::ID,
+			&public_type_pair,
+			header_hash.as_ref()
+		).await.map_err(|e| sp_consensus::Error::CannotSign(
+			public.clone(), e.to_string(),
+		))?;
+		let signature = signature.clone().try_into()
+			.map_err(|_| sp_consensus::Error::InvalidSignature(
+				signature, public
 			))?;
-			let signature = signature.clone().try_into()
-				.map_err(|_| sp_consensus::Error::InvalidSignature(
-					signature, public
-				))?;
 
-			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
+		let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
 
-			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
-			import_block.post_digests.push(signature_digest_item);
-			import_block.body = Some(body);
-			import_block.storage_changes = Some(storage_changes);
-			import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
+		import_block.post_digests.push(signature_digest_item);
+		import_block.body = Some(body);
+		import_block.storage_changes = Some(storage_changes);
+		import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-			Ok(import_block)
-		})
+		Ok(import_block)
 	}
 
 	fn force_authoring(&self) -> bool {
@@ -319,10 +313,10 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		&mut self.sync_oracle
 	}
 
-	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
-		Box::pin(self.env.init(block).map_err(|e| {
+	async fn proposer(&mut self, block: &B::Header) -> Result<E::Proposer, sp_consensus::Error> {
+		self.env.init(block).await.map_err(|e| {
 			sp_consensus::Error::ClientImport(format!("{:?}", e)).into()
-		}))
+		})
 	}
 
 	fn proposing_remaining_duration(
@@ -353,6 +347,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 	}
 }
 
+#[async_trait]
 impl<B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync + Send,
@@ -366,10 +361,8 @@ impl<B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, 
 	SO: SyncOracle + Send + Sync + Clone,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
-	type OnSlot = Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>>;
-
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
-		<Self as sc_consensus_slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
+	async fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Result<(), sp_consensus::Error> {
+		<Self as sc_consensus_slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info).await
 	}
 }
 
@@ -569,6 +562,7 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 }
 
 #[forbid(deprecated)]
+#[async_trait]
 impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 	C: ProvideRuntimeApi<B> +
 		Send +
@@ -583,7 +577,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 	P::Signature: Encode + Decode,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 {
-	fn verify(
+	async fn verify(
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
@@ -594,6 +588,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 			.create_inherent_data()
 			.map_err(|e| e.into_string())?;
 		let (timestamp_now, slot_now, _) = AuraSlotCompatible.extract_timestamp_and_slot(&inherent_data)
+			.await
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
@@ -776,6 +771,7 @@ impl<Block: BlockT, C, I: BlockImport<Block>, P> AuraBlockImport<Block, C, I, P>
 	}
 }
 
+#[async_trait]
 impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I, P> where
 	I: BlockImport<Block, Transaction = sp_api::TransactionFor<C, Block>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
@@ -787,14 +783,14 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 	type Error = ConsensusError;
 	type Transaction = sp_api::TransactionFor<C, Block>;
 
-	fn check_block(
+	async fn check_block(
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.check_block(block).map_err(Into::into)
+		self.inner.check_block(block).await.map_err(Into::into)
 	}
 
-	fn import_block(
+	async fn import_block(
 		&mut self,
 		block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
@@ -824,7 +820,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 			);
 		}
 
-		self.inner.import_block(block, new_cache).map_err(Into::into)
+		self.inner.import_block(block, new_cache).await.map_err(Into::into)
 	}
 }
 
