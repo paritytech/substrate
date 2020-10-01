@@ -29,7 +29,7 @@ sp-api = { version = "2.0.0", path = "../../../../primitives/api" }
 sp-consensus = { version = "0.8.0", path = "../../../../primitives/consensus/common" }
 sp-core = { version = "2.0.0", path = "../../../../primitives/core" }
 sp-application-crypto = { version = "2.0.0", path = "../../../../primitives/application-crypto" }
-sp-keystore = { version = "2.0.0", path = "../../../../primitives/keystore" }
+sp-keystore = { version = "0.8.0", path = "../../../../primitives/keystore" }
 
 [dev-dependencies]
 sc-consensus = { version = "0.8.0", path = "../../../consensus/common" }

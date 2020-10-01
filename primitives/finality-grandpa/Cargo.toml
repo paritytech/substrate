@@ -22,7 +22,7 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-api = { version = "2.0.0", default-features = false, path = "../api" }
 sp-application-crypto = { version = "2.0.0", default-features = false, path = "../application-crypto" }
 sp-core = { version = "2.0.0", default-features = false, path = "../core" }
-sp-keystore = { version = "2.0.0", default-features = false, path = "../keystore" }
+sp-keystore = { version = "0.8.0", default-features = false, path = "../keystore" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
 sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 
