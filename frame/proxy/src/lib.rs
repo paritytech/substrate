@@ -156,11 +156,11 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Proxy {
 		/// The set of account proxies. Maps the account which has delegated to the accounts
 		/// which are being delegated to, together with the amount held on deposit.
-		pub Proxies: map hasher(twox_64_concat) T::AccountId
+		pub Proxies get(fn proxies): map hasher(twox_64_concat) T::AccountId
 			=> (Vec<ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>>, BalanceOf<T>);
 
 		/// The announcements made by the proxy (key).
-		pub Announcements: map hasher(twox_64_concat) T::AccountId
+		pub Announcements get(fn announcements): map hasher(twox_64_concat) T::AccountId
 			=> (Vec<Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>>, BalanceOf<T>);
 	}
 }
@@ -268,6 +268,8 @@ decl_module! {
 		/// Parameters:
 		/// - `proxy`: The account that the `caller` would like to make a proxy.
 		/// - `proxy_type`: The permissions allowed for this proxy account.
+		/// - `delay`: The announcement period required of the initial proxy. Will generally be
+		/// zero.
 		///
 		/// # <weight>
 		/// Weight is a function of the number of proxies the user has (P).
@@ -279,21 +281,7 @@ decl_module! {
 			delay: T::BlockNumber,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Proxies::<T>::try_mutate(&who, |(ref mut proxies, ref mut deposit)| {
-				ensure!(proxies.len() < T::MaxProxies::get() as usize, Error::<T>::TooMany);
-				let proxy_def = ProxyDefinition { delegate, proxy_type, delay };
-				let i = proxies.binary_search(&proxy_def).err().ok_or(Error::<T>::Duplicate)?;
-				proxies.insert(i, proxy_def);
-				let new_deposit = T::ProxyDepositBase::get()
-					+ T::ProxyDepositFactor::get() * (proxies.len() as u32).into();
-				if new_deposit > *deposit {
-					T::Currency::reserve(&who, new_deposit - *deposit)?;
-				} else if new_deposit < *deposit {
-					T::Currency::unreserve(&who, *deposit - new_deposit);
-				}
-				*deposit = new_deposit;
-				Ok(())
-			})
+			Self::add_proxy_delegate(&who, delegate, proxy_type, delay)
 		}
 
 		/// Unregister a proxy account for the sender.
@@ -314,26 +302,7 @@ decl_module! {
 			delay: T::BlockNumber,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Proxies::<T>::try_mutate_exists(&who, |x| {
-				let (mut proxies, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
-				let proxy_def = ProxyDefinition { delegate, proxy_type, delay };
-				let i = proxies.binary_search(&proxy_def).ok().ok_or(Error::<T>::NotFound)?;
-				proxies.remove(i);
-				let new_deposit = if proxies.is_empty() {
-					BalanceOf::<T>::zero()
-				} else {
-					T::ProxyDepositBase::get() + T::ProxyDepositFactor::get() * (proxies.len() as u32).into()
-				};
-				if new_deposit > old_deposit {
-					T::Currency::reserve(&who, new_deposit - old_deposit)?;
-				} else if new_deposit < old_deposit {
-					T::Currency::unreserve(&who, old_deposit - new_deposit);
-				}
-				if !proxies.is_empty() {
-					*x = Some((proxies, new_deposit))
-				}
-				Ok(())
-			})
+			Self::remove_proxy_delegate(&who, delegate, proxy_type, delay)
 		}
 
 		/// Unregister all proxy accounts for the sender.
@@ -570,6 +539,18 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+
+	/// Calculate the address of an anonymous account.
+	///
+	/// - `who`: The spawner account.
+	/// - `proxy_type`: The type of the proxy that the sender will be registered as over the
+	/// new account. This will almost always be the most permissive `ProxyType` possible to
+	/// allow for maximum flexibility.
+	/// - `index`: A disambiguation index, in case this is called multiple times in the same
+	/// transaction (e.g. with `utility::batch`). Unless you're using `batch` you probably just
+	/// want to use `0`.
+	/// - `maybe_when`: The block height and extrinsic index of when the anonymous account was
+	/// created. None to use current block height and extrinsic index.
 	pub fn anonymous_account(
 		who: &T::AccountId,
 		proxy_type: &T::ProxyType,
@@ -583,6 +564,76 @@ impl<T: Trait> Module<T> {
 		let entropy = (b"modlpy/proxy____", who, height, ext_index, proxy_type, index)
 			.using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+	}
+
+	/// Register a proxy account for the delegator that is able to make calls on its behalf.
+	///
+	/// Parameters:
+	/// - `delegator`: The delegator account.
+	/// - `delegatee`: The account that the `delegator` would like to make a proxy.
+	/// - `proxy_type`: The permissions allowed for this proxy account.
+	/// - `delay`: The announcement period required of the initial proxy. Will generally be
+	/// zero.
+	pub fn add_proxy_delegate(
+		delegator: &T::AccountId,
+		delegatee: T::AccountId,
+		proxy_type: T::ProxyType,
+		delay: T::BlockNumber,
+	) -> DispatchResult {
+		Proxies::<T>::try_mutate(delegator, |(ref mut proxies, ref mut deposit)| {
+			ensure!(proxies.len() < T::MaxProxies::get() as usize, Error::<T>::TooMany);
+			let proxy_def = ProxyDefinition { delegate: delegatee, proxy_type, delay };
+			let i = proxies.binary_search(&proxy_def).err().ok_or(Error::<T>::Duplicate)?;
+			proxies.insert(i, proxy_def);
+			let new_deposit = Self::deposit(proxies.len() as u32);
+			if new_deposit > *deposit {
+				T::Currency::reserve(delegator, new_deposit - *deposit)?;
+			} else if new_deposit < *deposit {
+				T::Currency::unreserve(delegator, *deposit - new_deposit);
+			}
+			*deposit = new_deposit;
+			Ok(())
+		})
+	}
+
+	/// Unregister a proxy account for the delegator.
+	///
+	/// Parameters:
+	/// - `delegator`: The delegator account.
+	/// - `delegatee`: The account that the `delegator` would like to make a proxy.
+	/// - `proxy_type`: The permissions allowed for this proxy account.
+	/// - `delay`: The announcement period required of the initial proxy. Will generally be
+	/// zero.
+	pub fn remove_proxy_delegate(
+		delegator: &T::AccountId,
+		delegatee: T::AccountId,
+		proxy_type: T::ProxyType,
+		delay: T::BlockNumber,
+	) -> DispatchResult {
+		Proxies::<T>::try_mutate_exists(delegator, |x| {
+			let (mut proxies, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
+			let proxy_def = ProxyDefinition { delegate: delegatee, proxy_type, delay };
+			let i = proxies.binary_search(&proxy_def).ok().ok_or(Error::<T>::NotFound)?;
+			proxies.remove(i);
+			let new_deposit = Self::deposit(proxies.len() as u32);
+			if new_deposit > old_deposit {
+				T::Currency::reserve(delegator, new_deposit - old_deposit)?;
+			} else if new_deposit < old_deposit {
+				T::Currency::unreserve(delegator, old_deposit - new_deposit);
+			}
+			if !proxies.is_empty() {
+				*x = Some((proxies, new_deposit))
+			}
+			Ok(())
+		})
+	}
+
+	pub fn deposit(num_proxies: u32) -> BalanceOf<T> {
+		if num_proxies == 0 {
+			Zero::zero()
+		} else {
+			T::ProxyDepositBase::get() + T::ProxyDepositFactor::get() * num_proxies.into()
+		}
 	}
 
 	fn rejig_deposit(
