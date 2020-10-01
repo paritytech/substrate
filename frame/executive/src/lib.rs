@@ -498,7 +498,7 @@ mod tests {
 	mod custom {
 		use frame_support::weights::{Weight, DispatchClass};
 		use sp_runtime::transaction_validity::{
-			UnknownTransaction, TransactionValidityError, TransactionSource, TransactionValidity
+			UnknownTransaction, TransactionSource, TransactionValidity
 		};
 
 		pub trait Trait: frame_system::Trait {}
@@ -549,10 +549,6 @@ mod tests {
 
 		impl<T: Trait> sp_runtime::traits::ValidateUnsigned for Module<T> {
 			type Call = Call<T>;
-
-			fn pre_dispatch(_call: &Self::Call) -> Result<(), TransactionValidityError> {
-				Ok(())
-			}
 
 			fn validate_unsigned(
 				_source: TransactionSource,
@@ -919,7 +915,10 @@ mod tests {
 				Err(TransactionValidityError::Unknown(UnknownTransaction::NoUnsignedValidator)),
 			);
 			assert_eq!(Executive::apply_extrinsic(valid), Ok(Err(DispatchError::BadOrigin)));
-			assert_eq!(Executive::apply_extrinsic(invalid), Ok(Err(DispatchError::BadOrigin)));
+			assert_eq!(
+				Executive::apply_extrinsic(invalid),
+				Err(TransactionValidityError::Unknown(UnknownTransaction::NoUnsignedValidator))
+			);
 		});
 	}
 
