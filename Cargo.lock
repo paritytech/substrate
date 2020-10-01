@@ -2116,15 +2116,8 @@ checksum = "d36fab90f82edc3c747f9d438e06cf0a491055896f2a279638bb5beed6c40177"
 [[package]]
 name = "hash-db"
 version = "0.15.2"
-source = "git+https://github.com/cheme/trie?branch=key_val_indexed2#e2f5679e861c655f311338b45c2eb546150071a9"
-
-[[package]]
-name = "hash256-std-hasher"
-version = "0.15.2"
-source = "git+https://github.com/cheme/trie?branch=key_val_indexed2#e2f5679e861c655f311338b45c2eb546150071a9"
-dependencies = [
- "crunchy",
-]
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
 
 [[package]]
 name = "hash256-std-hasher"
@@ -2663,10 +2656,11 @@ checksum = "67c21572b4949434e4fc1e1978b99c5f77064153c59d998bf13ecd96fb5ecba7"
 [[package]]
 name = "keccak-hasher"
 version = "0.15.3"
-source = "git+https://github.com/cheme/trie?branch=key_val_indexed2#e2f5679e861c655f311338b45c2eb546150071a9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "711adba9940a039f4374fc5724c0a5eaca84a2d558cce62256bfe26f0dbef05e"
 dependencies = [
  "hash-db",
- "hash256-std-hasher 0.15.2 (git+https://github.com/cheme/trie?branch=key_val_indexed2)",
+ "hash256-std-hasher",
  "tiny-keccak",
 ]
 
@@ -2713,7 +2707,8 @@ dependencies = [
 [[package]]
 name = "kvdb-rocksdb"
 version = "0.9.1"
-source = "git+https://github.com/cheme/parity-common?branch=historied-db-cache#d71af81e0ce419391e66661bcf8afe9d465ece8a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44947dd392f09475af614d740fe0320b66d01cb5b977f664bbbb5e45a70ea4c1"
 dependencies = [
  "fs-swap",
  "kvdb",
@@ -3413,7 +3408,8 @@ dependencies = [
 [[package]]
 name = "memory-db"
 version = "0.24.1"
-source = "git+https://github.com/cheme/trie?branch=key_val_indexed2#e2f5679e861c655f311338b45c2eb546150071a9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36f36ddb0b2cdc25d38babba472108798e3477f02be5165f038c5e393e50c57a"
 dependencies = [
  "hash-db",
  "hashbrown 0.8.1",
@@ -8053,7 +8049,7 @@ dependencies = [
  "ed25519-dalek",
  "futures 0.3.5",
  "hash-db",
- "hash256-std-hasher 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hash256-std-hasher",
  "hex",
  "hex-literal",
  "historied-db",
@@ -8254,7 +8250,7 @@ name = "sp-runtime"
 version = "2.0.0"
 dependencies = [
  "either",
- "hash256-std-hasher 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hash256-std-hasher",
  "impl-trait-for-tuples",
  "log",
  "parity-scale-codec",
@@ -9492,7 +9488,8 @@ checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
 [[package]]
 name = "trie-bench"
 version = "0.25.0"
-source = "git+https://github.com/cheme/trie?branch=key_val_indexed2#e2f5679e861c655f311338b45c2eb546150071a9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af2cc37cac8cc158119982c920cbb9b8243d8540c1d13b8aca84484bfc83a426"
 dependencies = [
  "criterion",
  "hash-db",
@@ -9507,7 +9504,8 @@ dependencies = [
 [[package]]
 name = "trie-db"
 version = "0.22.1"
-source = "git+https://github.com/cheme/trie?branch=key_val_indexed2#e2f5679e861c655f311338b45c2eb546150071a9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e55f7ace33d6237e14137e386f4e1672e2a5c6bbc97fef9f438581a143971f0"
 dependencies = [
  "hash-db",
  "hashbrown 0.8.1",
@@ -9519,7 +9517,8 @@ dependencies = [
 [[package]]
 name = "trie-root"
 version = "0.16.0"
-source = "git+https://github.com/cheme/trie?branch=key_val_indexed2#e2f5679e861c655f311338b45c2eb546150071a9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "652931506d2c1244d7217a70b99f56718a7b4161b37f04e7cd868072a99f68cd"
 dependencies = [
  "hash-db",
 ]
@@ -9527,7 +9526,8 @@ dependencies = [
 [[package]]
 name = "trie-standardmap"
 version = "0.15.2"
-source = "git+https://github.com/cheme/trie?branch=key_val_indexed2#e2f5679e861c655f311338b45c2eb546150071a9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3161ba520ab28cd8e6b68e1126f1009f6e335339d1a73b978139011703264c8"
 dependencies = [
  "hash-db",
  "keccak-hasher",

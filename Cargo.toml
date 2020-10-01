@@ -256,14 +256,3 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-
-[patch.crates-io]
-trie-db = { git="https://github.com/cheme/trie", branch="key_val_indexed2" }
-memory-db = { git="https://github.com/cheme/trie", branch="key_val_indexed2" }
-hash-db = { git="https://github.com/cheme/trie", branch="key_val_indexed2" }
-trie-root = { git="https://github.com/cheme/trie", branch="key_val_indexed2" }
-trie-bench = { git="https://github.com/cheme/trie", branch="key_val_indexed2" }
-trie-standardmap = { git="https://github.com/cheme/trie", branch="key_val_indexed2" }
-
-kvdb-rocksdb = { git="https://github.com/cheme/parity-common", branch="historied-db-cache" }
