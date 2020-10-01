@@ -609,7 +609,7 @@ where
 
 impl BenchContext {
 	/// Import some block.
-	pub fn import_block(&mut self, block: Block) {
+	pub async fn import_block(&mut self, block: Block) {
 		let mut import_params = BlockImportParams::new(BlockOrigin::NetworkBroadcast, block.header.clone());
 		import_params.body = Some(block.extrinsics().to_vec());
 		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
@@ -618,6 +618,7 @@ impl BenchContext {
 
 		assert_eq!(
 			self.client.import_block(import_params, Default::default())
+				.await
 				.expect("Failed to import block"),
 			ImportResult::Imported(
 				ImportedAux {

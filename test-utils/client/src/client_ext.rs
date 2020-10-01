@@ -17,6 +17,7 @@
 
 //! Client extension for tests.
 
+use async_trait::async_trait;
 use sc_service::client::Client;
 use sc_client_api::backend::Finalizer;
 use sc_client_api::client::BlockBackend;
@@ -43,19 +44,20 @@ pub trait ClientExt<Block: BlockT>: Sized {
 }
 
 /// Extension trait for a test client around block importing.
+#[async_trait]
 pub trait ClientBlockImportExt<Block: BlockT>: Sized {
 	/// Import block to the chain. No finality.
-	fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
+	async fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
 
 	/// Import a block and make it our best block if possible.
-	fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
+	async fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
 
 	/// Import a block and finalize it.
-	fn import_as_final(&mut self, origin: BlockOrigin, block: Block)
+	async fn import_as_final(&mut self, origin: BlockOrigin, block: Block)
 		-> Result<(), ConsensusError>;
 
 	/// Import block with justification, finalizes block.
-	fn import_justified(
+	async fn import_justified(
 		&mut self,
 		origin: BlockOrigin,
 		block: Block,
@@ -84,38 +86,39 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 }
 
 /// This implementation is required, because of the weird api requirements around `BlockImport`.
-impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::Arc<T>
+#[async_trait]
+impl<Block: BlockT, T: Send + Sync, Transaction: Send + 'static> ClientBlockImportExt<Block> for std::sync::Arc<T>
 	where for<'r> &'r T: BlockImport<Block, Error = ConsensusError, Transaction = Transaction>
 {
-	fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
+	async fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(self, import, HashMap::new()).await.map(|_| ())
 	}
 
-	fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
+	async fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
 		import.fork_choice = Some(ForkChoiceStrategy::Custom(true));
 
-		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(self, import, HashMap::new()).await.map(|_| ())
 	}
 
-	fn import_as_final(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
+	async fn import_as_final(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
 		import.finalized = true;
 		import.fork_choice = Some(ForkChoiceStrategy::Custom(true));
 
-		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(self, import, HashMap::new()).await.map(|_| ())
 	}
 
-	fn import_justified(
+	async fn import_justified(
 		&mut self,
 		origin: BlockOrigin,
 		block: Block,
@@ -128,43 +131,45 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 		import.finalized = true;
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(self, import, HashMap::new()).await.map(|_| ())
 	}
 }
 
-impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block, RA>
+#[async_trait]
+impl<B: Send + Sync, E: Send, RA: Send, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block, RA>
 	where
 		Self: BlockImport<Block, Error = ConsensusError>,
+		<Self as BlockImport<Block>>::Transaction: Send,
 {
-	fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
+	async fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(self, import, HashMap::new()).await.map(|_| ())
 	}
 
-	fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
+	async fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
 		import.fork_choice = Some(ForkChoiceStrategy::Custom(true));
 
-		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(self, import, HashMap::new()).await.map(|_| ())
 	}
 
-	fn import_as_final(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
+	async fn import_as_final(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
 		import.finalized = true;
 		import.fork_choice = Some(ForkChoiceStrategy::Custom(true));
 
-		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(self, import, HashMap::new()).await.map(|_| ())
 	}
 
-	fn import_justified(
+	async fn import_justified(
 		&mut self,
 		origin: BlockOrigin,
 		block: Block,
@@ -177,6 +182,6 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 		import.finalized = true;
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(self, import, HashMap::new()).await.map(|_| ())
 	}
 }

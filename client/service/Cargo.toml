@@ -24,6 +24,7 @@ wasmtime = [
 test-helpers = []
 
 [dependencies]
+async-trait = "0.1.30"
 derive_more = "0.99.2"
 futures01 = { package = "futures", version = "0.1.29" }
 futures = { version = "0.3.4", features = ["compat"] }

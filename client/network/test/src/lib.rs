@@ -26,7 +26,7 @@ use std::{
 	borrow::Cow, collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData,
 	task::{Poll, Context as FutureContext}
 };
-
+use async_trait::async_trait;
 use libp2p::build_multiaddr;
 use log::trace;
 use sc_network::config::FinalityProofProvider;
@@ -50,10 +50,10 @@ use sp_consensus::block_import::{BlockImport, ImportResult};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
+use futures_util::lock::Mutex;
 use sc_network::{NetworkWorker, NetworkService, config::ProtocolId};
 use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
-use parking_lot::Mutex;
 use sp_core::H256;
 use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
@@ -99,8 +99,9 @@ impl PassThroughVerifier {
 }
 
 /// This `Verifier` accepts all data as valid.
+#[async_trait]
 impl<B: BlockT> Verifier<B> for PassThroughVerifier {
-	fn verify(
+	async fn verify(
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
@@ -276,16 +277,16 @@ impl<D> Peer<D> {
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
-	pub fn generate_blocks<F>(&mut self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
+	pub async fn generate_blocks<F>(&mut self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
 		where F: FnMut(BlockBuilder<Block, PeersFullClient, substrate_test_runtime_client::Backend>) -> Block
 	{
 		let best_hash = self.client.info().best_hash;
-		self.generate_blocks_at(BlockId::Hash(best_hash), count, origin, edit_block, false)
+		self.generate_blocks_at(BlockId::Hash(best_hash), count, origin, edit_block, false).await
 	}
 
 	/// Add blocks to the peer -- edit the block before adding. The chain will
 	/// start at the given block iD.
-	fn generate_blocks_at<F>(
+	async fn generate_blocks_at<F>(
 		&mut self,
 		at: BlockId<Block>,
 		count: usize,
@@ -317,14 +318,14 @@ impl<D> Peer<D> {
 				header.clone(),
 				None,
 				if headers_only { None } else { Some(block.extrinsics) },
-			).unwrap();
+			).await.unwrap();
 			let cache = if let Some(cache) = cache {
 				cache.into_iter().collect()
 			} else {
 				Default::default()
 			};
 
-			self.block_import.import_block(import_block, cache).expect("block_import failed");
+			self.block_import.import_block(import_block, cache).await.expect("block_import failed");
 			self.network.service().announce_block(hash, Vec::new());
 			at = hash;
 		}
@@ -335,26 +336,26 @@ impl<D> Peer<D> {
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX)
-	pub fn push_blocks(&mut self, count: usize, with_tx: bool) -> H256 {
+	pub async fn push_blocks(&mut self, count: usize, with_tx: bool) -> H256 {
 		let best_hash = self.client.info().best_hash;
-		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx)
+		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx).await
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX)
-	pub fn push_headers(&mut self, count: usize) -> H256 {
+	pub async fn push_headers(&mut self, count: usize) -> H256 {
 		let best_hash = self.client.info().best_hash;
-		self.generate_tx_blocks_at(BlockId::Hash(best_hash), count, false, true)
+		self.generate_tx_blocks_at(BlockId::Hash(best_hash), count, false, true).await
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX) starting from
 	/// given hash.
-	pub fn push_blocks_at(&mut self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
-		self.generate_tx_blocks_at(at, count, with_tx, false)
+	pub async fn push_blocks_at(&mut self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
+		self.generate_tx_blocks_at(at, count, with_tx, false).await
 	}
 
 	/// Push blocks/headers to the peer (simplified: with or without a TX) starting from
 	/// given hash.
-	fn generate_tx_blocks_at(&mut self, at: BlockId<Block>, count: usize, with_tx: bool, headers_only:bool) -> H256 {
+	async fn generate_tx_blocks_at(&mut self, at: BlockId<Block>, count: usize, with_tx: bool, headers_only:bool) -> H256 {
 		let mut nonce = 0;
 		if with_tx {
 			self.generate_blocks_at(
@@ -372,7 +373,7 @@ impl<D> Peer<D> {
 					builder.build().unwrap().block
 				},
 				headers_only
-			)
+			).await
 		} else {
 			self.generate_blocks_at(
 				at,
@@ -380,15 +381,15 @@ impl<D> Peer<D> {
 				BlockOrigin::File,
 				|builder| builder.build().unwrap().block,
 				headers_only,
-			)
+			).await
 		}
 	}
 
-	pub fn push_authorities_change_block(&mut self, new_authorities: Vec<AuthorityId>) -> H256 {
+	pub async fn push_authorities_change_block(&mut self, new_authorities: Vec<AuthorityId>) -> H256 {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
 			builder.build().unwrap().block
-		})
+		}).await
 	}
 
 	/// Get a reference to the client.
@@ -419,8 +420,8 @@ impl<D> Peer<D> {
 	}
 
 	/// Return a collection of block hashes that failed verification
-	pub fn failed_verifications(&self) -> HashMap<<Block as BlockT>::Hash, String> {
-		self.verifier.failed_verifications.lock().clone()
+	pub async fn failed_verifications(&self) -> HashMap<<Block as BlockT>::Hash, String> {
+		self.verifier.failed_verifications.lock().await.clone()
 	}
 
 	pub fn has_block(&self, hash: &H256) -> bool {
@@ -491,28 +492,29 @@ impl<Transaction> Clone for BlockImportAdapter<Transaction> {
 	}
 }
 
-impl<Transaction> BlockImport<Block> for BlockImportAdapter<Transaction> {
+#[async_trait]
+impl<Transaction: Send> BlockImport<Block> for BlockImportAdapter<Transaction> {
 	type Error = ConsensusError;
 	type Transaction = Transaction;
 
-	fn check_block(
+	async fn check_block(
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		match self {
-			Self::Full(full, _) => full.lock().check_block(block),
-			Self::Light(light, _) => light.lock().check_block(block),
+			Self::Full(full, _) => full.lock().await.check_block(block).await,
+			Self::Light(light, _) => light.lock().await.check_block(block).await,
 		}
 	}
 
-	fn import_block(
+	async fn import_block(
 		&mut self,
 		block: BlockImportParams<Block, Transaction>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		match self {
-			Self::Full(full, _) => full.lock().import_block(block.convert_transaction(), cache),
-			Self::Light(light, _) => light.lock().import_block(block.convert_transaction(), cache),
+			Self::Full(full, _) => full.lock().await.import_block(block.convert_transaction(), cache).await,
+			Self::Light(light, _) => light.lock().await.import_block(block.convert_transaction(), cache).await,
 		}
 	}
 }
@@ -524,8 +526,9 @@ struct VerifierAdapter<B: BlockT> {
 	failed_verifications: Arc<Mutex<HashMap<B::Hash, String>>>,
 }
 
+#[async_trait]
 impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
-	fn verify(
+	async fn verify(
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
@@ -533,10 +536,11 @@ impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let hash = header.hash();
-		self.verifier.lock().verify(origin, header, justification, body).map_err(|e| {
-			self.failed_verifications.lock().insert(hash, e.clone());
-			e
-		})
+		let result = self.verifier.lock().await.verify(origin, header, justification, body).await;
+		if let Err(ref e) = result {
+			self.failed_verifications.lock().await.insert(hash, e.clone());
+		}
+		result
 	}
 }
 

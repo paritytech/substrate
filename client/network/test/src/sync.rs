@@ -27,13 +27,13 @@ fn test_ancestor_search_when_common_is(n: usize) {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 
-	net.peer(0).push_blocks(n, false);
-	net.peer(1).push_blocks(n, false);
-	net.peer(2).push_blocks(n, false);
+	block_on(net.peer(0).push_blocks(n, false));
+	block_on(net.peer(1).push_blocks(n, false));
+	block_on(net.peer(2).push_blocks(n, false));
 
-	net.peer(0).push_blocks(10, true);
-	net.peer(1).push_blocks(100, false);
-	net.peer(2).push_blocks(100, false);
+	block_on(net.peer(0).push_blocks(10, true));
+	block_on(net.peer(1).push_blocks(100, false));
+	block_on(net.peer(2).push_blocks(100, false));
 
 	net.block_until_sync();
 	let peer1 = &net.peers()[1];
@@ -67,7 +67,7 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 	}
 
 	// Generate blocks.
-	net.peer(2).push_blocks(100, false);
+	block_on(net.peer(2).push_blocks(100, false));
 
 	// Block until all nodes are online and nodes 0 and 1 and major syncing.
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
@@ -117,7 +117,7 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 	let mut net = TestNet::new(3);
 
 	// Generate blocks.
-	net.peer(2).push_blocks(100, false);
+	block_on(net.peer(2).push_blocks(100, false));
 
 	// Check that we're not major syncing when disconnected.
 	assert!(!net.peer(1).is_major_syncing());
@@ -149,8 +149,8 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 fn sync_from_two_peers_works() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
-	net.peer(1).push_blocks(100, false);
-	net.peer(2).push_blocks(100, false);
+	block_on(net.peer(1).push_blocks(100, false));
+	block_on(net.peer(2).push_blocks(100, false));
 	net.block_until_sync();
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
@@ -161,9 +161,9 @@ fn sync_from_two_peers_works() {
 fn sync_from_two_peers_with_ancestry_search_works() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
-	net.peer(0).push_blocks(10, true);
-	net.peer(1).push_blocks(100, false);
-	net.peer(2).push_blocks(100, false);
+	block_on(net.peer(0).push_blocks(10, true));
+	block_on(net.peer(1).push_blocks(100, false));
+	block_on(net.peer(2).push_blocks(100, false));
 	net.block_until_sync();
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
@@ -174,9 +174,9 @@ fn ancestry_search_works_when_backoff_is_one() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 
-	net.peer(0).push_blocks(1, false);
-	net.peer(1).push_blocks(2, false);
-	net.peer(2).push_blocks(2, false);
+	block_on(net.peer(0).push_blocks(1, false));
+	block_on(net.peer(1).push_blocks(2, false));
+	block_on(net.peer(2).push_blocks(2, false));
 
 	net.block_until_sync();
 	let peer1 = &net.peers()[1];
@@ -188,9 +188,9 @@ fn ancestry_search_works_when_ancestor_is_genesis() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 
-	net.peer(0).push_blocks(13, true);
-	net.peer(1).push_blocks(100, false);
-	net.peer(2).push_blocks(100, false);
+	block_on(net.peer(0).push_blocks(13, true));
+	block_on(net.peer(1).push_blocks(100, false));
+	block_on(net.peer(2).push_blocks(100, false));
 
 	net.block_until_sync();
 	let peer1 = &net.peers()[1];
@@ -216,7 +216,7 @@ fn ancestry_search_works_when_common_is_hundred() {
 fn sync_long_chain_works() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
-	net.peer(1).push_blocks(500, false);
+	block_on(net.peer(1).push_blocks(500, false));
 	net.block_until_sync();
 	let peer1 = &net.peers()[1];
 	assert!(net.peers()[0].blockchain_canon_equals(peer1));
@@ -226,8 +226,8 @@ fn sync_long_chain_works() {
 fn sync_no_common_longer_chain_fails() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
-	net.peer(0).push_blocks(20, true);
-	net.peer(1).push_blocks(20, false);
+	block_on(net.peer(0).push_blocks(20, true));
+	block_on(net.peer(1).push_blocks(20, false));
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if net.peer(0).is_major_syncing() {
@@ -244,7 +244,7 @@ fn sync_no_common_longer_chain_fails() {
 fn sync_justifications() {
 	sp_tracing::try_init_simple();
 	let mut net = JustificationTestNet::new(3);
-	net.peer(0).push_blocks(20, false);
+	block_on(net.peer(0).push_blocks(20, false));
 	net.block_until_sync();
 
 	// there's currently no justification for block #10
@@ -286,10 +286,10 @@ fn sync_justifications_across_forks() {
 	sp_tracing::try_init_simple();
 	let mut net = JustificationTestNet::new(3);
 	// we push 5 blocks
-	net.peer(0).push_blocks(5, false);
+	block_on(net.peer(0).push_blocks(5, false));
 	// and then two forks 5 and 6 blocks long
-	let f1_best = net.peer(0).push_blocks_at(BlockId::Number(5), 5, false);
-	let f2_best = net.peer(0).push_blocks_at(BlockId::Number(5), 6, false);
+	let f1_best = block_on(net.peer(0).push_blocks_at(BlockId::Number(5), 5, false));
+	let f2_best = block_on(net.peer(0).push_blocks_at(BlockId::Number(5), 6, false));
 
 	// peer 1 will only see the longer fork. but we'll request justifications
 	// for both and finalize the small fork instead.
@@ -317,16 +317,16 @@ fn sync_justifications_across_forks() {
 fn sync_after_fork_works() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
-	net.peer(0).push_blocks(30, false);
-	net.peer(1).push_blocks(30, false);
-	net.peer(2).push_blocks(30, false);
+	block_on(net.peer(0).push_blocks(30, false));
+	block_on(net.peer(1).push_blocks(30, false));
+	block_on(net.peer(2).push_blocks(30, false));
 
-	net.peer(0).push_blocks(10, true);
-	net.peer(1).push_blocks(20, false);
-	net.peer(2).push_blocks(20, false);
+	block_on(net.peer(0).push_blocks(10, true));
+	block_on(net.peer(1).push_blocks(20, false));
+	block_on(net.peer(2).push_blocks(20, false));
 
-	net.peer(1).push_blocks(10, true);
-	net.peer(2).push_blocks(1, false);
+	block_on(net.peer(1).push_blocks(10, true));
+	block_on(net.peer(2).push_blocks(1, false));
 
 	// peer 1 has the best chain
 	net.block_until_sync();
@@ -340,11 +340,11 @@ fn sync_after_fork_works() {
 fn syncs_all_forks() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(4);
-	net.peer(0).push_blocks(2, false);
-	net.peer(1).push_blocks(2, false);
+	block_on(net.peer(0).push_blocks(2, false));
+	block_on(net.peer(1).push_blocks(2, false));
 
-	let b1 = net.peer(0).push_blocks(2, true);
-	let b2 = net.peer(1).push_blocks(4, false);
+	let b1 = block_on(net.peer(0).push_blocks(2, true));
+	let b2 = block_on(net.peer(1).push_blocks(4, false));
 
 	net.block_until_sync();
 	// Check that all peers have all of the branches.
@@ -359,7 +359,7 @@ fn own_blocks_are_announced() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 	net.block_until_sync(); // connect'em
-	net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.build().unwrap().block);
+	block_on(net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.build().unwrap().block));
 
 	net.block_until_sync();
 
@@ -381,7 +381,7 @@ fn blocks_are_not_announced_by_light_nodes() {
 	net.add_light_peer();
 
 	// Sync between 0 and 1.
-	net.peer(0).push_blocks(1, false);
+	block_on(net.peer(0).push_blocks(1, false));
 	assert_eq!(net.peer(0).client.info().best_number, 1);
 	net.block_until_sync();
 	assert_eq!(net.peer(1).client.info().best_number, 1);
@@ -403,17 +403,17 @@ fn blocks_are_not_announced_by_light_nodes() {
 fn can_sync_small_non_best_forks() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
-	net.peer(0).push_blocks(30, false);
-	net.peer(1).push_blocks(30, false);
+	block_on(net.peer(0).push_blocks(30, false));
+	block_on(net.peer(1).push_blocks(30, false));
 
 	// small fork + reorg on peer 1.
-	net.peer(0).push_blocks_at(BlockId::Number(30), 2, true);
+	block_on(net.peer(0).push_blocks_at(BlockId::Number(30), 2, true));
 	let small_hash = net.peer(0).client().info().best_hash;
-	net.peer(0).push_blocks_at(BlockId::Number(30), 10, false);
+	block_on(net.peer(0).push_blocks_at(BlockId::Number(30), 10, false));
 	assert_eq!(net.peer(0).client().info().best_number, 40);
 
 	// peer 1 only ever had the long fork.
-	net.peer(1).push_blocks(10, false);
+	block_on(net.peer(1).push_blocks(10, false));
 	assert_eq!(net.peer(1).client().info().best_number, 40);
 
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
@@ -451,7 +451,7 @@ fn can_sync_small_non_best_forks() {
 	}));
 	net.block_until_sync();
 
-	let another_fork = net.peer(0).push_blocks_at(BlockId::Number(35), 2, true);
+	let another_fork = block_on(net.peer(0).push_blocks_at(BlockId::Number(35), 2, true));
 	net.peer(0).announce_block(another_fork, Vec::new());
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
@@ -471,7 +471,7 @@ fn can_not_sync_from_light_peer() {
 	net.add_light_peer();
 
 	// generate some blocks on #0
-	net.peer(0).push_blocks(1, false);
+	block_on(net.peer(0).push_blocks(1, false));
 
 	// and let the light client sync from this node
 	net.block_until_sync();
@@ -520,11 +520,11 @@ fn light_peer_imports_header_from_announce() {
 	net.block_until_sync();
 
 	// check that NEW block is imported from announce message
-	let new_hash = net.peer(0).push_blocks(1, false);
+	let new_hash = block_on(net.peer(0).push_blocks(1, false));
 	import_with_announce(&mut net, new_hash);
 
 	// check that KNOWN STALE block is imported from announce message
-	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
+	let known_stale_hash = block_on(net.peer(0).push_blocks_at(BlockId::Number(0), 1, true));
 	import_with_announce(&mut net, known_stale_hash);
 }
 
@@ -532,18 +532,18 @@ fn light_peer_imports_header_from_announce() {
 fn can_sync_explicit_forks() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
-	net.peer(0).push_blocks(30, false);
-	net.peer(1).push_blocks(30, false);
+	block_on(net.peer(0).push_blocks(30, false));
+	block_on(net.peer(1).push_blocks(30, false));
 
 	// small fork + reorg on peer 1.
-	net.peer(0).push_blocks_at(BlockId::Number(30), 2, true);
+	block_on(net.peer(0).push_blocks_at(BlockId::Number(30), 2, true));
 	let small_hash = net.peer(0).client().info().best_hash;
 	let small_number = net.peer(0).client().info().best_number;
-	net.peer(0).push_blocks_at(BlockId::Number(30), 10, false);
+	block_on(net.peer(0).push_blocks_at(BlockId::Number(30), 10, false));
 	assert_eq!(net.peer(0).client().info().best_number, 40);
 
 	// peer 1 only ever had the long fork.
-	net.peer(1).push_blocks(10, false);
+	block_on(net.peer(1).push_blocks(10, false));
 	assert_eq!(net.peer(1).client().info().best_number, 40);
 
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
@@ -588,12 +588,12 @@ fn syncs_header_only_forks() {
 	let mut net = TestNet::new(0);
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig { keep_blocks: Some(3), ..Default::default() });
-	net.peer(0).push_blocks(2, false);
-	net.peer(1).push_blocks(2, false);
+	block_on(net.peer(0).push_blocks(2, false));
+	block_on(net.peer(1).push_blocks(2, false));
 
-	net.peer(0).push_blocks(2, true);
+	block_on(net.peer(0).push_blocks(2, true));
 	let small_hash = net.peer(0).client().info().best_hash;
-	net.peer(1).push_blocks(4, false);
+	block_on(net.peer(1).push_blocks(4, false));
 
 	net.block_until_sync();
 	// Peer 1 will sync the small fork even though common block state is missing
@@ -605,10 +605,10 @@ fn does_not_sync_announced_old_best_block() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 
-	let old_hash = net.peer(0).push_blocks(1, false);
-	let old_hash_with_parent = net.peer(0).push_blocks(1, false);
-	net.peer(0).push_blocks(18, true);
-	net.peer(1).push_blocks(20, true);
+	let old_hash = block_on(net.peer(0).push_blocks(1, false));
+	let old_hash_with_parent = block_on(net.peer(0).push_blocks(1, false));
+	block_on(net.peer(0).push_blocks(18, true));
+	block_on(net.peer(1).push_blocks(20, true));
 
 	net.peer(0).announce_block(old_hash, Vec::new());
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
@@ -633,7 +633,7 @@ fn full_sync_requires_block_body() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
 
-	net.peer(0).push_headers(1);
+	block_on(net.peer(0).push_headers(1));
 	// Wait for nodes to connect
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
@@ -673,12 +673,12 @@ fn imports_stale_once() {
 	net.block_until_sync();
 
 	// check that NEW block is imported from announce message
-	let new_hash = net.peer(0).push_blocks(1, false);
+	let new_hash = block_on(net.peer(0).push_blocks(1, false));
 	import_with_announce(&mut net, new_hash);
 	assert_eq!(net.peer(1).num_downloaded_blocks(), 1);
 
 	// check that KNOWN STALE block is imported from announce message
-	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
+	let known_stale_hash = block_on(net.peer(0).push_blocks_at(BlockId::Number(0), 1, true));
 	import_with_announce(&mut net, known_stale_hash);
 	assert_eq!(net.peer(1).num_downloaded_blocks(), 2);
 }
@@ -688,10 +688,10 @@ fn can_sync_to_peers_with_wrong_common_block() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
 
-	net.peer(0).push_blocks(2, true);
-	net.peer(1).push_blocks(2, true);
-	let fork_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 2, false);
-	net.peer(1).push_blocks_at(BlockId::Number(0), 2, false);
+	block_on(net.peer(0).push_blocks(2, true));
+	block_on(net.peer(1).push_blocks(2, true));
+	let fork_hash = block_on(net.peer(0).push_blocks_at(BlockId::Number(0), 2, false));
+	block_on(net.peer(1).push_blocks_at(BlockId::Number(0), 2, false));
 	// wait for connection
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
@@ -705,7 +705,7 @@ fn can_sync_to_peers_with_wrong_common_block() {
 	// both peers re-org to the same fork without notifying each other
 	net.peer(0).client().finalize_block(BlockId::Hash(fork_hash), Some(Vec::new()), true).unwrap();
 	net.peer(1).client().finalize_block(BlockId::Hash(fork_hash), Some(Vec::new()), true).unwrap();
-	let final_hash = net.peer(0).push_blocks(1, false);
+	let final_hash = block_on(net.peer(0).push_blocks(1, false));
 
 	net.block_until_sync();
 
@@ -739,7 +739,7 @@ fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 
 	net.block_until_connected();
 
-	let block_hash = net.peer(0).push_blocks(1, false);
+	let block_hash = block_on(net.peer(0).push_blocks(1, false));
 
 	while !net.peer(2).has_block(&block_hash) {
 		net.block_until_idle();
