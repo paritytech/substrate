@@ -59,36 +59,6 @@ impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	}
 }
 
-
-arg_enum! {
-	#[allow(missing_docs)]
-	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-	pub enum ExpCacheConf {
-		LRUOnly,
-		GCRange,
-		GCRetracted,
-		None,
-	}
-}
-
-pub const DEFAULT_EXPCACHE_LRU_PARAM: usize = 10;
-pub const DEFAULT_EXPCACHE_GCRANGE_PARAM: usize = 100;
-impl ExpCacheConf {
-	/// TODO see if pub is needed here
-	pub fn into(self, param: Option<usize>) -> sc_client_api::ExpCacheConf {
-		match self {
-			ExpCacheConf::None => sc_client_api::ExpCacheConf::None,
-			ExpCacheConf::GCRange => sc_client_api::ExpCacheConf::GCRange(
-				param.unwrap_or(DEFAULT_EXPCACHE_GCRANGE_PARAM)
-			),
-			ExpCacheConf::GCRetracted => sc_client_api::ExpCacheConf::GCRetracted,
-			ExpCacheConf::LRUOnly => sc_client_api::ExpCacheConf::LRUOnly(
-				param.unwrap_or(DEFAULT_EXPCACHE_LRU_PARAM)
-			),
-		}
-	}
-}
-
 arg_enum! {
 	#[allow(missing_docs)]
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]

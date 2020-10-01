@@ -21,6 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod backend;
+#[cfg(feature = "std")]
 mod in_memory_backend;
 #[cfg(feature = "std")]
 mod changes_trie;
@@ -114,15 +115,13 @@ impl sp_std::fmt::Display for DefaultError {
 	}
 }
 
-pub use crate::in_memory_backend::{new_in_mem, KVInMem};
 pub use crate::overlayed_changes::{
 	OverlayedChanges, StorageKey, StorageValue,
 	StorageCollection, ChildStorageCollection,
 	StorageChanges, StorageTransactionCache,
 };
 pub use crate::backend::Backend;
-pub use crate::trie_backend_essence::{TrieBackendStorage, Storage,
-	OverlayWithIndexes};
+pub use crate::trie_backend_essence::{TrieBackendStorage, Storage};
 pub use crate::trie_backend::TrieBackend;
 pub use crate::stats::{UsageInfo, UsageUnit, StateMachineStats};
 pub use error::{Error, ExecutionError};
@@ -162,6 +161,7 @@ mod std_reexport {
 		create_proof_check_backend, ProofRecorder, ProvingBackend, ProvingBackendRecorder,
 	};
 	pub use crate::error::{Error, ExecutionError};
+	pub use crate::in_memory_backend::new_in_mem;
 }
 
 #[cfg(feature = "std")]
@@ -865,17 +865,6 @@ mod execution {
 	}
 }
 
-/// Simple key value backend support.
-pub mod kv_backend {
-	/// KVBackend trait.
-	pub trait KVBackend: Send + Sync {
-		fn assert_value(&self) -> bool {
-			true
-		}
-		fn storage(&self, key: &[u8]) -> Result<Option<sp_std::vec::Vec<u8>>, crate::DefaultError>;
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use std::collections::BTreeMap;
@@ -1437,7 +1426,7 @@ mod tests {
 			cache.transaction.unwrap()
 		};
 		let mut duplicate = false;
-		for (k, (value, rc)) in transaction.db.drain().iter() {
+		for (k, (value, rc)) in transaction.drain().iter() {
 			// look for a key inserted twice: transaction rc is 2
 			if *rc == 2 {
 				duplicate = true;

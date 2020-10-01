@@ -1,0 +1,23 @@
+[package]
+name = "historied-db"
+version = "0.8.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Trait for key value databases with history."
+license = "Apache-2.0"
+categories = [ "no-std" ]
+edition = "2018"
+
+[dependencies]
+derivative = { version = "2.1", features = ["use_core"] }
+smallvec = "1.4"
+hash-db = { default-features = false, version = "0.15.2"}
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
+sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+
+[features]
+default = ["std", "test-helpers"] # TODO remove test-helpers
+std = [
+  "codec/std",
+	"sp-std/std",
+]
+test-helpers = []

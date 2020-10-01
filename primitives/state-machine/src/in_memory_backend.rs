@@ -20,31 +20,14 @@ use crate::{
 	StorageKey, StorageValue, StorageCollection,
 	trie_backend::TrieBackend,
 };
-use sp_std::collections::btree_map::BTreeMap;
-#[cfg(feature = "std")]
-use std::collections::HashMap;
+use std::{collections::{BTreeMap, HashMap}};
 use hash_db::Hasher;
 use sp_trie::{
 	MemoryDB, TrieMut,
 	trie_types::TrieDBMut,
 };
 use codec::Codec;
-use sp_core::storage::ChildInfo;
-#[cfg(feature = "std")]
-use sp_core::storage::Storage;
-use sp_std::{sync::Arc, vec::Vec};
-
-#[derive(Default, Clone, Debug, Eq, PartialEq)]
-pub struct KVInMem(BTreeMap<Vec<u8>, Vec<u8>>);
-
-impl crate::kv_backend::KVBackend for KVInMem {
-	fn assert_value(&self) -> bool {
-		false
-	}
-	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, crate::DefaultError> {
-		Ok(self.0.get(key).cloned())
-	}
-}
+use sp_core::storage::{ChildInfo, Storage};
 
 /// Insert input pairs into memory db.
 fn insert_into_memory_db<H, I>(mut root: H::Out, mdb: &mut MemoryDB<H>, input: I) -> H::Out
@@ -56,10 +39,7 @@ where
 		let mut trie = if root == Default::default() {
 			TrieDBMut::<H>::new(mdb, &mut root)
 		} else {
-			match TrieDBMut::<H>::from_existing(mdb, &mut root) {
-				Ok(trie) => trie,
-				Err(_) => panic!("Error building trie from values."),
-			}
+			TrieDBMut::<H>::from_existing(mdb, &mut root).unwrap()
 		};
 		for (key, value) in input {
 			if let Err(e) = match value {
@@ -70,10 +50,7 @@ where
 					trie.remove(&key)
 				},
 			}  {
-				#[cfg(feature = "std")]
 				panic!("Failed to write to trie: {}", e);
-				#[cfg(not(feature = "std"))]
-				panic!("Failed to write to trie.");
 			}
 		}
 		trie.commit();
@@ -87,18 +64,8 @@ where
 	H::Out: Codec + Ord,
 {
 	let db = MemoryDB::default();
-	let kv_db = KVInMem::default();
-	// this does not share values with kvdb that is bad TODO ??
-	let kv_db_2 = BTreeMap::new();
-	let indexes = BTreeMap::new();
-	let mut backend = TrieBackend::new(
-		db,
-		Default::default(),
-		Arc::new(kv_db),
-		Arc::new(kv_db_2),
-		Arc::new(indexes),
-	);
-	backend.insert(sp_std::iter::empty());
+	let mut backend = TrieBackend::new(db, Default::default());
+	backend.insert(std::iter::empty());
 	backend
 }
 
@@ -157,13 +124,7 @@ where
 	pub fn update_backend(&self, root: H::Out, changes: MemoryDB<H>) -> Self {
 		let mut clone = self.backend_storage().clone();
 		clone.consolidate(changes);
-		Self::new(
-			clone,
-			root,
-			self.alternative.clone(),
-			self.alternative_trie_values.clone(),
-			self.alternative_indexes.clone(),
-		)
+		Self::new(clone, root)
 	}
 
 	/// Compare with another in-memory backend.
@@ -177,13 +138,7 @@ where
 	H::Out: Codec + Ord,
 {
 	fn clone(&self) -> Self {
-		TrieBackend::new(
-			self.backend_storage().clone(),
-			self.root().clone(),
-			self.alternative.clone(),
-			self.alternative_trie_values.clone(),
-			self.alternative_indexes.clone(),
-		)
+		TrieBackend::new(self.backend_storage().clone(), self.root().clone())
 	}
 }
 
@@ -196,7 +151,6 @@ where
 	}
 }
 
-#[cfg(feature = "std")]
 impl<H: Hasher> From<HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>>
 	for TrieBackend<MemoryDB<H>, H>
 where
@@ -209,7 +163,6 @@ where
 	}
 }
 
-#[cfg(feature = "std")]
 impl<H: Hasher> From<Storage> for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
@@ -222,7 +175,6 @@ where
 	}
 }
 
-#[cfg(feature = "std")]
 impl<H: Hasher> From<BTreeMap<StorageKey, StorageValue>> for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
@@ -234,7 +186,6 @@ where
 	}
 }
 
-#[cfg(feature = "std")]
 impl<H: Hasher> From<Vec<(Option<ChildInfo>, StorageCollection)>>
 	for TrieBackend<MemoryDB<H>, H>
 where

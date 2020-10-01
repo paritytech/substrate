@@ -114,7 +114,6 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut mdb = MemoryDB::<HashFor<B>>::default();
 		sp_state_machine::TrieDBMut::<HashFor<B>>::new(&mut mdb, &mut root);
 
-		let (shared_cache, _exp_cache) = new_shared_cache(0, (1, 10), sc_client_api::ExpCacheConf::None);
 		let mut state = BenchmarkingState {
 			state: RefCell::new(None),
 			db: Cell::new(None),
@@ -122,7 +121,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),
-			shared_cache,
+			shared_cache: new_shared_cache(0, (1, 10)),
 			main_key_tracker: Default::default(),
 			child_key_tracker: Default::default(),
 			read_write_tracker: Default::default(),
@@ -140,7 +139,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			genesis.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
 		);
-		state.genesis = transaction.db.clone().drain();
+		state.genesis = transaction.clone().drain();
 		state.genesis_root = root.clone();
 		state.commit(root, transaction, Vec::new(), Vec::new())?;
 		state.record.take();
@@ -155,19 +154,12 @@ impl<B: BlockT> BenchmarkingState<B> {
 		};
 		self.db.set(Some(db.clone()));
 		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
-		let alternative = sp_state_machine::KVInMem::default();
-		let kv_db_2 = std::collections::BTreeMap::new();
-		let indexes = std::collections::BTreeMap::new();
 		*self.state.borrow_mut() = Some(State::new(
 			DbState::<B>::new(
 				storage_db,
 				self.root.get(),
-				Arc::new(alternative),
-				Arc::new(kv_db_2),
-				Arc::new(indexes),
 			),
 			self.shared_cache.clone(),
-			None,
 			None,
 		));
 		Ok(())
@@ -427,7 +419,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	) -> Result<(), Self::Error> {
 		if let Some(db) = self.db.take() {
 			let mut db_transaction = DBTransaction::new();
-			let changes = transaction.db.drain();
+			let changes = transaction.drain();
 			let mut keys = Vec::with_capacity(changes.len());
 			for (key, (val, rc)) in changes {
 				if rc > 0 {

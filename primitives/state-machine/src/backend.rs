@@ -24,11 +24,10 @@ use sp_core::{
 };
 use crate::{
 	trie_backend::TrieBackend,
-	trie_backend_essence::{TrieBackendStorage, IndexChanges},
+	trie_backend_essence::TrieBackendStorage,
 	UsageInfo, StorageKey, StorageValue, StorageCollection, ChildStorageCollection,
 };
 use sp_std::vec::Vec;
-use sp_std::collections::btree_map::BTreeMap;
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 
@@ -339,13 +338,6 @@ impl Consolidate for () {
 	}
 }
 
-impl IndexChanges for () {
-	fn push_index_change(
-		&mut self,
-		_changes: BTreeMap<Vec<u8>, trie_db::partial_db::Index>,
-	) { }
-}
-
 impl Consolidate for Vec<(
 		Option<ChildInfo>,
 		StorageCollection,
@@ -355,27 +347,10 @@ impl Consolidate for Vec<(
 	}
 }
 
-impl IndexChanges for Vec<(
-		Option<ChildInfo>,
-		StorageCollection,
-	)> {
-	fn push_index_change(
-		&mut self,
-		_changes: BTreeMap<Vec<u8>, trie_db::partial_db::Index>,
-	) { }
-}
-
 impl<H: Hasher, KF: sp_trie::KeyFunction<H>> Consolidate for sp_trie::GenericMemoryDB<H, KF> {
 	fn consolidate(&mut self, other: Self) {
 		sp_trie::GenericMemoryDB::consolidate(self, other)
 	}
-}
-
-impl<H: Hasher, KF: sp_trie::KeyFunction<H>> IndexChanges for sp_trie::GenericMemoryDB<H, KF> {
-	fn push_index_change(
-		&mut self,
-		_changes: BTreeMap<Vec<u8>, trie_db::partial_db::Index>,
-	) { }
 }
 
 /// Insert input pairs into memory db.

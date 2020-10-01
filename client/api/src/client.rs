@@ -252,62 +252,6 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub header: Block::Header,
 }
 
-/// Config for experimental cache.
-#[derive(Clone, Debug, Copy)]
-pub enum ExpCacheConf {
-	/// Do not use experimental cache.
-	None,
-	/// Gc clean mode, only apply lru, this will result
-	/// in memory loss in regularily used keys.
-	/// The parameter if not null indicate how many
-	/// call before next full clean (needed for mentioned
-	/// memory accumulation).
-	/// If usize is 0 we never clear: this should not be use,
-	/// only for debugging.
-	LRUOnly(usize),
-	/// Gc against a state without retracted branches.
-	/// Any enacted of non retracted branch will result
-	/// in global cache invalidation.
-	GCRetracted,
-	/// Gc against state available from the last usize blocks over current
-	/// branch.
-	/// Similar to a canonicalization window size.
-	GCRange(usize),
-}
-
-impl Default for ExpCacheConf {
-	fn default() -> Self {
-		// TODO EMCH ??(here for testing purpose, since test mostly use hardcoded default)
-		//
-		// TODO switch to None obviously (as long as expcache).
-		ExpCacheConf::GCRetracted
-	}
-}
-
-impl ExpCacheConf {
-
-	/// Is experimental cache active?
-	pub fn use_exp_cache(&self) -> bool {
-		if let &ExpCacheConf::None = self {
-			false
-		} else {
-			true
-		}
-	}
-
-	/// Default initial value for gc.
-	/// Having this method in this crate
-	/// is discutable : TODO move ??
-	pub fn did_gc_init(&self) -> usize {
-		match self {
-			ExpCacheConf::LRUOnly(nb) => *nb,
-			ExpCacheConf::GCRetracted => 0,
-			ExpCacheConf::GCRange(_) => 0,
-			ExpCacheConf::None => 0,
-		}
-	}
-}
-
 impl<B: BlockT> TryFrom<BlockImportNotification<B>> for sp_transaction_pool::ChainEvent<B> {
 	type Error = ();
 

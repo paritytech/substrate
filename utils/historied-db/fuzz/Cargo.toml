@@ -1,0 +1,25 @@
+
+[package]
+name = "historied-db-fuzz"
+version = "0.0.1"
+authors = []
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.3"
+
+[dependencies.historied-db]
+path = ".."
+features = ["test-helpers"]
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "inmemory_forkable"
+path = "fuzz_targets/inmemory_forkable.rs"
