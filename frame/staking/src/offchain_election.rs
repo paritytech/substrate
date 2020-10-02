@@ -226,35 +226,19 @@ pub fn maximum_compact_len<W: crate::WeightInfo>(
 
 
 	// Time to finish.
-	// We might have reduced less than expected due to rounding error. Reduce linearly one last
-	// time.
-	let mut initialized = false;
-	let mut prev_voters = voters;
-	loop {
-		let next = next_voters(current_weight, voters, 1).unwrap_or(voters);
-		// no change? break.
-		if next == voters {
-			break
-		}
-
-		// then we are stuck in a loop;
-		if prev_voters == next {
-			break;
-		}
-
-		// skip 1 loop, then update these 3 variables in a sequence:
-		// prev_voters --> voter --> next
-		if !initialized {
-			initialized = true
-		} else {
-			prev_voters = voters
-		}
-
-		voters = next;
-		current_weight = weight_with(voters);
+	// We might have reduced less than expected due to rounding error. Increase one last time if we
+	// have any room left, the reduce until we are sure we are below limit.
+	while weight_with(voters + 1) < max_weight {
+		voters += 1;
+	}
+	while voters.checked_sub(1).is_some() && weight_with(voters) > max_weight {
+		voters -= 1;
 	}
 
-	debug_assert!(weight_with(voters) <= max_weight);
+	debug_assert!(
+		weight_with(voters.min(size.nominators)) <= max_weight,
+		"weight_with({}) <= {}", voters.min(size.nominators), max_weight,
+	);
 	voters.min(size.nominators)
 }
 
@@ -559,8 +543,14 @@ mod test {
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 999), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1000), 1);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1001), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1990), 1);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1999), 1);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2000), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2001), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2010), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2990), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2999), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 3000), 3);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 3333), 3);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 5500), 5);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 7777), 7);
@@ -580,8 +570,11 @@ mod test {
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 999), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1000), 1);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1001), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1990), 1);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1999), 1);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2000), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2001), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2010), 1);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 3333), 1);
 
 		let size = ElectionSize {
@@ -596,6 +589,8 @@ mod test {
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1001), 1);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1999), 1);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2000), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2001), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2010), 2);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 3333), 2);
 	}
 }
