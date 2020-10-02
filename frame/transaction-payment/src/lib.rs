@@ -62,6 +62,8 @@ pub use payment::*;
 /// Fee multiplier.
 pub type Multiplier = FixedU128;
 
+type BalanceOf<T> =
+	<T as Trait>::Balance;
 type NegativeImbalanceOf<C, T> =
 	<C as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
@@ -233,10 +235,10 @@ pub trait Trait: frame_system::Trait {
 	type OnChargeTransaction: OnChargeTransaction<Self>;
 
 	/// The fee to be paid for making a transaction; the per-byte portion.
-	type TransactionByteFee: Get<Self::Balance>;
+	type TransactionByteFee: Get<BalanceOf<Self>>;
 
 	/// Convert a weight value into a deductible fee based on the currency type.
-	type WeightToFee: WeightToFeePolynomial<Balance = Self::Balance>;
+	type WeightToFee: WeightToFeePolynomial<Balance = BalanceOf<Self>>;
 
 	/// Update the multiplier of the next block, based on the previous block's weight.
 	type FeeMultiplierUpdate: MultiplierUpdate;
@@ -253,10 +255,10 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// The fee to be paid for making a transaction; the per-byte portion.
-		const TransactionByteFee: T::Balance = T::TransactionByteFee::get();
+		const TransactionByteFee: BalanceOf<T> = T::TransactionByteFee::get();
 
 		/// The polynomial that is applied in order to derive fee from weight.
-		const WeightToFee: Vec<WeightToFeeCoefficient<T::Balance>> =
+		const WeightToFee: Vec<WeightToFeeCoefficient<BalanceOf<T>>> =
 			T::WeightToFee::polynomial().to_vec();
 
 		fn on_finalize() {
@@ -308,7 +310,7 @@ decl_module! {
 
 impl<T: Trait> Module<T>
 where
-	T::Balance: FixedPointOperand,
+	BalanceOf<T>: FixedPointOperand,
 {
 	/// Query the data that we know about the fee of a given `call`.
 	///
@@ -321,10 +323,10 @@ where
 	pub fn query_info<Extrinsic: GetDispatchInfo>(
 		unchecked_extrinsic: Extrinsic,
 		len: u32,
-	) -> RuntimeDispatchInfo<T::Balance>
+	) -> RuntimeDispatchInfo<BalanceOf<T>>
 	where
 		T: Send + Sync,
-		T::Balance: Send + Sync,
+		BalanceOf<T>: Send + Sync,
 		T::Call: Dispatchable<Info=DispatchInfo>,
 	{
 		// NOTE: we can actually make it understand `ChargeTransactionPayment`, but would be some
@@ -361,7 +363,7 @@ where
 	/// inclusion_fee = base_fee + len_fee + [targeted_fee_adjustment * weight_fee];
 	/// final_fee = inclusion_fee + tip;
 	/// ```
-	pub fn compute_fee(len: u32, info: &DispatchInfoOf<T::Call>, tip: T::Balance) -> T::Balance
+	pub fn compute_fee(len: u32, info: &DispatchInfoOf<T::Call>, tip: BalanceOf<T>) -> BalanceOf<T>
 	where
 		T::Call: Dispatchable<Info = DispatchInfo>,
 	{
@@ -376,17 +378,17 @@ where
 		len: u32,
 		info: &DispatchInfoOf<T::Call>,
 		post_info: &PostDispatchInfoOf<T::Call>,
-		tip: T::Balance,
-	) -> T::Balance
+		tip: BalanceOf<T>,
+	) -> BalanceOf<T>
 	where
 		T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	{
 		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, post_info.pays_fee(info))
 	}
 
-	fn compute_fee_raw(len: u32, weight: Weight, tip: T::Balance, pays_fee: Pays) -> T::Balance {
+	fn compute_fee_raw(len: u32, weight: Weight, tip: BalanceOf<T>, pays_fee: Pays) -> BalanceOf<T> {
 		if pays_fee == Pays::Yes {
-			let len = <T::Balance>::from(len);
+			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
 
 			// length fee. this is not adjusted.
@@ -408,7 +410,7 @@ where
 		}
 	}
 
-	fn weight_to_fee(weight: Weight) -> T::Balance {
+	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
 		let capped_weight = weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
@@ -416,17 +418,17 @@ where
 	}
 }
 
-impl<T> Convert<Weight, T::Balance> for Module<T>
+impl<T> Convert<Weight, BalanceOf<T>> for Module<T>
 where
 	T: Trait,
-	T::Balance: FixedPointOperand,
+	BalanceOf<T>: FixedPointOperand,
 {
 	/// Compute the fee for the specified weight.
 	///
 	/// This fee is already adjusted by the per block fee adjustment factor and is therefore the
 	/// share that the weight contributes to the overall fee of a transaction. It is mainly
 	/// for informational purposes and not used in the actual fee calculation.
-	fn convert(weight: Weight) -> T::Balance {
+	fn convert(weight: Weight) -> BalanceOf<T> {
 		NextFeeMultiplier::get().saturating_mul_int(Self::weight_to_fee(weight))
 	}
 }
@@ -434,15 +436,15 @@ where
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct ChargeTransactionPayment<T: Trait + Send + Sync>(#[codec(compact)] T::Balance);
+pub struct ChargeTransactionPayment<T: Trait + Send + Sync>(#[codec(compact)] BalanceOf<T>);
 
 impl<T: Trait + Send + Sync> ChargeTransactionPayment<T>
 where
 	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
-	T::Balance: Send + Sync + FixedPointOperand,
+	BalanceOf<T>: Send + Sync + FixedPointOperand,
 {
 	/// utility constructor. Used only in client/factory code.
-	pub fn from(fee: T::Balance) -> Self {
+	pub fn from(fee: BalanceOf<T>) -> Self {
 		Self(fee)
 	}
 
@@ -454,7 +456,7 @@ where
 		len: usize,
 	) -> Result<
 		(
-			T::Balance,
+			BalanceOf<T>,
 			<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
 		),
 		TransactionValidityError,
@@ -481,10 +483,10 @@ where
 	/// and the entire block weight `(1/1)`, its priority is `fee * min(1, 4) = fee * 1`. This means
 	///  that the transaction which consumes more resources (either length or weight) with the same
 	/// `fee` ends up having lower priority.
-	fn get_priority(len: usize, info: &DispatchInfoOf<T::Call>, final_fee: <T as Trait>::Balance) -> TransactionPriority {
+	fn get_priority(len: usize, info: &DispatchInfoOf<T::Call>, final_fee: BalanceOf<T>) -> TransactionPriority {
 		let weight_saturation = T::MaximumBlockWeight::get() / info.weight.max(1);
 		let len_saturation = T::MaximumBlockLength::get() as u64 / (len as u64).max(1);
-		let coefficient: <T as Trait>::Balance = weight_saturation.min(len_saturation).saturated_into::<<T as Trait>::Balance>();
+		let coefficient: BalanceOf<T> = weight_saturation.min(len_saturation).saturated_into::<BalanceOf<T>>();
 		final_fee.saturating_mul(coefficient).saturated_into::<TransactionPriority>()
 	}
 }
@@ -502,7 +504,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 
 impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 where
-	T::Balance: Send + Sync + From<u64> + FixedPointOperand,
+	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
 	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
@@ -511,7 +513,7 @@ where
 	type AdditionalSigned = ();
 	type Pre = (
 		// tip
-		T::Balance,
+		BalanceOf<T>,
 		// who paid the fee
 		Self::AccountId,
 		// imbalance resulting from withdrawing the fee
