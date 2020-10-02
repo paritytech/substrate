@@ -1,4 +1,4 @@
-use crate::{onchain::OnChainSequentialPhragmen, ElectionProvider, Error};
+use crate::{onchain::OnChainSequentialPhragmen, ElectionDataProvider, ElectionProvider, Error};
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage,
@@ -15,12 +15,10 @@ use sp_npos_elections::{
 use sp_runtime::{traits::Zero, PerThing, PerU16, Perbill, RuntimeDebug};
 use sp_std::{mem::size_of, prelude::*};
 
-pub trait ElectionDataProvider<AccountId, B> {
-	fn targets() -> (Vec<AccountId>, Weight);
-	fn voters() -> (Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight);
-	fn desired_targets() -> (u32, Weight);
-	fn next_election_prediction() -> (B, Weight);
-}
+#[cfg(test)]
+mod mock;
+pub mod signed;
+pub mod unsigned;
 
 type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -36,7 +34,7 @@ pub type ChainAccuracy = Perbill;
 /// Accuracy used for off-chain election. This better be small.
 pub type OffchainAccuracy = PerU16;
 
-/// Data type used to index nominators in the compact type
+/// Data type used to index nominators in the compact type.
 pub type VoterIndex = u32;
 
 /// Data type used to index validators in the compact type.
@@ -53,6 +51,45 @@ generate_solution_type!(
 	#[compact]
 	pub struct CompactAssignments::<VoterIndex, TargetIndex, OffchainAccuracy>(16)
 );
+
+#[macro_export]
+macro_rules! voter_at_fn {
+	($voters:ident, $acc:ty) => {
+		|who: &$acc| -> Option<$crate::two_phase::VoterIndex> {
+					$voters
+						.iter()
+						.position(|(x, _, _)| x == who)
+						.and_then(|i| <usize as $crate::TryInto<$crate::two_phase::VoterIndex>>::try_into(i).ok())
+					}
+	};
+}
+
+#[macro_export]
+macro_rules! target_at_fn {
+	($targets:ident, $acc:ty) => {
+		|who: &$acc| -> Option<$crate::two_phase::TargetIndex> {
+					$targets
+						.iter()
+						.position(|x| x == who)
+						.and_then(|i| <usize as $crate::TryInto<$crate::two_phase::TargetIndex>>::try_into(i).ok())
+					}
+	};
+}
+
+// TODO: these can use a cache.
+// TODO: move these to test if they are not used.. They most likely will be used in offchain.
+#[macro_export]
+macro_rules! stake_of_fn {
+	($voters:ident, $acc:ty) => {
+		|who: &$acc| -> $crate::VoteWeight {
+																											$voters
+																												.iter()
+																												.find(|(x, _, _)| x == who)
+																												.map(|(_, x, _)| *x)
+																												.unwrap_or_default()
+																											}
+	};
+}
 
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum Phase {
@@ -92,7 +129,7 @@ pub enum ElectionCompute {
 	Unsigned,
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct RawSolution<AccountId> {
 	winners: Vec<AccountId>,
 	compact: CompactAssignments,
@@ -115,6 +152,7 @@ pub struct ReadySolution<AccountId> {
 }
 
 pub trait WeightInfo {}
+impl WeightInfo for () {}
 
 pub trait Trait: frame_system::Trait {
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
@@ -127,12 +165,13 @@ pub trait Trait: frame_system::Trait {
 	type MaxSignedSubmissions: Get<u32>;
 
 	type SignedRewardBase: Get<BalanceOf<Self>>;
-	type SignedRewardFactor: Get<BalanceOf<Self>>;
+	type SignedRewardFactor: Get<Perbill>;
+
+	type SignedDepositBase: Get<BalanceOf<Self>>;
+	type SignedDepositByte: Get<BalanceOf<Self>>;
+	type SignedDepositWeight: Get<BalanceOf<Self>>;
 
 	type SolutionImprovementThreshold: Get<Perbill>;
-
-	type SubmissionBondBase: Get<BalanceOf<Self>>;
-	type SubmissionBondByte: Get<BalanceOf<Self>>;
 
 	type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
 	type RewardHandler: OnUnbalanced<PositiveImbalanceOf<Self>>;
@@ -153,13 +192,15 @@ decl_storage! {
 		/// Current, best, unsigned solution.
 		pub QueuedSolution get(fn queued_solution): Option<ReadySolution<T::AccountId>>;
 
-		/// Raw targets.
 		/// Snapshot of all Voters. The indices if this will be used in election.
-		pub SnapshotTargets get(fn snapshot_targets): Vec<T::AccountId>;
+		///
+		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
+		pub SnapshotTargets get(fn snapshot_targets): Option<Vec<T::AccountId>>;
 
-		/// Raw voters.
 		/// Snapshot of all targets. The indices if this will be used in election.
-		pub SnapshotVoters get(fn snapshot_voters): Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>;
+		///
+		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
+		pub SnapshotVoters get(fn snapshot_voters): Option<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>>;
 
 		/// Desired number of targets to elect
 		pub DesiredTargets get(fn desired_targets): u32;
@@ -187,7 +228,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
-			let (next_election, weight) = T::ElectionDataProvider::next_election_prediction();
+			let next_election = T::ElectionDataProvider::next_election_prediction(now);
 			// TODO: document this invariant.
 			let next_election = next_election.max(now);
 
@@ -196,20 +237,17 @@ decl_module! {
 
 			let remaining = next_election - now;
 			match Self::current_phase() {
-				Phase::Off => {
-					// check only for the signed phase. Note that next
-					if remaining < signed_deadline {
-						let w = Self::start_signed_phase();
-					}
+				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
+					// check only for the signed phase.
+					CurrentPhase::put(Phase::Signed);
+					Self::start_signed_phase();
 				},
-				Phase::Signed => {
+				Phase::Signed if remaining <= unsigned_deadline && remaining > 0.into() => {
 					// check the unsigned phase.
-					if remaining < unsigned_deadline {
-						let (found_solution, w) = Self::finalize_signed_phase();
-						CurrentPhase::put(Phase::Unsigned(!found_solution));
-					}
+					let found_solution = Self::finalize_signed_phase();
+					CurrentPhase::put(Phase::Unsigned(!found_solution));
 				},
-				Phase::Unsigned(_) => {
+				_ => {
 					// Nothing. We wait in the unsigned phase until we receive the call to `elect`.
 				}
 			}
@@ -232,35 +270,25 @@ decl_module! {
 			// ensure queued is not full.
 			let queue_size = <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32;
 			ensure!(
-				queue_size < T::MaxSignedSubmissions::get(),
+				queue_size <= T::MaxSignedSubmissions::get(),
 				PalletError::<T>::SubmissionQueuedFull,
 			);
 
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
-			let improvement = signed_submissions.last().map_or(
-				true,
-				|best: &SignedSubmission<_, _>| -> bool {
-					is_score_better(
-						solution.score,
-						best.solution.score,
-						T::SolutionImprovementThreshold::get()
-					)
-				}
-			);
-			ensure!(improvement, PalletError::<T>::LowScoreSubmission);
+			let maybe_index = Self::insert_submission(&who, &mut signed_submissions, solution);
+			ensure!(maybe_index.is_some(), PalletError::<T>::LowScoreSubmission);
+			let index = maybe_index.expect("Option checked to be `Some`; qed.");
 
 			// ensure... what else?
 			// TODO
 
 			// collect deposit. Thereafter, the function cannot fail.
-			let deposit = Self::deposit_for(&solution);
+			let deposit = signed_submissions[index].deposit;
 			T::Currency::reserve(&who, deposit).map_err(|_| PalletError::<T>::CannotPayDeposit)?;
 
-			// amount to be rewarded if this solution is accepted.
-			let reward = Self::reward_for(&solution);
-
-			signed_submissions.push(SignedSubmission { who, deposit, reward, solution });
+			// store the new signed submission.
+			debug_assert_eq!(signed_submissions.len() as u32, queue_size + 1);
 			<SignedSubmissions<T>>::put(signed_submissions);
 
 			Ok(None.into())
@@ -274,86 +302,18 @@ decl_module! {
 	}
 }
 
+// General stuff
 impl<T: Trait> Module<T> {
-	fn start_signed_phase() -> Weight {
-		let (targets, w1) = T::ElectionDataProvider::targets();
-		// TODO: this module is not aware at all of self-vote. Clarify this.
-		let (voters, w2) = T::ElectionDataProvider::voters();
-		let (desired_targets, w3) = T::ElectionDataProvider::desired_targets();
-
-		<SnapshotTargets<T>>::put(targets);
-		<SnapshotVoters<T>>::put(voters);
-		DesiredTargets::put(desired_targets);
-
-		CurrentPhase::put(Phase::Signed);
-		Default::default()
-	}
-
-	/// Returns true if we have a good solution in the signed phase.
-	fn finalize_signed_phase() -> (bool, Weight) {
-		let mut all_submission: Vec<SignedSubmission<_, _>> = <SignedSubmissions<T>>::take();
-		let mut found_solution = false;
-
-		while let Some(best) = all_submission.pop() {
-			let SignedSubmission {
-				solution,
-				who,
-				deposit,
-				reward,
-			} = best;
-			match Self::feasibility_check(solution) {
-				(Ok(ready_solution), w) => {
-					<QueuedSolution<T>>::put(ready_solution);
-
-					// unreserve deposit.
-					let _remaining = T::Currency::unreserve(&who, deposit);
-					debug_assert!(_remaining.is_zero());
-
-					// Reward.
-					let positive_imbalance = T::Currency::deposit_creating(&who, reward);
-					T::RewardHandler::on_unbalanced(positive_imbalance);
-
-					found_solution = true;
-					break;
-				}
-				(Err(_), w) => {
-					let (negative_imbalance, _remaining) =
-						T::Currency::slash_reserved(&who, deposit);
-					debug_assert!(_remaining.is_zero());
-					T::SlashHandler::on_unbalanced(negative_imbalance);
-				}
-			}
-		}
-
-		// Any unprocessed solution is not pointless to even ponder upon. Feasible or malicious,
-		// they didn't end up being used. Unreserve the bonds.
-		all_submission.into_iter().for_each(|not_processed| {
-			let SignedSubmission { who, deposit, .. } = not_processed;
-			let _remaining = T::Currency::unreserve(&who, deposit);
-			debug_assert!(_remaining.is_zero());
-		});
-
-		(found_solution, Default::default())
-	}
-
 	fn feasibility_check(
 		solution: RawSolution<T::AccountId>,
-	) -> (Result<ReadySolution<T::AccountId>, ()>, Weight) {
+	) -> Result<ReadySolution<T::AccountId>, ()> {
 		unimplemented!()
-	}
-
-	fn deposit_for(solution: &RawSolution<T::AccountId>) -> BalanceOf<T> {
-		unimplemented!()
-	}
-
-	fn reward_for(solution: &RawSolution<T::AccountId>) -> BalanceOf<T> {
-		T::SignedRewardBase::get()
 	}
 
 	fn onchain_fallback() -> Result<FlatSupportMap<T::AccountId>, crate::Error> {
 		let desired_targets = Self::desired_targets() as usize;
-		let voters = Self::snapshot_voters();
-		let targets = Self::snapshot_targets();
+		let voters = Self::snapshot_voters().ok_or(crate::Error::SnapshotUnAvailable)?;
+		let targets = Self::snapshot_targets().ok_or(crate::Error::SnapshotUnAvailable)?;
 		<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<ChainAccuracy>(
 			desired_targets,
 			targets,
@@ -372,11 +332,19 @@ impl<T: Trait> crate::ElectionProvider<T::AccountId> for Module<T> {
 		ExtendedBalance: From<<P as PerThing>::Inner>,
 		P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 	{
-		CurrentPhase::put(Phase::Off);
-		Self::queued_solution().map_or_else(
-			|| Self::onchain_fallback(),
-			|ReadySolution { supports, .. }| Ok(supports),
-		)
+		Self::queued_solution()
+			.map_or_else(
+				|| Self::onchain_fallback(),
+				|ReadySolution { supports, .. }| Ok(supports),
+			)
+			.map(|result| {
+				// reset phase.
+				CurrentPhase::put(Phase::Off);
+				// clear snapshots.
+				<SnapshotVoters<T>>::kill();
+				<SnapshotTargets<T>>::kill();
+				result
+			})
 	}
 
 	fn ongoing() -> bool {
@@ -386,34 +354,92 @@ impl<T: Trait> crate::ElectionProvider<T::AccountId> for Module<T> {
 
 #[cfg(test)]
 mod tests {
+	use super::{mock::*, *};
+	use crate::ElectionProvider;
+	use frame_support::traits::OnInitialize;
+	use sp_npos_elections::Support;
 
-	mod signed {
-		#[test]
-		fn cannot_submit_too_early() {}
+	#[test]
+	fn phase_rotation_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// 0 ------- 5 -------------- 15 ------- 20
+			//           |                |
+			//         Signed           Unsigned
 
-		#[test]
-		fn should_pay_deposit() {}
+			assert_eq!(System::block_number(), 0);
+			assert_eq!(TwoPhase::current_phase(), Phase::Off);
 
-		#[test]
-		fn cannot_submit_worse() {}
+			roll_to(4);
+			assert_eq!(TwoPhase::current_phase(), Phase::Off);
+			assert!(TwoPhase::snapshot_voters().is_none());
 
-		#[test]
-		fn good_solution_is_rewarded() {}
+			roll_to(5);
+			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			assert!(TwoPhase::snapshot_voters().is_some());
 
-		#[test]
-		fn bad_solution_is_slashed() {}
+			roll_to(14);
+			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			assert!(TwoPhase::snapshot_voters().is_some());
 
-		#[test]
-		fn suppressed_solution_gets_bond_back() {}
+			roll_to(15);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned(true));
+			assert!(TwoPhase::snapshot_voters().is_some());
 
-		#[test]
-		fn all_in_one() {
-			// a combination of:
-			// - good_solution_is_rewarded
-			// - bad_solution_is_slashed
-			// - suppressed_solution_gets_bond_back
-		}
+			roll_to(19);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned(true));
+			assert!(TwoPhase::snapshot_voters().is_some());
+
+			roll_to(20);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned(true));
+			assert!(TwoPhase::snapshot_voters().is_some());
+
+			// we close when upstream tells us to elect.
+			roll_to(21);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned(true));
+			assert!(TwoPhase::snapshot_voters().is_some());
+
+			TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
+				.unwrap();
+			assert_eq!(TwoPhase::current_phase(), Phase::Off);
+			assert!(TwoPhase::snapshot_voters().is_none());
+		})
 	}
 
-	mod unsigned {}
+	#[test]
+	fn onchain_backup_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(5);
+			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+
+			roll_to(20);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned(true));
+
+			// zilch solutions thus far.
+			let supports =
+				TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
+					.unwrap();
+			assert_eq!(
+				supports,
+				vec![
+					(
+						30,
+						Support {
+							total: 40,
+							voters: vec![(2, 5), (4, 5), (30, 30)]
+						}
+					),
+					(
+						40,
+						Support {
+							total: 60,
+							voters: vec![(2, 5), (3, 10), (4, 5), (40, 40)]
+						}
+					)
+				]
+			)
+		})
+	}
+
+	#[test]
+	fn can_only_submit_threshold_better() {}
 }

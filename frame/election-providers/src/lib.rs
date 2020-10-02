@@ -1,14 +1,41 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-pub mod offchain;
 pub mod onchain;
+pub mod two_phase;
 
 use sp_arithmetic::PerThing;
 use sp_npos_elections::{ExtendedBalance, FlatSupportMap};
 use sp_runtime::RuntimeDebug;
-// TODO: maybe we can have this be generic in the trait? probably in the future.
-use sp_npos_elections::VoteWeight;
+
+// for the helper macros
+#[doc(hidden)]
+pub use sp_npos_elections::VoteWeight;
+#[doc(hidden)]
+pub use sp_std::convert::TryInto;
+
+pub trait ElectionDataProvider<AccountId, B> {
+	fn targets() -> Vec<AccountId>;
+	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)>;
+	fn desired_targets() -> u32;
+	fn next_election_prediction(now: B) -> B;
+}
+
+#[cfg(feature = "std")]
+impl<AccountId, B: Default> ElectionDataProvider<AccountId, B> for () {
+	fn targets() -> Vec<AccountId> {
+		Default::default()
+	}
+	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
+		Default::default()
+	}
+	fn desired_targets() -> u32 {
+		Default::default()
+	}
+	fn next_election_prediction(_: B) -> B {
+		Default::default()
+	}
+}
 
 /// Something that can compute the result of an election and pass it back to a pallet.
 pub trait ElectionProvider<AccountId> {
@@ -16,7 +43,7 @@ pub trait ElectionProvider<AccountId> {
 	///
 	/// The result is returned in a target major format, namely as a support map.
 	fn elect<P: PerThing>(
-		to_elect: usize,
+		to_elect: usize, // TODO: consider making this u32
 		targets: Vec<AccountId>,
 		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	) -> Result<FlatSupportMap<AccountId>, Error>
@@ -35,6 +62,7 @@ pub trait ElectionProvider<AccountId> {
 #[derive(RuntimeDebug, Eq, PartialEq)]
 pub enum Error {
 	ElectionFailed,
+	SnapshotUnAvailable,
 	Internal(sp_npos_elections::Error),
 }
 

@@ -1,8 +1,6 @@
 use crate::{ElectionProvider, Error};
 use sp_arithmetic::PerThing;
-use sp_npos_elections::{
-	ElectionResult, ExtendedBalance, FlatSupportMap, IdentifierT, SupportMap, VoteWeight,
-};
+use sp_npos_elections::{ElectionResult, ExtendedBalance, FlatSupportMap, IdentifierT, VoteWeight};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 pub struct OnChainSequentialPhragmen;

@@ -1519,7 +1519,7 @@ dependencies = [
  "hex-literal",
  "linregress",
  "parity-scale-codec",
- "paste",
+ "paste 0.1.18",
  "sp-api",
  "sp-io",
  "sp-runtime",
@@ -1552,15 +1552,20 @@ version = "2.0.0"
 dependencies = [
  "frame-support",
  "frame-system",
+ "hex-literal",
+ "pallet-balances",
  "parity-scale-codec",
+ "paste 1.0.1",
  "serde",
  "sp-arithmetic",
+ "sp-core",
  "sp-io",
  "sp-npos-elections",
  "sp-runtime",
  "sp-staking",
  "sp-std",
  "static_assertions",
+ "substrate-test-utils",
 ]
 
 [[package]]
@@ -1606,7 +1611,7 @@ dependencies = [
  "once_cell 1.4.0",
  "parity-scale-codec",
  "parity-util-mem",
- "paste",
+ "paste 0.1.18",
  "pretty_assertions",
  "serde",
  "smallvec 1.4.1",
@@ -3264,7 +3269,7 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c50092e40e0ccd1bf2015a10333fde0502ff95b832b0895dc1ca0d7ac6c52f6"
 dependencies = [
- "paste",
+ "paste 0.1.18",
 ]
 
 [[package]]
@@ -5330,6 +5335,12 @@ dependencies = [
  "paste-impl",
  "proc-macro-hack",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0520af26d4cf99643dbbe093a61507922b57232d9978d8491fdc8f7b44573c8c"
 
 [[package]]
 name = "paste-impl"
@@ -8237,7 +8248,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parity-util-mem",
- "paste",
+ "paste 0.1.18",
  "rand 0.7.3",
  "serde",
  "serde_json",

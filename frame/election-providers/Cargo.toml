@@ -26,6 +26,14 @@ sp-npos-elections = { version = "2.0.0-rc6", default-features = false, path = ".
 sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/std" }
 sp-arithmetic = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/arithmetic" }
 
+[dev-dependencies]
+sp-io = { version = "2.0.0", path = "../../primitives/io" }
+hex-literal = "0.3.1"
+pallet-balances = { version = "2.0.0", path = "../balances" }
+sp-core = { version = "2.0.0", path = "../../primitives/core" }
+paste = "1.0.1"
+substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
+
 [features]
 default = ["std"]
 std = [
