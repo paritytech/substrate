@@ -126,6 +126,30 @@ groups:
   # Others
   ##############################################################################
 
+  - alert: ContinuousTaskEnded
+    expr: 'polkadot_tasks_ended_total{task_name=~"
+      authority-discovery-worker
+      |babe
+      |basic-block-import-worker
+      |grandpa-voter
+      |informant
+      |network-worker
+      |offchain-notifications
+      |on-transaction-imported
+      |prometheus-endpoint
+      |telemetry-periodic-network-state
+      |telemetry-periodic-send
+      |telemetry-worker
+      |txpool-background
+      |txpool-notifications
+    "} > 0'
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      message: 'Continuous task {{ $labels.task_name }} on node
+      {{ $labels.instance }} ended unexpectedly.'
+
   - alert: AuthorityDiscoveryDiscoveryFailureHigh
     expr: 'polkadot_authority_discovery_handle_value_found_event_failure /
     ignoring(name)
