@@ -228,7 +228,7 @@ pub trait Trait: frame_system::Trait {
 	type TransactionByteFee: Get<BalanceOf<Self>>;
 
 	/// Convert a weight value into a deductible fee based on the currency type.
-	type WeightToFee: WeightToFeePolynomial<Balance = BalanceOf<Self>>;
+	type WeightToFee: WeightToFeePolynomial<Balance=BalanceOf<Self>>;
 
 	/// Update the multiplier of the next block, based on the previous block's weight.
 	type FeeMultiplierUpdate: MultiplierUpdate;
@@ -298,9 +298,8 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T>
-where
-	BalanceOf<T>: FixedPointOperand,
+impl<T: Trait> Module<T> where
+	BalanceOf<T>: FixedPointOperand
 {
 	/// Query the data that we know about the fee of a given `call`.
 	///
@@ -353,9 +352,12 @@ where
 	/// inclusion_fee = base_fee + len_fee + [targeted_fee_adjustment * weight_fee];
 	/// final_fee = inclusion_fee + tip;
 	/// ```
-	pub fn compute_fee(len: u32, info: &DispatchInfoOf<T::Call>, tip: BalanceOf<T>) -> BalanceOf<T>
-	where
-		T::Call: Dispatchable<Info = DispatchInfo>,
+	pub fn compute_fee(
+		len: u32,
+		info: &DispatchInfoOf<T::Call>,
+		tip: BalanceOf<T>,
+	) -> BalanceOf<T> where
+		T::Call: Dispatchable<Info=DispatchInfo>,
 	{
 		Self::compute_fee_raw(len, info.weight, tip, info.pays_fee)
 	}
@@ -369,14 +371,18 @@ where
 		info: &DispatchInfoOf<T::Call>,
 		post_info: &PostDispatchInfoOf<T::Call>,
 		tip: BalanceOf<T>,
-	) -> BalanceOf<T>
-	where
-		T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	) -> BalanceOf<T> where
+	T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
 	{
 		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, post_info.pays_fee(info))
 	}
 
-	fn compute_fee_raw(len: u32, weight: Weight, tip: BalanceOf<T>, pays_fee: Pays) -> BalanceOf<T> {
+	fn compute_fee_raw(
+		len: u32,
+		weight: Weight,
+		tip: BalanceOf<T>,
+		pays_fee: Pays,
+	) -> BalanceOf<T> {
 		if pays_fee == Pays::Yes {
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
@@ -408,8 +414,7 @@ where
 	}
 }
 
-impl<T> Convert<Weight, BalanceOf<T>> for Module<T>
-where
+impl<T> Convert<Weight, BalanceOf<T>> for Module<T> where
 	T: Trait,
 	BalanceOf<T>: FixedPointOperand,
 {
@@ -428,9 +433,8 @@ where
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct ChargeTransactionPayment<T: Trait + Send + Sync>(#[codec(compact)] BalanceOf<T>);
 
-impl<T: Trait + Send + Sync> ChargeTransactionPayment<T>
-where
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
+	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 	BalanceOf<T>: Send + Sync + FixedPointOperand,
 {
 	/// utility constructor. Used only in client/factory code.
@@ -492,10 +496,9 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
-where
+impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> where
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
 	type AccountId = T::AccountId;
@@ -509,9 +512,7 @@ where
 		// imbalance resulting from withdrawing the fee
 		<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
 	);
-	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
-		Ok(())
-	}
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
 		&self,
