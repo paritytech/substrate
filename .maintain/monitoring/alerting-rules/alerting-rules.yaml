@@ -127,22 +127,8 @@ groups:
   ##############################################################################
 
   - alert: ContinuousTaskEnded
-    expr: 'polkadot_tasks_ended_total{task_name=~"
-      authority-discovery-worker
-      |babe
-      |basic-block-import-worker
-      |grandpa-voter
-      |informant
-      |network-worker
-      |offchain-notifications
-      |on-transaction-imported
-      |prometheus-endpoint
-      |telemetry-periodic-network-state
-      |telemetry-periodic-send
-      |telemetry-worker
-      |txpool-background
-      |txpool-notifications
-    "} > 0'
+    expr: '(polkadot_tasks_spawned_total == 1) - on(instance, task_name)
+    (polkadot_tasks_ended_total == 1)'
     for: 5m
     labels:
       severity: warning
