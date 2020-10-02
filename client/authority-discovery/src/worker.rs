@@ -261,13 +261,9 @@ where
 						return;
 					}
 				},
-				// Handle messages from [`Service`].
-				msg = self.from_service.next().fuse() => {
-					if let Some(msg) = msg {
-						self.process_message_from_service(msg);
-					} else {
-						return;
-					}
+				// Handle messages from [`Service`]. Ignore if sender side is closed.
+				msg = self.from_service.select_next_some() => {
+					self.process_message_from_service(msg);
 				},
 				// Set peerset priority group to a new random set of addresses.
 				_ = self.priority_group_set_interval.next().fuse() => {

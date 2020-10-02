@@ -440,7 +440,8 @@ fn publish_discover_cycle() {
 
 	pool.run();
 }
-
+/// Don't terminate when sender side of service channel is dropped. Terminate when network event
+/// stream terminates.
 #[test]
 fn terminate_when_event_stream_terminates() {
 	let (dht_event_tx, dht_event_rx) = channel(1000);
@@ -450,7 +451,7 @@ fn terminate_when_event_stream_terminates() {
 		authorities: vec![],
 	});
 
-	let (_to_worker, from_service) = mpsc::channel(0);
+	let (to_worker, from_service) = mpsc::channel(0);
 	let worker = Worker::new(
 		from_service,
 		test_api,
@@ -464,6 +465,14 @@ fn terminate_when_event_stream_terminates() {
 
 	block_on(async {
 		assert_eq!(Poll::Pending, futures::poll!(&mut worker));
+
+		// Drop sender side of service channel.
+		drop(to_worker);
+		assert_eq!(
+			Poll::Pending, futures::poll!(&mut worker),
+			"Expect the authority discovery module not to terminate once the \
+			sender side of the service channel is closed.",
+		);
 
 		// Simulate termination of the network through dropping the sender side
 		// of the dht event channel.
