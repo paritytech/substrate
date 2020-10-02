@@ -522,7 +522,7 @@ benchmarks! {
 			compact,
 			score,
 			size
-		) = offchain_election::prepare_submission::<T>(assignments, winners, false).unwrap();
+		) = offchain_election::prepare_submission::<T>(assignments, winners, false, T::MaximumBlockWeight::get()).unwrap();
 
 		assert_eq!(
 			winners.len(), compact.unique_targets().len(),
@@ -590,7 +590,7 @@ benchmarks! {
 			compact,
 			score,
 			size
-		) = offchain_election::prepare_submission::<T>(assignments, winners, false).unwrap();
+		) = offchain_election::prepare_submission::<T>(assignments, winners, false, T::MaximumBlockWeight::get()).unwrap();
 
 		assert_eq!(
 			winners.len(), compact.unique_targets().len(),
