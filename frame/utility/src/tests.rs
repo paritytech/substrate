@@ -465,7 +465,7 @@ fn batch_all_revert() {
 			]),
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
-					actual_weight: Some(<Test as Trait>::WeightInfo::batch(2) + info.weight * 2),
+					actual_weight: Some(<Test as Trait>::WeightInfo::batch_all(2) + info.weight * 2),
 					pays_fee: Pays::Yes
 				},
 				error: pallet_balances::Error::<Test, _>::InsufficientBalance.into()
