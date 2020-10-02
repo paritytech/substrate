@@ -304,7 +304,7 @@ pub struct RuntimeInstanceSpawn {
 }
 
 impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
-	fn dyn_dispatch(&self, dispatcher_ref: u32, func: u32, data: Vec<u8>) -> u64 {
+	fn spawn_call(&self, dispatcher_ref: u32, func: u32, data: Vec<u8>) -> u64 {
 		let new_handle = self.counter.fetch_add(1, Ordering::Relaxed);
 
 		let (sender, receiver) = mpsc::channel();

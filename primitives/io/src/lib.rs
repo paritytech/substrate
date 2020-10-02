@@ -1258,7 +1258,7 @@ pub trait RuntimeSpawn : Send {
 	/// Create new runtime instance and use dynamic dispatch to invoke with specified payload.
 	///
 	/// Returns handle of the spawned task.
-	fn dyn_dispatch(&self, dispatcher_ref: u32, func: u32, payload: Vec<u8>) -> u64;
+	fn spawn_call(&self, dispatcher_ref: u32, func: u32, payload: Vec<u8>) -> u64;
 
 	/// Join the result of previously created runtime instance invocation.
 	fn join(&self, handle: u64) -> Vec<u8>;
@@ -1281,7 +1281,7 @@ pub trait RuntimeTasks {
 	fn spawn(&mut self, dispatcher_ref: u32, entry: u32, payload: Vec<u8>) -> u64 {
 		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
 			.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		runtime_spawn.dyn_dispatch(dispatcher_ref, entry, payload)
+		runtime_spawn.spawn_call(dispatcher_ref, entry, payload)
 	}
 
 	/// Wasm host function for joining a task.
