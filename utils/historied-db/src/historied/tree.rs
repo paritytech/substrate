@@ -736,20 +736,22 @@ mod test {
 
 		type EncArray<'a> = EncodedArray<'a, Vec<u8>, DefaultVersion>;
 		type Backend<'a> = BTreeMap<Vec<u8>, Node<Vec<u8>, u32, EncArray<'a>, MetaSize>>;
-		type BD<'a> = Head<Vec<u8>, u32, EncArray<'a>, MetaSize, Backend<'a>>;
+		type BD<'a> = Head<Vec<u8>, u32, EncArray<'a>, MetaSize, Backend<'a>, ()>;
 
 		type V2<'a> = crate::historied::linear::Linear<Vec<u8>, u32, BD<'a>>;
 		type EncArray2<'a> = EncodedArray<'a, V2<'a>, DefaultVersion>;
 		type Backend2<'a> = BTreeMap<Vec<u8>, Node<V2<'a>, u32, EncArray2<'a>, MetaSize>>;
 //		type D<'a> = crate::historied::linear::MemoryOnly<
-		type D<'a> = Head<V2<'a>, u32, EncArray2<'a>, MetaSize, Backend2<'a>>;
+		type D<'a> = Head<V2<'a>, u32, EncArray2<'a>, MetaSize, Backend2<'a>, ()>;
 		let init_head = InitHead {
 			backend: Backend2::new(),
 			key: b"any".to_vec(),
+			node_init_from: (),
 		};
 		let init_head_child = InitHead {
 			backend: Backend::new(),
 			key: b"any".to_vec(),
+			node_init_from: (),
 		};
 		let item: Tree<u32, u32, Vec<u8>, D, BD> = InitFrom::init_from((init_head.clone(), init_head_child.clone()));
 		let at: ForkPlan<u32, u32> = Default::default();

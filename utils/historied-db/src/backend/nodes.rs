@@ -125,7 +125,7 @@ impl<V, S, D, M> Node<V, S, D, M> {
 
 /// Head is the entry node, it contains fetched nodes and additional
 /// information about this backend state.
-pub struct Head<V, S, D, M, B> {
+pub struct Head<V, S, D, M, B, NI> {
 	/// Head contains the last `Node` content.
 	inner: Node<V, S, D, M>,
 	/// Accessed nodes are kept in memory.
@@ -148,7 +148,7 @@ pub struct Head<V, S, D, M, B> {
 	/// All nodes are persisted under this backend storage.
 	backend: B,
 	/// New node initializing contant.
-	node_init_from: D::InitFrom,
+	node_init_from: NI,
 }
 
 #[derive(Encode, Decode)]
@@ -162,7 +162,7 @@ pub struct HeadCodec {
 	len: u32,
 }
 
-impl<V, S, D, M, B> Encode for Head<V, S, D, M, B>
+impl<V, S, D, M, B, NI> Encode for Head<V, S, D, M, B, NI>
 	where
 		D: Encode,
 {
@@ -187,12 +187,12 @@ pub trait DecodeWithInit: Sized {
 	fn decode_with_init(input: &[u8], init: &Self::Init) -> Option<Self>;
 }
 
-impl<V, S, D, M, B> DecodeWithInit for Head<V, S, D, M, B>
+impl<V, S, D, M, B> DecodeWithInit for Head<V, S, D, M, B, ()>
 	where
 		D: Decode,
 		B: Clone,
 {
-	type Init = InitHead<B>;
+	type Init = InitHead<B, ()>;
 	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
 		// This contains len from additionaly struct but it is considered
 		// negligable.
@@ -211,24 +211,26 @@ impl<V, S, D, M, B> DecodeWithInit for Head<V, S, D, M, B>
 					len: head_decoded.len as usize,
 					reference_key: init.key.clone(),
 					backend: init.backend.clone(),
+					node_init_from: (),	
 				}
 			})
 		})
 	}
 }
 
-impl<V, S, D, M, B> Head<V, S, D, M, B>
+impl<V, S, D, M, B, NI> Head<V, S, D, M, B, NI>
 	where
-		D: DecodeWithInit,
+		D: DecodeWithInit<Init = NI>,
 		B: Clone,
+		NI: Clone,
 {
 	/// Decode with init for this head but also for its inner nodes.
-	pub fn decode_with_init_2(mut input: &[u8], init: &InitHead<B>, init_nodes: &D::Init) -> Option<Self> {
+	pub fn decode_with_init_2(mut input: &[u8], init: &InitHead<B, NI>, init_nodes: NI) -> Option<Self> {
 		// This contains len from additionaly struct but it is considered
 		// negligable.
 		let reference_len = input.len();
 		let input = &mut input;
-		D::decode_with_init(input, init_nodes).and_then(|data| {
+		D::decode_with_init(input, &init.node_init_from).and_then(|data| {
 			let head_decoded = HeadCodec::decode(input).ok();
 			head_decoded.map(|head_decoded| {
 				Head {
@@ -241,46 +243,14 @@ impl<V, S, D, M, B> Head<V, S, D, M, B>
 					len: head_decoded.len as usize,
 					reference_key: init.key.clone(),
 					backend: init.backend.clone(),
+					node_init_from: init_nodes,
 				}
 			})
 		})
 	}
 }
 
-
-
-impl<V, S, M, B> Head<V, S, crate::backend::in_memory::MemoryOnly<V, S>, M, B>
-	where
-		V: Codec,
-		S: Codec,
-		B: Clone,
-{
-	pub fn decode_with_init(mut input: &[u8], init: &B, reference_key: Vec<u8>) -> Option<Self> {
-		// This contains len from additionaly struct but it is considered
-		// negligable.
-		let reference_len = input.len();
-		let input = &mut input;
-		crate::backend::in_memory::MemoryOnly::decode(input).ok().and_then(|data| {
-			let head_decoded = HeadCodec::decode(input).ok();
-			head_decoded.map(|head_decoded| {
-				Head {
-					inner: Node::new(data, reference_len),
-					fetched: RefCell::new(Vec::new()),
-					old_start_node_index: head_decoded.start_node_index,
-					old_end_node_index: head_decoded.end_node_index,
-					start_node_index: head_decoded.start_node_index,
-					end_node_index: head_decoded.end_node_index,
-					len: head_decoded.len as usize,
-					reference_key,
-					backend: init.clone(),
-				}
-			})
-		})
-	}
-}
-
-
-impl<V, S, D: Clone, M, B> Head<V, S, D, M, B>
+impl<V, S, D: Clone, M, B, NI> Head<V, S, D, M, B, NI>
 	where
 		M: NodesMeta,
 		B: NodeStorageMut<V, S, D, M>,
@@ -307,23 +277,26 @@ impl<V, S, D: Clone, M, B> Head<V, S, D, M, B>
 
 /// Information needed to initialize a new `Head`.
 #[derive(Clone)]
-pub struct InitHead<B> {
+pub struct InitHead<B, NI> {
 	/// The key of the historical value stored in nodes.
 	pub key: Vec<u8>,
 	/// The nodes backend.
 	pub backend: B,
+	/// Int type for internal node content.
+	pub node_init_from: NI,
 }
 
-impl<V, S, D, M, B> InitFrom for Head<V, S, D, M, B>
+impl<V, S, D, M, B, NI> InitFrom for Head<V, S, D, M, B, NI>
 	where
-		D: InitFrom<Init = ()>,
+		D: InitFrom<Init = NI>,
 		B: Clone,
+		NI: Clone,
 {
-	type Init = InitHead<B>; // TODO key to clone and backend refcell.
+	type Init = InitHead<B, NI>; // TODO key to clone and backend refcell.
 	fn init_from(init: Self::Init) -> Self {
 		Head {
 			inner: Node {
-				data: D::init_from(()),
+				data: D::init_from(init.node_init_from.clone()),
 				changed: false,
 				reference_len: 0,
 				_ph: PhantomData,
@@ -336,17 +309,19 @@ impl<V, S, D, M, B> InitFrom for Head<V, S, D, M, B>
 			len: 0,
 			reference_key: init.key,
 			backend: init.backend,
+			node_init_from: init.node_init_from,
 		}
 	}
 }
 
-impl<V, S, D, M, B> Head<V, S, D, M, B>
+impl<V, S, D, M, B, NI> Head<V, S, D, M, B, NI>
 	where
-		D: InitFrom<Init = ()> + LinearStorage<V, S>,
+		D: InitFrom<Init = NI> + LinearStorage<V, S>,
 		B: NodeStorage<V, S, D, M>,
 		M: NodesMeta,
 		S: EstimateSize,
 		V: EstimateSize,
+		NI: Clone,
 {
 	// return node index (if node index is end_node_index this is in head),
 	// and index in it.
@@ -392,13 +367,14 @@ impl<V, S, D, M, B> Head<V, S, D, M, B>
 /// Notice that all max node operation are only for push and pop operation.
 /// 'insert' and 'remove' operation would need to use a call to 'realign'
 /// operation to rewrite correctly the sizes.
-impl<V, S, D, M, B> LinearStorage<V, S> for Head<V, S, D, M, B>
+impl<V, S, D, M, B, NI> LinearStorage<V, S> for Head<V, S, D, M, B, NI>
 	where
-		D: InitFrom<Init = ()> + LinearStorage<V, S>,
+		D: InitFrom<Init = NI> + LinearStorage<V, S>,
 		B: NodeStorage<V, S, D, M>,
 		M: NodesMeta,
 		S: EstimateSize,
 		V: EstimateSize,
+		NI: Clone,
 {
 	// Fetched node index (end_node_index is head).
 	// If true the node needs to be inserted.
@@ -561,7 +537,7 @@ impl<V, S, D, M, B> LinearStorage<V, S> for Head<V, S, D, M, B>
 			value.value.estimate_size() + value.state.estimate_size()
 		);
 		self.end_node_index += 1;
-		let mut data = D::init_from(());
+		let mut data = D::init_from(self.node_init_from.clone());
 		data.push(value);
 		let new_node = Node::<V, S, D, M> {
 			data,
@@ -762,7 +738,7 @@ impl<V: EstimateSize, S: EstimateSize> EstimateSize for crate::backend::in_memor
 
 //D is backend::encoded_array::EncodedArray<'_, std::vec::Vec<u8>, backend::encoded_array::DefaultVersion>
 // B is std::collections::BTreeMap<std::vec::Vec<u8>, backend::nodes::Node<std::vec::Vec<u8>, u32, backend::encoded_array::EncodedArray<'_, std::vec::Vec<u8>, backend::encoded_array::DefaultVersion>, backend::nodes::test::MetaSize>>
-impl<D, M, B> EncodedArrayValue for Head<Vec<u8>, u32, D, M, B>
+impl<D, M, B, NI> EncodedArrayValue for Head<Vec<u8>, u32, D, M, B, NI>
 	where
 		D: EncodedArrayValue,
 {
@@ -775,7 +751,7 @@ impl<D, M, B> EncodedArrayValue for Head<Vec<u8>, u32, D, M, B>
 	}
 }
 
-impl<D, M, B> AsRef<[u8]> for Head<Vec<u8>, u32, D, M, B>
+impl<D, M, B, NI> AsRef<[u8]> for Head<Vec<u8>, u32, D, M, B, NI>
 	where
 		D: AsRef<[u8]>,
 {
@@ -784,7 +760,7 @@ impl<D, M, B> AsRef<[u8]> for Head<Vec<u8>, u32, D, M, B>
 	}
 }
 
-impl<D, M, B> AsMut<[u8]> for Head<Vec<u8>, u32, D, M, B>
+impl<D, M, B, NI> AsMut<[u8]> for Head<Vec<u8>, u32, D, M, B, NI>
 	where
 		D: AsMut<[u8]>,
 {
@@ -793,7 +769,7 @@ impl<D, M, B> AsMut<[u8]> for Head<Vec<u8>, u32, D, M, B>
 	}
 }
 
-impl<V, S, D, M, B> EstimateSize for Head<V, S, D, M, B> {
+impl<V, S, D, M, B, NI> EstimateSize for Head<V, S, D, M, B, NI> {
 	fn estimate_size(&self) -> usize {
 		self.inner.reference_len
 	}
@@ -845,8 +821,9 @@ pub(crate) mod test {
 		let init_head = InitHead {
 			backend: BTreeMap::<Vec<u8>, Node<Vec<u8>, u32, D, M>>::new(),
 			key: b"any".to_vec(),
+			node_init_from: (),
 		};
-		let mut head = Head::<Vec<u8>, u32, D, M, _>::init_from(init_head);
+		let mut head = Head::<Vec<u8>, u32, D, M, _, _>::init_from(init_head);
 		assert_eq!(head.get_state_lookup(0), None);
 		for i in 0usize..30 {
 			let modu = i % 3;
@@ -877,8 +854,9 @@ pub(crate) mod test {
 		let init_head = InitHead {
 			backend: BTreeMap::<Vec<u8>, Node<Vec<u8>, u32, D, M>>::new(),
 			key: b"any".to_vec(),
+			node_init_from: (),
 		};
-		let mut head = Head::<Vec<u8>, u32, D, M, _>::init_from(init_head);
+		let mut head = Head::<Vec<u8>, u32, D, M, _, _>::init_from(init_head);
 		crate::backend::test::test_linear_storage(&mut head);
 	}
 }
