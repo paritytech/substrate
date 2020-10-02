@@ -372,7 +372,7 @@ impl<T: Trait> Module<T> where
 		post_info: &PostDispatchInfoOf<T::Call>,
 		tip: BalanceOf<T>,
 	) -> BalanceOf<T> where
-	T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
+		T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
 	{
 		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, post_info.pays_fee(info))
 	}
