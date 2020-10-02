@@ -23,7 +23,7 @@ use super::*;
 
 use frame_support::{
 	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch, impl_outer_event,
-	assert_noop_ignore_postinfo,
+	assert_err_ignore_postinfo,
 	weights::{Weight, Pays},
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
 	traits::Filter,
@@ -198,7 +198,7 @@ fn as_derivative_works() {
 	new_test_ext().execute_with(|| {
 		let sub_1_0 = Utility::derivative_account_id(1, 0);
 		assert_ok!(Balances::transfer(Origin::signed(1), sub_1_0, 5));
-		assert_noop_ignore_postinfo!(Utility::as_derivative(
+		assert_err_ignore_postinfo!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
 			Box::new(Call::Balances(BalancesCall::transfer(6, 3))),
@@ -276,7 +276,7 @@ fn as_derivative_handles_weight_refund() {
 #[test]
 fn as_derivative_filters() {
 	new_test_ext().execute_with(|| {
-		assert_noop_ignore_postinfo!(Utility::as_derivative(
+		assert_err_ignore_postinfo!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
 			Box::new(Call::System(frame_system::Call::suicide())),
@@ -510,7 +510,7 @@ fn batch_all_handles_weight_refund() {
 		let call = Call::Utility(UtilityCall::batch_all(batch_calls));
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
-		assert_noop_ignore_postinfo!(result, "The cake is a lie.");
+		assert_err_ignore_postinfo!(result, "The cake is a lie.");
 		// No weight is refunded
 		assert_eq!(extract_actual_weight(&result, &info), info.weight);
 
@@ -522,7 +522,7 @@ fn batch_all_handles_weight_refund() {
 		let call = Call::Utility(UtilityCall::batch_all(batch_calls));
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
-		assert_noop_ignore_postinfo!(result, "The cake is a lie.");
+		assert_err_ignore_postinfo!(result, "The cake is a lie.");
 		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
 
 		// Partial batch completion
@@ -532,7 +532,7 @@ fn batch_all_handles_weight_refund() {
 		let call = Call::Utility(UtilityCall::batch_all(batch_calls));
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
-		assert_noop_ignore_postinfo!(result, "The cake is a lie.");
+		assert_err_ignore_postinfo!(result, "The cake is a lie.");
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
