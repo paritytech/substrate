@@ -26,6 +26,7 @@ use crate::historied::HistoriedValue;
 use derivative::Derivative;
 use crate::InitFrom;
 use crate::backend::encoded_array::EncodedArrayValue;
+use codec::{Encode, Decode, Codec};
 
 /// Rough size estimate to manage node size.
 pub trait EstimateSize {
@@ -48,8 +49,6 @@ pub trait NodesMeta: Sized {
 	const MAX_NODE_LEN: usize;
 	/// Maximum number of items one.
 	const MAX_NODE_ITEMS: usize;
-	/// Maximum number of index items one.
-	const MAX_INDEX_ITEMS: usize;
 	/// Prefix to isolate nodes.
 	const STORAGE_PREFIX: &'static [u8];
 }
@@ -64,7 +63,7 @@ pub trait NodeStorage<V, S, D, M: NodesMeta>: Clone {
 		let storage_prefix = M::STORAGE_PREFIX;
 		let mut result = Vec::with_capacity(reference_key.len() + storage_prefix.len() + 8);
 		result.extend_from_slice(storage_prefix);
-		result.extend_from_slice(&(reference_key.len() as u32).to_be_bytes());
+		result.extend_from_slice(&(reference_key.len() as u32).to_be_bytes()); // TODO remove this line, it is useless
 		result.extend_from_slice(reference_key);
 		result.extend_from_slice(&relative_index.to_be_bytes());
 		result
@@ -108,6 +107,22 @@ pub struct Node<V, S, D, M> {
 	_ph: PhantomData<(V, S, D, M)>,
 }
 
+impl<V, S, D, M> Node<V, S, D, M> {
+	/// Access to inner linear data.
+	pub fn inner(&self) -> &D {
+		&self.data
+	}
+	/// Instantiate a node from its inner linear data and size.
+	pub fn new(data: D, reference_len: usize) -> Self {
+		Node {
+			data,
+			reference_len,
+			changed: false,
+			_ph: PhantomData::default(),
+		}
+	}
+}
+
 /// Head is the entry node, it contains fetched nodes and additional
 /// information about this backend state.
 pub struct Head<V, S, D, M, B> {
@@ -132,7 +147,138 @@ pub struct Head<V, S, D, M, B> {
 	reference_key: Vec<u8>,
 	/// All nodes are persisted under this backend storage.
 	backend: B,
+	/// New node initializing contant.
+	node_init_from: D::InitFrom,
 }
+
+#[derive(Encode, Decode)]
+/// Codec fragment for node
+pub struct HeadCodec {
+	/// The index of the first node, inclusive.
+	start_node_index: u32,
+	/// The index of the last node, non inclusive (next index to use)
+	end_node_index: u32,
+	/// Number of historied values stored in head and all past nodes.
+	len: u32,
+}
+
+impl<V, S, D, M, B> Encode for Head<V, S, D, M, B>
+	where
+		D: Encode,
+{
+	fn size_hint(&self) -> usize {
+		self.inner.data.size_hint() + 12
+	}
+
+	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+		self.inner.data.encode_to(dest);
+		HeadCodec {
+			start_node_index: self.start_node_index,
+			end_node_index: self.end_node_index,
+			len: self.len as u32,
+		}.encode_to(dest)
+	}
+}
+
+
+pub trait DecodeWithInit: Sized {
+	type Init: Clone;
+
+	fn decode_with_init(input: &[u8], init: &Self::Init) -> Option<Self>;
+}
+
+impl<V, S, D, M, B> DecodeWithInit for Head<V, S, D, M, B>
+	where
+		D: Decode,
+		B: Clone,
+{
+	type Init = InitHead<B>;
+	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
+		// This contains len from additionaly struct but it is considered
+		// negligable.
+		let reference_len = input.len();
+		let input = &mut input;
+		D::decode(input).ok().and_then(|data| {
+			let head_decoded = HeadCodec::decode(input).ok();
+			head_decoded.map(|head_decoded| {
+				Head {
+					inner: Node::new(data, reference_len),
+					fetched: RefCell::new(Vec::new()),
+					old_start_node_index: head_decoded.start_node_index,
+					old_end_node_index: head_decoded.end_node_index,
+					start_node_index: head_decoded.start_node_index,
+					end_node_index: head_decoded.end_node_index,
+					len: head_decoded.len as usize,
+					reference_key: init.key.clone(),
+					backend: init.backend.clone(),
+				}
+			})
+		})
+	}
+}
+
+impl<V, S, D, M, B> Head<V, S, D, M, B>
+	where
+		D: DecodeWithInit,
+		B: Clone,
+{
+	/// Decode with init for this head but also for its inner nodes.
+	pub fn decode_with_init_2(mut input: &[u8], init: &InitHead<B>, init_nodes: &D::Init) -> Option<Self> {
+		// This contains len from additionaly struct but it is considered
+		// negligable.
+		let reference_len = input.len();
+		let input = &mut input;
+		D::decode_with_init(input, init_nodes).and_then(|data| {
+			let head_decoded = HeadCodec::decode(input).ok();
+			head_decoded.map(|head_decoded| {
+				Head {
+					inner: Node::new(data, reference_len),
+					fetched: RefCell::new(Vec::new()),
+					old_start_node_index: head_decoded.start_node_index,
+					old_end_node_index: head_decoded.end_node_index,
+					start_node_index: head_decoded.start_node_index,
+					end_node_index: head_decoded.end_node_index,
+					len: head_decoded.len as usize,
+					reference_key: init.key.clone(),
+					backend: init.backend.clone(),
+				}
+			})
+		})
+	}
+}
+
+
+
+impl<V, S, M, B> Head<V, S, crate::backend::in_memory::MemoryOnly<V, S>, M, B>
+	where
+		V: Codec,
+		S: Codec,
+		B: Clone,
+{
+	pub fn decode_with_init(mut input: &[u8], init: &B, reference_key: Vec<u8>) -> Option<Self> {
+		// This contains len from additionaly struct but it is considered
+		// negligable.
+		let reference_len = input.len();
+		let input = &mut input;
+		crate::backend::in_memory::MemoryOnly::decode(input).ok().and_then(|data| {
+			let head_decoded = HeadCodec::decode(input).ok();
+			head_decoded.map(|head_decoded| {
+				Head {
+					inner: Node::new(data, reference_len),
+					fetched: RefCell::new(Vec::new()),
+					old_start_node_index: head_decoded.start_node_index,
+					old_end_node_index: head_decoded.end_node_index,
+					start_node_index: head_decoded.start_node_index,
+					end_node_index: head_decoded.end_node_index,
+					len: head_decoded.len as usize,
+					reference_key,
+					backend: init.clone(),
+				}
+			})
+		})
+	}
+}
+
 
 impl<V, S, D: Clone, M, B> Head<V, S, D, M, B>
 	where
@@ -253,7 +399,7 @@ impl<V, S, D, M, B> LinearStorage<V, S> for Head<V, S, D, M, B>
 		M: NodesMeta,
 		S: EstimateSize,
 		V: EstimateSize,
-{	
+{
 	// Fetched node index (end_node_index is head).
 	// If true the node needs to be inserted.
 	// Inner node linear storage index.
@@ -400,6 +546,9 @@ impl<V, S, D, M, B> LinearStorage<V, S> for Head<V, S, D, M, B>
 		} else {
 			let add_size = value.value.estimate_size() + value.state.estimate_size(); 
 			additional_size = Some(add_size);
+			// TODO restore two next lines (test issue to solve
+				// Allow one excess item (in case an item des not fit into the maximum length)
+				//if self.inner.reference_len < M::MAX_NODE_LEN {
 			if self.inner.reference_len + add_size < M::MAX_NODE_LEN {
 				self.inner.reference_len += add_size;
 				self.inner.data.push(value);
@@ -407,6 +556,7 @@ impl<V, S, D, M, B> LinearStorage<V, S> for Head<V, S, D, M, B>
 			}
 		}
 
+		// New head
 		let add_size = additional_size.unwrap_or_else(||
 			value.value.estimate_size() + value.state.estimate_size()
 		);
@@ -668,7 +818,6 @@ pub(crate) mod test {
 		const APPLY_SIZE_LIMIT: bool = true;
 		const MAX_NODE_LEN: usize = 25;
 		const MAX_NODE_ITEMS: usize = 8;
-		const MAX_INDEX_ITEMS: usize = 5;
 		const STORAGE_PREFIX: &'static [u8] = b"nodes1";
 	}
 	#[derive(Clone)]
@@ -677,7 +826,6 @@ pub(crate) mod test {
 		const APPLY_SIZE_LIMIT: bool = false;
 		const MAX_NODE_LEN: usize = 0;
 		const MAX_NODE_ITEMS: usize = 3;
-		const MAX_INDEX_ITEMS: usize = 5;
 		const STORAGE_PREFIX: &'static [u8] = b"nodes2";
 	}
 

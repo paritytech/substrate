@@ -26,6 +26,7 @@ use crate::Latest;
 use codec::{Encode, Decode};
 use sp_std::ops::Range;
 use crate::InitFrom;
+use crate::backend::nodes::DecodeWithInit;
 
 pub mod linear;
 pub mod tree;
@@ -138,6 +139,23 @@ pub struct HistoriedValue<V, S> {
 	pub value: V,
 	/// The state this value belongs to.
 	pub state: S,
+}
+
+impl<V, S> DecodeWithInit for HistoriedValue<V, S>
+	where
+		V: DecodeWithInit,
+		S: Decode,
+{
+	type Init = V::Init;
+	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
+		V::decode_with_init(input, init)
+			.and_then(|value| S::decode(&mut input).ok()
+				.map(|state| HistoriedValue {
+					value,
+					state,
+				})
+			)
+	}
 }
 
 impl<V, S> HistoriedValue<V, S> {

@@ -23,6 +23,7 @@ use super::{LinearStorage, LinearStorageMem};
 use sp_std::mem::replace;
 use crate::InitFrom;
 use sp_std::vec::Vec;
+use crate::backend::nodes::DecodeWithInit;
 
 /// Size of preallocated history per element.
 /// Currently at two for committed and prospective only.
@@ -56,6 +57,32 @@ impl<V: Decode, S: Decode> Decode for MemoryOnly<V, S> {
 		// TODO make a variant when len < ALLOCATED_HISTORY
 		let v = Vec::decode(value)?;
 		Ok(MemoryOnly(smallvec::SmallVec::from_vec(v)))
+	}
+}
+
+impl<V, S> DecodeWithInit for MemoryOnly<V, S>
+	where
+		V: DecodeWithInit,
+		S: Decode,
+{
+	type Init = V::Init;
+	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
+		let input = &mut input;
+		// this align on scale codec inner implementation (DecodeWithInit trait
+		// could be a scale trait).
+		<codec::Compact<u32>>::decode(input).ok().and_then(|len| {
+			// TODO allocate with capacity
+			let len = len.0 as usize;
+			let mut result = smallvec::SmallVec::new();
+			for _ in 0..len {
+				if let Some(value) = HistoriedValue::decode_with_init(*input, init) {
+					result.push(value);
+				} else {
+					return None;
+				}
+			}
+			Some(MemoryOnly(result))
+		})
 	}
 }
 

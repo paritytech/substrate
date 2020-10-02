@@ -35,7 +35,7 @@ use crate::backend::{LinearStorage, LinearStorageMem, LinearStorageSlice, Linear
 use crate::backend::encoded_array::EncodedArrayValue;
 use crate::InitFrom;
 use derivative::Derivative;
-use crate::backend::nodes::EstimateSize;
+use crate::backend::nodes::{EstimateSize, DecodeWithInit};
 
 /// Basic usage case should be integers and byte representation, but
 /// only integer should really be use.
@@ -73,6 +73,16 @@ impl<S> LinearState for S where S:
 #[derive(Derivative, Debug, Encode, Decode)]
 #[derivative(PartialEq(bound="D: PartialEq"))]
 pub struct Linear<V, S, D>(D, PhantomData<(V, S)>);
+
+impl<V, S, D> DecodeWithInit for Linear<V, S, D>
+	where
+		D: DecodeWithInit,
+{
+	type Init = D::Init;
+	fn decode_with_init(input: &[u8], init: &Self::Init) -> Option<Self> {
+		D::decode_with_init(input, init).map(|d| Linear(d, Default::default()))
+	}
+}
 
 impl<V, S, D> Linear<V, S, D> {
 	/// Access inner `LinearStorage`.

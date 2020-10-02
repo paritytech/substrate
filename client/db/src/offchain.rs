@@ -26,9 +26,12 @@ use std::{
 use crate::{columns, Database, DbHash, Transaction};
 use parking_lot::{Mutex, RwLock};
 use historied_db::{Latest, Management, ManagementRef, UpdateResult,
-	management::tree::{TreeManagementStorage, ForkPlan}};
+	management::tree::{TreeManagementStorage, ForkPlan},
+	simple_db::{TransactionalSerializeDB},
+	historied::tree::Tree,
+	backend::nodes::{NodesMeta, NodeStorage, NodeStorageMut, Node, InitHead},
+};
 use codec::{Decode, Encode, Codec};
-use sp_core::offchain::storage::HValue;
 use log::error;
 
 /// Offchain local storage
@@ -427,6 +430,156 @@ impl BlockChainLocalAt {
 		is_set
 	}
 }
+
+/// Multiple node splitting strategy based on content
+/// size.
+struct MetaBranches;
+
+/// Multiple node splitting strategy based on content
+/// size.
+struct MetaBlocks;
+
+impl NodesMeta for MetaBranches {
+	const APPLY_SIZE_LIMIT: bool = true;
+	const MAX_NODE_LEN: usize = 2048; // This should be benched.
+	const MAX_NODE_ITEMS: usize = 8;
+	const STORAGE_PREFIX: &'static [u8] = b"tree_mgmt/branches_nodes";
+}
+
+impl NodesMeta for MetaBlocks {
+	const APPLY_SIZE_LIMIT: bool = true;
+	const MAX_NODE_LEN: usize = 512; // This should be benched to get a good value.
+	const MAX_NODE_ITEMS: usize = 4;
+	const STORAGE_PREFIX: &'static [u8] = b"tree_mgmt/blocks_nodes";
+}
+
+/// Node backend for blocks values.
+#[derive(Clone)]
+pub struct BlocksNodes(pub Arc<RwLock<TransactionalSerializeDB<historied_db::simple_db::SerializeDBDyn>>>);
+
+/// Node backend for branch values.
+#[derive(Clone)]
+pub struct BranchesNodes(pub Arc<RwLock<TransactionalSerializeDB<historied_db::simple_db::SerializeDBDyn>>>);
+
+/// We use AUX to store nodes.
+const NODE_STORAGE_COLUMN: &'static [u8] = &[crate::columns::AUX as u8, 0, 0, 0];
+
+impl NodeStorage<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for BlocksNodes {
+	fn get_node(&self, reference_key: &[u8], relative_index: u32) -> Option<LinearNode> {
+		use historied_db::simple_db::SerializeDB;
+		let key = Self::vec_address(reference_key, relative_index);
+		self.0.read().read(NODE_STORAGE_COLUMN, &key).and_then(|mut value| {
+			// use encoded len as size (this is bigger than the call to estimate size
+			// but not an issue, otherwhise could adjust).
+			let reference_len = value.len();
+
+			let mut input = &mut value.as_slice();
+			LinearBackendInner::decode(input).ok().map(|data| Node::new(
+				data,
+				reference_len,
+			))
+		})
+	}
+}
+
+impl NodeStorageMut<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for BlocksNodes {
+	fn set_node(&mut self, reference_key: &[u8], relative_index: u32, node: &LinearNode) {
+		use historied_db::simple_db::SerializeDB;
+		let key = Self::vec_address(reference_key, relative_index);
+		let encoded = node.inner().encode();
+		self.0.write().write(NODE_STORAGE_COLUMN, &key, encoded.as_slice());
+	}
+	fn remove_node(&mut self, reference_key: &[u8], relative_index: u32) {
+		use historied_db::simple_db::SerializeDB;
+		let key = Self::vec_address(reference_key, relative_index);
+		self.0.write().remove(NODE_STORAGE_COLUMN, &key);
+	}
+}
+
+impl NodeStorage<BranchLinear, u32, TreeBackendInner, MetaBranches> for BranchesNodes {
+	fn get_node(&self, reference_key: &[u8], relative_index: u32) -> Option<TreeNode> {
+		use historied_db::simple_db::SerializeDB;
+		use historied_db::backend::nodes::DecodeWithInit;
+		let key = Self::vec_address(reference_key, relative_index);
+		self.0.read().read(NODE_STORAGE_COLUMN, &key).and_then(|value| {
+			// use encoded len as size (this is bigger than the call to estimate size
+			// but not an issue, otherwhise could adjust).
+			let reference_len = value.len();
+
+			let block_nodes = BlocksNodes(self.0.clone());
+			let mut input = &mut value.as_slice();
+			TreeBackendInner::decode_with_init(
+				input,
+				&InitHead {
+					key: reference_key.to_vec(),
+					backend: block_nodes,
+				},
+			).map(|data| Node::new (
+				data,
+				reference_len,
+			))
+		})
+	}
+}
+
+impl NodeStorageMut<BranchLinear, u32, TreeBackendInner, MetaBranches> for BranchesNodes {
+	fn set_node(&mut self, reference_key: &[u8], relative_index: u32, node: &TreeNode) {
+		use historied_db::simple_db::SerializeDB;
+		let key = Self::vec_address(reference_key, relative_index);
+		let encoded = node.inner().encode();
+		self.0.write().write(NODE_STORAGE_COLUMN, &key, encoded.as_slice());
+	}
+	fn remove_node(&mut self, reference_key: &[u8], relative_index: u32) {
+		use historied_db::simple_db::SerializeDB;
+		let key = Self::vec_address(reference_key, relative_index);
+		self.0.write().remove(NODE_STORAGE_COLUMN, &key);
+	}
+}
+
+type LinearBackendInner = historied_db::backend::in_memory::MemoryOnly<
+	Option<Vec<u8>>,
+	u32,
+>;
+
+type LinearBackend = historied_db::backend::nodes::Head<
+	Option<Vec<u8>>,
+	u32,
+	LinearBackendInner,
+	MetaBlocks,
+	BlocksNodes,
+>;
+
+type LinearNode = historied_db::backend::nodes::Node<
+	Option<Vec<u8>>,
+	u32,
+	LinearBackendInner,
+	MetaBlocks,
+>;
+
+type BranchLinear = historied_db::historied::linear::Linear<Option<Vec<u8>>, u32, LinearBackend>;
+
+type TreeBackendInner = historied_db::backend::in_memory::MemoryOnly<
+	BranchLinear,
+	u32,
+>;
+
+type TreeBackend = historied_db::backend::nodes::Head<
+	BranchLinear,
+	u32,
+	TreeBackendInner,
+	MetaBranches,
+	BranchesNodes,
+>;
+
+type TreeNode = historied_db::backend::nodes::Node<
+	BranchLinear,
+	u32,
+	TreeBackendInner,
+	MetaBranches,
+>;
+
+/// Historied value with multiple paralell branches.
+pub type HValue = Tree<u32, u32, Option<Vec<u8>>, TreeBackend, LinearBackend>;
 
 #[cfg(test)]
 mod tests {

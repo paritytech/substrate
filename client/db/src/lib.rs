@@ -49,12 +49,14 @@ use historied_db::{
 	Management, ForkableManagement,
 	historied::Value,
 	simple_db::TransactionalSerializeDB,
+	backend::nodes::{InitHead, DecodeWithInit},
 };
 
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
 use std::io;
 use std::collections::{HashMap, HashSet};
+use offchain::{BlocksNodes, BranchesNodes};
 
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
@@ -124,22 +126,35 @@ impl HistoriedDBMut {
 
 	/// Update transaction for a offchain local storage historied value.
 	pub fn update_single_offchain(&mut self, k: &[u8], change: Option<Vec<u8>>, change_set: &mut Transaction<DbHash>) {
-		use sp_core::offchain::storage::HValue;
+		use crate::offchain::HValue;
 		let column = crate::columns::OFFCHAIN;
+		let block_nodes: BlocksNodes = unimplemented!("TODO store it around");
+		let branches_nodes: BranchesNodes = unimplemented!("TODO store it around");
+		let init_nodes = InitHead {
+			key: k.to_vec(),
+			backend: block_nodes,
+		};
+		let init_branches = InitHead {
+			key: k.to_vec(),
+			backend: branches_nodes,
+		};
+		let init = (init_branches, init_nodes);
+
 		let histo = if let Some(histo) = self.db.get(column, k) {
-			Some(HValue::decode(&mut &histo[..]).expect("Bad encoded value in db, closing"))
+			Some(HValue::decode_with_init(&mut &histo[..], &init).expect("Bad encoded value in db, closing"))
 		} else {
 			if change.is_none() {
 				return;
 			}
 			None
 		};
+
 		let mut new_value;
 		match if let Some(histo) = histo {
 			new_value = histo;
 			new_value.set(change, &self.current_state)
 		} else {
-			new_value = HValue::new(change, &self.current_state, ((), ()));
+			new_value = HValue::new(change, &self.current_state, init);
 			historied_db::UpdateResult::Changed(())
 		} {
 			historied_db::UpdateResult::Changed(()) => {

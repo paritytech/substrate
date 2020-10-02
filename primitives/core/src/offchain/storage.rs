@@ -34,6 +34,20 @@ pub struct InMemOffchainStorage {
 	storage: HashMap<Vec<u8>, Vec<u8>>,
 }
 
+type InMemLinearBackend = historied_db::backend::in_memory::MemoryOnly<
+	Option<Vec<u8>>,
+	u32
+>;
+
+type InMemTreeBackend = historied_db::backend::in_memory::MemoryOnly<
+	historied_db::historied::linear::Linear<Option<Vec<u8>>, u32, InMemLinearBackend>,
+	u32,
+>;
+
+/// Historied value with multiple paralell branches.
+pub type InMemHValue = Tree<u32, u32, Option<Vec<u8>>, InMemTreeBackend, InMemLinearBackend>;
+
+
 /// In-memory storage for offchain workers.
 /// With block chain data history.
 #[derive(Debug, Clone, Default)]
@@ -41,13 +55,13 @@ pub struct BlockChainInMemOffchainStorage<Hash: Ord> {
 	// Note that we could parameterized over historied management here.
 	// Also could remove inner mutability if changing historied db simple db trait.
 	historied_management: Arc<RwLock<TreeManagement<Hash, u32, u32, Option<Vec<u8>>, ()>>>,
-	storage: Arc<RwLock<HashMap<Vec<u8>, HValue>>>,
+	storage: Arc<RwLock<HashMap<Vec<u8>, InMemHValue>>>,
 }
 
 /// In-memory storage for offchain workers.
 #[derive(Debug, Clone, Default)]
 pub struct BlockChainInMemOffchainStorageAt {
-	storage: Arc<RwLock<HashMap<Vec<u8>, HValue>>>,
+	storage: Arc<RwLock<HashMap<Vec<u8>, InMemHValue>>>,
 	at_read: ForkPlan<u32, u32>,
 	at_write: Option<Latest<(u32, u32)>>,
 }
@@ -55,20 +69,7 @@ pub struct BlockChainInMemOffchainStorageAt {
 /// In-memory storage for offchain workers,
 /// and for new state (without concurrency handling).
 #[derive(Debug, Clone, Default)]
-pub struct BlockChainInMemOffchainStorageAtNew (BlockChainInMemOffchainStorageAt);
-
-type LinearBackend = historied_db::backend::in_memory::MemoryOnly<
-	Option<Vec<u8>>,
-	u32
->;
-
-type TreeBackend = historied_db::backend::in_memory::MemoryOnly<
-	historied_db::historied::linear::Linear<Option<Vec<u8>>, u32, LinearBackend>,
-	u32,
->;
-
-/// Historied value with multiple paralell branches.
-pub type HValue = Tree<u32, u32, Option<Vec<u8>>, TreeBackend, LinearBackend>;
+pub struct BlockChainInMemOffchainStorageAtNew(BlockChainInMemOffchainStorageAt);
 
 impl InMemOffchainStorage {
 	/// Consume the offchain storage and iterate over all key value pairs.
@@ -291,7 +292,7 @@ impl BlockChainInMemOffchainStorageAt {
 				}
 			} else {
 				if is_insert {
-					let new_histo = HValue::new(new_value, self.at_write.as_ref().expect("Synch at start"), ((), ()));
+					let new_histo = InMemHValue::new(new_value, self.at_write.as_ref().expect("Synch at start"), ((), ()));
 					storage_write.insert(key, new_histo);
 				} else {
 					return is_set;
