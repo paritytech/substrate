@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 //! Substrate externalities abstraction
 //!
 //! The externalities mainly provide access to storage and to registered extensions. Extensions
@@ -23,9 +25,9 @@
 //!
 //! This crate exposes the main [`Externalities`] trait.
 
-use std::any::{Any, TypeId};
+use sp_std::{any::{Any, TypeId}, vec::Vec, boxed::Box};
 
-use sp_storage::ChildInfo;
+use sp_storage::{ChildInfo, TrackedStorageKey};
 
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
 pub use extensions::{Extension, Extensions, ExtensionStore};
@@ -252,8 +254,15 @@ pub trait Externalities: ExtensionStore {
 	/// Benchmarking related functionality and shouldn't be used anywhere else!
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	///
+	/// Gets the current DB tracking whitelist.
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey>;
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
 	/// Adds new storage keys to the DB tracking whitelist.
-	fn set_whitelist(&mut self, new: Vec<Vec<u8>>);
+	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>);
 }
 
 /// Extension for the [`Externalities`] trait.

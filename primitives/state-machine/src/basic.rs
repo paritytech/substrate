@@ -27,7 +27,7 @@ use sp_trie::trie_types::Layout;
 use sp_core::{
 	storage::{
 		well_known_keys::is_child_storage_key, Storage,
-		ChildInfo, StorageChild,
+		ChildInfo, StorageChild, TrackedStorageKey,
 	},
 	traits::Externalities, Blake2Hasher,
 };
@@ -325,7 +325,11 @@ impl Externalities for BasicExternalities {
 		unimplemented!("reset_read_write_count is not supported in Basic")
 	}
 
-	fn set_whitelist(&mut self, _: Vec<Vec<u8>>) {
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		unimplemented!("get_whitelist is not supported in Basic")
+	}
+
+	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in Basic")
 	}
 }
@@ -344,10 +348,11 @@ impl sp_externalities::ExtensionStore for BasicExternalities {
 	}
 
 	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
-		self.extensions
-			.deregister(type_id)
-			.ok_or(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
-			.map(drop)
+		if self.extensions.deregister(type_id) {
+			Ok(())
+		} else {
+			Err(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
+		}
 	}
 }
 

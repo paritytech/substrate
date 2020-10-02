@@ -470,6 +470,23 @@ where
 				.map(|i| (fee, i))
 		}
 	}
+
+	/// Get an appropriate priority for a transaction with the given length and info.
+	///
+	/// This will try and optimise the `fee/weight` `fee/length`, whichever is consuming more of the
+	/// maximum corresponding limit.
+	///
+	/// For example, if a transaction consumed 1/4th of the block length and half of the weight, its
+	/// final priority is `fee * min(2, 4) = fee * 2`. If it consumed `1/4th` of the block length
+	/// and the entire block weight `(1/1)`, its priority is `fee * min(1, 4) = fee * 1`. This means
+	///  that the transaction which consumes more resources (either length or weight) with the same
+	/// `fee` ends up having lower priority.
+	fn get_priority(len: usize, info: &DispatchInfoOf<T::Call>, final_fee: <T as Trait>::Balance) -> TransactionPriority {
+		let weight_saturation = T::MaximumBlockWeight::get() / info.weight.max(1);
+		let len_saturation = T::MaximumBlockLength::get() as u64 / (len as u64).max(1);
+		let coefficient: <T as Trait>::Balance = weight_saturation.min(len_saturation).saturated_into::<<T as Trait>::Balance>();
+		final_fee.saturating_mul(coefficient).saturated_into::<TransactionPriority>()
+	}
 }
 
 impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
@@ -512,11 +529,10 @@ where
 		len: usize,
 	) -> TransactionValidity {
 		let (fee, _) = self.withdraw_fee(who, call, info, len)?;
-		let mut r = ValidTransaction::default();
-		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
-		// will be a bit more than setting the priority to tip. For now, this is enough.
-		r.priority = fee.saturated_into::<TransactionPriority>();
-		Ok(r)
+		Ok(ValidTransaction {
+			priority: Self::get_priority(len, info, fee),
+			..Default::default()
+		})
 	}
 
 	fn pre_dispatch(
@@ -633,7 +649,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
-		type ModuleToIndex = ();
+		type PalletInfo = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -650,6 +666,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type MaxLocks = ();
 		type WeightInfo = ();
 	}
 	thread_local! {

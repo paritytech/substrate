@@ -66,7 +66,6 @@ members = [
 	"frame/babe",
 	"frame/balances",
 	"frame/benchmarking",
-	"frame/benchmark",
 	"frame/collective",
 	"frame/contracts",
 	"frame/contracts/rpc",
@@ -79,7 +78,6 @@ members = [
 	"frame/example-offchain-worker",
 	"frame/executive",
 	"frame/finality-tracker",
-	"frame/generic-asset",
 	"frame/grandpa",
 	"frame/identity",
 	"frame/im-online",
@@ -88,6 +86,7 @@ members = [
 	"frame/metadata",
 	"frame/multisig",
 	"frame/nicks",
+	"frame/node-authorization",
 	"frame/offences",
 	"frame/proxy",
 	"frame/randomness-collective-flip",
@@ -180,6 +179,7 @@ members = [
 	"utils/build-script-utils",
 	"utils/fork-tree",
 	"utils/frame/benchmarking-cli",
+	"utils/frame/frame-utilities-cli",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
 	"utils/wasm-builder",
@@ -201,7 +201,6 @@ members = [
 #
 # This list is ordered alphabetically.
 [profile.dev.package]
-aes-ctr = { opt-level = 3 }
 aes-soft = { opt-level = 3 }
 aesni = { opt-level = 3 }
 blake2 = { opt-level = 3 }
@@ -215,7 +214,6 @@ crc32fast = { opt-level = 3 }
 crossbeam-deque = { opt-level = 3 }
 crossbeam-queue = { opt-level = 3 }
 crypto-mac = { opt-level = 3 }
-ctr = { opt-level = 3 }
 curve25519-dalek = { opt-level = 3 }
 ed25519-dalek = { opt-level = 3 }
 evm-core = { opt-level = 3 }

@@ -111,7 +111,7 @@ fn main() {
 				// stuff to submit
 				let (winners, compact, score, size) = match mode {
 					Mode::InitialSubmission => {
-						/* No need to setup anything */
+						// No need to setup anything
 						get_seq_phragmen_solution::<Test>(do_reduce)
 					},
 					Mode::StrongerSubmission => {
@@ -166,7 +166,7 @@ fn main() {
 							DispatchError::Module {
 								index: 0,
 								error: 16,
-								message: Some("PhragmenWeakSubmission"),
+								message: Some("OffchainElectionWeakSubmission"),
 							},
 						);
 					},

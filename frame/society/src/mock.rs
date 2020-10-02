@@ -20,7 +20,8 @@
 use super::*;
 
 use frame_support::{
-	impl_outer_origin, parameter_types, ord_parameter_types, traits::{OnInitialize, OnFinalize}
+	impl_outer_origin, parameter_types, ord_parameter_types,
+	traits::{OnInitialize, OnFinalize, TestRandomness},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -80,7 +81,7 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
-	type ModuleToIndex = ();
+	type PalletInfo = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -88,6 +89,7 @@ impl frame_system::Trait for Test {
 }
 
 impl pallet_balances::Trait for Test {
+	type MaxLocks = ();
 	type Balance = u64;
 	type Event = ();
 	type DustRemoval = ();
@@ -99,7 +101,7 @@ impl pallet_balances::Trait for Test {
 impl Trait for Test {
 	type Event = ();
 	type Currency = pallet_balances::Module<Self>;
-	type Randomness = ();
+	type Randomness = TestRandomness;
 	type CandidateDeposit = CandidateDeposit;
 	type WrongSideDeduction = WrongSideDeduction;
 	type MaxStrikes = MaxStrikes;
