@@ -6,13 +6,15 @@ use frame_support::{
 	unsigned::TransactionValidityError,
 };
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf},
+	traits::{AtLeast32BitUnsigned, DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf, Saturating, Zero},
 	transaction_validity::InvalidTransaction,
 };
 use sp_std::{fmt::Debug, marker::PhantomData};
 
 /// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeTransaction<T: Trait> {
+	/// The currency type in which fees will be paid.
+	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
 	type LiquidityInfo: Default;
 
 	/// Before the transaction is executed the payment of the transaction fees
@@ -21,8 +23,8 @@ pub trait OnChargeTransaction<T: Trait> {
 		who: &T::AccountId,
 		call: &T::Call,
 		dispatch_info: &DispatchInfoOf<T::Call>,
-		fee: T::Balance,
-		tip: T::Balance,
+		fee: Self::Balance,
+		tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, TransactionValidityError>;
 
 	/// After the transaction was executed and the correct fees where collected,
@@ -31,8 +33,8 @@ pub trait OnChargeTransaction<T: Trait> {
 		who: &T::AccountId,
 		dispatch_info: &DispatchInfoOf<T::Call>,
 		post_info: &PostDispatchInfoOf<T::Call>,
-		fee: T::Balance,
-		tip: T::Balance,
+		fee: Self::Balance,
+		tip: Self::Balance,
 		liquidity_info: Self::LiquidityInfo,
 	) -> Result<(), TransactionValidityError>;
 }
@@ -43,17 +45,19 @@ pub trait OnChargeTransaction<T: Trait> {
 pub struct CurrencyAdapter<C, OU>(PhantomData<C>, PhantomData<OU>);
 
 /// Default implementation for a Currency and an OnUnbalanced handler.
-impl<T, C, OU, B> OnChargeTransaction<T> for CurrencyAdapter<C, OU>
+impl<T, C, OU> OnChargeTransaction<T> for CurrencyAdapter<C, OU>
 where
-	B: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Send + Sync,
-	T: Trait<Balance = B>,
-	T::TransactionByteFee: Get<B>,
-	C: Currency<<T as frame_system::Trait>::AccountId, Balance = B>,
-	C::PositiveImbalance: Imbalance<B, Opposite = C::NegativeImbalance>,
-	C::NegativeImbalance: Imbalance<B, Opposite = C::PositiveImbalance>,
+	T: Trait,
+	T::TransactionByteFee: Get<<C as Currency<<T as frame_system::Trait>::AccountId>>::Balance>,
+	C: Currency<<T as frame_system::Trait>::AccountId>,
+	C::PositiveImbalance:
+		Imbalance<<C as Currency<<T as frame_system::Trait>::AccountId>>::Balance, Opposite = C::NegativeImbalance>,
+	C::NegativeImbalance:
+		Imbalance<<C as Currency<<T as frame_system::Trait>::AccountId>>::Balance, Opposite = C::PositiveImbalance>,
 	OU: OnUnbalanced<NegativeImbalanceOf<C, T>>,
 {
 	type LiquidityInfo = Option<NegativeImbalanceOf<C, T>>;
+	type Balance = <C as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 	/// Withdraw the predicted fee from the transaction origin.
 	///
@@ -62,8 +66,8 @@ where
 		who: &T::AccountId,
 		_call: &T::Call,
 		_info: &DispatchInfoOf<T::Call>,
-		fee: B,
-		tip: B,
+		fee: Self::Balance,
+		tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, TransactionValidityError> {
 		if fee.is_zero() {
 			return Ok(None);
@@ -95,8 +99,8 @@ where
 		who: &T::AccountId,
 		_dispatch_info: &DispatchInfoOf<T::Call>,
 		_post_info: &PostDispatchInfoOf<T::Call>,
-		fee: B,
-		tip: B,
+		fee: Self::Balance,
+		tip: Self::Balance,
 		liquidity_info: Self::LiquidityInfo,
 	) -> Result<(), TransactionValidityError> {
 		if let Some(paid) = liquidity_info {

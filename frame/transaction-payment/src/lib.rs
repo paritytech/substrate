@@ -33,8 +33,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{prelude::*, fmt::Debug};
-use codec::{Encode, Decode, FullCodec};
+use sp_std::prelude::*;
+use codec::{Encode, Decode};
 use frame_support::{
 	decl_storage, decl_module,
 	traits::{Currency, Get},
@@ -51,7 +51,7 @@ use sp_runtime::{
 	},
 	traits::{
 		Zero, Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
-		DispatchInfoOf, PostDispatchInfoOf, AtLeast32BitUnsigned, MaybeSerializeDeserialize,
+		DispatchInfoOf, PostDispatchInfoOf,
 	},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
@@ -63,7 +63,7 @@ pub use payment::*;
 pub type Multiplier = FixedU128;
 
 type BalanceOf<T> =
-	<T as Trait>::Balance;
+	<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::Balance;
 type NegativeImbalanceOf<C, T> =
 	<C as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
@@ -216,16 +216,6 @@ impl Default for Releases {
 }
 
 pub trait Trait: frame_system::Trait {
-	/// The currency type in which fees will be paid.
-	type Balance: AtLeast32BitUnsigned
-		+ FullCodec
-		+ Copy
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ Default
-		+ Send
-		+ Sync;
-
 	/// Handler for withdrawing, refunding and depositing the transaction fee.
 	/// Transaction fees are withdrawen before the transaction is executed.
 	/// After the transaction was executed the transaction weight can be
@@ -696,7 +686,6 @@ mod tests {
 	}
 
 	impl Trait for Runtime {
-		type Balance = u64;
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = WeightToFee;

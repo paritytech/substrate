@@ -98,7 +98,6 @@ parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
 impl pallet_transaction_payment::Trait for Test {
-	type Balance = u64;
 	type OnChargeTransaction = CurrencyAdapter<Module<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<u64>;
