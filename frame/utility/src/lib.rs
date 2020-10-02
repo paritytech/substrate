@@ -179,7 +179,7 @@ decl_module! {
 			}
 			Self::deposit_event(Event::BatchCompleted);
 			let base_weight = T::WeightInfo::batch(calls_len as u32);
-			return Ok(Some(base_weight + weight).into());
+			Ok(Some(base_weight + weight).into())
 		}
 
 		/// Send a call through an indexed pseudonym of the sender.
@@ -216,8 +216,7 @@ decl_module! {
 			result.map_err(|mut err| {
 				err.post_info = Some(weight).into();
 				err
-			})?;
-			Ok(Some(weight).into())
+			}).map(|_| Some(weight).into())
 		}
 
 		/// Send a batch of dispatch calls and atomically execute them.
