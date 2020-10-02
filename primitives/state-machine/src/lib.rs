@@ -31,7 +31,7 @@ mod ext;
 mod testing;
 #[cfg(feature = "std")]
 mod basic;
-mod overlayed_changes;
+pub(crate) mod overlayed_changes;
 #[cfg(feature = "std")]
 mod proving_backend;
 mod trie_backend;
@@ -907,7 +907,7 @@ mod tests {
 			_method: &str,
 			_data: &[u8],
 			use_native: bool,
-			_native_call: Option<NC>,
+			native_call: Option<NC>,
 		) -> (CallResult<R, Self::Error>, bool) {
 			if self.change_changes_trie_config {
 				ext.place_storage(
@@ -922,8 +922,15 @@ mod tests {
 			}
 
 			let using_native = use_native && self.native_available;
-			match (using_native, self.native_succeeds, self.fallback_succeeds) {
-				(true, true, _) | (false, _, true) => {
+			match (using_native, self.native_succeeds, self.fallback_succeeds, native_call) {
+				(true, true, _, Some(call)) => {
+					let res = sp_externalities::set_and_run_with_externalities(ext, || call());
+					(
+						res.map(NativeOrEncoded::Native).map_err(|_| 0),
+						true
+					)
+				},
+				(true, true, _, None) | (false, _, true, None) => {
 					(
 						Ok(
 							NativeOrEncoded::Encoded(
@@ -1472,5 +1479,52 @@ mod tests {
 		}
 		overlay.commit_transaction().unwrap();
 		assert_eq!(overlay.storage(b"ccc"), Some(None));
+	}
+
+	#[test]
+	fn runtime_registered_extensions_are_removed_after_execution() {
+		use sp_externalities::ExternalitiesExt;
+		sp_externalities::decl_extension! {
+			struct DummyExt(u32);
+		}
+
+		let backend = trie_backend::tests::test_trie();
+		let mut overlayed_changes = Default::default();
+		let mut offchain_overlayed_changes = Default::default();
+		let wasm_code = RuntimeCode::empty();
+
+		let mut state_machine = StateMachine::new(
+			&backend,
+			changes_trie::disabled_state::<_, u64>(),
+			&mut overlayed_changes,
+			&mut offchain_overlayed_changes,
+			&DummyCodeExecutor {
+				change_changes_trie_config: false,
+				native_available: true,
+				native_succeeds: true,
+				fallback_succeeds: false,
+			},
+			"test",
+			&[],
+			Default::default(),
+			&wasm_code,
+			TaskExecutor::new(),
+		);
+
+		let run_state_machine = |state_machine: &mut StateMachine<_, _, _, _>| {
+			state_machine.execute_using_consensus_failure_handler::<fn(_, _) -> _, _, _>(
+				ExecutionManager::NativeWhenPossible,
+				Some(|| {
+					sp_externalities::with_externalities(|mut ext| {
+						ext.register_extension(DummyExt(2)).unwrap();
+					}).unwrap();
+
+					Ok(())
+				}),
+			).unwrap();
+		};
+
+		run_state_machine(&mut state_machine);
+		run_state_machine(&mut state_machine);
 	}
 }
