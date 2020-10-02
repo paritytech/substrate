@@ -2199,21 +2199,6 @@ impl<T: Trait> Module<T> {
 		)
 	}
 
-	/// Check the weight of an unsigned solution. Returns true of the weight is below the designated
-	/// limit .
-	pub fn check_unsigned_solution_weight(
-		winners: &Vec<ValidatorIndex>,
-		compact: &CompactAssignments,
-		size: &ElectionSize,
-	) -> bool {
-		T::WeightInfo::submit_solution_better(
-			size.validators.into(),
-			size.nominators.into(),
-			compact.len() as u32,
-			winners.len() as u32,
-		) <= T::OffchainSolutionWeightLimit::get()
-	}
-
 	/// Dump the list of validators and nominators into vectors and keep them on-chain.
 	///
 	/// This data is used to efficiently evaluate election results. returns `true` if the operation
