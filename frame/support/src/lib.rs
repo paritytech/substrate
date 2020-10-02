@@ -322,7 +322,7 @@ macro_rules! assert_err {
 /// Evaluate an expression, assert it returns an expected `Err` value and that
 /// runtime storage has not been mutated (i.e. expression is a no-operation).
 ///
-/// Used as `assert_noop(expression_to_assert, expected_error_expression)`.
+/// Used as `assert_noop_ignore_postinfo(expression_to_assert, expected_error_expression)`.
 ///
 /// This can be used on`DispatchResultWithPostInfo` when the post info should
 /// be ignored.
