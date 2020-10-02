@@ -244,10 +244,6 @@ pub fn write_results(
 			.iter()
 			.map(|(name, _)| -> String { return name.to_string() })
 			.collect::<Vec<String>>();
-		if all_components.len() != used_components.len() {
-			let mut unused_components = all_components.clone();
-			unused_components.retain(|x| !used_components.contains(&x));
-		}
 
 		// function name
 		write!(file, "{}fn {}(", indent, benchmark_string)?;
