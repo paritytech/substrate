@@ -56,6 +56,8 @@ where
 	type LiquidityInfo = Option<NegativeImbalanceOf<C, T>>;
 
 	/// Withdraw the predicted fee from the transaction origin.
+	///
+	/// Note: The `fee` already includes the `tip`.
 	fn withdraw_fee(
 		who: &T::AccountId,
 		_call: &T::Call,
@@ -66,14 +68,17 @@ where
 		if fee.is_zero() {
 			return Ok(None);
 		}
+
+		let withdraw_reason = if tip.is_zero() {
+			WithdrawReason::TransactionPayment.into()
+		} else {
+			WithdrawReason::TransactionPayment | WithdrawReason::Tip
+		};
+
 		match C::withdraw(
 			who,
 			fee,
-			if tip.is_zero() {
-				WithdrawReason::TransactionPayment.into()
-			} else {
-				WithdrawReason::TransactionPayment | WithdrawReason::Tip
-			},
+			withdraw_reason,
 			ExistenceRequirement::KeepAlive,
 		) {
 			Ok(imbalance) => Ok(Some(imbalance)),
@@ -84,6 +89,8 @@ where
 	/// Hand the fee and the tip over to the `[OnUnbalanced]` implementation.
 	/// Since the predicted fee might have been too high, parts of the fee may
 	/// be refunded.
+	///
+	/// Note: The `fee` already includes the `tip`.
 	fn deposit_fee(
 		who: &T::AccountId,
 		_dispatch_info: &DispatchInfoOf<T::Call>,
