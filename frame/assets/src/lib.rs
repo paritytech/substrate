@@ -24,9 +24,10 @@
 //! The Assets module provides functionality for asset management of fungible asset classes
 //! with a fixed supply, including:
 //!
-//! * Asset Issuance
-//! * Asset Transfer
-//! * Asset Destruction
+//! * Asset Issuance (Minting)
+//! * Asset Transferal
+//! * Asset Freezing
+//! * Asset Destruction (Burning)
 //!
 //! To use it in your runtime, you need to implement the assets [`Trait`](./trait.Trait.html).
 //!
@@ -34,31 +35,61 @@
 //!
 //! ### Terminology
 //!
-//! * **Asset issuance:** The creation of a new asset, whose total supply will belong to the
-//!   account that issues the asset.
-//! * **Asset transfer:** The action of transferring assets from one account to another.
-//! * **Asset destruction:** The process of an account removing its entire holding of an asset.
-//! * **Fungible asset:** An asset whose units are interchangeable.
-//! * **Non-fungible asset:** An asset for which each unit has unique characteristics.
+//! * **Admin**: An account ID uniquely privileged to be able to unfreeze (thaw) an account and it's
+//!   assets, as well as forcibly transfer a particular class of assets between arbitrary accounts
+//!   and reduce the balance of a particular class of assets of arbitrary accounts.
+//! * **Asset issuance/minting**: The creation of a new asset, whose total supply will belong to the
+//!   account that issues the asset. This is a privileged operation.
+//! * **Asset transfer**: The reduction of the balance of an asset of one account with the
+//!   corresponding increase in the balance of another.
+//! * **Asset destruction**: The process of reduce the balance of an asset of one account. This is
+//!   a privileged operation.
+//! * **Fungible asset**: An asset whose units are interchangeable.
+//! * **Issuer**: An account ID uniquely privileged to be able to mint a particular class of assets.
+//! * **Freezer**: An account ID uniquely privileged to be able to freeze an account from
+//!   transferring a particular class of assets.
+//! * **Freezing**: Removing the possibility of an unpermissioned transfer of an asset from a
+//!   particular account.
+//! * **Non-fungible asset**: An asset for which each unit has unique characteristics.
+//! * **Owner**: An account ID uniquely privileged to be able to destroy a particular asset class,
+//!   or to set the Issuer, Freezer or Admin of that asset class.
+//! * **Zombie**: An account which has a balance of some assets in this pallet, but no other
+//!   footprint on-chain, in particular no account managed in the `frame_system` pallet.
 //!
 //! ### Goals
 //!
 //! The assets system in Substrate is designed to make the following possible:
 //!
-//! * Issue a unique asset to its creator's account.
+//! * Issue a new assets in a permissioned or permissionless way, if permissionless, then with a
+//!   deposit required.
+//! * Allow accounts to hold these assets without otherwise existing on-chain (*zombies*).
 //! * Move assets between accounts.
-//! * Remove an account's balance of an asset when requested by that account's owner and update
-//!   the asset's total supply.
+//! * Update the asset's total supply.
+//! * Allow administrative activities by specially privileged accounts including freezing account
+//!   balances and minting/burning assets.
 //!
 //! ## Interface
 //!
-//! ### Dispatchable Functions
+//! ### Permissionless Functions
 //!
-//! * `issue` - Issues the total supply of a new fungible asset to the account of the caller of the function.
-//! * `transfer` - Transfers an `amount` of units of fungible asset `id` from the balance of
-//! the function caller's account (`origin`) to a `target` account.
-//! * `destroy` - Destroys the entire holding of a fungible asset `id` associated with the account
-//! that called the function.
+//! * `create`: Creates a new asset class, taking the required deposit.
+//! * `transfer`: Transfer sender's assets to another account.
+//!
+//! ### Permissioned Functions
+//!
+//! * `force_create`: Creates a new asset class without taking any deposit.
+//! * `force_destroy`: Destroys an asset class.
+//!
+//! ### Privileged Functions
+//! * `destroy`: Destroys an entire asset class; called by the asset class's Owner.
+//! * `mint`: Increases the asset balance of an account; called by the asset class's Issuer.
+//! * `burn`: Decreases the asset balance of an account; called by the asset class's Admin.
+//! * `force_transfer`: Transfers between arbitrary accounts; called by the asset class's Admin.
+//! * `freeze`: Disallows further `transfer`s from an account; called by the asset class's Freezer.
+//! * `thaw`: Allows further `transfer`s from an account; called by the asset class's Admin.
+//! * `set_owner`: Changes an asset class's Owner; called by the asset class's Owner.
+//! * `set_team`: Changes an asset class's Admin, Freezer and Issuer; called by the asset class's
+//!   Owner.
 //!
 //! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
 //!
@@ -120,7 +151,7 @@
 //! ## Assumptions
 //!
 //! Below are assumptions that must be held when using this module.  If any of
-//! them are violated, the behavior of this module is undefined.
+//! these are violated, the behavior of this module is undefined.
 //!
 //! * The total count of assets should be less than
 //!   `Trait::AssetId::max_value()`.
@@ -208,10 +239,6 @@ pub struct AccountData<
 	is_zombie: bool,
 }
 
-// TODO: accounts holding funds must be in existence first, or...
-//   `deposit` should be sufficient to allow for N additional accounts in the state,
-//   and the creater can require a minimum balance here to ensure dust accounts don't use this up.
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Assets {
 		/// Details of an asset.
@@ -281,24 +308,40 @@ decl_error! {
 	}
 }
 
-// TODO: refs should be handled in this module because system refs are u8 only.
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
+		// TODO: Allow for max_zombies to be adjusted.
+		// TODO: Allow for easy integration with system accounts so that an ED in an asset here is
+		//   sufficient for account existence and tx fees may be paid through assets here. An
+		//   `Exchange` trait is probably best for this so AMM pallets can be wired in.
+
 		fn deposit_event() = default;
 
-		/// Issue a new class of fungible assets. There are, and will only ever be, `total`
-		/// such assets and they'll all belong to the `origin` initially. It will have an
-		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
+		/// Issue a new class of fungible assets from a public origin.
 		///
-		/// # <weight>
-		/// - `O(1)`
-		/// - 1 storage mutation (codec `O(1)`).
-		/// - 2 storage writes (condec `O(1)`).
-		/// - 1 event.
-		/// # </weight>
+		/// This new asset class has no assets initially.
+		///
+		/// The origin must be Signed and the sender must have sufficient funds free.
+		///
+		/// Funds of sender are reserved according to the formula:
+		/// `AssetDepositBase + AssetDepositPerZombie * max_zombies`.
+		///
+		/// Parameters:
+		/// - `id`: The identifier of the new asset. This must not be currently in use to identify
+		/// an existing asset.
+		/// - `owner`: The owner of this class of assets. The owner has full superuser permissions
+		/// over this asset, but may later change and configure the permissions using `set_owner`
+		/// and `set_team`.
+		/// - `max_zombies`: The total number of accounts which may hold assets in this class yet
+		/// have no existential deposit.
+		/// - `minimum_balance`: The minimum balance of this new asset that any single account must
+		/// have. If an account's balance is reduced below this, then it collapses to zero.
+		///
+		/// Emits `Created` event when successful.
+		///
+		/// Weight: `O(1)`
 		#[weight = 0]
 		fn create(origin,
 			#[compact] id: T::AssetId,
@@ -330,6 +373,27 @@ decl_module! {
 			Self::deposit_event(RawEvent::Created(id, origin, owner));
 		}
 
+		/// Issue a new class of fungible assets from a privileged origin.
+		///
+		/// This new asset class has no assets initially.
+		///
+		/// The origin must conform to `ForceOrigin`.
+		///
+		/// Unlike `create`, no funds are reserved.
+		///
+		/// - `id`: The identifier of the new asset. This must not be currently in use to identify
+		/// an existing asset.
+		/// - `owner`: The owner of this class of assets. The owner has full superuser permissions
+		/// over this asset, but may later change and configure the permissions using `set_owner`
+		/// and `set_team`.
+		/// - `max_zombies`: The total number of accounts which may hold assets in this class yet
+		/// have no existential deposit.
+		/// - `minimum_balance`: The minimum balance of this new asset that any single account must
+		/// have. If an account's balance is reduced below this, then it collapses to zero.
+		///
+		/// Emits `ForceCreated` event when successful.
+		///
+		/// Weight: `O(1)`
 		#[weight = 0]
 		fn force_create(origin,
 			#[compact] id: T::AssetId,
@@ -356,6 +420,16 @@ decl_module! {
 			Self::deposit_event(RawEvent::ForceCreated(id, owner));
 		}
 
+		/// Destroy a class of fungible assets owned by the sender.
+		///
+		/// The origin must be Signed and the sender must be the owner of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
+		/// asset.
+		///
+		/// Emits `Destroyed` event when successful.
+		///
+		/// Weight: `O(1)`
 		#[weight = 0]
 		fn destroy(origin, #[compact] id: T::AssetId) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -370,6 +444,16 @@ decl_module! {
 			})
 		}
 
+		/// Destroy a class of fungible assets.
+		///
+		/// The origin must conform to `ForceOrigin`.
+		///
+		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
+		/// asset.
+		///
+		/// Emits `Destroyed` event when successful.
+		///
+		/// Weight: `O(1)`
 		#[weight = 0]
 		fn force_destroy(origin, #[compact] id: T::AssetId) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
@@ -382,6 +466,18 @@ decl_module! {
 			})
 		}
 
+		/// Mint assets of a particular class.
+		///
+		/// The origin must be Signed and the sender must be the Issuer of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to have some amount minted.
+		/// - `beneficiary`: The account to be credited with the minted assets.
+		/// - `amount`: The amount of the asset to be minted.
+		///
+		/// Emits `Destroyed` event when successful.
+		///
+		/// Weight: `O(1)`
+		/// Modes: Pre-existence of `beneficiary`
 		#[weight = 0]
 		fn mint(origin,
 			#[compact] id: T::AssetId,
@@ -409,11 +505,21 @@ decl_module! {
 			})
 		}
 
-		/// Destroy up to `amount` assets of `id` owned by `who`.
+		/// Reduce the balance of `who` by as much as possible up to `amount` assets of `id`.
 		///
-		/// Origin must be Signed from the Manager account.
+		/// Origin must be Signed and the sender should be the Manager of the asset `id`.
 		///
 		/// Bails with `BalanceZero` if the `who` is already dead.
+		///
+		/// - `id`: The identifier of the asset to have some amount burned.
+		/// - `who`: The account to be debited from.
+		/// - `amount`: The maximum amount by which `who`'s balance should be reduced.
+		///
+		/// Emits `Burned` with the actual amount burned. If this takes the balance to below the
+		/// minimum for the asset, then the amount burned is increased to take it to zero.
+		///
+		/// Weight: `O(1)`
+		/// Modes: Post-existence of `who`
 		#[weight = 0]
 		fn burn(origin,
 			#[compact] id: T::AssetId,
@@ -452,14 +558,24 @@ decl_module! {
 			})
 		}
 
-		/// Move some assets from one holder to another.
+		/// Move some assets from the sender account to another.
 		///
-		/// # <weight>
-		/// - `O(1)`
-		/// - 1 static lookup
-		/// - 2 storage mutations (codec `O(1)`).
-		/// - 1 event.
-		/// # </weight>
+		/// Origin must be Signed.
+		///
+		/// - `id`: The identifier of the asset to have some amount transferred.
+		/// - `target`: The account to be credited.
+		/// - `amount`: The amount by which the sender's balance of assets should be reduced and
+		/// `target`'s balance increased. The amount actually transferred may be slightly greater in
+		/// the case that the transfer would otherwise take the sender balance above zero but below
+		/// the minimum balance. Must be greater than zero.
+		///
+		/// Emits `Transferred` with the actual amount transferred. If this takes the source balance
+		/// to below the minimum for the asset, then the amount transferred is increased to take it
+		/// to zero.
+		///
+		/// Weight: `O(1)`
+		/// Modes: Pre-existence of `target`; Post-existence of sender; Prior & post zombie-status
+		/// of sender.
 		#[weight = 0]
 		fn transfer(origin,
 			#[compact] id: T::AssetId,
@@ -512,6 +628,25 @@ decl_module! {
 			})
 		}
 
+		/// Move some assets from one account to another.
+		///
+		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to have some amount transferred.
+		/// - `source`: The account to be debited.
+		/// - `dest`: The account to be credited.
+		/// - `amount`: The amount by which the `source`'s balance of assets should be reduced and
+		/// `dest`'s balance increased. The amount actually transferred may be slightly greater in
+		/// the case that the transfer would otherwise take the `source` balance above zero but
+		/// below the minimum balance. Must be greater than zero.
+		///
+		/// Emits `Transferred` with the actual amount transferred. If this takes the source balance
+		/// to below the minimum for the asset, then the amount transferred is increased to take it
+		/// to zero.
+		///
+		/// Weight: `O(1)`
+		/// Modes: Pre-existence of `dest`; Post-existence of `source`. Prior & post zombie-status
+		/// of `source`.
 		#[weight = 0]
 		fn force_transfer(origin,
 			#[compact] id: T::AssetId,
@@ -551,7 +686,6 @@ decl_module! {
 
 				match source_account.balance.is_zero() {
 					false => {
-						Self::dezombify(&source, d, &mut source_account.is_zombie);
 						Account::<T>::insert(id, &source, &source_account)
 					}
 					true => {
@@ -565,12 +699,22 @@ decl_module! {
 			})
 		}
 
+		/// Disallow further unprivileged transfers from an account.
+		///
+		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be frozen.
+		/// - `who`: The account to be frozen.
+		///
+		/// Emits `Frozen`.
+		///
+		/// Weight: `O(1)`
 		#[weight = 0]
 		fn freeze(origin, #[compact] id: T::AssetId, who: <T::Lookup as StaticLookup>::Source) {
 			let origin = ensure_signed(origin)?;
 
 			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
-			ensure!(&origin == &d.admin, Error::<T>::NoPermission);
+			ensure!(&origin == &d.freezer, Error::<T>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
 			ensure!(Account::<T>::contains_key(id, &who), Error::<T>::BalanceZero);
 
@@ -579,6 +723,16 @@ decl_module! {
 			Self::deposit_event(Event::<T>::Frozen(id, who));
 		}
 
+		/// Allow unprivileged transfers from an account again.
+		///
+		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be frozen.
+		/// - `who`: The account to be unfrozen.
+		///
+		/// Emits `Thawed`.
+		///
+		/// Weight: `O(1)`
 		#[weight = 0]
 		fn thaw(origin, #[compact] id: T::AssetId, who: <T::Lookup as StaticLookup>::Source) {
 			let origin = ensure_signed(origin)?;
@@ -593,6 +747,16 @@ decl_module! {
 			Self::deposit_event(Event::<T>::Thawed(id, who));
 		}
 
+		/// Change the Owner of an asset.
+		///
+		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be frozen.
+		/// - `owner`: The new Owner of this asset.
+		///
+		/// Emits `OwnerChanged`.
+		///
+		/// Weight: `O(1)`
 		#[weight = 0]
 		fn set_owner(origin,
 			#[compact] id: T::AssetId,
@@ -612,6 +776,18 @@ decl_module! {
 			})
 		}
 
+		/// Change the Issuer, Admin and Freezer of an asset.
+		///
+		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be frozen.
+		/// - `issuer`: The new Issuer of this asset.
+		/// - `admin`: The new Admin of this asset.
+		/// - `freezer`: The new Freezer of this asset.
+		///
+		/// Emits `TeamChanged`.
+		///
+		/// Weight: `O(1)`
 		#[weight = 0]
 		fn set_team(origin,
 			#[compact] id: T::AssetId,
@@ -735,7 +911,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type PalletInfo = ();
-		type pallet_balances::AccountData<u64> = ();
+		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
