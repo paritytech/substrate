@@ -319,6 +319,26 @@ macro_rules! assert_err {
 	}
 }
 
+/// Evaluate an expression, assert it returns an expected `Err` value and that
+/// runtime storage has not been mutated (i.e. expression is a no-operation).
+///
+/// Used as `assert_noop(expression_to_assert, expected_error_expression)`.
+///
+/// This can be used on`DispatchResultWithPostInfo` when the post info should
+/// be ignored.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_noop_ignore_postinfo {
+	(
+		$x:expr,
+		$y:expr $(,)?
+	) => {
+		let h = $crate::storage_root();
+		$crate::assert_err_ignore_postinfo!($x, $y);
+		assert_eq!(h, $crate::storage_root());
+	}
+}
+
 /// Assert an expression returns an error specified.
 ///
 /// This can be used on`DispatchResultWithPostInfo` when the post info should

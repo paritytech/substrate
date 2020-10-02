@@ -66,7 +66,7 @@ use frame_support::{
 	dispatch::{PostDispatchInfo, DispatchResultWithPostInfo},
 };
 use frame_system::{ensure_signed, ensure_root};
-use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
+use sp_runtime::{DispatchError, traits::Dispatchable};
 
 mod tests;
 mod benchmarking;
@@ -75,6 +75,7 @@ mod default_weights;
 pub trait WeightInfo {
 	fn batch(c: u32, ) -> Weight;
 	fn as_derivative() -> Weight;
+	fn batch_all(c: u32, ) -> Weight;
 }
 
 /// Configuration trait.
@@ -153,20 +154,32 @@ decl_module! {
 				}
 			},
 		)]
-		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
+		fn batch(origin, calls: Vec<<T as Trait>::Call>) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
+			let calls_len = calls.len();
+			// Track the actual weight of each of the batch calls.
+			let mut weight: Weight = 0;
 			for (index, call) in calls.into_iter().enumerate() {
+				let info = call.get_dispatch_info();
+				// If origin is root, don't apply any dispatch filters; root can call anything.
 				let result = if is_root {
 					call.dispatch_bypass_filter(origin.clone())
 				} else {
 					call.dispatch(origin.clone())
 				};
+				// Add the weight of this call.
+				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				if let Err(e) = result {
 					Self::deposit_event(Event::BatchInterrupted(index as u32, e.error));
-					return Ok(());
+					// Take the weight of this function itself into account.
+					let base_weight = T::WeightInfo::batch(index.saturating_add(1) as u32);
+					// Return the actual used weight + base_weight of this call.
+					return Ok(Some(base_weight + weight).into());
 				}
 			}
 			Self::deposit_event(Event::BatchCompleted);
+			let base_weight = T::WeightInfo::batch(calls_len as u32);
+			return Ok(Some(base_weight + weight).into());
 		}
 
 		/// Send a call through an indexed pseudonym of the sender.
@@ -189,12 +202,22 @@ decl_module! {
 				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 			call.get_dispatch_info().class,
 		)]
-		fn as_derivative(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
+		fn as_derivative(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResultWithPostInfo {
 			let mut origin = origin;
 			let who = ensure_signed(origin.clone())?;
 			let pseudonym = Self::derivative_account_id(who, index);
 			origin.set_caller_from(frame_system::RawOrigin::Signed(pseudonym));
-			call.dispatch(origin).map(|_| ()).map_err(|e| e.error)
+			let info = call.get_dispatch_info();
+			let result = call.dispatch(origin);
+			// Always take into account the base weight of this call.
+			let mut weight = T::WeightInfo::as_derivative().saturating_add(T::DbWeight::get().reads_writes(1, 1));
+			// Add the real weight of the dispatch.
+			weight = weight.saturating_add(extract_actual_weight(&result, &info));
+			result.map_err(|mut err| {
+				err.post_info = Some(weight).into();
+				err
+			})?;
+			Ok(Some(weight).into())
 		}
 
 		/// Send a batch of dispatch calls and atomically execute them.
@@ -214,7 +237,7 @@ decl_module! {
 			calls.iter()
 				.map(|call| call.get_dispatch_info().weight)
 				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
-				.saturating_add(T::WeightInfo::batch(calls.len() as u32)),
+				.saturating_add(T::WeightInfo::batch_all(calls.len() as u32)),
 			{
 				let all_operational = calls.iter()
 					.map(|call| call.get_dispatch_info().class)
@@ -229,22 +252,30 @@ decl_module! {
 		#[transactional]
 		fn batch_all(origin, calls: Vec<<T as Trait>::Call>) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
+			let calls_len = calls.len();
+			// Track the actual weight of each of the batch calls.
 			let mut weight: Weight = 0;
-			for call in calls.into_iter() {
+			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
+				// If origin is root, bypass any dispatch filter; root can call anything.
 				let result = if is_root {
 					call.dispatch_bypass_filter(origin.clone())
 				} else {
 					call.dispatch(origin.clone())
 				};
+				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				result.map_err(|mut err| {
-					err.post_info = Some(weight).into();
+					// Take the weight of this function itself into account.
+					let base_weight = T::WeightInfo::batch_all(index.saturating_add(1) as u32);
+					// Return the actual used weight + base_weight of this call.
+					err.post_info = Some(base_weight + weight).into();
 					err
 				})?;
 			}
 			Self::deposit_event(Event::BatchCompleted);
-			Ok(Some(weight).into())
+			let base_weight = T::WeightInfo::batch_all(calls_len as u32);
+			Ok(Some(base_weight + weight).into())
 		}
 	}
 }

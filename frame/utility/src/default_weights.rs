@@ -31,4 +31,8 @@ impl crate::WeightInfo for () {
 	fn as_derivative() -> Weight {
 		(4086000 as Weight)
 	}
+	fn batch_all(c: u32, ) -> Weight {
+		(16461000 as Weight)
+			.saturating_add((1982000 as Weight).saturating_mul(c as Weight))
+	}
 }
