@@ -1,8 +1,5 @@
 use sp_std::marker::PhantomData;
 use sp_std::vec::Vec;
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-use codec::{Encode, Decode};
 use sp_core::{U256, H256, H160};
 use sp_runtime::traits::UniqueSaturatedInto;
 use frame_support::traits::Get;
@@ -10,38 +7,7 @@ use frame_support::{debug, storage::{StorageMap, StorageDoubleMap}};
 use sha3::{Keccak256, Digest};
 use evm::backend::{Backend as BackendT, ApplyBackend, Apply};
 use crate::{Trait, AccountStorages, AccountCodes, Module, Event};
-
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-/// Ethereum account nonce, balance and code. Used by storage.
-pub struct Account {
-	/// Account nonce.
-	pub nonce: U256,
-	/// Account balance.
-	pub balance: U256,
-}
-
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-/// Ethereum log. Used for `deposit_event`.
-pub struct Log {
-	/// Source address of the log.
-	pub address: H160,
-	/// Topics of the log.
-	pub topics: Vec<H256>,
-	/// Byte array data of the log.
-	pub data: Vec<u8>,
-}
-
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-/// External input from the transaction.
-pub struct Vicinity {
-	/// Current transaction gas price.
-	pub gas_price: U256,
-	/// Origin of the transaction.
-	pub origin: H160,
-}
+use crate::runner::{Account, Log, Vicinity};
 
 /// Substrate backend for EVM.
 pub struct Backend<'vicinity, T> {

@@ -20,12 +20,12 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod backend;
+mod runner;
 mod tests;
 pub mod precompiles;
 
 pub use crate::precompiles::{Precompile, Precompiles};
-pub use crate::backend::{Account, Log, Vicinity, Backend};
+pub use crate::runner::{Account, Log, Vicinity};
 
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
@@ -44,6 +44,8 @@ pub use evm::{ExitReason, ExitSucceed, ExitError, ExitRevert, ExitFatal};
 use evm::Config;
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
+
+use crate::runner::stack::Backend;
 
 /// Type alias for currency balance.
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
