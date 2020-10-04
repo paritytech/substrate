@@ -20,7 +20,7 @@
 use sp_std::{convert::Infallible, marker::PhantomData, rc::Rc, collections::btree_set::BTreeSet};
 use sp_core::{H160, U256, H256};
 use sp_runtime::{TransactionOutcome, traits::UniqueSaturatedInto};
-use frame_support::{traits::{Get, Currency, ExistenceRequirement}, storage::{StorageMap, StorageDoubleMap}};
+use frame_support::{ensure, traits::{Get, Currency, ExistenceRequirement}, storage::{StorageMap, StorageDoubleMap}};
 use sha3::{Keccak256, Digest};
 use evm::{
 	ExternalOpcode, Opcode, ExitError, ExitReason, Capture, Context, CreateScheme, Stack,
@@ -30,7 +30,206 @@ use evm_runtime::{Config, Handler as HandlerT};
 use evm_gasometer::{self as gasometer, Gasometer};
 use crate::{
 	Trait, Vicinity, Module, Event, Log, AccountCodes, AccountStorages, AddressMapping,
+	Runner as RunnerT, Error, CallInfo, CreateInfo, FeeCalculator, precompiles::Precompiles,
 };
+
+#[derive(Default)]
+pub struct Runner<T: Trait> {
+	_marker: PhantomData<T>,
+}
+
+impl<T: Trait> RunnerT<T> for Runner<T> {
+	type Error = Error<T>;
+
+	fn call(
+		source: H160,
+		target: H160,
+		input: Vec<u8>,
+		value: U256,
+		gas_limit: u32,
+		gas_price: U256,
+		nonce: Option<U256>,
+	) -> Result<CallInfo, Self::Error> {
+		ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+
+		if let Some(nonce) = nonce {
+			ensure!(Module::<T>::account_basic(&source).nonce == nonce, Error::<T>::InvalidNonce);
+		}
+
+		frame_support::storage::with_transaction(|| {
+			let vicinity = Vicinity {
+				gas_price,
+				origin: source,
+			};
+
+			let config = T::config();
+
+			let mut substate = Handler::<T>::new_with_precompile(
+				&vicinity,
+				gas_limit as usize,
+				false,
+				config,
+				T::Precompiles::execute,
+			);
+
+			let code = substate.code(target);
+
+			let (reason, out) = substate.execute(
+				source,
+				target,
+				value,
+				code,
+				input,
+			);
+
+			let call_info = CallInfo {
+				exit_reason: reason.into(),
+				value: out,
+			};
+
+			match reason {
+				ExitReason::Succeed(_) => TransactionOutcome::Commit(Ok(call_info)),
+				ExitReason::Revert(_) => TransactionOutcome::Rollback(Ok(call_info)),
+				ExitReason::Error(_) => TransactionOutcome::Rollback(Ok(call_info)),
+				ExitReason::Fatal(_) => TransactionOutcome::Rollback(Ok(call_info)),
+			}
+		})
+	}
+
+	fn create(
+		source: H160,
+		init: Vec<u8>,
+		value: U256,
+		gas_limit: u32,
+		gas_price: U256,
+		nonce: Option<U256>,
+	) -> Result<CreateInfo, Self::Error> {
+		ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+
+		if let Some(nonce) = nonce {
+			ensure!(Module::<T>::account_basic(&source).nonce == nonce, Error::<T>::InvalidNonce);
+		}
+
+		frame_support::storage::with_transaction(|| {
+			let vicinity = Vicinity {
+				gas_price,
+				origin: source,
+			};
+
+			let config = T::config();
+
+			let mut substate = Handler::<T>::new_with_precompile(
+				&vicinity,
+				gas_limit as usize,
+				false,
+				config,
+				T::Precompiles::execute,
+			);
+
+			let address = substate.create_address(CreateScheme::Legacy { caller: source });
+
+			let (reason, out) = substate.execute(
+				source,
+				address,
+				value,
+				init,
+				Vec::new()
+			);
+
+			let mut create_info = CreateInfo {
+				exit_reason: reason.into(),
+				value: address,
+			};
+
+			match reason {
+				ExitReason::Succeed(_) => {
+					match substate.gasometer.record_deposit(out.len()) {
+						Ok(()) => {
+							AccountCodes::insert(address, out);
+							TransactionOutcome::Commit(Ok(create_info))
+						},
+						Err(e) => {
+							create_info.exit_reason = e.into();
+							TransactionOutcome::Rollback(Ok(create_info))
+						},
+					}
+				},
+				ExitReason::Revert(_) => TransactionOutcome::Rollback(Ok(create_info)),
+				ExitReason::Error(_) => TransactionOutcome::Rollback(Ok(create_info)),
+				ExitReason::Fatal(_) => TransactionOutcome::Rollback(Ok(create_info)),
+			}
+		})
+	}
+
+	fn create2(
+		source: H160,
+		init: Vec<u8>,
+		salt: H256,
+		value: U256,
+		gas_limit: u32,
+		gas_price: U256,
+		nonce: Option<U256>,
+	) -> Result<CreateInfo, Self::Error> {
+		ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+
+		if let Some(nonce) = nonce {
+			ensure!(Module::<T>::account_basic(&source).nonce == nonce, Error::<T>::InvalidNonce);
+		}
+
+		frame_support::storage::with_transaction(|| {
+			let vicinity = Vicinity {
+				gas_price,
+				origin: source,
+			};
+
+			let config = T::config();
+
+			let mut substate = Handler::<T>::new_with_precompile(
+				&vicinity,
+				gas_limit as usize,
+				false,
+				config,
+				T::Precompiles::execute,
+			);
+
+			let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
+			let address = substate.create_address(
+				CreateScheme::Create2 { caller: source, code_hash, salt }
+			);
+
+			let (reason, out) = substate.execute(
+				source,
+				address,
+				value,
+				init,
+				Vec::new()
+			);
+
+			let mut create_info = CreateInfo {
+				exit_reason: reason.into(),
+				value: address,
+			};
+
+			match reason {
+				ExitReason::Succeed(_) => {
+					match substate.gasometer.record_deposit(out.len()) {
+						Ok(()) => {
+							AccountCodes::insert(address, out);
+							TransactionOutcome::Commit(Ok(create_info))
+						},
+						Err(e) => {
+							create_info.exit_reason = e.into();
+							TransactionOutcome::Rollback(Ok(create_info))
+						},
+					}
+				},
+				ExitReason::Revert(_) => TransactionOutcome::Rollback(Ok(create_info)),
+				ExitReason::Error(_) => TransactionOutcome::Rollback(Ok(create_info)),
+				ExitReason::Fatal(_) => TransactionOutcome::Rollback(Ok(create_info)),
+			}
+		})
+	}
+}
 
 fn l64(gas: usize) -> usize {
 	gas - gas / 64

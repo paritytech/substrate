@@ -79,29 +79,20 @@ impl<T: Trait> Runner<T> {
 
 		let (reason, retv) = f(&mut executor);
 
-		let used_gas = U256::from(executor.used_gas());
 		let actual_fee = executor.fee(gas_price);
 		debug::debug!(
 			target: "evm",
-			"Execution {:?} [source: {:?}, value: {}, gas_limit: {}, used_gas: {}, actual_fee: {}]",
+			"Execution {:?} [source: {:?}, value: {}, gas_limit: {}, actual_fee: {}]",
 			reason,
 			source,
 			value,
 			gas_limit,
-			used_gas,
 			actual_fee
 		);
 		executor.deposit(source, total_fee.saturating_sub(actual_fee));
 
 		let (values, logs) = executor.deconstruct();
 		let logs_data = logs.into_iter().map(|x| x ).collect::<Vec<_>>();
-		let logs_result = logs_data.clone().into_iter().map(|it| {
-			Log {
-				address: it.address,
-				topics: it.topics,
-				data: it.data
-			}
-		}).collect();
 		if apply_state {
 			backend.apply(values, logs_data, true);
 		}
@@ -109,8 +100,6 @@ impl<T: Trait> Runner<T> {
 		Ok(ExecutionInfo {
 			value: retv,
 			exit_reason: reason,
-			used_gas,
-			logs: logs_result,
 		})
 	}
 }
