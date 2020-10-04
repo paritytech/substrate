@@ -16,6 +16,7 @@
 // limitations under the License.
 
 pub mod stack;
+pub mod native;
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
