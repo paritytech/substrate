@@ -4464,6 +4464,8 @@ name = "pallet-evm"
 version = "2.0.0"
 dependencies = [
  "evm",
+ "evm-gasometer",
+ "evm-runtime",
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",

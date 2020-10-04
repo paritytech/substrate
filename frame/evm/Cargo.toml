@@ -26,6 +26,8 @@ sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/
 primitive-types = { version = "0.7.0", default-features = false, features = ["rlp", "byteorder"] }
 rlp = { version = "0.4", default-features = false }
 evm = { version = "0.17", default-features = false }
+evm-runtime = { version = "0.17", default-features = false }
+evm-gasometer = { version = "0.17", default-features = false }
 sha3 = { version = "0.8", default-features = false }
 impl-trait-for-tuples = "0.1"
 ripemd160 = { version = "0.9", default-features = false }
@@ -46,6 +48,8 @@ std = [
 	"rlp/std",
 	"primitive-types/std",
 	"evm/std",
+	"evm-runtime/std",
+	"evm-gasometer/std",
 	"pallet-timestamp/std",
 	"ripemd160/std",
 ]

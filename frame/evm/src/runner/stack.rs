@@ -21,13 +21,12 @@ use sp_std::marker::PhantomData;
 use sp_std::vec::Vec;
 use sp_core::{U256, H256, H160};
 use sp_runtime::traits::UniqueSaturatedInto;
-use frame_support::traits::Get;
-use frame_support::{debug, ensure, storage::{StorageMap, StorageDoubleMap}};
+use frame_support::{debug, ensure, traits::{Get, Currency}, storage::{StorageMap, StorageDoubleMap}};
 use sha3::{Keccak256, Digest};
 use evm::ExitReason;
 use evm::backend::{Backend as BackendT, ApplyBackend, Apply};
 use evm::executor::StackExecutor;
-use crate::{Trait, AccountStorages, FeeCalculator, AccountCodes, Module, Event, Error};
+use crate::{Trait, AccountStorages, FeeCalculator, AccountCodes, Module, Event, Error, AddressMapping};
 use crate::runner::{ExecutionInfo, CallInfo, CreateInfo, Account, Log, Vicinity, Runner as RunnerT};
 use crate::precompiles::Precompiles;
 
@@ -213,10 +212,31 @@ pub struct Backend<'vicinity, T> {
 	_marker: PhantomData<T>,
 }
 
-impl<'vicinity, T> Backend<'vicinity, T> {
+impl<'vicinity, T: Trait> Backend<'vicinity, T> {
 	/// Create a new backend with given vicinity.
 	pub fn new(vicinity: &'vicinity Vicinity) -> Self {
 		Self { vicinity, _marker: PhantomData }
+	}
+
+	fn mutate_account_basic(&self, address: &H160, new: Account) {
+		let account_id = T::AddressMapping::into_account_id(*address);
+		let current = Module::<T>::account_basic(address);
+
+		if current.nonce < new.nonce {
+			// ASSUME: in one single EVM transaction, the nonce will not increase more than
+			// `u128::max_value()`.
+			for _ in 0..(new.nonce - current.nonce).low_u128() {
+				frame_system::Module::<T>::inc_account_nonce(&account_id);
+			}
+		}
+
+		if current.balance > new.balance {
+			let diff = current.balance - new.balance;
+			T::Currency::slash(&account_id, diff.low_u128().unique_saturated_into());
+		} else if current.balance < new.balance {
+			let diff = new.balance - current.balance;
+			T::Currency::deposit_creating(&account_id, diff.low_u128().unique_saturated_into());
+		}
 	}
 }
 
@@ -305,7 +325,7 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 				Apply::Modify {
 					address, basic, code, storage, reset_storage,
 				} => {
-					Module::<T>::mutate_account_basic(&address, Account {
+					self.mutate_account_basic(&address, Account {
 						nonce: basic.nonce,
 						balance: basic.balance,
 					});
