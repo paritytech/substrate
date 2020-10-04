@@ -1,13 +1,211 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! EVM stack-based runner.
+
 use sp_std::marker::PhantomData;
 use sp_std::vec::Vec;
 use sp_core::{U256, H256, H160};
 use sp_runtime::traits::UniqueSaturatedInto;
 use frame_support::traits::Get;
-use frame_support::{debug, storage::{StorageMap, StorageDoubleMap}};
+use frame_support::{debug, ensure, storage::{StorageMap, StorageDoubleMap}};
 use sha3::{Keccak256, Digest};
+use evm::ExitReason;
 use evm::backend::{Backend as BackendT, ApplyBackend, Apply};
-use crate::{Trait, AccountStorages, AccountCodes, Module, Event};
-use crate::runner::{Account, Log, Vicinity};
+use evm::executor::StackExecutor;
+use crate::{Trait, AccountStorages, FeeCalculator, AccountCodes, Module, Event, Error};
+use crate::runner::{ExecutionInfo, CallInfo, CreateInfo, Account, Log, Vicinity, Runner as RunnerT};
+use crate::precompiles::Precompiles;
+
+#[derive(Default)]
+pub struct Runner<T: Trait> {
+	_marker: PhantomData<T>,
+}
+
+impl<T: Trait> Runner<T> {
+	/// Execute an EVM operation.
+	pub fn execute<F, R>(
+		source: H160,
+		value: U256,
+		gas_limit: u32,
+		gas_price: U256,
+		nonce: Option<U256>,
+		apply_state: bool,
+		f: F,
+	) -> Result<ExecutionInfo<R>, Error<T>> where
+		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (ExitReason, R),
+	{
+		// Gas price check is skipped when performing a gas estimation.
+		if apply_state {
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+		}
+
+		let vicinity = Vicinity {
+			gas_price,
+			origin: source,
+		};
+
+		let mut backend = Backend::<T>::new(&vicinity);
+		let mut executor = StackExecutor::new_with_precompile(
+			&backend,
+			gas_limit as usize,
+			T::config(),
+			T::Precompiles::execute,
+		);
+
+		let total_fee = gas_price.checked_mul(U256::from(gas_limit))
+			.ok_or(Error::<T>::FeeOverflow)?;
+		let total_payment = value.checked_add(total_fee).ok_or(Error::<T>::PaymentOverflow)?;
+		let source_account = Module::<T>::account_basic(&source);
+		ensure!(source_account.balance >= total_payment, Error::<T>::BalanceLow);
+		executor.withdraw(source, total_fee).map_err(|_| Error::<T>::WithdrawFailed)?;
+
+		if let Some(nonce) = nonce {
+			ensure!(source_account.nonce == nonce, Error::<T>::InvalidNonce);
+		}
+
+		let (reason, retv) = f(&mut executor);
+
+		let used_gas = U256::from(executor.used_gas());
+		let actual_fee = executor.fee(gas_price);
+		debug::debug!(
+			target: "evm",
+			"Execution {:?} [source: {:?}, value: {}, gas_limit: {}, used_gas: {}, actual_fee: {}]",
+			reason,
+			source,
+			value,
+			gas_limit,
+			used_gas,
+			actual_fee
+		);
+		executor.deposit(source, total_fee.saturating_sub(actual_fee));
+
+		let (values, logs) = executor.deconstruct();
+		let logs_data = logs.into_iter().map(|x| x ).collect::<Vec<_>>();
+		let logs_result = logs_data.clone().into_iter().map(|it| {
+			Log {
+				address: it.address,
+				topics: it.topics,
+				data: it.data
+			}
+		}).collect();
+		if apply_state {
+			backend.apply(values, logs_data, true);
+		}
+
+		Ok(ExecutionInfo {
+			value: retv,
+			exit_reason: reason,
+			used_gas,
+			logs: logs_result,
+		})
+	}
+}
+
+impl<T: Trait> RunnerT<T> for Runner<T> {
+	type Error = Error<T>;
+
+	fn call(
+		source: H160,
+		target: H160,
+		input: Vec<u8>,
+		value: U256,
+		gas_limit: u32,
+		gas_price: U256,
+		nonce: Option<U256>,
+	) -> Result<CallInfo, Self::Error> {
+		Self::execute(
+			source,
+			value,
+			gas_limit,
+			gas_price,
+			nonce,
+			true,
+			|executor| executor.transact_call(
+				source,
+				target,
+				value,
+				input,
+				gas_limit as usize,
+			),
+		)
+	}
+
+	fn create(
+		source: H160,
+		init: Vec<u8>,
+		value: U256,
+		gas_limit: u32,
+		gas_price: U256,
+		nonce: Option<U256>,
+	) -> Result<CreateInfo, Self::Error> {
+		Self::execute(
+			source,
+			value,
+			gas_limit,
+			gas_price,
+			nonce,
+			true,
+			|executor| {
+				let address = executor.create_address(
+					evm::CreateScheme::Legacy { caller: source },
+				);
+				(executor.transact_create(
+					source,
+					value,
+					init,
+					gas_limit as usize,
+				), address)
+			},
+		)
+	}
+
+	fn create2(
+		source: H160,
+		init: Vec<u8>,
+		salt: H256,
+		value: U256,
+		gas_limit: u32,
+		gas_price: U256,
+		nonce: Option<U256>,
+	) -> Result<CreateInfo, Self::Error> {
+		let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
+		Self::execute(
+			source,
+			value,
+			gas_limit,
+			gas_price,
+			nonce,
+			true,
+			|executor| {
+				let address = executor.create_address(
+					evm::CreateScheme::Create2 { caller: source, code_hash, salt },
+				);
+				(executor.transact_create2(
+					source,
+					value,
+					init,
+					salt,
+					gas_limit as usize,
+				), address)
+			},
+		)
+	}
+}
 
 /// Substrate backend for EVM.
 pub struct Backend<'vicinity, T> {

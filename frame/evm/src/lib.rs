@@ -25,27 +25,22 @@ mod tests;
 pub mod precompiles;
 
 pub use crate::precompiles::{Precompile, Precompiles};
-pub use crate::runner::{Account, Log, Vicinity};
+pub use crate::runner::{Account, Log, Vicinity, Runner, CallInfo, CreateInfo};
 
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use frame_support::{debug, ensure, decl_module, decl_storage, decl_event, decl_error};
+use frame_support::{decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::{Weight, Pays};
 use frame_support::traits::{Currency, ExistenceRequirement, Get};
 use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_system::RawOrigin;
 use sp_core::{U256, H256, H160, Hasher};
 use sp_runtime::{AccountId32, traits::{UniqueSaturatedInto, SaturatedConversion, BadOrigin}};
-use sha3::{Digest, Keccak256};
 pub use evm::{ExitReason, ExitSucceed, ExitError, ExitRevert, ExitFatal};
 use evm::Config;
-use evm::executor::StackExecutor;
-use evm::backend::ApplyBackend;
-
-use crate::runner::stack::Backend;
 
 /// Type alias for currency balance.
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -210,6 +205,8 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	type Precompiles: Precompiles;
 	/// Chain ID of EVM.
 	type ChainId: Get<u64>;
+	/// EVM execution runner.
+	type Runner: Runner<Self>;
 
 	/// EVM config used in the module.
 	fn config() -> &'static Config {
@@ -329,7 +326,7 @@ decl_module! {
 		) -> DispatchResultWithPostInfo {
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
-			match Self::execute_call(
+			match T::Runner::call(
 				source,
 				target,
 				input,
@@ -337,12 +334,14 @@ decl_module! {
 				gas_limit,
 				gas_price,
 				nonce,
-				true,
 			)? {
-				(ExitReason::Succeed(_), _, _, _) => {
+				CallInfo {
+					exit_reason: ExitReason::Succeed(_),
+					..
+				} => {
 					Module::<T>::deposit_event(Event::<T>::Executed(target));
 				},
-				(_, _, _, _) => {
+				_ => {
 					Module::<T>::deposit_event(Event::<T>::ExecutedFailed(target));
 				},
 			}
@@ -364,19 +363,26 @@ decl_module! {
 		) -> DispatchResultWithPostInfo {
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
-			match Self::execute_create(
+			match T::Runner::create(
 				source,
 				init,
 				value,
 				gas_limit,
 				gas_price,
 				nonce,
-				true,
 			)? {
-				(ExitReason::Succeed(_), create_address, _, _) => {
+				CreateInfo {
+					exit_reason: ExitReason::Succeed(_),
+					value: create_address,
+					..
+				} => {
 					Module::<T>::deposit_event(Event::<T>::Created(create_address));
 				},
-				(_, create_address, _, _) => {
+				CreateInfo {
+					exit_reason: _,
+					value: create_address,
+					..
+				} => {
 					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
 				},
 			}
@@ -398,7 +404,7 @@ decl_module! {
 		) -> DispatchResultWithPostInfo {
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
-			match Self::execute_create2(
+			match T::Runner::create2(
 				source,
 				init,
 				salt,
@@ -406,12 +412,19 @@ decl_module! {
 				gas_limit,
 				gas_price,
 				nonce,
-				true,
 			)? {
-				(ExitReason::Succeed(_), create_address, _, _) => {
+				CreateInfo {
+					exit_reason: ExitReason::Succeed(_),
+					value: create_address,
+					..
+				} => {
 					Module::<T>::deposit_event(Event::<T>::Created(create_address));
 				},
-				(_, create_address, _, _) => {
+				CreateInfo {
+					exit_reason: _,
+					value: create_address,
+					..
+				} => {
 					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
 				},
 			}
@@ -476,172 +489,5 @@ impl<T: Trait> Module<T> {
 			nonce: U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(nonce)),
 			balance: U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(balance)),
 		}
-	}
-
-	/// Execute a create transaction on behalf of given sender.
-	pub fn execute_create(
-		source: H160,
-		init: Vec<u8>,
-		value: U256,
-		gas_limit: u32,
-		gas_price: U256,
-		nonce: Option<U256>,
-		apply_state: bool,
-	) -> Result<(ExitReason, H160, U256, Vec<Log>), Error<T>> {
-		Self::execute_evm(
-			source,
-			value,
-			gas_limit,
-			gas_price,
-			nonce,
-			apply_state,
-			|executor| {
-				let address = executor.create_address(
-					evm::CreateScheme::Legacy { caller: source },
-				);
-				(executor.transact_create(
-					source,
-					value,
-					init,
-					gas_limit as usize,
-				), address)
-			},
-		)
-	}
-
-	/// Execute a create2 transaction on behalf of a given sender.
-	pub fn execute_create2(
-		source: H160,
-		init: Vec<u8>,
-		salt: H256,
-		value: U256,
-		gas_limit: u32,
-		gas_price: U256,
-		nonce: Option<U256>,
-		apply_state: bool,
-	) -> Result<(ExitReason, H160, U256, Vec<Log>), Error<T>> {
-		let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
-		Self::execute_evm(
-			source,
-			value,
-			gas_limit,
-			gas_price,
-			nonce,
-			apply_state,
-			|executor| {
-				let address = executor.create_address(
-					evm::CreateScheme::Create2 { caller: source, code_hash, salt },
-				);
-				(executor.transact_create2(
-					source,
-					value,
-					init,
-					salt,
-					gas_limit as usize,
-				), address)
-			},
-		)
-	}
-
-	/// Execute a call transaction on behalf of a given sender.
-	pub fn execute_call(
-		source: H160,
-		target: H160,
-		input: Vec<u8>,
-		value: U256,
-		gas_limit: u32,
-		gas_price: U256,
-		nonce: Option<U256>,
-		apply_state: bool,
-	) -> Result<(ExitReason, Vec<u8>, U256, Vec<Log>), Error<T>> {
-		Self::execute_evm(
-			source,
-			value,
-			gas_limit,
-			gas_price,
-			nonce,
-			apply_state,
-			|executor| executor.transact_call(
-				source,
-				target,
-				value,
-				input,
-				gas_limit as usize,
-			),
-		)
-	}
-
-	/// Execute an EVM operation.
-	fn execute_evm<F, R>(
-		source: H160,
-		value: U256,
-		gas_limit: u32,
-		gas_price: U256,
-		nonce: Option<U256>,
-		apply_state: bool,
-		f: F,
-	) -> Result<(ExitReason, R, U256, Vec<Log>), Error<T>> where
-		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (ExitReason, R),
-	{
-
-		// Gas price check is skipped when performing a gas estimation.
-		if apply_state {
-			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
-		}
-
-		let vicinity = Vicinity {
-			gas_price,
-			origin: source,
-		};
-
-		let mut backend = Backend::<T>::new(&vicinity);
-		let mut executor = StackExecutor::new_with_precompile(
-			&backend,
-			gas_limit as usize,
-			T::config(),
-			T::Precompiles::execute,
-		);
-
-		let total_fee = gas_price.checked_mul(U256::from(gas_limit))
-			.ok_or(Error::<T>::FeeOverflow)?;
-		let total_payment = value.checked_add(total_fee).ok_or(Error::<T>::PaymentOverflow)?;
-		let source_account = Self::account_basic(&source);
-		ensure!(source_account.balance >= total_payment, Error::<T>::BalanceLow);
-		executor.withdraw(source, total_fee).map_err(|_| Error::<T>::WithdrawFailed)?;
-
-		if let Some(nonce) = nonce {
-			ensure!(source_account.nonce == nonce, Error::<T>::InvalidNonce);
-		}
-
-		let (retv, reason) = f(&mut executor);
-
-		let used_gas = U256::from(executor.used_gas());
-		let actual_fee = executor.fee(gas_price);
-		debug::debug!(
-			target: "evm",
-			"Execution {:?} [source: {:?}, value: {}, gas_limit: {}, used_gas: {}, actual_fee: {}]",
-			retv,
-			source,
-			value,
-			gas_limit,
-			used_gas,
-			actual_fee
-		);
-		executor.deposit(source, total_fee.saturating_sub(actual_fee));
-
-		let (values, logs) = executor.deconstruct();
-		let logs_data = logs.into_iter().map(|x| x ).collect::<Vec<_>>();
-		let logs_result = logs_data.clone().into_iter().map(|it| {
-			Log {
-				address: it.address,
-				topics: it.topics,
-				data: it.data
-			}
-		}).collect();
-		if apply_state {
-			backend.apply(values, logs_data, true);
-		}
-
-		Ok((retv, reason, used_gas, logs_result))
 	}
 }

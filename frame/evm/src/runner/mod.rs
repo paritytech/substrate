@@ -22,6 +22,7 @@ use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};
 use sp_core::{H160, U256, H256};
 use evm::ExitReason;
+use crate::Trait;
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -55,22 +56,18 @@ pub struct Vicinity {
 	pub origin: H160,
 }
 
-pub struct CallInfo {
-	exit_reason: ExitReason,
-	return_value: Vec<u8>,
-	used_gas: U256,
-	logs: Vec<Log>,
+pub struct ExecutionInfo<T> {
+	pub exit_reason: ExitReason,
+	pub value: T,
+	pub used_gas: U256,
+	pub logs: Vec<Log>,
 }
 
-pub struct CreateInfo {
-	exit_reason: ExitReason,
-	contract_address: H160,
-	used_gas: U256,
-	logs: Vec<Log>,
-}
+pub type CallInfo = ExecutionInfo<Vec<u8>>;
+pub type CreateInfo = ExecutionInfo<H160>;
 
-pub trait Executor {
-	type Error;
+pub trait Runner<T: Trait> {
+	type Error: Into<sp_runtime::DispatchError>;
 
 	fn call(
 		source: H160,
