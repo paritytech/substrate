@@ -39,7 +39,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 >, ServiceError> {
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
-	let (client, backend, keystore, task_manager) =
+	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
 
@@ -73,7 +73,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	)?;
 
 	Ok(sc_service::PartialComponents {
-		client, backend, task_manager, import_queue, keystore,
+		client, backend, task_manager, import_queue, keystore_container,
 		select_chain, transaction_pool,inherent_data_providers,
 		other: (aura_block_import, grandpa_link),
 	})
@@ -82,7 +82,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
-		client, backend, mut task_manager, import_queue, keystore,
+		client, backend, mut task_manager, import_queue, keystore_container,
 		select_chain, transaction_pool, inherent_data_providers,
 		other: (block_import, grandpa_link),
 	} = new_partial(&config)?;
@@ -134,7 +134,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		network: network.clone(),
 		client: client.clone(),
-		keystore: keystore.clone(),
+		keystore: keystore_container.sync_keystore(),
 		task_manager: &mut task_manager,
 		transaction_pool: transaction_pool.clone(),
 		telemetry_connection_sinks: telemetry_connection_sinks.clone(),
@@ -163,7 +163,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			network.clone(),
 			inherent_data_providers.clone(),
 			force_authoring,
-			keystore.clone(),
+			keystore_container.sync_keystore(),
 			can_author_with,
 		)?;
 
@@ -175,7 +175,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	// if the node isn't actively participating in consensus then it doesn't
 	// need a keystore, regardless of which protocol we use below.
 	let keystore = if role.is_authority() {
-		Some(keystore)
+		Some(keystore_container.sync_keystore())
 	} else {
 		None
 	};
@@ -228,7 +228,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
-	let (client, backend, keystore, mut task_manager, on_demand) =
+	let (client, backend, keystore_container, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
 	let transaction_pool = Arc::new(sc_transaction_pool::BasicPool::new_light(
@@ -290,7 +290,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
 		config,
 		client,
-		keystore,
+		keystore: keystore_container.sync_keystore(),
 		backend,
 		network,
 		network_status_sinks,

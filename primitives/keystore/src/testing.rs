@@ -82,6 +82,83 @@ impl KeyStore {
 #[async_trait]
 impl CryptoStore for KeyStore {
 	async fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
+		SyncCryptoStore::keys(self, id)
+	}
+
+	async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
+		SyncCryptoStore::sr25519_public_keys(self, id)
+	}
+
+	async fn sr25519_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<sr25519::Public, Error> {
+		SyncCryptoStore::sr25519_generate_new(self, id, seed)
+	}
+
+	async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
+		SyncCryptoStore::ed25519_public_keys(self, id)
+	}
+
+	async fn ed25519_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ed25519::Public, Error> {
+		SyncCryptoStore::ed25519_generate_new(self, id, seed)
+	}
+
+	async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+		SyncCryptoStore::ecdsa_public_keys(self, id)
+	}
+
+	async fn ecdsa_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ecdsa::Public, Error> {
+		SyncCryptoStore::ecdsa_generate_new(self, id, seed)
+	}
+
+	async fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
+		SyncCryptoStore::insert_unknown(self, id, suri, public)
+	}
+
+	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+		SyncCryptoStore::has_keys(self, public_keys)
+	}
+
+	async fn supported_keys(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+	) -> std::result::Result<Vec<CryptoTypePublicPair>, Error> {
+		SyncCryptoStore::supported_keys(self, id, keys)
+	}
+
+	async fn sign_with(
+		&self,
+		id: KeyTypeId,
+		key: &CryptoTypePublicPair,
+		msg: &[u8],
+	) -> Result<Vec<u8>, Error> {
+		SyncCryptoStore::sign_with(self, id, key, msg)
+	}
+
+	async fn sr25519_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		transcript_data: VRFTranscriptData,
+	) -> Result<VRFSignature, Error> {
+		SyncCryptoStore::sr25519_vrf_sign(self, key_type, public, transcript_data)
+	}
+}
+
+#[cfg(feature = "std")]
+impl SyncCryptoStore for KeyStore {
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
 		self.keys.read()
 			.get(&id)
 			.map(|map| {
@@ -96,7 +173,7 @@ impl CryptoStore for KeyStore {
 			.unwrap_or_else(|| Ok(vec![]))
 	}
 
-	async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
+	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
 		self.keys.read().get(&id)
 			.map(|keys|
 				keys.values()
@@ -107,7 +184,7 @@ impl CryptoStore for KeyStore {
 			.unwrap_or_default()
 	}
 
-	async fn sr25519_generate_new(
+	fn sr25519_generate_new(
 		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
@@ -127,7 +204,7 @@ impl CryptoStore for KeyStore {
 		}
 	}
 
-	async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
+	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
 		self.keys.read().get(&id)
 			.map(|keys|
 				keys.values()
@@ -138,7 +215,7 @@ impl CryptoStore for KeyStore {
 			.unwrap_or_default()
 	}
 
-	async fn ed25519_generate_new(
+	fn ed25519_generate_new(
 		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
@@ -158,7 +235,7 @@ impl CryptoStore for KeyStore {
 		}
 	}
 
-	async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
 		self.keys.read().get(&id)
 			.map(|keys|
 				keys.values()
@@ -169,7 +246,7 @@ impl CryptoStore for KeyStore {
 			.unwrap_or_default()
 	}
 
-	async fn ecdsa_generate_new(
+	fn ecdsa_generate_new(
 		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
@@ -189,27 +266,27 @@ impl CryptoStore for KeyStore {
 		}
 	}
 
-	async fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
+	fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
 		self.keys.write().entry(id).or_default().insert(public.to_owned(), suri.to_string());
 		Ok(())
 	}
 
-	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		public_keys.iter().all(|(k, t)| self.keys.read().get(&t).and_then(|s| s.get(k)).is_some())
 	}
 
-	async fn supported_keys(
+	fn supported_keys(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, Error> {
 		let provided_keys = keys.into_iter().collect::<HashSet<_>>();
-		let all_keys = CryptoStore::keys(self, id).await?.into_iter().collect::<HashSet<_>>();
+		let all_keys = SyncCryptoStore::keys(self, id)?.into_iter().collect::<HashSet<_>>();
 
 		Ok(provided_keys.intersection(&all_keys).cloned().collect())
 	}
 
-	async fn sign_with(
+	fn sign_with(
 		&self,
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
@@ -240,7 +317,7 @@ impl CryptoStore for KeyStore {
 		}
 	}
 
-	async fn sr25519_vrf_sign(
+	fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
@@ -258,11 +335,15 @@ impl CryptoStore for KeyStore {
 }
 
 #[cfg(feature = "std")]
-impl SyncCryptoStore for KeyStore {}
-
-#[cfg(feature = "std")]
 impl Into<CryptoStorePtr> for KeyStore {
 	fn into(self) -> CryptoStorePtr {
+		Arc::new(self)
+	}
+}
+
+#[cfg(feature = "std")]
+impl Into<Arc<dyn CryptoStore>> for KeyStore {
+	fn into(self) -> Arc<dyn CryptoStore> {
 		Arc::new(self)
 	}
 }

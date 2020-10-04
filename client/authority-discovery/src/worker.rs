@@ -45,7 +45,7 @@ use sc_network::{
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, Pair};
-use sp_keystore::CryptoStorePtr;
+use sp_keystore::CryptoStore;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
 
@@ -75,7 +75,7 @@ const MAX_IN_FLIGHT_LOOKUPS: usize = 8;
 /// Role an authority discovery module can run as.
 pub enum Role {
 	/// Actual authority as well as a reference to its key store.
-	Authority(CryptoStorePtr),
+	Authority(Arc<dyn CryptoStore>),
 	/// Sentry node that guards an authority.
 	///
 	/// No reference to its key store needed, as sentry nodes don't have an identity to sign
@@ -360,14 +360,12 @@ where
 			self.client.as_ref(),
 		).await?.into_iter().map(Into::into).collect::<Vec<_>>();
 
-		let signatures = key_store
-			.sign_with_all(
-				key_types::AUTHORITY_DISCOVERY,
-				keys.clone(),
-				serialized_addresses.as_slice(),
-			)
-			.await
-			.map_err(|_| Error::Signing)?;
+		let signatures = key_store.sign_with_all(
+			key_types::AUTHORITY_DISCOVERY,
+			keys.clone(),
+			serialized_addresses.as_slice(),
+		).await.map_err(|_| Error::Signing)?;
+
 		for (sign_result, key) in signatures.into_iter().zip(keys) {
 			let mut signed_addresses = vec![];
 
@@ -396,11 +394,9 @@ where
 
 		let local_keys = match &self.role {
 			Role::Authority(key_store) => {
-				key_store
-					.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
-					.await
-					.into_iter()
-					.collect::<HashSet<_>>()
+				key_store.sr25519_public_keys(
+					key_types::AUTHORITY_DISCOVERY
+				).await.into_iter().collect::<HashSet<_>>()
 			},
 			Role::Sentry => HashSet::new(),
 		};
@@ -606,7 +602,7 @@ where
 	// next authority set with two keys. The function does not return all of the local authority
 	// discovery public keys, but only the ones intersecting with the current or next authority set.
 	async fn get_own_public_keys_within_authority_set(
-		key_store: CryptoStorePtr,
+		key_store: Arc<dyn CryptoStore>,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
 		let local_pub_keys = key_store

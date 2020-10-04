@@ -199,7 +199,7 @@ pub trait CryptoStore: Send + Sync {
 	) -> Result<VRFSignature, Error>;
 }
 
-/// [deprecated] Sync version of the CryptoStore
+/// Sync version of the CryptoStore
 ///
 /// Some parts of Substrate still rely on a sync version of the `CryptoStore`.
 /// To make the transition easier this auto trait wraps any async `CryptoStore` and
@@ -209,9 +209,7 @@ pub trait CryptoStore: Send + Sync {
 /// instead, use [`CryptoStore`].
 pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
-	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		block_on(CryptoStore::sr25519_public_keys(self, id))
-	}
+	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
 
 	/// Generate a new sr25519 key pair for the given key type and an optional seed.
 	///
@@ -222,14 +220,10 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<sr25519::Public, Error> {
-		block_on(CryptoStore::sr25519_generate_new(self, id, seed))
-	}
+	) -> Result<sr25519::Public, Error>;
 
 	/// Returns all ed25519 public keys for the given key type.
-	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		block_on(CryptoStore::ed25519_public_keys(self, id))
-	}
+	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public>;
 
 	/// Generate a new ed25519 key pair for the given key type and an optional seed.
 	///
@@ -240,14 +234,10 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<ed25519::Public, Error> {
-		block_on(CryptoStore::ed25519_generate_new(self, id, seed))
-	}
+	) -> Result<ed25519::Public, Error>;
 
 	/// Returns all ecdsa public keys for the given key type.
-	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		block_on(CryptoStore::ecdsa_public_keys(self, id))
-	}
+	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public>;
 
 	/// Generate a new ecdsa key pair for the given key type and an optional seed.
 	///
@@ -258,9 +248,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<ecdsa::Public, Error> {
-		block_on(CryptoStore::ecdsa_generate_new(self, id, seed))
-	}
+	) -> Result<ecdsa::Public, Error>;
 
 	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.
@@ -268,9 +256,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// Places it into the file system store.
 	///
 	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
-	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
-		block_on(CryptoStore::insert_unknown(self, key_type, suri, public))
-	}
+	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()>;
 
 	/// Find intersection between provided keys and supported keys
 	///
@@ -280,9 +266,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
-	) -> Result<Vec<CryptoTypePublicPair>, Error> {
-		block_on(CryptoStore::supported_keys(self, id, keys))
-	}
+	) -> Result<Vec<CryptoTypePublicPair>, Error>;
 
 	/// List all supported keys
 	///
@@ -294,9 +278,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns `true` iff all private keys could be found.
-	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		block_on(CryptoStore::has_keys(self, public_keys))
-	}
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
 
 	/// Sign with key
 	///
@@ -310,9 +292,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> Result<Vec<u8>, Error> {
-		block_on(CryptoStore::sign_with(self, id, key, msg))
-	}
+	) -> Result<Vec<u8>, Error>;
 
 	/// Sign with any key
 	///
@@ -326,7 +306,16 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8]
 	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
-		block_on(CryptoStore::sign_with_any(self, id, keys, msg))
+		if keys.len() == 1 {
+			return SyncCryptoStore::sign_with(self, id, &keys[0], msg).map(|s| (keys[0].clone(), s));
+		} else {
+			for k in SyncCryptoStore::supported_keys(self, id, keys)? {
+				if let Ok(sign) = SyncCryptoStore::sign_with(self, id, &k, msg) {
+					return Ok((k, sign));
+				}
+			}
+		}
+		Err(Error::KeyNotSupported(id))
 	}
 
 	/// Sign with all keys
@@ -341,8 +330,8 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8],
-	) -> Result<Vec<Result<Vec<u8>, Error>>, ()> {
-		block_on(CryptoStore::sign_with_all(self, id, keys, msg))
+	) -> Result<Vec<Result<Vec<u8>, Error>>, ()>{
+		Ok(keys.iter().map(|k| SyncCryptoStore::sign_with(self, id, k, msg)).collect())
 	}
 
 	/// Generate VRF signature for given transcript data.
@@ -364,15 +353,11 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
-	) -> Result<VRFSignature, Error> {
-		block_on(CryptoStore::sr25519_vrf_sign(self, key_type, public, transcript_data))
-	}
+	) -> Result<VRFSignature, Error>;
 }
 
-impl SyncCryptoStore for dyn CryptoStore {}
-
 /// A pointer to a keystore.
-pub type CryptoStorePtr = Arc<dyn CryptoStore>;
+pub type CryptoStorePtr = Arc<dyn SyncCryptoStore>;
 
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.

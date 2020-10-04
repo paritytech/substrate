@@ -63,7 +63,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		),
 	)
 >, ServiceError> {
-	let (client, backend, keystore, task_manager) =
+	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
 
@@ -121,7 +121,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		let client = client.clone();
 		let pool = transaction_pool.clone();
 		let select_chain = select_chain.clone();
-		let keystore = keystore.clone();
+		let keystore = keystore_container.sync_keystore();
 
 		let rpc_extensions_builder = move |deny_unsafe, subscription_executor| {
 			let deps = node_rpc::FullDeps {
@@ -150,7 +150,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	};
 
 	Ok(sc_service::PartialComponents {
-		client, backend, task_manager, keystore,
+		client, backend, task_manager, keystore_container,
 		select_chain, import_queue, transaction_pool, inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup)
 	})
@@ -174,7 +174,7 @@ pub fn new_full_base(
 	)
 ) -> Result<NewFullBase, ServiceError> {
 	let sc_service::PartialComponents {
-		client, backend, mut task_manager, import_queue, keystore,
+		client, backend, mut task_manager, import_queue, keystore_container,
 		select_chain, transaction_pool, inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup),
 	} = new_partial(&config)?;
@@ -211,7 +211,7 @@ pub fn new_full_base(
 		config,
 		backend: backend.clone(),
 		client: client.clone(),
-		keystore: keystore.clone(),
+		keystore: keystore_container.sync_keystore(),
 		network: network.clone(),
 		rpc_extensions_builder: Box::new(rpc_extensions_builder),
 		transaction_pool: transaction_pool.clone(),
@@ -238,7 +238,7 @@ pub fn new_full_base(
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
 		let babe_config = sc_consensus_babe::BabeParams {
-			keystore: keystore.clone(),
+			keystore: keystore_container.sync_keystore(),
 			client: client.clone(),
 			select_chain,
 			env: proposer,
@@ -260,7 +260,7 @@ pub fn new_full_base(
 			sc_service::config::Role::Authority { ref sentry_nodes } => (
 				sentry_nodes.clone(),
 				sc_authority_discovery::Role::Authority (
-					keystore.clone(),
+					keystore_container.keystore(),
 				),
 			),
 			sc_service::config::Role::Sentry {..} => (
@@ -290,7 +290,7 @@ pub fn new_full_base(
 	// if the node isn't actively participating in consensus then it doesn't
 	// need a keystore, regardless of which protocol we use below.
 	let keystore = if role.is_authority() {
-		Some(keystore)
+		Some(keystore_container.sync_keystore())
 	} else {
 		None
 	};
@@ -357,7 +357,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
-	let (client, backend, keystore, mut task_manager, on_demand) =
+	let (client, backend, keystore_container, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
@@ -439,7 +439,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
-			keystore,
+			keystore: keystore_container.sync_keystore(),
 			config, backend, network_status_sinks, system_rpc_tx,
 			network: network.clone(),
 			telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),

@@ -47,7 +47,83 @@ impl LocalKeystore {
 
 #[async_trait]
 impl CryptoStore for LocalKeystore {
-	async fn keys(
+	async fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
+		SyncCryptoStore::keys(self, id)
+	}
+
+	async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
+		SyncCryptoStore::sr25519_public_keys(self, id)
+	}
+
+	async fn sr25519_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<sr25519::Public, TraitError> {
+		SyncCryptoStore::sr25519_generate_new(self, id, seed)
+	}
+
+	async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
+		SyncCryptoStore::ed25519_public_keys(self, id)
+	}
+
+	async fn ed25519_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<ed25519::Public, TraitError> {
+		SyncCryptoStore::ed25519_generate_new(self, id, seed)
+	}
+
+	async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+		SyncCryptoStore::ecdsa_public_keys(self, id)
+	}
+
+	async fn ecdsa_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<ecdsa::Public, TraitError> {
+		SyncCryptoStore::ecdsa_generate_new(self, id, seed)
+	}
+
+	async fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> std::result::Result<(), ()> {
+		SyncCryptoStore::insert_unknown(self, id, suri, public)
+	}
+
+	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+		SyncCryptoStore::has_keys(self, public_keys)
+	}
+
+	async fn supported_keys(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
+		SyncCryptoStore::supported_keys(self, id, keys)
+	}
+
+	async fn sign_with(
+		&self,
+		id: KeyTypeId,
+		key: &CryptoTypePublicPair,
+		msg: &[u8],
+	) -> std::result::Result<Vec<u8>, TraitError> {
+		SyncCryptoStore::sign_with(self, id, key, msg)
+	}
+
+	async fn sr25519_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		transcript_data: VRFTranscriptData,
+	) -> std::result::Result<VRFSignature, TraitError> {
+		SyncCryptoStore::sr25519_vrf_sign(self, key_type, public, transcript_data)
+	}
+}
+
+impl SyncCryptoStore for LocalKeystore {
+	fn keys(
 		&self,
 		id: KeyTypeId
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
@@ -61,12 +137,12 @@ impl CryptoStore for LocalKeystore {
 			}))
 	}
 
-	async fn supported_keys(
+	fn supported_keys(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
-		let all_keys = <LocalKeystore as CryptoStore>::keys(self, id).await?
+		let all_keys = SyncCryptoStore::keys(self, id)?
 			.into_iter()
 			.collect::<HashSet<_>>();
 		Ok(keys.into_iter()
@@ -74,7 +150,7 @@ impl CryptoStore for LocalKeystore {
 		   .collect::<Vec<_>>())
 	}
 
-	async fn sign_with(
+	fn sign_with(
 		&self,
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
@@ -106,7 +182,7 @@ impl CryptoStore for LocalKeystore {
 		}
 	}
 
-	async fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public> {
+	fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public> {
 		self.0.read().raw_public_keys(key_type)
 			.map(|v| {
 				v.into_iter()
@@ -116,7 +192,7 @@ impl CryptoStore for LocalKeystore {
 			.unwrap_or_default()
 	}
 
-	async fn sr25519_generate_new(
+	fn sr25519_generate_new(
 		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
@@ -129,7 +205,7 @@ impl CryptoStore for LocalKeystore {
 		Ok(pair.public())
 	}
 
-	async fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
+	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
 		self.0.read().raw_public_keys(key_type)
 			.map(|v| {
 				v.into_iter()
@@ -139,7 +215,7 @@ impl CryptoStore for LocalKeystore {
     		.unwrap_or_default()
 	}
 
-	async fn ed25519_generate_new(
+	fn ed25519_generate_new(
 		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
@@ -152,7 +228,7 @@ impl CryptoStore for LocalKeystore {
 		Ok(pair.public())
 	}
 
-	async fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public> {
+	fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public> {
 		self.0.read().raw_public_keys(key_type)
 			.map(|v| {
 				v.into_iter()
@@ -162,7 +238,7 @@ impl CryptoStore for LocalKeystore {
 			.unwrap_or_default()
 	}
 
-	async fn ecdsa_generate_new(
+	fn ecdsa_generate_new(
 		&self,
 		id: KeyTypeId,
 		seed: Option<&str>,
@@ -175,17 +251,17 @@ impl CryptoStore for LocalKeystore {
 		Ok(pair.public())
 	}
 
-	async fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8])
+	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8])
 		-> std::result::Result<(), ()>
 	{
 		self.0.write().insert_unknown(key_type, suri, public).map_err(|_| ())
 	}
 
-	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		public_keys.iter().all(|(p, t)| self.0.read().key_phrase_by_type(&p, *t).is_ok())
 	}
 
-	async fn sr25519_vrf_sign(
+	fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
 		public: &Sr25519Public,
@@ -203,10 +279,14 @@ impl CryptoStore for LocalKeystore {
 	}
 }
 
-impl SyncCryptoStore for LocalKeystore {}
-
 impl Into<CryptoStorePtr> for LocalKeystore {
     fn into(self) -> CryptoStorePtr {
+		Arc::new(self)
+    }
+}
+
+impl Into<Arc<dyn CryptoStore>> for LocalKeystore {
+    fn into(self) -> Arc<dyn CryptoStore> {
 		Arc::new(self)
     }
 }
