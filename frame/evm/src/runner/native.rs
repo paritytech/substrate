@@ -17,20 +17,19 @@
 
 //! Native EVM runner.
 
-use sp_std::{convert::Infallible, marker::PhantomData, collections::btree_set::BTreeSet};
+use sp_std::{convert::Infallible, marker::PhantomData, rc::Rc, collections::btree_set::BTreeSet};
 use sp_core::{H160, U256, H256};
-use sp_runtime::traits::UniqueSaturatedInto;
-use frame_support::{ensure, traits::{Get, Currency, ExistenceRequirement}, storage::{StorageMap, StorageDoubleMap}};
+use sp_runtime::{TransactionOutcome, traits::UniqueSaturatedInto};
+use frame_support::{traits::{Get, Currency, ExistenceRequirement}, storage::{StorageMap, StorageDoubleMap}};
 use sha3::{Keccak256, Digest};
 use evm::{
 	ExternalOpcode, Opcode, ExitError, ExitReason, Capture, Context, CreateScheme, Stack,
-	Transfer, ExitSucceed,
+	Transfer, ExitSucceed, Runtime,
 };
 use evm_runtime::{Config, Handler as HandlerT};
-use evm_gasometer::Gasometer;
+use evm_gasometer::{self as gasometer, Gasometer};
 use crate::{
-	Trait, Vicinity, Module, Event, Runner, Log, AccountCodes, AccountStorages, AddressMapping,
-	CreateInfo,
+	Trait, Vicinity, Module, Event, Log, AccountCodes, AccountStorages, AddressMapping,
 };
 
 fn l64(gas: usize) -> usize {
@@ -53,6 +52,7 @@ impl<'vicinity, 'config, T: Trait> Handler<'vicinity, 'config, T> {
 	pub fn new_with_precompile(
 		vicinity: &'vicinity Vicinity,
 		gas_limit: usize,
+		is_static: bool,
 		config: &'config Config,
 		precompile: fn(H160, &[u8], Option<usize>) ->
 			Option<Result<(ExitSucceed, Vec<u8>, usize), ExitError>>,
@@ -60,10 +60,54 @@ impl<'vicinity, 'config, T: Trait> Handler<'vicinity, 'config, T> {
 		Self {
 			vicinity,
 			config,
+			is_static,
 			gasometer: Gasometer::new(gas_limit, config),
 			precompile,
 			deleted: BTreeSet::default(),
 			_marker: PhantomData,
+		}
+	}
+
+	pub fn execute(
+		&mut self,
+		caller: H160,
+		address: H160,
+		value: U256,
+		code: Vec<u8>,
+		input: Vec<u8>,
+	) -> (ExitReason, Vec<u8>) {
+		let context = Context {
+			caller,
+			address,
+			apparent_value: value,
+		};
+
+		let mut runtime = Runtime::new(
+			Rc::new(code),
+			Rc::new(input),
+			context,
+			self.config,
+		);
+
+		let reason = match runtime.run(self) {
+			Capture::Exit(s) => s,
+			Capture::Trap(_) => unreachable!("Trap is Infallible"),
+		};
+
+		match reason {
+			ExitReason::Succeed(s) => {
+				(s.into(), runtime.machine().return_value())
+			},
+			ExitReason::Error(e) => {
+				(e.into(), Vec::new())
+			},
+			ExitReason::Revert(e) => {
+				(e.into(), runtime.machine().return_value())
+			},
+			ExitReason::Fatal(e) => {
+				self.gasometer.fail();
+				(e.into(), Vec::new())
+			},
 		}
 	}
 
@@ -140,7 +184,7 @@ impl<'vicinity, 'config, T: Trait> HandlerT for Handler<'vicinity, 'config, T> {
 		AccountStorages::get(address, index)
 	}
 
-	fn original_storage(&self, address: H160, index: H256) -> H256 {
+	fn original_storage(&self, _address: H160, _index: H256) -> H256 {
 		// We do not have the concept of original storage in the native runner, so we always return
 		// empty value. This only affects gas calculation in the current EVM specification.
 		H256::default()
@@ -193,7 +237,7 @@ impl<'vicinity, 'config, T: Trait> HandlerT for Handler<'vicinity, 'config, T> {
 		U256::from(T::ChainId::get())
 	}
 
-	fn exists(&self, address: H160) -> bool {
+	fn exists(&self, _address: H160) -> bool {
 		true
 	}
 
@@ -251,8 +295,17 @@ impl<'vicinity, 'config, T: Trait> HandlerT for Handler<'vicinity, 'config, T> {
 		init_code: Vec<u8>,
 		target_gas: Option<usize>,
 	) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
+		macro_rules! try_or_fail {
+			( $e:expr ) => {
+				match $e {
+					Ok(v) => v,
+					Err(e) => return Capture::Exit((e.into(), None, Vec::new())),
+				}
+			}
+		}
+
 		if self.is_static {
-			return Err(ExitError::OutOfGas)
+			return Capture::Exit((ExitError::OutOfGas.into(), None, Vec::new()))
 		}
 
 		let mut after_gas = self.gasometer.gas();
@@ -260,57 +313,92 @@ impl<'vicinity, 'config, T: Trait> HandlerT for Handler<'vicinity, 'config, T> {
 			after_gas = l64(after_gas);
 		}
 		let target_gas = target_gas.unwrap_or(after_gas);
+		try_or_fail!(self.gasometer.record_cost(target_gas));
 
-		let called = match scheme {
-			CreateScheme::Legacy { caller } =>
-				T::Runner::create(
-					caller,
-					init_code,
-					value,
-					target_gas as u32,
-					self.vicinity.gas_price,
-					None,
+		let address = self.create_address(scheme);
+
+		frame_support::storage::with_transaction(|| {
+			macro_rules! try_or_fail {
+				( $e:expr ) => {
+					match $e {
+						Ok(v) => v,
+						Err(e) => return TransactionOutcome::Rollback(
+							Capture::Exit((e.into(), None, Vec::new()))
+						),
+					}
+				}
+			}
+
+			let mut substate = Self::new_with_precompile(
+				self.vicinity,
+				target_gas,
+				self.is_static,
+				self.config,
+				self.precompile,
+			);
+
+			match substate.transfer(Transfer {
+				source: caller,
+				target: address,
+				value,
+			}) {
+				Ok(()) => (),
+				Err(e) => return TransactionOutcome::Rollback(
+					Capture::Exit((e.into(), None, Vec::new()))
 				),
-			CreateScheme::Create2 { caller, salt, code_hash: _ } => {
-				T::Runner::create2(
-					caller,
-					init_code,
-					salt,
-					value,
-					target_gas as u32,
-					self.vicinity.gas_price,
-					None
-				)
-			},
-			CreateScheme::Fixed(_) => return Capture::Exit(
-				(ExitError::OutOfGas.into(), None, Vec::new())
-			),
-		};
+			}
 
-		match called {
-			Ok(CreateInfo {
-				exit_reason,
-				value: address,
-				used_gas,
-				logs: _,
-			}) => {
-				match self.gasometer.record_cost(used_gas.low_u128().unique_saturated_into()) {
-					Ok(()) => (),
-					Err(e) => return Capture::Exit((e.into(), None, Vec::new())),
-				}
+			substate.inc_nonce(caller);
 
-				match exit_reason {
-					ExitReason::Succeed(e) => Capture::Exit((e.into(), Some(address), Vec::new())),
-					ExitReason::Revert(e) => Capture::Exit((e.into(), None, Vec::new())),
-					ExitReason::Error(e) => Capture::Exit((e.into(), None, Vec::new())),
-					ExitReason::Fatal(e) => Capture::Exit((e.into(), None, Vec::new())),
-				}
-			},
-			Err(e) => {
-				self.gasometer.fail();
-				Capture::Exit((ExitError::OutOfGas.into(), None, Vec::new()))
-			},
-		}
+			let (reason, out) = substate.execute(
+				caller,
+				address,
+				value,
+				init_code,
+				Vec::new(),
+			);
+
+			match reason {
+				ExitReason::Succeed(s) => {
+					match self.gasometer.record_deposit(out.len()) {
+						Ok(()) => {
+							try_or_fail!(
+								self.gasometer.record_stipend(substate.gasometer.gas())
+							);
+							try_or_fail!(
+								self.gasometer.record_refund(substate.gasometer.refunded_gas())
+							);
+							AccountCodes::insert(address, out);
+
+							TransactionOutcome::Commit(
+								Capture::Exit((s.into(), Some(address), Vec::new()))
+							)
+						},
+						Err(e) => {
+							TransactionOutcome::Rollback(
+								Capture::Exit((e.into(), None, Vec::new()))
+							)
+						},
+					}
+				},
+				ExitReason::Revert(r) => {
+					TransactionOutcome::Rollback(
+						Capture::Exit((r.into(), None, out))
+					)
+				},
+				ExitReason::Error(e) => {
+					TransactionOutcome::Rollback(
+						Capture::Exit((e.into(), None, Vec::new()))
+					)
+				},
+				ExitReason::Fatal(e) => {
+					self.gasometer.fail();
+					TransactionOutcome::Rollback(
+						Capture::Exit((e.into(), None, Vec::new()))
+					)
+				},
+			}
+		})
 	}
 
 	fn call(
@@ -322,7 +410,96 @@ impl<'vicinity, 'config, T: Trait> HandlerT for Handler<'vicinity, 'config, T> {
 		is_static: bool,
 		context: Context,
 	) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
-		unimplemented!()
+		macro_rules! try_or_fail {
+			( $e:expr ) => {
+				match $e {
+					Ok(v) => v,
+					Err(e) => return Capture::Exit((e.into(), Vec::new())),
+				}
+			}
+		}
+
+		if self.is_static && transfer.is_some() {
+			return Capture::Exit((ExitError::OutOfGas.into(), Vec::new()))
+		}
+
+		let mut after_gas = self.gasometer.gas();
+		if self.config.call_l64_after_gas {
+			after_gas = l64(after_gas);
+		}
+		let target_gas = target_gas.unwrap_or(after_gas);
+		try_or_fail!(self.gasometer.record_cost(target_gas));
+
+		let code = self.code(code_address);
+
+		frame_support::storage::with_transaction(|| {
+			macro_rules! try_or_fail {
+				( $e:expr ) => {
+					match $e {
+						Ok(v) => v,
+						Err(e) => return TransactionOutcome::Rollback(
+							Capture::Exit((e.into(), Vec::new()))
+						),
+					}
+				}
+			}
+
+			let mut substate = Self::new_with_precompile(
+				self.vicinity,
+				target_gas,
+				self.is_static || is_static,
+				self.config,
+				self.precompile,
+			);
+
+			if let Some(transfer) = transfer {
+				match substate.transfer(transfer) {
+					Ok(()) => (),
+					Err(e) => return TransactionOutcome::Rollback(
+						Capture::Exit((e.into(), Vec::new()))
+					),
+				}
+			}
+
+			let (reason, out) = substate.execute(
+				context.caller,
+				context.address,
+				context.apparent_value,
+				code,
+				input,
+			);
+
+			match reason {
+				ExitReason::Succeed(s) => {
+					try_or_fail!(
+						self.gasometer.record_stipend(substate.gasometer.gas())
+					);
+					try_or_fail!(
+						self.gasometer.record_refund(substate.gasometer.refunded_gas())
+					);
+
+					TransactionOutcome::Commit(
+						Capture::Exit((s.into(), out))
+					)
+				},
+				ExitReason::Revert(r) => {
+					TransactionOutcome::Rollback(
+						Capture::Exit((r.into(), out))
+					)
+				},
+				ExitReason::Error(e) => {
+					TransactionOutcome::Rollback(
+						Capture::Exit((e.into(), Vec::new()))
+					)
+				},
+				ExitReason::Fatal(e) => {
+					self.gasometer.fail();
+					TransactionOutcome::Rollback(
+						Capture::Exit((e.into(), Vec::new()))
+					)
+				},
+			}
+		})
 	}
 
 	fn pre_validate(
@@ -331,6 +508,12 @@ impl<'vicinity, 'config, T: Trait> HandlerT for Handler<'vicinity, 'config, T> {
 		opcode: Result<Opcode, ExternalOpcode>,
 		stack: &Stack
 	) -> Result<(), ExitError> {
-		unimplemented!()
+		let (gas_cost, memory_cost) = gasometer::opcode_cost(
+			context.address, opcode, stack, self.is_static, &self.config, self
+		)?;
+
+		self.gasometer.record_opcode(gas_cost, memory_cost)?;
+
+		Ok(())
 	}
 }
