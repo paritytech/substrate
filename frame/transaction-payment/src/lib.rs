@@ -553,7 +553,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 			post_info,
 			tip,
 		);
-		T::OnChargeTransaction::deposit_fee(&who, info, post_info, actual_fee, tip, imbalance)?;
+		T::OnChargeTransaction::correct_and_deposit_fee(&who, info, post_info, actual_fee, tip, imbalance)?;
 		Ok(())
 	}
 }

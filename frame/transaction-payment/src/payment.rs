@@ -29,15 +29,18 @@ pub trait OnChargeTransaction<T: Trait> {
 		tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, TransactionValidityError>;
 
-	/// After the transaction was executed and the correct fees where collected,
-	/// the resulting funds can be spend here.
-	fn deposit_fee(
+	/// After the transaction was executed the actual fee can be calculated.
+	/// This function should refund any overpaid fees and optionally deposit
+	/// the corrected amount.
+	///
+	/// Note: The `fee` already includes the `tip`.
+	fn correct_and_deposit_fee(
 		who: &T::AccountId,
 		dispatch_info: &DispatchInfoOf<T::Call>,
 		post_info: &PostDispatchInfoOf<T::Call>,
-		fee: Self::Balance,
+		corrected_fee: Self::Balance,
 		tip: Self::Balance,
-		liquidity_info: Self::LiquidityInfo,
+		already_withdrawn: Self::LiquidityInfo,
 	) -> Result<(), TransactionValidityError>;
 }
 
@@ -81,12 +84,7 @@ where
 			WithdrawReason::TransactionPayment | WithdrawReason::Tip
 		};
 
-		match C::withdraw(
-			who,
-			fee,
-			withdraw_reason,
-			ExistenceRequirement::KeepAlive,
-		) {
+		match C::withdraw(who, fee, withdraw_reason, ExistenceRequirement::KeepAlive) {
 			Ok(imbalance) => Ok(Some(imbalance)),
 			Err(_) => Err(InvalidTransaction::Payment.into()),
 		}
@@ -97,17 +95,17 @@ where
 	/// be refunded.
 	///
 	/// Note: The `fee` already includes the `tip`.
-	fn deposit_fee(
+	fn correct_and_deposit_fee(
 		who: &T::AccountId,
 		_dispatch_info: &DispatchInfoOf<T::Call>,
 		_post_info: &PostDispatchInfoOf<T::Call>,
-		fee: Self::Balance,
+		corrected_fee: Self::Balance,
 		tip: Self::Balance,
-		liquidity_info: Self::LiquidityInfo,
+		already_withdrawn: Self::LiquidityInfo,
 	) -> Result<(), TransactionValidityError> {
-		if let Some(paid) = liquidity_info {
+		if let Some(paid) = already_withdrawn {
 			// Calculate how much refund we should return
-			let refund_amount = paid.peek().saturating_sub(fee);
+			let refund_amount = paid.peek().saturating_sub(corrected_fee);
 			// refund to the the account that paid the fees. If this fails, the
 			// account might have dropped below the existential balance. In
 			// that case we don't refund anything.
