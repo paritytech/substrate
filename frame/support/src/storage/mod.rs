@@ -32,32 +32,74 @@ pub mod migration;
 
 #[cfg(not(build_type = "release"))]
 mod debug_helper {
-	use sp_std::cell::RefCell;
+	#[cfg(feature = "std")]
+	mod with_std {
+		use sp_std::cell::RefCell;
 
-	thread_local! {
-		static TRANSACTION_LEVEL: RefCell<u32> = RefCell::new(0);
-	}
+		thread_local! {
+			static TRANSACTION_LEVEL: RefCell<u32> = RefCell::new(0);
+		}
 
-	pub fn require_transaction() {
-		let level = TRANSACTION_LEVEL.with(|v| *v.borrow());
-		if level == 0 {
-			panic!("Require transaction not called within with_transaction");
+		pub fn require_transaction() {
+			let level = TRANSACTION_LEVEL.with(|v| *v.borrow());
+			if level == 0 {
+				panic!("Require transaction not called within with_transaction");
+			}
+		}
+
+		pub fn inc_transaction_level() {
+			TRANSACTION_LEVEL.with(|v| {
+				let mut val = v.borrow_mut();
+				*val += 1;
+				if *val > 10 {
+					crate::debug::warn!("Detected with_transaction with nest level {}. Nested usage of with_transaction is not recommended.", *val);
+				}
+			});
+		}
+
+		pub fn dec_transaction_level() {
+			TRANSACTION_LEVEL.with(|v| *v.borrow_mut() -= 1);
 		}
 	}
 
-	pub fn inc_transaction_level() {
-		TRANSACTION_LEVEL.with(|v| {
-			let mut val = v.borrow_mut();
+	#[cfg(feature = "std")]
+	pub use with_std::*;
+
+	#[cfg(not(feature = "std"))]
+	mod without_std {
+		use sp_std::cell::RefCell;
+
+		struct TransactionLevel(RefCell<u32>);
+
+		// NOTE: Safe only in wasm (guarded above) because there's only one thread.
+		unsafe impl Send for TransactionLevel {}
+		unsafe impl Sync for TransactionLevel {}
+
+		static TRANSACTION_LEVEL: TransactionLevel = TransactionLevel(RefCell::new(0));
+
+		pub fn require_transaction() {
+			let level = TRANSACTION_LEVEL.0.borrow();
+			if *level == 0 {
+				panic!("Require transaction not called within with_transaction");
+			}
+		}
+
+		pub fn inc_transaction_level() {
+			let mut val = TRANSACTION_LEVEL.0.borrow_mut();
 			*val += 1;
 			if *val > 10 {
 				crate::debug::warn!("Detected with_transaction with nest level {}. Nested usage of with_transaction is not recommended.", *val);
 			}
-		});
+		}
+
+		pub fn dec_transaction_level() {
+			let mut val = TRANSACTION_LEVEL.0.borrow_mut();
+			*val -= 1;
+		}
 	}
 
-	pub fn dec_transaction_level() {
-		TRANSACTION_LEVEL.with(|v| *v.borrow_mut() -= 1);
-	}
+	#[cfg(not(feature = "std"))]
+	pub use without_std::*;
 }
 
 pub fn require_transaction() {
