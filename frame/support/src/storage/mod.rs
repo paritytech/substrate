@@ -30,62 +30,24 @@ pub mod child;
 pub mod generator;
 pub mod migration;
 
-#[cfg(debug_assertions)]
+#[cfg(all(feature = "std", any(debug_assertions, feature = "assert-require-transaction")))]
 mod debug_helper {
-	#[cfg(feature = "std")]
-	mod with_std {
-		use sp_std::cell::RefCell;
+	use std::cell::RefCell;
 
-		thread_local! {
-			static TRANSACTION_LEVEL: RefCell<u32> = RefCell::new(0);
-		}
+	thread_local! {
+		static TRANSACTION_LEVEL: RefCell<u32> = RefCell::new(0);
+	}
 
-		pub fn require_transaction() {
-			let level = TRANSACTION_LEVEL.with(|v| *v.borrow());
-			if level == 0 {
-				panic!("Require transaction not called within with_transaction");
-			}
-		}
-
-		pub fn inc_transaction_level() {
-			TRANSACTION_LEVEL.with(|v| {
-				let mut val = v.borrow_mut();
-				*val += 1;
-				if *val > 10 {
-					crate::debug::warn!("Detected with_transaction with nest level {}. Nested usage of with_transaction is not recommended.", *val);
-				}
-			});
-		}
-
-		pub fn dec_transaction_level() {
-			TRANSACTION_LEVEL.with(|v| *v.borrow_mut() -= 1);
+	pub fn require_transaction() {
+		let level = TRANSACTION_LEVEL.with(|v| *v.borrow());
+		if level == 0 {
+			panic!("Require transaction not called within with_transaction");
 		}
 	}
 
-	#[cfg(feature = "std")]
-	pub use with_std::*;
-
-	#[cfg(not(feature = "std"))]
-	mod without_std {
-		use sp_std::cell::RefCell;
-
-		struct TransactionLevel(RefCell<u32>);
-
-		// NOTE: Safe only in wasm (guarded above) because there's only one thread.
-		unsafe impl Send for TransactionLevel {}
-		unsafe impl Sync for TransactionLevel {}
-
-		static TRANSACTION_LEVEL: TransactionLevel = TransactionLevel(RefCell::new(0));
-
-		pub fn require_transaction() {
-			let level = TRANSACTION_LEVEL.0.borrow();
-			if *level == 0 {
-				panic!("Require transaction not called within with_transaction");
-			}
-		}
-
-		pub fn inc_transaction_level() {
-			let mut val = TRANSACTION_LEVEL.0.borrow_mut();
+	pub fn inc_transaction_level() {
+		TRANSACTION_LEVEL.with(|v| {
+			let mut val = v.borrow_mut();
 			*val += 1;
 			if *val > 10 {
 				crate::debug::warn!(
@@ -93,20 +55,21 @@ mod debug_helper {
 					*val
 				);
 			}
-		}
-
-		pub fn dec_transaction_level() {
-			let mut val = TRANSACTION_LEVEL.0.borrow_mut();
-			*val -= 1;
-		}
+		});
 	}
 
-	#[cfg(not(feature = "std"))]
-	pub use without_std::*;
+	pub fn dec_transaction_level() {
+		TRANSACTION_LEVEL.with(|v| *v.borrow_mut() -= 1);
+	}
 }
 
+/// Assert this method is called within a storage transaction.
+/// This will **panic** if is not called within a storage transaction.
+///
+/// This assertion is enabled for native execution and DEBUG build only.
+/// Use feature `assert-require-transaction` to enable it for RELEASE builds.
 pub fn require_transaction() {
-	#[cfg(debug_assertions)]
+	#[cfg(all(feature = "std", any(debug_assertions, feature = "assert-require-transaction")))]
 	debug_helper::require_transaction();
 }
 
@@ -124,12 +87,12 @@ pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
 
 	start_transaction();
 
-	#[cfg(debug_assertions)]
+	#[cfg(all(feature = "std", any(debug_assertions, feature = "assert-require-transaction")))]
 	debug_helper::inc_transaction_level();
 
 	let res = f();
 
-	#[cfg(debug_assertions)]
+	#[cfg(all(feature = "std", any(debug_assertions, feature = "assert-require-transaction")))]
 	debug_helper::dec_transaction_level();
 
 	match res {

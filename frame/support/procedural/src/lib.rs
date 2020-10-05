@@ -326,6 +326,33 @@ pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
+/// Assert the annotated function is executed within a storage transaction.
+///
+/// The assertion is enabled for debug build native execution only.
+/// Use feature `assert-require-transaction` to enable it for release build native execution.
+///
+/// # Example
+///
+/// ```nocompile
+///
+/// #[require_transactional]
+/// fn update_all(acc1: T::AccountId, acc2: T::AccountId, v: u32) -> DispatchResult {
+/// 	Value::insert(acc, v);
+/// 	Value::insert(acc2, v);
+/// }
+///
+/// #[transactional]
+/// fn safe_update(acc1: T::AccountId, acc2: T::AccountId, v: u32) -> DispatchResult {
+/// 	// This is safe
+/// 	Self::update_all(acc1, acc2, v)?
+/// }
+///
+/// fn unsafe_update(acc1: T::AccountId, acc2: T::AccountId, v: u32) -> DispatchResult {
+/// 	// this may panic if unsafe_update is not called within a storage transaction
+/// 	// in DEBUG native execution
+/// 	Self::update_all(acc1, acc2, v)?
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::require_transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())

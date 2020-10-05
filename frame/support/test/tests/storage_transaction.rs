@@ -17,8 +17,9 @@
 
 use codec::{Encode, Decode, EncodeLike};
 use frame_support::{
-	assert_ok, assert_noop, dispatch::{DispatchError, DispatchResult}, transactional, require_transactional,
+	assert_ok, assert_noop, transactional, require_transactional,
 	StorageMap, StorageValue,
+	dispatch::{DispatchError, DispatchResult},
 	storage::{with_transaction, TransactionOutcome::*},
 };
 use sp_io::TestExternalities;
