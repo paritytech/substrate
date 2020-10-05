@@ -21,9 +21,8 @@ use crate::historied::HistoriedValue;
 use codec::{Encode, Decode, Input as CodecInput};
 use super::{LinearStorage, LinearStorageMem};
 use sp_std::mem::replace;
-use crate::{Init, InitFrom};
+use crate::{Context, InitFrom, DecodeWithContext};
 use sp_std::vec::Vec;
-use crate::backend::nodes::DecodeWithInit;
 
 /// Size of preallocated history per element.
 /// Currently at two for committed and prospective only.
@@ -60,21 +59,21 @@ impl<V: Decode, S: Decode> Decode for MemoryOnly<V, S> {
 	}
 }
 
-impl<V, S> DecodeWithInit for MemoryOnly<V, S>
+impl<V, S> DecodeWithContext for MemoryOnly<V, S>
 	where
-		V: DecodeWithInit,
+		V: DecodeWithContext,
 		S: Decode,
 {
-	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
+	fn decode_with_context(mut input: &[u8], init: &Self::Context) -> Option<Self> {
 		let input = &mut input;
-		// this align on scale codec inner implementation (DecodeWithInit trait
+		// this align on scale codec inner implementation (DecodeWithContext trait
 		// could be a scale trait).
 		<codec::Compact<u32>>::decode(input).ok().and_then(|len| {
 			// TODO allocate with capacity
 			let len = len.0 as usize;
 			let mut result = smallvec::SmallVec::new();
 			for _ in 0..len {
-				if let Some(value) = HistoriedValue::decode_with_init(*input, init) {
+				if let Some(value) = HistoriedValue::decode_with_context(*input, init) {
 					result.push(value);
 				} else {
 					return None;
@@ -91,7 +90,7 @@ impl<V, S> Default for MemoryOnly<V, S> {
 	}
 }
 
-impl<V: Clone + Init, S: Clone> LinearStorageMem<V, S> for MemoryOnly<V, S> {
+impl<V: Clone + Context, S: Clone> LinearStorageMem<V, S> for MemoryOnly<V, S> {
 	fn get_ref(&self, index: Self::Index) -> HistoriedValue<&V, S> {
 		let HistoriedValue { value, state } = &self.0[index];
 		HistoriedValue { value: &value, state: state.clone() }
@@ -102,16 +101,16 @@ impl<V: Clone + Init, S: Clone> LinearStorageMem<V, S> for MemoryOnly<V, S> {
 	}
 }
 
-impl<V: Init, S> Init for MemoryOnly<V, S> {
-	type Init = V::Init;
+impl<V: Context, S> Context for MemoryOnly<V, S> {
+	type Context = V::Context;
 }
-impl<V: Init, S> InitFrom for MemoryOnly<V, S> {
-	fn init_from(_init: Self::Init) -> Self {
+impl<V: Context, S> InitFrom for MemoryOnly<V, S> {
+	fn init_from(_init: Self::Context) -> Self {
 		Self::default()
 	}
 }
 
-impl<V: Clone + Init, S: Clone> LinearStorage<V, S> for MemoryOnly<V, S> {
+impl<V: Clone + Context, S: Clone> LinearStorage<V, S> for MemoryOnly<V, S> {
 	// Index position in array.
 	type Index = usize;
 	fn last(&self) -> Option<Self::Index> {

@@ -25,8 +25,7 @@ use hash_db::{PlainDB, PlainDBRef};
 use crate::Latest;
 use codec::{Encode, Decode};
 use sp_std::ops::Range;
-use crate::{Init, InitFrom};
-use crate::backend::nodes::DecodeWithInit;
+use crate::{Context, DecodeWithContext};
 
 pub mod linear;
 pub mod tree;
@@ -65,7 +64,7 @@ pub trait InMemoryValueRange<S> {
 }
 
 /// Trait for historied value.
-pub trait Value<V>: ValueRef<V> + Init {
+pub trait Value<V>: ValueRef<V> + Context {
 	/// State to use for changing value.
 	/// We use a different state than
 	/// for querying as it can use different
@@ -83,8 +82,8 @@ pub trait Value<V>: ValueRef<V> + Init {
 	/// and all pending state are invalidated.
 	type Migrate;
 
-	/// Initiate a new value.
-	fn new(value: V, at: &Self::SE, init: Self::Init) -> Self;
+	/// Contextiate a new value.
+	fn new(value: V, at: &Self::SE, init: Self::Context) -> Self;
 
 	/// Insert or update a value.
 	fn set(&mut self, value: V, at: &Self::SE) -> UpdateResult<()>;
@@ -141,20 +140,20 @@ pub struct HistoriedValue<V, S> {
 	pub state: S,
 }
 
-impl<V, S> Init for HistoriedValue<V, S>
+impl<V, S> Context for HistoriedValue<V, S>
 	where
-		V: Init,
+		V: Context,
 {
-	type Init = V::Init;
+	type Context = V::Context;
 }
 
-impl<V, S> DecodeWithInit for HistoriedValue<V, S>
+impl<V, S> DecodeWithContext for HistoriedValue<V, S>
 	where
-		V: DecodeWithInit,
+		V: DecodeWithContext,
 		S: Decode,
 {
-	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
-		V::decode_with_init(input, init)
+	fn decode_with_context(mut input: &[u8], init: &Self::Context) -> Option<Self> {
+		V::decode_with_context(input, init)
 			.and_then(|value| S::decode(&mut input).ok()
 				.map(|state| HistoriedValue {
 					value,
@@ -199,15 +198,15 @@ impl<V, S> From<(V, S)> for HistoriedValue<V, S> {
 }
 
 /// Implementation for plain db.
-pub struct BTreeMap<K, V, H: Init>(pub(crate) sp_std::collections::btree_map::BTreeMap<K, H>, H::Init, PhantomData<V>);
+pub struct BTreeMap<K, V, H: Context>(pub(crate) sp_std::collections::btree_map::BTreeMap<K, H>, H::Context, PhantomData<V>);
 
-impl<K: Ord, V, H: Init> BTreeMap<K, V, H> {
-	pub fn new(init: H::Init) -> Self {
+impl<K: Ord, V, H: Context> BTreeMap<K, V, H> {
+	pub fn new(init: H::Context) -> Self {
 		BTreeMap(sp_std::collections::btree_map::BTreeMap::new(), init, PhantomData)
 	}
 }
 
-impl<K: Ord, V: Clone, H: ValueRef<V> + Init> StateDBRef<K, V> for BTreeMap<K, V, H> {
+impl<K: Ord, V: Clone, H: ValueRef<V> + Context> StateDBRef<K, V> for BTreeMap<K, V, H> {
 	type S = H::S;
 
 	fn get(&self, key: &K, at: &Self::S) -> Option<V> {
@@ -223,7 +222,7 @@ impl<K: Ord, V: Clone, H: ValueRef<V> + Init> StateDBRef<K, V> for BTreeMap<K, V
 }
 
 // note that the constraint on state db ref for the associated type is bad (forces V as clonable).
-impl<K: Ord, V, H: InMemoryValueRef<V> + Init> InMemoryStateDBRef<K, V> for BTreeMap<K, V, H> {
+impl<K: Ord, V, H: InMemoryValueRef<V> + Context> InMemoryStateDBRef<K, V> for BTreeMap<K, V, H> {
 	type S = H::S;
 
 	fn get_ref(&self, key: &K, at: &Self::S) -> Option<&V> {
@@ -309,7 +308,7 @@ impl<K, V: Clone, H: ValueRef<V>, DB: PlainDBRef<K, H>, S> StateDBRef<K, V> for 
 impl<
 	K: Ord + Clone,
 	V: Clone + Eq,
-	H: Value<V, Init = ()>,
+	H: Value<V, Context = ()>,
 	DB: PlainDBRef<K, H> + PlainDB<K, H>,
 > StateDB<K, V> for PlainDBState<K, DB, H, H::Index>
 	where

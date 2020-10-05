@@ -28,7 +28,7 @@ use parking_lot::{Mutex, RwLock};
 use historied_db::{Latest, Management, ManagementRef, UpdateResult,
 	management::tree::{TreeManagementStorage, ForkPlan},
 	historied::tree::Tree,
-	backend::nodes::{NodesMeta, NodeStorage, NodeStorageMut, Node, InitHead},
+	backend::nodes::{NodesMeta, NodeStorage, NodeStorageMut, Node, ContextHead},
 };
 use codec::{Decode, Encode, Codec};
 use log::error;
@@ -52,8 +52,8 @@ pub struct BlockChainLocalStorage<H: Ord, S: TreeManagementStorage> {
 #[derive(Clone)]
 pub struct BlockChainLocalAt {
 	db: Arc<dyn Database<DbHash>>,
-	blocks_nodes: BlocksNodes,
-	branches_nodes: BranchesNodes,
+	block_nodes: BlockNodes,
+	branch_nodes: BranchNodes,
 	at_read: ForkPlan<u32, u32>,
 	at_write: Option<Latest<(u32, u32)>>,
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
@@ -199,6 +199,8 @@ impl<H, S> sp_core::offchain::BlockChainOffchainStorage for BlockChainLocalStora
 			let at_write = self.historied_management.write().get_db_state_mut(&id);
 			Some(BlockChainLocalAt {
 				db: self.db.clone(),
+				branch_nodes: BranchNodes::new(self.db.clone()),
+				block_nodes: BlockNodes::new(self.db.clone()),
 				at_read,
 				at_write,
 				locks: self.locks.clone(),
@@ -258,7 +260,17 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		self.db.get(columns::OFFCHAIN, &key)
 			.and_then(|v| {
-				let v: Option<HValue> = Decode::decode(&mut &v[..]).ok();
+				let init_nodes = ContextHead {
+					key: key.clone(),
+					backend: self.block_nodes.clone(),
+					node_init_from: (),
+				};
+				let init = ContextHead {
+					key,
+					backend: self.branch_nodes.clone(),
+					node_init_from: init_nodes.clone(),
+				};
+				let v: Option<HValue> = historied_db::DecodeWithContext::decode_with_context(&mut &v[..], &(init, init_nodes));
 				v
 			}.and_then(|h| {
 				use historied_db::historied::ValueRef;
@@ -359,12 +371,17 @@ impl BlockChainLocalAt {
 			let _key_guard = key_lock.lock();
 			let histo = self.db.get(columns::OFFCHAIN, &key)
 				.and_then(|v| {
-					let init = InitHead {
-						key,
-						backend: self.branches_nodes.clone(),
-						node_init_from: self.blocks_nodes.clone(),
+					let init_nodes = ContextHead {
+						key: key.clone(),
+						backend: self.block_nodes.clone(),
+						node_init_from: (),
 					};
-					let v: Option<HValue> = Decode::decode_with_init_2(&mut &v[..], init).ok();
+					let init = ContextHead {
+						key: key.clone(),
+						backend: self.branch_nodes.clone(),
+						node_init_from: init_nodes.clone(),
+					};
+					let v: Option<HValue> = historied_db::DecodeWithContext::decode_with_context(&mut &v[..], &(init, init_nodes));
 					v
 				});
 			let val = histo.as_ref().and_then(|h| {
@@ -396,10 +413,21 @@ impl BlockChainLocalAt {
 					}
 				} else {
 					if is_insert {
+						let init_nodes = ContextHead {
+							key: key.clone(),
+							backend: self.block_nodes.clone(),
+							node_init_from: (),
+						};
+						let init = ContextHead {
+							key: key.clone(),
+							backend: self.branch_nodes.clone(),
+							node_init_from: init_nodes.clone(),
+						};
+	
 						(HValue::new(
 								new_value,
 								self.at_write.as_ref().expect("Synch at start"),
-								(self.branches_nodes.clone(), self.blocks_nodes.clone()),
+								(init, init_nodes),
 							).encode(), UpdateResult::Changed(()))
 					} else {
 						// nothing to delete
@@ -443,33 +471,33 @@ impl BlockChainLocalAt {
 
 /// Multiple node splitting strategy based on content
 /// size.
-struct MetaBranches;
+pub struct MetaBranches;
 
 /// Multiple node splitting strategy based on content
 /// size.
-struct MetaBlocks;
+pub struct MetaBlocks;
 
 impl NodesMeta for MetaBranches {
 	const APPLY_SIZE_LIMIT: bool = true;
 	const MAX_NODE_LEN: usize = 2048; // This should be benched.
 	const MAX_NODE_ITEMS: usize = 8;
-	const STORAGE_PREFIX: &'static [u8] = b"tree_mgmt/branches_nodes";
+	const STORAGE_PREFIX: &'static [u8] = b"tree_mgmt/branch_nodes";
 }
 
 impl NodesMeta for MetaBlocks {
 	const APPLY_SIZE_LIMIT: bool = true;
 	const MAX_NODE_LEN: usize = 512; // This should be benched to get a good value.
 	const MAX_NODE_ITEMS: usize = 4;
-	const STORAGE_PREFIX: &'static [u8] = b"tree_mgmt/blocks_nodes";
+	const STORAGE_PREFIX: &'static [u8] = b"tree_mgmt/block_nodes";
 }
 
 /// Node backend for blocks values.
 #[derive(Clone)]
-pub struct BlocksNodes(DatabasePending);
+pub struct BlockNodes(DatabasePending);
 
 /// Node backend for branch values.
 #[derive(Clone)]
-pub struct BranchesNodes(DatabasePending);
+pub struct BranchNodes(DatabasePending);
 
 #[derive(Clone)]
 struct DatabasePending {
@@ -511,9 +539,9 @@ impl DatabasePending {
 	}
 }
 
-impl BlocksNodes {
+impl BlockNodes {
 	pub fn new(database: Arc<dyn Database<DbHash>>) -> Self {
-		BlocksNodes(DatabasePending {
+		BlockNodes(DatabasePending {
 			pending: Arc::new(RwLock::new(HashMap::new())),
 			database,
 		})
@@ -523,9 +551,9 @@ impl BlocksNodes {
 	}
 }
 
-impl BranchesNodes {
+impl BranchNodes {
 	pub fn new(database: Arc<dyn Database<DbHash>>) -> Self {
-		BranchesNodes(DatabasePending {
+		BranchNodes(DatabasePending {
 			pending: Arc::new(RwLock::new(HashMap::new())),
 			database,
 		})
@@ -540,15 +568,15 @@ impl BranchesNodes {
 	}
 }
 
-impl NodeStorage<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for BlocksNodes {
+impl NodeStorage<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for BlockNodes {
 	fn get_node(&self, reference_key: &[u8], relative_index: u32) -> Option<LinearNode> {
 		let key = Self::vec_address(reference_key, relative_index);
-		self.0.read(crate::columns::AUX, &key).and_then(|mut value| {
+		self.0.read(crate::columns::AUX, &key).and_then(|value| {
 			// use encoded len as size (this is bigger than the call to estimate size
 			// but not an issue, otherwhise could adjust).
 			let reference_len = value.len();
 
-			let mut input = &mut value.as_slice();
+			let input = &mut value.as_slice();
 			LinearBackendInner::decode(input).ok().map(|data| Node::new(
 				data,
 				reference_len,
@@ -557,7 +585,7 @@ impl NodeStorage<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for Block
 	}
 }
 
-impl NodeStorageMut<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for BlocksNodes {
+impl NodeStorageMut<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for BlockNodes {
 	fn set_node(&mut self, reference_key: &[u8], relative_index: u32, node: &LinearNode) {
 		let key = Self::vec_address(reference_key, relative_index);
 		let encoded = node.inner().encode();
@@ -569,20 +597,20 @@ impl NodeStorageMut<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for Bl
 	}
 }
 
-impl NodeStorage<BranchLinear, u32, TreeBackendInner, MetaBranches> for BranchesNodes {
+impl NodeStorage<BranchLinear, u32, TreeBackendInner, MetaBranches> for BranchNodes {
 	fn get_node(&self, reference_key: &[u8], relative_index: u32) -> Option<TreeNode> {
-		use historied_db::backend::nodes::DecodeWithInit;
+		use historied_db::DecodeWithContext;
 		let key = Self::vec_address(reference_key, relative_index);
-		self.0.read(crate::columns::AUX, &key).and_then(|mut value| {
+		self.0.read(crate::columns::AUX, &key).and_then(|value| {
 			// use encoded len as size (this is bigger than the call to estimate size
 			// but not an issue, otherwhise could adjust).
 			let reference_len = value.len();
 
-			let block_nodes = BlocksNodes(self.0.clone());
-			let mut input = &mut value.as_slice();
-			TreeBackendInner::decode_with_init(
+			let block_nodes = BlockNodes(self.0.clone());
+			let input = &mut value.as_slice();
+			TreeBackendInner::decode_with_context(
 				input,
-				&InitHead {
+				&ContextHead {
 					key: reference_key.to_vec(),
 					backend: block_nodes,
 					node_init_from: (),
@@ -595,7 +623,7 @@ impl NodeStorage<BranchLinear, u32, TreeBackendInner, MetaBranches> for Branches
 	}
 }
 
-impl NodeStorageMut<BranchLinear, u32, TreeBackendInner, MetaBranches> for BranchesNodes {
+impl NodeStorageMut<BranchLinear, u32, TreeBackendInner, MetaBranches> for BranchNodes {
 	fn set_node(&mut self, reference_key: &[u8], relative_index: u32, node: &TreeNode) {
 		let key = Self::vec_address(reference_key, relative_index);
 		let encoded = node.inner().encode();
@@ -617,7 +645,7 @@ type LinearBackend = historied_db::backend::nodes::Head<
 	u32,
 	LinearBackendInner,
 	MetaBlocks,
-	BlocksNodes,
+	BlockNodes,
 	(),
 >;
 
@@ -640,8 +668,8 @@ type TreeBackend = historied_db::backend::nodes::Head<
 	u32,
 	TreeBackendInner,
 	MetaBranches,
-	BranchesNodes,
-	BlocksNodes,
+	BranchNodes,
+	ContextHead<BlockNodes, ()>
 >;
 
 type TreeNode = historied_db::backend::nodes::Node<

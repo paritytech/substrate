@@ -24,7 +24,7 @@ use sp_std::vec::Vec;
 use super::{LinearStorage};
 use crate::historied::HistoriedValue;
 use derivative::Derivative;
-use crate::{Init, InitFrom};
+use crate::{Context, InitFrom, DecodeWithContext};
 use crate::backend::encoded_array::EncodedArrayValue;
 use codec::{Encode, Decode};
 
@@ -123,6 +123,8 @@ impl<V, S, D, M> Node<V, S, D, M> {
 	}
 }
 
+#[derive(Derivative)]
+#[derivative(Clone(bound="D: Clone, B: Clone, NI: Clone"))]
 /// Head is the entry node, it contains fetched nodes and additional
 /// information about this backend state.
 pub struct Head<V, S, D, M, B, NI> {
@@ -180,23 +182,18 @@ impl<V, S, D, M, B, NI> Encode for Head<V, S, D, M, B, NI>
 	}
 }
 
-
-pub trait DecodeWithInit: Init {
-	fn decode_with_init(input: &[u8], init: &Self::Init) -> Option<Self>;
-}
-
-impl<V, S, D, M, B, NI> DecodeWithInit for Head<V, S, D, M, B, NI>
+impl<V, S, D, M, B, NI> DecodeWithContext for Head<V, S, D, M, B, NI>
 	where
-		D: DecodeWithInit<Init = NI>,
+		D: DecodeWithContext<Context = NI>,
 		B: Clone,
 		NI: Clone,
 {
-	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
+	fn decode_with_context(mut input: &[u8], init: &Self::Context) -> Option<Self> {
 		// This contains len from additionaly struct but it is considered
 		// negligable.
 		let reference_len = input.len();
 		let input = &mut input;
-		D::decode_with_init(input, &init.node_init_from).and_then(|data| {
+		D::decode_with_context(input, &init.node_init_from).and_then(|data| {
 			let head_decoded = HeadCodec::decode(input).ok();
 			head_decoded.map(|head_decoded| {
 				Head {
@@ -218,18 +215,18 @@ impl<V, S, D, M, B, NI> DecodeWithInit for Head<V, S, D, M, B, NI>
 /*
 impl<V, S, D, M, B, NI> Head<V, S, D, M, B, NI>
 	where
-		D: DecodeWithInit<Init = NI>,
+		D: DecodeWithContext<Context = NI>,
 		B: Clone,
 		NI: Clone,
 {
 	/// Decode with init for this head but also for its inner nodes.
 	/// TODO see if we should no just use tait impl
-	pub fn decode_with_init_2(mut input: &[u8], init: &InitHead<B, NI>) -> Option<Self> {
+	pub fn decode_with_context_2(mut input: &[u8], init: &ContextHead<B, NI>) -> Option<Self> {
 		// This contains len from additionaly struct but it is considered
 		// negligable.
 		let reference_len = input.len();
 		let input = &mut input;
-		D::decode_with_init(input, &init.node_init_from).and_then(|data| {
+		D::decode_with_context(input, &init.node_init_from).and_then(|data| {
 			let head_decoded = HeadCodec::decode(input).ok();
 			head_decoded.map(|head_decoded| {
 				Head {
@@ -276,8 +273,9 @@ impl<V, S, D: Clone, M, B, NI> Head<V, S, D, M, B, NI>
 
 /// Information needed to initialize a new `Head`.
 #[derive(Clone)]
-pub struct InitHead<B, NI> {
+pub struct ContextHead<B, NI> {
 	/// The key of the historical value stored in nodes.
+	/// TODO use Arc<Vec<u8> since this is cloned around a lot
 	pub key: Vec<u8>,
 	/// The nodes backend.
 	pub backend: B,
@@ -285,22 +283,22 @@ pub struct InitHead<B, NI> {
 	pub node_init_from: NI,
 }
 
-impl<V, S, D, M, B, NI> Init for Head<V, S, D, M, B, NI>
+impl<V, S, D, M, B, NI> Context for Head<V, S, D, M, B, NI>
 	where
-		D: Init<Init = NI>,
+		D: Context<Context = NI>,
 		B: Clone,
 		NI: Clone,
 {
-	type Init = InitHead<B, NI>; // TODO key to clone and backend refcell.
+	type Context = ContextHead<B, NI>; // TODO key to clone and backend refcell.
 }
 	
 impl<V, S, D, M, B, NI> InitFrom for Head<V, S, D, M, B, NI>
 	where
-		D: InitFrom<Init = NI>,
+		D: InitFrom<Context = NI>,
 		B: Clone,
 		NI: Clone,
 {
-	fn init_from(init: Self::Init) -> Self {
+	fn init_from(init: Self::Context) -> Self {
 		Head {
 			inner: Node {
 				data: D::init_from(init.node_init_from.clone()),
@@ -323,7 +321,7 @@ impl<V, S, D, M, B, NI> InitFrom for Head<V, S, D, M, B, NI>
 
 impl<V, S, D, M, B, NI> Head<V, S, D, M, B, NI>
 	where
-		D: InitFrom<Init = NI> + LinearStorage<V, S>,
+		D: LinearStorage<V, S>,
 		B: NodeStorage<V, S, D, M>,
 		M: NodesMeta,
 		S: EstimateSize,
@@ -376,7 +374,7 @@ impl<V, S, D, M, B, NI> Head<V, S, D, M, B, NI>
 /// operation to rewrite correctly the sizes.
 impl<V, S, D, M, B, NI> LinearStorage<V, S> for Head<V, S, D, M, B, NI>
 	where
-		D: InitFrom<Init = NI> + LinearStorage<V, S>,
+		D: Context<Context = NI> + LinearStorage<V, S>,
 		B: NodeStorage<V, S, D, M>,
 		M: NodesMeta,
 		S: EstimateSize,
@@ -822,10 +820,10 @@ pub(crate) mod test {
 
 	fn nodes_push_and_query_inner<D, M>()
 		where
-			D: InitFrom<Init = ()> + LinearStorage<Vec<u8>, u32> + Clone,
+			D: InitFrom<Context = ()> + LinearStorage<Vec<u8>, u32> + Clone,
 			M: NodesMeta + Clone,
 	{
-		let init_head = InitHead {
+		let init_head = ContextHead {
 			backend: BTreeMap::<Vec<u8>, Node<Vec<u8>, u32, D, M>>::new(),
 			key: b"any".to_vec(),
 			node_init_from: (),
@@ -854,11 +852,11 @@ pub(crate) mod test {
 	}
 	fn test_linear_storage_inner<D, M>()
 		where
-			D: InitFrom<Init = ()> + LinearStorage<Vec<u8>, u32> + Clone,
+			D: InitFrom<Context = ()> + LinearStorage<Vec<u8>, u32> + Clone,
 			M: NodesMeta + Clone,
 	{
 		use crate::backend::test::{Value, State};
-		let init_head = InitHead {
+		let init_head = ContextHead {
 			backend: BTreeMap::<Vec<u8>, Node<Vec<u8>, u32, D, M>>::new(),
 			key: b"any".to_vec(),
 			node_init_from: (),

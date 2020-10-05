@@ -48,15 +48,17 @@ pub mod simple_db;
 /// Management for state of historied data.
 pub mod management;
 
-/// TODO rename as Aux or Ext.
-pub trait Init: Sized {
-	type Init: Clone;
+/// Context associated with item.
+/// Main use case here is a backend to fetch
+/// additional information.
+pub trait Context: Sized {
+	type Context: Clone;
 }
 
 macro_rules! empty_init {
 	($type: ty) => {
-		impl Init for $type {
-			type Init = ();
+		impl Context for $type {
+			type Context = ();
 		}
 	}
 }
@@ -65,26 +67,44 @@ empty_init!(u16);
 empty_init!(u32);
 empty_init!(u64);
 empty_init!(u128);
-impl<V: Init> Init for Option<V> {
-	type Init = V::Init;
+impl<V: Context> Context for Option<V> {
+	type Context = V::Context;
 }
-impl<V: Init> Init for Vec<V> {
-	type Init = V::Init;
-}
-
-pub trait InitFrom: Init {
-	fn init_from(init: Self::Init) -> Self;
+impl<V: Context> Context for Vec<V> {
+	type Context = V::Context;
 }
 
-impl<V: Init> InitFrom for Option<V> {
-	fn init_from(_init: Self::Init) -> Self {
+pub trait InitFrom: Context {
+	fn init_from(init: Self::Context) -> Self;
+}
+
+pub trait DecodeWithContext: Context {
+	fn decode_with_context(input: &[u8], init: &Self::Context) -> Option<Self>;
+}
+
+impl<V: Context> InitFrom for Option<V> {
+	fn init_from(_init: Self::Context) -> Self {
 		None
 	}
 }
 
-impl<V: Init> InitFrom for Vec<V> {
-	fn init_from(_init: Self::Init) -> Self {
+impl<V: Context> InitFrom for Vec<V> {
+	fn init_from(_init: Self::Context) -> Self {
 		Vec::new()
+	}
+}
+
+impl<V: codec::Decode + Context> DecodeWithContext for Option<V> {
+	fn decode_with_context(mut input: &[u8], _init: &Self::Context) -> Option<Self> {
+		use codec::Decode;
+		Self::decode(&mut input).ok()
+	}
+}
+
+impl<V: codec::Decode + Context> DecodeWithContext for Vec<V> {
+	fn decode_with_context(mut input: &[u8], _init: &Self::Context) -> Option<Self> {
+		use codec::Decode;
+		Self::decode(&mut input).ok()
 	}
 }
 

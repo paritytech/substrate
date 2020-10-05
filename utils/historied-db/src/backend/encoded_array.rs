@@ -32,7 +32,7 @@ use crate::historied::HistoriedValue;
 use super::{LinearStorage, LinearStorageSlice, LinearStorageRange};
 use codec::{Encode, Decode, Input as CodecInput};
 use derivative::Derivative;
-use crate::{Init, InitFrom};
+use crate::{Context, InitFrom};
 
 #[derive(Derivative, Debug)]
 #[cfg_attr(test, derivative(PartialEq(bound="")))]
@@ -203,7 +203,7 @@ const SIZE_BYTE_LEN: usize = 4;
 // vec like container. Those method could be move to a trait
 // implementation.
 // Those function requires checked index.
-impl<'a, V: Init, F: EncodedArrayConfig> EncodedArray<'a, V, F>
+impl<'a, V: Context, F: EncodedArrayConfig> EncodedArray<'a, V, F>
 	where V: EncodedArrayValue {
 	pub fn into_owned(self) -> EncodedArray<'static, V, F> {
     EncodedArray(EncodedArrayBuff::Cow(Cow::from(self.0.into_owned())), PhantomData)
@@ -341,7 +341,7 @@ impl<'a, V, F> Into<EncodedArray<'a, V, F>> for &'a mut Vec<u8> {
 
 
 // Utility function for basis implementation.
-impl<'a, V: Init, F: EncodedArrayConfig> EncodedArray<'a, V, F>
+impl<'a, V: Context, F: EncodedArrayConfig> EncodedArray<'a, V, F>
 	where V: EncodedArrayValue {
 	// Index at end, also contains the encoded size
 	fn index_start(&self) -> usize {
@@ -400,18 +400,18 @@ impl<'a, V: Init, F: EncodedArrayConfig> EncodedArray<'a, V, F>
 
 }
 
-impl<'a, F: EncodedArrayConfig, V: Init> Init for EncodedArray<'a, V, F> {
-	type Init = V::Init;
+impl<'a, F: EncodedArrayConfig, V: Context> Context for EncodedArray<'a, V, F> {
+	type Context = V::Context;
 }
 
-impl<'a, F: EncodedArrayConfig, V: Init> InitFrom for EncodedArray<'a, V, F>
+impl<'a, F: EncodedArrayConfig, V: Context> InitFrom for EncodedArray<'a, V, F>
 {
-	fn init_from(_init: Self::Init) -> Self {
+	fn init_from(_init: Self::Context) -> Self {
 		Self::default()
 	}
 }
 
-impl<'a, F: EncodedArrayConfig, V: Init> LinearStorage<V, u32> for EncodedArray<'a, V, F>
+impl<'a, F: EncodedArrayConfig, V: Context> LinearStorage<V, u32> for EncodedArray<'a, V, F>
 	where V: EncodedArrayValue,
 {
 	// Node index.
@@ -577,7 +577,7 @@ impl<'a, F: EncodedArrayConfig, V: Init> LinearStorage<V, u32> for EncodedArray<
 	}
 }
 
-impl<'a, F: EncodedArrayConfig, V: Init> LinearStorageSlice<V, u32> for EncodedArray<'a, V, F>
+impl<'a, F: EncodedArrayConfig, V: Context> LinearStorageSlice<V, u32> for EncodedArray<'a, V, F>
 	where V: EncodedArrayValue,
 {
 	fn get_slice(&self, index: Self::Index) -> HistoriedValue<&[u8], u32> {
@@ -588,7 +588,7 @@ impl<'a, F: EncodedArrayConfig, V: Init> LinearStorageSlice<V, u32> for EncodedA
 	}
 }
 
-impl<'a, F: EncodedArrayConfig, V: Init> LinearStorageRange<V, u32> for EncodedArray<'a, V, F>
+impl<'a, F: EncodedArrayConfig, V: Context> LinearStorageRange<V, u32> for EncodedArray<'a, V, F>
 	where V: EncodedArrayValue,
 {
 	fn get_range(&self, index: Self::Index) -> HistoriedValue<Range<usize>, u32> {

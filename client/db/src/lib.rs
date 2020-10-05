@@ -46,17 +46,17 @@ mod stats;
 mod parity_db;
 
 use historied_db::{
-	Management, ForkableManagement,
+	Management, ForkableManagement, DecodeWithContext,
 	historied::Value,
 	simple_db::TransactionalSerializeDB,
-	backend::nodes::{InitHead, DecodeWithInit},
+	backend::nodes::ContextHead,
 };
 
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
 use std::io;
 use std::collections::{HashMap, HashSet};
-use offchain::{BlocksNodes, BranchesNodes};
+use offchain::{BlockNodes, BranchNodes};
 
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
@@ -130,24 +130,24 @@ impl HistoriedDBMut {
 		k: &[u8],
 		change: Option<Vec<u8>>,
 		change_set: &mut Transaction<DbHash>,
-		branches_nodes: &BranchesNodes,
-		block_nodes: &BlocksNodes,
+		branch_nodes: &BranchNodes,
+		block_nodes: &BlockNodes,
 	) {
 		use crate::offchain::HValue;
 		let column = crate::columns::OFFCHAIN;
-		let init_nodes = InitHead {
+		let init_nodes = ContextHead {
 			key: k.to_vec(),
-			backend: block_nodes,
+			backend: block_nodes.clone(),
 			node_init_from: (),
 		};
-		let init = InitHead {
+		let init = ContextHead {
 			key: k.to_vec(),
-			backend: branches_nodes,
-			node_init_from: init_nodes,
+			backend: branch_nodes.clone(),
+			node_init_from: init_nodes.clone(),
 		};
 
 		let histo = if let Some(histo) = self.db.get(column, k) {
-			Some(HValue::decode_with_init_2(&mut &histo[..], &init).expect("Bad encoded value in db, closing"))
+			Some(HValue::decode_with_context(&mut &histo[..], &(init.clone(), init_nodes.clone())).expect("Bad encoded value in db, closing"))
 		} else {
 			if change.is_none() {
 				return;
@@ -160,7 +160,7 @@ impl HistoriedDBMut {
 			new_value = histo;
 			new_value.set(change, &self.current_state)
 		} else {
-			new_value = HValue::new(change, &self.current_state, (branches_nodes.clone(), block_nodes.clone()));
+			new_value = HValue::new(change, &self.current_state, (init, init_nodes));
 			historied_db::UpdateResult::Changed(())
 		} {
 			historied_db::UpdateResult::Changed(()) => {
@@ -901,11 +901,11 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 		historied: Option<&mut HistoriedDBMut>,
 	) {
 
-		let mut historied = historied.map(|historied_db| (
-				historied_db,
-				BlocksNodes::new(historied_db.db.clone()),
-				BranchesNodes::new(historied_db.db.clone()),
-		));
+		let mut historied = historied.map(|historied_db| {
+			let block_nodes = BlockNodes::new(historied_db.db.clone());
+			let branch_nodes = BranchNodes::new(historied_db.db.clone());
+			(historied_db, block_nodes, branch_nodes)
+		});
 		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain() {
 			let key: Vec<u8> = prefix
 				.into_iter()

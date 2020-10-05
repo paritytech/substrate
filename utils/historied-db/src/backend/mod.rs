@@ -60,7 +60,7 @@ impl<'a, V, S, D: LinearStorage<V, S>> Entry<'a, V, S, D> {
 		self.changed |= self.value.is_some();
 		self
 	}
-	/// Init a value for vaccant entry.
+	/// Context a value for vaccant entry.
 	pub fn or_insert(mut self, default: HistoriedValue<V, S>) -> Self {
 		if self.value.is_none() {
 			self.changed = true;
