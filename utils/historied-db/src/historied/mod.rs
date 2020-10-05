@@ -141,6 +141,13 @@ pub struct HistoriedValue<V, S> {
 	pub state: S,
 }
 
+impl<V, S> Init for HistoriedValue<V, S>
+	where
+		V: Init,
+{
+	type Init = V::Init;
+}
+
 impl<V, S> DecodeWithInit for HistoriedValue<V, S>
 	where
 		V: DecodeWithInit,

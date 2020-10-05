@@ -91,7 +91,7 @@ impl<V, S> Default for MemoryOnly<V, S> {
 	}
 }
 
-impl<V: Clone, S: Clone> LinearStorageMem<V, S> for MemoryOnly<V, S> {
+impl<V: Clone + Init, S: Clone> LinearStorageMem<V, S> for MemoryOnly<V, S> {
 	fn get_ref(&self, index: Self::Index) -> HistoriedValue<&V, S> {
 		let HistoriedValue { value, state } = &self.0[index];
 		HistoriedValue { value: &value, state: state.clone() }
@@ -105,13 +105,13 @@ impl<V: Clone, S: Clone> LinearStorageMem<V, S> for MemoryOnly<V, S> {
 impl<V: Init, S> Init for MemoryOnly<V, S> {
 	type Init = V::Init;
 }
-impl<V, S> InitFrom for MemoryOnly<V, S> {
+impl<V: Init, S> InitFrom for MemoryOnly<V, S> {
 	fn init_from(_init: Self::Init) -> Self {
 		Self::default()
 	}
 }
 
-impl<V: Clone, S: Clone> LinearStorage<V, S> for MemoryOnly<V, S> {
+impl<V: Clone + Init, S: Clone> LinearStorage<V, S> for MemoryOnly<V, S> {
 	// Index position in array.
 	type Index = usize;
 	fn last(&self) -> Option<Self::Index> {

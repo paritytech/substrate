@@ -52,15 +52,40 @@ pub mod management;
 pub trait Init: Sized {
 	type Init: Clone;
 }
-impl Init for Vec<u8> {
-	type Init = ();
+
+macro_rules! empty_init {
+	($type: ty) => {
+		impl Init for $type {
+			type Init = ();
+		}
+	}
 }
+empty_init!(u8);
+empty_init!(u16);
+empty_init!(u32);
+empty_init!(u64);
+empty_init!(u128);
 impl<V: Init> Init for Option<V> {
-	type Init = ();
+	type Init = V::Init;
+}
+impl<V: Init> Init for Vec<V> {
+	type Init = V::Init;
 }
 
 pub trait InitFrom: Init {
 	fn init_from(init: Self::Init) -> Self;
+}
+
+impl<V: Init> InitFrom for Option<V> {
+	fn init_from(_init: Self::Init) -> Self {
+		None
+	}
+}
+
+impl<V: Init> InitFrom for Vec<V> {
+	fn init_from(_init: Self::Init) -> Self {
+		Vec::new()
+	}
 }
 
 /// Minimal simple implementation.

@@ -104,12 +104,14 @@ impl<I, BI, V, D, BD> DecodeWithInit for Tree<I, BI, V, D, BD>
 		BD: DecodeWithInit,
 {
 	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
-		Tree {
-			branches: D::decode_with_init(&init.0),
-			init: init.0,
-			init_child: init.1,
-			_ph: PhantomData,
-		}
+		D::decode_with_init(input, &init.0).map(|branches|
+			Tree {
+				branches,
+				init: init.0.clone(),
+				init_child: init.1.clone(),
+				_ph: PhantomData,
+			}
+		)
 	}
 }
 
@@ -760,16 +762,16 @@ mod test {
 		type EncArray2<'a> = EncodedArray<'a, V2<'a>, DefaultVersion>;
 		type Backend2<'a> = BTreeMap<Vec<u8>, Node<V2<'a>, u32, EncArray2<'a>, MetaSize>>;
 //		type D<'a> = crate::historied::linear::MemoryOnly<
-		type D<'a> = Head<V2<'a>, u32, EncArray2<'a>, MetaSize, Backend2<'a>, ()>;
-		let init_head = InitHead {
-			backend: Backend2::new(),
-			key: b"any".to_vec(),
-			node_init_from: (),
-		};
+		type D<'a> = Head<V2<'a>, u32, EncArray2<'a>, MetaSize, Backend2<'a>, InitHead<Backend<'a>, ()>>;
 		let init_head_child = InitHead {
 			backend: Backend::new(),
 			key: b"any".to_vec(),
 			node_init_from: (),
+		};
+		let init_head = InitHead {
+			backend: Backend2::new(),
+			key: b"any".to_vec(),
+			node_init_from: init_head_child.clone(),
 		};
 		let item: Tree<u32, u32, Vec<u8>, D, BD> = InitFrom::init_from((init_head.clone(), init_head_child.clone()));
 		let at: ForkPlan<u32, u32> = Default::default();
