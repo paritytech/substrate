@@ -792,6 +792,8 @@ decl_module! {
 					T::Currency::unreserve(&origin, d.deposit - new_deposit);
 				}
 
+				d.max_zombies = max_zombies;
+
 				Self::deposit_event(RawEvent::MaxZombiesChanged(id, max_zombies));
 				Ok(())
 			})
@@ -971,6 +973,26 @@ mod tests {
 			assert_ok!(Assets::transfer(Origin::signed(0), 0, 1, 100));
 			assert_eq!(Assets::zombie_allowance(0), 1);
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+
+			// TODO: Test dezombify
+		});
+	}
+
+	#[test]
+	fn resetting_max_zombies_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 2, 1));
+			Balances::make_free_balance_be(&1, 100);
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 100));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 3, 100));
+
+			assert_eq!(Assets::zombie_allowance(0), 0);
+
+			assert_noop!(Assets::set_max_zombies(Origin::signed(1), 0, 1), Error::<Test>::TooManyZombies);
+
+			assert_ok!(Assets::set_max_zombies(Origin::signed(1), 0, 3));
+			assert_eq!(Assets::zombie_allowance(0), 1);
 		});
 	}
 
@@ -1055,6 +1077,7 @@ mod tests {
 			assert_noop!(Assets::mint(Origin::signed(2), 0, 2, 100), Error::<Test>::NoPermission);
 			assert_noop!(Assets::burn(Origin::signed(2), 0, 1, 100), Error::<Test>::NoPermission);
 			assert_noop!(Assets::force_transfer(Origin::signed(2), 0, 1, 2, 100), Error::<Test>::NoPermission);
+			assert_noop!(Assets::set_max_zombies(Origin::signed(2), 0, 11), Error::<Test>::NoPermission);
 		});
 	}
 
