@@ -167,7 +167,7 @@ pub struct AssetDetails<
 	/// created when they had a system-level ED.
 	max_zombies: u32,
 	/// The ED for virtual accounts.
-	minimum_balance: Balance,
+	min_balance: Balance,
 	/// The current number of zombie accounts.
 	zombies: u32,
 }
@@ -262,8 +262,6 @@ decl_module! {
 		//   sufficient for account existence and tx fees may be paid through assets here. An
 		//   `Exchange` trait is probably best for this so AMM pallets can be wired in.
 
-		// TODO: Test max_zombies, zombie counting, referencing.
-
 		fn deposit_event() = default;
 
 		/// Issue a new class of fungible assets from a public origin.
@@ -283,7 +281,7 @@ decl_module! {
 		/// and `set_team`.
 		/// - `max_zombies`: The total number of accounts which may hold assets in this class yet
 		/// have no existential deposit.
-		/// - `minimum_balance`: The minimum balance of this new asset that any single account must
+		/// - `min_balance`: The minimum balance of this new asset that any single account must
 		/// have. If an account's balance is reduced below this, then it collapses to zero.
 		///
 		/// Emits `Created` event when successful.
@@ -294,7 +292,7 @@ decl_module! {
 			#[compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
 			max_zombies: u32,
-			minimum_balance: T::Balance,
+			min_balance: T::Balance,
 		) {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
@@ -314,7 +312,7 @@ decl_module! {
 				supply: Zero::zero(),
 				deposit,
 				max_zombies,
-				minimum_balance,
+				min_balance,
 				zombies: Zero::zero(),
 			});
 			Self::deposit_event(RawEvent::Created(id, origin, owner));
@@ -335,7 +333,7 @@ decl_module! {
 		/// and `set_team`.
 		/// - `max_zombies`: The total number of accounts which may hold assets in this class yet
 		/// have no existential deposit.
-		/// - `minimum_balance`: The minimum balance of this new asset that any single account must
+		/// - `min_balance`: The minimum balance of this new asset that any single account must
 		/// have. If an account's balance is reduced below this, then it collapses to zero.
 		///
 		/// Emits `ForceCreated` event when successful.
@@ -346,7 +344,7 @@ decl_module! {
 			#[compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
 			max_zombies: u32,
-			minimum_balance: T::Balance,
+			min_balance: T::Balance,
 		) {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
@@ -361,7 +359,7 @@ decl_module! {
 				supply: Zero::zero(),
 				deposit: Zero::zero(),
 				max_zombies,
-				minimum_balance,
+				min_balance,
 				zombies: Zero::zero(),
 			});
 			Self::deposit_event(RawEvent::ForceCreated(id, owner));
@@ -441,10 +439,12 @@ decl_module! {
 				d.supply = d.supply.saturating_add(amount);
 
 				Account::<T>::try_mutate(id, &beneficiary, |t| -> DispatchResult {
+					let new_balance = t.balance.saturating_add(amount);
+					ensure!(new_balance >= d.min_balance, Error::<T>::BalanceLow);
 					if t.balance.is_zero() {
 						t.is_zombie = Self::new_account(&beneficiary, d)?;
 					}
-					t.balance = t.balance.saturating_add(amount);
+					t.balance = new_balance;
 					Ok(())
 				})?;
 				Self::deposit_event(RawEvent::Issued(id, beneficiary, amount));
@@ -487,7 +487,7 @@ decl_module! {
 						let mut account = maybe_account.take().ok_or(Error::<T>::BalanceZero)?;
 						let mut burned = amount.min(account.balance);
 						account.balance -= burned;
-						*maybe_account = if account.balance < d.minimum_balance {
+						*maybe_account = if account.balance < d.min_balance {
 							burned += account.balance;
 							Self::dead_account(&who, d, account.is_zombie);
 							None
@@ -546,16 +546,18 @@ decl_module! {
 				}
 
 				let mut amount = amount;
-				if origin_account.balance < d.minimum_balance {
+				if origin_account.balance < d.min_balance {
 					amount += origin_account.balance;
 					origin_account.balance = Zero::zero();
 				}
 
 				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
+					let new_balance = a.balance.saturating_add(amount);
+					ensure!(new_balance >= d.min_balance, Error::<T>::BalanceLow);
 					if a.balance.is_zero() {
 						a.is_zombie = Self::new_account(&dest, d)?;
 					}
-					a.balance = a.balance.saturating_add(amount);
+					a.balance = new_balance;
 					Ok(())
 				})?;
 
@@ -618,16 +620,18 @@ decl_module! {
 				ensure!(&origin == &d.admin, Error::<T>::NoPermission);
 
 				source_account.balance -= amount;
-				if source_account.balance < d.minimum_balance {
+				if source_account.balance < d.min_balance {
 					amount += source_account.balance;
 					source_account.balance = Zero::zero();
 				}
 
 				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
+					let new_balance = a.balance.saturating_add(amount);
+					ensure!(new_balance >= d.min_balance, Error::<T>::BalanceLow);
 					if a.balance.is_zero() {
 						a.is_zombie = Self::new_account(&dest, d)?;
 					}
-					a.balance = a.balance.saturating_add(amount);
+					a.balance = new_balance;
 					Ok(())
 				})?;
 
@@ -776,6 +780,11 @@ impl<T: Trait> Module<T> {
 		Asset::<T>::get(id).map(|x| x.supply).unwrap_or_else(Zero::zero)
 	}
 
+	/// Check the number of zombies allow yet for an asset.
+	pub fn zombie_allowance(id: T::AssetId) -> u32 {
+		Asset::<T>::get(id).map(|x| x.max_zombies - x.zombies).unwrap_or_else(Zero::zero)
+	}
+
 	fn new_account(
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
@@ -809,9 +818,9 @@ impl<T: Trait> Module<T> {
 		is_zombie: bool,
 	) {
 		if is_zombie {
-			frame_system::Module::<T>::dec_ref(who);
-		} else {
 			d.zombies = d.zombies.saturating_sub(1);
+		} else {
+			frame_system::Module::<T>::dec_ref(who);
 		}
 	}
 }
@@ -901,11 +910,60 @@ mod tests {
 	}
 
 	#[test]
-	fn issuing_asset_units_to_issuer_should_work() {
+	fn issuing_asset_units_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 100));
+			assert_eq!(Assets::balance(0, 2), 100);
+		});
+	}
+
+	#[test]
+	fn max_zombies_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 2, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 0, 100));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+
+			assert_eq!(Assets::zombie_allowance(0), 0);
+			assert_noop!(Assets::mint(Origin::signed(1), 0, 2, 100), Error::<Test>::TooManyZombies);
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::TooManyZombies);
+			assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 50), Error::<Test>::TooManyZombies);
+
+			Balances::make_free_balance_be(&3, 100);
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 3, 100));
+
+			assert_ok!(Assets::transfer(Origin::signed(0), 0, 1, 100));
+			assert_eq!(Assets::zombie_allowance(0), 1);
+			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+		});
+	}
+
+	#[test]
+	fn min_balance_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 10));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+
+			// Cannot create a new account with a balance that is below minimum...
+			assert_noop!(Assets::mint(Origin::signed(1), 0, 2, 9), Error::<Test>::BalanceLow);
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 9), Error::<Test>::BalanceLow);
+			assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 9), Error::<Test>::BalanceLow);
+
+			// When deducting from an account to below minimum, it should be reaped.
+
+			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 91));
+			assert!(Assets::balance(0, 1).is_zero());
+			assert_eq!(Assets::balance(0, 2), 100);
+
+			assert_ok!(Assets::force_transfer(Origin::signed(1), 0, 2, 1, 91));
+			assert!(Assets::balance(0, 2).is_zero());
+			assert_eq!(Assets::balance(0, 1), 100);
+
+			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, 91));
+			assert!(Assets::balance(0, 1).is_zero());
 		});
 	}
 
