@@ -133,15 +133,16 @@ impl HistoriedDBMut {
 		let init_nodes = InitHead {
 			key: k.to_vec(),
 			backend: block_nodes,
+			node_init_from: (),
 		};
 		let init_branches = InitHead {
 			key: k.to_vec(),
 			backend: branches_nodes,
+			node_init_from: init_nodes,
 		};
-		let init = (init_branches, init_nodes);
 
 		let histo = if let Some(histo) = self.db.get(column, k) {
-			Some(HValue::decode_with_init(&mut &histo[..], &init).expect("Bad encoded value in db, closing"))
+			Some(HValue::decode_with_init(&mut &histo[..], &init_branches).expect("Bad encoded value in db, closing"))
 		} else {
 			if change.is_none() {
 				return;
@@ -154,7 +155,7 @@ impl HistoriedDBMut {
 			new_value = histo;
 			new_value.set(change, &self.current_state)
 		} else {
-			new_value = HValue::new(change, &self.current_state, init);
+			new_value = HValue::new(change, &self.current_state, init_branches);
 			historied_db::UpdateResult::Changed(())
 		} {
 			historied_db::UpdateResult::Changed(()) => {

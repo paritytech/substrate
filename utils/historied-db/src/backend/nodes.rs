@@ -26,7 +26,7 @@ use crate::historied::HistoriedValue;
 use derivative::Derivative;
 use crate::InitFrom;
 use crate::backend::encoded_array::EncodedArrayValue;
-use codec::{Encode, Decode, Codec};
+use codec::{Encode, Decode};
 
 /// Rough size estimate to manage node size.
 pub trait EstimateSize {

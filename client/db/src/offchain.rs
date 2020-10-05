@@ -27,7 +27,6 @@ use crate::{columns, Database, DbHash, Transaction};
 use parking_lot::{Mutex, RwLock};
 use historied_db::{Latest, Management, ManagementRef, UpdateResult,
 	management::tree::{TreeManagementStorage, ForkPlan},
-	simple_db::{TransactionalSerializeDB},
 	historied::tree::Tree,
 	backend::nodes::{NodesMeta, NodeStorage, NodeStorageMut, Node, InitHead},
 };
@@ -53,6 +52,8 @@ pub struct BlockChainLocalStorage<H: Ord, S: TreeManagementStorage> {
 #[derive(Clone)]
 pub struct BlockChainLocalAt {
 	db: Arc<dyn Database<DbHash>>,
+	blocks_nodes: BlocksNodes,
+	branches_nodes: BranchesNodes,
 	at_read: ForkPlan<u32, u32>,
 	at_write: Option<Latest<(u32, u32)>>,
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
@@ -455,20 +456,69 @@ impl NodesMeta for MetaBlocks {
 
 /// Node backend for blocks values.
 #[derive(Clone)]
-pub struct BlocksNodes(pub Arc<RwLock<TransactionalSerializeDB<historied_db::simple_db::SerializeDBDyn>>>);
+pub struct BlocksNodes(DatabasePending);
 
 /// Node backend for branch values.
 #[derive(Clone)]
-pub struct BranchesNodes(pub Arc<RwLock<TransactionalSerializeDB<historied_db::simple_db::SerializeDBDyn>>>);
+pub struct BranchesNodes(DatabasePending);
 
-/// We use AUX to store nodes.
-const NODE_STORAGE_COLUMN: &'static [u8] = &[crate::columns::AUX as u8, 0, 0, 0];
+#[derive(Clone)]
+struct DatabasePending {
+	pending: Arc<RwLock<HashMap<Vec<u8>, Option<Vec<u8>>>>>,
+	database: Arc<dyn Database<DbHash>>,
+}
+
+impl DatabasePending {
+	fn clear_and_extract_changes(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
+		std::mem::replace(&mut self.pending.write(), HashMap::new())
+	}
+	fn read(&self, col: sp_database::ColumnId, key: &[u8]) -> Option<Vec<u8>> {
+		if let Some(pending) = self.pending.read().get(key).cloned() {
+			pending
+		} else {
+			self.database.get(col, key)
+		}
+	}
+	fn write(&self, key: Vec<u8>, value: Vec<u8>) {
+		self.pending.write().insert(key, Some(value));
+	}
+	fn remove(&self, key: Vec<u8>) {
+		self.pending.write().insert(key, None);
+	}
+}
+
+impl BlocksNodes {
+	pub fn new(database: Arc<dyn Database<DbHash>>) -> Self {
+		BlocksNodes(DatabasePending {
+			pending: Arc::new(RwLock::new(HashMap::new())),
+			database,
+		})
+	}
+	pub fn clear_and_extract_changes(
+		&self,
+	) -> (sp_database::ColumnId, HashMap<Vec<u8>, Option<Vec<u8>>>) {
+		(crate::columns::AUX, self.0.clear_and_extract_changes())
+	}
+}
+
+impl BranchesNodes {
+	pub fn new(database: Arc<dyn Database<DbHash>>) -> Self {
+		BranchesNodes(DatabasePending {
+			pending: Arc::new(RwLock::new(HashMap::new())),
+			database,
+		})
+	}
+	pub fn clear_and_extract_changes(
+		&self,
+	) -> (sp_database::ColumnId, HashMap<Vec<u8>, Option<Vec<u8>>>) {
+		(crate::columns::AUX, self.0.clear_and_extract_changes())
+	}
+}
 
 impl NodeStorage<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for BlocksNodes {
 	fn get_node(&self, reference_key: &[u8], relative_index: u32) -> Option<LinearNode> {
-		use historied_db::simple_db::SerializeDB;
 		let key = Self::vec_address(reference_key, relative_index);
-		self.0.read().read(NODE_STORAGE_COLUMN, &key).and_then(|mut value| {
+		self.0.read(crate::columns::AUX, &key).and_then(|mut value| {
 			// use encoded len as size (this is bigger than the call to estimate size
 			// but not an issue, otherwhise could adjust).
 			let reference_len = value.len();
@@ -484,24 +534,21 @@ impl NodeStorage<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for Block
 
 impl NodeStorageMut<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for BlocksNodes {
 	fn set_node(&mut self, reference_key: &[u8], relative_index: u32, node: &LinearNode) {
-		use historied_db::simple_db::SerializeDB;
 		let key = Self::vec_address(reference_key, relative_index);
 		let encoded = node.inner().encode();
-		self.0.write().write(NODE_STORAGE_COLUMN, &key, encoded.as_slice());
+		self.0.write(key, encoded);
 	}
 	fn remove_node(&mut self, reference_key: &[u8], relative_index: u32) {
-		use historied_db::simple_db::SerializeDB;
 		let key = Self::vec_address(reference_key, relative_index);
-		self.0.write().remove(NODE_STORAGE_COLUMN, &key);
+		self.0.remove(key);
 	}
 }
 
 impl NodeStorage<BranchLinear, u32, TreeBackendInner, MetaBranches> for BranchesNodes {
 	fn get_node(&self, reference_key: &[u8], relative_index: u32) -> Option<TreeNode> {
-		use historied_db::simple_db::SerializeDB;
 		use historied_db::backend::nodes::DecodeWithInit;
 		let key = Self::vec_address(reference_key, relative_index);
-		self.0.read().read(NODE_STORAGE_COLUMN, &key).and_then(|value| {
+		self.0.read(crate::columns::AUX, &key).and_then(|mut value| {
 			// use encoded len as size (this is bigger than the call to estimate size
 			// but not an issue, otherwhise could adjust).
 			let reference_len = value.len();
@@ -513,6 +560,7 @@ impl NodeStorage<BranchLinear, u32, TreeBackendInner, MetaBranches> for Branches
 				&InitHead {
 					key: reference_key.to_vec(),
 					backend: block_nodes,
+					node_init_from: (),
 				},
 			).map(|data| Node::new (
 				data,
@@ -524,15 +572,13 @@ impl NodeStorage<BranchLinear, u32, TreeBackendInner, MetaBranches> for Branches
 
 impl NodeStorageMut<BranchLinear, u32, TreeBackendInner, MetaBranches> for BranchesNodes {
 	fn set_node(&mut self, reference_key: &[u8], relative_index: u32, node: &TreeNode) {
-		use historied_db::simple_db::SerializeDB;
 		let key = Self::vec_address(reference_key, relative_index);
 		let encoded = node.inner().encode();
-		self.0.write().write(NODE_STORAGE_COLUMN, &key, encoded.as_slice());
+		self.0.write(key, encoded);
 	}
 	fn remove_node(&mut self, reference_key: &[u8], relative_index: u32) {
-		use historied_db::simple_db::SerializeDB;
 		let key = Self::vec_address(reference_key, relative_index);
-		self.0.write().remove(NODE_STORAGE_COLUMN, &key);
+		self.0.remove(key);
 	}
 }
 
@@ -547,6 +593,7 @@ type LinearBackend = historied_db::backend::nodes::Head<
 	LinearBackendInner,
 	MetaBlocks,
 	BlocksNodes,
+	(),
 >;
 
 type LinearNode = historied_db::backend::nodes::Node<
@@ -569,6 +616,7 @@ type TreeBackend = historied_db::backend::nodes::Head<
 	TreeBackendInner,
 	MetaBranches,
 	BranchesNodes,
+	BlocksNodes,
 >;
 
 type TreeNode = historied_db::backend::nodes::Node<
