@@ -28,10 +28,12 @@ use sp_std::ops::SubAssign;
 use sp_std::vec::Vec;
 use sp_std::marker::PhantomData;
 use crate::Latest;
-use crate::InitFrom;
+use crate::{Init, InitFrom};
 use codec::{Encode, Decode};
 use derivative::Derivative;
 use core::default::Default;
+use crate::backend::nodes::DecodeWithInit;
+
 // TODO for not in memory we need some direct or indexed api, returning value
 // and the info if there can be lower value index (not just a direct index).
 // -> then similar to those reverse iteration with possible early exit.
@@ -87,7 +89,7 @@ macro_rules! tree_get {
 
 #[derive(Derivative, Debug, Clone, Encode, Decode)]
 #[derivative(PartialEq(bound="D: PartialEq"))]
-pub struct Tree<I, BI, V, D: InitFrom, BD: InitFrom> {
+pub struct Tree<I, BI, V, D: Init, BD: Init> {
 	branches: D,
 	#[derivative(PartialEq="ignore" )]
 	init: D::Init,
@@ -96,9 +98,25 @@ pub struct Tree<I, BI, V, D: InitFrom, BD: InitFrom> {
 	_ph: PhantomData<(I, BI, V, BD)>,
 }
 
-impl<I, BI, V, D: InitFrom, BD: InitFrom> InitFrom for Tree<I, BI, V, D, BD> {
-	type Init = (D::Init, BD::Init);
+impl<I, BI, V, D, BD> DecodeWithInit for Tree<I, BI, V, D, BD>
+	where
+		D: DecodeWithInit,
+		BD: DecodeWithInit,
+{
+	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
+		Tree {
+			branches: D::decode_with_init(&init.0),
+			init: init.0,
+			init_child: init.1,
+			_ph: PhantomData,
+		}
+	}
+}
 
+impl<I, BI, V, D: Init, BD: Init> Init for Tree<I, BI, V, D, BD> {
+	type Init = (D::Init, BD::Init);
+}
+impl<I, BI, V, D: InitFrom, BD: InitFrom> InitFrom for Tree<I, BI, V, D, BD> {
 	fn init_from(init: Self::Init) -> Self {
 		Tree {
 			branches: D::init_from(init.0.clone()),

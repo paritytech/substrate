@@ -32,7 +32,7 @@ use crate::historied::HistoriedValue;
 use super::{LinearStorage, LinearStorageSlice, LinearStorageRange};
 use codec::{Encode, Decode, Input as CodecInput};
 use derivative::Derivative;
-use crate::InitFrom;
+use crate::{Init, InitFrom};
 
 #[derive(Derivative, Debug)]
 #[cfg_attr(test, derivative(PartialEq(bound="")))]
@@ -401,9 +401,12 @@ impl<'a, V, F: EncodedArrayConfig> EncodedArray<'a, V, F>
 
 }
 
-impl<'a, F: EncodedArrayConfig, V> InitFrom for EncodedArray<'a, V, F>
+impl<'a, F: EncodedArrayConfig, V: Init> Init for EncodedArray<'a, V, F> {
+	type Init = V::Init;
+}
+
+impl<'a, F: EncodedArrayConfig, V: InitFrom> InitFrom for EncodedArray<'a, V, F>
 {
-	type Init = ();
 	fn init_from(_init: Self::Init) -> Self {
 		Self::default()
 	}

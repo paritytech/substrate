@@ -24,7 +24,7 @@ use sp_std::vec::Vec;
 use super::{LinearStorage};
 use crate::historied::HistoriedValue;
 use derivative::Derivative;
-use crate::InitFrom;
+use crate::{Init, InitFrom};
 use crate::backend::encoded_array::EncodedArrayValue;
 use codec::{Encode, Decode};
 
@@ -181,51 +181,17 @@ impl<V, S, D, M, B, NI> Encode for Head<V, S, D, M, B, NI>
 }
 
 
-pub trait DecodeWithInit: Sized {
-	type Init: Clone;
-
+pub trait DecodeWithInit: Init {
 	fn decode_with_init(input: &[u8], init: &Self::Init) -> Option<Self>;
 }
 
-impl<V, S, D, M, B> DecodeWithInit for Head<V, S, D, M, B, ()>
-	where
-		D: Decode,
-		B: Clone,
-{
-	type Init = InitHead<B, ()>;
-	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
-		// This contains len from additionaly struct but it is considered
-		// negligable.
-		let reference_len = input.len();
-		let input = &mut input;
-		D::decode(input).ok().and_then(|data| {
-			let head_decoded = HeadCodec::decode(input).ok();
-			head_decoded.map(|head_decoded| {
-				Head {
-					inner: Node::new(data, reference_len),
-					fetched: RefCell::new(Vec::new()),
-					old_start_node_index: head_decoded.start_node_index,
-					old_end_node_index: head_decoded.end_node_index,
-					start_node_index: head_decoded.start_node_index,
-					end_node_index: head_decoded.end_node_index,
-					len: head_decoded.len as usize,
-					reference_key: init.key.clone(),
-					backend: init.backend.clone(),
-					node_init_from: (),	
-				}
-			})
-		})
-	}
-}
-
-impl<V, S, D, M, B, NI> Head<V, S, D, M, B, NI>
+impl<V, S, D, M, B, NI> DecodeWithInit for Head<V, S, D, M, B, NI>
 	where
 		D: DecodeWithInit<Init = NI>,
 		B: Clone,
 		NI: Clone,
 {
-	/// Decode with init for this head but also for its inner nodes.
-	pub fn decode_with_init_2(mut input: &[u8], init: &InitHead<B, NI>, init_nodes: NI) -> Option<Self> {
+	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
 		// This contains len from additionaly struct but it is considered
 		// negligable.
 		let reference_len = input.len();
@@ -243,13 +209,46 @@ impl<V, S, D, M, B, NI> Head<V, S, D, M, B, NI>
 					len: head_decoded.len as usize,
 					reference_key: init.key.clone(),
 					backend: init.backend.clone(),
-					node_init_from: init_nodes,
+					node_init_from: init.node_init_from.clone(),
 				}
 			})
 		})
 	}
 }
-
+/*
+impl<V, S, D, M, B, NI> Head<V, S, D, M, B, NI>
+	where
+		D: DecodeWithInit<Init = NI>,
+		B: Clone,
+		NI: Clone,
+{
+	/// Decode with init for this head but also for its inner nodes.
+	/// TODO see if we should no just use tait impl
+	pub fn decode_with_init_2(mut input: &[u8], init: &InitHead<B, NI>) -> Option<Self> {
+		// This contains len from additionaly struct but it is considered
+		// negligable.
+		let reference_len = input.len();
+		let input = &mut input;
+		D::decode_with_init(input, &init.node_init_from).and_then(|data| {
+			let head_decoded = HeadCodec::decode(input).ok();
+			head_decoded.map(|head_decoded| {
+				Head {
+					inner: Node::new(data, reference_len),
+					fetched: RefCell::new(Vec::new()),
+					old_start_node_index: head_decoded.start_node_index,
+					old_end_node_index: head_decoded.end_node_index,
+					start_node_index: head_decoded.start_node_index,
+					end_node_index: head_decoded.end_node_index,
+					len: head_decoded.len as usize,
+					reference_key: init.key.clone(),
+					backend: init.backend.clone(),
+					node_init_from: init.node_init_from.clone(),
+				}
+			})
+		})
+	}
+}
+*/
 impl<V, S, D: Clone, M, B, NI> Head<V, S, D, M, B, NI>
 	where
 		M: NodesMeta,
@@ -286,13 +285,21 @@ pub struct InitHead<B, NI> {
 	pub node_init_from: NI,
 }
 
+impl<V, S, D, M, B, NI> Init for Head<V, S, D, M, B, NI>
+	where
+		D: Init<Init = NI>,
+		B: Clone,
+		NI: Clone,
+{
+	type Init = InitHead<B, NI>; // TODO key to clone and backend refcell.
+}
+	
 impl<V, S, D, M, B, NI> InitFrom for Head<V, S, D, M, B, NI>
 	where
 		D: InitFrom<Init = NI>,
 		B: Clone,
 		NI: Clone,
 {
-	type Init = InitHead<B, NI>; // TODO key to clone and backend refcell.
 	fn init_from(init: Self::Init) -> Self {
 		Head {
 			inner: Node {

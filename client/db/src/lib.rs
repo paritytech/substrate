@@ -125,24 +125,29 @@ impl HistoriedDBMut {
 	}
 
 	/// Update transaction for a offchain local storage historied value.
-	pub fn update_single_offchain(&mut self, k: &[u8], change: Option<Vec<u8>>, change_set: &mut Transaction<DbHash>) {
+	pub fn update_single_offchain(
+		&mut self,
+		k: &[u8],
+		change: Option<Vec<u8>>,
+		change_set: &mut Transaction<DbHash>,
+		branches_nodes: &BranchesNodes,
+		block_nodes: &BlocksNodes,
+	) {
 		use crate::offchain::HValue;
 		let column = crate::columns::OFFCHAIN;
-		let block_nodes: BlocksNodes = unimplemented!("TODO store it around");
-		let branches_nodes: BranchesNodes = unimplemented!("TODO store it around");
 		let init_nodes = InitHead {
 			key: k.to_vec(),
 			backend: block_nodes,
 			node_init_from: (),
 		};
-		let init_branches = InitHead {
+		let init = InitHead {
 			key: k.to_vec(),
 			backend: branches_nodes,
 			node_init_from: init_nodes,
 		};
 
 		let histo = if let Some(histo) = self.db.get(column, k) {
-			Some(HValue::decode_with_init(&mut &histo[..], &init_branches).expect("Bad encoded value in db, closing"))
+			Some(HValue::decode_with_init_2(&mut &histo[..], &init).expect("Bad encoded value in db, closing"))
 		} else {
 			if change.is_none() {
 				return;
@@ -155,7 +160,7 @@ impl HistoriedDBMut {
 			new_value = histo;
 			new_value.set(change, &self.current_state)
 		} else {
-			new_value = HValue::new(change, &self.current_state, init_branches);
+			new_value = HValue::new(change, &self.current_state, (branches_nodes.clone(), block_nodes.clone()));
 			historied_db::UpdateResult::Changed(())
 		} {
 			historied_db::UpdateResult::Changed(()) => {
@@ -893,8 +898,14 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_offchain(
 		&mut self,
 		transaction: &mut Transaction<DbHash>,
-		mut historied: Option<&mut HistoriedDBMut>,
+		historied: Option<&mut HistoriedDBMut>,
 	) {
+
+		let mut historied = historied.map(|historied_db| (
+				historied_db,
+				BlocksNodes::new(historied_db.db.clone()),
+				BranchesNodes::new(historied_db.db.clone()),
+		));
 		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain() {
 			let key: Vec<u8> = prefix
 				.into_iter()
@@ -905,17 +916,21 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 				OffchainOverlayedChange::SetValue(val) => transaction.set_from_vec(columns::OFFCHAIN, &key, val),
 				OffchainOverlayedChange::Remove => transaction.remove(columns::OFFCHAIN, &key),
 				OffchainOverlayedChange::SetLocalValue(val) => {
-					historied.as_mut().map(|historied_db|
-						historied_db.update_single_offchain(&key, Some(val), transaction)
+					historied.as_mut().map(|(historied_db, block_nodes, branch_nodes)|
+						historied_db.update_single_offchain(&key, Some(val), transaction, branch_nodes, block_nodes)
 					);
 				},
 				OffchainOverlayedChange::RemoveLocal => {
-					historied.as_mut().map(|historied_db|
-						historied_db.update_single_offchain(&key, None, transaction)
+					historied.as_mut().map(|(historied_db, block_nodes, branch_nodes)|
+						historied_db.update_single_offchain(&key, None, transaction, branch_nodes, block_nodes)
 					);
 				},
 			}
 		}
+		historied.as_mut().map(|(_historied_db, block_nodes, branch_nodes)| {
+			block_nodes.apply_transaction(transaction);
+			branch_nodes.apply_transaction(transaction);
+		});
 	}
 
 	fn apply_aux(&mut self, transaction: &mut Transaction<DbHash>) {

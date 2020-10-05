@@ -359,7 +359,12 @@ impl BlockChainLocalAt {
 			let _key_guard = key_lock.lock();
 			let histo = self.db.get(columns::OFFCHAIN, &key)
 				.and_then(|v| {
-					let v: Option<HValue> = Decode::decode(&mut &v[..]).ok();
+					let init = InitHead {
+						key,
+						backend: self.branches_nodes.clone(),
+						node_init_from: self.blocks_nodes.clone(),
+					};
+					let v: Option<HValue> = Decode::decode_with_init_2(&mut &v[..], init).ok();
 					v
 				});
 			let val = histo.as_ref().and_then(|h| {
@@ -391,7 +396,11 @@ impl BlockChainLocalAt {
 					}
 				} else {
 					if is_insert {
-						(HValue::new(new_value, self.at_write.as_ref().expect("Synch at start"), ((), ())).encode(), UpdateResult::Changed(()))
+						(HValue::new(
+								new_value,
+								self.at_write.as_ref().expect("Synch at start"),
+								(self.branches_nodes.clone(), self.blocks_nodes.clone()),
+							).encode(), UpdateResult::Changed(()))
 					} else {
 						// nothing to delete
 						(Default::default(), UpdateResult::Unchanged)
@@ -472,6 +481,21 @@ impl DatabasePending {
 	fn clear_and_extract_changes(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
 		std::mem::replace(&mut self.pending.write(), HashMap::new())
 	}
+	fn apply_transaction(
+		&self,
+		col: sp_database::ColumnId,
+		transaction: &mut Transaction<DbHash>,
+	) {
+		let pending = self.clear_and_extract_changes();
+		for (key, change) in pending {
+			if let Some(value) = change {
+				transaction.set_from_vec(col, &key, value);
+			} else {
+				transaction.remove(col, &key);
+			}
+		}
+	}
+
 	fn read(&self, col: sp_database::ColumnId, key: &[u8]) -> Option<Vec<u8>> {
 		if let Some(pending) = self.pending.read().get(key).cloned() {
 			pending
@@ -494,10 +518,8 @@ impl BlocksNodes {
 			database,
 		})
 	}
-	pub fn clear_and_extract_changes(
-		&self,
-	) -> (sp_database::ColumnId, HashMap<Vec<u8>, Option<Vec<u8>>>) {
-		(crate::columns::AUX, self.0.clear_and_extract_changes())
+	pub fn apply_transaction(&self, transaction: &mut Transaction<DbHash>) {
+		self.0.apply_transaction(crate::columns::AUX, transaction)
 	}
 }
 
@@ -512,6 +534,9 @@ impl BranchesNodes {
 		&self,
 	) -> (sp_database::ColumnId, HashMap<Vec<u8>, Option<Vec<u8>>>) {
 		(crate::columns::AUX, self.0.clear_and_extract_changes())
+	}
+	pub fn apply_transaction(&self, transaction: &mut Transaction<DbHash>) {
+		self.0.apply_transaction(crate::columns::AUX, transaction)
 	}
 }
 

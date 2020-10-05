@@ -33,7 +33,7 @@ use sp_std::ops::{SubAssign, Range};
 use codec::{Encode, Decode};
 use crate::backend::{LinearStorage, LinearStorageMem, LinearStorageSlice, LinearStorageRange};
 use crate::backend::encoded_array::EncodedArrayValue;
-use crate::InitFrom;
+use crate::{Init, InitFrom};
 use derivative::Derivative;
 use crate::backend::nodes::{EstimateSize, DecodeWithInit};
 
@@ -78,7 +78,6 @@ impl<V, S, D> DecodeWithInit for Linear<V, S, D>
 	where
 		D: DecodeWithInit,
 {
-	type Init = D::Init;
 	fn decode_with_init(input: &[u8], init: &Self::Init) -> Option<Self> {
 		D::decode_with_init(input, init).map(|d| Linear(d, Default::default()))
 	}
@@ -133,8 +132,10 @@ impl<V, S, D: EncodedArrayValue> EncodedArrayValue for Linear<V, S, D> {
 	}
 }*/
 
+impl<V, S, D: Init> Init for Linear<V, S, D> {
+	type Init = <D as Init>::Init;
+}
 impl<V, S, D: InitFrom> InitFrom for Linear<V, S, D> {
-	type Init = <D as InitFrom>::Init;
 	fn init_from(init: Self::Init) -> Self {
 		Linear(<D as InitFrom>::init_from(init), PhantomData)
 	}

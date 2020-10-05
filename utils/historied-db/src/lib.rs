@@ -48,8 +48,18 @@ pub mod simple_db;
 /// Management for state of historied data.
 pub mod management;
 
-pub trait InitFrom: Sized {
+/// TODO rename as Aux or Ext.
+pub trait Init: Sized {
 	type Init: Clone;
+}
+impl Init for Vec<u8> {
+	type Init = ();
+}
+impl<V: Init> Init for Option<V> {
+	type Init = ();
+}
+
+pub trait InitFrom: Init {
 	fn init_from(init: Self::Init) -> Self;
 }
 

@@ -25,7 +25,7 @@ use hash_db::{PlainDB, PlainDBRef};
 use crate::Latest;
 use codec::{Encode, Decode};
 use sp_std::ops::Range;
-use crate::InitFrom;
+use crate::{Init, InitFrom};
 use crate::backend::nodes::DecodeWithInit;
 
 pub mod linear;
@@ -65,7 +65,7 @@ pub trait InMemoryValueRange<S> {
 }
 
 /// Trait for historied value.
-pub trait Value<V>: ValueRef<V> + InitFrom {
+pub trait Value<V>: ValueRef<V> + Init {
 	/// State to use for changing value.
 	/// We use a different state than
 	/// for querying as it can use different
@@ -146,7 +146,6 @@ impl<V, S> DecodeWithInit for HistoriedValue<V, S>
 		V: DecodeWithInit,
 		S: Decode,
 {
-	type Init = V::Init;
 	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
 		V::decode_with_init(input, init)
 			.and_then(|value| S::decode(&mut input).ok()
@@ -193,15 +192,15 @@ impl<V, S> From<(V, S)> for HistoriedValue<V, S> {
 }
 
 /// Implementation for plain db.
-pub struct BTreeMap<K, V, H: InitFrom>(pub(crate) sp_std::collections::btree_map::BTreeMap<K, H>, H::Init, PhantomData<V>);
+pub struct BTreeMap<K, V, H: Init>(pub(crate) sp_std::collections::btree_map::BTreeMap<K, H>, H::Init, PhantomData<V>);
 
-impl<K: Ord, V, H: InitFrom> BTreeMap<K, V, H> {
+impl<K: Ord, V, H: Init> BTreeMap<K, V, H> {
 	pub fn new(init: H::Init) -> Self {
 		BTreeMap(sp_std::collections::btree_map::BTreeMap::new(), init, PhantomData)
 	}
 }
 
-impl<K: Ord, V: Clone, H: ValueRef<V> + InitFrom> StateDBRef<K, V> for BTreeMap<K, V, H> {
+impl<K: Ord, V: Clone, H: ValueRef<V> + Init> StateDBRef<K, V> for BTreeMap<K, V, H> {
 	type S = H::S;
 
 	fn get(&self, key: &K, at: &Self::S) -> Option<V> {
@@ -217,7 +216,7 @@ impl<K: Ord, V: Clone, H: ValueRef<V> + InitFrom> StateDBRef<K, V> for BTreeMap<
 }
 
 // note that the constraint on state db ref for the associated type is bad (forces V as clonable).
-impl<K: Ord, V, H: InMemoryValueRef<V> + InitFrom> InMemoryStateDBRef<K, V> for BTreeMap<K, V, H> {
+impl<K: Ord, V, H: InMemoryValueRef<V> + Init> InMemoryStateDBRef<K, V> for BTreeMap<K, V, H> {
 	type S = H::S;
 
 	fn get_ref(&self, key: &K, at: &Self::S) -> Option<&V> {

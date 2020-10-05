@@ -21,7 +21,7 @@ use crate::historied::HistoriedValue;
 use codec::{Encode, Decode, Input as CodecInput};
 use super::{LinearStorage, LinearStorageMem};
 use sp_std::mem::replace;
-use crate::InitFrom;
+use crate::{Init, InitFrom};
 use sp_std::vec::Vec;
 use crate::backend::nodes::DecodeWithInit;
 
@@ -65,7 +65,6 @@ impl<V, S> DecodeWithInit for MemoryOnly<V, S>
 		V: DecodeWithInit,
 		S: Decode,
 {
-	type Init = V::Init;
 	fn decode_with_init(mut input: &[u8], init: &Self::Init) -> Option<Self> {
 		let input = &mut input;
 		// this align on scale codec inner implementation (DecodeWithInit trait
@@ -103,8 +102,10 @@ impl<V: Clone, S: Clone> LinearStorageMem<V, S> for MemoryOnly<V, S> {
 	}
 }
 
+impl<V: Init, S> Init for MemoryOnly<V, S> {
+	type Init = V::Init;
+}
 impl<V, S> InitFrom for MemoryOnly<V, S> {
-	type Init = ();
 	fn init_from(_init: Self::Init) -> Self {
 		Self::default()
 	}
