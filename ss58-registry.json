@@ -185,19 +185,19 @@
 			"prefix": 21,
 			"network": "dock-testnet",
 			"displayName": "Dock Testnet",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["DCK"],
+			"decimals": [6],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://dock.io"
 		},
 		{
 			"prefix": 22,
 			"network": "dock-mainnet",
 			"displayName": "Dock Mainnet",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["DCK"],
+			"decimals": [6],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://dock.io"
 		},
 		{
 			"prefix": 23,
