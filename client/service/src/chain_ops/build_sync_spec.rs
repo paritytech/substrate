@@ -30,6 +30,7 @@ pub fn build_light_sync_state<TBl, TCl>(
 		TCl: HeaderBackend<TBl> + sc_client_api::AuxStore,
 {
 	let finalized_hash = client.info().finalized_hash;
+	let finalized_number = client.info().finalized_number;
 	let finalized_header = client.header(BlockId::Hash(finalized_hash))?.unwrap();
 
 	let authority_set = shared_authority_set.inner().read();
@@ -41,9 +42,12 @@ pub fn build_light_sync_state<TBl, TCl>(
 		finalized_hash,
 	)?.unwrap();
 
+	let mut epoch_changes = shared_epoch_changes.lock().clone();
+	epoch_changes.filter(finalized_number);
+
 	Ok(sc_chain_spec::LightSyncState {
 		finalized_block_header: finalized_header,
-		babe_epoch_changes: shared_epoch_changes.lock().clone(),
+		babe_epoch_changes: epoch_changes,
 		grandpa_finalized_triggered_authorities: authority_set.current_authorities.clone(),
 		grandpa_after_finalized_block_authorities_set_id: authority_set.set_id,
 		grandpa_finalized_scheduled_change: pending_change.clone(),
