@@ -17,7 +17,7 @@
 
 //! Native EVM runner.
 
-use sp_std::{convert::Infallible, marker::PhantomData, rc::Rc, collections::btree_set::BTreeSet};
+use sp_std::{convert::Infallible, marker::PhantomData, rc::Rc, collections::btree_set::BTreeSet, mem};
 use sp_core::{H160, U256, H256};
 use sp_runtime::{TransactionOutcome, traits::UniqueSaturatedInto};
 use frame_support::{ensure, traits::{Get, Currency, ExistenceRequirement}, storage::{StorageMap, StorageDoubleMap}};
@@ -235,7 +235,7 @@ fn l64(gas: usize) -> usize {
 	gas - gas / 64
 }
 
-pub struct Handler<'vicinity, 'config, T> {
+pub struct Handler<'vicinity, 'config, T: Trait> {
 	vicinity: &'vicinity Vicinity,
 	config: &'config Config,
 	gasometer: Gasometer<'config>,
@@ -714,5 +714,16 @@ impl<'vicinity, 'config, T: Trait> HandlerT for Handler<'vicinity, 'config, T> {
 		self.gasometer.record_opcode(gas_cost, memory_cost)?;
 
 		Ok(())
+	}
+}
+
+impl<'vicinity, 'config, T: Trait> Drop for Handler<'vicinity, 'config, T> {
+	fn drop(&mut self) {
+		let mut deleted = BTreeSet::new();
+		mem::swap(&mut deleted, &mut self.deleted);
+
+		for address in deleted {
+			Module::<T>::remove_account(&address);
+		}
 	}
 }
