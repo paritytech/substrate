@@ -101,61 +101,6 @@
 //!
 //! Please refer to the [`Module`](./struct.Module.html) struct for details on publicly available functions.
 //!
-//! ## Usage
-//!
-//! The following example shows how to use the Assets module in your runtime by exposing public functions to:
-//!
-//! * Issue a new fungible asset for a token distribution event (airdrop).
-//! * Query the fungible asset holding balance of an account.
-//! * Query the total supply of a fungible asset that has been issued.
-//!
-//! ### Prerequisites
-//!
-//! Import the Assets module and types and derive your runtime's configuration traits from the Assets module trait.
-//!
-//! ### Simple Code Snippet
-//!
-//! ```rust,ignore
-//! use pallet_assets as assets;
-//! use frame_support::{decl_module, dispatch, ensure};
-//! use frame_system::ensure_signed;
-//!
-//! pub trait Trait: assets::Trait { }
-//!
-//! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn issue_token_airdrop(origin) -> dispatch::DispatchResult {
-//! 			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
-//!
-//! 			const ACCOUNT_ALICE: u64 = 1;
-//! 			const ACCOUNT_BOB: u64 = 2;
-//! 			const COUNT_AIRDROP_RECIPIENTS: u64 = 2;
-//! 			const TOKENS_FIXED_SUPPLY: u64 = 100;
-//!
-//! 			ensure!(!COUNT_AIRDROP_RECIPIENTS.is_zero(), "Divide by zero error.");
-//!
-//! 			let asset_id = Self::next_asset_id();
-//!
-//! 			NextAssetId::<T>::mutate(|asset_id| *asset_id += 1);
-//! 			Balances::<T>::insert((asset_id, &ACCOUNT_ALICE), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
-//! 			Balances::<T>::insert((asset_id, &ACCOUNT_BOB), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
-//! 			TotalSupply::<T>::insert(asset_id, TOKENS_FIXED_SUPPLY);
-//!
-//! 			Self::deposit_event(RawEvent::Issued(asset_id, sender, TOKENS_FIXED_SUPPLY));
-//! 			Ok(())
-//! 		}
-//! 	}
-//! }
-//! ```
-//!
-//! ## Assumptions
-//!
-//! Below are assumptions that must be held when using this module.  If any of
-//! these are violated, the behavior of this module is undefined.
-//!
-//! * The total count of assets should be less than
-//!   `Trait::AssetId::max_value()`.
-//!
 //! ## Related Modules
 //!
 //! * [`System`](../frame_system/index.html)
@@ -316,6 +261,8 @@ decl_module! {
 		// TODO: Allow for easy integration with system accounts so that an ED in an asset here is
 		//   sufficient for account existence and tx fees may be paid through assets here. An
 		//   `Exchange` trait is probably best for this so AMM pallets can be wired in.
+
+		// TODO: Test max_zombies, zombie counting, referencing.
 
 		fn deposit_event() = default;
 
@@ -981,7 +928,7 @@ mod tests {
 	}
 
 	#[test]
-	fn transferring_amount_above_available_balance_should_work() {
+	fn transferring_amount_below_available_balance_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
@@ -989,6 +936,72 @@ mod tests {
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
 			assert_eq!(Assets::balance(0, 1), 50);
 			assert_eq!(Assets::balance(0, 2), 50);
+		});
+	}
+
+	#[test]
+	fn transferring_frozen_balance_should_not_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_eq!(Assets::balance(0, 1), 100);
+			assert_ok!(Assets::freeze(Origin::signed(1), 0, 1));
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
+			assert_ok!(Assets::thaw(Origin::signed(1), 0, 1));
+			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+		});
+	}
+
+	#[test]
+	fn origin_guards_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_noop!(Assets::set_owner(Origin::signed(2), 0, 2), Error::<Test>::NoPermission);
+			assert_noop!(Assets::set_team(Origin::signed(2), 0, 2, 2, 2), Error::<Test>::NoPermission);
+			assert_noop!(Assets::freeze(Origin::signed(2), 0, 1), Error::<Test>::NoPermission);
+			assert_noop!(Assets::thaw(Origin::signed(2), 0, 2), Error::<Test>::NoPermission);
+			assert_noop!(Assets::mint(Origin::signed(2), 0, 2, 100), Error::<Test>::NoPermission);
+			assert_noop!(Assets::burn(Origin::signed(2), 0, 1, 100), Error::<Test>::NoPermission);
+			assert_noop!(Assets::force_transfer(Origin::signed(2), 0, 1, 2, 100), Error::<Test>::NoPermission);
+		});
+	}
+
+	#[test]
+	fn set_owner_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::set_owner(Origin::signed(1), 0, 2));
+			assert_noop!(Assets::set_owner(Origin::signed(1), 0, 1), Error::<Test>::NoPermission);
+			assert_ok!(Assets::set_owner(Origin::signed(2), 0, 1));
+		});
+	}
+
+	#[test]
+	fn set_team_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::set_team(Origin::signed(1), 0, 2, 3, 4));
+
+			assert_ok!(Assets::mint(Origin::signed(2), 0, 2, 100));
+			assert_ok!(Assets::freeze(Origin::signed(4), 0, 2));
+			assert_ok!(Assets::thaw(Origin::signed(3), 0, 2));
+			assert_ok!(Assets::force_transfer(Origin::signed(3), 0, 2, 3, 100));
+			assert_ok!(Assets::burn(Origin::signed(3), 0, 3, 100));
+		});
+	}
+
+	#[test]
+	fn transferring_to_frozen_account_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 100));
+			assert_eq!(Assets::balance(0, 1), 100);
+			assert_eq!(Assets::balance(0, 2), 100);
+			assert_ok!(Assets::freeze(Origin::signed(1), 0, 2));
+			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+			assert_eq!(Assets::balance(0, 2), 150);
 		});
 	}
 
