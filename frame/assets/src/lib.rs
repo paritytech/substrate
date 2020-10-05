@@ -170,6 +170,8 @@ pub struct AssetDetails<
 	min_balance: Balance,
 	/// The current number of zombie accounts.
 	zombies: u32,
+	/// The total number of accounts.
+	accounts: u32,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
@@ -252,6 +254,8 @@ decl_error! {
 		InUse,
 		/// Too many zombie accounts in use.
 		TooManyZombies,
+		/// Attempt to destroy an asset class when non-zombie, reference-bearing accounts exist.
+		RefsLeft,
 	}
 }
 
@@ -259,7 +263,6 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-		// TODO: Test set_max_zombies.
 		// TODO: Allow for easy integration with system accounts so that an ED in an asset here is
 		//   sufficient for account existence and tx fees may be paid through assets here. An
 		//   `Exchange` trait is probably best for this so AMM pallets can be wired in.
@@ -316,6 +319,7 @@ decl_module! {
 				max_zombies,
 				min_balance,
 				zombies: Zero::zero(),
+				accounts: Zero::zero(),
 			});
 			Self::deposit_event(RawEvent::Created(id, origin, owner));
 		}
@@ -363,6 +367,7 @@ decl_module! {
 				max_zombies,
 				min_balance,
 				zombies: Zero::zero(),
+				accounts: Zero::zero(),
 			});
 			Self::deposit_event(RawEvent::ForceCreated(id, owner));
 		}
@@ -384,6 +389,9 @@ decl_module! {
 			Asset::<T>::try_mutate_exists(id, |maybe_details| {
 				let details = maybe_details.take().ok_or(Error::<T>::Unknown)?;
 				ensure!(details.owner == origin, Error::<T>::NoPermission);
+				ensure!(details.accounts == details.zombies, Error::<T>::RefsLeft);
+				T::Currency::unreserve(&details.owner, details.deposit);
+
 				*maybe_details = None;
 				Account::<T>::remove_prefix(&id);
 				Self::deposit_event(RawEvent::Destroyed(id));
@@ -406,6 +414,10 @@ decl_module! {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			Asset::<T>::try_mutate_exists(id, |maybe_details| {
+				let details = maybe_details.take().ok_or(Error::<T>::Unknown)?;
+				ensure!(details.accounts == details.zombies, Error::<T>::RefsLeft);
+				T::Currency::unreserve(&details.owner, details.deposit);
+
 				*maybe_details = None;
 				Account::<T>::remove_prefix(&id);
 				Self::deposit_event(RawEvent::Destroyed(id));
@@ -824,14 +836,16 @@ impl<T: Trait> Module<T> {
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
 	) -> Result<bool, DispatchError> {
-		Ok(if frame_system::Module::<T>::account_exists(who) {
+		let r = Ok(if frame_system::Module::<T>::account_exists(who) {
 			frame_system::Module::<T>::inc_ref(who);
 			false
 		} else {
 			ensure!(d.zombies < d.max_zombies, Error::<T>::TooManyZombies);
 			d.zombies += 1;
 			true
-		})
+		});
+		d.accounts = d.accounts.saturating_add(1);
+		r
 	}
 
 	/// If `who`` exists in system and it's a zombie, dezombify it.
@@ -857,6 +871,7 @@ impl<T: Trait> Module<T> {
 		} else {
 			frame_system::Module::<T>::dec_ref(who);
 		}
+		d.accounts = d.accounts.saturating_sub(1);
 	}
 }
 
@@ -945,13 +960,44 @@ mod tests {
 	}
 
 	#[test]
-	fn issuing_asset_units_should_work() {
+	fn basic_minting_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 100));
 			assert_eq!(Assets::balance(0, 2), 100);
+		});
+	}
+
+	#[test]
+	fn lifecycle_should_work() {
+		new_test_ext().execute_with(|| {
+			Balances::make_free_balance_be(&1, 100);
+			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
+			assert_eq!(Balances::reserved_balance(&1), 11);
+
+			assert_ok!(Assets::destroy(Origin::signed(1), 0));
+			assert_eq!(Balances::reserved_balance(&1), 0);
+
+			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
+			assert_eq!(Balances::reserved_balance(&1), 11);
+
+			assert_ok!(Assets::force_destroy(Origin::root(), 0));
+			assert_eq!(Balances::reserved_balance(&1), 0);
+		});
+	}
+
+	#[test]
+	fn destroy_with_non_zombies_should_not_work() {
+		new_test_ext().execute_with(|| {
+			Balances::make_free_balance_be(&1, 100);
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_noop!(Assets::destroy(Origin::signed(1), 0), Error::<Test>::RefsLeft);
+			assert_noop!(Assets::force_destroy(Origin::root(), 0), Error::<Test>::RefsLeft);
+			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, 100));
+			assert_ok!(Assets::destroy(Origin::signed(1), 0));
 		});
 	}
 
@@ -993,6 +1039,29 @@ mod tests {
 
 			assert_ok!(Assets::set_max_zombies(Origin::signed(1), 0, 3));
 			assert_eq!(Assets::zombie_allowance(0), 1);
+		});
+	}
+
+	#[test]
+	fn dezombifying_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 10));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_eq!(Assets::zombie_allowance(0), 9);
+
+			// introduce a bit of balance for account 2.
+			Balances::make_free_balance_be(&2, 100);
+
+			// transfer 25 units, nothing changes.
+			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 25));
+			assert_eq!(Assets::zombie_allowance(0), 9);
+
+			// introduce a bit of balance; this will create the account.
+			Balances::make_free_balance_be(&1, 100);
+
+			// now transferring 25 units will create it.
+			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 25));
+			assert_eq!(Assets::zombie_allowance(0), 10);
 		});
 	}
 
@@ -1078,16 +1147,28 @@ mod tests {
 			assert_noop!(Assets::burn(Origin::signed(2), 0, 1, 100), Error::<Test>::NoPermission);
 			assert_noop!(Assets::force_transfer(Origin::signed(2), 0, 1, 2, 100), Error::<Test>::NoPermission);
 			assert_noop!(Assets::set_max_zombies(Origin::signed(2), 0, 11), Error::<Test>::NoPermission);
+			assert_noop!(Assets::destroy(Origin::signed(2), 0), Error::<Test>::NoPermission);
 		});
 	}
 
 	#[test]
-	fn transfer_owner_should_workship() {
+	fn transfer_owner_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			Balances::make_free_balance_be(&1, 100);
+			Balances::make_free_balance_be(&2, 1);
+			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
+
+			assert_eq!(Balances::reserved_balance(&1), 11);
+
 			assert_ok!(Assets::transfer_ownership(Origin::signed(1), 0, 2));
+			assert_eq!(Balances::reserved_balance(&2), 11);
+			assert_eq!(Balances::reserved_balance(&1), 0);
+
 			assert_noop!(Assets::transfer_ownership(Origin::signed(1), 0, 1), Error::<Test>::NoPermission);
+
 			assert_ok!(Assets::transfer_ownership(Origin::signed(2), 0, 1));
+			assert_eq!(Balances::reserved_balance(&1), 11);
+			assert_eq!(Balances::reserved_balance(&2), 0);
 		});
 	}
 
@@ -1155,7 +1236,7 @@ mod tests {
 	}
 
 	#[test]
-	fn destroying_asset_balance_with_positive_balance_should_work() {
+	fn burning_asset_balance_with_positive_balance_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
@@ -1165,7 +1246,7 @@ mod tests {
 	}
 
 	#[test]
-	fn destroying_asset_balance_with_zero_balance_should_not_work() {
+	fn burning_asset_balance_with_zero_balance_should_not_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
