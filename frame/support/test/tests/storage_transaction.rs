@@ -17,7 +17,8 @@
 
 use codec::{Encode, Decode, EncodeLike};
 use frame_support::{
-	assert_ok, assert_noop, dispatch::{DispatchError, DispatchResult}, transactional, StorageMap, StorageValue,
+	assert_ok, assert_noop, dispatch::{DispatchError, DispatchResult}, transactional, require_transactional,
+	StorageMap, StorageValue,
 	storage::{with_transaction, TransactionOutcome::*},
 };
 use sp_io::TestExternalities;
@@ -49,6 +50,22 @@ frame_support::decl_storage!{
 	trait Store for Module<T: Trait> as StorageTransactions {
 		pub Value: u32;
 		pub Map: map hasher(twox_64_concat) String => u32;
+	}
+}
+
+impl <T: Trait> Module<T> {
+	#[require_transactional]
+	fn mutate() {
+	}
+
+	#[transactional]
+	fn safe() -> DispatchResult {
+		Self::mutate();
+		Ok(())
+	}
+
+	fn not_safe() {
+		Self::mutate();
 	}
 }
 
@@ -208,5 +225,20 @@ fn transactional_annotation_in_decl_module() {
 		assert_eq!(Value::get(), 2);
 
 		assert_noop!(<Module<Runtime>>::value_rollbacks(origin, 3), "nah");
+	});
+}
+
+#[test]
+#[should_panic(expected = "Require transaction not called within with_transaction")]
+fn require_transactional_panic() {
+	TestExternalities::default().execute_with(|| {
+		<Module<Runtime>>::not_safe();
+	});
+}
+
+#[test]
+fn require_transactional_not_panic() {
+	TestExternalities::default().execute_with(|| {
+		<Module<Runtime>>::safe().unwrap();
 	});
 }
