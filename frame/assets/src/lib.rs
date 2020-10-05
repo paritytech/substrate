@@ -87,7 +87,7 @@
 //! * `force_transfer`: Transfers between arbitrary accounts; called by the asset class's Admin.
 //! * `freeze`: Disallows further `transfer`s from an account; called by the asset class's Freezer.
 //! * `thaw`: Allows further `transfer`s from an account; called by the asset class's Admin.
-//! * `set_owner`: Changes an asset class's Owner; called by the asset class's Owner.
+//! * `transfer_ownership`: Changes an asset class's Owner; called by the asset class's Owner.
 //! * `set_team`: Changes an asset class's Admin, Freezer and Issuer; called by the asset class's
 //!   Owner.
 //!
@@ -115,7 +115,7 @@ use sp_runtime::{RuntimeDebug, traits::{
 }};
 use codec::{Encode, Decode};
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
-	traits::{Currency, ReservableCurrency, EnsureOrigin, Get},
+	traits::{Currency, ReservableCurrency, EnsureOrigin, Get, BalanceStatus::Reserved},
 	dispatch::{DispatchResult, DispatchError},
 };
 use frame_system::ensure_signed;
@@ -229,6 +229,8 @@ decl_event! {
 		Destroyed(AssetId),
 		/// Some asset class was force-created. \[asset_id, owner\]
 		ForceCreated(AssetId, AccountId),
+		/// The maximum amount of zombies allowed has changed. \[asset_id, max_zombies\]
+		MaxZombiesChanged(AssetId, u32),
 	}
 }
 
@@ -257,7 +259,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-		// TODO: Allow for max_zombies to be adjusted.
+		// TODO: Test set_max_zombies.
 		// TODO: Allow for easy integration with system accounts so that an ED in an asset here is
 		//   sufficient for account existence and tx fees may be paid through assets here. An
 		//   `Exchange` trait is probably best for this so AMM pallets can be wired in.
@@ -277,7 +279,7 @@ decl_module! {
 		/// - `id`: The identifier of the new asset. This must not be currently in use to identify
 		/// an existing asset.
 		/// - `owner`: The owner of this class of assets. The owner has full superuser permissions
-		/// over this asset, but may later change and configure the permissions using `set_owner`
+		/// over this asset, but may later change and configure the permissions using `transfer_ownership`
 		/// and `set_team`.
 		/// - `max_zombies`: The total number of accounts which may hold assets in this class yet
 		/// have no existential deposit.
@@ -329,7 +331,7 @@ decl_module! {
 		/// - `id`: The identifier of the new asset. This must not be currently in use to identify
 		/// an existing asset.
 		/// - `owner`: The owner of this class of assets. The owner has full superuser permissions
-		/// over this asset, but may later change and configure the permissions using `set_owner`
+		/// over this asset, but may later change and configure the permissions using `transfer_ownership`
 		/// and `set_team`.
 		/// - `max_zombies`: The total number of accounts which may hold assets in this class yet
 		/// have no existential deposit.
@@ -709,7 +711,7 @@ decl_module! {
 		///
 		/// Weight: `O(1)`
 		#[weight = 0]
-		fn set_owner(origin,
+		fn transfer_ownership(origin,
 			#[compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
@@ -719,6 +721,10 @@ decl_module! {
 			Asset::<T>::try_mutate(id, |maybe_details| {
 				let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 				ensure!(&origin == &d.owner, Error::<T>::NoPermission);
+				if d.owner == owner { return Ok(()) }
+
+				// Move the deposit to the new owner.
+				T::Currency::repatriate_reserved(&d.owner, &owner, d.deposit, Reserved)?;
 
 				d.owner = owner.clone();
 
@@ -760,6 +766,33 @@ decl_module! {
 				d.freezer = freezer.clone();
 
 				Self::deposit_event(RawEvent::TeamChanged(id, issuer, admin, freezer));
+				Ok(())
+			})
+		}
+
+		#[weight = 0]
+		fn set_max_zombies(origin,
+			#[compact] id: T::AssetId,
+			#[compact] max_zombies: u32,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+
+			Asset::<T>::try_mutate(id, |maybe_details| {
+				let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+				ensure!(&origin == &d.owner, Error::<T>::NoPermission);
+				ensure!(max_zombies >= d.zombies, Error::<T>::TooManyZombies);
+
+				let new_deposit = T::AssetDepositPerZombie::get()
+					.saturating_mul(max_zombies.into())
+					.saturating_add(T::AssetDepositBase::get());
+
+				if new_deposit > d.deposit {
+					T::Currency::reserve(&origin, new_deposit - d.deposit)?;
+				} else {
+					T::Currency::unreserve(&origin, d.deposit - new_deposit);
+				}
+
+				Self::deposit_event(RawEvent::MaxZombiesChanged(id, max_zombies));
 				Ok(())
 			})
 		}
@@ -1015,7 +1048,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-			assert_noop!(Assets::set_owner(Origin::signed(2), 0, 2), Error::<Test>::NoPermission);
+			assert_noop!(Assets::transfer_ownership(Origin::signed(2), 0, 2), Error::<Test>::NoPermission);
 			assert_noop!(Assets::set_team(Origin::signed(2), 0, 2, 2, 2), Error::<Test>::NoPermission);
 			assert_noop!(Assets::freeze(Origin::signed(2), 0, 1), Error::<Test>::NoPermission);
 			assert_noop!(Assets::thaw(Origin::signed(2), 0, 2), Error::<Test>::NoPermission);
@@ -1026,12 +1059,12 @@ mod tests {
 	}
 
 	#[test]
-	fn set_owner_should_work() {
+	fn transfer_owner_should_workship() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
-			assert_ok!(Assets::set_owner(Origin::signed(1), 0, 2));
-			assert_noop!(Assets::set_owner(Origin::signed(1), 0, 1), Error::<Test>::NoPermission);
-			assert_ok!(Assets::set_owner(Origin::signed(2), 0, 1));
+			assert_ok!(Assets::transfer_ownership(Origin::signed(1), 0, 2));
+			assert_noop!(Assets::transfer_ownership(Origin::signed(1), 0, 1), Error::<Test>::NoPermission);
+			assert_ok!(Assets::transfer_ownership(Origin::signed(2), 0, 1));
 		});
 	}
 
