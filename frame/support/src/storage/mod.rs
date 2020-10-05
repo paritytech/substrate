@@ -30,7 +30,7 @@ pub mod child;
 pub mod generator;
 pub mod migration;
 
-#[cfg(not(build_type = "release"))]
+#[cfg(debug_assertions)]
 mod debug_helper {
 	#[cfg(feature = "std")]
 	mod with_std {
@@ -88,7 +88,10 @@ mod debug_helper {
 			let mut val = TRANSACTION_LEVEL.0.borrow_mut();
 			*val += 1;
 			if *val > 10 {
-				crate::debug::warn!("Detected with_transaction with nest level {}. Nested usage of with_transaction is not recommended.", *val);
+				crate::debug::warn!(
+					"Detected with_transaction with nest level {}. Nested usage of with_transaction is not recommended.",
+					*val
+				);
 			}
 		}
 
@@ -103,7 +106,7 @@ mod debug_helper {
 }
 
 pub fn require_transaction() {
-	#[cfg(not(build_type = "release"))]
+	#[cfg(debug_assertions)]
 	debug_helper::require_transaction();
 }
 
@@ -121,12 +124,12 @@ pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
 
 	start_transaction();
 
-	#[cfg(not(build_type = "release"))]
+	#[cfg(debug_assertions)]
 	debug_helper::inc_transaction_level();
 
 	let res = f();
 
-	#[cfg(not(build_type = "release"))]
+	#[cfg(debug_assertions)]
 	debug_helper::dec_transaction_level();
 
 	match res {
