@@ -264,33 +264,37 @@ macro_rules! impl_outer_origin {
 			}
 		}
 
-		#[allow(dead_code)]
-		impl $name {
+		impl $crate::traits::SystemOrigin for $name {
+			type AccountId = <$runtime as $system::Trait>::AccountId;
+
 			/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
-			pub fn none() -> Self {
+			fn none() -> Self {
 				$system::RawOrigin::None.into()
 			}
 			/// Create with system root origin and no filter.
-			pub fn root() -> Self {
+			fn root() -> Self {
 				$system::RawOrigin::Root.into()
 			}
 			/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
-			pub fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
+			fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
 				$system::RawOrigin::Signed(by).into()
 			}
 		}
 
-		impl $crate::traits::SystemOrigin for $name {
-			type AccountId = <$runtime as $system::Trait>::AccountId;
-
-			fn none() -> Self {
-				$system::RawOrigin::None.into()
+		// For backwards compatibility and ease of accessing these functions.
+		#[allow(dead_code)]
+		impl $name {
+			/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+			pub fn none() -> Self {
+				<$name as $crate::traits::SystemOrigin>::none()
 			}
-			fn root() -> Self {
-				$system::RawOrigin::Root.into()
+			/// Create with system root origin and no filter.
+			pub fn root() -> Self {
+				<$name as $crate::traits::SystemOrigin>::root()
 			}
-			fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
-				$system::RawOrigin::Signed(by).into()
+			/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+			pub fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
+				<$name as $crate::traits::SystemOrigin>::signed(by)
 			}
 		}
 
