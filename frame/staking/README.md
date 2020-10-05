@@ -81,7 +81,7 @@ between the validator and its nominators. This rule incentivizes the nominators 
 the misbehaving/offline validators as much as possible, simply because the nominators will also
 lose funds if they vote poorly.
 
-An account can become a nominator via the [`nominate`](enum.Call.html#variant.nominate) call.
+An account can become a nominator via the [`nominate`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.nominate) call.
 
 #### Rewards and Slash
 
@@ -102,7 +102,7 @@ Slashing logic is further described in the documentation of the `slashing` modul
 
 Similar to slashing, rewards are also shared among a validator and its associated nominators.
 Yet, the reward funds are not always transferred to the stash account and can be configured. See
-[Reward Calculation](#reward-calculation) for more details.
+[Reward Calculation](https://docs.rs/pallet-staking/latest/pallet_staking/#reward-calculation) for more details.
 
 #### Chilling
 
@@ -110,7 +110,7 @@ Finally, any of the roles above can choose to step back temporarily and just chi
 This means that if they are a nominator, they will not be considered as voters anymore and if
 they are validators, they will no longer be a candidate for the next election.
 
-An account can step back via the [`chill`](enum.Call.html#variant.chill) call.
+An account can step back via the [`chill`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.chill) call.
 
 ### Session managing
 
@@ -202,7 +202,7 @@ staked behind this validator (_i.e._ dividing the
 
 All entities who receive a reward have the option to choose their reward destination through the
 [`Payee`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Payee.html) storage item (see
-[`set_payee`](enum.Call.html#variant.set_payee)), to be one of the following:
+[`set_payee`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.set_payee)), to be one of the following:
 
 - Controller account, (obviously) not increasing the staked value.
 - Stash account, not increasing the staked value.
@@ -213,14 +213,14 @@ All entities who receive a reward have the option to choose their reward destina
 Any funds already placed into stash can be the target of the following operations:
 
 The controller account can free a portion (or all) of the funds using the
-[`unbond`](enum.Call.html#variant.unbond) call. Note that the funds are not immediately
+[`unbond`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.unbond) call. Note that the funds are not immediately
 accessible. Instead, a duration denoted by [`BondingDuration`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.BondingDuration.html)
 (in number of eras) must pass until the funds can actually be removed. Once the
 `BondingDuration` is over, the [`withdraw_unbonded`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.withdraw_unbonded)
 call can be used to actually withdraw the funds.
 
 Note that there is a limitation to the number of fund-chunks that can be scheduled to be
-unlocked in the future via [`unbond`](enum.Call.html#variant.unbond). In case this maximum
+unlocked in the future via [`unbond`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.unbond). In case this maximum
 (`MAX_UNLOCKING_CHUNKS`) is reached, the bonded account _must_ first wait until a successful
 call to `withdraw_unbonded` to remove some of the chunks.
 
