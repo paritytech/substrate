@@ -2848,4 +2848,20 @@ pub(crate) mod tests {
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
 	}
+
+	#[test]
+	fn offchain_backends() {
+		use sp_core::offchain::BlockChainOffchainStorage;
+
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let offchain_local_storage = backend.offchain_local_storage().unwrap();
+		let offchain_local_storage = offchain_local_storage.at(block0).unwrap();
+		let block1 = insert_header(&backend, 1, block0, None, Default::default());
+		let block2 = insert_header(&backend, 2, block1, None, Default::default());
+		let block3 = insert_header(&backend, 3, block2, None, Default::default());
+		let block4 = insert_header(&backend, 4, block3, None, Default::default());
+	}
+
 }

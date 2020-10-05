@@ -195,7 +195,8 @@ impl<H, S> sp_core::offchain::BlockChainOffchainStorage for BlockChainLocalStora
 	type OffchainStorageNew = BlockChainLocalAtNew;
 
 	fn at(&self, id: Self::BlockId) -> Option<Self::OffchainStorage> {
-		if let Some(at_read) = self.historied_management.write().get_db_state(&id) {
+		let db_state = self.historied_management.write().get_db_state(&id);
+		if let Some(at_read) = db_state {
 			let at_write = self.historied_management.write().get_db_state_mut(&id);
 			Some(BlockChainLocalAt {
 				db: self.db.clone(),
