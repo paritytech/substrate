@@ -201,5 +201,6 @@ impl pallet_staking::Trait for Test {
 	type MinSolutionScoreBump = ();
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = ();
+	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();
 }

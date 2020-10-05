@@ -185,6 +185,7 @@ impl pallet_staking::Trait for Test {
 	type UnsignedPriority = ();
 	type MaxIterations = ();
 	type MinSolutionScoreBump = ();
+	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();
 }
 
