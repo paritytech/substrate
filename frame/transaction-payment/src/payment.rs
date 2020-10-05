@@ -13,12 +13,14 @@ use sp_std::{fmt::Debug, marker::PhantomData};
 
 /// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeTransaction<T: Trait> {
-	/// The currency type in which fees will be paid.
+	/// The underlying integer type in which fees are calculated.
 	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
 	type LiquidityInfo: Default;
 
 	/// Before the transaction is executed the payment of the transaction fees
 	/// need to be secured.
+	///
+	/// Note: The `fee` already includes the `tip`.
 	fn withdraw_fee(
 		who: &T::AccountId,
 		call: &T::Call,

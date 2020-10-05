@@ -217,7 +217,7 @@ impl Default for Releases {
 
 pub trait Trait: frame_system::Trait {
 	/// Handler for withdrawing, refunding and depositing the transaction fee.
-	/// Transaction fees are withdrawen before the transaction is executed.
+	/// Transaction fees are withdrawn before the transaction is executed.
 	/// After the transaction was executed the transaction weight can be
 	/// adjusted, depending on the used resources by the transaction. If the
 	/// transaction weight is lower than expected, parts of the transaction fee
