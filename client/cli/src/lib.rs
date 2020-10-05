@@ -253,7 +253,7 @@ pub fn init_logger(
 		.add_directive("yamux=off".parse().expect("provided directive is valid"))
 		.add_directive("cranelift_codegen=off".parse().expect("provided directive is valid"))
 		// Set warn logging by default for some modules.
-		.add_directive("cranelife_wasm=warn".parse().expect("provided directive is valid"))
+		.add_directive("cranelift_wasm=warn".parse().expect("provided directive is valid"))
 		.add_directive("hyper=warn".parse().expect("provided directive is valid"))
 		// Always log the special target `sc_tracing`, overrides global level.
 		.add_directive("sc_tracing=trace".parse().expect("provided directive is valid"))
