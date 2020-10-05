@@ -6456,7 +6456,6 @@ dependencies = [
 name = "sc-consensus-aura"
 version = "0.8.0"
 dependencies = [
- "async-std",
  "derive_more",
  "futures 0.3.5",
  "futures-timer 3.0.2",
@@ -6496,7 +6495,6 @@ dependencies = [
 name = "sc-consensus-babe"
 version = "0.8.0"
 dependencies = [
- "async-std",
  "derive_more",
  "fork-tree",
  "futures 0.3.5",

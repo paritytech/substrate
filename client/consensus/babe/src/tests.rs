@@ -52,7 +52,6 @@ use rand_chacha::{
 };
 use sc_keystore::LocalKeystore;
 use sp_application_crypto::key_types::BABE;
-use async_std::task;
 
 type Item = DigestItem<Hash>;
 
@@ -440,7 +439,7 @@ fn run_one_test(
 			can_author_with: sp_consensus::AlwaysCanAuthor,
 		}).expect("Starts babe"));
 	}
-	task::block_on(future::select(
+	futures::executor::block_on(future::select(
 		futures::future::poll_fn(move |cx| {
 			let mut net = net.lock();
 			net.poll(cx);
