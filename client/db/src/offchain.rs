@@ -420,6 +420,8 @@ impl BlockChainLocalAt {
 					if let &UpdateResult::Unchanged = &update_result {
 						(Vec::new(), update_result)
 					} else {
+						use historied_db::Trigger;
+						histo.trigger_flush();
 						(histo.encode(), update_result)
 					}
 				} else {
@@ -551,29 +553,28 @@ impl DatabasePending {
 }
 
 impl BlockNodes {
+	/// Initialize from clonable pointer to backend database.
 	pub fn new(database: Arc<dyn Database<DbHash>>) -> Self {
 		BlockNodes(DatabasePending {
 			pending: Arc::new(RwLock::new(HashMap::new())),
 			database,
 		})
 	}
+	/// Flush pending changes into a database transaction.
 	pub fn apply_transaction(&self, transaction: &mut Transaction<DbHash>) {
 		self.0.apply_transaction(crate::columns::AUX, transaction)
 	}
 }
 
 impl BranchNodes {
+	/// Initialize from clonable pointer to backend database.
 	pub fn new(database: Arc<dyn Database<DbHash>>) -> Self {
 		BranchNodes(DatabasePending {
 			pending: Arc::new(RwLock::new(HashMap::new())),
 			database,
 		})
 	}
-	pub fn clear_and_extract_changes(
-		&self,
-	) -> (sp_database::ColumnId, HashMap<Vec<u8>, Option<Vec<u8>>>) {
-		(crate::columns::AUX, self.0.clear_and_extract_changes())
-	}
+	/// Flush pending changes into a database transaction.
 	pub fn apply_transaction(&self, transaction: &mut Transaction<DbHash>) {
 		self.0.apply_transaction(crate::columns::AUX, transaction)
 	}

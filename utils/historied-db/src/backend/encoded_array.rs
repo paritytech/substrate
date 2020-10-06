@@ -32,7 +32,7 @@ use crate::historied::HistoriedValue;
 use super::{LinearStorage, LinearStorageSlice, LinearStorageRange};
 use codec::{Encode, Decode, Input as CodecInput};
 use derivative::Derivative;
-use crate::{Context, InitFrom};
+use crate::{Context, InitFrom, Trigger};
 
 #[derive(Derivative, Debug)]
 #[cfg_attr(test, derivative(PartialEq(bound="")))]
@@ -400,11 +400,28 @@ impl<'a, V: Context, F: EncodedArrayConfig> EncodedArray<'a, V, F>
 
 }
 
-impl<'a, F: EncodedArrayConfig, V: Context> Context for EncodedArray<'a, V, F> {
+impl<'a, F: EncodedArrayConfig, V: Context> Trigger for EncodedArray<'a, V, F>
+	where V: EncodedArrayValue + Trigger,
+{
+	const TRIGGER: bool = <V as Trigger>::TRIGGER;
+
+	fn trigger_flush(&mut self) {
+		if Self::TRIGGER {
+			for i in 0 .. self.len() {
+				self.get(i).trigger_flush()
+			}
+		}
+	}
+}
+
+impl<'a, F: EncodedArrayConfig, V: Context> Context for EncodedArray<'a, V, F>
+	where V: EncodedArrayValue,
+{
 	type Context = V::Context;
 }
 
 impl<'a, F: EncodedArrayConfig, V: Context> InitFrom for EncodedArray<'a, V, F>
+	where V: EncodedArrayValue,
 {
 	fn init_from(_init: Self::Context) -> Self {
 		Self::default()

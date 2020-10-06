@@ -55,10 +55,27 @@ pub trait Context: Sized {
 	type Context: Clone;
 }
 
+
+/// Trigger action on changed data.
+pub trait Trigger {
+	/// Define if we can trigger.
+	const TRIGGER: bool;
+
+	/// Run triggered related action on this element and changed children.
+	/// Flush is typically committing to context if needed.
+	fn trigger_flush(&mut self);
+}
+
+
 macro_rules! empty_init {
 	($type: ty) => {
 		impl Context for $type {
 			type Context = ();
+		}
+
+		impl Trigger for $type {
+			const TRIGGER: bool = false;
+			fn trigger_flush(&mut self) { }
 		}
 	}
 }
@@ -70,8 +87,29 @@ empty_init!(u128);
 impl<V: Context> Context for Option<V> {
 	type Context = V::Context;
 }
+
+impl<V: Trigger> Trigger for Option<V> {
+	const TRIGGER: bool = V::TRIGGER;
+
+	fn trigger_flush(&mut self) {
+		if V::TRIGGER {
+			self.as_mut().map(|v| v.trigger_flush());
+		}
+	}
+}
+
 impl<V: Context> Context for Vec<V> {
 	type Context = V::Context;
+}
+
+impl<V: Trigger> Trigger for Vec<V> {
+	const TRIGGER: bool = V::TRIGGER;
+
+	fn trigger_flush(&mut self) {
+		if V::TRIGGER {
+			self.iter_mut().for_each(|v| v.trigger_flush())
+		}
+	}
 }
 
 pub trait InitFrom: Context {

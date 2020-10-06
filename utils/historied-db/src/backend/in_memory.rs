@@ -21,7 +21,7 @@ use crate::historied::HistoriedValue;
 use codec::{Encode, Decode, Input as Input};
 use super::{LinearStorage, LinearStorageMem};
 use sp_std::mem::replace;
-use crate::{Context, InitFrom, DecodeWithContext};
+use crate::{Context, InitFrom, DecodeWithContext, Trigger};
 use sp_std::vec::Vec;
 
 /// Size of preallocated history per element.
@@ -100,9 +100,22 @@ impl<V: Clone + Context, S: Clone> LinearStorageMem<V, S> for MemoryOnly<V, S> {
 	}
 }
 
+impl<V: Clone + Context + Trigger, S: Clone> Trigger for MemoryOnly<V, S> {
+	const TRIGGER: bool = <V as Trigger>::TRIGGER;
+
+	fn trigger_flush(&mut self) {
+		if Self::TRIGGER {
+			for i in 0 .. self.len() {
+				self.get(i).trigger_flush()
+			}
+		}
+	}
+}
+
 impl<V: Context, S> Context for MemoryOnly<V, S> {
 	type Context = V::Context;
 }
+
 impl<V: Context, S> InitFrom for MemoryOnly<V, S> {
 	fn init_from(_init: Self::Context) -> Self {
 		Self::default()

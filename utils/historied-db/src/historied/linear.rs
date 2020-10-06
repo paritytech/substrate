@@ -33,7 +33,7 @@ use sp_std::ops::{SubAssign, Range};
 use codec::{Encode, Decode, Input};
 use crate::backend::{LinearStorage, LinearStorageMem, LinearStorageSlice, LinearStorageRange};
 use crate::backend::encoded_array::EncodedArrayValue;
-use crate::{Context, InitFrom, DecodeWithContext};
+use crate::{Context, InitFrom, DecodeWithContext, Trigger};
 use derivative::Derivative;
 use crate::backend::nodes::EstimateSize;
 
@@ -73,6 +73,16 @@ impl<S> LinearState for S where S:
 #[derive(Derivative, Debug, Encode, Decode)]
 #[derivative(PartialEq(bound="D: PartialEq"))]
 pub struct Linear<V, S, D>(D, PhantomData<(V, S)>);
+
+impl<V, S, D: Trigger> Trigger for Linear<V, S, D> {
+	const TRIGGER: bool = <D as Trigger>::TRIGGER;
+
+	fn trigger_flush(&mut self) {
+		if Self::TRIGGER {
+			self.0.trigger_flush();
+		}
+	}
+}
 
 impl<V, S, D: Context> Context for Linear<V, S, D> {
 	type Context = <D as Context>::Context;

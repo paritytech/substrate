@@ -164,9 +164,13 @@ impl HistoriedDBMut {
 			historied_db::UpdateResult::Changed(())
 		} {
 			historied_db::UpdateResult::Changed(()) => {
+				use historied_db::Trigger;
+				new_value.trigger_flush();
 				change_set.set_from_vec(column, k, new_value.encode());
 			},
 			historied_db::UpdateResult::Cleared(()) => {
+				use historied_db::Trigger;
+				new_value.trigger_flush();
 				change_set.remove(column, k);
 			},
 			historied_db::UpdateResult::Unchanged => (),
@@ -2886,16 +2890,27 @@ pub(crate) mod tests {
 		ooc.set(b"prefix1", b"key1", vec![4u8; 20_000].as_slice(), true);
 		let block2 = insert_block(&backend, 2, block1, None, Some(ooc), Default::default());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
+		assert_eq!(offchain_local_storage.at(block1).unwrap().get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
 		let offchain_local_storage = offchain_local_storage.at(block2).unwrap();
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1").map(|v| v.len()), Some(20_000));
 
 		let mut ooc = OffchainOverlayedChanges::enabled();
 		ooc.remove(b"prefix1", b"key1", true);
-		let block3 = insert_header(&backend, 3, block2, None, Default::default());
+		let block3 = insert_block(&backend, 3, block2, None, Some(ooc), Default::default());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
+		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), None);
+		assert_eq!(offchain_local_storage.at(block1).unwrap().get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
+		assert_eq!(offchain_local_storage.at(block2).unwrap().get(b"prefix1", b"key1").map(|v| v.len()), Some(20_000));
 		let offchain_local_storage = offchain_local_storage.at(block3).unwrap();
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1").map(|v| v.len()), None);
 
-		let block1_b = insert_header(&backend, 1, block0, None, [1; 32].into());
+		let mut ooc = OffchainOverlayedChanges::enabled();
+		ooc.remove(b"prefix1", b"key1", true);
+		let block1_b = insert_block(&backend, 1, block0, None, Some(ooc), [1; 32].into());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
+		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), None);
+		assert_eq!(offchain_local_storage.at(block1).unwrap().get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
 		let offchain_local_storage = offchain_local_storage.at(block1_b).unwrap();
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), None);
 	}
 }

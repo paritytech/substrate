@@ -24,7 +24,7 @@ use sp_std::vec::Vec;
 use super::{LinearStorage};
 use crate::historied::HistoriedValue;
 use derivative::Derivative;
-use crate::{Context, InitFrom, DecodeWithContext};
+use crate::{Context, InitFrom, DecodeWithContext, Trigger};
 use crate::backend::encoded_array::EncodedArrayValue;
 use codec::{Encode, Decode, Input};
 
@@ -105,6 +105,19 @@ pub struct Node<V, S, D, M> {
 	/// Keep trace of node byte length for `APPLY_SIZE_LIMIT`.
 	reference_len: usize,
 	_ph: PhantomData<(V, S, D, M)>,
+}
+
+impl<V, S, D, M> Trigger for Node<V, S, D, M>
+	where
+		D: Trigger,
+{
+	const TRIGGER: bool = <D as Trigger>::TRIGGER;
+
+	fn trigger_flush(&mut self) {
+		if Self::TRIGGER && self.changed {
+			self.data.trigger_flush();
+		}
+	}
 }
 
 impl<V, S, D, M> Node<V, S, D, M> {
@@ -249,24 +262,38 @@ impl<V, S, D, M, B, NI> Head<V, S, D, M, B, NI>
 	}
 }
 */
-impl<V, S, D: Clone, M, B, NI> Head<V, S, D, M, B, NI>
+impl<V, S, D, M, B, NI> Head<V, S, D, M, B, NI>
 	where
+		D: Clone + Trigger,
 		M: NodesMeta,
-		B: NodeStorageMut<V, S, D, M>,
+		B: NodeStorage<V, S, D, M> + NodeStorageMut<V, S, D, M>,
 {
-	pub fn flush_changes(&mut self) {
+	pub fn flush_changes(&mut self, trigger: bool) {
 		for d in self.old_start_node_index .. self.start_node_index {
+			if trigger {
+				if let Some(mut node) = self.backend.get_node(&self.reference_key[..], d) {
+					node.trigger_flush();
+				}
+			}
 			self.backend.remove_node(&self.reference_key[..], d);
 		}
 		// this comparison is needed for the case we clear to 0 nodes indexes.
 		let start_end = sp_std::cmp::max(self.end_node_index, self.old_start_node_index);
 		self.old_start_node_index = self.start_node_index;
 		for d in start_end .. self.old_end_node_index {
+			if trigger {
+				if let Some(mut node) = self.backend.get_node(&self.reference_key[..], d) {
+					node.trigger_flush();
+				}
+			}
 			self.backend.remove_node(&self.reference_key[..], d);
 		}
 		self.old_end_node_index = self.end_node_index;
 		for (index, mut node) in self.fetched.borrow_mut().iter_mut().enumerate() {
 			if node.changed {
+				if trigger {
+					node.trigger_flush();
+				}
 				self.backend.set_node(&self.reference_key[..], self.end_node_index - 1 - index as u32 , node);
 				node.changed = false;
 			}
@@ -286,6 +313,23 @@ pub struct ContextHead<B, NI> {
 	pub node_init_from: NI,
 }
 
+impl<V, S, D, M, B, NI> Trigger for Head<V, S, D, M, B, NI>
+	where
+		D: Clone + Trigger,
+		M: NodesMeta,
+		B: NodeStorage<V, S, D, M> + NodeStorageMut<V, S, D, M>,
+{
+	/// Always transmit trigger for fetch nodes and possibly inner data.
+	const TRIGGER: bool = true;
+
+	fn trigger_flush(&mut self) {
+		if D::TRIGGER {
+			self.inner.trigger_flush();
+		}
+		self.flush_changes(D::TRIGGER)
+	}
+}
+
 impl<V, S, D, M, B, NI> Context for Head<V, S, D, M, B, NI>
 	where
 		D: Context<Context = NI>,
@@ -294,7 +338,7 @@ impl<V, S, D, M, B, NI> Context for Head<V, S, D, M, B, NI>
 {
 	type Context = ContextHead<B, NI>; // TODO key to clone and backend refcell.
 }
-	
+
 impl<V, S, D, M, B, NI> InitFrom for Head<V, S, D, M, B, NI>
 	where
 		D: InitFrom<Context = NI>,
@@ -418,29 +462,54 @@ impl<V, S, D, M, B, NI> LinearStorage<V, S> for Head<V, S, D, M, B, NI>
 		None
 	}
 	fn previous_index(&self, mut index: Self::Index) -> Option<Self::Index> {
+		let mut switched = false;
 		if index.0 == self.end_node_index {
 			if let Some(inner_index) = self.inner.data.previous_index(index.1) {
 				index.1 = inner_index;
 				return Some(index);
+			} else {
+				if index.0 > self.start_node_index {
+					index.0 -= 1;
+					switched = true;
+				} else {
+					return None;
+				}
 			}
 		}
-		while index.0 > self.start_node_index {
-			index.0 -= 1;
+		loop {
 			let fetch_index = self.end_node_index - index.0 - 1;
-			let inner_index = if let Some(node) = self.fetched.borrow().get(fetch_index as usize) {
-				node.data.last()
+			let (past, inner_index) = if let Some(node) = self.fetched.borrow().get(fetch_index as usize) {
+				let inner_index = if switched {
+					switched = false;
+					node.data.last()
+				} else {
+					node.data.previous_index(index.1)
+				};
+				(false, inner_index)
 			} else {
+				(true, None)
+			};
+			let inner_index = if past {
 				if let Some(node) = self.backend.get_node(self.reference_key.as_slice(), index.0) {
-					let inner_index = node.data.previous_index(index.1);
+					debug_assert!(switched);
+					let inner_index = node.data.last();
 					self.fetched.borrow_mut().push(node);
 					inner_index
 				} else {
 					None
 				}
+			} else {
+				inner_index
 			};
 			if let Some(inner_index) = inner_index {
 				index.1 = inner_index;
 				return Some(index);
+			}
+			if index.0 > self.start_node_index {
+				index.0 -= 1;
+				switched = true;
+			} else {
+				break;
 			}
 		}
 		None

@@ -28,7 +28,7 @@ use sp_std::ops::SubAssign;
 use sp_std::vec::Vec;
 use sp_std::marker::PhantomData;
 use crate::Latest;
-use crate::{Context, InitFrom, DecodeWithContext};
+use crate::{Context, InitFrom, DecodeWithContext, Trigger};
 use codec::{Encode, Input};
 use derivative::Derivative;
 use core::default::Default;
@@ -120,6 +120,17 @@ impl<I, BI, V, D, BD> DecodeWithContext for Tree<I, BI, V, D, BD>
 impl<I, BI, V, D: Context, BD: Context> Context for Tree<I, BI, V, D, BD> {
 	type Context = (D::Context, BD::Context);
 }
+
+impl<I, BI, V, D: Context + Trigger, BD: Context> Trigger for Tree<I, BI, V, D, BD> {
+	const TRIGGER: bool = <D as Trigger>::TRIGGER;
+
+	fn trigger_flush(&mut self) {
+		if Self::TRIGGER {
+			self.branches.trigger_flush();
+		}
+	}
+}
+
 impl<I, BI, V, D: InitFrom, BD: InitFrom> InitFrom for Tree<I, BI, V, D, BD> {
 	fn init_from(init: Self::Context) -> Self {
 		Tree {
@@ -831,8 +842,6 @@ mod test {
 		use crate::backend::LinearStorage;
 		let _a: Option<HistoriedValue<V2, u32>> = bd.get_lookup(1usize);
 	}
-
-
 
 	#[test]
 	fn test_set_get() {

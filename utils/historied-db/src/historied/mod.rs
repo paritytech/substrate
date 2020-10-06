@@ -25,7 +25,7 @@ use hash_db::{PlainDB, PlainDBRef};
 use crate::Latest;
 use codec::{Encode, Decode, Input};
 use sp_std::ops::Range;
-use crate::{Context, DecodeWithContext};
+use crate::{Context, DecodeWithContext, Trigger};
 
 pub mod linear;
 pub mod tree;
@@ -138,6 +138,19 @@ pub struct HistoriedValue<V, S> {
 	pub value: V,
 	/// The state this value belongs to.
 	pub state: S,
+}
+
+impl<V, S> Trigger for HistoriedValue<V, S>
+	where
+		V: Trigger,
+{
+	const TRIGGER: bool = V::TRIGGER;
+
+	fn trigger_flush(&mut self) {
+		if V::TRIGGER {
+			self.value.trigger_flush();
+		}
+	}
 }
 
 impl<V, S> Context for HistoriedValue<V, S>
