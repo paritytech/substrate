@@ -2878,11 +2878,13 @@ pub(crate) mod tests {
 		ooc.set(b"prefix1", b"key1", b"value1", true);
 		let block1 = insert_block(&backend, 1, block0, None, Some(ooc), Default::default());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
-//		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), None);
+		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), None);
 		let offchain_local_storage = offchain_local_storage.at(block1).unwrap();
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
 
-		let block2 = insert_header(&backend, 2, block1, None, Default::default());
+		let mut ooc = OffchainOverlayedChanges::enabled();
+//		ooc.set(b"prefix1", b"key1", vec![4u8; 20_000].as_slice(), true);
+		let block2 = insert_block(&backend, 2, block1, None, Some(ooc), Default::default());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
 		let offchain_local_storage = offchain_local_storage.at(block2).unwrap();
 

@@ -706,8 +706,8 @@ impl<V, S, D, M, B, NI> LinearStorage<V, S> for Head<V, S, D, M, B, NI>
 		node.changed = true;
 
 		if M::APPLY_SIZE_LIMIT && V::ACTIVE {
-			let h = node.data.get(index.1);
-			node.reference_len -= h.value.estimate_size() + h.state.estimate_size();
+			let h_old = node.data.get(index.1);
+			node.reference_len -= h_old.value.estimate_size() + h_old.state.estimate_size();
 			node.reference_len += h.value.estimate_size() + h.state.estimate_size();
 		}
 		node.data.emplace(index.1, h);
