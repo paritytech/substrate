@@ -707,7 +707,12 @@ impl<V, S, D, M, B, NI> LinearStorage<V, S> for Head<V, S, D, M, B, NI>
 
 		if M::APPLY_SIZE_LIMIT && V::ACTIVE {
 			let h_old = node.data.get(index.1);
-			node.reference_len -= h_old.value.estimate_size() + h_old.state.estimate_size();
+			if node.reference_len > h_old.value.estimate_size() + h_old.state.estimate_size() {
+				node.reference_len -= h_old.value.estimate_size() + h_old.state.estimate_size();
+			} else {
+				// we can have biggest estimatition for head (size can be overestimated).
+				node.reference_len = 0;
+			}
 			node.reference_len += h.value.estimate_size() + h.state.estimate_size();
 		}
 		node.data.emplace(index.1, h);
