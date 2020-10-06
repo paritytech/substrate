@@ -852,9 +852,9 @@ pub(crate) mod test {
 	#[test]
 	fn test_linear_storage() {
 		test_linear_storage_inner::<MemoryOnly<Vec<u8>, u32>, MetaSize>();
-/*		test_linear_storage_inner::<MemoryOnly<Vec<u8>, u32>, MetaNb>();
+		test_linear_storage_inner::<MemoryOnly<Vec<u8>, u32>, MetaNb>();
 		test_linear_storage_inner::<EncodedArray<Vec<u8>, DefaultVersion>, MetaSize>();
-		test_linear_storage_inner::<EncodedArray<Vec<u8>, DefaultVersion>, MetaNb>();*/
+		test_linear_storage_inner::<EncodedArray<Vec<u8>, DefaultVersion>, MetaNb>();
 	}
 	fn test_linear_storage_inner<D, M>()
 		where
