@@ -258,7 +258,12 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		// TODO consider using types for a totally encoded items.
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+		let key: Vec<u8> = prefix
+			.iter()
+			.chain(std::iter::once(&b'/'))
+			.chain(key)
+			.cloned()
+			.collect();
 		self.db.get(columns::OFFCHAIN, &key)
 			.and_then(|v| {
 				let init_nodes = ContextHead {
@@ -361,7 +366,12 @@ impl BlockChainLocalAt {
 		if self.at_write.is_none() {
 			panic!("Incoherent state for offchain writing");
 		}
-		let key: Vec<u8> = prefix.iter().chain(item_key).cloned().collect();
+		let key: Vec<u8> = prefix
+			.iter()
+			.chain(std::iter::once(&b'/'))
+			.chain(item_key)
+			.cloned()
+			.collect();
 		let key_lock = {
 			let mut locks = self.locks.lock();
 			locks.entry(key.clone()).or_default().clone()

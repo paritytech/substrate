@@ -79,7 +79,7 @@ pub trait InitFrom: Context {
 }
 
 pub trait DecodeWithContext: Context {
-	fn decode_with_context(input: &[u8], init: &Self::Context) -> Option<Self>;
+	fn decode_with_context<I: codec::Input>(input: &mut I, init: &Self::Context) -> Option<Self>;
 }
 
 impl<V: Context> InitFrom for Option<V> {
@@ -95,16 +95,16 @@ impl<V: Context> InitFrom for Vec<V> {
 }
 
 impl<V: codec::Decode + Context> DecodeWithContext for Option<V> {
-	fn decode_with_context(mut input: &[u8], _init: &Self::Context) -> Option<Self> {
+	fn decode_with_context<I: codec::Input>(input: &mut I, _init: &Self::Context) -> Option<Self> {
 		use codec::Decode;
-		Self::decode(&mut input).ok()
+		Self::decode(input).ok()
 	}
 }
 
 impl<V: codec::Decode + Context> DecodeWithContext for Vec<V> {
-	fn decode_with_context(mut input: &[u8], _init: &Self::Context) -> Option<Self> {
+	fn decode_with_context<I: codec::Input>(input: &mut I, _init: &Self::Context) -> Option<Self> {
 		use codec::Decode;
-		Self::decode(&mut input).ok()
+		Self::decode(input).ok()
 	}
 }
 

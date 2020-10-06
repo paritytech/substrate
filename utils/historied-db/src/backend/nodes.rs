@@ -26,7 +26,7 @@ use crate::historied::HistoriedValue;
 use derivative::Derivative;
 use crate::{Context, InitFrom, DecodeWithContext};
 use crate::backend::encoded_array::EncodedArrayValue;
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, Input};
 
 /// Rough size estimate to manage node size.
 pub trait EstimateSize {
@@ -184,18 +184,21 @@ impl<V, S, D, M, B, NI> Encode for Head<V, S, D, M, B, NI>
 
 impl<V, S, D, M, B, NI> DecodeWithContext for Head<V, S, D, M, B, NI>
 	where
-		D: DecodeWithContext<Context = NI>,
+		D: DecodeWithContext<Context = NI> + EstimateSize,
 		B: Clone,
 		NI: Clone,
 {
-	fn decode_with_context(mut input: &[u8], init: &Self::Context) -> Option<Self> {
+	fn decode_with_context<I: Input>(input: &mut I, init: &Self::Context) -> Option<Self> {
 		// This contains len from additionaly struct but it is considered
 		// negligable.
-		let reference_len = input.len();
-		let input = &mut input;
+		let reference_len = match input.remaining_len() {
+			Ok(len) => len,
+			_ => return None,
+		};
 		D::decode_with_context(input, &init.node_init_from).and_then(|data| {
 			let head_decoded = HeadCodec::decode(input).ok();
 			head_decoded.map(|head_decoded| {
+				let reference_len = reference_len.unwrap_or_else(|| data.estimate_size());
 				Head {
 					inner: Node::new(data, reference_len),
 					fetched: RefCell::new(Vec::new()),

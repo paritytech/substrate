@@ -29,7 +29,7 @@ use sp_std::vec::Vec;
 use sp_std::marker::PhantomData;
 use crate::Latest;
 use crate::{Context, InitFrom, DecodeWithContext};
-use codec::Encode;
+use codec::{Encode, Input};
 use derivative::Derivative;
 use core::default::Default;
 
@@ -105,7 +105,7 @@ impl<I, BI, V, D, BD> DecodeWithContext for Tree<I, BI, V, D, BD>
 		D: DecodeWithContext,
 		BD: DecodeWithContext,
 {
-	fn decode_with_context(input: &[u8], init: &Self::Context) -> Option<Self> {
+	fn decode_with_context<IN: Input>(input: &mut IN, init: &Self::Context) -> Option<Self> {
 		D::decode_with_context(input, &init.0).map(|branches|
 			Tree {
 				branches,

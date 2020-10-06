@@ -30,7 +30,7 @@ use sp_std::marker::PhantomData;
 use sp_std::vec::Vec;
 use sp_std::convert::TryFrom;
 use sp_std::ops::{SubAssign, Range};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, Input};
 use crate::backend::{LinearStorage, LinearStorageMem, LinearStorageSlice, LinearStorageRange};
 use crate::backend::encoded_array::EncodedArrayValue;
 use crate::{Context, InitFrom, DecodeWithContext};
@@ -85,7 +85,7 @@ impl<V, S, D: InitFrom> InitFrom for Linear<V, S, D> {
 }
 
 impl<V, S, D: DecodeWithContext> DecodeWithContext for Linear<V, S, D> {
-	fn decode_with_context(input: &[u8], init: &Self::Context) -> Option<Self> {
+	fn decode_with_context<I: Input>(input: &mut I, init: &Self::Context) -> Option<Self> {
 		D::decode_with_context(input, init).map(|d| Linear(d, Default::default()))
 	}
 }

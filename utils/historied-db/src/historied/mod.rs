@@ -23,7 +23,7 @@ use sp_std::marker::PhantomData;
 use crate::{StateDBRef, UpdateResult, InMemoryStateDBRef, StateDB};
 use hash_db::{PlainDB, PlainDBRef};
 use crate::Latest;
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, Input};
 use sp_std::ops::Range;
 use crate::{Context, DecodeWithContext};
 
@@ -152,9 +152,9 @@ impl<V, S> DecodeWithContext for HistoriedValue<V, S>
 		V: DecodeWithContext,
 		S: Decode,
 {
-	fn decode_with_context(mut input: &[u8], init: &Self::Context) -> Option<Self> {
+	fn decode_with_context<I: Input>(input: &mut I, init: &Self::Context) -> Option<Self> {
 		V::decode_with_context(input, init)
-			.and_then(|value| S::decode(&mut input).ok()
+			.and_then(|value| S::decode(input).ok()
 				.map(|state| HistoriedValue {
 					value,
 					state,

@@ -2226,6 +2226,17 @@ pub(crate) mod tests {
 		changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
 		extrinsics_root: H256,
 	) -> H256 {
+		insert_block(backend, number, parent_hash, changes, None, extrinsics_root)
+	}
+	
+	pub fn insert_block(
+		backend: &Backend<Block>,
+		number: u64,
+		parent_hash: H256,
+		changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
+		offchain: Option<OffchainOverlayedChanges>,
+		extrinsics_root: H256,
+	) -> H256 {
 		use sp_runtime::testing::Digest;
 
 		let mut digest = Digest::default();
@@ -2253,6 +2264,9 @@ pub(crate) mod tests {
 		backend.begin_state_operation(&mut op, block_id).unwrap();
 		op.set_block_data(header, Some(Vec::new()), None, NewBlockState::Best).unwrap();
 		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear)).unwrap();
+		if let Some(offchain) = offchain {
+			op.update_offchain_storage(offchain).unwrap();
+		}
 		backend.commit_operation(op).unwrap();
 
 		header_hash
@@ -2850,18 +2864,35 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn offchain_backends() {
-		use sp_core::offchain::BlockChainOffchainStorage;
+	fn offchain_backends_indexing() {
+		use sp_core::offchain::{BlockChainOffchainStorage, OffchainStorage};
 
 		let backend = Backend::<Block>::new_test(10, 10);
 
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
 		let offchain_local_storage = offchain_local_storage.at(block0).unwrap();
-		let block1 = insert_header(&backend, 1, block0, None, Default::default());
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), None);
+
+		let mut ooc = OffchainOverlayedChanges::enabled();
+		ooc.set(b"prefix1", b"key1", b"value1", true);
+		let block1 = insert_block(&backend, 1, block0, None, Some(ooc), Default::default());
+		let offchain_local_storage = backend.offchain_local_storage().unwrap();
+//		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), None);
+		let offchain_local_storage = offchain_local_storage.at(block1).unwrap();
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
+
 		let block2 = insert_header(&backend, 2, block1, None, Default::default());
+		let offchain_local_storage = backend.offchain_local_storage().unwrap();
+		let offchain_local_storage = offchain_local_storage.at(block2).unwrap();
+
 		let block3 = insert_header(&backend, 3, block2, None, Default::default());
-		let block4 = insert_header(&backend, 4, block3, None, Default::default());
+		let offchain_local_storage = backend.offchain_local_storage().unwrap();
+		let offchain_local_storage = offchain_local_storage.at(block3).unwrap();
+
+		let block1_b = insert_header(&backend, 1, block0, None, [1; 32].into());
+		let offchain_local_storage = backend.offchain_local_storage().unwrap();
+		let offchain_local_storage = offchain_local_storage.at(block1_b).unwrap();
 	}
 
 }
