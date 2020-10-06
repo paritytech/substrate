@@ -30,7 +30,7 @@ pub mod child;
 pub mod generator;
 pub mod migration;
 
-#[cfg(all(feature = "std", any(debug_assertions, feature = "assert-require-transaction")))]
+#[cfg(all(feature = "std", debug_assertions))]
 mod debug_helper {
 	use std::cell::RefCell;
 
@@ -67,9 +67,8 @@ mod debug_helper {
 /// This will **panic** if is not called within a storage transaction.
 ///
 /// This assertion is enabled for native execution and when `debug_assertions` are enabled.
-/// Use feature `assert-require-transaction` to enable it for RELEASE builds.
 pub fn require_transaction() {
-	#[cfg(all(feature = "std", any(debug_assertions, feature = "assert-require-transaction")))]
+	#[cfg(all(feature = "std", debug_assertions))]
 	debug_helper::require_transaction();
 }
 
@@ -87,12 +86,12 @@ pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
 
 	start_transaction();
 
-	#[cfg(all(feature = "std", any(debug_assertions, feature = "assert-require-transaction")))]
+	#[cfg(all(feature = "std", debug_assertions))]
 	debug_helper::inc_transaction_level();
 
 	let res = f();
 
-	#[cfg(all(feature = "std", any(debug_assertions, feature = "assert-require-transaction")))]
+	#[cfg(all(feature = "std", debug_assertions))]
 	debug_helper::dec_transaction_level();
 
 	match res {

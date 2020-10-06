@@ -56,4 +56,3 @@ std = [
 nightly = []
 strict = []
 runtime-benchmarks = []
-assert-require-transaction = []
