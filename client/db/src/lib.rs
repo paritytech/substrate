@@ -2898,5 +2898,4 @@ pub(crate) mod tests {
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
 		let offchain_local_storage = offchain_local_storage.at(block1_b).unwrap();
 	}
-
 }
