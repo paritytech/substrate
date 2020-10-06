@@ -419,7 +419,7 @@ impl<V, S, D, M, B, NI> LinearStorage<V, S> for Head<V, S, D, M, B, NI>
 	}
 	fn previous_index(&self, mut index: Self::Index) -> Option<Self::Index> {
 		if index.0 == self.end_node_index {
-			if let Some(inner_index) = self.inner.data.last() {
+			if let Some(inner_index) = self.inner.data.previous_index(index.1) {
 				index.1 = inner_index;
 				return Some(index);
 			}
@@ -431,7 +431,7 @@ impl<V, S, D, M, B, NI> LinearStorage<V, S> for Head<V, S, D, M, B, NI>
 				node.data.last()
 			} else {
 				if let Some(node) = self.backend.get_node(self.reference_key.as_slice(), index.0) {
-					let inner_index = node.data.last();
+					let inner_index = node.data.previous_index(index.1);
 					self.fetched.borrow_mut().push(node);
 					inner_index
 				} else {

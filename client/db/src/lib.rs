@@ -2883,11 +2883,13 @@ pub(crate) mod tests {
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
 
 		let mut ooc = OffchainOverlayedChanges::enabled();
-//		ooc.set(b"prefix1", b"key1", vec![4u8; 20_000].as_slice(), true);
+		ooc.set(b"prefix1", b"key1", vec![4u8; 20_000].as_slice(), true);
 		let block2 = insert_block(&backend, 2, block1, None, Some(ooc), Default::default());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
 		let offchain_local_storage = offchain_local_storage.at(block2).unwrap();
 
+		let mut ooc = OffchainOverlayedChanges::enabled();
+		ooc.remove(b"prefix1", b"key1", true);
 		let block3 = insert_header(&backend, 3, block2, None, Default::default());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
 		let offchain_local_storage = offchain_local_storage.at(block3).unwrap();
