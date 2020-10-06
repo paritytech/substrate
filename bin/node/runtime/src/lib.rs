@@ -696,7 +696,7 @@ impl pallet_contracts::Trait for Runtime {
 	type MaxDepth = pallet_contracts::DefaultMaxDepth;
 	type MaxValueSize = pallet_contracts::DefaultMaxValueSize;
 	type WeightPrice = pallet_transaction_payment::Module<Self>;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_contracts::WeightInfo<Self>;
 }
 
 impl pallet_sudo::Trait for Runtime {
