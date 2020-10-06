@@ -66,7 +66,7 @@ mod debug_helper {
 /// Assert this method is called within a storage transaction.
 /// This will **panic** if is not called within a storage transaction.
 ///
-/// This assertion is enabled for native execution and DEBUG build only.
+/// This assertion is enabled for native execution and when `debug_assertions` are enabled.
 /// Use feature `assert-require-transaction` to enable it for RELEASE builds.
 pub fn require_transaction() {
 	#[cfg(all(feature = "std", any(debug_assertions, feature = "assert-require-transaction")))]

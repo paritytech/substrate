@@ -328,8 +328,7 @@ pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 
 /// Assert the annotated function is executed within a storage transaction.
 ///
-/// The assertion is enabled for debug build native execution only.
-/// Use feature `assert-require-transaction` to enable it for release build native execution.
+/// The assertion is enabled for native execution and when `debug_assertions` are enabled.
 ///
 /// # Example
 ///
