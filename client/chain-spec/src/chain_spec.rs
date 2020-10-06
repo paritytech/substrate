@@ -333,6 +333,13 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 		json::to_string_pretty(&container)
 			.map_err(|e| format!("Error generating spec json: {}", e))
 	}
+
+	/// Dump to json value
+	pub fn as_json_value(&self, raw: bool) -> Result<json::Value, String> {
+		let container = self.json_container(raw)?;
+		json::to_value(container)
+			.map_err(|e| format!("Error generating spec json: {}", e))
+	}
 }
 
 impl<G, E> crate::ChainSpec for ChainSpec<G, E>
@@ -378,6 +385,10 @@ where
 
 	fn as_json(&self, raw: bool) -> Result<String, String> {
 		ChainSpec::as_json(self, raw)
+	}
+
+	fn as_json_value(&self, raw: bool) -> Result<serde_json::Value, String> {
+		ChainSpec::as_json_value(self, raw)
 	}
 
 	fn as_storage_builder(&self) -> &dyn BuildStorage {

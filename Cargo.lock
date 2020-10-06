@@ -7100,6 +7100,7 @@ dependencies = [
  "parking_lot 0.10.2",
  "serde",
  "serde_json",
+ "sp-blockchain",
  "sp-chain-spec",
  "sp-core",
  "sp-rpc",

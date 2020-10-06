@@ -31,7 +31,7 @@ use sc_service::{
 };
 use sp_inherents::InherentDataProviders;
 use sc_network::{Event, NetworkService};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sp_core::traits::BareCryptoStorePtr;
@@ -164,8 +164,6 @@ pub struct NewFullBase {
 	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	pub network_status_sinks: sc_service::NetworkStatusSinks<Block>,
 	pub transaction_pool: Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
-	pub shared_authority_set: grandpa::SharedAuthoritySet<<Block as BlockT>::Hash, NumberFor<Block>>,
-	pub shared_epoch_changes: sc_consensus_epochs::SharedEpochChanges<Block, sc_consensus_babe::Epoch>,
 }
 
 /// Creates a full service from the configuration.
@@ -183,6 +181,9 @@ pub fn new_full_base(
 	} = new_partial(&config)?;
 
 	let (shared_voter_state, finality_proof_provider) = rpc_setup;
+	let (block_import, grandpa_link, babe_link) = import_setup;
+	let shared_authority_set = grandpa_link.shared_authority_set().clone();
+	let shared_epoch_changes = babe_link.epoch_changes().clone();
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -195,6 +196,9 @@ pub fn new_full_base(
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: None,
 			finality_proof_provider: Some(finality_proof_provider.clone()),
+			sync_state_items: Some((
+				shared_authority_set.clone(), shared_epoch_changes.clone(),
+			))
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -226,11 +230,7 @@ pub fn new_full_base(
 		system_rpc_tx,
 	})?;
 
-	let (block_import, grandpa_link, babe_link) = import_setup;
-
 	(with_startup_data)(&block_import, &babe_link);
-
-	let shared_epoch_changes = babe_link.epoch_changes().clone();
 
 	if let sc_service::config::Role::Authority { .. } = &role {
 		let proposer = sc_basic_authorship::ProposerFactory::new(
@@ -310,8 +310,6 @@ pub fn new_full_base(
 		is_authority: role.is_network_authority(),
 	};
 
-	let shared_authority_set = grandpa_link.shared_authority_set().clone();
-
 	if enable_grandpa {
 		// start the full GRANDPA voter
 		// NOTE: non-authorities could run the GRANDPA observer protocol, but at
@@ -347,7 +345,7 @@ pub fn new_full_base(
 	network_starter.start_network();
 	Ok(NewFullBase {
 		task_manager, inherent_data_providers, client, network, network_status_sinks,
-		transaction_pool, shared_authority_set, shared_epoch_changes,
+		transaction_pool,
 	})
 }
 
@@ -421,6 +419,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: Some(finality_proof_request_builder),
 			finality_proof_provider: Some(finality_proof_provider),
+			sync_state_items: None,
 		})?;
 	network_starter.start_network();
 

@@ -103,7 +103,10 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 				}
 				Request::NodeRoles(sender) => {
 					let _ = sender.send(vec![NodeRole::Authority]);
-				}
+				},
+				Request::GenSyncSpec(_, _, sender) => {
+					let _ = sender.send(Ok(serde_json::Value::Null));
+				},
 			};
 
 			future::ready(())
