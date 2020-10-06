@@ -35,7 +35,9 @@ pub fn build_light_sync_state<TBl, TCl>(
 
 	let authority_set = shared_authority_set.inner().read();
 
-	let pending_change = authority_set.pending_changes().next().unwrap();
+	let pending_change = authority_set.pending_changes().next().ok_or_else(|| {
+		"No next pending change in the authority set"
+	})?;
 
 	let finalized_block_weight = sc_consensus_babe::aux_schema::load_block_weight(
 		&*client,

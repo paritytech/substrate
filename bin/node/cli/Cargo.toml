@@ -74,7 +74,6 @@ sc-service = { version = "0.8.0", default-features = false, path = "../../../cli
 sc-tracing = { version = "2.0.0", path = "../../../client/tracing" }
 sc-telemetry = { version = "2.0.0", path = "../../../client/telemetry" }
 sc-authority-discovery = { version = "0.8.0",  path = "../../../client/authority-discovery" }
-sc-consensus-epochs = { version = "0.8.0", path = "../../../client/consensus/epochs" }
 
 # frame dependencies
 pallet-indices = { version = "2.0.0", path = "../../../frame/indices" }

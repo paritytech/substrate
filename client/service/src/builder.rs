@@ -25,7 +25,7 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 };
 use sc_client_api::{
-	light::RemoteBlockchain, ForkBlocks, BadBlocks, UsageProvider, ExecutorProvider,
+	light::RemoteBlockchain, ForkBlocks, BadBlocks, UsageProvider, ExecutorProvider, AuxStore,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_chain_spec::get_extension;
@@ -337,7 +337,6 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 	)?);
 
-	use sc_client_api::AuxStore;
 	use codec::Encode;
 
 	if client.chain_info().best_number == NumberFor::<TBl>::zero() {
@@ -843,6 +842,12 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
 	/// An optional, shared finality proof request provider.
 	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
+	/// Shared GRANDPA and BABE items that are used to generate sync states to be used by light
+	/// clients. Only generated on full clients.
+	pub sync_state_items: Option<(
+		grandpa::SharedAuthoritySet<<TBl as BlockT>::Hash, NumberFor<TBl>>,
+		sc_consensus_epochs::SharedEpochChanges<TBl, sc_consensus_babe::Epoch>,
+	)>
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
@@ -861,12 +866,12 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		TBl: BlockT,
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
-		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
+		HeaderBackend<TBl> + BlockchainEvents<TBl> + AuxStore + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
 {
 	let BuildNetworkParams {
-		config, client, transaction_pool, spawn_handle, import_queue, on_demand,
+		config, client, transaction_pool, spawn_handle, import_queue, on_demand, sync_state_items,
 		block_announce_validator_builder, finality_proof_request_builder, finality_proof_provider,
 	} = params;
 
@@ -930,6 +935,10 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		system_rpc_rx,
 		has_bootnodes,
 		config.announce_block,
+		sync_state_items.map(|(auth_set, epoch_changes)| (
+			config.chain_spec.cloned_box(),
+			auth_set, epoch_changes,
+		))
 	);
 
 	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the

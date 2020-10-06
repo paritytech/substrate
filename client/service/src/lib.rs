@@ -32,6 +32,7 @@ mod builder;
 pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
+mod sync_state;
 mod task_manager;
 
 use std::{io, pin::Pin};
@@ -46,9 +47,11 @@ use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
+use sp_blockchain::HeaderBackend;
+use sc_client_api::{AuxStore, BlockchainEvents};
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -80,7 +83,6 @@ pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
-use sc_client_api::BlockchainEvents;
 pub use sc_keystore::KeyStorePtr as KeyStore;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
@@ -200,7 +202,7 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 async fn build_network_future<
 	B: BlockT,
-	C: BlockchainEvents<B>,
+	C: BlockchainEvents<B> + HeaderBackend<B> + AuxStore,
 	H: sc_network::ExHashT
 > (
 	role: Role,
@@ -210,6 +212,11 @@ async fn build_network_future<
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
+	sync_state_items: Option<(
+		Box<dyn ChainSpec>,
+		grandpa::SharedAuthoritySet<<B as BlockT>::Hash, NumberFor<B>>,
+		sc_consensus_epochs::SharedEpochChanges<B, sc_consensus_babe::Epoch>,
+	)>,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
@@ -323,6 +330,23 @@ async fn build_network_future<
 						};
 
 						let _ = sender.send(vec![node_role]);
+					},
+					sc_rpc::system::Request::GenSyncSpec(raw, sender) => {
+						let result = sync_state_items
+							.as_ref()
+							.ok_or(sc_rpc::system::error::Error::MissingSyncStateItems)
+							.and_then(|(chain_spec, auth_set, epoch_changes)| {
+								let mut chain_spec = chain_spec.cloned_box();
+
+								let sync_state = crate::sync_state::build_light_sync_state(
+									client.clone(), auth_set.clone(), epoch_changes.clone(),
+								)?;
+								chain_spec.set_light_sync_state(sync_state.to_serializable());
+								chain_spec.as_json_value(raw).map_err(|err| {
+									sp_blockchain::Error::Msg(err).into()
+								})
+							});
+						let _ = sender.send(result);
 					}
 				}
 			}

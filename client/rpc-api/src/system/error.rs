@@ -32,6 +32,12 @@ pub enum Error {
 	NotHealthy(Health),
 	/// Peer argument is malformatted.
 	MalformattedPeerArg(String),
+	/// An error that occurred while trying to generate the sync state.
+	#[display(fmt = "{}. Try syncing the node some more.", _0)]
+	GenSyncState(sp_blockchain::Error),
+	/// BuildNetworkParams::sync_state_items has not been set.
+	#[display(fmt = "BuildNetworkParams::sync_state_items has not been set.")]
+	MissingSyncStateItems,
 }
 
 impl std::error::Error for Error {}
@@ -50,6 +56,16 @@ impl From<Error> for rpc::Error {
 			Error::MalformattedPeerArg(ref e) => rpc::Error {
 				code :rpc::ErrorCode::ServerError(BASE_ERROR + 2),
 				message: e.clone(),
+				data: None,
+			},
+			Error::GenSyncState(_) => rpc::Error {
+				code :rpc::ErrorCode::ServerError(BASE_ERROR + 3),
+				message: e.to_string(),
+				data: None,
+			},
+			Error::MissingSyncStateItems => rpc::Error {
+				code :rpc::ErrorCode::ServerError(BASE_ERROR + 4),
+				message: e.to_string(),
 				data: None,
 			}
 		}
