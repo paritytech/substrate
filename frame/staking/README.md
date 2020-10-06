@@ -57,7 +57,7 @@ There are three possible roles that any staked account pair can be in: `Validato
 and `Idle` (defined in [`StakerStatus`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.StakerStatus.html)). There are three
 corresponding instructions to change between roles, namely:
 [`validate`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.validate),
-[`nominate`](./enum.Call.html#variant.nominate), and [`chill`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.chill).
+[`nominate`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.nominate), and [`chill`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.chill).
 
 #### Validating
 
@@ -183,7 +183,7 @@ they received during the era. Points are added to a validator using
 [`reward_by_ids`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.reward_by_ids) or
 [`reward_by_indices`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.reward_by_indices).
 
-[`Module`](./struct.Module.html) implements
+[`Module`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Module.html) implements
 [`pallet_authorship::EventHandler`](https://docs.rs/pallet-authorship/latest/pallet_authorship/trait.EventHandler.html) to add reward
 points to block producer and block producer of referenced uncles.
 
@@ -198,7 +198,7 @@ validator and all of the nominators that nominated the validator, proportional t
 staked behind this validator (_i.e._ dividing the
 [`own`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html#structfield.own) or
 [`others`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html#structfield.others) by
-[`total`](./struct.Exposure.html#structfield.total) in [`Exposure`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html)).
+[`total`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html#structfield.total) in [`Exposure`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html)).
 
 All entities who receive a reward have the option to choose their reward destination through the
 [`Payee`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Payee.html) storage item (see
