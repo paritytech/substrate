@@ -435,7 +435,7 @@ fn run_one_test(
 			inherent_data_providers: data.inherent_data_providers.clone(),
 			force_authoring: false,
 			babe_link: data.link.clone(),
-			keystore: keystore,
+			keystore,
 			can_author_with: sp_consensus::AlwaysCanAuthor,
 		}).expect("Starts babe"));
 	}

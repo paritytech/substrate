@@ -3829,7 +3829,6 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-babe",
- "sp-core",
  "sp-keystore",
  "sp-runtime",
  "sp-transaction-pool",
@@ -6625,7 +6624,6 @@ dependencies = [
 name = "sc-consensus-pow"
 version = "0.8.0"
 dependencies = [
- "async-trait",
  "derive_more",
  "futures 0.3.5",
  "futures-timer 3.0.2",
@@ -7942,7 +7940,6 @@ dependencies = [
 name = "sp-consensus"
 version = "0.8.0"
 dependencies = [
- "async-trait",
  "derive_more",
  "futures 0.3.5",
  "futures-timer 3.0.2",

@@ -17,35 +17,27 @@
 
 //! Types that should only be used for testing!
 
-#[cfg(feature = "std")]
 use sp_core::crypto::KeyTypeId;
-#[cfg(feature = "std")]
 use sp_core::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
 };
-#[cfg(feature = "std")]
 use crate::{
 	{CryptoStore, CryptoStorePtr, Error, SyncCryptoStore},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
-#[cfg(feature = "std")]
 use std::{collections::{HashMap, HashSet}, sync::Arc};
-#[cfg(feature = "std")]
 use parking_lot::RwLock;
-
-#[cfg(feature = "std")]
 use async_trait::async_trait;
 
 /// A keystore implementation usable in tests.
-#[cfg(feature = "std")]
+
 #[derive(Default)]
 pub struct KeyStore {
 	/// `KeyTypeId` maps to public keys and public keys map to private keys.
 	keys: Arc<RwLock<HashMap<KeyTypeId, HashMap<Vec<u8>, String>>>>,
 }
 
-#[cfg(feature = "std")]
 impl KeyStore {
 	/// Creates a new instance of `Self`.
 	pub fn new() -> Self {
@@ -78,7 +70,6 @@ impl KeyStore {
 
 }
 
-#[cfg(feature = "std")]
 #[async_trait]
 impl CryptoStore for KeyStore {
 	async fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
@@ -156,7 +147,6 @@ impl CryptoStore for KeyStore {
 	}
 }
 
-#[cfg(feature = "std")]
 impl SyncCryptoStore for KeyStore {
 	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
 		self.keys.read()
@@ -334,14 +324,12 @@ impl SyncCryptoStore for KeyStore {
 	}
 }
 
-#[cfg(feature = "std")]
 impl Into<CryptoStorePtr> for KeyStore {
 	fn into(self) -> CryptoStorePtr {
 		Arc::new(self)
 	}
 }
 
-#[cfg(feature = "std")]
 impl Into<Arc<dyn CryptoStore>> for KeyStore {
 	fn into(self) -> Arc<dyn CryptoStore> {
 		Arc::new(self)
