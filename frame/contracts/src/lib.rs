@@ -522,7 +522,7 @@ decl_module! {
 
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
-		#[weight = T::WeightInfo::put_code(code.len() as u32)]
+		#[weight = T::WeightInfo::put_code(code.len() as u32 / 1024)]
 		pub fn put_code(
 			origin,
 			code: Vec<u8>
@@ -572,7 +572,7 @@ decl_module! {
 		///   after the execution is saved as the `code` of the account. That code will be invoked
 		///   upon any call received by this account.
 		/// - The contract is initialized.
-		#[weight = T::WeightInfo::instantiate(data.len() as u32).saturating_add(*gas_limit)]
+		#[weight = T::WeightInfo::instantiate(data.len() as u32 / 1024).saturating_add(*gas_limit)]
 		pub fn instantiate(
 			origin,
 			#[compact] endowment: BalanceOf<T>,
