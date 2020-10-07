@@ -390,13 +390,6 @@ impl BlockChainLocalAt {
 		if self.at_write.is_none() && is_new {
 			return Err(ModifyError::NoWriteState);
 		}
-		let at_write_inner;
-		let at_write = if is_new {
-			self.at_write.as_ref().expect("checked above")
-		} else {
-			at_write_inner = Latest::unchecked_latest(self.at_read.latest_index());
-			&at_write_inner
-		};
 		let key: Vec<u8> = prefix
 			.iter()
 			.chain(std::iter::once(&b'/'))
@@ -408,62 +401,19 @@ impl BlockChainLocalAt {
 			locks.entry(key.clone()).or_default().clone()
 		};
 
-		let is_set;
-		{
-			let _key_guard = key_lock.lock();
-			let histo = self.db.get(columns::OFFCHAIN, &key)
-				.and_then(|v| {
-					let init_nodes = ContextHead {
-						key: key.clone(),
-						backend: self.block_nodes.clone(),
-						node_init_from: (),
-					};
-					let init = ContextHead {
-						key: key.clone(),
-						backend: self.branch_nodes.clone(),
-						node_init_from: init_nodes.clone(),
-					};
-					let v: Option<HValue> = historied_db::DecodeWithContext::decode_with_context(
-						&mut &v[..],
-						&(init, init_nodes),
-					);
-					v
-				});
-			let val = histo.as_ref().and_then(|h| {
-				use historied_db::historied::ValueRef;
-				h.get(&self.at_read).flatten()
-			});
-
-			is_set = condition.map(|c| c(val.as_ref().map(|v| v.as_slice()))).unwrap_or(true);
-
-			if is_set {
-				use historied_db::historied::Value;
-				let is_insert = new_value.is_some();
-				let new_value = new_value.map(|v| v.to_vec());
-				let (new_value, update_result) = if let Some(mut histo) = histo {
-					let update_result = if is_new {
-						histo.set(new_value, at_write)
-					} else {
-						use historied_db::historied::ConditionalValueMut;
-						use historied_db::historied::StateIndex;
-						if let Some(update_result) = histo.set_if_possible_no_overwrite(
-							new_value,
-							at_write.index_ref(),
-						) {
-							update_result
-						} else {
-							return Err(ModifyError::AlreadyWritten);
-						}
-					};
-					if let &UpdateResult::Unchanged = &update_result {
-						(Vec::new(), update_result)
-					} else {
-						use historied_db::Trigger;
-						histo.trigger_flush();
-						(histo.encode(), update_result)
-					}
-				} else {
-					if is_insert {
+		let result = || -> Result<bool, ModifyError> {
+			let at_write_inner;
+			let at_write = if is_new {
+				self.at_write.as_ref().expect("checked above")
+			} else {
+				at_write_inner = Latest::unchecked_latest(self.at_read.latest_index());
+				&at_write_inner
+			};
+			let is_set;
+			{
+				let _key_guard = key_lock.lock();
+				let histo = self.db.get(columns::OFFCHAIN, &key)
+					.and_then(|v| {
 						let init_nodes = ContextHead {
 							key: key.clone(),
 							backend: self.block_nodes.clone(),
@@ -474,38 +424,91 @@ impl BlockChainLocalAt {
 							backend: self.branch_nodes.clone(),
 							node_init_from: init_nodes.clone(),
 						};
-	
-						(HValue::new(
+						let v: Option<HValue> = historied_db::DecodeWithContext::decode_with_context(
+							&mut &v[..],
+							&(init, init_nodes),
+						);
+						v
+					});
+				let val = histo.as_ref().and_then(|h| {
+					use historied_db::historied::ValueRef;
+					h.get(&self.at_read).flatten()
+				});
+
+				is_set = condition.map(|c| c(val.as_ref().map(|v| v.as_slice()))).unwrap_or(true);
+
+				if is_set {
+					use historied_db::historied::Value;
+					let is_insert = new_value.is_some();
+					let new_value = new_value.map(|v| v.to_vec());
+					let (new_value, update_result) = if let Some(mut histo) = histo {
+						let update_result = if is_new {
+							histo.set(new_value, at_write)
+						} else {
+							use historied_db::historied::ConditionalValueMut;
+							use historied_db::historied::StateIndex;
+							if let Some(update_result) = histo.set_if_possible_no_overwrite(
 								new_value,
-								at_write,
-								(init, init_nodes),
-							).encode(), UpdateResult::Changed(()))
+								at_write.index_ref(),
+							) {
+								update_result
+							} else {
+								return Err(ModifyError::AlreadyWritten);
+							}
+						};
+						if let &UpdateResult::Unchanged = &update_result {
+							(Vec::new(), update_result)
+						} else {
+							use historied_db::Trigger;
+							histo.trigger_flush();
+							(histo.encode(), update_result)
+						}
 					} else {
-						// nothing to delete
-						(Default::default(), UpdateResult::Unchanged)
+						if is_insert {
+							let init_nodes = ContextHead {
+								key: key.clone(),
+								backend: self.block_nodes.clone(),
+								node_init_from: (),
+							};
+							let init = ContextHead {
+								key: key.clone(),
+								backend: self.branch_nodes.clone(),
+								node_init_from: init_nodes.clone(),
+							};
+
+							(HValue::new(
+									new_value,
+									at_write,
+									(init, init_nodes),
+								).encode(), UpdateResult::Changed(()))
+						} else {
+							// nothing to delete
+							(Default::default(), UpdateResult::Unchanged)
+						}
+					};
+					match update_result {
+						UpdateResult::Changed(()) => {
+							let mut tx = Transaction::new();
+							tx.set(columns::OFFCHAIN, &key, new_value.as_slice());
+
+							if self.db.commit(tx).is_err() {
+								return Err(ModifyError::DbWrite);
+							};
+						},
+						UpdateResult::Cleared(()) => {
+							let mut tx = Transaction::new();
+							tx.remove(columns::OFFCHAIN, &key);
+
+							if self.db.commit(tx).is_err() {
+								return Err(ModifyError::DbWrite);
+							};
+						},
+						UpdateResult::Unchanged => (),
 					}
-				};
-				match update_result {
-					UpdateResult::Changed(()) => {
-						let mut tx = Transaction::new();
-						tx.set(columns::OFFCHAIN, &key, new_value.as_slice());
-
-						if self.db.commit(tx).is_err() {
-							return Err(ModifyError::DbWrite);
-						};
-					},
-					UpdateResult::Cleared(()) => {
-						let mut tx = Transaction::new();
-						tx.remove(columns::OFFCHAIN, &key);
-
-						if self.db.commit(tx).is_err() {
-							return Err(ModifyError::DbWrite);
-						};
-					},
-					UpdateResult::Unchanged => (),
 				}
 			}
-		}
+			Ok(is_set)
+		}();
 
 		// clean the lock map if we're the only entry
 		let mut locks = self.locks.lock();
@@ -516,7 +519,7 @@ impl BlockChainLocalAt {
 				locks.remove(&key);
 			}
 		}
-		Ok(is_set)
+		result
 	}
 }
 
