@@ -483,7 +483,16 @@ impl<FR> SandboxInstance<FR> {
 			}
 
 			BackendInstance::Wasmer(wasmer_instance) => {
-				todo!()
+				let global = wasmer_instance.exports.get_global(name).ok()?;
+				let wasmtime_value = match global.get() {
+					wasmer::Val::I32(val) => Value::I32(val),
+					wasmer::Val::I64(val) => Value::I64(val),
+					wasmer::Val::F32(val) => Value::F32(val as u32),
+					wasmer::Val::F64(val) => Value::F64(val as u64),
+					_ => None?,
+				};
+
+				Some(wasmtime_value)
 			}
 		}
 	}
