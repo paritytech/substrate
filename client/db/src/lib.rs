@@ -1444,9 +1444,9 @@ impl<Block: BlockT> Backend<Block> {
 				let mut management = self.historied_management.write();
 				if let Some(state) = Some(management.get_db_state_for_fork(&parent_hash)
 					.unwrap_or_else(|| {
-						// allow this to start from existing state TODO EMCH add a stored boolean to only allow
-						// that once in genesis
-						warn!("state not found for parent hash, THISISABUG, appending to latest");
+						// allow this to start from existing state TODO add a stored boolean to only allow
+						// that once in genesis or in tests
+						warn!("state not found for parent hash, appending to latest");
 						management.latest_state_fork()
 					}))
 				{

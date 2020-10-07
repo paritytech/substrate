@@ -300,9 +300,16 @@ mod tests {
 
 	#[test]
 	fn should_call_into_runtime_and_produce_extrinsic() {
+		use sc_client_api::Backend;
+		use substrate_test_runtime_client::{
+			TestClientBuilder,
+			DefaultTestClientBuilderExt,
+			TestClientBuilderExt,
+		};
 		sp_tracing::try_init_simple();
-
-		let client = Arc::new(substrate_test_runtime_client::new());
+		let builder = TestClientBuilder::new();
+		let local_db = builder.backend().offchain_local_storage().unwrap();
+		let client = Arc::new(builder.build());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = TestPool(BasicPool::new_full(
 			Default::default(),
@@ -311,7 +318,7 @@ mod tests {
 			client.clone(),
 		));
 		let db = sc_client_db::offchain::LocalStorage::new_test();
-		let local_db = sc_client_db::offchain::BlockChainLocalStorage::new_test();
+		
 		let network = Arc::new(TestNetwork());
 		let header = client.header(&BlockId::number(0)).unwrap().unwrap();
 
