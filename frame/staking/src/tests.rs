@@ -3100,7 +3100,7 @@ mod offchain_election {
 	}
 
 	#[test]
-	#[ignore] // This takes a few mins
+	#[ignore]
 	fn offchain_wont_work_if_snapshot_fails() {
 		ExtBuilder::default()
 			.offchain_election_ext()
@@ -3382,8 +3382,8 @@ mod offchain_election {
 	}
 
 	#[test]
-	fn offchain_worker_runs_with_equalise() {
-		// Offchain worker equalises based on the number provided by randomness. See the difference
+	fn offchain_worker_runs_with_balancing() {
+		// Offchain worker balances based on the number provided by randomness. See the difference
 		// in the priority, which comes from the computed score.
 		let mut ext = ExtBuilder::default()
 			.offchain_election_ext()
