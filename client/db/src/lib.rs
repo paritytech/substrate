@@ -2971,15 +2971,24 @@ pub(crate) mod tests {
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"test".to_vec()));
 
 		let block1 = insert_block(&backend, 1, block0, None, None, Default::default());
+		let mut offchain_local_storage = offchain_local.at(block1).unwrap();
 		offchain_local_storage.set(b"prefix1", b"key2", b"test2");
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key2"), Some(b"test2".to_vec()));
 
 		let _block2 = insert_block(&backend, 2, block1, None, None, Default::default());
-		// can insert in the past if there is no following change (TODO change set api to return error and test the opposites).
+		// can insert in the past if there is no following change
 		let mut offchain_local_storage = offchain_local.at(block1).unwrap();
+		assert!(offchain_local_storage.can_update());
 		offchain_local_storage.set(b"prefix1", b"key3", b"test3");
-		offchain_local_storage.set(b"prefix1", b"key1", b"test1");
+		assert!(offchain_local_storage.set_if_possible(b"prefix1", b"key1", b"test1"));
+		assert!(!offchain_local_storage.set_if_possible(b"prefix1", b"key2", b"test1"));
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key3"), Some(b"test3".to_vec()));
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"test1".to_vec()));
+		let mut offchain_local_storage = offchain_local.at(block0).unwrap();
+		assert!(offchain_local_storage.can_update());
+		assert!(!offchain_local_storage.set_if_possible(b"prefix1", b"key1", b"test1"));
+		assert!(!offchain_local_storage.set_if_possible(b"prefix1", b"key2", b"test1"));
+		assert!(!offchain_local_storage.set_if_possible(b"prefix1", b"key3", b"test1"));
+		assert!(offchain_local_storage.set_if_possible(b"prefix1", b"key4", b"test1"));
 	}
 }

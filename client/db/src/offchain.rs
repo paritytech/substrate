@@ -223,7 +223,7 @@ impl BlockChainLocalAt {
 	/// are at a latest block, this function tells if we can use
 	/// function that modify state.
 	pub fn can_update(&self) -> bool {
-		self.at_write.is_some()
+		true
 	}
 }
 
@@ -235,10 +235,29 @@ impl BlockChainLocalAtNew {
 }
 
 
+impl BlockChainLocalAt {
+	/// Variant of `OffchainStorage` `set` that returns false when state does not allow
+	/// update.
+	/// In case of concurrent access, this generally indicate that some other threads
+	/// already did the update.
+	pub fn set_if_possible(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> bool {
+		let test: Option<fn(Option<&[u8]>) -> bool> = None;
+		match self.modify(
+			prefix,
+			key,
+			test,
+			Some(value),
+			false,
+		) {
+			Ok(_) => true,
+			Err(ModifyError::AlreadyWritten) => false,
+			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
+			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
+		}
+	}
+}
 impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		// TODO have a Tree implementation that can write at non terminal state
-		// to avoid locks??
 		let test: Option<fn(Option<&[u8]>) -> bool> = None;
 		self.modify(
 			prefix,
@@ -246,7 +265,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 			test,
 			Some(value),
 			false,
-		);
+		).expect("Concurrency failure for sequential write of offchain storage");
 	}
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
@@ -257,7 +276,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 			test,
 			None,
 			false,
-		);
+		).expect("Concurrency failure for sequential write of offchain storage");
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
@@ -302,7 +321,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 			Some(test),
 			Some(new_value),
 			false,
-		)
+		).expect("Concurrency failure for sequential write of offchain storage")
 	}
 }
 
@@ -315,7 +334,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
 			test,
 			Some(value),
 			true,
-		);
+		).expect("Concurrency failure for sequential write of offchain storage");
 	}
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
@@ -326,7 +345,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
 			test,
 			None,
 			true,
-		);
+		).expect("Concurrency failure for sequential write of offchain storage");
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
@@ -347,8 +366,15 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
 			Some(test),
 			Some(new_value),
 			true,
-		)
+		).expect("Concurrency failure for sequential write of offchain storage")
 	}
+}
+
+#[derive(Debug)]
+enum ModifyError {
+	NoWriteState,
+	AlreadyWritten,
+	DbWrite,
 }
 
 impl BlockChainLocalAt {
@@ -359,9 +385,9 @@ impl BlockChainLocalAt {
 		condition: Option<impl Fn(Option<&[u8]>) -> bool>,
 		new_value: Option<&[u8]>,
 		is_new: bool,
-	) -> bool {
+	) -> Result<bool, ModifyError> {
 		if self.at_write.is_none() && is_new {
-			panic!("Incoherent state for offchain writing");
+			return Err(ModifyError::NoWriteState);
 		}
 		let at_write_inner;
 		let at_write = if is_new {
@@ -419,10 +445,14 @@ impl BlockChainLocalAt {
 					} else {
 						use historied_db::historied::ConditionalValueMut;
 						use historied_db::historied::StateIndex;
-						histo.set_if_possible_no_overwrite(
+						if let Some(update_result) = histo.set_if_possible_no_overwrite(
 							new_value,
 							at_write.index_ref(),
-						).expect("Concurrency failure for sequential write of offchain storage")
+						) {
+							update_result
+						} else {
+							return Err(ModifyError::AlreadyWritten);
+						}
 					};
 					if let &UpdateResult::Unchanged = &update_result {
 						(Vec::new(), update_result)
@@ -460,7 +490,7 @@ impl BlockChainLocalAt {
 						tx.set(columns::OFFCHAIN, &key, new_value.as_slice());
 
 						if self.db.commit(tx).is_err() {
-							return false;
+							return Err(ModifyError::DbWrite);
 						};
 					},
 					UpdateResult::Cleared(()) => {
@@ -468,7 +498,7 @@ impl BlockChainLocalAt {
 						tx.remove(columns::OFFCHAIN, &key);
 
 						if self.db.commit(tx).is_err() {
-							return false;
+							return Err(ModifyError::DbWrite);
 						};
 					},
 					UpdateResult::Unchanged => (),
@@ -485,7 +515,7 @@ impl BlockChainLocalAt {
 				locks.remove(&key);
 			}
 		}
-		is_set
+		Ok(is_set)
 	}
 }
 
