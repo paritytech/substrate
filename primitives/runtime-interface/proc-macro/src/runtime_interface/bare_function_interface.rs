@@ -104,7 +104,7 @@ fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
 
 	Ok(
 		quote! {
-			#[cfg(not(feature = "std"))]
+			#[cfg(feature = "runtime-wasm")]
 			#( #attrs )*
 			pub fn #function_name( #( #args, )* ) #return_value {
 				// Call the host function
@@ -129,7 +129,7 @@ fn function_std_latest_impl(
 	let latest_function_name = create_function_ident_with_version(&method.sig.ident, latest_version);
 
 	Ok(quote_spanned! { method.span() =>
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		#( #attrs )*
 		pub fn #function_name( #( #args, )* ) #return_value {
 			#latest_function_name(
@@ -181,7 +181,7 @@ fn function_std_impl(
 
 	Ok(
 		quote_spanned! { method.span() =>
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			#( #attrs )*
 			fn #function_name( #( #args, )* ) #return_value {
 				#call_to_trait

@@ -404,7 +404,7 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 				let common_count = trailing_common(&voter_root_path, &target_root_path);
 
 				// because roots are the same.
-				#[cfg(feature = "std")]
+				#[cfg(not(feature = "runtime-wasm"))]
 				debug_assert_eq!(
 					target_root_path.last().unwrap(),
 					voter_root_path.last().unwrap()
@@ -428,7 +428,7 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 					.collect::<Vec<NodeRef<A>>>();
 
 				// a cycle's length shall always be multiple of two.
-				#[cfg(feature = "std")]
+				#[cfg(not(feature = "runtime-wasm"))]
 				debug_assert_eq!(cycle.len() % 2, 0);
 
 				// find minimum of cycle.

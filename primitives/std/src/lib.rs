@@ -99,6 +99,6 @@ pub mod prelude {
 
 	// Re-export `vec!` macro here, but not in `std` mode, since
 	// std's prelude already brings `vec!` into the scope.
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	pub use crate::vec;
 }

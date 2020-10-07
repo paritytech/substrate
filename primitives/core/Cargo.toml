@@ -71,7 +71,8 @@ harness = false
 bench = false
 
 [features]
-default = ["std"]
+default = [ "std" ]
+runtime-wasm = []
 std = [
 	"full_crypto",
 	"log/std",

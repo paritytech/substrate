@@ -43,7 +43,7 @@ pub fn debug_derive(ast: DeriveInput) -> proc_macro::TokenStream {
 	gen.into()
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 mod implementation {
 	use super::*;
 
@@ -58,7 +58,7 @@ mod implementation {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod implementation {
 	use super::*;
 	use proc_macro2::Span;

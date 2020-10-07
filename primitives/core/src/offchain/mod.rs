@@ -24,9 +24,9 @@ use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub mod storage;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub mod testing;
 
 /// Local storage prefix used by the Offchain Worker API to
@@ -705,13 +705,13 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 sp_externalities::decl_extension! {
 	/// The offchain extension that will be registered at the Substrate externalities.
 	pub struct OffchainExt(Box<dyn Externalities>);
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl OffchainExt {
 	/// Create a new instance of `Self`.
 	pub fn new<O: Externalities + 'static>(offchain: O) -> Self {
@@ -724,7 +724,7 @@ impl OffchainExt {
 /// This trait is currently used within the `ExternalitiesExtension`
 /// to provide offchain calls with access to the transaction pool without
 /// tight coupling with any pool implementation.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub trait TransactionPool {
 	/// Submit transaction.
 	///
@@ -732,13 +732,13 @@ pub trait TransactionPool {
 	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 sp_externalities::decl_extension! {
 	/// An externalities extension to submit transactions to the pool.
 	pub struct TransactionPoolExt(Box<dyn TransactionPool + Send>);
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl TransactionPoolExt {
 	/// Create a new instance of `TransactionPoolExt`.
 	pub fn new<O: TransactionPool + Send + 'static>(pool: O) -> Self {

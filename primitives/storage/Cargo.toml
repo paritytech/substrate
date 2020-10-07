@@ -23,4 +23,5 @@ codec = { package = "parity-scale-codec", version = "1.3.1", default-features = 
 
 [features]
 default = [ "std" ]
+runtime-wasm = []
 std = [ "sp-std/std", "serde", "impl-serde", "codec/std" ]

@@ -22,7 +22,8 @@ sp-inherents = { version = "2.0.0", default-features = false, path = "../../inhe
 sp-timestamp = { version = "2.0.0", default-features = false, path = "../../timestamp" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
+runtime-wasm = []
 std = [
 	"sp-application-crypto/std",
 	"codec/std",

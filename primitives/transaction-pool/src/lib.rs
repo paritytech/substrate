@@ -21,12 +21,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod runtime_api;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub mod error;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod pool;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use pool::*;
 
 pub use sp_runtime::transaction_validity::{

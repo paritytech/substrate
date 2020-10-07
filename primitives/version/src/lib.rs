@@ -19,11 +19,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use serde::{Serialize, Deserialize};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::fmt;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::collections::HashSet;
 
 use codec::{Encode, Decode};
@@ -32,7 +32,7 @@ pub use sp_runtime::create_runtime_str;
 #[doc(hidden)]
 pub use sp_std;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 
 /// The identity of a particular API interface that the runtime might provide.
@@ -107,7 +107,7 @@ pub struct RuntimeVersion {
 	pub transaction_version: u32,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl fmt::Display for RuntimeVersion {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "{}-{} ({}-{}.tx{}.au{})",
@@ -121,7 +121,7 @@ impl fmt::Display for RuntimeVersion {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl RuntimeVersion {
 	/// Check if this version matches other version for calling into runtime.
 	pub fn can_call_with(&self, other: &RuntimeVersion) -> bool {
@@ -141,7 +141,7 @@ impl RuntimeVersion {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[derive(Debug)]
 pub struct NativeVersion {
 	/// Basic runtime version info.
@@ -150,7 +150,7 @@ pub struct NativeVersion {
 	pub can_author_with: HashSet<u32>,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl NativeVersion {
 	/// Check if this version matches other version for authoring blocks.
 	///
@@ -181,7 +181,7 @@ impl NativeVersion {
 }
 
 /// Something that can provide the runtime version at a given block and the native runtime version.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub trait GetRuntimeVersion<Block: BlockT> {
 	/// Returns the version of the native runtime.
 	fn native_version(&self) -> &NativeVersion;
@@ -190,7 +190,7 @@ pub trait GetRuntimeVersion<Block: BlockT> {
 	fn runtime_version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, String>;
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<T: GetRuntimeVersion<Block>, Block: BlockT> GetRuntimeVersion<Block> for std::sync::Arc<T> {
 	fn native_version(&self) -> &NativeVersion {
 		(&**self).native_version()
@@ -201,7 +201,7 @@ impl<T: GetRuntimeVersion<Block>, Block: BlockT> GetRuntimeVersion<Block> for st
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod apis_serialize {
 	use super::*;
 	use impl_serde::serialize as bytes;

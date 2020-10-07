@@ -185,7 +185,7 @@ pub trait PerThing:
 	fn from_parts(parts: Self::Inner) -> Self;
 
 	/// Converts a fraction into `Self`.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn from_fraction(x: f64) -> Self;
 
 	/// Approximate the fraction `p/q` into a per-thing fraction. This will never overflow.
@@ -358,7 +358,7 @@ macro_rules! implement_per_thing {
 			fn from_parts(parts: Self::Inner) -> Self { Self(parts.min($max)) }
 
 			/// NOTE: saturate to 0 or 1 if x is beyond `[0, 1]`
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			fn from_fraction(x: f64) -> Self {
 				Self::from_parts((x.max(0.).min(1.) * $max as f64) as Self::Inner)
 			}
@@ -459,7 +459,7 @@ macro_rules! implement_per_thing {
 			}
 
 			/// See [`PerThing::from_fraction`].
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			pub fn from_fraction(x: f64) -> Self {
 				<Self as PerThing>::from_fraction(x)
 			}

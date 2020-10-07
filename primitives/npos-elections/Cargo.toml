@@ -25,7 +25,8 @@ rand = "0.7.3"
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
+runtime-wasm = []
 bench = []
 std = [
 	"codec/std",

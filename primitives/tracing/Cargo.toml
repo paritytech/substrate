@@ -27,6 +27,7 @@ tracing-subscriber = { version = "0.2.10", optional = true, features = ["tracing
 
 [features]
 default = [ "std" ]
+runtime-wasm = []
 with-tracing = [
     "codec/derive",
     "codec/full",

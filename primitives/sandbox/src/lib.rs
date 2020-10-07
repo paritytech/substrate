@@ -44,10 +44,10 @@ pub use sp_core::sandbox::HostError;
 pub use sp_wasm_interface::{Value, ReturnValue};
 
 mod imp {
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	include!("../with_std.rs");
 
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	include!("../without_std.rs");
 }
 

@@ -23,6 +23,7 @@ sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/
 
 [features]
 default = [ "std" ]
+runtime-wasm = []
 std = [ "full_crypto", "sp-core/std", "codec/std", "serde", "sp-std/std", "sp-io/std" ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers

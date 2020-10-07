@@ -19,9 +19,9 @@
 
 use super::{StorageKey, StorageValue, Extrinsics};
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::collections::HashSet as Set;
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 use sp_std::collections::btree_set::BTreeSet as Set;
 
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};

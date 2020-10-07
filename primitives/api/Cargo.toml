@@ -27,6 +27,7 @@ sp-test-primitives = { version = "2.0.0", path = "../test-primitives" }
 
 [features]
 default = [ "std" ]
+runtime-wasm = []
 std = [
 	"codec/std",
 	"sp-core/std",

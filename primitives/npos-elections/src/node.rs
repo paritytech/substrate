@@ -48,7 +48,7 @@ impl<A> NodeId<A> {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<A: fmt::Debug> sp_std::fmt::Debug for NodeId<A> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(
@@ -81,7 +81,7 @@ impl<A: PartialEq> PartialEq for Node<A> {
 
 impl<A: PartialEq> Eq for Node<A> {}
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<A: fmt::Debug + Clone> fmt::Debug for Node<A> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(

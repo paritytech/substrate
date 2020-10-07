@@ -20,11 +20,11 @@
 use sp_std::prelude::*;
 use sp_std::{self, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
 use sp_io;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::fmt::Display;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::str::FromStr;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use sp_core::{self, Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
@@ -410,7 +410,7 @@ pub trait CheckEqual {
 }
 
 impl CheckEqual for sp_core::H256 {
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn check_equal(&self, other: &Self) {
 		use sp_core::hexdisplay::HexDisplay;
 		if self != other {
@@ -422,7 +422,7 @@ impl CheckEqual for sp_core::H256 {
 		}
 	}
 
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
 			"Hash not equal".print();
@@ -433,14 +433,14 @@ impl CheckEqual for sp_core::H256 {
 }
 
 impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H> where H: Encode {
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
 			println!("DigestItem: given={:?}, expected={:?}", self, other);
 		}
 	}
 
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
 			"DigestItem not equal".print();
@@ -884,7 +884,7 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 }
 
 /// Only for bare bone testing when you don't care about signed extensions at all.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl SignedExtension for () {
 	type AccountId = u64;
 	type AdditionalSigned = ();
@@ -1331,7 +1331,7 @@ impl Printable for Tuple {
 }
 
 /// Something that can convert a [`BlockId`](crate::generic::BlockId) to a number or a hash.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub trait BlockIdTo<Block: self::Block> {
 	/// The error type that will be returned by the functions.
 	type Error: std::fmt::Debug;

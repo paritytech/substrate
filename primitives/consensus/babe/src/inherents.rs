@@ -18,12 +18,12 @@
 //! Inherents for BABE
 
 use sp_inherents::{Error, InherentData, InherentIdentifier};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_inherents::{InherentDataProviders, ProvideInherentData};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_timestamp::TimestampInherentData;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use codec::Decode;
 use sp_std::result::Result;
 
@@ -52,12 +52,12 @@ impl BabeInherentData for InherentData {
 }
 
 /// Provides the slot duration inherent data for BABE.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub struct InherentDataProvider {
 	slot_duration: u64,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl InherentDataProvider {
 	/// Constructs `Self`
 	pub fn new(slot_duration: u64) -> Self {
@@ -65,7 +65,7 @@ impl InherentDataProvider {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl ProvideInherentData for InherentDataProvider {
 	fn on_register(&self, providers: &InherentDataProviders) -> Result<(), Error> {
 		if !providers.has_provider(&sp_timestamp::INHERENT_IDENTIFIER) {

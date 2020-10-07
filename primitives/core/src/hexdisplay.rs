@@ -84,7 +84,7 @@ impl_non_endians!([u8; 1], [u8; 2], [u8; 3], [u8; 4], [u8; 5], [u8; 6], [u8; 7],
 	[u8; 48], [u8; 56], [u8; 64], [u8; 65], [u8; 80], [u8; 96], [u8; 112], [u8; 128]);
 
 /// Format into ASCII + # + hex, suitable for storage key preimages.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub fn ascii_format(asciish: &[u8]) -> String {
 	let mut r = String::new();
 	let mut latch = false;

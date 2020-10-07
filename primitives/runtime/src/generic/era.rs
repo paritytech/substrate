@@ -17,7 +17,7 @@
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use serde::{Serialize, Deserialize};
 
 use crate::codec::{Decode, Encode, Input, Output, Error};

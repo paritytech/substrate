@@ -23,19 +23,19 @@ use crate::{sr25519, ed25519};
 use sp_std::hash::Hash;
 use sp_std::vec::Vec;
 use sp_std::str;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_std::convert::TryInto;
 use sp_std::convert::TryFrom;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use parking_lot::Mutex;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use rand::{RngCore, rngs::OsRng};
 use codec::{Encode, Decode};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use regex::Regex;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use base58::{FromBase58, ToBase58};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use crate::hexdisplay::HexDisplay;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
@@ -45,7 +45,7 @@ pub use zeroize::Zeroize;
 /// Trait for accessing reference to `SecretString`.
 pub use secrecy::ExposeSecret;
 /// A store for sensitive data.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use secrecy::SecretString;
 
 /// The root phrase for our publicly known keys.
@@ -224,7 +224,7 @@ pub enum PublicError {
 #[cfg(feature = "full_crypto")]
 pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// Some if the string is a properly encoded SS58Check address.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
 		Self::from_ss58check_with_version(s)
 			.and_then(|(r, v)| match v {
@@ -234,7 +234,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 			})
 	}
 	/// Some if the string is a properly encoded SS58Check address.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
 		let mut res = Self::default();
 		let len = res.as_mut().len();
@@ -254,7 +254,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	}
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn from_string(s: &str) -> Result<Self, PublicError> {
 		Self::from_string_with_version(s)
 			.and_then(|(r, v)| match v {
@@ -265,7 +265,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	}
 
 	/// Return the ss58-check string for this key.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
 		let mut v = vec![version.into()];
 		v.extend(self.as_ref());
@@ -275,12 +275,12 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	}
 
 	/// Return the ss58-check string for this key.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn to_ss58check(&self) -> String { self.to_ss58check_with_version(*DEFAULT_VERSION.lock()) }
 
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn from_string_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
 		Self::from_ss58check_with_version(s)
 	}
@@ -291,16 +291,16 @@ pub trait Derive: Sized {
 	/// Derive a child key from a series of given junctions.
 	///
 	/// Will be `None` for public keys if there are any hard junctions in there.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Option<Self> {
 		None
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 const PREFIX: &[u8] = b"SS58PRE";
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
 	let mut context = blake2_rfc::blake2b::Blake2b::new(64);
 	context.update(PREFIX);
@@ -308,7 +308,7 @@ fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
 	context.finalize()
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 lazy_static::lazy_static! {
 	static ref DEFAULT_VERSION: Mutex<Ss58AddressFormat>
 		= Mutex::new(Ss58AddressFormat::SubstrateAccount);
@@ -325,7 +325,7 @@ macro_rules! ss58_address_format {
 			Custom(u8),
 		}
 
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		impl std::fmt::Display for Ss58AddressFormat {
 			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 				match self {
@@ -379,13 +379,13 @@ macro_rules! ss58_address_format {
 				match x {
 					$($number => Ok(Ss58AddressFormat::$identifier)),*,
 					_ => {
-						#[cfg(feature = "std")]
+						#[cfg(not(feature = "runtime-wasm"))]
 						match Ss58AddressFormat::default() {
 							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(x)),
 							_ => Err(()),
 						}
 
-						#[cfg(not(feature = "std"))]
+						#[cfg(feature = "runtime-wasm")]
 						Err(())
 					},
 				}
@@ -408,7 +408,7 @@ macro_rules! ss58_address_format {
 			}
 		}
 
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		impl std::str::FromStr for Ss58AddressFormat {
 			type Err = ParseError;
 
@@ -417,21 +417,21 @@ macro_rules! ss58_address_format {
 			}
 		}
 
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		impl std::fmt::Display for ParseError {
 			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 				write!(f, "failed to parse network value as u8")
 			}
 		}
 
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		impl Default for Ss58AddressFormat {
 			fn default() -> Self {
 				*DEFAULT_VERSION.lock()
 			}
 		}
 
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		impl From<Ss58AddressFormat> for String {
 			fn from(x: Ss58AddressFormat) -> String {
 				x.to_string()
@@ -514,12 +514,12 @@ ss58_address_format!(
 /// encoding and decoding SS58 addresses. If an unknown version is provided then it fails.
 ///
 /// See `ss58_address_format!` for all current known "versions".
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub fn set_default_ss58_version(version: Ss58AddressFormat) {
 	*DEFAULT_VERSION.lock() = version
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	fn from_string(s: &str) -> Result<Self, PublicError> {
 		let re = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
@@ -605,7 +605,7 @@ impl UncheckedFrom<crate::hash::H256> for AccountId32 {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl Ss58Codec for AccountId32 {}
 
 impl AsRef<[u8]> for AccountId32 {
@@ -669,7 +669,7 @@ impl From<ed25519::Public> for AccountId32 {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl std::fmt::Display for AccountId32 {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{}", self.to_ss58check())
@@ -677,26 +677,26 @@ impl std::fmt::Display for AccountId32 {
 }
 
 impl sp_std::fmt::Debug for AccountId32 {
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
 
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl serde::Serialize for AccountId32 {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
 		serializer.serialize_str(&self.to_ss58check())
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'de> serde::Deserialize<'de> for AccountId32 {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
 		Ss58Codec::from_ss58check(&String::deserialize(deserializer)?)
@@ -704,7 +704,7 @@ impl<'de> serde::Deserialize<'de> for AccountId32 {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl sp_std::str::FromStr for AccountId32 {
 	type Err = &'static str;
 
@@ -721,10 +721,10 @@ impl sp_std::str::FromStr for AccountId32 {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use self::dummy::*;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod dummy {
 	use super::*;
 
@@ -753,7 +753,7 @@ mod dummy {
 
 	impl Public for Dummy {
 		fn from_slice(_: &[u8]) -> Self { Self }
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
 		fn as_slice(&self) -> &[u8] { b"" }
 		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
@@ -768,9 +768,9 @@ mod dummy {
 		type Seed = Dummy;
 		type Signature = Dummy;
 		type DeriveError = ();
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		fn generate_with_phrase(_: Option<&str>) -> (Self, String, Self::Seed) { Default::default() }
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		fn from_phrase(_: &str, _: Option<&str>)
 			-> Result<(Self, Self::Seed), SecretStringError>
 		{
@@ -812,7 +812,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	///
 	/// This is only for ephemeral keys really, since you won't have access to the secret key
 	/// for storage. If you want a persistent key pair, use `generate_with_phrase` instead.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn generate() -> (Self, Self::Seed) {
 		let mut seed = Self::Seed::default();
 		OsRng.fill_bytes(seed.as_mut());
@@ -825,11 +825,11 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	///
 	/// This is generally slower than `generate()`, so prefer that unless you need to persist
 	/// the key from the current session.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn generate_with_phrase(password: Option<&str>) -> (Self, String, Self::Seed);
 
 	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<(Self, Self::Seed), SecretStringError>;
 
 	/// Derive a child key from a series of given junctions.
@@ -891,7 +891,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// be equivalent to no password at all.
 	///
 	/// `None` is returned if no matches are found.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn from_string_with_seed(s: &str, password_override: Option<&str>)
 		-> Result<(Self, Option<Self::Seed>), SecretStringError>
 	{
@@ -929,7 +929,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Interprets the string `s` in order to generate a key pair.
 	///
 	/// See [`from_string_with_seed`](Pair::from_string_with_seed) for more extensive documentation.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
 		Self::from_string_with_seed(s, password_override).map(|x| x.0)
 	}
@@ -1026,7 +1026,7 @@ pub struct CryptoTypeId(pub [u8; 4]);
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl sp_std::fmt::Display for CryptoTypePublicPair {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		let id = match str::from_utf8(&(self.0).0[..]) {

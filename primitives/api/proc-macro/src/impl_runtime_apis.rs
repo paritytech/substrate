@@ -148,7 +148,7 @@ fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 		});
 
 	Ok(quote!(
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		pub fn dispatch(method: &str, mut #data: &[u8]) -> Option<Vec<u8>> {
 			match method {
 				#( #impl_calls )*
@@ -172,7 +172,7 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 			quote!(
 				#( #attrs )*
-				#[cfg(not(feature = "std"))]
+				#[cfg(feature = "runtime-wasm")]
 				#[no_mangle]
 				pub unsafe fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
 					let mut #input = if input_len == 0 {
@@ -757,7 +757,7 @@ mod tests {
 
 	#[test]
 	fn filter_non_cfg_attributes() {
-		let cfg_std: Attribute = parse_quote!(#[cfg(feature = "std")]);
+		let cfg_std: Attribute = parse_quote!(#[cfg(not(feature = "runtime-wasm"))]);
 		let cfg_benchmarks: Attribute = parse_quote!(#[cfg(feature = "runtime-benchmarks")]);
 
 		let attrs = vec![

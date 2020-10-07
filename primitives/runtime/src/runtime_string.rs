@@ -25,10 +25,10 @@ pub enum RuntimeString {
 	/// The borrowed mode that wraps a `&'static str`.
 	Borrowed(&'static str),
 	/// The owned mode that wraps a `String`.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	Owned(String),
 	/// The owned mode that wraps a `Vec<u8>`.
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	Owned(Vec<u8>),
 }
 
@@ -38,7 +38,7 @@ impl From<&'static str> for RuntimeString {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl From<RuntimeString> for String {
 	fn from(string: RuntimeString) -> Self {
 		match string {
@@ -84,7 +84,7 @@ impl Decode for RuntimeString {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl std::fmt::Display for RuntimeString {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match self {
@@ -94,7 +94,7 @@ impl std::fmt::Display for RuntimeString {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl serde::Serialize for RuntimeString {
 	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		match self {
@@ -104,7 +104,7 @@ impl serde::Serialize for RuntimeString {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'de> serde::Deserialize<'de> for RuntimeString {
 	fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
 		String::deserialize(de).map(Self::Owned)

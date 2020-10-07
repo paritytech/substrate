@@ -27,17 +27,17 @@ use sp_std::vec::Vec;
 use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretKey, PublicKey,
 	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
 };
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::convert::TryFrom;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use substrate_bip39::mini_secret_from_entropy;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{
 	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError
 };
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use crate::crypto::Ss58Codec;
 
 use crate::crypto::{Public as TraitPublic, CryptoTypePublicPair, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
@@ -45,7 +45,7 @@ use crate::hash::{H256, H512};
 use codec::{Encode, Decode};
 use sp_std::ops::Deref;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "full_crypto")]
 use schnorrkel::keys::{MINI_SECRET_KEY_LENGTH, SECRET_KEY_LENGTH};
@@ -116,7 +116,7 @@ impl From<Public> for H256 {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl std::str::FromStr for Public {
 	type Err = crate::crypto::PublicError;
 
@@ -151,7 +151,7 @@ impl UncheckedFrom<H256> for Public {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl std::fmt::Display for Public {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{}", self.to_ss58check())
@@ -159,26 +159,26 @@ impl std::fmt::Display for Public {
 }
 
 impl sp_std::fmt::Debug for Public {
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
 
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl Serialize for Public {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
 		serializer.serialize_str(&self.to_ss58check())
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'de> Deserialize<'de> for Public {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 		Public::from_ss58check(&String::deserialize(deserializer)?)
@@ -206,14 +206,14 @@ impl sp_std::convert::TryFrom<&[u8]> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl Serialize for Signature {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
 		serializer.serialize_str(&hex::encode(self))
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'de> Deserialize<'de> for Signature {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 		let signature_hex = hex::decode(&String::deserialize(deserializer)?)
@@ -283,12 +283,12 @@ impl From<schnorrkel::Signature> for Signature {
 }
 
 impl sp_std::fmt::Debug for Signature {
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
 	}
 
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
@@ -303,7 +303,7 @@ impl sp_std::hash::Hash for Signature {
 
 /// A localized signature also contains sender information.
 /// NOTE: Encode and Decode traits are supported in ed25519 but not possible for now here.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct LocalizedSignature {
 	/// The signer of the signature.
@@ -346,7 +346,7 @@ impl Derive for Public {
 	/// Derive a child key from a series of given junctions.
 	///
 	/// `None` if there are any hard junctions in there.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Option<Public> {
 		let mut acc = PublicKey::from_bytes(self.as_ref()).ok()?;
 		for j in path {
@@ -410,14 +410,14 @@ impl From<&Public> for CryptoTypePublicPair {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl From<MiniSecretKey> for Pair {
 	fn from(sec: MiniSecretKey) -> Pair {
 		Pair(sec.expand_to_keypair(ExpansionMode::Ed25519))
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl From<SecretKey> for Pair {
 	fn from(sec: SecretKey) -> Pair {
 		Pair(Keypair::from(sec))
@@ -502,7 +502,7 @@ impl TraitPair for Pair {
 			_ => Err(SecretStringError::InvalidSeedLength)
 		}
 	}
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn generate_with_phrase(password: Option<&str>) -> (Pair, String, Seed) {
 		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 		let phrase = mnemonic.phrase();
@@ -514,7 +514,7 @@ impl TraitPair for Pair {
 			seed,
 		)
 	}
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<(Pair, Seed), SecretStringError> {
 		Mnemonic::from_phrase(phrase, Language::English)
 			.map_err(|_| SecretStringError::InvalidPhrase)
@@ -572,7 +572,7 @@ impl TraitPair for Pair {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl Pair {
 	/// Make a new key pair from binary data derived from a valid seed phrase.
 	///
@@ -621,7 +621,7 @@ impl CryptoType for Pair {
 /// `messages`, `signatures` and `pub_keys` should all have equal length.
 ///
 /// Returns `true` if all signatures are correct, `false` otherwise.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub fn verify_batch(
 	messages: Vec<&[u8]>,
 	signatures: Vec<&Signature>,

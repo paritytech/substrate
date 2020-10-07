@@ -33,7 +33,7 @@ tracing = { version = "0.1.19", default-features = false }
 tracing-core = { version = "0.1.15", default-features = false}
 
 [features]
-default = ["std"]
+default = [ "std" ]
 runtime-wasm = []
 std = [
 	"sp-core/std",

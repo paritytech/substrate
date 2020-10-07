@@ -34,12 +34,12 @@ use codec::{Decode, Encode, EncodeAppend};
 
 use sp_std::{fmt, any::{Any, TypeId}, vec::Vec, vec, boxed::Box};
 use crate::{warn, trace, log_error};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_core::offchain::storage::OffchainOverlayedChanges;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use crate::changes_trie::State as ChangesTrieState;
 use crate::StorageTransactionCache;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::error;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
@@ -49,18 +49,18 @@ const BENCHMARKING_FN: &str = "\
 	Without client transactions the loop condition garantuees the success of the tx close.";
 
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 fn guard() -> sp_panic_handler::AbortGuard {
 	sp_panic_handler::AbortGuard::force_abort()
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 fn guard() -> () {
 	()
 }
 
 /// Errors that can occur when interacting with the externalities.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[derive(Debug, Copy, Clone)]
 pub enum Error<B, E> {
 	/// Failure to load state data from the backend.
@@ -71,7 +71,7 @@ pub enum Error<B, E> {
 	Executor(E),
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<B: fmt::Display, E: fmt::Display> fmt::Display for Error<B, E> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match *self {
@@ -81,7 +81,7 @@ impl<B: fmt::Display, E: fmt::Display> fmt::Display for Error<B, E> {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 	fn description(&self) -> &str {
 		match *self {
@@ -101,21 +101,21 @@ pub struct Ext<'a, H, N, B>
 	/// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
 	/// The overlayed changes destined for the Offchain DB.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	offchain_overlay: &'a mut OffchainOverlayedChanges,
 	/// The storage backend to read from.
 	backend: &'a B,
 	/// The cache for the storage transactions.
 	storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H, N>,
 	/// Changes trie state to read from.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 	/// Pseudo-unique id used for tracing.
 	pub id: u16,
 	/// Dummy usage of N arg.
 	_phantom: sp_std::marker::PhantomData<N>,
 	/// Extensions registered with this instance.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	extensions: Option<OverlayedExtensions<'a>>,
 }
 
@@ -127,7 +127,7 @@ impl<'a, H, N, B> Ext<'a, H, N, B>
 		N: crate::changes_trie::BlockNumber,
 {
 	/// Create a new `Ext`.
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
 		storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H, N>,
@@ -143,7 +143,7 @@ impl<'a, H, N, B> Ext<'a, H, N, B>
 	}
 
 	/// Create a new `Ext` from overlayed changes and read-only backend
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
 		offchain_overlay: &'a mut OffchainOverlayedChanges,
@@ -172,7 +172,7 @@ impl<'a, H, N, B> Ext<'a, H, N, B>
 	}
 
 	/// Read only accessor for the scheduled overlay changes.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	pub fn get_offchain_storage_changes(&self) -> &OffchainOverlayedChanges {
 		&*self.offchain_overlay
 	}
@@ -206,7 +206,7 @@ where
 	B: Backend<H>,
 	N: crate::changes_trie::BlockNumber,
 {
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
 		use ::sp_core::offchain::STORAGE_PREFIX;
 		match value {
@@ -215,7 +215,7 @@ where
 		}
 	}
 
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {}
 
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
@@ -568,12 +568,12 @@ where
 		}
 	}
 
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	fn storage_changes_root(&mut self, _parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		Ok(None)
 	}
 
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		let _guard = guard();
 		let root = self.overlay.changes_trie_root(
@@ -618,7 +618,7 @@ where
 		}
 		self.overlay.drain_storage_changes(
 			&self.backend,
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			None,
 			Default::default(),
 			self.storage_transaction_cache,
@@ -636,7 +636,7 @@ where
 		}
 		let changes = self.overlay.drain_storage_changes(
 			&self.backend,
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			None,
 			Default::default(),
 			self.storage_transaction_cache,
@@ -709,7 +709,7 @@ impl<'a> StorageAppend<'a> {
 	}
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 impl<'a, H, N, B> ExtensionStore for Ext<'a, H, N, B>
 where
 	H: Hasher,
@@ -737,7 +737,7 @@ where
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'a, H, N, B> ExtensionStore for Ext<'a, H, N, B>
 where
 	H: Hasher,

@@ -25,6 +25,7 @@ sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" 
 
 [features]
 default = [ "std" ]
+runtime-wasm = []
 std = [
 	"codec",
 	"derive_more",

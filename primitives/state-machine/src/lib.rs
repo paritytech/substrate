@@ -21,36 +21,36 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod backend;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod in_memory_backend;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod changes_trie;
 mod error;
 mod ext;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod testing;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod basic;
 pub(crate) mod overlayed_changes;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
 mod stats;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod read_only;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use std_reexport::*;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use execution::*;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use log::{debug, warn, trace, error as log_error};
 
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 #[macro_export]
 macro_rules! warn {
 	(target: $target:expr, $($arg:tt)+) => (
@@ -63,7 +63,7 @@ macro_rules! warn {
 
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 #[macro_export]
 macro_rules! debug {
 	(target: $target:expr, $($arg:tt)+) => (
@@ -76,7 +76,7 @@ macro_rules! debug {
 
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 #[macro_export]
 macro_rules! trace {
 	(target: $target:expr, $($arg:tt)+) => (
@@ -89,7 +89,7 @@ macro_rules! trace {
 
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 #[macro_export]
 macro_rules! log_error {
 	(target: $target:expr, $($arg:tt)+) => (
@@ -101,14 +101,14 @@ macro_rules! log_error {
 }
 
 /// Default error type to use with state machine trie backend.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub type DefaultError = String;
 /// Error type to use with state machine trie backend.
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub struct DefaultError;
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 impl sp_std::fmt::Display for DefaultError {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "DefaultError")
@@ -127,7 +127,7 @@ pub use crate::stats::{UsageInfo, UsageUnit, StateMachineStats};
 pub use error::{Error, ExecutionError};
 pub use crate::ext::Ext;
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 mod changes_trie {
 	/// Stub for change trie block number until
 	/// change trie move to no_std.
@@ -136,7 +136,7 @@ mod changes_trie {
 	impl<N> BlockNumber for N {}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod std_reexport {
 	pub use sp_trie::{trie_types::{Layout, TrieDBMut}, StorageProof, TrieMut, DBValue, MemoryDB};
 	pub use crate::testing::TestExternalities;
@@ -164,7 +164,7 @@ mod std_reexport {
 	pub use crate::in_memory_backend::new_in_mem;
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod execution {
 	use super::*;
 	use std::{fmt, result, collections::HashMap, panic::UnwindSafe};

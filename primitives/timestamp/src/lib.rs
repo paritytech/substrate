@@ -20,9 +20,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use codec::Decode;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_inherents::ProvideInherentData;
 use sp_inherents::{InherentIdentifier, IsFatalError, InherentData};
 
@@ -55,7 +55,7 @@ impl IsFatalError for InherentError {
 
 impl InherentError {
 	/// Try to create an instance ouf of the given identifier and data.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
 		if id == &INHERENT_IDENTIFIER {
 			<InherentError as codec::Decode>::decode(&mut &data[..]).ok()
@@ -79,10 +79,10 @@ impl TimestampInherentData for InherentData {
 }
 
 /// Provide duration since unix epoch in millisecond for timestamp inherent.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub struct InherentDataProvider;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl ProvideInherentData for InherentDataProvider {
 	fn inherent_identifier(&self) -> &'static InherentIdentifier {
 		&INHERENT_IDENTIFIER

@@ -31,7 +31,7 @@ pub use sp_core::crypto::{KeyTypeId, CryptoTypeId, key_types};
 #[doc(hidden)]
 pub use codec;
 #[doc(hidden)]
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use serde;
 #[doc(hidden)]
 pub use sp_std::{
@@ -158,7 +158,7 @@ macro_rules! app_crypto_pair {
 
 /// Implements functions for the `Pair` trait when `feature = "std"` is enabled.
 #[doc(hidden)]
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[macro_export]
 macro_rules! app_crypto_pair_functions_if_std {
 	($pair:ty) => {
@@ -176,7 +176,7 @@ macro_rules! app_crypto_pair_functions_if_std {
 }
 
 #[doc(hidden)]
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 #[macro_export]
 macro_rules! app_crypto_pair_functions_if_std {
 	($pair:ty) => {}
@@ -327,7 +327,7 @@ macro_rules! app_crypto_public_common {
 }
 
 /// Implements traits for the public key type if `feature = "std"` is enabled.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_public_common_if_std {
@@ -368,7 +368,7 @@ macro_rules! app_crypto_public_common_if_std {
 	}
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 #[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_public_common_if_std {

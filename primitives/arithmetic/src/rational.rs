@@ -92,14 +92,14 @@ impl From<Rational128> for RationalInfinite {
 #[derive(Clone, Copy, Default, Eq)]
 pub struct Rational128(u128, u128);
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl sp_std::fmt::Debug for Rational128 {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(f, "Rational128({:.4})", self.0 as f32 / self.1 as f32)
 	}
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 impl sp_std::fmt::Debug for Rational128 {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(f, "Rational128(..)")

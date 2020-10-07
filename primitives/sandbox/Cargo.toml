@@ -25,7 +25,8 @@ wat = "1.0"
 assert_matches = "1.3.0"
 
 [features]
-default = ["std"]
+default = [ "std" ]
+runtime-wasm = []
 std = [
 	"wasmi",
 	"sp-core/std",

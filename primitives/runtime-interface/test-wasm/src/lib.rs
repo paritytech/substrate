@@ -21,16 +21,16 @@
 
 use sp_runtime_interface::runtime_interface;
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 use sp_std::{prelude::*, mem, convert::TryFrom};
 
 use sp_core::{sr25519::Public, wasm_export_functions};
 
 // Include the WASM binary
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 /// Wasm binary unwrapped. If built with `BUILD_DUMMY_WASM_BINARY`, the function panics.
 pub fn wasm_binary_unwrap() -> &'static [u8] {
 	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \

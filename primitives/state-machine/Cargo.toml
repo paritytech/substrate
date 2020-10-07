@@ -35,7 +35,8 @@ sp-runtime = { version = "2.0.0", path = "../runtime" }
 pretty_assertions = "0.6.1"
 
 [features]
-default = ["std"]
+default = [ "std" ]
+runtime-wasm = []
 std = [
 	"codec/std",
 	"hash-db/std",

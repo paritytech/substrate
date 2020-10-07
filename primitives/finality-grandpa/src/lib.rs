@@ -19,20 +19,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 extern crate alloc;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use serde::Serialize;
 
 use codec::{Encode, Decode, Input, Codec};
 use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
 use sp_std::borrow::Cow;
 use sp_std::vec::Vec;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_core::traits::BareCryptoStorePtr;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use log::debug;
 
 /// Key type for GRANDPA module.
@@ -362,7 +362,7 @@ where
 	let valid = id.verify(&buf, signature);
 
 	if !valid {
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
 	}
 
@@ -370,7 +370,7 @@ where
 }
 
 /// Localizes the message to the given set and round and signs the payload.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub fn sign_message<H, N>(
 	keystore: &BareCryptoStorePtr,
 	message: grandpa::Message<H, N>,

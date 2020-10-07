@@ -29,7 +29,7 @@
 
 use sp_std::vec::Vec;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_std::ops::Deref;
 
 #[cfg(not(feature = "runtime-wasm"))]

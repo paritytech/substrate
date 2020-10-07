@@ -23,6 +23,7 @@ wasm-timer = { version = "0.2", optional = true }
 
 [features]
 default = [ "std" ]
+runtime-wasm = []
 std = [
 	"sp-api/std",
 	"sp-std/std",

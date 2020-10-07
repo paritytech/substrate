@@ -82,9 +82,9 @@ use sp_arithmetic::{
 	traits::{Zero, Bounded},
 };
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use serde::{Serialize, Deserialize};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use codec::{Encode, Decode};
 
 #[cfg(test)]
@@ -205,7 +205,7 @@ pub struct Edge<AccountId> {
 	weight: ExtendedBalance,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<A: IdentifierT> sp_std::fmt::Debug for Edge<A> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(f, "Edge({:?}, weight = {:?})", self.who, self.weight)
@@ -225,7 +225,7 @@ pub struct Voter<AccountId> {
 	load: Rational128,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<A: IdentifierT> std::fmt::Debug for Voter<A> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(f, "Voter({:?}, budget = {}, edges = {:?})", self.who, self.budget, self.edges)

@@ -430,7 +430,7 @@ impl BigUint {
 }
 
 impl sp_std::fmt::Debug for BigUint {
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(
 			f,
@@ -440,7 +440,7 @@ impl sp_std::fmt::Debug for BigUint {
 		)
 	}
 
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		Ok(())
 	}

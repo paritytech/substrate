@@ -64,7 +64,7 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream
 			/// The implementations of the extern host functions. This special implementation module
 			/// is required to change the extern host functions signature to
 			/// `unsafe fn name(args) -> ret` to make the function implementations exchangeable.
-			#[cfg(not(feature = "std"))]
+			#[cfg(feature = "runtime-wasm")]
 			mod extern_host_function_impls {
 				use super::*;
 
@@ -146,7 +146,7 @@ fn generate_exchangeable_host_function(method: &TraitItemMethod) -> Result<Token
 
 	Ok(
 		quote! {
-			#[cfg(not(feature = "std"))]
+			#[cfg(feature = "runtime-wasm")]
 			#[allow(non_upper_case_globals)]
 			#[doc = #doc_string]
 			pub static #exchangeable_function : #crate_::wasm::ExchangeableFunction<
@@ -171,10 +171,10 @@ fn generate_host_functions_struct(trait_def: &ItemTrait, is_wasm_only: bool) -> 
 	Ok(
 		quote! {
 			/// Provides implementations for the extern host functions.
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			pub struct HostFunctions;
 
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			impl #crate_::sp_wasm_interface::HostFunctions for HostFunctions {
 				fn host_functions() -> Vec<&'static dyn #crate_::sp_wasm_interface::Function> {
 					vec![ #( #host_functions ),* ]

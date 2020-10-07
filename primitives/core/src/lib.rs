@@ -37,16 +37,16 @@ use sp_std::prelude::*;
 use sp_std::ops::Deref;
 #[cfg(feature = "std")]
 use std::borrow::Cow;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use serde::{Serialize, Deserialize};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use serde;
 #[doc(hidden)]
 pub use codec::{Encode, Decode};
 
 pub use sp_debug_derive::RuntimeDebug;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use impl_serde::serialize as bytes;
 
 #[cfg(feature = "full_crypto")]
@@ -63,16 +63,16 @@ pub mod ed25519;
 pub mod sr25519;
 pub mod ecdsa;
 pub mod hash;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod hasher;
 pub mod offchain;
 pub mod sandbox;
 pub mod uint;
 mod changes_trie;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub mod traits;
 pub mod testing;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub mod vrf;
 
 pub use self::hash::{H160, H256, H512, convert_hash};
@@ -82,9 +82,9 @@ pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 pub use crypto::{DeriveJunction, Pair, Public};
 
 pub use hash_db::Hasher;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use self::hasher::blake2::Blake2Hasher;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use self::hasher::keccak::KeccakHasher;
 
 pub use sp_storage as storage;
@@ -149,7 +149,7 @@ impl Deref for Bytes {
 	fn deref(&self) -> &[u8] { &self.0[..] }
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl sp_std::str::FromStr for Bytes {
 	type Err = bytes::FromHexError;
 
@@ -190,7 +190,7 @@ impl OpaquePeerId {
 }
 
 /// Something that is either a native or an encoded value.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub enum NativeOrEncoded<R> {
 	/// The native representation.
 	Native(R),
@@ -198,14 +198,14 @@ pub enum NativeOrEncoded<R> {
 	Encoded(Vec<u8>)
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<R: codec::Encode> sp_std::fmt::Debug for NativeOrEncoded<R> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		hexdisplay::HexDisplay::from(&self.as_encoded().as_ref()).fmt(f)
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<R: codec::Encode> NativeOrEncoded<R> {
 	/// Return the value as the encoded format.
 	pub fn as_encoded(&self) -> Cow<'_, [u8]> {
@@ -224,7 +224,7 @@ impl<R: codec::Encode> NativeOrEncoded<R> {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
@@ -239,11 +239,11 @@ impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
 
 /// A value that is never in a native representation.
 /// This is type is useful in conjunction with `NativeOrEncoded`.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[derive(PartialEq)]
 pub enum NeverNativeValue {}
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl codec::Encode for NeverNativeValue {
 	fn encode(&self) -> Vec<u8> {
 		// The enum is not constructable, so this function should never be callable!
@@ -251,10 +251,10 @@ impl codec::Encode for NeverNativeValue {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl codec::EncodeLike for NeverNativeValue {}
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl codec::Decode for NeverNativeValue {
 	fn decode<I: codec::Input>(_: &mut I) -> Result<Self, codec::Error> {
 		Err("`NeverNativeValue` should never be decoded".into())
@@ -328,7 +328,7 @@ impl From<LogLevel> for log::Level {
 /// from the Wasm blob. The return value of this signature is always a `u64`.
 /// This `u64` stores the pointer to the encoded return value and the length of this encoded value.
 /// The low `32bits` are reserved for the pointer, followed by `32bit` for the length.
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
 	let encoded = value.encode();
 
@@ -375,15 +375,15 @@ macro_rules! impl_maybe_marker {
 	) => {
 		$(
 			$(#[$doc])+
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			pub trait $trait_name: $( $trait_bound + )+ {}
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			impl<T: $( $trait_bound + )+> $trait_name for T {}
 
 			$(#[$doc])+
-			#[cfg(not(feature = "std"))]
+			#[cfg(feature = "runtime-wasm")]
 			pub trait $trait_name {}
-			#[cfg(not(feature = "std"))]
+			#[cfg(feature = "runtime-wasm")]
 			impl<T> $trait_name for T {}
 		)+
 	}

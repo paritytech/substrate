@@ -18,7 +18,7 @@
 //! Trie-based state machine backend essence used to read values
 //! from storage.
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::sync::Arc;
 use sp_std::{ops::Deref, boxed::Box, vec::Vec};
 use crate::{warn, debug};
@@ -31,7 +31,7 @@ use crate::{backend::Consolidate, StorageKey, StorageValue};
 use sp_core::storage::ChildInfo;
 use codec::Encode;
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 macro_rules! format {
 	($($arg:tt)+) => (
 		crate::DefaultError
@@ -351,7 +351,7 @@ pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 }
 
 // This implementation is used by normal storage trie clients.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	type Overlay = PrefixedMemoryDB<H>;
 

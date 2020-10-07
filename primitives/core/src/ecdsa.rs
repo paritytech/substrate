@@ -27,15 +27,15 @@ use codec::{Encode, Decode};
 
 #[cfg(feature = "full_crypto")]
 use core::convert::{TryFrom, TryInto};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use substrate_bip39::seed_from_entropy;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "full_crypto")]
 use crate::{hashing::blake2_256, crypto::{Pair as TraitPair, DeriveJunction, SecretStringError}};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use crate::crypto::Ss58Codec;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::crypto::{Public as TraitPublic, CryptoTypePublicPair, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 use sp_runtime_interface::pass_by::PassByInner;
@@ -76,7 +76,7 @@ impl PartialEq for Public {
 impl Eq for Public {}
 
 /// An error type for SS58 decoding.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum PublicError {
 	/// Bad alphabet.
@@ -101,7 +101,7 @@ impl Public {
 	/// Create a new instance from the given full public key.
 	///
 	/// This will convert the full public key into the compressed format.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	pub fn from_full(full: &[u8]) -> Result<Self, ()> {
 		secp256k1::PublicKey::parse_slice(full, None)
 			.map(|k| k.serialize_compressed())
@@ -184,7 +184,7 @@ impl UncheckedFrom<[u8; 33]> for Public {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl std::fmt::Display for Public {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{}", self.to_ss58check())
@@ -192,26 +192,26 @@ impl std::fmt::Display for Public {
 }
 
 impl sp_std::fmt::Debug for Public {
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.as_ref()), &s[0..8])
 	}
 
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl Serialize for Public {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
 		serializer.serialize_str(&self.to_ss58check())
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'de> Deserialize<'de> for Public {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 		Public::from_ss58check(&String::deserialize(deserializer)?)
@@ -244,14 +244,14 @@ impl sp_std::convert::TryFrom<&[u8]> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl Serialize for Signature {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
 		serializer.serialize_str(&hex::encode(self))
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'de> Deserialize<'de> for Signature {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 		let signature_hex = hex::decode(&String::deserialize(deserializer)?)
@@ -308,12 +308,12 @@ impl AsMut<[u8]> for Signature {
 }
 
 impl sp_std::fmt::Debug for Signature {
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
 	}
 
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
@@ -412,7 +412,7 @@ impl TraitPair for Pair {
 	/// Generate new secure (random) key pair and provide the recovery phrase.
 	///
 	/// You can recover the same key later with `from_phrase`.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn generate_with_phrase(password: Option<&str>) -> (Pair, String, Seed) {
 		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 		let phrase = mnemonic.phrase();
@@ -426,7 +426,7 @@ impl TraitPair for Pair {
 	}
 
 	/// Generate key pair from given recovery phrase and password.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<(Pair, Seed), SecretStringError> {
 		let big_seed = seed_from_entropy(
 			Mnemonic::from_phrase(phrase, Language::English)
@@ -522,7 +522,7 @@ impl Pair {
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
 	/// characters are taken (padded with spaces as necessary) and used as the MiniSecretKey.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	pub fn from_legacy_string(s: &str, password_override: Option<&str>) -> Pair {
 		Self::from_string(s, password_override).unwrap_or_else(|_| {
 			let mut padded_seed: Seed = [' ' as u8; 32];

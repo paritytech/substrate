@@ -18,14 +18,14 @@
 //! Types that should only be used for testing!
 
 use crate::crypto::KeyTypeId;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use crate::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
 	traits::Error,
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::collections::HashSet;
 
 /// Key type for generic Ed25519 key.
@@ -36,14 +36,14 @@ pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
 pub const ECDSA: KeyTypeId = KeyTypeId(*b"ecds");
 
 /// A keystore implementation usable in tests.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[derive(Default)]
 pub struct KeyStore {
 	/// `KeyTypeId` maps to public keys and public keys map to private keys.
 	keys: std::collections::HashMap<KeyTypeId, std::collections::HashMap<Vec<u8>, String>>,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl KeyStore {
 	/// Creates a new instance of `Self`.
 	pub fn new() -> crate::traits::BareCryptoStorePtr {
@@ -76,7 +76,7 @@ impl KeyStore {
 
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl crate::traits::BareCryptoStore for KeyStore {
 	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
 		self.keys
@@ -265,7 +265,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 /// The input parameters are expected to be SCALE encoded and will be automatically decoded for you.
 /// The output value is also SCALE encoded when returned back to the host.
 ///
-/// The functions are feature-gated with `#[cfg(not(feature = "std"))]`, so they are only available
+/// The functions are feature-gated with `#[cfg(feature = "runtime-wasm")]`, so they are only available
 /// from within wasm.
 ///
 /// # Example
@@ -308,7 +308,7 @@ macro_rules! wasm_export_functions {
 	) => {
 		#[no_mangle]
 		#[allow(unreachable_code)]
-		#[cfg(not(feature = "std"))]
+		#[cfg(feature = "runtime-wasm")]
 		pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
 			let input: &[u8] = if input_len == 0 {
 				&[0u8; 0]
@@ -336,7 +336,7 @@ macro_rules! wasm_export_functions {
 	) => {
 		#[no_mangle]
 		#[allow(unreachable_code)]
-		#[cfg(not(feature = "std"))]
+		#[cfg(feature = "runtime-wasm")]
 		pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
 			let input: &[u8] = if input_len == 0 {
 				&[0u8; 0]
@@ -363,11 +363,11 @@ macro_rules! wasm_export_functions {
 ///
 /// Internally this just wraps a `ThreadPool` with a pool size of `8`. This
 /// should ensure that we have enough threads in tests for spawning blocking futures.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[derive(Clone)]
 pub struct TaskExecutor(futures::executor::ThreadPool);
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl TaskExecutor {
 	/// Create a new instance of `Self`.
 	pub fn new() -> Self {
@@ -376,7 +376,7 @@ impl TaskExecutor {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl crate::traits::SpawnNamed for TaskExecutor {
 	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		self.0.spawn_ok(future);

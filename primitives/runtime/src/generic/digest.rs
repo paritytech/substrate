@@ -17,7 +17,7 @@
 
 //! Generic implementation of a digest.
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use serde::{Deserialize, Serialize};
 
 use sp_std::prelude::*;
@@ -135,7 +135,7 @@ pub enum ChangesTrieSignal {
 	NewConfiguration(Option<ChangesTrieConfiguration>),
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<Hash: Encode> serde::Serialize for DigestItem<Hash> {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
 		self.using_encoded(|bytes| {
@@ -144,7 +144,7 @@ impl<Hash: Encode> serde::Serialize for DigestItem<Hash> {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'a, Hash: Decode> serde::Deserialize<'a> for DigestItem<Hash> {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error> where
 		D: serde::Deserializer<'a>,

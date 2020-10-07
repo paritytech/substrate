@@ -26,4 +26,5 @@ proc-macro-crate = "0.1.4"
 # Required for the doc tests
 [features]
 default = [ "std" ]
+runtime-wasm = []
 std = []

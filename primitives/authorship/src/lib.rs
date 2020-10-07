@@ -56,20 +56,20 @@ impl<H: Decode> UnclesInherentData<H> for InherentData {
 }
 
 /// Provider for inherent data.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub struct InherentDataProvider<F, H> {
 	inner: F,
 	_marker: std::marker::PhantomData<H>,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<F, H> InherentDataProvider<F, H> {
 	pub fn new(uncles_oracle: F) -> Self {
 		InherentDataProvider { inner: uncles_oracle, _marker: Default::default() }
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<F, H: Encode + std::fmt::Debug> sp_inherents::ProvideInherentData for InherentDataProvider<F, H>
 where F: Fn() -> Vec<H>
 {

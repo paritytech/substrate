@@ -26,7 +26,7 @@
 
 #[doc(hidden)]
 pub use codec;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[doc(hidden)]
 pub use serde;
 #[doc(hidden)]
@@ -38,7 +38,7 @@ pub use paste;
 #[doc(hidden)]
 pub use sp_application_crypto as app_crypto;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use sp_core::storage::{Storage, StorageChild};
 
 use sp_std::prelude::*;
@@ -50,7 +50,7 @@ use codec::{Encode, Decode};
 pub mod curve;
 pub mod generic;
 pub mod offchain;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
@@ -103,12 +103,12 @@ impl TypeId for ModuleId {
 	const TYPE_ID: [u8; 4] = *b"modl";
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use crate::traits::IdentifyAccount;
 
 /// Complex storage builder stuff.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub trait BuildStorage {
 	/// Build the storage out of this builder.
 	fn build_storage(&self) -> Result<sp_core::storage::Storage, String> {
@@ -124,7 +124,7 @@ pub trait BuildStorage {
 }
 
 /// Something that can build the genesis storage of a module.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
@@ -133,7 +133,7 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	) -> Result<(), String>;
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl BuildStorage for sp_core::storage::Storage {
 	fn assimilate_storage(
 		&self,
@@ -155,7 +155,7 @@ impl BuildStorage for sp_core::storage::Storage {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl BuildStorage for () {
 	fn assimilate_storage(
 		&self,
@@ -311,7 +311,7 @@ impl TryFrom<MultiSigner> for ecdsa::Public {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl std::fmt::Display for MultiSigner {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match *self {
@@ -699,7 +699,7 @@ macro_rules! impl_outer_config {
 /// # }
 /// ```
 #[macro_export]
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
 		assert!(
@@ -724,7 +724,7 @@ impl OpaqueExtrinsic {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
 	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
 		self.0.size_of(ops)
@@ -732,26 +732,26 @@ impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
 }
 
 impl sp_std::fmt::Debug for OpaqueExtrinsic {
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(fmt, "{}", sp_core::hexdisplay::HexDisplay::from(&self.0))
 	}
 
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	fn fmt(&self, _fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
 	}
 }
 
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl ::serde::Serialize for OpaqueExtrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		codec::Encode::using_encoded(&self.0, |bytes| ::sp_core::bytes::serialize(bytes, seq))
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'a> {
 		let r = ::sp_core::bytes::deserialize(de)?;

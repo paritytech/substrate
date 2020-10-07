@@ -35,7 +35,7 @@ pub enum Extrinsic {
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl serde::Serialize for Extrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))

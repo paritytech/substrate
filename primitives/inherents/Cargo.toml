@@ -23,6 +23,7 @@ derive_more = { version = "0.99.2", optional = true }
 
 [features]
 default = [ "std" ]
+runtime-wasm = []
 std = [
 	"parking_lot",
 	"sp-std/std",

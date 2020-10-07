@@ -50,7 +50,7 @@
 
 use sp_std::str;
 use sp_std::prelude::Vec;
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 use sp_std::prelude::vec;
 use sp_core::RuntimeDebug;
 use sp_core::offchain::{
@@ -377,7 +377,7 @@ pub struct ResponseBody {
 	deadline: Option<Timestamp>,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl std::fmt::Debug for ResponseBody {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
 		fmt.debug_struct("ResponseBody")

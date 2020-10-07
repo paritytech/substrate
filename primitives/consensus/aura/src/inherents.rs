@@ -19,7 +19,7 @@
 
 use sp_inherents::{InherentIdentifier, InherentData, Error};
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_inherents::{InherentDataProviders, ProvideInherentData};
 
 /// The Aura inherent identifier.
@@ -48,12 +48,12 @@ impl AuraInherentData for InherentData {
 }
 
 /// Provides the slot duration inherent data for `Aura`.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub struct InherentDataProvider {
 	slot_duration: u64,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl InherentDataProvider {
 	pub fn new(slot_duration: u64) -> Self {
 		Self {
@@ -62,7 +62,7 @@ impl InherentDataProvider {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl ProvideInherentData for InherentDataProvider {
 	fn on_register(
 		&self,

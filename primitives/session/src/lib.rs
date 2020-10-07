@@ -21,9 +21,9 @@
 
 use codec::{Encode, Decode};
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_api::ProvideRuntimeApi;
 
 use sp_core::RuntimeDebug;
@@ -108,7 +108,7 @@ impl GetValidatorCount for MembershipProof {
 
 /// Generate the initial session keys with the given seeds, at the given block and store them in
 /// the client's keystore.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub fn generate_initial_session_keys<Block, T>(
 	client: std::sync::Arc<T>,
 	at: &BlockId<Block>,

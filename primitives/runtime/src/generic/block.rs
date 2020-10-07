@@ -17,10 +17,10 @@
 
 //! Generic implementation of a block and associated items.
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::fmt;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use serde::{Deserialize, Serialize};
 
 use sp_std::prelude::*;
@@ -58,7 +58,7 @@ impl<Block: BlockT> BlockId<Block> {
 
 impl<Block: BlockT> Copy for BlockId<Block> {}
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<Block: BlockT> fmt::Display for BlockId<Block> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "{:?}", self)

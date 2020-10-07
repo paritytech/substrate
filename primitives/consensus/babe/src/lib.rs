@@ -29,7 +29,7 @@ pub use sp_consensus_vrf::schnorrkel::{
 };
 
 use codec::{Decode, Encode};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_core::vrf::{VRFTranscriptData, VRFTranscriptValue};
 use sp_runtime::{traits::Header, ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
@@ -52,7 +52,7 @@ pub static BABE_VRF_INOUT_CONTEXT: &[u8] = b"BabeVRFInOutContext";
 
 /// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub type AuthorityPair = app::Pair;
 
 /// A Babe authority signature.
@@ -104,7 +104,7 @@ pub fn make_transcript(
 }
 
 /// Make a VRF transcript data container
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub fn make_transcript_data(
 	randomness: &Randomness,
 	slot_number: u64,
@@ -238,7 +238,7 @@ impl AllowedSlots {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl sp_consensus::SlotData for BabeGenesisConfiguration {
 	fn slot_duration(&self) -> u64 {
 		self.slot_duration

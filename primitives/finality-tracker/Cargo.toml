@@ -18,7 +18,8 @@ sp-inherents = { version = "2.0.0", default-features = false, path = "../../prim
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
+runtime-wasm = []
 std = [
 	"codec/std",
 	"sp-std/std",

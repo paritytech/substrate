@@ -22,7 +22,8 @@ sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
+runtime-wasm = []
 std = [
 	"impl-serde",
 	"serde",

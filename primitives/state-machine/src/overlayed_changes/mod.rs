@@ -26,7 +26,7 @@ use crate::{
 use sp_std::{vec::Vec, any::{TypeId, Any}, boxed::Box};
 use self::changeset::OverlayedChangeSet;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use crate::{
 	ChangesTrieTransaction,
 	changes_trie::{
@@ -35,14 +35,14 @@ use crate::{
 	},
 };
 use crate::changes_trie::BlockNumber;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::collections::{HashMap as Map, hash_map::Entry as MapEntry};
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 use sp_std::collections::btree_map::{BTreeMap as Map, Entry as MapEntry};
 use sp_std::collections::btree_set::BTreeSet;
 use codec::{Decode, Encode};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_core::offchain::storage::OffchainOverlayedChanges;
 use hash_db::Hasher;
 use crate::DefaultError;
@@ -115,7 +115,7 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	/// All changes to the child storages.
 	pub child_storage_changes: ChildStorageCollection,
 	/// Offchain state changes to write to the offchain database.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	pub offchain_storage_changes: OffchainOverlayedChanges,
 	/// A transaction for the backend that contains all changes from
 	/// [`main_storage_changes`](StorageChanges::main_storage_changes) and from
@@ -127,14 +127,14 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	/// Contains the transaction for the backend for the changes trie.
 	///
 	/// If changes trie is disabled the value is set to `None`.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	pub changes_trie_transaction: Option<ChangesTrieTransaction<H, N>>,
 	/// Phantom data for block number until change trie support no_std.
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	pub _ph: sp_std::marker::PhantomData<N>,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<Transaction, H: Hasher, N: BlockNumber> StorageChanges<Transaction, H, N> {
 	/// Deconstruct into the inner values
 	pub fn into_inner(self) -> (
@@ -165,13 +165,13 @@ pub struct StorageTransactionCache<Transaction, H: Hasher, N: BlockNumber> {
 	/// The storage root after applying the transaction.
 	pub(crate) transaction_storage_root: Option<H::Out>,
 	/// Contains the changes trie transaction.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	pub(crate) changes_trie_transaction: Option<Option<ChangesTrieTransaction<H, N>>>,
 	/// The storage root after applying the changes trie transaction.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	pub(crate) changes_trie_transaction_storage_root: Option<Option<H::Out>>,
 	/// Phantom data for block number until change trie support no_std.
-	#[cfg(not(feature = "std"))]
+	#[cfg(feature = "runtime-wasm")]
 	pub(crate) _ph: sp_std::marker::PhantomData<N>,
 }
 
@@ -187,11 +187,11 @@ impl<Transaction, H: Hasher, N: BlockNumber> Default for StorageTransactionCache
 		Self {
 			transaction: None,
 			transaction_storage_root: None,
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			changes_trie_transaction: None,
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			changes_trie_transaction_storage_root: None,
-			#[cfg(not(feature = "std"))]
+			#[cfg(feature = "runtime-wasm")]
 			_ph: Default::default(),
 		}
 	}
@@ -202,13 +202,13 @@ impl<Transaction: Default, H: Hasher, N: BlockNumber> Default for StorageChanges
 		Self {
 			main_storage_changes: Default::default(),
 			child_storage_changes: Default::default(),
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			offchain_storage_changes: Default::default(),
 			transaction: Default::default(),
 			transaction_storage_root: Default::default(),
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			changes_trie_transaction: None,
-			#[cfg(not(feature = "std"))]
+			#[cfg(feature = "runtime-wasm")]
 			_ph: Default::default(),
 		}
 	}
@@ -467,7 +467,7 @@ impl OverlayedChanges {
 	}
 
 	/// Convert this instance with all changes into a [`StorageChanges`] instance.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	pub fn into_storage_changes<
 		B: Backend<H>, H: Hasher, N: BlockNumber
 	>(
@@ -485,7 +485,7 @@ impl OverlayedChanges {
 	pub fn drain_storage_changes<B: Backend<H>, H: Hasher, N: BlockNumber>(
 		&mut self,
 		backend: &B,
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		changes_trie_state: Option<&ChangesTrieState<H, N>>,
 		parent_hash: H::Out,
 		mut cache: &mut StorageTransactionCache<B::Transaction, H, N>,
@@ -501,7 +501,7 @@ impl OverlayedChanges {
 			.expect("Transaction was be generated as part of `storage_root`; qed");
 
 		// If the transaction does not exist, we generate it.
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		if cache.changes_trie_transaction.is_none() {
 			self.changes_trie_root(
 				backend,
@@ -512,7 +512,7 @@ impl OverlayedChanges {
 			).map_err(|_| "Failed to generate changes trie transaction")?;
 		}
 
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		let changes_trie_transaction = cache.changes_trie_transaction
 			.take()
 			.expect("Changes trie transaction was generated by `changes_trie_root`; qed");
@@ -522,13 +522,13 @@ impl OverlayedChanges {
 		Ok(StorageChanges {
 			main_storage_changes: main_storage_changes.collect(),
 			child_storage_changes: child_storage_changes.map(|(sk, it)| (sk, it.0.collect())).collect(),
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			offchain_storage_changes: Default::default(),
 			transaction,
 			transaction_storage_root,
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			changes_trie_transaction,
-			#[cfg(not(feature = "std"))]
+			#[cfg(feature = "runtime-wasm")]
 			_ph: Default::default(),
 		})
 	}
@@ -587,7 +587,7 @@ impl OverlayedChanges {
 	/// # Panics
 	///
 	/// Panics on storage error, when `panic_on_storage_error` is set.
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	pub fn changes_trie_root<'a, H: Hasher, N: BlockNumber, B: Backend<H>>(
 		&self,
 		backend: &B,
@@ -631,7 +631,7 @@ impl OverlayedChanges {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 fn retain_map<K, V, F>(map: &mut Map<K, V>, f: F)
 	where
 		K: std::cmp::Eq + std::hash::Hash,
@@ -640,7 +640,7 @@ fn retain_map<K, V, F>(map: &mut Map<K, V>, f: F)
 	map.retain(f);
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 fn retain_map<K, V, F>(map: &mut Map<K, V>, mut f: F)
 	where
 		K: Ord,

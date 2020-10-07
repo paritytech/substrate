@@ -34,6 +34,7 @@ trybuild = "1.0.23"
 
 [features]
 default = [ "std" ]
+runtime-wasm = []
 std = [
 	"sp-wasm-interface/std",
 	"sp-std/std",

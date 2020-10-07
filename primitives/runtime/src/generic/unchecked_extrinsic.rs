@@ -48,7 +48,7 @@ where
 	pub function: Call,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<Address, Call, Signature, Extra> parity_util_mem::MallocSizeOf
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
@@ -279,7 +279,7 @@ where
 	Extra: SignedExtension,
 {}
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> serde::Serialize
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
@@ -288,7 +288,7 @@ impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> s
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'a, Address: Decode, Signature: Decode, Call: Decode, Extra: SignedExtension> serde::Deserialize<'a>
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {

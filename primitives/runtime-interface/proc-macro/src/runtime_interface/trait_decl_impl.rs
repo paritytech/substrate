@@ -174,7 +174,7 @@ fn impl_trait_for_externalities(trait_def: &ItemTrait, is_wasm_only: bool) -> Re
 
 	Ok(
 		quote! {
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			impl #trait_ for #impl_type {
 				#( #methods )*
 			}

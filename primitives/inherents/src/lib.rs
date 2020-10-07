@@ -38,25 +38,25 @@ use codec::{Encode, Decode};
 
 use sp_std::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use parking_lot::RwLock;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::{sync::Arc, format};
 
 /// An error that can occur within the inherent data system.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[derive(Debug, Encode, Decode, derive_more::Display)]
 pub struct Error(String);
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<T: Into<String>> From<T> for Error {
 	fn from(data: T) -> Error {
 		Self(data.into())
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl Error {
 	/// Convert this error into a `String`.
 	pub fn into_string(self) -> String {
@@ -66,10 +66,10 @@ impl Error {
 
 /// An error that can occur within the inherent data system.
 #[derive(Encode, sp_core::RuntimeDebug)]
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 pub struct Error(&'static str);
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 impl From<&'static str> for Error {
 	fn from(data: &'static str) -> Error {
 		Self(data)
@@ -247,7 +247,7 @@ impl CheckInherentsResult {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl PartialEq for CheckInherentsResult {
 	fn eq(&self, other: &Self) -> bool {
 		self.fatal_error == other.fatal_error &&
@@ -257,13 +257,13 @@ impl PartialEq for CheckInherentsResult {
 }
 
 /// All `InherentData` providers.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[derive(Clone, Default)]
 pub struct InherentDataProviders {
 	providers: Arc<RwLock<Vec<Box<dyn ProvideInherentData + Send + Sync>>>>,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl InherentDataProviders {
 	/// Create a new instance.
 	pub fn new() -> Self {
@@ -337,7 +337,7 @@ impl InherentDataProviders {
 }
 
 /// Something that provides inherent data.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub trait ProvideInherentData {
 	/// Is called when this inherent data provider is registered at the given
 	/// `InherentDataProviders`.
@@ -360,7 +360,7 @@ pub trait ProvideInherentData {
 }
 
 /// A fallback function, if the decoding of an error fails.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 fn error_to_string_fallback(identifier: &InherentIdentifier) -> String {
 	format!(
 		"Error while checking inherent of type \"{}\", but error could not be decoded.",

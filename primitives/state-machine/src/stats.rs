@@ -17,7 +17,7 @@
 
 //! Usage statistics for state db
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::time::{Instant, Duration};
 use sp_std::cell::RefCell;
 
@@ -51,10 +51,10 @@ pub struct UsageInfo {
 	/// Memory used.
 	pub memory: usize,
 
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	/// Moment at which current statistics has been started being collected.
 	pub started: Instant,
-	#[cfg(feature = "std")]
+	#[cfg(not(feature = "runtime-wasm"))]
 	/// Timespan of the statistics.
 	pub span: Duration,
 }
@@ -102,9 +102,9 @@ impl UsageInfo {
 			cache_reads: UsageUnit::default(),
 			modified_reads: UsageUnit::default(),
 			memory: 0,
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			started: Instant::now(),
-			#[cfg(feature = "std")]
+			#[cfg(not(feature = "runtime-wasm"))]
 			span: Default::default(),
 		}
 	}

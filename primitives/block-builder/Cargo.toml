@@ -21,6 +21,7 @@ sp-inherents = { version = "2.0.0", default-features = false, path = "../inheren
 
 [features]
 default = [ "std" ]
+runtime-wasm = []
 std = [
 	"sp-runtime/std",
 	"codec/std",

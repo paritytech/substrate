@@ -37,20 +37,20 @@
 extern crate self as sp_api;
 
 #[doc(hidden)]
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use sp_state_machine::{
 	OverlayedChanges, StorageProof, Backend as StateBackend, ChangesTrieState, InMemoryBackend,
 };
 #[doc(hidden)]
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use sp_core::NativeOrEncoded;
 #[doc(hidden)]
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use hash_db::Hasher;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub use sp_core::offchain::storage::OffchainOverlayedChanges;
 #[doc(hidden)]
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 pub use sp_core::to_substrate_wasm_fn_return_value;
 #[doc(hidden)]
 pub use sp_runtime::{
@@ -66,12 +66,12 @@ pub use sp_core::{offchain, ExecutionContext};
 pub use sp_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 #[doc(hidden)]
 pub use sp_std::{slice, mem};
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_std::result;
 #[doc(hidden)]
 pub use codec::{Encode, Decode, DecodeLimit};
 use sp_core::OpaqueMetadata;
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use std::{panic::UnwindSafe, cell::RefCell};
 
 /// Maximum nesting level for extrinsics.
@@ -304,17 +304,17 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 pub use sp_api_proc_macro::mock_impl_runtime_apis;
 
 /// A type that records all accessed trie nodes and generates a proof out of it.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<HashFor<B>>;
 
 /// A type that is used as cache for the storage transactions.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub type StorageTransactionCache<Block, Backend> =
 	sp_state_machine::StorageTransactionCache<
 		<Backend as StateBackend<HashFor<Block>>>::Transaction, HashFor<Block>, NumberFor<Block>
 	>;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub type StorageChanges<SBackend, Block> =
 	sp_state_machine::StorageChanges<
 		<SBackend as StateBackend<HashFor<Block>>>::Transaction,
@@ -323,17 +323,17 @@ pub type StorageChanges<SBackend, Block> =
 	>;
 
 /// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub type StateBackendFor<P, Block> =
 	<<P as ProvideRuntimeApi<Block>>::Api as ApiExt<Block>>::StateBackend;
 
 /// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub type TransactionFor<P, Block> =
 	<StateBackendFor<P, Block> as StateBackend<HashFor<Block>>>::Transaction;
 
 /// Something that can be constructed to a runtime api.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {
 	/// The actual runtime api that will be constructed.
 	type RuntimeApi: ApiExt<Block>;
@@ -344,14 +344,14 @@ pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {
 
 /// Extends the runtime api traits with an associated error type. This trait is given as super
 /// trait to every runtime api trait.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub trait ApiErrorExt {
 	/// Error type used by the runtime apis.
 	type Error: std::fmt::Debug + From<String>;
 }
 
 /// Extends the runtime api implementation with some common functionality.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	/// The state backend that is used to store the block states.
 	type StateBackend: StateBackend<HashFor<Block>>;
@@ -408,7 +408,7 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 ///
 /// `call_api_at` is instructed by this enum to do the initialization or to skip
 /// it.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 #[derive(Clone, Copy)]
 pub enum InitializeBlock<'a, Block: BlockT> {
 	/// Skip initializing the runtime for a given block.
@@ -422,7 +422,7 @@ pub enum InitializeBlock<'a, Block: BlockT> {
 }
 
 /// Parameters for [`CallApiAt::call_api_at`].
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashFor<Block>>> {
 	/// A reference to something that implements the [`Core`] api.
 	pub core_api: &'a C,
@@ -453,7 +453,7 @@ pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashF
 }
 
 /// Something that can call into the an api at a given block.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub trait CallApiAt<Block: BlockT> {
 	/// Error type used by the implementation.
 	type Error: std::fmt::Debug + From<String>;
@@ -478,17 +478,17 @@ pub trait CallApiAt<Block: BlockT> {
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub struct ApiRef<'a, T>(T, std::marker::PhantomData<&'a ()>);
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'a, T> From<T> for ApiRef<'a, T> {
 	fn from(api: T) -> Self {
 		ApiRef(api, Default::default())
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'a, T> std::ops::Deref for ApiRef<'a, T> {
 	type Target = T;
 
@@ -497,7 +497,7 @@ impl<'a, T> std::ops::Deref for ApiRef<'a, T> {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<'a, T> std::ops::DerefMut for ApiRef<'a, T> {
 	fn deref_mut(&mut self) -> &mut T {
 		&mut self.0
@@ -505,7 +505,7 @@ impl<'a, T> std::ops::DerefMut for ApiRef<'a, T> {
 }
 
 /// Something that provides a runtime api.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub trait ProvideRuntimeApi<Block: BlockT> {
 	/// The concrete type that provides the api.
 	type Api: ApiExt<Block>;
@@ -519,7 +519,7 @@ pub trait ProvideRuntimeApi<Block: BlockT> {
 }
 
 /// Something that provides information about a runtime api.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub trait RuntimeApiInfo {
 	/// The identifier of the runtime api.
 	const ID: [u8; 8];
@@ -528,7 +528,7 @@ pub trait RuntimeApiInfo {
 }
 
 /// Extracts the `Api::Error` for a type that provides a runtime api.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub type ApiErrorFor<T, Block> = <<T as ProvideRuntimeApi<Block>>::Api as ApiErrorExt>::Error;
 
 #[derive(codec::Encode, codec::Decode)]

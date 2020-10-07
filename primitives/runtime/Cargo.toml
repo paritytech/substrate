@@ -39,7 +39,8 @@ sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" 
 [features]
 bench = []
 runtime-benchmarks = []
-default = ["std"]
+default = [ "std" ]
+runtime-wasm = []
 std = [
 	"sp-application-crypto/std",
 	"sp-arithmetic/std",

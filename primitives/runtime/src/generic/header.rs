@@ -17,7 +17,7 @@
 
 //! Generic implementation of a block header.
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use serde::{Deserialize, Serialize};
 use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef, Error};
 use crate::traits::{
@@ -53,7 +53,7 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	pub digest: Digest<Hash::Output>,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<Number, Hash> parity_util_mem::MallocSizeOf for Header<Number, Hash>
 where
 	Number: Copy + Into<U256> + TryFrom<U256> + parity_util_mem::MallocSizeOf,
@@ -69,7 +69,7 @@ where
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub fn serialize_number<S, T: Copy + Into<U256> + TryFrom<U256>>(
 	val: &T, s: S,
 ) -> Result<S::Ok, S::Error> where S: serde::Serializer {
@@ -77,7 +77,7 @@ pub fn serialize_number<S, T: Copy + Into<U256> + TryFrom<U256>>(
 	serde::Serialize::serialize(&u256, s)
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub fn deserialize_number<'a, D, T: Copy + Into<U256> + TryFrom<U256>>(
 	d: D,
 ) -> Result<T, D::Error> where D: serde::Deserializer<'a> {
@@ -148,7 +148,7 @@ impl<Number, Hash> traits::Header for Header<Number, Hash> where
 	fn digest(&self) -> &Digest<Self::Hash> { &self.digest }
 
 	fn digest_mut(&mut self) -> &mut Digest<Self::Hash> {
-		#[cfg(feature = "std")]
+		#[cfg(not(feature = "runtime-wasm"))]
 		log::debug!(target: "header", "Retrieving mutable reference to digest");
 		&mut self.digest
 	}

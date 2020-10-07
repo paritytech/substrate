@@ -22,7 +22,7 @@
 use sp_inherents::{InherentIdentifier, InherentData, Error};
 use codec::Decode;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use codec::Encode;
 
 /// The identifier for the `finalnum` inherent.
@@ -42,20 +42,20 @@ impl<N: Decode> FinalizedInherentData<N> for InherentData {
 }
 
 /// Provider for inherent data.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub struct InherentDataProvider<F, N> {
 	inner: F,
 	_marker: std::marker::PhantomData<N>,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<F, N> InherentDataProvider<F, N> {
 	pub fn new(final_oracle: F) -> Self {
 		InherentDataProvider { inner: final_oracle, _marker: Default::default() }
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 impl<F, N: Encode> sp_inherents::ProvideInherentData for InherentDataProvider<F, N>
 	where F: Fn() -> Result<N, Error>
 {

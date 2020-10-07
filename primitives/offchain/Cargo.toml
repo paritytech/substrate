@@ -21,7 +21,8 @@ sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" 
 sp-state-machine = { version = "0.8.0", default-features = false, path = "../state-machine" }
 
 [features]
-default = ["std"]
+default = [ "std" ]
+runtime-wasm = []
 std = [
 	"sp-core/std",
 	"sp-api/std",
