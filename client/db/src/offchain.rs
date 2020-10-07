@@ -124,12 +124,8 @@ impl<H: Ord> BlockChainLocalStorage<H, ()> {
 
 impl sp_core::offchain::OffchainStorage for LocalStorage {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		let mut tx = Transaction::new();
-		tx.set(columns::OFFCHAIN, &key, value);
-
-		if let Err(err) = self.db.commit(tx) {
-			error!("Error setting on local storage: {}", err)
+		if !self.set_if_possible(prefix, key, value) {
+			panic!("Concurrency failure for sequential write of offchain storage");
 		}
 	}
 
@@ -235,12 +231,19 @@ impl BlockChainLocalAtNew {
 }
 
 
-impl BlockChainLocalAt {
-	/// Variant of `OffchainStorage` `set` that returns false when state does not allow
-	/// update.
-	/// In case of concurrent access, this generally indicate that some other threads
-	/// already did the update.
-	pub fn set_if_possible(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> bool {
+impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
+		let test: Option<fn(Option<&[u8]>) -> bool> = None;
+		self.modify(
+			prefix,
+			key,
+			test,
+			Some(value),
+			false,
+		).expect("Concurrency failure for sequential write of offchain storage");
+	}
+
+	fn set_if_possible(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> bool {
 		let test: Option<fn(Option<&[u8]>) -> bool> = None;
 		match self.modify(
 			prefix,
@@ -254,18 +257,6 @@ impl BlockChainLocalAt {
 			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
 			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
 		}
-	}
-}
-impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		let test: Option<fn(Option<&[u8]>) -> bool> = None;
-		self.modify(
-			prefix,
-			key,
-			test,
-			Some(value),
-			false,
-		).expect("Concurrency failure for sequential write of offchain storage");
 	}
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
@@ -327,14 +318,25 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 
 impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
+		if !self.set_if_possible(prefix, key, value) {
+			panic!("Concurrency failure for sequential write of offchain storage");
+		}
+	}
+
+	fn set_if_possible(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> bool {
 		let test: Option<fn(Option<&[u8]>) -> bool> = None;
-		self.0.modify(
+		match self.0.modify(
 			prefix,
 			key,
 			test,
 			Some(value),
 			true,
-		).expect("Concurrency failure for sequential write of offchain storage");
+		) {
+			Ok(_) => true,
+			Err(ModifyError::AlreadyWritten) => false,
+			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
+			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
+		}
 	}
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {

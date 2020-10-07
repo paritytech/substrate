@@ -66,11 +66,14 @@ impl<T: OffchainStorage + 'static, LT: BlockChainOffchainStorage + 'static> Offc
 				let local_storage = self.local_storage.write();
 				if let Some(block) = local_storage.latest() {
 					if let Some(mut local_storage) = local_storage.at(block) {
-						local_storage.set(sp_offchain::LOCAL_STORAGE_PREFIX, &*key, &*value);
-						return Ok(())
+						if local_storage.set_if_possible(sp_offchain::LOCAL_STORAGE_PREFIX, &*key, &*value) {
+							return Ok(());
+						} else {
+							return Err(Error::UnavailableStorageState);
+						}
 					}
 				}
-				return Err(Error::UnavailableStorageState)
+				return Err(Error::UnavailableStorageState);
 			},
 		};
 		Ok(())
