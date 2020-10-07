@@ -851,4 +851,21 @@ mod tests {
 		roundtrip(Header::Free(Link::Ptr(0)));
 		roundtrip(Header::Free(Link::Ptr(4)));
 	}
+
+	#[test]
+	fn poison_oom() {
+		// given
+		// a heap of 32 bytes. Should be enough for two allocations.
+		let mut mem = [0u8; 32];
+		let mut heap = FreeingBumpHeapAllocator::new(0);
+
+		// when
+		assert!(heap.allocate(mem.as_mut(), 8).is_ok());
+		let alloc_ptr =heap.allocate(mem.as_mut(), 8).unwrap();
+		assert!(heap.allocate(mem.as_mut(), 8).is_err());
+
+		// then
+		assert!(heap.poisoned);
+		assert!(heap.deallocate(mem.as_mut(), alloc_ptr).is_err());
+	}
 }
