@@ -325,7 +325,7 @@ impl Sandbox for HostState {
 
 		let instance_idx_or_err_code =
 			match sandbox::instantiate::<_, _, Holder>(
-				SandboxBackend::Wasmtime,
+				SandboxBackend::Wasmer,
 				dispatch_thunk, 
 				wasm, 
 				guest_env, 

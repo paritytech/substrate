@@ -40,6 +40,10 @@ use wasmtime::Val;
 
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 
+// use wasmer::{imports, wat2wasm, Instance, Module, Store, Value};
+use wasmer_compiler_singlepass::Singlepass;
+use wasmer_engine_jit::JIT;
+
 /// Index of a function inside the supervisor.
 ///
 /// This is a typically an index in the default table of the supervisor, however
@@ -342,6 +346,7 @@ where
 enum BackendInstance {
 	Wasmi(wasmi::ModuleRef),
 	Wasmtime(wasmtime::Instance),
+	Wasmer(wasmer::Instance),
 }
 
 /// Sandboxed instance of a wasm module.
@@ -442,6 +447,8 @@ impl<FR> SandboxInstance<FR> {
 
 							Ok(wasmtime_result)
 						}
+
+						BackendInstance::Wasmer(_) => { todo!() }
 					}
 				},
 			)
@@ -473,6 +480,10 @@ impl<FR> SandboxInstance<FR> {
 				};
 
 				Some(wasmtime_value)
+			}
+
+			BackendInstance::Wasmer(wasmer_instance) => {
+				todo!()
 			}
 		}
 	}
@@ -587,6 +598,7 @@ pub trait SandboxCapabiliesHolder {
 pub enum SandboxBackend {
 	Wasmi,
 	Wasmtime,
+	Wasmer,
 }
 
 /// Instantiate a guest module and return it's index in the store.
@@ -764,6 +776,33 @@ where
 
 			Rc::new(SandboxInstance {
 				backend_instance: BackendInstance::Wasmtime(wasmtime_instance),
+				dispatch_thunk,
+				guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
+			})
+		}
+
+		SandboxBackend::Wasmer => {
+			let compiler = Singlepass::default();
+			let store = wasmer::Store::new(&wasmer::JIT::new(&compiler).engine());
+
+			println!("Decoding module...");
+			let module = wasmer::Module::new(&store, wasm).map_err(|error| {
+				println!("{:?}", error);
+				InstantiationError::ModuleDecoding
+			})?;
+
+			let import_object = wasmer::imports! {};
+
+			println!("Instantiating module...");
+			let instance = wasmer::Instance::new(&module, &import_object)
+				.map_err(|error| {
+					println!("{:?}", error);
+					InstantiationError::Instantiation
+				})?;
+
+			println!("Creating SandboxInstance...");
+			Rc::new(SandboxInstance {
+				backend_instance: BackendInstance::Wasmer(instance),
 				dispatch_thunk,
 				guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
 			})
