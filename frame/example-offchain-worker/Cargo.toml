@@ -18,13 +18,11 @@ frame-support = { version = "2.0.0", default-features = false, path = "../suppor
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 serde = { version = "1.0.101", optional = true }
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
+sp-keystore = { version = "0.8.0", path = "../../primitives/keystore", optional = true }
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 lite-json = { version = "0.1", default-features = false }
-
-[dev-dependencies]
-sp-keystore = { version = "0.8.0", default-features = false, path = "../../primitives/keystore" }
 
 [features]
 default = ["std"]
@@ -36,6 +34,7 @@ std = [
 	"lite-json/std",
 	"sp-core/std",
 	"sp-io/std",
+	"sp-keystore",
 	"sp-runtime/std",
 	"sp-std/std",
 ]
