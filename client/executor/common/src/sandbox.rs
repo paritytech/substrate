@@ -646,7 +646,7 @@ where
 
 		SandboxBackend::Wasmtime => {
 			let mut config = wasmtime::Config::new();
-			config.cranelift_opt_level(wasmtime::OptLevel::Speed);
+			config.cranelift_opt_level(wasmtime::OptLevel::None);
 			config.strategy(wasmtime::Strategy::Cranelift).map_err(|_| InstantiationError::ModuleDecoding)?;
 
 			let wasmtime_engine = wasmtime::Engine::new(&config);
