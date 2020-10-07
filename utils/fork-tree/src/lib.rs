@@ -643,12 +643,48 @@ mod node_implementation {
 		Abort,
 	}
 
-	#[derive(Clone, Debug, Decode, Encode, PartialEq)]
+	#[derive(Clone, Debug, Encode, PartialEq)]
 	pub struct Node<H, N, V> {
 		pub hash: H,
 		pub number: N,
 		pub data: V,
 		pub children: Vec<Node<H, N, V>>,
+	}
+
+	impl<H: Decode, N: Decode, V: Decode> Decode for Node<H, N, V> {
+		fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+			let complete = |node: &Self| {
+				node.children.len() == node.children.capacity()
+			};
+			
+			let mut stack = Vec::new();
+
+			// Loop until we've got a single completely decoded node on the stack.
+			while !(stack.len() == 1 && stack.last().map(complete).unwrap_or(false)) {
+				// If the top-most node is complete, pop it and push it as a child of the node
+				// beneath it.
+				if stack.last().map(complete).unwrap_or(false) {
+					let last = stack.pop().expect("We already checked this");
+					let latest = stack.last_mut().expect("We know there were 2 items on the stack");
+					latest.children.push(last);
+					continue;
+				}
+				
+				// Otherwise, decode a node and push it onto the stack.
+				let hash = H::decode(input)?;
+				let number = N::decode(input)?;
+				let data = V::decode(input)?;
+				// `Vec`s use a compacted u32 for capacity.
+				let capacity = codec::Compact::<u32>::decode(input)?;
+
+				stack.push(Node {
+					hash, number, data,
+					children: Vec::with_capacity(capacity.0 as usize),
+				});
+			}
+
+			Ok(stack.pop().expect("checked"))
+		}
 	}
 
 	impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
@@ -719,6 +755,8 @@ mod node_implementation {
 					}
 
 					if !node.children.is_empty() {
+						// We want to check all children depth-first.
+
 						stack.push((node, false));
 
 						for child in node.children.iter().rev() {
@@ -992,6 +1030,67 @@ mod test {
 
 		tree.import("J", 2, (), &is_descendent_of).unwrap();
 		tree.import("K", 3, (), &is_descendent_of).unwrap();
+
+		(tree, is_descendent_of)
+	}
+
+	fn test_fork_tree_2() -> (ForkTree<String, u64, ()>, impl Fn(&String, &String) -> Result<bool, TestError>)  {
+		let mut tree = ForkTree::new();
+
+		//
+		//     - B - C - D - E
+		//    /
+		//   /   - G
+		//  /   /
+		// A - F - H - I
+		//          \
+		//           - L - M
+		//              \
+		//               - O
+		//  \
+		//   — J - K
+		//
+		// (where N is not a part of fork tree)
+		let is_descendent_of = |base: &String, block: &String| -> Result<bool, TestError> {
+			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "O"];
+			match (&base[..], &block[..]) {
+				("A", b) => Ok(letters.into_iter().any(|n| n == b)),
+				("B", b) => Ok(b == "C" || b == "D" || b == "E"),
+				("C", b) => Ok(b == "D" || b == "E"),
+				("D", b) => Ok(b == "E"),
+				("E", _) => Ok(false),
+				("F", b) => Ok(b == "G" || b == "H" || b == "I" || b == "L" || b == "M" || b == "O"),
+				("G", _) => Ok(false),
+				("H", b) => Ok(b == "I" || b == "L" || b == "M" || b == "O"),
+				("I", _) => Ok(false),
+				("J", b) => Ok(b == "K"),
+				("K", _) => Ok(false),
+				("L", b) => Ok(b == "M" || b == "O"),
+				("M", _) => Ok(false),
+				("O", _) => Ok(false),
+				("0", _) => Ok(true),
+				_ => Ok(false),
+			}
+		};
+
+		tree.import("A".into(), 1, (), &is_descendent_of).unwrap();
+
+		tree.import("B".into(), 2, (), &is_descendent_of).unwrap();
+		tree.import("C".into(), 3, (), &is_descendent_of).unwrap();
+		tree.import("D".into(), 4, (), &is_descendent_of).unwrap();
+		tree.import("E".into(), 5, (), &is_descendent_of).unwrap();
+
+		tree.import("F".into(), 2, (), &is_descendent_of).unwrap();
+		tree.import("G".into(), 3, (), &is_descendent_of).unwrap();
+
+		tree.import("H".into(), 3, (), &is_descendent_of).unwrap();
+		tree.import("I".into(), 4, (), &is_descendent_of).unwrap();
+		tree.import("L".into(), 4, (), &is_descendent_of).unwrap();
+		tree.import("M".into(), 5, (), &is_descendent_of).unwrap();
+		tree.import("O".into(), 5, (), &is_descendent_of).unwrap();
+
+		tree.import("J".into(), 2, (), &is_descendent_of).unwrap();
+		tree.import("K".into(), 3, (), &is_descendent_of).unwrap();
 
 		(tree, is_descendent_of)
 	}
@@ -1572,5 +1671,14 @@ mod test {
 			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
 			["A", "B", "C", "D", "E", "F", "H", "L", "M", "O", "I", "G", "J", "K"]
 		);
+	}
+
+	#[test]
+	fn test_serialization() {
+		use codec::*;
+		let (tree, _is_descendent_of) = test_fork_tree_2();
+		let encoded = tree.encode();
+		let decoded = ForkTree::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(tree, decoded);
 	}
 }
