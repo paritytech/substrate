@@ -372,7 +372,8 @@ impl FreeingBumpHeapAllocator {
 				// Corresponding free list is empty. Allocate a new item.
 				Self::bump(
 					&mut self.bumper,
-					order.size() + HEADER_SIZE, mem.size()
+					order.size() + HEADER_SIZE,
+					mem.size(),
 				)?
 			}
 		};
