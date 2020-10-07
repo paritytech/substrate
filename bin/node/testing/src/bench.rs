@@ -92,10 +92,11 @@ impl BenchPair {
 ///
 /// Will panic if cache drop is impossbile.
 pub fn drop_system_cache() {
-
 	#[cfg(target_os = "windows")] {
-		log::warn!(target: "bench-logistics",
-			"Clearing system cache on windows is not supported. Benchmark might totally be wrong.");
+		log::warn!(
+			target: "bench-logistics",
+			"Clearing system cache on windows is not supported. Benchmark might totally be wrong.",
+		);
 		return;
 	}
 
@@ -140,7 +141,6 @@ pub fn drop_system_cache() {
 		}
 		log::trace!(target: "bench-logistics", "Clearing system cache done!");
 	}
-
 }
 
 /// Pre-initialized benchmarking database.
