@@ -107,7 +107,7 @@ use frame_support::{
 use sp_runtime::{
 	RuntimeString,
 	traits::{
-		AtLeast32Bit, Zero, SaturatedConversion, Scale
+		AtLeast32Bit, Zero, SaturatedConversion, Scale, UniqueSaturatedInto,
 	}
 };
 use frame_system::ensure_none;
@@ -117,7 +117,7 @@ use sp_timestamp::{
 };
 
 pub trait WeightInfo {
-	fn set() -> Weight;
+	fn set(t: u32, ) -> Weight;
 	fn on_finalize() -> Weight;
 }
 
@@ -164,7 +164,7 @@ decl_module! {
 		/// - 1 event handler `on_timestamp_set` `O(T)`.
 		/// # </weight>
 		#[weight = (
-			T::WeightInfo::set(),
+			T::WeightInfo::set(UniqueSaturatedInto::<u32>::unique_saturated_into(*now)),
 			DispatchClass::Mandatory
 		)]
 		fn set(origin, #[compact] now: T::Moment) {

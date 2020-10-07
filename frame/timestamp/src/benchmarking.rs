@@ -47,7 +47,7 @@ benchmarks! {
 	}
 
 	on_finalize {
-		let t in 1 .. MAX_TIME;
+		let t = MAX_TIME;
 		Timestamp::<T>::set(RawOrigin::None.into(), t.into())?;
 		ensure!(DidUpdate::exists(), "Time was not set.");
 		// Ignore read/write to `DidUpdate` since it is transient.
