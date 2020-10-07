@@ -101,7 +101,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		finality_proof_request_builder: None,
 		on_demand: None,
 		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
-		protocol_id: config::ProtocolId::from(&b"/test-protocol-name"[..]),
+		protocol_id: config::ProtocolId::from("/test-protocol-name"),
 		import_queue,
 		block_announce_validator: Box::new(
 			sp_consensus::block_validation::DefaultBlockAnnounceValidator,
@@ -131,14 +131,14 @@ fn build_nodes_one_proto()
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![(ENGINE_ID, From::from(&b"/foo"[..]))],
+		notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
 		.. config::NetworkConfiguration::new_local()
 	});
 
 	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![(ENGINE_ID, From::from(&b"/foo"[..]))],
+		notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
 		listen_addresses: vec![],
 		reserved_nodes: vec![config::MultiaddrWithPeerId {
 			multiaddr: listen_addr,
@@ -151,6 +151,7 @@ fn build_nodes_one_proto()
 	(node1, events_stream1, node2, events_stream2)
 }
 
+#[ignore]
 #[test]
 fn notifications_state_consistent() {
 	// Runs two nodes and ensures that events are propagated out of the API in a consistent
@@ -280,7 +281,7 @@ fn lots_of_incoming_peers_works() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (main_node, _) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![(ENGINE_ID, From::from(&b"/foo"[..]))],
+		notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
 		listen_addresses: vec![listen_addr.clone()],
 		in_peers: u32::max_value(),
 		transport: config::TransportConfig::MemoryOnly,
@@ -297,7 +298,7 @@ fn lots_of_incoming_peers_works() {
 		let main_node_peer_id = main_node_peer_id.clone();
 
 		let (_dialing_node, event_stream) = build_test_full_node(config::NetworkConfiguration {
-			notifications_protocols: vec![(ENGINE_ID, From::from(&b"/foo"[..]))],
+			notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
 			listen_addresses: vec![],
 			reserved_nodes: vec![config::MultiaddrWithPeerId {
 				multiaddr: listen_addr.clone(),
@@ -342,6 +343,57 @@ fn lots_of_incoming_peers_works() {
 
 	futures::executor::block_on(async move {
 		future::join_all(background_tasks_to_wait).await
+	});
+}
+
+#[test]
+fn notifications_back_pressure() {
+	// Node 1 floods node 2 with notifications. Random sleeps are done on node 2 to simulate the
+	// node being busy. We make sure that all notifications are received.
+
+	const TOTAL_NOTIFS: usize = 10_000;
+
+	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
+	let node2_id = node2.local_peer_id();
+
+	let receiver = async_std::task::spawn(async move {
+		let mut received_notifications = 0;
+
+		while received_notifications < TOTAL_NOTIFS {
+			match events_stream2.next().await.unwrap() {
+				Event::NotificationStreamClosed { .. } => panic!(),
+				Event::NotificationsReceived { messages, .. } => {
+					for message in messages {
+						assert_eq!(message.0, ENGINE_ID);
+						assert_eq!(message.1, format!("hello #{}", received_notifications));
+						received_notifications += 1;
+					}
+				}
+				_ => {}
+			};
+
+			if rand::random::<u8>() < 2 {
+				async_std::task::sleep(Duration::from_millis(rand::random::<u64>() % 750)).await;
+			}
+		}
+	});
+
+	async_std::task::block_on(async move {
+		// Wait for the `NotificationStreamOpened`.
+		loop {
+			match events_stream1.next().await.unwrap() {
+				Event::NotificationStreamOpened { .. } => break,
+				_ => {}
+			};
+		}
+
+		// Sending!
+		for num in 0..TOTAL_NOTIFS {
+			let notif = node1.notification_sender(node2_id.clone(), ENGINE_ID).unwrap();
+			notif.ready().await.unwrap().send(format!("hello #{}", num)).unwrap();
+		}
+
+		receiver.await;
 	});
 }
 

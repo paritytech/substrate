@@ -156,13 +156,13 @@ impl Config {
 	pub fn set_protocol(&mut self, id: &ProtocolId) -> &mut Self {
 		let mut vl = Vec::new();
 		vl.extend_from_slice(b"/");
-		vl.extend_from_slice(id.as_bytes());
+		vl.extend_from_slice(id.as_ref().as_bytes());
 		vl.extend_from_slice(b"/light/2");
 		self.light_protocol = vl.into();
 
 		let mut vb = Vec::new();
 		vb.extend_from_slice(b"/");
-		vb.extend_from_slice(id.as_bytes());
+		vb.extend_from_slice(id.as_ref().as_bytes());
 		vb.extend_from_slice(b"/sync/2");
 		self.block_protocol = vb.into();
 
@@ -758,7 +758,7 @@ where
 		};
 		let mut cfg = OneShotHandlerConfig::default();
 		cfg.keep_alive_timeout = self.config.inactivity_timeout;
-		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
+		OneShotHandler::new(SubstreamProtocol::new(p, ()), cfg)
 	}
 
 	fn addresses_of_peer(&mut self, peer: &PeerId) -> Vec<Multiaddr> {
@@ -1447,7 +1447,7 @@ mod tests {
 	}
 
 	fn make_config() -> super::Config {
-		super::Config::new(&ProtocolId::from(&b"foo"[..]))
+		super::Config::new(&ProtocolId::from("foo"))
 	}
 
 	fn dummy_header() -> sp_test_primitives::Header {
@@ -2004,7 +2004,7 @@ mod tests {
 
 	#[test]
 	fn send_receive_header() {
-		let _ = env_logger::try_init();
+		sp_tracing::try_init_simple();
 		let chan = oneshot::channel();
 		let request = light::RemoteHeaderRequest {
 			cht_root: Default::default(),

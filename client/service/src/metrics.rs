@@ -18,53 +18,40 @@
 
 use std::{convert::TryFrom, time::SystemTime};
 
-use crate::{NetworkStatus, config::Configuration};
-use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
+use crate::{NetworkStatus, NetworkState, NetworkStatusSinks, config::Configuration};
+use futures_timer::Delay;
+use prometheus_endpoint::{register, Gauge, U64, Registry, PrometheusError, Opts, GaugeVec};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
+use sp_api::ProvideRuntimeApi;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
-use sp_transaction_pool::PoolStatus;
+use sp_transaction_pool::{PoolStatus, MaintainedTransactionPool};
 use sp_utils::metrics::register_globals;
-use sc_client_api::ClientInfo;
+use sp_utils::mpsc::TracingUnboundedReceiver;
+use sc_client_api::{ClientInfo, UsageProvider};
 use sc_network::config::Role;
-
-use sysinfo::{self, ProcessExt, SystemExt};
-
-#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
-use netstat2::{
-	TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags,
-};
+use std::sync::Arc;
+use std::time::Duration;
+use wasm_timer::Instant;
 
 struct PrometheusMetrics {
-	// system
-	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
-	load_avg: GaugeVec<F64>,
-
-	// process
-	cpu_usage_percentage: Gauge<F64>,
-	memory_usage_bytes: Gauge<U64>,
-	threads: Gauge<U64>,
-	open_files: GaugeVec<U64>,
-
-	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
-	netstat: GaugeVec<U64>,
-
-	// -- inner counters
 	// generic info
 	block_height: GaugeVec<U64>,
 	number_leaves: Gauge<U64>,
 	ready_transactions_number: Gauge<U64>,
 
 	// I/O
-	network_per_sec_bytes: GaugeVec<U64>,
 	database_cache: Gauge<U64>,
 	state_cache: Gauge<U64>,
 	state_db: GaugeVec<U64>,
 }
 
 impl PrometheusMetrics {
-	fn setup(registry: &Registry, name: &str, version: &str, roles: u64)
-		-> Result<Self, PrometheusError>
-	{
+	fn setup(
+		registry: &Registry,
+		name: &str,
+		version: &str,
+		roles: u64,
+	) -> Result<Self, PrometheusError> {
 		register(Gauge::<U64>::with_opts(
 			Opts::new(
 				"build_info",
@@ -88,39 +75,6 @@ impl PrometheusMetrics {
 		)?, registry)?.set(start_time_since_epoch.as_secs());
 
 		Ok(Self {
-			// system
-			#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
-			load_avg: register(GaugeVec::new(
-				Opts::new("load_avg", "System load average"),
-				&["over"]
-			)?, registry)?,
-
-			// process
-			memory_usage_bytes: register(Gauge::new(
-				"memory_usage_bytes", "Process memory (resident set size) usage",
-			)?, registry)?,
-
-			cpu_usage_percentage: register(Gauge::new(
-				"cpu_usage_percentage", "Process CPU usage, percentage per core summed over all cores",
-			)?, registry)?,
-
-			#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
-			netstat: register(GaugeVec::new(
-				Opts::new("netstat_tcp", "Number of TCP sockets of the process"),
-				&["status"]
-			)?, registry)?,
-
-			threads: register(Gauge::new(
-				"threads", "Number of threads used by the process",
-			)?, registry)?,
-
-			open_files: register(GaugeVec::new(
-				Opts::new("open_file_handles", "Number of open file handlers held by the process"),
-				&["fd_type"]
-			)?, registry)?,
-
-			// --- internal
-
 			// generic internals
 			block_height: register(GaugeVec::new(
 				Opts::new("block_height", "Block height info of the chain"),
@@ -136,10 +90,6 @@ impl PrometheusMetrics {
 			)?, registry)?,
 
 			// I/ O
-			network_per_sec_bytes: register(GaugeVec::new(
-				Opts::new("network_per_sec_bytes", "Networking bytes per second"),
-				&["direction"]
-			)?, registry)?,
 			database_cache: register(Gauge::new(
 				"database_cache_bytes", "RocksDB cache size in bytes",
 			)?, registry)?,
@@ -154,116 +104,34 @@ impl PrometheusMetrics {
 	}
 }
 
-#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
-#[derive(Default)]
-struct ConnectionsCount {
-	listen: u64,
-	established: u64,
-	starting: u64,
-	closing: u64,
-	closed: u64,
-	other: u64
-}
-
-#[derive(Default)]
-struct FdCounter {
-	paths: u64,
-	sockets: u64,
-	net: u64,
-	pipes: u64,
-	anon_inode: u64,
-	mem: u64,
-	other: u64,
-}
-
-#[derive(Default)]
-struct ProcessInfo {
-	cpu_usage: f64,
-	memory: u64,
-	threads: Option<u64>,
-	open_fd: Option<FdCounter>,
-}
-
+/// A `MetricsService` periodically sends general client and
+/// network state to the telemetry as well as (optionally)
+/// a Prometheus endpoint.
 pub struct MetricsService {
 	metrics: Option<PrometheusMetrics>,
-	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
-	system: sysinfo::System,
-	pid: Option<sysinfo::Pid>,
+	last_update: Instant,
+	last_total_bytes_inbound: u64,
+	last_total_bytes_outbound: u64,
 }
 
-#[cfg(target_os = "linux")]
 impl MetricsService {
-	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
-		let process = procfs::process::Process::myself()
-			.expect("Procfs doesn't fail on unix. qed");
-
-		Self {
-			metrics,
-			system: sysinfo::System::new_with_specifics(sysinfo::RefreshKind::new().with_processes()),
-			pid: Some(process.pid),
+	/// Creates a `MetricsService` that only sends information
+	/// to the telemetry.
+	pub fn new() -> Self {
+		MetricsService {
+			metrics: None,
+			last_total_bytes_inbound: 0,
+			last_total_bytes_outbound: 0,
+			last_update: Instant::now(),
 		}
 	}
 
-	fn process_info(&mut self) -> ProcessInfo {
-		let pid = self.pid.clone().expect("unix always has a pid. qed");
-		let mut info = self.process_info_for(&pid);
-		let process = procfs::process::Process::new(pid).expect("Our process exists. qed.");
-		info.threads = process.stat().ok().map(|s|
-			u64::try_from(s.num_threads).expect("There are no negative thread counts. qed"),
-		);
-		info.open_fd = process.fd().ok().map(|i|
-			i.into_iter().fold(FdCounter::default(), |mut f, info| {
-				match info.target {
-					procfs::process::FDTarget::Path(_) => f.paths += 1,
-					procfs::process::FDTarget::Socket(_) => f.sockets += 1,
-					procfs::process::FDTarget::Net(_) => f.net += 1,
-					procfs::process::FDTarget::Pipe(_) => f.pipes += 1,
-					procfs::process::FDTarget::AnonInode(_) => f.anon_inode += 1,
-					procfs::process::FDTarget::MemFD(_) => f.mem += 1,
-					procfs::process::FDTarget::Other(_,_) => f.other += 1,
-				};
-				f
-			})
-		);
-		info
-	}
-}
-
-#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios"), not(target_os = "linux")))]
-impl MetricsService {
-	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
-		Self {
-			metrics,
-			system: sysinfo::System::new_with_specifics(sysinfo::RefreshKind::new().with_processes()),
-			pid: sysinfo::get_current_pid().ok(),
-		}
-	}
-
-	fn process_info(&mut self) -> ProcessInfo {
-		self.pid.map(|pid| self.process_info_for(&pid)).unwrap_or_default()
-	}
-}
-
-
-#[cfg(not(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios"))))]
-impl MetricsService {
-	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
-		Self {
-			metrics,
-			pid: None,
-		}
-	}
-
-	fn process_info(&mut self) -> ProcessInfo {
-		ProcessInfo::default()
-	}
-}
-
-
-impl MetricsService {
-	pub fn with_prometheus(registry: &Registry, config: &Configuration)
-		-> Result<Self, PrometheusError>
-	{
+	/// Creates a `MetricsService` that sends metrics
+	/// to prometheus alongside the telemetry.
+	pub fn with_prometheus(
+		registry: &Registry,
+		config: &Configuration,
+	) -> Result<Self, PrometheusError> {
 		let role_bits = match config.role {
 			Role::Full => 1u64,
 			Role::Light => 2u64,
@@ -271,141 +139,140 @@ impl MetricsService {
 			Role::Authority { .. } => 4u64,
 		};
 
-		PrometheusMetrics::setup(registry, &config.network.node_name, &config.impl_version, role_bits).map(|p| {
-			Self::inner_new(Some(p))
+		PrometheusMetrics::setup(
+			registry,
+			&config.network.node_name,
+			&config.impl_version,
+			role_bits,
+		)
+		.map(|p| MetricsService {
+			metrics: Some(p),
+			last_total_bytes_inbound: 0,
+			last_total_bytes_outbound: 0,
+			last_update: Instant::now(),
 		})
 	}
 
-	pub fn new() -> Self {
-		Self::inner_new(None)
+	/// Returns a never-ending `Future` that performs the
+	/// metric and telemetry updates with information from
+	/// the given sources.
+	pub async fn run<TBl, TExPool, TCl>(
+		mut self,
+		client: Arc<TCl>,
+		transactions: Arc<TExPool>,
+		network: NetworkStatusSinks<TBl>,
+	) where
+		TBl: Block,
+		TCl: ProvideRuntimeApi<TBl> + UsageProvider<TBl>,
+		TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as Block>::Hash>,
+	{
+		let mut timer = Delay::new(Duration::from_secs(0));
+		let timer_interval = Duration::from_secs(5);
+
+		// Metric and telemetry update interval.
+		let net_status_interval = timer_interval;
+		let net_state_interval = Duration::from_secs(30);
+
+		// Source of network information.
+		let mut net_status_rx = Some(network.status_stream(net_status_interval));
+		let mut net_state_rx = Some(network.state_stream(net_state_interval));
+
+		loop {
+			// Wait for the next tick of the timer.
+			(&mut timer).await;
+
+			// Try to get the latest network information.
+			let mut net_status = None;
+			let mut net_state = None;
+			if let Some(rx) = net_status_rx.as_mut() {
+				match Self::latest(rx) {
+					Ok(status) => { net_status = status; }
+					Err(()) => { net_status_rx = None; }
+				}
+			}
+			if let Some(rx) = net_state_rx.as_mut() {
+				match Self::latest(rx) {
+					Ok(state) => { net_state = state; }
+					Err(()) => { net_state_rx = None; }
+				}
+			}
+
+			// Update / Send the metrics.
+			self.update(
+				&client.usage_info(),
+				&transactions.status(),
+				net_status,
+				net_state,
+			);
+
+			// Schedule next tick.
+			timer.reset(timer_interval);
+		}
 	}
 
-	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
-	fn process_info_for(&mut self, pid: &sysinfo::Pid) -> ProcessInfo {
-		let mut info = ProcessInfo::default();
-		self.system.refresh_process(*pid);
-		self.system.get_process(*pid).map(|prc| {
-			info.cpu_usage = prc.cpu_usage().into();
-			info.memory = prc.memory();
-		});
-		info
+	// Try to get the latest value from a receiver, dropping intermediate values.
+	fn latest<T>(rx: &mut TracingUnboundedReceiver<T>) -> Result<Option<T>, ()> {
+		let mut value = None;
+
+		while let Ok(next) = rx.try_next() {
+			match next {
+				Some(v) => {
+					value = Some(v)
+				}
+				None => {
+					log::error!("Receiver closed unexpectedly.");
+					return Err(())
+				}
+			}
+		}
+
+		Ok(value)
 	}
 
-	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
-	fn connections_info(&self) -> Option<ConnectionsCount> {
-		self.pid.as_ref().and_then(|pid| {
-			let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
-			let proto_flags = ProtocolFlags::TCP;
-			let netstat_pid = *pid as u32;
-
-			iterate_sockets_info(af_flags, proto_flags).ok().map(|iter|
-				iter.filter_map(|r|
-					r.ok().and_then(|s| {
-						match s.protocol_socket_info {
-							ProtocolSocketInfo::Tcp(info)
-								if s.associated_pids.contains(&netstat_pid) => Some(info.state),
-							_ => None
-						}
-					})
-				).fold(ConnectionsCount::default(), |mut counter, socket_state| {
-					match socket_state {
-						TcpState::Listen => counter.listen += 1,
-						TcpState::Established => counter.established += 1,
-						TcpState::Closed => counter.closed += 1,
-						TcpState::SynSent | TcpState::SynReceived => counter.starting += 1,
-						TcpState::FinWait1 | TcpState::FinWait2 | TcpState::CloseWait
-						| TcpState::Closing | TcpState::LastAck => counter.closing += 1,
-						_ => counter.other += 1
-					}
-
-					counter
-				})
-			)
-		})
-	}
-
-	pub fn tick<T: Block>(
+	fn update<T: Block>(
 		&mut self,
 		info: &ClientInfo<T>,
 		txpool_status: &PoolStatus,
-		net_status: &NetworkStatus<T>,
+		net_status: Option<NetworkStatus<T>>,
+		net_state: Option<NetworkState>,
 	) {
+		let now = Instant::now();
+		let elapsed = (now - self.last_update).as_secs();
+		self.last_update = now;
 
 		let best_number = info.chain.best_number.saturated_into::<u64>();
 		let best_hash = info.chain.best_hash;
-		let num_peers = net_status.num_connected_peers;
 		let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
-		let bandwidth_download = net_status.average_download_per_sec;
-		let bandwidth_upload = net_status.average_upload_per_sec;
-		let best_seen_block = net_status.best_seen_block
-			.map(|num: NumberFor<T>| num.unique_saturated_into() as u64);
-		let process_info = self.process_info();
 
+		// Update/send metrics that are always available.
 		telemetry!(
 			SUBSTRATE_INFO;
 			"system.interval";
-			"peers" => num_peers,
 			"height" => best_number,
 			"best" => ?best_hash,
 			"txcount" => txpool_status.ready,
-			"cpu" => process_info.cpu_usage,
-			"memory" => process_info.memory,
 			"finalized_height" => finalized_number,
 			"finalized_hash" => ?info.chain.finalized_hash,
-			"bandwidth_download" => bandwidth_download,
-			"bandwidth_upload" => bandwidth_upload,
 			"used_state_cache_size" => info.usage.as_ref()
 				.map(|usage| usage.memory.state_cache.as_bytes())
-				.unwrap_or(0),
-			"used_db_cache_size" => info.usage.as_ref()
-				.map(|usage| usage.memory.database_cache.as_bytes())
-				.unwrap_or(0),
-			"disk_read_per_sec" => info.usage.as_ref()
-				.map(|usage| usage.io.bytes_read)
-				.unwrap_or(0),
-			"disk_write_per_sec" => info.usage.as_ref()
-				.map(|usage| usage.io.bytes_written)
 				.unwrap_or(0),
 		);
 
 		if let Some(metrics) = self.metrics.as_ref() {
-			metrics.cpu_usage_percentage.set(process_info.cpu_usage as f64);
-			// `sysinfo::Process::memory` returns memory usage in KiB and not bytes.
-			metrics.memory_usage_bytes.set(process_info.memory * 1024);
+			metrics
+				.block_height
+				.with_label_values(&["finalized"])
+				.set(finalized_number);
+			metrics
+				.block_height
+				.with_label_values(&["best"])
+				.set(best_number);
 
-			if let Some(threads) = process_info.threads {
-				metrics.threads.set(threads);
-			}
-
-			if let Some(fd_info) = process_info.open_fd {
-				metrics.open_files.with_label_values(&["paths"]).set(fd_info.paths);
-				metrics.open_files.with_label_values(&["mem"]).set(fd_info.mem);
-				metrics.open_files.with_label_values(&["sockets"]).set(fd_info.sockets);
-				metrics.open_files.with_label_values(&["net"]).set(fd_info.net);
-				metrics.open_files.with_label_values(&["pipe"]).set(fd_info.pipes);
-				metrics.open_files.with_label_values(&["anon_inode"]).set(fd_info.anon_inode);
-				metrics.open_files.with_label_values(&["other"]).set(fd_info.other);
-			}
-
-
-			metrics.network_per_sec_bytes.with_label_values(&["download"]).set(
-				net_status.average_download_per_sec,
-			);
-			metrics.network_per_sec_bytes.with_label_values(&["upload"]).set(
-				net_status.average_upload_per_sec,
-			);
-
-			metrics.block_height.with_label_values(&["finalized"]).set(finalized_number);
-			metrics.block_height.with_label_values(&["best"]).set(best_number);
 			if let Ok(leaves) = u64::try_from(info.chain.number_leaves) {
 				metrics.number_leaves.set(leaves);
 			}
 
 			metrics.ready_transactions_number.set(txpool_status.ready as u64);
-
-			if let Some(best_seen_block) = best_seen_block {
-				metrics.block_height.with_label_values(&["sync_target"]).set(best_seen_block);
-			}
 
 			if let Some(info) = info.usage.as_ref() {
 				metrics.database_cache.set(info.memory.database_cache.as_bytes() as u64);
@@ -421,23 +288,51 @@ impl MetricsService {
 					info.memory.state_db.pinned.as_bytes() as u64,
 				);
 			}
+		}
 
-			#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
-			{
-				let load = self.system.get_load_average();
-				metrics.load_avg.with_label_values(&["1min"]).set(load.one);
-				metrics.load_avg.with_label_values(&["5min"]).set(load.five);
-				metrics.load_avg.with_label_values(&["15min"]).set(load.fifteen);
+		// Update/send network status information, if any.
+		if let Some(net_status) = net_status {
+			let num_peers = net_status.num_connected_peers;
+			let total_bytes_inbound = net_status.total_bytes_inbound;
+			let total_bytes_outbound = net_status.total_bytes_outbound;
 
-				if let Some(conns) = self.connections_info() {
-					metrics.netstat.with_label_values(&["listen"]).set(conns.listen);
-					metrics.netstat.with_label_values(&["established"]).set(conns.established);
-					metrics.netstat.with_label_values(&["starting"]).set(conns.starting);
-					metrics.netstat.with_label_values(&["closing"]).set(conns.closing);
-					metrics.netstat.with_label_values(&["closed"]).set(conns.closed);
-					metrics.netstat.with_label_values(&["other"]).set(conns.other);
+			let diff_bytes_inbound = total_bytes_inbound - self.last_total_bytes_inbound;
+			let diff_bytes_outbound = total_bytes_outbound - self.last_total_bytes_outbound;
+			let (avg_bytes_per_sec_inbound, avg_bytes_per_sec_outbound) =
+				if elapsed > 0 {
+					self.last_total_bytes_inbound = total_bytes_inbound;
+					self.last_total_bytes_outbound = total_bytes_outbound;
+					(diff_bytes_inbound / elapsed, diff_bytes_outbound / elapsed)
+				} else {
+					(diff_bytes_inbound, diff_bytes_outbound)
+				};
+
+			telemetry!(
+				SUBSTRATE_INFO;
+				"system.interval";
+				"peers" => num_peers,
+				"bandwidth_download" => avg_bytes_per_sec_inbound,
+				"bandwidth_upload" => avg_bytes_per_sec_outbound,
+			);
+
+			if let Some(metrics) = self.metrics.as_ref() {
+				let best_seen_block = net_status
+					.best_seen_block
+					.map(|num: NumberFor<T>| num.unique_saturated_into() as u64);
+
+				if let Some(best_seen_block) = best_seen_block {
+					metrics.block_height.with_label_values(&["sync_target"]).set(best_seen_block);
 				}
 			}
+		}
+
+		// Send network state information, if any.
+		if let Some(net_state) = net_state {
+			telemetry!(
+				SUBSTRATE_INFO;
+				"system.network_state";
+				"state" => net_state,
+			);
 		}
 	}
 }

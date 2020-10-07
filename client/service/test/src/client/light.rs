@@ -42,7 +42,7 @@ use sc_executor::{NativeExecutor, WasmExecutionMethod, RuntimeVersion, NativeVer
 use sp_core::{H256, NativeOrEncoded, testing::TaskExecutor};
 use sc_client_api::{
 	blockchain::Info, backend::NewBlockState, Backend as ClientBackend, ProofProvider,
-	in_mem::{Backend as InMemBackend, Blockchain as InMemoryBlockchain},
+	in_mem::{Backend as InMemBackend, Blockchain as InMemoryBlockchain}, ProvideChtRoots,
 	AuxStore, Storage, CallExecutor, cht, ExecutionStrategy, StorageProof, BlockImportOperation,
 	RemoteCallRequest, StorageProvider, ChangesProof, RemoteBodyRequest, RemoteReadRequest,
 	RemoteChangesRequest, FetchChecker, RemoteReadChildRequest, RemoteHeaderRequest, BlockBackend,
@@ -164,6 +164,16 @@ impl Storage<Block> for DummyStorage {
 		Err(ClientError::Backend("Test error".into()))
 	}
 
+	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>> {
+		None
+	}
+
+	fn usage_info(&self) -> Option<sc_client_api::UsageInfo> {
+		None
+	}
+}
+
+impl ProvideChtRoots<Block> for DummyStorage {
 	fn header_cht_root(&self, _cht_size: u64, _block: u64) -> ClientResult<Option<Hash>> {
 		Err(ClientError::Backend("Test error".into()))
 	}
@@ -176,14 +186,6 @@ impl Storage<Block> for DummyStorage {
 				format!("Test error: CHT for block #{} not found", block)
 			).into())
 			.map(Some)
-	}
-
-	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>> {
-		None
-	}
-
-	fn usage_info(&self) -> Option<sc_client_api::UsageInfo> {
-		None
 	}
 }
 
@@ -686,7 +688,7 @@ fn changes_proof_is_generated_and_checked_when_headers_are_not_pruned() {
 		match local_result == expected_result {
 			true => (),
 			false => panic!(format!("Failed test {}: local = {:?}, expected = {:?}",
-			                        index, local_result, expected_result)),
+									index, local_result, expected_result)),
 		}
 	}
 }
@@ -843,7 +845,7 @@ fn check_changes_tries_proof_fails_if_proof_is_wrong() {
 		Box::new(TaskExecutor::new()),
 	);
 	assert!(local_checker.check_changes_tries_proof(4, &remote_proof.roots,
-	                                                remote_proof.roots_proof.clone()).is_err());
+													remote_proof.roots_proof.clone()).is_err());
 
 	// fails when proof is broken
 	let mut local_storage = DummyStorage::new();

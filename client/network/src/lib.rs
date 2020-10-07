@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 #![warn(unused_extern_crates)]
 #![warn(missing_docs)]
 
@@ -197,13 +198,14 @@
 //! handshake message can be of length 0, in which case the sender has to send a single `0`.
 //! - The receiver then either immediately closes the substream, or answers with its own
 //! LEB128-prefixed protocol-specific handshake response. The message can be of length 0, in which
-//! case a single `0` has to be sent back. The receiver is then encouraged to close its sending
-//! side.
+//! case a single `0` has to be sent back.
 //! - Once the handshake has completed, the notifications protocol is unidirectional. Only the
 //! node which initiated the substream can push notifications. If the remote wants to send
 //! notifications as well, it has to open its own undirectional substream.
 //! - Each notification must be prefixed with an LEB128-encoded length. The encoding of the
 //! messages is specific to each protocol.
+//! - Either party can signal that it doesn't want a notifications substream anymore by closing
+//! its writing side. The other party should respond by closing its own writing side soon after.
 //!
 //! The API of `sc-network` allows one to register user-defined notification protocols.
 //! `sc-network` automatically tries to open a substream towards each node for which the legacy
@@ -251,6 +253,7 @@ mod finality_requests;
 mod light_client_handler;
 mod on_demand_layer;
 mod protocol;
+mod request_responses;
 mod schema;
 mod service;
 mod transport;
@@ -258,15 +261,16 @@ mod utils;
 
 pub mod config;
 pub mod error;
+pub mod gossip;
 pub mod network_state;
 
-pub use service::{NetworkService, NetworkWorker};
-pub use protocol::PeerInfo;
-pub use protocol::event::{Event, DhtEvent, ObservedRole};
-pub use protocol::sync::SyncState;
-pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]
-pub use libp2p::multiaddr;
+pub use libp2p::{multiaddr, Multiaddr, PeerId};
+pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
+pub use service::{
+	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
+	NotificationSenderReady,
+};
 
 pub use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -308,8 +312,8 @@ pub struct NetworkStatus<B: BlockT> {
 	pub num_connected_peers: usize,
 	/// Total number of active peers.
 	pub num_active_peers: usize,
-	/// Downloaded bytes per second averaged over the past few seconds.
-	pub average_download_per_sec: u64,
-	/// Uploaded bytes per second averaged over the past few seconds.
-	pub average_upload_per_sec: u64,
+	/// The total number of bytes received.
+	pub total_bytes_inbound: u64,
+	/// The total number of bytes sent.
+	pub total_bytes_outbound: u64,
 }

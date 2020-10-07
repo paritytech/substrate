@@ -371,7 +371,7 @@ impl<T: Trait> Module<T> where
 	) -> BalanceOf<T> where
 		T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
 	{
-		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, info.pays_fee)
+		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, post_info.pays_fee(info))
 	}
 
 	fn compute_fee_raw(
@@ -467,6 +467,23 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 			Err(_) => Err(InvalidTransaction::Payment.into()),
 		}
 	}
+
+	/// Get an appropriate priority for a transaction with the given length and info.
+	///
+	/// This will try and optimise the `fee/weight` `fee/length`, whichever is consuming more of the
+	/// maximum corresponding limit.
+	///
+	/// For example, if a transaction consumed 1/4th of the block length and half of the weight, its
+	/// final priority is `fee * min(2, 4) = fee * 2`. If it consumed `1/4th` of the block length
+	/// and the entire block weight `(1/1)`, its priority is `fee * min(1, 4) = fee * 1`. This means
+	///  that the transaction which consumes more resources (either length or weight) with the same
+	/// `fee` ends up having lower priority.
+	fn get_priority(len: usize, info: &DispatchInfoOf<T::Call>, final_fee: BalanceOf<T>) -> TransactionPriority {
+		let weight_saturation = T::MaximumBlockWeight::get() / info.weight.max(1);
+		let len_saturation = T::MaximumBlockLength::get() as u64 / (len as u64).max(1);
+		let coefficient: BalanceOf<T> = weight_saturation.min(len_saturation).saturated_into::<BalanceOf<T>>();
+		final_fee.saturating_mul(coefficient).saturated_into::<TransactionPriority>()
+	}
 }
 
 impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
@@ -499,12 +516,10 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 		len: usize,
 	) -> TransactionValidity {
 		let (fee, _) = self.withdraw_fee(who, info, len)?;
-
-		let mut r = ValidTransaction::default();
-		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
-		// will be a bit more than setting the priority to tip. For now, this is enough.
-		r.priority = fee.saturated_into::<TransactionPriority>();
-		Ok(r)
+		Ok(ValidTransaction {
+			priority: Self::get_priority(len, info, fee),
+			..Default::default()
+		})
 	}
 
 	fn pre_dispatch(
@@ -639,7 +654,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
-		type ModuleToIndex = ();
+		type PalletInfo = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -656,6 +671,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type MaxLocks = ();
 		type WeightInfo = ();
 	}
 	thread_local! {
@@ -762,11 +778,24 @@ mod tests {
 	}
 
 	fn post_info_from_weight(w: Weight) -> PostDispatchInfo {
-		PostDispatchInfo { actual_weight: Some(w), }
+		PostDispatchInfo {
+			actual_weight: Some(w),
+			pays_fee: Default::default(),
+		}
+	}
+
+	fn post_info_from_pays(p: Pays) -> PostDispatchInfo {
+		PostDispatchInfo {
+			actual_weight: None,
+			pays_fee: p,
+		}
 	}
 
 	fn default_post_info() -> PostDispatchInfo {
-		PostDispatchInfo { actual_weight: None, }
+		PostDispatchInfo {
+			actual_weight: None,
+			pays_fee: Default::default(),
+		}
 	}
 
 	#[test]
@@ -1208,6 +1237,40 @@ mod tests {
 
 			// 33 weight, 10 length, 7 base, 5 tip
 			assert_eq!(actual_fee, 7 + 10 + (33 * 5 / 4) + 5);
+			assert_eq!(refund_based_fee, actual_fee);
+		});
+	}
+
+	#[test]
+	fn post_info_can_change_pays_fee() {
+		ExtBuilder::default()
+			.balance_factor(10)
+			.base_weight(7)
+			.build()
+			.execute_with(||
+		{
+			let info = info_from_weight(100);
+			let post_info = post_info_from_pays(Pays::No);
+			let prev_balance = Balances::free_balance(2);
+			let len = 10;
+			let tip = 5;
+
+			NextFeeMultiplier::put(Multiplier::saturating_from_rational(5, 4));
+
+			let pre = ChargeTransactionPayment::<Runtime>::from(tip)
+				.pre_dispatch(&2, CALL, &info, len)
+				.unwrap();
+
+			ChargeTransactionPayment::<Runtime>
+				::post_dispatch(pre, &info, &post_info, len, &Ok(()))
+				.unwrap();
+
+			let refund_based_fee = prev_balance - Balances::free_balance(2);
+			let actual_fee = Module::<Runtime>
+				::compute_actual_fee(len as u32, &info, &post_info, tip);
+
+			// Only 5 tip is paid
+			assert_eq!(actual_fee, 5);
 			assert_eq!(refund_based_fee, actual_fee);
 		});
 	}

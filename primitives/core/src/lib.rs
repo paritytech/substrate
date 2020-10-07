@@ -32,6 +32,7 @@ macro_rules! map {
 	);
 }
 
+use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
 use sp_std::prelude::*;
 use sp_std::ops::Deref;
 #[cfg(feature = "std")]
@@ -50,9 +51,9 @@ pub use impl_serde::serialize as bytes;
 
 #[cfg(feature = "full_crypto")]
 pub mod hashing;
+
 #[cfg(feature = "full_crypto")]
 pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256, keccak_256};
-#[cfg(feature = "std")]
 pub mod hexdisplay;
 pub mod crypto;
 
@@ -176,6 +177,18 @@ impl sp_std::ops::Deref for OpaqueMetadata {
 	}
 }
 
+/// Simple blob to hold a `PeerId` without committing to its format.
+#[derive(Default, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, PassByInner)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct OpaquePeerId(pub Vec<u8>);
+
+impl OpaquePeerId {
+	/// Create new `OpaquePeerId`
+	pub fn new(vec: Vec<u8>) -> Self {
+		OpaquePeerId(vec)
+	}
+}
+
 /// Something that is either a native or an encoded value.
 #[cfg(feature = "std")]
 pub enum NativeOrEncoded<R> {
@@ -257,7 +270,7 @@ pub trait TypeId {
 /// A log level matching the one from `log` crate.
 ///
 /// Used internally by `sp_io::log` method.
-#[derive(Encode, Decode, sp_runtime_interface::pass_by::PassByEnum, Copy, Clone)]
+#[derive(Encode, Decode, PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
 	Error = 1,

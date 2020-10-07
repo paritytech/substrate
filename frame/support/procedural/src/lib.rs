@@ -15,14 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// tag::description[]
 //! Proc macro of Support code for the runtime.
-// end::description[]
 
 #![recursion_limit="512"]
 
 mod storage;
 mod construct_runtime;
+mod transactional;
 
 use proc_macro::TokenStream;
 
@@ -253,13 +252,13 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         NodeBlock = runtime::Block,
 ///         UncheckedExtrinsic = UncheckedExtrinsic
 ///     {
-///         System: system::{Module, Call, Event<T>, Config<T>},
-///         Test: test::{Module, Call},
-///         Test2: test_with_long_module::{Module},
+///         System: system::{Module, Call, Event<T>, Config<T>} = 0,
+///         Test: test::{Module, Call} = 1,
+///         Test2: test_with_long_module::{Module, Event<T>},
 ///
 ///         // Module with instances
 ///         Test3_Instance1: test3::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
-///         Test3_DefaultInstance: test3::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>},
+///         Test3_DefaultInstance: test3::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
 ///     }
 /// )
 /// ```
@@ -280,6 +279,18 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// - `Inherent` - If the module provides/can check inherents.
 /// - `ValidateUnsigned` - If the module validates unsigned extrinsics.
 ///
+/// `= $n` is an optional part allowing to define at which index the module variants in
+/// `OriginCaller`, `Call` and `Event` are encoded, and to define the ModuleToIndex value.
+///
+/// if `= $n` is not given, then index is resolved same as fieldless enum in Rust
+/// (i.e. incrementedly from previous index):
+/// ```nocompile
+/// module1 .. = 2,
+/// module2 .., // Here module2 is given index 3
+/// module3 .. = 0,
+/// module4 .., // Here module4 is given index 1
+/// ```
+///
 /// # Note
 ///
 /// The population of the genesis storage depends on the order of modules. So, if one of your
@@ -288,4 +299,29 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
+}
+
+/// Execute the annotated function in a new storage transaction.
+///
+/// The return type of the annotated function must be `Result`. All changes to storage performed
+/// by the annotated function are discarded if it returns `Err`, or committed if `Ok`.
+///
+/// # Example
+///
+/// ```nocompile
+/// #[transactional]
+/// fn value_commits(v: u32) -> result::Result<u32, &'static str> {
+/// 	Value::set(v);
+/// 	Ok(v)
+/// }
+///
+/// #[transactional]
+/// fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
+/// 	Value::set(v);
+/// 	Err("nah")
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
+	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }

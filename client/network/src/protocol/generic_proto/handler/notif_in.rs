@@ -109,7 +109,7 @@ pub enum NotifsInHandlerOut {
 impl NotifsInHandlerProto {
 	/// Builds a new `NotifsInHandlerProto`.
 	pub fn new(
-		protocol_name: impl Into<Cow<'static, [u8]>>
+		protocol_name: impl Into<Cow<'static, str>>
 	) -> Self {
 		NotifsInHandlerProto {
 			in_protocol: NotificationsIn::new(protocol_name),
@@ -136,8 +136,35 @@ impl IntoProtocolsHandler for NotifsInHandlerProto {
 
 impl NotifsInHandler {
 	/// Returns the name of the protocol that we accept.
-	pub fn protocol_name(&self) -> &[u8] {
+	pub fn protocol_name(&self) -> &Cow<'static, str> {
 		self.in_protocol.protocol_name()
+	}
+
+	/// Equivalent to the `poll` method of `ProtocolsHandler`, except that it is guaranteed to
+	/// never generate [`NotifsInHandlerOut::Notif`].
+	///
+	/// Use this method in situations where it is not desirable to receive events but still
+	/// necessary to drive any potential incoming handshake or request.
+	pub fn poll_process(
+		&mut self,
+		cx: &mut Context
+	) -> Poll<
+		ProtocolsHandlerEvent<DeniedUpgrade, (), NotifsInHandlerOut, void::Void>
+	> {
+		if let Some(event) = self.events_queue.pop_front() {
+			return Poll::Ready(event)
+		}
+
+		match self.substream.as_mut().map(|s| NotificationsInSubstream::poll_process(Pin::new(s), cx)) {
+			None | Some(Poll::Pending) => {},
+			Some(Poll::Ready(Ok(v))) => match v {},
+			Some(Poll::Ready(Err(_))) => {
+				self.substream = None;
+				return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed));
+			},
+		}
+
+		Poll::Pending
 	}
 }
 
@@ -148,14 +175,16 @@ impl ProtocolsHandler for NotifsInHandler {
 	type InboundProtocol = NotificationsIn;
 	type OutboundProtocol = DeniedUpgrade;
 	type OutboundOpenInfo = ();
+	type InboundOpenInfo = ();
 
-	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
-		SubstreamProtocol::new(self.in_protocol.clone())
+	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, ()> {
+		SubstreamProtocol::new(self.in_protocol.clone(), ())
 	}
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		(msg, proto): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
+		(msg, proto): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output,
+		(): ()
 	) {
 		// If a substream already exists, we drop it and replace it with the new incoming one.
 		if self.substream.is_some() {
@@ -163,11 +192,9 @@ impl ProtocolsHandler for NotifsInHandler {
 		}
 
 		// Note that we drop the existing substream, which will send an equivalent to a TCP "RST"
-		// to the remote and force-close the substream. It  might seem like an unclean way to get
+		// to the remote and force-close the substream. It might seem like an unclean way to get
 		// rid of a substream. However, keep in mind that it is invalid for the remote to open
-		// multiple such substreams, and therefore sending a "RST" is the correct thing to do.
-		// Also note that we have already closed our writing side during the initial handshake,
-		// and we can't close "more" than that anyway.
+		// multiple such substreams, and therefore sending a "RST" is not an incorrect thing to do.
 		self.substream = Some(proto);
 
 		self.events_queue.push_back(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest(msg)));

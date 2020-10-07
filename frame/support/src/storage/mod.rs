@@ -17,7 +17,7 @@
 
 //! Stuff to do with the runtime's storage.
 
-use sp_std::{prelude::*, marker::PhantomData};
+use sp_std::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::hash::{Twox128, StorageHasher};
 use sp_runtime::generic::{Digest, DigestItem};
@@ -251,6 +251,8 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
+	///
+	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
 	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F);
 }
 
@@ -286,7 +288,9 @@ pub trait IterableStorageDoubleMap<
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
-	fn translate<O: Decode, F: Fn(O) -> Option<V>>(f: F);
+	///
+	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
+	fn translate<O: Decode, F: Fn(K1, K2, O) -> Option<V>>(f: F);
 }
 
 /// An implementation of a map with a two keys.
@@ -366,6 +370,13 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg2: EncodeLike<K2>,
 		F: FnOnce(&mut Self::Query) -> Result<R, E>;
 
+	/// Mutate the value under the given keys. Deletes the item if mutated to a `None`.
+	fn mutate_exists<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		F: FnOnce(&mut Option<V>) -> R;
+
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
 	fn try_mutate_exists<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
 	where
@@ -426,35 +437,58 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	>(key1: KeyArg1, key2: KeyArg2) -> Option<V>;
 }
 
-/// Iterator for prefixed map.
-pub struct PrefixIterator<Value> {
+/// Iterate over a prefix and decode raw_key and raw_value into `T`.
+///
+/// If any decoding fails it skips it and continues to the next key.
+pub struct PrefixIterator<T> {
 	prefix: Vec<u8>,
 	previous_key: Vec<u8>,
-	phantom_data: PhantomData<Value>,
+	/// If true then value are removed while iterating
+	drain: bool,
+	/// Function that take `(raw_key_without_prefix, raw_value)` and decode `T`.
+	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
+	closure: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 }
 
-impl<Value: Decode> Iterator for PrefixIterator<Value> {
-	type Item = Value;
+impl<T> Iterator for PrefixIterator<T> {
+	type Item = T;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		match sp_io::storage::next_key(&self.previous_key)
-			.filter(|n| n.starts_with(&self.prefix[..]))
-		{
-			Some(next_key) => {
-				let value = unhashed::get(&next_key);
+		loop {
+			let maybe_next = sp_io::storage::next_key(&self.previous_key)
+				.filter(|n| n.starts_with(&self.prefix));
+			break match maybe_next {
+				Some(next) => {
+					self.previous_key = next;
+					let raw_value = match unhashed::get_raw(&self.previous_key) {
+						Some(raw_value) => raw_value,
+						None => {
+							crate::debug::error!(
+								"next_key returned a key with no value at {:?}",
+								self.previous_key
+							);
+							continue
+						}
+					};
+					if self.drain {
+						unhashed::kill(&self.previous_key)
+					}
+					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
+					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
+						Ok(item) => item,
+						Err(e) => {
+							crate::debug::error!(
+								"(key, value) failed to decode at {:?}: {:?}",
+								self.previous_key, e
+							);
+							continue
+						}
+					};
 
-				if value.is_none() {
-					runtime_print!(
-						"ERROR: returned next_key has no value:\nkey is {:?}\nnext_key is {:?}",
-						&self.previous_key, &next_key,
-					);
+					Some(item)
 				}
-
-				self.previous_key = next_key;
-
-				value
-			},
-			_ => None,
+				None => None,
+			}
 		}
 	}
 }
@@ -486,22 +520,22 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	}
 
 	/// Iter over all value of the storage.
+	///
+	/// NOTE: If a value failed to decode becaues storage is corrupted then it is skipped.
 	fn iter_values() -> PrefixIterator<Value> {
 		let prefix = Self::final_prefix();
 		PrefixIterator {
 			prefix: prefix.to_vec(),
 			previous_key: prefix.to_vec(),
-			phantom_data: Default::default(),
+			drain: false,
+			closure: |_raw_key, mut raw_value| Value::decode(&mut raw_value),
 		}
 	}
 
-	/// Translate the values from some previous `OldValue` to the current type.
+	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
-	/// `TV` translates values.
-	///
-	/// Returns `Err` if the map could not be interpreted as the old type, and Ok if it could.
-	/// The `Err` contains the number of value that couldn't be interpreted, those value are
-	/// removed from the map.
+	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
 	///
 	/// # Warning
 	///
@@ -510,33 +544,28 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	///
 	/// # Usage
 	///
-	/// This would typically be called inside the module implementation of on_runtime_upgrade, while
-	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**. (More
-	/// precisely prior initialized modules doesn't make use of this storage).
-	fn translate_values<OldValue, TV>(translate_val: TV) -> Result<(), u32>
-		where OldValue: Decode, TV: Fn(OldValue) -> Value
-	{
+	/// This would typically be called inside the module implementation of on_runtime_upgrade.
+	fn translate_values<OldValue: Decode, F: Fn(OldValue) -> Option<Value>>(f: F) {
 		let prefix = Self::final_prefix();
-		let mut previous_key = prefix.to_vec();
-		let mut errors = 0;
-		while let Some(next_key) = sp_io::storage::next_key(&previous_key)
-			.filter(|n| n.starts_with(&prefix[..]))
+		let mut previous_key = prefix.clone().to_vec();
+		while let Some(next) = sp_io::storage::next_key(&previous_key)
+			.filter(|n| n.starts_with(&prefix))
 		{
-			if let Some(value) = unhashed::get(&next_key) {
-				unhashed::put(&next_key[..], &translate_val(value));
-			} else {
-				// We failed to read the value. Remove the key and increment errors.
-				unhashed::kill(&next_key[..]);
-				errors += 1;
+			previous_key = next;
+			let maybe_value = unhashed::get::<OldValue>(&previous_key);
+			match maybe_value {
+				Some(value) => match f(value) {
+					Some(new) => unhashed::put::<Value>(&previous_key, &new),
+					None => unhashed::kill(&previous_key),
+				},
+				None => {
+					crate::debug::error!(
+						"old key failed to decode at {:?}",
+						previous_key
+					);
+					continue
+				},
 			}
-
-			previous_key = next_key;
-		}
-
-		if errors == 0 {
-			Ok(())
-		} else {
-			Err(errors)
 		}
 	}
 }
@@ -627,7 +656,7 @@ mod test {
 			assert_eq!(MyStorage::final_prefix().to_vec(), k);
 
 			// test iteration
-			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![]);
+			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u64);
 			unhashed::put(&[&k[..], &vec![1, 1][..]].concat(), &2u64);
@@ -638,14 +667,14 @@ mod test {
 
 			// test removal
 			MyStorage::remove_all();
-			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![]);
+			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 
 			// test migration
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u32);
 			unhashed::put(&[&k[..], &vec![8][..]].concat(), &2u32);
 
-			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![]);
-			MyStorage::translate_values(|v: u32| v as u64).unwrap();
+			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
+			MyStorage::translate_values(|v: u32| Some(v as u64));
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2]);
 			MyStorage::remove_all();
 
@@ -657,8 +686,8 @@ mod test {
 
 			// (contains some value that successfully decoded to u64)
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3]);
-			assert_eq!(MyStorage::translate_values(|v: u128| v as u64), Err(2));
-			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 3]);
+			MyStorage::translate_values(|v: u128| Some(v as u64));
+			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3]);
 			MyStorage::remove_all();
 
 			// test that other values are not modified.

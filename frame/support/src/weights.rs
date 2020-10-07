@@ -242,6 +242,30 @@ impl Default for DispatchClass {
 	}
 }
 
+/// Primitives related to priority management of Frame.
+pub mod priority {
+	/// The starting point of all Operational transactions. 3/4 of u64::max_value().
+	pub const LIMIT: u64 = 13_835_058_055_282_163_711_u64;
+
+	/// Wrapper for priority of different dispatch classes.
+	///
+	/// This only makes sure that any value created for the operational dispatch class is
+	/// incremented by [`LIMIT`].
+	pub enum FrameTransactionPriority {
+		Normal(u64),
+		Operational(u64),
+	}
+
+	impl From<FrameTransactionPriority> for u64 {
+		fn from(priority: FrameTransactionPriority) -> Self {
+			match priority {
+				FrameTransactionPriority::Normal(inner) => inner,
+				FrameTransactionPriority::Operational(inner) => inner.saturating_add(LIMIT),
+			}
+		}
+	}
+}
+
 /// A bundle of static information collected from the `#[weight = $x]` attributes.
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
 pub struct DispatchInfo {
@@ -263,10 +287,13 @@ pub trait GetDispatchInfo {
 }
 
 /// Weight information that is only available post dispatch.
+/// NOTE: This can only be used to reduce the weight or fee, not increase it.
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
 pub struct PostDispatchInfo {
 	/// Actual weight consumed by a call or `None` which stands for the worst case static weight.
 	pub actual_weight: Option<Weight>,
+	/// Whether this transaction should pay fees when all is said and done.
+	pub pays_fee: Pays,
 }
 
 impl PostDispatchInfo {
@@ -283,6 +310,20 @@ impl PostDispatchInfo {
 			info.weight
 		}
 	}
+
+	/// Determine if user should actually pay fees at the end of the dispatch.
+	pub fn pays_fee(&self, info: &DispatchInfo) -> Pays {
+		// If they originally were not paying fees, or the post dispatch info
+		// says they should not pay fees, then they don't pay fees.
+		// This is because the pre dispatch information must contain the
+		// worst case for weight and fees paid.
+		if info.pays_fee == Pays::No || self.pays_fee == Pays::No {
+			Pays::No
+		} else {
+			// Otherwise they pay.
+			Pays::Yes
+		}
+	}
 }
 
 /// Extract the actual weight from a dispatch result if any or fall back to the default weight.
@@ -293,10 +334,30 @@ pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &Dispatc
 	}.calc_actual_weight(info)
 }
 
+impl From<(Option<Weight>, Pays)> for PostDispatchInfo {
+	fn from(post_weight_info: (Option<Weight>, Pays)) -> Self {
+		let (actual_weight, pays_fee) = post_weight_info;
+		Self {
+			actual_weight,
+			pays_fee,
+		}
+	}
+}
+
+impl From<Pays> for PostDispatchInfo {
+	fn from(pays_fee: Pays) -> Self {
+		Self {
+			actual_weight: None,
+			pays_fee,
+		}
+	}
+}
+
 impl From<Option<Weight>> for PostDispatchInfo {
 	fn from(actual_weight: Option<Weight>) -> Self {
 		Self {
 			actual_weight,
+			pays_fee: Default::default(),
 		}
 	}
 }
@@ -305,6 +366,7 @@ impl From<()> for PostDispatchInfo {
 	fn from(_: ()) -> Self {
 		Self {
 			actual_weight: None,
+			pays_fee: Default::default(),
 		}
 	}
 }
@@ -315,6 +377,11 @@ impl sp_runtime::traits::Printable for PostDispatchInfo {
 		match self.actual_weight {
 			Some(weight) => weight.print(),
 			None => "max-weight".print(),
+		};
+		"pays_fee=".print();
+		match self.pays_fee {
+			Pays::Yes => "Yes".print(),
+			Pays::No => "No".print(),
 		}
 	}
 }
@@ -338,7 +405,10 @@ impl<T> WithPostDispatchInfo for T where
 {
 	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo {
 		DispatchErrorWithPostInfo {
-			post_info: PostDispatchInfo { actual_weight: Some(actual_weight) },
+			post_info: PostDispatchInfo {
+				actual_weight: Some(actual_weight),
+				pays_fee: Default::default(),
+			},
 			error: self.into(),
 		}
 	}

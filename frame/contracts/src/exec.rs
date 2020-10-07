@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
-	TrieId, BalanceOf, ContractInfo, TrieIdGenerator};
-use crate::{gas::{Gas, GasMeter, Token}, rent, storage, Error, ContractInfoOf};
+use crate::{
+	CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
+	TrieId, BalanceOf, ContractInfo, TrieIdGenerator,
+	gas::{Gas, GasMeter, Token}, rent, storage, Error, ContractInfoOf
+};
 use bitflags::bitflags;
 use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, Zero, Convert, Saturating};
@@ -56,9 +58,9 @@ pub enum TransactorKind {
 /// Output of a contract call or instantiation which ran to completion.
 #[cfg_attr(test, derive(PartialEq, Eq, Debug))]
 pub struct ExecReturnValue {
-	/// Flags passed along by `ext_return`. Empty when `ext_return` was never called.
+	/// Flags passed along by `seal_return`. Empty when `seal_return` was never called.
 	pub flags: ReturnFlags,
-	/// Buffer passed along by `ext_return`. Empty when `ext_return` was never called.
+	/// Buffer passed along by `seal_return`. Empty when `seal_return` was never called.
 	pub data: Vec<u8>,
 }
 
@@ -69,7 +71,39 @@ impl ExecReturnValue {
 	}
 }
 
-pub type ExecResult = Result<ExecReturnValue, DispatchError>;
+/// Call or instantiate both call into other contracts and pass through errors happening
+/// in those to the caller. This enum is for  the caller to distinguish whether the error
+/// happened during the execution of the callee or in the current execution context.
+#[cfg_attr(test, derive(PartialEq, Eq, Debug))]
+pub enum ErrorOrigin {
+	/// The error happened in the current exeuction context rather than in the one
+	/// of the contract that is called into.
+	Caller,
+	/// The error happened during execution of the called contract.
+	Callee,
+}
+
+/// Error returned by contract exection.
+#[cfg_attr(test, derive(PartialEq, Eq, Debug))]
+pub struct ExecError {
+	/// The reason why the execution failed.
+	pub error: DispatchError,
+	/// Origin of the error.
+	pub origin: ErrorOrigin,
+}
+
+impl<T: Into<DispatchError>> From<T> for ExecError {
+	fn from(error: T) -> Self {
+		Self {
+			error: error.into(),
+			origin: ErrorOrigin::Caller,
+		}
+	}
+}
+
+/// The result that is returned from contract execution. It either contains the output
+/// buffer or an error describing the reason for failure.
+pub type ExecResult = Result<ExecReturnValue, ExecError>;
 
 /// An interface that provides access to the external environment in which the
 /// smart-contract is executed.
@@ -99,7 +133,7 @@ pub trait Ext {
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		input_data: Vec<u8>,
-	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), DispatchError>;
+	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError>;
 
 	/// Transfer some amount of funds into the specified account.
 	fn transfer(
@@ -282,12 +316,12 @@ where
 		}
 	}
 
-	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_id: Option<TrieId>)
+	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_id: TrieId)
 		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
 			caller: Some(self),
-			self_trie_id: trie_id,
+			self_trie_id: Some(trie_id),
 			self_account: dest,
 			depth: self.depth + 1,
 			config: self.config,
@@ -307,31 +341,31 @@ where
 		input_data: Vec<u8>,
 	) -> ExecResult {
 		if self.depth == self.config.max_depth as usize {
-			Err("reached maximum depth, cannot make a call")?
+			Err(Error::<T>::MaxCallDepthReached)?
 		}
 
 		if gas_meter
 			.charge(self.config, ExecFeeToken::Call)
 			.is_out_of_gas()
 		{
-			Err("not enough gas to pay base call fee")?
+			Err(Error::<T>::OutOfGas)?
 		}
 
 		// Assumption: `collect_rent` doesn't collide with overlay because
 		// `collect_rent` will be done on first call and destination contract and balance
 		// cannot be changed before the first call
-		let contract_info = rent::collect_rent::<T>(&dest);
-
-		// Calls to dead contracts always fail.
-		if let Some(ContractInfo::Tombstone(_)) = contract_info {
-			Err("contract has been evicted")?
+		// We do not allow 'calling' plain accounts. For transfering value
+		// `seal_transfer` must be used.
+		let contract = if let Some(ContractInfo::Alive(info)) = rent::collect_rent::<T>(&dest) {
+			info
+		} else {
+			Err(Error::<T>::NotCallable)?
 		};
 
 		let transactor_kind = self.transactor_kind();
 		let caller = self.self_account.clone();
-		let dest_trie_id = contract_info.and_then(|i| i.as_alive().map(|i| i.trie_id.clone()));
 
-		self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
+		self.with_nested_context(dest.clone(), contract.trie_id.clone(), |nested| {
 			if value > BalanceOf::<T>::zero() {
 				transfer(
 					gas_meter,
@@ -344,22 +378,15 @@ where
 				)?
 			}
 
-			// If code_hash is not none, then the destination account is a live contract, otherwise
-			// it is a regular account since tombstone accounts have already been rejected.
-			match storage::code_hash::<T>(&dest) {
-				Ok(dest_code_hash) => {
-					let executable = nested.loader.load_main(&dest_code_hash)?;
-					let output = nested.vm
-						.execute(
-							&executable,
-							nested.new_call_context(caller, value),
-							input_data,
-							gas_meter,
-						)?;
-					Ok(output)
-				}
-				Err(storage::ContractAbsentError) => Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
-			}
+			let executable = nested.loader.load_main(&contract.code_hash)
+				.map_err(|_| Error::<T>::CodeNotFound)?;
+			let output = nested.vm.execute(
+				&executable,
+				nested.new_call_context(caller, value),
+				input_data,
+				gas_meter,
+			).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
+			Ok(output)
 		})
 	}
 
@@ -369,16 +396,16 @@ where
 		gas_meter: &mut GasMeter<T>,
 		code_hash: &CodeHash<T>,
 		input_data: Vec<u8>,
-	) -> Result<(T::AccountId, ExecReturnValue), DispatchError> {
+	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
 		if self.depth == self.config.max_depth as usize {
-			Err("reached maximum depth, cannot instantiate")?
+			Err(Error::<T>::MaxCallDepthReached)?
 		}
 
 		if gas_meter
 			.charge(self.config, ExecFeeToken::Instantiate)
 			.is_out_of_gas()
 		{
-			Err("not enough gas to pay base instantiate fee")?
+			Err(Error::<T>::OutOfGas)?
 		}
 
 		let transactor_kind = self.transactor_kind();
@@ -394,7 +421,7 @@ where
 		// Generate it now.
 		let dest_trie_id = <T as Trait>::TrieIdGenerator::trie_id(&dest);
 
-		let output = self.with_nested_context(dest.clone(), Some(dest_trie_id), |nested| {
+		let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
 			storage::place_contract::<T>(
 				&dest,
 				nested
@@ -416,18 +443,21 @@ where
 				nested,
 			)?;
 
-			let executable = nested.loader.load_init(&code_hash)?;
+			let executable = nested.loader.load_init(&code_hash)
+				.map_err(|_| Error::<T>::CodeNotFound)?;
 			let output = nested.vm
 				.execute(
 					&executable,
 					nested.new_call_context(caller.clone(), endowment),
 					input_data,
 					gas_meter,
-				)?;
+				).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
-			// Error out if insufficient remaining balance.
-			if T::Currency::free_balance(&dest) < nested.config.existential_deposit {
-				Err("insufficient remaining balance")?
+			// We need each contract that exists to be above the subsistence threshold
+			// in order to keep up the guarantuee that we always leave a tombstone behind
+			// with the exception of a contract that called `seal_terminate`.
+			if T::Currency::total_balance(&dest) < nested.config.subsistence_threshold() {
+				Err(Error::<T>::NewContractNotFunded)?
 			}
 
 			// Deposit an instantiation event.
@@ -456,7 +486,7 @@ where
 	}
 
 	/// Execute the given closure within a nested execution context.
-	fn with_nested_context<F>(&mut self, dest: T::AccountId, trie_id: Option<TrieId>, func: F)
+	fn with_nested_context<F>(&mut self, dest: T::AccountId, trie_id: TrieId, func: F)
 		-> ExecResult
 		where F: FnOnce(&mut ExecutionContext<T, V, L>) -> ExecResult
 	{
@@ -566,10 +596,10 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	};
 
 	if gas_meter.charge(ctx.config, token).is_out_of_gas() {
-		Err("not enough gas to pay transfer fee")?
+		Err(Error::<T>::OutOfGas)?
 	}
 
-	// Only ext_terminate is allowed to bring the sender below the subsistence
+	// Only seal_terminate is allowed to bring the sender below the subsistence
 	// threshold or even existential deposit.
 	let existence_requirement = match (cause, origin) {
 		(Terminate, _) => ExistenceRequirement::AllowDeath,
@@ -577,13 +607,15 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 			ensure!(
 				T::Currency::total_balance(transactor).saturating_sub(value) >=
 					ctx.config.subsistence_threshold(),
-				Error::<T>::InsufficientBalance,
+				Error::<T>::BelowSubsistenceThreshold,
 			);
 			ExistenceRequirement::KeepAlive
 		},
 		(_, PlainAccount) => ExistenceRequirement::KeepAlive,
 	};
-	T::Currency::transfer(transactor, dest, value, existence_requirement)?;
+
+	T::Currency::transfer(transactor, dest, value, existence_requirement)
+		.map_err(|_| Error::<T>::TransferFailed)?;
 
 	Ok(())
 }
@@ -650,7 +682,7 @@ where
 		endowment: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		input_data: Vec<u8>,
-	) -> Result<(AccountIdOf<T>, ExecReturnValue), DispatchError> {
+	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
 		self.ctx.instantiate(endowment, gas_meter, code_hash, input_data)
 	}
 
@@ -834,13 +866,13 @@ fn deposit_event<T: Trait>(
 mod tests {
 	use super::{
 		BalanceOf, Event, ExecFeeToken, ExecResult, ExecutionContext, Ext, Loader,
-		RawEvent, TransferFeeKind, TransferFeeToken, Vm, ReturnFlags,
+		RawEvent, TransferFeeKind, TransferFeeToken, Vm, ReturnFlags, ExecError, ErrorOrigin
 	};
 	use crate::{
 		gas::GasMeter, tests::{ExtBuilder, Test, MetaEvent},
 		exec::ExecReturnValue, CodeHash, Config,
 		gas::Gas,
-		storage,
+		storage, Error
 	};
 	use crate::tests::test_utils::{place_contract, set_balance, get_balance};
 	use sp_runtime::DispatchError;
@@ -996,11 +1028,19 @@ mod tests {
 
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 
-			let result = ctx.call(dest, 0, &mut gas_meter, vec![]);
+			let result = super::transfer(
+				&mut gas_meter,
+				super::TransferCause::Call,
+				super::TransactorKind::PlainAccount,
+				&origin,
+				&dest,
+				0,
+				&mut ctx,
+			);
 			assert_matches!(result, Ok(_));
 
 			let mut toks = gas_meter.tokens().iter();
-			match_tokens!(toks, ExecFeeToken::Call,);
+			match_tokens!(toks, TransferFeeToken { kind: TransferFeeKind::Transfer },);
 		});
 
 		// This test verifies that base fee for instantiation is taken.
@@ -1016,7 +1056,7 @@ mod tests {
 
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 
-			let result = ctx.instantiate(1, &mut gas_meter, &code, vec![]);
+			let result = ctx.instantiate(cfg.subsistence_threshold(), &mut gas_meter, &code, vec![]);
 			assert_matches!(result, Ok(_));
 
 			let mut toks = gas_meter.tokens().iter();
@@ -1040,14 +1080,18 @@ mod tests {
 			set_balance(&origin, 100);
 			set_balance(&dest, 0);
 
-			let output = ctx.call(
-				dest,
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+
+			super::transfer(
+				&mut gas_meter,
+				super::TransferCause::Call,
+				super::TransactorKind::PlainAccount,
+				&origin,
+				&dest,
 				55,
-				&mut GasMeter::<Test>::new(GAS_LIMIT),
-				vec![],
+				&mut ctx,
 			).unwrap();
 
-			assert!(output.is_success());
 			assert_eq!(get_balance(&origin), 45);
 			assert_eq!(get_balance(&dest), 55);
 		});
@@ -1104,13 +1148,20 @@ mod tests {
 
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 
-			let result = ctx.call(dest, 50, &mut gas_meter, vec![]);
+			let result = super::transfer(
+				&mut gas_meter,
+				super::TransferCause::Call,
+				super::TransactorKind::PlainAccount,
+				&origin,
+				&dest,
+				50,
+				&mut ctx,
+			);
 			assert_matches!(result, Ok(_));
 
 			let mut toks = gas_meter.tokens().iter();
 			match_tokens!(
 				toks,
-				ExecFeeToken::Call,
 				TransferFeeToken {
 					kind: TransferFeeKind::Transfer,
 				},
@@ -1129,13 +1180,20 @@ mod tests {
 
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 
-			let result = ctx.call(dest, 50, &mut gas_meter, vec![]);
+			let result = super::transfer(
+				&mut gas_meter,
+				super::TransferCause::Call,
+				super::TransactorKind::PlainAccount,
+				&origin,
+				&dest,
+				50,
+				&mut ctx,
+			);
 			assert_matches!(result, Ok(_));
 
 			let mut toks = gas_meter.tokens().iter();
 			match_tokens!(
 				toks,
-				ExecFeeToken::Call,
 				TransferFeeToken {
 					kind: TransferFeeKind::Transfer,
 				},
@@ -1186,16 +1244,19 @@ mod tests {
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 			set_balance(&origin, 0);
 
-			let result = ctx.call(
-				dest,
-				100,
+			let result = super::transfer(
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
-				vec![],
+				super::TransferCause::Call,
+				super::TransactorKind::PlainAccount,
+				&origin,
+				&dest,
+				100,
+				&mut ctx,
 			);
 
-			assert_matches!(
+			assert_eq!(
 				result,
-				Err(DispatchError::Module { message: Some("InsufficientBalance"), .. })
+				Err(Error::<Test>::TransferFailed.into())
 			);
 			assert_eq!(get_balance(&origin), 0);
 			assert_eq!(get_balance(&dest), 0);
@@ -1306,7 +1367,7 @@ mod tests {
 			set_balance(&ALICE, 100);
 
 			let result = ctx.instantiate(
-				1,
+				cfg.subsistence_threshold(),
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&input_data_ch,
 				vec![1, 2, 3, 4],
@@ -1332,9 +1393,9 @@ mod tests {
 			if !*reached_bottom {
 				// We are first time here, it means we just reached bottom.
 				// Verify that we've got proper error and set `reached_bottom`.
-				assert_matches!(
+				assert_eq!(
 					r,
-					Err(DispatchError::Other("reached maximum depth, cannot make a call"))
+					Err(Error::<Test>::MaxCallDepthReached.into())
 				);
 				*reached_bottom = true;
 			} else {
@@ -1549,7 +1610,7 @@ mod tests {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				let (address, output) = ctx.ext.instantiate(
 					&dummy_ch,
-					15u64,
+					Config::<Test>::subsistence_threshold_uncached(),
 					ctx.gas_meter,
 					vec![]
 				).unwrap();
@@ -1601,7 +1662,10 @@ mod tests {
 						ctx.gas_meter,
 						vec![]
 					),
-					Err(DispatchError::Other("It's a trap!"))
+					Err(ExecError {
+						error: DispatchError::Other("It's a trap!"),
+						origin: ErrorOrigin::Callee,
+					})
 				);
 
 				exec_success()
@@ -1645,14 +1709,14 @@ mod tests {
 				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 				set_balance(&ALICE, 1000);
 
-				assert_matches!(
+				assert_eq!(
 					ctx.instantiate(
 						100,
 						&mut GasMeter::<Test>::new(GAS_LIMIT),
 						&terminate_ch,
 						vec![],
 					),
-					Err(DispatchError::Other("insufficient remaining balance"))
+					Err(Error::<Test>::NewContractNotFunded.into())
 				);
 
 				assert_eq!(
@@ -1679,7 +1743,7 @@ mod tests {
 			set_balance(&ALICE, 100);
 
 			let result = ctx.instantiate(
-				1,
+				cfg.subsistence_threshold(),
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&rent_allowance_ch,
 				vec![],

@@ -19,8 +19,9 @@
 
 use crate::mock::*;
 use crate::{
-	seq_phragmen, balance_solution, build_support_map, is_score_better, helpers::*,
-	Support, StakedAssignment, Assignment, ElectionResult, ExtendedBalance,
+	seq_phragmen, balancing, build_support_map, is_score_better, helpers::*,
+	Support, StakedAssignment, Assignment, ElectionResult, ExtendedBalance, setup_inputs,
+	seq_phragmen_core, Voter,
 };
 use substrate_test_utils::assert_eq_uvec;
 use sp_arithmetic::{Perbill, Permill, Percent, PerU16};
@@ -34,7 +35,7 @@ fn float_phragmen_poc_works() {
 		(30, vec![2, 3]),
 	];
 	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30), (1, 0), (2, 0), (3, 0)]);
-	let mut phragmen_result = elect_float(2, 2, candidates, voters, &stake_of).unwrap();
+	let mut phragmen_result = elect_float(2, candidates, voters, &stake_of).unwrap();
 	let winners = phragmen_result.clone().winners;
 	let assignments = phragmen_result.clone().assignments;
 
@@ -72,6 +73,153 @@ fn float_phragmen_poc_works() {
 }
 
 #[test]
+fn phragmen_core_poc_works() {
+	let candidates = vec![1, 2, 3];
+	let voters = vec![
+		(10, 10, vec![1, 2]),
+		(20, 20, vec![1, 3]),
+		(30, 30, vec![2, 3]),
+	];
+
+	let (candidates, voters) = setup_inputs(candidates, voters);
+	let (candidates, voters) = seq_phragmen_core(2, candidates, voters).unwrap();
+
+	assert_eq!(
+		voters
+			.iter()
+			.map(|v| (
+				v.who,
+				v.budget,
+				(v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()),
+			))
+			.collect::<Vec<_>>(),
+		vec![
+			(10, 10, vec![(2, 10)]),
+			(20, 20, vec![(3, 20)]),
+			(30, 30, vec![(2, 15), (3, 15)]),
+		]
+	);
+
+	assert_eq!(
+		candidates
+			.iter()
+			.map(|c_ptr| (
+				c_ptr.borrow().who,
+				c_ptr.borrow().elected,
+				c_ptr.borrow().round,
+				c_ptr.borrow().backed_stake,
+			)).collect::<Vec<_>>(),
+		vec![
+			(1, false, 0, 0),
+			(2, true, 1, 25),
+			(3, true, 0, 35),
+		]
+	);
+}
+
+#[test]
+fn balancing_core_works() {
+	let candidates = vec![1, 2, 3, 4, 5];
+	let voters = vec![
+		(10, 10, vec![1, 2]),
+		(20, 20, vec![1, 3]),
+		(30, 30, vec![1, 2, 3, 4]),
+		(40, 40, vec![1, 3, 4, 5]),
+		(50, 50, vec![2, 4, 5]),
+	];
+
+	let (candidates, voters) = setup_inputs(candidates, voters);
+	let (candidates, mut voters) = seq_phragmen_core(4, candidates, voters).unwrap();
+	let iters = balancing::balance::<AccountId>(&mut voters, 4, 0);
+
+	assert!(iters > 0);
+
+	assert_eq!(
+		voters
+			.iter()
+			.map(|v| (
+				v.who,
+				v.budget,
+				(v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()),
+			))
+			.collect::<Vec<_>>(),
+		vec![
+			// note the 0 edge. This is know and not an issue per se. Also note that the stakes are
+			// normalized.
+			(10, 10, vec![(1, 9), (2, 1)]),
+			(20, 20, vec![(1, 9), (3, 11)]),
+			(30, 30, vec![(1, 8), (2, 7), (3, 8), (4, 7)]),
+			(40, 40, vec![(1, 11), (3, 18), (4, 11)]),
+			(50, 50, vec![(2, 30), (4, 20)]),
+		]
+	);
+
+	assert_eq!(
+		candidates
+			.iter()
+			.map(|c_ptr| (
+				c_ptr.borrow().who,
+				c_ptr.borrow().elected,
+				c_ptr.borrow().round,
+				c_ptr.borrow().backed_stake,
+			)).collect::<Vec<_>>(),
+		vec![
+			(1, true, 1, 37),
+			(2, true, 2, 38),
+			(3, true, 3, 37),
+			(4, true, 0, 38),
+			(5, false, 0, 0),
+		]
+	);
+}
+
+#[test]
+fn voter_normalize_ops_works() {
+	use crate::{Candidate, Edge};
+	use sp_std::{cell::RefCell, rc::Rc};
+	// normalize
+	{
+		let c1 = Candidate { who: 10, elected: false ,..Default::default() };
+		let c2 = Candidate { who: 20, elected: false ,..Default::default() };
+		let c3 = Candidate { who: 30, elected: false ,..Default::default() };
+
+		let e1 = Edge { candidate: Rc::new(RefCell::new(c1)), weight: 30, ..Default::default() };
+		let e2 = Edge { candidate: Rc::new(RefCell::new(c2)), weight: 33, ..Default::default() };
+		let e3 = Edge { candidate: Rc::new(RefCell::new(c3)), weight: 30, ..Default::default() };
+
+		let mut v = Voter {
+			who: 1,
+			budget: 100,
+			edges: vec![e1, e2, e3],
+			..Default::default()
+		};
+
+		v.try_normalize().unwrap();
+		assert_eq!(v.edges.iter().map(|e| e.weight).collect::<Vec<_>>(), vec![34, 33, 33]);
+	}
+	// // normalize_elected
+	{
+		let c1 = Candidate { who: 10, elected: false ,..Default::default() };
+		let c2 = Candidate { who: 20, elected: true ,..Default::default() };
+		let c3 = Candidate { who: 30, elected: true ,..Default::default() };
+
+		let e1 = Edge { candidate: Rc::new(RefCell::new(c1)), weight: 30, ..Default::default() };
+		let e2 = Edge { candidate: Rc::new(RefCell::new(c2)), weight: 33, ..Default::default() };
+		let e3 = Edge { candidate: Rc::new(RefCell::new(c3)), weight: 30, ..Default::default() };
+
+		let mut v = Voter {
+			who: 1,
+			budget: 100,
+			edges: vec![e1, e2, e3],
+			..Default::default()
+		};
+
+		v.try_normalize_elected().unwrap();
+		assert_eq!(v.edges.iter().map(|e| e.weight).collect::<Vec<_>>(), vec![30, 34, 66]);
+	}
+}
+
+#[test]
 fn phragmen_poc_works() {
 	let candidates = vec![1, 2, 3];
 	let voters = vec![
@@ -83,12 +231,12 @@ fn phragmen_poc_works() {
 	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
-		2,
 		candidates,
 		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+		None,
 	).unwrap();
 
-	assert_eq_uvec!(winners, vec![(2, 40), (3, 50)]);
+	assert_eq_uvec!(winners, vec![(2, 25), (3, 35)]);
 	assert_eq_uvec!(
 		assignments,
 		vec![
@@ -110,9 +258,9 @@ fn phragmen_poc_works() {
 		]
 	);
 
-	let mut staked = assignment_ratio_to_staked(assignments, &stake_of);
+	let staked = assignment_ratio_to_staked(assignments, &stake_of);
 	let winners = to_without_backing(winners);
-	let mut support_map = build_support_map::<AccountId>(&winners, &staked).0;
+	let support_map = build_support_map::<AccountId>(&winners, &staked).unwrap();
 
 	assert_eq_uvec!(
 		staked,
@@ -143,13 +291,50 @@ fn phragmen_poc_works() {
 		*support_map.get(&3).unwrap(),
 		Support::<AccountId> { total: 35, voters: vec![(20, 20), (30, 15)] },
 	);
+}
 
-	balance_solution(
-		&mut staked,
-		&mut support_map,
-		0,
+#[test]
+fn phragmen_poc_works_with_balancing() {
+	let candidates = vec![1, 2, 3];
+	let voters = vec![
+		(10, vec![1, 2]),
+		(20, vec![1, 3]),
+		(30, vec![2, 3]),
+	];
+
+	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
+		candidates,
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+		Some((4, 0)),
+	).unwrap();
+
+	assert_eq_uvec!(winners, vec![(2, 30), (3, 30)]);
+	assert_eq_uvec!(
+		assignments,
+		vec![
+			Assignment {
+				who: 10u64,
+				distribution: vec![(2, Perbill::from_percent(100))],
+			},
+			Assignment {
+				who: 20,
+				distribution: vec![(3, Perbill::from_percent(100))],
+			},
+			Assignment {
+				who: 30,
+				distribution: vec![
+					(2, Perbill::from_parts(666666666)),
+					(3, Perbill::from_parts(333333334)),
+				],
+			},
+		]
 	);
+
+	let staked = assignment_ratio_to_staked(assignments, &stake_of);
+	let winners = to_without_backing(winners);
+	let support_map = build_support_map::<AccountId>(&winners, &staked).unwrap();
 
 	assert_eq_uvec!(
 		staked,
@@ -182,6 +367,7 @@ fn phragmen_poc_works() {
 	);
 }
 
+
 #[test]
 fn phragmen_poc_2_works() {
 	let candidates = vec![10, 20, 30];
@@ -198,10 +384,10 @@ fn phragmen_poc_2_works() {
 		(4, 500),
 	]);
 
-	run_and_compare::<Perbill>(candidates.clone(), voters.clone(), &stake_of, 2, 2);
-	run_and_compare::<Permill>(candidates.clone(), voters.clone(), &stake_of, 2, 2);
-	run_and_compare::<Percent>(candidates.clone(), voters.clone(), &stake_of, 2, 2);
-	run_and_compare::<PerU16>(candidates, voters, &stake_of, 2, 2);
+	run_and_compare::<Perbill>(candidates.clone(), voters.clone(), &stake_of, 2);
+	run_and_compare::<Permill>(candidates.clone(), voters.clone(), &stake_of, 2);
+	run_and_compare::<Percent>(candidates.clone(), voters.clone(), &stake_of, 2);
+	run_and_compare::<PerU16>(candidates, voters, &stake_of, 2);
 }
 
 #[test]
@@ -219,14 +405,14 @@ fn phragmen_poc_3_works() {
 		(4, 1000),
 	]);
 
-	run_and_compare::<Perbill>(candidates.clone(), voters.clone(), &stake_of, 2, 2);
-	run_and_compare::<Permill>(candidates.clone(), voters.clone(), &stake_of, 2, 2);
-	run_and_compare::<Percent>(candidates.clone(), voters.clone(), &stake_of, 2, 2);
-	run_and_compare::<PerU16>(candidates, voters, &stake_of, 2, 2);
+	run_and_compare::<Perbill>(candidates.clone(), voters.clone(), &stake_of, 2);
+	run_and_compare::<Permill>(candidates.clone(), voters.clone(), &stake_of, 2);
+	run_and_compare::<Percent>(candidates.clone(), voters.clone(), &stake_of, 2);
+	run_and_compare::<PerU16>(candidates, voters, &stake_of, 2);
 }
 
 #[test]
-fn phragmen_accuracy_on_large_scale_only_validators() {
+fn phragmen_accuracy_on_large_scale_only_candidates() {
 	// because of this particular situation we had per_u128 and now rational128. In practice, a
 	// candidate can have the maximum amount of tokens, and also supported by the maximum.
 	let candidates = vec![1, 2, 3, 4, 5];
@@ -240,12 +426,12 @@ fn phragmen_accuracy_on_large_scale_only_validators() {
 
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
-		2,
 		candidates.clone(),
 		auto_generate_self_voters(&candidates)
 			.iter()
 			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
+		None,
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(1, 18446744073709551614u128), (5, 18446744073709551613u128)]);
@@ -254,7 +440,7 @@ fn phragmen_accuracy_on_large_scale_only_validators() {
 }
 
 #[test]
-fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
+fn phragmen_accuracy_on_large_scale_voters_and_candidates() {
 	let candidates = vec![1, 2, 3, 4, 5];
 	let mut voters = vec![
 		(13, vec![1, 3, 5]),
@@ -273,12 +459,13 @@ fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
-		2,
 		candidates,
 		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+		None,
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(2, 36893488147419103226u128), (1, 36893488147419103219u128)]);
+
 	assert_eq!(
 		assignments,
 		vec![
@@ -300,6 +487,7 @@ fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 			},
 		]
 	);
+
 	check_assignments_sum(assignments);
 }
 
@@ -314,14 +502,15 @@ fn phragmen_accuracy_on_small_scale_self_vote() {
 		(30, 1),
 	]);
 
-	let ElectionResult { winners, assignments: _ } = seq_phragmen::<_, Perbill>(
-		3,
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		3,
 		candidates,
 		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+		None,
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(20, 2), (10, 1), (30, 1)]);
+	check_assignments_sum(assignments);
 }
 
 #[test]
@@ -344,14 +533,16 @@ fn phragmen_accuracy_on_small_scale_no_self_vote() {
 		(3, 1),
 	]);
 
-	let ElectionResult { winners, assignments: _ } = seq_phragmen::<_, Perbill>(
-		3,
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		3,
 		candidates,
 		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+		None,
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(20, 2), (10, 1), (30, 1)]);
+	check_assignments_sum(assignments);
+
 }
 
 #[test]
@@ -379,12 +570,12 @@ fn phragmen_large_scale_test() {
 
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
-		2,
 		candidates,
 		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+		None,
 	).unwrap();
 
-	assert_eq_uvec!(winners, vec![(24, 1490000000000200000u128), (22, 1490000000000100000u128)]);
+	assert_eq_uvec!(to_without_backing(winners.clone()), vec![24, 22]);
 	check_assignments_sum(assignments);
 }
 
@@ -405,20 +596,21 @@ fn phragmen_large_scale_test_2() {
 
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
-		2,
 		candidates,
 		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+		None,
 	).unwrap();
 
-	assert_eq_uvec!(winners, vec![(2, 1000000000004000000u128), (4, 1000000000004000000u128)]);
-	assert_eq!(
+	assert_eq_uvec!(winners, vec![(2, 500000000005000000u128), (4, 500000000003000000)]);
+
+	assert_eq_uvec!(
 		assignments,
 		vec![
 			Assignment {
 				who: 50u64,
 				distribution: vec![
-					(2, Perbill::from_parts(500000001)),
-					(4, Perbill::from_parts(499999999))
+					(2, Perbill::from_parts(500000000)),
+					(4, Perbill::from_parts(500000000)),
 				],
 			},
 			Assignment {
@@ -431,6 +623,7 @@ fn phragmen_large_scale_test_2() {
 			},
 		],
 	);
+
 	check_assignments_sum(assignments);
 }
 
@@ -464,7 +657,7 @@ fn phragmen_linear_equalize() {
 		(130, 1000),
 	]);
 
-	run_and_compare::<Perbill>(candidates, voters, &stake_of, 2, 2);
+	run_and_compare::<Perbill>(candidates, voters, &stake_of, 2);
 }
 
 #[test]
@@ -481,9 +674,9 @@ fn elect_has_no_entry_barrier() {
 
 	let ElectionResult { winners, assignments: _ } = seq_phragmen::<_, Perbill>(
 		3,
-		3,
 		candidates,
 		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+		None,
 	).unwrap();
 
 	// 30 is elected with stake 0. The caller is responsible for stripping this.
@@ -495,29 +688,7 @@ fn elect_has_no_entry_barrier() {
 }
 
 #[test]
-fn minimum_to_elect_is_respected() {
-	let candidates = vec![10, 20, 30];
-	let voters = vec![
-		(1, vec![10]),
-		(2, vec![20]),
-	];
-	let stake_of = create_stake_of(&[
-		(1, 10),
-		(2, 10),
-	]);
-
-	let maybe_result = seq_phragmen::<_, Perbill>(
-		10,
-		10,
-		candidates,
-		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
-	);
-
-	assert!(maybe_result.is_none());
-}
-
-#[test]
-fn self_votes_should_be_kept() {
+fn phragmen_self_votes_should_be_kept() {
 	let candidates = vec![5, 10, 20, 30];
 	let voters = vec![
 		(5, vec![5]),
@@ -534,32 +705,28 @@ fn self_votes_should_be_kept() {
 
 	let result = seq_phragmen::<_, Perbill>(
 		2,
-		2,
 		candidates,
 		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+		None,
 	).unwrap();
 
-	assert_eq!(result.winners, vec![(20, 28), (10, 18)]);
-	assert_eq!(
+	assert_eq!(result.winners, vec![(20, 24), (10, 14)]);
+	assert_eq_uvec!(
 		result.assignments,
 		vec![
-			Assignment { who: 10, distribution: vec![(10, Perbill::from_percent(100))] },
-			Assignment { who: 20, distribution: vec![(20, Perbill::from_percent(100))] },
 			Assignment { who: 1, distribution: vec![
 					(10, Perbill::from_percent(50)),
-					(20, Perbill::from_percent(50))
+					(20, Perbill::from_percent(50)),
 				]
 			},
-		],
+			Assignment { who: 10, distribution: vec![(10, Perbill::from_percent(100))] },
+			Assignment { who: 20, distribution: vec![(20, Perbill::from_percent(100))] },
+		]
 	);
 
-	let mut staked_assignments = assignment_ratio_to_staked(result.assignments, &stake_of);
+	let staked_assignments = assignment_ratio_to_staked(result.assignments, &stake_of);
 	let winners = to_without_backing(result.winners);
-
-	let (mut supports, _) = build_support_map::<AccountId>(
-		&winners,
-		&staked_assignments,
-	);
+	let supports = build_support_map::<AccountId>(&winners, &staked_assignments).unwrap();
 
 	assert_eq!(supports.get(&5u64), None);
 	assert_eq!(
@@ -569,22 +736,6 @@ fn self_votes_should_be_kept() {
 	assert_eq!(
 		supports.get(&20u64).unwrap(),
 		&Support { total: 24u128, voters: vec![(20u64, 20u128), (1u64, 4u128)] },
-	);
-
-	balance_solution(
-		&mut staked_assignments,
-		&mut supports,
-		0,
-		2usize,
-	);
-
-	assert_eq!(
-		supports.get(&10u64).unwrap(),
-		&Support { total: 18u128, voters: vec![(10u64, 10u128), (1u64, 8u128)] },
-	);
-	assert_eq!(
-		supports.get(&20u64).unwrap(),
-		&Support { total: 20u128, voters: vec![(20u64, 20u128)] },
 	);
 }
 
@@ -599,9 +750,9 @@ fn duplicate_target_is_ignored() {
 
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
-		2,
 		candidates,
 		voters,
+		None,
 	).unwrap();
 	let winners = to_without_backing(winners);
 
@@ -629,9 +780,9 @@ fn duplicate_target_is_ignored_when_winner() {
 
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
-		2,
 		candidates,
 		voters,
+		None,
 	).unwrap();
 	let winners = to_without_backing(winners);
 
@@ -920,28 +1071,75 @@ mod score {
 	}
 }
 
-mod compact {
+mod solution_type {
 	use codec::{Decode, Encode};
 	use super::AccountId;
 	// these need to come from the same dev-dependency `sp-npos-elections`, not from the crate.
 	use crate::{
-		generate_compact_solution_type, VoteWeight, Assignment, StakedAssignment,
-		Error as PhragmenError, ExtendedBalance,
+		generate_solution_type, Assignment,
+		Error as PhragmenError,
 	};
-	use sp_std::{convert::{TryInto, TryFrom}, fmt::Debug};
+	use sp_std::{convert::TryInto, fmt::Debug};
 	use sp_arithmetic::Percent;
 
-	type Accuracy = Percent;
+	type TestAccuracy = Percent;
 
-	generate_compact_solution_type!(TestCompact, 16);
+	generate_solution_type!(pub struct TestSolutionCompact::<u32, u8, TestAccuracy>(16));
+
+	#[allow(dead_code)]
+	mod __private {
+		// This is just to make sure that that the compact can be generated in a scope without any
+		// imports.
+		use crate::generate_solution_type;
+		use sp_arithmetic::Percent;
+		generate_solution_type!(
+			#[compact]
+			struct InnerTestSolutionCompact::<u32, u8, Percent>(12)
+		);
+
+	}
 
 	#[test]
-	fn compact_struct_is_codec() {
-		let compact = TestCompact::<_, _, _> {
-			votes1: vec![(2u64, 20), (4, 40)],
+	fn solution_struct_works_with_and_without_compact() {
+		// we use u32 size to make sure compact is smaller.
+		let without_compact = {
+			generate_solution_type!(pub struct InnerTestSolution::<u32, u32, Percent>(16));
+			let compact = InnerTestSolution {
+				votes1: vec![(2, 20), (4, 40)],
+				votes2: vec![
+					(1, (10, TestAccuracy::from_percent(80)), 11),
+					(5, (50, TestAccuracy::from_percent(85)), 51),
+				],
+				..Default::default()
+			};
+
+			compact.encode().len()
+		};
+
+		let with_compact = {
+			generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<u32, u32, Percent>(16));
+			let compact = InnerTestSolutionCompact {
+				votes1: vec![(2, 20), (4, 40)],
+				votes2: vec![
+					(1, (10, TestAccuracy::from_percent(80)), 11),
+					(5, (50, TestAccuracy::from_percent(85)), 51),
+				],
+				..Default::default()
+			};
+
+			compact.encode().len()
+		};
+
+		assert!(with_compact < without_compact);
+	}
+
+	#[test]
+	fn solution_struct_is_codec() {
+		let compact = TestSolutionCompact {
+			votes1: vec![(2, 20), (4, 40)],
 			votes2: vec![
-				(1, (10, Accuracy::from_percent(80)), 11),
-				(5, (50, Accuracy::from_percent(85)), 51),
+				(1, (10, TestAccuracy::from_percent(80)), 11),
+				(5, (50, TestAccuracy::from_percent(85)), 51),
 			],
 			..Default::default()
 		};
@@ -954,16 +1152,74 @@ mod compact {
 		);
 		assert_eq!(compact.len(), 4);
 		assert_eq!(compact.edge_count(), 2 + 4);
+		assert_eq!(compact.unique_targets(), vec![10, 11, 20, 40, 50, 51]);
 	}
 
-	fn basic_ratio_test_with<V, T>() where
-		V: codec::Codec + Copy + Default + PartialEq + Eq + TryInto<usize> + TryFrom<usize> + From<u8> + Debug,
-		T: codec::Codec + Copy + Default + PartialEq + Eq + TryInto<usize> + TryFrom<usize> + From<u8> + Debug,
-		<V as TryFrom<usize>>::Error: std::fmt::Debug,
-		<T as TryFrom<usize>>::Error: std::fmt::Debug,
-		<V as TryInto<usize>>::Error: std::fmt::Debug,
-		<T as TryInto<usize>>::Error: std::fmt::Debug,
-	{
+	#[test]
+	fn remove_voter_works() {
+		let mut compact = TestSolutionCompact {
+			votes1: vec![(0, 2), (1, 6)],
+			votes2: vec![
+				(2, (0, TestAccuracy::from_percent(80)), 1),
+				(3, (7, TestAccuracy::from_percent(85)), 8),
+			],
+			votes3: vec![
+				(
+					4,
+					[(3, TestAccuracy::from_percent(50)), (4, TestAccuracy::from_percent(25))],
+					5,
+				),
+			],
+			..Default::default()
+		};
+
+		assert!(!compact.remove_voter(11));
+		assert!(compact.remove_voter(2));
+		assert_eq!(
+			compact,
+			TestSolutionCompact {
+				votes1: vec![(0, 2), (1, 6)],
+				votes2: vec![
+					(3, (7, TestAccuracy::from_percent(85)), 8),
+				],
+				votes3: vec![
+					(
+						4,
+						[(3, TestAccuracy::from_percent(50)), (4, TestAccuracy::from_percent(25))],
+						5,
+					),
+				],
+				..Default::default()
+			},
+		);
+
+		assert!(compact.remove_voter(4));
+		assert_eq!(
+			compact,
+			TestSolutionCompact {
+				votes1: vec![(0, 2), (1, 6)],
+				votes2: vec![
+					(3, (7, TestAccuracy::from_percent(85)), 8),
+				],
+				..Default::default()
+			},
+		);
+
+		assert!(compact.remove_voter(1));
+		assert_eq!(
+			compact,
+			TestSolutionCompact {
+				votes1: vec![(0, 2)],
+				votes2: vec![
+					(3, (7, TestAccuracy::from_percent(85)), 8),
+				],
+				..Default::default()
+			},
+		);
+	}
+
+	#[test]
+	fn basic_from_and_into_compact_works_assignments() {
 		let voters = vec![
 			2 as AccountId,
 			4,
@@ -986,44 +1242,44 @@ mod compact {
 		let assignments = vec![
 			Assignment {
 				who: 2 as AccountId,
-				distribution: vec![(20u64, Accuracy::from_percent(100))]
+				distribution: vec![(20u64, TestAccuracy::from_percent(100))]
 			},
 			Assignment {
 				who: 4,
-				distribution: vec![(40, Accuracy::from_percent(100))],
+				distribution: vec![(40, TestAccuracy::from_percent(100))],
 			},
 			Assignment {
 				who: 1,
 				distribution: vec![
-					(10, Accuracy::from_percent(80)),
-					(11, Accuracy::from_percent(20))
+					(10, TestAccuracy::from_percent(80)),
+					(11, TestAccuracy::from_percent(20))
 				],
 			},
 			Assignment {
 				who: 5,
 				distribution: vec![
-					(50, Accuracy::from_percent(85)),
-					(51, Accuracy::from_percent(15)),
+					(50, TestAccuracy::from_percent(85)),
+					(51, TestAccuracy::from_percent(15)),
 				]
 			},
 			Assignment {
 				who: 3,
 				distribution: vec![
-					(30, Accuracy::from_percent(50)),
-					(31, Accuracy::from_percent(25)),
-					(32, Accuracy::from_percent(25)),
+					(30, TestAccuracy::from_percent(50)),
+					(31, TestAccuracy::from_percent(25)),
+					(32, TestAccuracy::from_percent(25)),
 				],
 			},
 		];
 
-		let voter_index = |a: &AccountId| -> Option<V> {
+		let voter_index = |a: &AccountId| -> Option<u32> {
 			voters.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
-		let target_index = |a: &AccountId| -> Option<T> {
+		let target_index = |a: &AccountId| -> Option<u8> {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted = <TestCompact<V, T, Percent>>::from_assignment(
+		let compacted = TestSolutionCompact::from_assignment(
 			assignments.clone(),
 			voter_index,
 			target_index,
@@ -1038,25 +1294,34 @@ mod compact {
 
 		assert_eq!(
 			compacted,
-			TestCompact {
-				votes1: vec![(V::from(0u8), T::from(2u8)), (V::from(1u8), T::from(6u8))],
+			TestSolutionCompact {
+				votes1: vec![(0, 2), (1, 6)],
 				votes2: vec![
-					(V::from(2u8), (T::from(0u8), Accuracy::from_percent(80)), T::from(1u8)),
-					(V::from(3u8), (T::from(7u8), Accuracy::from_percent(85)), T::from(8u8)),
+					(2, (0, TestAccuracy::from_percent(80)), 1),
+					(3, (7, TestAccuracy::from_percent(85)), 8),
 				],
 				votes3: vec![
 					(
-						V::from(4),
-						[(T::from(3u8), Accuracy::from_percent(50)), (T::from(4u8), Accuracy::from_percent(25))],
-						T::from(5u8),
+						4,
+						[(3, TestAccuracy::from_percent(50)), (4, TestAccuracy::from_percent(25))],
+						5,
 					),
 				],
 				..Default::default()
 			}
 		);
 
-		let voter_at = |a: V| -> Option<AccountId> { voters.get(<V as TryInto<usize>>::try_into(a).unwrap()).cloned() };
-		let target_at = |a: T| -> Option<AccountId> { targets.get(<T as TryInto<usize>>::try_into(a).unwrap()).cloned() };
+		assert_eq!(
+			compacted.unique_targets(),
+			vec![0, 1, 2, 3, 4, 5, 6, 7, 8],
+		);
+
+		let voter_at = |a: u32| -> Option<AccountId> {
+			voters.get(<u32 as TryInto<usize>>::try_into(a).unwrap()).cloned()
+		};
+		let target_at = |a: u8| -> Option<AccountId> {
+			targets.get(<u8 as TryInto<usize>>::try_into(a).unwrap()).cloned()
+		};
 
 		assert_eq!(
 			compacted.into_assignment(voter_at, target_at).unwrap(),
@@ -1065,265 +1330,147 @@ mod compact {
 	}
 
 	#[test]
-	fn basic_from_and_into_compact_works_assignments() {
-		basic_ratio_test_with::<u16, u16>();
-		basic_ratio_test_with::<u16, u32>();
-		basic_ratio_test_with::<u8, u32>();
-	}
+	fn unique_targets_len_edge_count_works() {
+		const ACC: TestAccuracy = TestAccuracy::from_percent(10);
 
-	#[test]
-	fn basic_from_and_into_compact_works_staked_assignments() {
-		let voters = vec![
-			2 as AccountId,
-			4,
-			1,
-			5,
-			3,
-		];
-		let targets = vec![
-			10 as AccountId, 11,
-			20,
-			30, 31, 32,
-			40,
-			50, 51,
-		];
-
-		let assignments = vec![
-			StakedAssignment {
-				who: 2 as AccountId,
-				distribution: vec![(20, 100 as ExtendedBalance)]
-			},
-			StakedAssignment {
-				who: 4,
-				distribution: vec![(40, 100)],
-			},
-			StakedAssignment {
-				who: 1,
-				distribution: vec![
-					(10, 80),
-					(11, 20)
-				],
-			},
-			StakedAssignment {
-				who: 5, distribution:
-				vec![
-					(50, 85),
-					(51, 15),
-				]
-			},
-			StakedAssignment {
-				who: 3,
-				distribution: vec![
-					(30, 50),
-					(31, 25),
-					(32, 25),
-				],
-			},
-		];
-
-		let voter_index = |a: &AccountId| -> Option<u16> {
-			voters.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
-		};
-		let target_index = |a: &AccountId| -> Option<u16> {
-			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
-		};
-
-		let compacted = <TestCompact<u16, u16, ExtendedBalance>>::from_staked(
-			assignments.clone(),
-			voter_index,
-			target_index,
-		).unwrap();
-		assert_eq!(compacted.len(), assignments.len());
-		assert_eq!(
-			compacted.edge_count(),
-			assignments.iter().fold(0, |a, b| a + b.distribution.len()),
-		);
-
-		assert_eq!(
-			compacted,
-			TestCompact {
-				votes1: vec![(0, 2), (1, 6)],
-				votes2: vec![
-					(2, (0, 80), 1),
-					(3, (7, 85), 8),
-				],
-				votes3: vec![
-					(4, [(3, 50), (4, 25)], 5),
-				],
-				..Default::default()
-			}
-		);
-
-		let max_of_fn = |_: &AccountId| -> VoteWeight { 100 };
-		let voter_at = |a: u16| -> Option<AccountId> { voters.get(a as usize).cloned() };
-		let target_at = |a: u16| -> Option<AccountId> { targets.get(a as usize).cloned() };
-
-		assert_eq!(
-			compacted.into_staked(
-				max_of_fn,
-				voter_at,
-				target_at,
-			).unwrap(),
-			assignments,
-		);
-	}
-
-	#[test]
-	fn compact_into_stake_must_report_overflow() {
-		// The last edge which is computed from the rest should ALWAYS be positive.
-		// in votes2
-		let compact = TestCompact::<u16, u16, ExtendedBalance> {
-			votes1: Default::default(),
-			votes2: vec![(0, (1, 10), 2)],
+		// we don't really care about voters here so all duplicates. This is not invalid per se.
+		let compact = TestSolutionCompact {
+			votes1: vec![(99, 1), (99, 2)],
+			votes2: vec![
+				(99, (3, ACC.clone()), 7),
+				(99, (4, ACC.clone()), 8),
+			],
+			votes3: vec![
+				(99, [(11, ACC.clone()), (12, ACC.clone())], 13),
+			],
+			// ensure the last one is also counted.
+			votes16: vec![
+				(
+					99,
+					[
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+						(66, ACC.clone()),
+					],
+					67,
+				)
+			],
 			..Default::default()
 		};
 
-		let entity_at = |a: u16| -> Option<AccountId> { Some(a as AccountId) };
-		let max_of = |_: &AccountId| -> VoteWeight { 5 };
+		assert_eq!(compact.unique_targets(), vec![1, 2, 3, 4, 7, 8, 11, 12, 13, 66, 67]);
+		assert_eq!(compact.edge_count(), 2 + (2 * 2) + 3 + 16);
+		assert_eq!(compact.len(), 6);
 
-		assert_eq!(
-			compact.into_staked(&max_of, &entity_at, &entity_at).unwrap_err(),
-			PhragmenError::CompactStakeOverflow,
-		);
-
-		// in votes3 onwards
-		let compact = TestCompact::<u16, u16, ExtendedBalance> {
-			votes1: Default::default(),
-			votes2: Default::default(),
-			votes3: vec![(0, [(1, 7), (2, 8)], 3)],
+		// this one has some duplicates.
+		let compact = TestSolutionCompact {
+			votes1: vec![(99, 1), (99, 1)],
+			votes2: vec![
+				(99, (3, ACC.clone()), 7),
+				(99, (4, ACC.clone()), 8),
+			],
+			votes3: vec![
+				(99, [(11, ACC.clone()), (11, ACC.clone())], 13),
+			],
 			..Default::default()
 		};
 
-		assert_eq!(
-			compact.into_staked(&max_of, &entity_at, &entity_at).unwrap_err(),
-			PhragmenError::CompactStakeOverflow,
-		);
-
-		// Also if equal
-		let compact = TestCompact::<u16, u16, ExtendedBalance> {
-			votes1: Default::default(),
-			votes2: Default::default(),
-			// 5 is total, we cannot leave none for 30 here.
-			votes3: vec![(0, [(1, 3), (2, 2)], 3)],
-			..Default::default()
-		};
-
-		assert_eq!(
-			compact.into_staked(&max_of, &entity_at, &entity_at).unwrap_err(),
-			PhragmenError::CompactStakeOverflow,
-		);
+		assert_eq!(compact.unique_targets(), vec![1, 3, 4, 7, 8, 11, 13]);
+		assert_eq!(compact.edge_count(), 2 + (2 * 2) + 3);
+		assert_eq!(compact.len(), 5);
 	}
 
 	#[test]
 	fn compact_into_assignment_must_report_overflow() {
 		// in votes2
-		let compact = TestCompact::<u16, u16, Accuracy> {
+		let compact = TestSolutionCompact {
 			votes1: Default::default(),
-			votes2: vec![(0, (1, Accuracy::from_percent(100)), 2)],
+			votes2: vec![(0, (1, TestAccuracy::from_percent(100)), 2)],
 			..Default::default()
 		};
 
-		let entity_at = |a: u16| -> Option<AccountId> { Some(a as AccountId) };
+		let voter_at = |a: u32| -> Option<AccountId> { Some(a as AccountId) };
+		let target_at = |a: u8| -> Option<AccountId> { Some(a as AccountId) };
+
 
 		assert_eq!(
-			compact.into_assignment(&entity_at, &entity_at).unwrap_err(),
+			compact.into_assignment(&voter_at, &target_at).unwrap_err(),
 			PhragmenError::CompactStakeOverflow,
 		);
 
 		// in votes3 onwards
-		let compact = TestCompact::<u16, u16, Accuracy> {
+		let compact = TestSolutionCompact {
 			votes1: Default::default(),
 			votes2: Default::default(),
-			votes3: vec![(0, [(1, Accuracy::from_percent(70)), (2, Accuracy::from_percent(80))], 3)],
+			votes3: vec![(0, [(1, TestAccuracy::from_percent(70)), (2, TestAccuracy::from_percent(80))], 3)],
 			..Default::default()
 		};
 
 		assert_eq!(
-			compact.into_assignment(&entity_at, &entity_at).unwrap_err(),
+			compact.into_assignment(&voter_at, &target_at).unwrap_err(),
 			PhragmenError::CompactStakeOverflow,
 		);
 	}
 
 	#[test]
 	fn target_count_overflow_is_detected() {
-		let assignments = vec![
-			StakedAssignment {
-				who: 1 as AccountId,
-				distribution: (10..26).map(|i| (i as AccountId, i as ExtendedBalance)).collect::<Vec<_>>(),
-			},
-		];
-
-		let entity_index = |a: &AccountId| -> Option<u16> { Some(*a as u16) };
-
-		let compacted = <TestCompact<u16, u16, ExtendedBalance>>::from_staked(
-			assignments.clone(),
-			entity_index,
-			entity_index,
-		);
-
-		assert!(compacted.is_ok());
-
-		let assignments = vec![
-			StakedAssignment {
-				who: 1 as AccountId,
-				distribution: (10..27).map(|i| (i as AccountId, i as ExtendedBalance)).collect::<Vec<_>>(),
-			},
-		];
-
-		let compacted = <TestCompact<u16, u16, ExtendedBalance>>::from_staked(
-			assignments.clone(),
-			entity_index,
-			entity_index,
-		);
-
-		assert_eq!(
-			compacted.unwrap_err(),
-			PhragmenError::CompactTargetOverflow,
-		);
+		let voter_index = |a: &AccountId| -> Option<u32> { Some(*a as u32) };
+		let target_index = |a: &AccountId| -> Option<u8> { Some(*a as u8) };
 
 		let assignments = vec![
 			Assignment {
 				who: 1 as AccountId,
-				distribution: (10..27).map(|i| (i as AccountId, Percent::from_parts(i as u8))).collect::<Vec<_>>(),
+				distribution:
+					(10..27)
+					.map(|i| (i as AccountId, Percent::from_parts(i as u8)))
+					.collect::<Vec<_>>(),
 			},
 		];
 
-		let compacted = <TestCompact<u16, u16, Percent>>::from_assignment(
+		let compacted = TestSolutionCompact::from_assignment(
 			assignments.clone(),
-			entity_index,
-			entity_index,
+			voter_index,
+			target_index,
 		);
-
-		assert_eq!(
-			compacted.unwrap_err(),
-			PhragmenError::CompactTargetOverflow,
-		);
+		assert_eq!(compacted.unwrap_err(), PhragmenError::CompactTargetOverflow);
 	}
 
-		#[test]
+	#[test]
 	fn zero_target_count_is_ignored() {
 		let voters = vec![1 as AccountId, 2];
 		let targets = vec![10 as AccountId, 11];
 
 		let assignments = vec![
-			StakedAssignment {
+			Assignment {
 				who: 1 as AccountId,
-				distribution: vec![(10, 100 as ExtendedBalance), (11, 100)]
+				distribution: vec![(10, Percent::from_percent(50)), (11, Percent::from_percent(50))],
 			},
-			StakedAssignment {
+			Assignment {
 				who: 2,
 				distribution: vec![],
 			},
 		];
 
-		let voter_index = |a: &AccountId| -> Option<u16> {
+		let voter_index = |a: &AccountId| -> Option<u32> {
 			voters.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
-		let target_index = |a: &AccountId| -> Option<u16> {
+		let target_index = |a: &AccountId| -> Option<u8> {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted = <TestCompact<u16, u16, ExtendedBalance>>::from_staked(
+		let compacted = TestSolutionCompact::from_assignment(
 			assignments.clone(),
 			voter_index,
 			target_index,
@@ -1331,9 +1478,9 @@ mod compact {
 
 		assert_eq!(
 			compacted,
-			TestCompact {
+			TestSolutionCompact {
 				votes1: Default::default(),
-				votes2: vec![(0, (0, 100), 1)],
+				votes2: vec![(0, (0, Percent::from_percent(50)), 1)],
 				..Default::default()
 			}
 		);

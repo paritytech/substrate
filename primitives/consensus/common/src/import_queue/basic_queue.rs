@@ -96,7 +96,13 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		}
 
 		trace!(target: "sync", "Scheduling {} blocks for import", blocks.len());
-		let _ = self.sender.unbounded_send(ToWorkerMsg::ImportBlocks(origin, blocks));
+		let res = self.sender.unbounded_send(ToWorkerMsg::ImportBlocks(origin, blocks));
+		if res.is_err() {
+			log::error!(
+				target: "sync",
+				"import_blocks: Background import task is no longer alive"
+			);
+		}
 	}
 
 	fn import_justification(
@@ -106,10 +112,16 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		number: NumberFor<B>,
 		justification: Justification
 	) {
-		let _ = self.sender
+		let res = self.sender
 			.unbounded_send(
 				ToWorkerMsg::ImportJustification(who, hash, number, justification)
 			);
+		if res.is_err() {
+			log::error!(
+				target: "sync",
+				"import_justification: Background import task is no longer alive"
+			);
+		}
 	}
 
 	fn import_finality_proof(
@@ -120,14 +132,22 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		finality_proof: Vec<u8>,
 	) {
 		trace!(target: "sync", "Scheduling finality proof of {}/{} for import", number, hash);
-		let _ = self.sender
+		let res = self.sender
 			.unbounded_send(
 				ToWorkerMsg::ImportFinalityProof(who, hash, number, finality_proof)
 			);
+		if res.is_err() {
+			log::error!(
+				target: "sync",
+				"import_finality_proof: Background import task is no longer alive"
+			);
+		}
 	}
 
 	fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
-		self.result_port.poll_actions(cx, link);
+		if self.result_port.poll_actions(cx, link).is_err() {
+			log::error!(target: "sync", "poll_actions: Background import task is no longer alive");
+		}
 	}
 }
 
@@ -272,6 +292,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		number: NumberFor<B>,
 		finality_proof: Vec<u8>
 	) {
+		let started = wasm_timer::Instant::now();
 		let result = self.finality_proof_import.as_mut().map(|finality_proof_import| {
 			finality_proof_import.import_finality_proof(hash, number, finality_proof, verifier)
 				.map_err(|e| {
@@ -285,6 +306,10 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 				})
 		}).unwrap_or(Err(()));
 
+		if let Some(metrics) = self.metrics.as_ref() {
+			metrics.finality_proof_import_time.observe(started.elapsed().as_secs_f64());
+		}
+
 		trace!(target: "sync", "Imported finality proof for {}/{}", number, hash);
 		self.result_sender.finality_proof_imported(who, (hash, number), result);
 	}
@@ -296,6 +321,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		number: NumberFor<B>,
 		justification: Justification
 	) {
+		let started = wasm_timer::Instant::now();
 		let success = self.justification_import.as_mut().map(|justification_import| {
 			justification_import.import_justification(hash, number, justification)
 				.map_err(|e| {
@@ -310,6 +336,10 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 					e
 				}).is_ok()
 		}).unwrap_or(false);
+
+		if let Some(metrics) = self.metrics.as_ref() {
+			metrics.justification_import_time.observe(started.elapsed().as_secs_f64());
+		}
 
 		self.result_sender.justification_imported(who, &hash, number, success);
 	}

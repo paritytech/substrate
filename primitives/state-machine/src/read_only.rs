@@ -24,7 +24,7 @@ use std::{
 use crate::{Backend, StorageKey, StorageValue};
 use hash_db::Hasher;
 use sp_core::{
-	storage::ChildInfo,
+	storage::{ChildInfo, TrackedStorageKey},
 	traits::Externalities, Blake2Hasher,
 };
 use codec::Encode;
@@ -37,11 +37,13 @@ pub trait InspectState<H: Hasher, B: Backend<H>> {
 	///
 	/// Self will be set as read-only externalities and inspection
 	/// closure will be run against it.
-	fn inspect_with<F: FnOnce()>(&self, f: F);
+	///
+	/// Returns the result of the closure.
+	fn inspect_state<F: FnOnce() -> R, R>(&self, f: F) -> R;
 }
 
 impl<H: Hasher, B: Backend<H>> InspectState<H, B> for B {
-	fn inspect_with<F: FnOnce()>(&self, f: F) {
+	fn inspect_state<F: FnOnce() -> R, R>(&self, f: F) -> R {
 		ReadOnlyExternalities::from(self).execute_with(f)
 	}
 }
@@ -194,7 +196,11 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("reset_read_write_count is not supported in ReadOnlyExternalities")
 	}
 
-	fn set_whitelist(&mut self, _: Vec<Vec<u8>>) {
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		unimplemented!("get_whitelist is not supported in ReadOnlyExternalities")
+	}
+
+	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
 	}
 }

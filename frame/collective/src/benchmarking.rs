@@ -21,7 +21,7 @@ use super::*;
 
 use frame_system::RawOrigin as SystemOrigin;
 use frame_system::EventRecord;
-use frame_benchmarking::{benchmarks_instance, account};
+use frame_benchmarking::{benchmarks_instance, account, whitelisted_caller};
 use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
@@ -45,8 +45,8 @@ benchmarks_instance! {
 	_{ }
 
 	set_members {
-		let m in 1 .. MAX_MEMBERS;
-		let n in 1 .. MAX_MEMBERS;
+		let m in 1 .. T::MaxMembers::get();
+		let n in 1 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 
 		// Set old members.
@@ -63,7 +63,7 @@ benchmarks_instance! {
 			SystemOrigin::Root.into(),
 			old_members.clone(),
 			Some(last_old_member.clone()),
-			MAX_MEMBERS,
+			T::MaxMembers::get(),
 		)?;
 
 		// Set a high threshold for proposals passing so that they stay around.
@@ -104,15 +104,15 @@ benchmarks_instance! {
 			new_members.push(last_member.clone());
 		}
 
-	}: _(SystemOrigin::Root, new_members.clone(), Some(last_member), MAX_MEMBERS)
+	}: _(SystemOrigin::Root, new_members.clone(), Some(last_member), T::MaxMembers::get())
 	verify {
 		new_members.sort();
 		assert_eq!(Collective::<T, _>::members(), new_members);
 	}
 
 	execute {
-		let m in 1 .. MAX_MEMBERS;
 		let b in 1 .. MAX_BYTES;
+		let m in 1 .. T::MaxMembers::get();
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
 
@@ -123,10 +123,10 @@ benchmarks_instance! {
 			members.push(member);
 		}
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
 
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, MAX_MEMBERS)?;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, T::MaxMembers::get())?;
 
 		let proposal: T::Proposal = SystemCall::<T>::remark(vec![1; b as usize]).into();
 
@@ -141,8 +141,8 @@ benchmarks_instance! {
 
 	// This tests when execution would happen immediately after proposal
 	propose_execute {
-		let m in 1 .. MAX_MEMBERS;
 		let b in 1 .. MAX_BYTES;
+		let m in 1 .. T::MaxMembers::get();
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
 
@@ -153,10 +153,10 @@ benchmarks_instance! {
 			members.push(member);
 		}
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
 
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, MAX_MEMBERS)?;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, T::MaxMembers::get())?;
 
 		let proposal: T::Proposal = SystemCall::<T>::remark(vec![1; b as usize]).into();
 		let threshold = 1;
@@ -172,9 +172,9 @@ benchmarks_instance! {
 
 	// This tests when proposal is created and queued as "proposed"
 	propose_proposed {
-		let m in 2 .. MAX_MEMBERS;
-		let p in 1 .. T::MaxProposals::get();
 		let b in 1 .. MAX_BYTES;
+		let m in 2 .. T::MaxMembers::get();
+		let p in 1 .. T::MaxProposals::get();
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
 
@@ -184,9 +184,9 @@ benchmarks_instance! {
 			let member = account("member", i, SEED);
 			members.push(member);
 		}
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, MAX_MEMBERS)?;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, T::MaxMembers::get())?;
 
 		let threshold = m;
 		// Add previous proposals.
@@ -215,7 +215,7 @@ benchmarks_instance! {
 
 	vote {
 		// We choose 5 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
-		let m in 5 .. MAX_MEMBERS;
+		let m in 5 .. T::MaxMembers::get();
 
 		let p = T::MaxProposals::get();
 		let b = MAX_BYTES;
@@ -231,7 +231,7 @@ benchmarks_instance! {
 		}
 		let voter: T::AccountId = account("voter", 0, SEED);
 		members.push(voter.clone());
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None, MAX_MEMBERS)?;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None, T::MaxMembers::get())?;
 
 		// Threshold is 1 less than the number of members so that one person can vote nay
 		let threshold = m - 1;
@@ -277,6 +277,9 @@ benchmarks_instance! {
 		// Voter switches vote to nay, but does not kill the vote, just updates + inserts
 		let approve = false;
 
+		// Whitelist voter account from further DB operations.
+		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
+		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
 	}: _(SystemOrigin::Signed(voter), last_hash.clone(), index, approve)
 	verify {
 		// All proposals exist and the last proposal has just been updated.
@@ -288,11 +291,11 @@ benchmarks_instance! {
 
 	close_early_disapproved {
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
-		let m in 4 .. MAX_MEMBERS;
+		let m in 4 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
-		let b in 1 .. MAX_BYTES;
 
-		let bytes_in_storage = b + size_of::<u32>() as u32;
+		let bytes = 100;
+		let bytes_in_storage = bytes + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -304,7 +307,7 @@ benchmarks_instance! {
 		}
 		let voter: T::AccountId = account("voter", 0, SEED);
 		members.push(voter.clone());
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None, MAX_MEMBERS)?;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None, T::MaxMembers::get())?;
 
 		// Threshold is total members so that one nay will disapprove the vote
 		let threshold = m;
@@ -313,7 +316,7 @@ benchmarks_instance! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; b as usize]).into();
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; bytes as usize]).into();
 			Collective::<T, _>::propose(
 				SystemOrigin::Signed(proposer.clone()).into(),
 				threshold,
@@ -356,6 +359,9 @@ benchmarks_instance! {
 			approve,
 		)?;
 
+		// Whitelist voter account from further DB operations.
+		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
+		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
 	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
 	verify {
 		// The last proposal is removed.
@@ -364,10 +370,10 @@ benchmarks_instance! {
 	}
 
 	close_early_approved {
-		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
-		let m in 4 .. MAX_MEMBERS;
-		let p in 1 .. T::MaxProposals::get();
 		let b in 1 .. MAX_BYTES;
+		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
+		let m in 4 .. T::MaxMembers::get();
+		let p in 1 .. T::MaxProposals::get();
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
 
@@ -377,9 +383,9 @@ benchmarks_instance! {
 			let member = account("member", i, SEED);
 			members.push(member);
 		}
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None, MAX_MEMBERS)?;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None, T::MaxMembers::get())?;
 
 		// Threshold is 2 so any two ayes will approve the vote
 		let threshold = 2;
@@ -446,11 +452,11 @@ benchmarks_instance! {
 
 	close_disapproved {
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
-		let m in 4 .. MAX_MEMBERS;
+		let m in 4 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
-		let b in 1 .. MAX_BYTES;
 
-		let bytes_in_storage = b + size_of::<u32>() as u32;
+		let bytes = 100;
+		let bytes_in_storage = bytes + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -458,13 +464,13 @@ benchmarks_instance! {
 			let member = account("member", i, SEED);
 			members.push(member);
 		}
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
 		Collective::<T, _>::set_members(
 			SystemOrigin::Root.into(),
 			members.clone(),
 			Some(caller.clone()),
-			MAX_MEMBERS,
+			T::MaxMembers::get(),
 		)?;
 
 		// Threshold is one less than total members so that two nays will disapprove the vote
@@ -474,7 +480,7 @@ benchmarks_instance! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; b as usize]).into();
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; bytes as usize]).into();
 			Collective::<T, _>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
@@ -517,10 +523,10 @@ benchmarks_instance! {
 	}
 
 	close_approved {
-		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
-		let m in 4 .. MAX_MEMBERS;
-		let p in 1 .. T::MaxProposals::get();
 		let b in 1 .. MAX_BYTES;
+		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
+		let m in 4 .. T::MaxMembers::get();
+		let p in 1 .. T::MaxProposals::get();
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
 
@@ -530,13 +536,13 @@ benchmarks_instance! {
 			let member = account("member", i, SEED);
 			members.push(member);
 		}
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
 		Collective::<T, _>::set_members(
 			SystemOrigin::Root.into(),
 			members.clone(),
 			Some(caller.clone()),
-			MAX_MEMBERS,
+			T::MaxMembers::get(),
 		)?;
 
 		// Threshold is two, so any two ayes will pass the vote
@@ -578,6 +584,54 @@ benchmarks_instance! {
 	verify {
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
 		assert_last_event::<T, I>(RawEvent::Executed(last_hash, Err(DispatchError::BadOrigin)).into());
+	}
+
+	disapprove_proposal {
+		let p in 1 .. T::MaxProposals::get();
+
+		let m = 3;
+		let b = MAX_BYTES;
+		let bytes_in_storage = b + size_of::<u32>() as u32;
+
+		// Construct `members`.
+		let mut members = vec![];
+		for i in 0 .. m - 1 {
+			let member = account("member", i, SEED);
+			members.push(member);
+		}
+		let caller: T::AccountId = account("caller", 0, SEED);
+		members.push(caller.clone());
+		Collective::<T, _>::set_members(
+			SystemOrigin::Root.into(),
+			members.clone(),
+			Some(caller.clone()),
+			T::MaxMembers::get(),
+		)?;
+
+		// Threshold is one less than total members so that two nays will disapprove the vote
+		let threshold = m - 1;
+
+		// Add proposals
+		let mut last_hash = T::Hash::default();
+		for i in 0 .. p {
+			// Proposals should be different so that different proposal hashes are generated
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; b as usize]).into();
+			Collective::<T, _>::propose(
+				SystemOrigin::Signed(caller.clone()).into(),
+				threshold,
+				Box::new(proposal.clone()),
+				bytes_in_storage,
+			)?;
+			last_hash = T::Hashing::hash_of(&proposal);
+		}
+
+		System::<T>::set_block_number(T::BlockNumber::max_value());
+		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
+
+	}: _(SystemOrigin::Root, last_hash)
+	verify {
+		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
+		assert_last_event::<T, I>(RawEvent::Disapproved(last_hash).into());
 	}
 }
 
@@ -647,6 +701,13 @@ mod tests {
 	fn close_approved() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_close_approved::<Test>());
+		});
+	}
+
+	#[test]
+	fn disapprove_proposal() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_disapprove_proposal::<Test>());
 		});
 	}
 }

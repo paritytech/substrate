@@ -21,18 +21,18 @@
 //! The goal of this benchmark is to figure out time needed to fill
 //! the transaction pool for the next block.
 
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use node_testing::bench::{BenchDb, Profile, BlockType, KeyTypes, DatabaseType};
 
-use sc_transaction_pool::{BasicPool, FullChainApi};
+use sc_transaction_pool::BasicPool;
 use sp_runtime::generic::BlockId;
 use sp_transaction_pool::{TransactionPool, TransactionSource};
 
 use crate::core::{self, Path, Mode};
 
 pub struct PoolBenchmarkDescription {
-    pub database_type: DatabaseType,
+	pub database_type: DatabaseType,
 }
 
 pub struct PoolBenchmark {
@@ -41,7 +41,7 @@ pub struct PoolBenchmark {
 
 impl core::BenchmarkDescription for PoolBenchmarkDescription {
 	fn path(&self) -> Path {
-        Path::new(&["node", "txpool"])
+		Path::new(&["node", "txpool"])
 	}
 
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
@@ -55,7 +55,7 @@ impl core::BenchmarkDescription for PoolBenchmarkDescription {
 	}
 
 	fn name(&self) -> Cow<'static, str> {
-        "Transaction pool benchmark".into()
+		"Transaction pool benchmark".into()
 	}
 }
 
@@ -74,7 +74,6 @@ impl core::Benchmark for PoolBenchmark {
 		let executor = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(context.client.clone(), None)),
 			None,
 			executor,
 			context.client.clone(),

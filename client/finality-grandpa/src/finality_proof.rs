@@ -149,7 +149,7 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 }
 
 /// Finality proof provider for serving network requests.
-pub struct FinalityProofProvider<B,  Block: BlockT> {
+pub struct FinalityProofProvider<B, Block: BlockT> {
 	backend: Arc<B>,
 	authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 }
@@ -168,6 +168,41 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 		where P: AuthoritySetForFinalityProver<Block> + 'static,
 	{
 		FinalityProofProvider { backend, authority_provider: Arc::new(authority_provider) }
+	}
+
+	/// Create new finality proof provider for the service using:
+	///
+	/// - backend for accessing blockchain data;
+	/// - storage_and_proof_provider, which is generally a client.
+	pub fn new_for_service(
+		backend: Arc<B>,
+		storage_and_proof_provider: Arc<dyn StorageAndProofProvider<Block, B>>,
+	) -> Arc<Self> {
+		Arc::new(Self::new(backend, storage_and_proof_provider))
+	}
+}
+
+impl<B, Block> FinalityProofProvider<B, Block>
+	where
+		Block: BlockT,
+		NumberFor<Block>: BlockNumberOps,
+		B: Backend<Block> + Send + Sync + 'static,
+{
+	/// Prove finality for the range (begin; end] hash. Returns None if there are no finalized blocks
+	/// unknown in the range.
+	pub fn prove_finality(
+		&self,
+		begin: Block::Hash,
+		end: Block::Hash,
+		authorities_set_id: u64,
+	) -> Result<Option<Vec<u8>>, ClientError> {
+		prove_finality::<_, _, GrandpaJustification<Block>>(
+			&*self.backend.blockchain(),
+			&*self.authority_provider,
+			authorities_set_id,
+			begin,
+			end,
+		)
 	}
 }
 
@@ -220,8 +255,8 @@ pub struct FinalityEffects<Header: HeaderT> {
 /// 1) the justification for the descendant block F;
 /// 2) headers sub-chain (B; F] if B != F;
 /// 3) proof of GRANDPA::authorities() if the set changes at block F.
-#[derive(Debug, PartialEq, Encode, Decode)]
-pub(crate) struct FinalityProofFragment<Header: HeaderT> {
+#[derive(Debug, PartialEq, Encode, Decode, Clone)]
+pub struct FinalityProofFragment<Header: HeaderT> {
 	/// The hash of block F for which justification is provided.
 	pub block: Header::Hash,
 	/// Justification of the block F.

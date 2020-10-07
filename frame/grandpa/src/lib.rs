@@ -40,8 +40,8 @@ use fg_primitives::{
 	GRANDPA_ENGINE_ID,
 };
 use frame_support::{
-	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
-	Parameter,
+	decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResultWithPostInfo,
+	storage, traits::KeyOwnerProofSystem, weights::{Pays, Weight}, Parameter,
 };
 use frame_system::{ensure_none, ensure_root, ensure_signed};
 use pallet_finality_tracker::OnFinalizationStalled;
@@ -54,6 +54,7 @@ use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
 
 mod equivocation;
+mod default_weights;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -97,6 +98,14 @@ pub trait Trait: frame_system::Trait {
 	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 	/// definition.
 	type HandleEquivocation: HandleEquivocation<Self>;
+
+	/// Weights for this pallet.
+	type WeightInfo: WeightInfo;
+}
+
+pub trait WeightInfo {
+	fn report_equivocation(validator_count: u32) -> Weight;
+	fn note_stalled() -> Weight;
 }
 
 /// A stored pending change, old format.
@@ -170,7 +179,7 @@ pub enum StoredState<N> {
 
 decl_event! {
 	pub enum Event {
-		/// New authority set has been applied. [authority_set]
+		/// New authority set has been applied. \[authority_set\]
 		NewAuthorities(AuthorityList),
 		/// Current authority set has been paused.
 		Paused,
@@ -242,19 +251,19 @@ decl_module! {
 		/// equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
-		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		#[weight = T::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
 		fn report_equivocation(
 			origin,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			key_owner_proof: T::KeyOwnerProof,
-		) {
+		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 
 			Self::do_report_equivocation(
 				Some(reporter),
 				equivocation_proof,
 				key_owner_proof,
-			)?;
+			)
 		}
 
 		/// Report voter equivocation/misbehavior. This method will verify the
@@ -266,19 +275,19 @@ decl_module! {
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
-		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		#[weight = T::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
 		fn report_equivocation_unsigned(
 			origin,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			key_owner_proof: T::KeyOwnerProof,
-		) {
+		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
 			Self::do_report_equivocation(
 				T::HandleEquivocation::block_author(),
 				equivocation_proof,
 				key_owner_proof,
-			)?;
+			)
 		}
 
 		/// Note that the current authority set of the GRANDPA finality gadget has
@@ -288,7 +297,7 @@ decl_module! {
 		/// forced change will not be re-orged (e.g. 1000 blocks). The GRANDPA voters
 		/// will start the new authority set using the given finalized block as base.
 		/// Only callable by root.
-		#[weight = weight_for::note_stalled::<T>()]
+		#[weight = T::WeightInfo::note_stalled()]
 		fn note_stalled(
 			origin,
 			delay: T::BlockNumber,
@@ -361,45 +370,6 @@ decl_module! {
 				_ => {},
 			}
 		}
-	}
-}
-
-mod weight_for {
-	use frame_support::{
-		traits::Get,
-		weights::{
-			constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
-			Weight,
-		},
-	};
-
-	pub fn report_equivocation<T: super::Trait>(validator_count: u32) -> Weight {
-		// we take the validator set count from the membership proof to
-		// calculate the weight but we set a floor of 100 validators.
-		let validator_count = validator_count.min(100) as u64;
-
-		// worst case we are considering is that the given offender
-		// is backed by 200 nominators
-		const MAX_NOMINATORS: u64 = 200;
-
-		// checking membership proof
-		(35 * WEIGHT_PER_MICROS)
-			.saturating_add((175 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
-			.saturating_add(T::DbWeight::get().reads(5))
-			// check equivocation proof
-			.saturating_add(95 * WEIGHT_PER_MICROS)
-			// report offence
-			.saturating_add(110 * WEIGHT_PER_MICROS)
-			.saturating_add(25 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
-			.saturating_add(T::DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
-			.saturating_add(T::DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
-			// fetching set id -> session index mappings
-			.saturating_add(T::DbWeight::get().reads(2))
-	}
-
-	pub fn note_stalled<T: super::Trait>() -> Weight {
-		(3 * WEIGHT_PER_MICROS)
-			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
 
@@ -520,7 +490,7 @@ impl<T: Trait> Module<T> {
 		reporter: Option<T::AccountId>,
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
-	) -> Result<(), Error<T>> {
+	) -> DispatchResultWithPostInfo {
 		// we check the equivocation within the context of its set id (and
 		// associated session) and round. we also need to know the validator
 		// set count when the offence since it is required to calculate the
@@ -585,7 +555,10 @@ impl<T: Trait> Module<T> {
 				set_id,
 				round,
 			),
-		).map_err(|_| Error::<T>::DuplicateOffenceReport)
+		).map_err(|_| Error::<T>::DuplicateOffenceReport)?;
+
+		// waive the fee since the report is valid and beneficial
+		Ok(Pays::No.into())
 	}
 
 	/// Submits an extrinsic to report an equivocation. This method will create

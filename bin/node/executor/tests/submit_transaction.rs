@@ -192,7 +192,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 fn submitted_transaction_should_be_valid() {
 	use codec::Encode;
 	use frame_support::storage::StorageMap;
-	use sp_runtime::transaction_validity::{ValidTransaction, TransactionSource};
+	use sp_runtime::transaction_validity::{TransactionSource, TransactionTag};
 	use sp_runtime::traits::StaticLookup;
 
 	let mut t = new_test_ext(compact_code_unwrap(), false);
@@ -224,18 +224,16 @@ fn submitted_transaction_should_be_valid() {
 		let author = extrinsic.signature.clone().unwrap().0;
 		let address = Indices::lookup(author).unwrap();
 		let data = pallet_balances::AccountData { free: 5_000_000_000_000, ..Default::default() };
-		let account = frame_system::AccountInfo { nonce: 0u32, refcount: 0u8, data };
+		let account = frame_system::AccountInfo { nonce: 0, refcount: 0, data };
 		<frame_system::Account<Runtime>>::insert(&address, account);
 
 		// check validity
-		let res = Executive::validate_transaction(source, extrinsic);
+		let res = Executive::validate_transaction(source, extrinsic).unwrap();
 
-		assert_eq!(res.unwrap(), ValidTransaction {
-			priority: 1_410_710_000_000,
-			requires: vec![],
-			provides: vec![(address, 0).encode()],
-			longevity: 2048,
-			propagate: true,
-		});
+		// We ignore res.priority since this number can change based on updates to weights and such.
+		assert_eq!(res.requires, Vec::<TransactionTag>::new());
+		assert_eq!(res.provides, vec![(address, 0).encode()]);
+		assert_eq!(res.longevity, 2048);
+		assert_eq!(res.propagate, true);
 	});
 }

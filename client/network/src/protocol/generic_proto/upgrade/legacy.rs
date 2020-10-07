@@ -49,7 +49,7 @@ impl RegisteredProtocol {
 		-> Self {
 		let protocol = protocol.into();
 		let mut base_name = b"/substrate/".to_vec();
-		base_name.extend_from_slice(protocol.as_bytes());
+		base_name.extend_from_slice(protocol.as_ref().as_bytes());
 		base_name.extend_from_slice(b"/");
 
 		RegisteredProtocol {
@@ -57,7 +57,7 @@ impl RegisteredProtocol {
 			id: protocol,
 			supported_versions: {
 				let mut tmp = versions.to_vec();
-				tmp.sort_unstable_by(|a, b| b.cmp(&a));
+				tmp.sort_by(|a, b| b.cmp(&a));
 				tmp
 			},
 			handshake_message,
@@ -123,15 +123,6 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 		self.is_closing = true;
 		self.send_queue.clear();
 	}
-
-	/// Sends a message to the substream.
-	pub fn send_message(&mut self, data: Vec<u8>) {
-		if self.is_closing {
-			return
-		}
-
-		self.send_queue.push_back(From::from(&data[..]));
-	}
 }
 
 /// Event produced by the `RegisteredProtocolSubstream`.
@@ -174,7 +165,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 		}
 
 		// Indicating that the remote is clogged if that's the case.
-		if self.send_queue.len() >= 2048 {
+		if self.send_queue.len() >= 1536 {
 			if !self.clogged_fuse {
 				// Note: this fuse is important not just for preventing us from flooding the logs;
 				// 	if you remove the fuse, then we will always return early from this function and

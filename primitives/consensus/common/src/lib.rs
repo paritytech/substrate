@@ -56,6 +56,7 @@ pub use block_import::{
 };
 pub use select_chain::SelectChain;
 pub use sp_state_machine::Backend as StateBackend;
+pub use import_queue::DefaultImportQueue;
 
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]
@@ -211,6 +212,7 @@ pub trait CanAuthorWith<Block: BlockT> {
 
 /// Checks if the node can author blocks by using
 /// [`NativeVersion::can_author_with`](sp_version::NativeVersion::can_author_with).
+#[derive(Clone)]
 pub struct CanAuthorWithNativeVersion<T>(T);
 
 impl<T> CanAuthorWithNativeVersion<T> {
@@ -238,11 +240,22 @@ impl<T: sp_version::GetRuntimeVersion<Block>, Block: BlockT> CanAuthorWith<Block
 }
 
 /// Returns always `true` for `can_author_with`. This is useful for tests.
+#[derive(Clone)]
 pub struct AlwaysCanAuthor;
 
 impl<Block: BlockT> CanAuthorWith<Block> for AlwaysCanAuthor {
 	fn can_author_with(&self, _: &BlockId<Block>) -> Result<(), String> {
 		Ok(())
+	}
+}
+
+/// Never can author.
+#[derive(Clone)]
+pub struct NeverCanAuthor;
+
+impl<Block: BlockT> CanAuthorWith<Block> for NeverCanAuthor {
+	fn can_author_with(&self, _: &BlockId<Block>) -> Result<(), String> {
+		Err("Authoring is always disabled.".to_string())
 	}
 }
 

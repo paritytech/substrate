@@ -264,21 +264,21 @@ decl_event! {
 	pub enum Event<T> where
 		AccountId = <T as system::Trait>::AccountId,
 	{
-		/// A recovery process has been set up for an [account].
+		/// A recovery process has been set up for an \[account\].
 		RecoveryCreated(AccountId),
 		/// A recovery process has been initiated for lost account by rescuer account.
-		/// [lost, rescuer]
+		/// \[lost, rescuer\]
 		RecoveryInitiated(AccountId, AccountId),
 		/// A recovery process for lost account by rescuer account has been vouched for by sender.
-		/// [lost, rescuer, sender]
+		/// \[lost, rescuer, sender\]
 		RecoveryVouched(AccountId, AccountId, AccountId),
 		/// A recovery process for lost account by rescuer account has been closed.
-		/// [lost, rescuer]
+		/// \[lost, rescuer\]
 		RecoveryClosed(AccountId, AccountId),
 		/// Lost account has been successfully recovered by rescuer account.
-		/// [lost, rescuer]
+		/// \[lost, rescuer\]
 		AccountRecovered(AccountId, AccountId),
-		/// A recovery process has been removed for an [account].
+		/// A recovery process has been removed for an \[account\].
 		RecoveryRemoved(AccountId),
 	}
 }
@@ -352,7 +352,13 @@ decl_module! {
 		/// - The weight of the `call` + 10,000.
 		/// - One storage lookup to check account is recovered by `who`. O(1)
 		/// # </weight>
-		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
+		#[weight = (
+			call.get_dispatch_info().weight
+				.saturating_add(10_000)
+				 // AccountData for inner call origin accountdata.
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+			call.get_dispatch_info().class
+		)]
 		fn as_recovered(origin,
 			account: T::AccountId,
 			call: Box<<T as Trait>::Call>

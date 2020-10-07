@@ -284,19 +284,19 @@ given runtime.
 
 This is the list of getters:
 
-- ext_caller
-- ext_address
-- ext_weight_to_fee
-- ext_gas_left
-- ext_balance
-- ext_value_transferred
-- ext_now
-- ext_minimum_balance
-- ext_tombstone_deposit
-- ext_rent_allowance
-- ext_block_number
+- seal_caller
+- seal_address
+- seal_weight_to_fee
+- seal_gas_left
+- seal_balance
+- seal_value_transferred
+- seal_now
+- seal_minimum_balance
+- seal_tombstone_deposit
+- seal_rent_allowance
+- seal_block_number
 
-### ext_set_storage
+### seal_set_storage
 
 This function receives a `key` and `value` as arguments. It consists of the following steps:
 
@@ -305,7 +305,7 @@ This function receives a `key` and `value` as arguments. It consists of the foll
 
 **complexity**: Complexity is proportional to the size of the `value`. This function induces a DB write of size proportional to the `value` size (if flushed to the storage), so should be priced accordingly.
 
-### ext_clear_storage
+### seal_clear_storage
 
 This function receives a `key` as argument. It consists of the following steps:
 
@@ -315,7 +315,7 @@ This function receives a `key` as argument. It consists of the following steps:
 **complexity**: Complexity is constant. This function induces a DB write to clear the storage entry
 (upon being flushed to the storage) and should be priced accordingly.
 
-### ext_get_storage
+### seal_get_storage
 
 This function receives a `key` as an argument. It consists of the following steps:
 
@@ -330,7 +330,7 @@ performed. Moreover, the DB read has to be synchronous and no progress can be ma
 
 **complexity**: The memory and computing complexity is proportional to the size of the fetched value. This function performs a DB read.
 
-### ext_transfer
+### seal_transfer
 
 This function receives the following arguments:
 
@@ -345,7 +345,7 @@ It consists of the following steps:
 
 Loading of `account` and `value` buffers should be charged. This is because the sizes of buffers are specified by the calling code, even though marshaled representations are, essentially, of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId` and `Balance`.
 
-### ext_call
+### seal_call
 
 This function receives the following arguments:
 
@@ -369,7 +369,7 @@ Loading `input_data` should be charged in any case.
 
 **complexity**: All complexity comes from loading and writing buffers and executing `call` executive function. The former component is proportional to the sizes of `callee`, `value`, `input_data` and `output_ptr` buffers. The latter component completely depends on the complexity of `call` executive function, and also dominated by it.
 
-### ext_instantiate
+### seal_instantiate
 
 This function receives the following arguments:
 
@@ -391,7 +391,7 @@ Loading `init_code` and `input_data` should be charged in any case.
 
 **complexity**: All complexity comes from loading buffers and executing `instantiate` executive function. The former component is proportional to the sizes of `init_code`, `value` and `input_data` buffers. The latter component completely depends on the complexity of `instantiate` executive function and also dominated by it.
 
-### ext_terminate
+### seal_terminate
 
 This function receives the following arguments:
 
@@ -405,13 +405,13 @@ Loading of the `beneficiary` buffer should be charged. This is because the sizes
 
 **complexity**: All complexity comes from loading buffers and executing `terminate` executive function. The former component is proportional to the size of the `beneficiary` buffer. The latter component completely depends on the complexity of `terminate` executive function and also dominated by it.
 
-### ext_input
+### seal_input
 
 This function receives a pointer to contract memory. It copies the input to the contract call to this location.
 
 **complexity**: The complextity is proportional to the size of the input buffer.
 
-### ext_return
+### seal_return
 
 This function receives a `data` buffer and `flags` arguments. Execution of the function consists of the following steps:
 
@@ -421,7 +421,7 @@ This function receives a `data` buffer and `flags` arguments. Execution of the f
 
 **complexity**: The complexity of this function is proportional to the size of the `data` buffer.
 
-### ext_deposit_event
+### seal_deposit_event
 
 This function receives a `data` buffer as an argument. Execution of the function consists of the following steps:
 
@@ -432,7 +432,7 @@ This function receives a `data` buffer as an argument. Execution of the function
 
 **complexity**: The complexity of this function is proportional to the size of the `data` buffer.
 
-### ext_set_rent_allowance
+### seal_set_rent_allowance
 
 This function receives the following argument:
 

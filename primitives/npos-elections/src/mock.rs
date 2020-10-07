@@ -20,7 +20,7 @@
 #![cfg(test)]
 
 use crate::{seq_phragmen, ElectionResult, Assignment, VoteWeight, ExtendedBalance};
-use sp_arithmetic::{PerThing, traits::{SaturatedConversion, Zero, One}};
+use sp_arithmetic::{PerThing, InnerOf, traits::{SaturatedConversion, Zero, One}};
 use sp_std::collections::btree_map::BTreeMap;
 use sp_runtime::assert_eq_error_rate;
 
@@ -51,18 +51,18 @@ pub(crate) struct _Edge<A> {
 pub(crate) struct _Support<A> {
 	pub own: f64,
 	pub total: f64,
-	pub others: Vec<_PhragmenAssignment<A>>,
+	pub others: Vec<_Assignment<A>>,
 }
 
-pub(crate) type _PhragmenAssignment<A> = (A, f64);
+pub(crate) type _Assignment<A> = (A, f64);
 pub(crate) type _SupportMap<A> = BTreeMap<A, _Support<A>>;
 
 pub(crate) type AccountId = u64;
 
 #[derive(Debug, Clone)]
-pub(crate) struct _PhragmenResult<A: Clone> {
+pub(crate) struct _ElectionResult<A: Clone> {
 	pub winners: Vec<(A, ExtendedBalance)>,
-	pub assignments: Vec<(A, Vec<_PhragmenAssignment<A>>)>
+	pub assignments: Vec<(A, Vec<_Assignment<A>>)>
 }
 
 pub(crate) fn auto_generate_self_voters<A: Clone>(candidates: &[A]) -> Vec<(A, Vec<A>)> {
@@ -71,16 +71,15 @@ pub(crate) fn auto_generate_self_voters<A: Clone>(candidates: &[A]) -> Vec<(A, V
 
 pub(crate) fn elect_float<A, FS>(
 	candidate_count: usize,
-	minimum_candidate_count: usize,
 	initial_candidates: Vec<A>,
 	initial_voters: Vec<(A, Vec<A>)>,
 	stake_of: FS,
-) -> Option<_PhragmenResult<A>> where
+) -> Option<_ElectionResult<A>> where
 	A: Default + Ord + Copy,
 	for<'r> FS: Fn(&'r A) -> VoteWeight,
 {
 	let mut elected_candidates: Vec<(A, ExtendedBalance)>;
-	let mut assigned: Vec<(A, Vec<_PhragmenAssignment<A>>)>;
+	let mut assigned: Vec<(A, Vec<_Assignment<A>>)>;
 	let mut c_idx_cache = BTreeMap::<A, usize>::new();
 	let num_voters = initial_candidates.len() + initial_voters.len();
 	let mut voters: Vec<_Voter<A>> = Vec::with_capacity(num_voters);
@@ -93,10 +92,6 @@ pub(crate) fn elect_float<A, FS>(
 			_Candidate { who, ..Default::default() }
 		})
 		.collect::<Vec<_Candidate<A>>>();
-
-	if candidates.len() < minimum_candidate_count {
-		return None;
-	}
 
 	voters.extend(initial_voters.into_iter().map(|(who, votes)| {
 		let voter_stake = stake_of(&who) as f64;
@@ -172,14 +167,14 @@ pub(crate) fn elect_float<A, FS>(
 		}
 	}
 
-	Some(_PhragmenResult {
+	Some(_ElectionResult {
 		winners: elected_candidates,
 		assignments: assigned,
 	})
 }
 
 pub(crate) fn equalize_float<A, FS>(
-	mut assignments: Vec<(A, Vec<_PhragmenAssignment<A>>)>,
+	mut assignments: Vec<(A, Vec<_Assignment<A>>)>,
 	supports: &mut _SupportMap<A>,
 	tolerance: f64,
 	iterations: usize,
@@ -211,7 +206,7 @@ pub(crate) fn equalize_float<A, FS>(
 pub(crate) fn do_equalize_float<A>(
 	voter: &A,
 	budget_balance: VoteWeight,
-	elected_edges: &mut Vec<_PhragmenAssignment<A>>,
+	elected_edges: &mut Vec<_Assignment<A>>,
 	support_map: &mut _SupportMap<A>,
 	tolerance: f64
 ) -> f64 where
@@ -264,7 +259,7 @@ pub(crate) fn do_equalize_float<A>(
 		e.1 = 0.0;
 	});
 
-	elected_edges.sort_unstable_by(|x, y|
+	elected_edges.sort_by(|x, y|
 		support_map.get(&x.0)
 			.and_then(|x| support_map.get(&y.0).and_then(|y| x.total.partial_cmp(&y.total)))
 			.unwrap_or(sp_std::cmp::Ordering::Equal)
@@ -314,7 +309,7 @@ pub fn check_assignments_sum<T: PerThing>(assignments: Vec<Assignment<AccountId,
 	for Assignment { distribution, .. } in assignments {
 		let mut sum: u128 = Zero::zero();
 		distribution.iter().for_each(|(_, p)| sum += p.deconstruct().saturated_into());
-		assert_eq_error_rate!(sum, T::ACCURACY.saturated_into(), 1);
+		assert_eq!(sum, T::ACCURACY.saturated_into(), "Assignment ratio sum is not 100%");
 	}
 }
 
@@ -323,20 +318,21 @@ pub(crate) fn run_and_compare<Output: PerThing>(
 	voters: Vec<(AccountId, Vec<AccountId>)>,
 	stake_of: &Box<dyn Fn(&AccountId) -> VoteWeight>,
 	to_elect: usize,
-	min_to_elect: usize,
-) {
+) where
+	ExtendedBalance: From<InnerOf<Output>>,
+	Output: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
+{
 	// run fixed point code.
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Output>(
 		to_elect,
-		min_to_elect,
 		candidates.clone(),
 		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+		None
 	).unwrap();
 
 	// run float poc code.
 	let truth_value = elect_float(
 		to_elect,
-		min_to_elect,
 		candidates,
 		voters,
 		&stake_of,
@@ -354,7 +350,11 @@ pub(crate) fn run_and_compare<Output: PerThing>(
 						Output::Inner::one(),
 					);
 				} else {
-					panic!("candidate mismatch. This should never happen.")
+					panic!(
+						"candidate mismatch. This should never happen. could not find ({:?}, {:?})",
+						candidate,
+						per_thingy,
+					)
 				}
 			}
 		} else {
@@ -366,7 +366,7 @@ pub(crate) fn run_and_compare<Output: PerThing>(
 }
 
 pub(crate) fn build_support_map_float<FS>(
-	result: &mut _PhragmenResult<AccountId>,
+	result: &mut _ElectionResult<AccountId>,
 	stake_of: FS,
 ) -> _SupportMap<AccountId>
 	where for<'r> FS: Fn(&'r AccountId) -> VoteWeight

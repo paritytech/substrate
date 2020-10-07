@@ -1110,6 +1110,9 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
+	/// The maximum number of locks a user should have on their account.
+	type MaxLocks: Get<u32>;
+
 	/// Create a new balance lock on account `who`.
 	///
 	/// If the new lock is valid (i.e. not already expired), it will push the struct to
@@ -1238,7 +1241,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 	///
 	/// This resets any previous value of prime.
 	fn change_members(incoming: &[AccountId], outgoing: &[AccountId], mut new: Vec<AccountId>) {
-		new.sort_unstable();
+		new.sort();
 		Self::change_members_sorted(incoming, outgoing, &new[..]);
 	}
 
@@ -1310,8 +1313,6 @@ impl<T: Clone + Ord> ChangeMembers<T> for () {
 	fn set_prime(_: Option<T>) {}
 }
 
-
-
 /// Trait for type that can handle the initialization of account IDs at genesis.
 pub trait InitializeMembers<AccountId> {
 	/// Initialize the members to the given `members`.
@@ -1345,7 +1346,10 @@ pub trait Randomness<Output> {
 	}
 }
 
-impl<Output: Decode + Default> Randomness<Output> for () {
+/// Provides an implementation of [`Randomness`] that should only be used in tests!
+pub struct TestRandomness;
+
+impl<Output: Decode + Default> Randomness<Output> for TestRandomness {
 	fn random(subject: &[u8]) -> Output {
 		Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default()
 	}
@@ -1374,16 +1378,20 @@ pub trait ValidatorRegistration<ValidatorId> {
 	fn is_registered(id: &ValidatorId) -> bool;
 }
 
-/// Something that can convert a given module into the index of the module in the runtime.
+/// Provides information about the pallet setup in the runtime.
 ///
-/// The index of a module is determined by the position it appears in `construct_runtime!`.
-pub trait ModuleToIndex {
-	/// Convert the given module `M` into an index.
-	fn module_to_index<M: 'static>() -> Option<usize>;
+/// An implementor should be able to provide information about each pallet that
+/// is configured in `construct_runtime!`.
+pub trait PalletInfo {
+	/// Convert the given pallet `P` into its index as configured in the runtime.
+	fn index<P: 'static>() -> Option<usize>;
+	/// Convert the given pallet `P` into its name as configured in the runtime.
+	fn name<P: 'static>() -> Option<&'static str>;
 }
 
-impl ModuleToIndex for () {
-	fn module_to_index<M: 'static>() -> Option<usize> { Some(0) }
+impl PalletInfo for () {
+	fn index<P: 'static>() -> Option<usize> { Some(0) }
+	fn name<P: 'static>() -> Option<&'static str> { Some("test") }
 }
 
 /// The function and pallet name of the Call.
@@ -1613,6 +1621,9 @@ pub trait OriginTrait: Sized {
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin;
 
+	/// The AccountId used across the system.
+	type AccountId;
+
 	/// Add a filter to the origin.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
 
@@ -1627,6 +1638,15 @@ pub trait OriginTrait: Sized {
 
 	/// Get the caller.
 	fn caller(&self) -> &Self::PalletsOrigin;
+
+	/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+	fn none() -> Self;
+
+	/// Create with system root origin and no filter.
+	fn root() -> Self;
+
+	/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+	fn signed(by: Self::AccountId) -> Self;
 }
 
 /// Trait to be used when types are exactly same.
@@ -1651,6 +1671,17 @@ impl<T> IsType<T> for T {
 	fn into_ref(&self) -> &T { self }
 	fn from_mut(t: &mut T) -> &mut Self { t }
 	fn into_mut(&mut self) -> &mut T { self }
+}
+
+/// An instance of a pallet in the storage.
+///
+/// It is required that these instances are unique, to support multiple instances per pallet in the same runtime!
+///
+/// E.g. for module MyModule default instance will have prefix "MyModule" and other instances
+/// "InstanceNMyModule".
+pub trait Instance: 'static {
+    /// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
+    const PREFIX: &'static str ;
 }
 
 #[cfg(test)]

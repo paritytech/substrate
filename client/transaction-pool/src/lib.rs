@@ -34,7 +34,7 @@ pub mod testing;
 pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
-use std::{collections::{HashMap, HashSet}, sync::Arc, pin::Pin};
+use std::{collections::{HashMap, HashSet}, sync::Arc, pin::Pin, convert::TryInto};
 use futures::{prelude::*, future::{self, ready}, channel::oneshot};
 use parking_lot::Mutex;
 
@@ -177,18 +177,6 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 			},
 			background_task,
 			notifier,
-		)
-	}
-
-	/// Create new basic transaction pool for a light node with the provided api.
-	pub fn new_light(
-		options: sc_transaction_graph::Options,
-		pool_api: Arc<PoolApi>,
-		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnNamed,
-	) -> Self {
-		Self::with_revalidation_type(
-			options, pool_api, prometheus, RevalidationType::Light, spawner,
 		)
 	}
 
@@ -342,7 +330,28 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	}
 }
 
-impl<Block, Client> BasicPool<FullChainApi<Client, Block>, Block>
+impl<Block, Client, Fetcher> LightPool<Block, Client, Fetcher>
+where
+	Block: BlockT,
+	Client: sp_blockchain::HeaderBackend<Block> + 'static,
+	Fetcher: sc_client_api::Fetcher<Block> + 'static,
+{
+	/// Create new basic transaction pool for a light node with the provided api.
+	pub fn new_light(
+		options: sc_transaction_graph::Options,
+		prometheus: Option<&PrometheusRegistry>,
+		spawner: impl SpawnNamed,
+		client: Arc<Client>,
+		fetcher: Arc<Fetcher>,
+	) -> Self {
+		let pool_api = Arc::new(LightChainApi::new(client, fetcher));
+		Self::with_revalidation_type(
+			options, pool_api, prometheus, RevalidationType::Light, spawner,
+		)
+	}
+}
+
+impl<Block, Client> FullPool<Block, Client>
 where
 	Block: BlockT,
 	Client: sp_api::ProvideRuntimeApi<Block>
@@ -355,11 +364,11 @@ where
 	/// Create new basic transaction pool for a full node with the provided api.
 	pub fn new_full(
 		options: sc_transaction_graph::Options,
-		pool_api: Arc<FullChainApi<Client, Block>>,
 		prometheus: Option<&PrometheusRegistry>,
 		spawner: impl SpawnNamed,
 		client: Arc<Client>,
 	) -> Arc<Self> {
+		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus));
 		let pool = Arc::new(Self::with_revalidation_type(
 			options, pool_api, prometheus, RevalidationType::Full, spawner
 		));
@@ -540,7 +549,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>> {
 		match event {
-			ChainEvent::NewBlock { hash, tree_route, is_new_best, .. } => {
+			ChainEvent::NewBestBlock { hash, tree_route } => {
 				let pool = self.pool.clone();
 				let api = self.api.clone();
 
@@ -599,10 +608,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 						})
 					}
 
-					// If this is a new best block, we need to prune its transactions from the pool.
-					if is_new_best {
-						pruned_log.extend(prune_known_txs_for_block(id.clone(), &*api, &*pool).await);
-					}
+					pruned_log.extend(prune_known_txs_for_block(id.clone(), &*api, &*pool).await);
 
 					metrics.report(
 						|metrics| metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64)
@@ -681,9 +687,9 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 							.map(|tx| tx.hash.clone())
 							.collect();
 						revalidation_queue.revalidate_later(block_number, hashes).await;
-					}
 
-					revalidation_strategy.lock().clear();
+						revalidation_strategy.lock().clear();
+					}
 				}.boxed()
 			}
 			ChainEvent::Finalized { hash } => {
@@ -712,7 +718,9 @@ pub async fn notification_future<Client, Pool, Block>(
 		Client: sc_client_api::BlockchainEvents<Block>,
 		Pool: MaintainedTransactionPool<Block=Block>,
 {
-	let import_stream = client.import_notification_stream().map(Into::into).fuse();
+	let import_stream = client.import_notification_stream()
+		.filter_map(|n| ready(n.try_into().ok()))
+		.fuse();
 	let finality_stream = client.finality_notification_stream()
 		.map(Into::into)
 		.fuse();

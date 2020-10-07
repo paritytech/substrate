@@ -6,6 +6,99 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+## 2.0.0-rc6 -> 2.0.0 – two dot 😮
+
+Runtime
+-------
+
+* Rename `ModuleToIndex` to `PalletRuntimeSetup` (#7148)
+* Bounties (#5715)
+* pallet-collective: allow customized default vote (#6984)
+* add instantiable support for treasury pallet (#7058)
+* frame/authority-discovery: Have authorities() return both current and next (#6788)
+* add generated weight info for pallet-collective (#6789)
+* Support Staking Payout to Any Account (#6832)
+* Time-delay proxies (#6770)
+* Refcounts are now u32 (#7164)
+
+Client
+------
+
+* Rename `inspect-key` to `inspect` (#7160)
+* Send import notification always for re-orgs (#7118)
+* Allow remotes to not open a legacy substream (#7075)
+* Fix `storage::read` (#7084)
+* Support hex encoded secret key for `--node-key` (#7052)
+* Update the service tasks Grafana dashboard (#7038)
+* manual seal is now consensus agnostic (#7010)
+* Move subcommands from sc-cli to nodes (#6948)
+* Implement request-responses protocols (#6634)
+* fix bench db wipe (#6965)
+* Fix benchmark read/write key tracker for keys in child storages. (#6905)
+* *: Update to next libp2p version 0.24.0 (#6891)
+
+API
+---
+
+* grandpa-rpc: use FinalityProofProvider to check finality for rpc (#6215)
+* pow: replace the thread-base mining loop with a future-based mining worker (#7060)
+* Tracing for wasm with bridging to native (#6916)
+* Frame-support storage: make iterations and translate consistent (#5470)
+* pow: support uniform tie breaking in fork choice (#7073)
+* Make decoding of `compact<perthing>` saturating instead of invalid (#7062)
+* Set reserved nodes with offchain worker. (#6996)
+* client/*: Treat protocol name as str and not [u8] (#6967)
+* Add a `LightSyncState` field to the chain spec (#6894)
+* *: Update to next libp2p version 0.24.0 (#6891)
+
+Runtime Migrations
+------------------
+
+* Time-delay proxies (#6770)
+
+
+## 2.0.0-rc5 -> 2.0.0-rc6 – Rock Hyrax
+
+Runtime
+-------
+
+* Custom Codec Implenetation for NPoS Election (#6720)
+* Successful `note_imminent_preimage` is free (#6793)
+* pallet-democracy use of weightinfo (#6783)
+* Update Balances Pallet to use `WeightInfo` (#6610)
+* pallet-evm: add builtin support for the four basic Ethereum precompiles (#6743)
+* Allow `PostDispatchInfo` to disable fees (#6749)
+* pallet-evm: add support for tuple-based precompile declarations (#6681)
+* grandpa: allow noting that the set has stalled (#6725)
+
+Client
+------
+
+* Merge Subkey into sc-cli (#4954)
+* RpcHandlers Refactorings (#6846)
+* client/authority-discovery: Introduce AuthorityDiscoveryService (#6760)
+* Implement tracing::Event handling & parent_id for spans and events (#6672)
+* Move to upstream wasmtime, refactor globals snapshot  (#6759)
+* Revalidate transactions only on latest best block (#6824)
+* Allow task manager to have children (#6771)
+* client/network: Expose DHT query duration to Prometheus (#6784)
+* client/network: Add peers to DHT only if protocols match (#6549)
+* Name all the tasks! (#6726)
+* Child nodes can be handled by adding a child `TaskManager` to the parent's `TaskManager` (#6771)
+
+API
+---
+
+* pow: add access to pre-digest for algorithm verifiers (#6900)
+* babe, aura, pow: only call check_inherents if authoring version is compatible (#6862)
+* Implement 'transactional' annotation for runtime functions. (#6763)
+* seal: Change prefix and module name from "ext_" to "seal_" for contract callable functions (#6798)
+* Add Subscription RPC for Grandpa Finality (#5732)
+* seal: Fix and improve error reporting (#6773)
+* Allow blacklisting blocks from being finalized again after block revert (#6301)
+* BABE slot and epoch event notifications (#6563)
+* Add `memory-tracker` feature to `sp-trie` to fix wasm panic (#6745)
+
 ## 2.0.0-rc4 -> 2.0.0-rc5 – River Dolphin
 
 Runtime

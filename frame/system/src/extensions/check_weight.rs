@@ -27,7 +27,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	traits::{Get},
-	weights::{PostDispatchInfo, DispatchInfo, DispatchClass},
+	weights::{PostDispatchInfo, DispatchInfo, DispatchClass, priority::FrameTransactionPriority},
 	StorageValue,
 };
 
@@ -157,12 +157,18 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	}
 
 	/// get the priority of an extrinsic denoted by `info`.
+	///
+	/// Operational transaction will be given a fixed initial amount to be fairly distinguished from
+	/// the normal ones.
 	fn get_priority(info: &DispatchInfoOf<T::Call>) -> TransactionPriority {
 		match info.class {
-			DispatchClass::Normal => info.weight.into(),
-			// Don't use up the whole priority space, to allow things like `tip`
-			// to be taken into account as well.
-			DispatchClass::Operational => TransactionPriority::max_value() / 2,
+			// Normal transaction.
+			DispatchClass::Normal =>
+				FrameTransactionPriority::Normal(info.weight.into()).into(),
+			// Don't use up the whole priority space, to allow things like `tip` to be taken into
+			// account as well.
+			DispatchClass::Operational =>
+				FrameTransactionPriority::Operational(info.weight.into()).into(),
 			// Mandatory extrinsics are only for inherents; never transactions.
 			DispatchClass::Mandatory => TransactionPriority::min_value(),
 		}
@@ -176,7 +182,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	/// Do the pre-dispatch checks. This can be applied to both signed and unsigned.
 	///
 	/// It checks and notes the new weight and length.
-	fn do_pre_dispatch(
+	pub fn do_pre_dispatch(
 		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
@@ -192,7 +198,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	/// Do the validate checks. This can be applied to both signed and unsigned.
 	///
 	/// It only checks that the block weight and length limit will not exceed.
-	fn do_validate(
+	pub fn do_validate(
 		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> TransactionValidity {
@@ -496,7 +502,7 @@ mod tests {
 	}
 
 	#[test]
-	fn signed_ext() {
+	fn signed_ext_check_weight_works() {
 		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: Pays::Yes };
@@ -512,7 +518,7 @@ mod tests {
 				.validate(&1, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, u64::max_value() / 2);
+			assert_eq!(priority, frame_support::weights::priority::LIMIT + 100);
 		})
 	}
 
@@ -575,7 +581,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// This is half of the max block weight
 			let info = DispatchInfo { weight: 512, ..Default::default() };
-			let post_info = PostDispatchInfo { actual_weight: Some(128), };
+			let post_info = PostDispatchInfo {
+				actual_weight: Some(128),
+				pays_fee: Default::default(),
+			};
 			let len = 0_usize;
 
 			// We allow 75% for normal transaction, so we put 25% - extrinsic base weight
@@ -601,7 +610,10 @@ mod tests {
 	fn signed_ext_check_weight_actual_weight_higher_than_max_is_capped() {
 		new_test_ext().execute_with(|| {
 			let info = DispatchInfo { weight: 512, ..Default::default() };
-			let post_info = PostDispatchInfo { actual_weight: Some(700), };
+			let post_info = PostDispatchInfo {
+				actual_weight: Some(700),
+				pays_fee: Default::default(),
+			};
 			let len = 0_usize;
 
 			BlockWeight::mutate(|current_weight| {
