@@ -14,4 +14,4 @@ readme = "README.md"
 parking_lot = "0.10.0"
 kvdb = "0.7.0"
 parity-util-mem = { version = "0.7.0", default-features = false, features = [] }
-radix-tree = { version = "0.8.0", path = "../../utils/radix-tree", features = ["std"] }
+radix-tree = { version = "0.8.0", git = "https://github.com/cheme/substrate", branch = "historied-db", features = ["std"] }

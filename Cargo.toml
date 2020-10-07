@@ -56,7 +56,6 @@ members = [
 	"client/telemetry",
 	"client/transaction-pool",
 	"client/transaction-pool/graph",
-	"utils/historied-db",
 	"utils/prometheus",
 	"utils/wasm-builder-runner",
 	"frame/assets",
@@ -184,7 +183,6 @@ members = [
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
 	"utils/wasm-builder",
-	"utils/radix-tree",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates

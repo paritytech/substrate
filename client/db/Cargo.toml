@@ -37,7 +37,7 @@ sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 sp-database = { version = "2.0.0", path = "../../primitives/database" }
 parity-db = { version = "0.1.2", optional = true }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0", path = "../../utils/prometheus" }
-historied-db = { version = "0.8.0", path = "../../utils/historied-db" }
+historied-db = { version = "0.8.0", git = "https://github.com/cheme/substrate", branch = "historied-db" }
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
