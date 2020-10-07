@@ -100,7 +100,7 @@ pub use crate::gas::{Gas, GasMeter};
 pub use crate::exec::{ExecResult, ExecReturnValue};
 pub use crate::wasm::ReturnCode as RuntimeReturnCode;
 pub use crate::weight_info::WeightInfo;
-pub use crate::schedule::Schedule;
+pub use crate::schedule::{Schedule, ApiWeights, InstructionWeights};
 
 use sp_core::crypto::UncheckedFrom;
 use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
@@ -704,7 +704,7 @@ decl_event! {
 
 		/// Contract has been evicted and is now in tombstone state.
 		/// \[contract, tombstone\]
-		/// 
+		///
 		/// # Params
 		///
 		/// - `contract`: `AccountId`: The account ID of the evicted contract.
@@ -713,7 +713,7 @@ decl_event! {
 
 		/// Restoration for a contract has been successful.
 		/// \[donor, dest, code_hash, rent_allowance\]
-		/// 
+		///
 		/// # Params
 		///
 		/// - `donor`: `AccountId`: Account ID of the restoring contract

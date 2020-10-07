@@ -34,152 +34,14 @@ pub const API_BENCHMARK_BATCH_SIZE: u32 = 100;
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub struct Schedule<T: Trait> {
-	/// The type parameter is used in the default implementation.
-	pub phantom: PhantomData<T>,
-
 	/// Version of the schedule.
 	pub version: u32,
 
-	/// Weight of a growing memory by single page.
-	pub op_cost_grow_mem: Weight,
+	/// The weights for individual wasm instructions.
+	pub instruction_weights: InstructionWeights,
 
-	/// Weight of a regular operation.
-	pub op_cost_regular: Weight,
-
-	/// Weight of calling `seal_caller`.
-	pub api_cost_caller: Weight,
-
-	/// Weight of calling `seal_address`.
-	pub api_cost_address: Weight,
-
-	/// Weight of calling `seal_gas_left`.
-	pub api_cost_gas_left: Weight,
-
-	/// Weight of calling `seal_balance`.
-	pub api_cost_balance: Weight,
-
-	/// Weight of calling `seal_value_transferred`.
-	pub api_cost_value_transferred: Weight,
-
-	/// Weight of calling `seal_minimum_balance`.
-	pub api_cost_minimum_balance: Weight,
-
-	/// Weight of calling `seal_tombstone_deposit`.
-	pub api_cost_tombstone_deposit: Weight,
-
-	/// Weight of calling `seal_rent_allowance`.
-	pub api_cost_rent_allowance: Weight,
-
-	/// Weight of calling `seal_block_number`.
-	pub api_cost_block_number: Weight,
-
-	/// Weight of calling `seal_now`.
-	pub api_cost_now: Weight,
-
-	/// Weight of calling `seal_weight_to_fee`.
-	pub api_cost_weight_to_fee: Weight,
-
-	/// Weight of calling `gas`.
-	pub api_cost_gas: Weight,
-
-	/// Weight of calling `seal_input`.
-	pub api_cost_input: Weight,
-
-	/// Weight per input byte copied to contract memory by `seal_input`.
-	pub api_cost_input_per_byte: Weight,
-
-	/// Weight of calling `seal_return`.
-	pub api_cost_return: Weight,
-
-	/// Weight per byte returned through `seal_return`.
-	pub api_cost_return_per_byte: Weight,
-
-	/// Weight of calling `seal_terminate`.
-	pub api_cost_terminate: Weight,
-
-	/// Weight of calling `seal_restore_to`.
-	pub api_cost_restore_to: Weight,
-
-	/// Weight per delta key supplied to `seal_restore_to`.
-	pub api_cost_restore_to_per_delta: Weight,
-
-	/// Weight of calling `seal_random`.
-	pub api_cost_random: Weight,
-
-	/// Weight of calling `seal_reposit_event`.
-	pub api_cost_deposit_event: Weight,
-
-	/// Weight per topic supplied to `seal_deposit_event`.
-	pub api_cost_deposit_event_per_topic: Weight,
-
-	/// Weight per byte of an event deposited through `seal_deposit_event`.
-	pub api_cost_deposit_event_per_byte: Weight,
-
-	/// Weight of calling `seal_set_rent_allowance`.
-	pub api_cost_set_rent_allowance: Weight,
-
-	/// Weight of calling `seal_set_storage`.
-	pub api_cost_set_storage: Weight,
-
-	/// Weight per byte of an item stored with `seal_set_storage`.
-	pub api_cost_set_storage_per_byte: Weight,
-
-	/// Weight of calling `seal_clear_storage`.
-	pub api_cost_clear_storage: Weight,
-
-	/// Weight of calling `seal_get_storage`.
-	pub api_cost_get_storage: Weight,
-
-	/// Weight per byte of an item received via `seal_get_storage`.
-	pub api_cost_get_storage_per_byte: Weight,
-
-	/// Weight of calling `seal_transfer`.
-	pub api_cost_transfer: Weight,
-
-	/// Weight of calling `seal_call`.
-	pub api_cost_call: Weight,
-
-	/// Weight surcharge that is claimed if `seal_call` does a balance transfer.
-	pub api_cost_call_transfer_surcharge: Weight,
-
-	/// Weight per input byte supplied to `seal_call`.
-	pub api_cost_call_per_input_byte: Weight,
-
-	/// Weight per output byte received through `seal_call`.
-	pub api_cost_call_per_output_byte: Weight,
-
-	/// Weight of calling `seal_instantiate`.
-	pub api_cost_instantiate: Weight,
-
-	/// Weight per input byte supplied to `seal_instantiate`.
-	pub api_cost_instantiate_per_input_byte: Weight,
-
-	/// Weight per output byte received through `seal_instantiate`.
-	pub api_cost_instantiate_per_output_byte: Weight,
-
-	/// Weight of calling `seal_hash_sha_256`.
-	pub api_cost_hash_sha2_256: Weight,
-
-	/// Weight per byte hashed by `seal_hash_sha_256`.
-	pub api_cost_hash_sha2_256_per_byte: Weight,
-
-	/// Weight of calling `seal_hash_keccak_256`.
-	pub api_cost_hash_keccak_256: Weight,
-
-	/// Weight per byte hashed by `seal_hash_keccak_256`.
-	pub api_cost_hash_keccak_256_per_byte: Weight,
-
-	/// Weight of calling `seal_hash_blake2_256`.
-	pub api_cost_hash_blake2_256: Weight,
-
-	/// Weight per byte hashed by `seal_hash_blake2_256`.
-	pub api_cost_hash_blake2_256_per_byte: Weight,
-
-	/// Weight of calling `seal_hash_blake2_128`.
-	pub api_cost_hash_blake2_128: Weight,
-
-	/// Weight per byte hashed by `seal_hash_blake2_128`.
-	pub api_cost_hash_blake2_128_per_byte: Weight,
+	/// The weights for each imported function a contract is allowed to call.
+	pub api_weights: ApiWeights,
 
 	/// Whether the `seal_println` function is allowed to be used contracts.
 	/// MUST only be enabled for `dev` chains, NOT for production chains
@@ -206,6 +68,160 @@ pub struct Schedule<T: Trait> {
 	/// The maximum length of a contract code in bytes. This limit applies to the uninstrumented
 	/// and pristine form of the code as supplied to `put_code`.
 	pub max_code_size: u32,
+
+	/// The type parameter is used in the default implementation.
+	pub _phantom: PhantomData<T>,
+}
+
+/// Describes the weight for all categories of supported wasm instructions.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+pub struct InstructionWeights {
+	/// Weight of a growing memory by single page.
+	pub grow_mem: Weight,
+
+	/// Weight of a regular operation.
+	pub regular: Weight,
+}
+
+/// Describes the weight for each imported function that a contract is allowed to call.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+pub struct ApiWeights {
+	/// Weight of calling `seal_caller`.
+	pub caller: Weight,
+
+	/// Weight of calling `seal_address`.
+	pub address: Weight,
+
+	/// Weight of calling `seal_gas_left`.
+	pub gas_left: Weight,
+
+	/// Weight of calling `seal_balance`.
+	pub balance: Weight,
+
+	/// Weight of calling `seal_value_transferred`.
+	pub value_transferred: Weight,
+
+	/// Weight of calling `seal_minimum_balance`.
+	pub minimum_balance: Weight,
+
+	/// Weight of calling `seal_tombstone_deposit`.
+	pub tombstone_deposit: Weight,
+
+	/// Weight of calling `seal_rent_allowance`.
+	pub rent_allowance: Weight,
+
+	/// Weight of calling `seal_block_number`.
+	pub block_number: Weight,
+
+	/// Weight of calling `seal_now`.
+	pub now: Weight,
+
+	/// Weight of calling `seal_weight_to_fee`.
+	pub weight_to_fee: Weight,
+
+	/// Weight of calling `gas`.
+	pub gas: Weight,
+
+	/// Weight of calling `seal_input`.
+	pub input: Weight,
+
+	/// Weight per input byte copied to contract memory by `seal_input`.
+	pub input_per_byte: Weight,
+
+	/// Weight of calling `seal_return`.
+	pub r#return: Weight,
+
+	/// Weight per byte returned through `seal_return`.
+	pub return_per_byte: Weight,
+
+	/// Weight of calling `seal_terminate`.
+	pub terminate: Weight,
+
+	/// Weight of calling `seal_restore_to`.
+	pub restore_to: Weight,
+
+	/// Weight per delta key supplied to `seal_restore_to`.
+	pub restore_to_per_delta: Weight,
+
+	/// Weight of calling `seal_random`.
+	pub random: Weight,
+
+	/// Weight of calling `seal_reposit_event`.
+	pub deposit_event: Weight,
+
+	/// Weight per topic supplied to `seal_deposit_event`.
+	pub deposit_event_per_topic: Weight,
+
+	/// Weight per byte of an event deposited through `seal_deposit_event`.
+	pub deposit_event_per_byte: Weight,
+
+	/// Weight of calling `seal_set_rent_allowance`.
+	pub set_rent_allowance: Weight,
+
+	/// Weight of calling `seal_set_storage`.
+	pub set_storage: Weight,
+
+	/// Weight per byte of an item stored with `seal_set_storage`.
+	pub set_storage_per_byte: Weight,
+
+	/// Weight of calling `seal_clear_storage`.
+	pub clear_storage: Weight,
+
+	/// Weight of calling `seal_get_storage`.
+	pub get_storage: Weight,
+
+	/// Weight per byte of an item received via `seal_get_storage`.
+	pub get_storage_per_byte: Weight,
+
+	/// Weight of calling `seal_transfer`.
+	pub transfer: Weight,
+
+	/// Weight of calling `seal_call`.
+	pub call: Weight,
+
+	/// Weight surcharge that is claimed if `seal_call` does a balance transfer.
+	pub call_transfer_surcharge: Weight,
+
+	/// Weight per input byte supplied to `seal_call`.
+	pub call_per_input_byte: Weight,
+
+	/// Weight per output byte received through `seal_call`.
+	pub call_per_output_byte: Weight,
+
+	/// Weight of calling `seal_instantiate`.
+	pub instantiate: Weight,
+
+	/// Weight per input byte supplied to `seal_instantiate`.
+	pub instantiate_per_input_byte: Weight,
+
+	/// Weight per output byte received through `seal_instantiate`.
+	pub instantiate_per_output_byte: Weight,
+
+	/// Weight of calling `seal_hash_sha_256`.
+	pub hash_sha2_256: Weight,
+
+	/// Weight per byte hashed by `seal_hash_sha_256`.
+	pub hash_sha2_256_per_byte: Weight,
+
+	/// Weight of calling `seal_hash_keccak_256`.
+	pub hash_keccak_256: Weight,
+
+	/// Weight per byte hashed by `seal_hash_keccak_256`.
+	pub hash_keccak_256_per_byte: Weight,
+
+	/// Weight of calling `seal_hash_blake2_256`.
+	pub hash_blake2_256: Weight,
+
+	/// Weight per byte hashed by `seal_hash_blake2_256`.
+	pub hash_blake2_256_per_byte: Weight,
+
+	/// Weight of calling `seal_hash_blake2_128`.
+	pub hash_blake2_128: Weight,
+
+	/// Weight per byte hashed by `seal_hash_blake2_128`.
+	pub hash_blake2_128_per_byte: Weight,
 }
 
 /// We need to implement Debug manually because the automatic derive enforces T
@@ -281,58 +297,63 @@ macro_rules! cost_byte_batched {
 
 impl<T: Trait> Default for Schedule<T> {
 	fn default() -> Self {
+		let instruction_weights = InstructionWeights {
+			grow_mem: WASM_INSTRUCTION_COST,
+			regular: WASM_INSTRUCTION_COST,
+		};
+
+		let api_weights = ApiWeights {
+			caller: cost_batched!(seal_caller),
+			address: cost_batched!(seal_address),
+			gas_left: cost_batched!(seal_gas_left),
+			balance: cost_batched!(seal_balance),
+			value_transferred: cost_batched!(seal_value_transferred),
+			minimum_balance: cost_batched!(seal_minimum_balance),
+			tombstone_deposit: cost_batched!(seal_tombstone_deposit),
+			rent_allowance: cost_batched!(seal_rent_allowance),
+			block_number: cost_batched!(seal_block_number),
+			now: cost_batched!(seal_now),
+			weight_to_fee: cost_batched!(seal_weight_to_fee),
+			gas: cost_batched!(seal_gas),
+			input: cost!(seal_input),
+			input_per_byte: cost_byte!(seal_input_per_kb),
+			r#return: cost!(seal_return),
+			return_per_byte: cost_byte!(seal_return_per_kb),
+			terminate: cost!(seal_terminate),
+			restore_to: cost!(seal_restore_to),
+			restore_to_per_delta: cost_batched!(seal_restore_to_per_delta),
+			random: cost_batched!(seal_random),
+			deposit_event: cost_batched!(seal_deposit_event),
+			deposit_event_per_topic: cost_batched_args!(seal_deposit_event_per_topic_and_kb, 1, 0),
+			deposit_event_per_byte: cost_byte_batched_args!(seal_deposit_event_per_topic_and_kb, 0, 1),
+			set_rent_allowance: cost_batched!(seal_set_rent_allowance),
+			set_storage: cost_batched!(seal_set_storage),
+			set_storage_per_byte: cost_byte_batched!(seal_set_storage_per_kb),
+			clear_storage: cost_batched!(seal_clear_storage),
+			get_storage: cost_batched!(seal_get_storage),
+			get_storage_per_byte: cost_byte_batched!(seal_get_storage_per_kb),
+			transfer: cost_batched!(seal_transfer),
+			call: cost_batched!(seal_call),
+			call_transfer_surcharge: cost_batched_args!(seal_call_per_transfer_input_output_kb, 1, 0, 0),
+			call_per_input_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 1, 0),
+			call_per_output_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 0, 1),
+			instantiate: cost_batched!(seal_instantiate),
+			instantiate_per_input_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_kb, 1, 0),
+			instantiate_per_output_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_kb, 0, 1),
+			hash_sha2_256: cost_batched!(seal_hash_sha2_256),
+			hash_sha2_256_per_byte: cost_byte_batched!(seal_hash_sha2_256_per_kb),
+			hash_keccak_256: cost_batched!(seal_hash_keccak_256),
+			hash_keccak_256_per_byte: cost_byte_batched!(seal_hash_keccak_256_per_kb),
+			hash_blake2_256: cost_batched!(seal_hash_blake2_256),
+			hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
+			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
+			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
+		};
+
 		Self {
-			phantom: PhantomData,
 			version: 0,
-
-			op_cost_grow_mem: WASM_INSTRUCTION_COST,
-			op_cost_regular: WASM_INSTRUCTION_COST,
-			api_cost_caller: cost_batched!(seal_caller),
-			api_cost_address: cost_batched!(seal_address),
-			api_cost_gas_left: cost_batched!(seal_gas_left),
-			api_cost_balance: cost_batched!(seal_balance),
-			api_cost_value_transferred: cost_batched!(seal_value_transferred),
-			api_cost_minimum_balance: cost_batched!(seal_minimum_balance),
-			api_cost_tombstone_deposit: cost_batched!(seal_tombstone_deposit),
-			api_cost_rent_allowance: cost_batched!(seal_rent_allowance),
-			api_cost_block_number: cost_batched!(seal_block_number),
-			api_cost_now: cost_batched!(seal_now),
-			api_cost_weight_to_fee: cost_batched!(seal_weight_to_fee),
-			api_cost_gas: cost_batched!(seal_gas),
-			api_cost_input: cost!(seal_input),
-			api_cost_input_per_byte: cost_byte!(seal_input_per_kb),
-			api_cost_return: cost!(seal_return),
-			api_cost_return_per_byte: cost_byte!(seal_return_per_kb),
-			api_cost_terminate: cost!(seal_terminate),
-			api_cost_restore_to: cost!(seal_restore_to),
-			api_cost_restore_to_per_delta: cost_batched!(seal_restore_to_per_delta),
-			api_cost_random: cost_batched!(seal_random),
-			api_cost_deposit_event: cost_batched!(seal_deposit_event),
-			api_cost_deposit_event_per_topic: cost_batched_args!(seal_deposit_event_per_topic_and_kb, 1, 0),
-			api_cost_deposit_event_per_byte: cost_byte_batched_args!(seal_deposit_event_per_topic_and_kb, 0, 1),
-			api_cost_set_rent_allowance: cost_batched!(seal_set_rent_allowance),
-			api_cost_set_storage: cost_batched!(seal_set_storage),
-			api_cost_set_storage_per_byte: cost_byte_batched!(seal_set_storage_per_kb),
-			api_cost_clear_storage: cost_batched!(seal_clear_storage),
-			api_cost_get_storage: cost_batched!(seal_get_storage),
-			api_cost_get_storage_per_byte: cost_byte_batched!(seal_get_storage_per_kb),
-			api_cost_transfer: cost_batched!(seal_transfer),
-			api_cost_call: cost_batched!(seal_call),
-			api_cost_call_transfer_surcharge: cost_batched_args!(seal_call_per_transfer_input_output_kb, 1, 0, 0),
-			api_cost_call_per_input_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 1, 0),
-			api_cost_call_per_output_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 0, 1),
-			api_cost_instantiate: cost_batched!(seal_instantiate),
-			api_cost_instantiate_per_input_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_kb, 1, 0),
-			api_cost_instantiate_per_output_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_kb, 0, 1),
-			api_cost_hash_sha2_256: cost_batched!(seal_hash_sha2_256),
-			api_cost_hash_sha2_256_per_byte: cost_byte_batched!(seal_hash_sha2_256_per_kb),
-			api_cost_hash_keccak_256: cost_batched!(seal_hash_keccak_256),
-			api_cost_hash_keccak_256_per_byte: cost_byte_batched!(seal_hash_keccak_256_per_kb),
-			api_cost_hash_blake2_256: cost_batched!(seal_hash_blake2_256),
-			api_cost_hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
-			api_cost_hash_blake2_128: cost_batched!(seal_hash_blake2_128),
-			api_cost_hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
-
+			instruction_weights,
+			api_weights,
 			enable_println: false,
 			max_event_topics: 4,
 			max_stack_height: 64 * 1024,
@@ -340,6 +361,7 @@ impl<T: Trait> Default for Schedule<T> {
 			max_table_size: 16 * 1024,
 			max_subject_len: 32,
 			max_code_size: 512 * 1024,
+			_phantom: PhantomData,
 		}
 	}
 }

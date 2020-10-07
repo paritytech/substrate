@@ -148,10 +148,10 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 	fn inject_gas_metering(self) -> Result<Self, &'static str> {
 		let gas_rules =
 			rules::Set::new(
-				self.schedule.op_cost_regular.clone().saturated_into(),
+				self.schedule.instruction_weights.regular.clone().saturated_into(),
 				Default::default(),
 			)
-			.with_grow_cost(self.schedule.op_cost_grow_mem.clone().saturated_into())
+			.with_grow_cost(self.schedule.instruction_weights.grow_mem.clone().saturated_into())
 			.with_forbidden_floats();
 
 		let contract_module = pwasm_utils::inject_gas_counter(

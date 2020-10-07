@@ -16,7 +16,7 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{Schedule, Trait, CodeHash, BalanceOf, Error};
+use crate::{ApiWeights, Schedule, Trait, CodeHash, BalanceOf, Error};
 use crate::exec::{
 	Ext, ExecResult, ExecReturnValue, StorageKey, TopicOf, ReturnFlags, ExecError
 };
@@ -278,57 +278,57 @@ pub enum RuntimeToken {
 }
 
 impl<T: Trait> Token<T> for RuntimeToken {
-	type Metadata = Schedule<T>;
+	type Metadata = ApiWeights;
 
-	fn calculate_amount(&self, s: &Schedule<T>) -> Gas {
+	fn calculate_amount(&self, s: &Self::Metadata) -> Gas {
 		use self::RuntimeToken::*;
 		match *self {
-			MeteringBlock(amount) => s.api_cost_gas.saturating_add(amount.into()),
-			Caller => s.api_cost_caller,
-			Address => s.api_cost_address,
-			GasLeft => s.api_cost_gas_left,
-			Balance => s.api_cost_balance,
-			ValueTransferred => s.api_cost_value_transferred,
-			MinimumBalance => s.api_cost_minimum_balance,
-			TombstoneDeposit => s.api_cost_tombstone_deposit,
-			RentAllowance => s.api_cost_rent_allowance,
-			BlockNumber => s.api_cost_block_number,
-			Now => s.api_cost_now,
-			WeightToFee => s.api_cost_weight_to_fee,
-			InputBase => s.api_cost_input,
-			InputCopyOut(len) => s.api_cost_input_per_byte.saturating_mul(len.into()),
-			Return(len) => s.api_cost_return
-				.saturating_add(s.api_cost_return_per_byte.saturating_mul(len.into())),
-			Terminate => s.api_cost_terminate,
-			RestoreTo(delta) => s.api_cost_restore_to
-				.saturating_add(s.api_cost_restore_to_per_delta.saturating_mul(delta.into())),
-			Random => s.api_cost_random,
-			DepositEvent{num_topic, len} => s.api_cost_deposit_event
-				.saturating_add(s.api_cost_deposit_event_per_topic.saturating_mul(num_topic.into()))
-				.saturating_add(s.api_cost_deposit_event_per_byte.saturating_mul(len.into())),
-			SetRentAllowance => s.api_cost_set_rent_allowance,
-			SetStorage(len) => s.api_cost_set_storage
-				.saturating_add(s.api_cost_set_storage_per_byte.saturating_mul(len.into())),
-			ClearStorage => s.api_cost_clear_storage,
-			GetStorageBase => s.api_cost_get_storage,
-			GetStorageCopyOut(len) => s.api_cost_get_storage_per_byte.saturating_mul(len.into()),
-			Transfer => s.api_cost_transfer,
-			CallBase(len) => s.api_cost_call
-				.saturating_add(s.api_cost_call_per_input_byte.saturating_mul(len.into())),
-			CallSurchargeTransfer => s.api_cost_call_transfer_surcharge,
-			CallCopyOut(len) => s.api_cost_call_per_output_byte.saturating_mul(len.into()),
-			InstantiateBase(len) => s.api_cost_instantiate
-				.saturating_add(s.api_cost_instantiate_per_input_byte.saturating_mul(len.into())),
-			InstantiateCopyOut(len) => s.api_cost_instantiate_per_output_byte
+			MeteringBlock(amount) => s.gas.saturating_add(amount.into()),
+			Caller => s.caller,
+			Address => s.address,
+			GasLeft => s.gas_left,
+			Balance => s.balance,
+			ValueTransferred => s.value_transferred,
+			MinimumBalance => s.minimum_balance,
+			TombstoneDeposit => s.tombstone_deposit,
+			RentAllowance => s.rent_allowance,
+			BlockNumber => s.block_number,
+			Now => s.now,
+			WeightToFee => s.weight_to_fee,
+			InputBase => s.input,
+			InputCopyOut(len) => s.input_per_byte.saturating_mul(len.into()),
+			Return(len) => s.r#return
+				.saturating_add(s.return_per_byte.saturating_mul(len.into())),
+			Terminate => s.terminate,
+			RestoreTo(delta) => s.restore_to
+				.saturating_add(s.restore_to_per_delta.saturating_mul(delta.into())),
+			Random => s.random,
+			DepositEvent{num_topic, len} => s.deposit_event
+				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
+				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
+			SetRentAllowance => s.set_rent_allowance,
+			SetStorage(len) => s.set_storage
+				.saturating_add(s.set_storage_per_byte.saturating_mul(len.into())),
+			ClearStorage => s.clear_storage,
+			GetStorageBase => s.get_storage,
+			GetStorageCopyOut(len) => s.get_storage_per_byte.saturating_mul(len.into()),
+			Transfer => s.transfer,
+			CallBase(len) => s.call
+				.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
+			CallSurchargeTransfer => s.call_transfer_surcharge,
+			CallCopyOut(len) => s.call_per_output_byte.saturating_mul(len.into()),
+			InstantiateBase(len) => s.instantiate
+				.saturating_add(s.instantiate_per_input_byte.saturating_mul(len.into())),
+			InstantiateCopyOut(len) => s.instantiate_per_output_byte
 				.saturating_mul(len.into()),
-			HashSha256(len) => s.api_cost_hash_sha2_256
-				.saturating_add(s.api_cost_hash_sha2_256_per_byte.saturating_mul(len.into())),
-			HashKeccak256(len) => s.api_cost_hash_keccak_256
-				.saturating_add(s.api_cost_hash_keccak_256_per_byte.saturating_mul(len.into())),
-			HashBlake256(len) => s.api_cost_hash_blake2_256
-				.saturating_add(s.api_cost_hash_blake2_256_per_byte.saturating_mul(len.into())),
-			HashBlake128(len) => s.api_cost_hash_blake2_128
-				.saturating_add(s.api_cost_hash_blake2_128_per_byte.saturating_mul(len.into())),
+			HashSha256(len) => s.hash_sha2_256
+				.saturating_add(s.hash_sha2_256_per_byte.saturating_mul(len.into())),
+			HashKeccak256(len) => s.hash_keccak_256
+				.saturating_add(s.hash_keccak_256_per_byte.saturating_mul(len.into())),
+			HashBlake256(len) => s.hash_blake2_256
+				.saturating_add(s.hash_blake2_256_per_byte.saturating_mul(len.into())),
+			HashBlake128(len) => s.hash_blake2_128
+				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 		}
 	}
 }
@@ -339,9 +339,9 @@ impl<T: Trait> Token<T> for RuntimeToken {
 fn charge_gas<E, Tok>(ctx: &mut Runtime<E>, token: Tok) -> Result<(), sp_sandbox::HostError>
 where
 	E: Ext,
-	Tok: Token<E::T, Metadata=Schedule<E::T>>,
+	Tok: Token<E::T, Metadata=ApiWeights>,
 {
-	match ctx.gas_meter.charge(ctx.schedule, token) {
+	match ctx.gas_meter.charge(&ctx.schedule.api_weights, token) {
 		GasMeterResult::Proceed => Ok(()),
 		GasMeterResult::OutOfGas =>  {
 			ctx.trap_reason = Some(TrapReason::SupervisorError(Error::<E::T>::OutOfGas.into()));
