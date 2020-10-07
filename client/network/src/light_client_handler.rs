@@ -758,7 +758,7 @@ where
 		};
 		let mut cfg = OneShotHandlerConfig::default();
 		cfg.keep_alive_timeout = self.config.inactivity_timeout;
-		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
+		OneShotHandler::new(SubstreamProtocol::new(p, ()), cfg)
 	}
 
 	fn addresses_of_peer(&mut self, peer: &PeerId) -> Vec<Multiaddr> {
@@ -2004,7 +2004,7 @@ mod tests {
 
 	#[test]
 	fn send_receive_header() {
-		let _ = env_logger::try_init();
+		sp_tracing::try_init_simple();
 		let chan = oneshot::channel();
 		let request = light::RemoteHeaderRequest {
 			cht_root: Default::default(),

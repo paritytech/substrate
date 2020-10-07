@@ -41,21 +41,14 @@ use sp_runtime::{
 };
 use sp_staking::SessionIndex;
 
-use frame_system as system;
-use pallet_balances as balances;
-use pallet_offences as offences;
-use pallet_session as session;
-use pallet_staking as staking;
-use pallet_timestamp as timestamp;
-
 impl_outer_origin! {
 	pub enum Origin for Test {}
 }
 
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
-		grandpa::Grandpa,
-		staking::Staking,
+		pallet_grandpa::Grandpa,
+		pallet_staking::Staking,
 	}
 }
 
@@ -67,12 +60,12 @@ impl_opaque_keys! {
 
 impl_outer_event! {
 	pub enum TestEvent for Test {
-		system<T>,
-		balances<T>,
-		grandpa,
-		offences,
-		session,
-		staking<T>,
+		frame_system<T>,
+		pallet_balances<T>,
+		pallet_grandpa,
+		pallet_offences,
+		pallet_session,
+		pallet_staking<T>,
 	}
 }
 
@@ -107,14 +100,14 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
-	type ModuleToIndex = ();
-	type AccountData = balances::AccountData<u128>;
+	type PalletInfo = ();
+	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 }
 
-impl<C> system::offchain::SendTransactionTypes<C> for Test
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
 where
 	Call: From<C>,
 {
@@ -129,22 +122,22 @@ parameter_types! {
 }
 
 /// Custom `SessionHandler` since we use `TestSessionKeys` as `Keys`.
-impl session::Trait for Test {
+impl pallet_session::Trait for Test {
 	type Event = TestEvent;
 	type ValidatorId = u64;
-	type ValidatorIdOf = staking::StashOf<Self>;
-	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
-	type NextSessionRotation = session::PeriodicSessions<Period, Offset>;
-	type SessionManager = session::historical::NoteHistoricalRoot<Self, Staking>;
+	type ValidatorIdOf = pallet_staking::StashOf<Self>;
+	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
 	type SessionHandler = <TestSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = TestSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type WeightInfo = ();
 }
 
-impl session::historical::Trait for Test {
-	type FullIdentification = staking::Exposure<u64, u128>;
-	type FullIdentificationOf = staking::ExposureOf<Self>;
+impl pallet_session::historical::Trait for Test {
+	type FullIdentification = pallet_staking::Exposure<u64, u128>;
+	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
 }
 
 parameter_types! {
@@ -162,7 +155,8 @@ parameter_types! {
 	pub const ExistentialDeposit: u128 = 1;
 }
 
-impl balances::Trait for Test {
+impl pallet_balances::Trait for Test {
+	type MaxLocks = ();
 	type Balance = u128;
 	type DustRemoval = ();
 	type Event = TestEvent;
@@ -175,7 +169,7 @@ parameter_types! {
 	pub const MinimumPeriod: u64 = 3;
 }
 
-impl timestamp::Trait for Test {
+impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -204,7 +198,7 @@ parameter_types! {
 	pub const StakingUnsignedPriority: u64 = u64::max_value() / 2;
 }
 
-impl staking::Trait for Test {
+impl pallet_staking::Trait for Test {
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = TestEvent;
@@ -214,9 +208,9 @@ impl staking::Trait for Test {
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SlashDeferDuration = SlashDeferDuration;
-	type SlashCancelOrigin = system::EnsureRoot<Self::AccountId>;
+	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type SessionInterface = Self;
-	type UnixTime = timestamp::Module<Test>;
+	type UnixTime = pallet_timestamp::Module<Test>;
 	type RewardCurve = RewardCurve;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type NextNewSession = Session;
@@ -225,6 +219,7 @@ impl staking::Trait for Test {
 	type UnsignedPriority = StakingUnsignedPriority;
 	type MaxIterations = ();
 	type MinSolutionScoreBump = ();
+	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();
 }
 
@@ -232,12 +227,11 @@ parameter_types! {
 	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
 }
 
-impl offences::Trait for Test {
+impl pallet_offences::Trait for Test {
 	type Event = TestEvent;
-	type IdentificationTuple = session::historical::IdentificationTuple<Self>;
+	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
-	type WeightInfo = ();
 }
 
 impl Trait for Test {
@@ -255,9 +249,11 @@ impl Trait for Test {
 	)>>::IdentificationTuple;
 
 	type HandleEquivocation = super::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+
+	type WeightInfo = ();
 }
 
-mod grandpa {
+mod pallet_grandpa {
 	pub use crate::Event;
 }
 
@@ -317,7 +313,7 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 				i as u64,
 				i as u64 + 1000,
 				10_000,
-				staking::StakerStatus::<u64>::Validator,
+				pallet_staking::StakerStatus::<u64>::Validator,
 			)
 		})
 		.collect();
@@ -328,18 +324,18 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 
 	// NOTE: this will initialize the grandpa authorities
 	// through OneSessionHandler::on_genesis_session
-	session::GenesisConfig::<Test> { keys: session_keys }
+	pallet_session::GenesisConfig::<Test> { keys: session_keys }
 		.assimilate_storage(&mut t)
 		.unwrap();
 
-	balances::GenesisConfig::<Test> { balances }
+	pallet_balances::GenesisConfig::<Test> { balances }
 		.assimilate_storage(&mut t)
 		.unwrap();
 
-	let staking_config = staking::GenesisConfig::<Test> {
+	let staking_config = pallet_staking::GenesisConfig::<Test> {
 		stakers,
 		validator_count: 8,
-		force_era: staking::Forcing::ForceNew,
+		force_era: pallet_staking::Forcing::ForceNew,
 		minimum_validator_count: 0,
 		invulnerables: vec![],
 		..Default::default()

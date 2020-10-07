@@ -1112,6 +1112,9 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
+	/// The maximum number of locks a user should have on their account.
+	type MaxLocks: Get<u32>;
+
 	/// Create a new balance lock on account `who`.
 	///
 	/// If the new lock is valid (i.e. not already expired), it will push the struct to
@@ -1312,8 +1315,6 @@ impl<T: Clone + Ord> ChangeMembers<T> for () {
 	fn set_prime(_: Option<T>) {}
 }
 
-
-
 /// Trait for type that can handle the initialization of account IDs at genesis.
 pub trait InitializeMembers<AccountId> {
 	/// Initialize the members to the given `members`.
@@ -1379,16 +1380,20 @@ pub trait ValidatorRegistration<ValidatorId> {
 	fn is_registered(id: &ValidatorId) -> bool;
 }
 
-/// Something that can convert a given module into the index of the module in the runtime.
+/// Provides information about the pallet setup in the runtime.
 ///
-/// The index of a module is determined by the position it appears in `construct_runtime!`.
-pub trait ModuleToIndex {
-	/// Convert the given module `M` into an index.
-	fn module_to_index<M: 'static>() -> Option<usize>;
+/// An implementor should be able to provide information about each pallet that
+/// is configured in `construct_runtime!`.
+pub trait PalletInfo {
+	/// Convert the given pallet `P` into its index as configured in the runtime.
+	fn index<P: 'static>() -> Option<usize>;
+	/// Convert the given pallet `P` into its name as configured in the runtime.
+	fn name<P: 'static>() -> Option<&'static str>;
 }
 
-impl ModuleToIndex for () {
-	fn module_to_index<M: 'static>() -> Option<usize> { Some(0) }
+impl PalletInfo for () {
+	fn index<P: 'static>() -> Option<usize> { Some(0) }
+	fn name<P: 'static>() -> Option<&'static str> { Some("test") }
 }
 
 /// The function and pallet name of the Call.
@@ -1526,11 +1531,9 @@ pub mod schedule {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + Debug;
 
-		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		/// Schedule a dispatch to happen at the beginning of some block in the future.
 		///
 		/// This is not named.
-		///
-		/// Infallible.
 		fn schedule(
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
@@ -1550,6 +1553,22 @@ pub mod schedule {
 		/// NOTE2: This will not work to cancel periodic tasks after their initial execution. For
 		/// that, you must name the task explicitly using the `Named` trait.
 		fn cancel(address: Self::Address) -> Result<(), ()>;
+
+		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
+		/// only if it is executed *before* the currently scheduled block. For periodic tasks,
+		/// this dispatch is guaranteed to succeed only before the *initial* execution; for
+		/// others, use `reschedule_named`. 
+		///
+		/// Will return an error if the `address` is invalid.
+		fn reschedule(
+			address: Self::Address,
+			when: DispatchTime<BlockNumber>,
+		) -> Result<Self::Address, DispatchError>;
+
+		/// Return the next dispatch time for a given task.
+		///
+		/// Will return an error if the `address` is invalid.
+		fn next_dispatch_time(address: Self::Address) -> Result<BlockNumber, ()>;
 	}
 
 	/// A type that can be used as a scheduler.
@@ -1557,7 +1576,7 @@ pub mod schedule {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
 
-		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		/// Schedule a dispatch to happen at the beginning of some block in the future.
 		///
 		/// - `id`: The identity of the task. This must be unique and will return an error if not.
 		fn schedule_named(
@@ -1577,6 +1596,18 @@ pub mod schedule {
 		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
 		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
 		fn cancel_named(id: Vec<u8>) -> Result<(), ()>;
+
+		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
+		/// only if it is executed *before* the currently scheduled block.
+		fn reschedule_named(
+			id: Vec<u8>,
+			when: DispatchTime<BlockNumber>,
+		) -> Result<Self::Address, DispatchError>;
+
+		/// Return the next dispatch time for a given task.
+		///
+		/// Will return an error if the `id` is invalid.
+		fn next_dispatch_time(id: Vec<u8>) -> Result<BlockNumber, ()>;
 	}
 }
 
@@ -1618,6 +1649,9 @@ pub trait OriginTrait: Sized {
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin;
 
+	/// The AccountId used across the system.
+	type AccountId;
+
 	/// Add a filter to the origin.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
 
@@ -1632,6 +1666,15 @@ pub trait OriginTrait: Sized {
 
 	/// Get the caller.
 	fn caller(&self) -> &Self::PalletsOrigin;
+
+	/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+	fn none() -> Self;
+
+	/// Create with system root origin and no filter.
+	fn root() -> Self;
+
+	/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+	fn signed(by: Self::AccountId) -> Self;
 }
 
 /// Trait to be used when types are exactly same.

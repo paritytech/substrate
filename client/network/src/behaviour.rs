@@ -211,9 +211,12 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		self.discovery.add_known_address(peer_id, addr)
 	}
 
-	/// Returns the number of nodes that are in the Kademlia k-buckets.
-	pub fn num_kbuckets_entries(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
-		self.discovery.num_kbuckets_entries()
+	/// Returns the number of nodes in each Kademlia kbucket for each Kademlia instance.
+	///
+	/// Identifies Kademlia instances by their [`ProtocolId`] and kbuckets by the base 2 logarithm
+	/// of their lower bound.
+	pub fn num_entries_per_kbucket(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, Vec<(u32, usize)>)> {
+		self.discovery.num_entries_per_kbucket()
 	}
 
 	/// Returns the number of records in the Kademlia record stores.
