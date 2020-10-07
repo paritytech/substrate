@@ -55,15 +55,6 @@ use sp_wasm_interface::{Pointer, WordSize};
 /// target version of wasm32: i64's natural alignment is 8.
 const ALIGNMENT: u32 = 8;
 
-// The pointer returned by `allocate()` needs to fulfill the alignment
-// requirement. In our case a pointer will always be a multiple of
-// 8, as long as the first pointer is aligned to 8 bytes.
-// This is because all pointers will contain a 8 byte prefix (the list
-// index) and then a subsequent item of 2^x bytes, where x = [3..24].
-const N: usize = 22;
-const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes, 16 MiB
-const MIN_POSSIBLE_ALLOCATION: u32 = 8;
-
 // Each pointer is prefixed with 8 bytes, which identify the list index
 // to which it belongs.
 const HEADER_SIZE: u32 = 8;
@@ -83,6 +74,20 @@ macro_rules! trace {
 		}
 	}
 }
+
+// The minimum possible allocation size is chosen to be 8 bytes because in that case we would have
+// easier time to provide the guaranteed alignment of 8.
+//
+// The maximum possible allocation size was chosen rather arbitrary. 16 MiB should be enough for
+// everybody.
+//
+// N_ORDERS - represents the number of orders supported.
+//
+// This number corresponds to the number of powers between the minimum possible allocation and
+// maximum possible allocation, or: 2^3...2^24 (both ends inclusive, hence 22).
+const N_ORDERS: usize = 22;
+const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes, 16 MiB
+const MIN_POSSIBLE_ALLOCATION: u32 = 8; // 2^3 bytes, 8 bytes
 
 /// The exponent for the power of two sized block adjusted to the minimum size.
 ///
@@ -105,7 +110,7 @@ impl Order {
 	///
 	/// Returns `Err` if it is greater than the maximum supported order.
 	fn from_raw(order: u32) -> Result<Self, Error> {
-		if order < N as u32 {
+		if order < N_ORDERS as u32 {
 			Ok(Self(order))
 		} else {
 			Err(error("invalid order"))
@@ -264,14 +269,14 @@ impl Header {
 
 /// This struct represents a collection of intrusive linked lists for each order.
 struct FreeLists {
-	heads: [Link; N],
+	heads: [Link; N_ORDERS],
 }
 
 impl FreeLists {
 	/// Creates the free empty lists.
 	fn new() -> Self {
 		Self {
-			heads: [Link::Nil; N]
+			heads: [Link::Nil; N_ORDERS]
 		}
 	}
 
@@ -572,7 +577,7 @@ mod tests {
 		// then
 		// should have re-allocated
 		assert_eq!(ptr3, to_pointer(padded_offset + 16 + HEADER_SIZE));
-		assert_eq!(heap.free_lists.heads, [Link::Nil; N]);
+		assert_eq!(heap.free_lists.heads, [Link::Nil; N_ORDERS]);
 	}
 
 	#[test]
