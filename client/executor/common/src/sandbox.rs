@@ -28,7 +28,7 @@ use sp_core::sandbox as sandbox_primitives;
 
 use wasmi::{
 	Externals, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
-	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages,
+	RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages,
 };
 
 use sp_wasm_interface::Value;
@@ -42,7 +42,6 @@ use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 
 // use wasmer::{imports, wat2wasm, Instance, Module, Store, Value};
 use wasmer_compiler_singlepass::Singlepass;
-use wasmer_engine_jit::JIT;
 
 /// Index of a function inside the supervisor.
 ///
@@ -597,16 +596,27 @@ impl<FR> UnregisteredInstance<FR> {
 	}
 }
 
+/// Helper type to provide sandbox capabilities to the inner context
 pub trait SandboxCapabiliesHolder {
+	/// Supervisor function reference
 	type SupervisorFuncRef;
+
+	/// Capabilities trait
 	type SC: SandboxCapabilities<SupervisorFuncRef = Self::SupervisorFuncRef>;
 
+	/// Wrapper that provides sandbox capabilities in a limited context
 	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R;
 }
 
+/// Sandbox backend to use
 pub enum SandboxBackend {
+	/// Wasm interpreter
 	Wasmi,
+
+	/// Wasmtime environment
 	Wasmtime,
+
+	/// Wasmer environment
 	Wasmer,
 }
 
@@ -776,7 +786,7 @@ where
 				.collect();
 
 			let wasmtime_instance = wasmtime::Instance::new(&wasmtime_store, &wasmtime_module, &module_imports).map_err(|error|
-				if let Ok(trap) = error.downcast::<wasmtime::Trap>() {
+				if let Ok(_trap) = error.downcast::<wasmtime::Trap>() {
 					InstantiationError::StartTrapped
 				} else {
 					InstantiationError::Instantiation
