@@ -447,7 +447,47 @@ impl<FR> SandboxInstance<FR> {
 							Ok(wasmtime_result)
 						}
 
-						BackendInstance::Wasmer(_) => { todo!() }
+						BackendInstance::Wasmer(wasmer_instance) => {
+							let function = wasmer_instance
+								.exports
+								.get_function(export_name)
+								.map_err(|error| {
+									println!("{:?}", error);
+									wasmi::Error::Function("wasmer function failed".to_string())
+								})?;
+
+							let args: Vec<wasmer::Val> = args
+								.iter()
+								.map(|v| match *v {
+									RuntimeValue::I32(val) => wasmer::Val::I32(val),
+									RuntimeValue::I64(val) => wasmer::Val::I64(val),
+									RuntimeValue::F32(val) => wasmer::Val::F32(val.into()),
+									RuntimeValue::F64(val) => wasmer::Val::F64(val.into()),
+								})
+								.collect();
+
+							let wasmer_result = function
+								.call(&args)
+								.map_err(|e| wasmi::Error::Function(e.to_string()))?;
+
+							assert!(wasmer_result.len() < 2, "multiple return types are not supported yet");
+
+							let wasmer_result = if let Some(wasmer_value) = wasmer_result.first() {
+								let wasmer_value = match *wasmer_value {
+									wasmer::Val::I32(val) => RuntimeValue::I32(val),
+									wasmer::Val::I64(val) => RuntimeValue::I64(val),
+									wasmer::Val::F32(val) => RuntimeValue::F32(val.into()),
+									wasmer::Val::F64(val) => RuntimeValue::F64(val.into()),
+									_ => unreachable!(),
+								};
+
+								Some(wasmer_value)
+							} else {
+								None
+							};
+
+							Ok(wasmer_result)
+						}
 					}
 				},
 			)
