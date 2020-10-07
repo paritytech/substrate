@@ -696,43 +696,56 @@ mod node_implementation {
 
 		pub fn import<F, E: std::error::Error>(
 			&mut self,
-			mut hash: H,
-			mut number: N,
-			mut data: V,
+			hash: H,
+			number: N,
+			data: V,
 			is_descendent_of: &F,
 		) -> Result<Option<(H, N, V)>, Error<E>>
 			where E: fmt::Debug,
 				  F: Fn(&H, &H) -> Result<bool, E>,
 		{
-			if self.hash == hash {
-				return Err(Error::Duplicate);
-			};
+			let mut stack: Vec<(&Self, bool)> = vec![(&self, true)];
 
-			if number <= self.number { return Ok(Some((hash, number, data))); }
+			while !stack.is_empty() {
+				let (node, first_time) = stack.pop().unwrap();
 
-			for node in self.children.iter_mut() {
-				match node.import(hash, number, data, is_descendent_of)? {
-					Some((h, n, d)) => {
-						hash = h;
-						number = n;
-						data = d;
-					},
-					None => return Ok(None),
+				if first_time {
+					if node.hash == hash {
+						return Err(Error::Duplicate);
+					}
+
+					if number <= node.number {
+						continue;
+					}
+
+					if !node.children.is_empty() {
+						stack.push((node, false));
+
+						for child in node.children.iter().rev() {
+							stack.push((child, true));
+						}
+
+						continue;
+					}
+				}
+
+				if is_descendent_of(&node.hash, &hash)? {
+					#[allow(mutable_transmutes)]
+					let node = unsafe {
+						std::mem::transmute::<&Self, &mut Self>(node)
+					};
+
+					node.children.push(Node {
+						data,
+						hash: hash,
+						number: number,
+						children: Vec::new(),
+					});
+					return Ok(None);
 				}
 			}
 
-			if is_descendent_of(&self.hash, &hash)? {
-				self.children.push(Node {
-					data,
-					hash: hash,
-					number: number,
-					children: Vec::new(),
-				});
-
-				Ok(None)
-			} else {
-				Ok(Some((hash, number, data)))
-			}
+			return Ok(Some((hash, number, data)))
 		}
 
 		/// Find a node in the tree that is the deepest ancestor of the given
