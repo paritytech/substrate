@@ -72,6 +72,7 @@ pub trait Value<V>: ValueRef<V> + Context {
 	type SE: StateIndex<Self::Index>;
 
 	/// Index a single history item.
+	/// TODO this type and trait StateIndex are not very relevant.
 	type Index;
 
 	/// GC strategy that can be applied.
@@ -120,10 +121,13 @@ pub trait InMemoryValue<V>: Value<V> {
 /// instance if `Value` is subject to concurrent access.
 /// TODO an entry api would be more proper (returning optional entry).
 pub trait ConditionalValueMut<V>: Value<V> {
+	/// Internal index.
 	type IndexConditional;
+
 	/// Does state allow modifying this value.
 	/// If value is added as parameter, we do not allow overwrite.
 	fn can_set(&self, no_overwrite: Option<&V>, at: &Self::IndexConditional) -> bool;
+
 	/// Do update if state allows it, otherwhise return None.
 	fn set_if_possible(&mut self, value: V, at: &Self::IndexConditional) -> Option<UpdateResult<()>>;
 

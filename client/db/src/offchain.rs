@@ -222,14 +222,18 @@ impl BlockChainLocalAt {
 	/// Under current design, the local update is only doable when we
 	/// are at a latest block, this function tells if we can use
 	/// function that modify state.
-	/// TODO EMCH this is probably racy offchain storage do not flush on new block,
-	/// but at the same time we need to do them sequentially...
-	/// Can probably save processed head of fork (would need a method to also indicate
-	/// if it may become updatable later, and produce mut state from fork state casted to latest).
 	pub fn can_update(&self) -> bool {
 		self.at_write.is_some()
 	}
 }
+
+impl BlockChainLocalAtNew {
+	/// Does the current state allows chain update attempt.
+	pub fn can_update(&self) -> bool {
+		self.0.at_write.is_some()
+	}
+}
+
 
 impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
@@ -281,13 +285,6 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 			}.and_then(|h| {
 				use historied_db::historied::ValueRef;
 				h.get(&self.at_read).flatten()
-				/*v.and_then(|mut v| {
-					match v.pop() {
-						Some(0u8) => None,
-						Some(1u8) => Some(v),
-						None | Some(_) => panic!("inconsistent value, DB corrupted"),
-					}
-				})*/
 			}))
 	}
 
@@ -363,9 +360,16 @@ impl BlockChainLocalAt {
 		new_value: Option<&[u8]>,
 		is_new: bool,
 	) -> bool {
-		if self.at_write.is_none() {
+		if self.at_write.is_none() && is_new {
 			panic!("Incoherent state for offchain writing");
 		}
+		let at_write_inner;
+		let at_write = if is_new {
+			self.at_write.as_ref().expect("checked above")
+		} else {
+			at_write_inner = Latest::unchecked_latest(self.at_read.latest_index());
+			&at_write_inner
+		};
 		let key: Vec<u8> = prefix
 			.iter()
 			.chain(std::iter::once(&b'/'))
@@ -392,7 +396,10 @@ impl BlockChainLocalAt {
 						backend: self.branch_nodes.clone(),
 						node_init_from: init_nodes.clone(),
 					};
-					let v: Option<HValue> = historied_db::DecodeWithContext::decode_with_context(&mut &v[..], &(init, init_nodes));
+					let v: Option<HValue> = historied_db::DecodeWithContext::decode_with_context(
+						&mut &v[..],
+						&(init, init_nodes),
+					);
 					v
 				});
 			let val = histo.as_ref().and_then(|h| {
@@ -408,13 +415,13 @@ impl BlockChainLocalAt {
 				let new_value = new_value.map(|v| v.to_vec());
 				let (new_value, update_result) = if let Some(mut histo) = histo {
 					let update_result = if is_new {
-						histo.set(new_value, self.at_write.as_ref().expect("Synch at start"))
+						histo.set(new_value, at_write)
 					} else {
 						use historied_db::historied::ConditionalValueMut;
 						use historied_db::historied::StateIndex;
 						histo.set_if_possible_no_overwrite(
 							new_value,
-							self.at_write.as_ref().expect("Synch at start").index_ref(),
+							at_write.index_ref(),
 						).expect("Concurrency failure for sequential write of offchain storage")
 					};
 					if let &UpdateResult::Unchanged = &update_result {
@@ -439,7 +446,7 @@ impl BlockChainLocalAt {
 	
 						(HValue::new(
 								new_value,
-								self.at_write.as_ref().expect("Synch at start"),
+								at_write,
 								(init, init_nodes),
 							).encode(), UpdateResult::Changed(()))
 					} else {

@@ -460,7 +460,7 @@ impl<S> Latest<S> {
 	/// This is only to be use by a `Management` or
 	/// a context where the state can be proven as
 	/// being the latest.
-	pub(crate) fn unchecked_latest(s: S) -> Self {
+	pub fn unchecked_latest(s: S) -> Self {
 		Latest(s)
 	}
 	/// Reference to inner state.

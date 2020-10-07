@@ -2913,4 +2913,73 @@ pub(crate) mod tests {
 		let offchain_local_storage = offchain_local_storage.at(block1_b).unwrap();
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), None);
 	}
+
+	#[test]
+	fn offchain_backends_change_new() {
+		use sp_core::offchain::{BlockChainOffchainStorage, OffchainStorage};
+
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let offchain_local_storage = backend.offchain_local_storage().unwrap();
+		let offchain_local_storage = offchain_local_storage.at(block0).unwrap();
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), None);
+
+		let mut ooc = OffchainOverlayedChanges::enabled();
+		ooc.set(b"prefix1", b"key1", b"value1", true);
+		let block1 = insert_block(&backend, 1, block0, None, Some(ooc), Default::default());
+		let offchain_local_storage = backend.offchain_local_storage().unwrap();
+		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), None);
+		assert!(!offchain_local_storage.at_new(block0).unwrap().can_update()); // TODO change
+		let mut offchain_local_storage = offchain_local_storage.at_new(block1).unwrap();
+		assert!(offchain_local_storage.can_update());
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
+		offchain_local_storage.set(b"prefix1", b"key1", b"test");
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"test".to_vec()));
+		offchain_local_storage.set(b"prefix1", b"key2", b"test");
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key2"), Some(b"test".to_vec()));
+	}
+
+	#[test]
+	#[should_panic(expected = "Concurrency failure for sequential write of offchain storage")]
+	fn offchain_backends_change_current_existing() {
+		use sp_core::offchain::{BlockChainOffchainStorage, OffchainStorage};
+
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		let mut ooc = OffchainOverlayedChanges::enabled();
+		ooc.set(b"prefix1", b"key1", b"value1", true);
+		let block0 = insert_block(&backend, 0, Default::default(), None, Some(ooc), Default::default());
+		let offchain_local_storage = backend.offchain_local_storage().unwrap();
+		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
+		let mut offchain_local_storage = offchain_local_storage.at(block0).unwrap();
+		assert!(offchain_local_storage.can_update());
+		offchain_local_storage.set(b"prefix1", b"key1", b"test");
+	}
+
+	#[test]
+	fn offchain_backends_change_current_new_value() {
+		use sp_core::offchain::{BlockChainOffchainStorage, OffchainStorage};
+
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		let block0 = insert_block(&backend, 0, Default::default(), None, None, Default::default());
+		let offchain_local = backend.offchain_local_storage().unwrap();
+		let mut offchain_local_storage = offchain_local.at(block0).unwrap();
+		assert!(offchain_local_storage.can_update());
+		offchain_local_storage.set(b"prefix1", b"key1", b"test");
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"test".to_vec()));
+
+		let block1 = insert_block(&backend, 1, block0, None, None, Default::default());
+		offchain_local_storage.set(b"prefix1", b"key2", b"test2");
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key2"), Some(b"test2".to_vec()));
+
+		let _block2 = insert_block(&backend, 2, block1, None, None, Default::default());
+		// can insert in the past if there is no following change (TODO change set api to return error and test the opposites).
+		let mut offchain_local_storage = offchain_local.at(block1).unwrap();
+		offchain_local_storage.set(b"prefix1", b"key3", b"test3");
+		offchain_local_storage.set(b"prefix1", b"key1", b"test1");
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key3"), Some(b"test3".to_vec()));
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"test1".to_vec()));
+	}
 }

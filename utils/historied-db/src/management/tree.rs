@@ -887,6 +887,10 @@ pub struct ForkPlan<I, BI> {
 }
 
 impl<I: Clone, BI: Clone + SubAssign<u32>> ForkPlan<I, BI> {
+	/// Extract latest state index use by the fork plan.
+	pub fn latest_index(&self) -> (I, BI) {
+		self.latest()
+	}
 	fn latest(&self) -> (I, BI) {
 		if let Some(branch_plan) = self.history.last() {
 			let mut index = branch_plan.state.end.clone();

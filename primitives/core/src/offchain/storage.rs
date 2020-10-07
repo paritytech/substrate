@@ -262,9 +262,16 @@ impl BlockChainInMemOffchainStorageAt {
 		new_value: Option<&[u8]>,
 		is_new: bool,
 	) -> bool {
-		if self.at_write.is_none() {
+		if self.at_write.is_none() && is_new {
 			panic!("Incoherent state for offchain writing");
 		}
+		let at_write_inner;
+		let at_write = if is_new {
+			self.at_write.as_ref().expect("checked above")
+		} else {
+			at_write_inner = Latest::unchecked_latest(self.at_read.latest_index());
+			&at_write_inner
+		};
 		let key: Vec<u8> = prefix.iter().chain(item_key).cloned().collect();
 		let is_set;
 		let mut storage_write = self.storage.write();
@@ -281,18 +288,18 @@ impl BlockChainInMemOffchainStorageAt {
 			let new_value = new_value.map(|v| v.to_vec());
 			if let Some(histo) = histo {
 				if is_new {
-					let _update_result = histo.set_mut(new_value, self.at_write.as_ref().expect("Synch at start"));
+					let _update_result = histo.set_mut(new_value, at_write);
 				} else {
 					use historied_db::historied::ConditionalValueMut;
 					use historied_db::historied::StateIndex;
 					let _update_result = histo.set_if_possible_no_overwrite(
 						new_value,
-						self.at_write.as_ref().expect("Synch at start").index_ref(),
+						at_write.index_ref(),
 					).expect("Concurrency failure for sequential write of offchain storage");
 				}
 			} else {
 				if is_insert {
-					let new_histo = InMemHValue::new(new_value, self.at_write.as_ref().expect("Synch at start"), ((), ()));
+					let new_histo = InMemHValue::new(new_value, at_write, ((), ()));
 					storage_write.insert(key, new_histo);
 				} else {
 					return is_set;
