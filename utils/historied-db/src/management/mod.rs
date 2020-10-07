@@ -73,25 +73,28 @@ pub mod linear {
 	H: Ord + Clone,
 	S: Default + Clone + AddAssign<u32> + Ord,
 	V: Clone,
-	> Management<H> for LinearInMemoryManagement<H, S, V> {
-		type SE = Latest<S>;
-		fn init() -> (Self, Self::S) {
+	> Default for LinearInMemoryManagement<H, S, V> {
+		fn default() -> Self {
 			let state = S::default();
 			let current_state = S::default();
 			let mapping = Default::default();
-			(LinearInMemoryManagement {
+			LinearInMemoryManagement {
 				mapping,
 				start_treshold: state.clone(),
 				current_state,
 				neutral_element: None,
 				changed_treshold: false,
 				can_append: true,
-			}, state)
+			}
 		}
+	}
 
-		fn init_state(&mut self) -> Self::SE {
-			Latest::unchecked_latest(self.start_treshold.clone())
-		}
+	impl<
+	H: Ord + Clone,
+	S: Default + Clone + AddAssign<u32> + Ord,
+	V: Clone,
+	> Management<H> for LinearInMemoryManagement<H, S, V> {
+		type SE = Latest<S>;
 
 		fn get_db_state_mut(&mut self, state: &H) -> Option<Self::SE> {
 			if let Some(state) = self.mapping.get(state) {

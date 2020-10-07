@@ -28,6 +28,7 @@ use crate::test::simple_impl::StateInput;
 pub type InMemoryMgmt = crate::management::tree::TreeManagement<StateInput, u32, u32, u16, ()>;
 pub type InMemoryMgmtSer = crate::management::tree::TreeManagement<StateInput, u32, u32, u16, SerFuzz>;
 
+#[derive(Default)]
 /// Serialize for fuzzer.
 pub struct SerFuzz;
 
@@ -73,10 +74,6 @@ impl crate::management::tree::TreeManagementStorage for SerFuzz {
 	type NeutralElt = bindings::NeutralElt;
 	type TreeMeta = bindings::TreeMeta;
 	type TreeState = bindings::TreeState;
-
-	fn init() -> Self::Storage {
-		crate::test::InMemorySimpleDB5::new()
-	}
 }
 
 type LinearBackend = crate::backend::in_memory::MemoryOnly<u16, u32>;
@@ -113,7 +110,7 @@ impl FuzzerState {
 			in_memory_mgmt,
 			in_memory_mgmt_ser,
 			with_ser: false,
-			simple: crate::test::simple_impl::Db::init().0,
+			simple: crate::test::simple_impl::Db::default(),
 			next_hash: 1,
 		}
 	}

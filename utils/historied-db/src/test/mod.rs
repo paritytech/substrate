@@ -33,6 +33,12 @@ macro_rules! InMemSimpleDB {
 		#[derive(Clone, Debug, Eq, PartialEq)]
 		pub struct InMemory([BTreeMap<Vec<u8>, Vec<u8>>; NB_COL]);
 
+		impl Default for InMemory {
+			fn default() -> Self {
+				InMemory::new()
+			}
+		}
+
 		impl InMemory {
 			pub fn new() -> Self {
 				use core::mem::MaybeUninit;

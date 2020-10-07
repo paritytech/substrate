@@ -155,10 +155,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		self.db.set(Some(db.clone()));
 		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
 		*self.state.borrow_mut() = Some(State::new(
-			DbState::<B>::new(
-				storage_db,
-				self.root.get(),
-			),
+			DbState::<B>::new(storage_db, self.root.get()),
 			self.shared_cache.clone(),
 			None,
 		));

@@ -46,7 +46,7 @@ pub trait TreeManagementStorage: Sized {
 	type TreeMeta: SerializeInstanceVariable + Send + Sync;
 	type TreeState: SerializeInstanceMap + Send + Sync;
 
-	fn init() -> Self::Storage;
+	//fn init() -> Self::Storage;
 }
 
 impl TreeManagementStorage for () {
@@ -61,7 +61,7 @@ impl TreeManagementStorage for () {
 	type TreeMeta = ();
 	type TreeState = ();
 
-	fn init() -> Self { }
+	//fn init() -> Self { }
 }
 
 /// Trait defining a state for querying or modifying a tree.
@@ -195,9 +195,15 @@ impl<I: Default, BI: Default> Default for TreeMeta<I, BI> {
 	}
 }
 
-impl<I: Ord + Default, BI: Default, S: TreeManagementStorage> Default for Tree<I, BI, S> {
+impl<I: Ord + Default, BI: Default, S: TreeManagementStorage> Default for Tree<I, BI, S>
+	where
+		I: Ord + Default,
+		BI: Default,
+		S: TreeManagementStorage,
+		S::Storage: Default,
+{
 	fn default() -> Self {
-		let serialize = S::init();
+		let serialize = S::Storage::default();
 		let storage = SerializeMap::default_from_db(&serialize);
 		let journal_delete = SerializeMap::default_from_db(&serialize);
 		Tree {
@@ -290,7 +296,14 @@ pub struct TreeManagement<H: Ord, I: Ord, BI, V, S: TreeManagementStorage> {
 	neutral_element: SerializeVariable<Option<V>, S::Storage, S::NeutralElt>,
 }
 
-impl<H: Ord, I: Default + Ord, BI: Default, V, S: TreeManagementStorage> Default for TreeManagement<H, I, BI, V, S> {
+impl<H, I, BI, V, S> Default for TreeManagement<H, I, BI, V, S>
+	where
+		H: Ord,
+		I: Default + Ord,
+		BI: Default,
+		S: TreeManagementStorage,
+		S::Storage: Default,
+{
 	fn default() -> Self {
 		let tree = Tree::default();
 		let mapping = SerializeMap::default_from_db(&tree.serialize);
@@ -1246,16 +1259,6 @@ impl<
 		})
 	}
 
-	fn init() -> (Self, Self::S) {
-		let mut management = Self::default();
-		let init_plan = management.state.tree.query_plan(I::default());
-		(management, init_plan)
-	}
-
-	fn init_state(&mut self) -> Self::SE {
-		Latest::unchecked_latest(self.state.tree.meta.get().composite_treshold.clone())
-	}
-
 	fn latest_state(&mut self) -> Self::SE {
 		let latest = self.last_in_use_index.handle(self.state.ser()).get().clone();
 		Latest::unchecked_latest(latest.0)
@@ -1389,7 +1392,9 @@ pub(crate) mod test {
 	}
 	
 	// TODO switch to management function?
-	pub(crate) fn test_states_inner<T: TreeManagementStorage>() -> Tree<u32, u32, T> {
+	pub(crate) fn test_states_inner<T: TreeManagementStorage>() -> Tree<u32, u32, T>
+		where T::Storage: Default,
+	{
 		let mut states = Tree::default();
 		assert_eq!(states.add_state(0, 1), Some(1));
 		// root branching.

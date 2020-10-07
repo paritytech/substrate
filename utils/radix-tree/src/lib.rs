@@ -17,21 +17,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// rawvec api handling alloc is quite nice -> TODO manage alloc the same way,
-// for now just using vec with usize as ptr
-//#![feature(allow_internal_unstable)] 
-
 //! Ordered tree with prefix iterator.
 //!
 //! Allows iteration over a key prefix.
 //! No concern about deletion performance.
 
-// mask cannot be 0 !!! TODO move this in key impl documentation
 extern crate alloc;
 
 pub mod backend;
 
-//use alloc::raw_vec::RawVec;
 pub use derivative::Derivative;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
@@ -40,41 +34,13 @@ use core::cmp::{min, Ordering};
 use core::fmt::Debug;
 use core::mem::replace;
 
-/*#[cfg(not(feature = "std"))]
-extern crate alloc; // TODO check if needed in 2018 and if needed at all
-
-#[cfg(feature = "std")]
-mod core_ {
-	use alloc::raw_vec::RawVec
-}
-
-#[cfg(not(feature = "std"))]
-mod core_ {
-	pub use core::{borrow, convert, cmp, iter, fmt, hash, marker, mem, ops, result};
-	pub use core::iter::Empty as EmptyIter;
-	pub use alloc::{boxed, rc, vec};
-	pub use alloc::collections::VecDeque;
-	pub trait Error {}
-	impl<T> Error for T {}
-}
-
-#[cfg(feature = "std")]
-use self::rstd::{fmt, Error};
-
-use hash_db::MaybeDebug;
-use self::rstd::{boxed::Box, vec::Vec};
-*/
-
-// TODO consider removal
 #[derive(Derivative)]
 #[derivative(Clone)]
 #[derivative(Debug)]
 struct PrefixKey<D, P>
 	where
 		P: PrefixKeyConf,
-//		D: Borrow<[u8]>,
 {
-	// ([u8; size], next_slice)
 	start: P::Mask, // mask of first byte
 	end: P::Mask, // mask of last byte
 	data: D,

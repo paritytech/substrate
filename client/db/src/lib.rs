@@ -193,11 +193,7 @@ pub struct RefTrackingState<Block: BlockT> {
 }
 
 impl<B: BlockT> RefTrackingState<B> {
-	fn new(
-		state: DbState<B>,
-		storage: Arc<StorageDb<B>>,
-		parent_hash: Option<B::Hash>,
-	) -> Self {
+	fn new(state: DbState<B>, storage: Arc<StorageDb<B>>, parent_hash: Option<B::Hash>) -> Self {
 		RefTrackingState {
 			state,
 			parent_hash,
@@ -416,20 +412,24 @@ pub(crate) mod columns {
 
 #[derive(Clone)]
 /// Database backed tree management.
+///
+/// Definitions for storage of historied
+/// db tree state (maps block hashes to internal
+/// history index).
 pub struct TreeManagementPersistence;
 
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
 /// Database backed tree management for a rocksdb database.
-/// TODO consider switching to use of kvdb trait instead of
-/// rocksdb database.
 pub struct RocksdbStorage(Arc<kvdb_rocksdb::Database>);
 
-/// Database backed tree management for an unoredered database.
-/// We set any Hash as inner type,
+/// Database backed tree management for an unordered database.
+///
+/// This internaly use radix tree to index nodes.
 pub struct DatabaseStorage<H: Clone + PartialEq + std::fmt::Debug>(RadixTreeDatabase<H>);
 
 impl historied_db::management::tree::TreeManagementStorage for TreeManagementPersistence {
 	const JOURNAL_DELETE: bool = true;
+	// Use pointer to serialize db with a transactional layer.
 	type Storage = TransactionalSerializeDB<historied_db::simple_db::SerializeDBDyn>;
 	type Mapping = historied_tree_bindings::Mapping;
 	type JournalDelete = historied_tree_bindings::JournalDelete;
@@ -439,10 +439,6 @@ impl historied_db::management::tree::TreeManagementStorage for TreeManagementPer
 	type NeutralElt = historied_tree_bindings::NeutralElt;
 	type TreeMeta = historied_tree_bindings::TreeMeta;
 	type TreeState = historied_tree_bindings::TreeState;
-
-	fn init() -> Self::Storage {
-		unimplemented!("unused")
-	}
 }
 
 macro_rules! subcollection_prefixed_key {
@@ -608,7 +604,6 @@ impl<H> historied_db::simple_db::SerializeDB for DatabaseStorage<H>
 	}
 }
 
-//pub struct TreeManagement<H: Ord, I: Ord, BI, V, S: TreeManagementStorage> {
 /// Trait for serializing historied db tree management.
 pub mod historied_tree_bindings {
 	macro_rules! static_instance {

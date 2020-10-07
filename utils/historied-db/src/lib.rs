@@ -277,16 +277,11 @@ pub trait ManagementRef<H> {
 pub trait Management<H>: ManagementRef<H> + Sized {
 	/// attached db state needed for update.
 	type SE; // TODO rename to latest or pending???
-	fn init() -> (Self, Self::S);
 
 	/// Return state mut for state but only if state exists and is
 	/// a terminal writeable leaf (if not you need to create new branch 
 	/// from previous state to write).
 	fn get_db_state_mut(&mut self, tag: &H) -> Option<Self::SE>;
-
-	/// Get a cursor over the initial state, can be use in some specific
-	/// case (replace `default` for SE).
-	fn init_state(&mut self) -> Self::SE;
 
 	/// Get a cursor over the last change of ref (when adding or removing).
 	fn latest_state(&mut self) -> Self::SE;
@@ -328,12 +323,6 @@ pub trait ForkableManagement<H>: Management<H> {
 	fn ref_state_fork(&self, s: &Self::S) -> Self::SF;
 
 	fn get_db_state_for_fork(&mut self, tag: &H) -> Option<Self::SF>;
-
-	/// Useful to fork in a independant branch (eg no parent reference found).
-	fn init_state_fork(&mut self) -> Self::SF {
-		let se = self.init_state();
-		self.inner_fork_state(se)
-	}
 
 	fn latest_state_fork(&mut self) -> Self::SF {
 		let se = self.latest_state();
