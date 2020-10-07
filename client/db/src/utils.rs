@@ -283,7 +283,7 @@ pub fn open_database_and_historied<Block: BlockT>(
 
 			let rocks_db = Arc::new(db);
 			let ordered = Box::new(crate::RocksdbStorage(rocks_db.clone()));
-			(sp_database::as_database2(rocks_db), ordered)
+			(sp_database::arc_as_database(rocks_db), ordered)
 		},
 		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
 		DatabaseSettingsSrc::RocksDb { .. } => {

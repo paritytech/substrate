@@ -540,16 +540,21 @@ impl NodesMeta for MetaBranches {
 
 impl NodesMeta for MetaBlocks {
 	const APPLY_SIZE_LIMIT: bool = true;
-	const MAX_NODE_LEN: usize = 512; // This should be benched to get a good value.
+	// This needs to be less than for `MetaBranches`, the point is to
+	// be able to store multiple branche in the immediate storage and
+	// avoid having a single branch occupy the whole item.
+	const MAX_NODE_LEN: usize = 512;
 	const MAX_NODE_ITEMS: usize = 4;
 	const STORAGE_PREFIX: &'static [u8] = b"tree_mgmt/block_nodes";
 }
 
-/// Node backend for blocks values.
+/// Node backend for blocks values
+/// when the block history grows too big.
 #[derive(Clone)]
 pub struct BlockNodes(DatabasePending);
 
-/// Node backend for branch values.
+/// Node backend for branch values
+/// when the branch history grows too big.
 #[derive(Clone)]
 pub struct BranchNodes(DatabasePending);
 
@@ -563,6 +568,7 @@ impl DatabasePending {
 	fn clear_and_extract_changes(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
 		std::mem::replace(&mut self.pending.write(), HashMap::new())
 	}
+
 	fn apply_transaction(
 		&self,
 		col: sp_database::ColumnId,
@@ -585,9 +591,11 @@ impl DatabasePending {
 			self.database.get(col, key)
 		}
 	}
+
 	fn write(&self, key: Vec<u8>, value: Vec<u8>) {
 		self.pending.write().insert(key, Some(value));
 	}
+
 	fn remove(&self, key: Vec<u8>) {
 		self.pending.write().insert(key, None);
 	}
@@ -601,6 +609,7 @@ impl BlockNodes {
 			database,
 		})
 	}
+
 	/// Flush pending changes into a database transaction.
 	pub fn apply_transaction(&self, transaction: &mut Transaction<DbHash>) {
 		self.0.apply_transaction(crate::columns::AUX, transaction)
@@ -615,6 +624,7 @@ impl BranchNodes {
 			database,
 		})
 	}
+
 	/// Flush pending changes into a database transaction.
 	pub fn apply_transaction(&self, transaction: &mut Transaction<DbHash>) {
 		self.0.apply_transaction(crate::columns::AUX, transaction)
@@ -626,7 +636,7 @@ impl NodeStorage<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for Block
 		let key = Self::vec_address(reference_key, relative_index);
 		self.0.read(crate::columns::AUX, &key).and_then(|value| {
 			// use encoded len as size (this is bigger than the call to estimate size
-			// but not an issue, otherwhise could adjust).
+			// but not really an issue, otherwhise could adjust).
 			let reference_len = value.len();
 
 			let input = &mut value.as_slice();
@@ -688,11 +698,13 @@ impl NodeStorageMut<BranchLinear, u32, TreeBackendInner, MetaBranches> for Branc
 	}
 }
 
+// Values are stored in memory in Vec like structure
 type LinearBackendInner = historied_db::backend::in_memory::MemoryOnly<
 	Option<Vec<u8>>,
 	u32,
 >;
 
+// A multiple nodes wraps multiple vec like structure
 type LinearBackend = historied_db::backend::nodes::Head<
 	Option<Vec<u8>>,
 	u32,
@@ -702,6 +714,7 @@ type LinearBackend = historied_db::backend::nodes::Head<
 	(),
 >;
 
+// Nodes storing these
 type LinearNode = historied_db::backend::nodes::Node<
 	Option<Vec<u8>>,
 	u32,
@@ -709,13 +722,16 @@ type LinearNode = historied_db::backend::nodes::Node<
 	MetaBlocks,
 >;
 
+// Branch
 type BranchLinear = historied_db::historied::linear::Linear<Option<Vec<u8>>, u32, LinearBackend>;
 
+// Branch are stored in memory
 type TreeBackendInner = historied_db::backend::in_memory::MemoryOnly<
 	BranchLinear,
 	u32,
 >;
 
+// Head of branches
 type TreeBackend = historied_db::backend::nodes::Head<
 	BranchLinear,
 	u32,
@@ -725,6 +741,7 @@ type TreeBackend = historied_db::backend::nodes::Head<
 	ContextHead<BlockNodes, ()>
 >;
 
+// Node with branches
 type TreeNode = historied_db::backend::nodes::Node<
 	BranchLinear,
 	u32,
@@ -732,7 +749,11 @@ type TreeNode = historied_db::backend::nodes::Node<
 	MetaBranches,
 >;
 
-/// Historied value with multiple paralell branches.
+/// Historied value with multiple branches.
+///
+/// Indexed by u32 for both branches and value into branches.
+/// Value are in memory but serialized as splitted node.
+/// Each node contains multiple values or multiple branch head of nodes.
 pub type HValue = Tree<u32, u32, Option<Vec<u8>>, TreeBackend, LinearBackend>;
 
 #[cfg(test)]

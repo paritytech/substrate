@@ -38,7 +38,7 @@ pub fn as_database<D: KeyValueDB + 'static, H: Clone>(db: D) -> std::sync::Arc<d
 }
 
 /// Wrap RocksDb database into a trait object that implements `sp_database::Database`
-pub fn as_database2<D: KeyValueDB + 'static, H: Clone>(db: std::sync::Arc<D>) -> std::sync::Arc<dyn Database<H>> {
+pub fn arc_as_database<D: KeyValueDB + 'static, H: Clone>(db: std::sync::Arc<D>) -> std::sync::Arc<dyn Database<H>> {
 	std::sync::Arc::new(DbAdapter(WrapArc(db)))
 }
 

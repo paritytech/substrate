@@ -26,7 +26,7 @@ use std::fmt;
 use std::collections::{HashMap, VecDeque, hash_map::Entry};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key};
 use codec::{Encode, Decode};
-use log::{trace, warn};
+use log::trace;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";
@@ -35,7 +35,7 @@ const LAST_CANONICAL: &[u8] = b"last_canonical";
 #[derive(parity_util_mem_derive::MallocSizeOf)]
 pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	last_canonicalized: Option<(BlockHash, u64)>,
-	pub(crate) levels: VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
+	levels: VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
 	parents: HashMap<BlockHash, BlockHash>,
 	pending_canonicalizations: Vec<BlockHash>,
 	pending_insertions: Vec<BlockHash>,
@@ -46,11 +46,11 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 }
 
 #[derive(Encode, Decode)]
-pub struct JournalRecord<BlockHash: Hash, Key: Hash> {
-	pub hash: BlockHash,
-	pub parent_hash: BlockHash,
-	pub inserted: Vec<(Key, DBValue)>,
-	pub deleted: Vec<Key>,
+struct JournalRecord<BlockHash: Hash, Key: Hash> {
+	hash: BlockHash,
+	parent_hash: BlockHash,
+	inserted: Vec<(Key, DBValue)>,
+	deleted: Vec<Key>,
 }
 
 fn to_journal_key(block: u64, index: u64) -> Vec<u8> {
@@ -59,7 +59,7 @@ fn to_journal_key(block: u64, index: u64) -> Vec<u8> {
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
 #[derive(parity_util_mem_derive::MallocSizeOf)]
-pub(crate) struct BlockOverlay<BlockHash: Hash, Key: Hash> {
+struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_key: Vec<u8>,
 	inserted: Vec<Key>,
@@ -204,55 +204,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			pinned_insertions: Default::default(),
 			values: values,
 		})
-	}
-
-	pub(crate) fn journals<D: MetaDb>(&self, db: D) -> Result<Vec<JournalRecord<BlockHash, Key>>, Error<D::Error>> {
-		let mut result = Vec::new();
-		let last_canonicalized = db.get_meta(&to_meta_key(LAST_CANONICAL, &()))
-			.map_err(|e| Error::Db(e))?;
-		let last_canonicalized = match last_canonicalized {
-			Some(buffer) => Some(<(BlockHash, u64)>::decode(&mut buffer.as_slice())?),
-			None => None,
-		};
-		if let Some((_hash, mut block)) = last_canonicalized {
-			for level in self.levels.iter() {
-				for (index, _journal) in level.iter().enumerate() {
-					let journal_key = to_journal_key(block, index as u64);
-					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
-						Some(record) => {
-							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
-							result.push(record);
-						},
-						None => (),
-					}
-				}
-				block += 1;
-			}
-			// this could replace the level iter.
-			loop {
-				let mut index = 0;
-				loop {
-					let journal_key = to_journal_key(block, index as u64);
-					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
-						Some(record) => {
-							warn!("out of level found");
-							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
-							result.push(record);
-						},
-						None => {
-							if index == 0 {
-								return Ok(result);
-							} else {
-								break;
-							}
-						},
-					}
-					index += 1
-				}
-				block += 1;
-			}
-		}
-		Ok(result)
 	}
 
 	/// Insert a new block into the overlay. If inserted on the second level or lover expects parent to be present in the window.
@@ -441,30 +392,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			let last_canonicalized = (hash, self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1));
 			self.last_canonicalized = Some(last_canonicalized);
 		}
-	}
-
-	pub(crate) fn drop_all(&mut self) {
-		warn!("drop all last cano: {:?}", self.last_canonicalized);
-		// only keep last_cannonicalized reference.
-		while let Some(level) = self.levels.pop_front() {
-			for (_i, overlay) in level.into_iter().enumerate() {
-				discard_descendants(
-					&mut self.levels.as_mut_slices(),
-					&mut self.values,
-					&mut self.parents,
-					&self.pinned,
-					&mut self.pinned_insertions,
-					&overlay.hash,
-				);
-			}
-		}
-		warn!("non cano levels: {:?}", self.levels.len());
-		self.parents.clear();
-		self.pending_canonicalizations.clear();
-		self.pending_insertions.clear();
-		self.values.clear();
-		self.pinned.clear();
-		self.pinned_insertions.clear();
 	}
 
 	/// Get a value from the node overlay. This searches in every existing changeset.

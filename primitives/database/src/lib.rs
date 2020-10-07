@@ -22,8 +22,7 @@ mod mem;
 mod kvdb;
 
 pub use mem::MemDb;
-pub use crate::kvdb::as_database;
-pub use crate::kvdb::as_database2;
+pub use crate::kvdb::{as_database, arc_as_database};
 pub use ordered::RadixTreeDatabase;
 
 /// An identifier for a column.
@@ -170,29 +169,9 @@ pub trait Database<H: Clone>: Send + Sync {
 	}
 }
 
-pub trait OrderedDatabase<H: Clone>: Database<H> {
-	/// Iterate on value from the database.
-	fn iter(&self, col: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>>;
-
-	/// Iterate on value over a given prefix, the prefix can be removed from
-	/// the resulting keys.
-	fn prefix_iter(
-		&self,
-		col: ColumnId,
-		prefix: &[u8],
-		trim_prefix: bool,
-	) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>>;
-}
-
 impl<H> std::fmt::Debug for dyn Database<H> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "Database")
-	}
-}
-
-impl<H> std::fmt::Debug for dyn OrderedDatabase<H> {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "OrderedDatabase")
 	}
 }
 
@@ -233,7 +212,9 @@ mod ordered {
 		Node256LazyHashBackend,
 		Children256,
 		Radix256Conf,
-		radix_tree::backend::LazyExt<radix_tree::backend::ArcBackend<radix_tree::backend::TransactionBackend<WrapColumnDb<H>>>>,
+		radix_tree::backend::LazyExt<
+			radix_tree::backend::ArcBackend<radix_tree::backend::TransactionBackend<WrapColumnDb<H>>>
+		>,
 		H,
 		{ H: Debug + PartialEq + Clone}
 	);
@@ -271,8 +252,7 @@ mod ordered {
 	/// Ordered database implementation through a indexing radix tree overlay.
 	pub struct RadixTreeDatabase<H: Clone + PartialEq + Debug> {
 		inner: Arc<dyn Database<H>>,
-		// Small vec?
-		trees: Arc<RwLock<Vec<radix_tree::Tree<Node256LazyHashBackend<H>>>>>, // TODO not the right type
+		trees: Arc<RwLock<Vec<radix_tree::Tree<Node256LazyHashBackend<H>>>>>,
 	}
 
 	impl<H: Clone + PartialEq + Debug> RadixTreeDatabase<H> {
@@ -357,13 +337,17 @@ mod ordered {
 		}
 	}
 
-	impl<H: Clone + PartialEq + Debug + Default + 'static> OrderedDatabase<H> for RadixTreeDatabase<H> {
-		fn iter(&self, col: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>> {
+	impl<H: Clone + PartialEq + Debug + Default + 'static> RadixTreeDatabase<H> {
+		/// Iterate on value from the database.
+		pub fn iter(&self, col: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>> {
 			self.lazy_column_init(col);
 			let tree = self.trees.read()[col as usize].clone();
 			Box::new(tree.owned_iter())
 		}
-		fn prefix_iter(
+
+		/// Iterate on value over a given prefix, the prefix can be removed from
+		/// the resulting keys.
+		pub fn prefix_iter(
 			&self, col: ColumnId,
 			prefix: &[u8],
 			trim_prefix: bool,

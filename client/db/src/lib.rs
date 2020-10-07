@@ -587,7 +587,6 @@ impl<H> historied_db::simple_db::SerializeDB for DatabaseStorage<H>
 	}
 
 	fn iter<'a>(&'a self, c: &'static [u8]) -> historied_db::simple_db::SerializeDBIter<'a> {
-		use sp_database::OrderedDatabase;
 		let iter = resolve_collection(c).map(|(c, p)| {
 			if let Some(p) = p {
 				self.0.prefix_iter(c, p, true)
