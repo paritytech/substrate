@@ -89,14 +89,14 @@ impl BenchPair {
 }
 
 /// Drop system cache.
-/// 
+///
 /// Will panic if cache drop is impossbile.
 pub fn drop_system_cache() {
 
 	#[cfg(target_os = "windows")] {
-		log::warn!(target: "bench-logistics", 
+		log::warn!(target: "bench-logistics",
 			"Clearing system cache on windows is not supported. Benchmark might totally be wrong.");
-		return;		
+		return;
 	}
 
 	std::process::Command::new("sync")
@@ -110,22 +110,25 @@ pub fn drop_system_cache() {
 			.output()
 			.expect("Failed to execute system cache clear");
 
+		let temp = tempfile::tempdir().expect("Failed to spawn tempdir");
+		let temp_file_path = format!("of={}/buf", temp.path().to_string_lossy());
+
 		// this should refill write cache with 2GB of garbage
 		std::process::Command::new("dd")
-			.args(&["if=/dev/urandom", "of=./benchmark-tmp", "bs=64M", "count=32"])
+			.args(&["if=/dev/urandom", &temp_file_path, "bs=64M", "count=32"])
 			.output()
 			.expect("Failed to execute dd for cache clear");
 
 		// remove tempfile of previous command
 		std::process::Command::new("rm")
-			.arg("./benchmark-tmp")
+			.arg(&temp_file_path)
 			.output()
-			.expect("Failed to execute dd for cache clear");
+			.expect("Failed to remove temp file");
 
 		std::process::Command::new("sync")
 			.output()
 			.expect("Failed to execute system cache clear");
-	
+
 		log::trace!(target: "bench-logistics", "Clearing system cache done!");
 	}
 
@@ -178,8 +181,8 @@ impl Clone for BenchDb {
 
 		// We clear system cache after db clone but before any warmups.
 		// This populates system cache with some data unrelated to actual
-		// data we will be quering further under benchmark (like what 
-		// would have happened in real system that queries random entries 
+		// data we will be quering further under benchmark (like what
+		// would have happened in real system that queries random entries
 		// from database).
 		drop_system_cache();
 
