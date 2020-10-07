@@ -63,7 +63,7 @@ pub trait NodeStorage<V, S, D, M: NodesMeta>: Clone {
 		let storage_prefix = M::STORAGE_PREFIX;
 		let mut result = Vec::with_capacity(reference_key.len() + storage_prefix.len() + 8);
 		result.extend_from_slice(storage_prefix);
-		result.extend_from_slice(&(reference_key.len() as u32).to_be_bytes()); // TODO remove this line, it is useless
+		result.extend_from_slice(&(reference_key.len() as u32).to_be_bytes());
 		result.extend_from_slice(reference_key);
 		result.extend_from_slice(&relative_index.to_be_bytes());
 		result

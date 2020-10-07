@@ -1177,7 +1177,6 @@ pub struct Backend<Block: BlockT> {
 		<HashFor<Block> as Hasher>::Out,
 		TreeManagementPersistence,
 	>>>,
-	historied_state_do_assert: bool,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1271,13 +1270,7 @@ impl<Block: BlockT> Backend<Block> {
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: Arc::new(StateUsageStats::new()),
 			historied_management,
-			historied_state_do_assert: false,
 		})
-	}
-
-	/// Compare historied state with trie state results.
-	pub fn do_assert_state_machine(&mut self) {
-		self.historied_state_do_assert = true;
 	}
 
 	/// Handle setting head within a transaction. `route_to` should be the last
@@ -1434,13 +1427,47 @@ impl<Block: BlockT> Backend<Block> {
 	fn try_commit_operation(
 		&self,
 		mut operation: BlockImportOperation<Block>,
-		historied_db: &mut Option<HistoriedDBMut>,
 	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let mut finalization_displaced_leaves = None;
 
 		operation.apply_aux(&mut transaction);
-		operation.apply_offchain(&mut transaction, historied_db.as_mut());
+
+		let hashes = operation.pending_block.as_ref().map(|pending_block| {
+			let hash = pending_block.header.hash();
+			let parent_hash = *pending_block.header.parent_hash();
+			(hash, parent_hash)
+		});
+
+		let mut historied_db = if let Some((hash, parent_hash)) = hashes {
+			let update_plan = {
+				// lock does notinclude update of value as we do not have concurrent block creation
+				let mut management = self.historied_management.write();
+				if let Some(state) = Some(management.get_db_state_for_fork(&parent_hash)
+					.unwrap_or_else(|| {
+						// allow this to start from existing state TODO EMCH add a stored boolean to only allow
+						// that once in genesis
+						warn!("state not found for parent hash, THISISABUG, appending to latest");
+						management.latest_state_fork()
+					}))
+				{
+					let _query_plan = management.append_external_state(hash.clone(), &state)
+						.ok_or(ClientError::Msg("correct state resolution".into()))?;
+					let update_plan = management.get_db_state_mut(&hash)
+						.ok_or(ClientError::Msg("correct state resolution".into()))?;
+					update_plan
+				} else {
+					return Err("missing update plan".into());
+				}
+			};
+			Some(HistoriedDBMut {
+				current_state: update_plan,
+				db: self.blockchain.db.clone(),
+			})
+		} else {
+			None
+		};
+
 		// write management state changes
 		let pending = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
 		for (col, (mut changes, dropped)) in pending {
@@ -1462,6 +1489,8 @@ impl<Block: BlockT> Backend<Block> {
 				warn!("Unknown collection for tree management pending transaction {:?}", col);
 			}
 		}
+
+		operation.apply_offchain(&mut transaction, historied_db.as_mut());
 
 		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
@@ -1853,50 +1882,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	) -> ClientResult<()> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
-		let hashes = operation.pending_block.as_ref().map(|pending_block| {
-			let hash = pending_block.header.hash();
-			let parent_hash = *pending_block.header.parent_hash();
-			(hash, parent_hash)
-		});
-
-		let mut historied_db = if let Some((hash, parent_hash)) = hashes {
-			let update_plan = {
-				// lock does notinclude update of value as we do not have concurrent block creation
-				let mut management = self.historied_management.write();
-				if let Some(state) = Some(management.get_db_state_for_fork(&parent_hash)
-					.unwrap_or_else(|| {
-						// allow this to start from existing state TODO EMCH add a stored boolean to only allow
-						// that once in genesis
-						warn!("state not found for parent hash, THISISABUG, appending to latest");
-						management.latest_state_fork()
-					}))
-				{
-					// TODO this require to support rollback!! actually we could drop a state
-					// without invalidating next value.
-					// (concurrency would fork here).
-					let query_plan = management.append_external_state(hash.clone(), &state)
-						.expect("correct state resolution");
-					warn!("qp for {:?}, {:?}", hash, query_plan);
-					// TODO EMCH this should be return by append operation!!!
-					let update_plan = management.get_db_state_mut(&hash)
-						.expect("correct state resolution");
-					warn!("up for {:?}, {:?}", hash, update_plan);
-					update_plan
-				} else {
-					// TODO EMCH rollback? Not that we could write the change in mgmt first
-					// and includ the later change in rollback
-					panic!("missing update plan");
-				}
-			};
-			Some(HistoriedDBMut {
-				current_state: update_plan,
-				db: self.blockchain.db.clone(),
-			})
-		} else {
-			None
-		};
-
-		match self.try_commit_operation(operation, &mut historied_db) {
+		match self.try_commit_operation(operation) {
 			Ok(_) => {
 				self.storage.state_db.apply_pending();
 				Ok(())
@@ -2227,7 +2213,7 @@ pub(crate) mod tests {
 	) -> H256 {
 		insert_block(backend, number, parent_hash, changes, None, extrinsics_root)
 	}
-	
+
 	pub fn insert_block(
 		backend: &Backend<Block>,
 		number: u64,

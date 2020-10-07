@@ -124,8 +124,12 @@ impl<H: Ord> BlockChainLocalStorage<H, ()> {
 
 impl sp_core::offchain::OffchainStorage for LocalStorage {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		if !self.set_if_possible(prefix, key, value) {
-			panic!("Concurrency failure for sequential write of offchain storage");
+		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+		let mut tx = Transaction::new();
+		tx.set(columns::OFFCHAIN, &key, value);
+
+		if let Err(err) = self.db.commit(tx) {
+			error!("Error setting on local storage: {}", err)
 		}
 	}
 
@@ -233,14 +237,9 @@ impl BlockChainLocalAtNew {
 
 impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		let test: Option<fn(Option<&[u8]>) -> bool> = None;
-		self.modify(
-			prefix,
-			key,
-			test,
-			Some(value),
-			false,
-		).expect("Concurrency failure for sequential write of offchain storage");
+		if !self.set_if_possible(prefix, key, value) {
+			panic!("Concurrency failure for sequential write of offchain storage");
+		}
 	}
 
 	fn set_if_possible(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> bool {
