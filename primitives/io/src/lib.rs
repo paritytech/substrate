@@ -32,10 +32,10 @@ use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use sp_std::ops::Deref;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use tracing;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_core::{
 	crypto::Pair,
 	traits::{KeystoreExt, CallInWasmExt, TaskExecutorExt},
@@ -51,7 +51,7 @@ use sp_core::{
 	},
 };
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 
 use sp_runtime_interface::{runtime_interface, Pointer};
@@ -59,13 +59,13 @@ use sp_runtime_interface::pass_by::PassBy;
 
 use codec::{Encode, Decode};
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use sp_externalities::{ExternalitiesExt, Externalities};
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 mod batch_verifier;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 use batch_verifier::BatchVerifier;
 
 /// Error verifying ECDSA signature
@@ -760,7 +760,7 @@ pub trait OffchainIndex {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
 	pub struct VerificationExt(BatchVerifier);
@@ -1247,14 +1247,14 @@ pub trait Sandbox {
 }
 
 /// Allocator used by Substrate when executing the Wasm runtime.
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 struct WasmAllocator;
 
 #[cfg(all(not(feature = "disable_allocator"), not(feature = "std")))]
 #[global_allocator]
 static ALLOCATOR: WasmAllocator = WasmAllocator;
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "runtime-wasm")]
 mod allocator_impl {
 	use super::*;
 	use core::alloc::{GlobalAlloc, Layout};
@@ -1293,13 +1293,13 @@ pub fn oom(_: core::alloc::Layout) -> ! {
 }
 
 /// Type alias for Externalities implementation used in tests.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher, u64>;
 
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///
 /// All these host functions will be callable from inside the Wasm environment.
-#[cfg(feature = "std")]
+#[cfg(not(feature = "runtime-wasm"))]
 pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
 	default_child_storage::HostFunctions,

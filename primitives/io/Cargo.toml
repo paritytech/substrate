@@ -34,6 +34,7 @@ tracing-core = { version = "0.1.15", default-features = false}
 
 [features]
 default = ["std"]
+runtime-wasm = []
 std = [
 	"sp-core/std",
 	"codec/std",
