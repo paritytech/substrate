@@ -1647,6 +1647,9 @@ pub trait OriginTrait: Sized {
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin;
 
+	/// The AccountId used across the system.
+	type AccountId;
+
 	/// Add a filter to the origin.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
 
@@ -1661,6 +1664,15 @@ pub trait OriginTrait: Sized {
 
 	/// Get the caller.
 	fn caller(&self) -> &Self::PalletsOrigin;
+
+	/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+	fn none() -> Self;
+
+	/// Create with system root origin and no filter.
+	fn root() -> Self;
+
+	/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+	fn signed(by: Self::AccountId) -> Self;
 }
 
 /// Trait to be used when types are exactly same.
