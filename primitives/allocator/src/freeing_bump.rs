@@ -46,7 +46,7 @@
 //! allocation to the linked list for the respective order.
 
 use crate::Error;
-use sp_std::{convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
+use sp_std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
 use sp_wasm_interface::{Pointer, WordSize};
 
 /// The minimal alignment guaranteed by this allocator.
@@ -308,6 +308,7 @@ pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	free_lists: FreeLists,
 	total_size: u32,
+	poisoned: bool,
 }
 
 impl FreeingBumpHeapAllocator {
@@ -323,6 +324,7 @@ impl FreeingBumpHeapAllocator {
 			bumper: aligned_heap_base,
 			free_lists: FreeLists::new(),
 			total_size: 0,
+			poisoned: false,
 		}
 	}
 
@@ -331,6 +333,8 @@ impl FreeingBumpHeapAllocator {
 	/// There is no minimum size, but whatever size is passed into
 	/// this function is rounded to the next power of two. If the requested
 	/// size is below 8 bytes it will be rounded up to 8 bytes.
+	///
+	/// NOTE: Once the allocator has returned an error all subsequent requests will return an error.
 	///
 	/// # Arguments
 	///
@@ -341,6 +345,11 @@ impl FreeingBumpHeapAllocator {
 		mem: &mut M,
 		size: WordSize,
 	) -> Result<Pointer<u8>, Error> {
+		if self.poisoned {
+			return Err(error("the allocator has been poisoned"))
+		}
+
+		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
 		let order = Order::from_size(size)?;
 
 		let header_ptr: u32 = match self.free_lists[order] {
@@ -361,7 +370,10 @@ impl FreeingBumpHeapAllocator {
 			}
 			Link::Nil => {
 				// Corresponding free list is empty. Allocate a new item.
-				self.bump(order.size() + HEADER_SIZE, mem.size())?
+				Self::bump(
+					&mut self.bumper,
+					order.size() + HEADER_SIZE, mem.size()
+				)?
 			}
 		};
 
@@ -371,16 +383,25 @@ impl FreeingBumpHeapAllocator {
 		self.total_size += order.size() + HEADER_SIZE;
 		trace!("Heap size is {} bytes after allocation", self.total_size);
 
+		bomb.disarm();
 		Ok(Pointer::new(header_ptr + HEADER_SIZE))
 	}
 
 	/// Deallocates the space which was allocated for a pointer.
+	///
+	/// NOTE: Once the allocator has returned an error all subsequent requests will return an error.
 	///
 	/// # Arguments
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `ptr` - pointer to the allocated chunk
 	pub fn deallocate<M: Memory + ?Sized>(&mut self, mem: &mut M, ptr: Pointer<u8>) -> Result<(), Error> {
+		if self.poisoned {
+			return Err(error("the allocator has been poisoned"))
+		}
+
+		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
+
 		let header_ptr = u32::from(ptr)
 			.checked_sub(HEADER_SIZE)
 			.ok_or_else(|| error("Invalid pointer for deallocation"))?;
@@ -400,6 +421,7 @@ impl FreeingBumpHeapAllocator {
 			.ok_or_else(|| error("Unable to subtract from total heap size without overflow"))?;
 		trace!("Heap size is {} bytes after deallocation", self.total_size);
 
+		bomb.disarm();
 		Ok(())
 	}
 
@@ -408,13 +430,13 @@ impl FreeingBumpHeapAllocator {
 	/// Returns the `bumper` from before the increase.
 	/// Returns an `Error::AllocatorOutOfSpace` if the operation
 	/// would exhaust the heap.
-	fn bump(&mut self, size: u32, heap_end: u32) -> Result<u32, Error> {
-		if self.bumper + size > heap_end {
+	fn bump(bumper: &mut u32, size: u32, heap_end: u32) -> Result<u32, Error> {
+		if *bumper + size > heap_end {
 			return Err(Error::AllocatorOutOfSpace);
 		}
 
-		let res = self.bumper;
-		self.bumper += size;
+		let res = *bumper;
+		*bumper += size;
 		Ok(res)
 	}
 }
@@ -465,6 +487,23 @@ fn heap_range(offset: u32, length: u32, heap_len: usize) -> Option<Range<usize>>
 		Some(start..end)
 	} else {
 		None
+	}
+}
+
+/// A guard that will raise the poisoned flag on drop unless disarmed.
+struct PoisonBomb<'a> {
+	poisoned: &'a mut bool,
+}
+
+impl<'a> PoisonBomb<'a> {
+	fn disarm(self) {
+		mem::forget(self)
+	}
+}
+
+impl<'a> Drop for PoisonBomb<'a> {
+	fn drop(&mut self) {
+		*self.poisoned = true;
 	}
 }
 
