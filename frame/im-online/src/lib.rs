@@ -594,7 +594,7 @@ impl<T: Trait> Module<T> {
 
 		// clear the lock in case we have failed to send transaction.
 		if res.is_err() {
-			new_status.sent_at = 0.into();
+			new_status.sent_at = 0u32.into();
 			storage.set(&new_status);
 		}
 
@@ -635,7 +635,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 		// Since we consider producing blocks as being online,
 		// the heartbeat is deferred a bit to prevent spamming.
 		let block_number = <frame_system::Module<T>>::block_number();
-		let half_session = T::SessionDuration::get() / 2.into();
+		let half_session = T::SessionDuration::get() / 2u32.into();
 		<HeartbeatAfter<T>>::put(block_number + half_session);
 
 		// Remember who the authorities are for the new session.
@@ -723,7 +723,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				.priority(T::UnsignedPriority::get())
 				.and_provides((current_session, authority_id))
 				.longevity(TryInto::<u64>::try_into(
-					T::SessionDuration::get() / 2.into()
+					T::SessionDuration::get() / 2u32.into()
 				).unwrap_or(64_u64))
 				.propagate(true)
 				.build()
