@@ -36,7 +36,7 @@
 //!
 //! For implementing freeing we maintain a linked lists for each order. The maximum supported
 //! allocation size is capped, therefore the number of orders and thus the linked lists is as well
-//! limited.
+//! limited. Currently, the maximum size of an allocation is 16 MiB.
 //!
 //! When the allocator serves an allocation request it first checks the linked list for the respective
 //! order. If it doesn't have any free chunks, the allocator requests memory from the bump allocator.
@@ -49,8 +49,10 @@ use crate::Error;
 use sp_std::{convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
 use sp_wasm_interface::{Pointer, WordSize};
 
-/// The minimal alignment guaranteed by this allocator. The alignment of 8 is chosen because it is
-/// the alignment guaranteed by wasm32.
+/// The minimal alignment guaranteed by this allocator.
+///
+/// The alignment of 8 is chosen because it is the maximum size of a primitive type supported by the
+/// target version of wasm32: i64's natural alignment is 8.
 const ALIGNMENT: u32 = 8;
 
 // The pointer returned by `allocate()` needs to fulfill the alignment
@@ -59,7 +61,7 @@ const ALIGNMENT: u32 = 8;
 // This is because all pointers will contain a 8 byte prefix (the list
 // index) and then a subsequent item of 2^x bytes, where x = [3..24].
 const N: usize = 22;
-const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes
+const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes, 16 MiB
 const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 
 // Each pointer is prefixed with 8 bytes, which identify the list index
@@ -91,6 +93,8 @@ macro_rules! trace {
 /// 16                | 1
 /// 32                | 2
 /// 64                | 3
+/// ...
+/// 16777216          | 21
 ///
 /// and so on.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -134,7 +138,7 @@ impl Order {
 		Ok(Self(order))
 	}
 
-	/// Returns the corresponding size for this order.
+	/// Returns the corresponding size in bytes for this order.
 	///
 	/// Note that it is always a power of two.
 	fn size(&self) -> u32 {
@@ -209,6 +213,10 @@ enum Header {
 }
 
 impl Header {
+	/// Reads a header from memory.
+	///
+	/// Returns an error if the `header_ptr` is out of bounds of the linear memory or if the read
+	/// header is corrupted (e.g. the order is incorrect).
 	fn read_from<M: Memory + ?Sized>(memory: &M, header_ptr: u32) -> Result<Self, Error> {
 		let raw_header = memory.read_le_u64(header_ptr)?;
 
@@ -225,6 +233,8 @@ impl Header {
 	}
 
 	/// Write out this header to memory.
+	///
+	/// Returns an error if the `header_ptr` is out of bounds of the linear memory.
 	fn write_into<M: Memory + ?Sized>(&self, memory: &mut M, header_ptr: u32) -> Result<(), Error> {
 		let (header_data, occupied_mask) = match *self {
 			Self::Occupied(order) => (order.into_raw(), 0x00000001_00000000),
@@ -297,7 +307,6 @@ pub struct FreeingBumpHeapAllocator {
 
 impl FreeingBumpHeapAllocator {
 	/// Creates a new allocation heap which follows a freeing-bump strategy.
-	/// The maximum size which can be allocated at once is 16 MiB.
 	///
 	/// # Arguments
 	///
@@ -405,13 +414,21 @@ impl FreeingBumpHeapAllocator {
 	}
 }
 
-/// A trait for abstraction of accesses to linear memory.
+/// A trait for abstraction of accesses to a wasm linear memory. Used to read or modify the
+/// allocation prefixes.
+///
+/// A wasm linear memory behaves similarly to a vector. The address space doesn't have holes and is
+/// accessible up to the reported size.
+///
+/// The linear memory can grow in size with the wasm page granularity (64KiB), but it cannot shrink.
 pub trait Memory {
-	/// Read a u64 from the heap in LE form. Used to read heap allocation prefixes.
+	/// Read a u64 from the heap in LE form. Returns an error if any of the bytes read are out of
+	/// bounds.
 	fn read_le_u64(&self, ptr: u32) -> Result<u64, Error>;
-	/// Write a u64 to the heap in LE form. Used to write heap allocation prefixes.
+	/// Write a u64 to the heap in LE form. Returns an error if any of the bytes written are out of
+	/// bounds.
 	fn write_le_u64(&mut self, ptr: u32, val: u64) -> Result<(), Error>;
-	/// Returns the full size of the memory.
+	/// Returns the full size of the memory in bytes.
 	fn size(&self) -> u32;
 }
 
