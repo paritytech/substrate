@@ -13,21 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Weights for the Balances Pallet
-
-pub trait WeightInfo {
-	fn transfer() -> Weight;
-	fn transfer_keep_alive() -> Weight;
-	fn set_balance_creating() -> Weight;
-	fn set_balance_killing() -> Weight;
-	fn force_transfer() -> Weight;
-}
+//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 2.0.0-rc5
 
 use frame_support::{traits::Get, weights::Weight};
 use sp_std::marker::PhantomData;
 
-pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
+pub struct WeightInfo<T>(PhantomData<T>);
+impl<T: frame_system::Trait> pallet_balances::WeightInfo for WeightInfo<T> {
 	fn transfer() -> Weight {
 		(65949000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))

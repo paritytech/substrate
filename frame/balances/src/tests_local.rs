@@ -118,7 +118,7 @@ impl Trait for Test {
 		u64, super::AccountData<u64>
 	>;
 	type MaxLocks = MaxLocks;
-	type WeightInfo = SubstrateWeight<Test>;
+	type WeightInfo = ();
 }
 
 pub struct ExtBuilder {
