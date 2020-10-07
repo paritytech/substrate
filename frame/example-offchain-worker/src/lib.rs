@@ -269,7 +269,7 @@ decl_module! {
 			// to the storage and other included pallets.
 			//
 			// We can easily import `frame_system` and retrieve a block hash of the parent block.
-			let parent_hash = <system::Module<T>>::block_hash(block_number - 1.into());
+			let parent_hash = <system::Module<T>>::block_hash(block_number - 1u32.into());
 			debug::debug!("Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
 			// It's a good practice to keep `fn offchain_worker()` function minimal, and move most
@@ -364,10 +364,10 @@ impl<T: Trait> Module<T> {
 				// transactions in a row. If a strict order is desired, it's better to use
 				// the storage entry for that. (for instance store both block number and a flag
 				// indicating the type of next transaction to send).
-				let transaction_type = block_number % 3.into();
+				let transaction_type = block_number % 3u32.into();
 				if transaction_type == Zero::zero() { TransactionType::Signed }
-				else if transaction_type == T::BlockNumber::from(1) { TransactionType::UnsignedForAny }
-				else if transaction_type == T::BlockNumber::from(2) { TransactionType::UnsignedForAll }
+				else if transaction_type == T::BlockNumber::from(1u32) { TransactionType::UnsignedForAny }
+				else if transaction_type == T::BlockNumber::from(2u32) { TransactionType::UnsignedForAll }
 				else { TransactionType::Raw }
 			},
 			// We are in the grace period, we should not send a transaction this time.

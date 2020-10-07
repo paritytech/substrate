@@ -200,7 +200,7 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Current time for the current block.
-		pub Now get(fn now) build(|_| 0.into()): T::Moment;
+		pub Now get(fn now): T::Moment;
 
 		/// Did the timestamp get updated in this block?
 		DidUpdate: bool;

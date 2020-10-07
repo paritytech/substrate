@@ -85,7 +85,7 @@ impl ExportBlocksCmd {
 			info!("DB path: {}", path.display());
 		}
 
-		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
+		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1u32);
 		let to = self.to.as_ref().and_then(|t| t.parse().ok());
 
 		let binary = self.binary;

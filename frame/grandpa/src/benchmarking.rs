@@ -65,8 +65,8 @@ benchmarks! {
 	}
 
 	note_stalled {
-		let delay = 1000.into();
-		let best_finalized_block_number = 1.into();
+		let delay = 1000u32.into();
+		let best_finalized_block_number = 1u32.into();
 
 	}: _(RawOrigin::Root, delay, best_finalized_block_number)
 	verify {

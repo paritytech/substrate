@@ -313,8 +313,8 @@ pub(crate) fn create_stake_of(stakes: &[(AccountId, VoteWeight)])
 pub fn check_assignments_sum<T: PerThing>(assignments: Vec<Assignment<AccountId, T>>) {
 	for Assignment { distribution, .. } in assignments {
 		let mut sum: u128 = Zero::zero();
-		distribution.iter().for_each(|(_, p)| sum += p.deconstruct().saturated_into());
-		assert_eq_error_rate!(sum, T::ACCURACY.saturated_into(), 1);
+		distribution.iter().for_each(|(_, p)| sum += p.deconstruct().saturated_into::<u128>());
+		assert_eq_error_rate!(sum, T::ACCURACY.saturated_into::<u128>(), 1);
 	}
 }
 

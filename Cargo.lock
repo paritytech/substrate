@@ -1512,7 +1512,7 @@ dependencies = [
 
 [[package]]
 name = "frame-benchmarking"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -1547,7 +1547,7 @@ dependencies = [
 
 [[package]]
 name = "frame-executive"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -1653,7 +1653,7 @@ dependencies = [
 
 [[package]]
 name = "frame-system"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "criterion",
  "frame-support",
@@ -1671,7 +1671,7 @@ dependencies = [
 
 [[package]]
 name = "frame-system-benchmarking"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -4220,7 +4220,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-aura"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -4276,7 +4276,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-babe"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -4498,7 +4498,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-example-offchain-worker"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -4530,7 +4530,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-grandpa"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "finality-grandpa",
  "frame-benchmarking",
@@ -4576,7 +4576,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-im-online"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -4671,7 +4671,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-offences"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -4729,7 +4729,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-randomness-collective-flip"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -4849,7 +4849,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-staking"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -4937,7 +4937,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-timestamp"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -5003,7 +5003,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-treasury"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -6310,7 +6310,7 @@ dependencies = [
 
 [[package]]
 name = "sc-cli"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "ansi_term 0.12.1",
  "atty",
@@ -6755,7 +6755,7 @@ dependencies = [
 
 [[package]]
 name = "sc-finality-grandpa"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "assert_matches",
  "derive_more",
@@ -6830,7 +6830,7 @@ dependencies = [
 
 [[package]]
 name = "sc-informant"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "ansi_term 0.12.1",
  "futures 0.3.5",
@@ -6881,7 +6881,7 @@ dependencies = [
 
 [[package]]
 name = "sc-network"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "assert_matches",
  "async-std",
@@ -7132,7 +7132,7 @@ dependencies = [
 
 [[package]]
 name = "sc-service"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "async-std",
  "derive_more",
@@ -7310,7 +7310,7 @@ dependencies = [
 
 [[package]]
 name = "sc-transaction-pool"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "assert_matches",
  "derive_more",
@@ -7834,7 +7834,7 @@ dependencies = [
 
 [[package]]
 name = "sp-arithmetic"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "criterion",
  "integer-sqrt",
@@ -8070,7 +8070,7 @@ dependencies = [
 
 [[package]]
 name = "sp-externalities"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -8147,7 +8147,7 @@ dependencies = [
 
 [[package]]
 name = "sp-npos-elections"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "parity-scale-codec",
  "rand 0.7.3",
@@ -8714,7 +8714,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-test-client"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "futures 0.1.29",
  "futures 0.3.5",

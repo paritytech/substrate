@@ -1,6 +1,6 @@
 [package]
 name = "sc-informant"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate informant."
 edition = "2018"
