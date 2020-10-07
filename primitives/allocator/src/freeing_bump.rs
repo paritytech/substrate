@@ -151,14 +151,14 @@ impl Order {
 	}
 }
 
-/// A marker for denoting the end of the linked list.
-const EMPTY_MARKER: u32 = u32::max_value();
+/// A special magic value for a pointer in a link that denotes the end of the linked list.
+const NIL_MARKER: u32 = u32::max_value();
 
 /// A link between headers in the free list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Link {
-	/// Null, denotes that there is no next element.
-	Null,
+	/// Nil, denotes that there is no next element.
+	Nil,
 	/// Link to the next element represented as a pointer to the a header.
 	Ptr(u32),
 }
@@ -166,17 +166,17 @@ enum Link {
 impl Link {
 	/// Creates a link from raw value.
 	fn from_raw(raw: u32) -> Self {
-		if raw != EMPTY_MARKER {
+		if raw != NIL_MARKER {
 			Self::Ptr(raw)
 		} else {
-			Self::Null
+			Self::Nil
 		}
 	}
 
 	/// Converts this link into a raw u32.
 	fn into_raw(self) -> u32 {
 		match self {
-			Self::Null => EMPTY_MARKER,
+			Self::Nil => NIL_MARKER,
 			Self::Ptr(ptr) => ptr,
 		}
 	}
@@ -271,7 +271,7 @@ impl FreeLists {
 	/// Creates the free empty lists.
 	fn new() -> Self {
 		Self {
-			heads: [Link::Null; N]
+			heads: [Link::Nil; N]
 		}
 	}
 
@@ -354,7 +354,7 @@ impl FreeingBumpHeapAllocator {
 
 				header_ptr
 			}
-			Link::Null => {
+			Link::Nil => {
 				// Corresponding free list is empty. Allocate a new item.
 				self.bump(order.size() + HEADER_SIZE, mem.size())?
 			}
@@ -572,7 +572,7 @@ mod tests {
 		// then
 		// should have re-allocated
 		assert_eq!(ptr3, to_pointer(padded_offset + 16 + HEADER_SIZE));
-		assert_eq!(heap.free_lists.heads, [Link::Null; N]);
+		assert_eq!(heap.free_lists.heads, [Link::Nil; N]);
 	}
 
 	#[test]
@@ -802,7 +802,7 @@ mod tests {
 
 		roundtrip(Header::Occupied(Order(0)));
 		roundtrip(Header::Occupied(Order(1)));
-		roundtrip(Header::Free(Link::Null));
+		roundtrip(Header::Free(Link::Nil));
 		roundtrip(Header::Free(Link::Ptr(0)));
 		roundtrip(Header::Free(Link::Ptr(4)));
 	}
