@@ -29,7 +29,7 @@ use sp_consensus_babe::digests::{
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{U256, blake2_256, crypto::Public};
-use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use codec::Encode;
 use schnorrkel::{
 	keys::PublicKey,
@@ -131,7 +131,7 @@ fn claim_secondary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	keys: &[(AuthorityId, usize)],
-	keystore: &CryptoStorePtr,
+	keystore: &SyncCryptoStorePtr,
 	author_secondary_vrf: bool,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -195,7 +195,7 @@ fn claim_secondary_slot(
 pub fn claim_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	keystore: &CryptoStorePtr,
+	keystore: &SyncCryptoStorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let authorities = epoch.authorities.iter()
 		.enumerate()
@@ -209,7 +209,7 @@ pub fn claim_slot(
 pub fn claim_slot_using_keys(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	keystore: &CryptoStorePtr,
+	keystore: &SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
 	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore, &keys)
@@ -238,7 +238,7 @@ fn claim_primary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	c: (u64, u64),
-	keystore: &CryptoStorePtr,
+	keystore: &SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -298,7 +298,7 @@ mod tests {
 
 	#[test]
 	fn claim_secondary_plain_slot_works() {
-		let keystore: CryptoStorePtr = Arc::new(LocalKeystore::in_memory());
+		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::in_memory());
 		let valid_public_key = SyncCryptoStore::sr25519_generate_new(
 			&*keystore,
 			AuthorityId::ID,

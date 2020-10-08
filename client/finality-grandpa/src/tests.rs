@@ -43,7 +43,7 @@ use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::{H256, crypto::Public};
-use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
@@ -288,7 +288,7 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 
-fn create_keystore(authority: Ed25519Keyring) -> (CryptoStorePtr, tempfile::TempDir) {
+fn create_keystore(authority: Ed25519Keyring) -> (SyncCryptoStorePtr, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 	let keystore = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 		.expect("Creates keystore"));
@@ -1057,7 +1057,7 @@ fn voter_persists_its_votes() {
 			voter_rx: TracingUnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
-			keystore: CryptoStorePtr,
+			keystore: SyncCryptoStorePtr,
 		}
 
 		impl Future for ResettableVoter {
@@ -1537,7 +1537,7 @@ type TestEnvironment<N, VR> = Environment<
 
 fn test_environment<N, VR>(
 	link: &TestLinkHalf,
-	keystore: Option<CryptoStorePtr>,
+	keystore: Option<SyncCryptoStorePtr>,
 	network_service: N,
 	voting_rule: VR,
 ) -> TestEnvironment<N, VR>

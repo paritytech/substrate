@@ -36,7 +36,7 @@ use sc_rpc_api::DenyUnsafe;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use codec::{Encode, Decode};
 use sp_core::Bytes;
-use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::generic;
 use sp_transaction_pool::{
@@ -58,7 +58,7 @@ pub struct Author<P, Client> {
 	/// Subscriptions manager
 	subscriptions: SubscriptionManager,
 	/// The key store.
-	keystore: CryptoStorePtr,
+	keystore: SyncCryptoStorePtr,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 }
@@ -69,7 +69,7 @@ impl<P, Client> Author<P, Client> {
 		client: Arc<Client>,
 		pool: Arc<P>,
 		subscriptions: SubscriptionManager,
-		keystore: CryptoStorePtr,
+		keystore: SyncCryptoStorePtr,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
 		Author {

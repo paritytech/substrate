@@ -36,7 +36,7 @@ use sp_core::{
 	crypto::Public,
 };
 use sp_application_crypto::AppKey;
-use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sc_rpc_api::DenyUnsafe;
 use sp_api::{ProvideRuntimeApi, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as _};
@@ -62,7 +62,7 @@ pub struct BabeRpcHandler<B: BlockT, C, SC> {
 	/// shared reference to EpochChanges
 	shared_epoch_changes: SharedEpochChanges<B, Epoch>,
 	/// shared reference to the Keystore
-	keystore: CryptoStorePtr,
+	keystore: SyncCryptoStorePtr,
 	/// config (actually holds the slot duration)
 	babe_config: Config,
 	/// The SelectChain strategy
@@ -76,7 +76,7 @@ impl<B: BlockT, C, SC> BabeRpcHandler<B, C, SC> {
 	pub fn new(
 		client: Arc<C>,
 		shared_epoch_changes: SharedEpochChanges<B, Epoch>,
-		keystore: CryptoStorePtr,
+		keystore: SyncCryptoStorePtr,
 		babe_config: Config,
 		select_chain: SC,
 		deny_unsafe: DenyUnsafe,
@@ -236,7 +236,7 @@ mod tests {
 	use sp_application_crypto::AppPair;
 	use sp_keyring::Sr25519Keyring;
 	use sp_core::{crypto::key_types::BABE};
-	use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
+	use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 	use sc_keystore::LocalKeystore;
 
 	use std::sync::Arc;
@@ -245,8 +245,8 @@ mod tests {
 
 	/// creates keystore backed by a temp file
 	fn create_temp_keystore<P: AppPair>(
-		authority: Sr25519Keyring
-	) -> (CryptoStorePtr, tempfile::TempDir) {
+		authority: Sr25519Keyring,
+	) -> (SyncCryptoStorePtr, tempfile::TempDir) {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 			.expect("Creates keystore"));

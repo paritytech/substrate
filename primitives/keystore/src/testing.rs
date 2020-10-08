@@ -23,7 +23,7 @@ use sp_core::{
 	ed25519, sr25519, ecdsa,
 };
 use crate::{
-	{CryptoStore, CryptoStorePtr, Error, SyncCryptoStore},
+	{CryptoStore, SyncCryptoStorePtr, Error, SyncCryptoStore},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
 use std::{collections::{HashMap, HashSet}, sync::Arc};
@@ -31,7 +31,6 @@ use parking_lot::RwLock;
 use async_trait::async_trait;
 
 /// A keystore implementation usable in tests.
-
 #[derive(Default)]
 pub struct KeyStore {
 	/// `KeyTypeId` maps to public keys and public keys map to private keys.
@@ -324,8 +323,8 @@ impl SyncCryptoStore for KeyStore {
 	}
 }
 
-impl Into<CryptoStorePtr> for KeyStore {
-	fn into(self) -> CryptoStorePtr {
+impl Into<SyncCryptoStorePtr> for KeyStore {
+	fn into(self) -> SyncCryptoStorePtr {
 		Arc::new(self)
 	}
 }

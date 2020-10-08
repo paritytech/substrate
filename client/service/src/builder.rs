@@ -59,7 +59,7 @@ use sp_core::traits::{
 	CodeExecutor,
 	SpawnNamed,
 };
-use sp_keystore::{CryptoStore, CryptoStorePtr};
+use sp_keystore::{CryptoStore, SyncCryptoStorePtr};
 use sp_runtime::BuildStorage;
 use sc_client_api::{
 	BlockBackend, BlockchainEvents,
@@ -208,7 +208,7 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 /// Construct and hold different layers of Keystore wrappers
 pub struct KeystoreContainer {
 	keystore: Arc<dyn CryptoStore>,
-	sync_keystore: CryptoStorePtr,
+	sync_keystore: SyncCryptoStorePtr,
 }
 
 impl KeystoreContainer {
@@ -217,11 +217,11 @@ impl KeystoreContainer {
 		let keystore = Arc::new(match config {
 			KeystoreConfig::Path { path, password } => LocalKeystore::open(
 				path.clone(),
-				password.clone()
+				password.clone(),
 			)?,
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
-		let sync_keystore = keystore.clone() as CryptoStorePtr;
+		let sync_keystore = keystore.clone() as SyncCryptoStorePtr;
 
 		Ok(Self {
 			keystore,
@@ -235,7 +235,7 @@ impl KeystoreContainer {
 	}
 
 	/// Returns the synchrnous keystore wrapper
-	pub fn sync_keystore(&self) -> CryptoStorePtr {
+	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
 		self.sync_keystore.clone()
 	}
 }
@@ -313,7 +313,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		client,
 		backend,
 		keystore_container,
-		task_manager
+		task_manager,
 	))
 }
 
@@ -423,7 +423,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// A task manager returned by `new_full_parts`/`new_light_parts`.
 	pub task_manager: &'a mut TaskManager,
 	/// A shared keystore returned by `new_full_parts`/`new_light_parts`.
-	pub keystore: CryptoStorePtr,
+	pub keystore: SyncCryptoStorePtr,
 	/// An optional, shared data fetcher for light clients.
 	pub on_demand: Option<Arc<OnDemand<TBl>>>,
 	/// A shared transaction pool.
@@ -706,7 +706,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
-	keystore: CryptoStorePtr,
+	keystore: SyncCryptoStorePtr,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
 	remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),

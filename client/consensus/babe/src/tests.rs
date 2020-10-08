@@ -390,7 +390,7 @@ fn run_one_test(
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 			.expect("Creates keystore"));
 		SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(seed)).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
@@ -522,7 +522,7 @@ fn sig_is_not_pre_digest() {
 fn can_author_block() {
 	sp_tracing::try_init_simple();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+	let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 		.expect("Creates keystore"));
 	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
 		.expect("Generates authority pair");
@@ -830,7 +830,7 @@ fn verify_slots_are_strictly_increasing() {
 fn babe_transcript_generation_match() {
 	sp_tracing::try_init_simple();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+	let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 		.expect("Creates keystore"));
 	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
 		.expect("Generates authority pair");

@@ -21,7 +21,7 @@ use crate::{Error, KeystoreParams, CryptoSchemeFlag, SharedParams, utils, with_c
 use std::sync::Arc;
 use structopt::StructOpt;
 use sp_core::crypto::KeyTypeId;
-use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use std::convert::TryFrom;
 use sc_service::config::KeystoreConfig;
 use sc_keystore::LocalKeystore;
@@ -70,7 +70,7 @@ impl InsertCmd {
 					self.crypto_scheme.scheme,
 					to_vec(&suri, password.clone())
 				)?;
-				let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(path, password)
+				let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(path, password)
 					.map_err(|e| format!("{}", e))?);
 				(keystore, public)
 			},

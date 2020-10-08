@@ -1,3 +1,5 @@
+// This file is part of Substrate.
+
 // Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -28,7 +30,7 @@ use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
 use sp_std::borrow::Cow;
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
-use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 
 #[cfg(feature = "std")]
 use log::debug;
@@ -370,7 +372,7 @@ where
 /// Localizes the message to the given set and round and signs the payload.
 #[cfg(feature = "std")]
 pub fn sign_message<H, N>(
-	keystore: CryptoStorePtr,
+	keystore: SyncCryptoStorePtr,
 	message: grandpa::Message<H, N>,
 	public: AuthorityId,
 	round: RoundNumber,
@@ -390,10 +392,7 @@ where
 		AuthorityId::ID,
 		&public.to_public_crypto_pair(),
 		&encoded[..],
-	)
-		.ok()?
-		.try_into()
-		.ok()?;
+	).ok()?.try_into().ok()?;
 
 	Some(grandpa::SignedMessage {
 		message,

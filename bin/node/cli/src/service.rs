@@ -474,7 +474,7 @@ mod tests {
 		H256,
 		Public
 	};
-	use sp_keystore::{CryptoStorePtr, SyncCryptoStore};
+	use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 	use sp_runtime::{
 		generic::{BlockId, Era, Digest, SignedPayload},
 		traits::{Block as BlockT, Header as HeaderT},
@@ -498,7 +498,7 @@ mod tests {
 	#[ignore]
 	fn test_sync() {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore: CryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
 			.expect("Creates keystore"));
 		let alice: sp_consensus_babe::AuthorityId = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
 			.expect("Creates authority pair").into();
@@ -609,7 +609,8 @@ mod tests {
 				let signature = SyncCryptoStore::sign_with(
 					&*keystore,
 					sp_consensus_babe::AuthorityId::ID,
-					&alice.to_public_crypto_pair(), &to_sign
+					&alice.to_public_crypto_pair(),
+					&to_sign,
 				).unwrap()
 				 .try_into()
 				 .unwrap();

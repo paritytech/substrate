@@ -26,7 +26,7 @@ use sp_core::{
 	ExecutionContext,
 	offchain::{self, OffchainExt, TransactionPoolExt},
 };
-use sp_keystore::{KeystoreExt, CryptoStorePtr};
+use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
 	traits,
@@ -81,7 +81,7 @@ impl ExtensionsFactory for () {
 /// for each call, based on required `Capabilities`.
 pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
-	keystore: Option<CryptoStorePtr>,
+	keystore: Option<SyncCryptoStorePtr>,
 	// FIXME: these two are only RwLock because of https://github.com/paritytech/substrate/issues/4587
 	//        remove when fixed.
 	// To break retain cycle between `Client` and `TransactionPool` we require this
@@ -107,7 +107,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	/// Create new `ExecutionExtensions` given a `keystore` and `ExecutionStrategies`.
 	pub fn new(
 		strategies: ExecutionStrategies,
-		keystore: Option<CryptoStorePtr>,
+		keystore: Option<SyncCryptoStorePtr>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
 		let extensions_factory = Box::new(());
