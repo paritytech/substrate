@@ -229,6 +229,7 @@ mod tests {
 	use sp_runtime::traits::Keccak256;
 
 	type Test = DataOrHash<Keccak256, String>;
+	type TestCompact = Compact<Keccak256, (Test, Test)>;
 
 	#[test]
 	fn should_encode_decode_correctly_if_no_compact() {
@@ -275,6 +276,60 @@ mod tests {
 
 	#[test]
 	fn compact_should_work() {
-		assert_eq!(true, false);
+		// given
+		let a: TestCompact = Compact::new((
+			Test::Data("Hello World!".into()),
+			Test::Data("".into())
+		));
+		let b: TestCompact = Compact::new((
+			Test::Hash(a.0.hash()),
+			Test::Hash(b.0.hash()),
+		));
+
+		// when
+		let a_hash = a.hash();
+		let b_hash = b.hash();
+
+		// then
+	}
+
+	#[test]
+	fn compact_should_encode_decode_correctly() {
+		// given
+		let a: TestCompact = Compact::new((
+			Test::Data("Hello World!".into()),
+			Test::Data("".into())
+		));
+		let b: TestCompact = Compact::new((
+			Test::Hash(a.0.hash()),
+			Test::Hash(b.0.hash()),
+		));
+		let cases = vec![a, b.clone()];
+
+		// when
+		let encoded_compact = cases
+			.iter()
+			.map(|c| c.using_encoded(|x| x.to_vec(), true))
+			.collect::<Vec<_>>();
+
+		let encoded = cases
+			.iter()
+			.map(|c| c.using_encoded(|x| x.to_vec(), false))
+			.collect::<Vec<_>>();
+
+		let decoded_compact = encoded_compact
+			.iter()
+			.map(|x| TestCompact::decode(&mut &**x))
+			.collect::<Vec<_>>();
+
+		let decoded = encoded
+			.iter()
+			.map(|x| TestCompact::decode(&mut &**x))
+			.collect::<Vec<_>>();
+
+		// then
+		assert_eq!(decoded, cases.into_iter().map(Result::<_, codec::Error>::Ok).collect::<Vec<_>>());
+
+		assert_eq!(decoded_compact, vec![Ok(b.clone()), Ok(b.clone())]);
 	}
 }
