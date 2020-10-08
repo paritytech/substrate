@@ -22,27 +22,47 @@ use super::*;
 use sp_runtime::traits::Bounded;
 use frame_system::RawOrigin as SystemOrigin;
 use frame_support::assert_ok;
-use frame_benchmarking::{benchmarks, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 
 use crate::Module as Assets;
 
-/*
-use frame_system::EventRecord;
-fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
-	let events = System::<T>::events();
-	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
-	// compare to the last event record
-	let EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
+const SEED: u32 = 0;
+
+fn create_default_asset<T: Trait>(max_zombies: u32)
+	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
+{
+	let caller: T::AccountId = whitelisted_caller();
+	let caller_lookup = T::Lookup::unlookup(caller.clone());
+	let root = SystemOrigin::Root.into();
+	assert_ok!(Assets::<T>::force_create(
+		root,
+		Default::default(),
+		caller_lookup.clone(),
+		max_zombies,
+		1.into(),
+	));
+	(caller, caller_lookup)
 }
-*/
+
+fn create_default_minted_asset<T: Trait>(max_zombies: u32, amount: T::Balance)
+	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
+{
+	let (caller, caller_lookup)  = create_default_asset::<T>(max_zombies);
+	assert_ok!(Assets::<T>::mint(
+		SystemOrigin::Signed(caller.clone()).into(),
+		Default::default(),
+		caller_lookup.clone(),
+		amount,
+	));
+	(caller, caller_lookup)
+}
 
 benchmarks! {
 	_ { }
 
 	create {
 		let caller: T::AccountId = whitelisted_caller();
-		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(SystemOrigin::Signed(caller), Default::default(), caller_lookup, 1, 1.into())
 	verify {
@@ -51,94 +71,103 @@ benchmarks! {
 
 	force_create {
 		let caller: T::AccountId = whitelisted_caller();
-		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller);
+		let caller_lookup = T::Lookup::unlookup(caller);
 	}: _(SystemOrigin::Root, Default::default(), caller_lookup, 1, 1.into())
 	verify {
 		assert!(true)
 	}
 
 	destroy {
-		let caller: T::AccountId = whitelisted_caller();
-		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
-		let root = SystemOrigin::Root.into();
-		assert_ok!(Assets::<T>::force_create(root, Default::default(), caller_lookup, 1, 1.into()));
+		let (caller, _) = create_default_asset::<T>(10);
 	}: _(SystemOrigin::Signed(caller), Default::default())
 	verify {
 		assert!(true)
 	}
 
 	force_destroy {
-		let caller: T::AccountId = whitelisted_caller();
-		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
-		let root = SystemOrigin::Root.into();
-		assert_ok!(Assets::<T>::force_create(root, Default::default(), caller_lookup, 1, 1.into()));
+		let _ = create_default_asset::<T>(10);
 	}: _(SystemOrigin::Root, Default::default())
 	verify {
 		assert!(true)
 	}
 
-	/*mint {
-		let caller: T::AccountId = whitelisted_caller();
-	}: _(SystemOrigin::Signed(caller))
+	mint {
+		let (caller, caller_lookup) = create_default_asset::<T>(10);
+	}: _(SystemOrigin::Signed(caller), Default::default(), caller_lookup, 100.into())
 	verify {
-		assert(true)
+		assert!(true)
 	}
 
 	burn {
-		let caller: T::AccountId = whitelisted_caller();
-	}: _(SystemOrigin::Signed(caller))
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100.into());
+	}: _(SystemOrigin::Signed(caller), Default::default(), caller_lookup, 100.into())
 	verify {
-		assert(true)
+		assert!(true)
 	}
 
 	transfer {
-		let caller: T::AccountId = whitelisted_caller();
-	}: _(SystemOrigin::Signed(caller))
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100.into());
+		let target = account("target", 0, SEED);
+		let target_lookup = T::Lookup::unlookup(target);
+	}: _(SystemOrigin::Signed(caller), Default::default(), target_lookup, 100.into())
 	verify {
-		assert(true)
+		assert!(true)
 	}
 
 	force_transfer {
-		let caller: T::AccountId = whitelisted_caller();
-	}: _(SystemOrigin::Signed(caller))
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100.into());
+		let target = account("target", 0, SEED);
+		let target_lookup = T::Lookup::unlookup(target);
+	}: _(SystemOrigin::Signed(caller), Default::default(), caller_lookup, target_lookup, 100.into())
 	verify {
-		assert(true)
+		assert!(true)
 	}
 
 	freeze {
-		let caller: T::AccountId = whitelisted_caller();
-	}: _(SystemOrigin::Signed(caller))
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100.into());
+	}: _(SystemOrigin::Signed(caller), Default::default(), caller_lookup)
 	verify {
-		assert(true)
+		assert!(true)
 	}
 
 	thaw {
-		let caller: T::AccountId = whitelisted_caller();
-	}: _(SystemOrigin::Signed(caller))
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100.into());
+		assert_ok!(Assets::<T>::freeze(
+			SystemOrigin::Signed(caller.clone()).into(),
+			Default::default(),
+			caller_lookup.clone()
+		));
+	}: _(SystemOrigin::Signed(caller), Default::default(), caller_lookup)
 	verify {
-		assert(true)
+		assert!(true)
 	}
 
 	transfer_ownership {
-		let caller: T::AccountId = whitelisted_caller();
-	}: _(SystemOrigin::Signed(caller))
+		let (caller, _) = create_default_asset::<T>(10);
+		let target = account("target", 0, SEED);
+		let target_lookup = T::Lookup::unlookup(target);
+	}: _(SystemOrigin::Signed(caller), Default::default(), target_lookup)
 	verify {
-		assert(true)
+		assert!(true)
 	}
 
 	set_team {
-		let caller: T::AccountId = whitelisted_caller();
-	}: _(SystemOrigin::Signed(caller))
+		let (caller, _) = create_default_asset::<T>(10);
+		let target0 = T::Lookup::unlookup(account("target", 0, SEED));
+		let target1 = T::Lookup::unlookup(account("target", 1, SEED));
+		let target2 = T::Lookup::unlookup(account("target", 2, SEED));
+	}: _(SystemOrigin::Signed(caller), Default::default(), target0, target1, target2)
 	verify {
-		assert(true)
+		assert!(true)
 	}
 
 	set_max_zombies {
-		let caller: T::AccountId = whitelisted_caller();
-	}: _(SystemOrigin::Signed(caller))
+		let (caller, _) = create_default_asset::<T>(10);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+	}: _(SystemOrigin::Signed(caller), Default::default(), 100)
 	verify {
-		assert(true)
-	}*/
+		assert!(true)
+	}
 }
 
 #[cfg(test)]
@@ -173,7 +202,7 @@ mod tests {
 			assert_ok!(test_benchmark_force_destroy::<Test>());
 		});
 	}
-/*
+
 	#[test]
 	fn mint() {
 		new_test_ext().execute_with(|| {
@@ -235,5 +264,5 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_set_max_zombies::<Test>());
 		});
-	}*/
+	}
 }
