@@ -88,9 +88,22 @@ pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro:
 					}
 				});
 
+			let mut different_variants = vec![];
+			for (i, i_variant) in enum_.variants.iter().enumerate() {
+				for (j, j_variant) in enum_.variants.iter().enumerate() {
+					if i != j {
+						let i_ident = &i_variant.ident;
+						let j_ident = &j_variant.ident;
+						different_variants.push(quote::quote!(
+							(Self::#i_ident { .. }, Self::#j_ident { .. }) => false
+						))
+					}
+				}
+			}
+
 			quote::quote!( match (self, other) {
 				#( #variants, )*
-				_ => false,
+				#( #different_variants, )*
 			})
 		},
 		syn::Data::Union(_) => {
