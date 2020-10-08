@@ -742,9 +742,7 @@ mod node_implementation {
 		{
 			let mut stack: Vec<(&Self, bool)> = vec![(&self, true)];
 
-			while !stack.is_empty() {
-				let (node, first_time) = stack.pop().unwrap();
-
+			while let Some((node, first_time)) = stack.pop() {
 				if first_time {
 					if node.hash == hash {
 						return Err(Error::Duplicate);
