@@ -1684,6 +1684,24 @@ pub trait Instance: 'static {
     const PREFIX: &'static str ;
 }
 
+/// An instance of a storage.
+///
+/// It is required the the couple `(PalletInfo::name<Pallet>(), STORAGE_PREFIX)` is unique.
+/// Any storage with same couple will collide.
+pub trait StorageInstance {
+	type Pallet: 'static;
+	type PalletInfo: PalletInfo;
+	const STORAGE_PREFIX: &'static str;
+}
+
+/// Implement Get by returning Default for any type that implements Default.
+pub struct GetDefault;
+impl<T: Default> crate::traits::Get<T> for GetDefault {
+	fn get() -> T {
+		T::default()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

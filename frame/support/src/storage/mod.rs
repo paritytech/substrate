@@ -29,6 +29,7 @@ pub mod child;
 #[doc(hidden)]
 pub mod generator;
 pub mod migration;
+pub mod types;
 
 /// Execute the supplied function in a new storage transaction.
 ///
