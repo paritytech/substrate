@@ -861,7 +861,7 @@ mod tests {
 
 		// when
 		assert!(heap.allocate(mem.as_mut(), 8).is_ok());
-		let alloc_ptr =heap.allocate(mem.as_mut(), 8).unwrap();
+		let alloc_ptr = heap.allocate(mem.as_mut(), 8).unwrap();
 		assert!(heap.allocate(mem.as_mut(), 8).is_err());
 
 		// then
