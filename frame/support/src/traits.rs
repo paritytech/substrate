@@ -1529,11 +1529,9 @@ pub mod schedule {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + Debug;
 
-		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		/// Schedule a dispatch to happen at the beginning of some block in the future.
 		///
 		/// This is not named.
-		///
-		/// Infallible.
 		fn schedule(
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
@@ -1553,6 +1551,22 @@ pub mod schedule {
 		/// NOTE2: This will not work to cancel periodic tasks after their initial execution. For
 		/// that, you must name the task explicitly using the `Named` trait.
 		fn cancel(address: Self::Address) -> Result<(), ()>;
+
+		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
+		/// only if it is executed *before* the currently scheduled block. For periodic tasks,
+		/// this dispatch is guaranteed to succeed only before the *initial* execution; for
+		/// others, use `reschedule_named`. 
+		///
+		/// Will return an error if the `address` is invalid.
+		fn reschedule(
+			address: Self::Address,
+			when: DispatchTime<BlockNumber>,
+		) -> Result<Self::Address, DispatchError>;
+
+		/// Return the next dispatch time for a given task.
+		///
+		/// Will return an error if the `address` is invalid.
+		fn next_dispatch_time(address: Self::Address) -> Result<BlockNumber, ()>;
 	}
 
 	/// A type that can be used as a scheduler.
@@ -1560,7 +1574,7 @@ pub mod schedule {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
 
-		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		/// Schedule a dispatch to happen at the beginning of some block in the future.
 		///
 		/// - `id`: The identity of the task. This must be unique and will return an error if not.
 		fn schedule_named(
@@ -1580,6 +1594,18 @@ pub mod schedule {
 		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
 		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
 		fn cancel_named(id: Vec<u8>) -> Result<(), ()>;
+
+		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
+		/// only if it is executed *before* the currently scheduled block.
+		fn reschedule_named(
+			id: Vec<u8>,
+			when: DispatchTime<BlockNumber>,
+		) -> Result<Self::Address, DispatchError>;
+
+		/// Return the next dispatch time for a given task.
+		///
+		/// Will return an error if the `id` is invalid.
+		fn next_dispatch_time(id: Vec<u8>) -> Result<BlockNumber, ()>;
 	}
 }
 

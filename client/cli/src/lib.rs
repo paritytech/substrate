@@ -43,7 +43,9 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
-use tracing_subscriber::{filter::Directive, layer::SubscriberExt};
+use tracing_subscriber::{
+	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
+};
 
 /// Substrate client CLI
 ///
@@ -255,8 +257,6 @@ pub fn init_logger(
 		// Set warn logging by default for some modules.
 		.add_directive("cranelift_wasm=warn".parse().expect("provided directive is valid"))
 		.add_directive("hyper=warn".parse().expect("provided directive is valid"))
-		// Always log the special target `sc_tracing`, overrides global level.
-		.add_directive("sc_tracing=trace".parse().expect("provided directive is valid"))
 		// Enable info for others.
 		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
 
@@ -278,15 +278,37 @@ pub fn init_logger(
 		}
 	}
 
+	// If we're only logging `INFO` entries then we'll use a simplified logging format.
+	let simple = match Layer::<FmtSubscriber>::max_level_hint(&env_filter) {
+		Some(level) if level <= tracing_subscriber::filter::LevelFilter::INFO => true,
+		_ => false,
+	};
+
+	// Always log the special target `sc_tracing`, overrides global level.
+	// NOTE: this must be done after we check the `max_level_hint` otherwise
+	// it is always raised to `TRACE`.
+	env_filter = env_filter.add_directive(
+		"sc_tracing=trace"
+			.parse()
+			.expect("provided directive is valid"),
+	);
+
 	let isatty = atty::is(atty::Stream::Stderr);
 	let enable_color = isatty;
+	let timer = ChronoLocal::with_format(if simple {
+		"%Y-%m-%d %H:%M:%S".to_string()
+	} else {
+		"%Y-%m-%d %H:%M:%S%.3f".to_string()
+	});
 
-	let subscriber = tracing_subscriber::FmtSubscriber::builder()
+	let subscriber = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
-		.with_target(false)
 		.with_ansi(enable_color)
+		.with_target(!simple)
+		.with_level(!simple)
+		.with_thread_names(!simple)
+		.with_timer(timer)
 		.with_writer(std::io::stderr)
-		.compact()
 		.finish();
 
 	if let Some(tracing_targets) = tracing_targets {
