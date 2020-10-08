@@ -267,7 +267,80 @@ macro_rules! ord_parameter_types {
 }
 
 #[doc(inline)]
-pub use frame_support_procedural::{decl_storage, construct_runtime, transactional};
+pub use frame_support_procedural::{decl_storage, construct_runtime, transactional, DebugStripped};
+
+/// Derive Clone but do not bound any generic.
+///
+/// This is useful for type generic over runtime:
+/// ```
+/// # use frame_support::CloneNoBound;
+/// trait Trait {
+///		type C: Clone;
+/// }
+///
+/// // Foo implements clone because C bounds Clone.
+/// // Otherwise compilation fail telling `c` doesn't implement clone.
+/// #[derive(CloneNoBound)]
+/// struct Foo<T: Trait> {
+///		c: T::C,
+/// }
+/// ```
+pub use frame_support_procedural::CloneNoBound;
+
+/// Derive Eq but do not bound any generic.
+///
+/// This is useful for type generic over runtime:
+/// ```
+/// # use frame_support::{EqNoBound, PartialEqNoBound};
+/// trait Trait {
+///		type C: Eq;
+/// }
+///
+/// // Foo implements clone because C bounds Eq.
+/// // Otherwise compilation fail telling `c` doesn't implement eq.
+/// #[derive(PartialEqNoBound, EqNoBound)]
+/// struct Foo<T: Trait> {
+///		c: T::C,
+/// }
+/// ```
+pub use frame_support_procedural::EqNoBound;
+
+/// Derive PartialEq but do not bound any generic.
+///
+/// This is useful for type generic over runtime:
+/// ```
+/// # use frame_support::PartialEqNoBound;
+/// trait Trait {
+///		type C: PartialEq;
+/// }
+///
+/// // Foo implements clone because C bounds PartialEq.
+/// // Otherwise compilation fail telling `c` doesn't implement eq.
+/// #[derive(PartialEqNoBound)]
+/// struct Foo<T: Trait> {
+///		c: T::C,
+/// }
+/// ```
+pub use frame_support_procedural::PartialEqNoBound;
+
+/// Derive Debug but do not bound any generic.
+///
+/// This is useful for type generic over runtime:
+/// ```
+/// # use frame_support::DebugNoBound;
+/// # use core::fmt::Debug;
+/// trait Trait {
+///		type C: Debug;
+/// }
+///
+/// // Foo implements clone because C bounds Debug.
+/// // Otherwise compilation fail telling `c` doesn't implement eq.
+/// #[cfg_attr(feature = "std", derive(DebugNoBound))]
+/// struct Foo<T: Trait> {
+///		c: T::C,
+/// }
+/// ```
+pub use frame_support_procedural::DebugNoBound;
 
 /// Return Err of the expression: `return Err($expression);`.
 ///
