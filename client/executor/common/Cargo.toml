@@ -28,6 +28,7 @@ wasmtime = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
 wasmer = "1.0.0-alpha3"
 wasmer-compiler-singlepass = "1.0.0-alpha3"
 wasmer-engine-jit = "1.0.0-alpha3"
+wasmer-runtime = "0.17"
 
 [features]
 default = []

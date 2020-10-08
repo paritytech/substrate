@@ -850,7 +850,118 @@ where
 				InstantiationError::ModuleDecoding
 			})?;
 
-			let import_object = wasmer::imports! {};
+
+			let imports: Vec<_> = module
+				.imports()
+				.into_iter()
+				.filter_map(|import| {
+					if let wasmer::ExternType::Function(func_ty) = import.ty() {
+						let guest_func_index = if let Some(index) = guest_env.imports.func_by_name(import.module(), import.name()) {
+							index
+						} else {
+							// Missing import
+							return None;
+						};
+
+						let supervisor_func_index = guest_env.guest_to_supervisor_mapping
+							.func_by_guest_index(guest_func_index).expect("missing guest to host mapping");
+
+						let dispatch_thunk = dispatch_thunk.clone();
+						let function = wasmer::Function::new(&store, func_ty, move |params| {
+							SCH::with_sandbox_capabilities(|supervisor_externals| {
+								// Serialize arguments into a byte vector.
+								let invoke_args_data = params
+									.iter()
+									.map(|val| match val {
+										wasmer::Val::I32(val) => Value::I32(*val),
+										wasmer::Val::I64(val) => Value::I64(*val),
+										wasmer::Val::F32(val) => Value::F32(*val as u32),
+										wasmer::Val::F64(val) => Value::F64(*val as u64),
+										_ => unimplemented!()
+									})
+									.collect::<Vec<_>>()
+									.encode();
+
+								// Move serialized arguments inside the memory, invoke dispatch thunk and
+								// then free allocated memory.
+								let invoke_args_len = invoke_args_data.len() as WordSize;
+								let invoke_args_ptr = supervisor_externals
+									.allocate_memory(invoke_args_len)
+									.map_err(|_| wasmer::RuntimeError::new("Can't allocate memory in supervisor for the arguments"))?;
+
+								let deallocate = |fe: &mut FE, ptr, fail_msg| {
+									fe
+										.deallocate_memory(ptr)
+										.map_err(|_| wasmer::RuntimeError::new(fail_msg))
+								};
+
+								if supervisor_externals
+									.write_memory(invoke_args_ptr, &invoke_args_data)
+									.is_err()
+								{
+									deallocate(supervisor_externals, invoke_args_ptr, "Failed dealloction after failed write of invoke arguments")?;
+									return Err(wasmer::RuntimeError::new("Can't write invoke args into memory"));
+								}
+
+								let serialized_result = supervisor_externals.invoke(
+									&dispatch_thunk,
+									invoke_args_ptr,
+									invoke_args_len,
+									state,
+									supervisor_func_index,
+								)
+									.map_err(|e| wasmer::RuntimeError::new(e.to_string()))?;
+
+								// dispatch_thunk returns pointer to serialized arguments.
+								// Unpack pointer and len of the serialized result data.
+								let (serialized_result_val_ptr, serialized_result_val_len) = {
+									// Cast to u64 to use zero-extension.
+									let v = serialized_result as u64;
+									let ptr = (v as u64 >> 32) as u32;
+									let len = (v & 0xFFFFFFFF) as u32;
+									(Pointer::new(ptr), len)
+								};
+
+								let serialized_result_val = supervisor_externals
+									.read_memory(serialized_result_val_ptr, serialized_result_val_len)
+									.map_err(|_| wasmer::RuntimeError::new("Can't read the serialized result from dispatch thunk"));
+
+								let deserialized_result = deallocate(supervisor_externals, serialized_result_val_ptr, "Can't deallocate memory for dispatch thunk's result")
+									.and_then(|_| serialized_result_val)
+									.and_then(|serialized_result_val| {
+										deserialize_result(&serialized_result_val)
+											.map_err(|e| wasmer::RuntimeError::new(e.to_string()))
+									})?;
+
+								if let Some(value) = deserialized_result {
+									Ok(vec![
+										match value {
+											RuntimeValue::I32(val) => wasmer::Val::I32(val),
+											RuntimeValue::I64(val) => wasmer::Val::I64(val),
+											RuntimeValue::F32(val) => wasmer::Val::F32(val.into()),
+											RuntimeValue::F64(val) => wasmer::Val::F64(val.into()),
+										}
+									])
+								} else {
+									Ok(vec![])
+								}
+							})
+						});
+
+						Some((import.name().to_string(), function))
+					} else {
+						None
+					}
+				})
+				.collect();
+
+			let mut import_object = wasmer::ImportObject::new();
+			let mut exports = wasmer::Exports::new();
+
+			for (name, function) in imports {
+				exports.insert(name, wasmer::Extern::Function(function));
+			}
+			import_object.register("env", exports);
 
 			println!("Instantiating module...");
 			let instance = wasmer::Instance::new(&module, &import_object)
