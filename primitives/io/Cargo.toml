@@ -30,7 +30,7 @@ log = { version = "0.4.8", optional = true }
 futures = { version = "0.3.1", features = ["thread-pool"], optional = true }
 parking_lot = { version = "0.10.0", optional = true }
 tracing = { version = "0.1.19", default-features = false }
-tracing-core = { version = "0.1.15", default-features = false}
+tracing-core = { version = "0.1.17", default-features = false}
 
 [features]
 default = ["std"]
