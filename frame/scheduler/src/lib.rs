@@ -474,8 +474,9 @@ impl<T: Trait> Module<T> {
 
 		let when = match when {
 			DispatchTime::At(x) => x,
-			// If the user does "after 0", just schedule it for the next block.
-			DispatchTime::After(x) => now.saturating_add(x.max(One::one()))
+			// The current block has already completed it's scheduled tasks, so
+			// Schedule the task at lest one block after this current block.
+			DispatchTime::After(x) => now.saturating_add(x).saturating_add(One::one())
 		};
 
 		if when <= now {
@@ -911,10 +912,11 @@ mod tests {
 			run_to_block(2);
 			let call = Call::Logger(logger::Call::log(42, 1000));
 			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			// This will schedule the call 3 blocks after the next block... so block 3 + 3 = 6
 			assert_ok!(Scheduler::do_schedule(DispatchTime::After(3), None, 127, root(), call));
-			run_to_block(4);
-			assert!(logger::log().is_empty());
 			run_to_block(5);
+			assert!(logger::log().is_empty());
+			run_to_block(6);
 			assert_eq!(logger::log(), vec![(root(), 42u32)]);
 			run_to_block(100);
 			assert_eq!(logger::log(), vec![(root(), 42u32)]);
