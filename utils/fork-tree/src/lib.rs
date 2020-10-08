@@ -1034,67 +1034,6 @@ mod test {
 		(tree, is_descendent_of)
 	}
 
-	fn test_fork_tree_2() -> (ForkTree<String, u64, ()>, impl Fn(&String, &String) -> Result<bool, TestError>)  {
-		let mut tree = ForkTree::new();
-
-		//
-		//     - B - C - D - E
-		//    /
-		//   /   - G
-		//  /   /
-		// A - F - H - I
-		//          \
-		//           - L - M
-		//              \
-		//               - O
-		//  \
-		//   — J - K
-		//
-		// (where N is not a part of fork tree)
-		let is_descendent_of = |base: &String, block: &String| -> Result<bool, TestError> {
-			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "O"];
-			match (&base[..], &block[..]) {
-				("A", b) => Ok(letters.into_iter().any(|n| n == b)),
-				("B", b) => Ok(b == "C" || b == "D" || b == "E"),
-				("C", b) => Ok(b == "D" || b == "E"),
-				("D", b) => Ok(b == "E"),
-				("E", _) => Ok(false),
-				("F", b) => Ok(b == "G" || b == "H" || b == "I" || b == "L" || b == "M" || b == "O"),
-				("G", _) => Ok(false),
-				("H", b) => Ok(b == "I" || b == "L" || b == "M" || b == "O"),
-				("I", _) => Ok(false),
-				("J", b) => Ok(b == "K"),
-				("K", _) => Ok(false),
-				("L", b) => Ok(b == "M" || b == "O"),
-				("M", _) => Ok(false),
-				("O", _) => Ok(false),
-				("0", _) => Ok(true),
-				_ => Ok(false),
-			}
-		};
-
-		tree.import("A".into(), 1, (), &is_descendent_of).unwrap();
-
-		tree.import("B".into(), 2, (), &is_descendent_of).unwrap();
-		tree.import("C".into(), 3, (), &is_descendent_of).unwrap();
-		tree.import("D".into(), 4, (), &is_descendent_of).unwrap();
-		tree.import("E".into(), 5, (), &is_descendent_of).unwrap();
-
-		tree.import("F".into(), 2, (), &is_descendent_of).unwrap();
-		tree.import("G".into(), 3, (), &is_descendent_of).unwrap();
-
-		tree.import("H".into(), 3, (), &is_descendent_of).unwrap();
-		tree.import("I".into(), 4, (), &is_descendent_of).unwrap();
-		tree.import("L".into(), 4, (), &is_descendent_of).unwrap();
-		tree.import("M".into(), 5, (), &is_descendent_of).unwrap();
-		tree.import("O".into(), 5, (), &is_descendent_of).unwrap();
-
-		tree.import("J".into(), 2, (), &is_descendent_of).unwrap();
-		tree.import("K".into(), 3, (), &is_descendent_of).unwrap();
-
-		(tree, is_descendent_of)
-	}
-
 	#[test]
 	fn import_doesnt_revert() {
 		let (mut tree, is_descendent_of) = test_fork_tree();
@@ -1671,14 +1610,5 @@ mod test {
 			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
 			["A", "B", "C", "D", "E", "F", "H", "L", "M", "O", "I", "G", "J", "K"]
 		);
-	}
-
-	#[test]
-	fn test_serialization() {
-		use codec::*;
-		let (tree, _is_descendent_of) = test_fork_tree_2();
-		let encoded = tree.encode();
-		let decoded = ForkTree::decode(&mut &encoded[..]).unwrap();
-		assert_eq!(tree, decoded);
 	}
 }
