@@ -337,7 +337,7 @@ mod tests {
 
 	#[test]
 	fn test_logger_filters() {
-		let test_pattern = "afg=debug,sync=trace,client=warn,telemetry";
+		let test_pattern = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
 		init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
 
 		tracing::dispatcher::get_default(|dispatcher| {
@@ -370,6 +370,7 @@ mod tests {
 			assert!(test_filter("client", Level::WARN));
 
 			assert!(test_filter("telemetry", Level::TRACE));
+			assert!(test_filter("something-with-dash", Level::ERROR));
 		});
 	}
 
