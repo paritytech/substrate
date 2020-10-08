@@ -254,6 +254,15 @@
 			"website": "https://centrifuge.io/"
 		},
 		{
+			"prefix": 37,
+			"network": "nodle",
+			"displayName": "Nodle Chain",
+			"symbols": ["NODL"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://nodle.io/"
+		},
+		{
 			"prefix": 39,
 			"network": "mathchain",
 			"displayName": "MathChain mainnet",
