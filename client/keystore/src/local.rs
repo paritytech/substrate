@@ -40,9 +40,6 @@ use sp_keystore::{
 };
 use sp_application_crypto::{ed25519, sr25519, ecdsa};
 
-use sp_core::crypto::IsWrappedBy;
-use sp_application_crypto::{AppPublic, AppKey, AppPair};
-
 use crate::{Result, Error};
 
 /// A local based keystore that is either memory-based or filesystem-based.
@@ -480,8 +477,12 @@ impl KeystoreInner {
 mod tests {
 	use super::*;
 	use tempfile::TempDir;
-	use sp_core::{Pair, testing::SR25519, crypto::Ss58Codec};
-	use sp_application_crypto::{ed25519, sr25519};
+	use sp_core::{
+		Pair,
+		crypto::{IsWrappedBy, Ss58Codec},
+		testing::SR25519,
+	};
+	use sp_application_crypto::{ed25519, sr25519, AppPublic, AppKey, AppPair};
 	use std::{
 		fs,
 		str::FromStr,
