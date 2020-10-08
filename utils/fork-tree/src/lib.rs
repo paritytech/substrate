@@ -768,48 +768,40 @@ mod node_implementation {
 				  F: Fn(&H, &H) -> Result<bool, E>,
 				  P: Fn(&V) -> bool,
 		{
-			// stop searching this branch
-			if *number < self.number {
-				return Ok(FindOutcome::Failure(false));
-			}
+			let mut stack: Vec<(&Self, Option<usize>, bool)> = vec![(self, None, true)];
+			let mut indices = Vec::new();
 
-			let mut known_descendent_of = false;
+			let mut found = false;
 
-			// continue depth-first search through all children
-			for (i, node) in self.children.iter().enumerate() {
-				// found node, early exit
-				match node.find_node_index_where(hash, number, is_descendent_of, predicate)? {
-					FindOutcome::Abort => return Ok(FindOutcome::Abort),
-					FindOutcome::Found(mut x) => {
-						x.push(i);
-						return Ok(FindOutcome::Found(x))
-					},
-					FindOutcome::Failure(true) => {
-						// if the block was a descendent of this child,
-						// then it cannot be a descendent of any others,
-						// so we don't search them.
-						known_descendent_of = true;
-						break;
-					},
-					FindOutcome::Failure(false) => {},
+			while let Some((node, index, first_time)) = stack.pop() {
+				// stop searching this branch
+				if *number < node.number {
+					continue;
+				}
+
+				if first_time && !found {
+					if !node.children.is_empty() {
+						stack.push((node, index, false));
+
+						for (i, node) in node.children.iter().enumerate().rev() {
+							stack.push((node, Some(i), true));
+						}
+
+						continue;
+					}
+				}
+
+				if is_descendent_of(&node.hash, hash)? {
+					if predicate(&node.data) {
+						if let Some(index) = index {
+							indices.push(index);
+						}
+						found = true;
+					}
 				}
 			}
 
-			// node not found in any of the descendents, if the node we're
-			// searching for is a descendent of this node then we will stop the
-			// search here, since there aren't any more children and we found
-			// the correct node so we don't want to backtrack.
-			let is_descendent_of = known_descendent_of || is_descendent_of(&self.hash, hash)?;
-			if is_descendent_of {
-				// if the predicate passes we return the node
-				if predicate(&self.data) {
-					return Ok(FindOutcome::Found(Vec::new()));
-				}
-			}
-
-			// otherwise, tell our ancestor that we failed, and whether
-			// the block was a descendent.
-			Ok(FindOutcome::Failure(is_descendent_of))
+			return Ok(FindOutcome::Found(indices))
 		}
 
 		/// Find a node in the tree that is the deepest ancestor of the given
