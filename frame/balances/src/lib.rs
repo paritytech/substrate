@@ -417,7 +417,7 @@ decl_storage! {
 			for (_, balance) in &config.balances {
 				assert!(
 					*balance >= <T as Trait<I>>::ExistentialDeposit::get(),
-					"the balance of any account should always be more than existential deposit.",
+					"the balance of any account should always be at least the existential deposit.",
 				)
 			}
 			for &(ref who, free) in config.balances.iter() {

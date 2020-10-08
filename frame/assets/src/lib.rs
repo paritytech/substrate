@@ -111,14 +111,19 @@
 
 use sp_std::{fmt::Debug};
 use sp_runtime::{RuntimeDebug, traits::{
-	Member, AtLeast32Bit, AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub,
+	Member, AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub,
 }};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, HasCompact};
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 	traits::{Currency, ReservableCurrency, EnsureOrigin, Get, BalanceStatus::Reserved},
-	dispatch::{DispatchResult, DispatchError},
+	dispatch::{DispatchResult, DispatchError}, weights::Weight
 };
 use frame_system::ensure_signed;
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+mod default_weight;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
@@ -131,7 +136,7 @@ pub trait Trait: frame_system::Trait {
 	type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy;
 
 	/// The arithmetic type of asset identifier.
-	type AssetId: Parameter + AtLeast32Bit + Default + Copy;
+	type AssetId: Member + Parameter + Default + Copy + HasCompact;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -139,8 +144,15 @@ pub trait Trait: frame_system::Trait {
 	/// The origin which may forcibly create or destroy an asset. Root can always do this.
 	type ForceOrigin: EnsureOrigin<Self::Origin>;
 
+	/// The basic amount of funds that must be reserved when creating a new asset class.
 	type AssetDepositBase: Get<BalanceOf<Self>>;
+
+	/// The additional funds that must be reserved for every zombie account that an asset class
+	/// supports.
 	type AssetDepositPerZombie: Get<BalanceOf<Self>>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
@@ -259,13 +271,25 @@ decl_error! {
 	}
 }
 
+pub trait WeightInfo {
+	fn create() -> Weight;
+	fn force_create() -> Weight;
+	fn destroy() -> Weight;
+	fn force_destroy() -> Weight;
+	fn mint() -> Weight;
+	fn burn() -> Weight;
+	fn transfer() -> Weight;
+	fn force_transfer() -> Weight;
+	fn freeze() -> Weight;
+	fn thaw() -> Weight;
+	fn transfer_ownership() -> Weight;
+	fn set_team() -> Weight;
+	fn set_max_zombies() -> Weight;
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
-
-		// TODO: Allow for easy integration with system accounts so that an ED in an asset here is
-		//   sufficient for account existence and tx fees may be paid through assets here. An
-		//   `Exchange` trait is probably best for this so AMM pallets can be wired in.
 
 		fn deposit_event() = default;
 
@@ -292,7 +316,7 @@ decl_module! {
 		/// Emits `Created` event when successful.
 		///
 		/// Weight: `O(1)`
-		#[weight = 0]
+		#[weight = T::WeightInfo::create()]
 		fn create(origin,
 			#[compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
@@ -345,7 +369,7 @@ decl_module! {
 		/// Emits `ForceCreated` event when successful.
 		///
 		/// Weight: `O(1)`
-		#[weight = 0]
+		#[weight = T::WeightInfo::force_create()]
 		fn force_create(origin,
 			#[compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
@@ -382,7 +406,7 @@ decl_module! {
 		/// Emits `Destroyed` event when successful.
 		///
 		/// Weight: `O(1)`
-		#[weight = 0]
+		#[weight = T::WeightInfo::destroy()]
 		fn destroy(origin, #[compact] id: T::AssetId) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -409,7 +433,7 @@ decl_module! {
 		/// Emits `Destroyed` event when successful.
 		///
 		/// Weight: `O(1)`
-		#[weight = 0]
+		#[weight = T::WeightInfo::force_destroy()]
 		fn force_destroy(origin, #[compact] id: T::AssetId) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
@@ -437,7 +461,7 @@ decl_module! {
 		///
 		/// Weight: `O(1)`
 		/// Modes: Pre-existence of `beneficiary`
-		#[weight = 0]
+		#[weight = T::WeightInfo::mint()]
 		fn mint(origin,
 			#[compact] id: T::AssetId,
 			beneficiary: <T::Lookup as StaticLookup>::Source,
@@ -481,7 +505,7 @@ decl_module! {
 		///
 		/// Weight: `O(1)`
 		/// Modes: Post-existence of `who`
-		#[weight = 0]
+		#[weight = T::WeightInfo::burn()]
 		fn burn(origin,
 			#[compact] id: T::AssetId,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -537,7 +561,7 @@ decl_module! {
 		/// Weight: `O(1)`
 		/// Modes: Pre-existence of `target`; Post-existence of sender; Prior & post zombie-status
 		/// of sender.
-		#[weight = 0]
+		#[weight = T::WeightInfo::transfer()]
 		fn transfer(origin,
 			#[compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -610,7 +634,7 @@ decl_module! {
 		/// Weight: `O(1)`
 		/// Modes: Pre-existence of `dest`; Post-existence of `source`. Prior & post zombie-status
 		/// of `source`.
-		#[weight = 0]
+		#[weight = T::WeightInfo::force_transfer()]
 		fn force_transfer(origin,
 			#[compact] id: T::AssetId,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -674,7 +698,7 @@ decl_module! {
 		/// Emits `Frozen`.
 		///
 		/// Weight: `O(1)`
-		#[weight = 0]
+		#[weight = T::WeightInfo::freeze()]
 		fn freeze(origin, #[compact] id: T::AssetId, who: <T::Lookup as StaticLookup>::Source) {
 			let origin = ensure_signed(origin)?;
 
@@ -698,7 +722,7 @@ decl_module! {
 		/// Emits `Thawed`.
 		///
 		/// Weight: `O(1)`
-		#[weight = 0]
+		#[weight = T::WeightInfo::thaw()]
 		fn thaw(origin, #[compact] id: T::AssetId, who: <T::Lookup as StaticLookup>::Source) {
 			let origin = ensure_signed(origin)?;
 
@@ -722,7 +746,7 @@ decl_module! {
 		/// Emits `OwnerChanged`.
 		///
 		/// Weight: `O(1)`
-		#[weight = 0]
+		#[weight = T::WeightInfo::transfer_ownership()]
 		fn transfer_ownership(origin,
 			#[compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
@@ -757,7 +781,7 @@ decl_module! {
 		/// Emits `TeamChanged`.
 		///
 		/// Weight: `O(1)`
-		#[weight = 0]
+		#[weight = T::WeightInfo::set_team()]
 		fn set_team(origin,
 			#[compact] id: T::AssetId,
 			issuer: <T::Lookup as StaticLookup>::Source,
@@ -782,7 +806,7 @@ decl_module! {
 			})
 		}
 
-		#[weight = 0]
+		#[weight = T::WeightInfo::set_max_zombies()]
 		fn set_max_zombies(origin,
 			#[compact] id: T::AssetId,
 			#[compact] max_zombies: u32,
@@ -950,12 +974,13 @@ mod tests {
 		type ForceOrigin = frame_system::EnsureRoot<u64>;
 		type AssetDepositBase = AssetDepositBase;
 		type AssetDepositPerZombie = AssetDepositPerZombie;
+		type WeightInfo = ();
 	}
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Assets = Module<Test>;
 
-	fn new_test_ext() -> sp_io::TestExternalities {
+	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 
@@ -1019,8 +1044,6 @@ mod tests {
 			assert_ok!(Assets::transfer(Origin::signed(0), 0, 1, 100));
 			assert_eq!(Assets::zombie_allowance(0), 1);
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
-
-			// TODO: Test dezombify
 		});
 	}
 
