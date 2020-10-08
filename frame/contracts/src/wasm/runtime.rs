@@ -16,7 +16,7 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{ApiWeights, Schedule, Trait, CodeHash, BalanceOf, Error};
+use crate::{HostFnWeights, Schedule, Trait, CodeHash, BalanceOf, Error};
 use crate::exec::{
 	Ext, ExecResult, ExecReturnValue, StorageKey, TopicOf, ReturnFlags, ExecError
 };
@@ -278,7 +278,7 @@ pub enum RuntimeToken {
 }
 
 impl<T: Trait> Token<T> for RuntimeToken {
-	type Metadata = ApiWeights;
+	type Metadata = HostFnWeights;
 
 	fn calculate_amount(&self, s: &Self::Metadata) -> Gas {
 		use self::RuntimeToken::*;
@@ -339,9 +339,9 @@ impl<T: Trait> Token<T> for RuntimeToken {
 fn charge_gas<E, Tok>(ctx: &mut Runtime<E>, token: Tok) -> Result<(), sp_sandbox::HostError>
 where
 	E: Ext,
-	Tok: Token<E::T, Metadata=ApiWeights>,
+	Tok: Token<E::T, Metadata=HostFnWeights>,
 {
-	match ctx.gas_meter.charge(&ctx.schedule.api_weights, token) {
+	match ctx.gas_meter.charge(&ctx.schedule.host_fn_weights, token) {
 		GasMeterResult::Proceed => Ok(()),
 		GasMeterResult::OutOfGas =>  {
 			ctx.trap_reason = Some(TrapReason::SupervisorError(Error::<E::T>::OutOfGas.into()));

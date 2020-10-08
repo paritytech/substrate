@@ -100,7 +100,7 @@ pub use crate::gas::{Gas, GasMeter};
 pub use crate::exec::{ExecResult, ExecReturnValue};
 pub use crate::wasm::ReturnCode as RuntimeReturnCode;
 pub use crate::weight_info::WeightInfo;
-pub use crate::schedule::{Schedule, ApiWeights, InstructionWeights};
+pub use crate::schedule::{Schedule, HostFnWeights, InstructionWeights};
 
 use sp_core::crypto::UncheckedFrom;
 use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};

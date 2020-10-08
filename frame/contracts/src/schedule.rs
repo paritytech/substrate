@@ -41,7 +41,7 @@ pub struct Schedule<T: Trait> {
 	pub instruction_weights: InstructionWeights,
 
 	/// The weights for each imported function a contract is allowed to call.
-	pub api_weights: ApiWeights,
+	pub host_fn_weights: HostFnWeights,
 
 	/// Whether the `seal_println` function is allowed to be used contracts.
 	/// MUST only be enabled for `dev` chains, NOT for production chains
@@ -87,7 +87,7 @@ pub struct InstructionWeights {
 /// Describes the weight for each imported function that a contract is allowed to call.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
-pub struct ApiWeights {
+pub struct HostFnWeights {
 	/// Weight of calling `seal_caller`.
 	pub caller: Weight,
 
@@ -302,7 +302,7 @@ impl<T: Trait> Default for Schedule<T> {
 			regular: WASM_INSTRUCTION_COST,
 		};
 
-		let api_weights = ApiWeights {
+		let host_fn_weights = HostFnWeights {
 			caller: cost_batched!(seal_caller),
 			address: cost_batched!(seal_address),
 			gas_left: cost_batched!(seal_gas_left),
@@ -353,7 +353,7 @@ impl<T: Trait> Default for Schedule<T> {
 		Self {
 			version: 0,
 			instruction_weights,
-			api_weights,
+			host_fn_weights,
 			enable_println: false,
 			max_event_topics: 4,
 			max_stack_height: 64 * 1024,
