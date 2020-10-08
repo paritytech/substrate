@@ -111,6 +111,7 @@ macro_rules! afg_log {
 }
 
 mod authorities;
+mod authority_set_changes;
 mod aux_schema;
 mod communication;
 mod consensus_changes;
@@ -588,6 +589,7 @@ where
 			client.clone(),
 			select_chain.clone(),
 			persistent_data.authority_set.clone(),
+			persistent_data.authority_set_changes.clone(),
 			voter_commands_tx,
 			persistent_data.consensus_changes.clone(),
 			authority_set_hard_forks,
@@ -870,6 +872,7 @@ where
 			network: network.clone(),
 			set_id: persistent_data.authority_set.set_id(),
 			authority_set: persistent_data.authority_set.clone(),
+			authority_set_changes: persistent_data.authority_set_changes.clone(),
 			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
@@ -1008,6 +1011,7 @@ where
 					select_chain: self.env.select_chain.clone(),
 					config: self.env.config.clone(),
 					authority_set: self.env.authority_set.clone(),
+					authority_set_changes: self.env.authority_set_changes.clone(),
 					consensus_changes: self.env.consensus_changes.clone(),
 					network: self.env.network.clone(),
 					voting_rule: self.env.voting_rule.clone(),
