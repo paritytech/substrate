@@ -83,25 +83,26 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Encode, Decode};
-use sp_std::prelude::*;
-use sp_runtime::{
-	DispatchError, RuntimeDebug, Perbill,
-	traits::{Zero, StaticLookup, Saturating},
-};
+use codec::{Decode, Encode};
 use frame_support::{
-	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::Weight,
-	storage::{StorageMap, IterableStorageMap},
+	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo},
+	ensure,
+	storage::{IterableStorageMap, StorageMap},
 	traits::{
-		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
-		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, InitializeMembers, BalanceStatus,
-		ContainsLengthBound, CurrencyToVote,
-	}
+		BalanceStatus, ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
+		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
+		WithdrawReason, WithdrawReasons,
+	},
+	weights::Weight,
 };
-use sp_npos_elections::{ExtendedBalance, VoteWeight, ElectionResult};
-use frame_system::{ensure_signed, ensure_root};
+use frame_system::{ensure_root, ensure_signed};
+use sp_npos_elections::{ElectionResult, ExtendedBalance};
+use sp_runtime::{
+	traits::{Saturating, StaticLookup, Zero},
+	DispatchError, Perbill, RuntimeDebug,
+};
+use sp_std::prelude::*;
 
 mod benchmarking;
 mod default_weights;
@@ -872,16 +873,12 @@ impl<T: Trait> Module<T> {
 
 		// helper closures to deal with balance/stake.
 		let total_issuance = T::Currency::total_issuance();
-		let to_votes = |b: BalanceOf<T>| -> VoteWeight {
-			T::CurrencyToVote::to_vote(b, total_issuance)
-		};
-		let to_balance = |e: ExtendedBalance| -> BalanceOf<T> {
-			T::CurrencyToVote::to_currency(e, total_issuance)
-		};
+		let to_votes = |b: BalanceOf<T>| T::CurrencyToVote::to_vote(b, total_issuance);
+		let to_balance = |e: ExtendedBalance| T::CurrencyToVote::to_currency(e, total_issuance);
 
 		// used for prime election.
 		let voters_and_stakes = Voting::<T>::iter()
-			.map(|(voter, (stake, votes))| { (voter, stake, votes) })
+			.map(|(voter, (stake, votes))| (voter, stake, votes))
 			.collect::<Vec<_>>();
 		// used for phragmen.
 		let voters_and_votes = voters_and_stakes.iter()

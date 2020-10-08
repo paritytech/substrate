@@ -451,7 +451,7 @@ parameter_types! {
 impl pallet_staking::Trait for Runtime {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
-	type CurrencyToVote = frame_support::traits::U128CurrencyToVote;
+	type CurrencyToVote = U128CurrencyToVote;
 	type RewardRemainder = Treasury;
 	type Event = Event;
 	type Slash = Treasury; // send the slashed funds to the treasury.
