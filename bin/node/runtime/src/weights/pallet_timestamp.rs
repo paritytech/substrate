@@ -22,7 +22,7 @@ use sp_std::marker::PhantomData;
 
 pub struct WeightInfo<T>(PhantomData<T>);
 impl<T: frame_system::Trait> pallet_timestamp::WeightInfo for WeightInfo<T> {
-	fn set(_t: u32) -> Weight {
+	fn set() -> Weight {
 		(9133000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
