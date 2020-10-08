@@ -391,13 +391,6 @@ impl KeystoreInner {
 		Ok(pair)
 	}
 
-	/// Generate a new key.
-	///
-	/// Places it into the file system store.
-	pub fn generate<Pair: AppPair>(&self) -> Result<Pair> {
-		self.generate_by_type::<Pair::Generic>(Pair::ID).map(Into::into)
-	}
-
 	/// Create a new key from seed.
 	///
 	/// Does not place it into the file system store.
@@ -409,13 +402,6 @@ impl KeystoreInner {
 		let pair = Pair::from_string(seed, None).map_err(|_| Error::InvalidSeed)?;
 		self.insert_ephemeral_pair(&pair, seed, key_type);
 		Ok(pair)
-	}
-
-	/// Create a new key from seed.
-	///
-	/// Does not place it into the file system store.
-	pub fn insert_ephemeral_from_seed<Pair: AppPair>(&mut self, seed: &str) -> Result<Pair> {
-		self.insert_ephemeral_from_seed_by_type::<Pair::Generic>(seed, Pair::ID).map(Into::into)
 	}
 
 	/// Get the key phrase for a given public key and key type.
@@ -446,26 +432,6 @@ impl KeystoreInner {
 		} else {
 			Err(Error::InvalidPassword)
 		}
-	}
-
-	/// Get a key pair for the given public key.
-	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Pair> {
-		self.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID).map(Into::into)
-	}
-
-	/// Get public keys of all stored keys that match the key type.
-	///
-	/// This will just use the type of the public key (a list of which to be returned) in order
-	/// to determine the key type. Unless you use a specialized application-type public key, then
-	/// this only give you keys registered under generic cryptography, and will not return keys
-	/// registered under the application type.
-	pub fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {
-		self.raw_public_keys(Public::ID)
-			.map(|v| {
-				v.into_iter()
-				 .map(|k| Public::from_slice(k.as_slice()))
-				 .collect()
-			})
 	}
 
 	/// Returns the file path for the given public key and key type.
@@ -520,19 +486,54 @@ mod tests {
 		fs,
 		str::FromStr,
 	};
+
+	/// Generate a new key.
+	///
+	/// Places it into the file system store.
+	fn generate<Pair: AppPair>(store: &KeystoreInner) -> Result<Pair> {
+		store.generate_by_type::<Pair::Generic>(Pair::ID).map(Into::into)
+	}
+
+	/// Create a new key from seed.
+	///
+	/// Does not place it into the file system store.
+	fn insert_ephemeral_from_seed<Pair: AppPair>(store: &mut KeystoreInner, seed: &str) -> Result<Pair> {
+		store.insert_ephemeral_from_seed_by_type::<Pair::Generic>(seed, Pair::ID).map(Into::into)
+	}
+
+	/// Get public keys of all stored keys that match the key type.
+	///
+	/// This will just use the type of the public key (a list of which to be returned) in order
+	/// to determine the key type. Unless you use a specialized application-type public key, then
+	/// this only give you keys registered under generic cryptography, and will not return keys
+	/// registered under the application type.
+	fn public_keys<Public: AppPublic>(store: &KeystoreInner) -> Result<Vec<Public>> {
+		store.raw_public_keys(Public::ID)
+			.map(|v| {
+				v.into_iter()
+				 .map(|k| Public::from_slice(k.as_slice()))
+				 .collect()
+			})
+	}
+
+	/// Get a key pair for the given public key.
+	fn key_pair<Pair: AppPair>(store: &KeystoreInner, public: &<Pair as AppKey>::Public) -> Result<Pair> {
+		store.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID).map(Into::into)
+	}
+
 	#[test]
 	fn basic_store() {
 		let temp_dir = TempDir::new().unwrap();
 		let store = KeystoreInner::open(temp_dir.path(), None).unwrap();
 
-		assert!(store.public_keys::<ed25519::AppPublic>().unwrap().is_empty());
+		assert!(public_keys::<ed25519::AppPublic>(&store).unwrap().is_empty());
 
-		let key: ed25519::AppPair = store.generate().unwrap();
-		let key2: ed25519::AppPair = store.key_pair(&key.public()).unwrap();
+		let key: ed25519::AppPair = generate(&store).unwrap();
+		let key2: ed25519::AppPair = key_pair(&store, &key.public()).unwrap();
 
 		assert_eq!(key.public(), key2.public());
 
-		assert_eq!(store.public_keys::<ed25519::AppPublic>().unwrap()[0], key.public());
+		assert_eq!(public_keys::<ed25519::AppPublic>(&store).unwrap()[0], key.public());
 	}
 
 	#[test]
@@ -540,9 +541,10 @@ mod tests {
 		let temp_dir = TempDir::new().unwrap();
 		let mut store = KeystoreInner::open(temp_dir.path(), None).unwrap();
 
-		let pair: ed25519::AppPair = store
-			.insert_ephemeral_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc")
-			.unwrap();
+		let pair: ed25519::AppPair = insert_ephemeral_from_seed(
+			&mut store,
+			"0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc"
+		).unwrap();
 		assert_eq!(
 			"5DKUrgFqCPV8iAXx9sjy1nyBygQCeiUYRFWurZGhnrn3HJCA",
 			pair.public().to_ss58check()
@@ -551,7 +553,7 @@ mod tests {
 		drop(store);
 		let store = KeystoreInner::open(temp_dir.path(), None).unwrap();
 		// Keys generated from seed should not be persisted!
-		assert!(store.key_pair::<ed25519::AppPair>(&pair.public()).is_err());
+		assert!(key_pair::<ed25519::AppPair>(&store, &pair.public()).is_err());
 	}
 
 	#[test]
@@ -563,15 +565,15 @@ mod tests {
 			Some(FromStr::from_str(password.as_str()).unwrap()),
 		).unwrap();
 
-		let pair: ed25519::AppPair = store.generate().unwrap();
+		let pair: ed25519::AppPair = generate(&store).unwrap();
 		assert_eq!(
 			pair.public(),
-			store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
+			key_pair::<ed25519::AppPair>(&store, &pair.public()).unwrap().public(),
 		);
 
 		// Without the password the key should not be retrievable
 		let store = KeystoreInner::open(temp_dir.path(), None).unwrap();
-		assert!(store.key_pair::<ed25519::AppPair>(&pair.public()).is_err());
+		assert!(key_pair::<ed25519::AppPair>(&store, &pair.public()).is_err());
 
 		let store = KeystoreInner::open(
 			temp_dir.path(),
@@ -579,7 +581,7 @@ mod tests {
 		).unwrap();
 		assert_eq!(
 			pair.public(),
-			store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
+			key_pair::<ed25519::AppPair>(&store, &pair.public()).unwrap().public(),
 		);
 	}
 
@@ -588,22 +590,23 @@ mod tests {
 		let temp_dir = TempDir::new().unwrap();
 		let mut store = KeystoreInner::open(temp_dir.path(), None).unwrap();
 
-		let mut public_keys = Vec::new();
+		let mut keys = Vec::new();
 		for i in 0..10 {
-			public_keys.push(store.generate::<ed25519::AppPair>().unwrap().public());
-			public_keys.push(store.insert_ephemeral_from_seed::<ed25519::AppPair>(
+			keys.push(generate::<ed25519::AppPair>(&store).unwrap().public());
+			keys.push(insert_ephemeral_from_seed::<ed25519::AppPair>(
+				&mut store,
 				&format!("0x3d97c819d68f9bafa7d6e79cb991eebcd7{}d966c5334c0b94d9e1fa7ad0869dc", i),
 			).unwrap().public());
 		}
 
 		// Generate a key of a different type
-		store.generate::<sr25519::AppPair>().unwrap();
+		generate::<sr25519::AppPair>(&store).unwrap();
 
-		public_keys.sort();
-		let mut store_pubs = store.public_keys::<ed25519::AppPublic>().unwrap();
+		keys.sort();
+		let mut store_pubs = public_keys::<ed25519::AppPublic>(&store).unwrap();
 		store_pubs.sort();
 
-		assert_eq!(public_keys, store_pubs);
+		assert_eq!(keys, store_pubs);
 	}
 
 	#[test]
