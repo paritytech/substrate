@@ -850,7 +850,6 @@ where
 				InstantiationError::ModuleDecoding
 			})?;
 
-
 			let imports: Vec<_> = module
 				.imports()
 				.into_iter()
@@ -967,7 +966,11 @@ where
 			let instance = wasmer::Instance::new(&module, &import_object)
 				.map_err(|error| {
 					println!("{:?}", error);
-					InstantiationError::Instantiation
+
+					match error {
+						wasmer::InstantiationError::Link(_) => InstantiationError::Instantiation,
+						wasmer::InstantiationError::Start(_) => InstantiationError::StartTrapped,
+					}
 				})?;
 
 			println!("Creating SandboxInstance...");
