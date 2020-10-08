@@ -66,8 +66,8 @@
 		},
 		{
 			"prefix": 6,
-			"network": "bitfrost",
-			"displayName": "Bitfrost",
+			"network": "bifrost",
+			"displayName": "Bifrost",
 			"symbols": ["BNC"],
 			"decimals": [12],
 			"standardAccount": "*25519",
@@ -164,6 +164,15 @@
 			"website": null
 		},
 		{
+			"prefix": 19,
+			"network": "geek",
+			"displayName": "GeekCash",
+			"symbols": ["GEEK"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://geekcash.org"
+		},
+		{
 			"prefix": 20,
 			"network": "stafi",
 			"displayName": "Stafi",
@@ -176,19 +185,19 @@
 			"prefix": 21,
 			"network": "dock-testnet",
 			"displayName": "Dock Testnet",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["DCK"],
+			"decimals": [6],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://dock.io"
 		},
 		{
 			"prefix": 22,
 			"network": "dock-mainnet",
 			"displayName": "Dock Mainnet",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["DCK"],
+			"decimals": [6],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://dock.io"
 		},
 		{
 			"prefix": 23,
@@ -243,6 +252,15 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://centrifuge.io/"
+		},
+		{
+			"prefix": 37,
+			"network": "nodle",
+			"displayName": "Nodle Chain",
+			"symbols": ["NODL"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://nodle.io/"
 		},
 		{
 			"prefix": 39,

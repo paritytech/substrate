@@ -215,6 +215,7 @@ macro_rules! impl_outer_origin {
 		impl $crate::traits::OriginTrait for $name {
 			type Call = <$runtime as $system::Trait>::Call;
 			type PalletsOrigin = $caller_name;
+			type AccountId = <$runtime as $system::Trait>::AccountId;
 
 			fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static) {
 				let f = self.filter.clone();
@@ -244,6 +245,19 @@ macro_rules! impl_outer_origin {
 			fn caller(&self) -> &Self::PalletsOrigin {
 				&self.caller
 			}
+
+			/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+			fn none() -> Self {
+				$system::RawOrigin::None.into()
+			}
+			/// Create with system root origin and no filter.
+			fn root() -> Self {
+				$system::RawOrigin::Root.into()
+			}
+			/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+			fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
+				$system::RawOrigin::Signed(by).into()
+			}
 		}
 
 		$crate::paste::item! {
@@ -263,19 +277,20 @@ macro_rules! impl_outer_origin {
 			}
 		}
 
+		// For backwards compatibility and ease of accessing these functions.
 		#[allow(dead_code)]
 		impl $name {
 			/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
 			pub fn none() -> Self {
-				$system::RawOrigin::None.into()
+				<$name as $crate::traits::OriginTrait>::none()
 			}
 			/// Create with system root origin and no filter.
 			pub fn root() -> Self {
-				$system::RawOrigin::Root.into()
+				<$name as $crate::traits::OriginTrait>::root()
 			}
 			/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
 			pub fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
-				$system::RawOrigin::Signed(by).into()
+				<$name as $crate::traits::OriginTrait>::signed(by)
 			}
 		}
 
