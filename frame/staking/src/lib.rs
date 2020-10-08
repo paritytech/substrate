@@ -695,7 +695,7 @@ pub enum ElectionStatus<BlockNumber> {
 /// Note that these values must reflect the __total__ number, not only those that are present in the
 /// solution. In short, these should be the same size as the size of the values dumped in
 /// `SnapshotValidators` and `SnapshotNominators`.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
 pub struct ElectionSize {
 	/// Number of validators in the snapshot of the current election round.
 	#[codec(compact)]
@@ -882,6 +882,13 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// This is exposed so that it can be tuned for particular runtime, when
 	/// multiple pallets send unsigned transactions.
 	type UnsignedPriority: Get<TransactionPriority>;
+
+	/// Maximum weight that the unsigned transaction can have.
+	///
+	/// Chose this value with care. On one hand, it should be as high as possible, so the solution
+	/// can contain as many nominators/validators as possible. On the other hand, it should be small
+	/// enough to fit in the block.
+	type OffchainSolutionWeightLimit: Get<Weight>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -1296,6 +1303,7 @@ decl_module! {
 				consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
 				consumed_weight += weight;
 			};
+
 			if
 				// if we don't have any ongoing offchain compute.
 				Self::era_election_status().is_closed() &&
@@ -1341,12 +1349,12 @@ decl_module! {
 			if Self::era_election_status().is_open_at(now) {
 				let offchain_status = set_check_offchain_execution_status::<T>(now);
 				if let Err(why) = offchain_status {
-					log!(debug, "skipping offchain worker in open election window due to [{}]", why);
+					log!(warn, "💸 skipping offchain worker in open election window due to [{}]", why);
 				} else {
 					if let Err(e) = compute_offchain_election::<T>() {
 						log!(error, "💸 Error in election offchain worker: {:?}", e);
 					} else {
-						log!(debug, "Executed offchain worker thread without errors.");
+						log!(debug, "💸 Executed offchain worker thread without errors.");
 					}
 				}
 			}
@@ -2143,7 +2151,7 @@ decl_module! {
 		/// transaction in the block.
 		///
 		/// # <weight>
-		/// See `crate::weight` module.
+		/// See [`submit_election_solution`].
 		/// # </weight>
 		#[weight = T::WeightInfo::submit_solution_better(
 			size.validators.into(),
@@ -2173,6 +2181,7 @@ decl_module! {
 				effectively depriving the validators from their authoring reward. Hence, this panic
 				is expected."
 			);
+
 			Ok(adjustments)
 		}
 	}
@@ -3084,7 +3093,6 @@ impl<T: Trait> Module<T> {
 	pub fn set_slash_reward_fraction(fraction: Perbill) {
 		SlashRewardFraction::put(fraction);
 	}
-
 }
 
 /// In this implementation `new_session(session)` must be called before `end_session(session-1)`
@@ -3369,13 +3377,13 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				let invalid = to_invalid(error_with_post_info);
 				log!(
 					debug,
-					"validate unsigned pre dispatch checks failed due to error #{:?}.",
+					"💸 validate unsigned pre dispatch checks failed due to error #{:?}.",
 					invalid,
 				);
-				return invalid .into();
+				return invalid.into();
 			}
 
-			log!(debug, "validateUnsigned succeeded for a solution at era {}.", era);
+			log!(debug, "💸 validateUnsigned succeeded for a solution at era {}.", era);
 
 			ValidTransaction::with_tag_prefix("StakingOffchain")
 				// The higher the score[0], the better a solution is.
