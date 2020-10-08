@@ -65,7 +65,7 @@ use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use sp_database::Transaction;
 use parking_lot::RwLock;
 use sp_core::ChangesTrieConfiguration;
-use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
+use sp_core::offchain::OffchainOverlayedChange;
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::{generic::{DigestItem, BlockId}, Justification, Storage};
@@ -74,7 +74,7 @@ use sp_runtime::traits::{
 };
 use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, UsageInfo as StateUsageInfo,
-	StorageCollection, ChildStorageCollection,
+	StorageCollection, ChildStorageCollection, OffchainChangesCollection,
 	backend::Backend as StateBackend, StateMachineStats,
 };
 use crate::utils::{DatabaseType, Meta, meta_keys, read_db, read_meta};
@@ -581,7 +581,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	db_updates: PrefixedMemoryDB<HashFor<Block>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
-	offchain_storage_updates: OffchainOverlayedChanges,
+	offchain_storage_updates: OffchainChangesCollection,
 	changes_trie_updates: MemoryDB<HashFor<Block>>,
 	changes_trie_build_cache_update: Option<ChangesTrieCacheAction<Block::Hash, NumberFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
@@ -594,7 +594,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 
 impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_offchain(&mut self, transaction: &mut Transaction<DbHash>) {
-		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain() {
+		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain(..) {
 			let key: Vec<u8> = prefix
 				.into_iter()
 				.chain(sp_core::sp_std::iter::once(b'/'))
@@ -714,7 +714,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 
 	fn update_offchain_storage(
 		&mut self,
-		offchain_update: OffchainOverlayedChanges,
+		offchain_update: OffchainChangesCollection,
 	) -> ClientResult<()> {
 		self.offchain_storage_updates = offchain_update;
 		Ok(())

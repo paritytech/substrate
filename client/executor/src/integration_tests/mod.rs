@@ -463,7 +463,7 @@ fn offchain_index(wasm_method: WasmExecutionMethod) {
 		&mut ext.ext(),
 	).unwrap();
 
-	use sp_core::offchain::storage::OffchainOverlayedChange;
+	use sp_core::offchain::OffchainOverlayedChange;
 	assert_eq!(
 		ext.ext()
 			.get_offchain_storage_changes()

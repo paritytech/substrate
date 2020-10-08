@@ -18,6 +18,7 @@
 //! The overlayed changes to state.
 
 mod changeset;
+pub(crate) mod offchain;
 
 use crate::{
 	backend::Backend,
@@ -25,6 +26,7 @@ use crate::{
 };
 use sp_std::{vec::Vec, any::{TypeId, Any}, boxed::Box};
 use self::changeset::OverlayedChangeSet;
+use self::offchain::{OffchainOverlayedChanges, OffchainOverlayedChangesDrain};
 
 #[cfg(feature = "std")]
 use crate::{
@@ -42,8 +44,7 @@ use sp_std::collections::btree_map::{BTreeMap as Map, Entry as MapEntry};
 use sp_std::collections::btree_set::BTreeSet;
 use codec::{Decode, Encode};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo};
-#[cfg(feature = "std")]
-use sp_core::offchain::storage::OffchainOverlayedChanges;
+use sp_core::offchain::OffchainOverlayedChange;
 use hash_db::Hasher;
 use crate::DefaultError;
 use sp_externalities::{Extensions, Extension};
@@ -64,6 +65,9 @@ pub type StorageCollection = Vec<(StorageKey, Option<StorageValue>)>;
 
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection)>;
+
+/// In memory array of storage values.
+pub type OffchainChangesCollection = Vec<((Vec<u8>, Vec<u8>), OffchainOverlayedChange)>;
 
 /// Keep trace of extrinsics index for a modified value.
 #[derive(Debug, Default, Eq, PartialEq, Clone)]
@@ -97,6 +101,8 @@ pub struct OverlayedChanges {
 	top: OverlayedChangeSet,
 	/// Child storage changes. The map key is the child storage key without the common prefix.
 	children: Map<StorageKey, (OverlayedChangeSet, ChildInfo)>,
+	/// Change sets for offchain indexing.
+	offchain: OffchainOverlayedChanges,
 	/// True if extrinsics stats must be collected.
 	collect_extrinsics: bool,
 	/// Collect statistic on this execution.
@@ -115,8 +121,7 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	/// All changes to the child storages.
 	pub child_storage_changes: ChildStorageCollection,
 	/// Offchain state changes to write to the offchain database.
-	#[cfg(feature = "std")]
-	pub offchain_storage_changes: OffchainOverlayedChanges,
+	pub offchain_storage_changes: OffchainChangesCollection,
 	/// A transaction for the backend that contains all changes from
 	/// [`main_storage_changes`](StorageChanges::main_storage_changes) and from
 	/// [`child_storage_changes`](StorageChanges::child_storage_changes).
@@ -140,7 +145,7 @@ impl<Transaction, H: Hasher, N: BlockNumber> StorageChanges<Transaction, H, N> {
 	pub fn into_inner(self) -> (
 		StorageCollection,
 		ChildStorageCollection,
-		OffchainOverlayedChanges,
+		OffchainChangesCollection,
 		Transaction,
 		H::Out,
 		Option<ChangesTrieTransaction<H, N>>,
@@ -202,7 +207,6 @@ impl<Transaction: Default, H: Hasher, N: BlockNumber> Default for StorageChanges
 		Self {
 			main_storage_changes: Default::default(),
 			child_storage_changes: Default::default(),
-			#[cfg(feature = "std")]
 			offchain_storage_changes: Default::default(),
 			transaction: Default::default(),
 			transaction_storage_root: Default::default(),
@@ -522,7 +526,6 @@ impl OverlayedChanges {
 		Ok(StorageChanges {
 			main_storage_changes: main_storage_changes.collect(),
 			child_storage_changes: child_storage_changes.map(|(sk, it)| (sk, it.0.collect())).collect(),
-			#[cfg(feature = "std")]
 			offchain_storage_changes: Default::default(),
 			transaction,
 			transaction_storage_root,
@@ -628,6 +631,32 @@ impl OverlayedChanges {
 			.and_then(|(overlay, _)|
 				overlay.next_change(key)
 			)
+	}
+
+	/// Activate offchain indexing.
+	pub fn enable_offchain_indexing(&mut self) {
+		if let OffchainOverlayedChanges::Disabled = self.offchain {
+			self.offchain = OffchainOverlayedChanges::enabled();
+		}
+	}
+
+	/// Read only access ot offchain overlay.
+	pub fn offchain(&self) -> &OffchainOverlayedChanges {
+		&self.offchain
+	}
+
+	/// Write a key value pair to the offchain storage overlay.
+	pub fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
+		use ::sp_core::offchain::STORAGE_PREFIX;
+		match value {
+			Some(value) => self.offchain.set(STORAGE_PREFIX, key, value),
+			None => self.offchain.remove(STORAGE_PREFIX, key),
+		}
+	}
+
+	/// Drain all elements of offchain changeset.
+	pub fn drain_offchain(&mut self) -> OffchainOverlayedChangesDrain {
+		self.offchain.drain()
 	}
 }
 
@@ -789,11 +818,9 @@ mod tests {
 		overlay.set_storage(b"dogglesworth".to_vec(), Some(b"cat".to_vec()));
 		overlay.set_storage(b"doug".to_vec(), None);
 
-		let mut offchain_overlay = Default::default();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(
 			&mut overlay,
-			&mut offchain_overlay,
 			&mut cache,
 			&backend,
 			crate::changes_trie::disabled_state::<_, u64>(),

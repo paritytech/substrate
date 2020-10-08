@@ -21,7 +21,7 @@
 #![warn(missing_docs)]
 
 /// Re-export of parent module scope storage prefix.
-pub use sp_core::offchain::STORAGE_PREFIX as STORAGE_PREFIX;
+pub use sp_core::offchain::STORAGE_PREFIX;
 
 sp_api::decl_runtime_apis! {
 	/// The offchain worker api.

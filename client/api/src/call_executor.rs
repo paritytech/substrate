@@ -28,7 +28,7 @@ use sp_state_machine::{
 };
 use sc_executor::{RuntimeVersion, NativeVersion};
 use sp_externalities::Extensions;
-use sp_core::{NativeOrEncoded,offchain::storage::OffchainOverlayedChanges};
+use sp_core::NativeOrEncoded;
 
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use crate::execution_extensions::ExecutionExtensions;
@@ -86,7 +86,6 @@ pub trait CallExecutor<B: BlockT> {
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		offchain_changes: &RefCell<OffchainOverlayedChanges>,
 		storage_transaction_cache: Option<&RefCell<
 			StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
 		>>,

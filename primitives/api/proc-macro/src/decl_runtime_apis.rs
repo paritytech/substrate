@@ -409,7 +409,6 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				at: &#crate_::BlockId<Block>,
 				args: Vec<u8>,
 				changes: &std::cell::RefCell<#crate_::OverlayedChanges>,
-				offchain_changes: &std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 				storage_transaction_cache: &std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, T::StateBackend>
 				>,
@@ -439,7 +438,6 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 							native_call: None,
 							arguments: args,
 							overlayed_changes: changes,
-							offchain_changes,
 							storage_transaction_cache,
 							initialize_block,
 							context,
@@ -460,7 +458,6 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 					native_call,
 					arguments: args,
 					overlayed_changes: changes,
-					offchain_changes,
 					storage_transaction_cache,
 					initialize_block,
 					context,
