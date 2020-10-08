@@ -31,10 +31,14 @@ use frame_support::traits::{
 use frame_system::ensure_signed;
 use codec::{Encode, Decode};
 
+mod mock;
+mod tests;
+
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait WeightInfo {}
+impl WeightInfo for () {}
 
 /// The module's config trait.
 pub trait Trait: frame_system::Trait {
@@ -185,7 +189,7 @@ decl_module! {
 		#[weight = 0]
 		fn bid(origin, name: Name, new_bid: BalanceOf<T>) {
 			let new_bidder = ensure_signed(origin)?;
-			ensure!(new_bid > T::MinBid::get(), Error::<T>::InvalidBid);
+			ensure!(new_bid >= T::MinBid::get(), Error::<T>::InvalidBid);
 
 			let block_number = frame_system::Module::<T>::block_number();
 			let new_bid_end = block_number.saturating_add(T::BiddingPeriod::get());
@@ -247,7 +251,7 @@ decl_module! {
 					NameStatus::Available | NameStatus::Owned { .. } => Err(Error::<T>::InvalidClaim)?,
 					NameStatus::Bidding { who: current_bidder, bid_end, amount } => {
 						ensure!(caller == *current_bidder, Error::<T>::NotBidder);
-						ensure!(*bid_end < block_number, Error::<T>::NotExpired);
+						ensure!(*bid_end <= block_number, Error::<T>::NotExpired);
 						// If user only wants 1 period, just slash the reserve we already have.
 						let mut credit = if num_of_periods == 1 {
 							NegativeImbalanceOf::<T>::zero()
@@ -268,7 +272,9 @@ decl_module! {
 						credit.subsume(T::Currency::slash_reserved(current_bidder, *amount).0);
 						T::PaymentDestination::on_unbalanced(credit);
 						// Grant ownership
-						let ownership_expiration = T::OwnershipPeriod::get().saturating_mul(num_of_periods.into());
+						let ownership_expiration = block_number.saturating_add(
+							T::OwnershipPeriod::get().saturating_mul(num_of_periods.into())
+						);
 						*state = NameStatus::Owned {
 							who: current_bidder.clone(),
 							expiration: Some(ownership_expiration),
@@ -307,7 +313,7 @@ decl_module! {
 					NameStatus::Owned { who: current_owner, expiration: maybe_expiration } => {
 						if let Some(expiration) = maybe_expiration {
 							if caller != *current_owner {
-								ensure!(*expiration < block_number, Error::<T>::NotExpired);
+								ensure!(*expiration <= block_number, Error::<T>::NotExpired);
 							}
 							*state = NameStatus::Available;
 							Ok(())
