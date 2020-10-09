@@ -973,7 +973,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
 	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
-		let peers = self.parse_multiaddr(peers)?;
+		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
 
@@ -995,7 +995,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
 	pub fn add_to_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
-		let peers = self.parse_multiaddr(peers)?;
+		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		for (peer_id, addr) in peers.into_iter() {
 			self.peerset.add_to_priority_group(group_id.clone(), peer_id.clone());
@@ -1015,7 +1015,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
 	pub fn remove_from_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
-		let peers = self.parse_multiaddr(peers)?;
+		let peers = self.split_multiaddr_and_peer_id(peers)?;
 		for (peer_id, _) in peers.into_iter() {
 			self.peerset.remove_from_priority_group(group_id.clone(), peer_id);
 		}
@@ -1045,7 +1045,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 
 	// Utility function to extract `PeerId` from each `Multiaddr` for priority group updates.
-	fn parse_multiaddr(&self, peers: HashSet<Multiaddr>) -> Result<Vec<(PeerId, Multiaddr)>, String> {
+	fn split_multiaddr_and_peer_id(&self, peers: HashSet<Multiaddr>) -> Result<Vec<(PeerId, Multiaddr)>, String> {
 		peers.into_iter()
 			.map(|mut addr| {
 				let peer = match addr.pop() {
