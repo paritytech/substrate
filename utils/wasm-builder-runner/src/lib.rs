@@ -469,7 +469,7 @@ fn check_provide_dummy_wasm_binary() -> bool {
 
 /// Provide the dummy WASM binary
 ///
-/// If `skip_build` is `true`, it will only generate the wasm binary if it doesn't exists.
+/// If `skip_build` is `true`, it will only generate the wasm binary if it doesn't exist.
 fn provide_dummy_wasm_binary(file_path: &Path, skip_build: bool) {
 	if !skip_build || !file_path.exists() {
 		write_file_if_changed(
