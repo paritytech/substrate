@@ -53,9 +53,9 @@ use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,
 pub use self::error::Error;
 pub use self::builder::{
 	new_full_client, new_client, new_full_parts, new_light_parts,
-	spawn_tasks, build_network, BuildNetworkParams, NetworkStarter, build_offchain_workers,
-	SpawnTasksParams, TFullClient, TLightClient, TFullBackend, TLightBackend,
-	TLightBackendWithHash, TLightClientWithBackend,
+	spawn_tasks, build_network, build_offchain_workers,
+	BuildNetworkParams, KeystoreContainer, NetworkStarter, SpawnTasksParams, TFullClient, TLightClient,
+	TFullBackend, TLightBackend, TLightBackendWithHash, TLightClientWithBackend,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
 };
 pub use config::{
@@ -81,7 +81,6 @@ pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
 use sc_client_api::BlockchainEvents;
-pub use sc_keystore::KeyStorePtr as KeyStore;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -97,7 +96,7 @@ impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
-pub struct RpcHandlers(Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>>);
+pub struct RpcHandlers(Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>);
 
 impl RpcHandlers {
 	/// Starts an RPC query.
@@ -118,7 +117,8 @@ impl RpcHandlers {
 	}
 
 	/// Provides access to the underlying `MetaIoHandler`
-	pub fn io_handler(&self) -> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>> {
+	pub fn io_handler(&self)
+		-> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
 		self.0.clone()
 	}
 }
@@ -126,24 +126,37 @@ impl RpcHandlers {
 /// Sinks to propagate network status updates.
 /// For each element, every time the `Interval` fires we push an element on the sender.
 #[derive(Clone)]
-pub struct NetworkStatusSinks<Block: BlockT>(
-	Arc<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>,
-);
+pub struct NetworkStatusSinks<Block: BlockT> {
+	status: Arc<status_sinks::StatusSinks<NetworkStatus<Block>>>,
+	state: Arc<status_sinks::StatusSinks<NetworkState>>,
+}
 
 impl<Block: BlockT> NetworkStatusSinks<Block> {
-	fn new(
-		sinks: Arc<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>
-	) -> Self {
-		Self(sinks)
+	fn new() -> Self {
+		Self {
+			status: Arc::new(status_sinks::StatusSinks::new()),
+			state: Arc::new(status_sinks::StatusSinks::new()),
+		}
 	}
 
-	/// Returns a receiver that periodically receives a status of the network.
-	pub fn network_status(&self, interval: Duration)
-		-> TracingUnboundedReceiver<(NetworkStatus<Block>, NetworkState)> {
+	/// Returns a receiver that periodically yields a [`NetworkStatus`].
+	pub fn status_stream(&self, interval: Duration)
+		-> TracingUnboundedReceiver<NetworkStatus<Block>>
+	{
 		let (sink, stream) = tracing_unbounded("mpsc_network_status");
-		self.0.push(interval, sink);
+		self.status.push(interval, sink);
 		stream
 	}
+
+	/// Returns a receiver that periodically yields a [`NetworkState`].
+	pub fn state_stream(&self, interval: Duration)
+		-> TracingUnboundedReceiver<NetworkState>
+	{
+		let (sink, stream) = tracing_unbounded("mpsc_network_state");
+		self.state.push(interval, sink);
+		stream
+	}
+
 }
 
 /// Sinks to propagate telemetry connection established events.
@@ -167,8 +180,8 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	pub backend: Arc<Backend>,
 	/// The chain task manager.
 	pub task_manager: TaskManager,
-	/// A shared keystore instance.
-	pub keystore: KeyStore,
+	/// A keystore container instance..
+	pub keystore_container: KeystoreContainer,
 	/// A chain selection algorithm instance.
 	pub select_chain: SelectChain,
 	/// An import queue.
@@ -272,7 +285,6 @@ async fn build_network_future<
 							sc_rpc::system::PeerInfo {
 								peer_id: peer_id.to_base58(),
 								roles: format!("{:?}", p.roles),
-								protocol_version: p.protocol_version,
 								best_hash: p.best_hash,
 								best_number: p.best_number,
 							}
@@ -319,20 +331,16 @@ async fn build_network_future<
 			// the network.
 			_ = (&mut network).fuse() => {}
 
-			// At a regular interval, we send the state of the network on what is called
-			// the "status sinks".
-			ready_sink = status_sinks.0.next().fuse() => {
-				let status = NetworkStatus {
-					sync_state: network.sync_state(),
-					best_seen_block: network.best_seen_block(),
-					num_sync_peers: network.num_sync_peers(),
-					num_connected_peers: network.num_connected_peers(),
-					num_active_peers: network.num_active_peers(),
-					total_bytes_inbound: network.total_bytes_inbound(),
-					total_bytes_outbound: network.total_bytes_outbound(),
-				};
-				let state = network.network_state();
-				ready_sink.send((status, state));
+			// At a regular interval, we send high-level status as well as
+			// detailed state information of the network on what are called
+			// "status sinks".
+
+			status_sink = status_sinks.status.next().fuse() => {
+				status_sink.send(network.status());
+			}
+
+			state_sink = status_sinks.state.next().fuse() => {
+				state_sink.send(network.network_state());
 			}
 		}
 	}
@@ -374,9 +382,13 @@ mod waiting {
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
+fn start_rpc_servers<
+	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
+	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+>(
 	config: &Configuration,
-	mut gen_handler: H
+	mut gen_handler: H,
+	rpc_metrics: Option<&sc_rpc_server::RpcMetrics>
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
 		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
@@ -406,13 +418,21 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 	}
 
 	Ok(Box::new((
-		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(&*path, gen_handler(sc_rpc::DenyUnsafe::No))),
+		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(
+			&*path, gen_handler(
+				sc_rpc::DenyUnsafe::No,
+				sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "ipc")
+			)
+		)),
 		maybe_start_server(
 			config.rpc_http,
 			|address| sc_rpc_server::start_http(
 				address,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
+				gen_handler(
+					deny_unsafe(&address, &config.rpc_methods),
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "http")
+				),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
@@ -421,7 +441,10 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
+				gen_handler(
+					deny_unsafe(&address, &config.rpc_methods),
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "ws")
+				),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
 	)))
@@ -429,9 +452,13 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
+fn start_rpc_servers<
+	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
+	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+>(
 	_: &Configuration,
-	_: H
+	_: H,
+	_: Option<&sc_rpc_server::RpcMetrics>
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }

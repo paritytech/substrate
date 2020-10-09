@@ -261,17 +261,17 @@ decl_event! {
 	{
 		/// Ethereum events from contracts.
 		Log(Log),
-		/// A contract has been created at given [address].
+		/// A contract has been created at given \[address\].
 		Created(H160),
-		/// A [contract] was attempted to be created, but the execution failed.
+		/// A \[contract\] was attempted to be created, but the execution failed.
 		CreatedFailed(H160),
-		/// A [contract] has been executed successfully with states applied.
+		/// A \[contract\] has been executed successfully with states applied.
 		Executed(H160),
-		/// A [contract] has been executed with errors. States are reverted with only gas fees applied.
+		/// A \[contract\] has been executed with errors. States are reverted with only gas fees applied.
 		ExecutedFailed(H160),
-		/// A deposit has been made at a given address. [sender, address, value]
+		/// A deposit has been made at a given address. \[sender, address, value\]
 		BalanceDeposit(AccountId, H160, U256),
-		/// A withdrawal has been made from a given address. [sender, address, value]
+		/// A withdrawal has been made from a given address. \[sender, address, value\]
 		BalanceWithdraw(AccountId, H160, U256),
 	}
 }
@@ -333,14 +333,14 @@ decl_module! {
 				input,
 				value,
 				gas_limit,
-				Some(gas_price),
+				gas_price,
 				nonce,
 				true,
 			)? {
-				(ExitReason::Succeed(_), _, _) => {
+				(ExitReason::Succeed(_), _, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::Executed(target));
 				},
-				(_, _, _) => {
+				(_, _, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::ExecutedFailed(target));
 				},
 			}
@@ -367,14 +367,14 @@ decl_module! {
 				init,
 				value,
 				gas_limit,
-				Some(gas_price),
+				gas_price,
 				nonce,
 				true,
 			)? {
-				(ExitReason::Succeed(_), create_address, _) => {
+				(ExitReason::Succeed(_), create_address, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::Created(create_address));
 				},
-				(_, create_address, _) => {
+				(_, create_address, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
 				},
 			}
@@ -402,14 +402,14 @@ decl_module! {
 				salt,
 				value,
 				gas_limit,
-				Some(gas_price),
+				gas_price,
 				nonce,
 				true,
 			)? {
-				(ExitReason::Succeed(_), create_address, _) => {
+				(ExitReason::Succeed(_), create_address, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::Created(create_address));
 				},
-				(_, create_address, _) => {
+				(_, create_address, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
 				},
 			}
@@ -482,10 +482,10 @@ impl<T: Trait> Module<T> {
 		init: Vec<u8>,
 		value: U256,
 		gas_limit: u32,
-		gas_price: Option<U256>,
+		gas_price: U256,
 		nonce: Option<U256>,
 		apply_state: bool,
-	) -> Result<(ExitReason, H160, U256), Error<T>> {
+	) -> Result<(ExitReason, H160, U256, Vec<Log>), Error<T>> {
 		Self::execute_evm(
 			source,
 			value,
@@ -514,10 +514,10 @@ impl<T: Trait> Module<T> {
 		salt: H256,
 		value: U256,
 		gas_limit: u32,
-		gas_price: Option<U256>,
+		gas_price: U256,
 		nonce: Option<U256>,
 		apply_state: bool,
-	) -> Result<(ExitReason, H160, U256), Error<T>> {
+	) -> Result<(ExitReason, H160, U256, Vec<Log>), Error<T>> {
 		let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
 		Self::execute_evm(
 			source,
@@ -548,10 +548,10 @@ impl<T: Trait> Module<T> {
 		input: Vec<u8>,
 		value: U256,
 		gas_limit: u32,
-		gas_price: Option<U256>,
+		gas_price: U256,
 		nonce: Option<U256>,
 		apply_state: bool,
-	) -> Result<(ExitReason, Vec<u8>, U256), Error<T>> {
+	) -> Result<(ExitReason, Vec<u8>, U256, Vec<Log>), Error<T>> {
 		Self::execute_evm(
 			source,
 			value,
@@ -574,20 +574,18 @@ impl<T: Trait> Module<T> {
 		source: H160,
 		value: U256,
 		gas_limit: u32,
-		gas_price: Option<U256>,
+		gas_price: U256,
 		nonce: Option<U256>,
 		apply_state: bool,
 		f: F,
-	) -> Result<(ExitReason, R, U256), Error<T>> where
+	) -> Result<(ExitReason, R, U256, Vec<Log>), Error<T>> where
 		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (ExitReason, R),
 	{
-		let gas_price = match gas_price {
-			Some(gas_price) => {
-				ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
-				gas_price
-			},
-			None => U256::zero(),
-		};
+
+		// Gas price check is skipped when performing a gas estimation.
+		if apply_state {
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+		}
 
 		let vicinity = Vicinity {
 			gas_price,
@@ -629,11 +627,19 @@ impl<T: Trait> Module<T> {
 		);
 		executor.deposit(source, total_fee.saturating_sub(actual_fee));
 
+		let (values, logs) = executor.deconstruct();
+		let logs_data = logs.into_iter().map(|x| x ).collect::<Vec<_>>();
+		let logs_result = logs_data.clone().into_iter().map(|it| {
+			Log {
+				address: it.address,
+				topics: it.topics,
+				data: it.data
+			}
+		}).collect();
 		if apply_state {
-			let (values, logs) = executor.deconstruct();
-			backend.apply(values, logs, true);
+			backend.apply(values, logs_data, true);
 		}
 
-		Ok((retv, reason, used_gas))
+		Ok((retv, reason, used_gas, logs_result))
 	}
 }

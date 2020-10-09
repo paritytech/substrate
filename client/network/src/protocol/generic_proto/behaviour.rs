@@ -120,7 +120,7 @@ pub struct GenericProto {
 	/// Notification protocols. Entries are only ever added and not removed.
 	/// Contains, for each protocol, the protocol name and the message to send as part of the
 	/// initial handshake.
-	notif_protocols: Vec<(Cow<'static, [u8]>, Arc<RwLock<Vec<u8>>>)>,
+	notif_protocols: Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -322,7 +322,7 @@ pub enum GenericProtoOut {
 		/// Id of the peer the message came from.
 		peer_id: PeerId,
 		/// Engine corresponding to the message.
-		protocol_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, str>,
 		/// Message that has been received.
 		message: BytesMut,
 	},
@@ -336,14 +336,21 @@ impl GenericProto {
 		versions: &[u8],
 		handshake_message: Vec<u8>,
 		peerset: sc_peerset::Peerset,
+		notif_protocols: impl Iterator<Item = (Cow<'static, str>, Vec<u8>)>,
 	) -> Self {
+		let notif_protocols = notif_protocols
+			.map(|(n, hs)| (n, Arc::new(RwLock::new(hs))))
+			.collect::<Vec<_>>();
+
+		assert!(!notif_protocols.is_empty());
+
 		let legacy_handshake_message = Arc::new(RwLock::new(handshake_message));
 		let legacy_protocol = RegisteredProtocol::new(protocol, versions, legacy_handshake_message);
 
 		GenericProto {
 			local_peer_id,
 			legacy_protocol,
-			notif_protocols: Vec::new(),
+			notif_protocols,
 			peerset,
 			peers: FnvHashMap::default(),
 			delays: Default::default(),
@@ -360,7 +367,7 @@ impl GenericProto {
 	/// will retain the protocols that were registered then, and not any new one.
 	pub fn register_notif_protocol(
 		&mut self,
-		protocol_name: impl Into<Cow<'static, [u8]>>,
+		protocol_name: impl Into<Cow<'static, str>>,
 		handshake_msg: impl Into<Vec<u8>>
 	) {
 		self.notif_protocols.push((protocol_name.into(), Arc::new(RwLock::new(handshake_msg.into()))));
@@ -371,10 +378,10 @@ impl GenericProto {
 	/// Has no effect if the protocol is unknown.
 	pub fn set_notif_protocol_handshake(
 		&mut self,
-		protocol_name: &[u8],
+		protocol_name: &str,
 		handshake_message: impl Into<Vec<u8>>
 	) {
-		if let Some(protocol) = self.notif_protocols.iter_mut().find(|(name, _)| name == &protocol_name) {
+		if let Some(protocol) = self.notif_protocols.iter_mut().find(|(name, _)| name == protocol_name) {
 			*protocol.1.write() = handshake_message.into();
 		}
 	}
@@ -551,9 +558,8 @@ impl GenericProto {
 	pub fn write_notification(
 		&mut self,
 		target: &PeerId,
-		protocol_name: Cow<'static, [u8]>,
+		protocol_name: Cow<'static, str>,
 		message: impl Into<Vec<u8>>,
-		encoded_fallback_message: Vec<u8>,
 	) {
 		let notifs_sink = match self.peers.get(target).and_then(|p| p.get_open()) {
 			None => {
@@ -569,36 +575,13 @@ impl GenericProto {
 			target: "sub-libp2p",
 			"External API => Notification({:?}, {:?})",
 			target,
-			str::from_utf8(&protocol_name)
+			protocol_name,
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 		notifs_sink.send_sync_notification(
-			&protocol_name,
-			encoded_fallback_message,
+			protocol_name,
 			message
 		);
-	}
-
-	/// Sends a message to a peer.
-	///
-	/// Has no effect if the custom protocol is not open with the given peer.
-	///
-	/// Also note that even we have a valid open substream, it may in fact be already closed
-	/// without us knowing, in which case the packet will not be received.
-	pub fn send_packet(&mut self, target: &PeerId, message: Vec<u8>) {
-		let notifs_sink = match self.peers.get(target).and_then(|p| p.get_open()) {
-			None => {
-				debug!(target: "sub-libp2p",
-					"Tried to sent packet to {:?} without an open channel.",
-					target);
-				return
-			}
-			Some(sink) => sink
-		};
-
-		trace!(target: "sub-libp2p", "External API => Packet for {:?}", target);
-		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
-		notifs_sink.send_legacy(message);
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
@@ -1329,30 +1312,11 @@ impl NetworkBehaviour for GenericProto {
 					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 
 				} else {
-					// In normal situations, the handshake is supposed to be a Status message, and
-					// we would discard Status messages received from secondary connections.
-					// However, in Polkadot 0.8.10 and below, nodes don't send a Status message
-					// when opening secondary connections and instead directly consider the
-					// substream as open. When connecting to such a node, the first message sent
-					// by the remote will always be considered by our local node as the handshake,
-					// even when it is a regular message.
-					// In order to maintain backwards compatibility, we therefore report the
-					// handshake as if it was a regular message, and the upper layer will ignore
-					// any superfluous Status message.
-					// The code below should be removed once Polkadot 0.8.10 and below are no
-					// longer widely in use, and should be replaced with simply printing a log
-					// entry.
 					debug!(
 						target: "sub-libp2p",
 						"Handler({:?}) => Secondary connection opened custom protocol",
 						source
 					);
-					trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
-					let event = GenericProtoOut::LegacyMessage {
-						peer_id: source,
-						message: From::from(&received_handshake[..]),
-					};
-					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 				}
 			}
 
@@ -1374,7 +1338,7 @@ impl NetworkBehaviour for GenericProto {
 					target: "sub-libp2p",
 					"Handler({:?}) => Notification({:?})",
 					source,
-					str::from_utf8(&protocol_name)
+					protocol_name,
 				);
 				trace!(target: "sub-libp2p", "External API <= Message({:?}, {:?})", protocol_name, source);
 				let event = GenericProtoOut::Notification {

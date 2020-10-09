@@ -1,12 +1,13 @@
 [package]
 name = "frame-benchmarking"
-version = "2.0.0-rc6"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Macro for benchmarking a FRAME runtime."
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -15,17 +16,17 @@ targets = ["x86_64-unknown-linux-gnu"]
 linregress = "0.1"
 paste = "0.1"
 codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false }
-sp-api = { version = "2.0.0-rc6", path = "../../primitives/api", default-features = false }
-sp-runtime-interface = { version = "2.0.0-rc6", path = "../../primitives/runtime-interface", default-features = false }
-sp-runtime = { version = "2.0.0-rc6", path = "../../primitives/runtime", default-features = false }
-sp-std = { version = "2.0.0-rc6", path = "../../primitives/std", default-features = false }
-sp-io = { version = "2.0.0-rc6", path = "../../primitives/io", default-features = false }
-sp-storage = { version = "2.0.0-rc6", path = "../../primitives/storage", default-features = false }
-frame-support = { version = "2.0.0-rc6", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0-rc6", default-features = false, path = "../system" }
+sp-api = { version = "2.0.0", path = "../../primitives/api", default-features = false }
+sp-runtime-interface = { version = "2.0.0", path = "../../primitives/runtime-interface", default-features = false }
+sp-runtime = { version = "2.0.0", path = "../../primitives/runtime", default-features = false }
+sp-std = { version = "2.0.0", path = "../../primitives/std", default-features = false }
+sp-io = { version = "2.0.0", path = "../../primitives/io", default-features = false }
+sp-storage = { version = "2.0.0", path = "../../primitives/storage", default-features = false }
+frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 
 [dev-dependencies]
-hex-literal = "0.2.1"
+hex-literal = "0.3.1"
 
 [features]
 default = [ "std" ]

@@ -63,19 +63,32 @@ pub struct BenchmarkResults {
 	pub repeat_writes: u32,
 }
 
+/// Configuration used to setup and run runtime benchmarks.
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct BenchmarkConfig {
+	/// The encoded name of the pallet to benchmark.
+	pub pallet: Vec<u8>,
+	/// The encoded name of the benchmark/extrinsic to run.
+	pub benchmark: Vec<u8>,
+	/// An optional manual override to the lowest values used in the `steps` range.
+	pub lowest_range_values: Vec<u32>,
+	/// An optional manual override to the highest values used in the `steps` range.
+	pub highest_range_values: Vec<u32>,
+	/// The number of samples to take across the range of values for components.
+	pub steps: Vec<u32>,
+	/// The number of times to repeat a benchmark.
+	pub repeat: u32,
+	/// Enable an extra benchmark iteration which runs the verification logic for a benchmark.
+	pub verify: bool,
+	/// Enable benchmarking of "extra" extrinsics, i.e. those that are not directly used in a pallet.
+	pub extra: bool,
+}
+
 sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
 	pub trait Benchmark {
 		/// Dispatch the given benchmark.
-		fn dispatch_benchmark(
-			pallet: Vec<u8>,
-			benchmark: Vec<u8>,
-			lowest_range_values: Vec<u32>,
-			highest_range_values: Vec<u32>,
-			steps: Vec<u32>,
-			repeat: u32,
-			extra: bool,
-		) -> Result<Vec<BenchmarkBatch>, RuntimeString>;
+		fn dispatch_benchmark(config: BenchmarkConfig) -> Result<Vec<BenchmarkBatch>, RuntimeString>;
 	}
 }
 
@@ -175,7 +188,8 @@ pub trait Benchmarking<T> {
 		highest_range_values: &[u32],
 		steps: &[u32],
 		repeat: u32,
-		whitelist: &[TrackedStorageKey]
+		whitelist: &[TrackedStorageKey],
+		verify: bool,
 	) -> Result<Vec<T>, &'static str>;
 }
 
@@ -188,10 +202,11 @@ pub trait BenchmarkingSetup<T, I = ()> {
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
 
 	/// Set up the storage, and prepare a closure to run the benchmark.
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
-
-	/// Set up the storage, and prepare a closure to test and verify the benchmark
-	fn verify(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+	fn instance(
+		&self,
+		components: &[(BenchmarkParameter, u32)],
+		verify: bool
+	) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
 /// Grab an account, seeded by a name and index.
@@ -203,4 +218,13 @@ pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed
 /// This caller account is automatically whitelisted for DB reads/writes by the benchmarking macro.
 pub fn whitelisted_caller<AccountId: Decode + Default>() -> AccountId {
 	account::<AccountId>("whitelisted_caller", 0, 0)
+}
+
+#[macro_export]
+macro_rules! whitelist_account {
+	($acc:ident) => {
+		frame_benchmarking::benchmarking::add_to_whitelist(
+			frame_system::Account::<T>::hashed_key_for(&$acc).into()
+		);
+	}
 }

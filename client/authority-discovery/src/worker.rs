@@ -19,21 +19,21 @@ use crate::{error::{Error, Result}, ServicetoWorkerMsg};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::marker::PhantomData;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::channel::mpsc;
-use futures::task::{Context, Poll};
-use futures::{Future, FutureExt, ready, Stream, StreamExt, stream::Fuse};
+use futures::{FutureExt, Stream, StreamExt, stream::Fuse};
 use futures_timer::Delay;
 
 use addr_cache::AddrCache;
 use codec::Decode;
-use libp2p::core::multiaddr;
+use either::Either;
+use libp2p::{core::multiaddr, multihash::Multihash};
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
 use prost::Message;
+use rand::{seq::SliceRandom, thread_rng};
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network::{
 	config::MultiaddrWithPeerId,
@@ -45,7 +45,7 @@ use sc_network::{
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, Pair};
-use sp_core::traits::BareCryptoStorePtr;
+use sp_keystore::CryptoStore;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
 
@@ -66,10 +66,16 @@ const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
 
+/// Maximum number of addresses cached per authority. Additional addresses are discarded.
+const MAX_ADDRESSES_PER_AUTHORITY: usize = 10;
+
+/// Maximum number of in-flight DHT lookups at any given point in time.
+const MAX_IN_FLIGHT_LOOKUPS: usize = 8;
+
 /// Role an authority discovery module can run as.
 pub enum Role {
 	/// Actual authority as well as a reference to its key store.
-	Authority(BareCryptoStorePtr),
+	Authority(Arc<dyn CryptoStore>),
 	/// Sentry node that guards an authority.
 	///
 	/// No reference to its key store needed, as sentry nodes don't have an identity to sign
@@ -95,7 +101,7 @@ pub enum Role {
 ///
 /// 2. **Discovers other authorities**
 ///
-///    1. Retrieves the current set of authorities.
+///    1. Retrieves the current and next set of authorities.
 ///
 ///    2. Starts DHT queries for the ids of the authorities.
 ///
@@ -107,7 +113,7 @@ pub enum Role {
 /// When run as a sentry node, the [`Worker`] does not publish
 /// any addresses to the DHT but still discovers validators and sentry nodes of
 /// validators, i.e. only step 2 (Discovers other authorities) is executed.
-pub struct Worker<Client, Network, Block>
+pub struct Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + 'static,
 	Network: NetworkProvider,
@@ -129,15 +135,20 @@ where
 	//   - Some(vec![a, b, c, ...]): Valid addresses were specified.
 	sentry_nodes: Option<Vec<Multiaddr>>,
 	/// Channel we receive Dht events on.
-	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+	dht_event_rx: DhtEventStream,
 
 	/// Interval to be proactive, publishing own addresses.
 	publish_interval: Interval,
-	/// Interval on which to query for addresses of other authorities.
+	/// Interval at which to request addresses of authorities, refilling the pending lookups queue.
 	query_interval: Interval,
 	/// Interval on which to set the peerset priority group to a new random
 	/// set of addresses.
 	priority_group_set_interval: Interval,
+
+	/// Queue of throttled lookups pending to be passed to the network.
+	pending_lookups: Vec<AuthorityId>,
+	/// Set of in-flight lookups.
+	in_flight_lookups: HashMap<libp2p::kad::record::Key, AuthorityId>,
 
 	addr_cache: addr_cache::AddrCache,
 
@@ -148,14 +159,14 @@ where
 	phantom: PhantomData<Block>,
 }
 
-impl<Client, Network, Block> Worker<Client, Network, Block>
+impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api:
 		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
-	Self: Future<Output = ()>,
+	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Return a new [`Worker`].
 	///
@@ -166,7 +177,7 @@ where
 		client: Arc<Client>,
 		network: Arc<Network>,
 		sentry_nodes: Vec<MultiaddrWithPeerId>,
-		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+		dht_event_rx: DhtEventStream,
 		role: Role,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 	) -> Self {
@@ -179,8 +190,8 @@ where
 			Duration::from_secs(12 * 60 * 60),
 		);
 
-		// External addresses of other authorities can change at any given point in time. The
-		// interval on which to query for external addresses of other authorities is a trade off
+		// External addresses of remote authorities can change at any given point in time. The
+		// interval on which to trigger new queries for the current authorities is a trade off
 		// between efficiency and performance.
 		let query_interval_start = Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME;
 		let query_interval_duration = Duration::from_secs(10 * 60);
@@ -189,9 +200,9 @@ where
 		// Querying 500 [`AuthorityId`]s takes ~1m on the Kusama DHT (10th of August 2020) when
 		// comparing `authority_discovery_authority_addresses_requested_total` and
 		// `authority_discovery_dht_event_received`. With that in mind set the peerset priority
-		// group on the same interval as the [`query_interval`] above, just delayed by 2 minutes.
+		// group on the same interval as the [`query_interval`] above, just delayed by 5 minutes.
 		let priority_group_set_interval = interval_at(
-			query_interval_start + Duration::from_secs(2 * 60),
+			query_interval_start + Duration::from_secs(5 * 60),
 			query_interval_duration,
 		);
 
@@ -225,6 +236,8 @@ where
 			publish_interval,
 			query_interval,
 			priority_group_set_interval,
+			pending_lookups: Vec::new(),
+			in_flight_lookups: HashMap::new(),
 			addr_cache,
 			role,
 			metrics,
@@ -232,8 +245,94 @@ where
 		}
 	}
 
+	/// Start the worker
+	pub async fn run(mut self) {
+		loop {
+			self.start_new_lookups();
+
+			futures::select! {
+				// Process incoming events.
+				event = self.dht_event_rx.next().fuse() => {
+					if let Some(event) = event {
+						self.handle_dht_event(event).await;
+					} else {
+						// This point is reached if the network has shut down, at which point there is not
+						// much else to do than to shut down the authority discovery as well.
+						return;
+					}
+				},
+				// Handle messages from [`Service`]. Ignore if sender side is closed.
+				msg = self.from_service.select_next_some() => {
+					self.process_message_from_service(msg);
+				},
+				// Set peerset priority group to a new random set of addresses.
+				_ = self.priority_group_set_interval.next().fuse() => {
+					if let Err(e) = self.set_priority_group() {
+						error!(
+							target: LOG_TARGET,
+							"Failed to set priority group: {:?}", e,
+						);
+					}
+				},
+				// Publish own addresses.
+				_ = self.publish_interval.next().fuse() => {
+					if let Err(e) = self.publish_ext_addresses().await {
+						error!(
+							target: LOG_TARGET,
+							"Failed to publish external addresses: {:?}", e,
+						);
+					}
+				},
+				// Request addresses of authorities.
+				_ = self.query_interval.next().fuse() => {
+					if let Err(e) = self.refill_pending_lookups_queue().await {
+						error!(
+							target: LOG_TARGET,
+							"Failed to request addresses of authorities: {:?}", e,
+						);
+					}
+				},
+			}
+		}
+	}
+
+	fn process_message_from_service(&self, msg: ServicetoWorkerMsg) {
+		match msg {
+			ServicetoWorkerMsg::GetAddressesByAuthorityId(authority, sender) => {
+				let _ = sender.send(
+					self.addr_cache.get_addresses_by_authority_id(&authority).map(Clone::clone),
+				);
+			}
+			ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, sender) => {
+				let _ = sender.send(
+					self.addr_cache.get_authority_id_by_peer_id(&peer_id).map(Clone::clone),
+				);
+			}
+		}
+	}
+
+	fn addresses_to_publish(&self) -> impl ExactSizeIterator<Item = Multiaddr> {
+		match &self.sentry_nodes {
+			Some(addrs) => Either::Left(addrs.clone().into_iter()),
+			None => {
+				let peer_id: Multihash = self.network.local_peer_id().into();
+				Either::Right(
+					self.network.external_addresses()
+						.into_iter()
+						.map(move |a| {
+							if a.iter().any(|p| matches!(p, multiaddr::Protocol::P2p(_))) {
+								a
+							} else {
+								a.with(multiaddr::Protocol::P2p(peer_id.clone()))
+							}
+						}),
+				)
+			}
+		}
+	}
+
 	/// Publish either our own or if specified the public addresses of our sentry nodes.
-	fn publish_ext_addresses(&mut self) -> Result<()> {
+	async fn publish_ext_addresses(&mut self) -> Result<()> {
 		let key_store = match &self.role {
 			Role::Authority(key_store) => key_store,
 			// Only authority nodes can put addresses (their own or the ones of their sentry nodes)
@@ -242,44 +341,30 @@ where
 			Role::Sentry => return Ok(()),
 		};
 
-		if let Some(metrics) = &self.metrics {
-			metrics.publish.inc()
-		}
-
-		let addresses: Vec<_> = match &self.sentry_nodes {
-			Some(addrs) => addrs.clone().into_iter()
-				.map(|a| a.to_vec())
-				.collect(),
-			None => self.network.external_addresses()
-				.into_iter()
-				.map(|a| a.with(multiaddr::Protocol::P2p(
-					self.network.local_peer_id().into(),
-				)))
-				.map(|a| a.to_vec())
-				.collect(),
-		};
+		let addresses = self.addresses_to_publish();
 
 		if let Some(metrics) = &self.metrics {
-			metrics.amount_last_published.set(addresses.len() as u64);
+			metrics.publish.inc();
+			metrics.amount_addresses_last_published.set(
+				addresses.len().try_into().unwrap_or(std::u64::MAX),
+			);
 		}
 
 		let mut serialized_addresses = vec![];
-		schema::AuthorityAddresses { addresses }
+		schema::AuthorityAddresses { addresses: addresses.map(|a| a.to_vec()).collect() }
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		let keys = Worker::get_own_public_keys_within_authority_set(
-			&key_store,
-			&self.client,
-		)?.into_iter().map(Into::into).collect::<Vec<_>>();
+		let keys = Worker::<Client, Network, Block, DhtEventStream>::get_own_public_keys_within_authority_set(
+			key_store.clone(),
+			self.client.as_ref(),
+		).await?.into_iter().map(Into::into).collect::<Vec<_>>();
 
-		let signatures = key_store.read()
-			.sign_with_all(
-				key_types::AUTHORITY_DISCOVERY,
-				keys.clone(),
-				serialized_addresses.as_slice(),
-			)
-			.map_err(|_| Error::Signing)?;
+		let signatures = key_store.sign_with_all(
+			key_types::AUTHORITY_DISCOVERY,
+			keys.clone(),
+			serialized_addresses.as_slice(),
+		).await.map_err(|_| Error::Signing)?;
 
 		for (sign_result, key) in signatures.into_iter().zip(keys) {
 			let mut signed_addresses = vec![];
@@ -304,106 +389,127 @@ where
 		Ok(())
 	}
 
-	fn request_addresses_of_others(&mut self) -> Result<()> {
+	async fn refill_pending_lookups_queue(&mut self) -> Result<()> {
 		let id = BlockId::hash(self.client.info().best_hash);
-
-		let authorities = self
-			.client
-			.runtime_api()
-			.authorities(&id)
-			.map_err(Error::CallingRuntime)?;
 
 		let local_keys = match &self.role {
 			Role::Authority(key_store) => {
-				key_store.read()
-					.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
-					.into_iter()
-					.collect::<HashSet<_>>()
+				key_store.sr25519_public_keys(
+					key_types::AUTHORITY_DISCOVERY
+				).await.into_iter().collect::<HashSet<_>>()
 			},
 			Role::Sentry => HashSet::new(),
 		};
 
-		for authority_id in authorities.iter() {
-			// Make sure we don't look up our own keys.
-			if !local_keys.contains(authority_id.as_ref()) {
-				if let Some(metrics) = &self.metrics {
-					metrics.request.inc();
-				}
+		let mut authorities = self
+			.client
+			.runtime_api()
+			.authorities(&id)
+			.map_err(Error::CallingRuntime)?
+			.into_iter()
+			.filter(|id| !local_keys.contains(id.as_ref()))
+			.collect();
 
-				self.network
-					.get_value(&hash_authority_id(authority_id.as_ref()));
-			}
+		self.addr_cache.retain_ids(&authorities);
+
+		authorities.shuffle(&mut thread_rng());
+		self.pending_lookups = authorities;
+		// Ignore all still in-flight lookups. Those that are still in-flight are likely stalled as
+		// query interval ticks are far enough apart for all lookups to succeed.
+		self.in_flight_lookups.clear();
+
+		if let Some(metrics) = &self.metrics {
+			metrics.requests_pending.set(
+				self.pending_lookups.len().try_into().unwrap_or(std::u64::MAX),
+			);
 		}
 
 		Ok(())
 	}
 
+	fn start_new_lookups(&mut self) {
+		while self.in_flight_lookups.len() < MAX_IN_FLIGHT_LOOKUPS {
+			let authority_id = match self.pending_lookups.pop() {
+				Some(authority) => authority,
+				None => return,
+			};
+			let hash = hash_authority_id(authority_id.as_ref());
+			self.network
+				.get_value(&hash);
+			self.in_flight_lookups.insert(hash, authority_id);
+
+			if let Some(metrics) = &self.metrics {
+				metrics.requests.inc();
+				metrics.requests_pending.set(
+					self.pending_lookups.len().try_into().unwrap_or(std::u64::MAX),
+				);
+			}
+		}
+	}
+
 	/// Handle incoming Dht events.
-	///
-	/// Returns either:
-	///   - Poll::Pending when there are no more events to handle or
-	///   - Poll::Ready(()) when the dht event stream terminated.
-	fn handle_dht_events(&mut self, cx: &mut Context) -> Poll<()>{
-		loop {
-			match ready!(self.dht_event_rx.poll_next_unpin(cx)) {
-				Some(DhtEvent::ValueFound(v)) => {
-					if let Some(metrics) = &self.metrics {
-						metrics.dht_event_received.with_label_values(&["value_found"]).inc();
-					}
-
-					if log_enabled!(log::Level::Debug) {
-						let hashes = v.iter().map(|(hash, _value)| hash.clone());
-						debug!(
-							target: LOG_TARGET,
-							"Value for hash '{:?}' found on Dht.", hashes,
-						);
-					}
-
-					if let Err(e) = self.handle_dht_value_found_event(v) {
-						if let Some(metrics) = &self.metrics {
-							metrics.handle_value_found_event_failure.inc();
-						}
-
-						debug!(
-							target: LOG_TARGET,
-							"Failed to handle Dht value found event: {:?}", e,
-						);
-					}
+	async fn handle_dht_event(&mut self, event: DhtEvent) {
+		match event {
+			DhtEvent::ValueFound(v) => {
+				if let Some(metrics) = &self.metrics {
+					metrics.dht_event_received.with_label_values(&["value_found"]).inc();
 				}
-				Some(DhtEvent::ValueNotFound(hash)) => {
+
+				if log_enabled!(log::Level::Debug) {
+					let hashes = v.iter().map(|(hash, _value)| hash.clone());
+					debug!(
+						target: LOG_TARGET,
+						"Value for hash '{:?}' found on Dht.", hashes,
+					);
+				}
+
+				if let Err(e) = self.handle_dht_value_found_event(v) {
 					if let Some(metrics) = &self.metrics {
-						metrics.dht_event_received.with_label_values(&["value_not_found"]).inc();
+						metrics.handle_value_found_event_failure.inc();
 					}
 
+					debug!(
+						target: LOG_TARGET,
+						"Failed to handle Dht value found event: {:?}", e,
+					);
+				}
+			}
+			DhtEvent::ValueNotFound(hash) => {
+				if let Some(metrics) = &self.metrics {
+					metrics.dht_event_received.with_label_values(&["value_not_found"]).inc();
+				}
+
+				if self.in_flight_lookups.remove(&hash).is_some() {
 					debug!(
 						target: LOG_TARGET,
 						"Value for hash '{:?}' not found on Dht.", hash
 					)
-				},
-				Some(DhtEvent::ValuePut(hash)) => {
-					if let Some(metrics) = &self.metrics {
-						metrics.dht_event_received.with_label_values(&["value_put"]).inc();
-					}
-
+				} else {
 					debug!(
 						target: LOG_TARGET,
-						"Successfully put hash '{:?}' on Dht.", hash,
+						"Received 'ValueNotFound' for unexpected hash '{:?}'.", hash
 					)
-				},
-				Some(DhtEvent::ValuePutFailed(hash)) => {
-					if let Some(metrics) = &self.metrics {
-						metrics.dht_event_received.with_label_values(&["value_put_failed"]).inc();
-					}
+				}
+			},
+			DhtEvent::ValuePut(hash) => {
+				if let Some(metrics) = &self.metrics {
+					metrics.dht_event_received.with_label_values(&["value_put"]).inc();
+				}
 
-					debug!(
-						target: LOG_TARGET,
-						"Failed to put hash '{:?}' on Dht.", hash
-					)
-				},
-				None => {
-					debug!(target: LOG_TARGET, "Dht event stream terminated.");
-					return Poll::Ready(());
-				},
+				debug!(
+					target: LOG_TARGET,
+					"Successfully put hash '{:?}' on Dht.", hash,
+				)
+			},
+			DhtEvent::ValuePutFailed(hash) => {
+				if let Some(metrics) = &self.metrics {
+					metrics.dht_event_received.with_label_values(&["value_put_failed"]).inc();
+				}
+
+				debug!(
+					target: LOG_TARGET,
+					"Failed to put hash '{:?}' on Dht.", hash
+				)
 			}
 		}
 	}
@@ -424,23 +530,9 @@ where
 			}
 		})?.ok_or(Error::ReceivingDhtValueFoundEventWithNoRecords)?;
 
-		let authorities = {
-			let block_id = BlockId::hash(self.client.info().best_hash);
-			// From the Dht we only get the hashed authority id. In order to retrieve the actual
-			// authority id and to ensure it is actually an authority, we match the hash against the
-			// hash of the authority id of all other authorities.
-			let authorities = self.client.runtime_api().authorities(&block_id)?;
-			self.addr_cache.retain_ids(&authorities);
-			authorities
-				.into_iter()
-				.map(|id| (hash_authority_id(id.as_ref()), id))
-				.collect::<HashMap<_, _>>()
-		};
-
-		// Check if the event origins from an authority in the current authority set.
-		let authority_id: &AuthorityId = authorities
-			.get(&remote_key)
-			.ok_or(Error::MatchingHashedAuthorityIdWithAuthorityId)?;
+		let authority_id: AuthorityId = self.in_flight_lookups
+			.remove(&remote_key)
+			.ok_or(Error::ReceivingUnexpectedRecord)?;
 
 		let local_peer_id = self.network.local_peer_id();
 
@@ -453,7 +545,7 @@ where
 				let signature = AuthoritySignature::decode(&mut &signature[..])
 					.map_err(Error::EncodingDecodingScale)?;
 
-				if !AuthorityPair::verify(&signature, &addresses, authority_id) {
+				if !AuthorityPair::verify(&signature, &addresses, &authority_id) {
 					return Err(Error::VerifyingDhtPayload);
 				}
 
@@ -489,44 +581,45 @@ where
 
 				false // `protocol` is not a [`Protocol::P2p`], let's keep looking.
 			}))
+			.take(MAX_ADDRESSES_PER_AUTHORITY)
 			.collect();
 
 		if !remote_addresses.is_empty() {
-			self.addr_cache.insert(authority_id.clone(), remote_addresses);
+			self.addr_cache.insert(authority_id, remote_addresses);
 			if let Some(metrics) = &self.metrics {
 				metrics.known_authorities_count.set(
 					self.addr_cache.num_ids().try_into().unwrap_or(std::u64::MAX)
 				);
 			}
 		}
-
 		Ok(())
 	}
 
-	/// Retrieve our public keys within the current authority set.
+	/// Retrieve our public keys within the current and next authority set.
 	//
 	// A node might have multiple authority discovery keys within its keystore, e.g. an old one and
-	// one for the upcoming session. In addition it could be participating in the current authority
-	// set with two keys. The function does not return all of the local authority discovery public
-	// keys, but only the ones intersecting with the current authority set.
-	fn get_own_public_keys_within_authority_set(
-		key_store: &BareCryptoStorePtr,
+	// one for the upcoming session. In addition it could be participating in the current and (/ or)
+	// next authority set with two keys. The function does not return all of the local authority
+	// discovery public keys, but only the ones intersecting with the current or next authority set.
+	async fn get_own_public_keys_within_authority_set(
+		key_store: Arc<dyn CryptoStore>,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
-		let local_pub_keys = key_store.read()
+		let local_pub_keys = key_store
 			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
+			.await
 			.into_iter()
 			.collect::<HashSet<_>>();
 
 		let id = BlockId::hash(client.info().best_hash);
-		let current_authorities = client.runtime_api()
+		let authorities = client.runtime_api()
 			.authorities(&id)
 			.map_err(Error::CallingRuntime)?
 			.into_iter()
 			.map(std::convert::Into::into)
 			.collect::<HashSet<_>>();
 
-		let intersection = local_pub_keys.intersection(&current_authorities)
+		let intersection = local_pub_keys.intersection(&authorities)
 			.cloned()
 			.map(std::convert::Into::into)
 			.collect();
@@ -564,84 +657,6 @@ where
 			.map_err(Error::SettingPeersetPriorityGroup)?;
 
 		Ok(())
-	}
-}
-
-impl<Client, Network, Block> Future for Worker<Client, Network, Block>
-where
-	Block: BlockT + Unpin + 'static,
-	Network: NetworkProvider,
-	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api:
-		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
-{
-	type Output = ();
-
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		// Process incoming events.
-		if let Poll::Ready(()) = self.handle_dht_events(cx) {
-			// `handle_dht_events` returns `Poll::Ready(())` when the Dht event stream terminated.
-			// Termination of the Dht event stream implies that the underlying network terminated,
-			// thus authority discovery should terminate as well.
-			return Poll::Ready(());
-		}
-
-		// Publish own addresses.
-		if let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {
-			// Register waker of underlying task for next interval.
-			while let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {}
-
-			if let Err(e) = self.publish_ext_addresses() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to publish external addresses: {:?}", e,
-				);
-			}
-		}
-
-		// Request addresses of authorities.
-		if let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {
-			// Register waker of underlying task for next interval.
-			while let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {}
-
-			if let Err(e) = self.request_addresses_of_others() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to request addresses of authorities: {:?}", e,
-				);
-			}
-		}
-
-		// Set peerset priority group to a new random set of addresses.
-		if let Poll::Ready(_) = self.priority_group_set_interval.poll_next_unpin(cx) {
-			// Register waker of underlying task for next interval.
-			while let Poll::Ready(_) = self.priority_group_set_interval.poll_next_unpin(cx) {}
-
-			if let Err(e) = self.set_priority_group() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to set priority group: {:?}", e,
-				);
-			}
-		}
-
-		// Handle messages from [`Service`].
-		while let Poll::Ready(Some(msg)) = self.from_service.poll_next_unpin(cx) {
-			match msg {
-				ServicetoWorkerMsg::GetAddressesByAuthorityId(authority, sender) => {
-					let _ = sender.send(
-						self.addr_cache.get_addresses_by_authority_id(&authority).map(Clone::clone),
-					);
-				}
-				ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, sender) => {
-					let _ = sender.send(
-						self.addr_cache.get_authority_id_by_peer_id(&peer_id).map(Clone::clone),
-					);
-				}
-			}
-		}
-
-		Poll::Pending
 	}
 }
 
@@ -701,8 +716,9 @@ fn interval_at(start: Instant, duration: Duration) -> Interval {
 #[derive(Clone)]
 pub(crate) struct Metrics {
 	publish: Counter<U64>,
-	amount_last_published: Gauge<U64>,
-	request: Counter<U64>,
+	amount_addresses_last_published: Gauge<U64>,
+	requests: Counter<U64>,
+	requests_pending: Gauge<U64>,
 	dht_event_received: CounterVec<U64>,
 	handle_value_found_event_failure: Counter<U64>,
 	known_authorities_count: Gauge<U64>,
@@ -719,7 +735,7 @@ impl Metrics {
 				)?,
 				registry,
 			)?,
-			amount_last_published: register(
+			amount_addresses_last_published: register(
 				Gauge::new(
 					"authority_discovery_amount_external_addresses_last_published",
 					"Number of external addresses published when authority discovery last \
@@ -727,11 +743,18 @@ impl Metrics {
 				)?,
 				registry,
 			)?,
-			request: register(
+			requests: register(
 				Counter::new(
 					"authority_discovery_authority_addresses_requested_total",
 					"Number of times authority discovery has requested external addresses of a \
 					 single authority."
+				)?,
+				registry,
+			)?,
+			requests_pending: register(
+				Gauge::new(
+					"authority_discovery_authority_address_requests_pending",
+					"Number of pending authority address requests."
 				)?,
 				registry,
 			)?,
@@ -772,7 +795,7 @@ impl Metrics {
 
 // Helper functions for unit testing.
 #[cfg(test)]
-impl<Client, Network, Block> Worker<Client, Network, Block>
+impl<Block, Client, Network, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + 'static,
 	Network: NetworkProvider,

@@ -265,7 +265,6 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	}
 
 	/// Return the ss58-check string for this key.
-
 	#[cfg(feature = "std")]
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
 		let mut v = vec![version.into()];
@@ -274,9 +273,11 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		v.extend(&r.as_bytes()[0..2]);
 		v.to_base58()
 	}
+
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
 	fn to_ss58check(&self) -> String { self.to_ss58check_with_version(*DEFAULT_VERSION.lock()) }
+
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
 	#[cfg(feature = "std")]
@@ -327,7 +328,13 @@ macro_rules! ss58_address_format {
 		#[cfg(feature = "std")]
 		impl std::fmt::Display for Ss58AddressFormat {
 			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-				write!(f, "{:?}", self)
+				match self {
+					$(
+						Ss58AddressFormat::$identifier => write!(f, "{}", $name),
+					)*
+					Ss58AddressFormat::Custom(x) => write!(f, "{}", x),
+				}
+
 			}
 		}
 
@@ -377,7 +384,7 @@ macro_rules! ss58_address_format {
 							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(x)),
 							_ => Err(()),
 						}
-						
+
 						#[cfg(not(feature = "std"))]
 						Err(())
 					},
@@ -402,6 +409,15 @@ macro_rules! ss58_address_format {
 		}
 
 		#[cfg(feature = "std")]
+		impl std::str::FromStr for Ss58AddressFormat {
+			type Err = ParseError;
+
+			fn from_str(data: &str) -> Result<Self, Self::Err> {
+				Self::try_from(data)
+			}
+		}
+
+		#[cfg(feature = "std")]
 		impl std::fmt::Display for ParseError {
 			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 				write!(f, "failed to parse network value as u8")
@@ -418,10 +434,7 @@ macro_rules! ss58_address_format {
 		#[cfg(feature = "std")]
 		impl From<Ss58AddressFormat> for String {
 			fn from(x: Ss58AddressFormat) -> String {
-				match x {
-					$(Ss58AddressFormat::$identifier => $name.into()),*,
-					Ss58AddressFormat::Custom(x) => x.to_string(),
-				}
+				x.to_string()
 			}
 		}
 	)
@@ -459,10 +472,20 @@ ss58_address_format!(
 		(13, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
 	KulupuAccount =>
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
+	DarkAccount =>
+		(17, "dark", "Dark mainnet, standard account (*25519).")
 	DarwiniaAccount =>
 		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
+	GeekAccount =>
+		(19, "geek", "GeekCash mainnet, standard account (*25519).")
 	StafiAccount =>
 		(20, "stafi", "Stafi mainnet, standard account (*25519).")
+	DockTestAccount =>
+		(21, "dock-testnet", "Dock testnet, standard account (*25519).")
+	DockMainAccount =>
+		(22, "dock-mainnet", "Dock mainnet, standard account (*25519).")
+	ShiftNrg =>
+		(23, "shift", "ShiftNrg mainnet, standard account (*25519).")
 	SubsocialAccount =>
 		(28, "subsocial", "Subsocial network, standard account (*25519).")
 	PhalaAccount =>
@@ -473,6 +496,8 @@ ss58_address_format!(
 		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
 	CentrifugeAccount =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
+	NodleAccount =>
+		(37, "nodle", "Nodle Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
 	Reserved43 =>

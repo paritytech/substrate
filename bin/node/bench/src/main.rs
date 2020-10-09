@@ -79,7 +79,7 @@ fn main() {
 	let opt = Opt::from_args();
 
 	if !opt.json {
-		sc_cli::init_logger("");
+		sp_tracing::try_init_simple();
 	}
 
 	let mut import_benchmarks = Vec::new();

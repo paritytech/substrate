@@ -20,11 +20,14 @@
 //!
 //! The membership can be provided in one of two ways: either directly, using the Root-dispatchable
 //! function `set_members`, or indirectly, through implementing the `ChangeMembers`.
-//! The pallet assumes that the amount of members stays at or below `MAX_MEMBERS` for its weight
+//! The pallet assumes that the amount of members stays at or below `MaxMembers` for its weight
 //! calculations, but enforces this neither in `set_members` nor in `change_members_sorted`.
 //!
-//! A "prime" member may be set allowing their vote to act as the default vote in case of any
-//! abstentions after the voting period.
+//! A "prime" member may be set to help determine the default vote behavior based on chain
+//! config. If `PreimDefaultVote` is used, the prime vote acts as the default vote in case of any
+//! abstentions after the voting period. If `MoreThanMajorityThenPrimeDefaultVote` is used, then
+//! abstentations will first follow the majority of the collective voting, and then the prime
+//! member.
 //!
 //! Voting happens through motions comprising a proposal (i.e. a curried dispatchable) plus a
 //! number of approvals required for it to pass and be called. Motions are open for members to
@@ -60,6 +63,8 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+mod default_weight;
+
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
 
@@ -69,35 +74,63 @@ pub type ProposalIndex = u32;
 /// vote exactly once, therefore also the number of votes for any given motion.
 pub type MemberCount = u32;
 
-/// The maximum number of members supported by the pallet. Used for weight estimation.
-///
-/// NOTE:
-/// + Benchmarks will need to be re-run and weights adjusted if this changes.
-/// + This pallet assumes that dependents keep to the limit without enforcing it.
-pub const MAX_MEMBERS: MemberCount = 100;
+/// Default voting strategy when a member is inactive.
+pub trait DefaultVote {
+	/// Get the default voting strategy, given:
+	///
+	/// - Whether the prime member voted Aye.
+	/// - Raw number of yes votes.
+	/// - Raw number of no votes.
+	/// - Total number of member count.
+	fn default_vote(
+		prime_vote: Option<bool>,
+		yes_votes: MemberCount,
+		no_votes: MemberCount,
+		len: MemberCount,
+	) -> bool;
+}
+
+/// Set the prime member's vote as the default vote.
+pub struct PrimeDefaultVote;
+
+impl DefaultVote for PrimeDefaultVote {
+	fn default_vote(
+		prime_vote: Option<bool>,
+		_yes_votes: MemberCount,
+		_no_votes: MemberCount,
+		_len: MemberCount,
+	) -> bool {
+		prime_vote.unwrap_or(false)
+	}
+}
+
+/// First see if yes vote are over majority of the whole collective. If so, set the default vote
+/// as yes. Otherwise, use the prime meber's vote as the default vote.
+pub struct MoreThanMajorityThenPrimeDefaultVote;
+
+impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
+	fn default_vote(
+		prime_vote: Option<bool>,
+		yes_votes: MemberCount,
+		_no_votes: MemberCount,
+		len: MemberCount,
+	) -> bool {
+		let more_than_majority = yes_votes * 2 > len;
+		more_than_majority || prime_vote.unwrap_or(false)
+	}
+}
 
 pub trait WeightInfo {
 	fn set_members(m: u32, n: u32, p: u32, ) -> Weight;
-	fn execute(m: u32, b: u32, ) -> Weight;
-	fn propose_execute(m: u32, b: u32, ) -> Weight;
-	fn propose_proposed(m: u32, p: u32, b: u32, ) -> Weight;
+	fn execute(b: u32, m: u32, ) -> Weight;
+	fn propose_execute(b: u32, m: u32, ) -> Weight;
+	fn propose_proposed(b: u32, m: u32, p: u32, ) -> Weight;
 	fn vote(m: u32, ) -> Weight;
-	fn close_early_disapproved(m: u32, p: u32, b: u32, ) -> Weight;
-	fn close_early_approved(m: u32, p: u32, b: u32, ) -> Weight;
-	fn close_disapproved(m: u32, p: u32, b: u32, ) -> Weight;
-	fn close_approved(m: u32, p: u32, b: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn set_members(_m: u32, _n: u32, _p: u32, ) -> Weight { 1_000_000_000 }
-	fn execute(_m: u32, _b: u32, ) -> Weight { 1_000_000_000 }
-	fn propose_execute(_m: u32, _b: u32, ) -> Weight { 1_000_000_000 }
-	fn propose_proposed(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
-	fn vote(_m: u32, ) -> Weight { 1_000_000_000 }
-	fn close_early_disapproved(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
-	fn close_early_approved(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
-	fn close_disapproved(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
-	fn close_approved(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn close_early_disapproved(m: u32, p: u32, ) -> Weight;
+	fn close_early_approved(b: u32, m: u32, p: u32, ) -> Weight;
+	fn close_disapproved(m: u32, p: u32, ) -> Weight;
+	fn close_approved(b: u32, m: u32, p: u32, ) -> Weight;
+	fn disapprove_proposal(p: u32, ) -> Weight;
 }
 
 pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
@@ -117,7 +150,17 @@ pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	type MotionDuration: Get<Self::BlockNumber>;
 
 	/// Maximum number of proposals allowed to be active in parallel.
-	type MaxProposals: Get<u32>;
+	type MaxProposals: Get<ProposalIndex>;
+
+	/// The maximum number of members supported by the pallet. Used for weight estimation.
+	///
+	/// NOTE:
+	/// + Benchmarks will need to be re-run and weights adjusted if this changes.
+	/// + This pallet assumes that dependents keep to the limit without enforcing it.
+	type MaxMembers: Get<MemberCount>;
+
+	/// Default vote strategy of this collective.
+	type DefaultVote: DefaultVote;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -166,8 +209,7 @@ decl_storage! {
 		pub ProposalCount get(fn proposal_count): u32;
 		/// The current members of the collective. This is stored sorted (just by value).
 		pub Members get(fn members): Vec<T::AccountId>;
-		/// The member who provides the default vote for any other members that do not vote before
-		/// the timeout. If None, then no member has that privilege.
+		/// The prime member that helps determine the default vote behavior in case of absentations.
 		pub Prime get(fn prime): Option<T::AccountId>;
 	}
 	add_extra_genesis {
@@ -184,26 +226,26 @@ decl_event! {
 	{
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given
 		/// `MemberCount`).
-		/// [account, proposal_index, proposal_hash, threshold]
+		/// \[account, proposal_index, proposal_hash, threshold\]
 		Proposed(AccountId, ProposalIndex, Hash, MemberCount),
 		/// A motion (given hash) has been voted on by given account, leaving
 		/// a tally (yes votes and no votes given respectively as `MemberCount`).
-		/// [account, proposal_hash, voted, yes, no]
+		/// \[account, proposal_hash, voted, yes, no\]
 		Voted(AccountId, Hash, bool, MemberCount, MemberCount),
 		/// A motion was approved by the required threshold.
-		/// [proposal_hash]
+		/// \[proposal_hash\]
 		Approved(Hash),
 		/// A motion was not approved by the required threshold.
-		/// [proposal_hash]
+		/// \[proposal_hash\]
 		Disapproved(Hash),
 		/// A motion was executed; result will be `Ok` if it returned without error.
-		/// [proposal_hash, result]
+		/// \[proposal_hash, result\]
 		Executed(Hash, DispatchResult),
 		/// A single member did some action; result will be `Ok` if it returned without error.
-		/// [proposal_hash, result]
+		/// \[proposal_hash, result\]
 		MemberExecuted(Hash, DispatchResult),
 		/// A proposal was closed because its threshold was reached or after its duration was up.
-		/// [proposal_hash, yes, no]
+		/// \[proposal_hash, yes, no\]
 		Closed(Hash, MemberCount, MemberCount),
 	}
 }
@@ -230,131 +272,6 @@ decl_error! {
 		WrongProposalWeight,
 		/// The given length bound for the proposal was too low.
 		WrongProposalLength,
-	}
-}
-
-/// Functions for calcuating the weight of dispatchables.
-mod weight_for {
-	use frame_support::{traits::Get, weights::Weight};
-	use super::{Trait, Instance};
-
-	/// Calculate the weight for `set_members`.
-	///
-	/// Based on benchmark:
-	/// 0 + M * 20.47 + N * 0.109 + P * 26.29 µs (min squares analysis)
-	///
-	/// Note: The complexity of `set_members` is quadratic (`O(MP + N)`), so the linear approximation
-	/// of the benchmark is not always permissible. It is here, though, because the linear approximation
-	/// covered the range of possible values and we estimate weight via the worst case (max paramter
-	/// values) before execution so we can be sure that we are only overestimating.
-	pub(crate) fn set_members<T: Trait<I>, I: Instance>(
-		old_count: Weight,
-		new_count: Weight,
-		proposals: Weight,
-	) -> Weight {
-		let db = T::DbWeight::get();
-		db.reads_writes(1, 1) // mutate `Members`
-			.saturating_add(db.writes(1)) // set `Prime`
-			.saturating_add(db.reads(1)) // read `Proposals`
-			.saturating_add(db.reads_writes(proposals, proposals)) // update votes (`Voting`)
-			.saturating_add(old_count.saturating_mul(21_000_000)) // M
-			.saturating_add(new_count.saturating_mul(110_000)) // N
-			.saturating_add(proposals.saturating_mul(27_000_000)) // P
-	}
-
-	/// Calculate the weight for `execute`.
-	///
-	/// Based on benchmark:
-	/// 22.62 + M * 0.115 + B * 0.003 µs (min squares analysis)
-	pub(crate) fn execute<T: Trait<I>, I: Instance>(
-		members: Weight,
-		proposal: Weight,
-		length: Weight,
-	) -> Weight {
-		T::DbWeight::get().reads(1) // read members for `is_member`
-			.saturating_add(23_000_000) // constant
-			.saturating_add(length.saturating_mul(4_000)) // B
-			.saturating_add(members.saturating_mul(120_000)) // M
-			.saturating_add(proposal) // P
-	}
-
-	/// Calculate the weight for `propose` if the proposal is executed straight away (`threshold < 2`).
-	///
-	/// Based on benchmark:
-	/// 28.12 + M * 0.218 + B * 0.003 µs (min squares analysis)
-	pub(crate) fn propose_execute<T: Trait<I>, I: Instance>(
-		members: Weight,
-		proposal: Weight,
-		length: Weight,
-	) -> Weight {
-		T::DbWeight::get().reads(2) // `is_member` + `contains_key`
-			.saturating_add(29_000_000) // constant
-			.saturating_add(length.saturating_mul(3_000)) // B
-			.saturating_add(members.saturating_mul(220_000)) // M
-			.saturating_add(proposal) // P1
-	}
-
-	/// Calculate the weight for `propose` if the proposal is put up for a vote (`threshold >= 2`).
-	///
-	/// Based on benchmark:
-	/// 49.75 + M * 0.105 + P2 0.502 + B * 0.006 µs (min squares analysis)
-	pub(crate) fn propose_proposed<T: Trait<I>, I: Instance>(
-		members: Weight,
-		proposals: Weight,
-		length: Weight,
-	) -> Weight {
-		T::DbWeight::get().reads(2) // `is_member` + `contains_key`
-			.saturating_add(T::DbWeight::get().reads_writes(2, 4)) // `proposal` insertion
-			.saturating_add(50_000_000) // constant
-			.saturating_add(length.saturating_mul(6_000)) // B
-			.saturating_add(members.saturating_mul(110_000)) // M
-			.saturating_add(proposals.saturating_mul(510_000)) // P2
-	}
-
-	/// Calculate the weight for `vote`.
-	///
-	/// Based on benchmark:
-	/// 24.03 + M * 0.349 + P * 0.119 + B * 0.003 µs (min squares analysis)
-	pub(crate) fn vote<T: Trait<I>, I: Instance>(
-		members: Weight,
-	) -> Weight {
-		T::DbWeight::get().reads(1) // read `Members`
-			.saturating_add(T::DbWeight::get().reads_writes(1, 1)) // mutate `Voting`
-			.saturating_add(30_000_000) // constant
-			.saturating_add(members.saturating_mul(500_000)) // M
-	}
-
-	/// Calculate the weight for `close`.
-	///
-	/// Based on benchmarks:
-	/// - early disapproved: 37.21 + M * 0.239 + P2 * 0.466 + B * 0.002 µs (min squares analysis)
-	/// - early approved:    50.82 + M * 0.211 + P2 * 0.478 + B * 0.008 µs (min squares analysis)
-	/// - disapproved:       51.08 + M * 0.224 + P2 * 0.475 + B * 0.003 µs (min squares analysis)
-	/// - approved:          65.95 + M * 0.226 + P2 * 0.487 + B * 0.005 µs (min squares analysis)
-	pub(crate) fn close<T: Trait<I>, I: Instance>(
-		members: Weight,
-		proposal_weight: Weight,
-		proposals: Weight,
-		length: Weight,
-	) -> Weight {
-		let db = T::DbWeight::get();
-		close_without_finalize::<T, I>(members, length)
-			.saturating_add(db.reads(1)) // `Prime`
-			.saturating_add(db.writes(1)) // `Proposals`
-			.saturating_add(db.writes(1)) // `Voting`
-			.saturating_add(proposal_weight) // P1
-			.saturating_add(proposals.saturating_mul(490_000)) // P2
-	}
-
-	/// Calculate the weight for `close` without the call to `approve/disapprove_proposal`.
-	pub(crate) fn close_without_finalize<T: Trait<I>, I: Instance>(
-		members: Weight,
-		length: Weight,
-	) -> Weight {
-		T::DbWeight::get().reads(3) // `Members`, `Voting`, `ProposalOf`
-			.saturating_add(66_000_000) // constant
-			.saturating_add(length.saturating_mul(8_000)) // B
-			.saturating_add(members.saturating_mul(250_000)) // M
 	}
 }
 
@@ -385,7 +302,7 @@ decl_module! {
 		///
 		/// Requires root origin.
 		///
-		/// NOTE: Does not enforce the expected `MAX_MEMBERS` limit on the amount of members, but
+		/// NOTE: Does not enforce the expected `MaxMembers` limit on the amount of members, but
 		///       the weight estimations rely on it to estimate dispatchable weight.
 		///
 		/// # <weight>
@@ -401,10 +318,10 @@ decl_module! {
 		///   - 1 storage write (codec `O(1)`) for deleting the old `prime` and setting the new one
 		/// # </weight>
 		#[weight = (
-			weight_for::set_members::<T, I>(
-				(*old_count).into(), // M
-				new_members.len() as Weight, // N
-				T::MaxProposals::get().into(), // P
+			T::WeightInfo::set_members(
+				*old_count, // M
+				new_members.len() as u32, // N
+				T::MaxProposals::get() // P
 			),
 			DispatchClass::Operational
 		)]
@@ -414,10 +331,10 @@ decl_module! {
 			old_count: MemberCount,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			if new_members.len() > MAX_MEMBERS as usize {
+			if new_members.len() > T::MaxMembers::get() as usize {
 				debug::error!(
 					"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
-					MAX_MEMBERS,
+					T::MaxMembers::get(),
 					new_members.len()
 				);
 			}
@@ -435,10 +352,10 @@ decl_module! {
 			<Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members, &old);
 			Prime::<T, I>::set(prime);
 
-			Ok(Some(weight_for::set_members::<T, I>(
-				old.len() as Weight, // M
-				new_members.len() as Weight, // N
-				T::MaxProposals::get().into(), // P
+			Ok(Some(T::WeightInfo::set_members(
+				old.len() as u32, // M
+				new_members.len() as u32, // N
+				T::MaxProposals::get(), // P
 			)).into())
 		}
 
@@ -453,11 +370,10 @@ decl_module! {
 		/// - 1 event
 		/// # </weight>
 		#[weight = (
-			weight_for::execute::<T, I>(
-				MAX_MEMBERS.into(),
-				proposal.get_dispatch_info().weight,
-				*length_bound as Weight,
-			),
+			T::WeightInfo::execute(
+				*length_bound, // B
+				T::MaxMembers::get(), // M
+			).saturating_add(proposal.get_dispatch_info().weight), // P
 			DispatchClass::Operational
 		)]
 		fn execute(origin,
@@ -476,11 +392,12 @@ decl_module! {
 				RawEvent::MemberExecuted(proposal_hash, result.map(|_| ()).map_err(|e| e.error))
 			);
 
-			Ok(get_result_weight(result).map(|w| weight_for::execute::<T, I>(
-				members.len() as Weight,
-				w,
-				proposal_len as Weight
-			)).into())
+			Ok(get_result_weight(result).map(|w| {
+				T::WeightInfo::execute(
+					proposal_len as u32,  // B
+					members.len() as u32, // M
+				).saturating_add(w) // P
+			}).into())
 		}
 
 		/// Add a new proposal to either be voted on or executed directly.
@@ -512,16 +429,15 @@ decl_module! {
 		/// # </weight>
 		#[weight = (
 			if *threshold < 2 {
-				weight_for::propose_execute::<T, I>(
-					MAX_MEMBERS.into(), // M
-					proposal.get_dispatch_info().weight, // P1
-					*length_bound as Weight, // B
-				)
+				T::WeightInfo::propose_execute(
+					*length_bound, // B
+					T::MaxMembers::get(), // M
+				).saturating_add(proposal.get_dispatch_info().weight) // P1
 			} else {
-				weight_for::propose_proposed::<T, I>(
-					MAX_MEMBERS.into(), // M
-					T::MaxProposals::get().into(), // P2
-					*length_bound as Weight, // B
+				T::WeightInfo::propose_proposed(
+					*length_bound, // B
+					T::MaxMembers::get(), // M
+					T::MaxProposals::get(), // P2
 				)
 			},
 			DispatchClass::Operational
@@ -547,11 +463,12 @@ decl_module! {
 					RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error))
 				);
 
-				Ok(get_result_weight(result).map(|w| weight_for::propose_execute::<T, I>(
-					members.len() as Weight, // M
-					w, // P1
-					proposal_len as Weight, // B
-				)).into())
+				Ok(get_result_weight(result).map(|w| {
+					T::WeightInfo::propose_execute(
+						proposal_len as u32, // B
+						members.len() as u32, // M
+					).saturating_add(w) // P1
+				}).into())
 			} else {
 				let active_proposals =
 					<Proposals<T, I>>::try_mutate(|proposals| -> Result<usize, DispatchError> {
@@ -571,10 +488,10 @@ decl_module! {
 
 				Self::deposit_event(RawEvent::Proposed(who, index, proposal_hash, threshold));
 
-				Ok(Some(weight_for::propose_proposed::<T, I>(
-					members.len() as Weight, // M
-					active_proposals as Weight, // P2
-					proposal_len as Weight, // B
+				Ok(Some(T::WeightInfo::propose_proposed(
+					proposal_len as u32, // B
+					members.len() as u32, // M
+					active_proposals as u32, // P2
 				)).into())
 			}
 		}
@@ -592,7 +509,7 @@ decl_module! {
 		/// - 1 event
 		/// # </weight>
 		#[weight = (
-			weight_for::vote::<T, I>(MAX_MEMBERS.into()),
+			T::WeightInfo::vote(T::MaxMembers::get()),
 			DispatchClass::Operational
 		)]
 		fn vote(origin,
@@ -636,7 +553,7 @@ decl_module! {
 
 			Voting::<T, I>::insert(&proposal, voting);
 
-			Ok(Some(weight_for::vote::<T, I>(members.len() as Weight)).into())
+			Ok(Some(T::WeightInfo::vote(members.len() as u32)).into())
 		}
 
 		/// Close a vote that is either approved, disapproved or whose voting period has ended.
@@ -667,12 +584,17 @@ decl_module! {
 		/// - up to 3 events
 		/// # </weight>
 		#[weight = (
-			weight_for::close::<T, I>(
-				MAX_MEMBERS.into(), // `M`
-				*proposal_weight_bound, // `P1`
-				T::MaxProposals::get().into(), // `P2`
-				*length_bound as Weight, // B
-			),
+			{
+				let b = *length_bound;
+				let m = T::MaxMembers::get();
+				let p1 = *proposal_weight_bound;
+				let p2 = T::MaxProposals::get();
+				T::WeightInfo::close_early_approved(b, m, p2)
+					.max(T::WeightInfo::close_early_disapproved(m, p2))
+					.max(T::WeightInfo::close_approved(b, m, p2))
+					.max(T::WeightInfo::close_disapproved(m, p2))
+					.saturating_add(p1)
+			},
 			DispatchClass::Operational
 		)]
 		fn close(origin,
@@ -699,25 +621,27 @@ decl_module! {
 					proposal_weight_bound
 				)?;
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
-				let approve_weight = Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
+				let (proposal_weight, proposal_count) =
+					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
 				return Ok(Some(
-					weight_for::close_without_finalize::<T, I>(seats.into(), len as Weight)
-						.saturating_add(approve_weight)
+					T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
+						.saturating_add(proposal_weight)
 				).into());
 			} else if disapproved {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
-				let disapprove_weight = Self::do_disapprove_proposal(proposal_hash);
+				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 				return Ok(Some(
-					weight_for::close_without_finalize::<T, I>(seats.into(), 0)
-						.saturating_add(disapprove_weight)
+					T::WeightInfo::close_early_disapproved(seats, proposal_count)
 				).into());
 			}
 
 			// Only allow actual closing of the proposal after the voting period has ended.
 			ensure!(system::Module::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 
-			// default to true only if there's a prime and they voted in favour.
-			let default = Self::prime().map_or(false, |who| voting.ayes.iter().any(|a| a == &who));
+			let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|a| a == &who));
+
+			// default voting strategy.
+			let default = T::DefaultVote::default_vote(prime_vote, yes_votes, no_votes, seats);
 
 			let abstentions = seats - (yes_votes + no_votes);
 			match default {
@@ -733,19 +657,17 @@ decl_module! {
 					proposal_weight_bound
 				)?;
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
-				let approve_weight = Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
+				let (proposal_weight, proposal_count) =
+					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
 				return Ok(Some(
-					weight_for::close_without_finalize::<T, I>(seats.into(), len as Weight)
-						.saturating_add(T::DbWeight::get().reads(1)) // read `Prime`
-						.saturating_add(approve_weight)
+					T::WeightInfo::close_approved(len as u32, seats, proposal_count)
+						.saturating_add(proposal_weight)
 				).into());
 			} else {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
-				let disapprove_weight = Self::do_disapprove_proposal(proposal_hash);
+				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 				return Ok(Some(
-					weight_for::close_without_finalize::<T, I>(seats.into(), 0)
-						.saturating_add(T::DbWeight::get().reads(1)) // read `Prime`
-						.saturating_add(disapprove_weight)
+					T::WeightInfo::close_disapproved(seats, proposal_count)
 				).into());
 			}
 		}
@@ -759,18 +681,15 @@ decl_module! {
 		///
 		/// # <weight>
 		/// Complexity: O(P) where P is the number of max proposals
-		/// Base Weight: .49 * P
 		/// DB Weight:
 		/// * Reads: Proposals
 		/// * Writes: Voting, Proposals, ProposalOf
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 3) // `Voting`, `Proposals`, `ProposalOf`
-			.saturating_add(490_000 * Weight::from(T::MaxProposals::get())) // P2
-		]
+		#[weight = T::WeightInfo::disapprove_proposal(T::MaxProposals::get())]
 		fn disapprove_proposal(origin, proposal_hash: T::Hash) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			let actual_weight = Self::do_disapprove_proposal(proposal_hash);
-			Ok(Some(actual_weight).into())
+			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
+			Ok(Some(T::WeightInfo::disapprove_proposal(proposal_count)).into())
 		}
 	}
 }
@@ -822,8 +741,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		voting: Votes<T::AccountId, T::BlockNumber>,
 		proposal_hash: T::Hash,
 		proposal: <T as Trait<I>>::Proposal,
-	) -> Weight {
-		let mut weight: Weight = 0;
+	) -> (Weight, u32) {
 		Self::deposit_event(RawEvent::Approved(proposal_hash));
 
 		let dispatch_weight = proposal.get_dispatch_info().weight;
@@ -832,23 +750,21 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		Self::deposit_event(
 			RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error))
 		);
-		weight = weight.saturating_add(
-			// default to the dispatch info weight for safety
-			get_result_weight(result).unwrap_or(dispatch_weight) // P1
-		);
+		// default to the dispatch info weight for safety
+		let proposal_weight = get_result_weight(result).unwrap_or(dispatch_weight); // P1
 
-		let remove_proposal_weight = Self::remove_proposal(proposal_hash);
-		weight.saturating_add(remove_proposal_weight)
+		let proposal_count = Self::remove_proposal(proposal_hash);
+		(proposal_weight, proposal_count)
 	}
 
-	fn do_disapprove_proposal(proposal_hash: T::Hash) -> Weight {
+	fn do_disapprove_proposal(proposal_hash: T::Hash) -> u32 {
 		// disapproved
 		Self::deposit_event(RawEvent::Disapproved(proposal_hash));
 		Self::remove_proposal(proposal_hash)
 	}
 
 	// Removes a proposal from the pallet, cleaning up votes and the vector of proposals.
-	fn remove_proposal(proposal_hash: T::Hash) -> Weight {
+	fn remove_proposal(proposal_hash: T::Hash) -> u32 {
 		// remove proposal and vote
 		ProposalOf::<T, I>::remove(&proposal_hash);
 		Voting::<T, I>::remove(&proposal_hash);
@@ -856,15 +772,14 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			proposals.retain(|h| h != &proposal_hash);
 			proposals.len() + 1 // calculate weight based on original length
 		});
-		T::DbWeight::get().reads_writes(1, 3) // `Voting`, `Proposals`, `ProposalOf`
-			.saturating_add(490_000 * num_proposals as Weight) // P2
+		num_proposals as u32
 	}
 }
 
 impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 	/// Update the members of the collective. Votes are updated and the prime is reset.
 	///
-	/// NOTE: Does not enforce the expected `MAX_MEMBERS` limit on the amount of members, but
+	/// NOTE: Does not enforce the expected `MaxMembers` limit on the amount of members, but
 	///       the weight estimations rely on it to estimate dispatchable weight.
 	///
 	/// # <weight>
@@ -884,10 +799,10 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		outgoing: &[T::AccountId],
 		new: &[T::AccountId],
 	) {
-		if new.len() > MAX_MEMBERS as usize {
+		if new.len() > T::MaxMembers::get() as usize {
 			debug::error!(
 				"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
-				MAX_MEMBERS,
+				T::MaxMembers::get(),
 				new.len()
 			);
 		}
@@ -1047,6 +962,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 		pub const MotionDuration: u64 = 3;
 		pub const MaxProposals: u32 = 100;
+		pub const MaxMembers: u32 = 100;
 	}
 	impl frame_system::Trait for Test {
 		type BaseCallFilter = ();
@@ -1069,7 +985,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
-		type ModuleToIndex = ();
+		type PalletInfo = ();
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -1081,6 +997,18 @@ mod tests {
 		type Event = Event;
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
+		type MaxMembers = MaxMembers;
+		type DefaultVote = PrimeDefaultVote;
+		type WeightInfo = ();
+	}
+	impl Trait<Instance2> for Test {
+		type Origin = Origin;
+		type Proposal = Call;
+		type Event = Event;
+		type MotionDuration = MotionDuration;
+		type MaxProposals = MaxProposals;
+		type MaxMembers = MaxMembers;
+		type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
 		type WeightInfo = ();
 	}
 	impl Trait for Test {
@@ -1089,6 +1017,8 @@ mod tests {
 		type Event = Event;
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
+		type MaxMembers = MaxMembers;
+		type DefaultVote = PrimeDefaultVote;
 		type WeightInfo = ();
 	}
 
@@ -1103,6 +1033,7 @@ mod tests {
 		{
 			System: system::{Module, Call, Event<T>},
 			Collective: collective::<Instance1>::{Module, Call, Event<T>, Origin<T>, Config<T>},
+			CollectiveMajority: collective::<Instance2>::{Module, Call, Event<T>, Origin<T>, Config<T>},
 			DefaultCollective: collective::{Module, Call, Event<T>, Origin<T>, Config<T>},
 		}
 	);
@@ -1113,10 +1044,18 @@ mod tests {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
 			}),
+			collective_Instance2: Some(collective::GenesisConfig {
+				members: vec![1, 2, 3, 4, 5],
+				phantom: Default::default(),
+			}),
 			collective: None,
 		}.build_storage().unwrap().into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext
+	}
+
+	fn make_proposal(value: u64) -> Call {
+		Call::System(frame_system::Call::remark(value.encode()))
 	}
 
 	#[test]
@@ -1125,10 +1064,6 @@ mod tests {
 			assert_eq!(Collective::members(), vec![1, 2, 3]);
 			assert_eq!(Collective::proposals(), Vec::<H256>::new());
 		});
-	}
-
-	fn make_proposal(value: u64) -> Call {
-		Call::System(frame_system::Call::remark(value.encode()))
 	}
 
 	#[test]
@@ -1164,7 +1099,7 @@ mod tests {
 	#[test]
 	fn proposal_weight_limit_works_on_approve() {
 		new_test_ext().execute_with(|| {
-			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MAX_MEMBERS));
+			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MaxMembers::get()));
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash = BlakeTwo256::hash_of(&proposal);
@@ -1184,7 +1119,7 @@ mod tests {
 	#[test]
 	fn proposal_weight_limit_ignored_on_disapprove() {
 		new_test_ext().execute_with(|| {
-			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MAX_MEMBERS));
+			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MaxMembers::get()));
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash = BlakeTwo256::hash_of(&proposal);
@@ -1205,7 +1140,7 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::set_members(Origin::root(), vec![1, 2, 3], Some(3), MAX_MEMBERS));
+			assert_ok!(Collective::set_members(Origin::root(), vec![1, 2, 3], Some(3), MaxMembers::get()));
 
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
@@ -1230,7 +1165,7 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::set_members(Origin::root(), vec![1, 2, 3], Some(1), MAX_MEMBERS));
+			assert_ok!(Collective::set_members(Origin::root(), vec![1, 2, 3], Some(1), MaxMembers::get()));
 
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
@@ -1245,6 +1180,34 @@ mod tests {
 				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 3, 0))),
 				record(Event::collective_Instance1(RawEvent::Approved(hash.clone()))),
 				record(Event::collective_Instance1(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
+			]);
+		});
+	}
+
+	#[test]
+	fn close_with_no_prime_but_majority_works() {
+		new_test_ext().execute_with(|| {
+			let proposal = make_proposal(42);
+			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+			let proposal_weight = proposal.get_dispatch_info().weight;
+			let hash = BlakeTwo256::hash_of(&proposal);
+			assert_ok!(CollectiveMajority::set_members(Origin::root(), vec![1, 2, 3, 4, 5], Some(5), MaxMembers::get()));
+
+			assert_ok!(CollectiveMajority::propose(Origin::signed(1), 5, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(CollectiveMajority::vote(Origin::signed(2), hash.clone(), 0, true));
+			assert_ok!(CollectiveMajority::vote(Origin::signed(3), hash.clone(), 0, true));
+
+			System::set_block_number(4);
+			assert_ok!(CollectiveMajority::close(Origin::signed(4), hash.clone(), 0, proposal_weight, proposal_len));
+
+			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
+			assert_eq!(System::events(), vec![
+				record(Event::collective_Instance2(RawEvent::Proposed(1, 0, hash.clone(), 5))),
+				record(Event::collective_Instance2(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::collective_Instance2(RawEvent::Voted(3, hash.clone(), true, 3, 0))),
+				record(Event::collective_Instance2(RawEvent::Closed(hash.clone(), 5, 0))),
+				record(Event::collective_Instance2(RawEvent::Approved(hash.clone()))),
+				record(Event::collective_Instance2(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
 			]);
 		});
 	}
@@ -1298,7 +1261,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![], end })
 			);
-			assert_ok!(Collective::set_members(Origin::root(), vec![2, 3, 4], None, MAX_MEMBERS));
+			assert_ok!(Collective::set_members(Origin::root(), vec![2, 3, 4], None, MaxMembers::get()));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![], end })
@@ -1313,7 +1276,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3], end })
 			);
-			assert_ok!(Collective::set_members(Origin::root(), vec![2, 4], None, MAX_MEMBERS));
+			assert_ok!(Collective::set_members(Origin::root(), vec![2, 4], None, MaxMembers::get()));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![], end })
@@ -1371,7 +1334,7 @@ mod tests {
 	#[test]
 	fn correct_validate_and_get_proposal() {
 		new_test_ext().execute_with(|| {
-			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MAX_MEMBERS));
+			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MaxMembers::get()));
 			let length = proposal.encode().len() as u32;
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), length));
 

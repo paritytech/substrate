@@ -49,7 +49,7 @@ impl RegisteredProtocol {
 		-> Self {
 		let protocol = protocol.into();
 		let mut base_name = b"/substrate/".to_vec();
-		base_name.extend_from_slice(protocol.as_bytes());
+		base_name.extend_from_slice(protocol.as_ref().as_bytes());
 		base_name.extend_from_slice(b"/");
 
 		RegisteredProtocol {
@@ -122,15 +122,6 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 	pub fn shutdown(&mut self) {
 		self.is_closing = true;
 		self.send_queue.clear();
-	}
-
-	/// Sends a message to the substream.
-	pub fn send_message(&mut self, data: Vec<u8>) {
-		if self.is_closing {
-			return
-		}
-
-		self.send_queue.push_back(From::from(&data[..]));
 	}
 }
 

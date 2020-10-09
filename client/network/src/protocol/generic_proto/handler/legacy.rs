@@ -204,12 +204,6 @@ pub enum LegacyProtoHandlerIn {
 
 	/// The node should stop using custom protocols.
 	Disable,
-
-	/// Sends a message through a custom protocol substream.
-	SendCustomMessage {
-		/// The message to send.
-		message: Vec<u8>,
-	},
 }
 
 /// Event that can be emitted by a `LegacyProtoHandler`.
@@ -222,16 +216,12 @@ pub enum LegacyProtoHandlerOut {
 		/// Handshake message that has been sent to us.
 		/// This is normally a "Status" message, but this out of the concern of this code.
 		received_handshake: Vec<u8>,
-		/// The connected endpoint.
-		endpoint: ConnectedPoint,
 	},
 
 	/// Closed a custom protocol with the remote.
 	CustomProtocolClosed {
 		/// Reason why the substream closed, for diagnostic purposes.
 		reason: Cow<'static, str>,
-		/// The connected endpoint.
-		endpoint: ConnectedPoint,
 	},
 
 	/// Receives a message on a custom protocol substream.
@@ -250,18 +240,6 @@ pub enum LegacyProtoHandlerOut {
 }
 
 impl LegacyProtoHandler {
-	/// Returns true if the legacy substream is currently open.
-	pub fn is_open(&self) -> bool {
-		match &self.state {
-			ProtocolState::Init { substreams, .. } => !substreams.is_empty(),
-			ProtocolState::Opening { .. } => false,
-			ProtocolState::Normal { substreams, .. } => !substreams.is_empty(),
-			ProtocolState::Disabled { .. } => false,
-			ProtocolState::KillAsap => false,
-			ProtocolState::Poisoned => false,
-		}
-	}
-
 	/// Enables the handler.
 	fn enable(&mut self) {
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
@@ -275,8 +253,7 @@ impl LegacyProtoHandler {
 				if incoming.is_empty() {
 					if let ConnectedPoint::Dialer { .. } = self.endpoint {
 						self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							protocol: SubstreamProtocol::new(self.protocol.clone()),
-							info: (),
+							protocol: SubstreamProtocol::new(self.protocol.clone(), ()),
 						});
 					}
 					ProtocolState::Opening {
@@ -285,7 +262,6 @@ impl LegacyProtoHandler {
 				} else {
 					let event = LegacyProtoHandlerOut::CustomProtocolOpen {
 						version: incoming[0].0.protocol_version(),
-						endpoint: self.endpoint.clone(),
 						received_handshake: mem::replace(&mut incoming[0].1, Vec::new()),
 					};
 					self.events_queue.push_back(ProtocolsHandlerEvent::Custom(event));
@@ -399,7 +375,6 @@ impl LegacyProtoHandler {
 							if substreams.is_empty() {
 								let event = LegacyProtoHandlerOut::CustomProtocolClosed {
 									reason: "Legacy substream clogged".into(),
-									endpoint: self.endpoint.clone()
 								};
 								self.state = ProtocolState::Disabled {
 									shutdown: shutdown.into_iter().collect(),
@@ -413,7 +388,6 @@ impl LegacyProtoHandler {
 							if substreams.is_empty() {
 								let event = LegacyProtoHandlerOut::CustomProtocolClosed {
 									reason: "All substreams have been closed by the remote".into(),
-									endpoint: self.endpoint.clone()
 								};
 								self.state = ProtocolState::Disabled {
 									shutdown: shutdown.into_iter().collect(),
@@ -426,7 +400,6 @@ impl LegacyProtoHandler {
 							if substreams.is_empty() {
 								let event = LegacyProtoHandlerOut::CustomProtocolClosed {
 									reason: format!("Error on the last substream: {:?}", err).into(),
-									endpoint: self.endpoint.clone()
 								};
 								self.state = ProtocolState::Disabled {
 									shutdown: shutdown.into_iter().collect(),
@@ -454,8 +427,7 @@ impl LegacyProtoHandler {
 						deadline: Delay::new(Duration::from_secs(60))
 					};
 					Some(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-						protocol: SubstreamProtocol::new(self.protocol.clone()),
-						info: (),
+						protocol: SubstreamProtocol::new(self.protocol.clone(), ()),
 					})
 				} else {
 					self.state = ProtocolState::Disabled { shutdown, reenable };
@@ -492,7 +464,6 @@ impl LegacyProtoHandler {
 			ProtocolState::Opening { .. } => {
 				let event = LegacyProtoHandlerOut::CustomProtocolOpen {
 					version: substream.protocol_version(),
-					endpoint: self.endpoint.clone(),
 					received_handshake,
 				};
 				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(event));
@@ -516,17 +487,6 @@ impl LegacyProtoHandler {
 			ProtocolState::KillAsap => ProtocolState::KillAsap,
 		};
 	}
-
-	/// Sends a message to the remote.
-	fn send_message(&mut self, message: Vec<u8>) {
-		match self.state {
-			ProtocolState::Normal { ref mut substreams, .. } =>
-				substreams[0].send_message(message),
-
-			_ => debug!(target: "sub-libp2p", "Tried to send message over closed protocol \
-				with {:?}", self.remote_peer_id)
-		}
-	}
 }
 
 impl ProtocolsHandler for LegacyProtoHandler {
@@ -536,14 +496,16 @@ impl ProtocolsHandler for LegacyProtoHandler {
 	type InboundProtocol = RegisteredProtocol;
 	type OutboundProtocol = RegisteredProtocol;
 	type OutboundOpenInfo = ();
+	type InboundOpenInfo = ();
 
-	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
-		SubstreamProtocol::new(self.protocol.clone())
+	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, ()> {
+		SubstreamProtocol::new(self.protocol.clone(), ())
 	}
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		(substream, handshake): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
+		(substream, handshake): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output,
+		(): ()
 	) {
 		self.inject_fully_negotiated(substream, handshake);
 	}
@@ -560,12 +522,9 @@ impl ProtocolsHandler for LegacyProtoHandler {
 		match message {
 			LegacyProtoHandlerIn::Disable => self.disable(),
 			LegacyProtoHandlerIn::Enable => self.enable(),
-			LegacyProtoHandlerIn::SendCustomMessage { message } =>
-				self.send_message(message),
 		}
 	}
 
-	#[inline]
 	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<io::Error>) {
 		let is_severe = match err {
 			ProtocolsHandlerUpgrErr::Upgrade(_) => true,

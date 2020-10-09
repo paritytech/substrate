@@ -24,8 +24,9 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	decl_error, decl_module, decl_storage,
+	dispatch::DispatchResultWithPostInfo,
 	traits::{FindAuthor, Get, KeyOwnerProofSystem, Randomness as RandomnessT},
-	weights::Weight,
+	weights::{Pays, Weight},
 	Parameter,
 };
 use frame_system::{ensure_none, ensure_signed};
@@ -50,6 +51,7 @@ use sp_inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInhe
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
 mod equivocation;
+mod default_weights;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -101,6 +103,12 @@ pub trait Trait: pallet_timestamp::Trait {
 	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 	/// definition.
 	type HandleEquivocation: HandleEquivocation<Self>;
+
+	type WeightInfo: WeightInfo;
+}
+
+pub trait WeightInfo {
+	fn report_equivocation(validator_count: u32) -> Weight;
 }
 
 /// Trigger an epoch change, if any should take place.
@@ -255,19 +263,19 @@ decl_module! {
 		/// the equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence will
 		/// be reported.
-		#[weight = weight::weight_for_report_equivocation::<T>()]
+		#[weight = <T as Trait>::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
 		fn report_equivocation(
 			origin,
 			equivocation_proof: EquivocationProof<T::Header>,
 			key_owner_proof: T::KeyOwnerProof,
-		) {
+		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 
 			Self::do_report_equivocation(
 				Some(reporter),
 				equivocation_proof,
 				key_owner_proof,
-			)?;
+			)
 		}
 
 		/// Report authority equivocation/misbehavior. This method will verify
@@ -278,41 +286,20 @@ decl_module! {
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
-		#[weight = weight::weight_for_report_equivocation::<T>()]
+		#[weight = <T as Trait>::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
 		fn report_equivocation_unsigned(
 			origin,
 			equivocation_proof: EquivocationProof<T::Header>,
 			key_owner_proof: T::KeyOwnerProof,
-		) {
+		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
 			Self::do_report_equivocation(
 				T::HandleEquivocation::block_author(),
 				equivocation_proof,
 				key_owner_proof,
-			)?;
+			)
 		}
-	}
-}
-
-mod weight {
-	use frame_support::{
-		traits::Get,
-		weights::{constants::WEIGHT_PER_MICROS, Weight},
-	};
-
-	pub fn weight_for_report_equivocation<T: super::Trait>() -> Weight {
-		// checking membership proof
-		(35 * WEIGHT_PER_MICROS)
-			.saturating_add(T::DbWeight::get().reads(5))
-			// check equivocation proof
-			.saturating_add(110 * WEIGHT_PER_MICROS)
-			// report offence
-			.saturating_add(110 * WEIGHT_PER_MICROS)
-			// worst case we are considering is that the given offender
-			// is backed by 200 nominators
-			.saturating_add(T::DbWeight::get().reads(14 + 3 * 200))
-			.saturating_add(T::DbWeight::get().writes(10 + 3 * 200))
 	}
 }
 
@@ -626,13 +613,13 @@ impl<T: Trait> Module<T> {
 		reporter: Option<T::AccountId>,
 		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
-	) -> Result<(), Error<T>> {
+	) -> DispatchResultWithPostInfo {
 		let offender = equivocation_proof.offender.clone();
 		let slot_number = equivocation_proof.slot_number;
 
 		// validate the equivocation proof
 		if !sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
-			return Err(Error::InvalidEquivocationProof.into());
+			return Err(Error::<T>::InvalidEquivocationProof.into());
 		}
 
 		let validator_set_count = key_owner_proof.validator_count();
@@ -644,13 +631,13 @@ impl<T: Trait> Module<T> {
 		// check that the slot number is consistent with the session index
 		// in the key ownership proof (i.e. slot is for that epoch)
 		if epoch_index != session_index {
-			return Err(Error::InvalidKeyOwnershipProof.into());
+			return Err(Error::<T>::InvalidKeyOwnershipProof.into());
 		}
 
 		// check the membership proof and extract the offender's id
 		let key = (sp_consensus_babe::KEY_TYPE, offender);
 		let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof)
-			.ok_or(Error::InvalidKeyOwnershipProof)?;
+			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
 		let offence = BabeEquivocationOffence {
 			slot: slot_number,
@@ -665,9 +652,10 @@ impl<T: Trait> Module<T> {
 		};
 
 		T::HandleEquivocation::report_offence(reporters, offence)
-			.map_err(|_| Error::DuplicateOffenceReport)?;
+			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
 
-		Ok(())
+		// waive the fee since the report is valid and beneficial
+		Ok(Pays::No.into())
 	}
 
 	/// Submits an extrinsic to report an equivocation. This method will create
