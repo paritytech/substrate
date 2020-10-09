@@ -21,7 +21,7 @@ sp-runtime = { version = "2.0.0", default-features = false, path = "../../../pri
 sp-allocator = { version = "2.0.0", default-features = false, path = "../../../primitives/allocator" }
 
 [build-dependencies]
-wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+wasm-builder-runner = { version = "2.0.0", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
 
 [features]
 default = [ "std" ]
