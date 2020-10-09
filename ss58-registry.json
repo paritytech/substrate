@@ -157,11 +157,11 @@
 		{
 			"prefix": 18,
 			"network": "darwinia",
-			"displayName": "Darwinia Chain",
-			"symbols": null,
-			"decimals": null,
+			"displayName": "Darwinia Network",
+			"symbols": ["RING", "KTON"],
+			"decimals": [9, 9],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://darwinia.network/"
 		},
 		{
 			"prefix": 19,
