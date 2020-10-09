@@ -1,9 +1,11 @@
 use super::*;
 use frame_support::{parameter_types, traits::OnInitialize};
 use sp_core::H256;
+use sp_npos_elections::CompactSolution;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	PerU16,
 };
 use std::cell::RefCell;
 
@@ -16,6 +18,11 @@ pub(crate) type System = frame_system::Module<Runtime>;
 pub(crate) type TwoPhase = super::Module<Runtime>;
 pub(crate) type Balance = u64;
 pub(crate) type AccountId = u64;
+
+sp_npos_elections::generate_solution_type!(
+	#[compact]
+	pub struct TestCompact::<u32, u16, PerU16>(16)
+);
 
 /// To from `now` to block `n`.
 pub fn roll_to(n: u64) {
@@ -34,21 +41,22 @@ pub fn balances(who: &AccountId) -> (Balance, Balance) {
 /// Spit out a verifiable raw solution.
 ///
 /// This is a good example of what an offchain miner would do.
-pub fn raw_solution() -> RawSolution {
+pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let voters = TwoPhase::snapshot_voters().unwrap();
 	let targets = TwoPhase::snapshot_targets().unwrap();
 	let desired = TwoPhase::desired_targets() as usize;
 
 	// closures
-	let voter_index = crate::voter_index_fn!(voters, AccountId);
-	let target_index = crate::target_index_fn!(targets, AccountId);
+	let voter_index = crate::voter_index_fn!(voters, AccountId, Runtime);
+	let target_index = crate::target_index_fn!(targets, AccountId, Runtime);
 	let stake_of = crate::stake_of_fn!(voters, AccountId);
 
 	use sp_npos_elections::{seq_phragmen, to_without_backing, ElectionResult};
 	let ElectionResult {
 		winners,
 		assignments,
-	} = seq_phragmen::<_, OffchainAccuracy>(desired, targets.clone(), voters.clone(), None).unwrap();
+	} = seq_phragmen::<_, CompactAccuracyOf<Runtime>>(desired, targets.clone(), voters.clone(), None)
+		.unwrap();
 
 	let winners = to_without_backing(winners);
 
@@ -59,17 +67,9 @@ pub fn raw_solution() -> RawSolution {
 		sp_npos_elections::evaluate_support(&support)
 	};
 	let compact =
-		CompactAssignments::from_assignment(assignments, &voter_index, &target_index).unwrap();
-	let winners = winners
-		.into_iter()
-		.map(|w| target_index(&w).unwrap())
-		.collect::<Vec<_>>();
+		<CompactOf<Runtime>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
 
-	RawSolution {
-		winners,
-		compact,
-		score,
-	}
+	RawSolution { compact, score }
 }
 
 frame_support::impl_outer_origin! {
@@ -191,7 +191,7 @@ impl crate::two_phase::Trait for Runtime {
 	type SolutionImprovementThreshold = ();
 	type SlashHandler = ();
 	type RewardHandler = ();
-	type ElectionDataProvider = ExtBuilder;
+	type ElectionDataProvider = StakingMock;
 	type WeightInfo = ();
 }
 
@@ -207,7 +207,11 @@ impl Default for ExtBuilder {
 	}
 }
 
-impl crate::ElectionDataProvider<AccountId, u64> for ExtBuilder {
+pub struct StakingMock;
+
+impl crate::ElectionDataProvider<AccountId, u64> for StakingMock {
+	type CompactSolution = TestCompact;
+
 	fn targets() -> Vec<AccountId> {
 		Targets::get()
 	}

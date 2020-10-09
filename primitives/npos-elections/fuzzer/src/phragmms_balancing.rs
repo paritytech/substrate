@@ -66,9 +66,13 @@ fn main() {
 			};
 
 			let unbalanced_score = {
-				let staked = assignment_ratio_to_staked_normalized(unbalanced.assignments.clone(), &stake_of).unwrap();
+				let staked = assignment_ratio_to_staked_normalized(
+					unbalanced.assignments.clone(),
+					&stake_of,
+				)
+				.unwrap();
 				let winners = to_without_backing(unbalanced.winners.clone());
-				let support = build_support_map(winners.as_ref(), staked.as_ref()).unwrap();
+				let support = build_support_map(&winners, &staked).unwrap();
 
 				let score = evaluate_support(&support);
 				if score[0] == 0 {

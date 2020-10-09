@@ -21,15 +21,15 @@
 //! to the Maximin problem.
 
 use crate::{
-	IdentifierT, VoteWeight, Voter, CandidatePtr, ExtendedBalance, setup_inputs, ElectionResult,
+	balancing, setup_inputs, CandidatePtr, ElectionResult, ExtendedBalance, IdentifierT,
+	PerThing128, VoteWeight, Voter,
+};
+use sp_arithmetic::{
+	helpers_128bit::multiply_by_rational,
+	traits::{Bounded, Zero},
+	InnerOf, Rational128,
 };
 use sp_std::prelude::*;
-use sp_arithmetic::{
-	PerThing, InnerOf, Rational128,
-	helpers_128bit::multiply_by_rational,
-	traits::{Zero, Bounded},
-};
-use crate::balancing;
 
 /// The denominator used for loads. Since votes are collected as u64, the smallest ratio that we
 /// might collect is `1/approval_stake` where approval stake is the sum of votes. Hence, some number
@@ -63,7 +63,7 @@ const DEN: ExtendedBalance = ExtendedBalance::max_value();
 /// `expect` this to return `Ok`.
 ///
 /// This can only fail if the normalization fails.
-pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing>(
+pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 	rounds: usize,
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,

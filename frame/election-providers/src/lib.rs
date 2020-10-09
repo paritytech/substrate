@@ -31,14 +31,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
+use sp_std::{fmt::Debug, prelude::*};
+
 /// The onchain module.
 pub mod onchain;
 /// The two-phase module.
 pub mod two_phase;
 
 use sp_arithmetic::PerThing;
-use sp_npos_elections::{ExtendedBalance, Support, SupportMap};
+use sp_npos_elections::{CompactSolution, ExtendedBalance, PerThing128, Support, SupportMap};
 
 // for the helper macros
 #[doc(hidden)]
@@ -87,7 +88,11 @@ impl<A> FlattenSupportMap<A> for SupportMap<A> {
 /// }
 /// ```
 pub trait ElectionDataProvider<AccountId, B> {
-	type CompactSolution: codec::Codec + Default + PartialEq + Eq;
+	/// The compact solution type.
+	///
+	/// This should encode the entire solution with the least possible space usage.
+	type CompactSolution: codec::Codec + Default + PartialEq + Eq + Clone + Debug + CompactSolution;
+
 	/// All possible targets for the election, i.e. the candidates.
 	fn targets() -> Vec<AccountId>;
 
@@ -116,25 +121,6 @@ pub trait ElectionDataProvider<AccountId, B> {
 	fn next_election_prediction(now: B) -> B;
 }
 
-#[cfg(feature = "std")]
-impl<AccountId, B: Default> ElectionDataProvider<AccountId, B> for () {
-	fn targets() -> Vec<AccountId> {
-		Default::default()
-	}
-	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-		Default::default()
-	}
-	fn desired_targets() -> u32 {
-		Default::default()
-	}
-	fn feasibility_check_assignment<P: PerThing>(_: &AccountId, _: &[(AccountId, P)]) -> bool {
-		Default::default()
-	}
-	fn next_election_prediction(_: B) -> B {
-		Default::default()
-	}
-}
-
 /// Something that can compute the result of an election and pass it back to the caller.
 pub trait ElectionProvider<AccountId> {
 	/// Indicate weather this election provider needs data when calling [`elect`] or not.
@@ -150,18 +136,15 @@ pub trait ElectionProvider<AccountId> {
 	/// Note that based on the logic of the type that will implement this trait, the input data may
 	/// or may not be used. To hint about this to the call site, [`NEEDS_ELECT_DATA`] should be
 	/// properly set.
-	fn elect<P: PerThing>(
+	///
+	/// The implementation should, if possible, use the accuracy `P` to compute the election result.
+	fn elect<P: PerThing128>(
 		to_elect: usize, // TODO: consider making this u32
 		targets: Vec<AccountId>,
 		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	) -> Result<FlatSupportMap<AccountId>, Self::Error>
 	where
-		// TODO: Okay about these two, I get that we probably need the first one, but can't we
-		// alleviate the latter one? I think we can say that all PerThing are Mul of some types.
-		// Perhaps it is time to move the PerBill macros to something better? Yeah I think then we
-		// can get rid of both of these types everywhere.
-		ExtendedBalance: From<<P as PerThing>::Inner>,
-		P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>;
+		ExtendedBalance: From<<P as PerThing>::Inner>;
 
 	/// Returns true if an election is still ongoing. This can be used by the call site to
 	/// dynamically check of a long-lasting election (such as [`two_phase`]) is still on-going or

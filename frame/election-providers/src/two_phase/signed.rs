@@ -21,8 +21,12 @@ use crate::two_phase::*;
 use codec::Encode;
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::is_score_better;
+use sp_runtime::Perbill;
 
-impl<T: Trait> Module<T> {
+impl<T: Trait> Module<T>
+where
+	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+{
 	/// Start the signed phase.
 	///
 	/// Upon calling this, auxillary data for election is stored and signed solutions will be
@@ -43,7 +47,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Returns true if we have a good solution in the signed phase.
 	pub fn finalize_signed_phase() -> bool {
-		let mut all_submission: Vec<SignedSubmission<_, _>> = <SignedSubmissions<T>>::take();
+		let mut all_submission: Vec<SignedSubmission<_, _, _>> = <SignedSubmissions<T>>::take();
 		let mut found_solution = false;
 
 		while let Some(best) = all_submission.pop() {
@@ -94,8 +98,8 @@ impl<T: Trait> Module<T> {
 	/// solution quality.
 	pub fn insert_submission(
 		who: &T::AccountId,
-		queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>>>,
-		solution: RawSolution,
+		queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
+		solution: RawSolution<CompactOf<T>>,
 	) -> Option<usize> {
 		// TODO: consider using VecDeQue or sth like that?
 
@@ -106,7 +110,8 @@ impl<T: Trait> Module<T> {
 			.enumerate()
 			.rev()
 			.find_map(|(i, s)| {
-				if is_score_better(
+
+				if is_score_better::<Perbill>(
 					solution.score,
 					s.solution.score,
 					T::SolutionImprovementThreshold::get(),
@@ -146,13 +151,13 @@ impl<T: Trait> Module<T> {
 		outcome
 	}
 
-	pub fn deposit_for(solution: &RawSolution) -> BalanceOf<T> {
+	pub fn deposit_for(solution: &RawSolution<CompactOf<T>>) -> BalanceOf<T> {
 		let encoded_len: BalanceOf<T> = solution.using_encoded(|e| e.len() as u32).into();
 		// TODO
 		T::SignedDepositBase::get() + T::SignedDepositByte::get() * encoded_len
 	}
 
-	pub fn reward_for(solution: &RawSolution) -> BalanceOf<T> {
+	pub fn reward_for(solution: &RawSolution<CompactOf<T>>) -> BalanceOf<T> {
 		T::SignedRewardBase::get()
 			+ T::SignedRewardFactor::get() * solution.score[0].saturated_into::<BalanceOf<T>>()
 	}
@@ -174,7 +179,7 @@ mod tests {
 
 			assert_noop!(
 				TwoPhase::submit(Origin::signed(10), solution),
-				PalletError::<Runtime>::EarlySubmission,
+				"EarlySubmission",
 			);
 		})
 	}
@@ -270,7 +275,6 @@ mod tests {
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
 
 			let solution = RawSolution {
-				winners: vec![1u16],
 				score: [5, 0, 0],
 				..Default::default()
 			};
@@ -278,7 +282,6 @@ mod tests {
 
 			// then a worse one.
 			let solution = RawSolution {
-				winners: vec![2u16],
 				score: [4, 0, 0],
 				..Default::default()
 			};
@@ -286,7 +289,6 @@ mod tests {
 
 			// then a better one.
 			let solution = RawSolution {
-				winners: vec![3u16],
 				score: [6, 0, 0],
 				..Default::default()
 			};
@@ -295,9 +297,9 @@ mod tests {
 			assert_eq!(
 				TwoPhase::signed_submissions()
 					.iter()
-					.map(|x| x.solution.winners[0])
+					.map(|x| x.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![2, 1, 3]
+				vec![4, 5, 6]
 			);
 		})
 	}
@@ -310,7 +312,6 @@ mod tests {
 			for s in 0..MaxSignedSubmissions::get() {
 				// score is always getting better
 				let solution = RawSolution {
-					winners: vec![1u16],
 					score: [(5 + s).into(), 0, 0],
 					..Default::default()
 				};
@@ -319,14 +320,13 @@ mod tests {
 
 			// weaker.
 			let solution = RawSolution {
-				winners: vec![1u16],
 				score: [4, 0, 0],
 				..Default::default()
 			};
 
 			assert_noop!(
 				TwoPhase::submit(Origin::signed(99), solution),
-				PalletError::<Runtime>::QueueFull,
+				"QueueFull",
 			);
 		})
 	}
@@ -339,7 +339,6 @@ mod tests {
 			for s in 0..MaxSignedSubmissions::get() {
 				// score is always getting better
 				let solution = RawSolution {
-					winners: vec![1u16],
 					score: [(5 + s).into(), 0, 0],
 					..Default::default()
 				};
@@ -356,7 +355,6 @@ mod tests {
 
 			// better.
 			let solution = RawSolution {
-				winners: vec![1u16],
 				score: [20, 0, 0],
 				..Default::default()
 			};
@@ -382,7 +380,6 @@ mod tests {
 
 				for i in 0..MaxSignedSubmissions::get() {
 					let solution = RawSolution {
-						winners: vec![1u16],
 						score: [(5 + i).into(), 0, 0],
 						..Default::default()
 					};
@@ -398,13 +395,12 @@ mod tests {
 
 				// 5 is not accepted. This will only cause processing with no benefit.
 				let solution = RawSolution {
-					winners: vec![1u16],
 					score: [5, 0, 0],
 					..Default::default()
 				};
 				assert_noop!(
 					TwoPhase::submit(Origin::signed(99), solution),
-					PalletError::<Runtime>::QueueFull
+					"QueueFull",
 				);
 			})
 	}
@@ -417,7 +413,6 @@ mod tests {
 				roll_to(5);
 
 				let solution = RawSolution {
-					winners: vec![1u16],
 					score: [5, 0, 0],
 					..Default::default()
 				};
@@ -431,7 +426,6 @@ mod tests {
 				);
 
 				let solution = RawSolution {
-					winners: vec![1u16],
 					score: [8, 0, 0],
 					..Default::default()
 				};
@@ -445,7 +439,6 @@ mod tests {
 				);
 
 				let solution = RawSolution {
-					winners: vec![1u16],
 					score: [3, 0, 0],
 					..Default::default()
 				};
@@ -459,7 +452,6 @@ mod tests {
 				);
 
 				let solution = RawSolution {
-					winners: vec![1u16],
 					score: [6, 0, 0],
 					..Default::default()
 				};
@@ -473,7 +465,6 @@ mod tests {
 				);
 
 				let solution = RawSolution {
-					winners: vec![1u16],
 					score: [6, 0, 0],
 					..Default::default()
 				};
@@ -487,7 +478,6 @@ mod tests {
 				);
 
 				let solution = RawSolution {
-					winners: vec![1u16],
 					score: [10, 0, 0],
 					..Default::default()
 				};

@@ -1,6 +1,6 @@
 use crate::{ElectionProvider, FlatSupportMap, FlattenSupportMap};
 use sp_arithmetic::PerThing;
-use sp_npos_elections::{ElectionResult, ExtendedBalance, IdentifierT, VoteWeight};
+use sp_npos_elections::{ElectionResult, ExtendedBalance, IdentifierT, PerThing128, VoteWeight};
 use sp_runtime::RuntimeDebug;
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
@@ -23,14 +23,13 @@ impl<AccountId: IdentifierT> ElectionProvider<AccountId> for OnChainSequentialPh
 
 	const NEEDS_ELECT_DATA: bool = true;
 
-	fn elect<P: sp_arithmetic::PerThing>(
+	fn elect<P: PerThing128>(
 		to_elect: usize,
 		targets: Vec<AccountId>,
 		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	) -> Result<FlatSupportMap<AccountId>, Self::Error>
 	where
 		ExtendedBalance: From<<P as PerThing>::Inner>,
-		P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 	{
 		// TODO: we really don't need to do this conversion all the time. With
 		// https://github.com/paritytech/substrate/pull/6685 merged, we should make variants of
@@ -39,6 +38,7 @@ impl<AccountId: IdentifierT> ElectionProvider<AccountId> for OnChainSequentialPh
 		// TODO: Okay even if not the above, then def. make the extension traits for converting
 		// between validator Major and Nominator Major result types, and make the conversions be
 		// lossless and painless to happen.
+
 		let mut stake_map: BTreeMap<AccountId, VoteWeight> = BTreeMap::new();
 		voters.iter().for_each(|(v, s, _)| {
 			stake_map.insert(v.clone(), *s);

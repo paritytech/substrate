@@ -29,25 +29,25 @@ macro_rules! log {
 
 #[macro_export]
 macro_rules! voter_index_fn {
-	($voters:ident, $acc:ty) => {
-		|who: &$acc| -> Option<$crate::two_phase::VoterIndex> {
+	($voters:ident, $acc:ty, $t:ident) => {
+		|who: &$acc| -> Option<$crate::two_phase::CompactVoterIndexOf<$t>> {
 					$voters
 						.iter()
 						.position(|(x, _, _)| x == who)
-						.and_then(|i| <usize as $crate::TryInto<$crate::two_phase::VoterIndex>>::try_into(i).ok())
+						.and_then(|i| <usize as $crate::TryInto<$crate::two_phase::CompactVoterIndexOf<$t>>>::try_into(i).ok())
 					}
 	};
 }
 
 #[macro_export]
 macro_rules! target_index_fn {
-	($targets:ident, $acc:ty) => {
-		|who: &$acc| -> Option<$crate::two_phase::TargetIndex> {
-					$targets
-						.iter()
-						.position(|x| x == who)
-						.and_then(|i| <usize as $crate::TryInto<$crate::two_phase::TargetIndex>>::try_into(i).ok())
-					}
+	($targets:ident, $acc:ty, $t:ident) => {
+		|who: &$acc| -> Option<$crate::two_phase::CompactTargetIndexOf<$t>> {
+			$targets
+				.iter()
+				.position(|x| x == who)
+				.and_then(|i| <usize as $crate::TryInto<$crate::two_phase::CompactTargetIndexOf<$t>>>::try_into(i).ok())
+			}
 	};
 }
 

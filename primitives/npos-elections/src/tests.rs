@@ -1072,15 +1072,12 @@ mod score {
 }
 
 mod solution_type {
-	use codec::{Decode, Encode};
 	use super::AccountId;
+	use codec::{Decode, Encode};
 	// these need to come from the same dev-dependency `sp-npos-elections`, not from the crate.
-	use crate::{
-		generate_solution_type, Assignment,
-		Error as PhragmenError,
-	};
-	use sp_std::{convert::TryInto, fmt::Debug};
+	use crate::{generate_solution_type, Assignment, CompactSolution, Error as PhragmenError};
 	use sp_arithmetic::Percent;
+	use sp_std::{convert::TryInto, fmt::Debug};
 
 	type TestAccuracy = Percent;
 

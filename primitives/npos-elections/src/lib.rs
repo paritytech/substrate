@@ -74,18 +74,19 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{
-	prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering, rc::Rc, cell::RefCell,
-};
 use sp_arithmetic::{
-	PerThing, Rational128, ThresholdOrd, InnerOf, Normalizable,
-	traits::{Zero, Bounded},
+	traits::{Bounded, Zero},
+	InnerOf, Normalizable, PerThing, Rational128, ThresholdOrd,
+};
+use sp_std::{
+	cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, fmt::Debug, ops::Mul,
+	prelude::*, rc::Rc,
 };
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use codec::{Encode, Decode};
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod mock;
@@ -128,22 +129,23 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 /// A common interface for all compact solutions.
 ///
 /// See [`compact`] for more info.
-pub trait CompactSolution<A: IdentifierT>: Sized {
+pub trait CompactSolution: Sized {
 	const LIMIT: usize;
-	type Voter;
-	type Target;
-	type VoteWeight: PerThing;
+	type Voter: sp_arithmetic::traits::UniqueSaturatedInto<usize>;
+	type Target: sp_arithmetic::traits::UniqueSaturatedInto<usize>;
+	type VoteWeight: PerThing128;
 
-	fn from_assignment<FV, FT>(
+	fn from_assignment<FV, FT, A>(
 		assignments: Vec<Assignment<A, Self::VoteWeight>>,
 		voter_index: FV,
 		target_index: FT,
 	) -> Result<Self, Error>
 	where
+		A: IdentifierT,
 		for<'r> FV: Fn(&'r A) -> Option<Self::Voter>,
 		for<'r> FT: Fn(&'r A) -> Option<Self::Target>;
 
-	fn into_assignment(
+	fn into_assignment<A: IdentifierT>(
 		self,
 		voter_at: impl Fn(Self::Voter) -> Option<A>,
 		target_at: impl Fn(Self::Target) -> Option<A>,
@@ -184,16 +186,14 @@ pub trait CompactSolution<A: IdentifierT>: Sized {
 // re-export the compact solution type.
 pub use sp_npos_elections_compact::generate_solution_type;
 
-/// A trait to limit the number of votes per voter. The generated compact type will implement this.
-pub trait VotingLimit {
-	const LIMIT: usize;
-}
-
 /// an aggregator trait for a generic type of a voter/target identifier. This usually maps to
 /// substrate's account id.
 pub trait IdentifierT: Clone + Eq + Default + Ord + Debug + codec::Codec {}
-
 impl<T: Clone + Eq + Default + Ord + Debug + codec::Codec> IdentifierT for T {}
+
+/// Aggregator trait for a PerThing that can be multiplied by u128 (ExtendedBalance).
+pub trait PerThing128: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance> {}
+impl<T: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance>> PerThing128 for T {}
 
 /// The errors that might occur in the this crate and compact.
 #[derive(Debug, Eq, PartialEq)]
@@ -389,10 +389,7 @@ pub struct Assignment<AccountId, P: PerThing> {
 	pub distribution: Vec<(AccountId, P)>,
 }
 
-impl<AccountId: IdentifierT, P: PerThing> Assignment<AccountId, P>
-where
-	ExtendedBalance: From<InnerOf<P>>,
-{
+impl<AccountId: IdentifierT, P: PerThing128> Assignment<AccountId, P> {
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
 	/// It needs `stake` which is the total budget of the voter. If `fill` is set to true, it
@@ -402,11 +399,9 @@ where
 	///
 	/// If an edge ratio is [`Bounded::min_value()`], it is dropped. This edge can never mean
 	/// anything useful.
-	pub fn into_staked(self, stake: ExtendedBalance) -> StakedAssignment<AccountId>
-	where
-		P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
-	{
-		let distribution = self.distribution
+	pub fn into_staked(self, stake: ExtendedBalance) -> StakedAssignment<AccountId> {
+		let distribution = self
+			.distribution
 			.into_iter()
 			.filter_map(|(target, p)| {
 				// if this ratio is zero, then skip it.
@@ -614,15 +609,19 @@ where
 /// - Sum of all supports squared. This value must be **minimized**.
 ///
 /// `O(E)` where `E` is the total number of edges.
-pub fn evaluate_support<AccountId>(
-	support: &SupportMap<AccountId>,
+pub fn evaluate_support<
+	'a,
+	AccountId: 'a,
+	I: IntoIterator<Item = (&'a AccountId, &'a Support<AccountId>)>,
+>(
+	support: I,
 ) -> ElectionScore {
 	let mut min_support = ExtendedBalance::max_value();
 	let mut sum: ExtendedBalance = Zero::zero();
 	// NOTE: The third element might saturate but fine for now since this will run on-chain and need
 	// to be fast.
 	let mut sum_squared: ExtendedBalance = Zero::zero();
-	for (_, support) in support.iter() {
+	for (_, ref support) in support.into_iter() {
 		sum = sum.saturating_add(support.total);
 		let squared = support.total.saturating_mul(support.total);
 		sum_squared = sum_squared.saturating_add(squared);
@@ -641,7 +640,8 @@ pub fn evaluate_support<AccountId>(
 ///
 /// Note that the third component should be minimized.
 pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool
-	where ExtendedBalance: From<sp_arithmetic::InnerOf<P>>
+where
+	ExtendedBalance: From<InnerOf<P>>,
 {
 	match this
 		.iter()

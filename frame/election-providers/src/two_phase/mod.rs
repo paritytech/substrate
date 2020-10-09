@@ -98,6 +98,11 @@
 //! ## Correct Submission
 //!
 //! TODO
+//!
+//! ## Accuracy
+//!
+//! TODO
+//!
 
 use crate::{
 	onchain::OnChainSequentialPhragmen, ElectionDataProvider, ElectionProvider, FlatSupportMap,
@@ -113,11 +118,11 @@ use frame_support::{
 };
 use frame_system::{ensure_none, ensure_signed};
 use sp_npos_elections::{
-	evaluate_support, generate_solution_type, Assignment, ElectionScore, ExtendedBalance,
-	VoteWeight,
+	assignment_ratio_to_staked_normalized, build_support_map, evaluate_support, Assignment,
+	CompactSolution, ElectionScore, ExtendedBalance, PerThing128, VoteWeight,
 };
-use sp_runtime::{traits::Zero, PerThing, PerU16, Perbill, RuntimeDebug};
-use sp_std::{mem::size_of, prelude::*};
+use sp_runtime::{traits::Zero, InnerOf, PerThing, Perbill, RuntimeDebug};
+use sp_std::prelude::*;
 
 #[cfg(test)]
 mod mock;
@@ -127,6 +132,20 @@ pub(crate) mod macros;
 pub mod signed;
 pub mod unsigned;
 
+/// The compact solution type used by this crate. This is provided from the [`ElectionDataProvider`]
+/// implementer.
+pub type CompactOf<T> = <<T as Trait>::ElectionDataProvider as ElectionDataProvider<
+	<T as frame_system::Trait>::AccountId,
+	<T as frame_system::Trait>::BlockNumber,
+>>::CompactSolution;
+
+/// The voter index. Derived from [`CompactOf`].
+pub type CompactVoterIndexOf<T> = <CompactOf<T> as CompactSolution>::Voter;
+/// The target index. Derived from [`CompactOf`].
+pub type CompactTargetIndexOf<T> = <CompactOf<T> as CompactSolution>::Target;
+/// The accuracy of the election. Derived from [`CompactOf`].
+pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::VoteWeight;
+
 type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
@@ -134,30 +153,6 @@ type PositiveImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
-
-/// Accuracy used for on-chain election.
-pub type ChainAccuracy = Perbill;
-
-/// Accuracy used for off-chain election. This better be small.
-pub type OffchainAccuracy = PerU16;
-
-/// Data type used to index voter in the compact type.
-pub type VoterIndex = u32;
-
-/// Data type used to index target in the compact type.
-pub type TargetIndex = u16;
-
-// Ensure the size of both TargetIndex and VoterIndex. They both need to be well below usize.
-static_assertions::const_assert!(size_of::<TargetIndex>() <= size_of::<usize>());
-static_assertions::const_assert!(size_of::<VoterIndex>() <= size_of::<usize>());
-static_assertions::const_assert!(size_of::<TargetIndex>() <= size_of::<u32>());
-static_assertions::const_assert!(size_of::<VoterIndex>() <= size_of::<u32>());
-
-// TODO: deal with 16 being defined here.
-generate_solution_type!(
-	#[compact]
-	pub struct CompactAssignments::<VoterIndex, TargetIndex, OffchainAccuracy>(16)
-);
 
 const LOG_TARGET: &'static str = "two-phase-submission";
 
@@ -222,11 +217,9 @@ impl Default for ElectionCompute {
 /// Such a solution should never become effective in anyway before being checked by the
 /// [`Module::feasibility_check`]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct RawSolution {
-	/// The winners indices.
-	winners: Vec<TargetIndex>,
+pub struct RawSolution<C> {
 	/// Compact election edges.
-	compact: CompactAssignments,
+	compact: C,
 	/// The _claimed_ score of the solution.
 	score: ElectionScore,
 }
@@ -235,23 +228,23 @@ pub struct RawSolution {
 ///
 /// This is just a wrapper around [`RawSolution`] and some additional info.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct SignedSubmission<AccountId, Balance: HasCompact> {
+pub struct SignedSubmission<A, B: HasCompact, C> {
 	/// Who submitted this solution.
-	who: AccountId,
+	who: A,
 	/// The deposit reserved for storing this solution.
-	deposit: Balance,
+	deposit: B,
 	/// The reward that should be given to this solution, if chosen the as the final one.
-	reward: Balance,
+	reward: B,
 	/// The raw solution itself.
-	solution: RawSolution,
+	solution: RawSolution<C>,
 }
 
 /// A checked and parsed solution, ready to be enacted.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct ReadySolution<AccountId> {
+pub struct ReadySolution<A> {
 	/// The final supports of the solution. This is target-major vector, storing each winners, total
 	/// backing, and each individual backer.
-	supports: FlatSupportMap<AccountId>,
+	supports: FlatSupportMap<A>,
 	/// How this election was computed.
 	compute: ElectionCompute,
 }
@@ -341,12 +334,12 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as TwoPhaseElectionProvider {
+	trait Store for Module<T: Trait> as TwoPhaseElectionProvider where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> {
 		/// Current phase.
 		pub CurrentPhase get(fn current_phase): Phase = Phase::Off;
 
 		/// Sorted (worse -> best) list of unchecked, signed solutions.
-		pub SignedSubmissions get(fn signed_submissions): Vec<SignedSubmission<T::AccountId, BalanceOf<T>>>;
+		pub SignedSubmissions get(fn signed_submissions): Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>;
 
 		/// Current best solution, signed or unsigned.
 		pub QueuedSolution get(fn queued_solution): Option<ReadySolution<T::AccountId>>;
@@ -385,19 +378,25 @@ decl_event!(
 	}
 );
 
-decl_error! {
-	pub enum PalletError for Module<T: Trait> {
-		/// Submission was too early.
-		EarlySubmission,
-		/// The queue was full, and the solution was not better than any of the existing ones.
-		QueueFull,
-		/// The origin failed to pay the deposit.
-		CannotPayDeposit,
-	}
-}
+// decl_error! {
+// 	pub enum PalletError for Module<T: Trait> {
+// 		/// Submission was too early.
+// 		EarlySubmission,
+// 		/// The queue was full, and the solution was not better than any of the existing ones.
+// 		QueueFull,
+// 		/// The origin failed to pay the deposit.
+// 		CannotPayDeposit,
+// 	}
+// }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call
+	where
+		origin: T::Origin,
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+		// TODO: replace with PalletError once we have it working.
+		type Error = &'static str;
 		fn deposit_event() = default;
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
@@ -439,21 +438,21 @@ decl_module! {
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
 		#[weight = 0]
-		fn submit(origin, solution: RawSolution) -> DispatchResultWithPostInfo {
+		fn submit(origin, solution: RawSolution<CompactOf<T>>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
 			// ensure solution is timely.
-			ensure!(Self::current_phase().is_signed(), PalletError::<T>::EarlySubmission);
+			ensure!(Self::current_phase().is_signed(), "EarlySubmission");
 
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
 			let maybe_index = Self::insert_submission(&who, &mut signed_submissions, solution);
-			ensure!(maybe_index.is_some(), PalletError::<T>::QueueFull);
+			ensure!(maybe_index.is_some(), "QueueFull");
 			let index = maybe_index.expect("Option checked to be `Some`; qed.");
 
 			// collect deposit. Thereafter, the function cannot fail.
 			let deposit = signed_submissions[index].deposit;
-			T::Currency::reserve(&who, deposit).map_err(|_| PalletError::<T>::CannotPayDeposit)?;
+			T::Currency::reserve(&who, deposit).map_err(|_| "CannotPayDeposit")?;
 
 			// store the new signed submission.
 			debug_assert!(signed_submissions.len() as u32 <= T::MaxSignedSubmissions::get());
@@ -464,7 +463,7 @@ decl_module! {
 		}
 
 		#[weight = 0]
-		fn submit_unsigned(origin, solution: RawSolution) {
+		fn submit_unsigned(origin, solution: RawSolution<CompactOf<T>>) {
 			ensure_none(origin)?;
 			Self::deposit_event(RawEvent::SolutionStored(ElectionCompute::Unsigned));
 			unimplemented!()
@@ -472,7 +471,10 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Trait> Module<T>
+where
+	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+{
 	/// Checks the feasibility of a solution.
 	///
 	/// This checks the solution for the following:
@@ -483,20 +485,13 @@ impl<T: Trait> Module<T> {
 	/// 3. for each assignment, the check of `ElectionDataProvider` is also examined.
 	/// 4. the claimed score is valid.
 	fn feasibility_check(
-		solution: RawSolution,
+		solution: RawSolution<CompactOf<T>>,
 		compute: ElectionCompute,
 	) -> Result<ReadySolution<T::AccountId>, FeasibilityError> {
-		let RawSolution {
-			winners,
-			compact,
-			score,
-		} = solution;
+		let RawSolution { compact, score } = solution;
 
-		// Ensure that the compact and winners have equal number of winners.
-		ensure!(
-			compact.unique_targets().len() == winners.len(),
-			FeasibilityError::WrongWinnerCount
-		);
+		// winners are not directly encoded in the solution.
+		let winners = compact.unique_targets();
 
 		// Ensure that we have received enough winners.
 		ensure!(
@@ -510,11 +505,16 @@ impl<T: Trait> Module<T> {
 		let snapshot_targets =
 			Self::snapshot_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
-		let voter_at = |i: VoterIndex| -> Option<T::AccountId> {
-			snapshot_voters.get(i as usize).map(|(x, _, _)| x).cloned()
+		use sp_runtime::traits::UniqueSaturatedInto;
+		let voter_at = |i: CompactVoterIndexOf<T>| -> Option<T::AccountId> {
+			snapshot_voters
+				.get(i.unique_saturated_into())
+				.map(|(x, _, _)| x)
+				.cloned()
 		};
-		let target_at =
-			|i: TargetIndex| -> Option<T::AccountId> { snapshot_targets.get(i as usize).cloned() };
+		let target_at = |i: CompactTargetIndexOf<T>| -> Option<T::AccountId> {
+			snapshot_targets.get(i.unique_saturated_into()).cloned()
+		};
 
 		// first, make sure that all the winners are sane.
 		let winners = winners
@@ -537,7 +537,7 @@ impl<T: Trait> Module<T> {
 					|(_, _, t)| {
 						if distribution.iter().map(|(x, _)| x).all(|x| t.contains(x))
 							&& T::ElectionDataProvider::feasibility_check_assignment::<
-								OffchainAccuracy,
+								CompactAccuracyOf<T>,
 							>(who, distribution)
 						{
 							Ok(())
@@ -552,20 +552,21 @@ impl<T: Trait> Module<T> {
 		// ----- Start building support. First, we need some more closures.
 		let stake_of = stake_of_fn!(snapshot_voters, T::AccountId);
 
-		use sp_npos_elections::{assignment_ratio_to_staked_normalized, build_support_map};
 		// This might fail if the normalization fails. Very unlikely.
 		let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
 			.map_err::<FeasibilityError, _>(Into::into)?;
 		// This might fail if one of the voter edges is pointing to a non-winner.
 		let supports = build_support_map(&winners, &staked_assignments)
+			.map(FlattenSupportMap::flatten)
 			.map_err::<FeasibilityError, _>(Into::into)?;
 
 		// Finally, check that the claimed score was indeed correct.
-		// TODO: evaluate support could accept both types of support.
-		let known_score = evaluate_support(&supports);
+		// TODO: well, I am not sure if this is now better or not...
+		let known_score =
+			evaluate_support::<T::AccountId, _>(supports.iter().map(|&(ref x, ref y)| (x, y)));
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
-		let supports = supports.flatten();
+		// let supports = supports.flatten();
 		Ok(ReadySolution { supports, compute })
 	}
 
@@ -574,7 +575,7 @@ impl<T: Trait> Module<T> {
 		let desired_targets = Self::desired_targets() as usize;
 		let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
 		let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
-		<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<ChainAccuracy>(
+		<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<Perbill>(
 			desired_targets,
 			targets,
 			voters,
@@ -583,19 +584,21 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> crate::ElectionProvider<T::AccountId> for Module<T> {
+impl<T: Trait> crate::ElectionProvider<T::AccountId> for Module<T>
+where
+	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+{
 	type Error = Error;
 
 	const NEEDS_ELECT_DATA: bool = false;
 
-	fn elect<P: PerThing>(
+	fn elect<P: PerThing128>(
 		_to_elect: usize,
 		_targets: Vec<T::AccountId>,
 		_voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 	) -> Result<FlatSupportMap<T::AccountId>, Self::Error>
 	where
 		ExtendedBalance: From<<P as PerThing>::Inner>,
-		P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 	{
 		Self::queued_solution()
 			.map_or_else(

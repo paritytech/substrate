@@ -320,7 +320,6 @@ pub(crate) fn run_and_compare<Output: PerThing>(
 	to_elect: usize,
 ) where
 	ExtendedBalance: From<InnerOf<Output>>,
-	Output: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 {
 	// run fixed point code.
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Output>(

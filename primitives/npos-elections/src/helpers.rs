@@ -18,21 +18,21 @@
 //! Helper methods for npos-elections.
 
 use crate::{
-	Assignment, ExtendedBalance, VoteWeight, IdentifierT, StakedAssignment, WithApprovalOf, Error,
+	Assignment, Error, ExtendedBalance, IdentifierT, PerThing128, StakedAssignment, VoteWeight,
+	WithApprovalOf,
 };
-use sp_arithmetic::{PerThing, InnerOf};
+use sp_arithmetic::{InnerOf, PerThing};
 use sp_std::prelude::*;
 
 /// Converts a vector of ratio assignments into ones with absolute budget value.
 ///
 /// Note that this will NOT attempt at normalizing the result.
-pub fn assignment_ratio_to_staked<A: IdentifierT, P: PerThing, FS>(
+pub fn assignment_ratio_to_staked<A: IdentifierT, P: PerThing128, FS>(
 	ratio: Vec<Assignment<A, P>>,
 	stake_of: FS,
 ) -> Vec<StakedAssignment<A>>
 where
 	for<'r> FS: Fn(&'r A) -> VoteWeight,
-	P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 	ExtendedBalance: From<InnerOf<P>>,
 {
 	ratio
@@ -45,19 +45,22 @@ where
 }
 
 /// Same as [`assignment_ratio_to_staked`] and try and do normalization.
-pub fn assignment_ratio_to_staked_normalized<A: IdentifierT, P: PerThing, FS>(
+pub fn assignment_ratio_to_staked_normalized<A: IdentifierT, P: PerThing128, FS>(
 	ratio: Vec<Assignment<A, P>>,
 	stake_of: FS,
 ) -> Result<Vec<StakedAssignment<A>>, Error>
 where
 	for<'r> FS: Fn(&'r A) -> VoteWeight,
-	P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 	ExtendedBalance: From<InnerOf<P>>,
 {
 	let mut staked = assignment_ratio_to_staked(ratio, &stake_of);
-	staked.iter_mut().map(|a|
-		a.try_normalize(stake_of(&a.who).into()).map_err(|err| Error::ArithmeticError(err))
-	).collect::<Result<_, _>>()?;
+	staked
+		.iter_mut()
+		.map(|a| {
+			a.try_normalize(stake_of(&a.who).into())
+				.map_err(|err| Error::ArithmeticError(err))
+		})
+		.collect::<Result<_, _>>()?;
 	Ok(staked)
 }
 
@@ -74,7 +77,7 @@ where
 }
 
 /// Same as [`assignment_staked_to_ratio`] and try and do normalization.
-pub fn assignment_staked_to_ratio_normalized<A: IdentifierT, P: PerThing>(
+pub fn assignment_staked_to_ratio_normalized<A: IdentifierT, P: PerThing128>(
 	staked: Vec<StakedAssignment<A>>,
 ) -> Result<Vec<Assignment<A, P>>, Error>
 where
