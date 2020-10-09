@@ -994,7 +994,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	pub fn add_to_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	// NOTE: even though this function is currently sync, it's marked as async for
+	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
+	pub async fn add_to_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		for (peer_id, addr) in peers.into_iter() {
@@ -1014,7 +1016,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	pub fn remove_from_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	// NOTE: even though this function is currently sync, it's marked as async for
+	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
+	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
+	pub async fn remove_from_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 		for (peer_id, _) in peers.into_iter() {
 			self.peerset.remove_from_priority_group(group_id.clone(), peer_id);
