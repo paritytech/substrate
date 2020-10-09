@@ -1044,7 +1044,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
 	}
 
-	// Utility function to extract `PeerId` from each `Multiaddr` for priority group updates.
+	/// Utility function to extract `PeerId` from each `Multiaddr` for priority group updates.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
 	fn parse_multiaddr(&self, peers: HashSet<Multiaddr>) -> Result<Vec<(PeerId, Multiaddr)>, String> {
 		peers.into_iter()
 			.map(|mut addr| {
