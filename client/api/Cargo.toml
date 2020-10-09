@@ -32,6 +32,7 @@ parking_lot = "0.10.0"
 lazy_static =  "1.4.0"
 sp-database = { version = "2.0.0", path = "../../primitives/database" }
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
+sp-keystore = { version = "0.8.0", default-features = false, path = "../../primitives/keystore" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 sp-version = { version = "2.0.0", default-features = false, path = "../../primitives/version" }
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
