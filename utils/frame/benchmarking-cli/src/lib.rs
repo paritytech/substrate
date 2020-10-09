@@ -68,6 +68,10 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub header: Option<std::path::PathBuf>,
 
+	/// Path to Handlebar template file for benchmark results (Optional)
+	#[structopt(long)]
+	pub handlebar_template: Option<std::path::PathBuf>,
+
 	/// Output the trait definition to a Rust file.
 	#[structopt(long)]
 	pub trait_def: bool,

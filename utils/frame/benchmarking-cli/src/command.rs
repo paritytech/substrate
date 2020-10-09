@@ -50,6 +50,10 @@ impl BenchmarkCmd {
 			if !header_file.is_file() { return Err("Header file is invalid!".into()) };
 		}
 
+		if let Some(handlebar_template_file) = &self.handlebar_template {
+			if !handlebar_template_file.is_file() { return Err("Handlebar Template file is invalid!".into()) };
+		}
+		
 		let spec = config.chain_spec;
 		let wasm_method = self.wasm_method.into();
 		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
@@ -99,23 +103,44 @@ impl BenchmarkCmd {
 
 		match results {
 			Ok(batches) => {
-				// If we are going to output results to a file...
 				if let Some(output_path) = &self.output {
-					if self.trait_def {
-						crate::writer::write_trait(&batches, output_path, &self.r#trait, self.spaces)?;
-					} else {
-						crate::writer::write_results(
-							&batches,
-							output_path,
-							&self.lowest_range_values,
-							&self.highest_range_values,
-							&self.steps,
-							self.repeat,
-							&self.header,
-							&self.r#struct,
-							&self.r#trait,
-							self.spaces
-						)?;
+					if let Some(handlebar_template) = &self.handlebar_template {
+						if self.trait_def {
+							println!("write_trait:  {:#?} ", &self.r#trait);
+							crate::writer::write_trait(&batches, output_path, &self.r#trait, self.spaces)?;
+						} else {
+							// If we are going to output results using a template to a file...
+							crate::writer::write_results_from_template(
+								&batches,
+								output_path,
+								&self.lowest_range_values,
+								&self.highest_range_values,
+								&self.steps,
+								self.repeat,
+								&self.header,
+								handlebar_template,
+								&self.r#struct,
+								&self.r#trait
+							)?;
+						}
+					}else{
+						if self.trait_def {
+							crate::writer::write_trait(&batches, output_path, &self.r#trait, self.spaces)?;
+						} else {
+							// If we are going to output results to a file...
+							crate::writer::write_results(
+								&batches,
+								output_path,
+								&self.lowest_range_values,
+								&self.highest_range_values,
+								&self.steps,
+								self.repeat,
+								&self.header,
+								&self.r#struct,
+								&self.r#trait,
+								self.spaces
+							)?;
+						}
 					}
 				}
 

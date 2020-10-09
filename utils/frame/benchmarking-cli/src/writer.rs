@@ -23,6 +23,11 @@ use std::path::PathBuf;
 use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis};
 use sp_runtime::traits::Zero;
 
+use serde_json::value::{Map};
+use handlebars::{
+    to_json, Handlebars
+};
+
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 pub fn open_file(path: PathBuf) -> Result<File, std::io::Error> {
@@ -324,5 +329,176 @@ pub fn write_results(
 		}
 	}
 
+	Ok(())
+}
+
+pub fn write_results_from_template(
+	batches: &[BenchmarkBatch],
+	path: &PathBuf,
+	lowest_range_values: &[u32],
+	highest_range_values: &[u32],
+	steps: &[u32],
+	repeat: u32,
+	header: &Option<PathBuf>,
+	handlebar_template_file: &PathBuf,
+	struct_name: &String,
+	trait_name: &String,
+) -> Result<(), std::io::Error> {
+
+	let mut data = Map::new();
+
+	let header_text = match header {
+		Some(header_file) => {
+			let text = fs::read_to_string(header_file)?;
+			Some(text)
+		},
+		None => None,
+	};
+
+	let date = chrono::Utc::now();
+
+	let mut current_pallet = Vec::<u8>::new();
+
+	// Skip writing if there are no batches
+	if batches.is_empty() { return Ok(()) }
+
+	let mut batches_iter = batches.iter().peekable();
+
+	let mut benchmark_results = Vec::new();
+
+	while let Some(batch) = batches_iter.next() {
+		// Skip writing if there are no results
+		if batch.results.is_empty() { continue }
+
+		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
+		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
+
+		// only create new trait definitions when we go to a new pallet
+		if batch.pallet != current_pallet {
+			// optional header and copyright
+			if let Some(header) = &header_text {
+				data.insert("header".to_string(), to_json(header));
+			}
+			// title of file
+			data.insert("pallet_string".to_string(), to_json(&pallet_string));
+
+			// version
+			data.insert("version".to_string(), to_json(&VERSION));
+
+			// auto-generation note
+			data.insert("version".to_string(), to_json(&VERSION));
+
+			// date of generation
+			data.insert("date".to_string(), to_json(&date.format("%Y-%m-%d").to_string()));
+			data.insert("steps".to_string(), to_json(&steps));
+			data.insert("repeat".to_string(), to_json(&repeat));
+			data.insert("lowest_range_values".to_string(), to_json(&lowest_range_values));
+			data.insert("highest_range_values".to_string(), to_json(&highest_range_values));
+
+			// struct for weights
+			data.insert("struct_name".to_string(), to_json(&struct_name));
+
+			// trait wrapper
+			data.insert("trait_name".to_string(), to_json(&trait_name));
+			data.insert("struct_name".to_string(), to_json(&struct_name));
+
+			current_pallet = batch.pallet.clone()
+		}
+
+		// Analysis results
+		let extrinsic_time = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
+		let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
+		let writes = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes).unwrap();
+
+		// Analysis data may include components that are not used, this filters out anything whose value is zero.
+		let mut used_components = Vec::new();
+		let mut used_extrinsic_time = Vec::new();
+		let mut used_reads = Vec::new();
+		let mut used_writes = Vec::new();
+
+		extrinsic_time.slopes.iter().zip(extrinsic_time.names.iter()).for_each(|(slope, name)| {
+			if !slope.is_zero() {
+				if !used_components.contains(&name) { used_components.push(name); }
+				used_extrinsic_time.push((slope, name));
+			}
+		});
+		reads.slopes.iter().zip(reads.names.iter()).for_each(|(slope, name)| {
+			if !slope.is_zero() {
+				if !used_components.contains(&name) { used_components.push(name); }
+				used_reads.push((slope, name));
+			}
+		});
+		writes.slopes.iter().zip(writes.names.iter()).for_each(|(slope, name)| {
+			if !slope.is_zero() {
+				if !used_components.contains(&name) { used_components.push(name); }
+				used_writes.push((slope, name));
+			}
+		});
+
+		let all_components = batch.results[0].components
+			.iter()
+			.map(|(name, _)| -> String { return name.to_string() })
+			.collect::<Vec<String>>();
+		
+		let mut uc = Vec::new();
+		if all_components.len() != used_components.len() {
+			let mut unused_components = all_components;
+			unused_components.retain(|x| !used_components.contains(&x));
+			uc = unused_components
+		}
+		data.insert("unused_components".to_string(), to_json(&uc));
+
+		let mut uet = Vec::new();
+		used_extrinsic_time.iter().for_each(|(slope, name)| {
+			let mut result = Map::new();
+			result.insert("name".to_string(), to_json(&name));
+			result.insert("slope".to_string(), to_json(underscore(&slope.saturating_mul(1000))));
+			uet.push(result)
+		});
+
+		let mut rb = 0;
+		if !reads.base.is_zero() {
+			rb = reads.base;
+		}
+
+		let mut wb = 0;
+		if !writes.base.is_zero() {
+			wb = writes.base
+		}
+
+		let mut uw = Vec::new();
+		used_writes.iter().for_each(|(slope, name)| {
+			let mut result = Map::new();
+			result.insert("name".to_string(), to_json(&name));
+			result.insert("slope".to_string(), to_json(&slope));
+			uw.push(result)
+		});
+
+		// Build Benchmark Results
+		let mut brd = Map::new();
+		brd.insert("benchmark_string".to_string(), to_json(&benchmark_string));
+		brd.insert("used_components".to_string(), to_json(&used_components));
+		brd.insert("extrinsic_time_as_weight".to_string(), to_json(underscore(extrinsic_time.base.saturating_mul(1000))));
+		brd.insert("used_extrinsic_time".to_string(), to_json(&uet));
+		brd.insert("extrinsic_time_base".to_string(), to_json(underscore(extrinsic_time.base.saturating_mul(1000))));
+		brd.insert("reads_base".to_string(), to_json(&rb.to_string()));
+		brd.insert("used_reads".to_string(), to_json(&used_reads));
+		brd.insert("writes_base".to_string(), to_json(wb.to_string()));
+		brd.insert("used_writes".to_string(), to_json(&used_writes));
+		benchmark_results.push(brd);
+		data.insert("benchmark_results".to_string(), to_json(&benchmark_results));
+
+		// Write File Using Template
+		let mut file_path = path.clone();
+		file_path.push(String::from_utf8(current_pallet.clone()).unwrap());
+		file_path.set_extension("rs");
+		let handlebars = Handlebars::new();
+		let mut source_template = File::open(&handlebar_template_file)?;
+		let mut output_file = File::create(file_path)?;
+		match handlebars.render_template_source_to_write(&mut source_template, &data, &mut output_file){
+			Ok(_)  => println!("Write file using template"),
+			Err(e) => println!("Error: {}", e),
+		};	
+	}
 	Ok(())
 }
