@@ -26,7 +26,6 @@ use frame_support::{
 };
 use frame_system as system;
 use sp_runtime::{
-	SaturatedConversion,
 	traits::{IdentityLookup, Block as BlockT},
 	testing::{Header, UintAuthorityId},
 };
@@ -150,22 +149,10 @@ parameter_types! {
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
-pub struct CurrencyToVoteHandler;
-impl Convert<u64, u64> for CurrencyToVoteHandler {
-	fn convert(x: u64) -> u64 {
-		x
-	}
-}
-impl Convert<u128, u64> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u64 {
-		x.saturated_into()
-	}
-}
-
 impl pallet_staking::Trait for Test {
 	type Currency = Balances;
 	type UnixTime = pallet_timestamp::Module<Self>;
-	type CurrencyToVote = CurrencyToVoteHandler;
+	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
 	type Event = Event;
 	type Slash = ();
@@ -183,6 +170,7 @@ impl pallet_staking::Trait for Test {
 	type UnsignedPriority = ();
 	type MaxIterations = ();
 	type MinSolutionScoreBump = ();
+	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();
 }
 

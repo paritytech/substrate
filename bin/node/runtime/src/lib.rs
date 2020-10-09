@@ -20,17 +20,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
-#![recursion_limit="256"]
+#![recursion_limit = "256"]
+
 
 use sp_std::prelude::*;
-
 use frame_support::{
 	construct_runtime, parameter_types, debug, RuntimeDebug,
 	weights::{
 		Weight, IdentityFee,
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
 	},
-	traits::{Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier},
+	traits::{
+		Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier,
+		U128CurrencyToVote,
+	},
 };
 use frame_system::{EnsureRoot, EnsureOneOf};
 use frame_support::traits::InstanceFilter;
@@ -78,7 +81,7 @@ pub use pallet_staking::StakerStatus;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{CurrencyToVoteHandler, Author};
+use impls::Author;
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -149,9 +152,8 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	/// Assume 10% of weight for average on_initialize calls.
-	pub MaximumExtrinsicWeight: Weight =
-		AvailableBlockRatio::get().saturating_sub(AVERAGE_ON_INITIALIZE_WEIGHT)
-		* MaximumBlockWeight::get();
+	pub MaximumExtrinsicWeight: Weight = AvailableBlockRatio::get().saturating_sub(AVERAGE_ON_INITIALIZE_WEIGHT)
+			* MaximumBlockWeight::get();
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;
 }
@@ -441,12 +443,15 @@ parameter_types! {
 	pub const MaxIterations: u32 = 10;
 	// 0.05%. The higher the value, the more strict solution acceptance becomes.
 	pub MinSolutionScoreBump: Perbill = Perbill::from_rational_approximation(5u32, 10_000);
+	pub OffchainSolutionWeightLimit: Weight = MaximumExtrinsicWeight::get()
+		.saturating_sub(BlockExecutionWeight::get())
+		.saturating_sub(ExtrinsicBaseWeight::get());
 }
 
 impl pallet_staking::Trait for Runtime {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
-	type CurrencyToVote = CurrencyToVoteHandler;
+	type CurrencyToVote = U128CurrencyToVote;
 	type RewardRemainder = Treasury;
 	type Event = Event;
 	type Slash = Treasury; // send the slashed funds to the treasury.
@@ -469,6 +474,9 @@ impl pallet_staking::Trait for Runtime {
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = StakingUnsignedPriority;
+	// The unsigned solution weight targeted by the OCW. We set it to the maximum possible value of
+	// a single extrinsic.
+	type OffchainSolutionWeightLimit = OffchainSolutionWeightLimit;
 	type WeightInfo = weights::pallet_staking::WeightInfo<Runtime>;
 }
 
@@ -569,7 +577,7 @@ impl pallet_elections_phragmen::Trait for Runtime {
 	// NOTE: this implies that council's genesis members cannot be set directly and must come from
 	// this module.
 	type InitializeMembers = Council;
-	type CurrencyToVote = CurrencyToVoteHandler;
+	type CurrencyToVote = U128CurrencyToVote;
 	type CandidacyBond = CandidacyBond;
 	type VotingBond = VotingBond;
 	type LoserCandidate = ();
@@ -691,6 +699,7 @@ impl pallet_contracts::Trait for Runtime {
 	type MaxDepth = pallet_contracts::DefaultMaxDepth;
 	type MaxValueSize = pallet_contracts::DefaultMaxValueSize;
 	type WeightPrice = pallet_transaction_payment::Module<Self>;
+	type WeightInfo = weights::pallet_contracts::WeightInfo<Self>;
 }
 
 impl pallet_sudo::Trait for Runtime {
@@ -921,7 +930,7 @@ construct_runtime!(
 		FinalityTracker: pallet_finality_tracker::{Module, Call, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event, ValidateUnsigned},
 		Treasury: pallet_treasury::{Module, Call, Storage, Config, Event<T>},
-		Contracts: pallet_contracts::{Module, Call, Config, Storage, Event<T>},
+		Contracts: pallet_contracts::{Module, Call, Config<T>, Storage, Event<T>},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		ImOnline: pallet_im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
 		AuthorityDiscovery: pallet_authority_discovery::{Module, Call, Config},
