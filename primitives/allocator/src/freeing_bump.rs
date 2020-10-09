@@ -36,7 +36,7 @@
 //!
 //! For implementing freeing we maintain a linked lists for each order. The maximum supported
 //! allocation size is capped, therefore the number of orders and thus the linked lists is as well
-//! limited.
+//! limited. Currently, the maximum size of an allocation is 16 MiB.
 //!
 //! When the allocator serves an allocation request it first checks the linked list for the respective
 //! order. If it doesn't have any free chunks, the allocator requests memory from the bump allocator.
@@ -46,21 +46,14 @@
 //! allocation to the linked list for the respective order.
 
 use crate::Error;
-use sp_std::{convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
+use sp_std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
 use sp_wasm_interface::{Pointer, WordSize};
 
-/// The minimal alignment guaranteed by this allocator. The alignment of 8 is chosen because it is
-/// the alignment guaranteed by wasm32.
+/// The minimal alignment guaranteed by this allocator.
+///
+/// The alignment of 8 is chosen because it is the maximum size of a primitive type supported by the
+/// target version of wasm32: i64's natural alignment is 8.
 const ALIGNMENT: u32 = 8;
-
-// The pointer returned by `allocate()` needs to fulfill the alignment
-// requirement. In our case a pointer will always be a multiple of
-// 8, as long as the first pointer is aligned to 8 bytes.
-// This is because all pointers will contain a 8 byte prefix (the list
-// index) and then a subsequent item of 2^x bytes, where x = [3..24].
-const N: usize = 22;
-const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes
-const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 
 // Each pointer is prefixed with 8 bytes, which identify the list index
 // to which it belongs.
@@ -82,6 +75,20 @@ macro_rules! trace {
 	}
 }
 
+// The minimum possible allocation size is chosen to be 8 bytes because in that case we would have
+// easier time to provide the guaranteed alignment of 8.
+//
+// The maximum possible allocation size was chosen rather arbitrary. 16 MiB should be enough for
+// everybody.
+//
+// N_ORDERS - represents the number of orders supported.
+//
+// This number corresponds to the number of powers between the minimum possible allocation and
+// maximum possible allocation, or: 2^3...2^24 (both ends inclusive, hence 22).
+const N_ORDERS: usize = 22;
+const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes, 16 MiB
+const MIN_POSSIBLE_ALLOCATION: u32 = 8; // 2^3 bytes, 8 bytes
+
 /// The exponent for the power of two sized block adjusted to the minimum size.
 ///
 /// This way, if `MIN_POSSIBLE_ALLOCATION == 8`, we would get:
@@ -91,6 +98,8 @@ macro_rules! trace {
 /// 16                | 1
 /// 32                | 2
 /// 64                | 3
+/// ...
+/// 16777216          | 21
 ///
 /// and so on.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -101,7 +110,7 @@ impl Order {
 	///
 	/// Returns `Err` if it is greater than the maximum supported order.
 	fn from_raw(order: u32) -> Result<Self, Error> {
-		if order < N as u32 {
+		if order < N_ORDERS as u32 {
 			Ok(Self(order))
 		} else {
 			Err(error("invalid order"))
@@ -134,7 +143,7 @@ impl Order {
 		Ok(Self(order))
 	}
 
-	/// Returns the corresponding size for this order.
+	/// Returns the corresponding size in bytes for this order.
 	///
 	/// Note that it is always a power of two.
 	fn size(&self) -> u32 {
@@ -147,14 +156,14 @@ impl Order {
 	}
 }
 
-/// A marker for denoting the end of the linked list.
-const EMPTY_MARKER: u32 = u32::max_value();
+/// A special magic value for a pointer in a link that denotes the end of the linked list.
+const NIL_MARKER: u32 = u32::max_value();
 
 /// A link between headers in the free list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Link {
-	/// Null, denotes that there is no next element.
-	Null,
+	/// Nil, denotes that there is no next element.
+	Nil,
 	/// Link to the next element represented as a pointer to the a header.
 	Ptr(u32),
 }
@@ -162,17 +171,17 @@ enum Link {
 impl Link {
 	/// Creates a link from raw value.
 	fn from_raw(raw: u32) -> Self {
-		if raw != EMPTY_MARKER {
+		if raw != NIL_MARKER {
 			Self::Ptr(raw)
 		} else {
-			Self::Null
+			Self::Nil
 		}
 	}
 
 	/// Converts this link into a raw u32.
 	fn into_raw(self) -> u32 {
 		match self {
-			Self::Null => EMPTY_MARKER,
+			Self::Nil => NIL_MARKER,
 			Self::Ptr(ptr) => ptr,
 		}
 	}
@@ -209,6 +218,10 @@ enum Header {
 }
 
 impl Header {
+	/// Reads a header from memory.
+	///
+	/// Returns an error if the `header_ptr` is out of bounds of the linear memory or if the read
+	/// header is corrupted (e.g. the order is incorrect).
 	fn read_from<M: Memory + ?Sized>(memory: &M, header_ptr: u32) -> Result<Self, Error> {
 		let raw_header = memory.read_le_u64(header_ptr)?;
 
@@ -225,6 +238,8 @@ impl Header {
 	}
 
 	/// Write out this header to memory.
+	///
+	/// Returns an error if the `header_ptr` is out of bounds of the linear memory.
 	fn write_into<M: Memory + ?Sized>(&self, memory: &mut M, header_ptr: u32) -> Result<(), Error> {
 		let (header_data, occupied_mask) = match *self {
 			Self::Occupied(order) => (order.into_raw(), 0x00000001_00000000),
@@ -254,14 +269,14 @@ impl Header {
 
 /// This struct represents a collection of intrusive linked lists for each order.
 struct FreeLists {
-	heads: [Link; N],
+	heads: [Link; N_ORDERS],
 }
 
 impl FreeLists {
 	/// Creates the free empty lists.
 	fn new() -> Self {
 		Self {
-			heads: [Link::Null; N]
+			heads: [Link::Nil; N_ORDERS]
 		}
 	}
 
@@ -293,11 +308,11 @@ pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	free_lists: FreeLists,
 	total_size: u32,
+	poisoned: bool,
 }
 
 impl FreeingBumpHeapAllocator {
 	/// Creates a new allocation heap which follows a freeing-bump strategy.
-	/// The maximum size which can be allocated at once is 16 MiB.
 	///
 	/// # Arguments
 	///
@@ -309,6 +324,7 @@ impl FreeingBumpHeapAllocator {
 			bumper: aligned_heap_base,
 			free_lists: FreeLists::new(),
 			total_size: 0,
+			poisoned: false,
 		}
 	}
 
@@ -317,6 +333,8 @@ impl FreeingBumpHeapAllocator {
 	/// There is no minimum size, but whatever size is passed into
 	/// this function is rounded to the next power of two. If the requested
 	/// size is below 8 bytes it will be rounded up to 8 bytes.
+	///
+	/// NOTE: Once the allocator has returned an error all subsequent requests will return an error.
 	///
 	/// # Arguments
 	///
@@ -327,6 +345,11 @@ impl FreeingBumpHeapAllocator {
 		mem: &mut M,
 		size: WordSize,
 	) -> Result<Pointer<u8>, Error> {
+		if self.poisoned {
+			return Err(error("the allocator has been poisoned"))
+		}
+
+		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
 		let order = Order::from_size(size)?;
 
 		let header_ptr: u32 = match self.free_lists[order] {
@@ -345,9 +368,13 @@ impl FreeingBumpHeapAllocator {
 
 				header_ptr
 			}
-			Link::Null => {
+			Link::Nil => {
 				// Corresponding free list is empty. Allocate a new item.
-				self.bump(order.size() + HEADER_SIZE, mem.size())?
+				Self::bump(
+					&mut self.bumper,
+					order.size() + HEADER_SIZE,
+					mem.size(),
+				)?
 			}
 		};
 
@@ -357,16 +384,25 @@ impl FreeingBumpHeapAllocator {
 		self.total_size += order.size() + HEADER_SIZE;
 		trace!("Heap size is {} bytes after allocation", self.total_size);
 
+		bomb.disarm();
 		Ok(Pointer::new(header_ptr + HEADER_SIZE))
 	}
 
 	/// Deallocates the space which was allocated for a pointer.
+	///
+	/// NOTE: Once the allocator has returned an error all subsequent requests will return an error.
 	///
 	/// # Arguments
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `ptr` - pointer to the allocated chunk
 	pub fn deallocate<M: Memory + ?Sized>(&mut self, mem: &mut M, ptr: Pointer<u8>) -> Result<(), Error> {
+		if self.poisoned {
+			return Err(error("the allocator has been poisoned"))
+		}
+
+		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
+
 		let header_ptr = u32::from(ptr)
 			.checked_sub(HEADER_SIZE)
 			.ok_or_else(|| error("Invalid pointer for deallocation"))?;
@@ -386,6 +422,7 @@ impl FreeingBumpHeapAllocator {
 			.ok_or_else(|| error("Unable to subtract from total heap size without overflow"))?;
 		trace!("Heap size is {} bytes after deallocation", self.total_size);
 
+		bomb.disarm();
 		Ok(())
 	}
 
@@ -394,24 +431,32 @@ impl FreeingBumpHeapAllocator {
 	/// Returns the `bumper` from before the increase.
 	/// Returns an `Error::AllocatorOutOfSpace` if the operation
 	/// would exhaust the heap.
-	fn bump(&mut self, size: u32, heap_end: u32) -> Result<u32, Error> {
-		if self.bumper + size > heap_end {
+	fn bump(bumper: &mut u32, size: u32, heap_end: u32) -> Result<u32, Error> {
+		if *bumper + size > heap_end {
 			return Err(Error::AllocatorOutOfSpace);
 		}
 
-		let res = self.bumper;
-		self.bumper += size;
+		let res = *bumper;
+		*bumper += size;
 		Ok(res)
 	}
 }
 
-/// A trait for abstraction of accesses to linear memory.
+/// A trait for abstraction of accesses to a wasm linear memory. Used to read or modify the
+/// allocation prefixes.
+///
+/// A wasm linear memory behaves similarly to a vector. The address space doesn't have holes and is
+/// accessible up to the reported size.
+///
+/// The linear memory can grow in size with the wasm page granularity (64KiB), but it cannot shrink.
 pub trait Memory {
-	/// Read a u64 from the heap in LE form. Used to read heap allocation prefixes.
+	/// Read a u64 from the heap in LE form. Returns an error if any of the bytes read are out of
+	/// bounds.
 	fn read_le_u64(&self, ptr: u32) -> Result<u64, Error>;
-	/// Write a u64 to the heap in LE form. Used to write heap allocation prefixes.
+	/// Write a u64 to the heap in LE form. Returns an error if any of the bytes written are out of
+	/// bounds.
 	fn write_le_u64(&mut self, ptr: u32, val: u64) -> Result<(), Error>;
-	/// Returns the full size of the memory.
+	/// Returns the full size of the memory in bytes.
 	fn size(&self) -> u32;
 }
 
@@ -443,6 +488,23 @@ fn heap_range(offset: u32, length: u32, heap_len: usize) -> Option<Range<usize>>
 		Some(start..end)
 	} else {
 		None
+	}
+}
+
+/// A guard that will raise the poisoned flag on drop unless disarmed.
+struct PoisonBomb<'a> {
+	poisoned: &'a mut bool,
+}
+
+impl<'a> PoisonBomb<'a> {
+	fn disarm(self) {
+		mem::forget(self)
+	}
+}
+
+impl<'a> Drop for PoisonBomb<'a> {
+	fn drop(&mut self) {
+		*self.poisoned = true;
 	}
 }
 
@@ -555,7 +617,7 @@ mod tests {
 		// then
 		// should have re-allocated
 		assert_eq!(ptr3, to_pointer(padded_offset + 16 + HEADER_SIZE));
-		assert_eq!(heap.free_lists.heads, [Link::Null; N]);
+		assert_eq!(heap.free_lists.heads, [Link::Nil; N_ORDERS]);
 	}
 
 	#[test]
@@ -785,8 +847,25 @@ mod tests {
 
 		roundtrip(Header::Occupied(Order(0)));
 		roundtrip(Header::Occupied(Order(1)));
-		roundtrip(Header::Free(Link::Null));
+		roundtrip(Header::Free(Link::Nil));
 		roundtrip(Header::Free(Link::Ptr(0)));
 		roundtrip(Header::Free(Link::Ptr(4)));
+	}
+
+	#[test]
+	fn poison_oom() {
+		// given
+		// a heap of 32 bytes. Should be enough for two allocations.
+		let mut mem = [0u8; 32];
+		let mut heap = FreeingBumpHeapAllocator::new(0);
+
+		// when
+		assert!(heap.allocate(mem.as_mut(), 8).is_ok());
+		let alloc_ptr = heap.allocate(mem.as_mut(), 8).unwrap();
+		assert!(heap.allocate(mem.as_mut(), 8).is_err());
+
+		// then
+		assert!(heap.poisoned);
+		assert!(heap.deallocate(mem.as_mut(), alloc_ptr).is_err());
 	}
 }
