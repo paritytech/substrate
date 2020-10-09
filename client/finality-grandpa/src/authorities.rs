@@ -314,7 +314,7 @@ where
 	/// Inspect pending changes. Standard pending changes are iterated first,
 	/// and the changes in the tree are traversed in pre-order, afterwards all
 	/// forced changes are iterated.
-	pub fn pending_changes(&self) -> impl Iterator<Item=&PendingChange<H, N>> {
+	pub(crate) fn pending_changes(&self) -> impl Iterator<Item=&PendingChange<H, N>> {
 		self.pending_standard_changes.iter().map(|(_, _, c)| c)
 			.chain(self.pending_forced_changes.iter())
 	}

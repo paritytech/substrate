@@ -345,8 +345,8 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 				.map_err(|err| err.to_string())?;
 
 			let las = grandpa::LightAuthoritySet {
-				set_id: sync_state.grandpa_after_finalized_block_authorities_set_id,
-				authorities: sync_state.grandpa_finalized_triggered_authorities,
+				set_id: sync_state.grandpa_authority_set.set_id,
+				authorities: sync_state.grandpa_authority_set.current_authorities,
 			};
 
 			println!("light state");

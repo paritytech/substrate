@@ -33,12 +33,6 @@ pub fn build_light_sync_state<TBl, TCl>(
 	let finalized_number = client.info().finalized_number;
 	let finalized_header = client.header(BlockId::Hash(finalized_hash))?.unwrap();
 
-	let authority_set = shared_authority_set.inner().read();
-
-	let pending_change = authority_set.pending_changes().next().ok_or_else(|| {
-		"No next pending change in the authority set"
-	})?;
-
 	let finalized_block_weight = sc_consensus_babe::aux_schema::load_block_weight(
 		&*client,
 		finalized_hash,
@@ -50,9 +44,7 @@ pub fn build_light_sync_state<TBl, TCl>(
 	Ok(sc_chain_spec::LightSyncState {
 		finalized_block_header: finalized_header,
 		babe_epoch_changes: epoch_changes,
-		grandpa_finalized_triggered_authorities: authority_set.current_authorities.clone(),
-		grandpa_after_finalized_block_authorities_set_id: authority_set.set_id,
-		grandpa_finalized_scheduled_change: pending_change.clone(),
 		babe_finalized_block_weight: finalized_block_weight,
+		grandpa_authority_set: shared_authority_set.inner().read().clone(),
 	})
 }
