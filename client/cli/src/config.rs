@@ -472,6 +472,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.map(|p| p.unsafe_pruning)
 			.unwrap_or(false);
 
+		let logger_pattern = self.log_filters()?;
+		let tracing_receiver = self.tracing_receiver()?;
+		let tracing_targets = self.tracing_targets()?;
+		// TODO: this should be fatal right?
+		let logger = init_logger(&logger_pattern, tracing_receiver, tracing_targets.as_ref())?;
+		//log::warn!("💬 Problem initializing global logging framework: {:}", e)
+
 		Ok(Configuration {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
@@ -507,8 +514,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			force_authoring: self.force_authoring()?,
 			disable_grandpa: self.disable_grandpa()?,
 			dev_key_seed: self.dev_key_seed(is_dev)?,
-			tracing_targets: self.tracing_targets()?,
-			tracing_receiver: self.tracing_receiver()?,
+			tracing_targets,
+			tracing_receiver,
+			logger: logger.into(),
 			chain_spec,
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
@@ -536,15 +544,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// 2. Initializes the logger
 	/// 3. Raises the FD limit
 	fn init<C: SubstrateCli>(&self) -> Result<()> {
-		let logger_pattern = self.log_filters()?;
-		let tracing_receiver = self.tracing_receiver()?;
-		let tracing_targets = self.tracing_targets()?;
-
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
-
-		if let Err(e) = init_logger(&logger_pattern, tracing_receiver, tracing_targets) {
-			log::warn!("💬 Problem initializing global logging framework: {:}", e)
-		}
 
 		if let Some(new_limit) = fdlimit::raise_fd_limit() {
 			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {

@@ -46,6 +46,7 @@ use structopt::{
 use tracing_subscriber::{
 	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
 };
+use std::sync::Arc;
 
 /// Substrate client CLI
 ///
@@ -234,8 +235,8 @@ pub trait SubstrateCli: Sized {
 pub fn init_logger(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
-	tracing_targets: Option<String>,
-) -> std::result::Result<(), String> {
+	tracing_targets: Option<&String>,
+) -> std::result::Result<Arc<dyn tracing::Subscriber + Send + Sync>, String> {
 	fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
 		dirs.as_ref()
 			.split(',')
@@ -308,25 +309,17 @@ pub fn init_logger(
 		.with_level(!simple)
 		.with_thread_names(!simple)
 		.with_timer(timer)
+		//.with_writer(std::io::sink)
 		.with_writer(std::io::stderr)
 		.finish();
 
 	if let Some(tracing_targets) = tracing_targets {
-		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &tracing_targets);
+		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, tracing_targets);
 
-		if let Err(e) = tracing::subscriber::set_global_default(subscriber.with(profiling)) {
-			return Err(format!(
-				"Registering Substrate tracing subscriber failed: {:}!", e
-			))
-		}
+		Ok(Arc::new(subscriber.with(profiling)))
 	} else {
-		if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-			return Err(format!(
-				"Registering Substrate tracing subscriber  failed: {:}!", e
-			))
-		}
+		Ok(Arc::new(subscriber))
 	}
-	Ok(())
 }
 
 #[cfg(test)]

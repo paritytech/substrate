@@ -33,6 +33,7 @@ pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
 mod task_manager;
+mod logger;
 
 use std::{io, pin::Pin};
 use std::net::SocketAddr;
@@ -82,6 +83,7 @@ pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
 use sc_client_api::BlockchainEvents;
 pub use sc_keystore::KeyStorePtr as KeyStore;
+pub use logger::*;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 

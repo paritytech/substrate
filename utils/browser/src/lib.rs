@@ -106,6 +106,7 @@ where
 			enable_color: false,
 			prefix: String::new(),
 		},
+		logger: Default::default(),
 	};
 
 	Ok(config)
