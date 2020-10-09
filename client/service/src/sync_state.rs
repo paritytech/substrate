@@ -32,17 +32,9 @@ pub fn build_light_sync_state<TBl, TCl>(
 	let finalized_hash = client.info().finalized_hash;
 	let finalized_header = client.header(BlockId::Hash(finalized_hash))?.unwrap();
 
-	let authority_set = shared_authority_set.inner().read();
-
-	let pending_change = authority_set.pending_changes().next().ok_or_else(|| {
-		"No next pending change in the authority set"
-	})?;
-
 	Ok(sc_chain_spec::LightSyncState {
 		finalized_block_header: finalized_header,
 		babe_epoch_changes: shared_epoch_changes.lock().clone(),
-		grandpa_finalized_triggered_authorities: authority_set.current_authorities.clone(),
-		grandpa_after_finalized_block_authorities_set_id: authority_set.set_id,
-		grandpa_finalized_scheduled_change: pending_change.clone(),
+		grandpa_authority_set: shared_authority_set.inner().read().clone(),
 	})
 }
