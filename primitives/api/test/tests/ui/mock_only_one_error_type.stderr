@@ -18,7 +18,7 @@ error[E0277]: the trait bound `u32: std::convert::From<std::string::String>` is 
     | 
    ::: $WORKSPACE/primitives/api/src/lib.rs
     |
-350 |       type Error: std::fmt::Debug + From<String>;
+    |       type Error: std::fmt::Debug + From<String>;
     |                                     ------------ required by this bound in `sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ApiErrorExt`
     |
     = help: the following implementations were found:
