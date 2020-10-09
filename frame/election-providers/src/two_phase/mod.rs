@@ -294,8 +294,23 @@ impl From<sp_npos_elections::Error> for FeasibilityError {
 }
 
 /// The weights for this pallet.
-pub trait WeightInfo {}
-impl WeightInfo for () {}
+pub trait WeightInfo {
+	fn feasibility_check() -> Weight;
+	fn submit() -> Weight;
+	fn submit_unsigned() -> Weight;
+}
+
+impl WeightInfo for () {
+	fn feasibility_check() -> Weight {
+		Default::default()
+	}
+	fn submit() -> Weight {
+		Default::default()
+	}
+	fn submit_unsigned() -> Weight {
+		Default::default()
+	}
+}
 
 pub trait Trait: frame_system::Trait {
 	/// Event type.

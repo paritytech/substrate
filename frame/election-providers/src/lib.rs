@@ -139,7 +139,7 @@ pub trait ElectionProvider<AccountId> {
 	///
 	/// The implementation should, if possible, use the accuracy `P` to compute the election result.
 	fn elect<P: PerThing128>(
-		to_elect: usize, // TODO: consider making this u32
+		to_elect: usize,
 		targets: Vec<AccountId>,
 		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	) -> Result<FlatSupportMap<AccountId>, Self::Error>

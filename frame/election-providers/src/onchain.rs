@@ -31,14 +31,6 @@ impl<AccountId: IdentifierT> ElectionProvider<AccountId> for OnChainSequentialPh
 	where
 		ExtendedBalance: From<<P as PerThing>::Inner>,
 	{
-		// TODO: we really don't need to do this conversion all the time. With
-		// https://github.com/paritytech/substrate/pull/6685 merged, we should make variants of
-		// seq_phragmen and others that return a different return type. In fact, I think I should
-		// rebase this branch there and just build there as well.
-		// TODO: Okay even if not the above, then def. make the extension traits for converting
-		// between validator Major and Nominator Major result types, and make the conversions be
-		// lossless and painless to happen.
-
 		let mut stake_map: BTreeMap<AccountId, VoteWeight> = BTreeMap::new();
 		voters.iter().for_each(|(v, s, _)| {
 			stake_map.insert(v.clone(), *s);
@@ -49,6 +41,7 @@ impl<AccountId: IdentifierT> ElectionProvider<AccountId> for OnChainSequentialPh
 
 		sp_npos_elections::seq_phragmen::<_, P>(to_elect, targets, voters, None)
 			.and_then(|e| {
+				// these could use potential simplifications.
 				let ElectionResult {
 					winners,
 					assignments,

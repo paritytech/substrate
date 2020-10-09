@@ -43,9 +43,13 @@ where
 		DesiredTargets::put(desired_targets);
 	}
 
-	/// Finish the singed phase.
+	/// Finish the singed phase. Process the signed submissions from best to worse until a valid one
+	/// is found, rewarding the best oen and slashing the invalid ones along the way.
 	///
 	/// Returns true if we have a good solution in the signed phase.
+	///
+	/// This drains the [`SignedSubmissions`], potentially storing the best valid one in
+	/// [`QueuedSolution`].
 	pub fn finalize_signed_phase() -> bool {
 		let mut all_submission: Vec<SignedSubmission<_, _, _>> = <SignedSubmissions<T>>::take();
 		let mut found_solution = false;
@@ -85,7 +89,6 @@ where
 		// Any unprocessed solution is not pointless to even ponder upon. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
 		all_submission.into_iter().for_each(|not_processed| {
-			dbg!(&not_processed);
 			let SignedSubmission { who, deposit, .. } = not_processed;
 			let _remaining = T::Currency::unreserve(&who, deposit);
 			debug_assert!(_remaining.is_zero());
@@ -96,13 +99,13 @@ where
 
 	/// Find a proper position in the queue for the signed queue, whilst maintaining the order of
 	/// solution quality.
+	///
+	/// The length of the queue will always be kept less than or equal to `T::MaxSignedSubmissions`.
 	pub fn insert_submission(
 		who: &T::AccountId,
 		queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
 		solution: RawSolution<CompactOf<T>>,
 	) -> Option<usize> {
-		// TODO: consider using VecDeQue or sth like that?
-
 		// from the last score, compare and see if the current one is better. If none, then the
 		// awarded index is 0.
 		let outcome = queue
@@ -110,7 +113,6 @@ where
 			.enumerate()
 			.rev()
 			.find_map(|(i, s)| {
-
 				if is_score_better::<Perbill>(
 					solution.score,
 					s.solution.score,
@@ -136,7 +138,9 @@ where
 						reward,
 						solution,
 					};
-					// TODO: write proof that this cannot panic
+					// Proof: `at` must always less than or equal queue.len() for this not to panic.
+					// It is either 0 (in which case `0 <= queue.len()`) or one of the queue indices
+					// + 1. The biggest queue index is `queue.len() - 1`, thus `at <= queue.len()`.
 					queue.insert(at, submission);
 					if queue.len() as u32 > T::MaxSignedSubmissions::get() {
 						queue.remove(0);
@@ -151,12 +155,25 @@ where
 		outcome
 	}
 
+	/// Collect sufficient deposit to store this solution this chain.
+	///
+	/// The deposit is composed of 3 main elements:
+	///
+	/// 1. base deposit, fixed for all submissions.
+	/// 2. a per-byte deposit, for renting the state usage.
+	/// 3. a per-weight deposit, for the potential weight usage in an upcoming on_initialize
 	pub fn deposit_for(solution: &RawSolution<CompactOf<T>>) -> BalanceOf<T> {
 		let encoded_len: BalanceOf<T> = solution.using_encoded(|e| e.len() as u32).into();
-		// TODO
-		T::SignedDepositBase::get() + T::SignedDepositByte::get() * encoded_len
+		let feasibility_weight = T::WeightInfo::feasibility_check();
+
+		let len_deposit = T::SignedDepositByte::get() * encoded_len;
+		let weight_deposit = T::SignedDepositWeight::get() * feasibility_weight.saturated_into();
+
+		T::SignedDepositBase::get() + len_deposit + weight_deposit
 	}
 
+	/// The reward for this solution, if successfully chosen as the best one at the end of the
+	/// signed phase.
 	pub fn reward_for(solution: &RawSolution<CompactOf<T>>) -> BalanceOf<T> {
 		T::SignedRewardBase::get()
 			+ T::SignedRewardFactor::get() * solution.score[0].saturated_into::<BalanceOf<T>>()
@@ -410,6 +427,10 @@ mod tests {
 		ExtBuilder::default()
 			.max_signed_submission(3)
 			.build_and_execute(|| {
+				let scores = || TwoPhase::signed_submissions()
+						.into_iter()
+						.map(|s| s.solution.score[0])
+						.collect::<Vec<_>>();
 				roll_to(5);
 
 				let solution = RawSolution {
@@ -417,78 +438,49 @@ mod tests {
 					..Default::default()
 				};
 				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
-				assert_eq!(
-					TwoPhase::signed_submissions()
-						.into_iter()
-						.map(|s| s.solution.score[0])
-						.collect::<Vec<_>>(),
-					vec![5]
-				);
+				assert_eq!(scores(), vec![5]);
 
 				let solution = RawSolution {
 					score: [8, 0, 0],
 					..Default::default()
 				};
 				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
-				assert_eq!(
-					TwoPhase::signed_submissions()
-						.into_iter()
-						.map(|s| s.solution.score[0])
-						.collect::<Vec<_>>(),
-					vec![5, 8]
-				);
+				assert_eq!(scores(), vec![5, 8]);
 
 				let solution = RawSolution {
 					score: [3, 0, 0],
 					..Default::default()
 				};
 				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
-				assert_eq!(
-					TwoPhase::signed_submissions()
-						.into_iter()
-						.map(|s| s.solution.score[0])
-						.collect::<Vec<_>>(),
-					vec![3, 5, 8]
-				);
+				assert_eq!(scores(), vec![3, 5, 8]);
 
 				let solution = RawSolution {
 					score: [6, 0, 0],
 					..Default::default()
 				};
 				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
-				assert_eq!(
-					TwoPhase::signed_submissions()
-						.into_iter()
-						.map(|s| s.solution.score[0])
-						.collect::<Vec<_>>(),
-					vec![5, 6, 8]
-				);
+				assert_eq!(scores(), vec![5, 6, 8]);
 
 				let solution = RawSolution {
 					score: [6, 0, 0],
 					..Default::default()
 				};
 				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
-				assert_eq!(
-					TwoPhase::signed_submissions()
-						.into_iter()
-						.map(|s| s.solution.score[0])
-						.collect::<Vec<_>>(),
-					vec![6, 6, 8]
-				);
+				assert_eq!(scores(), vec![6, 6, 8]);
 
 				let solution = RawSolution {
 					score: [10, 0, 0],
 					..Default::default()
 				};
 				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
-				assert_eq!(
-					TwoPhase::signed_submissions()
-						.into_iter()
-						.map(|s| s.solution.score[0])
-						.collect::<Vec<_>>(),
-					vec![6, 8, 10]
-				);
+				assert_eq!(scores(), vec![6, 8, 10]);
+
+				let solution = RawSolution {
+					score: [12, 0, 0],
+					..Default::default()
+				};
+				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_eq!(scores(), vec![8, 10, 12]);
 			})
 	}
 
