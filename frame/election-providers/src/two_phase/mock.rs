@@ -1,7 +1,6 @@
 use super::*;
-use frame_support::{parameter_types, traits::OnInitialize, weights::Weight};
+use frame_support::{parameter_types, traits::OnInitialize};
 use sp_core::H256;
-use sp_npos_elections::FlatSupportMap;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -35,14 +34,14 @@ pub fn balances(who: &AccountId) -> (Balance, Balance) {
 /// Spit out a verifiable raw solution.
 ///
 /// This is a good example of what an offchain miner would do.
-pub fn raw_solution() -> RawSolution<AccountId> {
+pub fn raw_solution() -> RawSolution {
 	let voters = TwoPhase::snapshot_voters().unwrap();
 	let targets = TwoPhase::snapshot_targets().unwrap();
 	let desired = TwoPhase::desired_targets() as usize;
 
 	// closures
-	let voter_at = crate::voter_at_fn!(voters, AccountId);
-	let target_at = crate::target_at_fn!(targets, AccountId);
+	let voter_index = crate::voter_index_fn!(voters, AccountId);
+	let target_index = crate::target_index_fn!(targets, AccountId);
 	let stake_of = crate::stake_of_fn!(voters, AccountId);
 
 	use sp_npos_elections::{seq_phragmen, to_without_backing, ElectionResult};
@@ -59,11 +58,16 @@ pub fn raw_solution() -> RawSolution<AccountId> {
 		let support = sp_npos_elections::build_support_map(&winners, &staked).unwrap();
 		sp_npos_elections::evaluate_support(&support)
 	};
-	let compact = CompactAssignments::from_assignment(assignments, &voter_at, &target_at).unwrap();
+	let compact =
+		CompactAssignments::from_assignment(assignments, &voter_index, &target_index).unwrap();
+	let winners = winners
+		.into_iter()
+		.map(|w| target_index(&w).unwrap())
+		.collect::<Vec<_>>();
 
 	RawSolution {
-		compact,
 		winners,
+		compact,
 		score,
 	}
 }
@@ -170,22 +174,7 @@ parameter_types_thread_local! {
 	];
 	static DESIRED_TARGETS: u32 = 2;
 	static SIGNED_DEPOSIT_BASE: Balance = 5;
-	static SIGNED_REWARD_BASE: Balance = 5;
-}
-
-impl crate::ElectionDataProvider<AccountId, u64> for ExtBuilder {
-	fn targets() -> Vec<AccountId> {
-		Targets::get()
-	}
-	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-		Voters::get()
-	}
-	fn desired_targets() -> u32 {
-		DesiredTargets::get()
-	}
-	fn next_election_prediction(now: u64) -> u64 {
-		now + 20 - now % 20
-	}
+	static SIGNED_REWARD_BASE: Balance = 7;
 }
 
 impl crate::two_phase::Trait for Runtime {
@@ -207,21 +196,43 @@ impl crate::two_phase::Trait for Runtime {
 }
 
 pub struct ExtBuilder {
-	signed_phase: u64,
-	unsigned_phase: u64,
+	max_signed_submissions: u32,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
-			signed_phase: SignedPhase::get(),
-			unsigned_phase: UnsignedPhase::get(),
+			max_signed_submissions: MaxSignedSubmissions::get(),
 		}
 	}
 }
 
+impl crate::ElectionDataProvider<AccountId, u64> for ExtBuilder {
+	fn targets() -> Vec<AccountId> {
+		Targets::get()
+	}
+	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
+		Voters::get()
+	}
+	fn desired_targets() -> u32 {
+		DesiredTargets::get()
+	}
+	fn feasibility_check_assignment<P: PerThing>(_: &AccountId, _: &[(AccountId, P)]) -> bool {
+		true
+	}
+	fn next_election_prediction(now: u64) -> u64 {
+		now + 20 - now % 20
+	}
+}
+
 impl ExtBuilder {
-	fn set_constants(&self) {}
+	fn set_constants(&self) {
+		MAX_SIGNED_SUBMISSIONS.with(|v| *v.borrow_mut() = self.max_signed_submissions)
+	}
+	pub(crate) fn max_signed_submission(mut self, count: u32) -> Self {
+		self.max_signed_submissions = count;
+		self
+	}
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.set_constants();
 		let mut storage = frame_system::GenesisConfig::default()
@@ -229,7 +240,12 @@ impl ExtBuilder {
 			.unwrap();
 
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
-			balances: vec![(99, 100)],
+			balances: vec![
+				// bunch of account for submitting stuff only.
+				(99, 100),
+				(999, 100),
+				(9999, 100),
+			],
 		}
 		.assimilate_storage(&mut storage);
 

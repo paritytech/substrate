@@ -125,6 +125,62 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 	}
 }
 
+/// A common interface for all compact solutions.
+///
+/// See [`compact`] for more info.
+pub trait CompactSolution<A: IdentifierT>: Sized {
+	const LIMIT: usize;
+	type Voter;
+	type Target;
+	type VoteWeight: PerThing;
+
+	fn from_assignment<FV, FT>(
+		assignments: Vec<Assignment<A, Self::VoteWeight>>,
+		voter_index: FV,
+		target_index: FT,
+	) -> Result<Self, Error>
+	where
+		for<'r> FV: Fn(&'r A) -> Option<Self::Voter>,
+		for<'r> FT: Fn(&'r A) -> Option<Self::Target>;
+
+	fn into_assignment(
+		self,
+		voter_at: impl Fn(Self::Voter) -> Option<A>,
+		target_at: impl Fn(Self::Target) -> Option<A>,
+	) -> Result<Vec<Assignment<A, Self::VoteWeight>>, Error>;
+
+	/// Get the length of all the assignments that this type is encoding. This is basically
+	/// the same as the number of assignments, or the number of voters in total.
+	fn len(&self) -> usize;
+
+	/// Get the total count of edges.
+	///
+	/// This is effectively in the range of {[`Self::len`], [`Self::len`] * [`Self::LIMIT`]}.
+	fn edge_count(&self) -> usize;
+
+	/// Get the number of unique targets in the whole struct.
+	///
+	/// Once presented with a list of winners, this set and the set of winners must be
+	/// equal.
+	///
+	/// The resulting indices are sorted.
+	fn unique_targets(&self) -> Vec<Self::Target>;
+
+	/// Get the average edge count.
+	fn average_edge_count(&self) -> usize {
+		self.edge_count().checked_div(self.len()).unwrap_or(0)
+	}
+
+	/// Remove a certain voter.
+	///
+	/// This will only search until the first instance of `to_remove`, and return true. If
+	/// no instance is found (no-op), then it returns false.
+	///
+	/// In other words, if this return true, exactly one element must have been removed from
+	/// `self.len()`.
+	fn remove_voter(&mut self, to_remove: Self::Voter) -> bool;
+}
+
 // re-export the compact solution type.
 pub use sp_npos_elections_compact::generate_solution_type;
 
@@ -492,11 +548,6 @@ pub struct Support<AccountId> {
 
 /// A linkage from a candidate and its [`Support`].
 pub type SupportMap<A> = BTreeMap<A, Support<A>>;
-
-/// A flat variant of [`SupportMap`].
-///
-/// The main advantage of this is that it is encodable.
-pub type FlatSupportMap<A> = Vec<(A, Support<A>)>;
 
 /// Build the support map from the given election result. It maps a flat structure like
 ///

@@ -1,15 +1,33 @@
-use crate::{ElectionProvider, Error};
+use crate::{ElectionProvider, FlatSupportMap, FlattenSupportMap};
 use sp_arithmetic::PerThing;
-use sp_npos_elections::{ElectionResult, ExtendedBalance, FlatSupportMap, IdentifierT, VoteWeight};
+use sp_npos_elections::{ElectionResult, ExtendedBalance, IdentifierT, VoteWeight};
+use sp_runtime::RuntimeDebug;
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+
+/// Errors of the on-chain election.
+#[derive(RuntimeDebug, Eq, PartialEq)]
+pub enum Error {
+	/// An internal error in the NPoS elections crate.
+	NposElections(sp_npos_elections::Error),
+}
+
+impl From<sp_npos_elections::Error> for Error {
+	fn from(e: sp_npos_elections::Error) -> Self {
+		Error::NposElections(e)
+	}
+}
 
 pub struct OnChainSequentialPhragmen;
 impl<AccountId: IdentifierT> ElectionProvider<AccountId> for OnChainSequentialPhragmen {
+	type Error = Error;
+
+	const NEEDS_ELECT_DATA: bool = true;
+
 	fn elect<P: sp_arithmetic::PerThing>(
 		to_elect: usize,
 		targets: Vec<AccountId>,
 		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	) -> Result<FlatSupportMap<AccountId>, Error>
+	) -> Result<FlatSupportMap<AccountId>, Self::Error>
 	where
 		ExtendedBalance: From<<P as PerThing>::Inner>,
 		P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
@@ -42,7 +60,7 @@ impl<AccountId: IdentifierT> ElectionProvider<AccountId> for OnChainSequentialPh
 				let winners = sp_npos_elections::to_without_backing(winners);
 
 				sp_npos_elections::build_support_map(&winners, &staked)
-					.map(|s| s.into_iter().map(|(k, v)| (k, v)).collect::<Vec<_>>())
+					.map(|s| s.flatten())
 			})
 			.map_err(From::from)
 	}
