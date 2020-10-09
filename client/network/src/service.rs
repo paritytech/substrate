@@ -994,6 +994,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
+	//
 	// NOTE: even though this function is currently sync, it's marked as async for
 	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
 	pub async fn add_to_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
@@ -1016,6 +1017,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
+	//
 	// NOTE: even though this function is currently sync, it's marked as async for
 	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
 	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
