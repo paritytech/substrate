@@ -1,26 +1,95 @@
 #![feature(prelude_import)]
+//! Reusable Election Providers.
+//!
+//! The core functionality of this crate is around [`ElectionProvider`]. An election provider is a
+//! struct, module, or anything else that implements [`ElectionProvider`]. Such types can then be
+//! passed around to other crates and pallets that need election functionality.
+//!
+//! Two main election providers are implemented in this crate.
+//!
+//! 1.  [`onchain`]: A `struct` that perform the election onchain (i.e. in the fly). This type is
+//!     likely to be expensive for most chains and damage the block time. Only use when you are sure
+//!     that the inputs are bounded and small enough.
+//! 2. [`two_phase`]: An individual `pallet` that performs the election in two phases, signed and
+//!    unsigned. Needless to say, the pallet needs to be included in the final runtime.
 #[prelude_import]
 use std::prelude::v1::*;
 #[macro_use]
 extern crate std;
-use sp_std::prelude::*;
+use sp_std::{fmt::Debug, prelude::*};
+/// The onchain module.
 pub mod onchain {
-	use crate::{ElectionProvider, Error};
+	use crate::{ElectionProvider, FlatSupportMap, FlattenSupportMap};
 	use sp_arithmetic::PerThing;
 	use sp_npos_elections::{
-		ElectionResult, ExtendedBalance, FlatSupportMap, FlattenSupportMap, IdentifierT, VoteWeight,
+		ElectionResult, ExtendedBalance, IdentifierT, PerThing128, VoteWeight,
 	};
+	use sp_runtime::RuntimeDebug;
 	use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+	/// Errors of the on-chain election.
+	pub enum Error {
+		/// An internal error in the NPoS elections crate.
+		NposElections(sp_npos_elections::Error),
+	}
+	impl core::fmt::Debug for Error {
+		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+			match self {
+				Self::NposElections(ref a0) => {
+					fmt.debug_tuple("Error::NposElections").field(a0).finish()
+				}
+				_ => Ok(()),
+			}
+		}
+	}
+	impl ::core::marker::StructuralEq for Error {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::cmp::Eq for Error {
+		#[inline]
+		#[doc(hidden)]
+		fn assert_receiver_is_total_eq(&self) -> () {
+			{
+				let _: ::core::cmp::AssertParamIsEq<sp_npos_elections::Error>;
+			}
+		}
+	}
+	impl ::core::marker::StructuralPartialEq for Error {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::cmp::PartialEq for Error {
+		#[inline]
+		fn eq(&self, other: &Error) -> bool {
+			match (&*self, &*other) {
+				(&Error::NposElections(ref __self_0), &Error::NposElections(ref __arg_1_0)) => {
+					(*__self_0) == (*__arg_1_0)
+				}
+			}
+		}
+		#[inline]
+		fn ne(&self, other: &Error) -> bool {
+			match (&*self, &*other) {
+				(&Error::NposElections(ref __self_0), &Error::NposElections(ref __arg_1_0)) => {
+					(*__self_0) != (*__arg_1_0)
+				}
+			}
+		}
+	}
+	impl From<sp_npos_elections::Error> for Error {
+		fn from(e: sp_npos_elections::Error) -> Self {
+			Error::NposElections(e)
+		}
+	}
 	pub struct OnChainSequentialPhragmen;
 	impl<AccountId: IdentifierT> ElectionProvider<AccountId> for OnChainSequentialPhragmen {
-		fn elect<P: sp_arithmetic::PerThing>(
+		type Error = Error;
+		const NEEDS_ELECT_DATA: bool = true;
+		fn elect<P: PerThing128>(
 			to_elect: usize,
 			targets: Vec<AccountId>,
 			voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-		) -> Result<FlatSupportMap<AccountId>, Error>
+		) -> Result<FlatSupportMap<AccountId>, Self::Error>
 		where
 			ExtendedBalance: From<<P as PerThing>::Inner>,
-			P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 		{
 			let mut stake_map: BTreeMap<AccountId, VoteWeight> = BTreeMap::new();
 			voters.iter().for_each(|(v, s, _)| {
@@ -49,8 +118,100 @@ pub mod onchain {
 		}
 	}
 }
+/// The two-phase module.
 pub mod two_phase {
-	use crate::{onchain::OnChainSequentialPhragmen, ElectionDataProvider, ElectionProvider};
+	//! # Two phase election provider pallet.
+	//!
+	//! As the name suggests, this election provider has two distinct phases (see [`Phase`]), signed and
+	//! unsigned.
+	//!
+	//! ## Phases
+	//!
+	//! The timeline of pallet is as follows. At each block,
+	//! [`ElectionDataProvider::next_election_prediction`] is used to estimate the time remaining to the
+	//! next call to `elect`. Based on this, a phase is chosen. The timeline is as follows.
+	//!
+	//! ```ignore
+	//!                                                                    elect()
+	//!                 +   <--T::SignedPhase-->  +  <--T::UnsignedPhase-->   +
+	//!   +-------------------------------------------------------------------+
+	//!    Phase::Off   +       Phase::Signed     +      Phase::Unsigned      +
+	//!
+	//! Note that the unsigned phase starts `T::UnsignedPhase` blocks before the
+	//! `next_election_prediction`, but only ends when a call to `ElectionProvider::elect` happens.
+	//!
+	//! ```
+	//! ### Signed Phase
+	//!
+	//!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
+	//! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
+	//! on-chain for a number of blocks. A maximum of [`Trait::MaxSignedSubmissions`] solutions are
+	//! stored. The queue is always sorted based on score (worse -> best).
+	//!
+	//! Upon arrival of a new solution:
+	//!
+	//! 1. If the queue is not full, it is stored.
+	//! 2. If the queue is full but the submitted solution is better than one of the queued ones, the
+	//!    worse solution is discarded (TODO: what to do with the bond?) and the new solution is stored
+	//!    in the correct index.
+	//! 3. If the queue is full and the solution is not an improvement compared to any of the queued
+	//!    ones, it is instantly rejected and no additional bond is reserved.
+	//!
+	//! A signed solution cannot be reversed, taken back, updated, or retracted. In other words, the
+	//! origin can not bail out in any way.
+	//!
+	//! Upon the end of the signed phase, the solutions are examined from worse to best (i.e. `pop()`ed
+	//! until drained). Each solution undergoes an expensive [`Module::feasibility_check`], which ensure
+	//! the score claimed by this score was correct, among other checks. At each step, if the current
+	//! best solution is passes the feasibility check, it is considered to be the best one. The sender
+	//! of the origin is rewarded, and the rest of the queued solutions get their deposit back, without
+	//! being checked.
+	//!
+	//! The following example covers all of the cases at the end of the signed phase:
+	//!
+	//! ```ignore
+	//! Queue
+	//! +-------------------------------+
+	//! |Solution(score=20, valid=false)| +-->  Slashed
+	//! +-------------------------------+
+	//! |Solution(score=15, valid=true )| +-->  Rewarded
+	//! +-------------------------------+
+	//! |Solution(score=10, valid=true )| +-->  Discarded
+	//! +-------------------------------+
+	//! |Solution(score=05, valid=false)| +-->  Discarded
+	//! +-------------------------------+
+	//! |             None              |
+	//! +-------------------------------+
+	//! ```
+	//!
+	//! Note that both of the bottom solutions end up being discarded and get their deposit back,
+	//! despite one of them being invalid.
+	//!
+	//! ## Unsigned Phase
+	//!
+	//! If signed phase ends with a good solution, then the unsigned phase will be `active`
+	//! ([`Phase::Unsigned(true)`]), else the unsigned phase will be `passive`.
+	//!
+	//! TODO
+	//!
+	//! ### Fallback
+	//!
+	//! If we reach the end of both phases (i.e. call to `ElectionProvider::elect` happens) and no good
+	//! solution is queued, then we fallback to an on-chain election. The on-chain election is slow, and
+	//! contains to balancing or reduction post-processing.
+	//!
+	//! ## Correct Submission
+	//!
+	//! TODO
+	//!
+	//! ## Accuracy
+	//!
+	//! TODO
+	//!
+	use crate::{
+		onchain::OnChainSequentialPhragmen, ElectionDataProvider, ElectionProvider, FlatSupportMap,
+		FlattenSupportMap,
+	};
 	use codec::{Decode, Encode, HasCompact};
 	use frame_support::{
 		decl_error, decl_event, decl_module, decl_storage,
@@ -61,17 +222,26 @@ pub mod two_phase {
 	};
 	use frame_system::{ensure_none, ensure_signed};
 	use sp_npos_elections::{
-		evaluate_support, generate_solution_type, Assignment, ElectionScore, ExtendedBalance,
-		FlatSupportMap, FlattenSupportMap, VoteWeight,
+		assignment_ratio_to_staked_normalized, build_support_map, evaluate_support, Assignment,
+		CompactSolution, ElectionScore, ExtendedBalance, PerThing128, VoteWeight,
 	};
-	use sp_runtime::{traits::Zero, PerThing, PerU16, Perbill, RuntimeDebug};
-	use sp_std::{mem::size_of, prelude::*};
+	use sp_runtime::{traits::Zero, InnerOf, PerThing, Perbill, RuntimeDebug};
+	use sp_std::prelude::*;
+	#[macro_use]
+	pub(crate) mod macros {
+		//! Some helper macros for this crate.
+	}
 	pub mod signed {
+		//! The signed phase implementation.
 		use crate::two_phase::*;
 		use codec::Encode;
 		use sp_arithmetic::traits::SaturatedConversion;
 		use sp_npos_elections::is_score_better;
-		impl<T: Trait> Module<T> {
+		use sp_runtime::Perbill;
+		impl<T: Trait> Module<T>
+		where
+			ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+		{
 			/// Start the signed phase.
 			///
 			/// Upon calling this, auxillary data for election is stored and signed solutions will be
@@ -86,11 +256,15 @@ pub mod two_phase {
 				<SnapshotVoters<T>>::put(voters);
 				DesiredTargets::put(desired_targets);
 			}
-			/// Finish the singed phase.
+			/// Finish the singed phase. Process the signed submissions from best to worse until a valid one
+			/// is found, rewarding the best oen and slashing the invalid ones along the way.
 			///
 			/// Returns true if we have a good solution in the signed phase.
+			///
+			/// This drains the [`SignedSubmissions`], potentially storing the best valid one in
+			/// [`QueuedSolution`].
 			pub fn finalize_signed_phase() -> bool {
-				let mut all_submission: Vec<SignedSubmission<_, _>> =
+				let mut all_submission: Vec<SignedSubmission<_, _, _>> =
 					<SignedSubmissions<T>>::take();
 				let mut found_solution = false;
 				while let Some(best) = all_submission.pop() {
@@ -135,83 +309,6 @@ pub mod two_phase {
 					}
 				}
 				all_submission.into_iter().for_each(|not_processed| {
-					match &not_processed {
-						tmp => {
-							{
-								::std::io::_eprint(::core::fmt::Arguments::new_v1_formatted(
-									&["[", ":", "] ", " = ", "\n"],
-									&match (
-										&"frame/election-providers/src/two_phase/signed.rs",
-										&65u32,
-										&"&not_processed",
-										&&tmp,
-									) {
-										(arg0, arg1, arg2, arg3) => [
-											::core::fmt::ArgumentV1::new(
-												arg0,
-												::core::fmt::Display::fmt,
-											),
-											::core::fmt::ArgumentV1::new(
-												arg1,
-												::core::fmt::Display::fmt,
-											),
-											::core::fmt::ArgumentV1::new(
-												arg2,
-												::core::fmt::Display::fmt,
-											),
-											::core::fmt::ArgumentV1::new(
-												arg3,
-												::core::fmt::Debug::fmt,
-											),
-										],
-									},
-									&[
-										::core::fmt::rt::v1::Argument {
-											position: 0usize,
-											format: ::core::fmt::rt::v1::FormatSpec {
-												fill: ' ',
-												align: ::core::fmt::rt::v1::Alignment::Unknown,
-												flags: 0u32,
-												precision: ::core::fmt::rt::v1::Count::Implied,
-												width: ::core::fmt::rt::v1::Count::Implied,
-											},
-										},
-										::core::fmt::rt::v1::Argument {
-											position: 1usize,
-											format: ::core::fmt::rt::v1::FormatSpec {
-												fill: ' ',
-												align: ::core::fmt::rt::v1::Alignment::Unknown,
-												flags: 0u32,
-												precision: ::core::fmt::rt::v1::Count::Implied,
-												width: ::core::fmt::rt::v1::Count::Implied,
-											},
-										},
-										::core::fmt::rt::v1::Argument {
-											position: 2usize,
-											format: ::core::fmt::rt::v1::FormatSpec {
-												fill: ' ',
-												align: ::core::fmt::rt::v1::Alignment::Unknown,
-												flags: 0u32,
-												precision: ::core::fmt::rt::v1::Count::Implied,
-												width: ::core::fmt::rt::v1::Count::Implied,
-											},
-										},
-										::core::fmt::rt::v1::Argument {
-											position: 3usize,
-											format: ::core::fmt::rt::v1::FormatSpec {
-												fill: ' ',
-												align: ::core::fmt::rt::v1::Alignment::Unknown,
-												flags: 4u32,
-												precision: ::core::fmt::rt::v1::Count::Implied,
-												width: ::core::fmt::rt::v1::Count::Implied,
-											},
-										},
-									],
-								));
-							};
-							tmp
-						}
-					};
 					let SignedSubmission { who, deposit, .. } = not_processed;
 					let _remaining = T::Currency::unreserve(&who, deposit);
 					if true {
@@ -226,17 +323,19 @@ pub mod two_phase {
 			}
 			/// Find a proper position in the queue for the signed queue, whilst maintaining the order of
 			/// solution quality.
+			///
+			/// The length of the queue will always be kept less than or equal to `T::MaxSignedSubmissions`.
 			pub fn insert_submission(
 				who: &T::AccountId,
-				queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>>>,
-				solution: RawSolution,
+				queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
+				solution: RawSolution<CompactOf<T>>,
 			) -> Option<usize> {
 				let outcome = queue
 					.iter()
 					.enumerate()
 					.rev()
 					.find_map(|(i, s)| {
-						if is_score_better(
+						if is_score_better::<Perbill>(
 							solution.score,
 							s.solution.score,
 							T::SolutionImprovementThreshold::get(),
@@ -277,18 +376,51 @@ pub mod two_phase {
 				};
 				outcome
 			}
-			pub fn deposit_for(solution: &RawSolution) -> BalanceOf<T> {
+			/// Collect sufficient deposit to store this solution this chain.
+			///
+			/// The deposit is composed of 3 main elements:
+			///
+			/// 1. base deposit, fixed for all submissions.
+			/// 2. a per-byte deposit, for renting the state usage.
+			/// 3. a per-weight deposit, for the potential weight usage in an upcoming on_initialize
+			pub fn deposit_for(solution: &RawSolution<CompactOf<T>>) -> BalanceOf<T> {
 				let encoded_len: BalanceOf<T> = solution.using_encoded(|e| e.len() as u32).into();
-				T::SignedDepositBase::get() + T::SignedDepositByte::get() * encoded_len
+				let feasibility_weight = T::WeightInfo::feasibility_check();
+				let len_deposit = T::SignedDepositByte::get() * encoded_len;
+				let weight_deposit =
+					T::SignedDepositWeight::get() * feasibility_weight.saturated_into();
+				T::SignedDepositBase::get() + len_deposit + weight_deposit
 			}
-			pub fn reward_for(solution: &RawSolution) -> BalanceOf<T> {
+			/// The reward for this solution, if successfully chosen as the best one at the end of the
+			/// signed phase.
+			pub fn reward_for(solution: &RawSolution<CompactOf<T>>) -> BalanceOf<T> {
 				T::SignedRewardBase::get()
 					+ T::SignedRewardFactor::get()
 						* solution.score[0].saturated_into::<BalanceOf<T>>()
 			}
 		}
 	}
-	pub mod unsigned {}
+	pub mod unsigned {
+		//! The unsigned phase implementation.
+		use crate::two_phase::*;
+		use codec::Encode;
+		use sp_arithmetic::traits::SaturatedConversion;
+		use sp_npos_elections::is_score_better;
+		use sp_runtime::Perbill;
+		impl<T: Trait> Module<T> where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> {}
+	}
+	/// The compact solution type used by this crate. This is provided from the [`ElectionDataProvider`]
+	/// implementer.
+	pub type CompactOf<T> = <<T as Trait>::ElectionDataProvider as ElectionDataProvider<
+		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Trait>::BlockNumber,
+	>>::CompactSolution;
+	/// The voter index. Derived from [`CompactOf`].
+	pub type CompactVoterIndexOf<T> = <CompactOf<T> as CompactSolution>::Voter;
+	/// The target index. Derived from [`CompactOf`].
+	pub type CompactTargetIndexOf<T> = <CompactOf<T> as CompactSolution>::Target;
+	/// The accuracy of the election. Derived from [`CompactOf`].
+	pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::VoteWeight;
 	type BalanceOf<T> =
 		<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 	type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<
@@ -297,2770 +429,14 @@ pub mod two_phase {
 	type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<
 		<T as frame_system::Trait>::AccountId,
 	>>::NegativeImbalance;
-	/// Accuracy used for on-chain election.
-	pub type ChainAccuracy = Perbill;
-	/// Accuracy used for off-chain election. This better be small.
-	pub type OffchainAccuracy = PerU16;
-	/// Data type used to index nominators in the compact type.
-	pub type VoterIndex = u32;
-	/// Data type used to index validators in the compact type.
-	pub type TargetIndex = u16;
-	#[allow(unknown_lints, eq_op)]
-	const _: [(); 0 - !{
-		const ASSERT: bool = size_of::<TargetIndex>() <= size_of::<usize>();
-		ASSERT
-	} as usize] = [];
-	#[allow(unknown_lints, eq_op)]
-	const _: [(); 0 - !{
-		const ASSERT: bool = size_of::<VoterIndex>() <= size_of::<usize>();
-		ASSERT
-	} as usize] = [];
-	#[allow(unknown_lints, eq_op)]
-	const _: [(); 0 - !{
-		const ASSERT: bool = size_of::<TargetIndex>() <= size_of::<u32>();
-		ASSERT
-	} as usize] = [];
-	#[allow(unknown_lints, eq_op)]
-	const _: [(); 0 - !{
-		const ASSERT: bool = size_of::<VoterIndex>() <= size_of::<u32>();
-		ASSERT
-	} as usize] = [];
-	extern crate sp_npos_elections as _npos;
-	/// A struct to encode a election assignment in a compact way.
-	impl _npos::codec::Encode for CompactAssignments {
-		fn encode(&self) -> Vec<u8> {
-			let mut r = ::alloc::vec::Vec::new();
-			let votes1 = self
-				.votes1
-				.iter()
-				.map(|(v, t)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						_npos::codec::Compact(t.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes1.encode_to(&mut r);
-			let votes2 = self
-				.votes2
-				.iter()
-				.map(|(v, (t1, w), t2)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						(
-							_npos::codec::Compact(t1.clone()),
-							_npos::codec::Compact(w.clone()),
-						),
-						_npos::codec::Compact(t2.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes2.encode_to(&mut r);
-			let votes3 = self
-				.votes3
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes3.encode_to(&mut r);
-			let votes4 = self
-				.votes4
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes4.encode_to(&mut r);
-			let votes5 = self
-				.votes5
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[3usize].0.clone()),
-								_npos::codec::Compact(inner[3usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes5.encode_to(&mut r);
-			let votes6 = self
-				.votes6
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[3usize].0.clone()),
-								_npos::codec::Compact(inner[3usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[4usize].0.clone()),
-								_npos::codec::Compact(inner[4usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes6.encode_to(&mut r);
-			let votes7 = self
-				.votes7
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[3usize].0.clone()),
-								_npos::codec::Compact(inner[3usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[4usize].0.clone()),
-								_npos::codec::Compact(inner[4usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[5usize].0.clone()),
-								_npos::codec::Compact(inner[5usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes7.encode_to(&mut r);
-			let votes8 = self
-				.votes8
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[3usize].0.clone()),
-								_npos::codec::Compact(inner[3usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[4usize].0.clone()),
-								_npos::codec::Compact(inner[4usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[5usize].0.clone()),
-								_npos::codec::Compact(inner[5usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[6usize].0.clone()),
-								_npos::codec::Compact(inner[6usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes8.encode_to(&mut r);
-			let votes9 = self
-				.votes9
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[3usize].0.clone()),
-								_npos::codec::Compact(inner[3usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[4usize].0.clone()),
-								_npos::codec::Compact(inner[4usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[5usize].0.clone()),
-								_npos::codec::Compact(inner[5usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[6usize].0.clone()),
-								_npos::codec::Compact(inner[6usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[7usize].0.clone()),
-								_npos::codec::Compact(inner[7usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes9.encode_to(&mut r);
-			let votes10 = self
-				.votes10
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[3usize].0.clone()),
-								_npos::codec::Compact(inner[3usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[4usize].0.clone()),
-								_npos::codec::Compact(inner[4usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[5usize].0.clone()),
-								_npos::codec::Compact(inner[5usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[6usize].0.clone()),
-								_npos::codec::Compact(inner[6usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[7usize].0.clone()),
-								_npos::codec::Compact(inner[7usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[8usize].0.clone()),
-								_npos::codec::Compact(inner[8usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes10.encode_to(&mut r);
-			let votes11 = self
-				.votes11
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[3usize].0.clone()),
-								_npos::codec::Compact(inner[3usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[4usize].0.clone()),
-								_npos::codec::Compact(inner[4usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[5usize].0.clone()),
-								_npos::codec::Compact(inner[5usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[6usize].0.clone()),
-								_npos::codec::Compact(inner[6usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[7usize].0.clone()),
-								_npos::codec::Compact(inner[7usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[8usize].0.clone()),
-								_npos::codec::Compact(inner[8usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[9usize].0.clone()),
-								_npos::codec::Compact(inner[9usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes11.encode_to(&mut r);
-			let votes12 = self
-				.votes12
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[3usize].0.clone()),
-								_npos::codec::Compact(inner[3usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[4usize].0.clone()),
-								_npos::codec::Compact(inner[4usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[5usize].0.clone()),
-								_npos::codec::Compact(inner[5usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[6usize].0.clone()),
-								_npos::codec::Compact(inner[6usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[7usize].0.clone()),
-								_npos::codec::Compact(inner[7usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[8usize].0.clone()),
-								_npos::codec::Compact(inner[8usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[9usize].0.clone()),
-								_npos::codec::Compact(inner[9usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[10usize].0.clone()),
-								_npos::codec::Compact(inner[10usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes12.encode_to(&mut r);
-			let votes13 = self
-				.votes13
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[3usize].0.clone()),
-								_npos::codec::Compact(inner[3usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[4usize].0.clone()),
-								_npos::codec::Compact(inner[4usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[5usize].0.clone()),
-								_npos::codec::Compact(inner[5usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[6usize].0.clone()),
-								_npos::codec::Compact(inner[6usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[7usize].0.clone()),
-								_npos::codec::Compact(inner[7usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[8usize].0.clone()),
-								_npos::codec::Compact(inner[8usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[9usize].0.clone()),
-								_npos::codec::Compact(inner[9usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[10usize].0.clone()),
-								_npos::codec::Compact(inner[10usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[11usize].0.clone()),
-								_npos::codec::Compact(inner[11usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes13.encode_to(&mut r);
-			let votes14 = self
-				.votes14
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[3usize].0.clone()),
-								_npos::codec::Compact(inner[3usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[4usize].0.clone()),
-								_npos::codec::Compact(inner[4usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[5usize].0.clone()),
-								_npos::codec::Compact(inner[5usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[6usize].0.clone()),
-								_npos::codec::Compact(inner[6usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[7usize].0.clone()),
-								_npos::codec::Compact(inner[7usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[8usize].0.clone()),
-								_npos::codec::Compact(inner[8usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[9usize].0.clone()),
-								_npos::codec::Compact(inner[9usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[10usize].0.clone()),
-								_npos::codec::Compact(inner[10usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[11usize].0.clone()),
-								_npos::codec::Compact(inner[11usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[12usize].0.clone()),
-								_npos::codec::Compact(inner[12usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes14.encode_to(&mut r);
-			let votes15 = self
-				.votes15
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[3usize].0.clone()),
-								_npos::codec::Compact(inner[3usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[4usize].0.clone()),
-								_npos::codec::Compact(inner[4usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[5usize].0.clone()),
-								_npos::codec::Compact(inner[5usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[6usize].0.clone()),
-								_npos::codec::Compact(inner[6usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[7usize].0.clone()),
-								_npos::codec::Compact(inner[7usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[8usize].0.clone()),
-								_npos::codec::Compact(inner[8usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[9usize].0.clone()),
-								_npos::codec::Compact(inner[9usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[10usize].0.clone()),
-								_npos::codec::Compact(inner[10usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[11usize].0.clone()),
-								_npos::codec::Compact(inner[11usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[12usize].0.clone()),
-								_npos::codec::Compact(inner[12usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[13usize].0.clone()),
-								_npos::codec::Compact(inner[13usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes15.encode_to(&mut r);
-			let votes16 = self
-				.votes16
-				.iter()
-				.map(|(v, inner, t_last)| {
-					(
-						_npos::codec::Compact(v.clone()),
-						[
-							(
-								_npos::codec::Compact(inner[0usize].0.clone()),
-								_npos::codec::Compact(inner[0usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[1usize].0.clone()),
-								_npos::codec::Compact(inner[1usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[2usize].0.clone()),
-								_npos::codec::Compact(inner[2usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[3usize].0.clone()),
-								_npos::codec::Compact(inner[3usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[4usize].0.clone()),
-								_npos::codec::Compact(inner[4usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[5usize].0.clone()),
-								_npos::codec::Compact(inner[5usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[6usize].0.clone()),
-								_npos::codec::Compact(inner[6usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[7usize].0.clone()),
-								_npos::codec::Compact(inner[7usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[8usize].0.clone()),
-								_npos::codec::Compact(inner[8usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[9usize].0.clone()),
-								_npos::codec::Compact(inner[9usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[10usize].0.clone()),
-								_npos::codec::Compact(inner[10usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[11usize].0.clone()),
-								_npos::codec::Compact(inner[11usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[12usize].0.clone()),
-								_npos::codec::Compact(inner[12usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[13usize].0.clone()),
-								_npos::codec::Compact(inner[13usize].1.clone()),
-							),
-							(
-								_npos::codec::Compact(inner[14usize].0.clone()),
-								_npos::codec::Compact(inner[14usize].1.clone()),
-							),
-						],
-						_npos::codec::Compact(t_last.clone()),
-					)
-				})
-				.collect::<Vec<_>>();
-			votes16.encode_to(&mut r);
-			r
-		}
-	}
-	impl _npos::codec::Decode for CompactAssignments {
-		fn decode<I: _npos::codec::Input>(value: &mut I) -> Result<Self, _npos::codec::Error> {
-			let votes1 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes1 = votes1
-				.into_iter()
-				.map(|(v, t)| (v.0, t.0))
-				.collect::<Vec<_>>();
-			let votes2 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				),
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes2 = votes2
-				.into_iter()
-				.map(|(v, (t1, w), t2)| (v.0, (t1.0, w.0), t2.0))
-				.collect::<Vec<_>>();
-			let votes3 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 3usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes3 = votes3
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes4 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 4usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes4 = votes4
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes5 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 5usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes5 = votes5
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-							((inner[3usize].0).0, (inner[3usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes6 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 6usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes6 = votes6
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-							((inner[3usize].0).0, (inner[3usize].1).0),
-							((inner[4usize].0).0, (inner[4usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes7 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 7usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes7 = votes7
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-							((inner[3usize].0).0, (inner[3usize].1).0),
-							((inner[4usize].0).0, (inner[4usize].1).0),
-							((inner[5usize].0).0, (inner[5usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes8 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 8usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes8 = votes8
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-							((inner[3usize].0).0, (inner[3usize].1).0),
-							((inner[4usize].0).0, (inner[4usize].1).0),
-							((inner[5usize].0).0, (inner[5usize].1).0),
-							((inner[6usize].0).0, (inner[6usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes9 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 9usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes9 = votes9
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-							((inner[3usize].0).0, (inner[3usize].1).0),
-							((inner[4usize].0).0, (inner[4usize].1).0),
-							((inner[5usize].0).0, (inner[5usize].1).0),
-							((inner[6usize].0).0, (inner[6usize].1).0),
-							((inner[7usize].0).0, (inner[7usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes10 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 10usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes10 = votes10
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-							((inner[3usize].0).0, (inner[3usize].1).0),
-							((inner[4usize].0).0, (inner[4usize].1).0),
-							((inner[5usize].0).0, (inner[5usize].1).0),
-							((inner[6usize].0).0, (inner[6usize].1).0),
-							((inner[7usize].0).0, (inner[7usize].1).0),
-							((inner[8usize].0).0, (inner[8usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes11 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 11usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes11 = votes11
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-							((inner[3usize].0).0, (inner[3usize].1).0),
-							((inner[4usize].0).0, (inner[4usize].1).0),
-							((inner[5usize].0).0, (inner[5usize].1).0),
-							((inner[6usize].0).0, (inner[6usize].1).0),
-							((inner[7usize].0).0, (inner[7usize].1).0),
-							((inner[8usize].0).0, (inner[8usize].1).0),
-							((inner[9usize].0).0, (inner[9usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes12 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 12usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes12 = votes12
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-							((inner[3usize].0).0, (inner[3usize].1).0),
-							((inner[4usize].0).0, (inner[4usize].1).0),
-							((inner[5usize].0).0, (inner[5usize].1).0),
-							((inner[6usize].0).0, (inner[6usize].1).0),
-							((inner[7usize].0).0, (inner[7usize].1).0),
-							((inner[8usize].0).0, (inner[8usize].1).0),
-							((inner[9usize].0).0, (inner[9usize].1).0),
-							((inner[10usize].0).0, (inner[10usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes13 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 13usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes13 = votes13
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-							((inner[3usize].0).0, (inner[3usize].1).0),
-							((inner[4usize].0).0, (inner[4usize].1).0),
-							((inner[5usize].0).0, (inner[5usize].1).0),
-							((inner[6usize].0).0, (inner[6usize].1).0),
-							((inner[7usize].0).0, (inner[7usize].1).0),
-							((inner[8usize].0).0, (inner[8usize].1).0),
-							((inner[9usize].0).0, (inner[9usize].1).0),
-							((inner[10usize].0).0, (inner[10usize].1).0),
-							((inner[11usize].0).0, (inner[11usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes14 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 14usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes14 = votes14
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-							((inner[3usize].0).0, (inner[3usize].1).0),
-							((inner[4usize].0).0, (inner[4usize].1).0),
-							((inner[5usize].0).0, (inner[5usize].1).0),
-							((inner[6usize].0).0, (inner[6usize].1).0),
-							((inner[7usize].0).0, (inner[7usize].1).0),
-							((inner[8usize].0).0, (inner[8usize].1).0),
-							((inner[9usize].0).0, (inner[9usize].1).0),
-							((inner[10usize].0).0, (inner[10usize].1).0),
-							((inner[11usize].0).0, (inner[11usize].1).0),
-							((inner[12usize].0).0, (inner[12usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes15 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 15usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes15 = votes15
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-							((inner[3usize].0).0, (inner[3usize].1).0),
-							((inner[4usize].0).0, (inner[4usize].1).0),
-							((inner[5usize].0).0, (inner[5usize].1).0),
-							((inner[6usize].0).0, (inner[6usize].1).0),
-							((inner[7usize].0).0, (inner[7usize].1).0),
-							((inner[8usize].0).0, (inner[8usize].1).0),
-							((inner[9usize].0).0, (inner[9usize].1).0),
-							((inner[10usize].0).0, (inner[10usize].1).0),
-							((inner[11usize].0).0, (inner[11usize].1).0),
-							((inner[12usize].0).0, (inner[12usize].1).0),
-							((inner[13usize].0).0, (inner[13usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			let votes16 = <Vec<(
-				_npos::codec::Compact<VoterIndex>,
-				[(
-					_npos::codec::Compact<TargetIndex>,
-					_npos::codec::Compact<OffchainAccuracy>,
-				); 16usize - 1],
-				_npos::codec::Compact<TargetIndex>,
-			)> as _npos::codec::Decode>::decode(value)?;
-			let votes16 = votes16
-				.into_iter()
-				.map(|(v, inner, t_last)| {
-					(
-						v.0,
-						[
-							((inner[0usize].0).0, (inner[0usize].1).0),
-							((inner[1usize].0).0, (inner[1usize].1).0),
-							((inner[2usize].0).0, (inner[2usize].1).0),
-							((inner[3usize].0).0, (inner[3usize].1).0),
-							((inner[4usize].0).0, (inner[4usize].1).0),
-							((inner[5usize].0).0, (inner[5usize].1).0),
-							((inner[6usize].0).0, (inner[6usize].1).0),
-							((inner[7usize].0).0, (inner[7usize].1).0),
-							((inner[8usize].0).0, (inner[8usize].1).0),
-							((inner[9usize].0).0, (inner[9usize].1).0),
-							((inner[10usize].0).0, (inner[10usize].1).0),
-							((inner[11usize].0).0, (inner[11usize].1).0),
-							((inner[12usize].0).0, (inner[12usize].1).0),
-							((inner[13usize].0).0, (inner[13usize].1).0),
-							((inner[14usize].0).0, (inner[14usize].1).0),
-						],
-						t_last.0,
-					)
-				})
-				.collect::<Vec<_>>();
-			Ok(CompactAssignments {
-				votes1,
-				votes2,
-				votes3,
-				votes4,
-				votes5,
-				votes6,
-				votes7,
-				votes8,
-				votes9,
-				votes10,
-				votes11,
-				votes12,
-				votes13,
-				votes14,
-				votes15,
-				votes16,
-			})
-		}
-	}
-	pub struct CompactAssignments {
-		votes1: Vec<(VoterIndex, TargetIndex)>,
-		votes2: Vec<(VoterIndex, (TargetIndex, OffchainAccuracy), TargetIndex)>,
-		votes3: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 2usize],
-			TargetIndex,
-		)>,
-		votes4: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 3usize],
-			TargetIndex,
-		)>,
-		votes5: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 4usize],
-			TargetIndex,
-		)>,
-		votes6: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 5usize],
-			TargetIndex,
-		)>,
-		votes7: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 6usize],
-			TargetIndex,
-		)>,
-		votes8: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 7usize],
-			TargetIndex,
-		)>,
-		votes9: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 8usize],
-			TargetIndex,
-		)>,
-		votes10: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 9usize],
-			TargetIndex,
-		)>,
-		votes11: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 10usize],
-			TargetIndex,
-		)>,
-		votes12: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 11usize],
-			TargetIndex,
-		)>,
-		votes13: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 12usize],
-			TargetIndex,
-		)>,
-		votes14: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 13usize],
-			TargetIndex,
-		)>,
-		votes15: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 14usize],
-			TargetIndex,
-		)>,
-		votes16: Vec<(
-			VoterIndex,
-			[(TargetIndex, OffchainAccuracy); 15usize],
-			TargetIndex,
-		)>,
-	}
-	#[automatically_derived]
-	#[allow(unused_qualifications)]
-	impl ::core::default::Default for CompactAssignments {
-		#[inline]
-		fn default() -> CompactAssignments {
-			CompactAssignments {
-				votes1: ::core::default::Default::default(),
-				votes2: ::core::default::Default::default(),
-				votes3: ::core::default::Default::default(),
-				votes4: ::core::default::Default::default(),
-				votes5: ::core::default::Default::default(),
-				votes6: ::core::default::Default::default(),
-				votes7: ::core::default::Default::default(),
-				votes8: ::core::default::Default::default(),
-				votes9: ::core::default::Default::default(),
-				votes10: ::core::default::Default::default(),
-				votes11: ::core::default::Default::default(),
-				votes12: ::core::default::Default::default(),
-				votes13: ::core::default::Default::default(),
-				votes14: ::core::default::Default::default(),
-				votes15: ::core::default::Default::default(),
-				votes16: ::core::default::Default::default(),
-			}
-		}
-	}
-	impl ::core::marker::StructuralPartialEq for CompactAssignments {}
-	#[automatically_derived]
-	#[allow(unused_qualifications)]
-	impl ::core::cmp::PartialEq for CompactAssignments {
-		#[inline]
-		fn eq(&self, other: &CompactAssignments) -> bool {
-			match *other {
-				CompactAssignments {
-					votes1: ref __self_1_0,
-					votes2: ref __self_1_1,
-					votes3: ref __self_1_2,
-					votes4: ref __self_1_3,
-					votes5: ref __self_1_4,
-					votes6: ref __self_1_5,
-					votes7: ref __self_1_6,
-					votes8: ref __self_1_7,
-					votes9: ref __self_1_8,
-					votes10: ref __self_1_9,
-					votes11: ref __self_1_10,
-					votes12: ref __self_1_11,
-					votes13: ref __self_1_12,
-					votes14: ref __self_1_13,
-					votes15: ref __self_1_14,
-					votes16: ref __self_1_15,
-				} => match *self {
-					CompactAssignments {
-						votes1: ref __self_0_0,
-						votes2: ref __self_0_1,
-						votes3: ref __self_0_2,
-						votes4: ref __self_0_3,
-						votes5: ref __self_0_4,
-						votes6: ref __self_0_5,
-						votes7: ref __self_0_6,
-						votes8: ref __self_0_7,
-						votes9: ref __self_0_8,
-						votes10: ref __self_0_9,
-						votes11: ref __self_0_10,
-						votes12: ref __self_0_11,
-						votes13: ref __self_0_12,
-						votes14: ref __self_0_13,
-						votes15: ref __self_0_14,
-						votes16: ref __self_0_15,
-					} => {
-						(*__self_0_0) == (*__self_1_0)
-							&& (*__self_0_1) == (*__self_1_1)
-							&& (*__self_0_2) == (*__self_1_2)
-							&& (*__self_0_3) == (*__self_1_3)
-							&& (*__self_0_4) == (*__self_1_4)
-							&& (*__self_0_5) == (*__self_1_5)
-							&& (*__self_0_6) == (*__self_1_6)
-							&& (*__self_0_7) == (*__self_1_7)
-							&& (*__self_0_8) == (*__self_1_8)
-							&& (*__self_0_9) == (*__self_1_9)
-							&& (*__self_0_10) == (*__self_1_10)
-							&& (*__self_0_11) == (*__self_1_11)
-							&& (*__self_0_12) == (*__self_1_12)
-							&& (*__self_0_13) == (*__self_1_13)
-							&& (*__self_0_14) == (*__self_1_14)
-							&& (*__self_0_15) == (*__self_1_15)
-					}
-				},
-			}
-		}
-		#[inline]
-		fn ne(&self, other: &CompactAssignments) -> bool {
-			match *other {
-				CompactAssignments {
-					votes1: ref __self_1_0,
-					votes2: ref __self_1_1,
-					votes3: ref __self_1_2,
-					votes4: ref __self_1_3,
-					votes5: ref __self_1_4,
-					votes6: ref __self_1_5,
-					votes7: ref __self_1_6,
-					votes8: ref __self_1_7,
-					votes9: ref __self_1_8,
-					votes10: ref __self_1_9,
-					votes11: ref __self_1_10,
-					votes12: ref __self_1_11,
-					votes13: ref __self_1_12,
-					votes14: ref __self_1_13,
-					votes15: ref __self_1_14,
-					votes16: ref __self_1_15,
-				} => match *self {
-					CompactAssignments {
-						votes1: ref __self_0_0,
-						votes2: ref __self_0_1,
-						votes3: ref __self_0_2,
-						votes4: ref __self_0_3,
-						votes5: ref __self_0_4,
-						votes6: ref __self_0_5,
-						votes7: ref __self_0_6,
-						votes8: ref __self_0_7,
-						votes9: ref __self_0_8,
-						votes10: ref __self_0_9,
-						votes11: ref __self_0_10,
-						votes12: ref __self_0_11,
-						votes13: ref __self_0_12,
-						votes14: ref __self_0_13,
-						votes15: ref __self_0_14,
-						votes16: ref __self_0_15,
-					} => {
-						(*__self_0_0) != (*__self_1_0)
-							|| (*__self_0_1) != (*__self_1_1)
-							|| (*__self_0_2) != (*__self_1_2)
-							|| (*__self_0_3) != (*__self_1_3)
-							|| (*__self_0_4) != (*__self_1_4)
-							|| (*__self_0_5) != (*__self_1_5)
-							|| (*__self_0_6) != (*__self_1_6)
-							|| (*__self_0_7) != (*__self_1_7)
-							|| (*__self_0_8) != (*__self_1_8)
-							|| (*__self_0_9) != (*__self_1_9)
-							|| (*__self_0_10) != (*__self_1_10)
-							|| (*__self_0_11) != (*__self_1_11)
-							|| (*__self_0_12) != (*__self_1_12)
-							|| (*__self_0_13) != (*__self_1_13)
-							|| (*__self_0_14) != (*__self_1_14)
-							|| (*__self_0_15) != (*__self_1_15)
-					}
-				},
-			}
-		}
-	}
-	impl ::core::marker::StructuralEq for CompactAssignments {}
-	#[automatically_derived]
-	#[allow(unused_qualifications)]
-	impl ::core::cmp::Eq for CompactAssignments {
-		#[inline]
-		#[doc(hidden)]
-		fn assert_receiver_is_total_eq(&self) -> () {
-			{
-				let _: ::core::cmp::AssertParamIsEq<Vec<(VoterIndex, TargetIndex)>>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(VoterIndex, (TargetIndex, OffchainAccuracy), TargetIndex)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 2usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 3usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 4usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 5usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 6usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 7usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 8usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 9usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 10usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 11usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 12usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 13usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 14usize],
-						TargetIndex,
-					)>,
-				>;
-				let _: ::core::cmp::AssertParamIsEq<
-					Vec<(
-						VoterIndex,
-						[(TargetIndex, OffchainAccuracy); 15usize],
-						TargetIndex,
-					)>,
-				>;
-			}
-		}
-	}
-	#[automatically_derived]
-	#[allow(unused_qualifications)]
-	impl ::core::clone::Clone for CompactAssignments {
-		#[inline]
-		fn clone(&self) -> CompactAssignments {
-			match *self {
-				CompactAssignments {
-					votes1: ref __self_0_0,
-					votes2: ref __self_0_1,
-					votes3: ref __self_0_2,
-					votes4: ref __self_0_3,
-					votes5: ref __self_0_4,
-					votes6: ref __self_0_5,
-					votes7: ref __self_0_6,
-					votes8: ref __self_0_7,
-					votes9: ref __self_0_8,
-					votes10: ref __self_0_9,
-					votes11: ref __self_0_10,
-					votes12: ref __self_0_11,
-					votes13: ref __self_0_12,
-					votes14: ref __self_0_13,
-					votes15: ref __self_0_14,
-					votes16: ref __self_0_15,
-				} => CompactAssignments {
-					votes1: ::core::clone::Clone::clone(&(*__self_0_0)),
-					votes2: ::core::clone::Clone::clone(&(*__self_0_1)),
-					votes3: ::core::clone::Clone::clone(&(*__self_0_2)),
-					votes4: ::core::clone::Clone::clone(&(*__self_0_3)),
-					votes5: ::core::clone::Clone::clone(&(*__self_0_4)),
-					votes6: ::core::clone::Clone::clone(&(*__self_0_5)),
-					votes7: ::core::clone::Clone::clone(&(*__self_0_6)),
-					votes8: ::core::clone::Clone::clone(&(*__self_0_7)),
-					votes9: ::core::clone::Clone::clone(&(*__self_0_8)),
-					votes10: ::core::clone::Clone::clone(&(*__self_0_9)),
-					votes11: ::core::clone::Clone::clone(&(*__self_0_10)),
-					votes12: ::core::clone::Clone::clone(&(*__self_0_11)),
-					votes13: ::core::clone::Clone::clone(&(*__self_0_12)),
-					votes14: ::core::clone::Clone::clone(&(*__self_0_13)),
-					votes15: ::core::clone::Clone::clone(&(*__self_0_14)),
-					votes16: ::core::clone::Clone::clone(&(*__self_0_15)),
-				},
-			}
-		}
-	}
-	#[automatically_derived]
-	#[allow(unused_qualifications)]
-	impl ::core::fmt::Debug for CompactAssignments {
-		fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-			match *self {
-				CompactAssignments {
-					votes1: ref __self_0_0,
-					votes2: ref __self_0_1,
-					votes3: ref __self_0_2,
-					votes4: ref __self_0_3,
-					votes5: ref __self_0_4,
-					votes6: ref __self_0_5,
-					votes7: ref __self_0_6,
-					votes8: ref __self_0_7,
-					votes9: ref __self_0_8,
-					votes10: ref __self_0_9,
-					votes11: ref __self_0_10,
-					votes12: ref __self_0_11,
-					votes13: ref __self_0_12,
-					votes14: ref __self_0_13,
-					votes15: ref __self_0_14,
-					votes16: ref __self_0_15,
-				} => {
-					let mut debug_trait_builder = f.debug_struct("CompactAssignments");
-					let _ = debug_trait_builder.field("votes1", &&(*__self_0_0));
-					let _ = debug_trait_builder.field("votes2", &&(*__self_0_1));
-					let _ = debug_trait_builder.field("votes3", &&(*__self_0_2));
-					let _ = debug_trait_builder.field("votes4", &&(*__self_0_3));
-					let _ = debug_trait_builder.field("votes5", &&(*__self_0_4));
-					let _ = debug_trait_builder.field("votes6", &&(*__self_0_5));
-					let _ = debug_trait_builder.field("votes7", &&(*__self_0_6));
-					let _ = debug_trait_builder.field("votes8", &&(*__self_0_7));
-					let _ = debug_trait_builder.field("votes9", &&(*__self_0_8));
-					let _ = debug_trait_builder.field("votes10", &&(*__self_0_9));
-					let _ = debug_trait_builder.field("votes11", &&(*__self_0_10));
-					let _ = debug_trait_builder.field("votes12", &&(*__self_0_11));
-					let _ = debug_trait_builder.field("votes13", &&(*__self_0_12));
-					let _ = debug_trait_builder.field("votes14", &&(*__self_0_13));
-					let _ = debug_trait_builder.field("votes15", &&(*__self_0_14));
-					let _ = debug_trait_builder.field("votes16", &&(*__self_0_15));
-					debug_trait_builder.finish()
-				}
-			}
-		}
-	}
-	impl _npos::VotingLimit for CompactAssignments {
-		const LIMIT: usize = 16usize;
-	}
-	impl CompactAssignments {
-		/// Get the length of all the assignments that this type is encoding. This is basically
-		/// the same as the number of assignments, or the number of voters in total.
-		pub fn len(&self) -> usize {
-			let mut all_len = 0usize;
-			all_len = all_len.saturating_add(self.votes1.len());
-			all_len = all_len.saturating_add(self.votes2.len());
-			all_len = all_len.saturating_add(self.votes3.len());
-			all_len = all_len.saturating_add(self.votes4.len());
-			all_len = all_len.saturating_add(self.votes5.len());
-			all_len = all_len.saturating_add(self.votes6.len());
-			all_len = all_len.saturating_add(self.votes7.len());
-			all_len = all_len.saturating_add(self.votes8.len());
-			all_len = all_len.saturating_add(self.votes9.len());
-			all_len = all_len.saturating_add(self.votes10.len());
-			all_len = all_len.saturating_add(self.votes11.len());
-			all_len = all_len.saturating_add(self.votes12.len());
-			all_len = all_len.saturating_add(self.votes13.len());
-			all_len = all_len.saturating_add(self.votes14.len());
-			all_len = all_len.saturating_add(self.votes15.len());
-			all_len = all_len.saturating_add(self.votes16.len());
-			all_len
-		}
-		/// Get the total count of edges.
-		pub fn edge_count(&self) -> usize {
-			let mut all_edges = 0usize;
-			all_edges = all_edges.saturating_add(self.votes1.len().saturating_mul(1usize as usize));
-			all_edges = all_edges.saturating_add(self.votes2.len().saturating_mul(2usize as usize));
-			all_edges = all_edges.saturating_add(self.votes3.len().saturating_mul(3usize as usize));
-			all_edges = all_edges.saturating_add(self.votes4.len().saturating_mul(4usize as usize));
-			all_edges = all_edges.saturating_add(self.votes5.len().saturating_mul(5usize as usize));
-			all_edges = all_edges.saturating_add(self.votes6.len().saturating_mul(6usize as usize));
-			all_edges = all_edges.saturating_add(self.votes7.len().saturating_mul(7usize as usize));
-			all_edges = all_edges.saturating_add(self.votes8.len().saturating_mul(8usize as usize));
-			all_edges = all_edges.saturating_add(self.votes9.len().saturating_mul(9usize as usize));
-			all_edges =
-				all_edges.saturating_add(self.votes10.len().saturating_mul(10usize as usize));
-			all_edges =
-				all_edges.saturating_add(self.votes11.len().saturating_mul(11usize as usize));
-			all_edges =
-				all_edges.saturating_add(self.votes12.len().saturating_mul(12usize as usize));
-			all_edges =
-				all_edges.saturating_add(self.votes13.len().saturating_mul(13usize as usize));
-			all_edges =
-				all_edges.saturating_add(self.votes14.len().saturating_mul(14usize as usize));
-			all_edges =
-				all_edges.saturating_add(self.votes15.len().saturating_mul(15usize as usize));
-			all_edges =
-				all_edges.saturating_add(self.votes16.len().saturating_mul(16usize as usize));
-			all_edges
-		}
-		/// Get the number of unique targets in the whole struct.
-		///
-		/// Once presented with a list of winners, this set and the set of winners must be
-		/// equal.
-		///
-		/// The resulting indices are sorted.
-		pub fn unique_targets(&self) -> Vec<TargetIndex> {
-			let mut all_targets: Vec<TargetIndex> = Vec::with_capacity(self.average_edge_count());
-			let mut maybe_insert_target = |t: TargetIndex| match all_targets.binary_search(&t) {
-				Ok(_) => (),
-				Err(pos) => all_targets.insert(pos, t),
-			};
-			self.votes1.iter().for_each(|(_, t)| {
-				maybe_insert_target(*t);
-			});
-			self.votes2.iter().for_each(|(_, (t1, _), t2)| {
-				maybe_insert_target(*t1);
-				maybe_insert_target(*t2);
-			});
-			self.votes3.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes4.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes5.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes6.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes7.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes8.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes9.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes10.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes11.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes12.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes13.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes14.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes15.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			self.votes16.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
-				});
-				maybe_insert_target(*t_last);
-			});
-			all_targets
-		}
-		/// Get the average edge count.
-		pub fn average_edge_count(&self) -> usize {
-			self.edge_count().checked_div(self.len()).unwrap_or(0)
-		}
-		/// Remove a certain voter.
-		///
-		/// This will only search until the first instance of `to_remove`, and return true. If
-		/// no instance is found (no-op), then it returns false.
-		///
-		/// In other words, if this return true, exactly one element must have been removed from
-		/// `self.len()`.
-		pub fn remove_voter(&mut self, to_remove: VoterIndex) -> bool {
-			if let Some(idx) = self.votes1.iter().position(|(x, _)| *x == to_remove) {
-				self.votes1.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes2.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes2.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes3.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes3.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes4.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes4.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes5.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes5.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes6.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes6.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes7.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes7.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes8.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes8.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes9.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes9.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes10.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes10.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes11.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes11.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes12.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes12.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes13.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes13.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes14.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes14.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes15.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes15.remove(idx);
-				return true;
-			}
-			if let Some(idx) = self.votes16.iter().position(|(x, _, _)| *x == to_remove) {
-				self.votes16.remove(idx);
-				return true;
-			}
-			return false;
-		}
-	}
-	use _npos::__OrInvalidIndex;
-	impl CompactAssignments {
-		pub fn from_assignment<FV, FT, A>(
-			assignments: Vec<_npos::Assignment<A, OffchainAccuracy>>,
-			index_of_voter: FV,
-			index_of_target: FT,
-		) -> Result<Self, _npos::Error>
-		where
-			A: _npos::IdentifierT,
-			for<'r> FV: Fn(&'r A) -> Option<VoterIndex>,
-			for<'r> FT: Fn(&'r A) -> Option<TargetIndex>,
-		{
-			let mut compact: CompactAssignments = Default::default();
-			for _npos::Assignment { who, distribution } in assignments {
-				match distribution.len() {
-					0 => continue,
-					1 => compact.votes1.push((
-						index_of_voter(&who).or_invalid_index()?,
-						index_of_target(&distribution[0].0).or_invalid_index()?,
-					)),
-					2 => compact.votes2.push((
-						index_of_voter(&who).or_invalid_index()?,
-						(
-							index_of_target(&distribution[0].0).or_invalid_index()?,
-							distribution[0].1,
-						),
-						index_of_target(&distribution[1].0).or_invalid_index()?,
-					)),
-					3usize => compact.votes3.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-						],
-						index_of_target(&distribution[2usize].0).or_invalid_index()?,
-					)),
-					4usize => compact.votes4.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-						],
-						index_of_target(&distribution[3usize].0).or_invalid_index()?,
-					)),
-					5usize => compact.votes5.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-							(
-								index_of_target(&distribution[3usize].0).or_invalid_index()?,
-								distribution[3usize].1,
-							),
-						],
-						index_of_target(&distribution[4usize].0).or_invalid_index()?,
-					)),
-					6usize => compact.votes6.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-							(
-								index_of_target(&distribution[3usize].0).or_invalid_index()?,
-								distribution[3usize].1,
-							),
-							(
-								index_of_target(&distribution[4usize].0).or_invalid_index()?,
-								distribution[4usize].1,
-							),
-						],
-						index_of_target(&distribution[5usize].0).or_invalid_index()?,
-					)),
-					7usize => compact.votes7.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-							(
-								index_of_target(&distribution[3usize].0).or_invalid_index()?,
-								distribution[3usize].1,
-							),
-							(
-								index_of_target(&distribution[4usize].0).or_invalid_index()?,
-								distribution[4usize].1,
-							),
-							(
-								index_of_target(&distribution[5usize].0).or_invalid_index()?,
-								distribution[5usize].1,
-							),
-						],
-						index_of_target(&distribution[6usize].0).or_invalid_index()?,
-					)),
-					8usize => compact.votes8.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-							(
-								index_of_target(&distribution[3usize].0).or_invalid_index()?,
-								distribution[3usize].1,
-							),
-							(
-								index_of_target(&distribution[4usize].0).or_invalid_index()?,
-								distribution[4usize].1,
-							),
-							(
-								index_of_target(&distribution[5usize].0).or_invalid_index()?,
-								distribution[5usize].1,
-							),
-							(
-								index_of_target(&distribution[6usize].0).or_invalid_index()?,
-								distribution[6usize].1,
-							),
-						],
-						index_of_target(&distribution[7usize].0).or_invalid_index()?,
-					)),
-					9usize => compact.votes9.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-							(
-								index_of_target(&distribution[3usize].0).or_invalid_index()?,
-								distribution[3usize].1,
-							),
-							(
-								index_of_target(&distribution[4usize].0).or_invalid_index()?,
-								distribution[4usize].1,
-							),
-							(
-								index_of_target(&distribution[5usize].0).or_invalid_index()?,
-								distribution[5usize].1,
-							),
-							(
-								index_of_target(&distribution[6usize].0).or_invalid_index()?,
-								distribution[6usize].1,
-							),
-							(
-								index_of_target(&distribution[7usize].0).or_invalid_index()?,
-								distribution[7usize].1,
-							),
-						],
-						index_of_target(&distribution[8usize].0).or_invalid_index()?,
-					)),
-					10usize => compact.votes10.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-							(
-								index_of_target(&distribution[3usize].0).or_invalid_index()?,
-								distribution[3usize].1,
-							),
-							(
-								index_of_target(&distribution[4usize].0).or_invalid_index()?,
-								distribution[4usize].1,
-							),
-							(
-								index_of_target(&distribution[5usize].0).or_invalid_index()?,
-								distribution[5usize].1,
-							),
-							(
-								index_of_target(&distribution[6usize].0).or_invalid_index()?,
-								distribution[6usize].1,
-							),
-							(
-								index_of_target(&distribution[7usize].0).or_invalid_index()?,
-								distribution[7usize].1,
-							),
-							(
-								index_of_target(&distribution[8usize].0).or_invalid_index()?,
-								distribution[8usize].1,
-							),
-						],
-						index_of_target(&distribution[9usize].0).or_invalid_index()?,
-					)),
-					11usize => compact.votes11.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-							(
-								index_of_target(&distribution[3usize].0).or_invalid_index()?,
-								distribution[3usize].1,
-							),
-							(
-								index_of_target(&distribution[4usize].0).or_invalid_index()?,
-								distribution[4usize].1,
-							),
-							(
-								index_of_target(&distribution[5usize].0).or_invalid_index()?,
-								distribution[5usize].1,
-							),
-							(
-								index_of_target(&distribution[6usize].0).or_invalid_index()?,
-								distribution[6usize].1,
-							),
-							(
-								index_of_target(&distribution[7usize].0).or_invalid_index()?,
-								distribution[7usize].1,
-							),
-							(
-								index_of_target(&distribution[8usize].0).or_invalid_index()?,
-								distribution[8usize].1,
-							),
-							(
-								index_of_target(&distribution[9usize].0).or_invalid_index()?,
-								distribution[9usize].1,
-							),
-						],
-						index_of_target(&distribution[10usize].0).or_invalid_index()?,
-					)),
-					12usize => compact.votes12.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-							(
-								index_of_target(&distribution[3usize].0).or_invalid_index()?,
-								distribution[3usize].1,
-							),
-							(
-								index_of_target(&distribution[4usize].0).or_invalid_index()?,
-								distribution[4usize].1,
-							),
-							(
-								index_of_target(&distribution[5usize].0).or_invalid_index()?,
-								distribution[5usize].1,
-							),
-							(
-								index_of_target(&distribution[6usize].0).or_invalid_index()?,
-								distribution[6usize].1,
-							),
-							(
-								index_of_target(&distribution[7usize].0).or_invalid_index()?,
-								distribution[7usize].1,
-							),
-							(
-								index_of_target(&distribution[8usize].0).or_invalid_index()?,
-								distribution[8usize].1,
-							),
-							(
-								index_of_target(&distribution[9usize].0).or_invalid_index()?,
-								distribution[9usize].1,
-							),
-							(
-								index_of_target(&distribution[10usize].0).or_invalid_index()?,
-								distribution[10usize].1,
-							),
-						],
-						index_of_target(&distribution[11usize].0).or_invalid_index()?,
-					)),
-					13usize => compact.votes13.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-							(
-								index_of_target(&distribution[3usize].0).or_invalid_index()?,
-								distribution[3usize].1,
-							),
-							(
-								index_of_target(&distribution[4usize].0).or_invalid_index()?,
-								distribution[4usize].1,
-							),
-							(
-								index_of_target(&distribution[5usize].0).or_invalid_index()?,
-								distribution[5usize].1,
-							),
-							(
-								index_of_target(&distribution[6usize].0).or_invalid_index()?,
-								distribution[6usize].1,
-							),
-							(
-								index_of_target(&distribution[7usize].0).or_invalid_index()?,
-								distribution[7usize].1,
-							),
-							(
-								index_of_target(&distribution[8usize].0).or_invalid_index()?,
-								distribution[8usize].1,
-							),
-							(
-								index_of_target(&distribution[9usize].0).or_invalid_index()?,
-								distribution[9usize].1,
-							),
-							(
-								index_of_target(&distribution[10usize].0).or_invalid_index()?,
-								distribution[10usize].1,
-							),
-							(
-								index_of_target(&distribution[11usize].0).or_invalid_index()?,
-								distribution[11usize].1,
-							),
-						],
-						index_of_target(&distribution[12usize].0).or_invalid_index()?,
-					)),
-					14usize => compact.votes14.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-							(
-								index_of_target(&distribution[3usize].0).or_invalid_index()?,
-								distribution[3usize].1,
-							),
-							(
-								index_of_target(&distribution[4usize].0).or_invalid_index()?,
-								distribution[4usize].1,
-							),
-							(
-								index_of_target(&distribution[5usize].0).or_invalid_index()?,
-								distribution[5usize].1,
-							),
-							(
-								index_of_target(&distribution[6usize].0).or_invalid_index()?,
-								distribution[6usize].1,
-							),
-							(
-								index_of_target(&distribution[7usize].0).or_invalid_index()?,
-								distribution[7usize].1,
-							),
-							(
-								index_of_target(&distribution[8usize].0).or_invalid_index()?,
-								distribution[8usize].1,
-							),
-							(
-								index_of_target(&distribution[9usize].0).or_invalid_index()?,
-								distribution[9usize].1,
-							),
-							(
-								index_of_target(&distribution[10usize].0).or_invalid_index()?,
-								distribution[10usize].1,
-							),
-							(
-								index_of_target(&distribution[11usize].0).or_invalid_index()?,
-								distribution[11usize].1,
-							),
-							(
-								index_of_target(&distribution[12usize].0).or_invalid_index()?,
-								distribution[12usize].1,
-							),
-						],
-						index_of_target(&distribution[13usize].0).or_invalid_index()?,
-					)),
-					15usize => compact.votes15.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-							(
-								index_of_target(&distribution[3usize].0).or_invalid_index()?,
-								distribution[3usize].1,
-							),
-							(
-								index_of_target(&distribution[4usize].0).or_invalid_index()?,
-								distribution[4usize].1,
-							),
-							(
-								index_of_target(&distribution[5usize].0).or_invalid_index()?,
-								distribution[5usize].1,
-							),
-							(
-								index_of_target(&distribution[6usize].0).or_invalid_index()?,
-								distribution[6usize].1,
-							),
-							(
-								index_of_target(&distribution[7usize].0).or_invalid_index()?,
-								distribution[7usize].1,
-							),
-							(
-								index_of_target(&distribution[8usize].0).or_invalid_index()?,
-								distribution[8usize].1,
-							),
-							(
-								index_of_target(&distribution[9usize].0).or_invalid_index()?,
-								distribution[9usize].1,
-							),
-							(
-								index_of_target(&distribution[10usize].0).or_invalid_index()?,
-								distribution[10usize].1,
-							),
-							(
-								index_of_target(&distribution[11usize].0).or_invalid_index()?,
-								distribution[11usize].1,
-							),
-							(
-								index_of_target(&distribution[12usize].0).or_invalid_index()?,
-								distribution[12usize].1,
-							),
-							(
-								index_of_target(&distribution[13usize].0).or_invalid_index()?,
-								distribution[13usize].1,
-							),
-						],
-						index_of_target(&distribution[14usize].0).or_invalid_index()?,
-					)),
-					16usize => compact.votes16.push((
-						index_of_voter(&who).or_invalid_index()?,
-						[
-							(
-								index_of_target(&distribution[0usize].0).or_invalid_index()?,
-								distribution[0usize].1,
-							),
-							(
-								index_of_target(&distribution[1usize].0).or_invalid_index()?,
-								distribution[1usize].1,
-							),
-							(
-								index_of_target(&distribution[2usize].0).or_invalid_index()?,
-								distribution[2usize].1,
-							),
-							(
-								index_of_target(&distribution[3usize].0).or_invalid_index()?,
-								distribution[3usize].1,
-							),
-							(
-								index_of_target(&distribution[4usize].0).or_invalid_index()?,
-								distribution[4usize].1,
-							),
-							(
-								index_of_target(&distribution[5usize].0).or_invalid_index()?,
-								distribution[5usize].1,
-							),
-							(
-								index_of_target(&distribution[6usize].0).or_invalid_index()?,
-								distribution[6usize].1,
-							),
-							(
-								index_of_target(&distribution[7usize].0).or_invalid_index()?,
-								distribution[7usize].1,
-							),
-							(
-								index_of_target(&distribution[8usize].0).or_invalid_index()?,
-								distribution[8usize].1,
-							),
-							(
-								index_of_target(&distribution[9usize].0).or_invalid_index()?,
-								distribution[9usize].1,
-							),
-							(
-								index_of_target(&distribution[10usize].0).or_invalid_index()?,
-								distribution[10usize].1,
-							),
-							(
-								index_of_target(&distribution[11usize].0).or_invalid_index()?,
-								distribution[11usize].1,
-							),
-							(
-								index_of_target(&distribution[12usize].0).or_invalid_index()?,
-								distribution[12usize].1,
-							),
-							(
-								index_of_target(&distribution[13usize].0).or_invalid_index()?,
-								distribution[13usize].1,
-							),
-							(
-								index_of_target(&distribution[14usize].0).or_invalid_index()?,
-								distribution[14usize].1,
-							),
-						],
-						index_of_target(&distribution[15usize].0).or_invalid_index()?,
-					)),
-					_ => {
-						return Err(_npos::Error::CompactTargetOverflow);
-					}
-				}
-			}
-			Ok(compact)
-		}
-		pub fn into_assignment<A: _npos::IdentifierT>(
-			self,
-			voter_at: impl Fn(VoterIndex) -> Option<A>,
-			target_at: impl Fn(TargetIndex) -> Option<A>,
-		) -> Result<Vec<_npos::Assignment<A, OffchainAccuracy>>, _npos::Error> {
-			let mut assignments: Vec<_npos::Assignment<A, OffchainAccuracy>> = Default::default();
-			for (voter_index, target_index) in self.votes1 {
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: <[_]>::into_vec(box [(
-						target_at(target_index).or_invalid_index()?,
-						OffchainAccuracy::one(),
-					)]),
-				})
-			}
-			for (voter_index, (t1_idx, p1), t2_idx) in self.votes2 {
-				if p1 >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p2 = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					p1,
-				);
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: <[_]>::into_vec(box [
-						(target_at(t1_idx).or_invalid_index()?, p1),
-						(target_at(t2_idx).or_invalid_index()?, p2),
-					]),
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes3 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes4 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes5 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes6 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes7 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes8 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes9 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes10 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes11 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes12 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes13 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes14 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes15 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			for (voter_index, inners, t_last_idx) in self.votes16 {
-				let mut sum = OffchainAccuracy::zero();
-				let mut inners_parsed = inners
-					.iter()
-					.map(|(ref t_idx, p)| {
-						sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
-						let target = target_at(*t_idx).or_invalid_index()?;
-						Ok((target, *p))
-					})
-					.collect::<Result<Vec<(A, OffchainAccuracy)>, _npos::Error>>()?;
-				if sum >= OffchainAccuracy::one() {
-					return Err(_npos::Error::CompactStakeOverflow);
-				}
-				let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
-					OffchainAccuracy::one(),
-					sum,
-				);
-				inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
-				assignments.push(_npos::Assignment {
-					who: voter_at(voter_index).or_invalid_index()?,
-					distribution: inners_parsed,
-				});
-			}
-			Ok(assignments)
-		}
-	}
 	const LOG_TARGET: &'static str = "two-phase-submission";
+	/// Current phase of the pallet.
 	pub enum Phase {
+		/// Nothing, the election is not happening.
 		Off,
+		/// Signed phase is open.
 		Signed,
+		/// Unsigned phase is open.
 		Unsigned(bool),
 	}
 	impl ::core::marker::StructuralPartialEq for Phase {}
@@ -3190,24 +566,28 @@ pub mod two_phase {
 		}
 	}
 	impl Phase {
+		/// Weather the phase is signed or not.
 		pub fn is_signed(&self) -> bool {
 			match self {
 				Phase::Signed => true,
 				_ => false,
 			}
 		}
+		/// Weather the phase is unsigned or not.
 		pub fn is_unsigned(&self) -> bool {
 			match self {
 				Phase::Unsigned(_) => true,
 				_ => false,
 			}
 		}
+		/// Weather the phase is unsigned and open or not.
 		pub fn is_unsigned_open(&self) -> bool {
 			match self {
 				Phase::Unsigned(true) => true,
 				_ => false,
 			}
 		}
+		/// Weather the phase is off or not.
 		pub fn is_off(&self) -> bool {
 			match self {
 				Phase::Off => true,
@@ -3215,9 +595,13 @@ pub mod two_phase {
 			}
 		}
 	}
+	/// The type of `Computation` that provided this election data.
 	pub enum ElectionCompute {
+		/// Election was computed on-chain.
 		OnChain,
+		/// Election was computed with a signed submission.
 		Signed,
+		/// Election was computed with an unsigned submission.
 		Unsigned,
 	}
 	impl ::core::marker::StructuralPartialEq for ElectionCompute {}
@@ -3316,84 +700,74 @@ pub mod two_phase {
 			ElectionCompute::OnChain
 		}
 	}
-	pub struct RawSolution {
-		winners: Vec<TargetIndex>,
-		compact: CompactAssignments,
+	/// A raw, unchecked solution.
+	///
+	/// Such a solution should never become effective in anyway before being checked by the
+	/// [`Module::feasibility_check`]
+	pub struct RawSolution<C> {
+		/// Compact election edges.
+		compact: C,
+		/// The _claimed_ score of the solution.
 		score: ElectionScore,
 	}
-	impl ::core::marker::StructuralPartialEq for RawSolution {}
+	impl<C> ::core::marker::StructuralPartialEq for RawSolution<C> {}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl ::core::cmp::PartialEq for RawSolution {
+	impl<C: ::core::cmp::PartialEq> ::core::cmp::PartialEq for RawSolution<C> {
 		#[inline]
-		fn eq(&self, other: &RawSolution) -> bool {
+		fn eq(&self, other: &RawSolution<C>) -> bool {
 			match *other {
 				RawSolution {
-					winners: ref __self_1_0,
-					compact: ref __self_1_1,
-					score: ref __self_1_2,
+					compact: ref __self_1_0,
+					score: ref __self_1_1,
 				} => match *self {
 					RawSolution {
-						winners: ref __self_0_0,
-						compact: ref __self_0_1,
-						score: ref __self_0_2,
-					} => {
-						(*__self_0_0) == (*__self_1_0)
-							&& (*__self_0_1) == (*__self_1_1)
-							&& (*__self_0_2) == (*__self_1_2)
-					}
+						compact: ref __self_0_0,
+						score: ref __self_0_1,
+					} => (*__self_0_0) == (*__self_1_0) && (*__self_0_1) == (*__self_1_1),
 				},
 			}
 		}
 		#[inline]
-		fn ne(&self, other: &RawSolution) -> bool {
+		fn ne(&self, other: &RawSolution<C>) -> bool {
 			match *other {
 				RawSolution {
-					winners: ref __self_1_0,
-					compact: ref __self_1_1,
-					score: ref __self_1_2,
+					compact: ref __self_1_0,
+					score: ref __self_1_1,
 				} => match *self {
 					RawSolution {
-						winners: ref __self_0_0,
-						compact: ref __self_0_1,
-						score: ref __self_0_2,
-					} => {
-						(*__self_0_0) != (*__self_1_0)
-							|| (*__self_0_1) != (*__self_1_1)
-							|| (*__self_0_2) != (*__self_1_2)
-					}
+						compact: ref __self_0_0,
+						score: ref __self_0_1,
+					} => (*__self_0_0) != (*__self_1_0) || (*__self_0_1) != (*__self_1_1),
 				},
 			}
 		}
 	}
-	impl ::core::marker::StructuralEq for RawSolution {}
+	impl<C> ::core::marker::StructuralEq for RawSolution<C> {}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl ::core::cmp::Eq for RawSolution {
+	impl<C: ::core::cmp::Eq> ::core::cmp::Eq for RawSolution<C> {
 		#[inline]
 		#[doc(hidden)]
 		fn assert_receiver_is_total_eq(&self) -> () {
 			{
-				let _: ::core::cmp::AssertParamIsEq<Vec<TargetIndex>>;
-				let _: ::core::cmp::AssertParamIsEq<CompactAssignments>;
+				let _: ::core::cmp::AssertParamIsEq<C>;
 				let _: ::core::cmp::AssertParamIsEq<ElectionScore>;
 			}
 		}
 	}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl ::core::clone::Clone for RawSolution {
+	impl<C: ::core::clone::Clone> ::core::clone::Clone for RawSolution<C> {
 		#[inline]
-		fn clone(&self) -> RawSolution {
+		fn clone(&self) -> RawSolution<C> {
 			match *self {
 				RawSolution {
-					winners: ref __self_0_0,
-					compact: ref __self_0_1,
-					score: ref __self_0_2,
+					compact: ref __self_0_0,
+					score: ref __self_0_1,
 				} => RawSolution {
-					winners: ::core::clone::Clone::clone(&(*__self_0_0)),
-					compact: ::core::clone::Clone::clone(&(*__self_0_1)),
-					score: ::core::clone::Clone::clone(&(*__self_0_2)),
+					compact: ::core::clone::Clone::clone(&(*__self_0_0)),
+					score: ::core::clone::Clone::clone(&(*__self_0_1)),
 				},
 			}
 		}
@@ -3402,31 +776,36 @@ pub mod two_phase {
 		#[allow(unknown_lints)]
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
-		impl _parity_scale_codec::Encode for RawSolution {
+		impl<C> _parity_scale_codec::Encode for RawSolution<C>
+		where
+			C: _parity_scale_codec::Encode,
+			C: _parity_scale_codec::Encode,
+		{
 			fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
-				dest.push(&self.winners);
 				dest.push(&self.compact);
 				dest.push(&self.score);
 			}
 		}
-		impl _parity_scale_codec::EncodeLike for RawSolution {}
+		impl<C> _parity_scale_codec::EncodeLike for RawSolution<C>
+		where
+			C: _parity_scale_codec::Encode,
+			C: _parity_scale_codec::Encode,
+		{
+		}
 	};
 	const _: () = {
 		#[allow(unknown_lints)]
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
-		impl _parity_scale_codec::Decode for RawSolution {
+		impl<C> _parity_scale_codec::Decode for RawSolution<C>
+		where
+			C: _parity_scale_codec::Decode,
+			C: _parity_scale_codec::Decode,
+		{
 			fn decode<DecIn: _parity_scale_codec::Input>(
 				input: &mut DecIn,
 			) -> core::result::Result<Self, _parity_scale_codec::Error> {
 				Ok(RawSolution {
-					winners: {
-						let res = _parity_scale_codec::Decode::decode(input);
-						match res {
-							Err(_) => return Err("Error decoding field RawSolution.winners".into()),
-							Ok(a) => a,
-						}
-					},
 					compact: {
 						let res = _parity_scale_codec::Decode::decode(input);
 						match res {
@@ -3445,10 +824,12 @@ pub mod two_phase {
 			}
 		}
 	};
-	impl core::fmt::Debug for RawSolution {
+	impl<C> core::fmt::Debug for RawSolution<C>
+	where
+		C: core::fmt::Debug,
+	{
 		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
 			fmt.debug_struct("RawSolution")
-				.field("winners", &self.winners)
 				.field("compact", &self.compact)
 				.field("score", &self.score)
 				.finish()
@@ -3456,33 +837,39 @@ pub mod two_phase {
 	}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl ::core::default::Default for RawSolution {
+	impl<C: ::core::default::Default> ::core::default::Default for RawSolution<C> {
 		#[inline]
-		fn default() -> RawSolution {
+		fn default() -> RawSolution<C> {
 			RawSolution {
-				winners: ::core::default::Default::default(),
 				compact: ::core::default::Default::default(),
 				score: ::core::default::Default::default(),
 			}
 		}
 	}
-	pub struct SignedSubmission<AccountId, Balance: HasCompact> {
-		who: AccountId,
-		deposit: Balance,
-		reward: Balance,
-		solution: RawSolution,
+	/// A raw, unchecked signed submission.
+	///
+	/// This is just a wrapper around [`RawSolution`] and some additional info.
+	pub struct SignedSubmission<A, B: HasCompact, C> {
+		/// Who submitted this solution.
+		who: A,
+		/// The deposit reserved for storing this solution.
+		deposit: B,
+		/// The reward that should be given to this solution, if chosen the as the final one.
+		reward: B,
+		/// The raw solution itself.
+		solution: RawSolution<C>,
 	}
-	impl<AccountId, Balance: HasCompact> ::core::marker::StructuralPartialEq
-		for SignedSubmission<AccountId, Balance>
-	{
-	}
+	impl<A, B: HasCompact, C> ::core::marker::StructuralPartialEq for SignedSubmission<A, B, C> {}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<AccountId: ::core::cmp::PartialEq, Balance: ::core::cmp::PartialEq + HasCompact>
-		::core::cmp::PartialEq for SignedSubmission<AccountId, Balance>
+	impl<
+			A: ::core::cmp::PartialEq,
+			B: ::core::cmp::PartialEq + HasCompact,
+			C: ::core::cmp::PartialEq,
+		> ::core::cmp::PartialEq for SignedSubmission<A, B, C>
 	{
 		#[inline]
-		fn eq(&self, other: &SignedSubmission<AccountId, Balance>) -> bool {
+		fn eq(&self, other: &SignedSubmission<A, B, C>) -> bool {
 			match *other {
 				SignedSubmission {
 					who: ref __self_1_0,
@@ -3505,7 +892,7 @@ pub mod two_phase {
 			}
 		}
 		#[inline]
-		fn ne(&self, other: &SignedSubmission<AccountId, Balance>) -> bool {
+		fn ne(&self, other: &SignedSubmission<A, B, C>) -> bool {
 			match *other {
 				SignedSubmission {
 					who: ref __self_1_0,
@@ -3528,33 +915,33 @@ pub mod two_phase {
 			}
 		}
 	}
-	impl<AccountId, Balance: HasCompact> ::core::marker::StructuralEq
-		for SignedSubmission<AccountId, Balance>
-	{
-	}
+	impl<A, B: HasCompact, C> ::core::marker::StructuralEq for SignedSubmission<A, B, C> {}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<AccountId: ::core::cmp::Eq, Balance: ::core::cmp::Eq + HasCompact> ::core::cmp::Eq
-		for SignedSubmission<AccountId, Balance>
+	impl<A: ::core::cmp::Eq, B: ::core::cmp::Eq + HasCompact, C: ::core::cmp::Eq> ::core::cmp::Eq
+		for SignedSubmission<A, B, C>
 	{
 		#[inline]
 		#[doc(hidden)]
 		fn assert_receiver_is_total_eq(&self) -> () {
 			{
-				let _: ::core::cmp::AssertParamIsEq<AccountId>;
-				let _: ::core::cmp::AssertParamIsEq<Balance>;
-				let _: ::core::cmp::AssertParamIsEq<Balance>;
-				let _: ::core::cmp::AssertParamIsEq<RawSolution>;
+				let _: ::core::cmp::AssertParamIsEq<A>;
+				let _: ::core::cmp::AssertParamIsEq<B>;
+				let _: ::core::cmp::AssertParamIsEq<B>;
+				let _: ::core::cmp::AssertParamIsEq<RawSolution<C>>;
 			}
 		}
 	}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<AccountId: ::core::clone::Clone, Balance: ::core::clone::Clone + HasCompact>
-		::core::clone::Clone for SignedSubmission<AccountId, Balance>
+	impl<
+			A: ::core::clone::Clone,
+			B: ::core::clone::Clone + HasCompact,
+			C: ::core::clone::Clone,
+		> ::core::clone::Clone for SignedSubmission<A, B, C>
 	{
 		#[inline]
-		fn clone(&self) -> SignedSubmission<AccountId, Balance> {
+		fn clone(&self) -> SignedSubmission<A, B, C> {
 			match *self {
 				SignedSubmission {
 					who: ref __self_0_0,
@@ -3574,15 +961,16 @@ pub mod two_phase {
 		#[allow(unknown_lints)]
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
-		impl<AccountId, Balance: HasCompact> _parity_scale_codec::Encode
-			for SignedSubmission<AccountId, Balance>
+		impl<A, B: HasCompact, C> _parity_scale_codec::Encode for SignedSubmission<A, B, C>
 		where
-			AccountId: _parity_scale_codec::Encode,
-			AccountId: _parity_scale_codec::Encode,
-			Balance: _parity_scale_codec::Encode,
-			Balance: _parity_scale_codec::Encode,
-			Balance: _parity_scale_codec::Encode,
-			Balance: _parity_scale_codec::Encode,
+			A: _parity_scale_codec::Encode,
+			A: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			RawSolution<C>: _parity_scale_codec::Encode,
+			RawSolution<C>: _parity_scale_codec::Encode,
 		{
 			fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
 				dest.push(&self.who);
@@ -3591,15 +979,16 @@ pub mod two_phase {
 				dest.push(&self.solution);
 			}
 		}
-		impl<AccountId, Balance: HasCompact> _parity_scale_codec::EncodeLike
-			for SignedSubmission<AccountId, Balance>
+		impl<A, B: HasCompact, C> _parity_scale_codec::EncodeLike for SignedSubmission<A, B, C>
 		where
-			AccountId: _parity_scale_codec::Encode,
-			AccountId: _parity_scale_codec::Encode,
-			Balance: _parity_scale_codec::Encode,
-			Balance: _parity_scale_codec::Encode,
-			Balance: _parity_scale_codec::Encode,
-			Balance: _parity_scale_codec::Encode,
+			A: _parity_scale_codec::Encode,
+			A: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			RawSolution<C>: _parity_scale_codec::Encode,
+			RawSolution<C>: _parity_scale_codec::Encode,
 		{
 		}
 	};
@@ -3607,15 +996,16 @@ pub mod two_phase {
 		#[allow(unknown_lints)]
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
-		impl<AccountId, Balance: HasCompact> _parity_scale_codec::Decode
-			for SignedSubmission<AccountId, Balance>
+		impl<A, B: HasCompact, C> _parity_scale_codec::Decode for SignedSubmission<A, B, C>
 		where
-			AccountId: _parity_scale_codec::Decode,
-			AccountId: _parity_scale_codec::Decode,
-			Balance: _parity_scale_codec::Decode,
-			Balance: _parity_scale_codec::Decode,
-			Balance: _parity_scale_codec::Decode,
-			Balance: _parity_scale_codec::Decode,
+			A: _parity_scale_codec::Decode,
+			A: _parity_scale_codec::Decode,
+			B: _parity_scale_codec::Decode,
+			B: _parity_scale_codec::Decode,
+			B: _parity_scale_codec::Decode,
+			B: _parity_scale_codec::Decode,
+			RawSolution<C>: _parity_scale_codec::Decode,
+			RawSolution<C>: _parity_scale_codec::Decode,
 		{
 			fn decode<DecIn: _parity_scale_codec::Input>(
 				input: &mut DecIn,
@@ -3661,10 +1051,11 @@ pub mod two_phase {
 			}
 		}
 	};
-	impl<AccountId, Balance: HasCompact> core::fmt::Debug for SignedSubmission<AccountId, Balance>
+	impl<A, B: HasCompact, C> core::fmt::Debug for SignedSubmission<A, B, C>
 	where
-		AccountId: core::fmt::Debug,
-		Balance: core::fmt::Debug,
+		A: core::fmt::Debug,
+		B: core::fmt::Debug,
+		C: core::fmt::Debug,
 	{
 		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
 			fmt.debug_struct("SignedSubmission")
@@ -3675,85 +1066,72 @@ pub mod two_phase {
 				.finish()
 		}
 	}
-	/// A parsed solution, ready to be enacted.
-	pub struct ReadySolution<AccountId> {
-		winners: Vec<AccountId>,
-		supports: FlatSupportMap<AccountId>,
+	/// A checked and parsed solution, ready to be enacted.
+	pub struct ReadySolution<A> {
+		/// The final supports of the solution. This is target-major vector, storing each winners, total
+		/// backing, and each individual backer.
+		supports: FlatSupportMap<A>,
+		/// How this election was computed.
 		compute: ElectionCompute,
 	}
-	impl<AccountId> ::core::marker::StructuralPartialEq for ReadySolution<AccountId> {}
+	impl<A> ::core::marker::StructuralPartialEq for ReadySolution<A> {}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<AccountId: ::core::cmp::PartialEq> ::core::cmp::PartialEq for ReadySolution<AccountId> {
+	impl<A: ::core::cmp::PartialEq> ::core::cmp::PartialEq for ReadySolution<A> {
 		#[inline]
-		fn eq(&self, other: &ReadySolution<AccountId>) -> bool {
+		fn eq(&self, other: &ReadySolution<A>) -> bool {
 			match *other {
 				ReadySolution {
-					winners: ref __self_1_0,
-					supports: ref __self_1_1,
-					compute: ref __self_1_2,
+					supports: ref __self_1_0,
+					compute: ref __self_1_1,
 				} => match *self {
 					ReadySolution {
-						winners: ref __self_0_0,
-						supports: ref __self_0_1,
-						compute: ref __self_0_2,
-					} => {
-						(*__self_0_0) == (*__self_1_0)
-							&& (*__self_0_1) == (*__self_1_1)
-							&& (*__self_0_2) == (*__self_1_2)
-					}
+						supports: ref __self_0_0,
+						compute: ref __self_0_1,
+					} => (*__self_0_0) == (*__self_1_0) && (*__self_0_1) == (*__self_1_1),
 				},
 			}
 		}
 		#[inline]
-		fn ne(&self, other: &ReadySolution<AccountId>) -> bool {
+		fn ne(&self, other: &ReadySolution<A>) -> bool {
 			match *other {
 				ReadySolution {
-					winners: ref __self_1_0,
-					supports: ref __self_1_1,
-					compute: ref __self_1_2,
+					supports: ref __self_1_0,
+					compute: ref __self_1_1,
 				} => match *self {
 					ReadySolution {
-						winners: ref __self_0_0,
-						supports: ref __self_0_1,
-						compute: ref __self_0_2,
-					} => {
-						(*__self_0_0) != (*__self_1_0)
-							|| (*__self_0_1) != (*__self_1_1)
-							|| (*__self_0_2) != (*__self_1_2)
-					}
+						supports: ref __self_0_0,
+						compute: ref __self_0_1,
+					} => (*__self_0_0) != (*__self_1_0) || (*__self_0_1) != (*__self_1_1),
 				},
 			}
 		}
 	}
-	impl<AccountId> ::core::marker::StructuralEq for ReadySolution<AccountId> {}
+	impl<A> ::core::marker::StructuralEq for ReadySolution<A> {}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<AccountId: ::core::cmp::Eq> ::core::cmp::Eq for ReadySolution<AccountId> {
+	impl<A: ::core::cmp::Eq> ::core::cmp::Eq for ReadySolution<A> {
 		#[inline]
 		#[doc(hidden)]
 		fn assert_receiver_is_total_eq(&self) -> () {
 			{
-				let _: ::core::cmp::AssertParamIsEq<Vec<AccountId>>;
-				let _: ::core::cmp::AssertParamIsEq<FlatSupportMap<AccountId>>;
+				let _: ::core::cmp::AssertParamIsEq<FlatSupportMap<A>>;
 				let _: ::core::cmp::AssertParamIsEq<ElectionCompute>;
 			}
 		}
 	}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<AccountId: ::core::clone::Clone> ::core::clone::Clone for ReadySolution<AccountId> {
+	impl<A: ::core::clone::Clone> ::core::clone::Clone for ReadySolution<A> {
 		#[inline]
-		fn clone(&self) -> ReadySolution<AccountId> {
+		fn clone(&self) -> ReadySolution<A> {
 			match *self {
 				ReadySolution {
-					winners: ref __self_0_0,
-					supports: ref __self_0_1,
-					compute: ref __self_0_2,
+					supports: ref __self_0_0,
+					compute: ref __self_0_1,
 				} => ReadySolution {
-					winners: ::core::clone::Clone::clone(&(*__self_0_0)),
-					supports: ::core::clone::Clone::clone(&(*__self_0_1)),
-					compute: ::core::clone::Clone::clone(&(*__self_0_2)),
+					supports: ::core::clone::Clone::clone(&(*__self_0_0)),
+					compute: ::core::clone::Clone::clone(&(*__self_0_1)),
 				},
 			}
 		}
@@ -3762,25 +1140,20 @@ pub mod two_phase {
 		#[allow(unknown_lints)]
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
-		impl<AccountId> _parity_scale_codec::Encode for ReadySolution<AccountId>
+		impl<A> _parity_scale_codec::Encode for ReadySolution<A>
 		where
-			Vec<AccountId>: _parity_scale_codec::Encode,
-			Vec<AccountId>: _parity_scale_codec::Encode,
-			FlatSupportMap<AccountId>: _parity_scale_codec::Encode,
-			FlatSupportMap<AccountId>: _parity_scale_codec::Encode,
+			FlatSupportMap<A>: _parity_scale_codec::Encode,
+			FlatSupportMap<A>: _parity_scale_codec::Encode,
 		{
 			fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
-				dest.push(&self.winners);
 				dest.push(&self.supports);
 				dest.push(&self.compute);
 			}
 		}
-		impl<AccountId> _parity_scale_codec::EncodeLike for ReadySolution<AccountId>
+		impl<A> _parity_scale_codec::EncodeLike for ReadySolution<A>
 		where
-			Vec<AccountId>: _parity_scale_codec::Encode,
-			Vec<AccountId>: _parity_scale_codec::Encode,
-			FlatSupportMap<AccountId>: _parity_scale_codec::Encode,
-			FlatSupportMap<AccountId>: _parity_scale_codec::Encode,
+			FlatSupportMap<A>: _parity_scale_codec::Encode,
+			FlatSupportMap<A>: _parity_scale_codec::Encode,
 		{
 		}
 	};
@@ -3788,26 +1161,15 @@ pub mod two_phase {
 		#[allow(unknown_lints)]
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
-		impl<AccountId> _parity_scale_codec::Decode for ReadySolution<AccountId>
+		impl<A> _parity_scale_codec::Decode for ReadySolution<A>
 		where
-			Vec<AccountId>: _parity_scale_codec::Decode,
-			Vec<AccountId>: _parity_scale_codec::Decode,
-			FlatSupportMap<AccountId>: _parity_scale_codec::Decode,
-			FlatSupportMap<AccountId>: _parity_scale_codec::Decode,
+			FlatSupportMap<A>: _parity_scale_codec::Decode,
+			FlatSupportMap<A>: _parity_scale_codec::Decode,
 		{
 			fn decode<DecIn: _parity_scale_codec::Input>(
 				input: &mut DecIn,
 			) -> core::result::Result<Self, _parity_scale_codec::Error> {
 				Ok(ReadySolution {
-					winners: {
-						let res = _parity_scale_codec::Decode::decode(input);
-						match res {
-							Err(_) => {
-								return Err("Error decoding field ReadySolution.winners".into())
-							}
-							Ok(a) => a,
-						}
-					},
 					supports: {
 						let res = _parity_scale_codec::Decode::decode(input);
 						match res {
@@ -3830,13 +1192,12 @@ pub mod two_phase {
 			}
 		}
 	};
-	impl<AccountId> core::fmt::Debug for ReadySolution<AccountId>
+	impl<A> core::fmt::Debug for ReadySolution<A>
 	where
-		AccountId: core::fmt::Debug,
+		A: core::fmt::Debug,
 	{
 		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
 			fmt.debug_struct("ReadySolution")
-				.field("winners", &self.winners)
 				.field("supports", &self.supports)
 				.field("compute", &self.compute)
 				.finish()
@@ -3844,33 +1205,243 @@ pub mod two_phase {
 	}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<AccountId: ::core::default::Default> ::core::default::Default for ReadySolution<AccountId> {
+	impl<A: ::core::default::Default> ::core::default::Default for ReadySolution<A> {
 		#[inline]
-		fn default() -> ReadySolution<AccountId> {
+		fn default() -> ReadySolution<A> {
 			ReadySolution {
-				winners: ::core::default::Default::default(),
 				supports: ::core::default::Default::default(),
 				compute: ::core::default::Default::default(),
 			}
 		}
 	}
-	pub trait WeightInfo {}
-	impl WeightInfo for () {}
+	/// The crate errors. Note that this is different from the [`PalletError`].
+	pub enum Error {
+		/// A feasibility error.
+		Feasibility(FeasibilityError),
+		/// An error in the on-chain fallback.
+		OnChainFallback(crate::onchain::Error),
+		/// Snapshot data was unavailable unexpectedly.
+		SnapshotUnAvailable,
+	}
+	impl core::fmt::Debug for Error {
+		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+			match self {
+				Self::Feasibility(ref a0) => {
+					fmt.debug_tuple("Error::Feasibility").field(a0).finish()
+				}
+				Self::OnChainFallback(ref a0) => {
+					fmt.debug_tuple("Error::OnChainFallback").field(a0).finish()
+				}
+				Self::SnapshotUnAvailable => fmt.debug_tuple("Error::SnapshotUnAvailable").finish(),
+				_ => Ok(()),
+			}
+		}
+	}
+	impl ::core::marker::StructuralEq for Error {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::cmp::Eq for Error {
+		#[inline]
+		#[doc(hidden)]
+		fn assert_receiver_is_total_eq(&self) -> () {
+			{
+				let _: ::core::cmp::AssertParamIsEq<FeasibilityError>;
+				let _: ::core::cmp::AssertParamIsEq<crate::onchain::Error>;
+			}
+		}
+	}
+	impl ::core::marker::StructuralPartialEq for Error {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::cmp::PartialEq for Error {
+		#[inline]
+		fn eq(&self, other: &Error) -> bool {
+			{
+				let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
+				let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
+				if true && __self_vi == __arg_1_vi {
+					match (&*self, &*other) {
+						(&Error::Feasibility(ref __self_0), &Error::Feasibility(ref __arg_1_0)) => {
+							(*__self_0) == (*__arg_1_0)
+						}
+						(
+							&Error::OnChainFallback(ref __self_0),
+							&Error::OnChainFallback(ref __arg_1_0),
+						) => (*__self_0) == (*__arg_1_0),
+						_ => true,
+					}
+				} else {
+					false
+				}
+			}
+		}
+		#[inline]
+		fn ne(&self, other: &Error) -> bool {
+			{
+				let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
+				let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
+				if true && __self_vi == __arg_1_vi {
+					match (&*self, &*other) {
+						(&Error::Feasibility(ref __self_0), &Error::Feasibility(ref __arg_1_0)) => {
+							(*__self_0) != (*__arg_1_0)
+						}
+						(
+							&Error::OnChainFallback(ref __self_0),
+							&Error::OnChainFallback(ref __arg_1_0),
+						) => (*__self_0) != (*__arg_1_0),
+						_ => false,
+					}
+				} else {
+					true
+				}
+			}
+		}
+	}
+	impl From<crate::onchain::Error> for Error {
+		fn from(e: crate::onchain::Error) -> Self {
+			Error::OnChainFallback(e)
+		}
+	}
+	/// Errors that can happen in the feasibility check.
+	pub enum FeasibilityError {
+		/// Wrong number of winners presented.
+		WrongWinnerCount,
+		/// The snapshot is not available.
+		///
+		/// This must be an internal error of the chain.
+		SnapshotUnavailable,
+		/// Internal error from the election crate.
+		NposElectionError(sp_npos_elections::Error),
+		/// A vote is invalid.
+		InvalidVote,
+		/// A voter is invalid.
+		InvalidVoter,
+		/// A winner is invalid.
+		InvalidWinner,
+		/// The given score was invalid.
+		InvalidScore,
+	}
+	impl core::fmt::Debug for FeasibilityError {
+		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+			match self {
+				Self::WrongWinnerCount => fmt
+					.debug_tuple("FeasibilityError::WrongWinnerCount")
+					.finish(),
+				Self::SnapshotUnavailable => fmt
+					.debug_tuple("FeasibilityError::SnapshotUnavailable")
+					.finish(),
+				Self::NposElectionError(ref a0) => fmt
+					.debug_tuple("FeasibilityError::NposElectionError")
+					.field(a0)
+					.finish(),
+				Self::InvalidVote => fmt.debug_tuple("FeasibilityError::InvalidVote").finish(),
+				Self::InvalidVoter => fmt.debug_tuple("FeasibilityError::InvalidVoter").finish(),
+				Self::InvalidWinner => fmt.debug_tuple("FeasibilityError::InvalidWinner").finish(),
+				Self::InvalidScore => fmt.debug_tuple("FeasibilityError::InvalidScore").finish(),
+				_ => Ok(()),
+			}
+		}
+	}
+	impl ::core::marker::StructuralEq for FeasibilityError {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::cmp::Eq for FeasibilityError {
+		#[inline]
+		#[doc(hidden)]
+		fn assert_receiver_is_total_eq(&self) -> () {
+			{
+				let _: ::core::cmp::AssertParamIsEq<sp_npos_elections::Error>;
+			}
+		}
+	}
+	impl ::core::marker::StructuralPartialEq for FeasibilityError {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::cmp::PartialEq for FeasibilityError {
+		#[inline]
+		fn eq(&self, other: &FeasibilityError) -> bool {
+			{
+				let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
+				let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
+				if true && __self_vi == __arg_1_vi {
+					match (&*self, &*other) {
+						(
+							&FeasibilityError::NposElectionError(ref __self_0),
+							&FeasibilityError::NposElectionError(ref __arg_1_0),
+						) => (*__self_0) == (*__arg_1_0),
+						_ => true,
+					}
+				} else {
+					false
+				}
+			}
+		}
+		#[inline]
+		fn ne(&self, other: &FeasibilityError) -> bool {
+			{
+				let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
+				let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
+				if true && __self_vi == __arg_1_vi {
+					match (&*self, &*other) {
+						(
+							&FeasibilityError::NposElectionError(ref __self_0),
+							&FeasibilityError::NposElectionError(ref __arg_1_0),
+						) => (*__self_0) != (*__arg_1_0),
+						_ => false,
+					}
+				} else {
+					true
+				}
+			}
+		}
+	}
+	impl From<sp_npos_elections::Error> for FeasibilityError {
+		fn from(e: sp_npos_elections::Error) -> Self {
+			FeasibilityError::NposElectionError(e)
+		}
+	}
+	/// The weights for this pallet.
+	pub trait WeightInfo {
+		fn feasibility_check() -> Weight;
+		fn submit() -> Weight;
+		fn submit_unsigned() -> Weight;
+	}
+	impl WeightInfo for () {
+		fn feasibility_check() -> Weight {
+			Default::default()
+		}
+		fn submit() -> Weight {
+			Default::default()
+		}
+		fn submit_unsigned() -> Weight {
+			Default::default()
+		}
+	}
 	pub trait Trait: frame_system::Trait {
+		/// Event type.
 		type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+		/// Currency type.
 		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
+		/// Duration of the signed phase.
 		type SignedPhase: Get<Self::BlockNumber>;
+		/// Duration of the unsigned phase.
 		type UnsignedPhase: Get<Self::BlockNumber>;
+		/// Maximum number of singed submissions that can be queued.
 		type MaxSignedSubmissions: Get<u32>;
 		type SignedRewardBase: Get<BalanceOf<Self>>;
 		type SignedRewardFactor: Get<Perbill>;
 		type SignedDepositBase: Get<BalanceOf<Self>>;
 		type SignedDepositByte: Get<BalanceOf<Self>>;
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
+		/// The minimum amount of improvement to the solution score that defines a solution as "better".
 		type SolutionImprovementThreshold: Get<Perbill>;
+		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
+		/// Handler for the rewards.
 		type RewardHandler: OnUnbalanced<PositiveImbalanceOf<Self>>;
+		/// Something that will provide the election data.
 		type ElectionDataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
+		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;
 	}
 	use self::sp_api_hidden_includes_decl_storage::hidden_include::{
@@ -3889,7 +1460,10 @@ pub mod two_phase {
 		type SnapshotVoters;
 		type DesiredTargets;
 	}
-	impl<T: Trait + 'static> Store for Module<T> {
+	impl<T: Trait + 'static> Store for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		type CurrentPhase = CurrentPhase;
 		type SignedSubmissions = SignedSubmissions<T>;
 		type QueuedSolution = QueuedSolution<T>;
@@ -3897,32 +1471,38 @@ pub mod two_phase {
 		type SnapshotVoters = SnapshotVoters<T>;
 		type DesiredTargets = DesiredTargets;
 	}
-	impl<T: Trait + 'static> Module<T> {
+	impl<T: Trait + 'static> Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		/// Current phase.
 		pub fn current_phase() -> Phase {
 			< CurrentPhase < > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < Phase > > :: get ( )
 		}
-		/// Sorted list of unchecked, signed solutions.
-		pub fn signed_submissions() -> Vec<SignedSubmission<T::AccountId, BalanceOf<T>>> {
-			< SignedSubmissions < T > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < Vec < SignedSubmission < T :: AccountId , BalanceOf < T > > > > > :: get ( )
+		/// Sorted (worse -> best) list of unchecked, signed solutions.
+		pub fn signed_submissions(
+		) -> Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>> {
+			< SignedSubmissions < T > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < Vec < SignedSubmission < T :: AccountId , BalanceOf < T > , CompactOf < T > > > > > :: get ( )
 		}
-		/// Current, best, unsigned solution.
+		/// Current best solution, signed or unsigned.
 		pub fn queued_solution() -> Option<ReadySolution<T::AccountId>> {
 			< QueuedSolution < T > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < ReadySolution < T :: AccountId > > > :: get ( )
 		}
-		/// Snapshot of all Voters. The indices if this will be used in election.
+		/// Snapshot of all Voters.
 		///
 		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 		pub fn snapshot_targets() -> Option<Vec<T::AccountId>> {
 			< SnapshotTargets < T > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < Vec < T :: AccountId > > > :: get ( )
 		}
-		/// Snapshot of all targets. The indices if this will be used in election.
+		/// Snapshot of all targets.
 		///
 		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 		pub fn snapshot_voters() -> Option<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
 			< SnapshotVoters < T > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < Vec < ( T :: AccountId , VoteWeight , Vec < T :: AccountId > ) > > > :: get ( )
 		}
-		/// Desired number of targets to elect
+		/// Desired number of targets to elect.
+		///
+		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 		pub fn desired_targets() -> u32 {
 			< DesiredTargets < > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < u32 > > :: get ( )
 		}
@@ -3942,6 +1522,8 @@ pub mod two_phase {
 	#[cfg(feature = "std")]
 	impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
 		for __GetByteStructCurrentPhase<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		fn default_byte(
 			&self,
@@ -3955,8 +1537,14 @@ pub mod two_phase {
 				.clone()
 		}
 	}
-	unsafe impl<T: Trait> Send for __GetByteStructCurrentPhase<T> {}
-	unsafe impl<T: Trait> Sync for __GetByteStructCurrentPhase<T> {}
+	unsafe impl<T: Trait> Send for __GetByteStructCurrentPhase<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	unsafe impl<T: Trait> Sync for __GetByteStructCurrentPhase<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
 	#[doc(hidden)]
 	pub struct __GetByteStructSignedSubmissions<T>(
 		pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
@@ -3972,22 +1560,24 @@ pub mod two_phase {
 	#[cfg(feature = "std")]
 	impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
 		for __GetByteStructSignedSubmissions<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		fn default_byte(
 			&self,
 		) -> self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8> {
 			use self::sp_api_hidden_includes_decl_storage::hidden_include::codec::Encode;
-			__CACHE_GET_BYTE_STRUCT_SignedSubmissions
-				.get_or_init(|| {
-					let def_val: Vec<SignedSubmission<T::AccountId, BalanceOf<T>>> =
-						Default::default();
-					<Vec<SignedSubmission<T::AccountId, BalanceOf<T>>> as Encode>::encode(&def_val)
-				})
-				.clone()
+			__CACHE_GET_BYTE_STRUCT_SignedSubmissions . get_or_init ( | | { let def_val : Vec < SignedSubmission < T :: AccountId , BalanceOf < T > , CompactOf < T > > > = Default :: default ( ) ; < Vec < SignedSubmission < T :: AccountId , BalanceOf < T > , CompactOf < T > > > as Encode > :: encode ( & def_val ) } ) . clone ( )
 		}
 	}
-	unsafe impl<T: Trait> Send for __GetByteStructSignedSubmissions<T> {}
-	unsafe impl<T: Trait> Sync for __GetByteStructSignedSubmissions<T> {}
+	unsafe impl<T: Trait> Send for __GetByteStructSignedSubmissions<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	unsafe impl<T: Trait> Sync for __GetByteStructSignedSubmissions<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
 	#[doc(hidden)]
 	pub struct __GetByteStructQueuedSolution<T>(
 		pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
@@ -4003,6 +1593,8 @@ pub mod two_phase {
 	#[cfg(feature = "std")]
 	impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
 		for __GetByteStructQueuedSolution<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		fn default_byte(
 			&self,
@@ -4016,8 +1608,14 @@ pub mod two_phase {
 				.clone()
 		}
 	}
-	unsafe impl<T: Trait> Send for __GetByteStructQueuedSolution<T> {}
-	unsafe impl<T: Trait> Sync for __GetByteStructQueuedSolution<T> {}
+	unsafe impl<T: Trait> Send for __GetByteStructQueuedSolution<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	unsafe impl<T: Trait> Sync for __GetByteStructQueuedSolution<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
 	#[doc(hidden)]
 	pub struct __GetByteStructSnapshotTargets<T>(
 		pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
@@ -4033,6 +1631,8 @@ pub mod two_phase {
 	#[cfg(feature = "std")]
 	impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
 		for __GetByteStructSnapshotTargets<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		fn default_byte(
 			&self,
@@ -4046,8 +1646,14 @@ pub mod two_phase {
 				.clone()
 		}
 	}
-	unsafe impl<T: Trait> Send for __GetByteStructSnapshotTargets<T> {}
-	unsafe impl<T: Trait> Sync for __GetByteStructSnapshotTargets<T> {}
+	unsafe impl<T: Trait> Send for __GetByteStructSnapshotTargets<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	unsafe impl<T: Trait> Sync for __GetByteStructSnapshotTargets<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
 	#[doc(hidden)]
 	pub struct __GetByteStructSnapshotVoters<T>(
 		pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
@@ -4063,6 +1669,8 @@ pub mod two_phase {
 	#[cfg(feature = "std")]
 	impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
 		for __GetByteStructSnapshotVoters<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		fn default_byte(
 			&self,
@@ -4079,8 +1687,14 @@ pub mod two_phase {
 				.clone()
 		}
 	}
-	unsafe impl<T: Trait> Send for __GetByteStructSnapshotVoters<T> {}
-	unsafe impl<T: Trait> Sync for __GetByteStructSnapshotVoters<T> {}
+	unsafe impl<T: Trait> Send for __GetByteStructSnapshotVoters<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	unsafe impl<T: Trait> Sync for __GetByteStructSnapshotVoters<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
 	#[doc(hidden)]
 	pub struct __GetByteStructDesiredTargets<T>(
 		pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
@@ -4096,6 +1710,8 @@ pub mod two_phase {
 	#[cfg(feature = "std")]
 	impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
 		for __GetByteStructDesiredTargets<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		fn default_byte(
 			&self,
@@ -4109,13 +1725,22 @@ pub mod two_phase {
 				.clone()
 		}
 	}
-	unsafe impl<T: Trait> Send for __GetByteStructDesiredTargets<T> {}
-	unsafe impl<T: Trait> Sync for __GetByteStructDesiredTargets<T> {}
-	impl<T: Trait + 'static> Module<T> {
+	unsafe impl<T: Trait> Send for __GetByteStructDesiredTargets<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	unsafe impl<T: Trait> Sync for __GetByteStructDesiredTargets<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	impl<T: Trait + 'static> Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		#[doc(hidden)]
 		pub fn storage_metadata(
 		) -> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::StorageMetadata {
-			self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageMetadata { prefix : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "TwoPhaseElectionProvider" ) , entries : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "CurrentPhase" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Phase" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructCurrentPhase :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Current phase." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SignedSubmissions" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<SignedSubmission<T::AccountId, BalanceOf<T>>>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSignedSubmissions :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Sorted list of unchecked, signed solutions." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "QueuedSolution" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "ReadySolution<T::AccountId>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructQueuedSolution :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Current, best, unsigned solution." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SnapshotTargets" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<T::AccountId>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSnapshotTargets :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Snapshot of all Voters. The indices if this will be used in election." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SnapshotVoters" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSnapshotVoters :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Snapshot of all targets. The indices if this will be used in election." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "DesiredTargets" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "u32" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructDesiredTargets :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Desired number of targets to elect" ] ) , } ] [ .. ] ) , }
+			self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageMetadata { prefix : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "TwoPhaseElectionProvider" ) , entries : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "CurrentPhase" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Phase" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructCurrentPhase :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Current phase." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SignedSubmissions" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSignedSubmissions :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Sorted (worse -> best) list of unchecked, signed solutions." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "QueuedSolution" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "ReadySolution<T::AccountId>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructQueuedSolution :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Current best solution, signed or unsigned." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SnapshotTargets" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<T::AccountId>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSnapshotTargets :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Snapshot of all Voters." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SnapshotVoters" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSnapshotVoters :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Snapshot of all targets." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "DesiredTargets" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "u32" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructDesiredTargets :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Desired number of targets to elect." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } ] [ .. ] ) , }
 		}
 	}
 	/// Hidden instance generated to be internally used when module is used without
@@ -4209,18 +1834,22 @@ pub mod two_phase {
 			Some(v)
 		}
 	}
-	/// Sorted list of unchecked, signed solutions.
+	/// Sorted (worse -> best) list of unchecked, signed solutions.
 	pub struct SignedSubmissions<T: Trait>(
 		self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
 				(T,),
 			>,
-	);
+	)
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
 	impl<T: Trait>
 		self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
-			Vec<SignedSubmission<T::AccountId, BalanceOf<T>>>,
+			Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
 		> for SignedSubmissions<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
-		type Query = Vec<SignedSubmission<T::AccountId, BalanceOf<T>>>;
+		type Query = Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>;
 		fn module_prefix() -> &'static [u8] {
 			< __InherentHiddenInstance as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: traits :: Instance > :: PREFIX . as_bytes ( )
 		}
@@ -4228,26 +1857,30 @@ pub mod two_phase {
 			b"SignedSubmissions"
 		}
 		fn from_optional_value_to_query(
-			v: Option<Vec<SignedSubmission<T::AccountId, BalanceOf<T>>>>,
+			v: Option<Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>>,
 		) -> Self::Query {
 			v.unwrap_or_else(|| Default::default())
 		}
 		fn from_query_to_optional_value(
 			v: Self::Query,
-		) -> Option<Vec<SignedSubmission<T::AccountId, BalanceOf<T>>>> {
+		) -> Option<Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>> {
 			Some(v)
 		}
 	}
-	/// Current, best, unsigned solution.
+	/// Current best solution, signed or unsigned.
 	pub struct QueuedSolution<T: Trait>(
 		self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
 				(T,),
 			>,
-	);
+	)
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
 	impl<T: Trait>
 		self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
 			ReadySolution<T::AccountId>,
 		> for QueuedSolution<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		type Query = Option<ReadySolution<T::AccountId>>;
 		fn module_prefix() -> &'static [u8] {
@@ -4263,18 +1896,22 @@ pub mod two_phase {
 			v
 		}
 	}
-	/// Snapshot of all Voters. The indices if this will be used in election.
+	/// Snapshot of all Voters.
 	///
 	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 	pub struct SnapshotTargets<T: Trait>(
 		self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
 				(T,),
 			>,
-	);
+	)
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
 	impl<T: Trait>
 		self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
 			Vec<T::AccountId>,
 		> for SnapshotTargets<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		type Query = Option<Vec<T::AccountId>>;
 		fn module_prefix() -> &'static [u8] {
@@ -4290,18 +1927,22 @@ pub mod two_phase {
 			v
 		}
 	}
-	/// Snapshot of all targets. The indices if this will be used in election.
+	/// Snapshot of all targets.
 	///
 	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 	pub struct SnapshotVoters<T: Trait>(
 		self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
 				(T,),
 			>,
-	);
+	)
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
 	impl<T: Trait>
 		self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
 			Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 		> for SnapshotVoters<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		type Query = Option<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>>;
 		fn module_prefix() -> &'static [u8] {
@@ -4321,7 +1962,9 @@ pub mod two_phase {
 			v
 		}
 	}
-	/// Desired number of targets to elect
+	/// Desired number of targets to elect.
+	///
+	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 	pub struct DesiredTargets(
 		self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<()>,
 	);
@@ -4352,10 +1995,17 @@ pub mod two_phase {
 	/// Events for this module.
 	///
 	pub enum RawEvent<AccountId> {
-		/// A solution was sot
+		/// A solution was stored with the given compute.
+		///
+		/// If the solution is signed, this means that it hasn't yet been processed. If the solution
+		/// is unsigned, this means that it has also been processed.
 		SolutionStored(ElectionCompute),
+		/// The election has been finalized, with `Some` of the given computation, or else if the
+		/// election failed, `None`.
 		ElectionFinalized(Option<ElectionCompute>),
+		/// An account has been rewarded for their signed submission being finalized.
 		Rewarded(AccountId),
+		/// An account has been slashed for submitting an invalid signed submission.
 		Slashed(AccountId),
 	}
 	#[automatically_derived]
@@ -4593,7 +2243,10 @@ pub mod two_phase {
 						"ElectionCompute",
 					]),
 					documentation: ::frame_support::event::DecodeDifferent::Encode(&[
-						r" A solution was sot",
+						r" A solution was stored with the given compute.",
+						r"",
+						r" If the solution is signed, this means that it hasn't yet been processed. If the solution",
+						r" is unsigned, this means that it has also been processed.",
 					]),
 				},
 				::frame_support::event::EventMetadata {
@@ -4601,122 +2254,37 @@ pub mod two_phase {
 					arguments: ::frame_support::event::DecodeDifferent::Encode(&[
 						"Option<ElectionCompute>",
 					]),
-					documentation: ::frame_support::event::DecodeDifferent::Encode(&[]),
+					documentation: ::frame_support::event::DecodeDifferent::Encode(&[
+						r" The election has been finalized, with `Some` of the given computation, or else if the",
+						r" election failed, `None`.",
+					]),
 				},
 				::frame_support::event::EventMetadata {
 					name: ::frame_support::event::DecodeDifferent::Encode("Rewarded"),
 					arguments: ::frame_support::event::DecodeDifferent::Encode(&["AccountId"]),
-					documentation: ::frame_support::event::DecodeDifferent::Encode(&[]),
+					documentation: ::frame_support::event::DecodeDifferent::Encode(&[
+						r" An account has been rewarded for their signed submission being finalized.",
+					]),
 				},
 				::frame_support::event::EventMetadata {
 					name: ::frame_support::event::DecodeDifferent::Encode("Slashed"),
 					arguments: ::frame_support::event::DecodeDifferent::Encode(&["AccountId"]),
-					documentation: ::frame_support::event::DecodeDifferent::Encode(&[]),
+					documentation: ::frame_support::event::DecodeDifferent::Encode(&[
+						r" An account has been slashed for submitting an invalid signed submission.",
+					]),
 				},
 			]
 		}
 	}
-	pub enum PalletError<T: Trait> {
-		#[doc(hidden)]
-		__Ignore(
-			::frame_support::sp_std::marker::PhantomData<(T,)>,
-			::frame_support::Never,
-		),
-		EarlySubmission,
-		QueueFull,
-		SubmissionQueuedFull,
-		CannotPayDeposit,
-	}
-	impl<T: Trait> ::frame_support::sp_std::fmt::Debug for PalletError<T> {
-		fn fmt(
-			&self,
-			f: &mut ::frame_support::sp_std::fmt::Formatter<'_>,
-		) -> ::frame_support::sp_std::fmt::Result {
-			f.write_str(self.as_str())
-		}
-	}
-	impl<T: Trait> PalletError<T> {
-		fn as_u8(&self) -> u8 {
-			match self {
-				PalletError::__Ignore(_, _) => {
-					::std::rt::begin_panic_fmt(&::core::fmt::Arguments::new_v1(
-						&["internal error: entered unreachable code: "],
-						&match (&"`__Ignore` can never be constructed",) {
-							(arg0,) => [::core::fmt::ArgumentV1::new(
-								arg0,
-								::core::fmt::Display::fmt,
-							)],
-						},
-					))
-				}
-				PalletError::EarlySubmission => 0,
-				PalletError::QueueFull => 0 + 1,
-				PalletError::SubmissionQueuedFull => 0 + 1 + 1,
-				PalletError::CannotPayDeposit => 0 + 1 + 1 + 1,
-			}
-		}
-		fn as_str(&self) -> &'static str {
-			match self {
-				Self::__Ignore(_, _) => {
-					::std::rt::begin_panic_fmt(&::core::fmt::Arguments::new_v1(
-						&["internal error: entered unreachable code: "],
-						&match (&"`__Ignore` can never be constructed",) {
-							(arg0,) => [::core::fmt::ArgumentV1::new(
-								arg0,
-								::core::fmt::Display::fmt,
-							)],
-						},
-					))
-				}
-				PalletError::EarlySubmission => "EarlySubmission",
-				PalletError::QueueFull => "QueueFull",
-				PalletError::SubmissionQueuedFull => "SubmissionQueuedFull",
-				PalletError::CannotPayDeposit => "CannotPayDeposit",
-			}
-		}
-	}
-	impl<T: Trait> From<PalletError<T>> for &'static str {
-		fn from(err: PalletError<T>) -> &'static str {
-			err.as_str()
-		}
-	}
-	impl<T: Trait> From<PalletError<T>> for ::frame_support::sp_runtime::DispatchError {
-		fn from(err: PalletError<T>) -> Self {
-			let index = <T::PalletInfo as ::frame_support::traits::PalletInfo>::index::<Module<T>>()
-				.expect("Every active module has an index in the runtime; qed") as u8;
-			::frame_support::sp_runtime::DispatchError::Module {
-				index,
-				error: err.as_u8(),
-				message: Some(err.as_str()),
-			}
-		}
-	}
-	impl<T: Trait> ::frame_support::error::ModuleErrorMetadata for PalletError<T> {
-		fn metadata() -> &'static [::frame_support::error::ErrorMetadata] {
-			&[
-				::frame_support::error::ErrorMetadata {
-					name: ::frame_support::error::DecodeDifferent::Encode("EarlySubmission"),
-					documentation: ::frame_support::error::DecodeDifferent::Encode(&[]),
-				},
-				::frame_support::error::ErrorMetadata {
-					name: ::frame_support::error::DecodeDifferent::Encode("QueueFull"),
-					documentation: ::frame_support::error::DecodeDifferent::Encode(&[]),
-				},
-				::frame_support::error::ErrorMetadata {
-					name: ::frame_support::error::DecodeDifferent::Encode("SubmissionQueuedFull"),
-					documentation: ::frame_support::error::DecodeDifferent::Encode(&[]),
-				},
-				::frame_support::error::ErrorMetadata {
-					name: ::frame_support::error::DecodeDifferent::Encode("CannotPayDeposit"),
-					documentation: ::frame_support::error::DecodeDifferent::Encode(&[]),
-				},
-			]
-		}
-	}
-	pub struct Module<T: Trait>(::frame_support::sp_std::marker::PhantomData<(T,)>);
+	pub struct Module<T: Trait>(::frame_support::sp_std::marker::PhantomData<(T,)>)
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<T: ::core::clone::Clone + Trait> ::core::clone::Clone for Module<T> {
+	impl<T: ::core::clone::Clone + Trait> ::core::clone::Clone for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		#[inline]
 		fn clone(&self) -> Module<T> {
 			match *self {
@@ -4726,11 +2294,20 @@ pub mod two_phase {
 	}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<T: ::core::marker::Copy + Trait> ::core::marker::Copy for Module<T> {}
-	impl<T: Trait> ::core::marker::StructuralPartialEq for Module<T> {}
+	impl<T: ::core::marker::Copy + Trait> ::core::marker::Copy for Module<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	impl<T: Trait> ::core::marker::StructuralPartialEq for Module<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<T: ::core::cmp::PartialEq + Trait> ::core::cmp::PartialEq for Module<T> {
+	impl<T: ::core::cmp::PartialEq + Trait> ::core::cmp::PartialEq for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		#[inline]
 		fn eq(&self, other: &Module<T>) -> bool {
 			match *other {
@@ -4748,10 +2325,16 @@ pub mod two_phase {
 			}
 		}
 	}
-	impl<T: Trait> ::core::marker::StructuralEq for Module<T> {}
+	impl<T: Trait> ::core::marker::StructuralEq for Module<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<T: ::core::cmp::Eq + Trait> ::core::cmp::Eq for Module<T> {
+	impl<T: ::core::cmp::Eq + Trait> ::core::cmp::Eq for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		#[inline]
 		#[doc(hidden)]
 		fn assert_receiver_is_total_eq(&self) -> () {
@@ -4764,6 +2347,7 @@ pub mod two_phase {
 	}
 	impl<T: Trait> core::fmt::Debug for Module<T>
 	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 		T: core::fmt::Debug,
 	{
 		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -4772,6 +2356,8 @@ pub mod two_phase {
 	}
 	impl<T: frame_system::Trait + Trait>
 		::frame_support::traits::OnInitialize<<T as frame_system::Trait>::BlockNumber> for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let __within_span__ = {
@@ -4787,7 +2373,7 @@ pub mod two_phase {
 								"frame_election_providers::two_phase",
 								::tracing::Level::TRACE,
 								Some("frame/election-providers/src/two_phase/mod.rs"),
-								Some(250u32),
+								Some(407u32),
 								Some("frame_election_providers::two_phase"),
 								::tracing_core::field::FieldSet::new(
 									&[],
@@ -4832,31 +2418,59 @@ pub mod two_phase {
 			}
 		}
 	}
-	impl<T: Trait> ::frame_support::traits::OnRuntimeUpgrade for Module<T> {}
+	impl<T: Trait> ::frame_support::traits::OnRuntimeUpgrade for Module<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
 	impl<T: frame_system::Trait + Trait>
 		::frame_support::traits::OnFinalize<<T as frame_system::Trait>::BlockNumber> for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 	}
 	impl<T: frame_system::Trait + Trait>
 		::frame_support::traits::OffchainWorker<<T as frame_system::Trait>::BlockNumber> for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		fn offchain_worker(n: T::BlockNumber) {}
 	}
-	impl<T: Trait> Module<T> {
+	impl<T: Trait> Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		/// Deposits an event using `frame_system::Module::deposit_event`.
 		fn deposit_event(event: impl Into<<T as Trait>::Event>) {
 			<frame_system::Module<T>>::deposit_event(event.into())
 		}
 	}
 	#[cfg(feature = "std")]
-	impl<T: Trait> ::frame_support::traits::IntegrityTest for Module<T> {}
+	impl<T: Trait> ::frame_support::traits::IntegrityTest for Module<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
 	/// Can also be called using [`Call`].
 	///
 	/// [`Call`]: enum.Call.html
-	impl<T: Trait> Module<T> {
+	impl<T: Trait> Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		/// Submit a solution for the signed phase.
+		///
+		/// The dispatch origin fo this call must be __signed__.
+		///
+		/// The solution potentially queued, based on the claimed score and processed at the end of
+		/// the signed phase.
+		///
+		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
+		/// might be rewarded, slashed, or get all or a part of the deposit back.
 		///
 		/// NOTE: Calling this function will bypass origin filters.
-		fn submit(origin: T::Origin, solution: RawSolution) -> DispatchResultWithPostInfo {
+		fn submit(
+			origin: T::Origin,
+			solution: RawSolution<CompactOf<T>>,
+		) -> DispatchResultWithPostInfo {
 			let __within_span__ = {
 				if ::tracing::Level::TRACE <= ::tracing::level_filters::STATIC_MAX_LEVEL
 					&& ::tracing::Level::TRACE <= ::tracing::level_filters::LevelFilter::current()
@@ -4870,7 +2484,7 @@ pub mod two_phase {
 								"frame_election_providers::two_phase",
 								::tracing::Level::TRACE,
 								Some("frame/election-providers/src/two_phase/mod.rs"),
-								Some(250u32),
+								Some(407u32),
 								Some("frame_election_providers::two_phase"),
 								::tracing_core::field::FieldSet::new(
 									&[],
@@ -4898,15 +2512,7 @@ pub mod two_phase {
 			{
 				if !Self::current_phase().is_signed() {
 					{
-						return Err(PalletError::<T>::EarlySubmission.into());
-					};
-				}
-			};
-			let queue_size = <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32;
-			{
-				if !(queue_size <= T::MaxSignedSubmissions::get()) {
-					{
-						return Err(PalletError::<T>::SubmissionQueuedFull.into());
+						return Err("EarlySubmission".into());
 					};
 				}
 			};
@@ -4915,19 +2521,17 @@ pub mod two_phase {
 			{
 				if !maybe_index.is_some() {
 					{
-						return Err(PalletError::<T>::QueueFull.into());
+						return Err("QueueFull".into());
 					};
 				}
 			};
 			let index = maybe_index.expect("Option checked to be `Some`; qed.");
 			let deposit = signed_submissions[index].deposit;
-			T::Currency::reserve(&who, deposit).map_err(|_| PalletError::<T>::CannotPayDeposit)?;
+			T::Currency::reserve(&who, deposit).map_err(|_| "CannotPayDeposit")?;
 			if true {
-				if !(signed_submissions.len() as u32 == queue_size + 1
-					|| signed_submissions.len() as u32 == T::MaxSignedSubmissions::get())
-				{
+				if !(signed_submissions.len() as u32 <= T::MaxSignedSubmissions::get()) {
 					{
-						:: std :: rt :: begin_panic ( "assertion failed: signed_submissions.len() as u32 == queue_size + 1 ||\n    signed_submissions.len() as u32 == T::MaxSignedSubmissions::get()" )
+						:: std :: rt :: begin_panic ( "assertion failed: signed_submissions.len() as u32 <= T::MaxSignedSubmissions::get()" )
 					}
 				};
 			};
@@ -4936,11 +2540,25 @@ pub mod two_phase {
 			Ok(None.into())
 		}
 		#[allow(unreachable_code)]
+		/// Submit a solution for the unsigned phase.
+		///
+		/// The dispatch origin fo this call must be __signed__.
+		///
+		/// This submission is checked on the fly, thus it is likely yo be more limited and smaller.
+		/// Moreover, this unsigned solution is only validated when submitted to the pool from the
+		/// local process. Effectively, this means that only active validators can submit this
+		/// transaction when authoring a block.
+		///
+		/// To prevent any incorrect solution (and thus wasted time/weight), this transaction will
+		/// panic if the solution submitted by the validator is invalid, effectively putting their
+		/// authoring reward at risk.
+		///
+		/// No deposit or reward is associated with this.
 		///
 		/// NOTE: Calling this function will bypass origin filters.
 		fn submit_unsigned(
 			origin: T::Origin,
-			solution: RawSolution,
+			solution: RawSolution<CompactOf<T>>,
 		) -> ::frame_support::dispatch::DispatchResult {
 			let __within_span__ = {
 				if ::tracing::Level::TRACE <= ::tracing::level_filters::STATIC_MAX_LEVEL
@@ -4955,7 +2573,7 @@ pub mod two_phase {
 								"frame_election_providers::two_phase",
 								::tracing::Level::TRACE,
 								Some("frame/election-providers/src/two_phase/mod.rs"),
-								Some(250u32),
+								Some(407u32),
 								Some("frame_election_providers::two_phase"),
 								::tracing_core::field::FieldSet::new(
 									&[],
@@ -4981,6 +2599,25 @@ pub mod two_phase {
 			let __tracing_guard__ = __within_span__.enter();
 			{
 				ensure_none(origin)?;
+				{
+					if !Self::current_phase().is_signed() {
+						{
+							return Err("EarlySubmission".into());
+						};
+					}
+				};
+				use sp_npos_elections::is_score_better;
+				if !Self::queued_solution().map_or(true, |q| {
+					is_score_better(
+						solution.score,
+						q.score,
+						T::SolutionImprovementThreshold::get(),
+					)
+				}) {
+					{
+						::std::rt::begin_panic("WeakSolution")
+					}
+				};
 				Self::deposit_event(RawEvent::SolutionStored(ElectionCompute::Unsigned));
 				{
 					::std::rt::begin_panic("not implemented")
@@ -4992,7 +2629,10 @@ pub mod two_phase {
 	/// Dispatchable calls.
 	///
 	/// Each variant of this enum maps to a dispatchable function from the associated module.
-	pub enum Call<T: Trait> {
+	pub enum Call<T: Trait>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		#[doc(hidden)]
 		#[codec(skip)]
 		__PhantomItem(
@@ -5000,15 +2640,45 @@ pub mod two_phase {
 			::frame_support::Never,
 		),
 		#[allow(non_camel_case_types)]
-		submit(RawSolution),
+		/// Submit a solution for the signed phase.
+		///
+		/// The dispatch origin fo this call must be __signed__.
+		///
+		/// The solution potentially queued, based on the claimed score and processed at the end of
+		/// the signed phase.
+		///
+		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
+		/// might be rewarded, slashed, or get all or a part of the deposit back.
+		submit(RawSolution<CompactOf<T>>),
 		#[allow(non_camel_case_types)]
-		submit_unsigned(RawSolution),
+		/// Submit a solution for the unsigned phase.
+		///
+		/// The dispatch origin fo this call must be __signed__.
+		///
+		/// This submission is checked on the fly, thus it is likely yo be more limited and smaller.
+		/// Moreover, this unsigned solution is only validated when submitted to the pool from the
+		/// local process. Effectively, this means that only active validators can submit this
+		/// transaction when authoring a block.
+		///
+		/// To prevent any incorrect solution (and thus wasted time/weight), this transaction will
+		/// panic if the solution submitted by the validator is invalid, effectively putting their
+		/// authoring reward at risk.
+		///
+		/// No deposit or reward is associated with this.
+		submit_unsigned(RawSolution<CompactOf<T>>),
 	}
 	const _: () = {
 		#[allow(unknown_lints)]
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
-		impl<T: Trait> _parity_scale_codec::Encode for Call<T> {
+		impl<T: Trait> _parity_scale_codec::Encode for Call<T>
+		where
+			ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Encode,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Encode,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Encode,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Encode,
+		{
 			fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
 				match *self {
 					Call::submit(ref aa) => {
@@ -5023,13 +2693,28 @@ pub mod two_phase {
 				}
 			}
 		}
-		impl<T: Trait> _parity_scale_codec::EncodeLike for Call<T> {}
+		impl<T: Trait> _parity_scale_codec::EncodeLike for Call<T>
+		where
+			ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Encode,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Encode,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Encode,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Encode,
+		{
+		}
 	};
 	const _: () = {
 		#[allow(unknown_lints)]
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
-		impl<T: Trait> _parity_scale_codec::Decode for Call<T> {
+		impl<T: Trait> _parity_scale_codec::Decode for Call<T>
+		where
+			ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Decode,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Decode,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Decode,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Decode,
+		{
 			fn decode<DecIn: _parity_scale_codec::Input>(
 				input: &mut DecIn,
 			) -> core::result::Result<Self, _parity_scale_codec::Error> {
@@ -5055,22 +2740,23 @@ pub mod two_phase {
 			}
 		}
 	};
-	impl<T: Trait> ::frame_support::dispatch::GetDispatchInfo for Call<T> {
+	impl<T: Trait> ::frame_support::dispatch::GetDispatchInfo for Call<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		fn get_dispatch_info(&self) -> ::frame_support::dispatch::DispatchInfo {
 			match *self {
 				Call::submit(ref solution) => {
-					let base_weight = 0;
-					let weight =
-						<dyn ::frame_support::dispatch::WeighData<(&RawSolution,)>>::weigh_data(
-							&base_weight,
-							(solution,),
-						);
-					let class = < dyn :: frame_support :: dispatch :: ClassifyDispatch < ( & RawSolution , ) > > :: classify_dispatch ( & base_weight , ( solution , ) ) ;
-					let pays_fee =
-						<dyn ::frame_support::dispatch::PaysFee<(&RawSolution,)>>::pays_fee(
-							&base_weight,
-							(solution,),
-						);
+					let base_weight = T::WeightInfo::submit();
+					let weight = <dyn ::frame_support::dispatch::WeighData<(
+						&RawSolution<CompactOf<T>>,
+					)>>::weigh_data(&base_weight, (solution,));
+					let class = <dyn ::frame_support::dispatch::ClassifyDispatch<(
+						&RawSolution<CompactOf<T>>,
+					)>>::classify_dispatch(&base_weight, (solution,));
+					let pays_fee = <dyn ::frame_support::dispatch::PaysFee<(
+						&RawSolution<CompactOf<T>>,
+					)>>::pays_fee(&base_weight, (solution,));
 					::frame_support::dispatch::DispatchInfo {
 						weight,
 						class,
@@ -5078,18 +2764,16 @@ pub mod two_phase {
 					}
 				}
 				Call::submit_unsigned(ref solution) => {
-					let base_weight = 0;
-					let weight =
-						<dyn ::frame_support::dispatch::WeighData<(&RawSolution,)>>::weigh_data(
-							&base_weight,
-							(solution,),
-						);
-					let class = < dyn :: frame_support :: dispatch :: ClassifyDispatch < ( & RawSolution , ) > > :: classify_dispatch ( & base_weight , ( solution , ) ) ;
-					let pays_fee =
-						<dyn ::frame_support::dispatch::PaysFee<(&RawSolution,)>>::pays_fee(
-							&base_weight,
-							(solution,),
-						);
+					let base_weight = T::WeightInfo::submit_unsigned();
+					let weight = <dyn ::frame_support::dispatch::WeighData<(
+						&RawSolution<CompactOf<T>>,
+					)>>::weigh_data(&base_weight, (solution,));
+					let class = <dyn ::frame_support::dispatch::ClassifyDispatch<(
+						&RawSolution<CompactOf<T>>,
+					)>>::classify_dispatch(&base_weight, (solution,));
+					let pays_fee = <dyn ::frame_support::dispatch::PaysFee<(
+						&RawSolution<CompactOf<T>>,
+					)>>::pays_fee(&base_weight, (solution,));
 					::frame_support::dispatch::DispatchInfo {
 						weight,
 						class,
@@ -5110,7 +2794,10 @@ pub mod two_phase {
 			}
 		}
 	}
-	impl<T: Trait> ::frame_support::dispatch::GetCallName for Call<T> {
+	impl<T: Trait> ::frame_support::dispatch::GetCallName for Call<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		fn get_call_name(&self) -> &'static str {
 			match *self {
 				Call::submit(ref solution) => {
@@ -5138,7 +2825,10 @@ pub mod two_phase {
 			&["submit", "submit_unsigned"]
 		}
 	}
-	impl<T: Trait> ::frame_support::dispatch::Clone for Call<T> {
+	impl<T: Trait> ::frame_support::dispatch::Clone for Call<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		fn clone(&self) -> Self {
 			match *self {
 				Call::submit(ref solution) => Call::submit((*solution).clone()),
@@ -5147,7 +2837,10 @@ pub mod two_phase {
 			}
 		}
 	}
-	impl<T: Trait> ::frame_support::dispatch::PartialEq for Call<T> {
+	impl<T: Trait> ::frame_support::dispatch::PartialEq for Call<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		fn eq(&self, _other: &Self) -> bool {
 			match *self {
 				Call::submit(ref solution) => {
@@ -5180,8 +2873,14 @@ pub mod two_phase {
 			}
 		}
 	}
-	impl<T: Trait> ::frame_support::dispatch::Eq for Call<T> {}
-	impl<T: Trait> ::frame_support::dispatch::fmt::Debug for Call<T> {
+	impl<T: Trait> ::frame_support::dispatch::Eq for Call<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	impl<T: Trait> ::frame_support::dispatch::fmt::Debug for Call<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		fn fmt(
 			&self,
 			_f: &mut ::frame_support::dispatch::fmt::Formatter,
@@ -5211,7 +2910,10 @@ pub mod two_phase {
 			}
 		}
 	}
-	impl<T: Trait> ::frame_support::traits::UnfilteredDispatchable for Call<T> {
+	impl<T: Trait> ::frame_support::traits::UnfilteredDispatchable for Call<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		type Origin = T::Origin;
 		fn dispatch_bypass_filter(
 			self,
@@ -5238,10 +2940,16 @@ pub mod two_phase {
 			}
 		}
 	}
-	impl<T: Trait> ::frame_support::dispatch::Callable<T> for Module<T> {
+	impl<T: Trait> ::frame_support::dispatch::Callable<T> for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		type Call = Call<T>;
 	}
-	impl<T: Trait> Module<T> {
+	impl<T: Trait> Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		#[doc(hidden)]
 		#[allow(dead_code)]
 		pub fn call_functions() -> &'static [::frame_support::dispatch::FunctionMetadata] {
@@ -5251,25 +2959,57 @@ pub mod two_phase {
 					arguments: ::frame_support::dispatch::DecodeDifferent::Encode(&[
 						::frame_support::dispatch::FunctionArgumentMetadata {
 							name: ::frame_support::dispatch::DecodeDifferent::Encode("solution"),
-							ty: ::frame_support::dispatch::DecodeDifferent::Encode("RawSolution"),
+							ty: ::frame_support::dispatch::DecodeDifferent::Encode(
+								"RawSolution<CompactOf<T>>",
+							),
 						},
 					]),
-					documentation: ::frame_support::dispatch::DecodeDifferent::Encode(&[]),
+					documentation: ::frame_support::dispatch::DecodeDifferent::Encode(&[
+						r" Submit a solution for the signed phase.",
+						r"",
+						r" The dispatch origin fo this call must be __signed__.",
+						r"",
+						r" The solution potentially queued, based on the claimed score and processed at the end of",
+						r" the signed phase.",
+						r"",
+						r" A deposit is reserved and recorded for the solution. Based on the outcome, the solution",
+						r" might be rewarded, slashed, or get all or a part of the deposit back.",
+					]),
 				},
 				::frame_support::dispatch::FunctionMetadata {
 					name: ::frame_support::dispatch::DecodeDifferent::Encode("submit_unsigned"),
 					arguments: ::frame_support::dispatch::DecodeDifferent::Encode(&[
 						::frame_support::dispatch::FunctionArgumentMetadata {
 							name: ::frame_support::dispatch::DecodeDifferent::Encode("solution"),
-							ty: ::frame_support::dispatch::DecodeDifferent::Encode("RawSolution"),
+							ty: ::frame_support::dispatch::DecodeDifferent::Encode(
+								"RawSolution<CompactOf<T>>",
+							),
 						},
 					]),
-					documentation: ::frame_support::dispatch::DecodeDifferent::Encode(&[]),
+					documentation: ::frame_support::dispatch::DecodeDifferent::Encode(&[
+						r" Submit a solution for the unsigned phase.",
+						r"",
+						r" The dispatch origin fo this call must be __signed__.",
+						r"",
+						r" This submission is checked on the fly, thus it is likely yo be more limited and smaller.",
+						r" Moreover, this unsigned solution is only validated when submitted to the pool from the",
+						r" local process. Effectively, this means that only active validators can submit this",
+						r" transaction when authoring a block.",
+						r"",
+						r" To prevent any incorrect solution (and thus wasted time/weight), this transaction will",
+						r" panic if the solution submitted by the validator is invalid, effectively putting their",
+						r" authoring reward at risk.",
+						r"",
+						r" No deposit or reward is associated with this.",
+					]),
 				},
 			]
 		}
 	}
-	impl<T: 'static + Trait> Module<T> {
+	impl<T: 'static + Trait> Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		#[doc(hidden)]
 		#[allow(dead_code)]
 		pub fn module_constants_metadata(
@@ -5277,52 +3017,33 @@ pub mod two_phase {
 			&[]
 		}
 	}
-	impl<T: Trait> ::frame_support::dispatch::ModuleErrorMetadata for Module<T> {
+	impl<T: Trait> ::frame_support::dispatch::ModuleErrorMetadata for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		fn metadata() -> &'static [::frame_support::dispatch::ErrorMetadata] {
 			<&'static str as ::frame_support::dispatch::ModuleErrorMetadata>::metadata()
 		}
 	}
-	pub enum FeasibilityError {
-		/// Wrong number of winners presented.
-		WrongWinnerCount,
-		/// The snapshot is not available.
-		///
-		/// This must be an internal error of the chain.
-		SnapshotUnavailable,
-		/// Internal error from the election crate.
-		NposElectionError(sp_npos_elections::Error),
-		/// A vote is invalid.
-		InvalidVote,
-		/// A voter is invalid.
-		InvalidVoter,
-		/// A winner is invalid.
-		InvalidWinner,
-		/// The given score was invalid.
-		InvalidScore,
-	}
-	impl From<sp_npos_elections::Error> for FeasibilityError {
-		fn from(e: sp_npos_elections::Error) -> Self {
-			FeasibilityError::NposElectionError(e)
-		}
-	}
-	impl<T: Trait> Module<T> {
+	impl<T: Trait> Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
 		/// Checks the feasibility of a solution.
+		///
+		/// This checks the solution for the following:
+		///
+		/// 0. **all** of the used indices must be correct.
+		/// 1. present correct number of winners.
+		/// 2. any assignment is checked to match with `SnapshotVoters`.
+		/// 3. for each assignment, the check of `ElectionDataProvider` is also examined.
+		/// 4. the claimed score is valid.
 		fn feasibility_check(
-			solution: RawSolution,
+			solution: RawSolution<CompactOf<T>>,
 			compute: ElectionCompute,
 		) -> Result<ReadySolution<T::AccountId>, FeasibilityError> {
-			let RawSolution {
-				winners,
-				compact,
-				score,
-			} = solution;
-			{
-				if !(compact.unique_targets().len() == winners.len()) {
-					{
-						return Err(FeasibilityError::WrongWinnerCount.into());
-					};
-				}
-			};
+			let RawSolution { compact, score } = solution;
+			let winners = compact.unique_targets();
 			{
 				if !(winners.len() as u32 == Self::desired_targets()) {
 					{
@@ -5334,11 +3055,15 @@ pub mod two_phase {
 				Self::snapshot_voters().ok_or(FeasibilityError::SnapshotUnavailable)?;
 			let snapshot_targets =
 				Self::snapshot_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
-			let voter_at = |i: VoterIndex| -> Option<T::AccountId> {
-				snapshot_voters.get(i as usize).map(|(x, _, _)| x).cloned()
+			use sp_runtime::traits::UniqueSaturatedInto;
+			let voter_at = |i: CompactVoterIndexOf<T>| -> Option<T::AccountId> {
+				snapshot_voters
+					.get(i.unique_saturated_into())
+					.map(|(x, _, _)| x)
+					.cloned()
 			};
-			let target_at = |i: TargetIndex| -> Option<T::AccountId> {
-				snapshot_targets.get(i as usize).cloned()
+			let target_at = |i: CompactTargetIndexOf<T>| -> Option<T::AccountId> {
+				snapshot_targets.get(i.unique_saturated_into()).cloned()
 			};
 			let winners = winners
 				.into_iter()
@@ -5355,7 +3080,7 @@ pub mod two_phase {
 						|(_, _, t)| {
 							if distribution.iter().map(|(x, _)| x).all(|x| t.contains(x))
 								&& T::ElectionDataProvider::feasibility_check_assignment::<
-									OffchainAccuracy,
+									CompactAccuracyOf<T>,
 								>(who, distribution)
 							{
 								Ok(())
@@ -5373,12 +3098,13 @@ pub mod two_phase {
 					.map(|(_, x, _)| *x)
 					.unwrap_or_default()
 			};
-			use sp_npos_elections::{assignment_ratio_to_staked_normalized, build_support_map};
 			let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
 				.map_err::<FeasibilityError, _>(Into::into)?;
 			let supports = build_support_map(&winners, &staked_assignments)
+				.map(FlattenSupportMap::flatten)
 				.map_err::<FeasibilityError, _>(Into::into)?;
-			let known_score = evaluate_support(&supports);
+			let known_score =
+				evaluate_support::<T::AccountId, _>(supports.iter().map(|&(ref x, ref y)| (x, y)));
 			{
 				if !(known_score == score) {
 					{
@@ -5386,37 +3112,42 @@ pub mod two_phase {
 					};
 				}
 			};
-			let supports = supports.flatten();
-			Ok(ReadySolution {
-				winners,
-				supports,
-				compute,
-			})
+			Ok(ReadySolution { supports, compute })
 		}
-		fn onchain_fallback() -> Result<FlatSupportMap<T::AccountId>, crate::Error> {
+		/// On-chain fallback of election.
+		fn onchain_fallback() -> Result<FlatSupportMap<T::AccountId>, Error> {
 			let desired_targets = Self::desired_targets() as usize;
-			let voters = Self::snapshot_voters().ok_or(crate::Error::SnapshotUnAvailable)?;
-			let targets = Self::snapshot_targets().ok_or(crate::Error::SnapshotUnAvailable)?;
-			<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<ChainAccuracy>(
+			let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
+			let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
+			<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<Perbill>(
 				desired_targets,
 				targets,
 				voters,
 			)
+			.map_err(Into::into)
 		}
 	}
-	impl<T: Trait> crate::ElectionProvider<T::AccountId> for Module<T> {
-		fn elect<P: PerThing>(
+	impl<T: Trait> crate::ElectionProvider<T::AccountId> for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		type Error = Error;
+		const NEEDS_ELECT_DATA: bool = false;
+		fn elect<P: PerThing128>(
 			_to_elect: usize,
 			_targets: Vec<T::AccountId>,
 			_voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-		) -> Result<FlatSupportMap<T::AccountId>, crate::Error>
+		) -> Result<FlatSupportMap<T::AccountId>, Self::Error>
 		where
 			ExtendedBalance: From<<P as PerThing>::Inner>,
-			P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 		{
 			Self::queued_solution()
 				.map_or_else(
-					|| Self::onchain_fallback().map(|r| (r, ElectionCompute::OnChain)),
+					|| {
+						Self::onchain_fallback()
+							.map(|r| (r, ElectionCompute::OnChain))
+							.map_err(Into::into)
+					},
 					|ReadySolution {
 					     supports, compute, ..
 					 }| Ok((supports, compute)),
@@ -5444,124 +3175,98 @@ pub mod two_phase {
 use sp_arithmetic::PerThing;
 #[doc(hidden)]
 pub use sp_npos_elections::VoteWeight;
-use sp_npos_elections::{ExtendedBalance, FlatSupportMap};
-use sp_runtime::RuntimeDebug;
+use sp_npos_elections::{CompactSolution, ExtendedBalance, PerThing128, Support, SupportMap};
 #[doc(hidden)]
 pub use sp_std::convert::TryInto;
-/// A bridge between the entity requesting a long-lasting election from something that implements
-/// [`ElectionProvider`], such as the [`two_phase`] module.
+/// A flat variant of [`sp_npos_elections::SupportMap`].
+///
+/// The main advantage of this is that it is encodable.
+pub type FlatSupportMap<A> = Vec<(A, Support<A>)>;
+/// Helper trait to convert from a support map to a flat support vector.
+pub trait FlattenSupportMap<A> {
+	fn flatten(self) -> FlatSupportMap<A>;
+}
+impl<A> FlattenSupportMap<A> for SupportMap<A> {
+	fn flatten(self) -> FlatSupportMap<A> {
+		self.into_iter().map(|(k, v)| (k, v)).collect::<Vec<_>>()
+	}
+}
+/// Something that can provide the data to something else that implements [`ElectionProvider`], such
+/// as the [`two_phase`] module.
+///
+/// The underlying purpose of this is to provide auxillary data to long-lasting election providers.
+/// For example, the [`two_phase`] election provider needs to know the voters/targets list well in
+/// advance and before a call to [`ElectionProvider::elect`].
+///
+/// For example, if pallet A wants to use the two-phase election:
+///
+/// ```rust,ignore
+/// pub trait TraitA {
+///     type ElectionProvider: ElectionProvider<_, _>;
+/// }
+///
+/// // these function will be called by `Self::ElectionProvider` whenever needed.
+/// impl ElectionDataProvider for PalletA { /* ..  */ }
+///
+/// impl<T: TraitA> Module<T> {
+///     fn do_election() {
+///         // finalize the election.
+///         T::ElectionProvider::elect( /* .. */ );
+///     }
+/// }
+/// ```
 pub trait ElectionDataProvider<AccountId, B> {
+	/// The compact solution type.
+	///
+	/// This should encode the entire solution with the least possible space usage.
+	type CompactSolution: codec::Codec + Default + PartialEq + Eq + Clone + Debug + CompactSolution;
+	/// All possible targets for the election, i.e. the candidates.
 	fn targets() -> Vec<AccountId>;
+	/// All possible voters for the election.
+	///
+	/// Note that if a notion of self-vote exists, it should be represented here.
 	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)>;
+	/// The number of targets to elect.
 	fn desired_targets() -> u32;
+	/// Check the feasibility of a single assignment for the underlying `ElectionProvider`. In other
+	/// words, check if `who` having a weight distribution described as `distribution` is correct or
+	/// not.
+	///
+	/// This might be called by the [`ElectionProvider`] upon processing solutions.
 	fn feasibility_check_assignment<P: PerThing>(
 		who: &AccountId,
 		distribution: &[(AccountId, P)],
 	) -> bool;
+	/// Provide a best effort prediction about when the next election is about to happen.
+	///
+	/// In essence, `Self` should predict with this function when it will trigger the
+	/// `ElectionDataProvider::elect`.
 	fn next_election_prediction(now: B) -> B;
 }
-#[cfg(feature = "std")]
-impl<AccountId, B: Default> ElectionDataProvider<AccountId, B> for () {
-	fn targets() -> Vec<AccountId> {
-		Default::default()
-	}
-	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-		Default::default()
-	}
-	fn desired_targets() -> u32 {
-		Default::default()
-	}
-	fn feasibility_check_assignment<P: PerThing>(_: &AccountId, _: &[(AccountId, P)]) -> bool {
-		Default::default()
-	}
-	fn next_election_prediction(_: B) -> B {
-		Default::default()
-	}
-}
-/// Something that can compute the result of an election and pass it back to a pallet.
+/// Something that can compute the result of an election and pass it back to the caller.
 pub trait ElectionProvider<AccountId> {
+	/// Indicate weather this election provider needs data when calling [`elect`] or not.
+	const NEEDS_ELECT_DATA: bool;
+	/// The error type that is returned by the provider.
+	type Error;
 	/// Elect a new set of winners.
 	///
 	/// The result is returned in a target major format, namely as a support map.
-	fn elect<P: PerThing>(
+	///
+	/// Note that based on the logic of the type that will implement this trait, the input data may
+	/// or may not be used. To hint about this to the call site, [`NEEDS_ELECT_DATA`] should be
+	/// properly set.
+	///
+	/// The implementation should, if possible, use the accuracy `P` to compute the election result.
+	fn elect<P: PerThing128>(
 		to_elect: usize,
 		targets: Vec<AccountId>,
 		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	) -> Result<FlatSupportMap<AccountId>, Error>
+	) -> Result<FlatSupportMap<AccountId>, Self::Error>
 	where
-		ExtendedBalance: From<<P as PerThing>::Inner>,
-		P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>;
-	/// Returns true if an election is still ongoing.
+		ExtendedBalance: From<<P as PerThing>::Inner>;
+	/// Returns true if an election is still ongoing. This can be used by the call site to
+	/// dynamically check of a long-lasting election (such as [`two_phase`]) is still on-going or
+	/// not.
 	fn ongoing() -> bool;
-}
-pub enum Error {
-	ElectionFailed,
-	SnapshotUnAvailable,
-	Internal(sp_npos_elections::Error),
-}
-impl core::fmt::Debug for Error {
-	fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
-		match self {
-			Self::ElectionFailed => fmt.debug_tuple("Error::ElectionFailed").finish(),
-			Self::SnapshotUnAvailable => fmt.debug_tuple("Error::SnapshotUnAvailable").finish(),
-			Self::Internal(ref a0) => fmt.debug_tuple("Error::Internal").field(a0).finish(),
-			_ => Ok(()),
-		}
-	}
-}
-impl ::core::marker::StructuralEq for Error {}
-#[automatically_derived]
-#[allow(unused_qualifications)]
-impl ::core::cmp::Eq for Error {
-	#[inline]
-	#[doc(hidden)]
-	fn assert_receiver_is_total_eq(&self) -> () {
-		{
-			let _: ::core::cmp::AssertParamIsEq<sp_npos_elections::Error>;
-		}
-	}
-}
-impl ::core::marker::StructuralPartialEq for Error {}
-#[automatically_derived]
-#[allow(unused_qualifications)]
-impl ::core::cmp::PartialEq for Error {
-	#[inline]
-	fn eq(&self, other: &Error) -> bool {
-		{
-			let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
-			let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
-			if true && __self_vi == __arg_1_vi {
-				match (&*self, &*other) {
-					(&Error::Internal(ref __self_0), &Error::Internal(ref __arg_1_0)) => {
-						(*__self_0) == (*__arg_1_0)
-					}
-					_ => true,
-				}
-			} else {
-				false
-			}
-		}
-	}
-	#[inline]
-	fn ne(&self, other: &Error) -> bool {
-		{
-			let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
-			let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
-			if true && __self_vi == __arg_1_vi {
-				match (&*self, &*other) {
-					(&Error::Internal(ref __self_0), &Error::Internal(ref __arg_1_0)) => {
-						(*__self_0) != (*__arg_1_0)
-					}
-					_ => false,
-				}
-			} else {
-				true
-			}
-		}
-	}
-}
-impl From<sp_npos_elections::Error> for Error {
-	fn from(err: sp_npos_elections::Error) -> Self {
-		Error::Internal(err)
-	}
 }

@@ -245,6 +245,10 @@ pub struct ReadySolution<A> {
 	/// The final supports of the solution. This is target-major vector, storing each winners, total
 	/// backing, and each individual backer.
 	supports: FlatSupportMap<A>,
+	/// The score of the solution.
+	///
+	/// This is needed to potentially challenge the solution.
+	score: ElectionScore,
 	/// How this election was computed.
 	compute: ElectionCompute,
 }
@@ -452,7 +456,7 @@ decl_module! {
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
-		#[weight = 0]
+		#[weight = T::WeightInfo::submit()]
 		fn submit(origin, solution: RawSolution<CompactOf<T>>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
@@ -477,11 +481,52 @@ decl_module! {
 			Ok(None.into())
 		}
 
-		#[weight = 0]
+		/// Submit a solution for the unsigned phase.
+		///
+		/// The dispatch origin fo this call must be __signed__.
+		///
+		/// This submission is checked on the fly, thus it is likely yo be more limited and smaller.
+		/// Moreover, this unsigned solution is only validated when submitted to the pool from the
+		/// local process. Effectively, this means that only active validators can submit this
+		/// transaction when authoring a block.
+		///
+		/// To prevent any incorrect solution (and thus wasted time/weight), this transaction will
+		/// panic if the solution submitted by the validator is invalid, effectively putting their
+		/// authoring reward at risk.
+		///
+		/// No deposit or reward is associated with this.
+		#[weight = T::WeightInfo::submit_unsigned()]
 		fn submit_unsigned(origin, solution: RawSolution<CompactOf<T>>) {
 			ensure_none(origin)?;
+
+			// ensure solution is timely. Don't panic yet. This is a cheap check.
+			ensure!(Self::current_phase().is_signed(), "EarlySubmission");
+
+			use sp_npos_elections::is_score_better;
+			// ensure score is being improved. Panic henceforth.
+			assert!(
+				Self::queued_solution().map_or(
+					true,
+					|q: ReadySolution<_>|
+						is_score_better::<Perbill>(
+							solution.score,
+							q.score,
+							T::SolutionImprovementThreshold::get()
+						)
+				),
+				"WeakSolution"
+			);
+
+			let ready =
+				Self::feasibility_check(solution, ElectionCompute::Unsigned)
+					.expect(
+						"Invalid unsigned submission must produce invalid block and deprive \
+						validator from their authoring reward."
+					);
+
+			// store the newly received solution.
+			<QueuedSolution<T>>::put(ready);
 			Self::deposit_event(RawEvent::SolutionStored(ElectionCompute::Unsigned));
-			unimplemented!()
 		}
 	}
 }
@@ -582,7 +627,11 @@ where
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
 		// let supports = supports.flatten();
-		Ok(ReadySolution { supports, compute })
+		Ok(ReadySolution {
+			supports,
+			compute,
+			score,
+		})
 	}
 
 	/// On-chain fallback of election.
@@ -622,9 +671,7 @@ where
 						.map(|r| (r, ElectionCompute::OnChain))
 						.map_err(Into::into)
 				},
-				|ReadySolution {
-				     supports, compute, ..
-				 }| Ok((supports, compute)),
+				|ReadySolution { supports, compute, ..}| Ok((supports, compute)),
 			)
 			.map(|(supports, compute)| {
 				// reset phase.
@@ -735,5 +782,7 @@ mod tests {
 	}
 
 	#[test]
-	fn can_only_submit_threshold_better() {}
+	fn can_only_submit_threshold_better() {
+		unimplemented!()
+	}
 }
