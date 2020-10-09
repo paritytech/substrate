@@ -268,5 +268,5 @@ pub mod body {
 
 /// The maximum amount of pages any contract is allowed to have according to the current `Schedule`.
 pub fn max_pages<T: Trait>() -> u32 {
-	Contracts::<T>::current_schedule().max_memory_pages
+	Contracts::<T>::current_schedule().limits.memory_pages
 }

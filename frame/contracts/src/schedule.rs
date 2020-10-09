@@ -32,62 +32,74 @@ pub const API_BENCHMARK_BATCH_SIZE: u32 = 100;
 
 /// Definition of the cost schedule and other parameterizations for wasm vm.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub struct Schedule<T: Trait> {
 	/// Version of the schedule.
 	pub version: u32,
 
-	/// The weights for individual wasm instructions.
-	pub instruction_weights: InstructionWeights,
-
-	/// The weights for each imported function a contract is allowed to call.
-	pub host_fn_weights: HostFnWeights,
-
 	/// Whether the `seal_println` function is allowed to be used contracts.
 	/// MUST only be enabled for `dev` chains, NOT for production chains
 	pub enable_println: bool,
 
-	/// The maximum number of topics supported by an event.
-	pub max_event_topics: u32,
+	/// Describes the upper limits on various metrics.
+	pub limits: Limits,
 
-	/// Maximum allowed stack height.
+	/// The weights for individual wasm instructions.
+	pub instruction_weights: InstructionWeights<T>,
+
+	/// The weights for each imported function a contract is allowed to call.
+	pub host_fn_weights: HostFnWeights<T>,
+}
+
+/// Describes the upper limits on various metrics.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+pub struct Limits {
+	/// The maximum number of topics supported by an event.
+	pub event_topics: u32,
+
+	/// Maximum allowed stack height in number of elements.
 	///
 	/// See https://wiki.parity.io/WebAssembly-StackHeight to find out
-	/// how the stack frame cost is calculated.
-	pub max_stack_height: u32,
+	/// how the stack frame cost is calculated. Each element can be of one of the
+	/// wasm value types. This means the maximum size per element is 64bit.
+	pub stack_height: u32,
 
 	/// Maximum number of memory pages allowed for a contract.
-	pub max_memory_pages: u32,
+	pub memory_pages: u32,
 
-	/// Maximum allowed size of a declared table.
-	pub max_table_size: u32,
+	/// Maximum number of elements allowed in a table.
+	///
+	/// Currently, the only type of element that is allowed in a table is funcref.
+	pub table_size: u32,
 
-	/// The maximum length of a subject used for PRNG generation.
-	pub max_subject_len: u32,
+	/// The maximum length of a subject in bytes used for PRNG generation.
+	pub subject_len: u32,
 
 	/// The maximum length of a contract code in bytes. This limit applies to the uninstrumented
 	/// and pristine form of the code as supplied to `put_code`.
-	pub max_code_size: u32,
-
-	/// The type parameter is used in the default implementation.
-	pub _phantom: PhantomData<T>,
+	pub code_size: u32,
 }
 
 /// Describes the weight for all categories of supported wasm instructions.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
-pub struct InstructionWeights {
+pub struct InstructionWeights<T: Trait> {
 	/// Weight of a growing memory by single page.
 	pub grow_mem: Weight,
 
 	/// Weight of a regular operation.
 	pub regular: Weight,
+
+	/// The type parameter is used in the default implementation.
+	pub _phantom: PhantomData<T>,
 }
 
 /// Describes the weight for each imported function that a contract is allowed to call.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
-pub struct HostFnWeights {
+pub struct HostFnWeights<T: Trait> {
 	/// Weight of calling `seal_caller`.
 	pub caller: Weight,
 
@@ -222,6 +234,9 @@ pub struct HostFnWeights {
 
 	/// Weight per byte hashed by `seal_hash_blake2_128`.
 	pub hash_blake2_128_per_byte: Weight,
+
+	/// The type parameter is used in the default implementation.
+	pub _phantom: PhantomData<T>
 }
 
 /// We need to implement Debug manually because the automatic derive enforces T
@@ -297,12 +312,42 @@ macro_rules! cost_byte_batched {
 
 impl<T: Trait> Default for Schedule<T> {
 	fn default() -> Self {
-		let instruction_weights = InstructionWeights {
+		Self {
+			version: 0,
+			enable_println: false,
+			limits: Default::default(),
+			instruction_weights: Default::default(),
+			host_fn_weights: Default::default(),
+		}
+	}
+}
+
+impl Default for Limits {
+	fn default() -> Self {
+		Self {
+			event_topics: 4,
+			stack_height: 64 * 1024,
+			memory_pages: 16,
+			table_size: 16 * 1024,
+			subject_len: 32,
+			code_size: 512 * 1024,
+		}
+	}
+}
+
+impl<T: Trait> Default for InstructionWeights<T> {
+	fn default() -> Self {
+		Self {
 			grow_mem: WASM_INSTRUCTION_COST,
 			regular: WASM_INSTRUCTION_COST,
-		};
+			_phantom: PhantomData,
+		}
+	}
+}
 
-		let host_fn_weights = HostFnWeights {
+impl<T: Trait> Default for HostFnWeights<T> {
+	fn default() -> Self {
+		Self {
 			caller: cost_batched!(seal_caller),
 			address: cost_batched!(seal_address),
 			gas_left: cost_batched!(seal_gas_left),
@@ -348,19 +393,6 @@ impl<T: Trait> Default for Schedule<T> {
 			hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
 			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
-		};
-
-		Self {
-			version: 0,
-			instruction_weights,
-			host_fn_weights,
-			enable_println: false,
-			max_event_topics: 4,
-			max_stack_height: 64 * 1024,
-			max_memory_pages: 16,
-			max_table_size: 16 * 1024,
-			max_subject_len: 32,
-			max_code_size: 512 * 1024,
 			_phantom: PhantomData,
 		}
 	}

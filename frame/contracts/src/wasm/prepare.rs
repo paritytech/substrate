@@ -167,7 +167,8 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 
 	fn inject_stack_height_metering(self) -> Result<Self, &'static str> {
 		let contract_module =
-			pwasm_utils::stack_height::inject_limiter(self.module, self.schedule.max_stack_height)
+			pwasm_utils::stack_height
+				::inject_limiter(self.module, self.schedule.limits.stack_height)
 				.map_err(|_| "stack height instrumentation failed")?;
 		Ok(ContractModule {
 			module: contract_module,
@@ -345,7 +346,7 @@ fn get_memory_limits<T: Trait>(module: Option<&MemoryType>, schedule: &Schedule<
 					"Requested initial number of pages should not exceed the requested maximum",
 				);
 			}
-			(_, Some(maximum)) if maximum > schedule.max_memory_pages => {
+			(_, Some(maximum)) if maximum > schedule.limits.memory_pages => {
 				return Err("Maximum number of pages should not exceed the configured maximum.");
 			}
 			(initial, Some(maximum)) => Ok((initial, maximum)),
@@ -381,7 +382,7 @@ pub fn prepare_contract<C: ImportSatisfyCheck, T: Trait>(
 	let mut contract_module = ContractModule::new(original_code, schedule)?;
 	contract_module.scan_exports()?;
 	contract_module.ensure_no_internal_memory()?;
-	contract_module.ensure_table_size_limit(schedule.max_table_size)?;
+	contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
 	contract_module.ensure_no_floating_types()?;
 
 	// We disallow importing `gas` function here since it is treated as implementation detail.
@@ -499,7 +500,7 @@ mod tests {
 		// Tests below assumes that maximum page number is configured to a certain number.
 		#[test]
 		fn assume_memory_size() {
-			assert_eq!(<Schedule<crate::tests::Test>>::default().max_memory_pages, 16);
+			assert_eq!(<Schedule<crate::tests::Test>>::default().limits.memory_pages, 16);
 		}
 
 		prepare_test!(memory_with_one_page,
@@ -628,7 +629,7 @@ mod tests {
 		// Tests below assumes that maximum table size is configured to a certain number.
 		#[test]
 		fn assume_table_size() {
-			assert_eq!(<Schedule<crate::tests::Test>>::default().max_table_size, 16384);
+			assert_eq!(<Schedule<crate::tests::Test>>::default().limits.table_size, 16384);
 		}
 
 		prepare_test!(no_tables,

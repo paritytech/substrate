@@ -100,7 +100,7 @@ pub use crate::gas::{Gas, GasMeter};
 pub use crate::exec::{ExecResult, ExecReturnValue};
 pub use crate::wasm::ReturnCode as RuntimeReturnCode;
 pub use crate::weight_info::WeightInfo;
-pub use crate::schedule::{Schedule, HostFnWeights, InstructionWeights};
+pub use crate::schedule::{Schedule, HostFnWeights, InstructionWeights, Limits};
 
 use sp_core::crypto::UncheckedFrom;
 use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
@@ -529,7 +529,7 @@ decl_module! {
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 			let schedule = <Module<T>>::current_schedule();
-			ensure!(code.len() as u32 <= schedule.max_code_size, Error::<T>::CodeTooLarge);
+			ensure!(code.len() as u32 <= schedule.limits.code_size, Error::<T>::CodeTooLarge);
 			let result = wasm::save_code::<T>(code, &schedule);
 			if let Ok(code_hash) = result {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));

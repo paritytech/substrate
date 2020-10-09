@@ -256,7 +256,7 @@ benchmarks! {
 	// It creates a maximum number of metering blocks per byte.
 	// `n`: Size of the code in kilobytes.
 	put_code {
-		let n in 0 .. Contracts::<T>::current_schedule().max_code_size / 1024;
+		let n in 0 .. Contracts::<T>::current_schedule().limits.code_size / 1024;
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let module = WasmModule::<T>::sized(n * 1024);
@@ -778,7 +778,7 @@ benchmarks! {
 	seal_random {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let pages = code::max_pages::<T>();
-		let subject_len = Contracts::<T>::current_schedule().max_subject_len;
+		let subject_len = Contracts::<T>::current_schedule().limits.subject_len;
 		assert!(subject_len < 1024);
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
@@ -834,7 +834,7 @@ benchmarks! {
 	// `t`: Number of topics
 	// `n`: Size of event payload in kb
 	seal_deposit_event_per_topic_and_kb {
-		let t in 0 .. Contracts::<T>::current_schedule().max_event_topics;
+		let t in 0 .. Contracts::<T>::current_schedule().limits.event_topics;
 		let n in 0 .. T::MaxValueSize::get() / 1024;
 		let mut topics = (0..API_BENCHMARK_BATCH_SIZE)
 			.map(|n| (n * t..n * t + t).map(|i| T::Hashing::hash_of(&i)).collect::<Vec<_>>().encode())
