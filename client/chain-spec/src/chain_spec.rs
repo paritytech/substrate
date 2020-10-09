@@ -422,6 +422,7 @@ pub struct LightSyncState<Block: BlockT> {
 	pub finalized_block_header: <Block as BlockT>::Header,
 	/// The epoch changes tree for babe.
 	pub babe_epoch_changes: sc_consensus_epochs::EpochChangesFor<Block, sc_consensus_babe::Epoch>,
+	/// The babe weight of the finalized block.
 	pub babe_finalized_block_weight: sp_consensus_babe::BabeBlockWeight,
 	/// The authority set for grandpa.
 	pub grandpa_authority_set: sc_finality_grandpa::AuthoritySet<<Block as BlockT>::Hash, NumberFor<Block>>,

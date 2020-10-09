@@ -333,10 +333,11 @@ pub fn init_logger(
 mod tests {
 	use super::*;
 	use tracing::{metadata::Kind, subscriber::Interest, Callsite, Level, Metadata};
+	use std::{process::Command, env};
 
 	#[test]
 	fn test_logger_filters() {
-		let test_pattern = "afg=debug,sync=trace,client=warn,telemetry";
+		let test_pattern = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
 		init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
 
 		tracing::dispatcher::get_default(|dispatcher| {
@@ -369,6 +370,36 @@ mod tests {
 			assert!(test_filter("client", Level::WARN));
 
 			assert!(test_filter("telemetry", Level::TRACE));
+			assert!(test_filter("something-with-dash", Level::ERROR));
 		});
+	}
+
+	const EXPECTED_LOG_MESSAGE: &'static str = "yeah logging works as expected";
+
+	#[test]
+	fn dash_in_target_name_works() {
+		let executable = env::current_exe().unwrap();
+		let output = Command::new(executable)
+			.env("ENABLE_LOGGING", "1")
+			.args(&["--nocapture", "log_something_with_dash_target_name"])
+			.output()
+			.unwrap();
+
+		let output = String::from_utf8(output.stderr).unwrap();
+		assert!(output.contains(EXPECTED_LOG_MESSAGE));
+	}
+
+	/// This is no actual test, it will be used by the `dash_in_target_name_works` test.
+	/// The given test will call the test executable to only execute this test that
+	/// will only print `EXPECTED_LOG_MESSAGE` through logging while using a target
+	/// name that contains a dash. This ensures that targets names with dashes work.
+	#[test]
+	fn log_something_with_dash_target_name() {
+		if env::var("ENABLE_LOGGING").is_ok() {
+			let test_pattern = "test-target=info";
+			init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
+
+			log::info!(target: "test-target", "{}", EXPECTED_LOG_MESSAGE);
+		}
 	}
 }
