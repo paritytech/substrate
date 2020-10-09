@@ -332,10 +332,12 @@ impl Default for Limits {
 	fn default() -> Self {
 		Self {
 			event_topics: 4,
-			stack_height: 64 * 1024,
-			globals: 1024,
+			// 512 * sizeof(i64) will give us a 4k stack.
+			stack_height: 512,
+			globals: 256,
 			memory_pages: 16,
-			table_size: 16 * 1024,
+			// 4k function pointers (This is in count not bytes).
+			table_size: 4096,
 			subject_len: 32,
 			code_size: 512 * 1024,
 		}
