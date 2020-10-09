@@ -101,6 +101,15 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 		Ok(())
 	}
 
+	fn ensure_global_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
+		if let Some(global_section) = self.module.global_section() {
+			if global_section.entries().len() > limit as usize {
+				return Err("module declares too many globals")
+			}
+		}
+		Ok(())
+	}
+
 	/// Ensures that no floating point types are in use.
 	fn ensure_no_floating_types(&self) -> Result<(), &'static str> {
 		if let Some(global_section) = self.module.global_section() {
@@ -383,6 +392,7 @@ pub fn prepare_contract<C: ImportSatisfyCheck, T: Trait>(
 	contract_module.scan_exports()?;
 	contract_module.ensure_no_internal_memory()?;
 	contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
+	contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
 	contract_module.ensure_no_floating_types()?;
 
 	// We disallow importing `gas` function here since it is treated as implementation detail.
@@ -443,7 +453,7 @@ pub mod benchmarking {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::exec::Ext;
+	use crate::{exec::Ext, Limits};
 	use std::fmt;
 	use assert_matches::assert_matches;
 
@@ -471,7 +481,15 @@ mod tests {
 			#[test]
 			fn $name() {
 				let wasm = wat::parse_str($wat).unwrap();
-				let schedule = Schedule::default();
+				let schedule = Schedule {
+					limits: Limits {
+						globals: 3,
+						memory_pages: 16,
+						table_size: 3,
+						.. Default::default()
+					},
+					.. Default::default()
+				};
 				let r = prepare_contract::<TestEnv, crate::tests::Test>(wasm.as_ref(), &schedule);
 				assert_matches!(r, $($expected)*);
 			}
@@ -494,14 +512,39 @@ mod tests {
 		Err("gas instrumentation failed")
 	);
 
-	mod memories {
+	mod globals {
 		use super::*;
 
-		// Tests below assumes that maximum page number is configured to a certain number.
-		#[test]
-		fn assume_memory_size() {
-			assert_eq!(<Schedule<crate::tests::Test>>::default().limits.memory_pages, 16);
-		}
+		prepare_test!(global_number_valid,
+			r#"
+			(module
+				(global i64 (i64.const 0))
+				(global i64 (i64.const 0))
+				(global i64 (i64.const 0))
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(global_number_too_high,
+			r#"
+			(module
+				(global i64 (i64.const 0))
+				(global i64 (i64.const 0))
+				(global i64 (i64.const 0))
+				(global i64 (i64.const 0))
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("module declares too many globals")
+		);
+	}
+
+	mod memories {
+		use super::*;
 
 		prepare_test!(memory_with_one_page,
 			r#"
@@ -560,6 +603,18 @@ mod tests {
 			)
 			"#,
 			Err("Maximum number of pages should be always declared.")
+		);
+
+		prepare_test!(requested_maximum_valid,
+			r#"
+			(module
+				(import "env" "memory" (memory 1 16))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
 		);
 
 		prepare_test!(requested_maximum_exceeds_configured_maximum,
@@ -626,12 +681,6 @@ mod tests {
 	mod tables {
 		use super::*;
 
-		// Tests below assumes that maximum table size is configured to a certain number.
-		#[test]
-		fn assume_table_size() {
-			assert_eq!(<Schedule<crate::tests::Test>>::default().limits.table_size, 16384);
-		}
-
 		prepare_test!(no_tables,
 			r#"
 			(module
@@ -645,7 +694,7 @@ mod tests {
 		prepare_test!(table_valid_size,
 			r#"
 			(module
-				(table 10000 funcref)
+				(table 3 funcref)
 
 				(func (export "call"))
 				(func (export "deploy"))
@@ -657,7 +706,7 @@ mod tests {
 		prepare_test!(table_too_big,
 			r#"
 			(module
-				(table 20000 funcref)
+				(table 4 funcref)
 
 				(func (export "call"))
 				(func (export "deploy"))

@@ -66,6 +66,12 @@ pub struct Limits {
 	/// wasm value types. This means the maximum size per element is 64bit.
 	pub stack_height: u32,
 
+	/// Maximum number of globals a module is allowed to declare.
+	///
+	/// Globals are not limited through the `stack_height` as locals are. Neither does
+	/// the linear memory limit `memory_pages` applies to them.
+	pub globals: u32,
+
 	/// Maximum number of memory pages allowed for a contract.
 	pub memory_pages: u32,
 
@@ -327,6 +333,7 @@ impl Default for Limits {
 		Self {
 			event_topics: 4,
 			stack_height: 64 * 1024,
+			globals: 1024,
 			memory_pages: 16,
 			table_size: 16 * 1024,
 			subject_len: 32,
