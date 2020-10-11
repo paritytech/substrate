@@ -54,24 +54,6 @@ frame_support::decl_storage!{
 	}
 }
 
-impl <T: Trait> Module<T> {
-	#[require_transactional]
-	fn mutate() {
-	}
-
-	#[transactional]
-	fn safe() -> DispatchResult {
-		Self::mutate();
-		Ok(())
-	}
-
-	// only used when debug_assertions is enabled
-	#[allow(dead_code)]
-	fn not_safe() {
-		Self::mutate();
-	}
-}
-
 struct Runtime;
 impl Trait for Runtime {
 	type Origin = u32;
@@ -228,21 +210,5 @@ fn transactional_annotation_in_decl_module() {
 		assert_eq!(Value::get(), 2);
 
 		assert_noop!(<Module<Runtime>>::value_rollbacks(origin, 3), "nah");
-	});
-}
-
-#[cfg(debug_assertions)]
-#[test]
-#[should_panic(expected = "Require transaction not called within with_transaction")]
-fn require_transactional_panic() {
-	TestExternalities::default().execute_with(|| {
-		<Module<Runtime>>::not_safe();
-	});
-}
-
-#[test]
-fn require_transactional_not_panic() {
-	TestExternalities::default().execute_with(|| {
-		<Module<Runtime>>::safe().unwrap();
 	});
 }
