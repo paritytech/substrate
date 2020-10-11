@@ -17,10 +17,16 @@
 
 //! Native EVM runner.
 
-use sp_std::{convert::Infallible, marker::PhantomData, rc::Rc, collections::btree_set::BTreeSet, mem};
+use sp_std::{
+	convert::Infallible, marker::PhantomData, rc::Rc,
+	collections::btree_set::BTreeSet, vec::Vec, mem,
+};
 use sp_core::{H160, U256, H256};
 use sp_runtime::{TransactionOutcome, traits::UniqueSaturatedInto};
-use frame_support::{ensure, traits::{Get, Currency, ExistenceRequirement}, storage::{StorageMap, StorageDoubleMap}};
+use frame_support::{
+	ensure, traits::{Get, Currency, ExistenceRequirement},
+	storage::{StorageMap, StorageDoubleMap},
+};
 use sha3::{Keccak256, Digest};
 use evm::{
 	ExternalOpcode, Opcode, ExitError, ExitReason, Capture, Context, CreateScheme, Stack,
