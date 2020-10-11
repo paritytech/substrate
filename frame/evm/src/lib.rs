@@ -234,6 +234,32 @@ decl_storage! {
 		AccountStorages get(fn account_storages):
 			double_map hasher(blake2_128_concat) H160, hasher(blake2_128_concat) H256 => H256;
 	}
+
+	add_extra_genesis {
+		config(accounts): std::collections::BTreeMap<H160, GenesisAccount>;
+		build(|config: &GenesisConfig| {
+			for (address, account) in &config.accounts {
+				let account_id = T::AddressMapping::into_account_id(*address);
+
+				// ASSUME: in one single EVM transaction, the nonce will not increase more than
+				// `u128::max_value()`.
+				for _ in 0..account.nonce.low_u128() {
+					frame_system::Module::<T>::inc_account_nonce(&account_id);
+				}
+
+				T::Currency::deposit_creating(
+					&account_id,
+					account.balance.low_u128().unique_saturated_into(),
+				);
+
+				AccountCodes::insert(address, &account.code);
+
+				for (index, value) in &account.storage {
+					AccountStorages::insert(address, index, value);
+				}
+			}
+		});
+	}
 }
 
 decl_event! {
