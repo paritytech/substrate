@@ -20,12 +20,12 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod runner;
 mod tests;
+pub mod runner;
 pub mod precompiles;
 
 pub use crate::precompiles::{Precompile, Precompiles};
-pub use crate::runner::{Account, Log, Vicinity, Runner, CallInfo, CreateInfo};
+pub use crate::runner::{Account, Log, Vicinity, Runner, ExecutionInfo, CallInfo, CreateInfo};
 
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
