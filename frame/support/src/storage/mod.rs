@@ -30,7 +30,7 @@ pub mod child;
 pub mod generator;
 pub mod migration;
 
-#[cfg(all(feature = "std", debug_assertions))]
+#[cfg(all(feature = "std", any(test, debug_assertions)))]
 mod debug_helper {
 	use std::cell::RefCell;
 
@@ -45,7 +45,15 @@ mod debug_helper {
 		}
 	}
 
-	pub fn inc_transaction_level() {
+	pub struct TransactionLevelGuard;
+
+	impl Drop for TransactionLevelGuard {
+		fn drop(&mut self) {
+			TRANSACTION_LEVEL.with(|v| *v.borrow_mut() -= 1);
+		}
+	}
+
+	pub fn inc_transaction_level() -> TransactionLevelGuard {
 		TRANSACTION_LEVEL.with(|v| {
 			let mut val = v.borrow_mut();
 			*val += 1;
@@ -56,10 +64,8 @@ mod debug_helper {
 				);
 			}
 		});
-	}
 
-	pub fn dec_transaction_level() {
-		TRANSACTION_LEVEL.with(|v| *v.borrow_mut() -= 1);
+		TransactionLevelGuard
 	}
 }
 
@@ -68,7 +74,7 @@ mod debug_helper {
 ///
 /// This assertion is enabled for native execution and when `debug_assertions` are enabled.
 pub fn require_transaction() {
-	#[cfg(all(feature = "std", debug_assertions))]
+	#[cfg(all(feature = "std", any(test, debug_assertions)))]
 	debug_helper::require_transaction();
 }
 
@@ -86,15 +92,10 @@ pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
 
 	start_transaction();
 
-	#[cfg(all(feature = "std", debug_assertions))]
-	debug_helper::inc_transaction_level();
+	#[cfg(all(feature = "std", any(test, debug_assertions)))]
+	let _guard = debug_helper::inc_transaction_level();
 
-	let res = f();
-
-	#[cfg(all(feature = "std", debug_assertions))]
-	debug_helper::dec_transaction_level();
-
-	match res {
+	match f() {
 		Commit(res) => { commit_transaction(); res },
 		Rollback(res) => { rollback_transaction(); res },
 	}

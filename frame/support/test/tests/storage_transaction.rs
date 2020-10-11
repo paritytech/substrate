@@ -65,6 +65,8 @@ impl <T: Trait> Module<T> {
 		Ok(())
 	}
 
+	// only used when debug_assertions is enabled
+	#[allow(dead_code)]
 	fn not_safe() {
 		Self::mutate();
 	}
@@ -229,6 +231,7 @@ fn transactional_annotation_in_decl_module() {
 	});
 }
 
+#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "Require transaction not called within with_transaction")]
 fn require_transactional_panic() {
