@@ -278,9 +278,9 @@ pub use frame_support_procedural::{
 /// # Example
 ///
 /// ```
-/// use frame_support::{
-/// 	require_transactional, transactional, dispatch::DispatchResult
-/// };
+/// # use frame_support::{
+/// # 	require_transactional, transactional, dispatch::DispatchResult
+/// # };
 ///
 /// #[require_transactional]
 /// fn update_all(value: u32) -> DispatchResult {

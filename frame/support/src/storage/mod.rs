@@ -53,6 +53,9 @@ mod debug_helper {
 		}
 	}
 
+	/// Increments the transaction level.
+	///
+	/// Returns a guard that when dropped decrements the transaction level automatically.
 	pub fn inc_transaction_level() -> TransactionLevelGuard {
 		TRANSACTION_LEVEL.with(|v| {
 			let mut val = v.borrow_mut();
