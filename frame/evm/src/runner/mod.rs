@@ -18,6 +18,7 @@
 pub mod stack;
 pub mod native;
 
+use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};
