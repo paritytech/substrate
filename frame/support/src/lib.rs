@@ -267,7 +267,9 @@ macro_rules! ord_parameter_types {
 }
 
 #[doc(inline)]
-pub use frame_support_procedural::{decl_storage, construct_runtime, transactional, DebugStripped};
+pub use frame_support_procedural::{
+	decl_storage, construct_runtime, transactional, RuntimeDebugNoBound
+};
 
 /// Derive [`Clone`] but do not bound any generic.
 ///

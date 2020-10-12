@@ -15,16 +15,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, and DebugStripped
+//! Tests for DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, and RuntimeDebugNoBound
 
-use frame_support::{DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DebugStripped};
+use frame_support::{DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound};
 
-#[derive(DebugStripped)]
-pub struct Foo;
+#[derive(RuntimeDebugNoBound)]
+struct Unnamed(u64);
 
 #[test]
-fn foo_debug_stripped() {
-	assert_eq!(format!("{:?}", Foo), String::from("<stripped>"));
+fn runtime_debug_no_bound_display_correctly() {
+	#[cfg(feature = "std")]
+	{
+		assert_eq!(format!("{:?}", Unnamed(1)), "Unnamed(1)");
+	}
+
+	#[cfg(not(features = "std"))]
+	{
+		assert_eq!(format!("{:?}", Unnamed(1)), "<stripped>");
+	}
 }
 
 trait Trait {
