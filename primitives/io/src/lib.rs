@@ -1261,7 +1261,7 @@ pub trait RuntimeSpawn : Send {
 
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
-	/// Extension that supports spawning extra runtime instances in exteernalities.
+	/// Extension that supports spawning extra runtime instances in externalities.
 	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
 }
 
