@@ -95,7 +95,7 @@ fn crate_metadata(cargo_manifest: &Path) -> Metadata {
 		.exec()
 		.expect("`cargo metadata` can not fail on project `Cargo.toml`; qed");
 
-	// If the `Cargo.lock` didn't existed, we need to remove it after
+	// If the `Cargo.lock` didn't exist, we need to remove it after
 	// calling `cargo metadata`. This is required to ensure that we don't change
 	// the build directory outside of the `target` folder. Commands like
 	// `cargo publish` require this.
