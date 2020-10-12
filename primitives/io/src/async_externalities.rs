@@ -36,8 +36,7 @@ pub struct AsyncExternalities {
 
 /// New Async externalities.
 pub fn new_async_externalities(scheduler: Box<dyn SpawnNamed>) -> Result<AsyncExternalities, &'static str> {
-	let extensions = Extensions::default();
-	let mut res = AsyncExternalities { extensions };
+	let mut res = AsyncExternalities { Default::default() };
 	let mut ext = &mut res as &mut dyn Externalities;
 	ext.register_extension::<TaskExecutorExt>(TaskExecutorExt(scheduler.clone()))
 		.map_err(|_| "Failed to register task executor extension.")?;
