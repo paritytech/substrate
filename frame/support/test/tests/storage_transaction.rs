@@ -17,7 +17,7 @@
 
 use codec::{Encode, Decode, EncodeLike};
 use frame_support::{
-	assert_ok, assert_noop, transactional, require_transactional,
+	assert_ok, assert_noop, transactional,
 	StorageMap, StorageValue,
 	dispatch::{DispatchError, DispatchResult},
 	storage::{with_transaction, TransactionOutcome::*},
