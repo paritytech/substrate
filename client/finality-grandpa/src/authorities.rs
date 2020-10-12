@@ -32,12 +32,34 @@ use std::ops::Add;
 use std::sync::Arc;
 
 /// Error type returned on operations on the `AuthoritySet`.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, derive_more::Display)]
 pub enum Error<E> {
 	#[display("Invalid authority set, either empty or with an authority weight set to 0.")]
 	InvalidAuthoritySet,
+	#[display("Client error during ancestry lookup: {}", _0)]
+	Client(E),
+	#[display("Duplicate authority set change.")]
+	DuplicateAuthoritySetChange,
+	#[display("Authority set change overlaps with existing change.")]
+	OverlappingAuthoritySetChange,
 	#[display(fmt = "Invalid operation in the pending changes tree: {}", _0)]
 	ForkTree(fork_tree::Error<E>),
+}
+
+impl<E> From<fork_tree::Error<E>> for Error<E> {
+	fn from(err: fork_tree::Error<E>) -> Error<E> {
+		match err {
+			fork_tree::Error::Client(err) => Error::Client(err),
+			fork_tree::Error::Duplicate => Error::DuplicateAuthoritySetChange,
+			err => Error::ForkTree(err),
+		}
+	}
+}
+
+impl<E: std::error::Error> From<E> for Error<E> {
+	fn from(err: E) -> Error<E> {
+		Error::Client(err)
+	}
 }
 
 /// A shared authority set.
@@ -110,15 +132,20 @@ pub(crate) struct AuthoritySet<H, N> {
 	/// enacted on finality and must be enacted (i.e. finalized) in-order across
 	/// a given branch
 	pub(crate) pending_standard_changes: ForkTree<H, N, PendingChange<H, N>>,
-	/// Pending forced changes across different forks (at most one per fork).
-	/// Forced changes are enacted on block depth (not finality), for this reason
-	/// only one forced change should exist per fork.
+	/// Pending forced changes across different forks. Forced changes are
+	/// enacted on block depth (not finality) and must be applied in-order
+	/// across a given branch. When trying to apply forced changes we keep track
+	/// of any pending standard changes that they may depend on, this is done by
+	/// making sure that any pending change that is an ancestor of the forced
+	/// changed and its effective block number is lower than the last finalized
+	/// block (as signaled in the forced change) must be applied beforehand.
 	pending_forced_changes: Vec<PendingChange<H, N>>,
 }
 
 impl<H, N> AuthoritySet<H, N>
-where H: PartialEq,
-	  N: Ord,
+where
+	H: PartialEq,
+	N: Ord,
 {
 	// authority sets must be non-empty and all weights must be greater than 0
 	fn invalid_authority_list(authorities: &AuthorityList) -> bool {
@@ -180,7 +207,7 @@ where
 		&self,
 		best_hash: &H,
 		is_descendent_of: &F,
-	) -> Result<Option<(H, N)>, fork_tree::Error<E>>
+	) -> Result<Option<(H, N)>, Error<E>>
 	where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		E: std::error::Error,
@@ -250,16 +277,20 @@ where
 		&mut self,
 		pending: PendingChange<H, N>,
 		is_descendent_of: &F,
-	) -> Result<(), Error<E>> where
+	) -> Result<(), Error<E>>
+	where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		E: std::error::Error,
 	{
-		for change in self.pending_forced_changes.iter() {
-			if change.canon_hash == pending.canon_hash ||
-				is_descendent_of(&change.canon_hash, &pending.canon_hash)
-					.map_err(fork_tree::Error::Client)?
+		for change in &self.pending_forced_changes {
+			if change.canon_hash == pending.canon_hash {
+				return Err(Error::DuplicateAuthoritySetChange);
+			}
+
+			if change.effective_number() >= pending.canon_height
+				&& is_descendent_of(&change.canon_hash, &pending.canon_hash)?
 			{
-				return Err(fork_tree::Error::UnfinalizedAncestor.into());
+				return Err(Error::OverlappingAuthoritySetChange);
 			}
 		}
 
@@ -341,6 +372,15 @@ where
 	///
 	/// These transitions are always forced and do not lead to justifications
 	/// which light clients can follow.
+	///
+	/// Forced changes can only be applied after all pending standard changes
+	/// that it depends on have been applied. If any pending standard change
+	/// exists that is an ancestor of a given forced changed and which effective
+	/// block number is lower than the last finalized block (as defined by the
+	/// forced change), then the forced change cannot be applied.
+	///
+	/// This method might apply multiple forced changes in one call (if any were
+	/// previously delayed by dependencies on pending standard changes).
 	pub(crate) fn apply_forced_changes<F, E>(
 		&self,
 		best_hash: H,
@@ -348,46 +388,106 @@ where
 		is_descendent_of: &F,
 		initial_sync: bool,
 	) -> Result<Option<(N, Self)>, E>
-		where F: Fn(&H, &H) -> Result<bool, E>,
+	where
+		F: Fn(&H, &H) -> Result<bool, E>,
 	{
-		let mut new_set = None;
+		let mut state: Option<(H, N, Self)> = None;
 
-		for change in self.pending_forced_changes.iter()
-			.take_while(|c| c.effective_number() <= best_number) // to prevent iterating too far
-			.filter(|c| c.effective_number() == best_number)
-		{
+		let apply_change = |set_id, change: &PendingChange<H, N>| {
 			// check if the given best block is in the same branch as
 			// the block that signaled the change.
 			if change.canon_hash == best_hash || is_descendent_of(&change.canon_hash, &best_hash)? {
+				let median_last_finalized = match change.delay_kind {
+					DelayKind::Best {
+						ref median_last_finalized,
+					} => median_last_finalized.clone(),
+					_ => unreachable!(
+						"pending_forced_changes only contains forced changes; forced changes have delay kind Best; qed."
+					),
+				};
+
+				// check if there's any pending standard change that we depend on
+				for (_, _, standard_change) in self.pending_standard_changes.roots() {
+					if standard_change.effective_number() <= median_last_finalized
+						&& is_descendent_of(&standard_change.canon_hash, &change.canon_hash)?
+					{
+						log::info!(target: "afg",
+							"Not applying authority set changed forced at block #{:?}, due to pending standard change at block #{:?}",
+							change.canon_height,
+							standard_change.effective_number(),
+						);
+
+						return Ok(None);
+					}
+				}
+
 				// apply this change: make the set canonical
-				afg_log!(initial_sync,
+				afg_log!(
+					initial_sync,
 					"👴 Applying authority set change forced at block #{:?}",
 					change.canon_height,
 				);
-				telemetry!(CONSENSUS_INFO; "afg.applying_forced_authority_set_change";
+
+				telemetry!(
+					CONSENSUS_INFO;
+					"afg.applying_forced_authority_set_change";
 					"block" => ?change.canon_height
 				);
 
-				let median_last_finalized = match change.delay_kind {
-					DelayKind::Best { ref median_last_finalized } => median_last_finalized.clone(),
-					_ => unreachable!("pending_forced_changes only contains forced changes; forced changes have delay kind Best; qed."),
-				};
-
-				new_set = Some((median_last_finalized, AuthoritySet {
-					current_authorities: change.next_authorities.clone(),
-					set_id: self.set_id + 1,
-					pending_standard_changes: ForkTree::new(), // new set, new changes.
-					pending_forced_changes: Vec::new(),
-				}));
-
-				break;
+				return Ok(Some((
+					change.canon_hash.clone(),
+					median_last_finalized,
+					AuthoritySet {
+						current_authorities: change.next_authorities.clone(),
+						set_id: set_id + 1,
+						pending_standard_changes: ForkTree::new(), // new set, new changes.
+						pending_forced_changes: Vec::new(),
+					},
+				)));
 			}
 
-			// we don't wipe forced changes until another change is
-			// applied
+			// nothing to apply
+			Ok(None)
+		};
+
+		for change in &self.pending_forced_changes {
+			// we are still looking for any viable forced changes
+			if change.effective_number() <= best_number {
+				// we might have already found a change to apply,
+				// in which case we need to its set_id
+				let set_id = if let Some((_, _, ref new_set)) = state {
+					new_set.set_id
+				} else {
+					self.set_id
+				};
+
+				let new_state = apply_change(set_id, &change)?;
+				if new_state.is_some() {
+					state = new_state;
+				}
+			} else {
+				// we already found a change to apply previously, now we
+				// need to figure out if there's any remaining changes we
+				// should keep
+				if let Some((ref applied_change_canon_hash, _, ref mut new_set)) = state {
+					// keep any further changes that are descendents of the one we previously
+					// found.
+					if is_descendent_of(applied_change_canon_hash, &change.canon_hash)? {
+						new_set.pending_forced_changes.push(change.clone());
+					}
+				} else {
+					// there are no more viable changes and we didn't apply
+					// any change previously so there's nothing left to do.
+					break;
+				}
+			}
 		}
 
-		Ok(new_set)
+		// we don't wipe forced changes until another change is applied, hence
+		// why we return a new set instead of mutating.
+		Ok(state.map(|(_, median_last_finalized, authority_set)| {
+			(median_last_finalized, authority_set)
+		}))
 	}
 
 	/// Apply or prune any pending transitions based on a finality trigger. This
@@ -406,7 +506,8 @@ where
 		finalized_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
-	) -> Result<Status<H, N>, Error<E>> where
+	) -> Result<Status<H, N>, Error<E>>
+	where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		E: std::error::Error,
 	{
@@ -429,12 +530,11 @@ where
 					Vec::new(),
 				);
 
-				// we will keep all forced change for any later blocks and that are a
-				// descendent of the finalized block (i.e. they are from this fork).
+				// we will keep all forced changes for any later blocks and that are a
+				// descendent of the finalized block (i.e. they are part of this branch).
 				for change in pending_forced_changes {
 					if change.effective_number() > finalized_number &&
-						is_descendent_of(&finalized_hash, &change.canon_hash)
-							.map_err(fork_tree::Error::Client)?
+						is_descendent_of(&finalized_hash, &change.canon_hash)?
 					{
 						self.pending_forced_changes.push(change)
 					}
