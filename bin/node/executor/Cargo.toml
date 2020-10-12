@@ -17,6 +17,7 @@ node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "2.0.0", path = "../runtime" }
 sc-executor = { version = "0.8.0", path = "../../../client/executor" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
+sp-keystore = { version = "0.8.0", path = "../../../primitives/keystore" }
 sp-io = { version = "2.0.0", path = "../../../primitives/io" }
 sp-state-machine = { version = "0.8.0", path = "../../../primitives/state-machine" }
 sp-trie = { version = "2.0.0", path = "../../../primitives/trie" }

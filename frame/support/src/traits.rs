@@ -23,9 +23,11 @@ use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError, traits::{
+	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError,
+	traits::{
 		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-		BadOrigin, AtLeast32BitUnsigned
+		BadOrigin, AtLeast32BitUnsigned, UniqueSaturatedFrom, UniqueSaturatedInto,
+		SaturatedConversion,
 	},
 };
 use crate::dispatch::Parameter;
@@ -1529,11 +1531,9 @@ pub mod schedule {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + Debug;
 
-		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		/// Schedule a dispatch to happen at the beginning of some block in the future.
 		///
 		/// This is not named.
-		///
-		/// Infallible.
 		fn schedule(
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
@@ -1553,6 +1553,22 @@ pub mod schedule {
 		/// NOTE2: This will not work to cancel periodic tasks after their initial execution. For
 		/// that, you must name the task explicitly using the `Named` trait.
 		fn cancel(address: Self::Address) -> Result<(), ()>;
+
+		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
+		/// only if it is executed *before* the currently scheduled block. For periodic tasks,
+		/// this dispatch is guaranteed to succeed only before the *initial* execution; for
+		/// others, use `reschedule_named`. 
+		///
+		/// Will return an error if the `address` is invalid.
+		fn reschedule(
+			address: Self::Address,
+			when: DispatchTime<BlockNumber>,
+		) -> Result<Self::Address, DispatchError>;
+
+		/// Return the next dispatch time for a given task.
+		///
+		/// Will return an error if the `address` is invalid.
+		fn next_dispatch_time(address: Self::Address) -> Result<BlockNumber, ()>;
 	}
 
 	/// A type that can be used as a scheduler.
@@ -1560,7 +1576,7 @@ pub mod schedule {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
 
-		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		/// Schedule a dispatch to happen at the beginning of some block in the future.
 		///
 		/// - `id`: The identity of the task. This must be unique and will return an error if not.
 		fn schedule_named(
@@ -1580,6 +1596,18 @@ pub mod schedule {
 		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
 		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
 		fn cancel_named(id: Vec<u8>) -> Result<(), ()>;
+
+		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
+		/// only if it is executed *before* the currently scheduled block.
+		fn reschedule_named(
+			id: Vec<u8>,
+			when: DispatchTime<BlockNumber>,
+		) -> Result<Self::Address, DispatchError>;
+
+		/// Return the next dispatch time for a given task.
+		///
+		/// Will return an error if the `id` is invalid.
+		fn next_dispatch_time(id: Vec<u8>) -> Result<BlockNumber, ()>;
 	}
 }
 
@@ -1621,6 +1649,9 @@ pub trait OriginTrait: Sized {
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin;
 
+	/// The AccountId used across the system.
+	type AccountId;
+
 	/// Add a filter to the origin.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
 
@@ -1635,6 +1666,15 @@ pub trait OriginTrait: Sized {
 
 	/// Get the caller.
 	fn caller(&self) -> &Self::PalletsOrigin;
+
+	/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+	fn none() -> Self;
+
+	/// Create with system root origin and no filter.
+	fn root() -> Self;
+
+	/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+	fn signed(by: Self::AccountId) -> Self;
 }
 
 /// Trait to be used when types are exactly same.
@@ -1670,6 +1710,73 @@ impl<T> IsType<T> for T {
 pub trait Instance: 'static {
     /// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
     const PREFIX: &'static str ;
+}
+
+/// A trait similar to `Convert` to convert values from `B` an abstract balance type
+/// into u64 and back from u128. (This conversion is used in election and other places where complex
+/// calculation over balance type is needed)
+///
+/// Total issuance of the currency is passed in, but an implementation of this trait may or may not
+/// use it.
+///
+/// # WARNING
+///
+/// the total issuance being passed in implies that the implementation must be aware of the fact
+/// that its values can affect the outcome. This implies that if the vote value is dependent on the
+/// total issuance, it should never ber written to storage for later re-use.
+pub trait CurrencyToVote<B> {
+	/// Convert balance to u64.
+	fn to_vote(value: B, issuance: B) -> u64;
+
+	/// Convert u128 to balance.
+	fn to_currency(value: u128, issuance: B) -> B;
+}
+
+/// An implementation of `CurrencyToVote` tailored for chain's that have a balance type of u128.
+///
+/// The factor is the `(total_issuance / u64::max()).max(1)`, represented as u64. Let's look at the
+/// important cases:
+///
+/// If the chain's total issuance is less than u64::max(), this will always be 1, which means that
+/// the factor will not have any effect. In this case, any account's balance is also less. Thus,
+/// both of the conversions are basically an `as`; Any balance can fit in u64.
+///
+/// If the chain's total issuance is more than 2*u64::max(), then a factor might be multiplied and
+/// divided upon conversion.
+pub struct U128CurrencyToVote;
+
+impl U128CurrencyToVote {
+	fn factor(issuance: u128) -> u128 {
+		(issuance / u64::max_value() as u128).max(1)
+	}
+}
+
+impl CurrencyToVote<u128> for U128CurrencyToVote {
+	fn to_vote(value: u128, issuance: u128) -> u64 {
+		(value / Self::factor(issuance)).saturated_into()
+	}
+
+	fn to_currency(value: u128, issuance: u128) -> u128 {
+		value.saturating_mul(Self::factor(issuance))
+	}
+}
+
+
+/// A naive implementation of `CurrencyConvert` that simply saturates all conversions.
+///
+/// # Warning
+///
+/// This is designed to be used mostly for testing. Use with care, and think about the consequences.
+pub struct SaturatingCurrencyToVote;
+
+impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> for SaturatingCurrencyToVote {
+	fn to_vote(value: B, _: B) -> u64 {
+		value.unique_saturated_into()
+	}
+
+	fn to_currency(value: u128, _: B) -> B {
+		B::unique_saturated_from(value)
+	}
 }
 
 #[cfg(test)]
