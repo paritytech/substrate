@@ -561,7 +561,6 @@ parameter_types! {
 	pub const CandidacyBond: Balance = 10 * DOLLARS;
 	pub const VotingBondBase: Balance = 1 * DOLLARS;
 	pub const VotingBondFactor: Balance = 50 * CENTS;    // per 32 bytes on-chain
-	pub const VotingBond: Balance = 1 * DOLLARS;
 	pub const TermDuration: BlockNumber = 7 * DAYS;
 	pub const DesiredMembers: u32 = 13;
 	pub const DesiredRunnersUp: u32 = 7;
