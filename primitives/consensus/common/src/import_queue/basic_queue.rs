@@ -403,12 +403,11 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 	Output = (
 		usize,
 		usize,
-		Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash,)>,
+		Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>,
 		BoxBlockImport<B, Transaction>,
-		V
-	)
->
-{
+		V,
+	),
+> {
 	let count = blocks.len();
 
 	let blocks_range = match (
@@ -500,4 +499,188 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 		cx.waker().wake_by_ref();
 		Poll::Pending
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{
+		import_queue::{CacheKeyId, Verifier},
+		BlockCheckParams, BlockImport, BlockImportParams, ImportResult, JustificationImport,
+	};
+	use futures::{executor::block_on, Future};
+	use sp_test_primitives::{Block, BlockNumber, Extrinsic, Hash, Header};
+	use std::collections::HashMap;
+
+	impl Verifier<Block> for () {
+		fn verify(
+			&mut self,
+			origin: BlockOrigin,
+			header: Header,
+			_justification: Option<Justification>,
+			_body: Option<Vec<Extrinsic>>,
+		) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+			Ok((BlockImportParams::new(origin, header), None))
+		}
+	}
+
+	impl BlockImport<Block> for () {
+		type Error = crate::Error;
+		type Transaction = Extrinsic;
+
+		fn check_block(
+			&mut self,
+			_block: BlockCheckParams<Block>,
+		) -> Result<ImportResult, Self::Error> {
+			Ok(ImportResult::imported(false))
+		}
+
+		fn import_block(
+			&mut self,
+			_block: BlockImportParams<Block, Self::Transaction>,
+			_cache: HashMap<CacheKeyId, Vec<u8>>,
+		) -> Result<ImportResult, Self::Error> {
+			Ok(ImportResult::imported(true))
+		}
+	}
+
+	impl JustificationImport<Block> for () {
+		type Error = crate::Error;
+
+		fn import_justification(
+			&mut self,
+			_hash: Hash,
+			_number: BlockNumber,
+			_justification: Justification,
+		) -> Result<(), Self::Error> {
+			Ok(())
+		}
+	}
+
+	#[derive(Debug, PartialEq)]
+	enum Event {
+		JustificationImported(Hash),
+		BlockImported(Hash),
+	}
+
+	#[derive(Default)]
+	struct TestLink {
+		events: Vec<Event>,
+	}
+
+	impl Link<Block> for TestLink {
+		fn blocks_processed(
+			&mut self,
+			_imported: usize,
+			_count: usize,
+			results: Vec<(Result<BlockImportResult<BlockNumber>, BlockImportError>, Hash)>,
+		) {
+			if let Some(hash) = results.into_iter().find_map(|(r, h)| r.ok().map(|_| h)) {
+				self.events.push(Event::BlockImported(hash));
+			}
+		}
+
+		fn justification_imported(
+			&mut self,
+			_who: Origin,
+			hash: &Hash,
+			_number: BlockNumber,
+			_success: bool,
+		) {
+			self.events.push(Event::JustificationImported(hash.clone()))
+		}
+	}
+
+	#[test]
+	fn prioritizes_finality_work_over_block_import() {
+		let (result_sender, mut result_port) = buffered_link::buffered_link();
+
+		let (mut worker, mut finality_sender, mut block_import_sender) =
+			BlockImportWorker::new(result_sender, (), Box::new(()), Some(Box::new(())), None, None);
+
+		let mut import_block = |n| {
+			let header = Header {
+				parent_hash: Hash::random(),
+				number: n,
+				extrinsics_root: Hash::random(),
+				state_root: Default::default(),
+				digest: Default::default(),
+			};
+
+			let hash = header.hash();
+
+			block_on(block_import_sender.send(worker_messages::ImportBlocks(
+				BlockOrigin::Own,
+				vec![IncomingBlock {
+					hash,
+					header: Some(header),
+					body: None,
+					justification: None,
+					origin: None,
+					allow_missing_state: false,
+					import_existing: false,
+				}],
+			)))
+			.unwrap();
+
+			hash
+		};
+
+		let mut import_justification = || {
+			let hash = Hash::random();
+
+			block_on(finality_sender.send(worker_messages::Finality::ImportJustification(
+				libp2p::PeerId::random(),
+				hash,
+				1,
+				Vec::new(),
+			)))
+			.unwrap();
+
+			hash
+		};
+
+		let mut link = TestLink::default();
+
+		// we send a bunch of tasks to the worker
+		let block1 = import_block(1);
+		let block2 = import_block(2);
+		let block3 = import_block(3);
+		let justification1 = import_justification();
+		let justification2 = import_justification();
+		let block4 = import_block(4);
+		let block5 = import_block(5);
+		let block6 = import_block(6);
+		let justification3 = import_justification();
+
+		// we poll the worker until we have processed 9 events
+		block_on(futures::future::poll_fn(|cx| {
+			while link.events.len() < 9 {
+				match Future::poll(Pin::new(&mut worker), cx) {
+					Poll::Pending => {}
+					Poll::Ready(()) => panic!("import queue worker should not conclude."),
+				}
+
+				result_port.poll_actions(cx, &mut link).unwrap();
+			}
+
+			Poll::Ready(())
+		}));
+
+		// all justification tasks must be done before any block import work
+		assert_eq!(
+			link.events,
+			vec![
+				Event::JustificationImported(justification1),
+				Event::JustificationImported(justification2),
+				Event::JustificationImported(justification3),
+				Event::BlockImported(block1),
+				Event::BlockImported(block2),
+				Event::BlockImported(block3),
+				Event::BlockImported(block4),
+				Event::BlockImported(block5),
+				Event::BlockImported(block6),
+			]
+		);
+	}
 }
