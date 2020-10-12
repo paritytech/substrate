@@ -17,7 +17,9 @@
 
 use codec::{Encode, Decode, EncodeLike};
 use frame_support::{
-	assert_ok, assert_noop, dispatch::{DispatchError, DispatchResult}, transactional, StorageMap, StorageValue,
+	assert_ok, assert_noop, transactional,
+	StorageMap, StorageValue,
+	dispatch::{DispatchError, DispatchResult},
 	storage::{with_transaction, TransactionOutcome::*},
 };
 use sp_io::TestExternalities;
@@ -180,15 +182,20 @@ fn storage_transaction_commit_then_rollback() {
 
 #[test]
 fn transactional_annotation() {
+	fn set_value(v: u32) -> DispatchResult {
+		Value::set(v);
+		Ok(())
+	}
+
 	#[transactional]
 	fn value_commits(v: u32) -> result::Result<u32, &'static str> {
-		Value::set(v);
+		set_value(v)?;
 		Ok(v)
 	}
 
 	#[transactional]
 	fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
-		Value::set(v);
+		set_value(v)?;
 		Err("nah")
 	}
 
