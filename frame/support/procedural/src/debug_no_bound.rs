@@ -34,9 +34,10 @@ pub fn derive_debug_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 					.map(|i| i.ident.as_ref().expect("named fields have ident"))
 					.map(|i| quote::quote_spanned!(i.span() => .field(stringify!(#i), &self.#i) ));
 
-				quote::quote!( fmt.debug_struct(stringify!(#input_ident))
-					#( #fields )*
-					.finish()
+				quote::quote!(
+					fmt.debug_struct(stringify!(#input_ident))
+						#( #fields )*
+						.finish()
 				)
 			},
 			syn::Fields::Unnamed(unnamed) => {
@@ -44,9 +45,10 @@ pub fn derive_debug_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 					.map(|(i, _)| syn::Index::from(i))
 					.map(|i| quote::quote_spanned!(i.span() => .field(&self.#i) ));
 
-				quote::quote!( fmt.debug_tuple(stringify!(#input_ident))
-					#( #fields )*
-					.finish()
+				quote::quote!(
+					fmt.debug_tuple(stringify!(#input_ident))
+						#( #fields )*
+						.finish()
 				)
 			},
 			syn::Fields::Unit => quote::quote!( fmt.write_str(stringify!(#input_ident)) ),
@@ -60,14 +62,14 @@ pub fn derive_debug_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 						syn::Fields::Named(named) => {
 							let captured = named.named.iter()
 								.map(|i| i.ident.as_ref().expect("named fields have ident"));
-							let debuged = captured.clone()
+							let debugged = captured.clone()
 								.map(|i| quote::quote_spanned!(i.span() =>
 									.field(stringify!(#i), &#i)
 								));
 							quote::quote!(
 								Self::#ident { #( ref #captured, )* } => {
 									fmt.debug_struct(#full_variant_str)
-										#( #debuged )*
+										#( #debugged )*
 										.finish()
 								}
 							)
@@ -75,12 +77,12 @@ pub fn derive_debug_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 						syn::Fields::Unnamed(unnamed) => {
 							let captured = unnamed.unnamed.iter().enumerate()
 								.map(|(i, f)| syn::Ident::new(&format!("_{}", i), f.span()));
-							let debuged = captured.clone()
-								.map(|i| quote::quote_spanned!(i.span() => .field(&#i) ));
+							let debugged = captured.clone()
+								.map(|i| quote::quote_spanned!(i.span() => .field(&#i)));
 							quote::quote!(
 								Self::#ident ( #( ref #captured, )* ) => {
 									fmt.debug_tuple(#full_variant_str)
-										#( #debuged )*
+										#( #debugged )*
 										.finish()
 								}
 							)
@@ -91,7 +93,7 @@ pub fn derive_debug_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 					}
 				});
 
-			quote::quote!( match *self {
+			quote::quote!(match *self {
 				#( #variants, )*
 			})
 		},

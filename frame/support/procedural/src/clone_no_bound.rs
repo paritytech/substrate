@@ -82,7 +82,7 @@ pub fn derive_clone_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 					}
 				});
 
-			quote::quote!( match self {
+			quote::quote!(match self {
 				#( #variants, )*
 			})
 		},

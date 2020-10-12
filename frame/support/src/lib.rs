@@ -269,7 +269,7 @@ macro_rules! ord_parameter_types {
 #[doc(inline)]
 pub use frame_support_procedural::{decl_storage, construct_runtime, transactional, DebugStripped};
 
-/// Derive Clone but do not bound any generic.
+/// Derive [`Clone`] but do not bound any generic.
 ///
 /// This is useful for type generic over runtime:
 /// ```
@@ -278,8 +278,8 @@ pub use frame_support_procedural::{decl_storage, construct_runtime, transactiona
 ///		type C: Clone;
 /// }
 ///
-/// // Foo implements clone because C bounds Clone.
-/// // Otherwise compilation fail telling `c` doesn't implement clone.
+/// // Foo implements [`Clone`] because `C` bounds [`Clone`].
+/// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Clone`].
 /// #[derive(CloneNoBound)]
 /// struct Foo<T: Trait> {
 ///		c: T::C,
@@ -287,7 +287,7 @@ pub use frame_support_procedural::{decl_storage, construct_runtime, transactiona
 /// ```
 pub use frame_support_procedural::CloneNoBound;
 
-/// Derive Eq but do not bound any generic.
+/// Derive [`Eq`] but do not bound any generic.
 ///
 /// This is useful for type generic over runtime:
 /// ```
@@ -296,8 +296,8 @@ pub use frame_support_procedural::CloneNoBound;
 ///		type C: Eq;
 /// }
 ///
-/// // Foo implements clone because C bounds Eq.
-/// // Otherwise compilation fail telling `c` doesn't implement eq.
+/// // Foo implements [`Eq`] because `C` bounds [`Eq`].
+/// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Eq`].
 /// #[derive(PartialEqNoBound, EqNoBound)]
 /// struct Foo<T: Trait> {
 ///		c: T::C,
@@ -305,7 +305,7 @@ pub use frame_support_procedural::CloneNoBound;
 /// ```
 pub use frame_support_procedural::EqNoBound;
 
-/// Derive PartialEq but do not bound any generic.
+/// Derive [`PartialEq`] but do not bound any generic.
 ///
 /// This is useful for type generic over runtime:
 /// ```
@@ -314,8 +314,8 @@ pub use frame_support_procedural::EqNoBound;
 ///		type C: PartialEq;
 /// }
 ///
-/// // Foo implements clone because C bounds PartialEq.
-/// // Otherwise compilation fail telling `c` doesn't implement eq.
+/// // Foo implements [`PartialEq`] because `C` bounds [`PartialEq`].
+/// // Otherwise compilation will fail with an output telling `c` doesn't implement [`PartialEq`].
 /// #[derive(PartialEqNoBound)]
 /// struct Foo<T: Trait> {
 ///		c: T::C,
@@ -323,7 +323,7 @@ pub use frame_support_procedural::EqNoBound;
 /// ```
 pub use frame_support_procedural::PartialEqNoBound;
 
-/// Derive Debug but do not bound any generic.
+/// Derive [`Debug`] but do not bound any generic.
 ///
 /// This is useful for type generic over runtime:
 /// ```
@@ -333,8 +333,8 @@ pub use frame_support_procedural::PartialEqNoBound;
 ///		type C: Debug;
 /// }
 ///
-/// // Foo implements clone because C bounds Debug.
-/// // Otherwise compilation fail telling `c` doesn't implement eq.
+/// // Foo implements [`Debug`] because `C` bounds [`Debug`].
+/// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Debug`].
 /// #[cfg_attr(feature = "std", derive(DebugNoBound))]
 /// struct Foo<T: Trait> {
 ///		c: T::C,
