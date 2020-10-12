@@ -56,8 +56,8 @@ pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro:
 							let names = named.named.iter().map(|i| &i.ident);
 							let other_names = names.clone()
 								.enumerate()
-								.map(|(i, ident)|
-									syn::Ident::new(&format!("_{}", i), ident.span())
+								.map(|(n, ident)|
+									syn::Ident::new(&format!("_{}", n), ident.span())
 								);
 
 							let capture = names.clone();
