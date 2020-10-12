@@ -136,7 +136,17 @@ impl<H: traits::Hash, L: FullLeaf> DataOrHash<H, L> {
 	}
 }
 
+/// A composition of multiple leaf elements with compact form representation.
 ///
+/// When composing together multiple [LeafDataProvider]s you will end up with
+/// a tuple of `LeafData` that each element provides.
+///
+/// However this will cause the leaves to have significant size, while for some
+/// use cases it will be enough to prove only one element of the tuple.
+/// That's the rationale for [Compact] struct. We wrap each element of the tuple
+/// into [DataOrHash] and each tuple element is hashed first before constructing
+/// the final hash of the entire tuple. This allows you to replace tuple elements
+/// you don't care about with their hashes.
 #[derive(RuntimeDebug, Clone, PartialEq)]
 pub struct Compact<H, T> {
 	pub tuple: T,

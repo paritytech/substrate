@@ -25,7 +25,7 @@
 
 use codec::Encode;
 use frame_support::{
-	debug, decl_module, decl_storage,
+	decl_module, decl_storage,
 	weights::Weight,
 	traits::Get,
 };
@@ -88,8 +88,6 @@ decl_storage! {
 		/// Note this collection only contains MMR peaks, the inner nodes (and leaves)
 		/// are pruned and only stored in the Offchain DB.
 		pub Nodes get(fn mmr_peak): map hasher(identity) u64 => Option<<T as Trait>::Hash>;
-
-		// TODO [ToDr] Populate initial MMR?
 	}
 }
 
@@ -98,10 +96,11 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			use primitives::LeafDataProvider;
-
+			let leaves = Self::mmr_leaves();
+			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 			let (data, leaf_weight) = T::LeafData::leaf_data();
 			// append new leaf to MMR
-			let mut mmr: ModuleMMR<mmr::storage::RuntimeStorage, T> = mmr::MMR::new(Self::mmr_leaves());
+			let mut mmr: ModuleMMR<mmr::storage::RuntimeStorage, T> = mmr::MMR::new(leaves);
 			mmr.push(data).expect("MMR push never fails.");
 
 			// update the size
@@ -109,12 +108,11 @@ decl_module! {
 			<NumberOfLeaves>::put(leaves);
 			<RootHash<T>>::put(root);
 
-			let pruned = Self::prune_non_peaks();
-			let peaks = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
+			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 
 			leaf_weight + <T as frame_system::Trait>::DbWeight::get().reads_writes(
-				2 + peaks,
-				2 + peaks + pruned
+				2 + peaks_before,
+				2 + peaks_after,
 			)
 		}
 	}
@@ -130,15 +128,6 @@ type LeafOf<T> = <<T as Trait>::LeafData as primitives::LeafDataProvider>::LeafD
 pub(crate) type HashingOf<T> = <T as crate::Trait>::Hashing;
 
 impl<T: Trait> Module<T> {
-	/// Prune leaf & inner nodes that are no longer necessary to keep.
-	///
-	/// Returns the number of nodes pruned.
-	fn prune_non_peaks() -> u64 {
-		debug::native::info!("Pruning MMR of size: {:?}", Self::mmr_leaves());
-		// TODO [ToDr] Implement me
-		0
-	}
-
 	fn offchain_key(pos: u64) -> Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
 	}
