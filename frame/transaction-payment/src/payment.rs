@@ -47,7 +47,7 @@ pub trait OnChargeTransaction<T: Trait> {
 /// Implements the transaction payment for a module implementing the `Currency`
 /// trait (eg. the pallet_balances) using an unbalance handler (implementing
 /// `OnUnbalanced`).
-pub struct CurrencyAdapter<C, OU>(PhantomData<C>, PhantomData<OU>);
+pub struct CurrencyAdapter<C, OU>(PhantomData<(C, OU)>);
 
 /// Default implementation for a Currency and an OnUnbalanced handler.
 impl<T, C, OU> OnChargeTransaction<T> for CurrencyAdapter<C, OU>
