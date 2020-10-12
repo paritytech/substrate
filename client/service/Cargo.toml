@@ -50,6 +50,7 @@ sp-utils = { version = "2.0.0", path = "../../primitives/utils" }
 sp-version = { version = "2.0.0", path = "../../primitives/version" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.8.0", path = "../../primitives/keystore" }
 sp-session = { version = "2.0.0", path = "../../primitives/session" }
 sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" }
 sp-application-crypto = { version = "2.0.0", path = "../../primitives/application-crypto" }

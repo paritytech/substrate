@@ -36,7 +36,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	impl_opaque_keys,
 	testing::{Header, TestXt, UintAuthorityId},
-	traits::{Convert, IdentityLookup, OpaqueKeys, SaturatedConversion},
+	traits::{IdentityLookup, OpaqueKeys},
 	DigestItem, Perbill,
 };
 use sp_staking::SessionIndex;
@@ -198,23 +198,9 @@ parameter_types! {
 	pub const StakingUnsignedPriority: u64 = u64::max_value() / 2;
 }
 
-pub struct CurrencyToVoteHandler;
-
-impl Convert<u128, u128> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u128 {
-		x
-	}
-}
-
-impl Convert<u128, u64> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u64 {
-		x.saturated_into()
-	}
-}
-
 impl pallet_staking::Trait for Test {
 	type RewardRemainder = ();
-	type CurrencyToVote = CurrencyToVoteHandler;
+	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = TestEvent;
 	type Currency = Balances;
 	type Slash = ();
@@ -233,6 +219,7 @@ impl pallet_staking::Trait for Test {
 	type UnsignedPriority = StakingUnsignedPriority;
 	type MaxIterations = ();
 	type MinSolutionScoreBump = ();
+	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();
 }
 

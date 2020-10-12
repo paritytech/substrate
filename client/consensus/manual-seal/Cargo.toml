@@ -27,7 +27,6 @@ sc-client-api = { path = "../../api", version = "2.0.0" }
 sc-consensus-babe = { path = "../../consensus/babe", version = "0.8.0" }
 sc-consensus-epochs = { path = "../../consensus/epochs", version = "0.8.0" }
 sp-consensus-babe = { path = "../../../primitives/consensus/babe", version = "0.8.0" }
-sc-keystore = { path = "../../keystore", version = "2.0.0" }
 
 sc-transaction-pool = { path = "../../transaction-pool", version = "2.0.0" }
 sp-blockchain = { path = "../../../primitives/blockchain", version = "2.0.0" }
@@ -35,6 +34,7 @@ sp-consensus = { package = "sp-consensus", path = "../../../primitives/consensus
 sp-inherents = { path = "../../../primitives/inherents", version = "2.0.0" }
 sp-runtime = {  path = "../../../primitives/runtime", version = "2.0.0" }
 sp-core = {  path = "../../../primitives/core", version = "2.0.0" }
+sp-keystore = {  path = "../../../primitives/keystore", version = "0.8.0" }
 sp-api = {  path = "../../../primitives/api", version = "2.0.0" }
 sp-transaction-pool = { path = "../../../primitives/transaction-pool", version = "2.0.0" }
 sp-timestamp = { path = "../../../primitives/timestamp", version = "2.0.0" }
