@@ -293,7 +293,7 @@ pub fn init_logger(
 			.expect("provided directive is valid"),
 	);
 
-	// Make sure we include profiling targets in the filter
+	// Make sure to include profiling targets in the filter
 	if let Some(profiling_targets) = profiling_targets.clone() {
 		for directive in parse_directives(profiling_targets) {
 			env_filter = env_filter.add_directive(directive);
