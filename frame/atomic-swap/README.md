@@ -2,9 +2,9 @@
 
 A module for atomically sending funds.
 
-- [`atomic_swap::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
-- [`Module`](./struct.Module.html)
+- [`atomic_swap::Trait`](https://docs.rs/pallet-atomic-swap/latest/pallet_atomic_swap/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-atomic-swap/latest/pallet_atomic_swap/enum.Call.html)
+- [`Module`](https://docs.rs/pallet-atomic-swap/latest/pallet_atomic_swap/struct.Module.html)
 
 ## Overview
 

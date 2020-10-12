@@ -41,3 +41,18 @@ pub fn transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStre
 
 	Ok(output.into())
 }
+
+pub fn require_transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
+	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
+
+	let crate_ = generate_crate_access_2018()?;
+	let output = quote! {
+		#(#attrs)*
+		#vis #sig {
+			#crate_::storage::require_transaction();
+			#block
+		}
+	};
+
+	Ok(output.into())
+}
