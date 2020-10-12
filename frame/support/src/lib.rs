@@ -344,6 +344,37 @@ pub use frame_support_procedural::PartialEqNoBound;
 /// ```
 pub use frame_support_procedural::DebugNoBound;
 
+/// Assert the annotated function is executed within a storage transaction.
+///
+/// The assertion is enabled for native execution and when `debug_assertions` are enabled.
+///
+/// # Example
+///
+/// ```
+/// # use frame_support::{
+/// # 	require_transactional, transactional, dispatch::DispatchResult
+/// # };
+///
+/// #[require_transactional]
+/// fn update_all(value: u32) -> DispatchResult {
+/// 	// Update multiple storages.
+/// 	// Return `Err` to indicate should revert.
+/// 	Ok(())
+/// }
+///
+/// #[transactional]
+/// fn safe_update(value: u32) -> DispatchResult {
+/// 	// This is safe
+/// 	update_all(value)
+/// }
+///
+/// fn unsafe_update(value: u32) -> DispatchResult {
+/// 	// this may panic if unsafe_update is not called within a storage transaction
+/// 	update_all(value)
+/// }
+/// ```
+pub use frame_support_procedural::require_transactional;
+
 /// Return Err of the expression: `return Err($expression);`.
 ///
 /// Used as `fail!(expression)`.

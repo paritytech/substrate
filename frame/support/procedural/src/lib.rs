@@ -397,3 +397,8 @@ pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 		};
 	).into()
 }
+
+#[proc_macro_attribute]
+pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
+	transactional::require_transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
+}
