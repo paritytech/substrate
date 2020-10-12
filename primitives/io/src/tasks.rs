@@ -178,7 +178,6 @@ mod inner {
 }
 
 pub use inner::{DataJoinHandle, spawn};
-
 #[cfg(test)]
 mod tests {
 
