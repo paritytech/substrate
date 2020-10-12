@@ -47,7 +47,7 @@ pub trait Trait: frame_system::Trait {
 	///
 	/// Each node is stored in the Off-chain DB under key derived from the [INDEXING_PREFIX] and
 	/// it's in-tree index (MMR position).
-	pub const INDEXING_PREFIX: &[u8];
+	const INDEXING_PREFIX: &'static [u8];
 
 	/// A hasher type for MMR.
 	///

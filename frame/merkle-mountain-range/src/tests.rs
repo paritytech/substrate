@@ -81,7 +81,8 @@ impl frame_system::Trait for Test {
 }
 
 impl Trait for Test {
-	const INDEXING_PREFIX = b"mmr-";
+	const INDEXING_PREFIX: &'static [u8] = b"mmr-";
+
 	type Hashing = Keccak256;
 	type Hash = H256;
 	type LeafData = Compact<Keccak256, (frame_system::Module<Test>, LeafData)>;
