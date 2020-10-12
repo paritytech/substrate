@@ -296,6 +296,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	}
 }
 
+/// Helper inner struct to implement `RuntimeSpawn` extension.
 pub struct RuntimeInstanceSpawn {
 	module: Arc<dyn WasmModule>,
 	forks: parking_lot::Mutex<HashMap<u64, mpsc::Receiver<Vec<u8>>>>,

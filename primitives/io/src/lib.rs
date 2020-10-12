@@ -1251,6 +1251,8 @@ pub trait RuntimeSpawn : Send {
 	/// Create new runtime instance and use dynamic dispatch to invoke with specified payload.
 	///
 	/// Returns handle of the spawned task.
+	///
+	/// Funtion pointers(`dispatcher_ref`, `func`) are WASM pointer types.
 	fn spawn_call(&self, dispatcher_ref: u32, func: u32, payload: Vec<u8>) -> u64;
 
 	/// Join the result of previously created runtime instance invocation.
