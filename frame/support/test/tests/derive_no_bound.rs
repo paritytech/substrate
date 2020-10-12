@@ -29,7 +29,7 @@ fn runtime_debug_no_bound_display_correctly() {
 		assert_eq!(format!("{:?}", Unnamed(1)), "Unnamed(1)");
 	}
 
-	#[cfg(not(features = "std"))]
+	#[cfg(not(feature = "std"))]
 	{
 		assert_eq!(format!("{:?}", Unnamed(1)), "<stripped>");
 	}
