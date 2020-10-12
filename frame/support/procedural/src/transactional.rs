@@ -29,7 +29,7 @@ pub fn transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStre
 		#vis #sig {
 			use #crate_::storage::{with_transaction, TransactionOutcome};
 			with_transaction(|| {
-				let r = #block;
+				let r = (|| { #block })();
 				if r.is_ok() {
 					TransactionOutcome::Commit(r)
 				} else {
