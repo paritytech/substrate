@@ -49,15 +49,15 @@
 
 use crate::{ExHashT, NetworkService};
 
-use async_std::sync::{Condvar, Mutex, MutexGuard};
+use async_std::sync::{Mutex, MutexGuard};
 use futures::prelude::*;
+use futures::channel::mpsc::{channel, Receiver, Sender};
 use libp2p::PeerId;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{
 	collections::VecDeque,
 	fmt,
-	sync::{atomic, Arc},
-	time::Duration,
+	sync::Arc,
 };
 
 #[cfg(test)]
@@ -67,6 +67,9 @@ mod tests;
 pub struct QueuedSender<M> {
 	/// Shared between the front and the back task.
 	shared: Arc<Shared<M>>,
+	// TODO: Can we get around this Mutex? E.g. by taking `&mut` for `lock_queue` and
+	// `queue_or_discard`.
+	notify_background_future: Mutex<Sender<()>>,
 }
 
 impl<M> QueuedSender<M> {
@@ -88,14 +91,15 @@ impl<M> QueuedSender<M> {
 		H: ExHashT,
 		F: Fn(M) -> Vec<u8> + Send + 'static,
 	{
+		let (notify_background_future, wait_for_sender) = channel(0);
+
 		let shared = Arc::new(Shared {
-			stop_task: atomic::AtomicBool::new(false),
-			condvar: Condvar::new(),
 			queue_size_limit,
 			messages_queue: Mutex::new(VecDeque::with_capacity(queue_size_limit)),
 		});
 
 		let task = spawn_task(
+			wait_for_sender,
 			service,
 			peer_id,
 			protocol,
@@ -103,7 +107,7 @@ impl<M> QueuedSender<M> {
 			messages_encode
 		);
 
-		(QueuedSender { shared }, task)
+		(QueuedSender { shared, notify_background_future: Mutex::new(notify_background_future) }, task)
 	}
 
 	/// Locks the queue of messages towards this peer.
@@ -112,8 +116,8 @@ impl<M> QueuedSender<M> {
 	pub async fn lock_queue<'a>(&'a self) -> QueueGuard<'a, M> {
 		QueueGuard {
 			messages_queue: self.shared.messages_queue.lock().await,
-			condvar: &self.shared.condvar,
 			queue_size_limit: self.shared.queue_size_limit,
+			notify_background_future: self.notify_background_future.lock().await,
 		}
 	}
 
@@ -134,17 +138,6 @@ impl<M> fmt::Debug for QueuedSender<M> {
 	}
 }
 
-impl<M> Drop for QueuedSender<M> {
-	fn drop(&mut self) {
-		// The "clean" way to notify the `Condvar` here is normally to first lock the `Mutex`,
-		// then notify the `Condvar` while the `Mutex` is locked. Unfortunately, the `Mutex`
-		// being asynchronous, it can't reasonably be locked from within a destructor.
-		// See also the corresponding code in the background task.
-		self.shared.stop_task.store(true, atomic::Ordering::Release);
-		self.shared.condvar.notify_all();
-	}
-}
-
 /// Locked queue of messages to the given peer.
 ///
 /// As long as this struct exists, the background task is asleep and the owner of the [`QueueGuard`]
@@ -153,9 +146,9 @@ impl<M> Drop for QueuedSender<M> {
 #[must_use]
 pub struct QueueGuard<'a, M> {
 	messages_queue: MutexGuard<'a, VecDeque<M>>,
-	condvar: &'a Condvar,
 	/// Same as [`Shared::queue_size_limit`].
 	queue_size_limit: usize,
+	notify_background_future: MutexGuard<'a, Sender<()>>,
 }
 
 impl<'a, M: Send + 'static> QueueGuard<'a, M> {
@@ -180,25 +173,20 @@ impl<'a, M: Send + 'static> QueueGuard<'a, M> {
 
 impl<'a, M> Drop for QueueGuard<'a, M> {
 	fn drop(&mut self) {
-		// We notify the `Condvar` in the destructor in order to be able to push multiple
-		// messages and wake up the background task only once afterwards.
-		self.condvar.notify_one();
+		let _ = self.notify_background_future.try_send(());
 	}
 }
 
 #[derive(Debug)]
 struct Shared<M> {
-	/// Read by the background task after locking `locked`. If true, the task stops.
-	stop_task: atomic::AtomicBool,
 	/// Queue of messages waiting to be sent out.
 	messages_queue: Mutex<VecDeque<M>>,
-	/// Must be notified every time the content of `locked` changes.
-	condvar: Condvar,
 	/// Maximum number of elements in `messages_queue`.
 	queue_size_limit: usize,
 }
 
 async fn spawn_task<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>(
+	mut wait_for_sender: Receiver<()>,
 	service: Arc<NetworkService<B, H>>,
 	peer_id: PeerId,
 	protocol: ConsensusEngineId,
@@ -206,26 +194,13 @@ async fn spawn_task<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>(
 	messages_encode: F,
 ) {
 	loop {
-		let next_message = 'next_msg: loop {
-			let mut queue = shared.messages_queue.lock().await;
+		if wait_for_sender.next().await.is_none() {
+			return
+		}
 
-			loop {
-				if shared.stop_task.load(atomic::Ordering::Acquire) {
-					return;
-				}
-
-				if let Some(msg) = queue.pop_front() {
-					break 'next_msg msg;
-				}
-
-				// It is possible that the destructor of `QueuedSender` sets `stop_task` to
-				// true and notifies the `Condvar` after the background task loads `stop_task`
-				// and before it calls `Condvar::wait`.
-				// See also the corresponding comment in `QueuedSender::drop`.
-				// For this reason, we use `wait_timeout`. In the worst case scenario,
-				// `stop_task` will always be checked again after the timeout is reached.
-				queue = shared.condvar.wait_timeout(queue, Duration::from_secs(10)).await.0;
-			}
+		let next_message = match shared.messages_queue.lock().await.pop_front() {
+			Some(msg) => msg,
+			None => continue,
 		};
 
 		// Starting from below, we try to send the message. If an error happens when sending,
