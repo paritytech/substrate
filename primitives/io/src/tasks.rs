@@ -124,7 +124,6 @@ mod inner {
 
 #[cfg(not(feature = "std"))]
 mod inner {
-
 	use core::mem;
 	use sp_std::prelude::*;
 
