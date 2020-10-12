@@ -1028,7 +1028,13 @@ mod tests {
 		};
 
 		authorities.add_pending_change(change_a, &static_is_descendent_of(false)).unwrap();
-		authorities.add_pending_change(change_b, &static_is_descendent_of(false)).unwrap();
+		authorities.add_pending_change(change_b.clone(), &static_is_descendent_of(false)).unwrap();
+
+		// no duplicates are allowed
+		assert!(matches!(
+			authorities.add_pending_change(change_b, &static_is_descendent_of(false)),
+			Err(Error::DuplicateAuthoritySetChange)
+		));
 
 		// there's an effective change triggered at block 15 but not a standard one.
 		// so this should do nothing.
@@ -1037,12 +1043,9 @@ mod tests {
 			None,
 		);
 
-		// throw a standard change into the mix to prove that it's discarded
-		// for being on the same fork.
-		//
-		// NOTE: after https://github.com/paritytech/substrate/issues/1861
-		// this should still be rejected based on the "span" rule -- it overlaps
-		// with another change on the same fork.
+		let is_descendent_of_a = is_descendent_of(|base: &&str, _| base.starts_with("hash_a"));
+
+		// we can add multiple forced changes on the same fork, but they must not overlap.
 		let change_c = PendingChange {
 			next_authorities: set_b.clone(),
 			delay: 3,
@@ -1051,37 +1054,46 @@ mod tests {
 			delay_kind: DelayKind::Best { median_last_finalized: 0 },
 		};
 
-		let is_descendent_of_a = is_descendent_of(|base: &&str, _| {
-			base.starts_with("hash_a")
-		});
+		assert!(matches!(
+			authorities.add_pending_change(change_c, &is_descendent_of_a),
+			Err(Error::OverlappingAuthoritySetChange)
+		));
 
-		assert!(authorities.add_pending_change(change_c, &is_descendent_of_a).is_err());
-
-		// too early.
+		// let's try and apply the forced changes.
+		// too early and there's no forced changes to apply.
 		assert!(
-			authorities.apply_forced_changes("hash_a10", 10, &static_is_descendent_of(true), false)
+			authorities
+				.apply_forced_changes("hash_a10", 10, &static_is_descendent_of(true), false)
 				.unwrap()
 				.is_none()
 		);
 
-		// too late.
-		assert!(
-			authorities.apply_forced_changes("hash_a16", 16, &static_is_descendent_of(true), false)
-				.unwrap()
-				.is_none()
-		);
-
-		// on time -- chooses the right change.
-		assert_eq!(
-			authorities.apply_forced_changes("hash_a15", 15, &is_descendent_of_a, false)
-				.unwrap()
-				.unwrap(),
-			(42, AuthoritySet {
+		let expected = (
+			42,
+			AuthoritySet {
 				current_authorities: set_a,
 				set_id: 1,
 				pending_standard_changes: ForkTree::new(),
 				pending_forced_changes: Vec::new(),
-			}),
+			},
+		);
+
+		// on time -- chooses the right change for this fork.
+		assert_eq!(
+			authorities
+				.apply_forced_changes("hash_a15", 15, &is_descendent_of_a, false)
+				.unwrap()
+				.unwrap(),
+			expected,
+		);
+
+		// also works on any later child block if it wasn't previously applied.
+		assert_eq!(
+			authorities
+				.apply_forced_changes("hash_a16", 16, &is_descendent_of_a, false)
+				.unwrap()
+				.unwrap(),
+			expected,
 		);
 	}
 
@@ -1119,6 +1131,152 @@ mod tests {
 				.apply_forced_changes("hash_a", 5, &static_is_descendent_of(false), false)
 				.unwrap()
 				.is_some()
+		);
+	}
+
+	#[test]
+	fn forced_changes_blocked_by_standard_changes() {
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+
+		let mut authorities = AuthoritySet {
+			current_authorities: set_a.clone(),
+			set_id: 0,
+			pending_standard_changes: ForkTree::new(),
+			pending_forced_changes: Vec::new(),
+		};
+
+		// effective at #15
+		let change_a = PendingChange {
+			next_authorities: set_a.clone(),
+			delay: 5,
+			canon_height: 10,
+			canon_hash: "hash_a",
+			delay_kind: DelayKind::Finalized,
+		};
+
+		// effective #20
+		let change_b = PendingChange {
+			next_authorities: set_a.clone(),
+			delay: 0,
+			canon_height: 20,
+			canon_hash: "hash_b",
+			delay_kind: DelayKind::Finalized,
+		};
+
+		// effective at #35
+		let change_c = PendingChange {
+			next_authorities: set_a.clone(),
+			delay: 5,
+			canon_height: 30,
+			canon_hash: "hash_c",
+			delay_kind: DelayKind::Finalized,
+		};
+
+		// add some pending standard changes all on the same fork
+		authorities.add_pending_change(change_a, &static_is_descendent_of(true)).unwrap();
+		authorities.add_pending_change(change_b, &static_is_descendent_of(true)).unwrap();
+		authorities.add_pending_change(change_c, &static_is_descendent_of(true)).unwrap();
+
+		// effective at #45
+		let change_d = PendingChange {
+			next_authorities: set_a.clone(),
+			delay: 5,
+			canon_height: 40,
+			canon_hash: "hash_d",
+			delay_kind: DelayKind::Best {
+				median_last_finalized: 31,
+			},
+		};
+
+		// effective at #55
+		let change_e = PendingChange {
+			next_authorities: set_a.clone(),
+			delay: 5,
+			canon_height: 50,
+			canon_hash: "hash_e",
+			delay_kind: DelayKind::Best {
+				median_last_finalized: 31,
+			},
+		};
+
+		// effective at #65
+		let change_f = PendingChange {
+			next_authorities: set_a.clone(),
+			delay: 5,
+			canon_height: 60,
+			canon_hash: "hash_f",
+			delay_kind: DelayKind::Best {
+				median_last_finalized: 31,
+			},
+		};
+
+		// now we add multiple forced changes on the same fork
+		authorities.add_pending_change(change_d, &static_is_descendent_of(true)).unwrap();
+		authorities.add_pending_change(change_e.clone(), &static_is_descendent_of(true)).unwrap();
+		authorities.add_pending_change(change_f.clone(), &static_is_descendent_of(true)).unwrap();
+
+		// the forced change cannot be applied since the pending changes it depends on
+		// have not been applied yet.
+		assert!(
+			authorities
+				.apply_forced_changes("hash_d45", 45, &static_is_descendent_of(true), false)
+				.unwrap()
+				.is_none()
+		);
+
+		// we apply the first pending standard change at #15
+		authorities
+			.apply_standard_changes("hash_a15", 15, &static_is_descendent_of(true), false)
+			.unwrap();
+
+		// but the forced change still depends on the next standard change
+		assert!(
+			authorities
+				.apply_forced_changes("hash_d", 45, &static_is_descendent_of(true), false)
+				.unwrap()
+				.is_none()
+		);
+
+		// we apply the pending standard change at #20
+		authorities
+			.apply_standard_changes("hash_b", 20, &static_is_descendent_of(true), false)
+			.unwrap();
+
+		// afterwards the forced change at #45 can already be applied since it signals
+		// that finality stalled at #31, and the next pending standard change is effective
+		// at #35. subsequent forced changes on the same branch must be kept
+		assert_eq!(
+			authorities
+				.apply_forced_changes("hash_d", 45, &static_is_descendent_of(true), false)
+				.unwrap()
+				.unwrap(),
+			(
+				31,
+				AuthoritySet {
+					current_authorities: set_a.clone(),
+					set_id: 3,
+					pending_standard_changes: ForkTree::new(),
+					pending_forced_changes: vec![change_e, change_f.clone()],
+				}
+			),
+		);
+
+		// it's also possible that multiple pending forced changes are applied at once,
+		// in case they were previously delayed due to any pending standard changes.
+		assert_eq!(
+			authorities
+				.apply_forced_changes("hash_e56", 56, &static_is_descendent_of(true), false)
+				.unwrap()
+				.unwrap(),
+			(
+				31,
+				AuthoritySet {
+					current_authorities: set_a,
+					set_id: 4,
+					pending_standard_changes: ForkTree::new(),
+					pending_forced_changes: vec![change_f],
+				}
+			),
 		);
 	}
 
@@ -1378,26 +1536,11 @@ mod tests {
 		add_pending_change(15, "C3", true);
 		add_pending_change(20, "D", true);
 
-		println!(
-			"pending_changes: {:?}",
-			authorities
-				.pending_changes()
-				.map(|c| c.canon_hash)
-				.collect::<Vec<_>>()
-		);
-
 		// applying the standard change at A should not prune anything
 		// other then the change that was applied
 		authorities
 			.apply_standard_changes("A", 5, &is_descendent_of, false)
 			.unwrap();
-		println!(
-			"pending_changes: {:?}",
-			authorities
-				.pending_changes()
-				.map(|c| c.canon_hash)
-				.collect::<Vec<_>>()
-		);
 
 		assert_eq!(authorities.pending_changes().count(), 6);
 
