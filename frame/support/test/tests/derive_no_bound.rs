@@ -17,7 +17,7 @@
 
 //! Tests for DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, and DebugStripped
 
-use frame_support_procedural::{DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DebugStripped};
+use frame_support::{DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DebugStripped};
 
 #[derive(DebugStripped)]
 pub struct Foo;

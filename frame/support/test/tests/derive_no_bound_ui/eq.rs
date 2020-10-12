@@ -2,7 +2,7 @@ trait Trait {
 	type C;
 }
 
-#[derive(frame_support_procedural::CloneNoBound)]
+#[derive(frame_support::EqNoBound)]
 struct Foo<T: Trait> {
 	c: T::C,
 }

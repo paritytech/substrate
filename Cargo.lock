@@ -1610,9 +1610,7 @@ dependencies = [
  "frame-support-procedural-tools",
  "proc-macro2",
  "quote",
- "rustversion",
  "syn",
- "trybuild",
 ]
 
 [[package]]
