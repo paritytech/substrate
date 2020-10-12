@@ -140,9 +140,9 @@ pub mod migrations {
 				count += 1;
 			});
 
-			PalletStorageVersion::put(StorageVersion::V2);
+			PalletStorageVersion::put(StorageVersion::V2_PER_VOTER_DEPOSIT);
 			frame_support::debug::info!(
-				"🏛 pallet-elections-phragmen: {} voters migrated to V2.",
+				"🏛 pallet-elections-phragmen: {} voters migrated to V2_PER_VOTER_DEPOSIT.",
 				count,
 			);
 			Weight::max_value()
@@ -213,7 +213,7 @@ pub enum StorageVersion {
 	/// Initial version.
 	V1,
 	/// After moving to per-vote deposit.
-	V2,
+	V2_PER_VOTER_DEPOSIT,
 }
 
 pub trait Trait: frame_system::Trait {
