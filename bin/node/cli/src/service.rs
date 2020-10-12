@@ -122,12 +122,14 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		let pool = transaction_pool.clone();
 		let select_chain = select_chain.clone();
 		let keystore = keystore_container.sync_keystore();
+		let chain_spec = config.chain_spec.cloned_box();
 
 		let rpc_extensions_builder = move |deny_unsafe, subscription_executor| {
 			let deps = node_rpc::FullDeps {
 				client: client.clone(),
 				pool: pool.clone(),
 				select_chain: select_chain.clone(),
+				chain_spec: chain_spec.cloned_box(),
 				deny_unsafe,
 				babe: node_rpc::BabeDeps {
 					babe_config: babe_config.clone(),
@@ -180,9 +182,6 @@ pub fn new_full_base(
 	} = new_partial(&config)?;
 
 	let (shared_voter_state, finality_proof_provider) = rpc_setup;
-	let (block_import, grandpa_link, babe_link) = import_setup;
-	let shared_authority_set = grandpa_link.shared_authority_set().clone();
-	let shared_epoch_changes = babe_link.epoch_changes().clone();
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -195,9 +194,6 @@ pub fn new_full_base(
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: None,
 			finality_proof_provider: Some(finality_proof_provider.clone()),
-			sync_state_items: Some((
-				shared_authority_set.clone(), shared_epoch_changes.clone(),
-			))
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -228,6 +224,8 @@ pub fn new_full_base(
 		network_status_sinks: network_status_sinks.clone(),
 		system_rpc_tx,
 	})?;
+
+	let (block_import, grandpa_link, babe_link) = import_setup;
 
 	(with_startup_data)(&block_import, &babe_link);
 
@@ -418,7 +416,6 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			block_announce_validator_builder: None,
 			finality_proof_request_builder: Some(finality_proof_request_builder),
 			finality_proof_provider: Some(finality_proof_provider),
-			sync_state_items: None,
 		})?;
 	network_starter.start_network();
 

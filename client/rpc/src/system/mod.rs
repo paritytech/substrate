@@ -66,9 +66,7 @@ pub enum Request<B: traits::Block> {
 	/// Must return any potential parse error.
 	NetworkRemoveReservedPeer(String, oneshot::Sender<Result<()>>),
 	/// Must return the node role.
-	NodeRoles(oneshot::Sender<Vec<NodeRole>>),
-	/// Must return either a chain spec with a snc state encoded as a `Value` or an error.
-	GenSyncSpec(bool, oneshot::Sender<Result<rpc::Value>>),
+	NodeRoles(oneshot::Sender<Vec<NodeRole>>)
 }
 
 impl<B: traits::Block> System<B> {
@@ -190,21 +188,5 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NodeRoles(tx));
 		Receiver(Compat::new(rx))
-	}
-
-	fn system_gen_sync_spec(&self, raw: bool)
-		-> Compat<BoxFuture<'static, rpc::Result<rpc::Value>>>
-	{
-		bail_if_unsafe!(self.deny_unsafe);
-
-		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::GenSyncSpec(raw, tx));
-		async move {
-			match rx.await {
-				Ok(Ok(value)) => Ok(value),
-				Ok(Err(e)) => Err(rpc::Error::from(e)),
-				Err(_) => Err(rpc::Error::internal_error()),
-			}
-		}.boxed().compat()
 	}
 }

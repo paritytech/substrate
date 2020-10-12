@@ -345,7 +345,7 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 impl<G, E> crate::ChainSpec for ChainSpec<G, E>
 where
 	G: RuntimeGenesis + 'static,
-	E: GetExtension + serde::Serialize + Clone + Send + 'static,
+	E: GetExtension + serde::Serialize + Clone + Send + Sync + 'static,
 {
 	fn boot_nodes(&self) -> &[MultiaddrWithPeerId] {
 		ChainSpec::boot_nodes(self)

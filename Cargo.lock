@@ -3826,6 +3826,7 @@ dependencies = [
  "node-runtime",
  "pallet-contracts-rpc",
  "pallet-transaction-payment-rpc",
+ "sc-chain-spec",
  "sc-client-api",
  "sc-consensus-babe",
  "sc-consensus-babe-rpc",
@@ -3835,6 +3836,7 @@ dependencies = [
  "sc-keystore",
  "sc-rpc",
  "sc-rpc-api",
+ "sc-sync-state-rpc",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
@@ -7136,7 +7138,6 @@ dependencies = [
  "parking_lot 0.10.2",
  "serde",
  "serde_json",
- "sp-blockchain",
  "sp-chain-spec",
  "sp-core",
  "sp-rpc",
@@ -7200,8 +7201,6 @@ dependencies = [
  "sc-chain-spec",
  "sc-client-api",
  "sc-client-db",
- "sc-consensus-babe",
- "sc-consensus-epochs",
  "sc-executor",
  "sc-finality-grandpa",
  "sc-informant",
@@ -7292,6 +7291,23 @@ dependencies = [
  "parking_lot 0.10.2",
  "sc-client-api",
  "sp-core",
+]
+
+[[package]]
+name = "sc-sync-state-rpc"
+version = "0.8.0"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "sc-chain-spec",
+ "sc-client-api",
+ "sc-consensus-babe",
+ "sc-consensus-epochs",
+ "sc-finality-grandpa",
+ "sc-rpc-api",
+ "sp-blockchain",
+ "sp-runtime",
 ]
 
 [[package]]
