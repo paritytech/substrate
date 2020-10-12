@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use syn::spanned::Spanned;
+
 /// Derive PartialEq but do not bound any generic.
 pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-	use syn::spanned::Spanned;
-
 	let input: syn::DeriveInput = match syn::parse(input) {
 		Ok(input) => input,
 		Err(e) => return e.to_compile_error().into(),
@@ -31,7 +31,7 @@ pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro:
 		syn::Data::Struct(struct_) => match struct_.fields {
 			syn::Fields::Named(named) => {
 				let fields = named.named.iter()
-					.map(|i| i.ident.as_ref().expect("named fields have ident"))
+					.map(|i| &i.ident)
 					.map(|i| quote::quote_spanned!(i.span() => self.#i == other.#i ));
 
 				quote::quote!( true #( && #fields )* )
@@ -53,34 +53,36 @@ pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro:
 					let ident = &variant.ident;
 					match &variant.fields {
 						syn::Fields::Named(named) => {
-							let names = named.named.iter()
-								.map(|i| i.ident.as_ref().expect("named fields have ident"));
-							let names_bis = names.clone()
-								.map(|i| syn::Ident::new(&format!("{}_bis", i), i.span()));
+							let names = named.named.iter().map(|i| &i.ident);
+							let other_names = names.clone()
+								.enumerate()
+								.map(|(i, ident)|
+									syn::Ident::new(&format!("_{}", i), ident.span())
+								);
 
 							let capture = names.clone();
-							let capture_bis = names.clone().zip(names_bis.clone())
-								.map(|(i, i_bis)| quote::quote!(#i: #i_bis));
-							let eq = names.zip(names_bis)
-								.map(|(i, i_bis)| quote::quote_spanned!(i.span() => #i == #i_bis));
+							let other_capture = names.clone().zip(other_names.clone())
+								.map(|(i, other_i)| quote::quote!(#i: #other_i));
+							let eq = names.zip(other_names)
+								.map(|(i, other_i)| quote::quote_spanned!(i.span() => #i == #other_i));
 							quote::quote!(
 								(
 									Self::#ident { #( #capture, )* },
-									Self::#ident { #( #capture_bis, )* },
+									Self::#ident { #( #other_capture, )* },
 								) => true #( && #eq )*
 							)
 						},
 						syn::Fields::Unnamed(unnamed) => {
 							let names = unnamed.unnamed.iter().enumerate()
 								.map(|(i, f)| syn::Ident::new(&format!("_{}", i), f.span()));
-							let names_bis = unnamed.unnamed.iter().enumerate()
-								.map(|(i, f)| syn::Ident::new(&format!("_{}_bis", i), f.span()));
-							let eq = names.clone().zip(names_bis.clone())
-								.map(|(i, i_bis)| quote::quote_spanned!(i.span() => #i == #i_bis));
+							let other_names = unnamed.unnamed.iter().enumerate()
+								.map(|(i, f)| syn::Ident::new(&format!("_{}_other", i), f.span()));
+							let eq = names.clone().zip(other_names.clone())
+								.map(|(i, other_i)| quote::quote_spanned!(i.span() => #i == #other_i));
 							quote::quote!(
 								(
 									Self::#ident ( #( #names, )* ),
-									Self::#ident ( #( #names_bis, )* ),
+									Self::#ident ( #( #other_names, )* ),
 								) => true #( && #eq )*
 							)
 						},

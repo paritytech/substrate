@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use syn::spanned::Spanned;
+
 /// Derive Clone but do not bound any generic.
 pub fn derive_clone_no_bound(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-	use syn::spanned::Spanned;
-
 	let input: syn::DeriveInput = match syn::parse(input) {
 		Ok(input) => input,
 		Err(e) => return e.to_compile_error().into(),
@@ -31,7 +31,7 @@ pub fn derive_clone_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 		syn::Data::Struct(struct_) => match struct_.fields {
 			syn::Fields::Named(named) => {
 				let fields = named.named.iter()
-					.map(|i| i.ident.as_ref().expect("named fields have ident"))
+					.map(|i| &i.ident)
 					.map(|i| quote::quote_spanned!(i.span() =>
 						#i: core::clone::Clone::clone(&self.#i)
 					));
@@ -57,8 +57,7 @@ pub fn derive_clone_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 					let ident = &variant.ident;
 					match &variant.fields {
 						syn::Fields::Named(named) => {
-							let captured = named.named.iter()
-								.map(|i| i.ident.as_ref().expect("named fields have ident"));
+							let captured = named.named.iter().map(|i| &i.ident);
 							let cloned = captured.clone()
 								.map(|i| quote::quote_spanned!(i.span() =>
 									#i: core::clone::Clone::clone(#i)
