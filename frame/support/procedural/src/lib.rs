@@ -329,13 +329,13 @@ pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
-/// Derive Clone but do not bound any generic. Docs are at `frame_support::CloneNoBound`.
+/// Derive [`Clone`] but do not bound any generic. Docs are at `frame_support::CloneNoBound`.
 #[proc_macro_derive(CloneNoBound)]
 pub fn derive_clone_no_bound(input: TokenStream) -> TokenStream {
 	clone_no_bound::derive_clone_no_bound(input)
 }
 
-/// Derive Debug but do not bound any generics. Docs are at `frame_support::DeriveNoBounds`.
+/// Derive [`Debug`] but do not bound any generics. Docs are at `frame_support::DeriveNoBounds`.
 #[proc_macro_derive(DebugNoBound)]
 pub fn derive_debug_no_bound(input: TokenStream) -> TokenStream {
 	debug_no_bound::derive_debug_no_bound(input)
@@ -363,7 +363,8 @@ pub fn derive_debug_stripped(input: TokenStream) -> TokenStream {
 	).into()
 }
 
-/// Derive PartialEq but do not bound any generic. Docs are at `frame_support::PartialEqNoBound`.
+/// Derive [`PartialEq`] but do not bound any generic. Docs are at
+/// `frame_support::PartialEqNoBound`.
 #[proc_macro_derive(PartialEqNoBound)]
 pub fn derive_partial_eq_no_bound(input: TokenStream) -> TokenStream {
 	partial_eq_no_bound::derive_partial_eq_no_bound(input)
