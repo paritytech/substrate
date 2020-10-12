@@ -4666,6 +4666,7 @@ dependencies = [
  "env_logger 0.5.13",
  "frame-support",
  "frame-system",
+ "hex-literal",
  "parity-scale-codec",
  "serde",
  "sp-core",

@@ -81,6 +81,7 @@ impl frame_system::Trait for Test {
 }
 
 impl Trait for Test {
+	const INDEXING_PREFIX = b"mmr-";
 	type Hashing = Keccak256;
 	type Hash = H256;
 	type LeafData = Compact<Keccak256, (frame_system::Module<Test>, LeafData)>;
@@ -147,7 +148,17 @@ fn decode_node(v: Vec<u8>) -> mmr::Node<
 	<Test as Trait>::Hashing,
 	(H256, LeafData),
 > {
-	codec::Decode::decode(&mut &v[..]).unwrap()
+	use crate::primitives::DataOrHash;
+	type A = DataOrHash::<<Test as Trait>::Hashing, H256>;
+	type B = DataOrHash::<<Test as Trait>::Hashing, LeafData>;
+	type Node = mmr::Node<<Test as Trait>::Hashing, (A, B)>;
+	let tuple: Node = codec::Decode::decode(&mut &v[..]).unwrap();
+
+	match tuple {
+		mmr::Node::Data((DataOrHash::Data(a), DataOrHash::Data(b))) => mmr::Node::Data((a, b)),
+		mmr::Node::Hash(hash) => mmr::Node::Hash(hash),
+		_ => unreachable!(),
+	}
 }
 
 fn init_chain(blocks: usize) {
@@ -175,10 +186,10 @@ fn should_start_empty() {
 		// then
 		assert_eq!(crate::NumberOfLeaves::get(), 1);
 		assert_eq!(crate::Nodes::<Test>::get(0),
-			Some(hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")));
+			Some(hex("da5e6d0616e05c6a6348605a37ca33493fc1a15ad1e6a405ee05c17843fdafed")));
 		assert_eq!(
 			crate::RootHash::<Test>::get(),
-			hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")
+			hex("da5e6d0616e05c6a6348605a37ca33493fc1a15ad1e6a405ee05c17843fdafed")
 		);
 		assert!(weight != 0);
 	});
@@ -196,15 +207,15 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 		// then
 		assert_eq!(crate::NumberOfLeaves::get(), 2);
 		assert_eq!(crate::Nodes::<Test>::get(0),
-			Some(hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")));
+			Some(hex("da5e6d0616e05c6a6348605a37ca33493fc1a15ad1e6a405ee05c17843fdafed")));
 		assert_eq!(crate::Nodes::<Test>::get(1),
-			Some(hex("037ff5a3903a59630e03b84cda912c26bf19442efe2cd30c2a25547e06ded385")));
+			Some(hex("ff5d891b28463a3440e1b650984685efdf260e482cb3807d53c49090841e755f")));
 		assert_eq!(crate::Nodes::<Test>::get(2),
-			Some(hex("21b847809cbb535ba771e7bb25b33985b5259f1f3fc9cae81bc097f56efbbd36")));
+			Some(hex("bc54778fab79f586f007bd408dca2c4aa07959b27d1f2c8f4f2549d1fcfac8f8")));
 		assert_eq!(crate::Nodes::<Test>::get(3), None);
 		assert_eq!(
 			crate::RootHash::<Test>::get(),
-			hex("21b847809cbb535ba771e7bb25b33985b5259f1f3fc9cae81bc097f56efbbd36")
+			hex("bc54778fab79f586f007bd408dca2c4aa07959b27d1f2c8f4f2549d1fcfac8f8")
 		);
 	});
 
@@ -220,7 +231,7 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 		LeafData::new(2),
 	))));
 	assert_eq!(offchain_db.get(&MMR::offchain_key(2)).map(decode_node), Some(mmr::Node::Hash(
-		hex("21b847809cbb535ba771e7bb25b33985b5259f1f3fc9cae81bc097f56efbbd36")
+		hex("bc54778fab79f586f007bd408dca2c4aa07959b27d1f2c8f4f2549d1fcfac8f8")
 	)));
 	assert_eq!(offchain_db.get(&MMR::offchain_key(3)), None);
 }
@@ -235,12 +246,12 @@ fn should_construct_larger_mmr_correctly() {
 		// then
 		assert_eq!(crate::NumberOfLeaves::get(), 7);
 		assert_eq!(crate::Nodes::<Test>::get(0),
-			Some(hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")));
+			Some(hex("da5e6d0616e05c6a6348605a37ca33493fc1a15ad1e6a405ee05c17843fdafed")));
 		assert_eq!(crate::Nodes::<Test>::get(10),
-			Some(hex("32d44b4a8e8a3046b9c02315847eb091678a59f136226e70d66f3a82bd836ce1")));
+			Some(hex("af3327deed0515c8d1902c9b5cd375942d42f388f3bfe3d1cd6e1b86f9cc456c")));
 		assert_eq!(
 			crate::RootHash::<Test>::get(),
-			hex("3106f5c4ee095d996b61283b4d7b524c0c2acb4c9eaff90da0c216709b8bd1b7")
+			hex("fc4f9042bd2f73feb26f3fc42db834c5f1943fa20070ddf106c486a478a0d561")
 		);
 	});
 }
@@ -271,9 +282,9 @@ fn should_generate_proofs_correclty() {
 			leaf_index: 0,
 			leaf_count: 7,
 			items: vec![
-				hex("037ff5a3903a59630e03b84cda912c26bf19442efe2cd30c2a25547e06ded385"),
-				hex("5e149bed24a6997e0440cd2daeaae5b44074e9f2f1403c4149ba3e8a9e5baef1"),
-				hex("e858832b2bc93dceb94c0df74e5d897ed418140623af150076116f82fb19e78f"),
+				hex("ff5d891b28463a3440e1b650984685efdf260e482cb3807d53c49090841e755f"),
+				hex("00b0046bd2d63fcb760cf50a262448bb2bbf9a264b0b0950d8744044edf00dc3"),
+				hex("16de0900b57bf359a0733674ebfbba0f494e95a8391b4bfeae850019399f3ec0"),
 			],
 		}));
 		assert_eq!(proofs[4], (Compact::new((
@@ -283,9 +294,9 @@ fn should_generate_proofs_correclty() {
 			leaf_index: 4,
 			leaf_count: 7,
 			items: vec![
-				hex("169dc0e8d0a804f16f2081941199ba3630463c29a761d1e20a7096b33ed8a448"),
-				hex("e232c7350837c9d87a948ddfc4286cc49d946e8cdad9121e91595f190ed7e54d"),
-				hex("32d44b4a8e8a3046b9c02315847eb091678a59f136226e70d66f3a82bd836ce1"),
+				hex("e53ee36ba6c068b1a6cfef7862fed5005df55615e1c9fa6eeefe08329ac4b94b"),
+				hex("c09d4a008a0f1ef37860bef33ec3088ccd94268c0bfba7ff1b3c2a1075b0eb92"),
+				hex("af3327deed0515c8d1902c9b5cd375942d42f388f3bfe3d1cd6e1b86f9cc456c"),
 			],
 		}));
 		assert_eq!(proofs[6], (Compact::new((
@@ -295,8 +306,8 @@ fn should_generate_proofs_correclty() {
 			leaf_index: 6,
 			leaf_count: 7,
 			items: vec![
-				hex("169dc0e8d0a804f16f2081941199ba3630463c29a761d1e20a7096b33ed8a448"),
-				hex("ae11d66a54590bd5c28adf98dfcbb5b05feb7fd51997c4e99c73e87de9ac4e49"),
+				hex("e53ee36ba6c068b1a6cfef7862fed5005df55615e1c9fa6eeefe08329ac4b94b"),
+				hex("dad09f50b41822fc5ecadc25b08c3a61531d4d60e962a5aa0b6998fad5c37c5e"),
 			],
 		}));
 	});

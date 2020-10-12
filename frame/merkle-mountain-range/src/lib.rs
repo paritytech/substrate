@@ -23,11 +23,6 @@
 //!
 #![cfg_attr(not(feature = "std"), no_std)]
 
-//
-// 1. Remove system-block hash and implement LeafDataProvider for system pallet insteand.
-// 2. Implement LeafDataProvider for tuples. Each tuples node should be hashed before creating a
-//     leaf, so that we can prove only one element of the tuple instead of all of them.
-
 use codec::Encode;
 use frame_support::{
 	debug, decl_module, decl_storage,
@@ -43,6 +38,17 @@ mod tests;
 
 /// This pallet's configuration trait
 pub trait Trait: frame_system::Trait {
+	/// Prefix for elements stored in the Off-chain DB via Indexing API.
+	///
+	/// Each node of the MMR is inserted both on-chain and off-chain via Indexing API.
+	/// The former does not store full leaf content, just it's compact version (hash),
+	/// and some of the inner mmr nodes might be pruned from on-chain storage.
+	/// The later will contain all the entries in their full form.
+	///
+	/// Each node is stored in the Off-chain DB under key derived from the [INDEXING_PREFIX] and
+	/// it's in-tree index (MMR position).
+	pub const INDEXING_PREFIX: &[u8];
+
 	/// A hasher type for MMR.
 	///
 	/// To construct trie nodes that result in merging (bagging) two peaks, depending on the node
@@ -134,8 +140,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn offchain_key(pos: u64) -> Vec<u8> {
-		// TODO [ToDr] Configurable?
-		(b"mmr-", pos).encode()
+		(T::INDEXING_PREFIX, pos).encode()
 	}
 
 	/// Generate a MMR proof for given `leaf_index`.

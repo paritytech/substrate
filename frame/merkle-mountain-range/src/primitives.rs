@@ -23,20 +23,6 @@ use frame_support::{
 use sp_runtime::traits;
 use sp_std::fmt;
 
-/// A full leaf content stored in the offchain-db.
-pub trait FullLeaf: Clone + PartialEq + fmt::Debug + codec::Decode {
-	/// Encode the leaf either in it's full or compact form.
-	///
-	/// NOTE the encoding returned here MUST be `Decode`able into `FullLeaf`.
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, compact: bool) -> R;
-}
-
-impl<T: codec::Encode + codec::Decode + Clone + PartialEq + fmt::Debug> FullLeaf for T {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, _compact: bool) -> R {
-		codec::Encode::using_encoded(self,f )
-	}
-}
-
 /// A provider of the MMR's leaf data.
 pub trait LeafDataProvider {
 	/// A type that should end up in the leaf of MMR.
@@ -69,7 +55,28 @@ impl<T: frame_system::Trait + crate::Trait> LeafDataProvider for frame_system::M
 	}
 }
 
-/// A node stored in the MMR.
+
+/// A full leaf content stored in the offchain-db.
+pub trait FullLeaf: Clone + PartialEq + fmt::Debug + codec::Decode {
+	/// Encode the leaf either in it's full or compact form.
+	///
+	/// NOTE the encoding returned here MUST be `Decode`able into `FullLeaf`.
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, compact: bool) -> R;
+}
+
+impl<T: codec::Encode + codec::Decode + Clone + PartialEq + fmt::Debug> FullLeaf for T {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, _compact: bool) -> R {
+		codec::Encode::using_encoded(self, f)
+	}
+}
+
+/// An element representing either raw leaf data or a hash.
+///
+/// See [Compact] to see how it may be used in practice to reduce the size
+/// of proofs in case multiple [LeafDataProvider]s are composed together.
+///
+/// [DataOrHash::hash] method is calculating the hash of this element in it's compact form,
+/// so should be used instead of hashing the encoded form (which will always be non-compact).
 #[derive(RuntimeDebug, Clone, PartialEq)]
 pub enum DataOrHash<H: traits::Hash, L> {
 	/// A terminal leaf node, storing arbitrary content.
@@ -83,6 +90,7 @@ impl<H: traits::Hash, L> From<L> for DataOrHash<H, L> {
 		Self::Data(l)
 	}
 }
+
 mod encoding {
 	use super::*;
 
@@ -128,7 +136,7 @@ impl<H: traits::Hash, L: FullLeaf> DataOrHash<H, L> {
 	}
 }
 
-// TODO [ToDr] Docs
+///
 #[derive(RuntimeDebug, Clone, PartialEq)]
 pub struct Compact<H, T> {
 	pub tuple: T,
@@ -162,12 +170,25 @@ impl<A, B, H> FullLeaf for Compact<H, (DataOrHash<H, A>, DataOrHash<H, B>)> wher
 {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, compact: bool) -> R {
 		if compact {
-			codec::Encode::using_encoded(&(self.tuple.0.hash(), self.tuple.1.hash()), f)
+			codec::Encode::using_encoded(&(
+				DataOrHash::<H, A>::Hash(self.tuple.0.hash()),
+				DataOrHash::<H, B>::Hash(self.tuple.1.hash()),
+			), f)
 		} else {
-			let a = self.tuple.0.using_encoded(|x| x.to_vec(), false);
-			let b = self.tuple.1.using_encoded(|x| x.to_vec(), false);
-			codec::Encode::using_encoded(&(a, b), f)
+			codec::Encode::using_encoded(&self.tuple, f)
 		}
+	}
+}
+
+#[cfg(test)]
+impl<A, B, H> Compact<H, (DataOrHash<H, A>, DataOrHash<H, B>)> where
+	A: FullLeaf,
+	B: FullLeaf,
+	H: traits::Hash,
+{
+	/// Retrieve a hash of this item in it's compact form.
+	pub fn hash(&self) -> H::Output {
+		self.using_encoded(<H as traits::Hash>::hash, true)
 	}
 }
 
@@ -232,6 +253,11 @@ mod tests {
 	type TestCompact = Compact<Keccak256, (Test, Test)>;
 
 	#[test]
+	fn should_encode_decode_proof() {
+
+	}
+
+	#[test]
 	fn should_encode_decode_correctly_if_no_compact() {
 		// given
 		let cases = vec![
@@ -255,8 +281,11 @@ mod tests {
 		// then
 		assert_eq!(decoded, cases.into_iter().map(Result::<_, codec::Error>::Ok).collect::<Vec<_>>());
 		// check encoding correctness
-		assert_eq!(&encoded[0], &vec![0, 52, 48, 72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33]);
-		assert_eq!(&encoded[1], &vec![1, 195, 231, 186, 107, 81, 17, 98, 254, 173, 88, 242, 200, 181, 118, 76, 232, 105, 237, 17, 24, 1, 26, 195, 115, 146, 82, 46, 209, 103, 32, 187, 205]);
+		assert_eq!(&encoded[0], &hex_literal::hex!("00343048656c6c6f20576f726c6421"));
+		assert_eq!(
+			&encoded[1],
+			&hex_literal::hex!("01c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")
+		);
 	}
 
 	#[test]
@@ -277,34 +306,32 @@ mod tests {
 	#[test]
 	fn compact_should_work() {
 		// given
-		let a: TestCompact = Compact::new((
-			Test::Data("Hello World!".into()),
-			Test::Data("".into())
-		));
-		let b: TestCompact = Compact::new((
-			Test::Hash(a.0.hash()),
-			Test::Hash(b.0.hash()),
-		));
+		let a = Test::Data("Hello World!".into());
+		let b = Test::Data("".into());
 
 		// when
-		let a_hash = a.hash();
-		let b_hash = b.hash();
+		let c: TestCompact = Compact::new((a.clone(), b.clone()));
+		let d: TestCompact = Compact::new((
+			Test::Hash(a.hash()),
+			Test::Hash(b.hash()),
+		));
 
 		// then
+		assert_eq!(c.hash(), d.hash());
 	}
 
 	#[test]
 	fn compact_should_encode_decode_correctly() {
 		// given
-		let a: TestCompact = Compact::new((
-			Test::Data("Hello World!".into()),
-			Test::Data("".into())
+		let a = Test::Data("Hello World!".into());
+		let b = Test::Data("".into());
+
+		let c: TestCompact = Compact::new((a.clone(), b.clone()));
+		let d: TestCompact = Compact::new((
+			Test::Hash(a.hash()),
+			Test::Hash(b.hash()),
 		));
-		let b: TestCompact = Compact::new((
-			Test::Hash(a.0.hash()),
-			Test::Hash(b.0.hash()),
-		));
-		let cases = vec![a, b.clone()];
+		let cases = vec![c, d.clone()];
 
 		// when
 		let encoded_compact = cases
@@ -330,6 +357,6 @@ mod tests {
 		// then
 		assert_eq!(decoded, cases.into_iter().map(Result::<_, codec::Error>::Ok).collect::<Vec<_>>());
 
-		assert_eq!(decoded_compact, vec![Ok(b.clone()), Ok(b.clone())]);
+		assert_eq!(decoded_compact, vec![Ok(d.clone()), Ok(d.clone())]);
 	}
 }
