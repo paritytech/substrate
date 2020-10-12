@@ -181,16 +181,16 @@ pub fn build_project_with_default_rustflags(
 	};
 
 	write_file_if_changed(
-			file_name.into(),
-			format!(
-				r#"
-					pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
-					pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
-				"#,
-				wasm_binary = wasm_binary,
-				wasm_binary_bloaty = wasm_binary_bloaty,
-			),
-		);
+		file_name.into(),
+		format!(
+			r#"
+				pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
+				pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
+			"#,
+			wasm_binary = wasm_binary,
+			wasm_binary_bloaty = wasm_binary_bloaty,
+		),
+	);
 }
 
 /// Checks if the build of the WASM binary should be skipped.

@@ -84,6 +84,28 @@ impl Drop for WorkspaceLock {
 	}
 }
 
+fn crate_metadata(cargo_manifest: &Path) -> Metadata {
+	let mut cargo_lock = cargo_manifest.to_path_buf();
+	cargo_lock.set_file_name("Cargo.lock");
+
+	let cargo_lock_existed = cargo_lock.exists();
+
+	let crate_metadata = MetadataCommand::new()
+		.manifest_path(cargo_manifest)
+		.exec()
+		.expect("`cargo metadata` can not fail on project `Cargo.toml`; qed");
+
+	// If the `Cargo.lock` didn't exist, we need to remove it after
+	// calling `cargo metadata`. This is required to ensure that we don't change
+	// the build directory outside of the `target` folder. Commands like
+	// `cargo publish` require this.
+	if !cargo_lock_existed {
+		let _ = fs::remove_file(&cargo_lock);
+	}
+
+	crate_metadata
+}
+
 /// Creates the WASM project, compiles the WASM binary and compacts the WASM binary.
 ///
 /// # Returns
@@ -98,10 +120,7 @@ pub fn create_and_compile(
 	// Lock the workspace exclusively for us
 	let _lock = WorkspaceLock::new(&wasm_workspace_root);
 
-	let crate_metadata = MetadataCommand::new()
-		.manifest_path(cargo_manifest)
-		.exec()
-		.expect("`cargo metadata` can not fail on project `Cargo.toml`; qed");
+	let crate_metadata = crate_metadata(cargo_manifest);
 
 	let project = create_project(cargo_manifest, &wasm_workspace, &crate_metadata);
 	create_wasm_workspace_project(&wasm_workspace, &crate_metadata.workspace_root);
