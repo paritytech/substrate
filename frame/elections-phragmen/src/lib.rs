@@ -208,8 +208,8 @@ pub trait WeightInfo {
 	fn remove_member_wrong_refund() -> Weight;
 }
 
-#[derive(Encode, Decode, Eq, PartialEq)]
 /// Storage version.
+#[derive(Encode, Decode, Eq, PartialEq)]
 pub enum StorageVersion {
 	/// Initial version.
 	V1,
@@ -296,7 +296,7 @@ decl_storage! {
 
 		/// Should be used in conjunction with `on_runtime_upgrade` to ensure an upgrade is executed
 		/// once, even if the code is not removed in time.
-		pub PalletStorageVersion get(fn pallet_storage_version): StorageVersion = StorageVersion::V1;
+		pub PalletStorageVersion get(fn pallet_storage_version) build(|_| StorageVersion::V2PerVoterDeposit): StorageVersion = StorageVersion::V1;
 
 	} add_extra_genesis {
 		config(members): Vec<(T::AccountId, BalanceOf<T>)>;
