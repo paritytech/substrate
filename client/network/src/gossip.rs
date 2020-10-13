@@ -198,23 +198,27 @@ async fn spawn_task<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>(
 			return
 		}
 
-		let next_message = match shared.messages_queue.lock().await.pop_front() {
-			Some(msg) => msg,
-			None => continue,
-		};
+		loop {
+			let mut queue_guard = shared.messages_queue.lock().await;
+			let next_message = match queue_guard.pop_front() {
+				Some(msg) => msg,
+				None => break,
+			};
+			drop(queue_guard);
 
-		// Starting from below, we try to send the message. If an error happens when sending,
-		// the only sane option we have is to silently discard the message.
-		let sender = match service.notification_sender(peer_id.clone(), protocol) {
-			Ok(s) => s,
-			Err(_) => continue,
-		};
+			// Starting from below, we try to send the message. If an error happens when sending,
+			// the only sane option we have is to silently discard the message.
+			let sender = match service.notification_sender(peer_id.clone(), protocol) {
+				Ok(s) => s,
+				Err(_) => continue,
+			};
 
-		let ready = match sender.ready().await {
-			Ok(r) => r,
-			Err(_) => continue,
-		};
+			let ready = match sender.ready().await {
+				Ok(r) => r,
+				Err(_) => continue,
+			};
 
-		let _ = ready.send(messages_encode(next_message));
+			let _ = ready.send(messages_encode(next_message));
+		}
 	}
 }
