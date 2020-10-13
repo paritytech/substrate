@@ -26,7 +26,7 @@ use frame_support::traits::OnInitialize;
 
 use crate::Module as Elections;
 
-const BALANCE_FACTOR: u32 = 250;
+const BALANCE_FACTOR: u32 = 25_000;
 const MAX_VOTERS: u32 = 500;
 const MAX_CANDIDATES: u32 = 200;
 
@@ -201,14 +201,14 @@ benchmarks! {
 
 		// original votes.
 		let mut votes = all_candidates.iter().skip(1).cloned().collect::<Vec<_>>();
-		submit_voter::<T>(caller.clone(), votes.clone(), stake)?;
+		submit_voter::<T>(caller.clone(), votes.clone(), stake / <BalanceOf<T>>::from(10))?;
 
 		// new votes.
 		votes = all_candidates;
 		assert!(votes.len() > <Voting<T>>::get(caller.clone()).votes.len());
 
 		whitelist!(caller);
-	}: vote(RawOrigin::Signed(caller), votes, stake)
+	}: vote(RawOrigin::Signed(caller), votes, stake / <BalanceOf<T>>::from(10))
 
 	vote_less {
 		let v in 2 .. (MAXIMUM_VOTE  as u32);
