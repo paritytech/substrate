@@ -194,13 +194,14 @@ pub struct Voter<AccountId, Balance> {
 }
 
 pub trait WeightInfo {
-	fn vote(v: u32, ) -> Weight;
-	fn vote_update(v: u32, ) -> Weight;
+	fn vote_equal(v: u32) -> Weight;
+	fn vote_more(v: u32) -> Weight;
+	fn vote_less(v: u32) -> Weight;
 	fn remove_voter() -> Weight;
-	fn report_defunct_voter_correct(c: u32, v: u32, ) -> Weight;
-	fn report_defunct_voter_incorrect(c: u32, v: u32, ) -> Weight;
-	fn submit_candidacy(c: u32, ) -> Weight;
-	fn renounce_candidacy_candidate(c: u32, ) -> Weight;
+	fn report_defunct_voter_correct(c: u32, v: u32) -> Weight;
+	fn report_defunct_voter_incorrect(c: u32, v: u32) -> Weight;
+	fn submit_candidacy(c: u32) -> Weight;
+	fn renounce_candidacy_candidate(c: u32) -> Weight;
 	fn renounce_candidacy_members() -> Weight;
 	fn renounce_candidacy_runners_up() -> Weight;
 	fn remove_member_with_replacement() -> Weight;
@@ -405,18 +406,9 @@ decl_module! {
 		/// and keep some for further transactions.
 		///
 		/// # <weight>
-		/// Base weight: 47.93 µs
-		/// State reads:
-		/// 	- Candidates.len() + Members.len() + RunnersUp.len()
-		/// 	- Voting (is_voter)
-		/// 	- Lock
-		/// 	- [AccountBalance(who) (unreserve + total_balance)]
-		/// State writes:
-		/// 	- Voting
-		/// 	- Lock
-		/// 	- [AccountBalance(who) (unreserve -- only when creating a new voter)]
+		/// we consider the common case of placing more votes. In other two case, we refund.
 		/// # </weight>
-		#[weight = T::WeightInfo::vote(votes.len() as u32)]
+		#[weight = T::WeightInfo::vote_more(votes.len() as u32)]
 		fn vote(
 			origin,
 			votes: Vec<T::AccountId>,
@@ -444,29 +436,24 @@ decl_module! {
 			// Reserve bond.
 			let new_deposit = Self::deposit_of(votes.len());
 			let Voter { votes: old_votes, deposit: old_deposit, .. } = <Voting<T>>::get(&who);
-			let maybe_refund = if old_votes.is_empty() {
-				// First time voter. Get full deposit.
-				T::Currency::reserve(&who, new_deposit)
-					.map_err(|_| Error::<T>::UnableToPayBond)?;
-				None
-			} else {
-				// Old voter.
-				match new_deposit.cmp(&old_deposit) {
-					Ordering::Greater => {
-						// Must reserve a bit more.
-						let to_reserve = new_deposit - old_deposit;
-						T::Currency::reserve(&who, to_reserve)
-							.map_err(|_| Error::<T>::UnableToPayBond)?;
-					},
-					Ordering::Equal => {},
-					Ordering::Less => {
-						// Must unreserve a bit.
-						let to_unreserve = old_deposit - new_deposit;
-						let _remainder = T::Currency::unreserve(&who, to_unreserve);
-						debug_assert!(_remainder.is_zero());
-					},
-				};
-				Some(T::WeightInfo::vote_update(votes.len() as u32))
+			let maybe_refund = match new_deposit.cmp(&old_deposit) {
+				Ordering::Greater => {
+					// Must reserve a bit more.
+					let to_reserve = new_deposit - old_deposit;
+					T::Currency::reserve(&who, to_reserve)
+						.map_err(|_| Error::<T>::UnableToPayBond)?;
+					None
+				},
+				Ordering::Equal => {
+					Some(T::WeightInfo::vote_equal(votes.len() as u32))
+				},
+				Ordering::Less => {
+					// Must unreserve a bit.
+					let to_unreserve = old_deposit - new_deposit;
+					let _remainder = T::Currency::unreserve(&who, to_unreserve);
+					debug_assert!(_remainder.is_zero());
+					Some(T::WeightInfo::vote_less(votes.len() as u32))
+				},
 			};
 
 			// Amount to be locked up.

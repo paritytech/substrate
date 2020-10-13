@@ -169,23 +169,7 @@ benchmarks! {
 	_ {}
 
 	// -- Signed ones
-	vote {
-		let v in 1 .. (MAXIMUM_VOTE as u32);
-		clean::<T>();
-
-		// create a bunch of candidates.
-		let all_candidates = submit_candidates::<T>(v, "candidates")?;
-
-		let caller = endowed_account::<T>("caller", 0);
-		let stake = default_stake::<T>(BALANCE_FACTOR);
-
-		// vote for all of them.
-		let votes = all_candidates;
-
-		whitelist!(caller);
-	}: _(RawOrigin::Signed(caller), votes, stake)
-
-	vote_update {
+	vote_equal {
 		let v in 1 .. (MAXIMUM_VOTE as u32);
 		clean::<T>();
 
@@ -201,6 +185,48 @@ benchmarks! {
 
 		// new votes.
 		votes.rotate_left(1);
+
+		whitelist!(caller);
+	}: vote(RawOrigin::Signed(caller), votes, stake)
+
+	vote_more {
+		let v in 2 .. (MAXIMUM_VOTE  as u32);
+		clean::<T>();
+
+		// create a bunch of candidates.
+		let all_candidates = submit_candidates::<T>(v, "candidates")?;
+
+		let caller = endowed_account::<T>("caller", 0);
+		let stake = default_stake::<T>(BALANCE_FACTOR);
+
+		// original votes.
+		let mut votes = all_candidates.iter().skip(1).cloned().collect::<Vec<_>>();
+		submit_voter::<T>(caller.clone(), votes.clone(), stake)?;
+
+		// new votes.
+		votes = all_candidates;
+		assert!(votes.len() > <Voting<T>>::get(caller.clone()).votes.len());
+
+		whitelist!(caller);
+	}: vote(RawOrigin::Signed(caller), votes, stake)
+
+	vote_less {
+		let v in 2 .. (MAXIMUM_VOTE  as u32);
+		clean::<T>();
+
+		// create a bunch of candidates.
+		let all_candidates = submit_candidates::<T>(v, "candidates")?;
+
+		let caller = endowed_account::<T>("caller", 0);
+		let stake = default_stake::<T>(BALANCE_FACTOR);
+
+		// original votes.
+		let mut votes = all_candidates;
+		submit_voter::<T>(caller.clone(), votes.clone(), stake)?;
+
+		// new votes.
+		votes = votes.into_iter().skip(1).collect::<Vec<_>>();
+		assert!(votes.len() < <Voting<T>>::get(caller.clone()).votes.len());
 
 		whitelist!(caller);
 	}: vote(RawOrigin::Signed(caller), votes, stake)
@@ -581,16 +607,39 @@ mod tests {
 
 	#[test]
 	fn test_benchmarks_elections_phragmen() {
-		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
-			assert_ok!(test_benchmark_vote::<Test>());
-		});
+		ExtBuilder::default()
+			.desired_members(13)
+			.desired_runners_up(7)
+			.build_and_execute(|| {
+				assert_ok!(test_benchmark_vote_equal::<Test>());
+			});
 
-		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
-			assert_ok!(test_benchmark_remove_voter::<Test>());
-		});
+		ExtBuilder::default()
+			.desired_members(13)
+			.desired_runners_up(7)
+			.build_and_execute(|| {
+				assert_ok!(test_benchmark_vote_more::<Test>());
+			});
 
-		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
-			assert_ok!(test_benchmark_report_defunct_voter_correct::<Test>());
+		ExtBuilder::default()
+			.desired_members(13)
+			.desired_runners_up(7)
+			.build_and_execute(|| {
+				assert_ok!(test_benchmark_vote_less::<Test>());
+			});
+
+		ExtBuilder::default()
+			.desired_members(13)
+			.desired_runners_up(7)
+			.build_and_execute(|| {
+				assert_ok!(test_benchmark_remove_voter::<Test>());
+			});
+
+		ExtBuilder::default()
+			.desired_members(13)
+			.desired_runners_up(7)
+			.build_and_execute(|| {
+				assert_ok!(test_benchmark_report_defunct_voter_correct::<Test>());
 		});
 
 		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {

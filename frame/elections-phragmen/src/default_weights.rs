@@ -23,17 +23,14 @@
 use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 
 impl crate::WeightInfo for () {
-	fn vote(v: u32, ) -> Weight {
-		(91_489_000 as Weight)
-			.saturating_add((199_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add(DbWeight::get().reads(5 as Weight))
-			.saturating_add(DbWeight::get().writes(2 as Weight))
+	fn vote_equal(v: u32) -> Weight {
+		0
 	}
-	fn vote_update(v: u32, ) -> Weight {
-		(56_511_000 as Weight)
-			.saturating_add((245_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add(DbWeight::get().reads(5 as Weight))
-			.saturating_add(DbWeight::get().writes(2 as Weight))
+	fn vote_more(v: u32) -> Weight {
+		0
+	}
+	fn vote_less(v: u32) -> Weight {
+		0
 	}
 	fn remove_voter() -> Weight {
 		(76_714_000 as Weight)
