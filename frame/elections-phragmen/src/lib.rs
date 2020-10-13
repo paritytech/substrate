@@ -207,8 +207,8 @@ pub trait WeightInfo {
 	fn remove_member_wrong_refund() -> Weight;
 }
 
-#[derive(Encode, Decode, Eq, PartialEq)]
 /// Storage version.
+#[derive(Encode, Decode, Eq, PartialEq)]
 pub enum StorageVersion {
 	/// Initial version.
 	V1,
