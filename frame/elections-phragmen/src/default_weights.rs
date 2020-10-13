@@ -23,13 +23,13 @@
 use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 
 impl crate::WeightInfo for () {
-	fn vote_equal(v: u32) -> Weight {
+	fn vote_equal(_v: u32) -> Weight {
 		0
 	}
-	fn vote_more(v: u32) -> Weight {
+	fn vote_more(_v: u32) -> Weight {
 		0
 	}
-	fn vote_less(v: u32) -> Weight {
+	fn vote_less(_v: u32) -> Weight {
 		0
 	}
 	fn remove_voter() -> Weight {
