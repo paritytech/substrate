@@ -412,7 +412,7 @@ where
 						&& is_descendent_of(&standard_change.canon_hash, &change.canon_hash)?
 					{
 						log::info!(target: "afg",
-							"Not applying authority set changed forced at block #{:?}, due to pending standard change at block #{:?}",
+							"Not applying authority set change forced at block #{:?}, due to pending standard change at block #{:?}",
 							change.canon_height,
 							standard_change.effective_number(),
 						);
