@@ -160,185 +160,185 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(
 }
 
 
-/// Build a _really bad_ but acceptable solution for election. This should always yield a solution
-/// which has a less score than the seq-phragmen.
-pub fn get_weak_solution<T: Trait>(
-	do_reduce: bool,
-) -> (Vec<ValidatorIndex>, CompactAssignments, ElectionScore, ElectionSize) {
-	let mut backing_stake_of: BTreeMap<T::AccountId, BalanceOf<T>> = BTreeMap::new();
+// /// Build a _really bad_ but acceptable solution for election. This should always yield a solution
+// /// which has a less score than the seq-phragmen.
+// pub fn get_weak_solution<T: Trait>(
+// 	do_reduce: bool,
+// ) -> (Vec<ValidatorIndex>, CompactAssignments, ElectionScore, ElectionSize) {
+// 	let mut backing_stake_of: BTreeMap<T::AccountId, BalanceOf<T>> = BTreeMap::new();
 
-	// self stake
-	<Validators<T>>::iter().for_each(|(who, _p)| {
-		*backing_stake_of.entry(who.clone()).or_insert_with(|| Zero::zero()) +=
-			<Module<T>>::slashable_balance_of(&who)
-	});
+// 	// self stake
+// 	<Validators<T>>::iter().for_each(|(who, _p)| {
+// 		*backing_stake_of.entry(who.clone()).or_insert_with(|| Zero::zero()) +=
+// 			<Module<T>>::slashable_balance_of(&who)
+// 	});
 
-	// elect winners. We chose the.. least backed ones.
-	let mut sorted: Vec<T::AccountId> = backing_stake_of.keys().cloned().collect();
-	sorted.sort_by_key(|x| backing_stake_of.get(x).unwrap());
-	let winners: Vec<T::AccountId> = sorted
-		.iter()
-		.rev()
-		.cloned()
-		.take(<Module<T>>::validator_count() as usize)
-		.collect();
+// 	// elect winners. We chose the.. least backed ones.
+// 	let mut sorted: Vec<T::AccountId> = backing_stake_of.keys().cloned().collect();
+// 	sorted.sort_by_key(|x| backing_stake_of.get(x).unwrap());
+// 	let winners: Vec<T::AccountId> = sorted
+// 		.iter()
+// 		.rev()
+// 		.cloned()
+// 		.take(<Module<T>>::validator_count() as usize)
+// 		.collect();
 
-	let mut staked_assignments: Vec<StakedAssignment<T::AccountId>> = Vec::new();
-	// you could at this point start adding some of the nominator's stake, but for now we don't.
-	// This solution must be bad.
+// 	let mut staked_assignments: Vec<StakedAssignment<T::AccountId>> = Vec::new();
+// 	// you could at this point start adding some of the nominator's stake, but for now we don't.
+// 	// This solution must be bad.
 
-	// add self support to winners.
-	winners.iter().for_each(|w| {
-		staked_assignments.push(StakedAssignment {
-			who: w.clone(),
-			distribution: vec![(
-				w.clone(),
-				<Module<T>>::slashable_balance_of_vote_weight(
-					&w,
-					T::Currency::total_issuance(),
-				).into(),
-			)],
-		})
-	});
+// 	// add self support to winners.
+// 	winners.iter().for_each(|w| {
+// 		staked_assignments.push(StakedAssignment {
+// 			who: w.clone(),
+// 			distribution: vec![(
+// 				w.clone(),
+// 				<Module<T>>::slashable_balance_of_vote_weight(
+// 					&w,
+// 					T::Currency::total_issuance(),
+// 				).into(),
+// 			)],
+// 		})
+// 	});
 
-	if do_reduce {
-		reduce(&mut staked_assignments);
-	}
+// 	if do_reduce {
+// 		reduce(&mut staked_assignments);
+// 	}
 
-	// helpers for building the compact
-	let snapshot_validators = <Module<T>>::snapshot_validators().unwrap();
-	let snapshot_nominators = <Module<T>>::snapshot_nominators().unwrap();
+// 	// helpers for building the compact
+// 	let snapshot_validators = <Module<T>>::snapshot_validators().unwrap();
+// 	let snapshot_nominators = <Module<T>>::snapshot_nominators().unwrap();
 
-	let nominator_index = |a: &T::AccountId| -> Option<NominatorIndex> {
-		snapshot_nominators
-			.iter()
-			.position(|x| x == a)
-			.and_then(|i| <usize as TryInto<NominatorIndex>>::try_into(i).ok())
-	};
-	let validator_index = |a: &T::AccountId| -> Option<ValidatorIndex> {
-		snapshot_validators
-			.iter()
-			.position(|x| x == a)
-			.and_then(|i| <usize as TryInto<ValidatorIndex>>::try_into(i).ok())
-	};
+// 	let nominator_index = |a: &T::AccountId| -> Option<NominatorIndex> {
+// 		snapshot_nominators
+// 			.iter()
+// 			.position(|x| x == a)
+// 			.and_then(|i| <usize as TryInto<NominatorIndex>>::try_into(i).ok())
+// 	};
+// 	let validator_index = |a: &T::AccountId| -> Option<ValidatorIndex> {
+// 		snapshot_validators
+// 			.iter()
+// 			.position(|x| x == a)
+// 			.and_then(|i| <usize as TryInto<ValidatorIndex>>::try_into(i).ok())
+// 	};
 
-	// convert back to ratio assignment. This takes less space.
-	let low_accuracy_assignment = assignment_staked_to_ratio_normalized(staked_assignments)
-		.expect("Failed to normalize");
+// 	// convert back to ratio assignment. This takes less space.
+// 	let low_accuracy_assignment = assignment_staked_to_ratio_normalized(staked_assignments)
+// 		.expect("Failed to normalize");
 
-	// re-calculate score based on what the chain will decode.
-	let score = {
-		let staked = assignment_ratio_to_staked::<_, OffchainAccuracy, _>(
-			low_accuracy_assignment.clone(),
-			<Module<T>>::slashable_balance_of_fn(),
-		);
+// 	// re-calculate score based on what the chain will decode.
+// 	let score = {
+// 		let staked = assignment_ratio_to_staked::<_, OffchainAccuracy, _>(
+// 			low_accuracy_assignment.clone(),
+// 			<Module<T>>::slashable_balance_of_fn(),
+// 		);
 
-		let support_map = build_support_map::<T::AccountId>(
-			winners.as_slice(),
-			staked.as_slice(),
-		).unwrap();
-		evaluate_support::<T::AccountId>(&support_map)
-	};
+// 		let support_map = build_support_map::<T::AccountId>(
+// 			winners.as_slice(),
+// 			staked.as_slice(),
+// 		).unwrap();
+// 		evaluate_support::<T::AccountId>(&support_map)
+// 	};
 
-	// compact encode the assignment.
-	let compact = CompactAssignments::from_assignment(
-		low_accuracy_assignment,
-		nominator_index,
-		validator_index,
-	)
-	.unwrap();
+// 	// compact encode the assignment.
+// 	let compact = CompactAssignments::from_assignment(
+// 		low_accuracy_assignment,
+// 		nominator_index,
+// 		validator_index,
+// 	)
+// 	.unwrap();
 
-	// winners to index.
-	let winners = winners
-		.into_iter()
-		.map(|w| {
-			snapshot_validators
-				.iter()
-				.position(|v| *v == w)
-				.unwrap()
-				.try_into()
-				.unwrap()
-		})
-		.collect::<Vec<ValidatorIndex>>();
+// 	// winners to index.
+// 	let winners = winners
+// 		.into_iter()
+// 		.map(|w| {
+// 			snapshot_validators
+// 				.iter()
+// 				.position(|v| *v == w)
+// 				.unwrap()
+// 				.try_into()
+// 				.unwrap()
+// 		})
+// 		.collect::<Vec<ValidatorIndex>>();
 
-	let size = ElectionSize {
-		validators: snapshot_validators.len() as ValidatorIndex,
-		nominators: snapshot_nominators.len() as NominatorIndex,
-	};
+// 	let size = ElectionSize {
+// 		validators: snapshot_validators.len() as ValidatorIndex,
+// 		nominators: snapshot_nominators.len() as NominatorIndex,
+// 	};
 
-	(winners, compact, score, size)
-}
+// 	(winners, compact, score, size)
+// }
 
-/// Create a solution for seq-phragmen. This uses the same internal function as used by the offchain
-/// worker code.
-pub fn get_seq_phragmen_solution<T: Trait>(
-	do_reduce: bool,
-) -> (
-	Vec<ValidatorIndex>,
-	CompactAssignments,
-	ElectionScore,
-	ElectionSize,
-) {
-	let iters = offchain_election::get_balancing_iters::<T>();
+// /// Create a solution for seq-phragmen. This uses the same internal function as used by the offchain
+// /// worker code.
+// pub fn get_seq_phragmen_solution<T: Trait>(
+// 	do_reduce: bool,
+// ) -> (
+// 	Vec<ValidatorIndex>,
+// 	CompactAssignments,
+// 	ElectionScore,
+// 	ElectionSize,
+// ) {
+// 	let iters = offchain_election::get_balancing_iters::<T>();
 
-	let sp_npos_elections::ElectionResult {
-		winners,
-		assignments,
-	} = <Module<T>>::do_phragmen::<OffchainAccuracy>(iters).unwrap();
+// 	let sp_npos_elections::ElectionResult {
+// 		winners,
+// 		assignments,
+// 	} = <Module<T>>::do_phragmen::<OffchainAccuracy>(iters).unwrap();
 
-	offchain_election::prepare_submission::<T>(
-		assignments,
-		winners,
-		do_reduce,
-		T::MaximumBlockWeight::get(),
-	)
-	.unwrap()
-}
+// 	offchain_election::prepare_submission::<T>(
+// 		assignments,
+// 		winners,
+// 		do_reduce,
+// 		T::MaximumBlockWeight::get(),
+// 	)
+// 	.unwrap()
+// }
 
-/// Returns a solution in which only one winner is elected with just a self vote.
-pub fn get_single_winner_solution<T: Trait>(
-	winner: T::AccountId,
-) -> Result<
-	(
-		Vec<ValidatorIndex>,
-		CompactAssignments,
-		ElectionScore,
-		ElectionSize,
-	),
-	&'static str,
-> {
-	let snapshot_validators = <Module<T>>::snapshot_validators().unwrap();
-	let snapshot_nominators = <Module<T>>::snapshot_nominators().unwrap();
+// /// Returns a solution in which only one winner is elected with just a self vote.
+// pub fn get_single_winner_solution<T: Trait>(
+// 	winner: T::AccountId,
+// ) -> Result<
+// 	(
+// 		Vec<ValidatorIndex>,
+// 		CompactAssignments,
+// 		ElectionScore,
+// 		ElectionSize,
+// 	),
+// 	&'static str,
+// > {
+// 	let snapshot_validators = <Module<T>>::snapshot_validators().unwrap();
+// 	let snapshot_nominators = <Module<T>>::snapshot_nominators().unwrap();
 
-	let val_index = snapshot_validators
-		.iter()
-		.position(|x| *x == winner)
-		.ok_or("not a validator")?;
-	let nom_index = snapshot_nominators
-		.iter()
-		.position(|x| *x == winner)
-		.ok_or("not a nominator")?;
+// 	let val_index = snapshot_validators
+// 		.iter()
+// 		.position(|x| *x == winner)
+// 		.ok_or("not a validator")?;
+// 	let nom_index = snapshot_nominators
+// 		.iter()
+// 		.position(|x| *x == winner)
+// 		.ok_or("not a nominator")?;
 
-	let stake = <Staking<T>>::slashable_balance_of(&winner);
-	let stake =
-		<T::CurrencyToVote>::to_vote(stake, T::Currency::total_issuance()) as ExtendedBalance;
+// 	let stake = <Staking<T>>::slashable_balance_of(&winner);
+// 	let stake =
+// 		<T::CurrencyToVote>::to_vote(stake, T::Currency::total_issuance()) as ExtendedBalance;
 
-	let val_index = val_index as ValidatorIndex;
-	let nom_index = nom_index as NominatorIndex;
+// 	let val_index = val_index as ValidatorIndex;
+// 	let nom_index = nom_index as NominatorIndex;
 
-	let winners = vec![val_index];
-	let compact = CompactAssignments {
-		votes1: vec![(nom_index, val_index)],
-		..Default::default()
-	};
-	let score = [stake, stake, stake * stake];
-	let size = ElectionSize {
-		validators: snapshot_validators.len() as ValidatorIndex,
-		nominators: snapshot_nominators.len() as NominatorIndex,
-	};
+// 	let winners = vec![val_index];
+// 	let compact = CompactAssignments {
+// 		votes1: vec![(nom_index, val_index)],
+// 		..Default::default()
+// 	};
+// 	let score = [stake, stake, stake * stake];
+// 	let size = ElectionSize {
+// 		validators: snapshot_validators.len() as ValidatorIndex,
+// 		nominators: snapshot_nominators.len() as NominatorIndex,
+// 	};
 
-	Ok((winners, compact, score, size))
-}
+// 	Ok((winners, compact, score, size))
+// }
 
 /// get the active era.
 pub fn current_era<T: Trait>() -> EraIndex {

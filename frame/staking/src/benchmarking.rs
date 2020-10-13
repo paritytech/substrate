@@ -484,220 +484,220 @@ benchmarks! {
 		assert!(balance_before > balance_after);
 	}
 
-	// This benchmark create `v` validators intent, `n` nominators intent, in total creating `e`
-	// edges.
-	#[extra]
-	submit_solution_initial {
-		// number of validator intention. This will be equal to `ElectionSize::validators`.
-		let v in 200 .. 400;
-		// number of nominator intention. This will be equal to `ElectionSize::nominators`.
-		let n in 500 .. 1000;
-		// number of assignments. Basically, number of active nominators. This will be equal to
-		// `compact.len()`.
-		let a in 200 .. 400;
-		// number of winners, also ValidatorCount. This will be equal to `winner.len()`.
-		let w in 16 .. 100;
+	// // This benchmark create `v` validators intent, `n` nominators intent, in total creating `e`
+	// // edges.
+	// #[extra]
+	// submit_solution_initial {
+	// 	// number of validator intention. This will be equal to `ElectionSize::validators`.
+	// 	let v in 200 .. 400;
+	// 	// number of nominator intention. This will be equal to `ElectionSize::nominators`.
+	// 	let n in 500 .. 1000;
+	// 	// number of assignments. Basically, number of active nominators. This will be equal to
+	// 	// `compact.len()`.
+	// 	let a in 200 .. 400;
+	// 	// number of winners, also ValidatorCount. This will be equal to `winner.len()`.
+	// 	let w in 16 .. 100;
 
-		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
+	// 	ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
 
-		let winners = create_validators_with_nominators_for_era::<T>(
-			v,
-			n,
-			MAX_NOMINATIONS,
-			false,
-			Some(w),
-		)?;
+	// 	let winners = create_validators_with_nominators_for_era::<T>(
+	// 		v,
+	// 		n,
+	// 		MAX_NOMINATIONS,
+	// 		false,
+	// 		Some(w),
+	// 	)?;
 
-		// needed for the solution to be generates.
-		assert!(<Staking<T>>::create_stakers_snapshot().0);
+	// 	// needed for the solution to be generates.
+	// 	assert!(<Staking<T>>::create_stakers_snapshot().0);
 
-		// set number of winners
-		ValidatorCount::put(w);
+	// 	// set number of winners
+	// 	ValidatorCount::put(w);
 
-		// create a assignments in total for the w winners.
-		let (winners, assignments) = create_assignments_for_offchain::<T>(a, winners)?;
+	// 	// create a assignments in total for the w winners.
+	// 	let (winners, assignments) = create_assignments_for_offchain::<T>(a, winners)?;
 
-		let (
-			winners,
-			compact,
-			score,
-			size
-		) = offchain_election::prepare_submission::<T>(assignments, winners, false, T::MaximumBlockWeight::get()).unwrap();
+	// 	let (
+	// 		winners,
+	// 		compact,
+	// 		score,
+	// 		size
+	// 	) = offchain_election::prepare_submission::<T>(assignments, winners, false, T::MaximumBlockWeight::get()).unwrap();
 
-		assert_eq!(
-			winners.len(), compact.unique_targets().len(),
-			"unique targets ({}) and winners ({}) count not same. This solution is not valid.",
-			compact.unique_targets().len(),
-			winners.len(),
-		);
+	// 	assert_eq!(
+	// 		winners.len(), compact.unique_targets().len(),
+	// 		"unique targets ({}) and winners ({}) count not same. This solution is not valid.",
+	// 		compact.unique_targets().len(),
+	// 		winners.len(),
+	// 	);
 
-		// needed for the solution to be accepted
-		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
+	// 	// needed for the solution to be accepted
+	// 	<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
 
-		let era = <Staking<T>>::current_era().unwrap_or(0);
-		let caller: T::AccountId = account("caller", n, SEED);
-		whitelist_account!(caller);
-	}: {
-		let result = <Staking<T>>::submit_election_solution(
-			RawOrigin::Signed(caller.clone()).into(),
-			winners,
-			compact,
-			score.clone(),
-			era,
-			size,
-		);
-		assert!(result.is_ok());
-	}
-	verify {
-		// new solution has been accepted.
-		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
-	}
+	// 	let era = <Staking<T>>::current_era().unwrap_or(0);
+	// 	let caller: T::AccountId = account("caller", n, SEED);
+	// 	whitelist_account!(caller);
+	// }: {
+	// 	let result = <Staking<T>>::submit_election_solution(
+	// 		RawOrigin::Signed(caller.clone()).into(),
+	// 		winners,
+	// 		compact,
+	// 		score.clone(),
+	// 		era,
+	// 		size,
+	// 	);
+	// 	assert!(result.is_ok());
+	// }
+	// verify {
+	// 	// new solution has been accepted.
+	// 	assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
+	// }
 
-	// same as submit_solution_initial but we place a very weak solution on chian first.
-	submit_solution_better {
-		// number of validator intention.
-		let v in 200 .. 400;
-		// number of nominator intention.
-		let n in 500 .. 1000;
-		// number of assignments. Basically, number of active nominators.
-		let a in 200 .. 400;
-		// number of winners, also ValidatorCount.
-		let w in 16 .. 100;
+	// // same as submit_solution_initial but we place a very weak solution on chian first.
+	// submit_solution_better {
+	// 	// number of validator intention.
+	// 	let v in 200 .. 400;
+	// 	// number of nominator intention.
+	// 	let n in 500 .. 1000;
+	// 	// number of assignments. Basically, number of active nominators.
+	// 	let a in 200 .. 400;
+	// 	// number of winners, also ValidatorCount.
+	// 	let w in 16 .. 100;
 
-		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
+	// 	ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
 
-		let winners = create_validators_with_nominators_for_era::<T>(
-			v,
-			n,
-			MAX_NOMINATIONS,
-			false,
-			Some(w),
-		)?;
+	// 	let winners = create_validators_with_nominators_for_era::<T>(
+	// 		v,
+	// 		n,
+	// 		MAX_NOMINATIONS,
+	// 		false,
+	// 		Some(w),
+	// 	)?;
 
-		// needed for the solution to be generates.
-		assert!(<Staking<T>>::create_stakers_snapshot().0);
+	// 	// needed for the solution to be generates.
+	// 	assert!(<Staking<T>>::create_stakers_snapshot().0);
 
-		// set number of winners
-		ValidatorCount::put(w);
+	// 	// set number of winners
+	// 	ValidatorCount::put(w);
 
-		// create a assignments in total for the w winners.
-		let (winners, assignments) = create_assignments_for_offchain::<T>(a, winners)?;
+	// 	// create a assignments in total for the w winners.
+	// 	let (winners, assignments) = create_assignments_for_offchain::<T>(a, winners)?;
 
-		let single_winner = winners[0].0.clone();
+	// 	let single_winner = winners[0].0.clone();
 
-		let (
-			winners,
-			compact,
-			score,
-			size
-		) = offchain_election::prepare_submission::<T>(assignments, winners, false, T::MaximumBlockWeight::get()).unwrap();
+	// 	let (
+	// 		winners,
+	// 		compact,
+	// 		score,
+	// 		size
+	// 	) = offchain_election::prepare_submission::<T>(assignments, winners, false, T::MaximumBlockWeight::get()).unwrap();
 
-		assert_eq!(
-			winners.len(), compact.unique_targets().len(),
-			"unique targets ({}) and winners ({}) count not same. This solution is not valid.",
-			compact.unique_targets().len(),
-			winners.len(),
-		);
+	// 	assert_eq!(
+	// 		winners.len(), compact.unique_targets().len(),
+	// 		"unique targets ({}) and winners ({}) count not same. This solution is not valid.",
+	// 		compact.unique_targets().len(),
+	// 		winners.len(),
+	// 	);
 
-		// needed for the solution to be accepted
-		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
+	// 	// needed for the solution to be accepted
+	// 	<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
 
-		let era = <Staking<T>>::current_era().unwrap_or(0);
-		let caller: T::AccountId = account("caller", n, SEED);
-		whitelist_account!(caller);
+	// 	let era = <Staking<T>>::current_era().unwrap_or(0);
+	// 	let caller: T::AccountId = account("caller", n, SEED);
+	// 	whitelist_account!(caller);
 
-		// submit a very bad solution on-chain
-		{
-			// this is needed to fool the chain to accept this solution.
-			ValidatorCount::put(1);
-			let (winners, compact, score, size) = get_single_winner_solution::<T>(single_winner)?;
-			assert!(
-				<Staking<T>>::submit_election_solution(
-					RawOrigin::Signed(caller.clone()).into(),
-					winners,
-					compact,
-					score.clone(),
-					era,
-					size,
-			).is_ok());
+	// 	// submit a very bad solution on-chain
+	// 	{
+	// 		// this is needed to fool the chain to accept this solution.
+	// 		ValidatorCount::put(1);
+	// 		let (winners, compact, score, size) = get_single_winner_solution::<T>(single_winner)?;
+	// 		assert!(
+	// 			<Staking<T>>::submit_election_solution(
+	// 				RawOrigin::Signed(caller.clone()).into(),
+	// 				winners,
+	// 				compact,
+	// 				score.clone(),
+	// 				era,
+	// 				size,
+	// 		).is_ok());
 
-			// new solution has been accepted.
-			assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
-			ValidatorCount::put(w);
-		}
-	}: {
-		let result = <Staking<T>>::submit_election_solution(
-			RawOrigin::Signed(caller.clone()).into(),
-			winners,
-			compact,
-			score.clone(),
-			era,
-			size,
-		);
-		assert!(result.is_ok());
-	}
-	verify {
-		// new solution has been accepted.
-		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
-	}
+	// 		// new solution has been accepted.
+	// 		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
+	// 		ValidatorCount::put(w);
+	// 	}
+	// }: {
+	// 	let result = <Staking<T>>::submit_election_solution(
+	// 		RawOrigin::Signed(caller.clone()).into(),
+	// 		winners,
+	// 		compact,
+	// 		score.clone(),
+	// 		era,
+	// 		size,
+	// 	);
+	// 	assert!(result.is_ok());
+	// }
+	// verify {
+	// 	// new solution has been accepted.
+	// 	assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
+	// }
 
-	// This will be early rejected based on the score.
-	#[extra]
-	submit_solution_weaker {
-		// number of validator intention.
-		let v in 200 .. 400;
-		// number of nominator intention.
-		let n in 500 .. 1000;
+	// // This will be early rejected based on the score.
+	// #[extra]
+	// submit_solution_weaker {
+	// 	// number of validator intention.
+	// 	let v in 200 .. 400;
+	// 	// number of nominator intention.
+	// 	let n in 500 .. 1000;
 
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
+	// 	create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 
-		// needed for the solution to be generates.
-		assert!(<Staking<T>>::create_stakers_snapshot().0);
+	// 	// needed for the solution to be generates.
+	// 	assert!(<Staking<T>>::create_stakers_snapshot().0);
 
-		// needed for the solution to be accepted
-		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
-		let era = <Staking<T>>::current_era().unwrap_or(0);
-		let caller: T::AccountId = account("caller", n, SEED);
-		whitelist_account!(caller);
+	// 	// needed for the solution to be accepted
+	// 	<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
+	// 	let era = <Staking<T>>::current_era().unwrap_or(0);
+	// 	let caller: T::AccountId = account("caller", n, SEED);
+	// 	whitelist_account!(caller);
 
-		// submit a seq-phragmen with all the good stuff on chain.
-		{
-			let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(true);
-			assert_eq!(
-				winners.len(), compact.unique_targets().len(),
-				"unique targets ({}) and winners ({}) count not same. This solution is not valid.",
-				compact.unique_targets().len(),
-				winners.len(),
-			);
-			assert!(
-				<Staking<T>>::submit_election_solution(
-					RawOrigin::Signed(caller.clone()).into(),
-					winners,
-					compact,
-					score.clone(),
-					era,
-					size,
-				).is_ok()
-			);
+	// 	// submit a seq-phragmen with all the good stuff on chain.
+	// 	{
+	// 		let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(true);
+	// 		assert_eq!(
+	// 			winners.len(), compact.unique_targets().len(),
+	// 			"unique targets ({}) and winners ({}) count not same. This solution is not valid.",
+	// 			compact.unique_targets().len(),
+	// 			winners.len(),
+	// 		);
+	// 		assert!(
+	// 			<Staking<T>>::submit_election_solution(
+	// 				RawOrigin::Signed(caller.clone()).into(),
+	// 				winners,
+	// 				compact,
+	// 				score.clone(),
+	// 				era,
+	// 				size,
+	// 			).is_ok()
+	// 		);
 
-			// new solution has been accepted.
-			assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
-		}
+	// 		// new solution has been accepted.
+	// 		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
+	// 	}
 
-		// prepare a bad solution. This will be very early rejected.
-		let (winners, compact, score, size) = get_weak_solution::<T>(true);
-	}: {
-		assert!(
-			<Staking<T>>::submit_election_solution(
-				RawOrigin::Signed(caller.clone()).into(),
-				winners,
-				compact,
-				score.clone(),
-				era,
-				size,
-			).is_err()
-		);
-	}
+	// 	// prepare a bad solution. This will be very early rejected.
+	// 	let (winners, compact, score, size) = get_weak_solution::<T>(true);
+	// }: {
+	// 	assert!(
+	// 		<Staking<T>>::submit_election_solution(
+	// 			RawOrigin::Signed(caller.clone()).into(),
+	// 			winners,
+	// 			compact,
+	// 			score.clone(),
+	// 			era,
+	// 			size,
+	// 		).is_err()
+	// 	);
+	// }
 }
 
 #[cfg(test)]
@@ -825,18 +825,6 @@ mod tests {
 			assert_ok!(test_benchmark_new_era::<Test>());
 			assert_ok!(test_benchmark_do_slash::<Test>());
 			assert_ok!(test_benchmark_payout_all::<Test>());
-			// only run one of them to same time on the CI. ignore the other two.
-			assert_ok!(test_benchmark_submit_solution_initial::<Test>());
 		});
 	}
-
-	#[test]
-	#[ignore]
-	fn test_benchmarks_offchain() {
-		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
-			assert_ok!(test_benchmark_submit_solution_better::<Test>());
-			assert_ok!(test_benchmark_submit_solution_weaker::<Test>());
-		});
-	}
-
 }

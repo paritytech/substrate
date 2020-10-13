@@ -27,13 +27,8 @@ use sp_std::prelude::*;
 /// Converts a vector of ratio assignments into ones with absolute budget value.
 ///
 /// Note that this will NOT attempt at normalizing the result.
-<<<<<<< HEAD
 pub fn assignment_ratio_to_staked<A: IdentifierT, P: PerThing128, FS>(
-	ratio: Vec<Assignment<A, P>>,
-=======
-pub fn assignment_ratio_to_staked<A: IdentifierT, P: PerThing, FS>(
 	ratios: Vec<Assignment<A, P>>,
->>>>>>> 8a644f5690d6cc4f9d3f9dc7094219cd51f4b54a
 	stake_of: FS,
 ) -> Vec<StakedAssignment<A>>
 where
