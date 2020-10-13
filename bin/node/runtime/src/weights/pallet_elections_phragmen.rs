@@ -27,17 +27,14 @@ use sp_std::marker::PhantomData;
 
 pub struct WeightInfo<T>(PhantomData<T>);
 impl<T: frame_system::Trait> pallet_elections_phragmen::WeightInfo for WeightInfo<T> {
-	fn vote(v: u32, ) -> Weight {
-		(91_060_000 as Weight)
-			.saturating_add((305_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+	fn vote_more(v: u32, ) -> Weight {
+		0
 	}
-	fn vote_update(v: u32, ) -> Weight {
-		(57_469_000 as Weight)
-			.saturating_add((444_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+	fn vote_less(v: u32, ) -> Weight {
+		0
+	}
+	fn vote_equal(v: u32, ) -> Weight {
+		0
 	}
 	fn remove_voter() -> Weight {
 		(81_517_000 as Weight)

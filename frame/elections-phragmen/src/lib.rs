@@ -435,7 +435,7 @@ decl_module! {
 
 			// Reserve bond.
 			let new_deposit = Self::deposit_of(votes.len());
-			let Voter { votes: old_votes, deposit: old_deposit, .. } = <Voting<T>>::get(&who);
+			let Voter { deposit: old_deposit, .. } = <Voting<T>>::get(&who);
 			let maybe_refund = match new_deposit.cmp(&old_deposit) {
 				Ordering::Greater => {
 					// Must reserve a bit more.
