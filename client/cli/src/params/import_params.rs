@@ -68,8 +68,8 @@ pub struct ImportParams {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub execution_strategies: ExecutionStrategiesParams,
-   
-	/// Specify the state cache size. 
+
+	/// Specify the state cache size.
 	#[structopt(
 		long = "state-cache-size",
 		value_name = "Bytes",

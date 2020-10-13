@@ -22,7 +22,7 @@ use std::{
 	marker::PhantomData,
 	collections::{HashSet, BTreeMap, HashMap},
 	sync::Arc, panic::UnwindSafe, result,
-    path::PathBuf
+	path::PathBuf
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
@@ -182,10 +182,10 @@ pub struct ClientConfig {
 	pub offchain_worker_enabled: bool,
 	/// If true, allows access from the runtime to write into offchain worker db.
 	pub offchain_indexing_api: bool,
-    /// Enable overwriting on-chain WASM with local WASM
-    pub wasm_overwrite_enabled: bool,
-    /// Path where WASM exists to overwrite the on-chain WASM
-    pub wasm_overwrite_path: PathBuf,
+	/// Enable overwriting on-chain WASM with local WASM
+	pub wasm_overwrite_enabled: bool,
+	/// Path where WASM exists to overwrite the on-chain WASM
+	pub wasm_overwrite_path: PathBuf,
 }
 
 /// Create a client with the explicitly provided backend.
