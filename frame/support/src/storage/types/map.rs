@@ -53,8 +53,9 @@ pub struct StorageMap<Prefix, Hasher, Key, Value, QueryKind=OptionQuery, OnEmpty
 	core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty)>
 );
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> crate::storage::generator::StorageMap<Key, Value> for
-	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
+	crate::storage::generator::StorageMap<Key, Value>
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -139,26 +140,38 @@ where
 	}
 
 	/// Mutate the value under a key.
-	pub fn mutate<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut QueryKind::Query) -> R>(key: KeyArg, f: F) -> R {
+	pub fn mutate<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut QueryKind::Query) -> R>(
+		key: KeyArg,
+		f: F
+	) -> R {
 		<Self as crate::storage::StorageMap<Key, Value>>::mutate(key, f)
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned.
-	pub fn try_mutate<KeyArg: EncodeLike<Key>, R, E, F: FnOnce(&mut QueryKind::Query) -> Result<R, E>>(
-		key: KeyArg,
-		f: F,
-	) -> Result<R, E> { <Self as crate::storage::StorageMap<Key, Value>>::try_mutate(key, f) }
+	pub fn try_mutate<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
+	where
+		KeyArg: EncodeLike<Key>,
+		F: FnOnce(&mut QueryKind::Query) -> Result<R, E>,
+	{
+		<Self as crate::storage::StorageMap<Key, Value>>::try_mutate(key, f)
+	}
 
 	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
-	pub fn mutate_exists<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut Option<Value>) -> R>(key: KeyArg, f: F) -> R {
+	pub fn mutate_exists<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut Option<Value>) -> R>(
+		key: KeyArg,
+		f: F
+	) -> R {
 		<Self as crate::storage::StorageMap<Key, Value>>::mutate_exists(key, f)
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
-	pub fn try_mutate_exists<KeyArg: EncodeLike<Key>, R, E, F: FnOnce(&mut Option<Value>) -> Result<R, E>>(
-		key: KeyArg,
-		f: F,
-	) -> Result<R, E> { <Self as crate::storage::StorageMap<Key, Value>>::try_mutate_exists(key, f) }
+	pub fn try_mutate_exists<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
+	where
+		KeyArg: EncodeLike<Key>,
+		F: FnOnce(&mut Option<Value>) -> Result<R, E>,
+	{
+		<Self as crate::storage::StorageMap<Key, Value>>::try_mutate_exists(key, f)
+	}
 
 	/// Take the value under a key.
 	pub fn take<KeyArg: EncodeLike<Key>>(key: KeyArg) -> QueryKind::Query {
@@ -179,7 +192,10 @@ where
 		EncodeLikeKey: EncodeLike<Key>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		Value: StorageAppend<Item> { <Self as crate::storage::StorageMap<Key, Value>>::append(key, item) }
+		Value: StorageAppend<Item>
+	{
+		<Self as crate::storage::StorageMap<Key, Value>>::append(key, item)
+	}
 
 	/// Read the length of the storage value without decoding the entire value under the
 	/// given `key`.

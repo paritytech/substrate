@@ -44,7 +44,10 @@ use sp_std::vec::Vec;
 ///
 /// As StorageDoubleMap implementation, each key value is stored at:
 /// ```nocompile
-/// Twox128(PalletInfo::name()) ++ Twox128(storage_type_name) ++ Hasher1(encode(key1)) ++ Hasher2(encode(key2))
+/// Twox128(PalletInfo::name())
+///		++ Twox128(storage_type_name)
+///		++ Hasher1(encode(key1))
+///		++ Hasher2(encode(key2))
 /// ```
 ///
 /// # Warning
@@ -430,8 +433,12 @@ mod test {
 
 	#[test]
 	fn test() {
-		type A = StorageDoubleMap<Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32, OptionQuery, ADefault>;
-		type AValueQueryDefaultEmpty = StorageDoubleMap<Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32, ValueQuery>;
+		type A = StorageDoubleMap<
+			Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32, OptionQuery, ADefault
+		>;
+		type AValueQueryDefaultEmpty = StorageDoubleMap<
+			Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32, ValueQuery
+		>;
 		type B = StorageDoubleMap<Prefix, Blake2_256, u16, Twox128, u8, u32, ValueQuery>;
 		type C = StorageDoubleMap<Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u8, ValueQuery>;
 		type WithLen = StorageDoubleMap<Prefix, Blake2_128Concat, u16, Twox64Concat, u8, Vec<u32>>;
