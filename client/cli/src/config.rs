@@ -280,7 +280,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.unwrap_or_default())
 	}
 	
-	/// Check whether overwriting on-chain WASM is enabled..
+	/// Check whether overwriting on-chain WASM is enabled.
 	///
 	/// By default overwriting on-chain WASM is disabled.
 	fn wasm_overwrite(&self) -> bool {

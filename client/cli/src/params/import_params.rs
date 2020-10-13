@@ -113,12 +113,12 @@ impl ImportParams {
 		self.wasm_method.into()
 	}
     
-    /// Enable overwriting on-chain WASM with locally-stored WASM
+	/// Enable overwriting on-chain WASM with locally-stored WASM.
 	pub fn wasm_overwrite(&self) -> bool {
 		self.wasm_overwrite
 	}
     
-    /// Path where local WASM is stored
+	/// Path where local WASM is stored.
 	pub fn wasm_overwrite_path(&self) -> Option<PathBuf> {
 		self.wasm_overwrite_path.clone()
 	}
