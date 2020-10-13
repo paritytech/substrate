@@ -95,12 +95,9 @@ pub struct SyncState<Number> {
 	/// Height of the current best block of the node.
 	pub current_block: Number,
 	/// Height of the highest block learned from the network. Missing if no block is known yet.
-	#[serde(default = "none", skip_serializing_if = "Option::is_none")]
+	#[serde(default = "Default::default", skip_serializing_if = "Option::is_none")]
 	pub highest_block: Option<Number>,
 }
-
-fn none<T>() -> Option<T> { None }
-
 #[cfg(test)]
 mod tests {
 	use super::*;
