@@ -7,7 +7,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -259,7 +259,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 			executor,
 			Box::new(sp_core::testing::TaskExecutor::new()),
 			Default::default(),
-		);
+		).unwrap();
 
 		self.build_with_executor(executor)
 	}

@@ -85,6 +85,7 @@ directories = "2.0.2"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+sc-runtime-test = { version = "2.0.0", path = "../executor/runtime-test" }
 sp-consensus-babe = { version = "0.8.0", path = "../../primitives/consensus/babe" }
 grandpa = { version = "0.8.0", package = "sc-finality-grandpa", path = "../finality-grandpa" }
 grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }

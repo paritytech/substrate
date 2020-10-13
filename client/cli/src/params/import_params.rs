@@ -25,6 +25,7 @@ use crate::params::DatabaseParams;
 use crate::params::PruningParams;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use structopt::StructOpt;
+use std::path::PathBuf;
 
 /// Parameters for block import.
 #[derive(Debug, StructOpt)]
@@ -54,12 +55,21 @@ pub struct ImportParams {
 		default_value = "Interpreted"
 	)]
 	pub wasm_method: WasmExecutionMethod,
+ 
+	/// Enable overriding the on-chain WASM with local wasm on-disk.
+	#[structopt(long)]
+	pub wasm_overwrite: bool, 
+	
+	/// Specify the path where local WASM runtimes are stored.
+	/// These runtimes will override on-chain runtimes when the version matches.
+	#[structopt(long, value_name = "PATH", parse(from_os_str))]
+	pub wasm_overwrite_path: Option<PathBuf>,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub execution_strategies: ExecutionStrategiesParams,
-
-	/// Specify the state cache size.
+   
+	/// Specify the state cache size. 
 	#[structopt(
 		long = "state-cache-size",
 		value_name = "Bytes",
@@ -101,6 +111,16 @@ impl ImportParams {
 	/// Get the WASM execution method from the parameters
 	pub fn wasm_method(&self) -> sc_service::config::WasmExecutionMethod {
 		self.wasm_method.into()
+	}
+    
+    /// Enable overwriting on-chain WASM with locally-stored WASM
+	pub fn wasm_overwrite(&self) -> bool {
+		self.wasm_overwrite
+	}
+    
+    /// Path where local WASM is stored
+	pub fn wasm_overwrite_path(&self) -> Option<PathBuf> {
+		self.wasm_overwrite_path.clone()
 	}
 
 	/// Get execution strategies for the parameters

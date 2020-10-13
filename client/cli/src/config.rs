@@ -42,6 +42,8 @@ pub(crate) const NODE_NAME_MAX_LENGTH: usize = 64;
 /// Default sub directory to store network config.
 pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";
 
+pub(crate) const DEFAULT_WASM_OVERWRITE_PATH: &'static str = "wasm_runtime_overwrites";
+
 /// The recommended open file descriptor limit to be configured for the process.
 const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
 
@@ -277,6 +279,24 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.map(|x| x.wasm_method())
 			.unwrap_or_default())
 	}
+	
+	/// Check whether overwriting on-chain WASM is enabled..
+	///
+	/// By default overwriting on-chain WASM is disabled.
+	fn wasm_overwrite(&self) -> bool {
+		self.import_params()
+			.map(|x| x.wasm_overwrite())
+			.unwrap_or_default()
+	}
+	
+	/// Get the path where WASM overwrites live.
+	///
+	/// By default this is set to ${config_dir}/chain/wasm_runtime_overwrites/
+	fn wasm_overwrite_path(&self) -> Option<PathBuf> {
+		self.import_params()
+			.map(|x| x.wasm_overwrite_path())
+			.unwrap_or_default()
+	}
 
 	/// Get the execution strategies.
 	///
@@ -459,6 +479,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.join("chains")
 			.join(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
+		let wasm_overwrite_dir: PathBuf = self
+			.wasm_overwrite_path()
+			.unwrap_or(config_dir.join(DEFAULT_WASM_OVERWRITE_PATH));
 		let client_id = C::client_id();
 		let database_cache_size = self.database_cache_size()?.unwrap_or(128);
 		let database = self.database()?.unwrap_or(Database::RocksDb);
@@ -492,6 +515,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			pruning: self.pruning(unsafe_pruning, &role)?,
 			wasm_method: self.wasm_method()?,
+			wasm_overwrite: self.wasm_overwrite(),
+			wasm_overwrite_path: wasm_overwrite_dir,
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
 			rpc_http: self.rpc_http(DCV::rpc_http_listen_port())?,
 			rpc_ws: self.rpc_ws(DCV::rpc_ws_listen_port())?,

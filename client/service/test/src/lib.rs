@@ -248,6 +248,8 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		pruning: Default::default(),
 		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
+        wasm_overwrite: Default::default(),
+        wasm_overwrite_path: Default::default(),
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ipc: None,

@@ -7,7 +7,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -355,7 +355,7 @@ pub fn new_light() -> (
 		executor,
 		Box::new(sp_core::testing::TaskExecutor::new()),
 		Default::default(),
-	);
+	).unwrap();
 	let call_executor = LightExecutor::new(
 		backend.clone(),
 		local_call_executor,

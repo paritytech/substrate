@@ -99,6 +99,8 @@ where
 		tracing_targets: Default::default(),
 		transaction_pool: Default::default(),
 		wasm_method: Default::default(),
+        wasm_overwrite: Default::default(),
+        wasm_overwrite_path: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
 		base_path: None,

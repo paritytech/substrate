@@ -62,6 +62,10 @@ pub struct Configuration {
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.
 	pub wasm_method: WasmExecutionMethod,
+	/// True when overwriting WASM is enabled.
+	pub wasm_overwrite: bool,
+	/// The path where WASM that will overwrite on-chain WASM exists.
+	pub wasm_overwrite_path: PathBuf,
 	/// Execution strategies.
 	pub execution_strategies: ExecutionStrategies,
 	/// RPC over HTTP binding address. `None` if disabled.
@@ -283,7 +287,7 @@ pub(crate) type JoinFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 /// let runtime = Runtime::new().unwrap();
 /// let handle = runtime.handle().clone();
 /// let task_executor: TaskExecutor = (move |future, _task_type| {
-///     handle.spawn(future).map(|_| ())
+///		handle.spawn(future).map(|_| ())
 /// }).into();
 /// ```
 ///
@@ -292,8 +296,8 @@ pub(crate) type JoinFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 /// ```
 /// # use sc_service::TaskExecutor;
 /// let task_executor: TaskExecutor = (|future, _task_type| {
-///     // NOTE: async-std's JoinHandle is not a Result so we don't need to map the result
-///     async_std::task::spawn(future)
+///		// NOTE: async-std's JoinHandle is not a Result so we don't need to map the result
+///		async_std::task::spawn(future)
 /// }).into();
 /// ```
 #[derive(Clone)]

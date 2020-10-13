@@ -33,31 +33,41 @@ use sp_core::{
 };
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor};
-use super::client::ClientConfig;
+use super::{client::ClientConfig, wasm_overwrite::WasmOverwrite};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
 pub struct LocalCallExecutor<B, E> {
 	backend: Arc<B>,
 	executor: E,
+    wasm_overwrite: WasmOverwrite<E>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	client_config: ClientConfig,
 }
 
-impl<B, E> LocalCallExecutor<B, E> {
+impl<B, E> LocalCallExecutor<B, E> 
+where
+    E: RuntimeInfo + Clone + 'static 
+{
 	/// Creates new instance of local call executor.
 	pub fn new(
 		backend: Arc<B>,
 		executor: E,
 		spawn_handle: Box<dyn SpawnNamed>,
 		client_config: ClientConfig,
-	) -> Self {
-		LocalCallExecutor {
+	) -> sp_blockchain::Result<Self> {
+        let wasm_overwrite = WasmOverwrite::new(
+            client_config.wasm_overwrite_path.clone(), 
+            client_config.wasm_overwrite_enabled, 
+            executor.clone()
+        )?;
+		Ok(LocalCallExecutor {
 			backend,
 			executor,
+            wasm_overwrite,
 			spawn_handle,
 			client_config,
-		}
+		})
 	}
 }
 
@@ -66,6 +76,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
 			executor: self.executor.clone(),
+            wasm_overwrite: self.wasm_overwrite.clone(),
 			spawn_handle: self.spawn_handle.clone(),
 			client_config: self.client_config.clone(),
 		}
@@ -101,7 +112,9 @@ where
 		)?;
 		let state = self.backend.state_at(*id)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-		let return_data = StateMachine::new(
+        let runtime_code = state_runtime_code.runtime_code()?;
+        let runtime_code = self.wasm_overwrite.try_replace(runtime_code, &state)?;
+        let return_data = StateMachine::new(
 			&state,
 			changes_trie,
 			&mut changes,
@@ -110,7 +123,7 @@ where
 			method,
 			call_data,
 			extensions.unwrap_or_default(),
-			&state_runtime_code.runtime_code()?,
+			&runtime_code,
 			self.spawn_handle.clone(),
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
@@ -169,11 +182,12 @@ where
 					.ok_or_else(||
 						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>
 					)?;
-
+                
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_state);
 				// It is important to extract the runtime code here before we create the proof
 				// recorder.
 				let runtime_code = state_runtime_code.runtime_code()?;
+                let runtime_code = self.wasm_overwrite.try_replace(runtime_code, &trie_state)?;
 
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
@@ -199,6 +213,8 @@ where
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 				let runtime_code = state_runtime_code.runtime_code()?;
+                let runtime_code = self.wasm_overwrite.try_replace(runtime_code, &state)?;
+
 				let mut state_machine = StateMachine::new(
 					&state,
 					changes_trie_state,
