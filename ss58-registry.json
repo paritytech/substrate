@@ -221,7 +221,7 @@
 			"prefix": 25,
 			"network": "zero-alphaville",
 			"displayName": "ZERO Alphaville",
-			"symbols": ["ZERO"],
+			"symbols": ["PLAY"],
 			"decimals": 18,
 			"standardAccount": "*25519",
 			"website": "https://zero.io"
