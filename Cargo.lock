@@ -7201,7 +7201,6 @@ dependencies = [
  "sc-offchain",
  "sc-rpc",
  "sc-rpc-server",
- "sc-runtime-test",
  "sc-telemetry",
  "sc-tracing",
  "sc-transaction-pool",

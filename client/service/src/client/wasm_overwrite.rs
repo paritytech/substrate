@@ -117,7 +117,7 @@ where
 	}
 
 	/// Scrapes a folder for WASM runtimes.
-	/// Gets the version from the runtime
+    /// Returns a hashmap of the runtime version and wasm runtime code.
 	fn scrape_overwrites(dir: &Path, executor: &E) -> Result<HashMap<u32, WasmBlob>> {
 		let handle_err = |e: std::io::Error | -> sp_blockchain::Error {
 			sp_blockchain::Error::Msg(format!("{}", e.to_string()))
