@@ -26,7 +26,7 @@ use frame_support::traits::OnInitialize;
 
 use crate::Module as Elections;
 
-const BALANCE_FACTOR: u32 = 25_000;
+const BALANCE_FACTOR: u32 = 250;
 const MAX_VOTERS: u32 = 500;
 const MAX_CANDIDATES: u32 = 200;
 
