@@ -173,28 +173,79 @@ impl<H, T: codec::Decode> codec::Decode for Compact<H, T> {
 	}
 }
 
-impl<A, B, H> FullLeaf for Compact<H, (DataOrHash<H, A>, DataOrHash<H, B>)> where
-	A: FullLeaf,
-	B: FullLeaf,
-	H: traits::Hash,
-{
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, compact: bool) -> R {
-		if compact {
-			codec::Encode::using_encoded(&(
-				DataOrHash::<H, A>::Hash(self.tuple.0.hash()),
-				DataOrHash::<H, B>::Hash(self.tuple.1.hash()),
-			), f)
-		} else {
-			codec::Encode::using_encoded(&self.tuple, f)
+macro_rules! impl_leaf_data_for_tuple {
+	( $( $name:ident : $id:tt ),+ ) => {
+		/// [FullLeaf] implementation for `Compact<H, (DataOrHash<H, Tuple>, ...)>`
+		impl<H, $( $name ),+> FullLeaf for Compact<H, ( $( DataOrHash<H, $name>, )+ )> where
+			H: traits::Hash,
+			$( $name: FullLeaf ),+
+		{
+			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, compact: bool) -> R {
+				if compact {
+					codec::Encode::using_encoded(&(
+						$( DataOrHash::<H, $name>::Hash(self.tuple.$id.hash()), )+
+					), f)
+				} else {
+					codec::Encode::using_encoded(&self.tuple, f)
+				}
+			}
+		}
+
+		/// [LeafDataProvider] implementation for `Compact<H, (DataOrHash<H, Tuple>, ...)>`
+		///
+		/// This provides a compact-form encoding for tuples wrapped in [Compact].
+		impl<H, $( $name ),+> LeafDataProvider for Compact<H, ( $( $name, )+ )> where
+			H: traits::Hash,
+			$( $name: LeafDataProvider ),+
+		{
+			type LeafData = Compact<
+				H,
+				( $( DataOrHash<H, $name::LeafData>, )+ ),
+			>;
+
+			fn leaf_data() -> (Self::LeafData, Weight) {
+				let mut total_weight: Weight = 0;
+				let tuple = (
+					$( {
+						let (leaf, weight) = $name::leaf_data();
+						total_weight = total_weight.saturating_add(weight);
+						DataOrHash::Data(leaf)
+					}, )+
+				);
+				(Compact::new(tuple), total_weight)
+			}
+		}
+
+		/// [LeafDataProvider] implementation for `(Tuple, ...)`
+		///
+		/// This provides regular (non-compactable) composition of [LeafDataProvider]s.
+		impl<$( $name ),+> LeafDataProvider for ( $( $name, )+ ) where
+			( $( $name::LeafData, )+ ): FullLeaf,
+			$( $name: LeafDataProvider ),+
+		{
+			type LeafData = ( $( $name::LeafData, )+ );
+
+			fn leaf_data() -> (Self::LeafData, Weight) {
+				let mut total_weight: Weight = 0;
+				let tuple = (
+					$( {
+							let (leaf, weight) = $name::leaf_data();
+							total_weight = total_weight.saturating_add(weight);
+							leaf
+					},)+
+				);
+				(tuple, total_weight)
+			}
 		}
 	}
 }
 
+/// Test functions implementation for `Compact<H, (DataOrHash<H, Tuple>, ...)>`
 #[cfg(test)]
-impl<A, B, H> Compact<H, (DataOrHash<H, A>, DataOrHash<H, B>)> where
+impl<H, A, B> Compact<H, (DataOrHash<H, A>, DataOrHash<H, B>)> where
+	H: traits::Hash,
 	A: FullLeaf,
 	B: FullLeaf,
-	H: traits::Hash,
 {
 	/// Retrieve a hash of this item in it's compact form.
 	pub fn hash(&self) -> H::Output {
@@ -202,42 +253,11 @@ impl<A, B, H> Compact<H, (DataOrHash<H, A>, DataOrHash<H, B>)> where
 	}
 }
 
-// TODO [ToDr] Impl for all tuples
-impl<A, B, H> LeafDataProvider for Compact<H, (A, B)> where
-	A: LeafDataProvider,
-	B: LeafDataProvider,
-	H: traits::Hash,
-{
-	type LeafData = Compact<H, (DataOrHash<H, A::LeafData>, DataOrHash<H, B::LeafData>)>;
-
-	fn leaf_data() -> (Self::LeafData, Weight) {
-		let (a_leaf, a_weight) = A::leaf_data();
-		let (b_leaf, b_weight) = B::leaf_data();
-
-		(
-			Compact::new((a_leaf.into(), b_leaf.into())),
-			a_weight.saturating_add(b_weight)
-		)
-	}
-}
-
-impl<A, B> LeafDataProvider for (A, B) where
-	A: LeafDataProvider,
-	B: LeafDataProvider,
-	(A::LeafData, B::LeafData): FullLeaf,
-{
-	type LeafData = (A::LeafData, B::LeafData);
-
-	fn leaf_data() -> (Self::LeafData, Weight) {
-		let (a_leaf, a_weight) = A::leaf_data();
-		let (b_leaf, b_weight) = B::leaf_data();
-
-		(
-			(a_leaf, b_leaf),
-			a_weight.saturating_add(b_weight)
-		)
-	}
-}
+impl_leaf_data_for_tuple!(A:0);
+impl_leaf_data_for_tuple!(A:0, B:1);
+impl_leaf_data_for_tuple!(A:0, B:1, C:2);
+impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3);
+impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3, E:4);
 
 /// A MMR proof data for one of the leaves.
 #[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
