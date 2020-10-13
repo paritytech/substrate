@@ -484,6 +484,10 @@ ss58_address_format!(
 		(21, "dock-testnet", "Dock testnet, standard account (*25519).")
 	DockMainAccount =>
 		(22, "dock-mainnet", "Dock mainnet, standard account (*25519).")
+	ZeroAccount =>
+		(24, "zero", "ZERO mainnet, standard account (*25519).")
+	AlphavilleAccount =>
+		(25, "alphaville", "ZERO testnet, standard account (*25519).")
 	ShiftNrg =>
 		(23, "shift", "ShiftNrg mainnet, standard account (*25519).")
 	SubsocialAccount =>
