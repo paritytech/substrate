@@ -747,7 +747,7 @@ impl TransactionPoolExt {
 }
 
 /// Change to be applied to the offchain worker db in regards to a key.
-#[derive(Debug,Clone,Hash,Eq,PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum OffchainOverlayedChange {
 	/// Remove the data associated with the key
 	Remove,

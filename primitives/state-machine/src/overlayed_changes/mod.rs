@@ -474,7 +474,7 @@ impl OverlayedChanges {
 	///
 	/// Panics:
 	/// Panics if `transaction_depth() > 0`
-	fn offchain_drain_committed(&mut self) -> impl Iterator<Item=((StorageKey, StorageKey), OffchainOverlayedChange)> {
+	pub fn offchain_drain_committed(&mut self) -> impl Iterator<Item=((StorageKey, StorageKey), OffchainOverlayedChange)> {
 		OffchainOverlayedChangesIntoIter::drain(&mut self.offchain)
 	}
 
@@ -660,8 +660,8 @@ impl OverlayedChanges {
 	}
 
 	/// Activate offchain indexing.
-	/// Note that this function must only be call before any transactional
-	/// changes.
+	///
+	/// Note that this function must only be call before any transactional changes.
 	pub fn enable_offchain_indexing(&mut self) {
 		if let OffchainOverlayedChanges::Disabled = self.offchain {
 			self.offchain = OffchainOverlayedChanges::enabled();
@@ -680,11 +680,6 @@ impl OverlayedChanges {
 			Some(value) => self.offchain.set(STORAGE_PREFIX, key, value),
 			None => self.offchain.remove(STORAGE_PREFIX, key),
 		}
-	}
-
-	/// Drain all elements of offchain changeset.
-	pub fn drain_offchain(&mut self) -> OffchainOverlayedChangesIntoIter {
-		self.offchain.drain()
 	}
 }
 

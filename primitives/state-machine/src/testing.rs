@@ -121,7 +121,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 
 	/// Move offchain changes from overlay to the persistent store.
 	pub fn persist_offchain_overlay(&mut self) {
-		self.offchain_db.apply_offchain_changes(self.overlay.drain_offchain());
+		self.offchain_db.apply_offchain_changes(self.overlay.offchain_drain_committed());
 	}
 
 	/// A shared reference type around the offchain worker storage.
