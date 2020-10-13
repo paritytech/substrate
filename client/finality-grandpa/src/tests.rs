@@ -1547,6 +1547,7 @@ where
 {
 	let PersistentData {
 		ref authority_set,
+		ref authority_set_changes,
 		ref consensus_changes,
 		ref set_state,
 		..
@@ -1570,6 +1571,7 @@ where
 
 	Environment {
 		authority_set: authority_set.clone(),
+		authority_set_changes: authority_set_changes.clone(),
 		config: config.clone(),
 		consensus_changes: consensus_changes.clone(),
 		client: link.client.clone(),
