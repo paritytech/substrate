@@ -452,7 +452,7 @@ pub trait BlockNumberProvider {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::offchain::{testing, OffchainExt, OffchainStorage};
+	use sp_core::offchain::{testing, OffchainExt};
 	use sp_io::TestExternalities;
 
 	const VAL_1: u32 = 0u32;

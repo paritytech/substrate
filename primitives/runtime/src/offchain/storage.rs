@@ -105,7 +105,6 @@ mod tests {
 	use sp_io::TestExternalities;
 	use sp_core::offchain::{
 		OffchainExt,
-		OffchainStorage,
 		testing,
 	};
 
