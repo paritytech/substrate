@@ -66,9 +66,11 @@ mod tests;
 /// Notifications sender for a specific combination of network service, peer, and protocol.
 pub struct QueuedSender<M> {
 	/// Shared between the front and the back task.
-	shared: Arc<Shared<M>>,
+	shared_message_queue: SharedMessageQueue<M>,
 	/// Used to notify the background future to check for new messages in the message queue.
 	notify_background_future: Sender<()>,
+	/// Maximum number of elements in [`QueuedSender::shared_message_queue`].
+	queue_size_limit: usize,
 }
 
 impl<M> QueuedSender<M> {
@@ -92,21 +94,26 @@ impl<M> QueuedSender<M> {
 	{
 		let (notify_background_future, wait_for_sender) = channel(0);
 
-		let shared = Arc::new(Shared {
-			queue_size_limit,
-			messages_queue: Mutex::new(VecDeque::with_capacity(queue_size_limit)),
-		});
+		let shared_message_queue = Arc::new(Mutex::new(
+			VecDeque::with_capacity(queue_size_limit),
+		));
 
 		let task = spawn_task(
 			wait_for_sender,
 			service,
 			peer_id,
 			protocol,
-			shared.clone(),
+			shared_message_queue.clone(),
 			messages_encode
 		);
 
-		(QueuedSender { shared, notify_background_future }, task)
+		let sender = QueuedSender {
+			shared_message_queue,
+			notify_background_future,
+			queue_size_limit,
+		};
+
+		(sender, task)
 	}
 
 	/// Locks the queue of messages towards this peer.
@@ -114,8 +121,8 @@ impl<M> QueuedSender<M> {
 	/// The returned `Future` is expected to be ready quite quickly.
 	pub async fn lock_queue<'a>(&'a mut self) -> QueueGuard<'a, M> {
 		QueueGuard {
-			messages_queue: self.shared.messages_queue.lock().await,
-			queue_size_limit: self.shared.queue_size_limit,
+			message_queue: self.shared_message_queue.lock().await,
+			queue_size_limit: self.queue_size_limit,
 			notify_background_future: &mut self.notify_background_future,
 		}
 	}
@@ -144,8 +151,8 @@ impl<M> fmt::Debug for QueuedSender<M> {
 /// is dropped.
 #[must_use]
 pub struct QueueGuard<'a, M> {
-	messages_queue: MutexGuard<'a, VecDeque<M>>,
-	/// Same as [`Shared::queue_size_limit`].
+	message_queue: MutexGuard<'a, MessageQueue<M>>,
+	/// Same as [`QueuedSender::queue_size_limit`].
 	queue_size_limit: usize,
 	notify_background_future: &'a mut Sender<()>,
 }
@@ -155,8 +162,8 @@ impl<'a, M: Send + 'static> QueueGuard<'a, M> {
 	///
 	/// The message will only start being sent out after the [`QueueGuard`] is dropped.
 	pub fn push_or_discard(&mut self, message: M) {
-		if self.messages_queue.len() < self.queue_size_limit {
-			self.messages_queue.push_back(message);
+		if self.message_queue.len() < self.queue_size_limit {
+			self.message_queue.push_back(message);
 		}
 	}
 
@@ -166,7 +173,7 @@ impl<'a, M: Send + 'static> QueueGuard<'a, M> {
 	/// > **Note**: The parameter of `filter` is a `&M` and not a `&mut M` (which would be
 	/// >           better) because the underlying implementation relies on `VecDeque::retain`.
 	pub fn retain(&mut self, filter: impl FnMut(&M) -> bool) {
-		self.messages_queue.retain(filter);
+		self.message_queue.retain(filter);
 	}
 }
 
@@ -177,20 +184,17 @@ impl<'a, M> Drop for QueueGuard<'a, M> {
 	}
 }
 
-#[derive(Debug)]
-struct Shared<M> {
-	/// Queue of messages waiting to be sent out.
-	messages_queue: Mutex<VecDeque<M>>,
-	/// Maximum number of elements in `messages_queue`.
-	queue_size_limit: usize,
-}
+type MessageQueue<M> = VecDeque<M>;
+
+/// [`MessageQueue`] shared between [`QueuedSender`] and background future.
+type SharedMessageQueue<M> = Arc<Mutex<MessageQueue<M>>>;
 
 async fn spawn_task<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>(
 	mut wait_for_sender: Receiver<()>,
 	service: Arc<NetworkService<B, H>>,
 	peer_id: PeerId,
 	protocol: ConsensusEngineId,
-	shared: Arc<Shared<M>>,
+	shared_message_queue: SharedMessageQueue<M>,
 	messages_encode: F,
 ) {
 	loop {
@@ -199,7 +203,7 @@ async fn spawn_task<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>(
 		}
 
 		loop {
-			let mut queue_guard = shared.messages_queue.lock().await;
+			let mut queue_guard = shared_message_queue.lock().await;
 			let next_message = match queue_guard.pop_front() {
 				Some(msg) => msg,
 				None => break,
