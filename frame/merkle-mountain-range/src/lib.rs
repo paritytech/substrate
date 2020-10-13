@@ -19,6 +19,25 @@
 //!
 //! ## Overview
 //!
+//! Details on Merkle Mountain Ranges (MMRs) can be found here:
+//! https://github.com/mimblewimble/grin/blob/master/doc/mmr.md
+//!
+//! The MMR pallet constructs a MMR from leaf data obtained on every block from
+//! `LeafDataProvider`. MMR nodes are stored both in:
+//! - on-chain storage - hashes only; not full leaf content)
+//! - off-chain storage - via Indexing API we push full leaf content (and all internal nodes as
+//! well) to the Off-chain DB, so that the data is available for Off-chain workers.
+//! Hashing used for MMR is configurable independently from the rest of the runtime (i.e. not using
+//! `frame_system::Hashing`) so something compatible with external chains can be used (like
+//! Keccak256 for Ethereum compatibility).
+//!
+//! Depending on the usage context (off-chain vs on-chain) the pallet is able to:
+//! - verify MMR leafs proofs (on-chain)
+//! - generate leaf proofs (off-chain)
+//!
+//! See [primitives::Compact] documentation for how you can optimize proof size for leafs that are
+//! composed from multiple elements.
+//!
 //! NOTE This pallet is experimental and not proven to work in production.
 //!
 #![cfg_attr(not(feature = "std"), no_std)]
