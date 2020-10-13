@@ -67,9 +67,8 @@ mod tests;
 pub struct QueuedSender<M> {
 	/// Shared between the front and the back task.
 	shared: Arc<Shared<M>>,
-	// TODO: Can we get around this Mutex? E.g. by taking `&mut` for `lock_queue` and
-	// `queue_or_discard`.
-	notify_background_future: Mutex<Sender<()>>,
+	/// Used to notify the background future to check for new messages in the message queue.
+	notify_background_future: Sender<()>,
 }
 
 impl<M> QueuedSender<M> {
@@ -107,24 +106,24 @@ impl<M> QueuedSender<M> {
 			messages_encode
 		);
 
-		(QueuedSender { shared, notify_background_future: Mutex::new(notify_background_future) }, task)
+		(QueuedSender { shared, notify_background_future }, task)
 	}
 
 	/// Locks the queue of messages towards this peer.
 	///
 	/// The returned `Future` is expected to be ready quite quickly.
-	pub async fn lock_queue<'a>(&'a self) -> QueueGuard<'a, M> {
+	pub async fn lock_queue<'a>(&'a mut self) -> QueueGuard<'a, M> {
 		QueueGuard {
 			messages_queue: self.shared.messages_queue.lock().await,
 			queue_size_limit: self.shared.queue_size_limit,
-			notify_background_future: self.notify_background_future.lock().await,
+			notify_background_future: &mut self.notify_background_future,
 		}
 	}
 
 	/// Pushes a message to the queue, or discards it if the queue is full.
 	///
 	/// The returned `Future` is expected to be ready quite quickly.
-	pub async fn queue_or_discard(&self, message: M)
+	pub async fn queue_or_discard(&mut self, message: M)
 	where
 		M: Send + 'static
 	{
@@ -148,7 +147,7 @@ pub struct QueueGuard<'a, M> {
 	messages_queue: MutexGuard<'a, VecDeque<M>>,
 	/// Same as [`Shared::queue_size_limit`].
 	queue_size_limit: usize,
-	notify_background_future: MutexGuard<'a, Sender<()>>,
+	notify_background_future: &'a mut Sender<()>,
 }
 
 impl<'a, M: Send + 'static> QueueGuard<'a, M> {
@@ -173,6 +172,7 @@ impl<'a, M: Send + 'static> QueueGuard<'a, M> {
 
 impl<'a, M> Drop for QueueGuard<'a, M> {
 	fn drop(&mut self) {
+		// Notify background future to check for new messages in the message queue.
 		let _ = self.notify_background_future.try_send(());
 	}
 }
