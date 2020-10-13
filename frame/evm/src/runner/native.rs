@@ -19,7 +19,7 @@
 
 use sp_std::{
 	convert::Infallible, marker::PhantomData, rc::Rc,
-	collections::btree_set::BTreeSet, vec::Vec, mem,
+	collections::btree_set::BTreeSet, vec::Vec, mem, cmp::min,
 };
 use sp_core::{H160, U256, H256};
 use sp_runtime::{TransactionOutcome, traits::UniqueSaturatedInto};
@@ -88,9 +88,14 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 				input,
 			);
 
+			let used_gas = U256::from(substate.used_gas());
+			let logs = substate.logs.clone();
+
 			let call_info = CallInfo {
 				exit_reason: reason.into(),
 				value: out,
+				used_gas,
+				logs,
 			};
 
 			match reason {
@@ -142,9 +147,14 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 				Vec::new()
 			);
 
+			let used_gas = U256::from(substate.used_gas());
+			let logs = substate.logs.clone();
+
 			let mut create_info = CreateInfo {
 				exit_reason: reason.into(),
 				value: address,
+				used_gas,
+				logs,
 			};
 
 			match reason {
@@ -211,9 +221,14 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 				Vec::new()
 			);
 
+			let used_gas = U256::from(substate.used_gas());
+			let logs = substate.logs.clone();
+
 			let mut create_info = CreateInfo {
 				exit_reason: reason.into(),
 				value: address,
+				used_gas,
+				logs,
 			};
 
 			match reason {
@@ -246,6 +261,7 @@ pub struct Handler<'vicinity, 'config, T: Trait> {
 	config: &'config Config,
 	gasometer: Gasometer<'config>,
 	deleted: BTreeSet<H160>,
+	logs: Vec<Log>,
 	precompile: fn(H160, &[u8], Option<usize>) ->
 		Option<Result<(ExitSucceed, Vec<u8>, usize), ExitError>>,
 	is_static: bool,
@@ -268,9 +284,18 @@ impl<'vicinity, 'config, T: Trait> Handler<'vicinity, 'config, T> {
 			is_static,
 			gasometer: Gasometer::new(gas_limit, config),
 			precompile,
+			logs: Vec::new(),
 			deleted: BTreeSet::default(),
 			_marker: PhantomData,
 		}
+	}
+
+	/// Get used gas for the current executor, given the price.
+	pub fn used_gas(
+		&self,
+	) -> usize {
+		self.gasometer.total_used_gas() -
+			min(self.gasometer.total_used_gas() / 2, self.gasometer.refunded_gas() as usize)
 	}
 
 	pub fn execute(
@@ -467,9 +492,13 @@ impl<'vicinity, 'config, T: Trait> HandlerT for Handler<'vicinity, 'config, T> {
 	fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) -> Result<(), ExitError> {
 		Module::<T>::deposit_event(Event::<T>::Log(Log {
 			address,
-			topics,
-			data,
+			topics: topics.clone(),
+			data: data.clone(),
 		}));
+
+		self.logs.push(Log {
+			address, topics, data
+		});
 
 		Ok(())
 	}
@@ -574,6 +603,9 @@ impl<'vicinity, 'config, T: Trait> HandlerT for Handler<'vicinity, 'config, T> {
 								self.gasometer.record_refund(substate.gasometer.refunded_gas())
 							);
 							AccountCodes::insert(address, out);
+
+							self.deleted.append(&mut substate.deleted);
+							self.logs.append(&mut substate.logs);
 
 							TransactionOutcome::Commit(
 								Capture::Exit((s.into(), Some(address), Vec::new()))
@@ -682,6 +714,9 @@ impl<'vicinity, 'config, T: Trait> HandlerT for Handler<'vicinity, 'config, T> {
 					try_or_fail!(
 						self.gasometer.record_refund(substate.gasometer.refunded_gas())
 					);
+
+					self.deleted.append(&mut substate.deleted);
+					self.logs.append(&mut substate.logs);
 
 					TransactionOutcome::Commit(
 						Capture::Exit((s.into(), out))

@@ -26,27 +26,7 @@ use sp_core::{H160, U256, H256};
 use evm::ExitReason;
 use crate::Trait;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-/// Ethereum account nonce, balance and code. Used by storage.
-pub struct Account {
-	/// Account nonce.
-	pub nonce: U256,
-	/// Account balance.
-	pub balance: U256,
-}
-
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-/// Ethereum log. Used for `deposit_event`.
-pub struct Log {
-	/// Source address of the log.
-	pub address: H160,
-	/// Topics of the log.
-	pub topics: Vec<H256>,
-	/// Byte array data of the log.
-	pub data: Vec<u8>,
-}
+pub use evm::backend::{Basic as Account, Log};
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -61,6 +41,8 @@ pub struct Vicinity {
 pub struct ExecutionInfo<T> {
 	pub exit_reason: ExitReason,
 	pub value: T,
+	pub used_gas: U256,
+	pub logs: Vec<Log>,
 }
 
 pub type CallInfo = ExecutionInfo<Vec<u8>>;
