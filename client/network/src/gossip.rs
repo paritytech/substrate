@@ -65,7 +65,7 @@ mod tests;
 
 /// Notifications sender for a specific combination of network service, peer, and protocol.
 pub struct QueuedSender<M> {
-	/// Shared between the front and the back task.
+	/// Shared between the user-facing [`QueuedSender`] and the background future.
 	shared_message_queue: SharedMessageQueue<M>,
 	/// Used to notify the background future to check for new messages in the message queue.
 	notify_background_future: Sender<()>,
@@ -98,7 +98,7 @@ impl<M> QueuedSender<M> {
 			VecDeque::with_capacity(queue_size_limit),
 		));
 
-		let task = spawn_task(
+		let background_future = create_background_future(
 			wait_for_sender,
 			service,
 			peer_id,
@@ -113,7 +113,7 @@ impl<M> QueuedSender<M> {
 			queue_size_limit,
 		};
 
-		(sender, task)
+		(sender, background_future)
 	}
 
 	/// Locks the queue of messages towards this peer.
@@ -146,9 +146,9 @@ impl<M> fmt::Debug for QueuedSender<M> {
 
 /// Locked queue of messages to the given peer.
 ///
-/// As long as this struct exists, the background task is asleep and the owner of the [`QueueGuard`]
-/// is in total control of the buffer. Messages can only ever be sent out after the [`QueueGuard`]
-/// is dropped.
+/// As long as this struct exists, the background future is asleep and the owner of the
+/// [`QueueGuard`] is in total control of the message queue. Messages can only ever be sent out on
+/// the network after the [`QueueGuard`] is dropped.
 #[must_use]
 pub struct QueueGuard<'a, M> {
 	message_queue: MutexGuard<'a, MessageQueue<M>>,
@@ -189,7 +189,7 @@ type MessageQueue<M> = VecDeque<M>;
 /// [`MessageQueue`] shared between [`QueuedSender`] and background future.
 type SharedMessageQueue<M> = Arc<Mutex<MessageQueue<M>>>;
 
-async fn spawn_task<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>(
+async fn create_background_future<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>(
 	mut wait_for_sender: Receiver<()>,
 	service: Arc<NetworkService<B, H>>,
 	peer_id: PeerId,
