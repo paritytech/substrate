@@ -23,19 +23,19 @@ use schnorrkel::vrf::{VRFOutput, VRFProof};
 /// An enum whose variants represent possible
 /// accepted values to construct the VRF transcript
 #[derive(Clone, Encode)]
-pub enum VRFTranscriptValue<'a> {
+pub enum VRFTranscriptValue {
 	/// Value is an array of bytes
-	Bytes(&'a [u8]),
+	Bytes(Vec<u8>),
 	/// Value is a u64 integer
 	U64(u64),
 }
 /// VRF Transcript data
 #[derive(Clone, Encode)]
-pub struct VRFTranscriptData<'a> {
+pub struct VRFTranscriptData {
 	/// The transcript's label
 	pub label: &'static [u8],
 	/// Additional data to be registered into the transcript
-	pub items: Vec<(&'static str, VRFTranscriptValue<'a>)>,
+	pub items: Vec<(&'static str, VRFTranscriptValue)>,
 }
 /// VRF signature data
 pub struct VRFSignature {
@@ -84,7 +84,7 @@ mod tests {
 			label: b"My label",
 			items: vec![
 				("one", VRFTranscriptValue::U64(1)),
-				("two", VRFTranscriptValue::Bytes("test".as_bytes())),
+				("two", VRFTranscriptValue::Bytes("test".as_bytes().to_vec())),
 			],
 		});
 		let test = |t: Transcript| -> [u8; 16] {

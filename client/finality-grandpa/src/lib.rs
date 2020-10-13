@@ -75,8 +75,8 @@ use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
 use sp_consensus::{SelectChain, BlockImport};
 use sp_core::{
 	crypto::Public,
-	traits::BareCryptoStorePtr,
 };
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_application_crypto::AppKey;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
@@ -271,7 +271,7 @@ pub struct Config {
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
-	pub keystore: Option<BareCryptoStorePtr>,
+	pub keystore: Option<SyncCryptoStorePtr>,
 }
 
 impl Config {
@@ -608,7 +608,7 @@ fn global_communication<BE, Block: BlockT, C, N>(
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: Arc<C>,
 	network: &NetworkBridge<Block, N>,
-	keystore: Option<&BareCryptoStorePtr>,
+	keystore: Option<&SyncCryptoStorePtr>,
 	metrics: Option<until_imported::Metrics>,
 ) -> (
 	impl Stream<
@@ -1083,14 +1083,13 @@ where
 /// Returns the key pair of the node that is being used in the current voter set or `None`.
 fn is_voter(
 	voters: &Arc<VoterSet<AuthorityId>>,
-	keystore: Option<&BareCryptoStorePtr>,
+	keystore: Option<& SyncCryptoStorePtr>,
 ) -> Option<AuthorityId> {
 	match keystore {
 		Some(keystore) => voters
 			.iter()
 			.find(|(p, _)| {
-				keystore.read()
-					.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)])
+				SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
 			})
 			.map(|(p, _)| p.clone()),
 		None => None,
@@ -1100,14 +1099,14 @@ fn is_voter(
 /// Returns the authority id of this node, if available.
 fn authority_id<'a, I>(
 	authorities: &mut I,
-	keystore: Option<&BareCryptoStorePtr>,
+	keystore: Option<&SyncCryptoStorePtr>,
 ) -> Option<AuthorityId> where
 	I: Iterator<Item = &'a AuthorityId>,
 {
 	match keystore {
 		Some(keystore) => {
 			authorities
-				.find(|p| keystore.read().has_keys(&[(p.to_raw_vec(), AuthorityId::ID)]))
+				.find(|p| SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)]))
 				.cloned()
 		},
 		None => None,
