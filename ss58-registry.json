@@ -98,7 +98,7 @@
 			"symbols": ["REY"],
 			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": ["http://laminar.network/"]
+			"website": "http://laminar.network/"
 		},
 		{
 			"prefix": 10,
@@ -116,7 +116,7 @@
 			"symbols": ["LAMI"],
 			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": ["http://laminar.network/"]
+			"website": "http://laminar.network/"
 		},
 		{
 			"prefix": 12,
@@ -213,7 +213,7 @@
 			"network": "zero",
 			"displayName": "ZERO",
 			"symbols": ["PLAY"],
-			"decimals": 18,
+			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://zero.io"
 		},
@@ -222,10 +222,10 @@
 			"network": "zero-alphaville",
 			"displayName": "ZERO Alphaville",
 			"symbols": ["PLAY"],
-			"decimals": 18,
+			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://zero.io"
-		},		
+		},
 		{
 			"prefix": 28,
 			"network": "subsocial",
