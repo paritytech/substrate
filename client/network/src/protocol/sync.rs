@@ -1510,8 +1510,13 @@ impl<B: BlockT> ChainSync<B> {
 		self.pending_requests.set_all();
 	}
 
-	/// Restart the sync process.
-	fn restart<'a>(&'a mut self) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a {
+	/// Restart the sync process. This will reset all pending block requests and return an iterator
+	/// of new block requests to make to peers. Peers that were downloading finality data (i.e.
+	/// their state was `DownloadingJustification` or `DownloadingFinalityProof`) are unaffected and
+	/// will stay in the same state.
+	fn restart<'a>(
+		&'a mut self,
+	) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a {
 		self.blocks.clear();
 		let info = self.client.info();
 		self.best_queued_hash = info.best_hash;
