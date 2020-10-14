@@ -101,6 +101,24 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 		Ok(())
 	}
 
+	/// Ensure that any `br_table` instruction adheres to its immediate value limit.
+	fn ensure_br_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
+		let code_section = if let Some(type_section) = self.module.code_section() {
+			type_section
+		} else {
+			return Ok(());
+		};
+		for instr in code_section.bodies().iter().flat_map(|body| body.code().elements()) {
+			use parity_wasm::elements::Instruction::BrTable;
+			if let BrTable(table) = instr {
+				if table.table.len() > limit as usize {
+					return Err("BrTable's immediate value is too big.")
+				}
+			}
+		}
+		Ok(())
+	}
+
 	fn ensure_global_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
 		if let Some(global_section) = self.module.global_section() {
 			if global_section.entries().len() > limit as usize {
@@ -412,6 +430,7 @@ pub fn prepare_contract<C: ImportSatisfyCheck, T: Trait>(
 	contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
 	contract_module.ensure_no_floating_types()?;
 	contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
+	contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
 
 	// We disallow importing `gas` function here since it is treated as implementation detail.
 	let disallowed_imports = [b"gas".as_ref()];
@@ -505,6 +524,7 @@ mod tests {
 						parameters: 3,
 						memory_pages: 16,
 						table_size: 3,
+						br_table_size: 3,
 						.. Default::default()
 					},
 					.. Default::default()
@@ -758,6 +778,33 @@ mod tests {
 				(func (export "deploy"))
 			)"#,
 			Err("table exceeds maximum size allowed")
+		);
+
+		prepare_test!(br_table_valid_size,
+			r#"
+			(module
+				(func (export "call"))
+				(func (export "deploy"))
+				(func
+					i32.const 0
+					br_table 0 0 0 0
+				)
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(br_table_too_big,
+			r#"
+			(module
+				(func (export "call"))
+				(func (export "deploy"))
+				(func
+					i32.const 0
+					br_table 0 0 0 0 0
+				)
+			)"#,
+			Err("BrTable's immediate value is too big.")
 		);
 	}
 

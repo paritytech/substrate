@@ -90,6 +90,9 @@ pub struct Limits {
 	/// Currently, the only type of element that is allowed in a table is funcref.
 	pub table_size: u32,
 
+	/// Maximum number of elements that can appear as immediate value to the br_table instruction.
+	pub br_table_size: u32,
+
 	/// The maximum length of a subject in bytes used for PRNG generation.
 	pub subject_len: u32,
 
@@ -349,6 +352,7 @@ impl Default for Limits {
 			memory_pages: 16,
 			// 4k function pointers (This is in count not bytes).
 			table_size: 4096,
+			br_table_size: 256,
 			subject_len: 32,
 			code_size: 512 * 1024,
 		}
