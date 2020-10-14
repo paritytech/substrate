@@ -193,9 +193,10 @@ pub fn get_weak_solution<T: Trait>(
 			who: w.clone(),
 			distribution: vec![(
 				w.clone(),
-				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
-					<Module<T>>::slashable_balance_of(&w),
-				) as ExtendedBalance,
+				<Module<T>>::slashable_balance_of_vote_weight(
+					&w,
+					T::Currency::total_issuance(),
+				).into(),
 			)],
 		})
 	});
@@ -220,11 +221,6 @@ pub fn get_weak_solution<T: Trait>(
 			.position(|x| x == a)
 			.and_then(|i| <usize as TryInto<ValidatorIndex>>::try_into(i).ok())
 	};
-	let stake_of = |who: &T::AccountId| -> VoteWeight {
-		<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
-			<Module<T>>::slashable_balance_of(who),
-		)
-	};
 
 	// convert back to ratio assignment. This takes less space.
 	let low_accuracy_assignment = assignment_staked_to_ratio_normalized(staked_assignments)
@@ -234,11 +230,13 @@ pub fn get_weak_solution<T: Trait>(
 	let score = {
 		let staked = assignment_ratio_to_staked::<_, OffchainAccuracy, _>(
 			low_accuracy_assignment.clone(),
-			stake_of
+			<Module<T>>::slashable_balance_of_fn(),
 		);
 
-		let (support_map, _) =
-			build_support_map::<T::AccountId>(winners.as_slice(), staked.as_slice());
+		let support_map = build_support_map::<T::AccountId>(
+			winners.as_slice(),
+			staked.as_slice(),
+		).unwrap();
 		evaluate_support::<T::AccountId>(&support_map)
 	};
 
@@ -275,28 +273,55 @@ pub fn get_weak_solution<T: Trait>(
 /// worker code.
 pub fn get_seq_phragmen_solution<T: Trait>(
 	do_reduce: bool,
-) -> (Vec<ValidatorIndex>, CompactAssignments, ElectionScore, ElectionSize) {
+) -> (
+	Vec<ValidatorIndex>,
+	CompactAssignments,
+	ElectionScore,
+	ElectionSize,
+) {
+	let iters = offchain_election::get_balancing_iters::<T>();
+
 	let sp_npos_elections::ElectionResult {
 		winners,
 		assignments,
-	} = <Module<T>>::do_phragmen::<OffchainAccuracy>().unwrap();
+	} = <Module<T>>::do_phragmen::<OffchainAccuracy>(iters).unwrap();
 
-	offchain_election::prepare_submission::<T>(assignments, winners, do_reduce).unwrap()
+	offchain_election::prepare_submission::<T>(
+		assignments,
+		winners,
+		do_reduce,
+		T::MaximumBlockWeight::get(),
+	)
+	.unwrap()
 }
 
 /// Returns a solution in which only one winner is elected with just a self vote.
 pub fn get_single_winner_solution<T: Trait>(
-	winner: T::AccountId
-) -> Result<(Vec<ValidatorIndex>, CompactAssignments, ElectionScore, ElectionSize), &'static str> {
+	winner: T::AccountId,
+) -> Result<
+	(
+		Vec<ValidatorIndex>,
+		CompactAssignments,
+		ElectionScore,
+		ElectionSize,
+	),
+	&'static str,
+> {
 	let snapshot_validators = <Module<T>>::snapshot_validators().unwrap();
 	let snapshot_nominators = <Module<T>>::snapshot_nominators().unwrap();
 
-	let val_index = snapshot_validators.iter().position(|x| *x == winner).ok_or("not a validator")?;
-	let nom_index = snapshot_nominators.iter().position(|x| *x == winner).ok_or("not a nominator")?;
+	let val_index = snapshot_validators
+		.iter()
+		.position(|x| *x == winner)
+		.ok_or("not a validator")?;
+	let nom_index = snapshot_nominators
+		.iter()
+		.position(|x| *x == winner)
+		.ok_or("not a nominator")?;
 
 	let stake = <Staking<T>>::slashable_balance_of(&winner);
-	let stake = <T::CurrencyToVote as Convert<BalanceOf<T>, VoteWeight>>::convert(stake)
-		as ExtendedBalance;
+	let stake =
+		<T::CurrencyToVote>::to_vote(stake, T::Currency::total_issuance()) as ExtendedBalance;
 
 	let val_index = val_index as ValidatorIndex;
 	let nom_index = nom_index as NominatorIndex;

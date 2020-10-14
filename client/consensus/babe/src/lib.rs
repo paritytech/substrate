@@ -82,14 +82,14 @@ use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
-use sp_core::{crypto::Public, traits::BareCryptoStore};
+use sp_core::crypto::Public;
 use sp_application_crypto::AppKey;
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
-use sc_keystore::KeyStorePtr;
 use parking_lot::Mutex;
 use sp_inherents::{InherentDataProviders, InherentData};
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
@@ -329,7 +329,7 @@ impl std::ops::Deref for Config {
 /// Parameters for BABE.
 pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	/// The keystore that manages the keys of the node.
-	pub keystore: KeyStorePtr,
+	pub keystore: SyncCryptoStorePtr,
 
 	/// The client to use
 	pub client: Arc<C>,
@@ -475,7 +475,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	sync_oracle: SO,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<SimpleBackoffAuthoringBlocksStrategy<B>>,
-	keystore: KeyStorePtr,
+	keystore: SyncCryptoStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
@@ -605,15 +605,15 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 			// add it to a digest item.
 			let public_type_pair = public.clone().into();
 			let public = public.to_raw_vec();
-			let signature = keystore.read()
-				.sign_with(
-					<AuthorityId as AppKey>::ID,
-					&public_type_pair,
-					header_hash.as_ref()
-				)
-				.map_err(|e| sp_consensus::Error::CannotSign(
-					public.clone(), e.to_string(),
-				))?;
+			let signature = SyncCryptoStore::sign_with(
+				&*keystore,
+				<AuthorityId as AppKey>::ID,
+				&public_type_pair,
+				header_hash.as_ref()
+			)
+			.map_err(|e| sp_consensus::Error::CannotSign(
+				public.clone(), e.to_string(),
+			))?;
 			let signature: AuthoritySignature = signature.clone().try_into()
 				.map_err(|_| sp_consensus::Error::InvalidSignature(
 					signature, public
@@ -1517,7 +1517,7 @@ pub mod test_helpers {
 		slot_number: u64,
 		parent: &B::Header,
 		client: &C,
-		keystore: &KeyStorePtr,
+		keystore: SyncCryptoStorePtr,
 		link: &BabeLink<B>,
 	) -> Option<PreDigest> where
 		B: BlockT,
@@ -1539,7 +1539,7 @@ pub mod test_helpers {
 		authorship::claim_slot(
 			slot_number,
 			&epoch,
-			keystore,
+			&keystore,
 		).map(|(digest, _)| digest)
 	}
 }
