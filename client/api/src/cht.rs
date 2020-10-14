@@ -267,9 +267,7 @@ fn build_pairs<Header, I>(
 	let mut pairs = Vec::new();
 	let mut hash_index = Header::Number::zero();
 	for hash in hashes.into_iter() {
-		let hash = hash?.ok_or_else(|| ClientError::from(
-			ClientError::MissingHashRequiredForCHT
-		))?;
+		let hash = hash?.unwrap_or_else(|| panic!("MissingHashRequiredForCHT"));
 		pairs.push((
 			encode_cht_key(start_num + hash_index).to_vec(),
 			encode_cht_value(hash)
@@ -283,7 +281,7 @@ fn build_pairs<Header, I>(
 	if hash_index == cht_size {
 		Ok(pairs)
 	} else {
-		Err(ClientError::MissingHashRequiredForCHT)
+		panic!("MissingHashRequiredForCHT")
 	}
 }
 

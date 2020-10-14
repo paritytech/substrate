@@ -298,6 +298,7 @@ impl<Block: BlockT> LightStorage<Block> {
 		let lookup_key = utils::number_and_hash_to_lookup_key(header.number().clone(), hash)?;
 		transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
 
+		/*
 		// build new CHT(s) if required
 		if let Some(new_cht_number) = cht::is_build_required(cht::size(), *header.number()) {
 			let new_cht_start: NumberFor<Block> = cht::start_number(cht::size(), new_cht_number);
@@ -358,6 +359,7 @@ impl<Block: BlockT> LightStorage<Block> {
 				prune_block += One::one();
 			}
 		}
+		*/
 
 		Ok(())
 	}
