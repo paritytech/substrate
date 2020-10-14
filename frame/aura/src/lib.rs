@@ -67,7 +67,7 @@ use pallet_staking::EraIndex;
 mod mock;
 mod tests;
 
-pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
+pub trait Trait: pallet_timestamp::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default;
 	/// The period for the AURA sessions
