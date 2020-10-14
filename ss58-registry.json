@@ -66,8 +66,8 @@
 		},
 		{
 			"prefix": 6,
-			"network": "bitfrost",
-			"displayName": "Bitfrost",
+			"network": "bifrost",
+			"displayName": "Bifrost",
 			"symbols": ["BNC"],
 			"decimals": [12],
 			"standardAccount": "*25519",
@@ -98,7 +98,7 @@
 			"symbols": ["REY"],
 			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": ["http://laminar.network/"]
+			"website": "http://laminar.network/"
 		},
 		{
 			"prefix": 10,
@@ -116,7 +116,7 @@
 			"symbols": ["LAMI"],
 			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": ["http://laminar.network/"]
+			"website": "http://laminar.network/"
 		},
 		{
 			"prefix": 12,
@@ -157,11 +157,20 @@
 		{
 			"prefix": 18,
 			"network": "darwinia",
-			"displayName": "Darwinia Chain",
-			"symbols": null,
-			"decimals": null,
+			"displayName": "Darwinia Network",
+			"symbols": ["RING", "KTON"],
+			"decimals": [9, 9],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://darwinia.network/"
+		},
+		{
+			"prefix": 19,
+			"network": "geek",
+			"displayName": "GeekCash",
+			"symbols": ["GEEK"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://geekcash.org"
 		},
 		{
 			"prefix": 20,
@@ -176,19 +185,19 @@
 			"prefix": 21,
 			"network": "dock-testnet",
 			"displayName": "Dock Testnet",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["DCK"],
+			"decimals": [6],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://dock.io"
 		},
 		{
 			"prefix": 22,
 			"network": "dock-mainnet",
 			"displayName": "Dock Mainnet",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["DCK"],
+			"decimals": [6],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://dock.io"
 		},
 		{
 			"prefix": 23,
@@ -198,6 +207,24 @@
 			"decimals": null,
 			"standardAccount": "*25519",
 			"website": null
+		},
+		{
+			"prefix": 24,
+			"network": "zero",
+			"displayName": "ZERO",
+			"symbols": ["PLAY"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://zero.io"
+		},
+		{
+			"prefix": 25,
+			"network": "zero-alphaville",
+			"displayName": "ZERO Alphaville",
+			"symbols": ["PLAY"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://zero.io"
 		},
 		{
 			"prefix": 28,
@@ -243,6 +270,33 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://centrifuge.io/"
+		},
+		{
+			"prefix": 37,
+			"network": "nodle",
+			"displayName": "Nodle Chain",
+			"symbols": ["NODL"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://nodle.io/"
+		},
+		{
+			"prefix": 39,
+			"network": "mathchain",
+			"displayName": "MathChain mainnet",
+			"symbols": ["MATH"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://mathwallet.org"
+		},
+		{
+			"prefix": 40,
+			"network": "mathchain-testnet",
+			"displayName": "MathChain testnet",
+			"symbols": ["MATH"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://mathwallet.org"
 		},
 		{
 			"prefix": 42,

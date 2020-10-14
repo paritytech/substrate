@@ -80,7 +80,7 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
-	type ModuleToIndex = ();
+	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -1146,5 +1146,22 @@ fn test_last_reward_migration() {
 				finders_fee: false,
 			})
 		);
+	});
+}
+
+#[test]
+fn genesis_funding_works() {
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let initial_funding = 100;
+	pallet_balances::GenesisConfig::<Test>{
+		// Total issuance will be 200 with treasury account initialized with 100.
+		balances: vec![(0, 100), (Treasury::account_id(), initial_funding)],
+	}.assimilate_storage(&mut t).unwrap();
+	GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+	let mut t: sp_io::TestExternalities = t.into();
+
+	t.execute_with(|| {
+		assert_eq!(Balances::free_balance(Treasury::account_id()), initial_funding);
+		assert_eq!(Treasury::pot(), initial_funding - Balances::minimum_balance());
 	});
 }

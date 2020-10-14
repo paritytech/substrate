@@ -30,7 +30,7 @@ use sp_runtime::traits::{self, Header as HeaderT};
 use self::error::Result;
 
 pub use sc_rpc_api::system::*;
-pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole};
+pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole, SyncState};
 pub use self::gen_client::Client as SystemClient;
 
 macro_rules! bail_if_unsafe {
@@ -66,7 +66,9 @@ pub enum Request<B: traits::Block> {
 	/// Must return any potential parse error.
 	NetworkRemoveReservedPeer(String, oneshot::Sender<Result<()>>),
 	/// Must return the node role.
-	NodeRoles(oneshot::Sender<Vec<NodeRole>>)
+	NodeRoles(oneshot::Sender<Vec<NodeRole>>),
+	/// Must return the state of the node syncing.
+	SyncState(oneshot::Sender<SyncState<<B::Header as HeaderT>::Number>>),
 }
 
 impl<B: traits::Block> System<B> {
@@ -187,6 +189,12 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NodeRoles(tx));
+		Receiver(Compat::new(rx))
+	}
+
+	fn system_sync_state(&self) -> Receiver<SyncState<<B::Header as HeaderT>::Number>> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::SyncState(tx));
 		Receiver(Compat::new(rx))
 	}
 }

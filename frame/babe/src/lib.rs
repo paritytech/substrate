@@ -51,6 +51,7 @@ use sp_inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInhe
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
 mod equivocation;
+mod default_weights;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -102,6 +103,12 @@ pub trait Trait: pallet_timestamp::Trait {
 	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 	/// definition.
 	type HandleEquivocation: HandleEquivocation<Self>;
+
+	type WeightInfo: WeightInfo;
+}
+
+pub trait WeightInfo {
+	fn report_equivocation(validator_count: u32) -> Weight;
 }
 
 /// Trigger an epoch change, if any should take place.
@@ -264,7 +271,7 @@ decl_module! {
 		/// the equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence will
 		/// be reported.
-		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		#[weight = <T as Trait>::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
 		fn report_equivocation(
 			origin,
 			equivocation_proof: EquivocationProof<T::Header>,
@@ -287,7 +294,7 @@ decl_module! {
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
-		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		#[weight = <T as Trait>::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
 		fn report_equivocation_unsigned(
 			origin,
 			equivocation_proof: EquivocationProof<T::Header>,
@@ -301,38 +308,6 @@ decl_module! {
 				key_owner_proof,
 			)
 		}
-	}
-}
-
-mod weight_for {
-	use frame_support::{
-		traits::Get,
-		weights::{
-			constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
-			Weight,
-		},
-	};
-
-	pub fn report_equivocation<T: super::Trait>(validator_count: u32) -> Weight {
-		// we take the validator set count from the membership proof to
-		// calculate the weight but we set a floor of 100 validators.
-		let validator_count = validator_count.max(100) as u64;
-
-		// worst case we are considering is that the given offender
-		// is backed by 200 nominators
-		const MAX_NOMINATORS: u64 = 200;
-
-		// checking membership proof
-		(35 * WEIGHT_PER_MICROS)
-			.saturating_add((175 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
-			.saturating_add(T::DbWeight::get().reads(5))
-			// check equivocation proof
-			.saturating_add(110 * WEIGHT_PER_MICROS)
-			// report offence
-			.saturating_add(110 * WEIGHT_PER_MICROS)
-			.saturating_add(25 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
-			.saturating_add(T::DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
-			.saturating_add(T::DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
 	}
 }
 

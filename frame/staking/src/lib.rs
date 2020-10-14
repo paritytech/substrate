@@ -299,12 +299,12 @@ use frame_support::{
 	},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		UnixTime, EstimateNextNewSession, EnsureOrigin,
+		UnixTime, EstimateNextNewSession, EnsureOrigin, CurrencyToVote,
 	}
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Percent, Perbill, PerU16, PerThing, RuntimeDebug, DispatchError,
+	Percent, Perbill, PerU16, PerThing, InnerOf, RuntimeDebug, DispatchError,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
@@ -695,7 +695,7 @@ pub enum ElectionStatus<BlockNumber> {
 /// Note that these values must reflect the __total__ number, not only those that are present in the
 /// solution. In short, these should be the same size as the size of the values dumped in
 /// `SnapshotValidators` and `SnapshotNominators`.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
 pub struct ElectionSize {
 	/// Number of validators in the snapshot of the current election round.
 	#[codec(compact)]
@@ -707,18 +707,18 @@ pub struct ElectionSize {
 
 
 impl<BlockNumber: PartialEq> ElectionStatus<BlockNumber> {
-	fn is_open_at(&self, n: BlockNumber) -> bool {
+	pub fn is_open_at(&self, n: BlockNumber) -> bool {
 		*self == Self::Open(n)
 	}
 
-	fn is_closed(&self) -> bool {
+	pub fn is_closed(&self) -> bool {
 		match self {
 			Self::Closed => true,
 			_ => false
 		}
 	}
 
-	fn is_open(&self) -> bool {
+	pub fn is_open(&self) -> bool {
 		!self.is_closed()
 	}
 }
@@ -811,7 +811,7 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// [`sp_npos_elections`] crate which accepts u64 numbers and does operations in 128.
 	/// Consequently, the backward convert is used convert the u128s from sp-elections back to a
 	/// [`BalanceOf`].
-	type CurrencyToVote: Convert<BalanceOf<Self>, VoteWeight> + Convert<u128, BalanceOf<Self>>;
+	type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 	/// Tokens have been minted and are unused for validator-reward.
 	/// See [Era payout](./index.html#era-payout).
@@ -882,6 +882,13 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// This is exposed so that it can be tuned for particular runtime, when
 	/// multiple pallets send unsigned transactions.
 	type UnsignedPriority: Get<TransactionPriority>;
+
+	/// Maximum weight that the unsigned transaction can have.
+	///
+	/// Chose this value with care. On one hand, it should be as high as possible, so the solution
+	/// can contain as many nominators/validators as possible. On the other hand, it should be small
+	/// enough to fit in the block.
+	type OffchainSolutionWeightLimit: Get<Weight>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -1294,6 +1301,7 @@ decl_module! {
 				consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
 				consumed_weight += weight;
 			};
+
 			if
 				// if we don't have any ongoing offchain compute.
 				Self::era_election_status().is_closed() &&
@@ -1339,12 +1347,12 @@ decl_module! {
 			if Self::era_election_status().is_open_at(now) {
 				let offchain_status = set_check_offchain_execution_status::<T>(now);
 				if let Err(why) = offchain_status {
-					log!(debug, "skipping offchain worker in open election window due to [{}]", why);
+					log!(warn, "💸 skipping offchain worker in open election window due to [{}]", why);
 				} else {
 					if let Err(e) = compute_offchain_election::<T>() {
 						log!(error, "💸 Error in election offchain worker: {:?}", e);
 					} else {
-						log!(debug, "Executed offchain worker thread without errors.");
+						log!(debug, "💸 Executed offchain worker thread without errors.");
 					}
 				}
 			}
@@ -1371,6 +1379,25 @@ decl_module! {
 					T::SlashDeferDuration::get(),
 					T::BondingDuration::get(),
 				)
+			);
+
+			use sp_runtime::UpperOf;
+			// see the documentation of `Assignment::try_normalize`. Now we can ensure that this
+			// will always return `Ok`.
+			// 1. Maximum sum of Vec<ChainAccuracy> must fit into `UpperOf<ChainAccuracy>`.
+			assert!(
+				<usize as TryInto<UpperOf<ChainAccuracy>>>::try_into(MAX_NOMINATIONS)
+				.unwrap()
+				.checked_mul(<ChainAccuracy>::one().deconstruct().try_into().unwrap())
+				.is_some()
+			);
+
+			// 2. Maximum sum of Vec<OffchainAccuracy> must fit into `UpperOf<OffchainAccuracy>`.
+			assert!(
+				<usize as TryInto<UpperOf<OffchainAccuracy>>>::try_into(MAX_NOMINATIONS)
+				.unwrap()
+				.checked_mul(<OffchainAccuracy>::one().deconstruct().try_into().unwrap())
+				.is_some()
 			);
 		}
 
@@ -2122,7 +2149,7 @@ decl_module! {
 		/// transaction in the block.
 		///
 		/// # <weight>
-		/// See `crate::weight` module.
+		/// See [`submit_election_solution`].
 		/// # </weight>
 		#[weight = T::WeightInfo::submit_solution_better(
 			size.validators.into(),
@@ -2152,6 +2179,7 @@ decl_module! {
 				effectively depriving the validators from their authoring reward. Hence, this panic
 				is expected."
 			);
+
 			Ok(adjustments)
 		}
 	}
@@ -2164,11 +2192,22 @@ impl<T: Trait> Module<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
-	/// internal impl of [`slashable_balance_of`] that returns [`VoteWeight`].
-	fn slashable_balance_of_vote_weight(stash: &T::AccountId) -> VoteWeight {
-		<T::CurrencyToVote as Convert<BalanceOf<T>, VoteWeight>>::convert(
-			Self::slashable_balance_of(stash)
-		)
+	/// Internal impl of [`slashable_balance_of`] that returns [`VoteWeight`].
+	pub fn slashable_balance_of_vote_weight(stash: &T::AccountId, issuance: BalanceOf<T>) -> VoteWeight {
+		T::CurrencyToVote::to_vote(Self::slashable_balance_of(stash), issuance)
+	}
+
+	/// Returns a closure around `slashable_balance_of_vote_weight` that can be passed around.
+	///
+	/// This prevents call sites from repeatedly requesting `total_issuance` from backend. But it is
+	/// important to be only used while the total issuance is not changing.
+	pub fn slashable_balance_of_fn() -> Box<dyn Fn(&T::AccountId) -> VoteWeight> {
+		// NOTE: changing this to unboxed `impl Fn(..)` return type and the module will still
+		// compile, while some types in mock fail to resolve.
+		let issuance = T::Currency::total_issuance();
+		Box::new(move |who: &T::AccountId| -> VoteWeight {
+			Self::slashable_balance_of_vote_weight(who, issuance)
+		})
 	}
 
 	/// Dump the list of validators and nominators into vectors and keep them on-chain.
@@ -2573,18 +2612,14 @@ impl<T: Trait> Module<T> {
 		// convert into staked assignments.
 		let staked_assignments = sp_npos_elections::assignment_ratio_to_staked(
 			assignments,
-			Self::slashable_balance_of_vote_weight,
+			Self::slashable_balance_of_fn(),
 		);
 
 		// build the support map thereof in order to evaluate.
-		// OPTIMIZATION: loop to create the staked assignments but it would bloat the code. Okay for
-		// now as it does not add to the complexity order.
-		let (supports, num_error) = build_support_map::<T::AccountId>(
+		let supports = build_support_map::<T::AccountId>(
 			&winners,
 			&staked_assignments,
-		);
-		// This technically checks that all targets in all nominators were among the winners.
-		ensure!(num_error == 0, Error::<T>::OffchainElectionBogusEdge);
+		).map_err(|_| Error::<T>::OffchainElectionBogusEdge)?;
 
 		// Check if the score is the same as the claimed one.
 		let submitted_score = evaluate_support(&supports);
@@ -2811,7 +2846,7 @@ impl<T: Trait> Module<T> {
 	fn try_do_election() -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
 		// an election result from either a stored submission or locally executed one.
 		let next_result = <QueuedElected<T>>::take().or_else(||
-			Self::do_phragmen_with_post_processing::<ChainAccuracy>(ElectionCompute::OnChain)
+			Self::do_on_chain_phragmen()
 		);
 
 		// either way, kill this. We remove it here to make sure it always has the exact same
@@ -2828,13 +2863,8 @@ impl<T: Trait> Module<T> {
 	/// `PrimitiveElectionResult` into `ElectionResult`.
 	///
 	/// No storage item is updated.
-	fn do_phragmen_with_post_processing<Accuracy: PerThing>(compute: ElectionCompute)
-		-> Option<ElectionResult<T::AccountId, BalanceOf<T>>>
-	where
-		Accuracy: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
-		ExtendedBalance: From<<Accuracy as PerThing>::Inner>,
-	{
-		if let Some(phragmen_result) = Self::do_phragmen::<Accuracy>() {
+	pub fn do_on_chain_phragmen() -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
+		if let Some(phragmen_result) = Self::do_phragmen::<ChainAccuracy>(0) {
 			let elected_stashes = phragmen_result.winners.iter()
 				.map(|(s, _)| s.clone())
 				.collect::<Vec<T::AccountId>>();
@@ -2842,13 +2872,20 @@ impl<T: Trait> Module<T> {
 
 			let staked_assignments = sp_npos_elections::assignment_ratio_to_staked(
 				assignments,
-				Self::slashable_balance_of_vote_weight,
+				Self::slashable_balance_of_fn(),
 			);
 
-			let (supports, _) = build_support_map::<T::AccountId>(
+			let supports = build_support_map::<T::AccountId>(
 				&elected_stashes,
 				&staked_assignments,
-			);
+			)
+			.map_err(|_|
+				log!(
+					error,
+					"💸 on-chain phragmen is failing due to a problem in the result. This must be a bug."
+				)
+			)
+			.ok()?;
 
 			// collect exposures
 			let exposures = Self::collect_exposure(supports);
@@ -2860,7 +2897,7 @@ impl<T: Trait> Module<T> {
 			Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
 				elected_stashes,
 				exposures,
-				compute,
+				compute: ElectionCompute::OnChain,
 			})
 		} else {
 			// There were not enough candidates for even our minimal level of functionality. This is
@@ -2874,15 +2911,19 @@ impl<T: Trait> Module<T> {
 	/// Execute phragmen election and return the new results. No post-processing is applied and the
 	/// raw edge weights are returned.
 	///
-	/// Self votes are added and nominations before the most recent slashing span are reaped.
+	/// Self votes are added and nominations before the most recent slashing span are ignored.
 	///
 	/// No storage item is updated.
-	fn do_phragmen<Accuracy: PerThing>() -> Option<PrimitiveElectionResult<T::AccountId, Accuracy>> {
+	pub fn do_phragmen<Accuracy: PerThing>(iterations: usize)
+	-> Option<PrimitiveElectionResult<T::AccountId, Accuracy>>
+		where ExtendedBalance: From<InnerOf<Accuracy>>
+	{
+		let weight_of = Self::slashable_balance_of_fn();
 		let mut all_nominators: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> = Vec::new();
 		let mut all_validators = Vec::new();
 		for (validator, _) in <Validators<T>>::iter() {
 			// append self vote
-			let self_vote = (validator.clone(), Self::slashable_balance_of_vote_weight(&validator), vec![validator.clone()]);
+			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
 			all_nominators.push(self_vote);
 			all_validators.push(validator);
 		}
@@ -2902,22 +2943,32 @@ impl<T: Trait> Module<T> {
 			(nominator, targets)
 		});
 		all_nominators.extend(nominator_votes.map(|(n, ns)| {
-			let s = Self::slashable_balance_of_vote_weight(&n);
+			let s = weight_of(&n);
 			(n, s, ns)
 		}));
 
-		seq_phragmen::<_, Accuracy>(
-			Self::validator_count() as usize,
-			Self::minimum_validator_count().max(1) as usize,
-			all_validators,
-			all_nominators,
-		)
+		if all_validators.len() < Self::minimum_validator_count().max(1) as usize {
+			// If we don't have enough candidates, nothing to do.
+			log!(error, "💸 Chain does not have enough staking candidates to operate. Era {:?}.", Self::current_era());
+			None
+		} else {
+			seq_phragmen::<_, Accuracy>(
+				Self::validator_count() as usize,
+				all_validators,
+				all_nominators,
+				Some((iterations, 0)), // exactly run `iterations` rounds.
+			)
+			.map_err(|err| log!(error, "Call to seq-phragmen failed due to {}", err))
+			.ok()
+		}
 	}
 
 	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a [`Exposure`]
-	fn collect_exposure(supports: SupportMap<T::AccountId>) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
-		let to_balance = |e: ExtendedBalance|
-			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
+	fn collect_exposure(
+		supports: SupportMap<T::AccountId>,
+	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
+		let total_issuance = T::Currency::total_issuance();
+		let to_currency = |e: ExtendedBalance| T::CurrencyToVote::to_currency(e, total_issuance);
 
 		supports.into_iter().map(|(validator, support)| {
 			// build `struct exposure` from `support`
@@ -2926,7 +2977,7 @@ impl<T: Trait> Module<T> {
 			let mut total: BalanceOf<T> = Zero::zero();
 			support.voters
 				.into_iter()
-				.map(|(nominator, weight)| (nominator, to_balance(weight)))
+				.map(|(nominator, weight)| (nominator, to_currency(weight)))
 				.for_each(|(nominator, stake)| {
 					if nominator == validator {
 						own = own.saturating_add(stake);
@@ -3051,7 +3102,6 @@ impl<T: Trait> Module<T> {
 	pub fn set_slash_reward_fraction(fraction: Perbill) {
 		SlashRewardFraction::put(fraction);
 	}
-
 }
 
 /// In this implementation `new_session(session)` must be called before `end_session(session-1)`
@@ -3336,13 +3386,13 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				let invalid = to_invalid(error_with_post_info);
 				log!(
 					debug,
-					"validate unsigned pre dispatch checks failed due to error #{:?}.",
+					"💸 validate unsigned pre dispatch checks failed due to error #{:?}.",
 					invalid,
 				);
-				return invalid .into();
+				return invalid.into();
 			}
 
-			log!(debug, "validateUnsigned succeeded for a solution at era {}.", era);
+			log!(debug, "💸 validateUnsigned succeeded for a solution at era {}.", era);
 
 			ValidTransaction::with_tag_prefix("StakingOffchain")
 				// The higher the score[0], the better a solution is.

@@ -11,9 +11,9 @@ with a fixed supply, including:
 * Asset Transfer
 * Asset Destruction
 
-To use it in your runtime, you need to implement the assets [`Trait`](./trait.Trait.html).
+To use it in your runtime, you need to implement the assets [`Trait`](https://docs.rs/pallet-assets/latest/pallet_assets/trait.Trait.html).
 
-The supported dispatchable functions are documented in the [`Call`](./enum.Call.html) enum.
+The supported dispatchable functions are documented in the [`Call`](https://docs.rs/pallet-assets/latest/pallet_assets/enum.Call.html) enum.
 
 ### Terminology
 
@@ -43,7 +43,7 @@ the function caller's account (`origin`) to a `target` account.
 * `destroy` - Destroys the entire holding of a fungible asset `id` associated with the account
 that called the function.
 
-Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
+Please refer to the [`Call`](https://docs.rs/pallet-assets/latest/pallet_assets/enum.Call.html) enum and its associated variants for documentation on each function.
 
 ### Public Functions
 <!-- Original author of descriptions: @gavofyork -->
@@ -51,7 +51,7 @@ Please refer to the [`Call`](./enum.Call.html) enum and its associated variants 
 * `balance` - Get the asset `id` balance of `who`.
 * `total_supply` - Get the total supply of an asset `id`.
 
-Please refer to the [`Module`](./struct.Module.html) struct for details on publicly available functions.
+Please refer to the [`Module`](https://docs.rs/pallet-assets/latest/pallet_assets/struct.Module.html) struct for details on publicly available functions.
 
 ## Usage
 
@@ -110,7 +110,7 @@ them are violated, the behavior of this module is undefined.
 
 ## Related Modules
 
-* [`System`](../frame_system/index.html)
-* [`Support`](../frame_support/index.html)
+* [`System`](https://docs.rs/frame-system/latest/frame_system/)
+* [`Support`](https://docs.rs/frame-support/latest/frame_support/)
 
 License: Apache-2.0
