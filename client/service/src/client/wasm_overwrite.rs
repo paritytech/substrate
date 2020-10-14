@@ -106,14 +106,10 @@ where
 			.and_then(|d| Decode::decode(&mut &d[..]).ok()); 
 		let version = Self::runtime_version(&self.executor, &WasmBlob::new(backend_code.to_vec()), heap_pages)?;
 		
-		if let Some(runtime_code) = self.overwrites
+		self.overwrites
 			.get(&version.spec_version)
-			.map(|w| w.runtime_code(heap_pages)) 
-		{
-			Ok(runtime_code)
-		} else {
-			Ok(code)
-		}
+			.map(|w| w.runtime_code(heap_pages))
+			.map_or_else(|| Ok(code), Ok)
 	}
 
 	/// Scrapes a folder for WASM runtimes.
