@@ -105,8 +105,8 @@
 //!
 
 use crate::{
-	onchain::OnChainSequentialPhragmen, ElectionDataProvider, ElectionProvider, FlatSupportMap,
-	FlattenSupportMap,
+	onchain::OnChainSequentialPhragmen, ElectionDataProvider, ElectionProvider, FlattenSupportMap,
+	Supports,
 };
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
@@ -118,8 +118,8 @@ use frame_support::{
 };
 use frame_system::{ensure_none, ensure_signed};
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, build_support_map, evaluate_support, Assignment,
-	CompactSolution, ElectionScore, ExtendedBalance, PerThing128, VoteWeight,
+	assignment_ratio_to_staked_normalized, Assignment, CompactSolution, ElectionScore,
+	EvaluateSupport, ExtendedBalance, PerThing128, VoteWeight,
 };
 use sp_runtime::{traits::Zero, InnerOf, PerThing, Perbill, RuntimeDebug};
 use sp_std::prelude::*;
@@ -244,7 +244,7 @@ pub struct SignedSubmission<A, B: HasCompact, C> {
 pub struct ReadySolution<A> {
 	/// The final supports of the solution. This is target-major vector, storing each winners, total
 	/// backing, and each individual backer.
-	supports: FlatSupportMap<A>,
+	supports: Supports<A>,
 	/// The score of the solution.
 	///
 	/// This is needed to potentially challenge the solution.
@@ -333,6 +333,7 @@ pub trait Trait: frame_system::Trait {
 	// TODO: these need input from the research team
 	type SignedRewardBase: Get<BalanceOf<Self>>;
 	type SignedRewardFactor: Get<Perbill>;
+	type SignedRewardMax: Get<Option<BalanceOf<Self>>>;
 	type SignedDepositBase: Get<BalanceOf<Self>>;
 	type SignedDepositByte: Get<BalanceOf<Self>>;
 	type SignedDepositWeight: Get<BalanceOf<Self>>;
@@ -616,14 +617,11 @@ where
 		let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
 			.map_err::<FeasibilityError, _>(Into::into)?;
 		// This might fail if one of the voter edges is pointing to a non-winner.
-		let supports = build_support_map(&winners, &staked_assignments)
-			.map(FlattenSupportMap::flatten)
+		let supports = sp_npos_elections::to_supports(&winners, &staked_assignments)
 			.map_err::<FeasibilityError, _>(Into::into)?;
 
 		// Finally, check that the claimed score was indeed correct.
-		// TODO: well, I am not sure if this is now better or not...
-		let known_score =
-			evaluate_support::<T::AccountId, _>(supports.iter().map(|&(ref x, ref y)| (x, y)));
+		let known_score = supports.evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
 		// let supports = supports.flatten();
@@ -635,7 +633,7 @@ where
 	}
 
 	/// On-chain fallback of election.
-	fn onchain_fallback() -> Result<FlatSupportMap<T::AccountId>, Error> {
+	fn onchain_fallback() -> Result<Supports<T::AccountId>, Error> {
 		let desired_targets = Self::desired_targets() as usize;
 		let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
 		let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
@@ -660,7 +658,7 @@ where
 		_to_elect: usize,
 		_targets: Vec<T::AccountId>,
 		_voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-	) -> Result<FlatSupportMap<T::AccountId>, Self::Error>
+	) -> Result<Supports<T::AccountId>, Self::Error>
 	where
 		ExtendedBalance: From<<P as PerThing>::Inner>,
 	{

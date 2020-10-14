@@ -541,52 +541,39 @@ pub struct Support<AccountId> {
 	pub voters: Vec<(AccountId, ExtendedBalance)>,
 }
 
-/// A linkage from a candidate and its [`Support`].
+/// A flat variant of [`SupportMap`].
+///
+/// The main advantage of this is that it is encodable.
+pub type Supports<A> = Vec<(A, Support<A>)>;
+
+/// Linkage from a winner to their [`Support`].
 pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 
-/// Build the support map from the given election result. It maps a flat structure like
+/// Helper trait to convert from a support map to a flat support vector.
+pub trait FlattenSupportMap<A> {
+	/// Flatten the support.
+	fn flatten(self) -> Supports<A>;
+}
+
+impl<A> FlattenSupportMap<A> for SupportMap<A> {
+	fn flatten(self) -> Supports<A> {
+		self.into_iter().map(|(k, v)| (k, v)).collect::<Vec<_>>()
+	}
+}
+
+/// Build the support map from the winners and assignments.
 ///
-/// ```nocompile
-/// assignments: vec![
-///     voter1, vec![(candidate1, w11), (candidate2, w12)],
-///     voter2, vec![(candidate1, w21), (candidate2, w22)]
-/// ]
-/// ```
-///
-/// into a mapping of candidates and their respective support:
-///
-/// ```nocompile
-///  SupportMap {
-///     candidate1: Support {
-///         own:0,
-///         total: w11 + w21,
-///         others: vec![(candidate1, w11), (candidate2, w21)]
-///     },
-///     candidate2: Support {
-///         own:0,
-///         total: w12 + w22,
-///         others: vec![(candidate1, w12), (candidate2, w22)]
-///     },
-/// }
-/// ```
-///
-/// The second returned flag indicates the number of edges who didn't corresponded to an actual
-/// winner from the given winner set. A value in this place larger than 0 indicates a potentially
-/// faulty assignment.
-///
-/// `O(E)` where `E` is the total number of edges.
-pub fn build_support_map<AccountId>(
-	winners: &[AccountId],
-	assignments: &[StakedAssignment<AccountId>],
-) -> Result<SupportMap<AccountId>, Error>
-where
-	AccountId: IdentifierT,
-{
+/// The list of winners is basically a redundancy; It basically ensures that all the targets pointed
+/// to by the `assignments` are present in the `winners`.
+pub fn to_support_map<A: IdentifierT>(
+	winners: &[A],
+	assignments: &[StakedAssignment<A>],
+) -> Result<SupportMap<A>, Error> {
 	// Initialize the support of each candidate.
-	let mut supports = <SupportMap<AccountId>>::new();
-	winners
-		.iter()
-		.for_each(|e| { supports.insert(e.clone(), Default::default()); });
+	let mut supports = <SupportMap<A>>::new();
+	winners.iter().for_each(|e| {
+		supports.insert(e.clone(), Default::default());
+	});
 
 	// build support struct.
 	for StakedAssignment { who, distribution } in assignments.iter() {
@@ -602,34 +589,61 @@ where
 	Ok(supports)
 }
 
-/// Evaluate a support map. The returned tuple contains:
-///
-/// - Minimum support. This value must be **maximized**.
-/// - Sum of all supports. This value must be **maximized**.
-/// - Sum of all supports squared. This value must be **minimized**.
-///
-/// `O(E)` where `E` is the total number of edges.
-pub fn evaluate_support<
-	'a,
-	AccountId: 'a,
-	I: IntoIterator<Item = (&'a AccountId, &'a Support<AccountId>)>,
->(
-	support: I,
-) -> ElectionScore {
-	let mut min_support = ExtendedBalance::max_value();
-	let mut sum: ExtendedBalance = Zero::zero();
-	// NOTE: The third element might saturate but fine for now since this will run on-chain and need
-	// to be fast.
-	let mut sum_squared: ExtendedBalance = Zero::zero();
-	for (_, ref support) in support.into_iter() {
-		sum = sum.saturating_add(support.total);
-		let squared = support.total.saturating_mul(support.total);
-		sum_squared = sum_squared.saturating_add(squared);
-		if support.total < min_support {
-			min_support = support.total;
+/// Same as [`to_support_map`] except it calls `FlattenSupportMap` on top of the result to return a
+/// flat vector.
+pub fn to_supports<A: IdentifierT>(
+	winners: &[A],
+	assignments: &[StakedAssignment<A>],
+) -> Result<Supports<A>, Error> {
+	to_support_map(winners, assignments).map(FlattenSupportMap::flatten)
+}
+
+/// Extension trait for evaluating a support map or vector.
+pub trait EvaluateSupport {
+	/// Evaluate a support map. The returned tuple contains:
+	///
+	/// - Minimum support. This value must be **maximized**.
+	/// - Sum of all supports. This value must be **maximized**.
+	/// - Sum of all supports squared. This value must be **minimized**.
+	fn evaluate(&self) -> ElectionScore;
+}
+
+impl<A> EvaluateSupport for SupportMap<A> {
+	fn evaluate(&self) -> ElectionScore {
+		let mut min_support = ExtendedBalance::max_value();
+		let mut sum: ExtendedBalance = Zero::zero();
+		// NOTE: The third element might saturate but fine for now since this will run on-chain and
+		// need to be fast.
+		let mut sum_squared: ExtendedBalance = Zero::zero();
+		for (_, ref support) in self.into_iter() {
+			sum = sum.saturating_add(support.total);
+			let squared = support.total.saturating_mul(support.total);
+			sum_squared = sum_squared.saturating_add(squared);
+			if support.total < min_support {
+				min_support = support.total;
+			}
 		}
+		[min_support, sum, sum_squared]
 	}
-	[min_support, sum, sum_squared]
+}
+
+impl<A> EvaluateSupport for Supports<A> {
+	fn evaluate(&self) -> ElectionScore {
+		let mut min_support = ExtendedBalance::max_value();
+		let mut sum: ExtendedBalance = Zero::zero();
+		// NOTE: The third element might saturate but fine for now since this will run on-chain and
+		// need to be fast.
+		let mut sum_squared: ExtendedBalance = Zero::zero();
+		for (_, ref support) in self.into_iter() {
+			sum = sum.saturating_add(support.total);
+			let squared = support.total.saturating_mul(support.total);
+			sum_squared = sum_squared.saturating_add(squared);
+			if support.total < min_support {
+				min_support = support.total;
+			}
+		}
+		[min_support, sum, sum_squared]
+	}
 }
 
 /// Compares two sets of election scores based on desirability and returns true if `this` is better

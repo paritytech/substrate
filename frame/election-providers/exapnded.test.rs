@@ -8,7 +8,7 @@ pub mod onchain {
 	use crate::{ElectionProvider, Error};
 	use sp_arithmetic::PerThing;
 	use sp_npos_elections::{
-		ElectionResult, ExtendedBalance, FlatSupportMap, FlattenSupportMap, IdentifierT, VoteWeight,
+		ElectionResult, ExtendedBalance, FlattenSupportMap, IdentifierT, Supports, VoteWeight,
 	};
 	use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 	pub struct OnChainSequentialPhragmen;
@@ -17,7 +17,7 @@ pub mod onchain {
 			to_elect: usize,
 			targets: Vec<AccountId>,
 			voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-		) -> Result<FlatSupportMap<AccountId>, Error>
+		) -> Result<Supports<AccountId>, Error>
 		where
 			ExtendedBalance: From<<P as PerThing>::Inner>,
 			P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
@@ -64,7 +64,7 @@ pub mod two_phase {
 	use frame_system::{ensure_none, ensure_signed};
 	use sp_npos_elections::{
 		evaluate_support, generate_solution_type, is_score_better, Assignment, ElectionScore,
-		ExtendedBalance, FlatSupportMap, FlattenSupportMap, VoteWeight,
+		ExtendedBalance, FlattenSupportMap, Supports, VoteWeight,
 	};
 	use sp_runtime::{traits::Zero, PerThing, PerU16, Perbill, RuntimeDebug};
 	use sp_std::{mem::size_of, prelude::*};
@@ -74,7 +74,7 @@ pub mod two_phase {
 		pub use frame_support::{assert_noop, assert_ok};
 		use frame_support::{parameter_types, traits::OnInitialize, weights::Weight};
 		use sp_core::H256;
-		use sp_npos_elections::FlatSupportMap;
+		use sp_npos_elections::Supports;
 		use sp_runtime::{
 			testing::Header,
 			traits::{BlakeTwo256, IdentityLookup},
@@ -5374,7 +5374,7 @@ pub mod two_phase {
 	/// A parsed solution, ready to be enacted.
 	pub struct ReadySolution<AccountId> {
 		winners: Vec<AccountId>,
-		supports: FlatSupportMap<AccountId>,
+		supports: Supports<AccountId>,
 	}
 	impl<AccountId> ::core::marker::StructuralPartialEq for ReadySolution<AccountId> {}
 	#[automatically_derived]
@@ -5418,7 +5418,7 @@ pub mod two_phase {
 		fn assert_receiver_is_total_eq(&self) -> () {
 			{
 				let _: ::core::cmp::AssertParamIsEq<Vec<AccountId>>;
-				let _: ::core::cmp::AssertParamIsEq<FlatSupportMap<AccountId>>;
+				let _: ::core::cmp::AssertParamIsEq<Supports<AccountId>>;
 			}
 		}
 	}
@@ -5446,8 +5446,8 @@ pub mod two_phase {
 		where
 			Vec<AccountId>: _parity_scale_codec::Encode,
 			Vec<AccountId>: _parity_scale_codec::Encode,
-			FlatSupportMap<AccountId>: _parity_scale_codec::Encode,
-			FlatSupportMap<AccountId>: _parity_scale_codec::Encode,
+			Supports<AccountId>: _parity_scale_codec::Encode,
+			Supports<AccountId>: _parity_scale_codec::Encode,
 		{
 			fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
 				dest.push(&self.winners);
@@ -5458,8 +5458,8 @@ pub mod two_phase {
 		where
 			Vec<AccountId>: _parity_scale_codec::Encode,
 			Vec<AccountId>: _parity_scale_codec::Encode,
-			FlatSupportMap<AccountId>: _parity_scale_codec::Encode,
-			FlatSupportMap<AccountId>: _parity_scale_codec::Encode,
+			Supports<AccountId>: _parity_scale_codec::Encode,
+			Supports<AccountId>: _parity_scale_codec::Encode,
 		{
 		}
 	};
@@ -5471,8 +5471,8 @@ pub mod two_phase {
 		where
 			Vec<AccountId>: _parity_scale_codec::Decode,
 			Vec<AccountId>: _parity_scale_codec::Decode,
-			FlatSupportMap<AccountId>: _parity_scale_codec::Decode,
-			FlatSupportMap<AccountId>: _parity_scale_codec::Decode,
+			Supports<AccountId>: _parity_scale_codec::Decode,
+			Supports<AccountId>: _parity_scale_codec::Decode,
 		{
 			fn decode<DecIn: _parity_scale_codec::Input>(
 				input: &mut DecIn,
@@ -6983,7 +6983,7 @@ pub mod two_phase {
 			let supports = supports.flatten();
 			Ok(ReadySolution { winners, supports })
 		}
-		fn onchain_fallback() -> Result<FlatSupportMap<T::AccountId>, crate::Error> {
+		fn onchain_fallback() -> Result<Supports<T::AccountId>, crate::Error> {
 			let desired_targets = Self::desired_targets() as usize;
 			let voters = Self::snapshot_voters().ok_or(crate::Error::SnapshotUnAvailable)?;
 			let targets = Self::snapshot_targets().ok_or(crate::Error::SnapshotUnAvailable)?;
@@ -6999,7 +6999,7 @@ pub mod two_phase {
 			_to_elect: usize,
 			_targets: Vec<T::AccountId>,
 			_voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-		) -> Result<FlatSupportMap<T::AccountId>, crate::Error>
+		) -> Result<Supports<T::AccountId>, crate::Error>
 		where
 			ExtendedBalance: From<<P as PerThing>::Inner>,
 			P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
@@ -7557,7 +7557,7 @@ pub mod two_phase {
 use sp_arithmetic::PerThing;
 #[doc(hidden)]
 pub use sp_npos_elections::VoteWeight;
-use sp_npos_elections::{ExtendedBalance, FlatSupportMap};
+use sp_npos_elections::{ExtendedBalance, Supports};
 use sp_runtime::RuntimeDebug;
 #[doc(hidden)]
 pub use sp_std::convert::TryInto;
@@ -7600,7 +7600,7 @@ pub trait ElectionProvider<AccountId> {
 		to_elect: usize,
 		targets: Vec<AccountId>,
 		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	) -> Result<FlatSupportMap<AccountId>, Error>
+	) -> Result<Supports<AccountId>, Error>
 	where
 		ExtendedBalance: From<<P as PerThing>::Inner>,
 		P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>;

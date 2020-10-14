@@ -26,13 +26,10 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_io;
-use sp_npos_elections::{
-	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
-};
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::{Header, TestXt, UintAuthorityId},
-	traits::{IdentityLookup, Zero},
+	traits::IdentityLookup,
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use std::{cell::RefCell, collections::HashSet};
@@ -50,9 +47,7 @@ thread_local! {
 	static SESSION_PER_ERA: RefCell<SessionIndex> = RefCell::new(3);
 	static EXISTENTIAL_DEPOSIT: RefCell<Balance> = RefCell::new(0);
 	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
-	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
 	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
-	static MAX_ITERATIONS: RefCell<u32> = RefCell::new(0);
 }
 
 /// Another session handler struct to test on_disabled.
@@ -111,13 +106,6 @@ impl Get<BlockNumber> for SessionsPerEra {
 	}
 }
 
-pub struct ElectionLookahead;
-impl Get<BlockNumber> for ElectionLookahead {
-	fn get() -> BlockNumber {
-		ELECTION_LOOKAHEAD.with(|v| *v.borrow())
-	}
-}
-
 pub struct Period;
 impl Get<BlockNumber> for Period {
 	fn get() -> BlockNumber {
@@ -129,13 +117,6 @@ pub struct SlashDeferDuration;
 impl Get<EraIndex> for SlashDeferDuration {
 	fn get() -> EraIndex {
 		SLASH_DEFER_DURATION.with(|v| *v.borrow())
-	}
-}
-
-pub struct MaxIterations;
-impl Get<u32> for MaxIterations {
-	fn get() -> u32 {
-		MAX_ITERATIONS.with(|v| *v.borrow())
 	}
 }
 
@@ -331,7 +312,6 @@ pub type Extrinsic = TestXt<Call, ()>;
 
 pub struct ExtBuilder {
 	session_length: BlockNumber,
-	election_lookahead: BlockNumber,
 	session_per_era: SessionIndex,
 	existential_deposit: Balance,
 	validator_pool: bool,
@@ -343,14 +323,12 @@ pub struct ExtBuilder {
 	num_validators: Option<u32>,
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
-	max_offchain_iterations: u32,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			session_length: 1,
-			election_lookahead: 0,
 			session_per_era: 3,
 			existential_deposit: 1,
 			validator_pool: false,
@@ -362,7 +340,6 @@ impl Default for ExtBuilder {
 			num_validators: None,
 			invulnerables: vec![],
 			has_stakers: true,
-			max_offchain_iterations: 0,
 		}
 	}
 }
@@ -404,14 +381,12 @@ impl ExtBuilder {
 		self.invulnerables = invulnerables;
 		self
 	}
+	#[allow(dead_code)]
 	pub fn session_per_era(mut self, length: SessionIndex) -> Self {
 		self.session_per_era = length;
 		self
 	}
-	pub fn election_lookahead(mut self, look: BlockNumber) -> Self {
-		self.election_lookahead = look;
-		self
-	}
+	#[allow(dead_code)]
 	pub fn session_length(mut self, length: BlockNumber) -> Self {
 		self.session_length = length;
 		self
@@ -420,22 +395,11 @@ impl ExtBuilder {
 		self.has_stakers = has;
 		self
 	}
-	pub fn max_offchain_iterations(mut self, iterations: u32) -> Self {
-		self.max_offchain_iterations = iterations;
-		self
-	}
-	pub fn offchain_election_ext(self) -> Self {
-		self.session_per_era(4)
-			.session_length(5)
-			.election_lookahead(3)
-	}
 	pub fn set_associated_constants(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = self.slash_defer_duration);
 		SESSION_PER_ERA.with(|v| *v.borrow_mut() = self.session_per_era);
-		ELECTION_LOOKAHEAD.with(|v| *v.borrow_mut() = self.election_lookahead);
 		PERIOD.with(|v| *v.borrow_mut() = self.session_length);
-		MAX_ITERATIONS.with(|v| *v.borrow_mut() = self.max_offchain_iterations);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
@@ -657,18 +621,6 @@ pub(crate) fn bond_nominator(
 		RewardDestination::Controller,
 	));
 	assert_ok!(Staking::nominate(Origin::signed(ctrl), target));
-}
-
-pub(crate) fn run_to_block(n: BlockNumber) {
-	Staking::on_finalize(System::block_number());
-	for b in System::block_number() + 1..=n {
-		System::set_block_number(b);
-		Session::on_initialize(b);
-		Staking::on_initialize(b);
-		if b != n {
-			Staking::on_finalize(System::block_number());
-		}
-	}
 }
 
 pub(crate) fn advance_session() {

@@ -51,16 +51,16 @@ macro_rules! target_index_fn {
 	};
 }
 
-// TODO: these can use a cache.
+// NOTE: these can use a cache.
 #[macro_export]
 macro_rules! stake_of_fn {
 	($voters:ident, $acc:ty) => {
 		|who: &$acc| -> $crate::VoteWeight {
-							$voters
-								.iter()
-								.find(|(x, _, _)| x == who)
-								.map(|(_, x, _)| *x)
-								.unwrap_or_default()
-							}
+			$voters
+				.iter()
+				.find(|(x, _, _)| x == who)
+				.map(|(_, x, _)| *x)
+				.unwrap_or_default()
+			}
 	};
 }

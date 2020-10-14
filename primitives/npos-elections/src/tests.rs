@@ -17,14 +17,12 @@
 
 //! Tests for npos-elections.
 
-use crate::mock::*;
 use crate::{
-	seq_phragmen, balancing, build_support_map, is_score_better, helpers::*,
-	Support, StakedAssignment, Assignment, ElectionResult, ExtendedBalance, setup_inputs,
-	seq_phragmen_core, Voter,
+	balancing, helpers::*, is_score_better, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs,
+	to_support_map, Assignment, ElectionResult, ExtendedBalance, StakedAssignment, Support, Voter,
 };
+use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
 use substrate_test_utils::assert_eq_uvec;
-use sp_arithmetic::{Perbill, Permill, Percent, PerU16};
 
 #[test]
 fn float_phragmen_poc_works() {
@@ -49,11 +47,15 @@ fn float_phragmen_poc_works() {
 		]
 	);
 
-	let mut support_map = build_support_map_float(&mut phragmen_result, &stake_of);
+	let mut support_map = to_support_map_float(&mut phragmen_result, &stake_of);
 
 	assert_eq!(
 		support_map.get(&2).unwrap(),
-		&_Support { own: 0.0, total: 25.0, others: vec![(10u64, 10.0), (30u64, 15.0)]}
+		&_Support {
+			own: 0.0,
+			total: 25.0,
+			others: vec![(10u64, 10.0), (30u64, 15.0)]
+		}
 	);
 	assert_eq!(
 		support_map.get(&3).unwrap(),
@@ -260,7 +262,7 @@ fn phragmen_poc_works() {
 
 	let staked = assignment_ratio_to_staked(assignments, &stake_of);
 	let winners = to_without_backing(winners);
-	let support_map = build_support_map::<AccountId>(&winners, &staked).unwrap();
+	let support_map = to_support_map::<AccountId>(&winners, &staked).unwrap();
 
 	assert_eq_uvec!(
 		staked,
@@ -334,7 +336,7 @@ fn phragmen_poc_works_with_balancing() {
 
 	let staked = assignment_ratio_to_staked(assignments, &stake_of);
 	let winners = to_without_backing(winners);
-	let support_map = build_support_map::<AccountId>(&winners, &staked).unwrap();
+	let support_map = to_support_map::<AccountId>(&winners, &staked).unwrap();
 
 	assert_eq_uvec!(
 		staked,
@@ -726,7 +728,7 @@ fn phragmen_self_votes_should_be_kept() {
 
 	let staked_assignments = assignment_ratio_to_staked(result.assignments, &stake_of);
 	let winners = to_without_backing(result.winners);
-	let supports = build_support_map::<AccountId>(&winners, &staked_assignments).unwrap();
+	let supports = to_support_map::<AccountId>(&winners, &staked_assignments).unwrap();
 
 	assert_eq!(supports.get(&5u64), None);
 	assert_eq!(

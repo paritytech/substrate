@@ -19,7 +19,7 @@ extern crate std;
 use sp_std::{fmt::Debug, prelude::*};
 /// The onchain module.
 pub mod onchain {
-	use crate::{ElectionProvider, FlatSupportMap, FlattenSupportMap};
+	use crate::{ElectionProvider, FlattenSupportMap, Supports};
 	use sp_arithmetic::PerThing;
 	use sp_npos_elections::{
 		ElectionResult, ExtendedBalance, IdentifierT, PerThing128, VoteWeight,
@@ -87,7 +87,7 @@ pub mod onchain {
 			to_elect: usize,
 			targets: Vec<AccountId>,
 			voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-		) -> Result<FlatSupportMap<AccountId>, Self::Error>
+		) -> Result<Supports<AccountId>, Self::Error>
 		where
 			ExtendedBalance: From<<P as PerThing>::Inner>,
 		{
@@ -209,8 +209,8 @@ pub mod two_phase {
 	//! TODO
 	//!
 	use crate::{
-		onchain::OnChainSequentialPhragmen, ElectionDataProvider, ElectionProvider, FlatSupportMap,
-		FlattenSupportMap,
+		onchain::OnChainSequentialPhragmen, ElectionDataProvider, ElectionProvider,
+		FlattenSupportMap, Supports,
 	};
 	use codec::{Decode, Encode, HasCompact};
 	use frame_support::{
@@ -1070,7 +1070,7 @@ pub mod two_phase {
 	pub struct ReadySolution<A> {
 		/// The final supports of the solution. This is target-major vector, storing each winners, total
 		/// backing, and each individual backer.
-		supports: FlatSupportMap<A>,
+		supports: Supports<A>,
 		/// How this election was computed.
 		compute: ElectionCompute,
 	}
@@ -1115,7 +1115,7 @@ pub mod two_phase {
 		#[doc(hidden)]
 		fn assert_receiver_is_total_eq(&self) -> () {
 			{
-				let _: ::core::cmp::AssertParamIsEq<FlatSupportMap<A>>;
+				let _: ::core::cmp::AssertParamIsEq<Supports<A>>;
 				let _: ::core::cmp::AssertParamIsEq<ElectionCompute>;
 			}
 		}
@@ -1142,8 +1142,8 @@ pub mod two_phase {
 		extern crate codec as _parity_scale_codec;
 		impl<A> _parity_scale_codec::Encode for ReadySolution<A>
 		where
-			FlatSupportMap<A>: _parity_scale_codec::Encode,
-			FlatSupportMap<A>: _parity_scale_codec::Encode,
+			Supports<A>: _parity_scale_codec::Encode,
+			Supports<A>: _parity_scale_codec::Encode,
 		{
 			fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
 				dest.push(&self.supports);
@@ -1152,8 +1152,8 @@ pub mod two_phase {
 		}
 		impl<A> _parity_scale_codec::EncodeLike for ReadySolution<A>
 		where
-			FlatSupportMap<A>: _parity_scale_codec::Encode,
-			FlatSupportMap<A>: _parity_scale_codec::Encode,
+			Supports<A>: _parity_scale_codec::Encode,
+			Supports<A>: _parity_scale_codec::Encode,
 		{
 		}
 	};
@@ -1163,8 +1163,8 @@ pub mod two_phase {
 		extern crate codec as _parity_scale_codec;
 		impl<A> _parity_scale_codec::Decode for ReadySolution<A>
 		where
-			FlatSupportMap<A>: _parity_scale_codec::Decode,
-			FlatSupportMap<A>: _parity_scale_codec::Decode,
+			Supports<A>: _parity_scale_codec::Decode,
+			Supports<A>: _parity_scale_codec::Decode,
 		{
 			fn decode<DecIn: _parity_scale_codec::Input>(
 				input: &mut DecIn,
@@ -3115,7 +3115,7 @@ pub mod two_phase {
 			Ok(ReadySolution { supports, compute })
 		}
 		/// On-chain fallback of election.
-		fn onchain_fallback() -> Result<FlatSupportMap<T::AccountId>, Error> {
+		fn onchain_fallback() -> Result<Supports<T::AccountId>, Error> {
 			let desired_targets = Self::desired_targets() as usize;
 			let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
 			let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
@@ -3137,7 +3137,7 @@ pub mod two_phase {
 			_to_elect: usize,
 			_targets: Vec<T::AccountId>,
 			_voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-		) -> Result<FlatSupportMap<T::AccountId>, Self::Error>
+		) -> Result<Supports<T::AccountId>, Self::Error>
 		where
 			ExtendedBalance: From<<P as PerThing>::Inner>,
 		{
@@ -3181,13 +3181,13 @@ pub use sp_std::convert::TryInto;
 /// A flat variant of [`sp_npos_elections::SupportMap`].
 ///
 /// The main advantage of this is that it is encodable.
-pub type FlatSupportMap<A> = Vec<(A, Support<A>)>;
+pub type Supports<A> = Vec<(A, Support<A>)>;
 /// Helper trait to convert from a support map to a flat support vector.
 pub trait FlattenSupportMap<A> {
-	fn flatten(self) -> FlatSupportMap<A>;
+	fn flatten(self) -> Supports<A>;
 }
 impl<A> FlattenSupportMap<A> for SupportMap<A> {
-	fn flatten(self) -> FlatSupportMap<A> {
+	fn flatten(self) -> Supports<A> {
 		self.into_iter().map(|(k, v)| (k, v)).collect::<Vec<_>>()
 	}
 }
@@ -3262,7 +3262,7 @@ pub trait ElectionProvider<AccountId> {
 		to_elect: usize,
 		targets: Vec<AccountId>,
 		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	) -> Result<FlatSupportMap<AccountId>, Self::Error>
+	) -> Result<Supports<AccountId>, Self::Error>
 	where
 		ExtendedBalance: From<<P as PerThing>::Inner>;
 	/// Returns true if an election is still ongoing. This can be used by the call site to

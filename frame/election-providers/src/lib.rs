@@ -39,29 +39,15 @@ pub mod onchain;
 pub mod two_phase;
 
 use sp_arithmetic::PerThing;
-use sp_npos_elections::{CompactSolution, ExtendedBalance, PerThing128, Support, SupportMap};
+use sp_npos_elections::{
+	CompactSolution, ExtendedBalance, FlattenSupportMap, PerThing128, Support, SupportMap, Supports,
+};
 
 // for the helper macros
 #[doc(hidden)]
 pub use sp_npos_elections::VoteWeight;
 #[doc(hidden)]
 pub use sp_std::convert::TryInto;
-
-/// A flat variant of [`sp_npos_elections::SupportMap`].
-///
-/// The main advantage of this is that it is encodable.
-pub type FlatSupportMap<A> = Vec<(A, Support<A>)>;
-
-/// Helper trait to convert from a support map to a flat support vector.
-pub trait FlattenSupportMap<A> {
-	fn flatten(self) -> FlatSupportMap<A>;
-}
-
-impl<A> FlattenSupportMap<A> for SupportMap<A> {
-	fn flatten(self) -> FlatSupportMap<A> {
-		self.into_iter().map(|(k, v)| (k, v)).collect::<Vec<_>>()
-	}
-}
 
 /// Something that can provide the data to something else that implements [`ElectionProvider`], such
 /// as the [`two_phase`] module.
@@ -123,7 +109,8 @@ pub trait ElectionDataProvider<AccountId, B> {
 
 /// Something that can compute the result of an election and pass it back to the caller.
 pub trait ElectionProvider<AccountId> {
-	/// Indicate weather this election provider needs data when calling [`elect`] or not.
+	/// Indicate weather this election provider needs data when calling [`elect`] or not. If
+	/// `false`, then the call site can ignore all parameters of [`elect`]
 	const NEEDS_ELECT_DATA: bool;
 
 	/// The error type that is returned by the provider.
@@ -142,12 +129,13 @@ pub trait ElectionProvider<AccountId> {
 		to_elect: usize,
 		targets: Vec<AccountId>,
 		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	) -> Result<FlatSupportMap<AccountId>, Self::Error>
+	) -> Result<Supports<AccountId>, Self::Error>
 	where
 		ExtendedBalance: From<<P as PerThing>::Inner>;
 
-	/// Returns true if an election is still ongoing. This can be used by the call site to
-	/// dynamically check of a long-lasting election (such as [`two_phase`]) is still on-going or
-	/// not.
+	/// Returns true if an election is still ongoing.
+	///
+	/// This can be used by the call site to dynamically check of a long-lasting election (such as
+	/// [`two_phase`]) is still on-going or not.
 	fn ongoing() -> bool;
 }

@@ -1,7 +1,9 @@
 use super::*;
 use frame_support::{parameter_types, traits::OnInitialize};
 use sp_core::H256;
-use sp_npos_elections::CompactSolution;
+use sp_npos_elections::{
+	seq_phragmen, to_without_backing, CompactSolution, ElectionResult, EvaluateSupport,
+};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -51,7 +53,6 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let target_index = crate::target_index_fn!(targets, AccountId, Runtime);
 	let stake_of = crate::stake_of_fn!(voters, AccountId);
 
-	use sp_npos_elections::{seq_phragmen, to_without_backing, ElectionResult};
 	let ElectionResult {
 		winners,
 		assignments,
@@ -61,10 +62,10 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let winners = to_without_backing(winners);
 
 	let score = {
-		// TODO: we really need to clean this process.
 		let staked = sp_npos_elections::assignment_ratio_to_staked(assignments.clone(), &stake_of);
-		let support = sp_npos_elections::build_support_map(&winners, &staked).unwrap();
-		sp_npos_elections::evaluate_support(&support)
+		sp_npos_elections::to_supports(&winners, &staked)
+			.unwrap()
+			.evaluate()
 	};
 	let compact =
 		<CompactOf<Runtime>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
@@ -185,6 +186,7 @@ impl crate::two_phase::Trait for Runtime {
 	type MaxSignedSubmissions = MaxSignedSubmissions;
 	type SignedRewardBase = SignedRewardBase;
 	type SignedRewardFactor = ();
+	type SignedRewardMax = ();
 	type SignedDepositBase = SignedDepositBase;
 	type SignedDepositByte = ();
 	type SignedDepositWeight = ();

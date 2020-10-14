@@ -282,7 +282,7 @@ pub mod default_weights;
 pub mod inflation;
 
 use codec::{Decode, Encode, HasCompact};
-use frame_election_providers::{ElectionDataProvider, ElectionProvider, FlatSupportMap};
+use frame_election_providers::{ElectionDataProvider, ElectionProvider, Supports};
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
@@ -2154,16 +2154,15 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Set staking information for new era.
-		let maybe_new_validators = Self::select_and_update_validators(current_era);
+		let maybe_new_validators = Self::enact_election(current_era);
 
 		maybe_new_validators
 	}
 
-	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a [`Exposure`]
+	/// Consume a vectors of [`Supports`] ([`Supports`]) and collect them into a [`Exposure`].
 	fn collect_exposure(
-		supports: frame_election_providers::FlatSupportMap<T::AccountId>,
+		supports: Supports<T::AccountId>,
 	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
-		// TODO: maybe this can be abstracted with `From<>`
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: ExtendedBalance| T::CurrencyToVote::to_currency(e, total_issuance);
 
@@ -2197,18 +2196,32 @@ impl<T: Trait> Module<T> {
 			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
 	}
 
-	/// TODO:
-	/// TODO: use minimum_validator_count()
+	/// Process the output of the election.
+	///
+	/// This ensures enough validators have been elected, converts all supports to exposures and
+	/// writes them to the associated storage.
+	///
+	/// Returns `Err(())` if less than [`MinimumValidatorCount`] validators have been elected, `Ok`
+	/// otherwise.
 	pub fn process_election(
-		flat_supports: FlatSupportMap<T::AccountId>,
+		flat_supports: Supports<T::AccountId>,
 		current_era: EraIndex,
-	) -> Vec<T::AccountId> {
+	) -> Result<Vec<T::AccountId>, ()> {
 		let exposures = Self::collect_exposure(flat_supports);
 		let elected_stashes = exposures
 			.iter()
 			.cloned()
 			.map(|(x, _)| x)
 			.collect::<Vec<_>>();
+
+		if (elected_stashes.len() as u32) <= Self::minimum_validator_count() {
+			log!(
+				error,
+				"💸  Chain does not have enough staking candidates to operate for era {:?}",
+				current_era,
+			);
+			return Err(());
+		}
 
 		// Populate Stakers and write slot stake.
 		let mut total_stake: BalanceOf<T> = Zero::zero();
@@ -2246,11 +2259,13 @@ impl<T: Trait> Module<T> {
 			current_era,
 		);
 
-		elected_stashes
+		Ok(elected_stashes)
 	}
 
-	/// TODO:
-	fn select_and_update_validators(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
+	/// Enact and process the election using the `ElectionProvider` type.
+	///
+	/// This will also process the election, as noted in [`process_election`].
+	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
 		if T::ElectionProvider::NEEDS_ELECT_DATA {
 			// This election will need the real data.
 			T::ElectionProvider::elect::<ChainAccuracy>(
@@ -2258,12 +2273,14 @@ impl<T: Trait> Module<T> {
 				Self::get_npos_targets(),
 				Self::get_npos_voters(),
 			)
-			.map(|flat_supports| Self::process_election(flat_supports, current_era))
+			.map_err(|_| ())
+			.and_then(|flat_supports| Self::process_election(flat_supports, current_era))
 			.ok()
 		} else {
 			// no need to fetch the params.
 			T::ElectionProvider::elect::<ChainAccuracy>(0, vec![], vec![])
-				.map(|flat_supports| Self::process_election(flat_supports, current_era))
+				.map_err(|_| ())
+				.and_then(|flat_supports| Self::process_election(flat_supports, current_era))
 				.ok()
 		}
 	}
@@ -2354,10 +2371,14 @@ impl<T: Trait> Module<T> {
 
 	/// Get all of the voters that are eligible for the npos election.
 	///
-	/// This will inject all validators as well as a self-vote.
+	/// This will use all on-chain nominators, and all the validators will inject a self vote.
+	///
+	/// ### Slashing
+	///
+	/// All nominations that have been submitted before the last non-zero slash of the validator are
+	/// auto-chilled.
 	///
 	/// Note that this is VERY expensive. Use with care.
-	/// TODO:
 	pub fn get_npos_voters() -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		let weight_of = Self::slashable_balance_of_fn();
 		let mut all_voters = Vec::new();
@@ -2412,9 +2433,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> ElectionDataProvider<T::AccountId, T::BlockNumber>
-	for Module<T>
-{
+impl<T: Trait> ElectionDataProvider<T::AccountId, T::BlockNumber> for Module<T> {
 	type CompactSolution = CompactU16Solution;
 
 	fn desired_targets() -> u32 {
@@ -2434,8 +2453,8 @@ impl<T: Trait> ElectionDataProvider<T::AccountId, T::BlockNumber>
 	}
 
 	fn feasibility_check_assignment<P: PerThing>(
-		who: &T::AccountId,
-		distribution: &[(T::AccountId, P)],
+		_who: &T::AccountId,
+		_distribution: &[(T::AccountId, P)],
 	) -> bool {
 		// TODO
 		true

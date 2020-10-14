@@ -18,16 +18,16 @@
 //! Tests for the module.
 
 use super::*;
-use mock::*;
-use sp_runtime::{
-	assert_eq_error_rate, traits::BadOrigin,
-};
-use sp_staking::offence::OffenceDetails;
 use frame_support::{
-	assert_ok, assert_noop, StorageMap,
-	traits::{Currency, ReservableCurrency, OnInitialize, OnFinalize},
+	assert_noop, assert_ok,
+	traits::{Currency, OnInitialize, ReservableCurrency},
+	StorageMap,
 };
+use mock::*;
 use pallet_balances::Error as BalancesError;
+use sp_npos_elections::Support;
+use sp_runtime::{assert_eq_error_rate, traits::BadOrigin};
+use sp_staking::offence::OffenceDetails;
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
@@ -1723,6 +1723,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
 		.minimum_validator_count(1)
 		.build()
 		.execute_with(|| {
+
 			// disable the nominator
 			assert_ok!(Staking::chill(Origin::signed(100)));
 			// make stakes equal.
@@ -1743,6 +1744,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
 			}
 
 			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
+			// 11 should not be elected. All of these count as ONE vote.
 			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21, 31,]));
 
 			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
@@ -1756,11 +1758,13 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
 				Staking::get_npos_voters(),
 			).unwrap();
 
-			let winners = election_result.iter().map(|(x, _)| x).cloned().collect::<Vec<_>>();
-			assert_eq!(winners, vec![31, 21]);
-			// only distribution to 21 and 31.
-			// TODO:
-			// assert_eq!(assignments.iter().find(|a| a.who == 1).unwrap().distribution.len(), 2);
+			assert_eq_uvec!(
+				election_result,
+				vec![
+					(21, Support::<AccountId> { total: 1800, voters: vec![(21, 1000), (3, 400), (1, 400)] }),
+					(31, Support::<AccountId> { total: 2200, voters: vec![(31, 1000), (3, 600), (1, 600)] }),
+				]
+			);
 		});
 }
 
@@ -1805,11 +1809,13 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election_elected() {
 				Staking::get_npos_voters(),
 			).unwrap();
 
-			let winners = election_result.iter().map(|(x, _)| x).cloned().collect::<Vec<_>>();
-			assert_eq!(winners, vec![21, 11]);
-			// only distribution to 21 and 31.
-			// TODO:
-			// assert_eq!(assignments.iter().find(|a| a.who == 1).unwrap().distribution.len(), 2);
+			assert_eq_uvec!(
+				election_result,
+				vec![
+					(21, Support::<AccountId> { total: 2500, voters: vec![(21, 1000), (3, 1000), (1, 500)] }),
+					(11, Support::<AccountId> { total: 1500, voters: vec![(11, 1000), (1, 500)] }),
+				]
+			);
 		});
 }
 
@@ -1943,7 +1949,7 @@ fn reward_from_authorship_event_handler_works() {
 fn add_reward_points_fns_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Not mandatory but must be coherent with rewards
-		assert_eq!(Session::validators(), vec![21, 11]);
+		assert_eq_uvec!(Session::validators(), vec![21, 11]);
 
 		<Module<Test>>::reward_by_ids(vec![
 			(21, 1),

@@ -1,4 +1,4 @@
-use crate::{ElectionProvider, FlatSupportMap, FlattenSupportMap};
+use crate::{ElectionProvider, FlattenSupportMap, Supports};
 use sp_arithmetic::PerThing;
 use sp_npos_elections::{ElectionResult, ExtendedBalance, IdentifierT, PerThing128, VoteWeight};
 use sp_runtime::RuntimeDebug;
@@ -17,17 +17,24 @@ impl From<sp_npos_elections::Error> for Error {
 	}
 }
 
+/// A simple on-chian implementation of the election provider trait.
+///
+/// This will accept voting data on the fly and produce the results immediately.
+///
+/// ### Warning
+///
+/// This can be very expensive to run frequently on-chain. Use with care.
 pub struct OnChainSequentialPhragmen;
+
 impl<AccountId: IdentifierT> ElectionProvider<AccountId> for OnChainSequentialPhragmen {
 	type Error = Error;
-
 	const NEEDS_ELECT_DATA: bool = true;
 
 	fn elect<P: PerThing128>(
 		to_elect: usize,
 		targets: Vec<AccountId>,
 		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	) -> Result<FlatSupportMap<AccountId>, Self::Error>
+	) -> Result<Supports<AccountId>, Self::Error>
 	where
 		ExtendedBalance: From<<P as PerThing>::Inner>,
 	{
@@ -52,8 +59,7 @@ impl<AccountId: IdentifierT> ElectionProvider<AccountId> for OnChainSequentialPh
 				)?;
 				let winners = sp_npos_elections::to_without_backing(winners);
 
-				sp_npos_elections::build_support_map(&winners, &staked)
-					.map(|s| s.flatten())
+				sp_npos_elections::to_supports(&winners, &staked)
 			})
 			.map_err(From::from)
 	}
