@@ -49,6 +49,7 @@ use tracing_subscriber::{
 	filter::Directive, fmt::{time::ChronoLocal, FormatEvent, FmtContext, FormatFields, format::FmtSpan}, layer::{SubscriberExt, Context}, FmtSubscriber, Layer, registry::LookupSpan,
 };
 use std::fmt::Write as OtherWrite;
+use std::marker::PhantomData;
 
 /// Substrate client CLI
 ///
@@ -316,7 +317,7 @@ pub fn init_logger(
 		//.with_span_events(FmtSpan::FULL)
 		.event_format(EventFormat)
 		//.event_format(tracing_subscriber::fmt::format().json().with_span_list(true))
-		.finish().with(MyLayer {});
+		.finish().with(MyLayer);
 
 	if let Some(tracing_targets) = tracing_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &tracing_targets);
@@ -347,24 +348,35 @@ where
 		use tracing_subscriber::fmt::FormattedFields;
 		ctx.visit_spans::<(), _>(|span| {
 			let exts = span.extensions();
-			let fields = exts.get::<FormattedFields<N>>();
-			writeln!(writer, "{:?} {:?} {:?}", span.name(), fields.map(|x| x.as_str()), event);
+			let fields = exts.get::<MyFormattedFields>();
+			write!(writer, "{:?} {:?}", span.name(), fields);
 			Ok(())
 		}).unwrap();
-		Ok(())
+
+		writeln!(writer, " {:?}", event)
 	}
 }
 
-pub struct MyLayer {
-	// ...
-}
+pub struct MyLayer;
 
-impl<S: Subscriber> Layer<S> for MyLayer {
+impl<S> Layer<S> for MyLayer
+where
+	S: Subscriber + for<'a> LookupSpan<'a>,
+{
 	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
-		let mut s = String::new();
-		let mut v = StringVisitor { string: &mut s };
-		attrs.record(&mut v);
-		eprintln!("### {:?}", s);
+		let span = ctx.span(id).expect("new_span has been called for this span; qed");
+		let mut extensions = span.extensions_mut();
+
+		if extensions.get_mut::<MyFormattedFields>().is_none() {
+			let mut s = String::new();
+			let mut v = StringVisitor { string: &mut s };
+			attrs.record(&mut v);
+
+			if !s.is_empty() {
+				let fmt_fields = MyFormattedFields(s);
+				extensions.insert(fmt_fields);
+			}
+		}
 	}
 }
 
@@ -375,7 +387,7 @@ pub struct StringVisitor<'a> {
 impl<'a> tracing::field::Visit for StringVisitor<'a> {
 	fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
 		if field.name() == "name" {
-			write!(self.string, " [name = {:?}]", value).unwrap();
+			write!(self.string, "[name = {:?}]", value).unwrap();
 		}
 	}
 
@@ -385,6 +397,9 @@ impl<'a> tracing::field::Visit for StringVisitor<'a> {
 		}
 	}
 }
+
+#[derive(Debug)]
+struct MyFormattedFields(String);
 
 #[cfg(test)]
 mod tests {
