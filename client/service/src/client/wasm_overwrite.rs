@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -95,15 +95,11 @@ where
 		let backend_code = code.fetch_runtime_code()
 			.ok_or(sp_blockchain::Error::Msg(format!("Runtime code could not be found in the backend")))?;
 		let version = Self::runtime_version(&self.executor, &WasmBlob::new(backend_code.to_vec()), code.heap_pages)?;
-
-		if let Some(runtime_code) = self.overwrites
+		
+		self.overwrites
 			.get(&version.spec_version)
-			.map(|w| w.runtime_code(code.heap_pages)) 
-		{
-			Ok(runtime_code)
-		} else {
-			Ok(code)
-		}
+			.map(|w| w.runtime_code(code.heap_pages))
+			.map_or_else(|| Ok(code), Ok)
 	}
 
 	/// Scrapes a folder for WASM runtimes.
