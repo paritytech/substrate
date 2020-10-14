@@ -19,16 +19,14 @@ use std::{
 	fs, collections::{HashMap, hash_map::DefaultHasher}, path::Path,
 	hash::Hasher as _, 
 };
-use codec::{Encode, Decode};
 use sp_core::{
 	traits::FetchRuntimeCode,
 };
-use sp_state_machine::{BasicExternalities, backend};
+use sp_state_machine::{BasicExternalities};
 use sp_blockchain::Result;
 use sc_executor::RuntimeInfo;
 use sp_version::RuntimeVersion;
 use sp_core::traits::RuntimeCode;
-use hash_db::Hasher;
 
 #[derive(Clone, Debug)]
 struct WasmBlob {
@@ -43,14 +41,14 @@ impl WasmBlob {
 	fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
 		RuntimeCode {
 			code_fetcher: self,
-			hash: make_hash(self.code.as_slice()).encode(),
+			hash: make_hash(self.code.as_slice()),
 			heap_pages,
 		}
 	}
 }
 
 /// Make a hash out of a byte string using the default rust hasher
-pub fn make_hash<K: std::hash::Hash + ?Sized>(val: &K) -> Vec<u8> {
+fn make_hash<K: std::hash::Hash + ?Sized>(val: &K) -> Vec<u8> {
 	let mut state = DefaultHasher::new();
 	val.hash(&mut state);
 	state.finish().to_le_bytes().to_vec()
@@ -81,18 +79,14 @@ where
 		let overwrites = Self::scrape_overwrites(path.as_ref(), &executor)?;
 		Ok(Self { overwrites, executor, enabled })
 	}
-	
+
 	/// Tries to replace the given `code` with an overwrite, if it exists.
 	/// If the overwrite does not exist, or overwrites are not enabled,
 	/// this function returns the original runtime code.
-	pub fn try_replace<'a, 'b: 'a, B, H>(
+	pub fn try_replace<'a, 'b: 'a>(
 		&'b self, 
 		code: RuntimeCode<'a>, 
-		state: &'a B,
 	) -> Result<RuntimeCode<'a>>
-	where
-		B: backend::Backend<H>,
-		H: Hasher
 	{
 		if !self.enabled {
 			return Ok(code);
@@ -100,15 +94,11 @@ where
 
 		let backend_code = code.fetch_runtime_code()
 			.ok_or(sp_blockchain::Error::Msg(format!("Runtime code could not be found in the backend")))?;
-		let heap_pages = state.storage(sp_core::storage::well_known_keys::HEAP_PAGES)
-			.ok()
-			.flatten()
-			.and_then(|d| Decode::decode(&mut &d[..]).ok()); 
-		let version = Self::runtime_version(&self.executor, &WasmBlob::new(backend_code.to_vec()), heap_pages)?;
-		
+		let version = Self::runtime_version(&self.executor, &WasmBlob::new(backend_code.to_vec()), code.heap_pages)?;
+
 		if let Some(runtime_code) = self.overwrites
 			.get(&version.spec_version)
-			.map(|w| w.runtime_code(heap_pages)) 
+			.map(|w| w.runtime_code(code.heap_pages)) 
 		{
 			Ok(runtime_code)
 		} else {
@@ -117,12 +107,12 @@ where
 	}
 
 	/// Scrapes a folder for WASM runtimes.
-    /// Returns a hashmap of the runtime version and wasm runtime code.
+	/// Returns a hashmap of the runtime version and wasm runtime code.
 	fn scrape_overwrites(dir: &Path, executor: &E) -> Result<HashMap<u32, WasmBlob>> {
 		let handle_err = |e: std::io::Error | -> sp_blockchain::Error {
 			sp_blockchain::Error::Msg(format!("{}", e.to_string()))
 		};
-		
+
 		let mut overwrites = HashMap::new(); 
 		if dir.is_dir() {
 			for entry in fs::read_dir(dir).map_err(handle_err)? {

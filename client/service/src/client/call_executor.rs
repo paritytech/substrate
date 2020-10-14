@@ -113,7 +113,7 @@ where
 		let state = self.backend.state_at(*id)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 		let runtime_code = state_runtime_code.runtime_code()?;
-		let runtime_code = self.wasm_overwrite.try_replace(runtime_code, &state)?;
+		let runtime_code = self.wasm_overwrite.try_replace(runtime_code)?;
 		let return_data = StateMachine::new(
 			&state,
 			changes_trie,
@@ -187,7 +187,7 @@ where
 				// It is important to extract the runtime code here before we create the proof
 				// recorder.
 				let runtime_code = state_runtime_code.runtime_code()?;
-				let runtime_code = self.wasm_overwrite.try_replace(runtime_code, &trie_state)?;
+				let runtime_code = self.wasm_overwrite.try_replace(runtime_code)?;
 
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
@@ -213,7 +213,7 @@ where
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 				let runtime_code = state_runtime_code.runtime_code()?;
-				let runtime_code = self.wasm_overwrite.try_replace(runtime_code, &state)?;
+				let runtime_code = self.wasm_overwrite.try_replace(runtime_code)?;
 
 				let mut state_machine = StateMachine::new(
 					&state,

@@ -355,7 +355,7 @@ pub fn new_light() -> (
 		executor,
 		Box::new(sp_core::testing::TaskExecutor::new()),
 		Default::default(),
-	).unwrap();
+	).expect("Local Call Executor failed to instantiate");
 	let call_executor = LightExecutor::new(
 		backend.clone(),
 		local_call_executor,
