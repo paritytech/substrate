@@ -72,6 +72,16 @@ pub struct Limits {
 	/// the linear memory limit `memory_pages` applies to them.
 	pub globals: u32,
 
+	/// Maximum numbers of parameters a function can have.
+	///
+	/// Those need to be limited to prevent a potentially exploitable interaction with
+	/// the stack height instrumentation: The costs of executing the stack height
+	/// instrumentation for an indirectly called function scales linearly with the amount
+	/// of parameters of this function. Because the stack height instrumentation itself is
+	/// is not weight metered its costs must be static (via this limit) and included in
+	/// the costs of the instructions that cause them (call, call_indirect).
+	pub parameters: u32,
+
 	/// Maximum number of memory pages allowed for a contract.
 	pub memory_pages: u32,
 
@@ -335,6 +345,7 @@ impl Default for Limits {
 			// 512 * sizeof(i64) will give us a 4k stack.
 			stack_height: 512,
 			globals: 256,
+			parameters: 128,
 			memory_pages: 16,
 			// 4k function pointers (This is in count not bytes).
 			table_size: 4096,

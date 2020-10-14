@@ -154,6 +154,23 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 		Ok(())
 	}
 
+	/// Ensure that no function exists that has more parameters than allowed.
+	fn ensure_parameter_limit(&self, limit: u32) -> Result<(), &'static str> {
+		let type_section = if let Some(type_section) = self.module.type_section() {
+			type_section
+		} else {
+			return Ok(());
+		};
+
+		for Type::Function(func) in type_section.types() {
+			if func.params().len() > limit as usize {
+				return Err("Use of a function type with too many parameters.");
+			}
+		}
+
+		Ok(())
+	}
+
 	fn inject_gas_metering(self) -> Result<Self, &'static str> {
 		let gas_rules =
 			rules::Set::new(
@@ -394,6 +411,7 @@ pub fn prepare_contract<C: ImportSatisfyCheck, T: Trait>(
 	contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
 	contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
 	contract_module.ensure_no_floating_types()?;
+	contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
 
 	// We disallow importing `gas` function here since it is treated as implementation detail.
 	let disallowed_imports = [b"gas".as_ref()];
@@ -484,6 +502,7 @@ mod tests {
 				let schedule = Schedule {
 					limits: Limits {
 						globals: 3,
+						parameters: 3,
 						memory_pages: 16,
 						table_size: 3,
 						.. Default::default()
@@ -511,6 +530,33 @@ mod tests {
 		)"#,
 		Err("gas instrumentation failed")
 	);
+
+	mod functions {
+		use super::*;
+
+		prepare_test!(param_number_valid,
+			r#"
+			(module
+				(func (export "call"))
+				(func (export "deploy"))
+				(func (param i32 i32 i32))
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(param_number_invalid,
+			r#"
+			(module
+				(func (export "call"))
+				(func (export "deploy"))
+				(func (param i32 i32 i32 i32))
+				(func (param i32))
+			)
+			"#,
+			Err("Use of a function type with too many parameters.")
+		);
+	}
 
 	mod globals {
 		use super::*;
