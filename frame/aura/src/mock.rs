@@ -19,6 +19,9 @@
 
 #![cfg(test)]
 
+use pallet_staking::EraIndex;
+use std::cell::RefCell;
+use frame_support::traits::Get;
 use crate::{Trait, Module, GenesisConfig};
 use sp_consensus_aura::ed25519::AuthorityId;
 use sp_runtime::{
@@ -80,8 +83,21 @@ impl pallet_timestamp::Trait for Test {
 	type WeightInfo = ();
 }
 
+pub(crate) type BlockNumber = u64;
+
+thread_local! {
+	static PERIOD: RefCell<EraIndex> = RefCell::new(1);
+}
+
+pub struct Period;
+impl Get<EraIndex> for Period {
+	fn get() -> EraIndex {
+		PERIOD.with(|v| *v.borrow())
+	}
+}
 impl Trait for Test {
 	type AuthorityId = AuthorityId;
+	type Period = Period;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {

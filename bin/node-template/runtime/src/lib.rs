@@ -129,6 +129,7 @@ parameter_types! {
 		.saturating_sub(Perbill::from_percent(10)) * MaximumBlockWeight::get();
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;
+	pub const Period: pallet_staking::EraIndex = 1;
 }
 
 // Configure FRAME pallets to include in runtime.
@@ -194,6 +195,7 @@ impl frame_system::Trait for Runtime {
 
 impl pallet_aura::Trait for Runtime {
 	type AuthorityId = AuraId;
+	type Period = Period;
 }
 
 impl pallet_grandpa::Trait for Runtime {

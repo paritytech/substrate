@@ -19,6 +19,7 @@ sp-inherents = { version = "2.0.0", default-features = false, path = "../../prim
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 serde = { version = "1.0.101", optional = true }
 pallet-session = { version = "2.0.0", default-features = false, path = "../session" }
+pallet-staking = { version = "2.0.0", default-features = false, path = "../staking" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 sp-consensus-aura = { version = "0.8.0", path = "../../primitives/consensus/aura", default-features = false }
@@ -47,4 +48,5 @@ std = [
 	"frame-system/std",
 	"sp-timestamp/std",
 	"pallet-timestamp/std",
+	"pallet-staking/std",
 ]

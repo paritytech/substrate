@@ -62,13 +62,16 @@ use sp_consensus_aura::{
 	AURA_ENGINE_ID, ConsensusLog, AuthorityIndex,
 	inherents::{INHERENT_IDENTIFIER, AuraInherentData},
 };
+use pallet_staking::EraIndex;
 
 mod mock;
 mod tests;
 
-pub trait Trait: pallet_timestamp::Trait {
+pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default;
+	/// The period for the AURA sessions
+	type Period: Get<EraIndex>;
 }
 
 decl_storage! {
@@ -86,7 +89,9 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		const EpochDuration: EraIndex = T::Period::get();
+	}
 }
 
 impl<T: Trait> Module<T> {
