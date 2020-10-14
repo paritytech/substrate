@@ -1519,11 +1519,24 @@ impl<B: BlockT> ChainSync<B> {
 		self.pending_requests.set_all();
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 		let old_peers = std::mem::take(&mut self.peers);
+
 		old_peers.into_iter().filter_map(move |(id, p)| {
+			// peers that were downloading justifications or finality proofs
+			// should be kept in that state.
+			match p.state {
+				PeerSyncState::DownloadingJustification(_)
+				| PeerSyncState::DownloadingFinalityProof(_) => {
+					self.peers.insert(id, p);
+					return None;
+				}
+				_ => {}
+			}
+
+			// handle peers that were in other states.
 			match self.new_peer(id.clone(), p.best_hash, p.best_number) {
 				Ok(None) => None,
 				Ok(Some(x)) => Some(Ok((id, x))),
-				Err(e) => Some(Err(e))
+				Err(e) => Some(Err(e)),
 			}
 		})
 	}
