@@ -98,7 +98,7 @@
 			"symbols": ["REY"],
 			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": ["http://laminar.network/"]
+			"website": "http://laminar.network/"
 		},
 		{
 			"prefix": 10,
@@ -116,7 +116,7 @@
 			"symbols": ["LAMI"],
 			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": ["http://laminar.network/"]
+			"website": "http://laminar.network/"
 		},
 		{
 			"prefix": 12,
