@@ -101,8 +101,6 @@ pub struct Configuration {
 	pub tracing_targets: Option<String>,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
-	/// Logger.
-	pub logger: crate::Logger,
 	/// The size of the instances cache.
 	///
 	/// The default value is 8.

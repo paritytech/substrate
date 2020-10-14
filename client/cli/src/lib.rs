@@ -37,16 +37,18 @@ pub use runner::*;
 use sc_service::{Configuration, TaskExecutor};
 pub use sc_service::{ChainSpec, Role};
 pub use sp_version::RuntimeVersion;
+use std::fmt;
 use std::io::Write;
 pub use structopt;
 use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
+use tracing::{Event, Subscriber, Id, span::Attributes};
 use tracing_subscriber::{
-	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
+	filter::Directive, fmt::{time::ChronoLocal, FormatEvent, FmtContext, FormatFields, format::FmtSpan}, layer::{SubscriberExt, Context}, FmtSubscriber, Layer, registry::LookupSpan,
 };
-use std::sync::Arc;
+use std::fmt::Write as OtherWrite;
 
 /// Substrate client CLI
 ///
@@ -235,8 +237,8 @@ pub trait SubstrateCli: Sized {
 pub fn init_logger(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
-	tracing_targets: Option<&String>,
-) -> std::result::Result<Arc<dyn tracing::Subscriber + Send + Sync>, String> {
+	tracing_targets: Option<String>,
+) -> std::result::Result<(), String> {
 	fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
 		dirs.as_ref()
 			.split(',')
@@ -305,20 +307,82 @@ pub fn init_logger(
 	let subscriber = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
 		.with_ansi(enable_color)
-		.with_target(!simple)
-		.with_level(!simple)
-		.with_thread_names(!simple)
-		.with_timer(timer)
-		//.with_writer(std::io::sink)
-		.with_writer(std::io::stderr)
-		.finish();
+		//.with_target(!simple)
+		//.with_level(!simple)
+		//.with_thread_names(!simple)
+		//.with_timer(timer)
+		//.with_writer(std::io::stderr)
+		//.with_max_level(tracing::Level::INFO)
+		//.with_span_events(FmtSpan::FULL)
+		.event_format(EventFormat)
+		//.event_format(tracing_subscriber::fmt::format().json().with_span_list(true))
+		.finish().with(MyLayer {});
 
 	if let Some(tracing_targets) = tracing_targets {
-		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, tracing_targets);
+		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &tracing_targets);
 
-		Ok(Arc::new(subscriber.with(profiling)))
+		if let Err(e) = tracing::subscriber::set_global_default(subscriber.with(profiling)) {
+			return Err(format!(
+				"Registering Substrate tracing subscriber failed: {:}!", e
+			))
+		}
 	} else {
-		Ok(Arc::new(subscriber))
+		if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+			return Err(format!(
+				"Registering Substrate tracing subscriber  failed: {:}!", e
+			))
+		}
+	}
+	Ok(())
+}
+
+struct EventFormat;
+
+impl<S, N> FormatEvent<S, N> for EventFormat
+where
+	S: Subscriber + for<'a> LookupSpan<'a>,
+	N: for<'a> FormatFields<'a> + 'static,
+{
+	fn format_event(&self, ctx: &FmtContext<S, N>, writer: &mut dyn fmt::Write, event: &Event) -> fmt::Result {
+		use tracing_subscriber::fmt::FormattedFields;
+		ctx.visit_spans::<(), _>(|span| {
+			let exts = span.extensions();
+			let fields = exts.get::<FormattedFields<N>>();
+			writeln!(writer, "{:?} {:?} {:?}", span.name(), fields.map(|x| x.as_str()), event);
+			Ok(())
+		}).unwrap();
+		Ok(())
+	}
+}
+
+pub struct MyLayer {
+	// ...
+}
+
+impl<S: Subscriber> Layer<S> for MyLayer {
+	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
+		let mut s = String::new();
+		let mut v = StringVisitor { string: &mut s };
+		attrs.record(&mut v);
+		eprintln!("### {:?}", s);
+	}
+}
+
+pub struct StringVisitor<'a> {
+	string: &'a mut String,
+}
+
+impl<'a> tracing::field::Visit for StringVisitor<'a> {
+	fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+		if field.name() == "name" {
+			write!(self.string, " [name = {:?}]", value).unwrap();
+		}
+	}
+
+	fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+		if field.name() == "name" {
+			write!(self.string, " [{}]", value).unwrap();
+		}
 	}
 }
 

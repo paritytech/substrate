@@ -52,7 +52,7 @@ pub struct ProfilingLayer {
 }
 
 /// Used to configure how to receive the metrics
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum TracingReceiver {
 	/// Output to logger
 	Log,

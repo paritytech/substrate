@@ -76,6 +76,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 sc-tracing = { version = "2.0.0", path = "../tracing" }
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
 tracing = "0.1.19"
+tracing-futures = { version = "0.2.4" }
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
