@@ -28,7 +28,7 @@ use sp_runtime::traits::{
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
-use frame_support::weights::{Weight, constants::WEIGHT_PER_MICROS};
+use frame_support::weights::Weight;
 use frame_system::{ensure_signed, ensure_root};
 use self::address::Address as RawAddress;
 
@@ -36,24 +36,17 @@ mod mock;
 pub mod address;
 mod tests;
 mod benchmarking;
+mod default_weights;
 
 pub type Address<T> = RawAddress<<T as frame_system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 pub trait WeightInfo {
-	fn claim(i: u32, ) -> Weight;
-	fn transfer(i: u32, ) -> Weight;
-	fn free(i: u32, ) -> Weight;
-	fn force_transfer(i: u32, ) -> Weight;
-	fn freeze(i: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn claim(_i: u32, ) -> Weight { 1_000_000_000 }
-	fn transfer(_i: u32, ) -> Weight { 1_000_000_000 }
-	fn free(_i: u32, ) -> Weight { 1_000_000_000 }
-	fn force_transfer(_i: u32, ) -> Weight { 1_000_000_000 }
-	fn freeze(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn claim() -> Weight;
+	fn transfer() -> Weight;
+	fn free() -> Weight;
+	fn force_transfer() -> Weight;
+	fn freeze() -> Weight;
 }
 
 /// The module's config trait.
@@ -95,11 +88,11 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as Trait>::AccountIndex
 	{
-		/// A account index was assigned. [who, index]
+		/// A account index was assigned. \[who, index\]
 		IndexAssigned(AccountId, AccountIndex),
-		/// A account index has been freed up (unassigned). [index]
+		/// A account index has been freed up (unassigned). \[index\]
 		IndexFreed(AccountIndex),
-		/// A account index has been frozen to its current account ID. [who, index]
+		/// A account index has been frozen to its current account ID. \[who, index\]
 		IndexFrozen(AccountIndex, AccountId),
 	}
 );
@@ -142,10 +135,9 @@ decl_module! {
 		/// - One reserve operation.
 		/// - One event.
 		/// -------------------
-		/// - Base Weight: 28.69 µs
 		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1) + 30 * WEIGHT_PER_MICROS]
+		#[weight = T::WeightInfo::claim()]
 		fn claim(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -173,12 +165,11 @@ decl_module! {
 		/// - One transfer operation.
 		/// - One event.
 		/// -------------------
-		/// - Base Weight: 33.74 µs
 		/// - DB Weight:
 		///    - Reads: Indices Accounts, System Account (recipient)
 		///    - Writes: Indices Accounts, System Account (recipient)
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(2, 2) + 35 * WEIGHT_PER_MICROS]
+		#[weight = T::WeightInfo::transfer()]
 		fn transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
@@ -210,10 +201,9 @@ decl_module! {
 		/// - One reserve operation.
 		/// - One event.
 		/// -------------------
-		/// - Base Weight: 25.53 µs
 		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1) + 25 * WEIGHT_PER_MICROS]
+		#[weight = T::WeightInfo::free()]
 		fn free(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -244,12 +234,11 @@ decl_module! {
 		/// - Up to one reserve operation.
 		/// - One event.
 		/// -------------------
-		/// - Base Weight: 26.83 µs
 		/// - DB Weight:
 		///    - Reads: Indices Accounts, System Account (original owner)
 		///    - Writes: Indices Accounts, System Account (original owner)
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(2, 2) + 25 * WEIGHT_PER_MICROS]
+		#[weight = T::WeightInfo::force_transfer()]
 		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex, freeze: bool) {
 			ensure_root(origin)?;
 
@@ -277,10 +266,9 @@ decl_module! {
 		/// - Up to one slash operation.
 		/// - One event.
 		/// -------------------
-		/// - Base Weight: 30.86 µs
 		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1) + 30 * WEIGHT_PER_MICROS]
+		#[weight = T::WeightInfo::freeze()]
 		fn freeze(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 

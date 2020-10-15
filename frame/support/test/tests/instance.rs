@@ -81,6 +81,13 @@ mod module1 {
 		}
 	}
 
+	frame_support::decl_error! {
+		pub enum Error for Module<T: Trait<I>, I: Instance> where T::BlockNumber: From<u32> {
+			/// Test
+			Test,
+		}
+	}
+
 	frame_support::decl_event! {
 		pub enum Event<T, I> where Phantom = std::marker::PhantomData<T> {
 			_Phantom(Phantom),
@@ -184,7 +191,7 @@ mod module3 {
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {}
+		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin, system=system {}
 	}
 }
 
@@ -241,7 +248,7 @@ impl system::Trait for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
-	type ModuleToIndex = ();
+	type PalletInfo = ();
 	type Call = Call;
 }
 

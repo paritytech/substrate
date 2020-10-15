@@ -61,7 +61,7 @@ use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_storage, Parameter};
 use frame_support::{
-	traits::{OriginTrait, UnfilteredDispatchable},
+	traits::{OriginTrait, UnfilteredDispatchable, Get},
 	weights::{Weight, GetDispatchInfo, DispatchClass}, dispatch::PostDispatchInfo,
 };
 use frame_system::{ensure_signed, ensure_root};
@@ -98,7 +98,7 @@ decl_event! {
 	/// Events type.
 	pub enum Event {
 		/// Batch of dispatches did not complete fully. Index of first failing dispatch given, as
-		/// well as the error. [index, error]
+		/// well as the error. \[index, error\]
 		BatchInterrupted(u32, DispatchError),
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
@@ -185,7 +185,9 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		#[weight = (
 			T::WeightInfo::as_derivative()
-				.saturating_add(call.get_dispatch_info().weight),
+				.saturating_add(call.get_dispatch_info().weight)
+				 // AccountData for inner call origin accountdata.
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 			call.get_dispatch_info().class,
 		)]
 		fn as_derivative(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {

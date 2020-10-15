@@ -73,7 +73,6 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						peers.push(PeerInfo {
 							peer_id: status.peer_id.to_base58(),
 							roles: format!("{}", Role::Full),
-							protocol_version: 1,
 							best_hash: Default::default(),
 							best_number: 1,
 						});
@@ -104,6 +103,13 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 				}
 				Request::NodeRoles(sender) => {
 					let _ = sender.send(vec![NodeRole::Authority]);
+				}
+				Request::SyncState(sender) => {
+					let _ = sender.send(SyncState {
+						starting_block: 1,
+						current_block: 2,
+						highest_block: Some(3),
+					});
 				}
 			};
 
@@ -259,7 +265,6 @@ fn system_peers() {
 		vec![PeerInfo {
 			peer_id: peer_id.to_base58(),
 			roles: "FULL".into(),
-			protocol_version: 1,
 			best_hash: Default::default(),
 			best_number: 1u64,
 		}]
@@ -290,6 +295,18 @@ fn system_node_roles() {
 	assert_eq!(
 		wait_receiver(api(None).system_node_roles()),
 		vec![NodeRole::Authority]
+	);
+}
+
+#[test]
+fn system_sync_state() {
+	assert_eq!(
+		wait_receiver(api(None).system_sync_state()),
+		SyncState {
+			starting_block: 1,
+			current_block: 2,
+			highest_block: Some(3),
+		}
 	);
 }
 

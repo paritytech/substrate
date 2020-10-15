@@ -41,7 +41,10 @@ macro_rules! impl_outer_origin {
 
 	(
 		$(#[$attr:meta])*
-		pub enum $name:ident for $runtime:ident where system = $system:ident {
+		pub enum $name:ident for $runtime:ident where
+			system = $system:ident
+			$(, system_index = $system_index:tt)?
+		{
 			$( $rest_with_system:tt )*
 		}
 	) => {
@@ -52,6 +55,7 @@ macro_rules! impl_outer_origin {
 				[< $name Caller >];
 				$runtime;
 				$system;
+				system_index { $( $system_index )? };
 				Modules { $( $rest_with_system )* };
 			);
 		}
@@ -64,8 +68,9 @@ macro_rules! impl_outer_origin {
 		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
+		system_index { $( $system_index:tt )? };
 		Modules {
-			$module:ident $instance:ident <T>
+			$( #[codec(index = $index:tt)] )? $module:ident $instance:ident <T>
 			$(, $( $rest_module:tt )* )?
 		};
 		$( $parsed:tt )*
@@ -76,8 +81,9 @@ macro_rules! impl_outer_origin {
 			$caller_name;
 			$runtime;
 			$system;
+			system_index { $( $system_index )? };
 			Modules { $( $( $rest_module )* )? };
-			$( $parsed )* $module <$runtime> { $instance },
+			$( $parsed )* $module <$runtime> { $instance } index { $( $index )? },
 		);
 	};
 
@@ -88,8 +94,9 @@ macro_rules! impl_outer_origin {
 		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
+		system_index { $( $system_index:tt )? };
 		Modules {
-			$module:ident $instance:ident
+			$( #[codec(index = $index:tt )] )? $module:ident $instance:ident
 			$(, $rest_module:tt )*
 		};
 		$( $parsed:tt )*
@@ -100,8 +107,9 @@ macro_rules! impl_outer_origin {
 			$caller_name;
 			$runtime;
 			$system;
+			system_index { $( $system_index )? };
 			Modules { $( $rest_module )* };
-			$( $parsed )* $module { $instance },
+			$( $parsed )* $module { $instance } index { $( $index )? },
 		);
 	};
 
@@ -112,8 +120,9 @@ macro_rules! impl_outer_origin {
 		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
+		system_index { $( $system_index:tt )? };
 		Modules {
-			$module:ident <T>
+			$( #[codec(index = $index:tt )] )? $module:ident <T>
 			$(, $( $rest_module:tt )* )?
 		};
 		$( $parsed:tt )*
@@ -124,8 +133,9 @@ macro_rules! impl_outer_origin {
 			$caller_name;
 			$runtime;
 			$system;
+			system_index { $( $system_index )? };
 			Modules { $( $( $rest_module )* )? };
-			$( $parsed )* $module <$runtime>,
+			$( $parsed )* $module <$runtime> index { $( $index )? },
 		);
 	};
 
@@ -136,8 +146,9 @@ macro_rules! impl_outer_origin {
 		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
+		system_index { $( $system_index:tt )? };
 		Modules {
-			$module:ident
+			$( #[codec(index = $index:tt )] )? $module:ident
 			$(, $( $rest_module:tt )* )?
 		};
 		$( $parsed:tt )*
@@ -148,8 +159,9 @@ macro_rules! impl_outer_origin {
 			$caller_name;
 			$runtime;
 			$system;
+			system_index { $( $system_index )? };
 			Modules { $( $( $rest_module )* )? };
-			$( $parsed )* $module,
+			$( $parsed )* $module index { $( $index )? },
 		);
 	};
 
@@ -160,8 +172,14 @@ macro_rules! impl_outer_origin {
 		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
+		system_index { $( $system_index:tt )? };
 		Modules { };
-		$( $module:ident $( < $generic:ident > )? $( { $generic_instance:ident } )? ,)*
+		$(
+			$module:ident
+			$( < $generic:ident > )?
+			$( { $generic_instance:ident } )?
+			index { $( $index:tt )? },
+		)*
 	) => {
 		// WARNING: All instance must hold the filter `frame_system::Trait::BaseCallFilter`, except
 		// when caller is system Root. One can use `OriginTrait::reset_filter` to do so.
@@ -197,6 +215,7 @@ macro_rules! impl_outer_origin {
 		impl $crate::traits::OriginTrait for $name {
 			type Call = <$runtime as $system::Trait>::Call;
 			type PalletsOrigin = $caller_name;
+			type AccountId = <$runtime as $system::Trait>::AccountId;
 
 			fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static) {
 				let f = self.filter.clone();
@@ -226,6 +245,19 @@ macro_rules! impl_outer_origin {
 			fn caller(&self) -> &Self::PalletsOrigin {
 				&self.caller
 			}
+
+			/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+			fn none() -> Self {
+				$system::RawOrigin::None.into()
+			}
+			/// Create with system root origin and no filter.
+			fn root() -> Self {
+				$system::RawOrigin::Root.into()
+			}
+			/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+			fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
+				$system::RawOrigin::Signed(by).into()
+			}
 		}
 
 		$crate::paste::item! {
@@ -233,8 +265,10 @@ macro_rules! impl_outer_origin {
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
 			pub enum $caller_name {
+				$( #[codec(index = $system_index)] )?
 				system($system::Origin<$runtime>),
 				$(
+					$( #[codec(index = $index)] )?
 					[< $module $( _ $generic_instance )? >]
 					($module::Origin < $( $generic, )? $( $module::$generic_instance )? > ),
 				)*
@@ -243,19 +277,20 @@ macro_rules! impl_outer_origin {
 			}
 		}
 
+		// For backwards compatibility and ease of accessing these functions.
 		#[allow(dead_code)]
 		impl $name {
 			/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
 			pub fn none() -> Self {
-				$system::RawOrigin::None.into()
+				<$name as $crate::traits::OriginTrait>::none()
 			}
 			/// Create with system root origin and no filter.
 			pub fn root() -> Self {
-				$system::RawOrigin::Root.into()
+				<$name as $crate::traits::OriginTrait>::root()
 			}
 			/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
 			pub fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
-				$system::RawOrigin::Signed(by).into()
+				<$name as $crate::traits::OriginTrait>::signed(by)
 			}
 		}
 
@@ -442,6 +477,13 @@ mod tests {
 		pub enum OriginEmpty for TestRuntime where system = frame_system {}
 	);
 
+	impl_outer_origin!(
+		pub enum OriginIndices for TestRuntime where system = frame_system, system_index = "11" {
+			origin_with_generic<T>,
+			#[codec(index = "10")] origin_without_generic,
+		}
+	);
+
 	#[test]
 	fn test_default_filter() {
 		assert_eq!(OriginWithSystem::root().filter_call(&0), true);
@@ -471,5 +513,21 @@ mod tests {
 		origin.reset_filter();
 		assert_eq!(origin.filter_call(&0), true);
 		assert_eq!(origin.filter_call(&1), false);
+	}
+
+	#[test]
+	fn test_codec() {
+		use codec::Encode;
+		assert_eq!(OriginIndices::root().caller.encode()[0], 11);
+		let without_generic_variant = OriginIndicesCaller::origin_without_generic(
+			origin_without_generic::Origin
+		);
+		assert_eq!(without_generic_variant.encode()[0], 10);
+
+		assert_eq!(OriginWithoutSystem::root().caller.encode()[0], 0);
+		let without_generic_variant = OriginWithoutSystemCaller::origin_without_generic(
+			origin_without_generic::Origin
+		);
+		assert_eq!(without_generic_variant.encode()[0], 1);
 	}
 }

@@ -140,8 +140,15 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 	changes
-		.filter(|( _, v)| v.extrinsics().next().is_some())
-		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, v)| {
+		.filter_map(|(k, v)| {
+			let extrinsics = v.extrinsics();
+			if !extrinsics.is_empty() {
+				Some((k, extrinsics))
+			} else {
+				None
+			}
+		})
+		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, extrinsics)| {
 			match map.entry(k) {
 				Entry::Vacant(entry) => {
 					// ignore temporary values (values that have null value at the end of operation
@@ -161,7 +168,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 						}
 					};
 
-					let extrinsics = v.extrinsics().cloned().collect();
+					let extrinsics = extrinsics.into_iter().collect();
 					entry.insert((ExtrinsicIndex {
 						block: block.clone(),
 						key: k.to_vec(),
@@ -170,11 +177,11 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 				Entry::Occupied(mut entry) => {
 					// we do not need to check for temporary values here, because entry is Occupied
 					// AND we are checking it before insertion
-					let extrinsics = &mut entry.get_mut().1;
-					extrinsics.extend(
-						v.extrinsics().cloned()
+					let entry_extrinsics = &mut entry.get_mut().1;
+					entry_extrinsics.extend(
+						extrinsics.into_iter()
 					);
-					extrinsics.sort();
+					entry_extrinsics.sort();
 				},
 			}
 

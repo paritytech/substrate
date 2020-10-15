@@ -20,7 +20,7 @@
 //!
 //! There are two main structs in this module: [`NetworkWorker`] and [`NetworkService`].
 //! The [`NetworkWorker`] *is* the network and implements the `Future` trait. It must be polled in
-//! order fo the network to advance.
+//! order for the network to advance.
 //! The [`NetworkService`] is merely a shared version of the [`NetworkWorker`]. You can obtain an
 //! `Arc<NetworkService>` by calling [`NetworkWorker::service`].
 //!
@@ -59,7 +59,7 @@ use sp_runtime::{
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
-	borrow::{Borrow, Cow},
+	borrow::Cow,
 	collections::{HashMap, HashSet},
 	fs,
 	marker::PhantomData,
@@ -233,12 +233,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.clone().into_peer_id();
-		let local_peer_id_legacy = bs58::encode(Borrow::<[u8]>::borrow(&local_peer_id)).into_string();
 		info!(
 			target: "sub-libp2p",
-			"🏷  Local node identity is: {} (legacy representation: {})",
+			"🏷 Local node identity is: {}",
 			local_peer_id.to_base58(),
-			local_peer_id_legacy
 		);
 
 		let checker = params.on_demand.as_ref()
@@ -605,6 +603,22 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self.local_peer_id
 	}
 
+	/// Set authorized peers.
+	///
+	/// Need a better solution to manage authorized peers, but now just use reserved peers for
+	/// prototyping.
+	pub fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
+		self.peerset.set_reserved_peers(peers)
+	}
+
+	/// Set authorized_only flag.
+	///
+	/// Need a better solution to decide authorized_only, but now just use reserved_only flag for
+	/// prototyping.
+	pub fn set_authorized_only(&self, reserved_only: bool) {
+		self.peerset.set_reserved_only(reserved_only)
+	}
+
 	/// Appends a notification to the buffer of pending outgoing notifications with the given peer.
 	/// Has no effect if the notifications channel with this protocol name is not open.
 	///
@@ -623,7 +637,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// >			preventing the message from being delivered.
 	///
 	/// The protocol must have been registered with `register_notifications_protocol` or
-	/// `NetworkConfiguration::notifications_protocols`.
+	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
 	///
 	pub fn write_notification(&self, target: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>) {
 		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
@@ -666,10 +680,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// 2.  [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
 	/// can only fail if the underlying notification substream or connection has suddenly closed.
 	///
-	/// An error is returned either by `notification_sender`, by [`NotificationSender::wait`],
-	/// or by [`NotificationSenderReady::send`] if there exists no open notifications substream
-	/// with that combination of peer and protocol, or if the remote has asked to close the
-	/// notifications substream. If that happens, it is guaranteed that an
+	/// An error is returned by [`NotificationSenderReady::send`] if there exists no open
+	/// notifications substream with that combination of peer and protocol, or if the remote
+	/// has asked to close the notifications substream. If that happens, it is guaranteed that an
 	/// [`Event::NotificationStreamClosed`] has been generated on the stream returned by
 	/// [`NetworkService::event_stream`].
 	///
@@ -680,7 +693,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// in which case enqueued notifications will be lost.
 	///
 	/// The protocol must have been registered with `register_notifications_protocol` or
-	/// `NetworkConfiguration::notifications_protocols`.
+	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
 	///
 	/// # Usage
 	///
@@ -785,7 +798,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Such restrictions, if desired, need to be enforced at the call site(s).
 	///
 	/// The protocol must have been registered through
-	/// [`NetworkConfiguration::request_response_protocols`].
+	/// [`NetworkConfiguration::request_response_protocols`](
+	/// crate::config::NetworkConfiguration::request_response_protocols).
 	pub async fn request(
 		&self,
 		target: PeerId,
@@ -959,23 +973,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
 	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
-		let peers = peers.into_iter()
-			.map(|mut addr| {
-				let peer = match addr.pop() {
-					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
-						.map_err(|_| "Invalid PeerId format".to_string())?,
-					_ => return Err("Missing PeerId from address".to_string()),
-				};
-
-				// Make sure the local peer ID is never added to the PSM
-				// or added as a "known address", even if given.
-				if peer == self.local_peer_id {
-					Err("Local peer ID in priority group.".to_string())
-				} else {
-					Ok((peer, addr))
-				}
-			})
-			.collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()?;
+		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
 
@@ -987,6 +985,47 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 				.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 		}
 
+		Ok(())
+	}
+
+	/// Add peers to a peerset priority group.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	//
+	// NOTE: even though this function is currently sync, it's marked as async for
+	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
+	pub async fn add_to_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+		let peers = self.split_multiaddr_and_peer_id(peers)?;
+
+		for (peer_id, addr) in peers.into_iter() {
+			self.peerset.add_to_priority_group(group_id.clone(), peer_id.clone());
+
+			let _ = self
+				.to_worker
+				.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+		}
+
+		Ok(())
+	}
+
+	/// Remove peers from a peerset priority group.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	//
+	// NOTE: even though this function is currently sync, it's marked as async for
+	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
+	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
+	pub async fn remove_from_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+		let peers = self.split_multiaddr_and_peer_id(peers)?;
+		for (peer_id, _) in peers.into_iter() {
+			self.peerset.remove_from_priority_group(group_id.clone(), peer_id);
+		}
 		Ok(())
 	}
 
@@ -1010,6 +1049,30 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
+	}
+
+	/// Utility function to extract `PeerId` from each `Multiaddr` for priority group updates.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	fn split_multiaddr_and_peer_id(&self, peers: HashSet<Multiaddr>) -> Result<Vec<(PeerId, Multiaddr)>, String> {
+		peers.into_iter()
+			.map(|mut addr| {
+				let peer = match addr.pop() {
+					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
+						.map_err(|_| "Invalid PeerId format".to_string())?,
+					_ => return Err("Missing PeerId from address".to_string()),
+				};
+
+				// Make sure the local peer ID is never added to the PSM
+				// or added as a "known address", even if given.
+				if peer == self.local_peer_id {
+					Err("Local peer ID in priority group.".to_string())
+				} else {
+					Ok((peer, addr))
+				}
+			})
+			.collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()
 	}
 }
 
@@ -1337,6 +1400,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 									ResponseFailure::Network(InboundFailure::Timeout) => "timeout",
 									ResponseFailure::Network(InboundFailure::UnsupportedProtocols) =>
 										"unsupported",
+									ResponseFailure::Network(InboundFailure::ConnectionClosed) =>
+										"connection-closed",
 								};
 
 								metrics.requests_in_failure_total
@@ -1652,8 +1717,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
-				metrics.kbuckets_num_nodes.with_label_values(&[&proto.as_ref()]).set(num_entries as u64);
+			for (proto, buckets) in this.network_service.num_entries_per_kbucket() {
+				for (lower_ilog2_bucket_bound, num_entries) in buckets {
+					metrics.kbuckets_num_nodes
+						.with_label_values(&[&proto.as_ref(), &lower_ilog2_bucket_bound.to_string()])
+						.set(num_entries as u64);
+				}
 			}
 			for (proto, num_entries) in this.network_service.num_kademlia_records() {
 				metrics.kademlia_records_count.with_label_values(&[&proto.as_ref()]).set(num_entries as u64);
