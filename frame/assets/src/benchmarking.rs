@@ -21,7 +21,6 @@ use super::*;
 use sp_std::prelude::*;
 use sp_runtime::traits::Bounded;
 use frame_system::RawOrigin as SystemOrigin;
-use frame_support::assert_ok;
 use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 
 use crate::Module as Assets;
@@ -34,13 +33,13 @@ fn create_default_asset<T: Trait>(max_zombies: u32)
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let root = SystemOrigin::Root.into();
-	assert_ok!(Assets::<T>::force_create(
+	assert!(Assets::<T>::force_create(
 		root,
 		Default::default(),
 		caller_lookup.clone(),
 		max_zombies,
 		1.into(),
-	));
+	).is_ok());
 	(caller, caller_lookup)
 }
 
@@ -48,12 +47,12 @@ fn create_default_minted_asset<T: Trait>(max_zombies: u32, amount: T::Balance)
 	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
 {
 	let (caller, caller_lookup)  = create_default_asset::<T>(max_zombies);
-	assert_ok!(Assets::<T>::mint(
+	assert!(Assets::<T>::mint(
 		SystemOrigin::Signed(caller.clone()).into(),
 		Default::default(),
 		caller_lookup.clone(),
 		amount,
-	));
+	).is_ok());
 	(caller, caller_lookup)
 }
 
@@ -132,11 +131,11 @@ benchmarks! {
 
 	thaw {
 		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100.into());
-		assert_ok!(Assets::<T>::freeze(
+		assert!(Assets::<T>::freeze(
 			SystemOrigin::Signed(caller.clone()).into(),
 			Default::default(),
 			caller_lookup.clone()
-		));
+		).is_ok());
 	}: _(SystemOrigin::Signed(caller), Default::default(), caller_lookup)
 	verify {
 		assert!(true)
@@ -178,91 +177,91 @@ mod tests {
 	#[test]
 	fn create() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_create::<Test>());
+			assert!(test_benchmark_create::<Test>().is_ok());
 		});
 	}
 
 	#[test]
 	fn force_create() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_force_create::<Test>());
+			assert!(test_benchmark_force_create::<Test>().is_ok());
 		});
 	}
 
 	#[test]
 	fn destroy() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_destroy::<Test>());
+			assert!(test_benchmark_destroy::<Test>().is_ok());
 		});
 	}
 
 	#[test]
 	fn force_destroy() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_force_destroy::<Test>());
+			assert!(test_benchmark_force_destroy::<Test>().is_ok());
 		});
 	}
 
 	#[test]
 	fn mint() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_mint::<Test>());
+			assert!(test_benchmark_mint::<Test>().is_ok());
 		});
 	}
 
 	#[test]
 	fn burn() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_burn::<Test>());
+			assert!(test_benchmark_burn::<Test>().is_ok());
 		});
 	}
 
 	#[test]
 	fn transfer() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_transfer::<Test>());
+			assert!(test_benchmark_transfer::<Test>().is_ok());
 		});
 	}
 
 	#[test]
 	fn force_transfer() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_force_transfer::<Test>());
+			assert!(test_benchmark_force_transfer::<Test>().is_ok());
 		});
 	}
 
 	#[test]
 	fn freeze() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_freeze::<Test>());
+			assert!(test_benchmark_freeze::<Test>().is_ok());
 		});
 	}
 
 	#[test]
 	fn thaw() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_thaw::<Test>());
+			assert!(test_benchmark_thaw::<Test>().is_ok());
 		});
 	}
 
 	#[test]
 	fn transfer_ownership() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_transfer_ownership::<Test>());
+			assert!(test_benchmark_transfer_ownership::<Test>().is_ok());
 		});
 	}
 
 	#[test]
 	fn set_team() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_set_team::<Test>());
+			assert!(test_benchmark_set_team::<Test>().is_ok());
 		});
 	}
 
 	#[test]
 	fn set_max_zombies() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_set_max_zombies::<Test>());
+			assert!(test_benchmark_set_max_zombies::<Test>().is_ok());
 		});
 	}
 }
