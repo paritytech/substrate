@@ -259,7 +259,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 			executor,
 			Box::new(sp_core::testing::TaskExecutor::new()),
 			Default::default(),
-		).expect("Failed to instantiate Local Call Executor");
+		).expect("Creates LocalCallExecutor");
 
 		self.build_with_executor(executor)
 	}
