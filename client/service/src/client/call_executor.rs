@@ -28,7 +28,7 @@ use sp_state_machine::{
 use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
 use sp_core::{
-	NativeOrEncoded, NeverNativeValue, traits::{CodeExecutor, SpawnNamed},
+	NativeOrEncoded, NeverNativeValue, traits::{CodeExecutor, SpawnNamed, RuntimeCode},
 	offchain::storage::OffchainOverlayedChanges,
 };
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
@@ -40,14 +40,14 @@ use super::{client::ClientConfig, wasm_overwrite::WasmOverwrite};
 pub struct LocalCallExecutor<B, E> {
 	backend: Arc<B>,
 	executor: E,
-	wasm_overwrite: WasmOverwrite<E>,
+	wasm_overwrite: Option<WasmOverwrite<E>>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	client_config: ClientConfig,
 }
 
 impl<B, E> LocalCallExecutor<B, E>
 where
-	E: RuntimeInfo + Clone + 'static
+	E: CodeExecutor + RuntimeInfo + Clone + 'static
 {
 	/// Creates new instance of local call executor.
 	pub fn new(
@@ -56,11 +56,15 @@ where
 		spawn_handle: Box<dyn SpawnNamed>,
 		client_config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
-		let wasm_overwrite = WasmOverwrite::new(
-			client_config.wasm_overwrite_path.clone(),
-			client_config.wasm_overwrite_enabled,
-			executor.clone()
-		)?;
+		let wasm_overwrite = if client_config.wasm_overwrite_enabled {
+			Some(WasmOverwrite::new(
+				client_config.wasm_overwrite_path.clone(),
+				executor.clone()
+			)?)
+		} else {
+			None
+		};
+
 		Ok(LocalCallExecutor {
 			backend,
 			executor,
@@ -69,6 +73,14 @@ where
 			client_config,
 		})
     }
+
+	fn check_overwrites(&self, spec: &u32, code: &RuntimeCode) -> Option<RuntimeCode> {
+		if let Some(overwrites) = &self.wasm_overwrite {
+			overwrites.get(spec, code.heap_pages)
+		} else {
+			None
+		}
+	}
 }
 
 impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
@@ -115,8 +127,7 @@ where
 		let runtime_code = {
 			let version = self.runtime_version(id)?;
 			let code = state_runtime_code.runtime_code()?;
-			self.wasm_overwrite.try_replace(version.spec_version, code.heap_pages)
-				.unwrap_or_else(|| code)
+			if let Some(code) = self.check_overwrites(&version.spec_version, &code) { code } else { code }
 		};
 
 		let return_data = StateMachine::new(
@@ -194,9 +205,8 @@ where
 				let runtime_code = {
 					let version = self.runtime_version(at)?;
 					let code = state_runtime_code.runtime_code()?;
-					self.wasm_overwrite.try_replace(version.spec_version, code.heap_pages)
-						.unwrap_or_else(|| code)
-					};
+					if let Some(code) = self.check_overwrites(&version.spec_version, &code) { code } else { code }
+				};
 
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
@@ -224,8 +234,7 @@ where
 				let runtime_code = {
 					let version = self.runtime_version(at)?;
 					let code = state_runtime_code.runtime_code()?;
-					self.wasm_overwrite.try_replace(version.spec_version, code.heap_pages)
-						.unwrap_or_else(|| code)
+					if let Some(code) = self.check_overwrites(&version.spec_version, &code) { code } else { code }
 				};
 
 				let mut state_machine = StateMachine::new(

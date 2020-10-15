@@ -68,31 +68,30 @@ pub struct WasmOverwrite<E> {
 	// Map of runtime spec version -> Wasm Blob
 	overwrites: HashMap<u32, WasmBlob>,
 	executor: E,
-	enabled: bool,
 }
 
 impl<E> WasmOverwrite<E>
 where
 	E: RuntimeInfo + Clone + 'static
 {
-	pub fn new<P>(path: P, enabled: bool, executor: E) -> Result<Self>
+	pub fn new<P>(path: P, executor: E) -> Result<Self>
 	where
 		P: AsRef<Path>,
 	{
 		let overwrites = Self::scrape_overwrites(path.as_ref(), &executor)?;
-		Ok(Self { overwrites, executor, enabled })
+		Ok(Self { overwrites, executor })
 	}
 
 	/// Tries to replace the given `code` with an overwrite, if it exists.
 	/// If the overwrite does not exist, or overwrites are not enabled,
 	/// this function returns the original runtime code.
-	pub fn try_replace<'a, 'b: 'a>(
+	pub fn get<'a, 'b: 'a>(
 		&'b self,
-		spec: u32,
+		spec: &u32,
 		pages: Option<u64>,
 	) -> Option<RuntimeCode<'a>> {
 		self.overwrites
-			.get(&spec)
+			.get(spec)
 			.map(|w| w.runtime_code(pages))
 	}
 
@@ -119,7 +118,7 @@ where
 		Ok(overwrites)
 	}
 
-	pub fn runtime_version(executor: &E, code: &WasmBlob, heap_pages: Option<u64>) -> Result<RuntimeVersion> {
+	fn runtime_version(executor: &E, code: &WasmBlob, heap_pages: Option<u64>) -> Result<RuntimeVersion> {
 		let mut ext = BasicExternalities::default();
 		executor.runtime_version(&mut ext, &code.runtime_code(heap_pages))
 			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
