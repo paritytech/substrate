@@ -23,9 +23,17 @@ use evm::{ExitError, ExitSucceed};
 use ripemd160::Digest;
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_application_crypto::TryFrom;
+
+#[cfg(feature="ed25519")]
 use ed25519_dalek::{PublicKey, Verifier, Signature};
+
+#[cfg(feature="modexp")]
 use num::{BigUint, Zero, One};
+
+#[cfg(feature="blake2")]
 use blake2_rfc::blake2b::Blake2b;
+
+#[cfg(feature="bn128")]
 use ethereum_types::{U256};
 
 /// Custom precompiles to be used by EVM engine.
@@ -150,8 +158,9 @@ impl Precompile for Ripemd160 {
 	) -> core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError> {
 		let cost = ensure_linear_cost(target_gas, input.len(), 600, 120)?;
 
-		let ret = ripemd160::Ripemd160::digest(input).to_vec();
-		Ok((ExitSucceed::Returned, ret, cost))
+		let mut ret = [0u8; 32];
+		ret[12..32].copy_from_slice(&ripemd160::Ripemd160::digest(input));
+		Ok((ExitSucceed::Returned, ret.to_vec(), cost))
 	}
 }
 
@@ -170,8 +179,10 @@ impl Precompile for Sha256 {
 	}
 }
 
+#[cfg(feature="modexp")]
 pub struct Modexp;
 
+#[cfg(feature="modexp")]
 impl Precompile for Modexp {
 	fn execute(
 		input: &[u8],
@@ -236,8 +247,10 @@ impl Precompile for Modexp {
 	}
 }
 
+#[cfg(feature="ed25519")]
 pub struct Ed25519Verify;
 
+#[cfg(feature="ed25519")]
 impl Precompile for Ed25519Verify {
 	fn execute(
 		input: &[u8],
@@ -269,9 +282,11 @@ impl Precompile for Ed25519Verify {
 	}
 }
 
-/// The identity precompile.
+/// The Blake2F precompile.
+#[cfg(feature="blake2")]
 pub struct Blake2F;
 
+#[cfg(feature="blake2")]
 impl Precompile for Blake2F {
 	fn execute(
 		input: &[u8],
@@ -285,10 +300,12 @@ impl Precompile for Blake2F {
 	}
 }
 
+#[cfg(feature="bn128")]
 fn read_fr(input: &[u8], start_inx: usize) -> Result<bn::Fr, ExitError> {
 	bn::Fr::from_slice(&input[start_inx..(start_inx + 32)]).map_err(|_| ExitError::Other("Invalid field element"))
 }
 
+#[cfg(feature="bn128")]
 fn read_point(input: &[u8], start_inx: usize) -> Result<bn::G1, ExitError> {
 	use bn::{Fq, AffineG1, G1, Group};
 
@@ -304,14 +321,19 @@ fn read_point(input: &[u8], start_inx: usize) -> Result<bn::G1, ExitError> {
 }
 
 /// The Bn128Add builtin
+#[cfg(feature="bn128")]
 pub struct Bn128Add;
 
 /// The Bn128Mul builtin
+#[cfg(feature="bn128")]
 pub struct Bn128Mul;
 
 /// The Bn128Pairing builtin
+#[cfg(feature="bn128")]
 pub struct Bn128Pairing;
 
+/// The bn128 addition arithmetic precompile.
+#[cfg(feature="bn128")]
 impl Precompile for Bn128Add {
 	fn execute(
 		input: &[u8],
@@ -335,6 +357,8 @@ impl Precompile for Bn128Add {
 	}
 }
 
+/// The bn128 multiplication arithmetic precompile.
+#[cfg(feature="bn128")]
 impl Precompile for Bn128Mul {
 	fn execute(
 		input: &[u8],
@@ -358,6 +382,8 @@ impl Precompile for Bn128Mul {
 	}
 }
 
+/// The bn128 pairing precompile.
+#[cfg(feature="bn128")]
 impl Precompile for Bn128Pairing {
 	fn execute(
 		input: &[u8],
