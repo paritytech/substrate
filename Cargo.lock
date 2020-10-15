@@ -3874,6 +3874,7 @@ dependencies = [
  "hex-literal",
  "integer-sqrt",
  "node-primitives",
+ "pallet-assets",
  "pallet-authority-discovery",
  "pallet-authorship",
  "pallet-babe",
