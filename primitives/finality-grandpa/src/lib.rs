@@ -30,7 +30,7 @@ use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
 use sp_std::borrow::Cow;
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
-use sp_core::traits::BareCryptoStorePtr;
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 
 #[cfg(feature = "std")]
 use log::debug;
@@ -372,7 +372,7 @@ where
 /// Localizes the message to the given set and round and signs the payload.
 #[cfg(feature = "std")]
 pub fn sign_message<H, N>(
-	keystore: &BareCryptoStorePtr,
+	keystore: SyncCryptoStorePtr,
 	message: grandpa::Message<H, N>,
 	public: AuthorityId,
 	round: RoundNumber,
@@ -387,11 +387,12 @@ where
 	use sp_std::convert::TryInto;
 
 	let encoded = localized_payload(round, set_id, &message);
-	let signature = keystore.read()
-		.sign_with(AuthorityId::ID, &public.to_public_crypto_pair(), &encoded[..])
-		.ok()?
-		.try_into()
-		.ok()?;
+	let signature = SyncCryptoStore::sign_with(
+		&*keystore,
+		AuthorityId::ID,
+		&public.to_public_crypto_pair(),
+		&encoded[..],
+	).ok()?.try_into().ok()?;
 
 	Some(grandpa::SignedMessage {
 		message,

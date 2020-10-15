@@ -53,9 +53,9 @@ use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,
 pub use self::error::Error;
 pub use self::builder::{
 	new_full_client, new_client, new_full_parts, new_light_parts,
-	spawn_tasks, build_network, BuildNetworkParams, NetworkStarter, build_offchain_workers,
-	SpawnTasksParams, TFullClient, TLightClient, TFullBackend, TLightBackend,
-	TLightBackendWithHash, TLightClientWithBackend,
+	spawn_tasks, build_network, build_offchain_workers,
+	BuildNetworkParams, KeystoreContainer, NetworkStarter, SpawnTasksParams, TFullClient, TLightClient,
+	TFullBackend, TLightBackend, TLightBackendWithHash, TLightClientWithBackend,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
 };
 pub use config::{
@@ -80,8 +80,7 @@ pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
-use sc_client_api::BlockchainEvents;
-pub use sc_keystore::KeyStorePtr as KeyStore;
+use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -181,8 +180,8 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	pub backend: Arc<Backend>,
 	/// The chain task manager.
 	pub task_manager: TaskManager,
-	/// A shared keystore instance.
-	pub keystore: KeyStore,
+	/// A keystore container instance..
+	pub keystore_container: KeystoreContainer,
 	/// A chain selection algorithm instance.
 	pub select_chain: SelectChain,
 	/// An import queue.
@@ -200,7 +199,7 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 async fn build_network_future<
 	B: BlockT,
-	C: BlockchainEvents<B>,
+	C: BlockchainEvents<B> + HeaderBackend<B>,
 	H: sc_network::ExHashT
 > (
 	role: Role,
@@ -212,6 +211,9 @@ async fn build_network_future<
 	announce_imported_blocks: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
+
+	// Current best block at initialization, to report to the RPC layer.
+	let starting_block = client.info().best_number;
 
 	// Stream of finalized blocks reported by the client.
 	let mut finality_notification_stream = {
@@ -323,6 +325,15 @@ async fn build_network_future<
 						};
 
 						let _ = sender.send(vec![node_role]);
+					}
+					sc_rpc::system::Request::SyncState(sender) => {
+						use sc_rpc::system::SyncState;
+
+						let _ = sender.send(SyncState {
+							starting_block: starting_block,
+							current_block: client.info().best_number,
+							highest_block: network.best_seen_block(),
+						});
 					}
 				}
 			}
