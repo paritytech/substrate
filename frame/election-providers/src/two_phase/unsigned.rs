@@ -26,7 +26,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
 		ValidTransaction,
 	},
-	PerU16, SaturatedConversion,
+	SaturatedConversion,
 };
 use sp_std::cmp::Ordering;
 
@@ -316,7 +316,7 @@ where
 		// ensure solution is timely. Don't panic yet. This is a cheap check.
 		ensure!(
 			Self::current_phase().is_unsigned_open(),
-			"UnsignedPhaseClosed"
+			PalletError::<T>::EarlySubmission
 		);
 
 		// ensure score is being improved. Panic henceforth.
@@ -326,7 +326,7 @@ where
 				q.score,
 				T::SolutionImprovementThreshold::get()
 			)),
-			"WeakSolution"
+			PalletError::<T>::WeakSubmission
 		);
 
 		Ok(())
@@ -735,7 +735,7 @@ mod tests {
 
 				assert_noop!(
 					TwoPhase::submit_unsigned(Origin::none(), solution),
-					"WeakSolution"
+					PalletError::<Runtime>::WeakSubmission,
 				);
 
 				// trial 2: a solution who's score is only 7, i.e. 70% better in the first element.

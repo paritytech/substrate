@@ -38,6 +38,6 @@ const LOG_TARGET: &'static str = "election-provider";
 #[doc(hidden)]
 pub use sp_npos_elections::VoteWeight;
 #[doc(hidden)]
-use sp_runtime::traits::UniqueSaturatedInto;
+pub use sp_runtime::traits::UniqueSaturatedInto;
 #[doc(hidden)]
 pub use sp_std::convert::TryInto;

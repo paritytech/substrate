@@ -196,7 +196,7 @@ mod tests {
 
 			assert_noop!(
 				TwoPhase::submit(Origin::signed(10), solution),
-				"EarlySubmission",
+				PalletError::<Runtime>::EarlySubmission,
 			);
 		})
 	}

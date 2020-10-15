@@ -415,16 +415,18 @@ decl_event!(
 	}
 );
 
-// decl_error! {
-// 	pub enum PalletError for Module<T: Trait> {
-// 		/// Submission was too early.
-// 		EarlySubmission,
-// 		/// The queue was full, and the solution was not better than any of the existing ones.
-// 		QueueFull,
-// 		/// The origin failed to pay the deposit.
-// 		CannotPayDeposit,
-// 	}
-// }
+frame_support::decl_error! {
+	pub enum PalletError for Module<T: Trait> where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> {
+		/// Submission was too early.
+		EarlySubmission,
+		/// Submission was too weak, score-wise.
+		WeakSubmission,
+		/// The queue was full, and the solution was not better than any of the existing ones.
+		QueueFull,
+		/// The origin failed to pay the deposit.
+		CannotPayDeposit,
+	}
+}
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call
@@ -433,7 +435,7 @@ decl_module! {
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
 	{
 		// TODO: replace with PalletError once we have it working.
-		type Error = &'static str;
+		type Error = PalletError<T>;
 		fn deposit_event() = default;
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
@@ -491,7 +493,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			// ensure solution is timely.
-			ensure!(Self::current_phase().is_signed(), "EarlySubmission");
+			ensure!(Self::current_phase().is_signed(), PalletError::<T>::EarlySubmission);
 
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
@@ -501,7 +503,7 @@ decl_module! {
 
 			// collect deposit. Thereafter, the function cannot fail.
 			let deposit = signed_submissions[index].deposit;
-			T::Currency::reserve(&who, deposit).map_err(|_| "CannotPayDeposit")?;
+			T::Currency::reserve(&who, deposit).map_err(|_| PalletError::<T>::CannotPayDeposit)?;
 
 			// store the new signed submission.
 			debug_assert!(signed_submissions.len() as u32 <= T::MaxSignedSubmissions::get());
