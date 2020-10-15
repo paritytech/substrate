@@ -51,6 +51,7 @@ use sp_inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInhe
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
 mod equivocation;
+mod default_weights;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -102,6 +103,12 @@ pub trait Trait: pallet_timestamp::Trait {
 	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 	/// definition.
 	type HandleEquivocation: HandleEquivocation<Self>;
+
+	type WeightInfo: WeightInfo;
+}
+
+pub trait WeightInfo {
+	fn report_equivocation(validator_count: u32) -> Weight;
 }
 
 /// Trigger an epoch change, if any should take place.
@@ -203,6 +210,11 @@ decl_storage! {
 		/// if per-block initialization has already been called for current block.
 		Initialized get(fn initialized): Option<MaybeRandomness>;
 
+		/// Temporary value (cleared at block finalization) that includes the VRF output generated
+		/// at this block. This field should always be populated during block processing unless
+		/// secondary plain slots are enabled (which don't contain a VRF output).
+		AuthorVrfRandomness get(fn author_vrf_randomness): MaybeRandomness;
+
 		/// How late the current block is compared to its parent.
 		///
 		/// This entry is populated as part of block execution and is cleaned up
@@ -248,6 +260,9 @@ decl_module! {
 				Self::deposit_randomness(&randomness);
 			}
 
+			// The stored author generated VRF output is ephemeral.
+			AuthorVrfRandomness::kill();
+
 			// remove temporary "environment" entry from storage
 			Lateness::<T>::kill();
 		}
@@ -256,7 +271,7 @@ decl_module! {
 		/// the equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence will
 		/// be reported.
-		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		#[weight = <T as Trait>::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
 		fn report_equivocation(
 			origin,
 			equivocation_proof: EquivocationProof<T::Header>,
@@ -279,7 +294,7 @@ decl_module! {
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
-		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		#[weight = <T as Trait>::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
 		fn report_equivocation_unsigned(
 			origin,
 			equivocation_proof: EquivocationProof<T::Header>,
@@ -293,38 +308,6 @@ decl_module! {
 				key_owner_proof,
 			)
 		}
-	}
-}
-
-mod weight_for {
-	use frame_support::{
-		traits::Get,
-		weights::{
-			constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
-			Weight,
-		},
-	};
-
-	pub fn report_equivocation<T: super::Trait>(validator_count: u32) -> Weight {
-		// we take the validator set count from the membership proof to
-		// calculate the weight but we set a floor of 100 validators.
-		let validator_count = validator_count.max(100) as u64;
-
-		// worst case we are considering is that the given offender
-		// is backed by 200 nominators
-		const MAX_NOMINATORS: u64 = 200;
-
-		// checking membership proof
-		(35 * WEIGHT_PER_MICROS)
-			.saturating_add((175 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
-			.saturating_add(T::DbWeight::get().reads(5))
-			// check equivocation proof
-			.saturating_add(110 * WEIGHT_PER_MICROS)
-			// report offence
-			.saturating_add(110 * WEIGHT_PER_MICROS)
-			.saturating_add(25 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
-			.saturating_add(T::DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
-			.saturating_add(T::DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
 	}
 }
 
@@ -542,7 +525,9 @@ impl<T: Trait> Module<T> {
 			})
 			.next();
 
-		let maybe_randomness: Option<schnorrkel::Randomness> = maybe_pre_digest.and_then(|digest| {
+		let is_primary = matches!(maybe_pre_digest, Some(PreDigest::Primary(..)));
+
+		let maybe_randomness: MaybeRandomness = maybe_pre_digest.and_then(|digest| {
 			// on the first non-zero block (i.e. block #1)
 			// this is where the first epoch (epoch #0) actually starts.
 			// we need to adjust internal storage accordingly.
@@ -571,38 +556,44 @@ impl<T: Trait> Module<T> {
 			Lateness::<T>::put(lateness);
 			CurrentSlot::put(current_slot);
 
-			if let PreDigest::Primary(primary) = digest {
-				// place the VRF output into the `Initialized` storage item
-				// and it'll be put onto the under-construction randomness
-				// later, once we've decided which epoch this block is in.
-				//
-				// Reconstruct the bytes of VRFInOut using the authority id.
-				Authorities::get()
-					.get(primary.authority_index as usize)
-					.and_then(|author| {
-						schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok()
-					})
-					.and_then(|pubkey| {
-						let transcript = sp_consensus_babe::make_transcript(
-							&Self::randomness(),
-							current_slot,
-							EpochIndex::get(),
-						);
+			let authority_index = digest.authority_index();
 
-						primary.vrf_output.0.attach_input_hash(
-							&pubkey,
-							transcript
-						).ok()
-					})
-					.map(|inout| {
-						inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT)
-					})
-			} else {
-				None
-			}
+			// Extract out the VRF output if we have it
+			digest
+				.vrf_output()
+				.and_then(|vrf_output| {
+					// Reconstruct the bytes of VRFInOut using the authority id.
+					Authorities::get()
+						.get(authority_index as usize)
+						.and_then(|author| {
+							schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok()
+						})
+						.and_then(|pubkey| {
+							let transcript = sp_consensus_babe::make_transcript(
+								&Self::randomness(),
+								current_slot,
+								EpochIndex::get(),
+							);
+
+							vrf_output.0.attach_input_hash(
+								&pubkey,
+								transcript
+							).ok()
+						})
+						.map(|inout| {
+							inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT)
+						})
+				})
 		});
 
-		Initialized::put(maybe_randomness);
+		// For primary VRF output we place it in the `Initialized` storage
+		// item and it'll be put onto the under-construction randomness later,
+		// once we've decided which epoch this block is in.
+		Initialized::put(if is_primary { maybe_randomness } else { None });
+
+		// Place either the primary or secondary VRF output into the
+		// `AuthorVrfRandomness` storage item.
+		AuthorVrfRandomness::put(maybe_randomness);
 
 		// enact epoch change, if necessary.
 		T::EpochChangeTrigger::trigger::<T>(now)

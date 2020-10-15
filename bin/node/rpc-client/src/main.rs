@@ -35,7 +35,7 @@ use jsonrpc_core_client::{
 };
 
 fn main() {
-	env_logger::init();
+	sp_tracing::try_init_simple();
 
 	rt::run(rt::lazy(|| {
 		let uri = "http://localhost:9933";

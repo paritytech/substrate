@@ -230,15 +230,18 @@ impl WasmBuilder {
 
 	/// Build the WASM binary.
 	pub fn build(self) {
+		let out_dir = PathBuf::from(env::var("OUT_DIR").expect("`OUT_DIR` is set by cargo!"));
+		let file_path = out_dir.join(self.file_name.unwrap_or_else(|| "wasm_binary.rs".into()));
+
 		if check_skip_build() {
 			// If we skip the build, we still want to make sure to be called when an env variable
 			// changes
 			generate_rerun_if_changed_instructions();
+
+			provide_dummy_wasm_binary(&file_path, true);
+
 			return;
 		}
-
-		let out_dir = PathBuf::from(env::var("OUT_DIR").expect("`OUT_DIR` is set by cargo!"));
-		let file_path = out_dir.join(self.file_name.unwrap_or_else(|| "wasm_binary.rs".into()));
 
 		// Hash the path to the project cargo toml.
 		let mut hasher = DefaultHasher::new();
@@ -252,7 +255,7 @@ impl WasmBuilder {
 			.join(format!("{}{}", project_name, hasher.finish()));
 
 		if check_provide_dummy_wasm_binary() {
-			provide_dummy_wasm_binary(&file_path);
+			provide_dummy_wasm_binary(&file_path, false);
 		} else {
 			create_project(
 				&project_folder,
@@ -381,7 +384,7 @@ fn create_project(
 	fs::create_dir_all(project_folder.join("src"))
 		.expect("WASM build runner dir create can not fail; qed");
 
-	fs::write(
+	write_file_if_changed(
 		project_folder.join("Cargo.toml"),
 		format!(
 			r#"
@@ -396,13 +399,15 @@ fn create_project(
 				[workspace]
 			"#,
 			wasm_builder_source = wasm_builder_source.to_cargo_source(&get_manifest_dir()),
-		)
-	).expect("WASM build runner `Cargo.toml` writing can not fail; qed");
+		),
+	);
 
-	fs::write(
+	write_file_if_changed(
 		project_folder.join("src/main.rs"),
 		format!(
 			r#"
+				//! This is automatically generated code by `substrate-wasm-builder`.
+
 				use substrate_wasm_builder::build_project_with_default_rustflags;
 
 				fn main() {{
@@ -416,8 +421,8 @@ fn create_project(
 			file_path = replace_back_slashes(file_path.display()),
 			cargo_toml_path = replace_back_slashes(cargo_toml_path.display()),
 			default_rustflags = default_rustflags,
-		)
-	).expect("WASM build runner `main.rs` writing can not fail; qed");
+		),
+	);
 }
 
 fn run_project(project_folder: &Path) {
@@ -463,11 +468,16 @@ fn check_provide_dummy_wasm_binary() -> bool {
 }
 
 /// Provide the dummy WASM binary
-fn provide_dummy_wasm_binary(file_path: &Path) {
-	fs::write(
-		file_path,
-		"pub const WASM_BINARY: Option<&[u8]> = None; pub const WASM_BINARY_BLOATY: Option<&[u8]> = None;",
-	).expect("Writing dummy WASM binary should not fail");
+///
+/// If `skip_build` is `true`, it will only generate the wasm binary if it doesn't exist.
+fn provide_dummy_wasm_binary(file_path: &Path, skip_build: bool) {
+	if !skip_build || !file_path.exists() {
+		write_file_if_changed(
+			file_path.into(),
+			"pub const WASM_BINARY: Option<&[u8]> = None;\
+			 pub const WASM_BINARY_BLOATY: Option<&[u8]> = None;".into(),
+		);
+	}
 }
 
 /// Generate the `rerun-if-changed` instructions for cargo to make sure that the WASM binary is
@@ -478,4 +488,11 @@ fn generate_rerun_if_changed_instructions() {
 	println!("cargo:rerun-if-env-changed={}", DUMMY_WASM_BINARY_ENV);
 	println!("cargo:rerun-if-env-changed={}", FORCE_WASM_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", generate_crate_skip_build_env_name());
+}
+
+/// Write to the given `file` if the `content` is different.
+fn write_file_if_changed(file: PathBuf, content: String) {
+	if fs::read_to_string(&file).ok().as_ref() != Some(&content) {
+		fs::write(&file, content).unwrap_or_else(|_| panic!("Writing `{}` can not fail!", file.display()));
+	}
 }

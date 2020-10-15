@@ -3,9 +3,9 @@
 The Session module allows validators to manage their session keys, provides a function for changing
 the session length, and handles session rotation.
 
-- [`session::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
-- [`Module`](./struct.Module.html)
+- [`session::Trait`](https://docs.rs/pallet-session/latest/pallet_session/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-session/latest/pallet_session/enum.Call.html)
+- [`Module`](https://docs.rs/pallet-session/latest/pallet_session/struct.Module.html)
 
 ## Overview
 
@@ -66,7 +66,7 @@ for next session rotation.
 
 ### Example from the FRAME
 
-The [Staking pallet](../pallet_staking/index.html) uses the Session pallet to get the validator set.
+The [Staking pallet](https://docs.rs/pallet-staking/latest/pallet_staking/) uses the Session pallet to get the validator set.
 
 ```rust
 use pallet_session as session;
@@ -78,6 +78,6 @@ fn validators<T: pallet_session::Trait>() -> Vec<<T as pallet_session::Trait>::V
 
 ## Related Modules
 
-- [Staking](../pallet_staking/index.html)
+- [Staking](https://docs.rs/pallet-staking/latest/pallet_staking/)
 
 License: Apache-2.0
