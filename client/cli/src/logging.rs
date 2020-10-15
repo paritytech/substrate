@@ -199,6 +199,9 @@ impl<'a> FmtThreadName<'a> {
 	}
 }
 
+// NOTE: the following code has been duplicated from tracing-subscriber
+//
+//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L845
 impl<'a> fmt::Display for FmtThreadName<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		use std::sync::atomic::{
@@ -260,6 +263,9 @@ where
 	}
 }
 
+// NOTE: the following code has been duplicated from tracing-subscriber
+//
+//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L711
 impl<'a, S, N: 'a> fmt::Display for FmtCtx<'a, S, N>
 where
 	S: Subscriber + for<'lookup> LookupSpan<'lookup>,
@@ -290,6 +296,9 @@ where
 	}
 }
 
+// NOTE: the following code has been duplicated from tracing-subscriber
+//
+//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/time/mod.rs#L252
 mod time {
 	use ansi_term::Style;
 	use std::fmt;
