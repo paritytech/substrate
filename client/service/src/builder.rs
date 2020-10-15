@@ -490,8 +490,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		telemetry_connection_sinks,
 	} = params;
 
-	let abc = String::from("a\"b\'c");
-	let span = tracing::info_span!("substrate-node", name = config.network.node_name.as_str(), test = abc.as_str());
+	let span = tracing::info_span!("substrate-node", name = config.network.node_name.as_str());
 	let _enter = span.enter();
 
 	let chain_info = client.usage_info().chain;

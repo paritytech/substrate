@@ -1,19 +1,45 @@
-use std::fmt;
-use tracing::{Event, Subscriber, Id, span::{self, Attributes}, Level};
-use tracing_subscriber::{
-	filter::Directive, fmt::{time::{SystemTime, ChronoLocal, FormatTime}, FormatEvent, FmtContext, FormatFields}, layer::{SubscriberExt, Context}, FmtSubscriber, Layer, registry::LookupSpan,
-};
-use std::fmt::Write as OtherWrite;
+// This file is part of Substrate.
+
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use ansi_term::{Colour, Style};
+use std::fmt;
+use std::fmt::Write as _;
 use std::iter;
+use tracing::{
+	span::{self, Attributes},
+	Event, Id, Level, Subscriber,
+};
 use tracing_log::NormalizeEvent;
+use tracing_subscriber::{
+	fmt::{
+		time::{FormatTime, SystemTime},
+		FmtContext, FormatEvent, FormatFields,
+	},
+	layer::Context,
+	registry::LookupSpan,
+	Layer,
+};
 
 pub(crate) struct EventFormat<T = SystemTime> {
 	pub(crate) timer: T,
 	pub(crate) ansi: bool,
 	pub(crate) display_target: bool,
 	pub(crate) display_level: bool,
-	pub(crate) display_thread_id: bool,
 	pub(crate) display_thread_name: bool,
 }
 
@@ -23,15 +49,18 @@ where
 	N: for<'a> FormatFields<'a> + 'static,
 	T: FormatTime,
 {
-	fn format_event(&self, ctx: &FmtContext<S, N>, writer: &mut dyn fmt::Write, event: &Event) -> fmt::Result {
+	fn format_event(
+		&self,
+		ctx: &FmtContext<S, N>,
+		writer: &mut dyn fmt::Write,
+		event: &Event,
+	) -> fmt::Result {
 		let normalized_meta = event.normalized_metadata();
 		let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());
 		time::write(&self.timer, writer, self.ansi)?;
 
 		if self.display_level {
-			let fmt_level = {
-				FmtLevel::new(meta.level(), self.ansi)
-			};
+			let fmt_level = { FmtLevel::new(meta.level(), self.ansi) };
 			write!(writer, "{} ", fmt_level)?;
 		}
 
@@ -42,62 +71,52 @@ where
 					write!(writer, "{} ", FmtThreadName::new(name))?;
 				}
 				// fall-back to thread id when name is absent and ids are not enabled
-				None if !self.display_thread_id => {
+				None => {
 					write!(writer, "{:0>2?} ", current_thread.id())?;
 				}
-				_ => {}
 			}
-		}
-
-		if self.display_thread_id {
-			write!(writer, "{:0>2?} ", std::thread::current().id())?;
 		}
 
 		// Custom code to display node name
 		ctx.visit_spans::<fmt::Error, _>(|span| {
 			let exts = span.extensions();
-			if let Some(node_name) = exts.get::<MyFormattedFields>() {
+			if let Some(node_name) = exts.get::<NodeName>() {
 				write!(writer, "{}", node_name.as_str())
 			} else {
 				Ok(())
 			}
-		}).unwrap();
+		})
+		.unwrap();
 
-		let fmt_ctx = {
-			FmtCtx::new(&ctx, event.parent(), self.ansi)
-		};
+		let fmt_ctx = { FmtCtx::new(&ctx, event.parent(), self.ansi) };
 		write!(writer, "{}", fmt_ctx)?;
 		if self.display_target {
 			write!(writer, "{}:", meta.target())?;
 		}
 		ctx.format_fields(writer, event)?;
-		let span = ctx.lookup_current();
-		if let Some(ref id) = span.map(|x| x.id()) {
-			if let Some(span) = ctx.metadata(id) {
-				write!(writer, "{}", span.fields()).unwrap_or(());
-			}
-		}
 		writeln!(writer)
 	}
 }
 
-pub(crate) struct MyLayer;
+pub(crate) struct NodeNameLayer;
 
-impl<S> Layer<S> for MyLayer
+impl<S> Layer<S> for NodeNameLayer
 where
 	S: Subscriber + for<'a> LookupSpan<'a>,
 {
 	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
-		let span = ctx.span(id).expect("new_span has been called for this span; qed");
+		let span = ctx
+			.span(id)
+			.expect("new_span has been called for this span; qed");
 		let mut extensions = span.extensions_mut();
 
-		if extensions.get_mut::<MyFormattedFields>().is_none() {
+		if extensions.get_mut::<NodeName>().is_none() {
 			let mut s = String::new();
 			let mut v = StringVisitor { string: &mut s };
 			attrs.record(&mut v);
 
 			if !s.is_empty() {
-				let fmt_fields = MyFormattedFields(s);
+				let fmt_fields = NodeName(s);
 				extensions.insert(fmt_fields);
 			}
 		}
@@ -123,9 +142,9 @@ impl<'a> tracing::field::Visit for StringVisitor<'a> {
 }
 
 #[derive(Debug)]
-struct MyFormattedFields(String);
+struct NodeName(String);
 
-impl MyFormattedFields {
+impl NodeName {
 	fn as_str(&self) -> &str {
 		self.0.as_str()
 	}
@@ -272,25 +291,23 @@ where
 }
 
 mod time {
-use std::fmt;
-use ansi_term::{Style};
-use tracing_subscriber::fmt::time::FormatTime;
+	use ansi_term::Style;
+	use std::fmt;
+	use tracing_subscriber::fmt::time::FormatTime;
 
-pub(crate) fn write<T>(timer: T, writer: &mut dyn fmt::Write, with_ansi: bool) -> fmt::Result
-where
-	T: FormatTime,
-{
-	if with_ansi {
-		let style = Style::new().dimmed();
-		write!(writer, "{}", style.prefix())?;
-		timer.format_time(writer)?;
-		write!(writer, "{}", style.suffix())?;
-	} else {
-		timer.format_time(writer)?;
+	pub(crate) fn write<T>(timer: T, writer: &mut dyn fmt::Write, with_ansi: bool) -> fmt::Result
+	where
+		T: FormatTime,
+	{
+		if with_ansi {
+			let style = Style::new().dimmed();
+			write!(writer, "{}", style.prefix())?;
+			timer.format_time(writer)?;
+			write!(writer, "{}", style.suffix())?;
+		} else {
+			timer.format_time(writer)?;
+		}
+		writer.write_char(' ')?;
+		Ok(())
 	}
-	writer.write_char(' ')?;
-	Ok(())
 }
-}
-
-

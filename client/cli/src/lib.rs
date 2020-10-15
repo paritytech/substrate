@@ -38,21 +38,15 @@ pub use runner::*;
 use sc_service::{Configuration, TaskExecutor};
 pub use sc_service::{ChainSpec, Role};
 pub use sp_version::RuntimeVersion;
-use std::fmt;
 use std::io::Write;
 pub use structopt;
 use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
-use tracing::{Event, Subscriber, Id, span::{self, Attributes}, Level};
 use tracing_subscriber::{
-	filter::Directive, fmt::{time::{SystemTime, ChronoLocal, FormatTime}, FormatEvent, FmtContext, FormatFields}, layer::{SubscriberExt, Context}, FmtSubscriber, Layer, registry::LookupSpan,
+	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
 };
-use std::fmt::Write as OtherWrite;
-use ansi_term::{Colour, Style};
-use std::iter;
-use tracing_log::NormalizeEvent;
 
 /// Substrate client CLI
 ///
@@ -316,10 +310,9 @@ pub fn init_logger(
 			ansi: enable_color,
 			display_target: !simple,
 			display_level: !simple,
-			display_thread_id: false,
 			display_thread_name: !simple,
 		})
-		.finish().with(logging::MyLayer);
+		.finish().with(logging::NodeNameLayer);
 
 	if let Some(tracing_targets) = tracing_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &tracing_targets);
