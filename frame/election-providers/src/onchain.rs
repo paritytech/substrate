@@ -1,6 +1,8 @@
-use crate::{ElectionProvider, FlattenSupportMap, Supports};
 use sp_arithmetic::PerThing;
-use sp_npos_elections::{ElectionResult, ExtendedBalance, IdentifierT, PerThing128, VoteWeight};
+use sp_election_providers::ElectionProvider;
+use sp_npos_elections::{
+	ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Supports, VoteWeight,
+};
 use sp_runtime::RuntimeDebug;
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 

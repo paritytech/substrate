@@ -1,6 +1,14 @@
 use super::*;
 use frame_support::{parameter_types, traits::OnInitialize};
-use sp_core::H256;
+use parking_lot::RwLock;
+use sp_core::{
+	offchain::{
+		testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
+		OffchainExt, TransactionPoolExt,
+	},
+	H256,
+};
+use sp_election_providers::ElectionDataProvider;
 use sp_npos_elections::{
 	seq_phragmen, to_without_backing, CompactSolution, ElectionResult, EvaluateSupport,
 };
@@ -9,7 +17,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	PerU16,
 };
-use std::cell::RefCell;
+use std::{cell::RefCell};
 
 pub use frame_support::{assert_noop, assert_ok};
 
@@ -73,6 +81,12 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	RawSolution { compact, score }
 }
 
+frame_support::impl_outer_dispatch! {
+	pub enum OuterCall for Runtime where origin: Origin {
+		two_phase::TwoPhase,
+	}
+}
+
 frame_support::impl_outer_origin! {
 	pub enum Origin for Runtime where system = frame_system {}
 }
@@ -82,7 +96,7 @@ impl frame_system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = OuterCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
@@ -176,6 +190,9 @@ parameter_types_thread_local! {
 	static DESIRED_TARGETS: u32 = 2;
 	static SIGNED_DEPOSIT_BASE: Balance = 5;
 	static SIGNED_REWARD_BASE: Balance = 7;
+	static MAX_UNSIGNED_ITERATIONS: u32 = 5;
+	static UNSIGNED_PRIORITY: u64 = 100;
+	static SOLUTION_IMPROVEMENT_THRESHOLD: Perbill = Perbill::zero();
 }
 
 impl crate::two_phase::Trait for Runtime {
@@ -190,28 +207,26 @@ impl crate::two_phase::Trait for Runtime {
 	type SignedDepositBase = SignedDepositBase;
 	type SignedDepositByte = ();
 	type SignedDepositWeight = ();
-	type SolutionImprovementThreshold = ();
+	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type SlashHandler = ();
 	type RewardHandler = ();
+	type UnsignedMaxIterations = MaxUnsignedIterations;
+	type UnsignedCall = ();
+	type UnsignedPriority = UnsignedPriority;
 	type ElectionDataProvider = StakingMock;
 	type WeightInfo = ();
 }
 
-pub struct ExtBuilder {
-	max_signed_submissions: u32,
-}
+pub struct ExtBuilder {}
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self {
-			max_signed_submissions: MaxSignedSubmissions::get(),
-		}
+		Self {}
 	}
 }
 
 pub struct StakingMock;
-
-impl crate::ElectionDataProvider<AccountId, u64> for StakingMock {
+impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	type CompactSolution = TestCompact;
 
 	fn targets() -> Vec<AccountId> {
@@ -232,15 +247,27 @@ impl crate::ElectionDataProvider<AccountId, u64> for StakingMock {
 }
 
 impl ExtBuilder {
-	fn set_constants(&self) {
-		MAX_SIGNED_SUBMISSIONS.with(|v| *v.borrow_mut() = self.max_signed_submissions)
-	}
-	pub(crate) fn max_signed_submission(mut self, count: u32) -> Self {
-		self.max_signed_submissions = count;
+	pub fn max_signed_submission(self, count: u32) -> Self {
+		MAX_SIGNED_SUBMISSIONS.with(|v| *v.borrow_mut() = count);
 		self
 	}
-	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
-		self.set_constants();
+	pub fn unsigned_priority(self, p: u64) -> Self {
+		UNSIGNED_PRIORITY.with(|v| *v.borrow_mut() = p);
+		self
+	}
+	pub fn solution_improvement_threshold(self, p: Perbill) -> Self {
+		SOLUTION_IMPROVEMENT_THRESHOLD.with(|v| *v.borrow_mut() = p);
+		self
+	}
+	pub fn desired_targets(self, t: u32) -> Self {
+		DESIRED_TARGETS.with(|v| *v.borrow_mut() = t);
+		self
+	}
+	pub fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
+		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
+		self
+	}
+	pub fn build(self) -> sp_io::TestExternalities {
 		let mut storage = frame_system::GenesisConfig::default()
 			.build_storage::<Runtime>()
 			.unwrap();
@@ -255,6 +282,23 @@ impl ExtBuilder {
 		}
 		.assimilate_storage(&mut storage);
 
-		sp_io::TestExternalities::from(storage).execute_with(test)
+		sp_io::TestExternalities::from(storage)
+	}
+	pub fn build_offchainify(self, iters: u32) -> sp_io::TestExternalities {
+		let mut ext = self.build();
+		let (offchain, offchain_state) = TestOffchainExt::new();
+		let (pool, _pool_state) = TestTransactionPoolExt::new();
+
+		let mut seed = [0_u8; 32];
+		seed[0..4].copy_from_slice(&iters.to_le_bytes());
+		offchain_state.write().seed = seed;
+
+		ext.register_extension(OffchainExt::new(offchain));
+		ext.register_extension(TransactionPoolExt::new(pool));
+
+		ext
+	}
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		self.build().execute_with(test)
 	}
 }

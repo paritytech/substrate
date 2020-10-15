@@ -104,24 +104,25 @@
 //! TODO
 //!
 
-use crate::{
-	onchain::OnChainSequentialPhragmen, ElectionDataProvider, ElectionProvider, FlattenSupportMap,
-	Supports,
-};
+use crate::onchain::OnChainSequentialPhragmen;
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
-	decl_error, decl_event, decl_module, decl_storage,
-	dispatch::DispatchResultWithPostInfo,
+	decl_event, decl_module, decl_storage,
+	dispatch::{DispatchResultWithPostInfo, Dispatchable},
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::Weight,
 };
 use frame_system::{ensure_none, ensure_signed};
+use sp_election_providers::{ElectionDataProvider, ElectionProvider};
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, Assignment, CompactSolution, ElectionScore,
-	EvaluateSupport, ExtendedBalance, PerThing128, VoteWeight,
+	assignment_ratio_to_staked_normalized, is_score_better, Assignment, CompactSolution,
+	ElectionScore, EvaluateSupport, ExtendedBalance, PerThing128, Supports, VoteWeight,
 };
-use sp_runtime::{traits::Zero, InnerOf, PerThing, Perbill, RuntimeDebug};
+use sp_runtime::{
+	traits::Zero, transaction_validity::TransactionPriority, InnerOf, PerThing, Perbill,
+	RuntimeDebug,
+};
 use sp_std::prelude::*;
 
 #[cfg(test)]
@@ -154,26 +155,24 @@ type PositiveImbalanceOf<T> =
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
-const LOG_TARGET: &'static str = "two-phase-submission";
-
 /// Current phase of the pallet.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-pub enum Phase {
+pub enum Phase<Bn> {
 	/// Nothing, the election is not happening.
 	Off,
 	/// Signed phase is open.
 	Signed,
 	/// Unsigned phase is open.
-	Unsigned(bool),
+	Unsigned((bool, Bn)),
 }
 
-impl Default for Phase {
+impl<Bn> Default for Phase<Bn> {
 	fn default() -> Self {
 		Phase::Off
 	}
 }
 
-impl Phase {
+impl<Bn: PartialEq + Eq> Phase<Bn> {
 	/// Weather the phase is signed or not.
 	pub fn is_signed(&self) -> bool {
 		matches!(self, Phase::Signed)
@@ -184,9 +183,14 @@ impl Phase {
 		matches!(self, Phase::Unsigned(_))
 	}
 
+	/// Weather the phase is unsigned and open or not, with specific start.
+	pub fn is_unsigned_open_at(&self, at: Bn) -> bool {
+		matches!(self, Phase::Unsigned((true, real)) if *real == at)
+	}
+
 	/// Weather the phase is unsigned and open or not.
 	pub fn is_unsigned_open(&self) -> bool {
-		matches!(self, Phase::Unsigned(true))
+		matches!(self, Phase::Unsigned((true, _)))
 	}
 
 	/// Weather the phase is off or not.
@@ -260,6 +264,8 @@ pub enum Error {
 	Feasibility(FeasibilityError),
 	/// An error in the on-chain fallback.
 	OnChainFallback(crate::onchain::Error),
+	/// An internal error in the NPoS elections crate.
+	NposElections(sp_npos_elections::Error),
 	/// Snapshot data was unavailable unexpectedly.
 	SnapshotUnAvailable,
 }
@@ -267,6 +273,12 @@ pub enum Error {
 impl From<crate::onchain::Error> for Error {
 	fn from(e: crate::onchain::Error) -> Self {
 		Error::OnChainFallback(e)
+	}
+}
+
+impl From<sp_npos_elections::Error> for Error {
+	fn from(e: sp_npos_elections::Error) -> Self {
+		Error::NposElections(e)
 	}
 }
 
@@ -341,6 +353,11 @@ pub trait Trait: frame_system::Trait {
 	/// The minimum amount of improvement to the solution score that defines a solution as "better".
 	type SolutionImprovementThreshold: Get<Perbill>;
 
+	type UnsignedMaxIterations: Get<u32>;
+	// TODO:
+	type UnsignedCall: Dispatchable + Clone;
+	type UnsignedPriority: Get<TransactionPriority>;
+
 	/// Handler for the slashed deposits.
 	type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
 	/// Handler for the rewards.
@@ -356,7 +373,7 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as TwoPhaseElectionProvider where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> {
 		/// Current phase.
-		pub CurrentPhase get(fn current_phase): Phase = Phase::Off;
+		pub CurrentPhase get(fn current_phase): Phase<T::BlockNumber> = Phase::Off;
 
 		/// Sorted (worse -> best) list of unchecked, signed solutions.
 		pub SignedSubmissions get(fn signed_submissions): Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>;
@@ -430,13 +447,15 @@ decl_module! {
 			match Self::current_phase() {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
 					// check only for the signed phase.
-					CurrentPhase::put(Phase::Signed);
+					<CurrentPhase<T>>::put(Phase::Signed);
 					Self::start_signed_phase();
+					log!(info, "Starting signed phase at #{}", now);
 				},
 				Phase::Signed if remaining <= unsigned_deadline && remaining > 0.into() => {
 					// check the unsigned phase.
 					let found_solution = Self::finalize_signed_phase();
-					CurrentPhase::put(Phase::Unsigned(!found_solution));
+					<CurrentPhase<T>>::put(Phase::Unsigned((!found_solution, now)));
+					log!(info, "Starting unsigned phase at #{}", now);
 				},
 				_ => {
 					// Nothing. We wait in the unsigned phase until we receive the call to `elect`.
@@ -446,7 +465,17 @@ decl_module! {
 			Default::default()
 		}
 
-		fn offchain_worker(n: T::BlockNumber) {}
+		fn offchain_worker(n: T::BlockNumber) {
+			// We only run the OCW in the fist block of the unsigned phase.
+			if
+				Self::set_check_offchain_execution_status(n).is_ok() &&
+				Self::current_phase().is_unsigned_open_at(n)
+			{
+				let _ = Self::mine_and_submit().map_err(|e| {
+					log!(error, "error while submitting transaction in OCW: {:?}", e)
+				});
+			}
+		}
 
 		/// Submit a solution for the signed phase.
 		///
@@ -500,23 +529,10 @@ decl_module! {
 		fn submit_unsigned(origin, solution: RawSolution<CompactOf<T>>) {
 			ensure_none(origin)?;
 
-			// ensure solution is timely. Don't panic yet. This is a cheap check.
-			ensure!(Self::current_phase().is_signed(), "EarlySubmission");
-
-			use sp_npos_elections::is_score_better;
-			// ensure score is being improved. Panic henceforth.
-			assert!(
-				Self::queued_solution().map_or(
-					true,
-					|q: ReadySolution<_>|
-						is_score_better::<Perbill>(
-							solution.score,
-							q.score,
-							T::SolutionImprovementThreshold::get()
-						)
-				),
-				"WeakSolution"
-			);
+			// check phase and score.
+			// TODO: since we do this in pre-dispatch, we can just ignore it
+			// here.
+			let _ = Self::pre_dispatch_checks(&solution)?;
 
 			let ready =
 				Self::feasibility_check(solution, ElectionCompute::Unsigned)
@@ -566,16 +582,8 @@ where
 		let snapshot_targets =
 			Self::snapshot_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
-		use sp_runtime::traits::UniqueSaturatedInto;
-		let voter_at = |i: CompactVoterIndexOf<T>| -> Option<T::AccountId> {
-			snapshot_voters
-				.get(i.unique_saturated_into())
-				.map(|(x, _, _)| x)
-				.cloned()
-		};
-		let target_at = |i: CompactTargetIndexOf<T>| -> Option<T::AccountId> {
-			snapshot_targets.get(i.unique_saturated_into()).cloned()
-		};
+		let voter_at = crate::voter_at_fn!(snapshot_voters, T::AccountId, T);
+		let target_at = crate::target_at_fn!(snapshot_targets, T::AccountId, T);
 
 		// first, make sure that all the winners are sane.
 		let winners = winners
@@ -646,13 +654,12 @@ where
 	}
 }
 
-impl<T: Trait> crate::ElectionProvider<T::AccountId> for Module<T>
+impl<T: Trait> ElectionProvider<T::AccountId> for Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {
-	type Error = Error;
-
 	const NEEDS_ELECT_DATA: bool = false;
+	type Error = Error;
 
 	fn elect<P: PerThing128>(
 		_to_elect: usize,
@@ -673,16 +680,18 @@ where
 			)
 			.map(|(supports, compute)| {
 				// reset phase.
-				CurrentPhase::put(Phase::Off);
+				<CurrentPhase<T>>::put(Phase::Off);
 				// clear snapshots.
 				<SnapshotVoters<T>>::kill();
 				<SnapshotTargets<T>>::kill();
 
 				Self::deposit_event(RawEvent::ElectionFinalized(Some(compute)));
+				log!(info, "Finalized election round with compute {:?}.", compute);
 				supports
 			})
 			.map_err(|err| {
 				Self::deposit_event(RawEvent::ElectionFinalized(None));
+				log!(error, "Failed to finalize election round. Error = {:?}", err);
 				err
 			})
 	}
@@ -695,7 +704,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{mock::*, *};
-	use crate::ElectionProvider;
+	use sp_election_providers::ElectionProvider;
 	use sp_npos_elections::Support;
 
 	#[test]
@@ -721,20 +730,20 @@ mod tests {
 			assert!(TwoPhase::snapshot_voters().is_some());
 
 			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned(true));
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
 			assert!(TwoPhase::snapshot_voters().is_some());
 
 			roll_to(19);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned(true));
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
 			assert!(TwoPhase::snapshot_voters().is_some());
 
 			roll_to(20);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned(true));
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
 			assert!(TwoPhase::snapshot_voters().is_some());
 
 			// we close when upstream tells us to elect.
 			roll_to(21);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned(true));
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
 			assert!(TwoPhase::snapshot_voters().is_some());
 
 			TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
@@ -751,7 +760,7 @@ mod tests {
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
 
 			roll_to(20);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned(true));
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
 
 			// zilch solutions thus far.
 			let supports =
@@ -777,10 +786,5 @@ mod tests {
 				]
 			)
 		})
-	}
-
-	#[test]
-	fn can_only_submit_threshold_better() {
-		unimplemented!()
 	}
 }

@@ -47,7 +47,7 @@ fn float_phragmen_poc_works() {
 		]
 	);
 
-	let mut support_map = to_support_map_float(&mut phragmen_result, &stake_of);
+	let mut support_map = build_support_map_float(&mut phragmen_result, &stake_of);
 
 	assert_eq!(
 		support_map.get(&2).unwrap(),

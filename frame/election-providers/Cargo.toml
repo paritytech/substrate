@@ -25,6 +25,7 @@ frame-system = { version = "2.0.0-rc6", default-features = false, path = "../sys
 sp-npos-elections = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/npos-elections" }
 sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/std" }
 sp-arithmetic = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/arithmetic" }
+sp-election-providers = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/election-providers" }
 
 [dev-dependencies]
 sp-io = { version = "2.0.0", path = "../../primitives/io" }
@@ -33,6 +34,7 @@ pallet-balances = { version = "2.0.0", path = "../balances" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 paste = "1.0.1"
 substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
+parking_lot = "0.11.0"
 
 [features]
 default = ["std"]
@@ -44,4 +46,5 @@ std = [
 	"sp-npos-elections/std",
 	"frame-system/std",
 	"sp-std/std",
+	"sp-election-providers/std"
 ]

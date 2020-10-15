@@ -75,12 +75,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_arithmetic::{
-	traits::{Bounded, Zero},
+	traits::{Bounded, UniqueSaturatedInto, Zero},
 	InnerOf, Normalizable, PerThing, Rational128, ThresholdOrd,
 };
 use sp_std::{
-	cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, fmt::Debug, ops::Mul,
-	prelude::*, rc::Rc,
+	cell::RefCell,
+	cmp::Ordering,
+	collections::btree_map::BTreeMap,
+	convert::{TryFrom, TryInto},
+	fmt::Debug,
+	ops::Mul,
+	prelude::*,
+	rc::Rc,
 };
 
 #[cfg(feature = "std")]
@@ -131,8 +137,8 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 /// See [`compact`] for more info.
 pub trait CompactSolution: Sized {
 	const LIMIT: usize;
-	type Voter: sp_arithmetic::traits::UniqueSaturatedInto<usize>;
-	type Target: sp_arithmetic::traits::UniqueSaturatedInto<usize>;
+	type Voter: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize>;
+	type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize>;
 	type VoteWeight: PerThing128;
 
 	fn from_assignment<FV, FT, A>(
@@ -181,6 +187,25 @@ pub trait CompactSolution: Sized {
 	/// In other words, if this return true, exactly one element must have been removed from
 	/// `self.len()`.
 	fn remove_voter(&mut self, to_remove: Self::Voter) -> bool;
+
+	/// Compute the score of this compact solution type.
+	fn score<A, FS>(
+		self,
+		winners: &[A],
+		stake_of: FS,
+		voter_at: impl Fn(Self::Voter) -> Option<A>,
+		target_at: impl Fn(Self::Target) -> Option<A>,
+	) -> Result<ElectionScore, Error>
+	where
+		for<'r> FS: Fn(&'r A) -> VoteWeight,
+		A: IdentifierT,
+		ExtendedBalance: From<InnerOf<Self::VoteWeight>>,
+	{
+		let ratio = self.into_assignment(voter_at, target_at)?;
+		let staked = helpers::assignment_ratio_to_staked_normalized(ratio, stake_of)?;
+		let support = to_supports(winners, &staked)?;
+		Ok(support.evaluate())
+	}
 }
 
 // re-export the compact solution type.
@@ -659,10 +684,10 @@ where
 {
 	match this
 		.iter()
-		.enumerate()
-		.map(|(i, e)| (
-			e.ge(&that[i]),
-			e.tcmp(&that[i], epsilon.mul_ceil(that[i])),
+		.zip(that.iter())
+		.map(|(thi, tha)| (
+			thi.ge(&tha),
+			thi.tcmp(&tha, epsilon.mul_ceil(*tha)),
 		))
 		.collect::<Vec<(bool, Ordering)>>()
 		.as_slice()

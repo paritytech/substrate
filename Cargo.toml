@@ -133,6 +133,7 @@ members = [
 	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/storage",
+	"primitives/election-providers",
 	"primitives/externalities",
 	"primitives/finality-tracker",
 	"primitives/finality-grandpa",
