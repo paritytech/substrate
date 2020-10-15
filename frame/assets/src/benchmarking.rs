@@ -18,7 +18,7 @@
 //! Staking pallet benchmarking.
 
 use super::*;
-
+use sp_std::prelude::*;
 use sp_runtime::traits::Bounded;
 use frame_system::RawOrigin as SystemOrigin;
 use frame_support::assert_ok;
