@@ -53,6 +53,7 @@ members = [
 	"client/service",
 	"client/service/test",
 	"client/state-db",
+	"client/sync-state-rpc",
 	"client/telemetry",
 	"client/transaction-pool",
 	"client/transaction-pool/graph",
