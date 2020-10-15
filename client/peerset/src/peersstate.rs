@@ -17,9 +17,10 @@
 //! Reputation and slots allocation system behind the peerset.
 //!
 //! The [`PeersState`] state machine is responsible for managing the reputation and allocating
-//! slots. It holds a list of nodes, each associated with a reputation value and whether we are
-//! connected or not to this node. Thanks to this list, it knows how many slots are occupied. It
-//! also holds a list of nodes which don't occupy slots.
+//! slots. It holds a list of nodes, each associated with a reputation value, a list of sets the
+//! node belongs to, and for each set whether we are connected or not to this node. Thanks to this
+//! list, it knows how many slots are occupied. It also holds a list of nodes which don't occupy
+//! slots.
 //!
 //! > Note: This module is purely dedicated to managing slots and reputations. Features such as
 //! >       for example connecting to some nodes in priority should be added outside of this
@@ -46,17 +47,8 @@ pub struct PeersState {
 	/// 			sort, to make the logic easier.
 	nodes: HashMap<PeerId, Node>,
 
-	/// Number of slot-occupying nodes for which the `ConnectionState` is `In`.
-	num_in: u32,
-
-	/// Number of slot-occupying nodes for which the `ConnectionState` is `In`.
-	num_out: u32,
-
-	/// Maximum allowed number of slot-occupying nodes for which the `ConnectionState` is `In`.
-	max_in: u32,
-
-	/// Maximum allowed number of slot-occupying nodes for which the `ConnectionState` is `Out`.
-	max_out: u32,
+	/// Configuration of each set. The size of this `Vec` is never modified.
+	sets: Vec<SetInfo>,
 
 	/// List of node identities (discovered or not) that don't occupy slots.
 	///
@@ -66,36 +58,64 @@ pub struct PeersState {
 	no_slot_nodes: HashSet<PeerId>,
 }
 
-/// State of a single node that we know about.
+/// Configuration of a single set.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct SetConfig {
+	/// Maximum allowed number of slot-occupying nodes for ingoing connections.
+	pub in_peers: u32,
+
+	/// Maximum allowed number of slot-occupying nodes for outgoing connections.
+	pub out_peers: u32,
+}
+
+/// State of a single set.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+struct SetInfo {
+	/// Number of slot-occupying nodes for which the `MembershipState` is `In`.
+	num_in: u32,
+
+	/// Number of slot-occupying nodes for which the `MembershipState` is `In`.
+	num_out: u32,
+
+	/// Maximum allowed number of slot-occupying nodes for which the `MembershipState` is `In`.
+	max_in: u32,
+
+	/// Maximum allowed number of slot-occupying nodes for which the `MembershipState` is `Out`.
+	max_out: u32,
+}
+
+/// State of a single node that we know about.
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Node {
-	/// Whether we are connected to this node.
-	connection_state: ConnectionState,
+	/// List of sets the node belongs to.
+	/// Always has a fixed size equal to the one of [`PeersState::set`]. The various possible sets
+	/// are indices into this `Vec`.
+	sets: Vec<MembershipState>,
 
 	/// Reputation value of the node, between `i32::min_value` (we hate that node) and
 	/// `i32::max_value` (we love that node).
 	reputation: i32,
 }
 
-impl Default for Node {
-	fn default() -> Node {
+impl Node {
+	fn new(num_sets: usize) -> Node {
 		Node {
-			connection_state: ConnectionState::NotConnected {
-				last_connected: Instant::now(),
-			},
+			sets: (0..num_sets).map(|_| MembershipState::NotMember).collect(),
 			reputation: 0,
 		}
 	}
 }
 
-/// Whether we are connected to a node.
+/// Whether we are connected to a node in the context of a specific set.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum ConnectionState {
+enum MembershipState {
+	/// Node isn't part of that set.
+	NotMember,
 	/// We are connected through an ingoing connection.
 	In,
 	/// We are connected through an outgoing connection.
 	Out,
-	/// We are not connected to this node.
+	/// Node is part of that set, but we are not connected to it.
 	NotConnected {
 		/// When we were last connected to the node, or if we were never connected when we
 		/// discovered it.
@@ -103,50 +123,66 @@ enum ConnectionState {
 	},
 }
 
-impl ConnectionState {
+impl MembershipState {
 	/// Returns `true` for `In` and `Out`.
 	fn is_connected(self) -> bool {
 		match self {
-			ConnectionState::In => true,
-			ConnectionState::Out => true,
-			ConnectionState::NotConnected { .. } => false,
+			MembershipState::NotMember => false,
+			MembershipState::In => true,
+			MembershipState::Out => true,
+			MembershipState::NotConnected { .. } => false,
 		}
 	}
 }
 
 impl PeersState {
 	/// Builds a new empty `PeersState`.
-	pub fn new(in_peers: u32, out_peers: u32) -> Self {
+	pub fn new(sets: impl IntoIterator<Item = SetConfig>) -> Self {
 		PeersState {
 			nodes: HashMap::new(),
-			num_in: 0,
-			num_out: 0,
-			max_in: in_peers,
-			max_out: out_peers,
+			sets: sets.into_iter().map(|config| {
+				SetInfo {
+					num_in: 0,
+					num_out: 0,
+					max_in: config.in_peers,
+					max_out: config.out_peers,
+				}
+			}).collect(),
 			no_slot_nodes: HashSet::new(),
 		}
 	}
 
-	/// Returns an object that grants access to the state of a peer.
-	pub fn peer<'a>(&'a mut self, peer_id: &'a PeerId) -> Peer<'a> {
-		match self.nodes.get_mut(peer_id) {
-			None => return Peer::Unknown(UnknownPeer {
-				parent: self,
-				peer_id: Cow::Borrowed(peer_id),
-			}),
-			Some(peer) => {
-				if peer.connection_state.is_connected() {
-					Peer::Connected(ConnectedPeer {
-						state: self,
-						peer_id: Cow::Borrowed(peer_id),
-					})
-				} else {
-					Peer::NotConnected(NotConnectedPeer {
-						state: self,
-						peer_id: Cow::Borrowed(peer_id),
-					})
-				}
-			}
+	/// Returns an object that grants access to the state of a peer in the context of a specific
+	/// set.
+	///
+	/// # Panic
+	///
+	/// `set` must be within range of the sets passed to [`PeersState::new`].
+	///
+	pub fn peer<'a>(&'a mut self, set: usize, peer_id: &'a PeerId) -> Peer<'a> {
+		// The code below will panic anyway if this happens to be false, but this earlier assert
+		// makes it explicit what is wrong.
+		assert!(set < self.sets.len());
+
+		match self.nodes.get_mut(peer_id).map(|p| &p.sets[set]) {
+			None | Some(MembershipState::NotMember) =>
+				Peer::Unknown(UnknownPeer {
+					parent: self,
+					set,
+					peer_id: Cow::Borrowed(peer_id),
+				}),
+			Some(MembershipState::In) | Some(MembershipState::Out) =>
+				Peer::Connected(ConnectedPeer {
+					state: self,
+					set,
+					peer_id: Cow::Borrowed(peer_id),
+				}),
+			Some(MembershipState::NotConnected { .. }) =>
+				Peer::NotConnected(NotConnectedPeer {
+					state: self,
+					set,
+					peer_id: Cow::Borrowed(peer_id),
+				}),
 		}
 	}
 
@@ -157,22 +193,40 @@ impl PeersState {
 		self.nodes.keys()
 	}
 
-	/// Returns the list of peers we are connected to.
+	/// Returns the list of peers we are connected to in the context of a specific set.
+	///
+	/// # Panic
+	///
+	/// `set` must be within range of the sets passed to [`PeersState::new`].
+	///
 	// Note: this method could theoretically return a `ConnectedPeer`, but implementing that
 	// isn't simple.
-	pub fn connected_peers(&self) -> impl Iterator<Item = &PeerId> {
+	pub fn connected_peers(&self, set: usize) -> impl Iterator<Item = &PeerId> {
+		// The code below will panic anyway if this happens to be false, but this earlier assert
+		// makes it explicit what is wrong.
+		assert!(set < self.sets.len());
+
 		self.nodes.iter()
-			.filter(|(_, p)| p.connection_state.is_connected())
+			.filter(|(_, p)| p.sets[set].is_connected())
 			.map(|(p, _)| p)
 	}
 
 	/// Returns the peer with the highest reputation and that we are not connected to.
 	///
 	/// If multiple nodes have the same reputation, which one is returned is unspecified.
-	pub fn highest_not_connected_peer(&mut self) -> Option<NotConnectedPeer> {
+	///
+	/// # Panic
+	///
+	/// `set` must be within range of the sets passed to [`PeersState::new`].
+	///
+	pub fn highest_not_connected_peer(&mut self, set: usize) -> Option<NotConnectedPeer> {
+		// The code below will panic anyway if this happens to be false, but this earlier assert
+		// makes it explicit what is wrong.
+		assert!(set < self.sets.len());
+
 		let outcome = self.nodes
 			.iter_mut()
-			.filter(|(_, Node { connection_state, .. })| !connection_state.is_connected())
+			.filter(|(_, Node { sets, .. })| !sets[set].is_connected())
 			.fold(None::<(&PeerId, &mut Node)>, |mut cur_node, to_try| {
 				if let Some(cur_node) = cur_node.take() {
 					if cur_node.1.reputation >= to_try.1.reputation {
@@ -186,6 +240,7 @@ impl PeersState {
 		if let Some(peer_id) = outcome {
 			Some(NotConnectedPeer {
 				state: self,
+				set,
 				peer_id: Cow::Owned(peer_id),
 			})
 		} else {
@@ -195,7 +250,7 @@ impl PeersState {
 
 	/// Add a node to the list of nodes that don't occupy slots.
 	///
-	/// Has no effect if the peer was already in the group.
+	/// Has no effect if the node was already in the group.
 	pub fn add_no_slot_node(&mut self, peer_id: PeerId) {
 		// Reminder: `HashSet::insert` returns false if the node was already in the set
 		if !self.no_slot_nodes.insert(peer_id.clone()) {
@@ -203,17 +258,19 @@ impl PeersState {
 		}
 
 		if let Some(peer) = self.nodes.get_mut(&peer_id) {
-			match peer.connection_state {
-				ConnectionState::In => self.num_in -= 1,
-				ConnectionState::Out => self.num_out -= 1,
-				ConnectionState::NotConnected { .. } => {},
+			for (set, membership) in peer.sets.iter().enumerate() {
+				match membership {
+					MembershipState::In => self.sets[set].num_in -= 1,
+					MembershipState::Out => self.sets[set].num_out -= 1,
+					MembershipState::NotConnected { .. } => {},
+				}
 			}
 		}
 	}
 
 	/// Removes a node from the list of nodes that don't occupy slots.
 	///
-	/// Has no effect if the peer was not in the group.
+	/// Has no effect if the node was not in the group.
 	pub fn remove_no_slot_node(&mut self, peer_id: &PeerId) {
 		// Reminder: `HashSet::remove` returns false if the node was already not in the set
 		if !self.no_slot_nodes.remove(peer_id) {
@@ -221,22 +278,24 @@ impl PeersState {
 		}
 
 		if let Some(peer) = self.nodes.get_mut(peer_id) {
-			match peer.connection_state {
-				ConnectionState::In => self.num_in += 1,
-				ConnectionState::Out => self.num_out += 1,
-				ConnectionState::NotConnected { .. } => {},
+			for (set, membership) in peer.sets.iter().enumerate() {
+				match membership {
+					MembershipState::In => self.sets[set].num_in += 1,
+					MembershipState::Out => self.sets[set].num_out += 1,
+					MembershipState::NotConnected { .. } => {},
+				}
 			}
 		}
 	}
 }
 
-/// Grants access to the state of a peer in the `PeersState`.
+/// Grants access to the state of a peer in the [`PeersState`] in the context of a specific set.
 pub enum Peer<'a> {
 	/// We are connected to this node.
 	Connected(ConnectedPeer<'a>),
 	/// We are not connected to this node.
 	NotConnected(NotConnectedPeer<'a>),
-	/// We have never heard of this node.
+	/// We have never heard of this node, or it is not part of the set.
 	Unknown(UnknownPeer<'a>),
 }
 
@@ -277,6 +336,7 @@ impl<'a> Peer<'a> {
 /// A peer that is connected to us.
 pub struct ConnectedPeer<'a> {
 	state: &'a mut PeersState,
+	set: usize,
 	peer_id: Cow<'a, PeerId>,
 }
 
@@ -291,14 +351,15 @@ impl<'a> ConnectedPeer<'a> {
 		let is_no_slot_occupy = self.state.no_slot_nodes.contains(&*self.peer_id);
 		if let Some(mut node) = self.state.nodes.get_mut(&*self.peer_id) {
 			if !is_no_slot_occupy {
-				match node.connection_state {
-					ConnectionState::In => self.state.num_in -= 1,
-					ConnectionState::Out => self.state.num_out -= 1,
-					ConnectionState::NotConnected { .. } =>
+				match node.sets[self.set] {
+					MembershipState::In => self.state.sets[self.set].num_in -= 1,
+					MembershipState::Out => self.state.sets[self.set].num_out -= 1,
+					MembershipState::NotMember |
+					MembershipState::NotConnected { .. } =>
 						debug_assert!(false, "State inconsistency: disconnecting a disconnected node")
 				}
 			}
-			node.connection_state = ConnectionState::NotConnected {
+			node.sets[self.set] = MembershipState::NotConnected {
 				last_connected: Instant::now(),
 			};
 		} else {
@@ -307,16 +368,21 @@ impl<'a> ConnectedPeer<'a> {
 
 		NotConnectedPeer {
 			state: self.state,
+			set: self.set,
 			peer_id: self.peer_id,
 		}
 	}
 
 	/// Returns the reputation value of the node.
+	///
+	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
 	pub fn reputation(&self) -> i32 {
 		self.state.nodes.get(&*self.peer_id).map_or(0, |p| p.reputation)
 	}
 
 	/// Sets the reputation of the peer.
+	///
+	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
 	pub fn set_reputation(&mut self, value: i32) {
 		if let Some(node) = self.state.nodes.get_mut(&*self.peer_id) {
 			node.reputation = value;
@@ -328,6 +394,8 @@ impl<'a> ConnectedPeer<'a> {
 	/// Performs an arithmetic addition on the reputation score of that peer.
 	///
 	/// In case of overflow, the value will be capped.
+	///
+	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
 	pub fn add_reputation(&mut self, modifier: i32) {
 		if let Some(node) = self.state.nodes.get_mut(&*self.peer_id) {
 			node.reputation = node.reputation.saturating_add(modifier);
@@ -341,6 +409,7 @@ impl<'a> ConnectedPeer<'a> {
 #[derive(Debug)]
 pub struct NotConnectedPeer<'a> {
 	state: &'a mut PeersState,
+	set: usize,
 	peer_id: Cow<'a, PeerId>,
 }
 
@@ -359,7 +428,7 @@ impl<'a> NotConnectedPeer<'a> {
 			None => return,
 		};
 
-		if let ConnectionState::NotConnected { last_connected } = &mut state.connection_state {
+		if let MembershipState::NotConnected { last_connected } = &mut state.sets[self.set] {
 			*last_connected = Instant::now();
 		}
 	}
@@ -381,8 +450,8 @@ impl<'a> NotConnectedPeer<'a> {
 			}
 		};
 
-		match state.connection_state {
-			ConnectionState::NotConnected { last_connected } => last_connected,
+		match state.sets[self.set] {
+			MembershipState::NotConnected { last_connected } => last_connected,
 			_ => {
 				error!(target: "peerset", "State inconsistency with {}", self.peer_id);
 				Instant::now()
@@ -401,14 +470,14 @@ impl<'a> NotConnectedPeer<'a> {
 
 		// Note that it is possible for num_out to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
-		if self.state.num_out >= self.state.max_out && !is_no_slot_occupy {
+		if self.state.sets[self.set].num_out >= self.state.sets[self.set].max_out && !is_no_slot_occupy {
 			return Err(self);
 		}
 
 		if let Some(mut peer) = self.state.nodes.get_mut(&*self.peer_id) {
-			peer.connection_state = ConnectionState::Out;
+			peer.sets[self.set] = MembershipState::Out;
 			if !is_no_slot_occupy {
-				self.state.num_out += 1;
+				self.state.sets[self.set].num_out += 1;
 			}
 		} else {
 			debug_assert!(false, "State inconsistency: try_outgoing on an unknown node");
@@ -416,6 +485,7 @@ impl<'a> NotConnectedPeer<'a> {
 
 		Ok(ConnectedPeer {
 			state: self.state,
+			set: self.set,
 			peer_id: self.peer_id,
 		})
 	}
@@ -431,14 +501,14 @@ impl<'a> NotConnectedPeer<'a> {
 
 		// Note that it is possible for num_in to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
-		if self.state.num_in >= self.state.max_in && !is_no_slot_occupy {
+		if self.state.sets[self.set].num_in >= self.state.sets[self.set].max_in && !is_no_slot_occupy {
 			return Err(self);
 		}
 
 		if let Some(mut peer) = self.state.nodes.get_mut(&*self.peer_id) {
-			peer.connection_state = ConnectionState::In;
+			peer.sets[self.set] = MembershipState::In;
 			if !is_no_slot_occupy {
-				self.state.num_in += 1;
+				self.state.sets[self.set].num_in += 1;
 			}
 		} else {
 			debug_assert!(false, "State inconsistency: try_accept_incoming on an unknown node");
@@ -446,16 +516,21 @@ impl<'a> NotConnectedPeer<'a> {
 
 		Ok(ConnectedPeer {
 			state: self.state,
+			set: self.set,
 			peer_id: self.peer_id,
 		})
 	}
 
 	/// Returns the reputation value of the node.
+	///
+	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
 	pub fn reputation(&self) -> i32 {
 		self.state.nodes.get(&*self.peer_id).map_or(0, |p| p.reputation)
 	}
 
 	/// Sets the reputation of the peer.
+	///
+	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
 	pub fn set_reputation(&mut self, value: i32) {
 		if let Some(node) = self.state.nodes.get_mut(&*self.peer_id) {
 			node.reputation = value;
@@ -467,6 +542,8 @@ impl<'a> NotConnectedPeer<'a> {
 	/// Performs an arithmetic addition on the reputation score of that peer.
 	///
 	/// In case of overflow, the value will be capped.
+	///
+	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
 	pub fn add_reputation(&mut self, modifier: i32) {
 		if let Some(node) = self.state.nodes.get_mut(&*self.peer_id) {
 			node.reputation = node.reputation.saturating_add(modifier);
@@ -475,26 +552,38 @@ impl<'a> NotConnectedPeer<'a> {
 		}
 	}
 
-	/// Un-discovers the peer. Removes it from the list.
+	/// Removes the peer from the list of members of the set.
 	pub fn forget_peer(self) -> UnknownPeer<'a> {
-		if self.state.nodes.remove(&*self.peer_id).is_none() {
+		if let Some(mut peer) = self.state.nodes.get_mut(&*self.peer_id) {
+			debug_assert!(!matches!(peer.sets[self.set], MembershipState::NotMember));
+			peer.sets[self.set] = MembershipState::NotMember;
+
+			// Remove the peer from `self.state.nodes` entirely if it isn't a member of any set.
+			if peer.sets.iter().all(|set| matches!(set, MembershipState::NotMember)) {
+				self.state.nodes.remove(&*self.peer_id);
+			}
+
+		} else {
+			debug_assert!(false, "State inconsistency: forget_peer on an unknown node");
 			error!(
 				target: "peerset",
 				"State inconsistency with {} when forgetting peer",
 				self.peer_id
 			);
-		}
+		};
 
 		UnknownPeer {
 			parent: self.state,
+			set: self.set,
 			peer_id: self.peer_id,
 		}
 	}
 }
 
-/// A peer that we have never heard of.
+/// A peer that we have never heard of or that isn't part of the set.
 pub struct UnknownPeer<'a> {
 	parent: &'a mut PeersState,
+	set: usize,
 	peer_id: Cow<'a, PeerId>,
 }
 
@@ -504,16 +593,17 @@ impl<'a> UnknownPeer<'a> {
 	/// The node starts with a reputation of 0. You can adjust these default
 	/// values using the `NotConnectedPeer` that this method returns.
 	pub fn discover(self) -> NotConnectedPeer<'a> {
-		self.parent.nodes.insert(self.peer_id.clone().into_owned(), Node {
-			connection_state: ConnectionState::NotConnected {
-				last_connected: Instant::now(),
-			},
-			reputation: 0,
-		});
+		let num_sets = self.parent.sets.len();
 
-		let state = self.parent;
+		self.parent.nodes.entry(self.peer_id.clone().into_owned())
+			.or_insert_with(|| Node::new(num_sets))
+			.sets[self.set] = MembershipState::NotConnected {
+				last_connected: Instant::now(),
+			};
+
 		NotConnectedPeer {
-			state,
+			state: self.parent,
+			set: self.set,
 			peer_id: self.peer_id,
 		}
 	}

@@ -103,7 +103,7 @@ impl PeersetHandle {
 	pub fn set_reserved_only(&self, reserved: bool) {
 		let _ = self.tx.unbounded_send(Action::SetReservedOnly(reserved));
 	}
-	
+
 	/// Set reserved peers to the new set.
 	pub fn set_reserved_peers(&self, peer_ids: HashSet<PeerId>) {
 		let _ = self.tx.unbounded_send(Action::SetReservedPeers(peer_ids));
@@ -160,20 +160,27 @@ impl From<u64> for IncomingIndex {
 /// Configuration to pass when creating the peer set manager.
 #[derive(Debug)]
 pub struct PeersetConfig {
+	/// List of sets of nodes the peerset manages.
+	pub sets: Vec<SetConfig>,
+
+	/// If true, we only accept nodes in the priority group named `reserved` of any of the sets.
+	pub reserved_only: bool,
+}
+
+/// Configuration for a single set of nodes.
+#[derive(Debug)]
+pub struct SetConfig {
 	/// Maximum number of ingoing links to peers.
 	pub in_peers: u32,
 
 	/// Maximum number of outgoing links to peers.
 	pub out_peers: u32,
 
-	/// List of bootstrap nodes to initialize the peer with.
+	/// List of bootstrap nodes to initialize the set with.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
 	/// >			otherwise it will not be able to connect to them.
 	pub bootnodes: Vec<PeerId>,
-
-	/// If true, we only accept nodes in [`PeersetConfig::priority_groups`].
-	pub reserved_only: bool,
 
 	/// Lists of nodes we should always be connected to.
 	///
@@ -252,7 +259,7 @@ impl Peerset {
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
 		self.on_remove_from_priority_group(RESERVED_NODES, peer_id);
 	}
-	
+
 	fn on_set_reserved_peers(&mut self, peer_ids: HashSet<PeerId>) {
 		self.on_set_priority_group(RESERVED_NODES, peer_ids);
 	}
