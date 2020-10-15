@@ -81,10 +81,16 @@ where
 		}
 
 		// Custom code to display node name
+		let mut found_node_name = false;
 		ctx.visit_spans::<fmt::Error, _>(|span| {
-			let exts = span.extensions();
-			if let Some(node_name) = exts.get::<NodeName>() {
-				write!(writer, "{}", node_name.as_str())
+			if !found_node_name {
+				let exts = span.extensions();
+				if let Some(node_name) = exts.get::<NodeName>() {
+					found_node_name = true;
+					write!(writer, "{}", node_name.as_str())
+				} else {
+					Ok(())
+				}
 			} else {
 				Ok(())
 			}
@@ -269,7 +275,7 @@ where
 	}
 }
 
-// NOTE: the following code has been duplicated from tracing-subscriber
+// NOTE: the following code has been inspired from tracing-subscriber
 //
 //       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L711
 impl<'a, S, N: 'a> fmt::Display for FmtCtx<'a, S, N>
@@ -290,9 +296,12 @@ where
 			.into_iter()
 			.flat_map(|span| span.from_root().chain(iter::once(span)));
 
-		for span in scope {
+		for name in scope
+			.map(|span| span.metadata().name())
+			.filter(|&x| x != "substrate-node")
+		{
 			seen = true;
-			write!(f, "{}:", bold.paint(span.metadata().name()))?;
+			write!(f, "{}:", bold.paint(name))?;
 		}
 
 		if seen {
