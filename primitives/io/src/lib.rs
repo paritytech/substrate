@@ -306,6 +306,13 @@ pub trait DefaultChildStorage {
 		key: &[u8],
 		value: &[u8],
 	) {
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			?key,
+			?value,
+			"set"
+		);
 		let child_info = ChildInfo::new_default(storage_key);
 		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
 	}
@@ -318,6 +325,12 @@ pub trait DefaultChildStorage {
 		storage_key: &[u8],
 		key: &[u8],
 	) {
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			?key,
+			"clear"
+		);
 		let child_info = ChildInfo::new_default(storage_key);
 		self.clear_child_storage(&child_info, key);
 	}
@@ -330,6 +343,12 @@ pub trait DefaultChildStorage {
 		&mut self,
 		storage_key: &[u8],
 	) {
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			?key,
+			"kill"
+		);
 		let child_info = ChildInfo::new_default(storage_key);
 		self.kill_child_storage(&child_info);
 	}
@@ -354,6 +373,12 @@ pub trait DefaultChildStorage {
 		storage_key: &[u8],
 		prefix: &[u8],
 	) {
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			?prefix,
+			"clear_prefix"
+		);
 		let child_info = ChildInfo::new_default(storage_key);
 		self.clear_child_prefix(&child_info, prefix);
 	}
@@ -368,6 +393,11 @@ pub trait DefaultChildStorage {
 		&mut self,
 		storage_key: &[u8],
 	) -> Vec<u8> {
+		#[cfg(feature = "std")]
+		tracing::event!(
+			tracing::Level::INFO,
+			"root"
+		);
 		let child_info = ChildInfo::new_default(storage_key);
 		self.child_storage_root(&child_info)
 	}
