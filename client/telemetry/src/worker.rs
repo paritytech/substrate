@@ -150,18 +150,12 @@ impl TelemetryWorker {
 			}
 		};
 
-		let serialized = {
-			let mut out = Vec::new();
-			slog_json::Json::default(&mut out).log(record, values).map_err(|_| ())?;
-			out
-		};
-
 		// None of the nodes want that verbosity, so just return without doing any serialization.
 		if self.nodes.iter().all(|(_, node_max_verbosity)| msg_verbosity > *node_max_verbosity) {
 			trace!(
 				target: "telemetry",
-				"Skipping log entry because verbosity {:?} is too high for all endpoints: {}",
-				msg_verbosity, String::from_utf8(serialized).unwrap()
+				"Skipping log entry because verbosity {:?} is too high for all endpoints",
+				msg_verbosity
 			);
 			return Ok(())
 		}
