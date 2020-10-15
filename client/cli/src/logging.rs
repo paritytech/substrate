@@ -43,6 +43,9 @@ pub(crate) struct EventFormat<T = SystemTime> {
 	pub(crate) display_thread_name: bool,
 }
 
+// NOTE: the following code has been inspiref from tracing-subscriber
+//
+//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L449
 impl<S, N, T> FormatEvent<S, N> for EventFormat<T>
 where
 	S: Subscriber + for<'a> LookupSpan<'a>,
@@ -108,11 +111,16 @@ where
 		let span = ctx
 			.span(id)
 			.expect("new_span has been called for this span; qed");
+
+		if span.name() != "substrate-node" {
+			return;
+		}
+
 		let mut extensions = span.extensions_mut();
 
 		if extensions.get_mut::<NodeName>().is_none() {
 			let mut s = String::new();
-			let mut v = StringVisitor { string: &mut s };
+			let mut v = NodeNameVisitor(&mut s);
 			attrs.record(&mut v);
 
 			if !s.is_empty() {
@@ -123,20 +131,18 @@ where
 	}
 }
 
-struct StringVisitor<'a> {
-	string: &'a mut String,
-}
+struct NodeNameVisitor<'a, W: std::fmt::Write>(&'a mut W);
 
-impl<'a> tracing::field::Visit for StringVisitor<'a> {
+impl<'a, W: std::fmt::Write> tracing::field::Visit for NodeNameVisitor<'a, W> {
 	fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
 		if field.name() == "name" {
-			write!(self.string, "[name = {:?}]", value).unwrap();
+			write!(self.0, "[name = {:?}]", value).unwrap();
 		}
 	}
 
 	fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
 		if field.name() == "name" {
-			write!(self.string, "[{}] ", value).unwrap();
+			write!(self.0, "[{}] ", value).unwrap();
 		}
 	}
 }
