@@ -15,14 +15,14 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
-use std::{ 
+use std::{
 	fs, collections::{HashMap, hash_map::DefaultHasher}, path::Path,
-	hash::Hasher as _, 
+	hash::Hasher as _,
 };
 use sp_core::{
 	traits::FetchRuntimeCode,
 };
-use sp_state_machine::{BasicExternalities};
+use sp_state_machine::BasicExternalities;
 use sp_blockchain::Result;
 use sc_executor::RuntimeInfo;
 use sp_version::RuntimeVersion;
@@ -34,7 +34,7 @@ struct WasmBlob {
 }
 
 impl WasmBlob {
-	fn new(code: Vec<u8>) -> Self {
+	pub fn new(code: Vec<u8>) -> Self {
 		Self { code }
 	}
 
@@ -60,6 +60,9 @@ impl FetchRuntimeCode for WasmBlob {
 	}
 }
 
+
+/// Scrapes WASM from a folder,
+/// and returns WASM from that folder if the version matches.
 #[derive(Clone, Debug)]
 pub struct WasmOverwrite<E> {
 	// Map of runtime spec version -> Wasm Blob
@@ -68,11 +71,11 @@ pub struct WasmOverwrite<E> {
 	enabled: bool,
 }
 
-impl<E> WasmOverwrite<E> 
-where 
-	E: RuntimeInfo + Clone + 'static 
+impl<E> WasmOverwrite<E>
+where
+	E: RuntimeInfo + Clone + 'static
 {
-	pub fn new<P>(path: P, enabled: bool, executor: E) -> Result<Self> 
+	pub fn new<P>(path: P, enabled: bool, executor: E) -> Result<Self>
 	where
 		P: AsRef<Path>,
 	{
@@ -84,22 +87,13 @@ where
 	/// If the overwrite does not exist, or overwrites are not enabled,
 	/// this function returns the original runtime code.
 	pub fn try_replace<'a, 'b: 'a>(
-		&'b self, 
-		code: RuntimeCode<'a>, 
-	) -> Result<RuntimeCode<'a>>
-	{
-		if !self.enabled {
-			return Ok(code);
-		}
-
-		let backend_code = code.fetch_runtime_code()
-			.ok_or(sp_blockchain::Error::Msg(format!("Runtime code could not be found in the backend")))?;
-		let version = Self::runtime_version(&self.executor, &WasmBlob::new(backend_code.to_vec()), code.heap_pages)?;
-		
+		&'b self,
+		spec: u32,
+		pages: Option<u64>,
+	) -> Option<RuntimeCode<'a>> {
 		self.overwrites
-			.get(&version.spec_version)
-			.map(|w| w.runtime_code(code.heap_pages))
-			.map_or_else(|| Ok(code), Ok)
+			.get(&spec)
+			.map(|w| w.runtime_code(pages))
 	}
 
 	/// Scrapes a folder for WASM runtimes.
@@ -109,7 +103,7 @@ where
 			sp_blockchain::Error::Msg(format!("{}", e.to_string()))
 		};
 
-		let mut overwrites = HashMap::new(); 
+		let mut overwrites = HashMap::new();
 		if dir.is_dir() {
 			for entry in fs::read_dir(dir).map_err(handle_err)? {
 				let entry = entry.map_err(handle_err)?;
@@ -118,12 +112,15 @@ where
 				let version = Self::runtime_version(executor, &wasm, Some(128))?;
 				overwrites.insert(version.spec_version, wasm);
 			}
+		} else {
+			return Err(sp_blockchain::Error::Msg(format!("{:?} is not a directory", dir)));
 		}
+
 		Ok(overwrites)
 	}
 
-	fn runtime_version(executor: &E, code: &WasmBlob, heap_pages: Option<u64>) -> Result<RuntimeVersion> {
-		let mut ext = BasicExternalities::default(); 
+	pub fn runtime_version(executor: &E, code: &WasmBlob, heap_pages: Option<u64>) -> Result<RuntimeVersion> {
+		let mut ext = BasicExternalities::default();
 		executor.runtime_version(&mut ext, &code.runtime_code(heap_pages))
 			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}

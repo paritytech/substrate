@@ -23,7 +23,7 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, StorageProof,
+	backend::Backend as _, StorageProof
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
@@ -45,9 +45,9 @@ pub struct LocalCallExecutor<B, E> {
 	client_config: ClientConfig,
 }
 
-impl<B, E> LocalCallExecutor<B, E> 
+impl<B, E> LocalCallExecutor<B, E>
 where
-	E: RuntimeInfo + Clone + 'static 
+	E: RuntimeInfo + Clone + 'static
 {
 	/// Creates new instance of local call executor.
 	pub fn new(
@@ -57,8 +57,8 @@ where
 		client_config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
 		let wasm_overwrite = WasmOverwrite::new(
-			client_config.wasm_overwrite_path.clone(), 
-			client_config.wasm_overwrite_enabled, 
+			client_config.wasm_overwrite_path.clone(),
+			client_config.wasm_overwrite_enabled,
 			executor.clone()
 		)?;
 		Ok(LocalCallExecutor {
@@ -68,7 +68,7 @@ where
 			spawn_handle,
 			client_config,
 		})
-	}
+    }
 }
 
 impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
@@ -112,8 +112,13 @@ where
 		)?;
 		let state = self.backend.state_at(*id)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-		let runtime_code = state_runtime_code.runtime_code()?;
-		let runtime_code = self.wasm_overwrite.try_replace(runtime_code)?;
+		let runtime_code = {
+			let version = self.runtime_version(id)?;
+			let code = state_runtime_code.runtime_code()?;
+			self.wasm_overwrite.try_replace(version.spec_version, code.heap_pages)
+				.unwrap_or_else(|| code)
+		};
+
 		let return_data = StateMachine::new(
 			&state,
 			changes_trie,
@@ -186,8 +191,12 @@ where
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_state);
 				// It is important to extract the runtime code here before we create the proof
 				// recorder.
-				let runtime_code = state_runtime_code.runtime_code()?;
-				let runtime_code = self.wasm_overwrite.try_replace(runtime_code)?;
+				let runtime_code = {
+					let version = self.runtime_version(at)?;
+					let code = state_runtime_code.runtime_code()?;
+					self.wasm_overwrite.try_replace(version.spec_version, code.heap_pages)
+						.unwrap_or_else(|| code)
+					};
 
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
@@ -212,8 +221,12 @@ where
 			},
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-				let runtime_code = state_runtime_code.runtime_code()?;
-				let runtime_code = self.wasm_overwrite.try_replace(runtime_code)?;
+				let runtime_code = {
+					let version = self.runtime_version(at)?;
+					let code = state_runtime_code.runtime_code()?;
+					self.wasm_overwrite.try_replace(version.spec_version, code.heap_pages)
+						.unwrap_or_else(|| code)
+				};
 
 				let mut state_machine = StateMachine::new(
 					&state,
