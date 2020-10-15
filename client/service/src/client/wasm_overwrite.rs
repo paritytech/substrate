@@ -82,9 +82,9 @@ where
 		Ok(Self { overwrites, executor })
 	}
 
-	/// Tries to replace the given `code` with an overwrite, if it exists.
-	/// If the overwrite does not exist, or overwrites are not enabled,
-	/// this function returns the original runtime code.
+	/// Gets an overwrite by it's runtime spec version.
+	///
+	/// Returns `None` if an overwrite for a spec version does not exist.
 	pub fn get<'a, 'b: 'a>(
 		&'b self,
 		spec: &u32,
@@ -118,7 +118,11 @@ where
 		Ok(overwrites)
 	}
 
-	fn runtime_version(executor: &E, code: &WasmBlob, heap_pages: Option<u64>) -> Result<RuntimeVersion> {
+	fn runtime_version(
+		executor: &E,
+		code: &WasmBlob,
+		heap_pages: Option<u64>
+	) -> Result<RuntimeVersion> {
 		let mut ext = BasicExternalities::default();
 		executor.runtime_version(&mut ext, &code.runtime_code(heap_pages))
 			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())

@@ -62,10 +62,8 @@ pub struct Configuration {
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.
 	pub wasm_method: WasmExecutionMethod,
-	/// True when overwriting WASM is enabled.
-	pub wasm_overwrite: bool,
 	/// The path where WASM that will overwrite on-chain WASM exists.
-	pub wasm_overwrite_path: PathBuf,
+	pub wasm_runtime_overwrites: Option<PathBuf>,
 	/// Execution strategies.
 	pub execution_strategies: ExecutionStrategies,
 	/// RPC over HTTP binding address. `None` if disabled.

@@ -23,7 +23,7 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, StorageProof
+	backend::Backend as _, StorageProof, BasicExternalities
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
@@ -56,14 +56,10 @@ where
 		spawn_handle: Box<dyn SpawnNamed>,
 		client_config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
-		let wasm_overwrite = if client_config.wasm_overwrite_enabled {
-			Some(WasmOverwrite::new(
-				client_config.wasm_overwrite_path.clone(),
-				executor.clone()
-			)?)
-		} else {
-			None
-		};
+		let wasm_overwrite = client_config.wasm_runtime_overwrites
+			.as_ref()
+			.map(|p| WasmOverwrite::new(p.clone(), executor.clone()))
+			.transpose()?;
 
 		Ok(LocalCallExecutor {
 			backend,
@@ -72,14 +68,18 @@ where
 			spawn_handle,
 			client_config,
 		})
-    }
+	}
 
-	fn check_overwrites(&self, spec: &u32, code: &RuntimeCode) -> Option<RuntimeCode> {
-		if let Some(overwrites) = &self.wasm_overwrite {
-			overwrites.get(spec, code.heap_pages)
-		} else {
-			None
-		}
+	/// Tries to return an overwrite for `code`.
+	///
+	/// Returns `None` if an overwrite was not found,
+	/// or if overwriting is disabled.
+	fn check_overwrite(&self, code: &RuntimeCode) -> sp_blockchain::Result<Option<RuntimeCode>> {
+		let mut ext = BasicExternalities::default();
+		let spec = self.executor.runtime_version(&mut ext, code)
+			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)))?
+			.spec_version;
+		Ok(self.wasm_overwrite.as_ref().map(|o| o.get(&spec, code.heap_pages)).flatten())
 	}
 }
 
@@ -114,8 +114,7 @@ where
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
-		let mut offchain_changes = if self.client_config.offchain_indexing_api {
-			OffchainOverlayedChanges::enabled()
+		let mut offchain_changes = if self.client_config.offchain_indexing_api { OffchainOverlayedChanges::enabled()
 		} else {
 			OffchainOverlayedChanges::disabled()
 		};
@@ -125,9 +124,8 @@ where
 		let state = self.backend.state_at(*id)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 		let runtime_code = {
-			let version = self.runtime_version(id)?;
 			let code = state_runtime_code.runtime_code()?;
-			if let Some(code) = self.check_overwrites(&version.spec_version, &code) { code } else { code }
+			self.check_overwrite(&code)?.unwrap_or(code)
 		};
 
 		let return_data = StateMachine::new(
@@ -203,9 +201,8 @@ where
 				// It is important to extract the runtime code here before we create the proof
 				// recorder.
 				let runtime_code = {
-					let version = self.runtime_version(at)?;
 					let code = state_runtime_code.runtime_code()?;
-					if let Some(code) = self.check_overwrites(&version.spec_version, &code) { code } else { code }
+					self.check_overwrite(&code)?.unwrap_or(code)
 				};
 
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
@@ -232,9 +229,8 @@ where
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 				let runtime_code = {
-					let version = self.runtime_version(at)?;
 					let code = state_runtime_code.runtime_code()?;
-					if let Some(code) = self.check_overwrites(&version.spec_version, &code) { code } else { code }
+					self.check_overwrite(&code)?.unwrap_or(code)
 				};
 
 				let mut state_machine = StateMachine::new(
