@@ -294,7 +294,8 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 	) -> ClientResult<Option<CommitOperation<Block, T>>> {
 		// this guarantee is currently provided by LightStorage && we're relying on it here
 		let prev_operation = operations.operations.last();
-		/*debug_assert!(
+		/*
+		debug_assert!(
 			entry_type != EntryType::Final ||
 			self.best_finalized_block.hash == parent.hash ||
 			match prev_operation {
@@ -302,7 +303,8 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 					=> best_finalized_block.hash == parent.hash,
 				_ => false,
 			}
-		);*/
+		);
+		*/
 
 		// we do not store any values behind finalized
 		if block.number != Zero::zero() && self.best_finalized_block.number >= block.number {

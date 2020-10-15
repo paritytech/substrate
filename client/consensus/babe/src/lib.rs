@@ -1275,10 +1275,12 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 			// used by pruning may not know about the block that is being
 			// imported.
 			let prune_and_import = || {
-				// prune_finalized(
-				// 	self.client.clone(),
-				// 	&mut epoch_changes,
-				// )?;
+				/*
+				prune_finalized(
+					self.client.clone(),
+					&mut epoch_changes,
+				)?;
+				*/
 
 				epoch_changes.import(
 					descendent_query(&*self.client),
@@ -1415,10 +1417,12 @@ pub fn block_import<Client, Block: BlockT, I>(
 	// NOTE: this isn't entirely necessary, but since we didn't use to prune the
 	// epoch tree it is useful as a migration, so that nodes prune long trees on
 	// startup rather than waiting until importing the next epoch change block.
-	/*prune_finalized(
+	/*
+	prune_finalized(
 		client.clone(),
 		&mut epoch_changes.lock(),
-	)?;*/
+	)?;
+	*/
 
 	let import = BabeBlockImport::new(
 		client,

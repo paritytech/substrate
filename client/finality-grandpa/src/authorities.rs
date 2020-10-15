@@ -53,7 +53,7 @@ impl<H, N> Clone for SharedAuthoritySet<H, N> {
 
 impl<H, N> SharedAuthoritySet<H, N> {
 	/// Acquire a reference to the inner read-write lock.
-	pub fn inner(&self) -> &RwLock<AuthoritySet<H, N>> {
+	pub(crate) fn inner(&self) -> &RwLock<AuthoritySet<H, N>> {
 		&*self.inner
 	}
 }
@@ -80,6 +80,11 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 			 constructor and all mutating operations on `AuthoritySet` ensure this; \
 			 qed.",
 		)
+	}
+
+	/// Clone the inner `AuthoritySet`.
+	pub fn clone_inner(&self) -> AuthoritySet<H, N> {
+		self.inner.read().clone()
 	}
 }
 
