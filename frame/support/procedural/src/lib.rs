@@ -325,3 +325,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }
+
+#[proc_macro_attribute]
+pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
+	transactional::require_transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
+}
