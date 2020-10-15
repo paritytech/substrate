@@ -95,7 +95,7 @@ impl<TBl, TCl> SyncStateRpcHandler<TBl, TCl>
 			finalized_block_header: finalized_header,
 			babe_epoch_changes: self.shared_epoch_changes.lock().clone(),
 			babe_finalized_block_weight: finalized_block_weight,
-			grandpa_authority_set: self.shared_authority_set.inner().read().clone(),
+			grandpa_authority_set: self.shared_authority_set.clone_inner(),
 		})
 	}
 }
