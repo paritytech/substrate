@@ -1657,4 +1657,105 @@ mod test {
 			["A", "B", "C", "D", "E", "F", "H", "L", "M", "O", "I", "G", "J", "K"]
 		);
 	}
+
+	fn test_fork_tree_with_values<'a>() -> (ForkTree<&'a str, u64, u64>, impl Fn(&&str, &&str) -> Result<bool, TestError>)  {
+		let mut tree = ForkTree::new();
+
+		//
+		//     - B - C - D - E
+		//    /
+		//   /   - G
+		//  /   /
+		// A - F - H - I
+		//          \
+		//           - L - M
+		//              \
+		//               - O
+		//  \
+		//   — J - K
+		//
+		// (where N is not a part of fork tree)
+		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
+			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "O"];
+			match (*base, *block) {
+				("A", b) => Ok(letters.into_iter().any(|n| n == b)),
+				("B", b) => Ok(b == "C" || b == "D" || b == "E"),
+				("C", b) => Ok(b == "D" || b == "E"),
+				("D", b) => Ok(b == "E"),
+				("E", _) => Ok(false),
+				("F", b) => Ok(b == "G" || b == "H" || b == "I" || b == "L" || b == "M" || b == "O"),
+				("G", _) => Ok(false),
+				("H", b) => Ok(b == "I" || b == "L" || b == "M" || b == "O"),
+				("I", _) => Ok(false),
+				("J", b) => Ok(b == "K"),
+				("K", _) => Ok(false),
+				("L", b) => Ok(b == "M" || b == "O"),
+				("M", _) => Ok(false),
+				("O", _) => Ok(false),
+				("0", _) => Ok(true),
+				_ => Ok(false),
+			}
+		};
+
+		tree.import("A", 1, 10, &is_descendent_of).unwrap();
+
+		tree.import("B", 2, 9, &is_descendent_of).unwrap();
+		tree.import("C", 3, 8, &is_descendent_of).unwrap();
+		tree.import("D", 4, 7, &is_descendent_of).unwrap();
+		tree.import("E", 5, 6, &is_descendent_of).unwrap();
+
+		tree.import("F", 2, 5, &is_descendent_of).unwrap();
+		tree.import("G", 3, 4, &is_descendent_of).unwrap();
+
+		tree.import("H", 3, 3, &is_descendent_of).unwrap();
+		tree.import("I", 4, 2, &is_descendent_of).unwrap();
+		tree.import("L", 4, 1, &is_descendent_of).unwrap();
+		tree.import("M", 5, 2, &is_descendent_of).unwrap();
+		tree.import("O", 5, 3, &is_descendent_of).unwrap();
+
+		tree.import("J", 2, 4, &is_descendent_of).unwrap();
+		tree.import("K", 3, 11, &is_descendent_of).unwrap();
+
+		(tree, is_descendent_of)
+	}
+
+	#[test]
+	fn find_node_where_value() {
+		let (tree, d) = test_fork_tree_with_values();
+		assert_eq!(
+			tree.find_node_where(&"M", &5, &d, &|&n| n == 1 || n == 2)
+				.map(|opt| opt.map(|node| node.hash)),
+			Ok(Some("L")),
+			"{:?}", tree.find_node_index_where(&"M", &5, &d, &|&n| n == 1 || n == 2)
+		);
+	}
+
+	#[test]
+	fn find_node_where_specific_value() {
+		let mut tree = ForkTree::new();
+
+		//
+		// A - B
+		//  \
+		//   — C
+		//
+		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
+			match (*base, *block) {
+				("A", b) => Ok(b == "B" || b == "C" || b == "D"),
+				("B", b) | ("C", b) => Ok(b == "D"),
+				("0", _) => Ok(true),
+				_ => Ok(false),
+			}
+		};
+
+		tree.import("A", 1, 1, &is_descendent_of).unwrap();
+		tree.import("B", 2, 2, &is_descendent_of).unwrap();
+		tree.import("C", 2, 4, &is_descendent_of).unwrap();
+
+		assert_eq!(
+			tree.find_node_where(&"D", &3, &is_descendent_of, &|&n| n == 4)
+				.map(|opt| opt.map(|node| node.hash)),
+			Ok(Some("C"))
+		);
+	}
 }
