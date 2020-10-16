@@ -321,25 +321,25 @@ decl_module! {
 		#[weight = T::WeightInfo::create()]
 		fn create(origin,
 			#[compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
+			admin: <T::Lookup as StaticLookup>::Source,
 			max_zombies: u32,
 			min_balance: T::Balance,
 		) {
-			let origin = ensure_signed(origin)?;
-			let owner = T::Lookup::lookup(owner)?;
+			let owner = ensure_signed(origin)?;
+			let admin = T::Lookup::lookup(admin)?;
 
 			ensure!(!Asset::<T>::contains_key(id), Error::<T>::InUse);
 
 			let deposit = T::AssetDepositPerZombie::get()
 				.saturating_mul(max_zombies.into())
 			 	.saturating_add(T::AssetDepositBase::get());
-			T::Currency::reserve(&origin, deposit)?;
+			T::Currency::reserve(&owner, deposit)?;
 
 			Asset::<T>::insert(id, AssetDetails {
 				owner: owner.clone(),
-				issuer: owner.clone(),
-				admin: owner.clone(),
-				freezer: owner.clone(),
+				issuer: admin.clone(),
+				admin: admin.clone(),
+				freezer: admin.clone(),
 				supply: Zero::zero(),
 				deposit,
 				max_zombies,
@@ -347,7 +347,7 @@ decl_module! {
 				zombies: Zero::zero(),
 				accounts: Zero::zero(),
 			});
-			Self::deposit_event(RawEvent::Created(id, origin, owner));
+			Self::deposit_event(RawEvent::Created(id, owner, admin));
 		}
 
 		/// Issue a new class of fungible assets from a privileged origin.
