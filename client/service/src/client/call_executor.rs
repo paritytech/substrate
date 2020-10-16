@@ -23,12 +23,12 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, StorageProof, BasicExternalities
+	backend::Backend as _, StorageProof
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
 use sp_core::{
-	NativeOrEncoded, NeverNativeValue, traits::{CodeExecutor, SpawnNamed, RuntimeCode},
+	NativeOrEncoded, NeverNativeValue, traits::{CodeExecutor, SpawnNamed},
 	offchain::storage::OffchainOverlayedChanges,
 };
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
@@ -68,18 +68,6 @@ where
 			spawn_handle,
 			client_config,
 		})
-	}
-
-	/// Tries to return an overwrite for `code`.
-	///
-	/// Returns `None` if an overwrite was not found,
-	/// or if overwriting is disabled.
-	fn check_overwrite(&self, code: &RuntimeCode) -> sp_blockchain::Result<Option<RuntimeCode>> {
-		let mut ext = BasicExternalities::default();
-		let spec = self.executor.runtime_version(&mut ext, code)
-			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)))?
-			.spec_version;
-		Ok(self.wasm_overwrite.as_ref().map(|o| o.get(&spec, code.heap_pages)).flatten())
 	}
 }
 
@@ -125,7 +113,12 @@ where
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 		let runtime_code = {
 			let code = state_runtime_code.runtime_code()?;
-			self.check_overwrite(&code)?.unwrap_or(code)
+			let spec = self.runtime_version(id)?.spec_version;
+			self.wasm_overwrite
+				.as_ref()
+				.map(|o| o.get(&spec, code.heap_pages))
+				.flatten()
+				.unwrap_or(code)
 		};
 
 		let return_data = StateMachine::new(
@@ -202,7 +195,12 @@ where
 				// recorder.
 				let runtime_code = {
 					let code = state_runtime_code.runtime_code()?;
-					self.check_overwrite(&code)?.unwrap_or(code)
+					let spec = self.runtime_version(at)?.spec_version;
+					self.wasm_overwrite
+						.as_ref()
+						.map(|o| o.get(&spec, code.heap_pages))
+						.flatten()
+						.unwrap_or(code)
 				};
 
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
@@ -230,7 +228,12 @@ where
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 				let runtime_code = {
 					let code = state_runtime_code.runtime_code()?;
-					self.check_overwrite(&code)?.unwrap_or(code)
+					let spec = self.runtime_version(at)?.spec_version;
+					self.wasm_overwrite
+						.as_ref()
+						.map(|o| o.get(&spec, code.heap_pages))
+						.flatten()
+						.unwrap_or(code)
 				};
 
 				let mut state_machine = StateMachine::new(
