@@ -22,6 +22,7 @@
 #![allow(unused_imports)]
 
 use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
+use sp_std::marker::PhantomData;
 
 pub struct DefaultWeight<T>(PhantomData<T>);
 impl<T: frame_system::Trait> crate::WeightInfo for DefaultWeight<T> {
