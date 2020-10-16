@@ -107,7 +107,7 @@ pub fn substrate_cli_node_name(arg: TokenStream, item: TokenStream) -> TokenStre
 	let item_fn = syn::parse_macro_input!(item as ItemFn);
 
 	if arg.is_empty() {
-		return Error::new(Span::call_site(), "missing expression (name of the node)")
+		return Error::new(Span::call_site(), "missing expression: name of the node (in argument)")
 			.to_compile_error()
 			.into();
 	}
