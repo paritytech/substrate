@@ -141,7 +141,7 @@ pub trait Trait: frame_system::Trait {
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
 
-	/// The origin which may forcibly create or destroy an asset. Root can always do this.
+	/// The origin which may forcibly create or destroy an asset.
 	type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 	/// The basic amount of funds that must be reserved when creating a new asset class.
