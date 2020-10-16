@@ -49,7 +49,7 @@ use tracing_subscriber::{
 };
 #[doc(hidden)]
 pub use tracing;
-pub use sc_cli_derive::*;
+pub use sc_cli_proc_macro::*;
 
 /// Substrate client CLI
 ///

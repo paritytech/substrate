@@ -6340,7 +6340,7 @@ dependencies = [
  "rand 0.7.3",
  "regex",
  "rpassword",
- "sc-cli-derive",
+ "sc-cli-proc-macro",
  "sc-client-api",
  "sc-consensus-babe",
  "sc-consensus-epochs",
@@ -6375,7 +6375,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-cli-derive"
+name = "sc-cli-proc-macro"
 version = "2.0.0"
 dependencies = [
  "proc-macro-crate",
