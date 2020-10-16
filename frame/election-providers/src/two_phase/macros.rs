@@ -22,7 +22,7 @@ macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		frame_support::debug::$level!(
 			target: crate::LOG_TARGET,
-			$patter $(, $values)*
+			concat!("🏦 ", $patter) $(, $values)*
 		)
 	};
 }
@@ -30,12 +30,12 @@ macro_rules! log {
 #[macro_export]
 macro_rules! voter_index_fn {
 	($voters:ident, $acc:ty, $t:ident) => {
-			|who: &$acc| -> Option<$crate::two_phase::CompactVoterIndexOf<$t>> {
-				$voters
-					.iter()
-					.position(|(x, _, _)| x == who)
-					.and_then(|i| <usize as $crate::TryInto<$crate::two_phase::CompactVoterIndexOf<$t>>>::try_into(i).ok())
-				}
+		|who: &$acc| -> Option<$crate::two_phase::CompactVoterIndexOf<$t>> {
+			$voters
+				.iter()
+				.position(|(x, _, _)| x == who)
+				.and_then(|i| <usize as $crate::TryInto<$crate::two_phase::CompactVoterIndexOf<$t>>>::try_into(i).ok())
+			}
 	};
 }
 
@@ -55,14 +55,14 @@ macro_rules! target_index_fn {
 macro_rules! voter_at_fn {
 	($snap:ident, $acc:ty, $t:ident) => {
 		|i: $crate::two_phase::CompactVoterIndexOf<$t>| -> Option<$acc> {
-													<$crate::two_phase::CompactVoterIndexOf<$t> as $crate::TryInto<usize>>::try_into(i)
-														.ok()
-														.and_then(|i| $snap
-															.get(i)
-															.map(|(x, _, _)| x)
-															.cloned()
-														)
-													}
+											<$crate::two_phase::CompactVoterIndexOf<$t> as $crate::TryInto<usize>>::try_into(i)
+												.ok()
+												.and_then(|i| $snap
+													.get(i)
+													.map(|(x, _, _)| x)
+													.cloned()
+												)
+											}
 	};
 }
 
@@ -70,13 +70,13 @@ macro_rules! voter_at_fn {
 macro_rules! target_at_fn {
 	($snap:ident, $acc:ty, $t:ident) => {
 		|i: $crate::two_phase::CompactTargetIndexOf<$t>| -> Option<$acc> {
-													<$crate::two_phase::CompactTargetIndexOf<$t> as $crate::TryInto<usize>>::try_into(i)
-														.ok()
-														.and_then(|i| $snap
-															.get(i)
-															.cloned()
-														)
-												};
+											<$crate::two_phase::CompactTargetIndexOf<$t> as $crate::TryInto<usize>>::try_into(i)
+												.ok()
+												.and_then(|i| $snap
+													.get(i)
+													.cloned()
+												)
+										};
 	};
 }
 
@@ -85,11 +85,11 @@ macro_rules! target_at_fn {
 macro_rules! stake_of_fn {
 	($voters:ident, $acc:ty) => {
 		|who: &$acc| -> $crate::VoteWeight {
-																											$voters
-																												.iter()
-																												.find(|(x, _, _)| x == who)
-																												.map(|(_, x, _)| *x)
-																												.unwrap_or_default()
-																											}
+											$voters
+												.iter()
+												.find(|(x, _, _)| x == who)
+												.map(|(_, x, _)| *x)
+												.unwrap_or_default()
+											}
 	};
 }

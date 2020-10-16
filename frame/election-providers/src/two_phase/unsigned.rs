@@ -19,8 +19,10 @@
 
 use crate::two_phase::*;
 use frame_support::{dispatch::DispatchResult, unsigned::ValidateUnsigned};
+use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{seq_phragmen, CompactSolution, ElectionResult};
 use sp_runtime::{
+	offchain::storage::StorageValueRef,
 	traits::TrailingZeroInput,
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
@@ -29,23 +31,6 @@ use sp_runtime::{
 	SaturatedConversion,
 };
 use sp_std::cmp::Ordering;
-
-/// Witness data about the size of the election.
-///
-/// This is needed for proper weight calculation.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
-pub struct WitnessData {
-	/// Number of all voters.
-	///
-	/// This must match the on-chain snapshot.
-	#[codec(compact)]
-	voters: u32,
-	/// Number of all targets.
-	///
-	/// This must match the on-chain snapshot.
-	#[codec(compact)]
-	target: u32,
-}
 
 /// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/unsigned-election/";
@@ -272,7 +257,7 @@ where
 	pub(crate) fn set_check_offchain_execution_status(
 		now: T::BlockNumber,
 	) -> Result<(), &'static str> {
-		let storage = sp_runtime::offchain::storage::StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
+		let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 		let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
 
 		let mutate_stat =
@@ -306,9 +291,12 @@ where
 	/// Mine a new solution, and submit it back to the chian as an unsigned transaction.
 	pub(crate) fn mine_and_submit() -> Result<(), Error> {
 		let balancing = Self::get_balancing_iters();
-		Self::mine_solution(balancing).map(|raw_solution| {
+		Self::mine_solution(balancing).and_then(|raw_solution| {
 			// submit the raw solution to the pool.
-			()
+			let call = Call::submit_unsigned(raw_solution).into();
+
+			SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
+				.map_err(|_| Error::PoolSubmissionFailed)
 		})
 	}
 
@@ -528,6 +516,8 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{mock::*, *};
+	use frame_support::traits::OffchainWorker;
+	use sp_runtime::PerU16;
 
 	#[test]
 	fn validate_unsigned_retracts_wrong_phase() {
@@ -687,6 +677,11 @@ mod tests {
 	}
 
 	#[test]
+	fn ocw_will_only_submit_if_feasible() {
+		// the ocw should only submit a solution if it is sure that it is valid.
+	}
+
+	#[test]
 	fn can_only_submit_threshold_better() {
 		ExtBuilder::default()
 			.desired_targets(1)
@@ -694,7 +689,7 @@ mod tests {
 			.add_voter(8, 5, vec![10])
 			.solution_improvement_threshold(Perbill::from_percent(50))
 			.build_and_execute(|| {
-				use sp_npos_elections::{Assignment, ElectionResult};
+
 				roll_to(15);
 				assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
 				assert_eq!(TwoPhase::desired_targets(), 1);
@@ -763,5 +758,78 @@ mod tests {
 				// and it is fine
 				assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution));
 			})
+	}
+
+	#[test]
+	fn ocw_check_prevent_duplicate() {
+		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(15);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+
+			// first execution -- okay.
+			assert!(TwoPhase::set_check_offchain_execution_status(15).is_ok());
+
+			// next block: rejected.
+			assert!(TwoPhase::set_check_offchain_execution_status(16).is_err());
+
+			// allowed after `OFFCHAIN_REPEAT`
+			assert!(
+				TwoPhase::set_check_offchain_execution_status((16 + OFFCHAIN_REPEAT).into())
+					.is_ok()
+			);
+
+			// a fork like situation: re-execute last 3.
+			assert!(TwoPhase::set_check_offchain_execution_status(
+				(16 + OFFCHAIN_REPEAT - 3).into()
+			)
+			.is_err());
+			assert!(TwoPhase::set_check_offchain_execution_status(
+				(16 + OFFCHAIN_REPEAT - 2).into()
+			)
+			.is_err());
+			assert!(TwoPhase::set_check_offchain_execution_status(
+				(16 + OFFCHAIN_REPEAT - 1).into()
+			)
+			.is_err());
+		})
+	}
+
+	#[test]
+	fn ocw_only_runs_when_signed_open_now() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(15);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			// we must clear the offchain storage to ensure the offchain execution check doesn't get
+			// in the way.
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
+
+			TwoPhase::offchain_worker(14);
+			assert!(pool.read().transactions.len().is_zero());
+			storage.clear();
+
+			TwoPhase::offchain_worker(16);
+			assert!(pool.read().transactions.len().is_zero());
+			storage.clear();
+
+			TwoPhase::offchain_worker(15);
+			assert!(!pool.read().transactions.len().is_zero());
+		})
+	}
+
+	#[test]
+	fn ocw_can_submit_to_pool() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(15);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			TwoPhase::offchain_worker(15);
+
+			let encoded = pool.read().transactions[0].clone();
+			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
+			let call = extrinsic.call;
+			matches!(call, OuterCall::TwoPhase(Call::submit_unsigned(_)));
+		})
 	}
 }

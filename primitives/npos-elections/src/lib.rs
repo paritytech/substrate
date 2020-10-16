@@ -137,8 +137,8 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 /// See [`compact`] for more info.
 pub trait CompactSolution: Sized {
 	const LIMIT: usize;
-	type Voter: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize>;
-	type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize>;
+	type Voter: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug;
+	type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug;
 	type VoteWeight: PerThing128;
 
 	fn from_assignment<FV, FT, A>(

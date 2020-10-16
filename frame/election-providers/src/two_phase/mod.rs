@@ -79,6 +79,8 @@
 //! +-------------------------------+
 //! ```
 //!
+//! TODO: what if length of some phase is zero?
+//!
 //! Note that both of the bottom solutions end up being discarded and get their deposit back,
 //! despite one of them being invalid.
 //!
@@ -108,12 +110,12 @@ use crate::onchain::OnChainSequentialPhragmen;
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
 	decl_event, decl_module, decl_storage,
-	dispatch::{DispatchResultWithPostInfo, Dispatchable},
+	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::Weight,
 };
-use frame_system::{ensure_none, ensure_signed};
+use frame_system::{ensure_none, ensure_signed, offchain::SendTransactionTypes};
 use sp_election_providers::{ElectionDataProvider, ElectionProvider};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, is_score_better, Assignment, CompactSolution,
@@ -125,6 +127,8 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
+#[cfg(any(feature = "runtime-benchmarks", test))]
+pub mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[macro_use]
@@ -257,6 +261,23 @@ pub struct ReadySolution<A> {
 	compute: ElectionCompute,
 }
 
+/// Witness data about the size of the election.
+///
+/// This is needed for proper weight calculation.
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
+pub struct WitnessData {
+	/// Number of all voters.
+	///
+	/// This must match the on-chain snapshot.
+	#[codec(compact)]
+	voters: u32,
+	/// Number of all targets.
+	///
+	/// This must match the on-chain snapshot.
+	#[codec(compact)]
+	targets: u32,
+}
+
 /// The crate errors. Note that this is different from the [`PalletError`].
 #[derive(RuntimeDebug, Eq, PartialEq)]
 pub enum Error {
@@ -268,6 +289,10 @@ pub enum Error {
 	NposElections(sp_npos_elections::Error),
 	/// Snapshot data was unavailable unexpectedly.
 	SnapshotUnAvailable,
+	/// Submitting a transaction to the pool failed.
+	///
+	/// This can only happen in the unsigned phase.
+	PoolSubmissionFailed,
 }
 
 impl From<crate::onchain::Error> for Error {
@@ -328,7 +353,10 @@ impl WeightInfo for () {
 	}
 }
 
-pub trait Trait: frame_system::Trait {
+pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>>
+where
+	ExtendedBalance: From<InnerOf<CompactAccuracyOf<Self>>>,
+{
 	/// Event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
@@ -354,8 +382,6 @@ pub trait Trait: frame_system::Trait {
 	type SolutionImprovementThreshold: Get<Perbill>;
 
 	type UnsignedMaxIterations: Get<u32>;
-	// TODO:
-	type UnsignedCall: Dispatchable + Clone;
 	type UnsignedPriority: Get<TransactionPriority>;
 
 	/// Handler for the slashed deposits.
@@ -372,6 +398,13 @@ pub trait Trait: frame_system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as TwoPhaseElectionProvider where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> {
+		/// Internal counter ofr the number of rounds.
+		///
+		/// This is useful for de-duplication of transactions submitted to the pool, and general
+		/// diagnostics of the module.
+		///
+		/// This is merely incremented once per every time that signed phase starts.
+		pub Round get(fn round): u32 = 0;
 		/// Current phase.
 		pub CurrentPhase get(fn current_phase): Phase<T::BlockNumber> = Phase::Off;
 
@@ -450,8 +483,9 @@ decl_module! {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
 					// check only for the signed phase.
 					<CurrentPhase<T>>::put(Phase::Signed);
+					Round::mutate(|r| *r +=1);
 					Self::start_signed_phase();
-					log!(info, "Starting signed phase at #{}", now);
+					log!(info, "Starting signed phase at #{} , round {}", now, Self::round());
 				},
 				Phase::Signed if remaining <= unsigned_deadline && remaining > 0.into() => {
 					// check the unsigned phase.
@@ -570,6 +604,8 @@ where
 		let RawSolution { compact, score } = solution;
 
 		// winners are not directly encoded in the solution.
+		// TODO: dupe winner
+		// TODO: dupe in compact.
 		let winners = compact.unique_targets();
 
 		// Ensure that we have received enough winners.
@@ -632,6 +668,7 @@ where
 
 		// Finally, check that the claimed score was indeed correct.
 		let known_score = supports.evaluate();
+		dbg!(known_score, score);
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
 		// let supports = supports.flatten();
@@ -718,18 +755,22 @@ mod tests {
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
+			assert_eq!(TwoPhase::round(), 0);
 
 			roll_to(4);
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
 			assert!(TwoPhase::snapshot_voters().is_none());
+			assert_eq!(TwoPhase::round(), 0);
 
 			roll_to(5);
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
 			assert!(TwoPhase::snapshot_voters().is_some());
+			assert_eq!(TwoPhase::round(), 1);
 
 			roll_to(14);
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
 			assert!(TwoPhase::snapshot_voters().is_some());
+			assert_eq!(TwoPhase::round(), 1);
 
 			roll_to(15);
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
@@ -752,6 +793,7 @@ mod tests {
 				.unwrap();
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
 			assert!(TwoPhase::snapshot_voters().is_none());
+			assert_eq!(TwoPhase::round(), 1);
 		})
 	}
 

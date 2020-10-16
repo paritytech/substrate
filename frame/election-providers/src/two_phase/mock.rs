@@ -10,14 +10,15 @@ use sp_core::{
 };
 use sp_election_providers::ElectionDataProvider;
 use sp_npos_elections::{
-	seq_phragmen, to_without_backing, CompactSolution, ElectionResult, EvaluateSupport,
+	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
+	CompactSolution, ElectionResult, EvaluateSupport,
 };
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	PerU16,
 };
-use std::{cell::RefCell};
+use std::{cell::RefCell, sync::Arc};
 
 pub use frame_support::{assert_noop, assert_ok};
 
@@ -70,10 +71,8 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let winners = to_without_backing(winners);
 
 	let score = {
-		let staked = sp_npos_elections::assignment_ratio_to_staked(assignments.clone(), &stake_of);
-		sp_npos_elections::to_supports(&winners, &staked)
-			.unwrap()
-			.evaluate()
+		let staked = assignment_ratio_to_staked_normalized(assignments.clone(), &stake_of).unwrap();
+		to_supports(&winners, &staked).unwrap().evaluate()
 	};
 	let compact =
 		<CompactOf<Runtime>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
@@ -211,11 +210,20 @@ impl crate::two_phase::Trait for Runtime {
 	type SlashHandler = ();
 	type RewardHandler = ();
 	type UnsignedMaxIterations = MaxUnsignedIterations;
-	type UnsignedCall = ();
 	type UnsignedPriority = UnsignedPriority;
 	type ElectionDataProvider = StakingMock;
 	type WeightInfo = ();
 }
+
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
+where
+	OuterCall: From<LocalCall>,
+{
+	type OverarchingCall = OuterCall;
+	type Extrinsic = Extrinsic;
+}
+
+pub type Extrinsic = sp_runtime::testing::TestXt<OuterCall, ()>;
 
 pub struct ExtBuilder {}
 
@@ -268,6 +276,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
+		sp_tracing::try_init_simple();
 		let mut storage = frame_system::GenesisConfig::default()
 			.build_storage::<Runtime>()
 			.unwrap();
@@ -284,10 +293,13 @@ impl ExtBuilder {
 
 		sp_io::TestExternalities::from(storage)
 	}
-	pub fn build_offchainify(self, iters: u32) -> sp_io::TestExternalities {
+	pub fn build_offchainify(
+		self,
+		iters: u32,
+	) -> (sp_io::TestExternalities, Arc<RwLock<PoolState>>) {
 		let mut ext = self.build();
 		let (offchain, offchain_state) = TestOffchainExt::new();
-		let (pool, _pool_state) = TestTransactionPoolExt::new();
+		let (pool, pool_state) = TestTransactionPoolExt::new();
 
 		let mut seed = [0_u8; 32];
 		seed[0..4].copy_from_slice(&iters.to_le_bytes());
@@ -296,7 +308,7 @@ impl ExtBuilder {
 		ext.register_extension(OffchainExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
 
-		ext
+		(ext, pool_state)
 	}
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(test)

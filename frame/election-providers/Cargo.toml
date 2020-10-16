@@ -27,6 +27,11 @@ sp-std = { version = "2.0.0-rc6", default-features = false, path = "../../primit
 sp-arithmetic = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/arithmetic" }
 sp-election-providers = { version = "2.0.0-rc6", default-features = false, path = "../../primitives/election-providers" }
 
+# Optional imports for benchmarking
+frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
+rand_chacha = { version = "0.2", default-features = false, optional = true }
+rand = { version = "0.7.3", optional = true }
+
 [dev-dependencies]
 sp-io = { version = "2.0.0", path = "../../primitives/io" }
 hex-literal = "0.3.1"
@@ -34,7 +39,12 @@ pallet-balances = { version = "2.0.0", path = "../balances" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 paste = "1.0.1"
 substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
-parking_lot = "0.11.0"
+parking_lot = "0.10.2"
+sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
+
+frame-benchmarking = { version = "2.0.0", path = "../benchmarking" }
+rand_chacha = { version = "0.2" }
+rand = "0.7.3"
 
 [features]
 default = ["std"]
@@ -47,4 +57,9 @@ std = [
 	"frame-system/std",
 	"sp-std/std",
 	"sp-election-providers/std"
+]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"rand_chacha",
+	"rand",
 ]

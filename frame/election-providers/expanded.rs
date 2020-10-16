@@ -123,113 +123,115 @@ pub mod onchain {
 /// The two-phase module.
 pub mod two_phase {
     //! # Two phase election provider pallet.
-    //!
-    //! As the name suggests, this election provider has two distinct phases (see [`Phase`]), signed and
-    //! unsigned.
-    //!
-    //! ## Phases
-    //!
-    //! The timeline of pallet is as follows. At each block,
-    //! [`ElectionDataProvider::next_election_prediction`] is used to estimate the time remaining to the
-    //! next call to `elect`. Based on this, a phase is chosen. The timeline is as follows.
-    //!
-    //! ```ignore
-    //!                                                                    elect()
-    //!                 +   <--T::SignedPhase-->  +  <--T::UnsignedPhase-->   +
-    //!   +-------------------------------------------------------------------+
-    //!    Phase::Off   +       Phase::Signed     +      Phase::Unsigned      +
-    //!
-    //! Note that the unsigned phase starts `T::UnsignedPhase` blocks before the
-    //! `next_election_prediction`, but only ends when a call to `ElectionProvider::elect` happens.
-    //!
-    //! ```
-    //! ### Signed Phase
-    //!
-    //!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
-    //! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
-    //! on-chain for a number of blocks. A maximum of [`Trait::MaxSignedSubmissions`] solutions are
-    //! stored. The queue is always sorted based on score (worse -> best).
-    //!
-    //! Upon arrival of a new solution:
-    //!
-    //! 1. If the queue is not full, it is stored.
-    //! 2. If the queue is full but the submitted solution is better than one of the queued ones, the
-    //!    worse solution is discarded (TODO: what to do with the bond?) and the new solution is stored
-    //!    in the correct index.
-    //! 3. If the queue is full and the solution is not an improvement compared to any of the queued
-    //!    ones, it is instantly rejected and no additional bond is reserved.
-    //!
-    //! A signed solution cannot be reversed, taken back, updated, or retracted. In other words, the
-    //! origin can not bail out in any way.
-    //!
-    //! Upon the end of the signed phase, the solutions are examined from worse to best (i.e. `pop()`ed
-    //! until drained). Each solution undergoes an expensive [`Module::feasibility_check`], which ensure
-    //! the score claimed by this score was correct, among other checks. At each step, if the current
-    //! best solution is passes the feasibility check, it is considered to be the best one. The sender
-    //! of the origin is rewarded, and the rest of the queued solutions get their deposit back, without
-    //! being checked.
-    //!
-    //! The following example covers all of the cases at the end of the signed phase:
-    //!
-    //! ```ignore
-    //! Queue
-    //! +-------------------------------+
-    //! |Solution(score=20, valid=false)| +-->  Slashed
-    //! +-------------------------------+
-    //! |Solution(score=15, valid=true )| +-->  Rewarded
-    //! +-------------------------------+
-    //! |Solution(score=10, valid=true )| +-->  Discarded
-    //! +-------------------------------+
-    //! |Solution(score=05, valid=false)| +-->  Discarded
-    //! +-------------------------------+
-    //! |             None              |
-    //! +-------------------------------+
-    //! ```
-    //!
-    //! Note that both of the bottom solutions end up being discarded and get their deposit back,
-    //! despite one of them being invalid.
-    //!
-    //! ## Unsigned Phase
-    //!
-    //! If signed phase ends with a good solution, then the unsigned phase will be `active`
-    //! ([`Phase::Unsigned(true)`]), else the unsigned phase will be `passive`.
-    //!
-    //! TODO
-    //!
-    //! ### Fallback
-    //!
-    //! If we reach the end of both phases (i.e. call to `ElectionProvider::elect` happens) and no good
-    //! solution is queued, then we fallback to an on-chain election. The on-chain election is slow, and
-    //! contains to balancing or reduction post-processing.
-    //!
-    //! ## Correct Submission
-    //!
-    //! TODO
-    //!
-    //! ## Accuracy
-    //!
-    //! TODO
-    //!
+	//!
+	//! As the name suggests, this election provider has two distinct phases (see [`Phase`]), signed and
+	//! unsigned.
+	//!
+	//! ## Phases
+	//!
+	//! The timeline of pallet is as follows. At each block,
+	//! [`ElectionDataProvider::next_election_prediction`] is used to estimate the time remaining to the
+	//! next call to `elect`. Based on this, a phase is chosen. The timeline is as follows.
+	//!
+	//! ```ignore
+	//!                                                                    elect()
+	//!                 +   <--T::SignedPhase-->  +  <--T::UnsignedPhase-->   +
+	//!   +-------------------------------------------------------------------+
+	//!    Phase::Off   +       Phase::Signed     +      Phase::Unsigned      +
+	//!
+	//! Note that the unsigned phase starts `T::UnsignedPhase` blocks before the
+	//! `next_election_prediction`, but only ends when a call to `ElectionProvider::elect` happens.
+	//!
+	//! ```
+	//! ### Signed Phase
+	//!
+	//!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
+	//! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
+	//! on-chain for a number of blocks. A maximum of [`Trait::MaxSignedSubmissions`] solutions are
+	//! stored. The queue is always sorted based on score (worse -> best).
+	//!
+	//! Upon arrival of a new solution:
+	//!
+	//! 1. If the queue is not full, it is stored.
+	//! 2. If the queue is full but the submitted solution is better than one of the queued ones, the
+	//!    worse solution is discarded (TODO: what to do with the bond?) and the new solution is stored
+	//!    in the correct index.
+	//! 3. If the queue is full and the solution is not an improvement compared to any of the queued
+	//!    ones, it is instantly rejected and no additional bond is reserved.
+	//!
+	//! A signed solution cannot be reversed, taken back, updated, or retracted. In other words, the
+	//! origin can not bail out in any way.
+	//!
+	//! Upon the end of the signed phase, the solutions are examined from worse to best (i.e. `pop()`ed
+	//! until drained). Each solution undergoes an expensive [`Module::feasibility_check`], which ensure
+	//! the score claimed by this score was correct, among other checks. At each step, if the current
+	//! best solution is passes the feasibility check, it is considered to be the best one. The sender
+	//! of the origin is rewarded, and the rest of the queued solutions get their deposit back, without
+	//! being checked.
+	//!
+	//! The following example covers all of the cases at the end of the signed phase:
+	//!
+	//! ```ignore
+	//! Queue
+	//! +-------------------------------+
+	//! |Solution(score=20, valid=false)| +-->  Slashed
+	//! +-------------------------------+
+	//! |Solution(score=15, valid=true )| +-->  Rewarded
+	//! +-------------------------------+
+	//! |Solution(score=10, valid=true )| +-->  Discarded
+	//! +-------------------------------+
+	//! |Solution(score=05, valid=false)| +-->  Discarded
+	//! +-------------------------------+
+	//! |             None              |
+	//! +-------------------------------+
+	//! ```
+	//!
+	//! TODO: what if length of some phase is zero?
+	//!
+	//! Note that both of the bottom solutions end up being discarded and get their deposit back,
+	//! despite one of them being invalid.
+	//!
+	//! ## Unsigned Phase
+	//!
+	//! If signed phase ends with a good solution, then the unsigned phase will be `active`
+	//! ([`Phase::Unsigned(true)`]), else the unsigned phase will be `passive`.
+	//!
+	//! TODO
+	//!
+	//! ### Fallback
+	//!
+	//! If we reach the end of both phases (i.e. call to `ElectionProvider::elect` happens) and no good
+	//! solution is queued, then we fallback to an on-chain election. The on-chain election is slow, and
+	//! contains to balancing or reduction post-processing.
+	//!
+	//! ## Correct Submission
+	//!
+	//! TODO
+	//!
+	//! ## Accuracy
+	//!
+	//! TODO
+	//!
     use crate::onchain::OnChainSequentialPhragmen;
-    use codec::{Decode, Encode, HasCompact};
-    use frame_support::{
-        decl_event, decl_module, decl_storage,
-        dispatch::{DispatchResultWithPostInfo, Dispatchable},
-        ensure,
-        traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
-        weights::Weight,
-    };
-    use frame_system::{ensure_none, ensure_signed};
-    use sp_election_providers::{ElectionDataProvider, ElectionProvider};
-    use sp_npos_elections::{
-        assignment_ratio_to_staked_normalized, is_score_better, Assignment, CompactSolution,
-        ElectionScore, EvaluateSupport, ExtendedBalance, PerThing128, Supports, VoteWeight,
-    };
-    use sp_runtime::{
-        traits::Zero, transaction_validity::TransactionPriority, InnerOf, PerThing, Perbill,
-        RuntimeDebug,
-    };
-    use sp_std::prelude::*;
+	use codec::{Decode, Encode, HasCompact};
+	use frame_support::{
+		decl_event, decl_module, decl_storage,
+		dispatch::DispatchResultWithPostInfo,
+		ensure,
+		traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
+		weights::Weight,
+	};
+	use frame_system::{ensure_none, ensure_signed, offchain::SendTransactionTypes};
+	use sp_election_providers::{ElectionDataProvider, ElectionProvider};
+	use sp_npos_elections::{
+		assignment_ratio_to_staked_normalized, is_score_better, Assignment, CompactSolution,
+		ElectionScore, EvaluateSupport, ExtendedBalance, PerThing128, Supports, VoteWeight,
+	};
+	use sp_runtime::{
+		traits::Zero, transaction_validity::TransactionPriority, InnerOf, PerThing, Perbill,
+		RuntimeDebug,
+	};
+	use sp_std::prelude::*;
     #[macro_use]
     pub(crate) mod macros {
         //! Some helper macros for this crate.
@@ -404,173 +406,33 @@ pub mod two_phase {
         }
     }
     pub mod unsigned {
-        //! The unsigned phase implementation.
-        use crate::two_phase::*;
-        use frame_support::{dispatch::DispatchResult, unsigned::ValidateUnsigned};
-        use sp_npos_elections::{seq_phragmen, CompactSolution, ElectionResult};
-        use sp_runtime::{
-            traits::TrailingZeroInput,
-            transaction_validity::{
-                InvalidTransaction, TransactionSource, TransactionValidity,
-                TransactionValidityError, ValidTransaction,
-            },
-            PerU16, SaturatedConversion,
-        };
-        use sp_std::cmp::Ordering;
-        /// Witness data about the size of the election.
-        ///
-        /// This is needed for proper weight calculation.
-        pub struct WitnessData {
-            /// Number of all voters.
-            ///
-            /// This must match the on-chain snapshot.
-            #[codec(compact)]
-            voters: u32,
-            /// Number of all targets.
-            ///
-            /// This must match the on-chain snapshot.
-            #[codec(compact)]
-            target: u32,
-        }
-        impl ::core::marker::StructuralPartialEq for WitnessData {}
-        #[automatically_derived]
-        #[allow(unused_qualifications)]
-        impl ::core::cmp::PartialEq for WitnessData {
-            #[inline]
-            fn eq(&self, other: &WitnessData) -> bool {
-                match *other {
-                    WitnessData {
-                        voters: ref __self_1_0,
-                        target: ref __self_1_1,
-                    } => match *self {
-                        WitnessData {
-                            voters: ref __self_0_0,
-                            target: ref __self_0_1,
-                        } => (*__self_0_0) == (*__self_1_0) && (*__self_0_1) == (*__self_1_1),
-                    },
-                }
-            }
-            #[inline]
-            fn ne(&self, other: &WitnessData) -> bool {
-                match *other {
-                    WitnessData {
-                        voters: ref __self_1_0,
-                        target: ref __self_1_1,
-                    } => match *self {
-                        WitnessData {
-                            voters: ref __self_0_0,
-                            target: ref __self_0_1,
-                        } => (*__self_0_0) != (*__self_1_0) || (*__self_0_1) != (*__self_1_1),
-                    },
-                }
-            }
-        }
-        impl ::core::marker::StructuralEq for WitnessData {}
-        #[automatically_derived]
-        #[allow(unused_qualifications)]
-        impl ::core::cmp::Eq for WitnessData {
-            #[inline]
-            #[doc(hidden)]
-            fn assert_receiver_is_total_eq(&self) -> () {
-                {
-                    let _: ::core::cmp::AssertParamIsEq<u32>;
-                    let _: ::core::cmp::AssertParamIsEq<u32>;
-                }
-            }
-        }
-        #[automatically_derived]
-        #[allow(unused_qualifications)]
-        impl ::core::clone::Clone for WitnessData {
-            #[inline]
-            fn clone(&self) -> WitnessData {
-                {
-                    let _: ::core::clone::AssertParamIsClone<u32>;
-                    let _: ::core::clone::AssertParamIsClone<u32>;
-                    *self
-                }
-            }
-        }
-        #[automatically_derived]
-        #[allow(unused_qualifications)]
-        impl ::core::marker::Copy for WitnessData {}
-        const _: () = {
-            #[allow(unknown_lints)]
-            #[allow(rust_2018_idioms)]
-            extern crate codec as _parity_scale_codec;
-            impl _parity_scale_codec::Encode for WitnessData {
-                fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
-                    {
-                        dest . push ( & < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: EncodeAsRef < '_ , u32 > > :: from ( & self . voters ) ) ;
-                    }
-                    {
-                        dest . push ( & < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: EncodeAsRef < '_ , u32 > > :: from ( & self . target ) ) ;
-                    }
-                }
-            }
-            impl _parity_scale_codec::EncodeLike for WitnessData {}
-        };
-        const _: () = {
-            #[allow(unknown_lints)]
-            #[allow(rust_2018_idioms)]
-            extern crate codec as _parity_scale_codec;
-            impl _parity_scale_codec::Decode for WitnessData {
-                fn decode<DecIn: _parity_scale_codec::Input>(
-                    input: &mut DecIn,
-                ) -> core::result::Result<Self, _parity_scale_codec::Error> {
-                    Ok(WitnessData {
-                        voters: {
-                            let res = < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: Decode > :: decode ( input ) ;
-                            match res {
-                                Err(_) => {
-                                    return Err("Error decoding field WitnessData.voters".into())
-                                }
-                                Ok(a) => a.into(),
-                            }
-                        },
-                        target: {
-                            let res = < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: Decode > :: decode ( input ) ;
-                            match res {
-                                Err(_) => {
-                                    return Err("Error decoding field WitnessData.target".into())
-                                }
-                                Ok(a) => a.into(),
-                            }
-                        },
-                    })
-                }
-            }
-        };
-        impl core::fmt::Debug for WitnessData {
-            fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
-                fmt.debug_struct("WitnessData")
-                    .field("voters", &self.voters)
-                    .field("target", &self.target)
-                    .finish()
-            }
-        }
-        #[automatically_derived]
-        #[allow(unused_qualifications)]
-        impl ::core::default::Default for WitnessData {
-            #[inline]
-            fn default() -> WitnessData {
-                WitnessData {
-                    voters: ::core::default::Default::default(),
-                    target: ::core::default::Default::default(),
-                }
-            }
-        }
-        /// Storage key used to store the persistent offchain worker status.
-        pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/unsigned-election/";
-        /// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
-        /// within a window of 5 blocks.
+		//! The unsigned phase implementation.
+		use crate::two_phase::*;
+		use frame_support::{dispatch::DispatchResult, unsigned::ValidateUnsigned};
+		use frame_system::offchain::SubmitTransaction;
+		use sp_npos_elections::{seq_phragmen, CompactSolution, ElectionResult};
+		use sp_runtime::{
+			offchain::storage::StorageValueRef,
+			traits::TrailingZeroInput,
+			transaction_validity::{
+				InvalidTransaction, TransactionSource, TransactionValidity,
+				TransactionValidityError, ValidTransaction,
+			},
+			SaturatedConversion,
+		};
+		use sp_std::cmp::Ordering;
+		/// Storage key used to store the persistent offchain worker status.
+		pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/unsigned-election/";
+		/// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
+		/// within a window of 5 blocks.
         pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
         /// Default number of blocks for which the unsigned transaction should stay in the pool
         pub(crate) const DEFAULT_LONGEVITY: u64 = 25;
         impl<T: Trait> Module<T>
-        where
-            ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-        {
-            /// Min a new npos solution.
+		where
+			ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+		{
+			/// Min a new npos solution.
             pub fn mine_solution(iters: usize) -> Result<RawSolution<CompactOf<T>>, Error> {
                 let desired_targets = Self::desired_targets() as usize;
                 let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
@@ -775,19 +637,19 @@ pub mod two_phase {
                 voters.min(witness.voters)
             }
             /// Checks if an execution of the offchain worker is permitted at the given block number, or not.
-            ///
-            /// This essentially makes sure that we don't run on previous blocks in case of a re-org, and we
-            /// don't run twice within a window of length [`OFFCHAIN_REPEAT`].
-            ///
-            /// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
-            pub(crate) fn set_check_offchain_execution_status(
-                now: T::BlockNumber,
-            ) -> Result<(), &'static str> {
-                let storage =
-                    sp_runtime::offchain::storage::StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
-                let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
-                let mutate_stat = storage.mutate::<_, &'static str, _>(
-                    |maybe_head: Option<Option<T::BlockNumber>>| match maybe_head {
+			///
+			/// This essentially makes sure that we don't run on previous blocks in case of a re-org, and we
+			/// don't run twice within a window of length [`OFFCHAIN_REPEAT`].
+			///
+			/// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
+			pub(crate) fn set_check_offchain_execution_status(
+				now: T::BlockNumber,
+			) -> Result<(), &'static str> {
+				let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
+				let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
+				let mutate_stat = storage.mutate::<_, &'static str, _>(
+					|maybe_head: Option<Option<T::BlockNumber>>| {
+						match maybe_head {
                         Some(Some(head)) if now < head => Err("fork."),
                         Some(Some(head)) if now >= head && now <= head + threshold => {
                             Err("recently executed.")
@@ -795,29 +657,33 @@ pub mod two_phase {
                         Some(Some(head)) if now > head + threshold => Ok(now),
                         _ => Ok(now),
                     },
-                );
+				);
                 match mutate_stat {
                     Ok(Ok(_)) => Ok(()),
                     Ok(Err(_)) => Err("failed to write to offchain db."),
                     Err(why) => Err(why),
                 }
             }
-            /// Mine a new solution, and submit it back to the chian as an unsigned transaction.
-            pub(crate) fn mine_and_submit() -> Result<(), Error> {
-                let balancing = Self::get_balancing_iters();
-                Self::mine_solution(balancing).map(|raw_solution| ())
-            }
-            pub(crate) fn pre_dispatch_checks(
-                solution: &RawSolution<CompactOf<T>>,
-            ) -> DispatchResult {
-                {
-                    if !Self::current_phase().is_unsigned_open() {
-                        {
-                            return Err("UnsignedPhaseClosed".into());
-                        };
-                    }
-                };
-                {
+			/// Mine a new solution, and submit it back to the chian as an unsigned transaction.
+			pub(crate) fn mine_and_submit() -> Result<(), Error> {
+				let balancing = Self::get_balancing_iters();
+				Self::mine_solution(balancing).and_then(|raw_solution| {
+					let call = Call::submit_unsigned(raw_solution).into();
+					SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
+						.map_err(|_| Error::PoolSubmissionFailed)
+				})
+			}
+			pub(crate) fn pre_dispatch_checks(
+				solution: &RawSolution<CompactOf<T>>,
+			) -> DispatchResult {
+				{
+					if !Self::current_phase().is_unsigned_open() {
+						{
+							return Err(PalletError::<T>::EarlySubmission.into());
+						};
+					}
+				};
+				{
                     if !Self::queued_solution().map_or(true, |q: ReadySolution<_>| {
                         is_score_better::<Perbill>(
                             solution.score,
@@ -826,13 +692,13 @@ pub mod two_phase {
                         )
                     }) {
                         {
-                            return Err("WeakSolution".into());
+                            return Err(PalletError::<T>::WeakSubmission.into());
                         };
                     }
-                };
-                Ok(())
+				};
+				Ok(())
             }
-        }
+		}
         #[allow(deprecated)]
         impl<T: Trait> ValidateUnsigned for Module<T>
         where
@@ -874,7 +740,7 @@ pub mod two_phase {
                 }
             }
         }
-    }
+	}
     /// The compact solution type used by this crate. This is provided from the [`ElectionDataProvider`]
     /// implementer.
     pub type CompactOf<T> = <<T as Trait>::ElectionDataProvider as ElectionDataProvider<
@@ -1723,31 +1589,173 @@ pub mod two_phase {
         }
     }
     #[automatically_derived]
-    #[allow(unused_qualifications)]
+	#[allow(unused_qualifications)]
     impl<A: ::core::default::Default> ::core::default::Default for ReadySolution<A> {
-        #[inline]
+		#[inline]
         fn default() -> ReadySolution<A> {
             ReadySolution {
                 supports: ::core::default::Default::default(),
                 score: ::core::default::Default::default(),
                 compute: ::core::default::Default::default(),
             }
-        }
-    }
-    /// The crate errors. Note that this is different from the [`PalletError`].
-    pub enum Error {
-        /// A feasibility error.
-        Feasibility(FeasibilityError),
-        /// An error in the on-chain fallback.
-        OnChainFallback(crate::onchain::Error),
-        /// An internal error in the NPoS elections crate.
-        NposElections(sp_npos_elections::Error),
-        /// Snapshot data was unavailable unexpectedly.
-        SnapshotUnAvailable,
-    }
-    impl core::fmt::Debug for Error {
-        fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
-            match self {
+		}
+	}
+	/// Witness data about the size of the election.
+	///
+	/// This is needed for proper weight calculation.
+	pub struct WitnessData {
+		/// Number of all voters.
+		///
+		/// This must match the on-chain snapshot.
+		#[codec(compact)]
+		voters: u32,
+		/// Number of all targets.
+		///
+		/// This must match the on-chain snapshot.
+		#[codec(compact)]
+		targets: u32,
+	}
+	impl ::core::marker::StructuralPartialEq for WitnessData {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::cmp::PartialEq for WitnessData {
+		#[inline]
+		fn eq(&self, other: &WitnessData) -> bool {
+			match *other {
+				WitnessData {
+					voters: ref __self_1_0,
+					targets: ref __self_1_1,
+				} => match *self {
+					WitnessData {
+						voters: ref __self_0_0,
+						targets: ref __self_0_1,
+					} => (*__self_0_0) == (*__self_1_0) && (*__self_0_1) == (*__self_1_1),
+				},
+			}
+		}
+		#[inline]
+		fn ne(&self, other: &WitnessData) -> bool {
+			match *other {
+				WitnessData {
+					voters: ref __self_1_0,
+					targets: ref __self_1_1,
+				} => match *self {
+					WitnessData {
+						voters: ref __self_0_0,
+						targets: ref __self_0_1,
+					} => (*__self_0_0) != (*__self_1_0) || (*__self_0_1) != (*__self_1_1),
+				},
+			}
+		}
+	}
+	impl ::core::marker::StructuralEq for WitnessData {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::cmp::Eq for WitnessData {
+		#[inline]
+		#[doc(hidden)]
+		fn assert_receiver_is_total_eq(&self) -> () {
+			{
+				let _: ::core::cmp::AssertParamIsEq<u32>;
+				let _: ::core::cmp::AssertParamIsEq<u32>;
+			}
+		}
+	}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::clone::Clone for WitnessData {
+		#[inline]
+		fn clone(&self) -> WitnessData {
+			{
+				let _: ::core::clone::AssertParamIsClone<u32>;
+				let _: ::core::clone::AssertParamIsClone<u32>;
+				*self
+			}
+		}
+	}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::marker::Copy for WitnessData {}
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl _parity_scale_codec::Encode for WitnessData {
+			fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
+				{
+					dest . push ( & < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: EncodeAsRef < '_ , u32 > > :: from ( & self . voters ) ) ;
+				}
+				{
+					dest . push ( & < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: EncodeAsRef < '_ , u32 > > :: from ( & self . targets ) ) ;
+				}
+			}
+		}
+		impl _parity_scale_codec::EncodeLike for WitnessData {}
+	};
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl _parity_scale_codec::Decode for WitnessData {
+			fn decode<DecIn: _parity_scale_codec::Input>(
+				input: &mut DecIn,
+			) -> core::result::Result<Self, _parity_scale_codec::Error> {
+				Ok(WitnessData {
+					voters: {
+						let res = < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: Decode > :: decode ( input ) ;
+						match res {
+							Err(_) => return Err("Error decoding field WitnessData.voters".into()),
+							Ok(a) => a.into(),
+						}
+					},
+					targets: {
+						let res = < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: Decode > :: decode ( input ) ;
+						match res {
+							Err(_) => return Err("Error decoding field WitnessData.targets".into()),
+							Ok(a) => a.into(),
+						}
+					},
+				})
+			}
+		}
+	};
+	impl core::fmt::Debug for WitnessData {
+		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+			fmt.debug_struct("WitnessData")
+				.field("voters", &self.voters)
+				.field("targets", &self.targets)
+				.finish()
+		}
+	}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::default::Default for WitnessData {
+		#[inline]
+		fn default() -> WitnessData {
+			WitnessData {
+				voters: ::core::default::Default::default(),
+				targets: ::core::default::Default::default(),
+			}
+		}
+	}
+	/// The crate errors. Note that this is different from the [`PalletError`].
+	pub enum Error {
+		/// A feasibility error.
+		Feasibility(FeasibilityError),
+		/// An error in the on-chain fallback.
+		OnChainFallback(crate::onchain::Error),
+		/// An internal error in the NPoS elections crate.
+		NposElections(sp_npos_elections::Error),
+		/// Snapshot data was unavailable unexpectedly.
+		SnapshotUnAvailable,
+		/// Submitting a transaction to the pool failed.
+		///
+		/// This can only happen in the unsigned phase.
+		PoolSubmissionFailed,
+	}
+	impl core::fmt::Debug for Error {
+		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+			match self {
                 Self::Feasibility(ref a0) => {
                     fmt.debug_tuple("Error::Feasibility").field(a0).finish()
                 }
@@ -1758,10 +1766,13 @@ pub mod two_phase {
                     fmt.debug_tuple("Error::NposElections").field(a0).finish()
                 }
                 Self::SnapshotUnAvailable => fmt.debug_tuple("Error::SnapshotUnAvailable").finish(),
+                Self::PoolSubmissionFailed => {
+                    fmt.debug_tuple("Error::PoolSubmissionFailed").finish()
+                }
                 _ => Ok(()),
             }
-        }
-    }
+		}
+	}
     impl ::core::marker::StructuralEq for Error {}
     #[automatically_derived]
     #[allow(unused_qualifications)]
@@ -1946,21 +1957,24 @@ pub mod two_phase {
         fn submit_unsigned() -> Weight;
     }
     impl WeightInfo for () {
-        fn feasibility_check() -> Weight {
+		fn feasibility_check() -> Weight {
             Default::default()
         }
         fn submit() -> Weight {
             Default::default()
         }
         fn submit_unsigned() -> Weight {
-            Default::default()
-        }
-    }
-    pub trait Trait: frame_system::Trait {
-        /// Event type.
-        type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-        /// Currency type.
-        type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
+			Default::default()
+		}
+	}
+	pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<Self>>>,
+	{
+		/// Event type.
+		type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+		/// Currency type.
+		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
         /// Duration of the signed phase.
         type SignedPhase: Get<Self::BlockNumber>;
         /// Duration of the unsigned phase.
@@ -1973,55 +1987,65 @@ pub mod two_phase {
         type SignedDepositBase: Get<BalanceOf<Self>>;
         type SignedDepositByte: Get<BalanceOf<Self>>;
         type SignedDepositWeight: Get<BalanceOf<Self>>;
-        /// The minimum amount of improvement to the solution score that defines a solution as "better".
-        type SolutionImprovementThreshold: Get<Perbill>;
-        type UnsignedMaxIterations: Get<u32>;
-        type UnsignedCall: Dispatchable + Clone;
-        type UnsignedPriority: Get<TransactionPriority>;
-        /// Handler for the slashed deposits.
-        type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
-        /// Handler for the rewards.
+		/// The minimum amount of improvement to the solution score that defines a solution as "better".
+		type SolutionImprovementThreshold: Get<Perbill>;
+		type UnsignedMaxIterations: Get<u32>;
+		type UnsignedPriority: Get<TransactionPriority>;
+		/// Handler for the slashed deposits.
+		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
+		/// Handler for the rewards.
         type RewardHandler: OnUnbalanced<PositiveImbalanceOf<Self>>;
         /// Something that will provide the election data.
         type ElectionDataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
         /// The weight of the pallet.
         type WeightInfo: WeightInfo;
-    }
+	}
     use self::sp_api_hidden_includes_decl_storage::hidden_include::{
         IterableStorageDoubleMap as _, IterableStorageMap as _, StorageDoubleMap as _,
         StorageMap as _, StoragePrefixedMap as _, StorageValue as _,
     };
     #[doc(hidden)]
     mod sp_api_hidden_includes_decl_storage {
-        pub extern crate frame_support as hidden_include;
-    }
-    trait Store {
-        type CurrentPhase;
-        type SignedSubmissions;
-        type QueuedSolution;
-        type SnapshotTargets;
+		pub extern crate frame_support as hidden_include;
+	}
+	trait Store {
+		type Round;
+		type CurrentPhase;
+		type SignedSubmissions;
+		type QueuedSolution;
+		type SnapshotTargets;
         type SnapshotVoters;
         type DesiredTargets;
-    }
+	}
     impl<T: Trait + 'static> Store for Module<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        type CurrentPhase = CurrentPhase<T>;
-        type SignedSubmissions = SignedSubmissions<T>;
-        type QueuedSolution = QueuedSolution<T>;
-        type SnapshotTargets = SnapshotTargets<T>;
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		type Round = Round;
+		type CurrentPhase = CurrentPhase<T>;
+		type SignedSubmissions = SignedSubmissions<T>;
+		type QueuedSolution = QueuedSolution<T>;
+		type SnapshotTargets = SnapshotTargets<T>;
         type SnapshotVoters = SnapshotVoters<T>;
         type DesiredTargets = DesiredTargets;
-    }
+	}
     impl<T: Trait + 'static> Module<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        /// Current phase.
-        pub fn current_phase() -> Phase<T::BlockNumber> {
-            < CurrentPhase < T > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < Phase < T :: BlockNumber > > > :: get ( )
-        }
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		/// Internal counter ofr the number of rounds.
+		///
+		/// This is useful for de-duplication of transactions submitted to the pool, and general
+		/// diagnostics of the module.
+		///
+		/// This is merely incremented once per every time that signed phase starts.
+		pub fn round() -> u32 {
+			< Round < > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < u32 > > :: get ( )
+		}
+		/// Current phase.
+		pub fn current_phase() -> Phase<T::BlockNumber> {
+			< CurrentPhase < T > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < Phase < T :: BlockNumber > > > :: get ( )
+		}
         /// Sorted (worse -> best) list of unchecked, signed solutions.
         pub fn signed_submissions(
         ) -> Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>> {
@@ -2049,13 +2073,51 @@ pub mod two_phase {
         pub fn desired_targets() -> u32 {
             < DesiredTargets < > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < u32 > > :: get ( )
         }
-    }
-    #[doc(hidden)]
-    pub struct __GetByteStructCurrentPhase<T>(
-        pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
-            (T),
-        >,
-    );
+	}
+	#[doc(hidden)]
+	pub struct __GetByteStructRound<T>(
+		pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
+			(T),
+		>,
+	);
+	#[cfg(feature = "std")]
+	#[allow(non_upper_case_globals)]
+	static __CACHE_GET_BYTE_STRUCT_Round:
+		self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell<
+			self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>,
+		> = self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell::new();
+	#[cfg(feature = "std")]
+	impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
+		for __GetByteStructRound<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn default_byte(
+			&self,
+		) -> self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8> {
+			use self::sp_api_hidden_includes_decl_storage::hidden_include::codec::Encode;
+			__CACHE_GET_BYTE_STRUCT_Round
+				.get_or_init(|| {
+					let def_val: u32 = 0;
+					<u32 as Encode>::encode(&def_val)
+				})
+				.clone()
+		}
+	}
+	unsafe impl<T: Trait> Send for __GetByteStructRound<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	unsafe impl<T: Trait> Sync for __GetByteStructRound<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	#[doc(hidden)]
+	pub struct __GetByteStructCurrentPhase<T>(
+		pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
+			(T),
+		>,
+	);
     #[cfg(feature = "std")]
     #[allow(non_upper_case_globals)]
     static __CACHE_GET_BYTE_STRUCT_CurrentPhase:
@@ -2289,18 +2351,17 @@ pub mod two_phase {
     {
     }
     impl<T: Trait + 'static> Module<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        #[doc(hidden)]
-        pub fn storage_metadata(
-        ) -> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::StorageMetadata
-        {
-            self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageMetadata { prefix : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "TwoPhaseElectionProvider" ) , entries : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "CurrentPhase" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Phase<T::BlockNumber>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructCurrentPhase :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Current phase." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SignedSubmissions" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSignedSubmissions :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Sorted (worse -> best) list of unchecked, signed solutions." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "QueuedSolution" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "ReadySolution<T::AccountId>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructQueuedSolution :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Current best solution, signed or unsigned." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SnapshotTargets" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<T::AccountId>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSnapshotTargets :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Snapshot of all Voters." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SnapshotVoters" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSnapshotVoters :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Snapshot of all targets." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "DesiredTargets" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "u32" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructDesiredTargets :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Desired number of targets to elect." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } ] [ .. ] ) , }
-        }
-    }
-    /// Hidden instance generated to be internally used when module is used without
-    /// instance.
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		#[doc(hidden)]
+		pub fn storage_metadata(
+		) -> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::StorageMetadata {
+			self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageMetadata { prefix : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "TwoPhaseElectionProvider" ) , entries : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Round" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "u32" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructRound :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Internal counter ofr the number of rounds." , "" , " This is useful for de-duplication of transactions submitted to the pool, and general" , " diagnostics of the module." , "" , " This is merely incremented once per every time that signed phase starts." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "CurrentPhase" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Phase<T::BlockNumber>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructCurrentPhase :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Current phase." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SignedSubmissions" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSignedSubmissions :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Sorted (worse -> best) list of unchecked, signed solutions." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "QueuedSolution" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "ReadySolution<T::AccountId>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructQueuedSolution :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Current best solution, signed or unsigned." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SnapshotTargets" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<T::AccountId>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSnapshotTargets :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Snapshot of all Voters." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SnapshotVoters" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSnapshotVoters :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Snapshot of all targets." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "DesiredTargets" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "u32" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructDesiredTargets :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Desired number of targets to elect." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } ] [ .. ] ) , }
+		}
+	}
+	/// Hidden instance generated to be internally used when module is used without
+	/// instance.
     #[doc(hidden)]
     pub struct __InherentHiddenInstance;
     #[automatically_derived]
@@ -2363,18 +2424,46 @@ pub mod two_phase {
         }
     }
     impl self::sp_api_hidden_includes_decl_storage::hidden_include::traits::Instance
-        for __InherentHiddenInstance
-    {
-        const PREFIX: &'static str = "TwoPhaseElectionProvider";
-    }
-    /// Current phase.
-    pub struct CurrentPhase<T: Trait>(
-        self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
-                (T,),
-            >,
-    )
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
+		for __InherentHiddenInstance
+	{
+		const PREFIX: &'static str = "TwoPhaseElectionProvider";
+	}
+	/// Internal counter ofr the number of rounds.
+	///
+	/// This is useful for de-duplication of transactions submitted to the pool, and general
+	/// diagnostics of the module.
+	///
+	/// This is merely incremented once per every time that signed phase starts.
+	pub struct Round(
+		self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<()>,
+	);
+	impl
+		self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
+			u32,
+		> for Round
+	{
+		type Query = u32;
+		fn module_prefix() -> &'static [u8] {
+			< __InherentHiddenInstance as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: traits :: Instance > :: PREFIX . as_bytes ( )
+		}
+		fn storage_prefix() -> &'static [u8] {
+			b"Round"
+		}
+		fn from_optional_value_to_query(v: Option<u32>) -> Self::Query {
+			v.unwrap_or_else(|| 0)
+		}
+		fn from_query_to_optional_value(v: Self::Query) -> Option<u32> {
+			Some(v)
+		}
+	}
+	/// Current phase.
+	pub struct CurrentPhase<T: Trait>(
+		self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
+				(T,),
+			>,
+	)
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
     impl<T: Trait>
         self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
             Phase<T::BlockNumber>,
@@ -2839,21 +2928,23 @@ pub mod two_phase {
         }
     }
     pub enum PalletError<T: Trait>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        #[doc(hidden)]
-        __Ignore(
-            ::frame_support::sp_std::marker::PhantomData<(T,)>,
-            ::frame_support::Never,
-        ),
-        /// Submission was too early.
-        EarlySubmission,
-        /// The queue was full, and the solution was not better than any of the existing ones.
-        QueueFull,
-        /// The origin failed to pay the deposit.
-        CannotPayDeposit,
-    }
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		#[doc(hidden)]
+		__Ignore(
+			::frame_support::sp_std::marker::PhantomData<(T,)>,
+			::frame_support::Never,
+		),
+		/// Submission was too early.
+		EarlySubmission,
+		/// Submission was too weak, score-wise.
+		WeakSubmission,
+		/// The queue was full, and the solution was not better than any of the existing ones.
+		QueueFull,
+		/// The origin failed to pay the deposit.
+		CannotPayDeposit,
+	}
     impl<T: Trait> ::frame_support::sp_std::fmt::Debug for PalletError<T>
     where
         ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
@@ -2866,10 +2957,10 @@ pub mod two_phase {
         }
     }
     impl<T: Trait> PalletError<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn as_u8(&self) -> u8 {
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn as_u8(&self) -> u8 {
             match self {
                 PalletError::__Ignore(_, _) => {
                     ::std::rt::begin_panic_fmt(&::core::fmt::Arguments::new_v1(
@@ -2883,12 +2974,13 @@ pub mod two_phase {
                     ))
                 }
                 PalletError::EarlySubmission => 0,
-                PalletError::QueueFull => 0 + 1,
-                PalletError::CannotPayDeposit => 0 + 1 + 1,
+                PalletError::WeakSubmission => 0 + 1,
+                PalletError::QueueFull => 0 + 1 + 1,
+                PalletError::CannotPayDeposit => 0 + 1 + 1 + 1,
             }
-        }
-        fn as_str(&self) -> &'static str {
-            match self {
+		}
+		fn as_str(&self) -> &'static str {
+			match self {
                 Self::__Ignore(_, _) => {
                     ::std::rt::begin_panic_fmt(&::core::fmt::Arguments::new_v1(
                         &["internal error: entered unreachable code: "],
@@ -2901,11 +2993,12 @@ pub mod two_phase {
                     ))
                 }
                 PalletError::EarlySubmission => "EarlySubmission",
+                PalletError::WeakSubmission => "WeakSubmission",
                 PalletError::QueueFull => "QueueFull",
                 PalletError::CannotPayDeposit => "CannotPayDeposit",
             }
-        }
-    }
+		}
+	}
     impl<T: Trait> From<PalletError<T>> for &'static str
     where
         ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
@@ -2930,15 +3023,21 @@ pub mod two_phase {
         }
     }
     impl<T: Trait> ::frame_support::error::ModuleErrorMetadata for PalletError<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn metadata() -> &'static [::frame_support::error::ErrorMetadata] {
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn metadata() -> &'static [::frame_support::error::ErrorMetadata] {
             &[
                 ::frame_support::error::ErrorMetadata {
                     name: ::frame_support::error::DecodeDifferent::Encode("EarlySubmission"),
                     documentation: ::frame_support::error::DecodeDifferent::Encode(&[
                         r" Submission was too early.",
+                    ]),
+                },
+                ::frame_support::error::ErrorMetadata {
+                    name: ::frame_support::error::DecodeDifferent::Encode("WeakSubmission"),
+                    documentation: ::frame_support::error::DecodeDifferent::Encode(&[
+                        r" Submission was too weak, score-wise.",
                     ]),
                 },
                 ::frame_support::error::ErrorMetadata {
@@ -2955,7 +3054,7 @@ pub mod two_phase {
                 },
             ]
         }
-    }
+	}
     pub struct Module<T: Trait>(::frame_support::sp_std::marker::PhantomData<(T,)>)
     where
         ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
@@ -3035,11 +3134,11 @@ pub mod two_phase {
         }
     }
     impl<T: frame_system::Trait + Trait>
-        ::frame_support::traits::OnInitialize<<T as frame_system::Trait>::BlockNumber> for Module<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn on_initialize(now: T::BlockNumber) -> Weight {
+		::frame_support::traits::OnInitialize<<T as frame_system::Trait>::BlockNumber> for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn on_initialize(now: T::BlockNumber) -> Weight {
             let __within_span__ = {
                 use ::tracing::__macro_support::Callsite as _;
                 static CALLSITE: ::tracing::__macro_support::MacroCallsite = {
@@ -3050,7 +3149,7 @@ pub mod two_phase {
                             "frame_election_providers::two_phase",
                             ::tracing::Level::TRACE,
                             Some("frame/election-providers/src/two_phase/mod.rs"),
-                            Some(429u32),
+                            Some(464u32),
                             Some("frame_election_providers::two_phase"),
                             ::tracing_core::field::FieldSet::new(
                                 &[],
@@ -3085,21 +3184,28 @@ pub mod two_phase {
                 let signed_deadline = T::SignedPhase::get() + T::UnsignedPhase::get();
                 let unsigned_deadline = T::UnsignedPhase::get();
                 let remaining = next_election - now;
-                match Self::current_phase() {
+				match Self::current_phase() {
                     Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
                         <CurrentPhase<T>>::put(Phase::Signed);
+                        Round::mutate(|r| *r += 1);
                         Self::start_signed_phase();
                         {
                             let lvl = ::log::Level::Info;
                             if lvl <= ::log::STATIC_MAX_LEVEL && lvl <= ::log::max_level() {
                                 ::log::__private_api_log(
                                     ::core::fmt::Arguments::new_v1(
-                                        &["Starting signed phase at #"],
-                                        &match (&now,) {
-                                            (arg0,) => [::core::fmt::ArgumentV1::new(
-                                                arg0,
-                                                ::core::fmt::Display::fmt,
-                                            )],
+                                        &["\u{1f3e6} Starting signed phase at #", " , round "],
+                                        &match (&now, &Self::round()) {
+                                            (arg0, arg1) => [
+                                                ::core::fmt::ArgumentV1::new(
+                                                    arg0,
+                                                    ::core::fmt::Display::fmt,
+                                                ),
+                                                ::core::fmt::ArgumentV1::new(
+                                                    arg1,
+                                                    ::core::fmt::Display::fmt,
+                                                ),
+                                            ],
                                         },
                                     ),
                                     lvl,
@@ -3107,7 +3213,7 @@ pub mod two_phase {
                                         crate::LOG_TARGET,
                                         "frame_election_providers::two_phase",
                                         "frame/election-providers/src/two_phase/mod.rs",
-                                        452u32,
+                                        488u32,
                                     ),
                                 );
                             }
@@ -3121,7 +3227,7 @@ pub mod two_phase {
                             if lvl <= ::log::STATIC_MAX_LEVEL && lvl <= ::log::max_level() {
                                 ::log::__private_api_log(
                                     ::core::fmt::Arguments::new_v1(
-                                        &["Starting unsigned phase at #"],
+                                        &["\u{1f3e6} Starting unsigned phase at #"],
                                         &match (&now,) {
                                             (arg0,) => [::core::fmt::ArgumentV1::new(
                                                 arg0,
@@ -3134,7 +3240,7 @@ pub mod two_phase {
                                         crate::LOG_TARGET,
                                         "frame_election_providers::two_phase",
                                         "frame/election-providers/src/two_phase/mod.rs",
-                                        458u32,
+                                        494u32,
                                     ),
                                 );
                             }
@@ -3145,7 +3251,7 @@ pub mod two_phase {
                 Default::default()
             }
         }
-    }
+	}
     impl<T: Trait> ::frame_support::traits::OnRuntimeUpgrade for Module<T> where
         ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
     {
@@ -3157,12 +3263,11 @@ pub mod two_phase {
     {
     }
     impl<T: frame_system::Trait + Trait>
-        ::frame_support::traits::OffchainWorker<<T as frame_system::Trait>::BlockNumber>
-        for Module<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn offchain_worker(n: T::BlockNumber) {
+		::frame_support::traits::OffchainWorker<<T as frame_system::Trait>::BlockNumber> for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn offchain_worker(n: T::BlockNumber) {
             if Self::set_check_offchain_execution_status(n).is_ok()
                 && Self::current_phase().is_unsigned_open_at(n)
             {
@@ -3171,7 +3276,7 @@ pub mod two_phase {
                     if lvl <= ::log::STATIC_MAX_LEVEL && lvl <= ::log::max_level() {
                         ::log::__private_api_log(
                             ::core::fmt::Arguments::new_v1(
-                                &["error while submitting transaction in OCW: "],
+                                &["\u{1f3e6} error while submitting transaction in OCW: "],
                                 &match (&e,) {
                                     (arg0,) => [::core::fmt::ArgumentV1::new(
                                         arg0,
@@ -3184,14 +3289,14 @@ pub mod two_phase {
                                 crate::LOG_TARGET,
                                 "frame_election_providers::two_phase",
                                 "frame/election-providers/src/two_phase/mod.rs",
-                                475u32,
+                                511u32,
                             ),
                         );
                     }
                 });
             }
         }
-    }
+	}
     impl<T: Trait> Module<T>
     where
         ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
@@ -3207,27 +3312,27 @@ pub mod two_phase {
     {
     }
     /// Can also be called using [`Call`].
-    ///
-    /// [`Call`]: enum.Call.html
+	///
+	/// [`Call`]: enum.Call.html
     impl<T: Trait> Module<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        /// Submit a solution for the signed phase.
-        ///
-        /// The dispatch origin fo this call must be __signed__.
-        ///
-        /// The solution potentially queued, based on the claimed score and processed at the end of
-        /// the signed phase.
-        ///
-        /// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
-        /// might be rewarded, slashed, or get all or a part of the deposit back.
-        ///
-        /// NOTE: Calling this function will bypass origin filters.
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		/// Submit a solution for the signed phase.
+		///
+		/// The dispatch origin fo this call must be __signed__.
+		///
+		/// The solution potentially queued, based on the claimed score and processed at the end of
+		/// the signed phase.
+		///
+		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
+		/// might be rewarded, slashed, or get all or a part of the deposit back.
+		///
+		/// NOTE: Calling this function will bypass origin filters.
         fn submit(
-            origin: T::Origin,
-            solution: RawSolution<CompactOf<T>>,
-        ) -> DispatchResultWithPostInfo {
+			origin: T::Origin,
+			solution: RawSolution<CompactOf<T>>,
+		) -> DispatchResultWithPostInfo {
             let __within_span__ = {
                 use ::tracing::__macro_support::Callsite as _;
                 static CALLSITE: ::tracing::__macro_support::MacroCallsite = {
@@ -3238,7 +3343,7 @@ pub mod two_phase {
                             "frame_election_providers::two_phase",
                             ::tracing::Level::TRACE,
                             Some("frame/election-providers/src/two_phase/mod.rs"),
-                            Some(429u32),
+                            Some(464u32),
                             Some("frame_election_providers::two_phase"),
                             ::tracing_core::field::FieldSet::new(
                                 &[],
@@ -3299,26 +3404,26 @@ pub mod two_phase {
             Ok(None.into())
         }
         #[allow(unreachable_code)]
-        /// Submit a solution for the unsigned phase.
-        ///
-        /// The dispatch origin fo this call must be __signed__.
-        ///
-        /// This submission is checked on the fly, thus it is likely yo be more limited and smaller.
-        /// Moreover, this unsigned solution is only validated when submitted to the pool from the
-        /// local process. Effectively, this means that only active validators can submit this
-        /// transaction when authoring a block.
-        ///
-        /// To prevent any incorrect solution (and thus wasted time/weight), this transaction will
-        /// panic if the solution submitted by the validator is invalid, effectively putting their
-        /// authoring reward at risk.
-        ///
-        /// No deposit or reward is associated with this.
-        ///
-        /// NOTE: Calling this function will bypass origin filters.
+		/// Submit a solution for the unsigned phase.
+		///
+		/// The dispatch origin fo this call must be __signed__.
+		///
+		/// This submission is checked on the fly, thus it is likely yo be more limited and smaller.
+		/// Moreover, this unsigned solution is only validated when submitted to the pool from the
+		/// local process. Effectively, this means that only active validators can submit this
+		/// transaction when authoring a block.
+		///
+		/// To prevent any incorrect solution (and thus wasted time/weight), this transaction will
+		/// panic if the solution submitted by the validator is invalid, effectively putting their
+		/// authoring reward at risk.
+		///
+		/// No deposit or reward is associated with this.
+		///
+		/// NOTE: Calling this function will bypass origin filters.
         fn submit_unsigned(
-            origin: T::Origin,
-            solution: RawSolution<CompactOf<T>>,
-        ) -> ::frame_support::dispatch::DispatchResult {
+			origin: T::Origin,
+			solution: RawSolution<CompactOf<T>>,
+		) -> ::frame_support::dispatch::DispatchResult {
             let __within_span__ = {
                 use ::tracing::__macro_support::Callsite as _;
                 static CALLSITE: ::tracing::__macro_support::MacroCallsite = {
@@ -3329,7 +3434,7 @@ pub mod two_phase {
                             "frame_election_providers::two_phase",
                             ::tracing::Level::TRACE,
                             Some("frame/election-providers/src/two_phase/mod.rs"),
-                            Some(429u32),
+                            Some(464u32),
                             Some("frame_election_providers::two_phase"),
                             ::tracing_core::field::FieldSet::new(
                                 &[],
@@ -3370,7 +3475,7 @@ pub mod two_phase {
             }
             Ok(())
         }
-    }
+	}
     /// Dispatchable calls.
     ///
     /// Each variant of this enum maps to a dispatchable function from the associated module.
@@ -3878,19 +3983,19 @@ pub mod two_phase {
         }
     }
     impl<T: Trait> ElectionProvider<T::AccountId> for Module<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        const NEEDS_ELECT_DATA: bool = false;
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		const NEEDS_ELECT_DATA: bool = false;
         type Error = Error;
         fn elect<P: PerThing128>(
-            _to_elect: usize,
-            _targets: Vec<T::AccountId>,
-            _voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-        ) -> Result<Supports<T::AccountId>, Self::Error>
-        where
-            ExtendedBalance: From<<P as PerThing>::Inner>,
-        {
+			_to_elect: usize,
+			_targets: Vec<T::AccountId>,
+			_voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+		) -> Result<Supports<T::AccountId>, Self::Error>
+		where
+			ExtendedBalance: From<<P as PerThing>::Inner>,
+		{
             Self::queued_solution()
                 .map_or_else(
                     || {
@@ -3912,7 +4017,7 @@ pub mod two_phase {
                         if lvl <= ::log::STATIC_MAX_LEVEL && lvl <= ::log::max_level() {
                             ::log::__private_api_log(
                                 ::core::fmt::Arguments::new_v1(
-                                    &["Finalized election round with compute ", "."],
+                                    &["\u{1f3e6} Finalized election round with compute ", "."],
                                     &match (&compute,) {
                                         (arg0,) => [::core::fmt::ArgumentV1::new(
                                             arg0,
@@ -3925,7 +4030,7 @@ pub mod two_phase {
                                     crate::LOG_TARGET,
                                     "frame_election_providers::two_phase",
                                     "frame/election-providers/src/two_phase/mod.rs",
-                                    689u32,
+                                    727u32,
                                 ),
                             );
                         }
@@ -3939,7 +4044,7 @@ pub mod two_phase {
                         if lvl <= ::log::STATIC_MAX_LEVEL && lvl <= ::log::max_level() {
                             ::log::__private_api_log(
                                 ::core::fmt::Arguments::new_v1(
-                                    &["Failed to finalize election round. Error = "],
+                                    &["\u{1f3e6} Failed to finalize election round. Error = "],
                                     &match (&err,) {
                                         (arg0,) => [::core::fmt::ArgumentV1::new(
                                             arg0,
@@ -3952,7 +4057,7 @@ pub mod two_phase {
                                     crate::LOG_TARGET,
                                     "frame_election_providers::two_phase",
                                     "frame/election-providers/src/two_phase/mod.rs",
-                                    694u32,
+                                    732u32,
                                 ),
                             );
                         }
@@ -3966,12 +4071,12 @@ pub mod two_phase {
                 _ => false,
             }
         }
-    }
+	}
 }
 const LOG_TARGET: &'static str = "election-provider";
 #[doc(hidden)]
 pub use sp_npos_elections::VoteWeight;
 #[doc(hidden)]
-use sp_runtime::traits::UniqueSaturatedInto;
+pub use sp_runtime::traits::UniqueSaturatedInto;
 #[doc(hidden)]
 pub use sp_std::convert::TryInto;
