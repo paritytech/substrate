@@ -20,10 +20,11 @@
 
 // FIXME #1021 move this into sp-consensus
 
-use std::{time, sync::Arc};
+use std::{pin::Pin, time, sync::Arc};
 use sc_client_api::backend;
 use codec::Decode;
 use sp_consensus::{evaluation, Proposal, RecordProof};
+use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use log::{error, info, debug, trace, warn};
 use sp_runtime::{
@@ -34,7 +35,7 @@ use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
-use futures::{executor, future, future::Either};
+use futures::{executor, future, future::{Either, Future}, channel::oneshot};
 use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
@@ -43,6 +44,7 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 
 /// Proposer factory.
 pub struct ProposerFactory<A, B, C> {
+	spawn_handle: Box<dyn SpawnNamed>,
 	/// The client instance.
 	client: Arc<C>,
 	/// The transaction pool.
@@ -55,11 +57,13 @@ pub struct ProposerFactory<A, B, C> {
 
 impl<A, B, C> ProposerFactory<A, B, C> {
 	pub fn new(
+		spawn_handle: Box<dyn SpawnNamed>,
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
 	) -> Self {
 		ProposerFactory {
+			spawn_handle,
 			client,
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
@@ -90,6 +94,7 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
 		let proposer = Proposer {
+			spawn_handle: self.spawn_handle.clone(),
 			client: self.client.clone(),
 			parent_hash,
 			parent_id: id,
@@ -129,6 +134,7 @@ impl<A, B, Block, C> sp_consensus::Environment<Block> for
 
 /// The proposer logic.
 pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
+	spawn_handle: Box<dyn SpawnNamed>,
 	client: Arc<C>,
 	parent_hash: <Block as BlockT>::Hash,
 	parent_id: BlockId<Block>,
@@ -151,9 +157,9 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 				+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	type Transaction = backend::TransactionFor<B, Block>;
-	type Proposal = tokio_executor::blocking::Blocking<
-		Result<Proposal<Block, Self::Transaction>, Self::Error>
-	>;
+	type Proposal = Pin<Box<dyn Future<
+		Output = Result<Proposal<Block, Self::Transaction>, Self::Error>
+	> + Send>>;
 	type Error = sp_blockchain::Error;
 
 	fn propose(
@@ -163,10 +169,23 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 		max_duration: time::Duration,
 		record_proof: RecordProof,
 	) -> Self::Proposal {
-		tokio_executor::blocking::run(move || {
+		let (tx, rx) = oneshot::channel();
+		let spawn_handle = self.spawn_handle.clone();
+
+		spawn_handle.spawn_blocking("basic-authorship-proposer", Box::pin(async move {
 			// leave some time for evaluation and block finalization (33%)
 			let deadline = (self.now)() + max_duration - max_duration / 3;
-			self.propose_with(inherent_data, inherent_digests, deadline, record_proof)
+			let res = self.propose_with(inherent_data, inherent_digests, deadline, record_proof);
+			if tx.send(res).is_err() {
+				error!("Could not send message to oneshot channel");
+			}
+		}));
+
+		Box::pin(async move {
+			match rx.await {
+				Ok(x) => x,
+				Err(err) => Err(sp_blockchain::Error::Msg(err.to_string()))
+			}
 		})
 	}
 }
