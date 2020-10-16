@@ -379,7 +379,7 @@ mod tests {
 		let txpool = BasicPool::new_full(
 			Default::default(),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
@@ -395,7 +395,12 @@ mod tests {
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(
+			Box::new(spawner.clone()),
+			client.clone(),
+			txpool.clone(),
+			None,
+		);
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let proposer = proposer_factory.init_with_now(
@@ -432,11 +437,16 @@ mod tests {
 		let txpool = BasicPool::new_full(
 			Default::default(),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(
+			Box::new(spawner.clone()),
+			client.clone(),
+			txpool.clone(),
+			None,
+		);
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let proposer = proposer_factory.init_with_now(
@@ -467,7 +477,7 @@ mod tests {
 		let txpool = BasicPool::new_full(
 			Default::default(),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
@@ -486,7 +496,12 @@ mod tests {
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(
+			Box::new(spawner.clone()),
+			client.clone(),
+			txpool.clone(),
+			None,
+		);
 
 		let proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),
@@ -529,7 +544,7 @@ mod tests {
 		let txpool = BasicPool::new_full(
 			Default::default(),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
@@ -555,7 +570,12 @@ mod tests {
 			])
 		).unwrap();
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(
+			Box::new(spawner.clone()),
+			client.clone(),
+			txpool.clone(),
+			None,
+		);
 		let mut propose_block = |
 			client: &TestClient,
 			number,

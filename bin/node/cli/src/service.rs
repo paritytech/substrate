@@ -558,6 +558,7 @@ mod tests {
 				);
 
 				let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
+					Box::new(service.spawn_handle()),
 					service.client(),
 					service.transaction_pool(),
 					None,
