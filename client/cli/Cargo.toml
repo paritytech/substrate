@@ -65,7 +65,6 @@ nix = "0.17.0"
 tempfile = "3.1.0"
 sp-io = { version = "2.0.0-rc3", path = "../../primitives/io" }
 sp-application-crypto = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/application-crypto" }
-trybuild = { version = "1.0.35", features = ["diff"] }
 
 [features]
 wasmtime = [
