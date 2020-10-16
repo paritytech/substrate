@@ -26,16 +26,7 @@ pub struct EncodedFinalityProofs(pub sp_core::Bytes);
 
 /// Local trait mainly to allow mocking in tests.
 pub trait RpcFinalityProofProvider<Block: BlockT> {
-	/// Return finality proofs for the given authorities set id, if it is provided, otherwise the
-	/// current one will be used.
 	fn rpc_prove_finality(
-		&self,
-		begin: Block::Hash,
-		end: Block::Hash,
-		authorities_set_id: u64,
-	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error>;
-
-	fn rpc_prove_finality2(
 		&self,
 		block: NumberFor<Block>,
 	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error>;
@@ -49,19 +40,9 @@ where
 {
 	fn rpc_prove_finality(
 		&self,
-		begin: Block::Hash,
-		end: Block::Hash,
-		authorities_set_id: u64,
-	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
-		self.prove_finality(begin, end, authorities_set_id)
-			.map(|x| x.map(|y| EncodedFinalityProofs(y.into())))
-	}
-
-	fn rpc_prove_finality2(
-		&self,
 		block: NumberFor<Block>,
 	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
-		self.prove_finality2(block)
+		self.prove_finality(block)
 			.map(|x| x.map(|y| EncodedFinalityProofs(y.into())))
 	}
 }

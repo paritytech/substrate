@@ -190,26 +190,9 @@ impl<B, Block> FinalityProofProvider<B, Block>
 		NumberFor<Block>: BlockNumberOps,
 		B: Backend<Block> + Send + Sync + 'static,
 {
-	/// Prove finality for the range (begin; end] hash. Returns None if there are no finalized blocks
-	/// unknown in the range.
-	pub fn prove_finality(
-		&self,
-		begin: Block::Hash,
-		end: Block::Hash,
-		authorities_set_id: u64,
-	) -> Result<Option<Vec<u8>>, ClientError> {
-		prove_finality::<_, _, GrandpaJustification<Block>>(
-			&*self.backend.blockchain(),
-			&*self.authority_provider,
-			authorities_set_id,
-			begin,
-			end,
-		)
-	}
-
 	/// Prove finality for the given block number.
 	/// WIP: expand this description
-	pub fn prove_finality2(
+	pub fn prove_finality(
 		&self,
 		block: NumberFor<Block>,
 	) -> Result<Option<Vec<u8>>, ClientError> {

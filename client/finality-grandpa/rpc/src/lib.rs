@@ -82,20 +82,10 @@ pub trait GrandpaApi<Notification, Hash, N> {
 		id: SubscriptionId
 	) -> jsonrpc_core::Result<bool>;
 
-	/// Prove finality for the range (begin; end] hash. Returns None if there are no finalized blocks
-	/// unknown in the range. If no authorities set is provided, the current one will be attempted.
-	#[rpc(name = "grandpa_proveFinality")]
-	fn prove_finality(
-		&self,
-		begin: Hash,
-		end: Hash,
-		authorities_set_id: Option<u64>,
-	) -> FutureResult<Option<EncodedFinalityProofs>>;
-
 	/// Prove finality for the given block number.
 	/// WIP: expand this
-	#[rpc(name = "grandpa_proveFinality2")]
-	fn prove_finality2(
+	#[rpc(name = "grandpa_proveFinality")]
+	fn prove_finality(
 		&self,
 		block: N,
 	) -> FutureResult<Option<EncodedFinalityProofs>>;
@@ -180,35 +170,11 @@ where
 
 	fn prove_finality(
 		&self,
-		begin: Block::Hash,
-		end: Block::Hash,
-		authorities_set_id: Option<u64>,
-	) -> FutureResult<Option<EncodedFinalityProofs>> {
-		// If we are not provided a set_id, try with the current one.
-		let authorities_set_id = authorities_set_id
-			.unwrap_or_else(|| self.authority_set.get().0);
-		let result = self
-			.finality_proof_provider
-			.rpc_prove_finality(begin, end, authorities_set_id);
-		let future = async move { result }.boxed();
-		Box::new(
-			future
-				.map_err(|e| {
-					warn!("Error proving finality: {}", e);
-					error::Error::ProveFinalityFailed(e)
-				})
-				.map_err(jsonrpc_core::Error::from)
-				.compat()
-		)
-	}
-
-	fn prove_finality2(
-		&self,
 		block: NumberFor<Block>,
 	) -> FutureResult<Option<EncodedFinalityProofs>> {
 		let result = self
 			.finality_proof_provider
-			.rpc_prove_finality2(block);
+			.rpc_prove_finality(block);
 		let future = async move { result }.boxed();
 		Box::new(
 			future
@@ -289,15 +255,6 @@ mod tests {
 
 	impl<Block: BlockT> RpcFinalityProofProvider<Block> for TestFinalityProofProvider {
 		fn rpc_prove_finality(
-			&self,
-			_begin: Block::Hash,
-			_end: Block::Hash,
-			_authoritites_set_id: u64,
-		) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
-			Ok(Some(EncodedFinalityProofs(self.finality_proofs.encode().into())))
-		}
-
-		fn rpc_prove_finality2(
 			&self,
 			_block: NumberFor<Block>
 		) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
@@ -566,11 +523,8 @@ mod tests {
 			finality_proofs.clone(),
 		);
 
-		let request = "{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_proveFinality\",\"params\":[\
-			\"0x0000000000000000000000000000000000000000000000000000000000000000\",\
-			\"0x0000000000000000000000000000000000000000000000000000000000000001\",\
-			42\
-		],\"id\":1}";
+		let request =
+			"{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_proveFinality\",\"params\":[42],\"id\":1}";
 
 		let meta = sc_rpc::Metadata::default();
 		let resp = io.handle_request_sync(request, meta);
