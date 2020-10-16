@@ -177,7 +177,6 @@ impl pallet_staking::Trait for Test {
 	type RewardCurve = RewardCurve;
 	type NextNewSession = Session;
 	type ElectionLookahead = ();
-	type Call = Call;
 	type MaxIterations = MaxIterations;
 	type MinSolutionScoreBump = ();
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;

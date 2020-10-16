@@ -315,7 +315,6 @@ impl Trait for Test {
 	type RewardCurve = RewardCurve;
 	type NextNewSession = Session;
 	type ElectionLookahead = ElectionLookahead;
-	type Call = Call;
 	type MaxIterations = MaxIterations;
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;

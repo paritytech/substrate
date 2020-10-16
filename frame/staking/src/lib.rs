@@ -294,7 +294,7 @@ use frame_support::{
 	weights::{Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	storage::IterableStorageMap,
 	dispatch::{
-		IsSubType, DispatchResult, DispatchResultWithPostInfo, DispatchErrorWithPostInfo,
+		DispatchResult, DispatchResultWithPostInfo, DispatchErrorWithPostInfo,
 		WithPostDispatchInfo,
 	},
 	traits::{
@@ -308,7 +308,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
-		AtLeast32BitUnsigned, Dispatchable,
+		AtLeast32BitUnsigned,
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
