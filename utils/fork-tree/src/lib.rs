@@ -633,6 +633,7 @@ mod node_implementation {
 	use super::*;
 
 	/// The outcome of a search within a node.
+	#[derive(Debug, PartialEq)]
 	pub enum FindOutcome<T> {
 		// this is the node we were looking for.
 		Found(T),
@@ -987,6 +988,89 @@ mod test {
 
 		(tree, is_descendent_of)
 	}
+
+	#[test]
+	fn find_node_index_where() {
+		let (tree, is_descendent_of) = test_fork_tree();
+
+		assert_eq!(
+			tree.find_node_index_where(&"B", &2, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![0]))
+		);
+
+		assert_eq!(
+			tree.find_node_index_where(&"C", &3, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![0, 0]))
+		);
+
+		assert_eq!(
+			tree.find_node_index_where(&"D", &4, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![0, 0, 0]))
+		);
+
+		assert_eq!(
+			tree.find_node_index_where(&"E", &5, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![0, 0, 0, 0]))
+		);
+
+		assert_eq!(
+			tree.find_node_index_where(&"F", &2, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![0]))
+		);
+
+		assert_eq!(
+			tree.find_node_index_where(&"G", &3, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![1, 0]))
+		);
+
+		assert_eq!(
+			tree.find_node_index_where(&"H", &3, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![1, 0]))
+		);
+
+		assert_eq!(
+			tree.find_node_index_where(&"I", &4, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![1, 1, 0]))
+		);
+
+		assert_eq!(
+			tree.find_node_index_where(&"L", &4, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![1, 1, 0]))
+		);
+
+		assert_eq!(
+			tree.find_node_index_where(&"M", &5, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![1, 1, 1, 0]))
+		);
+
+		assert_eq!(
+			tree.find_node_index_where(&"O", &5, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![1, 1, 1, 0]))
+		);
+
+		assert_eq!(
+			tree.find_node_index_where(&"J", &2, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![0]))
+		);
+
+		assert_eq!(
+			tree.find_node_index_where(&"K", &3, &is_descendent_of, &|&()| true),
+			Ok(Some(vec![2, 0]))
+		);
+
+		for i in 0 .. 10 {
+			assert_eq!(
+				tree.find_node_index_where(&"A", &i, &is_descendent_of, &|&()| true),
+				Ok(None)
+			);
+		}
+
+		assert_eq!(
+			tree.find_node_index_where(&"B", &0, &is_descendent_of, &|&()| true),
+			Ok(None),
+		);
+	}
+
 
 	#[test]
 	fn import_doesnt_revert() {
