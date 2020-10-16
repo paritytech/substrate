@@ -43,7 +43,7 @@ pub(crate) struct EventFormat<T = SystemTime> {
 	pub(crate) display_thread_name: bool,
 }
 
-// NOTE: the following code has been inspiref from tracing-subscriber
+// NOTE: the following code took inspiration from tracing-subscriber
 //
 //       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L449
 impl<S, N, T> FormatEvent<S, N> for EventFormat<T>
@@ -138,7 +138,7 @@ macro_rules! write_node_name {
 	($method:ident, $type:ty, $format:expr) => {
 		fn $method(&mut self, field: &tracing::field::Field, value: $type) {
 			if field.name() == "name" {
-				write!(self.0, $format, value).unwrap();
+				write!(self.0, $format, value).expect("no way to return the err; qed");
 			}
 		}
 	};
@@ -274,7 +274,7 @@ where
 	}
 }
 
-// NOTE: the following code has been inspired from tracing-subscriber
+// NOTE: the following code took inspiration from tracing-subscriber
 //
 //       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L711
 impl<'a, S, N: 'a> fmt::Display for FmtCtx<'a, S, N>

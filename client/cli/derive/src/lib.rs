@@ -108,7 +108,10 @@ pub fn substrate_cli_node_name(arg: TokenStream, item: TokenStream) -> TokenStre
 
 	let name = syn::parse_macro_input!(arg as Expr);
 
-	let crate_name = if std::env::var("CARGO_PKG_NAME").unwrap() == "sc-cli" {
+	let crate_name = if std::env::var("CARGO_PKG_NAME")
+		.expect("cargo env var always there when compiling; qed")
+		== "sc-cli"
+	{
 		Ident::new("sc_cli", Span::call_site().into())
 	} else {
 		let crate_name = match crate_name("sc-cli") {
