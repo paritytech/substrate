@@ -6359,6 +6359,7 @@ dependencies = [
  "tracing",
  "tracing-log",
  "tracing-subscriber",
+ "trybuild",
 ]
 
 [[package]]
