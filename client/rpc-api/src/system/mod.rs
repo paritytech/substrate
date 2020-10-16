@@ -27,7 +27,7 @@ use futures::{future::BoxFuture, compat::Compat};
 
 use self::error::Result as SystemResult;
 
-pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole};
+pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole, SyncState};
 pub use self::gen_client::Client as SystemClient;
 
 /// Substrate system RPC API
@@ -103,4 +103,9 @@ pub trait SystemApi<Hash, Number> {
 	/// Returns the roles the node is running as.
 	#[rpc(name = "system_nodeRoles", returns = "Vec<NodeRole>")]
 	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>>;
+
+	/// Returns the state of the syncing of the node: starting block, current best block, highest
+	/// known block.
+	#[rpc(name = "system_syncState", returns = "SyncState<Number>")]
+	fn system_sync_state(&self) -> Receiver<SyncState<Number>>;
 }

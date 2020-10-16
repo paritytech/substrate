@@ -81,6 +81,13 @@ mod module1 {
 		}
 	}
 
+	frame_support::decl_error! {
+		pub enum Error for Module<T: Trait<I>, I: Instance> where T::BlockNumber: From<u32> {
+			/// Test
+			Test,
+		}
+	}
+
 	frame_support::decl_event! {
 		pub enum Event<T, I> where Phantom = std::marker::PhantomData<T> {
 			_Phantom(Phantom),
