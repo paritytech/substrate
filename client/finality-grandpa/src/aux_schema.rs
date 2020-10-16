@@ -456,6 +456,12 @@ pub(crate) fn update_consensus_changes<H, N, F, R>(
 	write_aux(&[(CONSENSUS_CHANGES_KEY, set.encode().as_slice())])
 }
 
+pub(crate) fn load_authority_set_changes<B: AuxStore, Block: BlockT>(backend: &B)
+	-> ClientResult<Option<AuthoritySetChanges<NumberFor<Block>>>>
+{
+	load_decode(backend, AUTHORITY_SET_CHANGES_KEY)
+}
+
 #[cfg(test)]
 pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 	-> Option<AuthoritySet<H, N>> {

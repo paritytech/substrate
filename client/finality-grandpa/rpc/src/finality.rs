@@ -34,6 +34,11 @@ pub trait RpcFinalityProofProvider<Block: BlockT> {
 		end: Block::Hash,
 		authorities_set_id: u64,
 	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error>;
+
+	fn rpc_prove_finality2(
+		&self,
+		block: NumberFor<Block>,
+	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error>;
 }
 
 impl<B, Block> RpcFinalityProofProvider<Block> for FinalityProofProvider<B, Block>
@@ -49,6 +54,14 @@ where
 		authorities_set_id: u64,
 	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
 		self.prove_finality(begin, end, authorities_set_id)
+			.map(|x| x.map(|y| EncodedFinalityProofs(y.into())))
+	}
+
+	fn rpc_prove_finality2(
+		&self,
+		block: NumberFor<Block>,
+	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
+		self.prove_finality2(block)
 			.map(|x| x.map(|y| EncodedFinalityProofs(y.into())))
 	}
 }

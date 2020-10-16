@@ -37,7 +37,7 @@ mod notification;
 mod report;
 
 use sc_finality_grandpa::GrandpaJustificationStream;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use finality::{EncodedFinalityProofs, RpcFinalityProofProvider};
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
@@ -48,7 +48,7 @@ type FutureResult<T> =
 
 /// Provides RPC methods for interacting with GRANDPA.
 #[rpc]
-pub trait GrandpaApi<Notification, Hash> {
+pub trait GrandpaApi<Notification, Hash, N> {
 	/// RPC Metadata
 	type Metadata;
 
@@ -91,6 +91,14 @@ pub trait GrandpaApi<Notification, Hash> {
 		end: Hash,
 		authorities_set_id: Option<u64>,
 	) -> FutureResult<Option<EncodedFinalityProofs>>;
+
+	/// Prove finality for the given block number.
+	/// WIP: expand this
+	#[rpc(name = "grandpa_proveFinality2")]
+	fn prove_finality2(
+		&self,
+		block: N,
+	) -> FutureResult<Option<EncodedFinalityProofs>>;
 }
 
 /// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
@@ -127,7 +135,8 @@ impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
 	}
 }
 
-impl<AuthoritySet, VoterState, Block, ProofProvider> GrandpaApi<JustificationNotification, Block::Hash>
+impl<AuthoritySet, VoterState, Block, ProofProvider>
+	GrandpaApi<JustificationNotification, Block::Hash, NumberFor<Block>>
 	for GrandpaRpcHandler<AuthoritySet, VoterState, Block, ProofProvider>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
@@ -181,6 +190,25 @@ where
 		let result = self
 			.finality_proof_provider
 			.rpc_prove_finality(begin, end, authorities_set_id);
+		let future = async move { result }.boxed();
+		Box::new(
+			future
+				.map_err(|e| {
+					warn!("Error proving finality: {}", e);
+					error::Error::ProveFinalityFailed(e)
+				})
+				.map_err(jsonrpc_core::Error::from)
+				.compat()
+		)
+	}
+
+	fn prove_finality2(
+		&self,
+		block: NumberFor<Block>,
+	) -> FutureResult<Option<EncodedFinalityProofs>> {
+		let result = self
+			.finality_proof_provider
+			.rpc_prove_finality2(block);
 		let future = async move { result }.boxed();
 		Box::new(
 			future
@@ -265,6 +293,13 @@ mod tests {
 			_begin: Block::Hash,
 			_end: Block::Hash,
 			_authoritites_set_id: u64,
+		) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
+			Ok(Some(EncodedFinalityProofs(self.finality_proofs.encode().into())))
+		}
+
+		fn rpc_prove_finality2(
+			&self,
+			_block: NumberFor<Block>
 		) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
 			Ok(Some(EncodedFinalityProofs(self.finality_proofs.encode().into())))
 		}

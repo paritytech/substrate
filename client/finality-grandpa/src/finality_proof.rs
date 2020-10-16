@@ -39,7 +39,9 @@
 use std::sync::Arc;
 use log::{trace, warn};
 
-use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
+use sp_blockchain::{
+	Backend as BlockchainBackend, Error as ClientError, HeaderBackend, Result as ClientResult,
+};
 use sc_client_api::{
 	backend::Backend, StorageProof,
 	light::{FetchChecker, RemoteReadRequest},
@@ -202,6 +204,32 @@ impl<B, Block> FinalityProofProvider<B, Block>
 			authorities_set_id,
 			begin,
 			end,
+		)
+	}
+
+	/// Prove finality for the given block number.
+	/// WIP: expand this description
+	pub fn prove_finality2(
+		&self,
+		block: NumberFor<Block>,
+	) -> Result<Option<Vec<u8>>, ClientError> {
+		let blocks_where_set_changes =
+			match crate::aux_schema::load_authority_set_changes::<_, Block>(&*self.backend)? {
+				Some(blocks) => blocks,
+				None => return Ok(None),
+			};
+		let (set_id, last_block_for_set) = blocks_where_set_changes.get_set_id(block);
+
+		// Convert from block numbers to hashes
+		let last_block_for_set = self.backend.blockchain().hash(last_block_for_set).unwrap().unwrap();
+		let block = self.backend.blockchain().hash(block).unwrap().unwrap();
+
+		prove_finality::<_, _, GrandpaJustification<Block>>(
+			&*self.backend.blockchain(),
+			&*self.authority_provider,
+			set_id,
+			block,
+			last_block_for_set,
 		)
 	}
 }
