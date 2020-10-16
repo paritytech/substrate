@@ -337,7 +337,7 @@ pub use frame_support_procedural::PartialEqNoBound;
 ///
 /// // Foo implements [`Debug`] because `C` bounds [`Debug`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Debug`].
-/// #[cfg_attr(feature = "std", derive(DebugNoBound))]
+/// #[derive(DebugNoBound)]
 /// struct Foo<T: Trait> {
 ///		c: T::C,
 /// }
