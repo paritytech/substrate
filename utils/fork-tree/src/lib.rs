@@ -770,13 +770,14 @@ mod node_implementation {
 				  P: Fn(&V) -> bool,
 		{
 			let mut stack: Vec<(&Self, Option<usize>, bool)> = vec![(self, None, true)];
-			let mut indices = Vec::new();
 
 			let mut found = false;
+			let mut last: Option<FindOutcome<Vec<usize>>> = None;
 
 			while let Some((node, index, first_time)) = stack.pop() {
 				// stop searching this branch
 				if *number < node.number {
+					last = Some(FindOutcome::Failure(false));
 					continue;
 				}
 
@@ -784,25 +785,39 @@ mod node_implementation {
 					if !node.children.is_empty() {
 						stack.push((node, index, false));
 
-						for (i, node) in node.children.iter().enumerate().rev() {
-							stack.push((node, Some(i), true));
+						for (i, child) in node.children.iter().enumerate().rev() {
+							stack.push((child, Some(i), true));
 						}
 
 						continue;
 					}
 				}
 
-				if is_descendent_of(&node.hash, hash)? {
+				let is_descendent_of = is_descendent_of(&node.hash, hash)?;
+
+				if is_descendent_of {
 					if predicate(&node.data) {
-						if let Some(index) = index {
-							indices.push(index);
-						}
+						last = match last.take() {
+							Some(FindOutcome::Found(mut vec)) => {
+								if let Some(index) = index {
+									vec.push(index);
+								}
+								Some(FindOutcome::Found(vec))
+							},
+							_ => Some(FindOutcome::Found({
+								if let Some(index) = index {
+									vec![index]
+								} else {
+									vec![]
+								}
+							}))
+						};
 						found = true;
 					}
 				}
 			}
 
-			return Ok(FindOutcome::Found(indices))
+			return Ok(last.unwrap_or_else(|| FindOutcome::Failure(false)));
 		}
 
 		/// Find a node in the tree that is the deepest ancestor of the given
@@ -1061,7 +1076,8 @@ mod test {
 		for i in 0 .. 10 {
 			assert_eq!(
 				tree.find_node_index_where(&"A", &i, &is_descendent_of, &|&()| true),
-				Ok(None)
+				Ok(None),
+				"{}", i
 			);
 		}
 
