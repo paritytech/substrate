@@ -81,17 +81,15 @@ where
 		}
 
 		// Custom code to display node name
-		let mut found_node_name = None;
-		ctx.visit_spans::<(), _>(|span| {
-			let exts = span.extensions();
-			if let Some(node_name) = exts.get::<NodeName>() {
-				found_node_name = Some(node_name.as_str().to_owned());
+		if let Some(span) = ctx.lookup_current() {
+			let parents = span.parents();
+			for span in std::iter::once(span).chain(parents) {
+				let exts = span.extensions();
+				if let Some(node_name) = exts.get::<NodeName>() {
+					write!(writer, "{}", node_name.as_str())?;
+					break;
+				}
 			}
-			Ok(())
-		})
-		.unwrap();
-		if let Some(node_name) = found_node_name {
-			write!(writer, "{}", node_name)?;
 		}
 
 		let fmt_ctx = { FmtCtx::new(&ctx, event.parent(), self.ansi) };
