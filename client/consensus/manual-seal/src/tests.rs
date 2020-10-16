@@ -307,7 +307,7 @@ async fn manual_seal_fork_blocks() {
 	}).await.is_ok());
 
 	// Ensure the forked block is in the db
-	// note: The following line fails the test
+	// NOTE: The following line fails the test
 	// let imported = rx2.await.unwrap().unwrap();
 	// assert!(client.header(&BlockId::Hash(imported.hash)).unwrap().is_some())
 }
