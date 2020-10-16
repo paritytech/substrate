@@ -489,6 +489,9 @@ decl_module! {
 				},
 				Phase::Signed if remaining <= unsigned_deadline && remaining > 0.into() => {
 					// check the unsigned phase.
+					// TODO: this is probably very bad as it is.. we should only assume we don't
+					// want OCW solutions if the solutions is checked to be PJR as well. Probably a
+					// good middle ground for now is to always let the unsigned phase be open.
 					let found_solution = Self::finalize_signed_phase();
 					<CurrentPhase<T>>::put(Phase::Unsigned((!found_solution, now)));
 					log!(info, "Starting unsigned phase at #{}", now);
