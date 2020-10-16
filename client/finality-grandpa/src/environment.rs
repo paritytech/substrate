@@ -1331,7 +1331,6 @@ where
 				"authorities" => ?set_ref.to_vec(),
 				"set_id" => ?new_id,
 			);
-
 			Some(NewAuthoritySet {
 				canon_hash,
 				canon_number,
