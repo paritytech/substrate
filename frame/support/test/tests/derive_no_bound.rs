@@ -24,15 +24,8 @@ struct Unnamed(u64);
 
 #[test]
 fn runtime_debug_no_bound_display_correctly() {
-	#[cfg(feature = "std")]
-	{
-		assert_eq!(format!("{:?}", Unnamed(1)), "Unnamed(1)");
-	}
-
-	#[cfg(not(feature = "std"))]
-	{
-		assert_eq!(format!("{:?}", Unnamed(1)), "<stripped>");
-	}
+	// This test is not executed without std
+	assert_eq!(format!("{:?}", Unnamed(1)), "Unnamed(1)");
 }
 
 trait Trait {
