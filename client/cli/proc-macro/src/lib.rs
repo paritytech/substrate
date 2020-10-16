@@ -22,8 +22,14 @@ use proc_macro_crate::crate_name;
 use quote::quote;
 use syn::{Error, Expr, Ident, ItemFn};
 
-/// Macro that inserts a span with the node name at the beginning of the function. This prefix all
-/// the log lines with `[<name>]` (after the timestamp).
+/// Macro that inserts a tracing span with the node name at the beginning of the function. This
+/// prefixes all the log lines with `[<name>]` (after the timestamp). Tracing's span are propagated
+/// to all the child calls and child tasks (futures) if they are spawned properly with the
+/// `SpawnHandle` (see `TaskManager` in sc-cli) or if the futures use `.in_current_span()` (see
+/// tracing-futures).
+///
+/// See Tokio's [tracing documentation](https://docs.rs/tracing-core/) and
+/// [tracing-futures documentation](https://docs.rs/tracing-futures/) for more details.
 ///
 /// # Implementation notes
 ///
