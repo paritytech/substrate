@@ -47,6 +47,9 @@ use structopt::{
 use tracing_subscriber::{
 	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
 };
+#[doc(hidden)]
+pub use tracing;
+pub use sc_cli_derive::*;
 
 /// Substrate client CLI
 ///

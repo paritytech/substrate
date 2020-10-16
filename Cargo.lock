@@ -6331,6 +6331,7 @@ dependencies = [
  "rand 0.7.3",
  "regex",
  "rpassword",
+ "sc-cli-derive",
  "sc-client-api",
  "sc-informant",
  "sc-keystore",
@@ -6358,6 +6359,15 @@ dependencies = [
  "tracing",
  "tracing-log",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "sc-cli-derive"
+version = "2.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

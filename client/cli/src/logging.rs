@@ -81,21 +81,18 @@ where
 		}
 
 		// Custom code to display node name
-		let mut found_node_name = false;
-		ctx.visit_spans::<fmt::Error, _>(|span| {
-			if !found_node_name {
-				let exts = span.extensions();
-				if let Some(node_name) = exts.get::<NodeName>() {
-					found_node_name = true;
-					write!(writer, "{}", node_name.as_str())
-				} else {
-					Ok(())
-				}
-			} else {
-				Ok(())
+		let mut found_node_name = None;
+		ctx.visit_spans::<(), _>(|span| {
+			let exts = span.extensions();
+			if let Some(node_name) = exts.get::<NodeName>() {
+				found_node_name = Some(node_name.as_str().to_owned());
 			}
+			Ok(())
 		})
 		.unwrap();
+		if let Some(node_name) = found_node_name {
+			write!(writer, "{}", node_name)?;
+		}
 
 		let fmt_ctx = { FmtCtx::new(&ctx, event.parent(), self.ansi) };
 		write!(writer, "{}", fmt_ctx)?;
@@ -139,18 +136,22 @@ where
 
 struct NodeNameVisitor<'a, W: std::fmt::Write>(&'a mut W);
 
-impl<'a, W: std::fmt::Write> tracing::field::Visit for NodeNameVisitor<'a, W> {
-	fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-		if field.name() == "name" {
-			write!(self.0, "[name = {:?}]", value).unwrap();
+macro_rules! write_node_name {
+	($method:ident, $type:ty, $format:expr) => {
+		fn $method(&mut self, field: &tracing::field::Field, value: $type) {
+			if field.name() == "name" {
+				write!(self.0, $format, value).unwrap();
+			}
 		}
-	}
+	};
+}
 
-	fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-		if field.name() == "name" {
-			write!(self.0, "[{}] ", value).unwrap();
-		}
-	}
+impl<'a, W: std::fmt::Write> tracing::field::Visit for NodeNameVisitor<'a, W> {
+	write_node_name!(record_debug, &dyn std::fmt::Debug, "[{:?}] ");
+	write_node_name!(record_str, &str, "[{}] ");
+	write_node_name!(record_i64, i64, "[{}] ");
+	write_node_name!(record_u64, u64, "[{}] ");
+	write_node_name!(record_bool, bool, "[{}] ");
 }
 
 #[derive(Debug)]
