@@ -470,7 +470,7 @@ decl_module! {
 		/// Emits `Destroyed` event when successful.
 		///
 		/// Weight: `O(1)`
-		/// Modes: Pre-existence of `beneficiary`
+		/// Modes: Pre-existing balance of `beneficiary`; Account pre-existence of `beneficiary`.
 		#[weight = T::WeightInfo::mint()]
 		fn mint(origin,
 			#[compact] id: T::AssetId,
@@ -514,7 +514,7 @@ decl_module! {
 		/// minimum for the asset, then the amount burned is increased to take it to zero.
 		///
 		/// Weight: `O(1)`
-		/// Modes: Post-existence of `who`
+		/// Modes: Post-existence of `who`; Pre & post Zombie-status of `who`.
 		#[weight = T::WeightInfo::burn()]
 		fn burn(origin,
 			#[compact] id: T::AssetId,
@@ -570,7 +570,7 @@ decl_module! {
 		///
 		/// Weight: `O(1)`
 		/// Modes: Pre-existence of `target`; Post-existence of sender; Prior & post zombie-status
-		/// of sender.
+		/// of sender; Account pre-existence of `target`.
 		#[weight = T::WeightInfo::transfer()]
 		fn transfer(origin,
 			#[compact] id: T::AssetId,
@@ -642,8 +642,8 @@ decl_module! {
 		/// to zero.
 		///
 		/// Weight: `O(1)`
-		/// Modes: Pre-existence of `dest`; Post-existence of `source`. Prior & post zombie-status
-		/// of `source`.
+		/// Modes: Pre-existence of `dest`; Post-existence of `source`; Prior & post zombie-status
+		/// of `source`; Account pre-existence of `dest`.
 		#[weight = T::WeightInfo::force_transfer()]
 		fn force_transfer(origin,
 			#[compact] id: T::AssetId,
