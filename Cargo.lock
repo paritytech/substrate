@@ -6365,6 +6365,7 @@ dependencies = [
 name = "sc-cli-derive"
 version = "2.0.0"
 dependencies = [
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn",
