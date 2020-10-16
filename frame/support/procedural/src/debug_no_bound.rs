@@ -97,7 +97,7 @@ pub fn derive_debug_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 			})
 		},
 		syn::Data::Union(_) => {
-			let msg ="Union type not supported by `derive(DebugNoBound)`";
+			let msg = "Union type not supported by `derive(DebugNoBound)`";
 			return syn::Error::new(input.span(), msg).to_compile_error().into()
 		},
 	};
