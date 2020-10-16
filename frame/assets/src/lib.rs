@@ -268,14 +268,16 @@ decl_error! {
 		TooManyZombies,
 		/// Attempt to destroy an asset class when non-zombie, reference-bearing accounts exist.
 		RefsLeft,
+		/// Invalid witness data given.
+		BadWitness,
 	}
 }
 
 pub trait WeightInfo {
 	fn create() -> Weight;
 	fn force_create() -> Weight;
-	fn destroy() -> Weight;
-	fn force_destroy() -> Weight;
+	fn destroy(_z: u32, ) -> Weight;
+	fn force_destroy(_z: u32, ) -> Weight;
 	fn mint() -> Weight;
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
@@ -405,15 +407,19 @@ decl_module! {
 		///
 		/// Emits `Destroyed` event when successful.
 		///
-		/// Weight: `O(1)`
-		#[weight = T::WeightInfo::destroy()]
-		fn destroy(origin, #[compact] id: T::AssetId) -> DispatchResult {
+		/// Weight: `O(z)` where `z` is the number of zombie accounts.
+		#[weight = T::WeightInfo::destroy(*zombies_witness)]
+		fn destroy(origin,
+			#[compact] id: T::AssetId,
+			#[compact] zombies_witness: u32,
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			Asset::<T>::try_mutate_exists(id, |maybe_details| {
 				let details = maybe_details.take().ok_or(Error::<T>::Unknown)?;
 				ensure!(details.owner == origin, Error::<T>::NoPermission);
 				ensure!(details.accounts == details.zombies, Error::<T>::RefsLeft);
+				ensure!(details.zombies <= zombies_witness, Error::<T>::BadWitness);
 				T::Currency::unreserve(&details.owner, details.deposit);
 
 				*maybe_details = None;
@@ -433,13 +439,17 @@ decl_module! {
 		/// Emits `Destroyed` event when successful.
 		///
 		/// Weight: `O(1)`
-		#[weight = T::WeightInfo::force_destroy()]
-		fn force_destroy(origin, #[compact] id: T::AssetId) -> DispatchResult {
+		#[weight = T::WeightInfo::force_destroy(*zombies_witness)]
+		fn force_destroy(origin,
+			#[compact] id: T::AssetId,
+			#[compact] zombies_witness: u32,
+		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			Asset::<T>::try_mutate_exists(id, |maybe_details| {
 				let details = maybe_details.take().ok_or(Error::<T>::Unknown)?;
 				ensure!(details.accounts == details.zombies, Error::<T>::RefsLeft);
+				ensure!(details.zombies <= zombies_witness, Error::<T>::BadWitness);
 				T::Currency::unreserve(&details.owner, details.deposit);
 
 				*maybe_details = None;
@@ -1002,13 +1012,13 @@ mod tests {
 			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
 			assert_eq!(Balances::reserved_balance(&1), 11);
 
-			assert_ok!(Assets::destroy(Origin::signed(1), 0));
+			assert_ok!(Assets::destroy(Origin::signed(1), 0, 100));
 			assert_eq!(Balances::reserved_balance(&1), 0);
 
 			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
 			assert_eq!(Balances::reserved_balance(&1), 11);
 
-			assert_ok!(Assets::force_destroy(Origin::root(), 0));
+			assert_ok!(Assets::force_destroy(Origin::root(), 0, 100));
 			assert_eq!(Balances::reserved_balance(&1), 0);
 		});
 	}
@@ -1019,10 +1029,21 @@ mod tests {
 			Balances::make_free_balance_be(&1, 100);
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-			assert_noop!(Assets::destroy(Origin::signed(1), 0), Error::<Test>::RefsLeft);
-			assert_noop!(Assets::force_destroy(Origin::root(), 0), Error::<Test>::RefsLeft);
+			assert_noop!(Assets::destroy(Origin::signed(1), 0, 100), Error::<Test>::RefsLeft);
+			assert_noop!(Assets::force_destroy(Origin::root(), 0, 100), Error::<Test>::RefsLeft);
 			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, 100));
-			assert_ok!(Assets::destroy(Origin::signed(1), 0));
+			assert_ok!(Assets::destroy(Origin::signed(1), 0, 100));
+		});
+	}
+
+	#[test]
+	fn destroy_with_bad_witness_should_not_work() {
+		new_test_ext().execute_with(|| {
+			Balances::make_free_balance_be(&1, 100);
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
+			assert_noop!(Assets::destroy(Origin::signed(1), 0, 0), Error::<Test>::BadWitness);
+			assert_noop!(Assets::force_destroy(Origin::root(), 0, 0), Error::<Test>::BadWitness);
 		});
 	}
 
@@ -1170,7 +1191,7 @@ mod tests {
 			assert_noop!(Assets::burn(Origin::signed(2), 0, 1, 100), Error::<Test>::NoPermission);
 			assert_noop!(Assets::force_transfer(Origin::signed(2), 0, 1, 2, 100), Error::<Test>::NoPermission);
 			assert_noop!(Assets::set_max_zombies(Origin::signed(2), 0, 11), Error::<Test>::NoPermission);
-			assert_noop!(Assets::destroy(Origin::signed(2), 0), Error::<Test>::NoPermission);
+			assert_noop!(Assets::destroy(Origin::signed(2), 0, 100), Error::<Test>::NoPermission);
 		});
 	}
 

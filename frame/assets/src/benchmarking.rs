@@ -56,6 +56,15 @@ fn create_default_minted_asset<T: Trait>(max_zombies: u32, amount: T::Balance)
 	(caller, caller_lookup)
 }
 
+fn add_zombies<T: Trait>(minter: T::AccountId, n: u32) {
+	let origin = SystemOrigin::Signed(minter);
+	for i in 0..n {
+		let target = account("zombie", i, SEED);
+		let target_lookup = T::Lookup::unlookup(target);
+		assert!(Assets::<T>::mint(origin.clone().into(), Default::default(), target_lookup, 100.into()).is_ok());
+	}
+}
+
 benchmarks! {
 	_ { }
 
@@ -77,15 +86,19 @@ benchmarks! {
 	}
 
 	destroy {
-		let (caller, _) = create_default_asset::<T>(10);
-	}: _(SystemOrigin::Signed(caller), Default::default())
+		let z in 0 .. 10_000;
+		let (caller, _) = create_default_asset::<T>(10_000);
+		add_zombies::<T>(caller.clone(), z);
+	}: _(SystemOrigin::Signed(caller), Default::default(), 10_000)
 	verify {
 		assert!(true)
 	}
 
 	force_destroy {
-		let _ = create_default_asset::<T>(10);
-	}: _(SystemOrigin::Root, Default::default())
+		let z in 0 .. 10_000;
+		let (caller, _) = create_default_asset::<T>(10_000);
+		add_zombies::<T>(caller.clone(), z);
+	}: _(SystemOrigin::Root, Default::default(), 10_000)
 	verify {
 		assert!(true)
 	}

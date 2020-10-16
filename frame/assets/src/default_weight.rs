@@ -24,8 +24,8 @@ use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 impl crate::WeightInfo for () {
 	fn create() -> Weight { 0 as Weight }
 	fn force_create() -> Weight { 0 as Weight }
-	fn destroy() -> Weight { 0 as Weight }
-	fn force_destroy() -> Weight { 0 as Weight }
+	fn destroy(_z: u32, ) -> Weight { 0 as Weight }
+	fn force_destroy(_z: u32, ) -> Weight { 0 as Weight }
 	fn mint() -> Weight { 0 as Weight }
 	fn burn() -> Weight { 0 as Weight }
 	fn transfer() -> Weight { 0 as Weight }
