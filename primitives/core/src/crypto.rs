@@ -486,6 +486,10 @@ ss58_address_format!(
 		(22, "dock-mainnet", "Dock mainnet, standard account (*25519).")
 	ShiftNrg =>
 		(23, "shift", "ShiftNrg mainnet, standard account (*25519).")
+	ZeroAccount =>
+		(24, "zero", "ZERO mainnet, standard account (*25519).")
+	AlphavilleAccount =>
+		(25, "alphaville", "ZERO testnet, standard account (*25519).")
 	SubsocialAccount =>
 		(28, "subsocial", "Subsocial network, standard account (*25519).")
 	PhalaAccount =>
@@ -496,6 +500,8 @@ ss58_address_format!(
 		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
 	CentrifugeAccount =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
+	NodleAccount =>
+		(37, "nodle", "Nodle Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
 	Reserved43 =>
