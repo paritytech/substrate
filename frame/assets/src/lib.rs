@@ -276,8 +276,8 @@ decl_error! {
 pub trait WeightInfo {
 	fn create() -> Weight;
 	fn force_create() -> Weight;
-	fn destroy(_z: u32, ) -> Weight;
-	fn force_destroy(_z: u32, ) -> Weight;
+	fn destroy(z: u32, ) -> Weight;
+	fn force_destroy(z: u32, ) -> Weight;
 	fn mint() -> Weight;
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
