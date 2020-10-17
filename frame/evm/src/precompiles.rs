@@ -24,7 +24,7 @@ use ripemd160::Digest;
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_application_crypto::TryFrom;
 
-#[cfg(feature="ed25519")]
+#[cfg(feature = "ed25519")]
 use ed25519_dalek::{PublicKey, Verifier, Signature};
 
 #[cfg(feature="modexp")]
