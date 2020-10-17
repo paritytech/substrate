@@ -194,9 +194,9 @@ where
 		OutputType::Text => {
 			println!(
 				"Network ID/version: {}\n  \
-				Public key (hex):   {}\n  \
-				Account ID:         {}\n  \
-				SS58 Address:       {}",
+				 Public key (hex):   {}\n  \
+				 Account ID:         {}\n  \
+				 SS58 Address:       {}",
 				String::from(network_override),
 				format_public_key::<Pair>(public_key.clone()),
 				format_account_id::<Pair>(public_key.clone()),
