@@ -519,18 +519,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bn"
-version = "0.4.4"
-source = "git+https://github.com/paritytech/bn#635c4cdd560bc0c8b262e6bf809dc709da8bcd7e"
-dependencies = [
- "byteorder 1.3.4",
- "crunchy",
- "lazy_static",
- "rand 0.5.6",
- "rustc-hex",
-]
-
-[[package]]
 name = "bs58"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4566,7 +4554,6 @@ name = "pallet-evm"
 version = "2.0.0"
 dependencies = [
  "blake2-rfc",
- "bn",
  "ed25519-dalek",
  "ethereum-types",
  "evm",
@@ -4587,6 +4574,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "substrate-bn",
 ]
 
 [[package]]
@@ -7487,7 +7475,7 @@ checksum = "021b403afe70d81eea68f6ea12f6b3c9588e5d536a94c3bf80f15e7faa267862"
 dependencies = [
  "arrayref",
  "arrayvec 0.5.1",
- "curve25519-dalek",
+ "curve25519-dalek 2.1.0",
  "getrandom 0.1.14",
  "merlin",
  "rand 0.7.3",
@@ -8762,6 +8750,19 @@ dependencies = [
  "schnorrkel",
  "sha2 0.8.2",
  "zeroize",
+]
+
+[[package]]
+name = "substrate-bn"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acb439bec2318e98b83f1e12ddaaf2082d6fc29becc3117714ccb575fa343bc1"
+dependencies = [
+ "byteorder 1.3.4",
+ "crunchy",
+ "lazy_static",
+ "rand 0.5.6",
+ "rustc-hex",
 ]
 
 [[package]]
