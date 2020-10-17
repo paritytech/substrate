@@ -18,8 +18,8 @@
 //! Implementation of the `inspect` subcommand
 
 use crate::{
-	utils, KeystoreParams, with_crypto_scheme, NetworkSchemeFlag,
-	OutputTypeFlag, CryptoSchemeFlag, Error,
+	utils::{self, print_from_uri, print_from_public}, KeystoreParams,
+	with_crypto_scheme, NetworkSchemeFlag, OutputTypeFlag, CryptoSchemeFlag, Error,
 };
 use structopt::StructOpt;
 /// The `inspect` command
@@ -30,13 +30,19 @@ use structopt::StructOpt;
 )]
 pub struct InspectKeyCmd {
 	/// A Key URI to be inspected. May be a secret seed, secret URI
-	/// (with derivation paths and password), SS58 or public URI.
+	/// (with derivation paths and password), SS58, public URI or a hex encoded public key.
+	///
+	/// If it is a hex encoded public key, `--public` needs to be given as argument.
 	///
 	/// If the given value is a file, the file content will be used
 	/// as URI.
 	///
 	/// If omitted, you will be prompted for the URI.
 	uri: Option<String>,
+
+	/// Is the given `uri` a hex encoded public key?
+	#[structopt(long)]
+	public: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -61,16 +67,26 @@ impl InspectKeyCmd {
 		let uri = utils::read_uri(self.uri.as_ref())?;
 		let password = self.keystore_params.read_password()?;
 
-		use utils::print_from_uri;
-		with_crypto_scheme!(
-			self.crypto_scheme.scheme,
-			print_from_uri(
-				&uri,
-				password,
-				self.network_scheme.network.clone(),
-				self.output_scheme.output_type.clone()
-			)
-		);
+		if self.public {
+			with_crypto_scheme!(
+				self.crypto_scheme.scheme,
+				print_from_public(
+					&uri,
+					self.network_scheme.network.clone(),
+					self.output_scheme.output_type.clone(),
+				)
+			)?;
+		} else {
+			with_crypto_scheme!(
+				self.crypto_scheme.scheme,
+				print_from_uri(
+					&uri,
+					password,
+					self.network_scheme.network.clone(),
+					self.output_scheme.output_type.clone(),
+				)
+			);
+		}
 
 		Ok(())
 	}
@@ -92,6 +108,14 @@ mod tests {
 		assert!(inspect.run().is_ok());
 
 		let inspect = InspectKeyCmd::from_iter(&["inspect-key", seed]);
+		assert!(inspect.run().is_ok());
+	}
+
+	#[test]
+	fn inspect_public_key() {
+		let public = "0x12e76e0ae8ce41b6516cce52b3f23a08dcb4cfeed53c6ee8f5eb9f7367341069";
+
+		let inspect = InspectKeyCmd::from_iter(&["inspect-key", "--public", public]);
 		assert!(inspect.run().is_ok());
 	}
 }
