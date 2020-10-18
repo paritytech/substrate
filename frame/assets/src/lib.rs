@@ -1509,14 +1509,26 @@ mod tests {
 	fn set_metadata_should_work() {
 		new_test_ext().execute_with(|| {
 			// Cannot add metadata to unknown asset
-			assert_noop!(Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 10], 12), Error::<Test>::Unknown);
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 10], 12),
+				Error::<Test>::Unknown,
+			);
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			// Cannot add metadata to unowned asset
-			assert_noop!(Assets::set_metadata(Origin::signed(2), 0, vec![0u8; 10], vec![0u8; 10], 12), Error::<Test>::NoPermission);
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(2), 0, vec![0u8; 10], vec![0u8; 10], 12),
+				Error::<Test>::NoPermission,
+			);
 
 			// Cannot add oversized metadata
-			assert_noop!(Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 100], vec![0u8; 10], 12), Error::<Test>::BadMetadata);
-			assert_noop!(Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 100], 12), Error::<Test>::BadMetadata);
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 100], vec![0u8; 10], 12),
+				Error::<Test>::BadMetadata,
+			);
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 100], 12),
+				Error::<Test>::BadMetadata,
+			);
 
 			// Successfully add metadata and take deposit
 			Balances::make_free_balance_be(&1, 30);
@@ -1530,7 +1542,10 @@ mod tests {
 			assert_eq!(Balances::free_balance(&1), 4);
 
 			// Cannot over-reserve
-			assert_noop!(Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 20], vec![0u8; 20], 12), BalancesError::<Test, _>::InsufficientBalance);
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 20], vec![0u8; 20], 12),
+				BalancesError::<Test, _>::InsufficientBalance,
+			);
 
 			// Clear Metadata
 			assert!(Metadata::<Test>::contains_key(0));
