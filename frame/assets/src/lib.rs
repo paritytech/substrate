@@ -184,6 +184,8 @@ pub struct AssetDetails<
 	zombies: u32,
 	/// The total number of accounts.
 	accounts: u32,
+	/// Whether the asset is frozen for permissionless transfers.
+	is_frozen: bool,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
@@ -239,6 +241,10 @@ decl_event! {
 		Frozen(AssetId, AccountId),
 		/// Some account `who` was thawed. \[asset_id, who\]
 		Thawed(AssetId, AccountId),
+		/// Some asset `asset_id` was frozen. \[asset_id\]
+		AssetFrozen(AssetId),
+		/// Some asset `asset_id` was thawed. \[asset_id\]
+		AssetThawed(AssetId),
 		/// An asset class was destroyed.
 		Destroyed(AssetId),
 		/// Some asset class was force-created. \[asset_id, owner\]
@@ -284,6 +290,8 @@ pub trait WeightInfo {
 	fn force_transfer() -> Weight;
 	fn freeze() -> Weight;
 	fn thaw() -> Weight;
+	fn freeze_asset() -> Weight;
+	fn thaw_asset() -> Weight;
 	fn transfer_ownership() -> Weight;
 	fn set_team() -> Weight;
 	fn set_max_zombies() -> Weight;
@@ -346,6 +354,7 @@ decl_module! {
 				min_balance,
 				zombies: Zero::zero(),
 				accounts: Zero::zero(),
+				is_frozen: false,
 			});
 			Self::deposit_event(RawEvent::Created(id, owner, admin));
 		}
@@ -394,6 +403,7 @@ decl_module! {
 				min_balance,
 				zombies: Zero::zero(),
 				accounts: Zero::zero(),
+				is_frozen: false,
 			});
 			Self::deposit_event(RawEvent::ForceCreated(id, owner));
 		}
@@ -586,12 +596,13 @@ decl_module! {
 				.ok_or(Error::<T>::BalanceLow)?;
 
 			let dest = T::Lookup::lookup(target)?;
+			if dest == origin {
+				return Ok(())
+			}
+
 			Asset::<T>::try_mutate(id, |maybe_details| {
 				let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-
-				if dest == origin {
-					return Ok(())
-				}
+				ensure!(!d.is_frozen, Error::<T>::Frozen);
 
 				let mut amount = amount;
 				if origin_account.balance < d.min_balance {
@@ -744,6 +755,54 @@ decl_module! {
 			Account::<T>::mutate(id, &who, |a| a.is_frozen = false);
 
 			Self::deposit_event(Event::<T>::Thawed(id, who));
+		}
+
+		/// Disallow further unprivileged transfers for the asset class.
+		///
+		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be frozen.
+		///
+		/// Emits `Frozen`.
+		///
+		/// Weight: `O(1)`
+		#[weight = T::WeightInfo::freeze_asset()]
+		fn freeze_asset(origin, #[compact] id: T::AssetId) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+
+			Asset::<T>::try_mutate(id, |maybe_details| {
+				let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+				ensure!(&origin == &d.freezer, Error::<T>::NoPermission);
+
+				d.is_frozen = true;
+
+				Self::deposit_event(Event::<T>::AssetFrozen(id));
+				Ok(())
+			})
+		}
+
+		/// Allow unprivileged transfers for the asset again.
+		///
+		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be frozen.
+		///
+		/// Emits `Thawed`.
+		///
+		/// Weight: `O(1)`
+		#[weight = T::WeightInfo::thaw()]
+		fn thaw_asset(origin, #[compact] id: T::AssetId) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+
+			Asset::<T>::try_mutate(id, |maybe_details| {
+				let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+				ensure!(&origin == &d.admin, Error::<T>::NoPermission);
+
+				d.is_frozen = false;
+
+				Self::deposit_event(Event::<T>::AssetThawed(id));
+				Ok(())
+			})
 		}
 
 		/// Change the Owner of an asset.
@@ -1185,7 +1244,7 @@ mod tests {
 	}
 
 	#[test]
-	fn transferring_frozen_balance_should_not_work() {
+	fn transferring_frozen_user_should_not_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
@@ -1193,6 +1252,19 @@ mod tests {
 			assert_ok!(Assets::freeze(Origin::signed(1), 0, 1));
 			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
 			assert_ok!(Assets::thaw(Origin::signed(1), 0, 1));
+			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+		});
+	}
+
+	#[test]
+	fn transferring_frozen_asset_should_not_works() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_eq!(Assets::balance(0, 1), 100);
+			assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
+			assert_ok!(Assets::thaw_asset(Origin::signed(1), 0));
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
 		});
 	}
