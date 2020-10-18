@@ -19,6 +19,7 @@
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 2.0.0
 //! DATE: 2020-10-18, STEPS: [50], REPEAT: 20, LOW RANGE: [], HIGH RANGE: []
 //! EXECUTION: Some(Wasm), WASM-EXECUTION: Compiled, CHAIN: Some("dev"), DB CACHE: 128
+
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 

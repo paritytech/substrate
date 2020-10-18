@@ -177,7 +177,7 @@ pub fn write_results(
 			// more settings
 			write!(
 				file,
-				"//! EXECUTION: {:?}, WASM-EXECUTION: {}, CHAIN: {:?}, DB CACHE: {}\n",
+				"//! EXECUTION: {:?}, WASM-EXECUTION: {}, CHAIN: {:?}, DB CACHE: {}\n\n",
 				cmd.execution,
 				cmd.wasm_method,
 				cmd.shared_params.chain,
