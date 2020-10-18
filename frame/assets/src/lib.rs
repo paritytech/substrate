@@ -1129,6 +1129,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 10));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
 
 			// Cannot create a new account with a balance that is below minimum...
 			assert_noop!(Assets::mint(Origin::signed(1), 0, 2, 9), Error::<Test>::BalanceLow);
@@ -1140,13 +1141,16 @@ mod tests {
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 91));
 			assert!(Assets::balance(0, 1).is_zero());
 			assert_eq!(Assets::balance(0, 2), 100);
+			assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
 
 			assert_ok!(Assets::force_transfer(Origin::signed(1), 0, 2, 1, 91));
 			assert!(Assets::balance(0, 2).is_zero());
 			assert_eq!(Assets::balance(0, 1), 100);
+			assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
 
 			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, 91));
 			assert!(Assets::balance(0, 1).is_zero());
+			assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 0);
 		});
 	}
 
@@ -1271,6 +1275,7 @@ mod tests {
 			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::max_value()));
 			assert_eq!(Assets::balance(0, 1), 0);
 			assert_noop!(Assets::transfer(Origin::signed(1), 0, 1, 50), Error::<Test>::BalanceLow);
+			assert_noop!(Assets::transfer(Origin::signed(2), 0, 1, 51), Error::<Test>::BalanceLow);
 		});
 	}
 
@@ -1301,6 +1306,7 @@ mod tests {
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::max_value()));
+			assert_eq!(Assets::balance(0, 1), 0);
 		});
 	}
 
