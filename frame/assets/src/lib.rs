@@ -913,9 +913,24 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use frame_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, weights::Weight};
+	use frame_support::{
+		impl_outer_origin, impl_outer_event, assert_ok, assert_noop, parameter_types,
+		weights::Weight
+	};
 	use sp_core::H256;
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+
+	mod pallet_assets {
+		pub use crate::Event;
+	}
+
+	impl_outer_event! {
+		pub enum Event for Test {
+			frame_system<T>,
+			pallet_balances<T>,
+			pallet_assets<T>,
+		}
+	}
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = frame_system {}
@@ -940,7 +955,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
@@ -965,7 +980,7 @@ mod tests {
 		type MaxLocks = ();
 		type Balance = u64;
 		type DustRemoval = ();
-		type Event = ();
+		type Event = Event;
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type WeightInfo = ();
@@ -978,7 +993,7 @@ mod tests {
 
 	impl Trait for Test {
 		type Currency = Balances;
-		type Event = ();
+		type Event = Event;
 		type Balance = u64;
 		type AssetId = u32;
 		type ForceOrigin = frame_system::EnsureRoot<u64>;
