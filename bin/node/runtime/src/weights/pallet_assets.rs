@@ -41,15 +41,15 @@ impl<T: frame_system::Trait> pallet_assets::WeightInfo for WeightInfo<T> {
 	fn destroy(z: u32, ) -> Weight {
 		(0 as Weight)
 			.saturating_add((1_151_000 as Weight).saturating_mul(z as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(z as Weight)))
 	}
 	fn force_destroy(z: u32, ) -> Weight {
 		(0 as Weight)
 			.saturating_add((1_146_000 as Weight).saturating_mul(z as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(z as Weight)))
 	}
 	fn mint() -> Weight {

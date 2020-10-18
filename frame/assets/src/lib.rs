@@ -456,7 +456,9 @@ decl_module! {
 				ensure!(details.owner == origin, Error::<T>::NoPermission);
 				ensure!(details.accounts == details.zombies, Error::<T>::RefsLeft);
 				ensure!(details.zombies <= zombies_witness, Error::<T>::BadWitness);
-				T::Currency::unreserve(&details.owner, details.deposit);
+
+				let metadata = Metadata::<T>::take(&id);
+				T::Currency::unreserve(&details.owner, details.deposit.saturating_add(metadata.deposit));
 
 				*maybe_details = None;
 				Account::<T>::remove_prefix(&id);
@@ -486,7 +488,9 @@ decl_module! {
 				let details = maybe_details.take().ok_or(Error::<T>::Unknown)?;
 				ensure!(details.accounts == details.zombies, Error::<T>::RefsLeft);
 				ensure!(details.zombies <= zombies_witness, Error::<T>::BadWitness);
-				T::Currency::unreserve(&details.owner, details.deposit);
+
+				let metadata = Metadata::<T>::take(&id);
+				T::Currency::unreserve(&details.owner, details.deposit.saturating_add(metadata.deposit));
 
 				*maybe_details = None;
 				Account::<T>::remove_prefix(&id);
@@ -1199,14 +1203,26 @@ mod tests {
 			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
 			assert_eq!(Balances::reserved_balance(&1), 11);
 
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0], vec![0], 12));
+			assert_eq!(Balances::reserved_balance(&1), 14);
+
 			assert_ok!(Assets::destroy(Origin::signed(1), 0, 100));
 			assert_eq!(Balances::reserved_balance(&1), 0);
+
+			assert!(!Asset::<Test>::contains_key(0));
+			assert!(!Metadata::<Test>::contains_key(0));
 
 			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
 			assert_eq!(Balances::reserved_balance(&1), 11);
 
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0], vec![0], 12));
+			assert_eq!(Balances::reserved_balance(&1), 14);
+
 			assert_ok!(Assets::force_destroy(Origin::root(), 0, 100));
 			assert_eq!(Balances::reserved_balance(&1), 0);
+
+			assert!(!Asset::<Test>::contains_key(0));
+			assert!(!Metadata::<Test>::contains_key(0));
 		});
 	}
 
