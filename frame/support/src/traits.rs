@@ -1779,13 +1779,13 @@ impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> 
 	}
 }
 
-/// Something that can be checked if being of sub type `T`.
+/// Something that can be checked to be a of sub type `T`.
 ///
-/// This is being useful for enums where each variant encapsulates a different sub type and
-/// it is required to get access to these sub types.
+/// This is useful for enums where each variant encapsulates a different sub type, and
+/// you need access to these sub types.
 ///
-/// In FRAME this trait is for example implemented for the runtime `Call` enum. Pallets use this
-/// to check if a certain call instance is an instance of the local pallet `Call` enum.
+/// For example, in FRAME, this trait is implemented for the runtime `Call` enum. Pallets use this
+/// to check if a certain call is an instance of the local pallet's `Call` enum.
 ///
 /// # Example
 ///
