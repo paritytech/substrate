@@ -81,6 +81,16 @@ impl<T: frame_system::Trait> pallet_assets::WeightInfo for WeightInfo<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
+	fn freeze_asset() -> Weight {
+		(43_141_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	fn thaw_asset() -> Weight {
+		(42_965_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
 	fn transfer_ownership() -> Weight {
 		(30_110_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
@@ -96,4 +106,5 @@ impl<T: frame_system::Trait> pallet_assets::WeightInfo for WeightInfo<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
+	fn set_metadata(_n: u32, _s: u32) -> Weight { 0 }
 }

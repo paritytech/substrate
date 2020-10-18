@@ -109,7 +109,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{fmt::Debug};
+use sp_std::{fmt::Debug, prelude::*};
 use sp_runtime::{RuntimeDebug, traits::{
 	Member, AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub,
 }};
