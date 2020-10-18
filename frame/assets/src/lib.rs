@@ -1202,27 +1202,41 @@ mod tests {
 			Balances::make_free_balance_be(&1, 100);
 			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
 			assert_eq!(Balances::reserved_balance(&1), 11);
+			assert!(Asset::<Test>::contains_key(0));
 
 			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0], vec![0], 12));
 			assert_eq!(Balances::reserved_balance(&1), 14);
+			assert!(Metadata::<Test>::contains_key(0));
+
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 20, 100));
+			assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
 
 			assert_ok!(Assets::destroy(Origin::signed(1), 0, 100));
 			assert_eq!(Balances::reserved_balance(&1), 0);
 
 			assert!(!Asset::<Test>::contains_key(0));
 			assert!(!Metadata::<Test>::contains_key(0));
+			assert_eq!(Account::<Test>::iter_prefix(0).count(), 0);
 
 			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
 			assert_eq!(Balances::reserved_balance(&1), 11);
+			assert!(Asset::<Test>::contains_key(0));
 
 			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0], vec![0], 12));
 			assert_eq!(Balances::reserved_balance(&1), 14);
+			assert!(Metadata::<Test>::contains_key(0));
+
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 20, 100));
+			assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
 
 			assert_ok!(Assets::force_destroy(Origin::root(), 0, 100));
 			assert_eq!(Balances::reserved_balance(&1), 0);
 
 			assert!(!Asset::<Test>::contains_key(0));
 			assert!(!Metadata::<Test>::contains_key(0));
+			assert_eq!(Account::<Test>::iter_prefix(0).count(), 0);
 		});
 	}
 
