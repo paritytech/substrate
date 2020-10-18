@@ -104,4 +104,5 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().reads(1 as Weight))
 			.saturating_add(DbWeight::get().writes(1 as Weight))
 	}
+	fn set_metadata(_n: u32, _s: u32, ) -> Weight { 0 }
 }
