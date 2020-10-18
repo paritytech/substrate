@@ -88,6 +88,61 @@ impl BenchPair {
 	}
 }
 
+/// Drop system cache.
+///
+/// Will panic if cache drop is impossbile.
+pub fn drop_system_cache() {
+	#[cfg(target_os = "windows")] {
+		log::warn!(
+			target: "bench-logistics",
+			"Clearing system cache on windows is not supported. Benchmark might totally be wrong.",
+		);
+		return;
+	}
+
+	std::process::Command::new("sync")
+		.output()
+		.expect("Failed to execute system cache clear");
+
+	#[cfg(target_os = "linux")] {
+		log::trace!(target: "bench-logistics", "Clearing system cache...");
+		std::process::Command::new("echo")
+			.args(&["3", ">", "/proc/sys/vm/drop_caches", "2>", "/dev/null"])
+			.output()
+			.expect("Failed to execute system cache clear");
+
+		let temp = tempfile::tempdir().expect("Failed to spawn tempdir");
+		let temp_file_path = format!("of={}/buf", temp.path().to_string_lossy());
+
+		// this should refill write cache with 2GB of garbage
+		std::process::Command::new("dd")
+			.args(&["if=/dev/urandom", &temp_file_path, "bs=64M", "count=32"])
+			.output()
+			.expect("Failed to execute dd for cache clear");
+
+		// remove tempfile of previous command
+		std::process::Command::new("rm")
+			.arg(&temp_file_path)
+			.output()
+			.expect("Failed to remove temp file");
+
+		std::process::Command::new("sync")
+			.output()
+			.expect("Failed to execute system cache clear");
+
+		log::trace!(target: "bench-logistics", "Clearing system cache done!");
+	}
+
+	#[cfg(target_os = "macos")] {
+		log::trace!(target: "bench-logistics", "Clearing system cache...");
+		if let Err(err) = std::process::Command::new("purge").output() {
+			log::error!("purge error {:?}: ", err);
+			panic!("Could not clear system cache. Run under sudo?");
+		}
+		log::trace!(target: "bench-logistics", "Clearing system cache done!");
+	}
+}
+
 /// Pre-initialized benchmarking database.
 ///
 /// This is prepared database with genesis and keyring
@@ -123,6 +178,13 @@ impl Clone for BenchDb {
 			dir.path(),
 			&fs_extra::dir::CopyOptions::new(),
 		).expect("Copy of seed database is ok");
+
+		// We clear system cache after db clone but before any warmups.
+		// This populates system cache with some data unrelated to actual
+		// data we will be quering further under benchmark (like what
+		// would have happened in real system that queries random entries
+		// from database).
+		drop_system_cache();
 
 		BenchDb { keyring, directory_guard: Guard(dir), database_type }
 	}
@@ -369,10 +431,9 @@ impl BenchDb {
 		let mut inherent_data = InherentData::new();
 		let timestamp = 1 * MinimumPeriod::get();
 
-		inherent_data.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
+		inherent_data
+			.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
 			.expect("Put timestamp failed");
-		inherent_data.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &0)
-			.expect("Put finality tracker failed");
 
 		client.runtime_api()
 			.inherent_extrinsics_with_context(

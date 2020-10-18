@@ -21,7 +21,11 @@
 #![allow(deprecated)]
 use super::*;
 use authorship::claim_slot;
-use sp_core::{crypto::Pair, vrf::make_transcript as transcript_from_data};
+use sp_core::crypto::Pair;
+use sp_keystore::{
+	SyncCryptoStore,
+	vrf::make_transcript as transcript_from_data,
+};
 use sp_consensus_babe::{
 	AuthorityPair,
 	SlotNumber,
@@ -46,6 +50,8 @@ use rand_chacha::{
 	rand_core::SeedableRng,
 	ChaChaRng,
 };
+use sc_keystore::LocalKeystore;
+use sp_application_crypto::key_types::BABE;
 
 type Item = DigestItem<Hash>;
 
@@ -384,8 +390,9 @@ fn run_one_test(
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-		keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
+		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+			.expect("Creates keystore"));
+		SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(seed)).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
 		let mut got_own = false;
@@ -432,7 +439,6 @@ fn run_one_test(
 			can_author_with: sp_consensus::AlwaysCanAuthor,
 		}).expect("Starts babe"));
 	}
-
 	futures::executor::block_on(future::select(
 		futures::future::poll_fn(move |cx| {
 			let mut net = net.lock();
@@ -516,14 +522,15 @@ fn sig_is_not_pre_digest() {
 fn can_author_block() {
 	sp_tracing::try_init_simple();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-	let pair = keystore.write().insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
+	let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+		.expect("Creates keystore"));
+	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 
 	let mut i = 0;
 	let epoch = Epoch {
 		start_slot: 0,
-		authorities: vec![(pair.public(), 1)],
+		authorities: vec![(public.into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
@@ -823,13 +830,14 @@ fn verify_slots_are_strictly_increasing() {
 fn babe_transcript_generation_match() {
 	sp_tracing::try_init_simple();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-	let pair = keystore.write().insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
+	let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+		.expect("Creates keystore"));
+	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 
 	let epoch = Epoch {
 		start_slot: 0,
-		authorities: vec![(pair.public(), 1)],
+		authorities: vec![(public.into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,

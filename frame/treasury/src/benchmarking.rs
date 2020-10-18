@@ -203,7 +203,7 @@ benchmarks_instance! {
 	}: _(RawOrigin::Signed(caller), reason, awesome_person)
 
 	retract_tip {
-		let r in 0 .. MAX_BYTES;
+		let r = MAX_BYTES;
 		let (caller, reason, awesome_person) = setup_awesome::<T, _>(r);
 		Treasury::<T, _>::report_awesome(
 			RawOrigin::Signed(caller.clone()).into(),

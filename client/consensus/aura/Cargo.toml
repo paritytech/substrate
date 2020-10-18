@@ -24,7 +24,6 @@ derive_more = "0.99.2"
 futures = "0.3.4"
 futures-timer = "3.0.1"
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
-sc-keystore = { version = "2.0.0", path = "../../keystore" }
 log = "0.4.8"
 parking_lot = "0.10.0"
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
@@ -35,6 +34,7 @@ sc-consensus-slots = { version = "0.8.0", path = "../slots" }
 sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "2.0.0", path = "../../../primitives/timestamp" }
+sp-keystore = { version = "0.8.0", path = "../../../primitives/keystore" }
 sc-telemetry = { version = "2.0.0", path = "../../telemetry" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0"}
 
@@ -42,6 +42,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
 sp-tracing = { version = "2.0.0", path = "../../../primitives/tracing" }
 sc-executor = { version = "0.8.0", path = "../../executor" }
+sc-keystore = { version = "2.0.0", path = "../../keystore" }
 sc-network = { version = "0.8.0", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
 sc-service = { version = "0.8.0", default-features = false, path = "../../service" }
