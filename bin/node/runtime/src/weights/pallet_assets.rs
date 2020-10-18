@@ -17,8 +17,8 @@
 
 //! Weights for pallet_assets
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 2.0.0
-//! DATE: 2020-10-16, STEPS: [50], REPEAT: 20, LOW RANGE: [], HIGH RANGE: []
-
+//! DATE: 2020-10-18, STEPS: [50], REPEAT: 20, LOW RANGE: [], HIGH RANGE: []
+//! EXECUTION: Some(Wasm), WASM-EXECUTION: Compiled, CHAIN: Some("dev"), DB CACHE: 128
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
@@ -28,12 +28,12 @@ use sp_std::marker::PhantomData;
 pub struct WeightInfo<T>(PhantomData<T>);
 impl<T: frame_system::Trait> pallet_assets::WeightInfo for WeightInfo<T> {
 	fn create() -> Weight {
-		(58_069_000 as Weight)
+		(57_906_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn force_create() -> Weight {
-		(30_401_000 as Weight)
+		(30_085_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -46,65 +46,70 @@ impl<T: frame_system::Trait> pallet_assets::WeightInfo for WeightInfo<T> {
 	}
 	fn force_destroy(z: u32, ) -> Weight {
 		(0 as Weight)
-			.saturating_add((1_151_000 as Weight).saturating_mul(z as Weight))
+			.saturating_add((1_146_000 as Weight).saturating_mul(z as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(z as Weight)))
 	}
 	fn mint() -> Weight {
-		(44_772_000 as Weight)
+		(44_700_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn burn() -> Weight {
-		(39_564_000 as Weight)
+		(38_866_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn transfer() -> Weight {
-		(58_453_000 as Weight)
+		(58_275_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn force_transfer() -> Weight {
-		(58_704_000 as Weight)
+		(58_203_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn freeze() -> Weight {
-		(43_141_000 as Weight)
+		(42_693_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn thaw() -> Weight {
-		(42_965_000 as Weight)
+		(43_160_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn freeze_asset() -> Weight {
-		(43_141_000 as Weight)
+		(29_733_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn thaw_asset() -> Weight {
-		(42_965_000 as Weight)
+		(29_907_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn transfer_ownership() -> Weight {
-		(30_110_000 as Weight)
+		(30_070_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn set_team() -> Weight {
-		(30_704_000 as Weight)
+		(30_807_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn set_max_zombies() -> Weight {
-		(56_445_000 as Weight)
+		(56_619_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn set_metadata(_n: u32, _s: u32) -> Weight { 0 }
+	fn set_metadata(_n: u32, s: u32, ) -> Weight {
+		(64_054_000 as Weight)
+			.saturating_add((11_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
 }
