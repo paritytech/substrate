@@ -225,7 +225,6 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		enable_mdns: false,
 		allow_private_ipv4: true,
 		wasm_external_transport: None,
-		use_yamux_flow_control: true,
 	};
 
 	Configuration {
