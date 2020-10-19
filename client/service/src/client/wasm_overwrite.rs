@@ -19,9 +19,7 @@ use std::{
 	fs, collections::{HashMap, hash_map::DefaultHasher}, path::Path,
 	hash::Hasher as _,
 };
-use sp_core::{
-	traits::FetchRuntimeCode,
-};
+use sp_core::traits::FetchRuntimeCode;
 use sp_state_machine::BasicExternalities;
 use sp_blockchain::Result;
 use sc_executor::RuntimeInfo;
