@@ -251,7 +251,7 @@ impl InstanceWrapper {
 				EntryPoint::direct(func)
 					.map_err(|_|
 						Error::from(format!(
-							"Function @{} has invalid signature.",
+							"Function @{} has invalid signature for direct call.",
 							func_ref,
 						))
 					)?
