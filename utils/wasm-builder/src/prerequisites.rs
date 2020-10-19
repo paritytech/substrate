@@ -69,6 +69,15 @@ fn create_check_toolchain_project(project_dir: &Path) {
 		"#,
 	);
 	write_file_if_changed(lib_rs_file, "pub fn test() {}");
+
+	// We want to know the rustc version of the rustc that is being used by our cargo command.
+	// The cargo command is determined by some *very* complex algorithm to find the cargo command
+	// that supports nightly.
+	// The best solution would be if there is a `cargo rustc --version` command, which sadly
+	// doesn't exists. So, the only available way of getting the rustc version is to build a project
+	// and capture the rustc version in this build process. This `build.rs` is exactly doing this.
+	// It gets the rustc version by calling `rustc --version` and exposing it in the `RUSTC_VERSION`
+	// environment variable.
 	write_file_if_changed(
 		build_rs_file,
 		r#"
@@ -88,6 +97,8 @@ fn create_check_toolchain_project(project_dir: &Path) {
 			}
 		"#
 	);
+	// Just prints the `RURSTC_VERSION` environment variable that is being created by the
+	// `build.rs` script.
 	write_file_if_changed(
 		main_rs_file,
 		r#"
