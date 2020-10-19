@@ -758,14 +758,13 @@ fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecu
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	if let Err(e) = call_in_wasm(
+	let error_result = call_in_wasm(
 		"test_panic_in_spawned",
 		&[],
 		wasm_method,
 		&mut ext,
-	) {
-		assert!(format!("{}", e).contains("No signal from spawned execution"));
-	} else {
-		panic!("wasm call should be error")
-	}
+	).unwrap_err();
+
+	dbg!(&error_result);
+	assert!(format!("{}", error_result).contains("Spawned task panicked"));
 }

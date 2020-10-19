@@ -1269,7 +1269,7 @@ sp_externalities::decl_extension! {
 ///
 /// This should not be used directly. Use `sp_io::tasks` for running parallel tasks instead.
 #[runtime_interface]
-pub trait RuntimeTasks {
+trait RuntimeTasks {
 	/// Wasm host function for spawning task.
 	///
 	/// This should not be used directly. Use `sp_io::tasks::spawn` instead.

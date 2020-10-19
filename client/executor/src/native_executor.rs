@@ -353,6 +353,8 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 					// FIXME: Should be refactored to shared "instance factory".
 					// Instantiating wasm here every time is suboptimal at the moment, shared
 					// pool of instances should be used.
+					//
+					// https://github.com/paritytech/substrate/issues/7354
 					let instance = module.new_instance().expect("Failed to create new instance");
 
 					instance.call(
