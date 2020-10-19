@@ -105,7 +105,7 @@ mod inner {
 					}
 				},
 				Err(e) => {
-					log::warn!(
+					log::error!(
 						target: "runtime",
 						"Unable to run async task: {}",
 						e,
