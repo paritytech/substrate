@@ -37,7 +37,7 @@ use sp_std::prelude::*;
 
 /// A set of validators, which was used for a fixed session index.
 struct ValidatorSet<T: Trait> {
-	validator_set: Vec<IdentificationTuple<<T as frame_system::Trait>::AccountId, T>>,
+	validator_set: Vec<IdentificationTuple<T>>,
 }
 
 impl<T: Trait> ValidatorSet<T> {
@@ -152,7 +152,6 @@ mod tests {
 	};
 
 	use sp_runtime::testing::UintAuthorityId;
-	use crate::ValidatorIdentification;
 
 	type Historical = Module<Test>;
 
@@ -190,10 +189,12 @@ mod tests {
 	#[test]
 	fn encode_decode_roundtrip() {
 		use codec::{Decode, Encode};
+		use super::super::super::Trait as SessionTrait;
+		use super::super::Trait as HistoricalTrait;
 
 		let sample = (
-				22u32 as <Test as ValidatorIdentification<u64>>::ValidatorId,
-				7_777_777 as <Test as crate::historical::FullValidatorIdentification<u64>>::FullIdentification);
+				22u32 as <Test as SessionTrait>::ValidatorId,
+				7_777_777 as <Test as HistoricalTrait>::FullIdentification);
 
 		let encoded = sample.encode();
 		let decoded = Decode::decode(&mut encoded.as_slice()).expect("Must decode");

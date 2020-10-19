@@ -89,11 +89,7 @@ impl pallet_timestamp::Trait for Test {
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
-impl pallet_session::ValidatorIdentification<AccountId> for Test {
-	type ValidatorId = AccountId;
-	type ValidatorIdOf = pallet_staking::StashOf<Test>;
-}
-impl pallet_session::historical::FullValidatorIdentification<AccountId> for Test {
+impl pallet_session::historical::Trait for Test {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
 }
@@ -131,6 +127,8 @@ impl pallet_session::Trait for Test {
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
 	type Event = Event;
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type DisabledValidatorsThreshold = ();
 	type WeightInfo = ();
 }
@@ -179,7 +177,6 @@ impl pallet_staking::Trait for Test {
 impl pallet_im_online::Trait for Test {
 	type AuthorityId = UintAuthorityId;
 	type Event = Event;
-	type SessionInterface = Session;
 	type SessionDuration = Period;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();
@@ -192,7 +189,7 @@ parameter_types! {
 
 impl pallet_offences::Trait for Test {
 	type Event = Event;
-	type IdentificationTuple = pallet_session::historical::IdentificationTuple<AccountId, Self>;
+	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }

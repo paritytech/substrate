@@ -28,6 +28,7 @@ use sp_api::ProvideRuntimeApi;
 
 use sp_core::RuntimeDebug;
 use sp_core::crypto::KeyTypeId;
+use sp_runtime::traits::Convert;
 use sp_staking::SessionIndex;
 use sp_std::vec::Vec;
 
@@ -113,14 +114,25 @@ impl GetValidatorCount for MembershipProof {
 /// validators that are considered to be online in each session, particularly useful
 /// for the Substrate-based projects having their own staking implementation
 /// instead of using pallet-staking directly.
-pub trait SessionInterface<ValidatorId> {
+pub trait ValidatorSet<AccountId> {
+	// TODO [ToDr] This could use `frame_support::Parameter` instead,although don't know if such
+	// import is legal.
+	type ValidatorId: codec::Codec + codec::EncodeLike + Clone + Eq + sp_std::fmt::Debug;
+	// TODO [ToDr] This is most likely not needed along with `AccountId`
+	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
+
 	/// Returns current session index.
 	fn current_index() -> SessionIndex;
 
 	/// Returns all the validators ought to be online in a session.
 	///
 	/// The returned validators are all expected to be running an authority node.
-	fn validators() -> Vec<ValidatorId>;
+	fn validators() -> Vec<Self::ValidatorId>;
+}
+
+pub trait ValidatorSetWithIdentification<AccountId>: ValidatorSet<AccountId> {
+	type Identification: codec::Codec + codec::EncodeLike + Clone + Eq + sp_std::fmt::Debug;
+	type IdentificationOf: Convert<Self::ValidatorId, Option<Self::Identification>>;
 }
 
 /// Generate the initial session keys with the given seeds, at the given block and store them in

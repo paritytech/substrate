@@ -125,19 +125,6 @@ pub mod historical;
 
 mod default_weights;
 
-pub trait ValidatorIdentification<AccountId> {
-	/// A stable ID for a validator.
-	type ValidatorId: Member + Parameter;
-
-	/// A conversion from account ID to validator ID.
-	///
-	/// Its cost must be at most one storage read.
-	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
-}
-
-pub type ValidatorId<T> =
-	<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::ValidatorId;
-
 /// Decides whether the session should be ended.
 pub trait ShouldEndSession<BlockNumber> {
 	/// Return `true` if the session should be ended.
@@ -264,6 +251,7 @@ pub trait SessionHandler<ValidatorId> {
 	fn on_disabled(validator_index: usize);
 }
 
+// TODO [ToDr] This should be moved out to primitives/session
 /// A session handler for specific key type.
 pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	/// The key type expected.
@@ -371,11 +359,17 @@ pub trait WeightInfo {
 	fn purge_keys() -> Weight;
 }
 
-pub trait Trait:
-	ValidatorIdentification<<Self as frame_system::Trait>::AccountId> + frame_system::Trait
-{
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+
+	/// A stable ID for a validator.
+	type ValidatorId: Member + Parameter;
+
+	/// A conversion from account ID to validator ID.
+	///
+	/// Its cost must be at most one storage read.
+	type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
 
 	/// Indicator for when to end the session.
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
@@ -784,6 +778,19 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+impl<T: Trait> sp_session::ValidatorSet<T::AccountId> for Module<T> {
+	type ValidatorId = T::ValidatorId;
+	type ValidatorIdOf = T::ValidatorIdOf;
+
+	fn current_index() -> sp_staking::SessionIndex {
+		Module::<T>::current_index()
+	}
+
+	fn validators() -> Vec<Self::ValidatorId> {
+		Module::<T>::validators()
+	}
+}
+
 /// Wraps the author-scraping logic for consensus engines that can recover
 /// the canonical index of an author. This then transforms it into the
 /// registering account-ID of that session key index.
@@ -811,14 +818,5 @@ impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 
 	fn weight(now: T::BlockNumber) -> Weight {
 		T::NextSessionRotation::weight(now)
-	}
-}
-
-impl<T: Trait> sp_session::SessionInterface<ValidatorId<T>> for Module<T> {
-	fn current_index() -> sp_staking::SessionIndex {
-		Module::<T>::current_index()
-	}
-	fn validators() -> Vec<ValidatorId<T>> {
-		Module::<T>::validators()
 	}
 }

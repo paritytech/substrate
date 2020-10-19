@@ -36,11 +36,8 @@ use pallet_babe::BabeEquivocationOffence;
 use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
 use pallet_im_online::{Trait as ImOnlineTrait, Module as ImOnline, UnresponsivenessOffence};
 use pallet_offences::{Trait as OffencesTrait, Module as Offences};
-use pallet_session::historical::{Trait as HistoricalTrait};
-use pallet_session::{
-	Trait as SessionTrait, SessionManager, ValidatorIdentification,
-	historical::{IdentificationTuple, FullValidatorIdentification},
-};
+use pallet_session::historical::{Trait as HistoricalTrait, IdentificationTuple};
+use pallet_session::{Trait as SessionTrait, SessionManager};
 use pallet_staking::{
 	Module as Staking, Trait as StakingTrait, RewardDestination, ValidatorPrefs,
 	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS, Event as StakingEvent
@@ -69,18 +66,13 @@ pub trait Trait:
 /// and the one required by offences.
 pub trait IdTupleConvert<T: HistoricalTrait + OffencesTrait> {
 	/// Convert identification tuple from `historical` trait to the one expected by `offences`.
-	fn convert(
-		id: IdentificationTuple<<T as frame_system::Trait>::AccountId, T>,
-	) -> <T as OffencesTrait>::IdentificationTuple;
+	fn convert(id: IdentificationTuple<T>) -> <T as OffencesTrait>::IdentificationTuple;
 }
 
 impl<T: HistoricalTrait + OffencesTrait> IdTupleConvert<T> for T where
-	<T as OffencesTrait>::IdentificationTuple:
-		From<IdentificationTuple<<T as frame_system::Trait>::AccountId, T>>
+	<T as OffencesTrait>::IdentificationTuple: From<IdentificationTuple<T>>
 {
-	fn convert(
-		id: IdentificationTuple<<T as frame_system::Trait>::AccountId, T>,
-	) -> <T as OffencesTrait>::IdentificationTuple {
+	fn convert(id: IdentificationTuple<T>) -> <T as OffencesTrait>::IdentificationTuple {
 		id.into()
 	}
 }
@@ -158,7 +150,7 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<Offender<T>, &'s
 }
 
 fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<
-	(Vec<IdentificationTuple<<T as frame_system::Trait>::AccountId, T>>, Vec<Offender<T>>),
+	(Vec<IdentificationTuple<T>>, Vec<Offender<T>>),
 	&'static str
 > {
 	Staking::<T>::new_session(0);
@@ -171,18 +163,15 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<
 
 	Staking::<T>::start_session(0);
 
-	let validator_id_of =
-		<T as ValidatorIdentification<<T as frame_system::Trait>::AccountId>>::ValidatorIdOf::convert;
-	let full_identification_of =
-		<T as FullValidatorIdentification<<T as frame_system::Trait>::AccountId>>::FullIdentificationOf::convert;
-
 	let id_tuples = offenders.iter()
-		.map(|offender| validator_id_of(offender.controller.clone())
-			.expect("failed to get validator id from account id"))
-		.map(|validator_id| full_identification_of(validator_id.clone())
+		.map(|offender|
+			<T as SessionTrait>::ValidatorIdOf::convert(offender.controller.clone())
+				.expect("failed to get validator id from account id"))
+		.map(|validator_id|
+			<T as HistoricalTrait>::FullIdentificationOf::convert(validator_id.clone())
 			.map(|full_id| (validator_id, full_id))
 			.expect("failed to convert validator id to full identification"))
-		.collect::<Vec<IdentificationTuple<<T as frame_system::Trait>::AccountId, T>>>();
+		.collect::<Vec<IdentificationTuple<T>>>();
 	Ok((id_tuples, offenders))
 }
 

@@ -233,27 +233,23 @@ sp_runtime::impl_opaque_keys! {
 		pub other: OtherSessionHandler,
 	}
 }
-
-impl pallet_session::ValidatorIdentification<AccountId> for Test {
-	type ValidatorId = AccountId;
-	type ValidatorIdOf = crate::StashOf<Test>;
-}
-impl pallet_session::historical::FullValidatorIdentification<AccountId> for Test {
-	type FullIdentification = crate::Exposure<AccountId, Balance>;
-	type FullIdentificationOf = crate::ExposureOf<Test>;
-}
-
 impl pallet_session::Trait for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = (OtherSessionHandler,);
 	type Event = MetaEvent;
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = crate::StashOf<Test>;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
 }
 
+impl pallet_session::historical::Trait for Test {
+	type FullIdentification = crate::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = crate::ExposureOf<Test>;
+}
 impl pallet_authorship::Trait for Test {
 	type FindAuthor = Author11;
 	type UncleGenerations = UncleGenerations;
@@ -734,7 +730,7 @@ pub(crate) fn validator_controllers() -> Vec<AccountId> {
 pub(crate) fn on_offence_in_era(
 	offenders: &[OffenceDetails<
 		AccountId,
-		pallet_session::historical::IdentificationTuple<AccountId, Test>,
+		pallet_session::historical::IdentificationTuple<Test>,
 	>],
 	slash_fraction: &[Perbill],
 	era: EraIndex,
@@ -762,7 +758,7 @@ pub(crate) fn on_offence_in_era(
 }
 
 pub(crate) fn on_offence_now(
-	offenders: &[OffenceDetails<AccountId, pallet_session::historical::IdentificationTuple<AccountId, Test>>],
+	offenders: &[OffenceDetails<AccountId, pallet_session::historical::IdentificationTuple<Test>>],
 	slash_fraction: &[Perbill],
 ) {
 	let now = Staking::active_era().unwrap().index;
