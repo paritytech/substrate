@@ -81,7 +81,7 @@ pub enum EntryPointType {
 	Direct,
 	/// Indirect call.
 	///
-	/// Call is made by providing payload eference and length, and extra argument
+	/// Call is made by providing payload reference and length, and extra argument
 	/// for advanced routing (typically extra WASM function pointer).
 	Wrapped(u32),
 }
