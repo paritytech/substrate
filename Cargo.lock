@@ -1595,6 +1595,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "smallvec 1.4.1",
+ "sp-api",
  "sp-arithmetic",
  "sp-core",
  "sp-inherents",
@@ -1603,6 +1604,7 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-tracing",
+ "substrate-test-runtime-client",
 ]
 
 [[package]]
