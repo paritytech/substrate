@@ -112,7 +112,9 @@ where
 				overwrites.insert(version.spec_version, wasm);
 			}
 		} else {
-			return Err(sp_blockchain::Error::Msg(format!("{:?} is not a directory", dir)));
+			return Err(sp_blockchain::Error::Msg(
+				format!("Overwriting WASM requires a directory where \
+						Local Wasm is stored. {:?} is not a directory", dir)));
 		}
 
 		Ok(overwrites)
