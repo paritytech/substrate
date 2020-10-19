@@ -37,6 +37,9 @@ impl<H: traits::Hash, L: FullLeaf> mmr_lib::Merge for Hasher<H, L> {
 	type Item = Node<H, L>;
 
 	fn merge(left: &Self::Item, right: &Self::Item) -> Self::Item {
-		Node::Hash(H::hash_of(&(left.hash(), right.hash())))
+		let mut concat = left.hash().as_ref().to_vec();
+		concat.extend_from_slice(right.hash().as_ref());
+
+		Node::Hash(<H as traits::Hash>::hash(&concat))
 	}
 }

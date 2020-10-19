@@ -42,6 +42,18 @@ impl NodesUtils {
 	pub fn size(&self) -> u64 {
 		2 * self.no_of_leaves - self.number_of_peaks()
 	}
+
+	/// Calculate maximal depth of the MMR.
+	pub fn depth(&self) -> u32 {
+		if self.no_of_leaves == 0 {
+			return 0
+		}
+
+		64 - self.no_of_leaves
+				.next_power_of_two()
+				.to_le()
+				.leading_zeros()
+	}
 }
 
 #[cfg(test)]
@@ -50,6 +62,17 @@ mod tests {
 
 	#[test]
 	fn should_calculate_number_of_leaves_correctly() {
+		assert_eq!(
+			vec![0, 1, 2, 3, 4, 9, 15, 21]
+				.into_iter()
+				.map(|n| NodesUtils::new(n).depth())
+				.collect::<Vec<_>>(),
+			vec![0, 1, 2, 3, 3, 5, 5, 6]
+		);
+	}
+
+	#[test]
+	fn should_calculate_depth_correclty() {
 		assert_eq!(
 			vec![0, 1, 2, 3, 4, 9, 15, 21]
 				.into_iter()

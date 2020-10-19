@@ -87,10 +87,16 @@ pub trait Trait: frame_system::Trait {
 		+ sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + codec::Codec
 		+ codec::EncodeLike;
 
+	/// The cost of hashing a concatentation of two [Self::Hash] elements.
+	type HashWeight: Get<Weight>;
+
 	/// Data stored in the leaf nodes.
 	///
-	/// By default every leaf node will always include a (parent) block hash and
-	/// any additional [LeafData](primitives::LeafDataProvider) defined by this type.
+	/// The [LeafData](primitives::LeafDataProvider) is responsible for returning the entire leaf
+	/// data that will be inserted to the MMR.
+	/// [LeafDataProvider](primitives::LeafDataProvider)s can be composed into tuples to put
+	/// multiple elements into the tree. In such case it might be worth using [primitives::Compact]
+	/// to make MMR proof for one element of the tuple leaner.
 	type LeafData: primitives::LeafDataProvider;
 }
 
@@ -128,11 +134,14 @@ decl_module! {
 			<RootHash<T>>::put(root);
 
 			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
+			let hash_weight = peaks_after.saturating_mul(T::HashWeight::get());
 
-			leaf_weight + <T as frame_system::Trait>::DbWeight::get().reads_writes(
-				2 + peaks_before,
-				2 + peaks_after,
-			)
+			leaf_weight
+				.saturating_add(hash_weight)
+				.saturating_add(<T as frame_system::Trait>::DbWeight::get().reads_writes(
+					2 + peaks_before,
+					2 + peaks_after,
+				))
 		}
 	}
 }
@@ -174,7 +183,7 @@ impl<T: Trait> Module<T> {
 	pub fn verify_leaf(leaf: LeafOf<T>, proof: primitives::Proof<<T as Trait>::Hash>) -> Result<(), mmr::Error> {
 		if proof.leaf_count > Self::mmr_leaves()
 			|| proof.leaf_count == 0
-			|| proof.items.len() as u64 > proof.leaf_count
+			|| proof.items.len() as u32 > mmr::utils::NodesUtils::new(proof.leaf_count).depth()
 		{
 			return Err(mmr::Error::Verify.debug("Invalid leaf count."));
 		}
