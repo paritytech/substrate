@@ -34,8 +34,10 @@ use fs2::FileExt;
 
 use itertools::Itertools;
 
-/// Print an info message.
-fn print_info_message(message: &str) -> String {
+/// Colorize an info message.
+///
+/// Returns the colorized message.
+fn colorize_info_message(message: &str) -> String {
 	if super::color_output_enabled() {
 		ansi_term::Color::Yellow.bold().paint(message).to_string()
 	} else {
@@ -486,9 +488,9 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 		build_cmd.arg("--release");
 	};
 
-	println!("{}", print_info_message("Information that should be included in a bug report."));
-	println!("{} {:?}", print_info_message("Executing build command:"), build_cmd);
-	println!("{} {}", print_info_message("Using rustc version:"), cargo_cmd.rustc_version());
+	println!("{}", colorize_info_message("Information that should be included in a bug report."));
+	println!("{} {:?}", colorize_info_message("Executing build command:"), build_cmd);
+	println!("{} {}", colorize_info_message("Using rustc version:"), cargo_cmd.rustc_version());
 
 	match build_cmd.status().map(|s| s.success()) {
 		Ok(true) => {},
