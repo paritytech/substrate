@@ -319,7 +319,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 			let async_ext = match new_async_externalities(scheduler.clone()) {
 				Ok(val) => val,
 				Err(e) => {
-					log::warn!(
+					log::error!(
 						target: "executor",
 						"Failed to setup externalities for async context: {}",
 						e,
