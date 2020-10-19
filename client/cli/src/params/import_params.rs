@@ -57,6 +57,7 @@ pub struct ImportParams {
 	pub wasm_method: WasmExecutionMethod,
 
 	/// Specify the path where local WASM runtimes are stored.
+	///
 	/// These runtimes will override on-chain runtimes when the version matches.
 	#[structopt(long, value_name = "PATH", parse(from_os_str))]
 	pub wasm_runtime_overwrites: Option<PathBuf>,
