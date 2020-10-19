@@ -335,7 +335,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 			) {
 				Ok(val) => val,
 				Err(e) => {
-					log::warn!(
+					log::error!(
 						target: "executor",
 						"Failed to setup runtime extension for async externalities: {}",
 						e,
