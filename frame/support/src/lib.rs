@@ -77,7 +77,7 @@ pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
 	IterableStorageDoubleMap, migration
 };
-pub use self::dispatch::{Parameter, Callable, IsSubType};
+pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
 /// A type that cannot be instantiated.
