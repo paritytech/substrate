@@ -126,7 +126,7 @@ pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// Common interface of a chain specification.
-pub trait ChainSpec: BuildStorage + Send {
+pub trait ChainSpec: BuildStorage + Send + Sync {
 	/// Spec name.
 	fn name(&self) -> &str;
 	/// Spec id.
