@@ -121,7 +121,7 @@ where
 	fn runtime_version(
 		executor: &E,
 		code: &WasmBlob,
-		heap_pages: Option<u64>
+		heap_pages: Option<u64>,
 	) -> Result<RuntimeVersion> {
 		let mut ext = BasicExternalities::default();
 		executor.runtime_version(&mut ext, &code.runtime_code(heap_pages))
