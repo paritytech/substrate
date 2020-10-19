@@ -6216,6 +6216,7 @@ dependencies = [
 name = "sc-authority-discovery"
 version = "0.8.0"
 dependencies = [
+ "async-trait",
  "bytes 0.5.6",
  "derive_more",
  "either",
