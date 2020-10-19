@@ -1268,26 +1268,28 @@ sp_externalities::decl_extension! {
 /// Wasm host functions for managing tasks.
 ///
 /// This should not be used directly. Use `sp_io::tasks` for running parallel tasks instead.
-#[runtime_interface]
+#[runtime_interface(wasm_only)]
 trait RuntimeTasks {
 	/// Wasm host function for spawning task.
 	///
 	/// This should not be used directly. Use `sp_io::tasks::spawn` instead.
-	#[cfg_attr(feature = "std", allow(dead_code))]
-	fn spawn(&mut self, dispatcher_ref: u32, entry: u32, payload: Vec<u8>) -> u64 {
-		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
-			.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		runtime_spawn.spawn_call(dispatcher_ref, entry, payload)
+	fn spawn(dispatcher_ref: u32, entry: u32, payload: Vec<u8>) -> u64 {
+		sp_externalities::with_externalities(|mut ext|{
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
+			runtime_spawn.spawn_call(dispatcher_ref, entry, payload)
+		}).expect("`RuntimeTasks::spawn`: called outside of externalities context")
 	}
 
 	/// Wasm host function for joining a task.
 	///
 	/// This should not be used directly. Use `join` of `sp_io::tasks::spawn` result instead.
-	#[cfg_attr(feature = "std", allow(dead_code))]
-	fn join(&mut self, handle: u64) -> Vec<u8> {
-		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
-			.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		runtime_spawn.join(handle)
+	fn join(handle: u64) -> Vec<u8> {
+		sp_externalities::with_externalities(|mut ext| {
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
+			runtime_spawn.join(handle)
+		}).expect("`RuntimeTasks::join`: called outside of externalities context")
 	}
  }
 
