@@ -256,7 +256,7 @@
 
 use sp_std::marker::PhantomData;
 use frame_support::{
-	dispatch::{DispatchResult, IsSubType}, decl_module, decl_storage, decl_event,
+	dispatch::DispatchResult, decl_module, decl_storage, decl_event, traits::IsSubType,
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
 };
 use sp_std::prelude::*;

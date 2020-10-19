@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkSelector};
@@ -25,10 +26,10 @@ use sp_state_machine::StateMachine;
 use sp_externalities::Extensions;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_core::{
+use sp_core::offchain::{OffchainExt, testing::TestOffchainExt};
+use sp_keystore::{
+	SyncCryptoStorePtr, KeystoreExt,
 	testing::KeyStore,
-	traits::KeystoreExt,
-	offchain::{OffchainExt, testing::TestOffchainExt},
 };
 use std::fmt::Debug;
 
@@ -65,7 +66,7 @@ impl BenchmarkCmd {
 		);
 
 		let mut extensions = Extensions::default();
-		extensions.register(KeystoreExt(KeyStore::new()));
+		extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
 		let (offchain, _) = TestOffchainExt::new();
 		extensions.register(OffchainExt::new(offchain));
 
@@ -101,20 +102,9 @@ impl BenchmarkCmd {
 				// If we are going to output results to a file...
 				if let Some(output_path) = &self.output {
 					if self.trait_def {
-						crate::writer::write_trait(&batches, output_path, &self.r#trait, self.spaces)?;
+						crate::writer::write_trait(&batches, output_path, self)?;
 					} else {
-						crate::writer::write_results(
-							&batches,
-							output_path,
-							&self.lowest_range_values,
-							&self.highest_range_values,
-							&self.steps,
-							self.repeat,
-							&self.header,
-							&self.r#struct,
-							&self.r#trait,
-							self.spaces
-						)?;
+						crate::writer::write_results(&batches, output_path, self)?;
 					}
 				}
 
