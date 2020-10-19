@@ -145,8 +145,9 @@ impl Precompile for Ripemd160 {
 	) -> core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError> {
 		let cost = ensure_linear_cost(target_gas, input.len(), 600, 120)?;
 
-		let ret = ripemd160::Ripemd160::digest(input).to_vec();
-		Ok((ExitSucceed::Returned, ret, cost))
+		let mut ret = [0u8; 32];
+		ret[12..32].copy_from_slice(&ripemd160::Ripemd160::digest(input));
+		Ok((ExitSucceed::Returned, ret.to_vec(), cost))
 	}
 }
 

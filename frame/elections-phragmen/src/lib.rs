@@ -83,25 +83,26 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Encode, Decode};
-use sp_std::prelude::*;
-use sp_runtime::{
-	DispatchError, RuntimeDebug, Perbill,
-	traits::{Zero, StaticLookup, Convert, Saturating},
-};
+use codec::{Decode, Encode};
 use frame_support::{
-	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::Weight,
-	storage::{StorageMap, IterableStorageMap},
+	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo},
+	ensure,
+	storage::{IterableStorageMap, StorageMap},
 	traits::{
-		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
-		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, InitializeMembers, BalanceStatus,
-		ContainsLengthBound,
-	}
+		BalanceStatus, ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
+		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
+		WithdrawReason, WithdrawReasons,
+	},
+	weights::Weight,
 };
-use sp_npos_elections::{ExtendedBalance, VoteWeight, ElectionResult};
-use frame_system::{ensure_signed, ensure_root};
+use frame_system::{ensure_root, ensure_signed};
+use sp_npos_elections::{ElectionResult, ExtendedBalance};
+use sp_runtime::{
+	traits::{Saturating, StaticLookup, Zero},
+	DispatchError, Perbill, RuntimeDebug,
+};
+use sp_std::prelude::*;
 
 mod benchmarking;
 mod default_weights;
@@ -172,7 +173,7 @@ pub trait Trait: frame_system::Trait {
 
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
-	type CurrencyToVote: Convert<BalanceOf<Self>, VoteWeight> + Convert<ExtendedBalance, BalanceOf<Self>>;
+	type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 	/// How much should be locked up in order to submit one's candidacy.
 	type CandidacyBond: Get<BalanceOf<Self>>;
@@ -871,16 +872,13 @@ impl<T: Trait> Module<T> {
 		}
 
 		// helper closures to deal with balance/stake.
-		let to_votes = |b: BalanceOf<T>| -> VoteWeight {
-			<T::CurrencyToVote as Convert<BalanceOf<T>, VoteWeight>>::convert(b)
-		};
-		let to_balance = |e: ExtendedBalance| -> BalanceOf<T> {
-			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e)
-		};
+		let total_issuance = T::Currency::total_issuance();
+		let to_votes = |b: BalanceOf<T>| T::CurrencyToVote::to_vote(b, total_issuance);
+		let to_balance = |e: ExtendedBalance| T::CurrencyToVote::to_currency(e, total_issuance);
 
 		// used for prime election.
 		let voters_and_stakes = Voting::<T>::iter()
-			.map(|(voter, (stake, votes))| { (voter, stake, votes) })
+			.map(|(voter, (stake, votes))| (voter, stake, votes))
 			.collect::<Vec<_>>();
 		// used for phragmen.
 		let voters_and_votes = voters_and_stakes.iter()
@@ -1186,17 +1184,6 @@ mod tests {
 		}
 	}
 
-	/// Simple structure that exposes how u64 currency can be represented as... u64.
-	pub struct CurrencyToVoteHandler;
-	impl Convert<u64, u64> for CurrencyToVoteHandler {
-		fn convert(x: u64) -> u64 { x }
-	}
-	impl Convert<u128, u64> for CurrencyToVoteHandler {
-		fn convert(x: u128) -> u64 {
-			x as u64
-		}
-	}
-
 	parameter_types!{
 		pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 	}
@@ -1205,7 +1192,7 @@ mod tests {
 		type ModuleId = ElectionsPhragmenModuleId;
 		type Event = Event;
 		type Currency = Balances;
-		type CurrencyToVote = CurrencyToVoteHandler;
+		type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 		type ChangeMembers = TestChangeMembers;
 		type InitializeMembers = ();
 		type CandidacyBond = CandidacyBond;

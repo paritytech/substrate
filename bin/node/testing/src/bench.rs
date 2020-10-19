@@ -431,10 +431,9 @@ impl BenchDb {
 		let mut inherent_data = InherentData::new();
 		let timestamp = 1 * MinimumPeriod::get();
 
-		inherent_data.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
+		inherent_data
+			.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
 			.expect("Put timestamp failed");
-		inherent_data.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &0)
-			.expect("Put finality tracker failed");
 
 		client.runtime_api()
 			.inherent_extrinsics_with_context(

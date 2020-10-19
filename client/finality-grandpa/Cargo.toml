@@ -30,6 +30,7 @@ sp-utils = { version = "2.0.0", path = "../../primitives/utils" }
 sp-consensus = { version = "0.8.0", path = "../../primitives/consensus/common" }
 sc-consensus = { version = "0.8.0", path = "../../client/consensus/common" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.8.0", path = "../../primitives/keystore" }
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
 sc-telemetry = { version = "2.0.0", path = "../telemetry" }
 sc-keystore = { version = "2.0.0", path = "../keystore" }
@@ -39,7 +40,6 @@ sp-inherents = { version = "2.0.0", path = "../../primitives/inherents" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 sc-network = { version = "0.8.0", path = "../network" }
 sc-network-gossip = { version = "0.8.0", path = "../network-gossip" }
-sp-finality-tracker = { version = "2.0.0", path = "../../primitives/finality-tracker" }
 sp-finality-grandpa = { version = "2.0.0", path = "../../primitives/finality-grandpa" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0"}
 sc-block-builder = { version = "0.8.0", path = "../block-builder" }
