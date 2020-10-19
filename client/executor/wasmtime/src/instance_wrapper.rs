@@ -112,7 +112,11 @@ impl EntryPoint {
 					wasmtime::Val::I32(data_len),
 				])
 			},
-		}).map(|results| results[0].unwrap_i64() as u64)
+		})
+			.map(|results| 
+				// the signature is checked to have i64 return type
+				results[0].unwrap_i64() as u64
+			)
 	}
 
 	pub fn direct(func: wasmtime::Func) -> std::result::Result<Self, &'static str> {
@@ -121,7 +125,7 @@ impl EntryPoint {
 				Ok(Self { func, call_type: EntryPointType::Direct })
 			}
 			_ => {
-				Err("Invalid signature")
+				Err("Invalid signature for direct entry point")
 			}
 		}
 	}
@@ -135,7 +139,7 @@ impl EntryPoint {
 				Ok(Self { func: dispatcher, call_type: EntryPointType::Wrapped(func) })
 			},
 			_ => {
-				Err("Invalid signature")
+				Err("Invalid signature for wrapped entry point")
 			}
 		}
 	}
@@ -233,7 +237,7 @@ impl InstanceWrapper {
 				EntryPoint::direct(func)
 					.map_err(|_|
 						Error::from(format!(
-							"Function '{}' has invalid signature.",
+							"Exported function '{}' has invalid signature.",
 							method,
 						))
 					)?
@@ -251,7 +255,7 @@ impl InstanceWrapper {
 				EntryPoint::direct(func)
 					.map_err(|_|
 						Error::from(format!(
-							"Function @{} has invalid signature for direct call.",
+							"Function @{} in exported table has invalid signature for direct call.",
 							func_ref,
 						))
 					)?
@@ -269,7 +273,7 @@ impl InstanceWrapper {
 				EntryPoint::wrapped(dispatcher, func)
 					.map_err(|_|
 						Error::from(format!(
-							"Function @{} has invalid signature.",
+							"Function @{} in exported table has invalid signature for wrapped call.",
 							dispatcher_ref,
 						))
 					)?

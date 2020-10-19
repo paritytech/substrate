@@ -46,7 +46,7 @@ pub fn new_async_externalities(scheduler: Box<dyn SpawnNamed>) -> Result<AsyncEx
 
 impl AsyncExternalities {
 	/// Extend async externalities with the ability to spawn wasm instances.
-	pub fn with_runtime_ext(
+	pub fn with_runtime_spawn(
 		mut self,
 		runtime_ext: Box<dyn RuntimeSpawn>,
 	) -> Result<Self, &'static str> {

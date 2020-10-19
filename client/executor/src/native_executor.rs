@@ -330,7 +330,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 				}
 			};
 
-			let mut async_ext = match async_ext.with_runtime_ext(
+			let mut async_ext = match async_ext.with_runtime_spawn(
 				Box::new(RuntimeInstanceSpawn::new(module.clone(), scheduler))
 			) {
 				Ok(val) => val,
@@ -355,7 +355,8 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 					// pool of instances should be used.
 					//
 					// https://github.com/paritytech/substrate/issues/7354
-					let instance = module.new_instance().expect("Failed to create new instance");
+					let instance = module.new_instance()
+						.expect("Failed to create new instance from module");
 
 					instance.call(
 						InvokeMethod::TableWithWrapper { dispatcher_ref, func },
@@ -364,10 +365,15 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 				}
 			);
 
-			// If execution is panicked, the `join` in the original runtime code will panic as well,
-			// since the sender is dropped without sending anything.
-			if let Ok(output) = result {
-				let _ = sender.send(output);
+			match result {
+				Ok(output) => {
+					let _ = sender.send(output);
+				},
+				Err(error) => {
+					// If execution is panicked, the `join` in the original runtime code will panic as well,
+					// since the sender is dropped without sending anything.
+					log::error!("Call error in spawned task: {:?}", error);
+				},
 			}
 		}));
 
@@ -403,18 +409,21 @@ impl RuntimeInstanceSpawn {
 			.map(move |task_ext| Self::new(module, task_ext.clone()))
 	}
 
-	fn register_on_externalities(module: Arc<dyn WasmModule>) {
+	/// Register new `RuntimeSpawnExt` on current externalities.
+	///
+	/// This extensions will spawn instances from provided `module`.
+	pub fn register_on_externalities(module: Arc<dyn WasmModule>) {
 		sp_externalities::with_externalities(
 			move |mut ext| {
 				if let Some(runtime_spawn) =
 					Self::with_externalities_and_module(module.clone(), ext)
 				{
-					if let Err(e) = ext.register_extension::<RuntimeSpawnExt>(
+					if let Err(e) = ext.register_extension(
 						RuntimeSpawnExt(Box::new(runtime_spawn))
 					) {
 						trace!(
 							target: "executor",
-							"Failed to register instance hypervisor ext: {:?}",
+							"Failed to register `RuntimeSpawnExt` instance on externalities: {:?}",
 							e,
 						)
 					}

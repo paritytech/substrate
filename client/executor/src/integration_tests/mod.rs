@@ -766,5 +766,5 @@ fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecu
 	).unwrap_err();
 
 	dbg!(&error_result);
-	assert!(format!("{}", error_result).contains("Spawned task panicked"));
+	assert!(format!("{}", error_result).contains("Spawned task"));
 }
