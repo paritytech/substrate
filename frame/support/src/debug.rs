@@ -193,7 +193,6 @@ impl log::Log for RuntimeLogger {
 	}
 
 	fn log(&self, record: &log::Record) {
-		debug(&"Hey2");
 		use fmt::Write;
 		let mut w = sp_std::Writer::default();
 		let _ = core::write!(&mut w, "{}", record.args());
