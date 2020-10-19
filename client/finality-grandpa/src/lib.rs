@@ -624,7 +624,7 @@ fn global_communication<BE, Block: BlockT, C, N>(
 	N: NetworkT<Block>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	let is_voter = is_voter(voters, keystore).is_some();
+	let is_voter = local_authority_id(voters, keystore).is_some();
 
 	// verification stream
 	let (global_in, global_out) = network.global_communication(
@@ -722,7 +722,7 @@ where
 			.for_each(move |_| {
 				let current_authorities = authorities.current_authorities();
 				let set_id = authorities.set_id();
-				let authority_id = is_voter(&current_authorities, conf.keystore.as_ref())
+				let authority_id = local_authority_id(&current_authorities, conf.keystore.as_ref())
 					.unwrap_or_default();
 
 				let authorities = current_authorities
@@ -871,7 +871,7 @@ where
 	fn rebuild_voter(&mut self) {
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
 
-		let authority_id = is_voter(&self.env.voters, self.env.config.keystore.as_ref())
+		let authority_id = local_authority_id(&self.env.voters, self.env.config.keystore.as_ref())
 			.unwrap_or_default();
 
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
@@ -1085,10 +1085,10 @@ where
 	Ok(())
 }
 
-/// Checks if this node is a voter in the given voter set.
-///
-/// Returns the key pair of the node that is being used in the current voter set or `None`.
-fn is_voter(
+/// Checks if this node has any available keys in the keystore for any authority id in the given
+/// voter set.  Returns the authority id for which keys are available, or `None` if no keys are
+/// available.
+fn local_authority_id(
 	voters: &VoterSet<AuthorityId>,
 	keystore: Option<&SyncCryptoStorePtr>,
 ) -> Option<AuthorityId> {
