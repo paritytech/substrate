@@ -19,3 +19,7 @@ frame-support-procedural-tools = { version = "2.0.0", path = "./tools" }
 proc-macro2 = "1.0.6"
 quote = "1.0.3"
 syn = { version = "1.0.7", features = ["full"] }
+
+[features]
+default = ["std"]
+std = []
