@@ -93,7 +93,7 @@ mod inner {
 					}) {
 						Ok(result) => result,
 						Err(panic) => {
-							log::warn!(
+							log::error!(
 								target: "runtime",
 								"Spawned task panicked: {:?}",
 								panic,
