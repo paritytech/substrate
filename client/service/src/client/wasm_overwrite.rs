@@ -31,17 +31,19 @@ use sp_core::traits::RuntimeCode;
 #[derive(Clone, Debug)]
 struct WasmBlob {
 	code: Vec<u8>,
+	hash: Vec<u8>,
 }
 
 impl WasmBlob {
 	fn new(code: Vec<u8>) -> Self {
-		Self { code }
+		let hash = make_hash(code);
+		Self { code, hash }
 	}
 
 	fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
 		RuntimeCode {
 			code_fetcher: self,
-			hash: make_hash(self.code.as_slice()),
+			hash: self.hash.clone(),
 			heap_pages,
 		}
 	}
