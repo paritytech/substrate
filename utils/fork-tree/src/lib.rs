@@ -795,6 +795,12 @@ mod node_implementation {
 				if is_descendent_of {
 					found |= predicate(&node.data);
 
+					if !found {
+						while stack.last().map(|(.., first)| *first).unwrap_or(false) {
+							stack.pop();
+						}
+					}
+
 					if found {
 						indices = match indices.take() {
 							Some(mut vec) => {
@@ -1740,4 +1746,63 @@ mod test {
 			"{:?}", tree.find_node_index_where(&"M", &5, &d, &|&n| n == 1 || n == 2)
 		);
 	}
+
+	#[test]
+	fn find_node_where_returns_none_on_bad_is_descendent_of() {
+		let mut tree = ForkTree::new();
+
+		//
+		// A - B
+		//  \
+		//   — C
+		//
+		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
+			match (*base, *block) {
+				("A", b) => Ok(b == "B" || b == "C" || b == "D"),
+				("B", b) | ("C", b) => Ok(b == "D"),
+				("0", _) => Ok(true),
+				_ => Ok(false),
+			}
+		};
+
+		tree.import("A", 1, 1, &is_descendent_of).unwrap();
+		tree.import("B", 2, 2, &is_descendent_of).unwrap();
+		tree.import("C", 2, 4, &is_descendent_of).unwrap();
+
+		assert_eq!(
+			tree.find_node_where(&"D", &3, &is_descendent_of, &|&n| n == 4)
+				.map(|opt| opt.map(|node| node.hash)),
+			Ok(None)
+		);
+	}
+
+	#[test]
+	fn find_node_where_returns_none_on_bad_is_descendent_of_2() {
+		let mut tree = ForkTree::new();
+
+		//
+		// A - B
+		//  \
+		//   — C
+		//
+		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
+			match (*base, *block) {
+				("A", b) => Ok(b == "B" || b == "C" || b == "D"),
+				("B", b) | ("C", b) => Ok(b == "D"),
+				("0", _) => Ok(true),
+				_ => Ok(false),
+			}
+		};
+
+		tree.import("A", 1, 1, &is_descendent_of).unwrap();
+		tree.import("B", 2, 2, &is_descendent_of).unwrap();
+		tree.import("C", 2, 4, &is_descendent_of).unwrap();
+
+		assert_eq!(
+			tree.find_node_where(&"D", &3, &is_descendent_of, &|&n| n == 1)
+				.map(|opt| opt.map(|node| node.hash)),
+			Ok(Some("A"))
+		);
+	}
+
 }
