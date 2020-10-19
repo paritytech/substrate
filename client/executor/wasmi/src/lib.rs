@@ -446,7 +446,7 @@ fn call_in_wasm_module(
 		.and_then(|e| e.as_table().cloned());
 	let heap_base = get_heap_base(module_instance)?;
 
-	let mut functioon_executor = FunctionExecutor::new(
+	let mut function_executor = FunctionExecutor::new(
 		memory.clone(),
 		heap_base,
 		table.clone(),
@@ -456,15 +456,15 @@ fn call_in_wasm_module(
 	)?;
 
 	// Write the call data
-	let offset = functioon_executor.allocate_memory(data.len() as u32)?;
-	functioon_executor.write_memory(offset, data)?;
+	let offset = function_executor.allocate_memory(data.len() as u32)?;
+	function_executor.write_memory(offset, data)?;
 
 	let result = match method {
 		InvokeMethod::Export(method) => {
 			module_instance.invoke_export(
 				method,
 				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
-				&mut functioon_executor,
+				&mut function_executor,
 			)
 		},
 		InvokeMethod::Table(func_ref) => {
@@ -474,7 +474,7 @@ fn call_in_wasm_module(
 			FuncInstance::invoke(
 				&func,
 				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
-				&mut functioon_executor,
+				&mut function_executor,
 			).map_err(Into::into)
 		},
 		InvokeMethod::TableWithWrapper { dispatcher_ref, func } => {
@@ -485,7 +485,7 @@ fn call_in_wasm_module(
 			FuncInstance::invoke(
 				&dispatcher,
 				&[I32(func as _), I32(u32::from(offset) as i32), I32(data.len() as i32)],
-				&mut functioon_executor,
+				&mut function_executor,
 			).map_err(Into::into)
 		},
 	};

@@ -299,7 +299,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 /// Helper inner struct to implement `RuntimeSpawn` extension.
 pub struct RuntimeInstanceSpawn {
 	module: Arc<dyn WasmModule>,
-	forks: parking_lot::Mutex<HashMap<u64, mpsc::Receiver<Vec<u8>>>>,
+	tasks: parking_lot::Mutex<HashMap<u64, mpsc::Receiver<Vec<u8>>>>,
 	counter: AtomicU64,
 	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 }
@@ -309,7 +309,7 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 		let new_handle = self.counter.fetch_add(1, Ordering::Relaxed);
 
 		let (sender, receiver) = mpsc::channel();
-		self.forks.lock().insert(new_handle, receiver);
+		self.tasks.lock().insert(new_handle, receiver);
 
 		let module = self.module.clone();
 		let scheduler = self.scheduler.clone();
@@ -374,8 +374,8 @@ impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
 	}
 
 	fn join(&self, handle: u64) -> Vec<u8> {
-		let receiver = self.forks.lock().remove(&handle).expect("No fork for such handle");
-		let output = receiver.recv().expect("No signal from spawned execution");
+		let receiver = self.tasks.lock().remove(&handle).expect("No task for the handle");
+		let output = receiver.recv().expect("Spawned task panicked for the handle");
 		output
 	}
 }
@@ -389,7 +389,7 @@ impl RuntimeInstanceSpawn {
 			module,
 			scheduler,
 			counter: 0.into(),
-			forks: HashMap::new().into(),
+			tasks: HashMap::new().into(),
 		}
 	}
 

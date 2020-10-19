@@ -27,7 +27,7 @@ pub enum InvokeMethod<'a> {
 	///
 	/// Located function should have (u32, u32) -> u64 signature.
 	Export(&'a str),
-	/// Call function by reference from table.
+	/// Call a function found in the exported table found under the given index.
 	///
 	/// Located function should have (u32, u32) -> u64 signature.
 	Table(u32),
@@ -42,7 +42,11 @@ pub enum InvokeMethod<'a> {
 		///
 		/// Function pointer, index into runtime exported table.
 		dispatcher_ref: u32,
-		/// Actual wasm function pointer (index into table) that should be invoked.
+		/// Extra argument for dispatch.
+		///
+		/// Common usage would be to use it as an actual wasm function pointer
+		/// that should be invoked, but can be used as any extra argument on the
+		/// callee side.
 		///
 		/// This is typically generated and invoked by the runtime itself.
 		func: u32,

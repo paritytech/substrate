@@ -73,11 +73,16 @@ impl ModuleWrapper {
 	}
 }
 
-/// Format of the entrypoint.
+/// Invoked entrypoint format.
 pub enum EntryPointType {
 	/// Direct call.
+	///
+	/// Call is made by providing only payload reference and length.
 	Direct,
 	/// Indirect call.
+	///
+	/// Call is made by providing payload eference and length, and extra argument
+	/// for advanced routing (typically extra WASM function pointer).
 	Wrapped(u32),
 }
 

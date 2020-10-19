@@ -16,6 +16,9 @@
 // limitations under the License.
 
 //! Parallel tasks example
+//!
+//! This example pallet parallelizes validation of the enlisted participants
+//! (see `enlist_participants` dispatch).
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -96,7 +99,10 @@ decl_module! {
 			Ok(())
 		}
 
-		/// Submit new price to the list via unsigned transaction.
+		/// Submit list of participants to the current event.
+		///
+		/// The example utilizes parallel execution by checking half of the
+		/// signatures in spawned task.
 		#[weight = 0]
 		pub fn enlist_participants(origin, participants: Vec<EnlistedParticipant>)
 			-> DispatchResult
