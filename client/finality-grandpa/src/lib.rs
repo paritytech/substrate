@@ -881,17 +881,24 @@ where
 		);
 
 		let chain_info = self.env.client.info();
+
+		let authorities = self
+			.env
+			.voters
+			.iter()
+			.map(|(id, _)| id.to_string())
+			.collect::<Vec<_>>();
+
+		let authorities = serde_json::to_string(&authorities).expect(
+			"authorities is always at least an empty vector; elements are always of type string",
+		);
+
 		telemetry!(CONSENSUS_INFO; "afg.authority_set";
 			"number" => ?chain_info.finalized_number,
 			"hash" => ?chain_info.finalized_hash,
 			"authority_id" => authority_id.to_string(),
 			"authority_set_id" => ?self.env.set_id,
-			"authorities" => {
-				let authorities: Vec<String> = self.env.voters
-					.iter().map(|(id, _)| id.to_string()).collect();
-				serde_json::to_string(&authorities)
-					.expect("authorities is always at least an empty vector; elements are always of type string")
-			},
+			"authorities" => authorities,
 		);
 
 		match &*self.env.voter_set_state.read() {
