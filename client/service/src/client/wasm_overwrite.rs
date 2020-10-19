@@ -122,7 +122,7 @@ where
 		} else {
 			return Err(sp_blockchain::Error::Msg(
 				format!("Overwriting WASM requires a directory where \
-						Local Wasm is stored. {:?} is not a directory", dir)));
+						local WASM is stored. {:?} is not a directory", dir)));
 		}
 
 		Ok(overwrites)
