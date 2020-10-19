@@ -81,7 +81,7 @@ pub enum EntryPointType {
 	Direct,
 	/// Indirect call.
 	///
-	/// Call is made by providing payload eference and length, and extra argument
+	/// Call is made by providing payload reference and length, and extra argument
 	/// for advanced routing (typically extra WASM function pointer).
 	Wrapped(u32),
 }
@@ -251,7 +251,7 @@ impl InstanceWrapper {
 				EntryPoint::direct(func)
 					.map_err(|_|
 						Error::from(format!(
-							"Function @{} has invalid signature.",
+							"Function @{} has invalid signature for direct call.",
 							func_ref,
 						))
 					)?
