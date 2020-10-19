@@ -34,7 +34,7 @@ struct WasmBlob {
 }
 
 impl WasmBlob {
-	pub fn new(code: Vec<u8>) -> Self {
+	fn new(code: Vec<u8>) -> Self {
 		Self { code }
 	}
 
