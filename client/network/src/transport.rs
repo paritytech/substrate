@@ -41,7 +41,6 @@ pub fn build_transport(
 	keypair: identity::Keypair,
 	memory_only: bool,
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
-	use_yamux_flow_control: bool
 ) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<BandwidthSinks>) {
 	// Build the base layer of the transport.
 	let transport = if let Some(t) = wasm_external_transport {
@@ -86,7 +85,6 @@ pub fn build_transport(
 
 		// Legacy noise configurations for backward compatibility.
 		let mut noise_legacy = noise::LegacyConfig::default();
-		noise_legacy.send_legacy_handshake = true;
 		noise_legacy.recv_legacy_handshake = true;
 
 		let mut xx_config = noise::NoiseConfig::xx(noise_keypair_spec);
@@ -110,12 +108,9 @@ pub fn build_transport(
 		mplex_config.max_buffer_len(usize::MAX);
 
 		let mut yamux_config = libp2p::yamux::Config::default();
-
-		if use_yamux_flow_control {
-			// Enable proper flow-control: window updates are only sent when
-			// buffered data has been consumed.
-			yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::OnRead);
-		}
+		// Enable proper flow-control: window updates are only sent when
+		// buffered data has been consumed.
+		yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::OnRead);
 
 		core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
 			.map_inbound(move |muxer| core::muxing::StreamMuxerBox::new(muxer))

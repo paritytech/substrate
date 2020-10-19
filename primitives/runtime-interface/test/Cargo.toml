@@ -21,4 +21,4 @@ sp-runtime = { version = "2.0.0", path = "../../runtime" }
 sp-core = { version = "2.0.0", path = "../../core" }
 sp-io = { version = "2.0.0", path = "../../io" }
 tracing = "0.1.19"
-tracing-core = "0.1.15"
+tracing-core = "0.1.17"

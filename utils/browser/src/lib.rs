@@ -41,7 +41,7 @@ pub async fn browser_configuration<G, E>(chain_spec: GenericChainSpec<G, E>)
 	-> Result<Configuration, Box<dyn std::error::Error>>
 where
 	G: RuntimeGenesis + 'static,
-	E: Extension + 'static + Send,
+	E: Extension + 'static + Send + Sync,
 {
 	let name = chain_spec.name().to_string();
 
@@ -57,7 +57,6 @@ where
 		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
 		enable_mdns: false,
-		use_yamux_flow_control: true,
 	};
 
 	let config = Configuration {

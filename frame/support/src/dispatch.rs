@@ -1952,10 +1952,6 @@ macro_rules! decl_module {
 	}
 }
 
-pub trait IsSubType<T> {
-	fn is_sub_type(&self) -> Option<&T>;
-}
-
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
 #[macro_export]
 macro_rules! impl_outer_dispatch {
@@ -2053,7 +2049,7 @@ macro_rules! impl_outer_dispatch {
 		}
 
 		$(
-			impl $crate::dispatch::IsSubType<$crate::dispatch::CallableCallFor<$camelcase, $runtime>> for $call_type {
+			impl $crate::traits::IsSubType<$crate::dispatch::CallableCallFor<$camelcase, $runtime>> for $call_type {
 				#[allow(unreachable_patterns)]
 				fn is_sub_type(&self) -> Option<&$crate::dispatch::CallableCallFor<$camelcase, $runtime>> {
 					match *self {
