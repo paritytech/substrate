@@ -19,7 +19,7 @@
 use crate::error::Error;
 use sp_wasm_interface::Value;
 
-/// Call site.
+/// A method to be used to find the entrypoint when calling into the runtime
 ///
 /// Contains variants on how to resolve wasm function that will be invoked.
 pub enum InvokeMethod<'a> {
