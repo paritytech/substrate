@@ -83,13 +83,15 @@ where
 		Block: BlockT,
 		B: backend::Backend<Block>,
 	{
-		let code = self.wasm_overwrite.as_ref().map::<sp_blockchain::Result<Option<RuntimeCode>>, _>(|o| {
-			let spec = self.runtime_version(id)?.spec_version;
-			Ok(o.get(&spec, onchain_code.heap_pages))
-		})
-		.transpose()?
-		.flatten()
-		.unwrap_or(onchain_code);
+		let code = self.wasm_overwrite
+			.as_ref()
+			.map::<sp_blockchain::Result<Option<RuntimeCode>>, _>(|o| {
+				let spec = self.runtime_version(id)?.spec_version;
+				Ok(o.get(&spec, onchain_code.heap_pages))
+			})
+			.transpose()?
+			.flatten()
+			.unwrap_or(onchain_code);
 
 		Ok(code)
 	}

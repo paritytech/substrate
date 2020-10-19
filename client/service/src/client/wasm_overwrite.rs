@@ -34,7 +34,7 @@ struct WasmBlob {
 
 impl WasmBlob {
 	fn new(code: Vec<u8>) -> Self {
-		let hash = make_hash(code);
+		let hash = make_hash(&code);
 		Self { code, hash }
 	}
 
