@@ -38,6 +38,21 @@
 //! See [primitives::Compact] documentation for how you can optimize proof size for leafs that are
 //! composed from multiple elements.
 //!
+//! ## What for?
+//!
+//!	Primary use case for this pallet is to generate MMR root hashes, that can later on be used by
+//!	BEEFY protocol (see https://github.com/paritytech/grandpa-bridge-gadget).
+//!	MMR root hashes along with BEEFY will make it possible to build Super Light Clients of
+//!	Substrate-based chains. The SLC will be able to follow finality and can be shown proves of more
+//!	details that happened on the source chain.
+//!	In that case the chain which contains the pallet generates the Root Hashes and Proofs, which
+//!	are then presented to another chain acting as a light client which can verify them.
+//!
+//!	Secondary use case is to archive historical data, but still be able to retrieve them on-demand
+//!	if needed. For instance if parent block hashes are stored in the MMR it's possible at any point
+//!	in time to provide a MMR proof about some past block hash, while this data can be safely pruned
+//!	from on-chain storage.
+//!
 //! NOTE This pallet is experimental and not proven to work in production.
 //!
 #![cfg_attr(not(feature = "std"), no_std)]

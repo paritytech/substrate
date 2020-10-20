@@ -281,10 +281,27 @@ mod tests {
 
 	type Test = DataOrHash<Keccak256, String>;
 	type TestCompact = Compact<Keccak256, (Test, Test)>;
+	type TestProof = Proof<<Keccak256 as traits::Hash>::Output>;
 
 	#[test]
 	fn should_encode_decode_proof() {
+		// given
+		let proof: TestProof = Proof {
+			leaf_index: 5,
+			leaf_count: 10,
+			items: vec![
+				hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd"),
+				hex("d3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd"),
+				hex("e3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd"),
+			],
+		};
 
+		// when
+		let encoded = codec::Encode::encode(&proof);
+		let decoded = TestProof::decode(&mut &*encoded);
+
+		// then
+		assert_eq!(decoded, Ok(proof));
 	}
 
 	#[test]
