@@ -19,6 +19,7 @@ sp-core = { version = "2.0.0", default-features = false, path = "../../primitive
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-tasks = { version = "2.0.0", default-features = false, path = "../../primitives/tasks" }
 
 [features]
 default = ["std"]
@@ -30,4 +31,5 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-tasks/std",
 ]
