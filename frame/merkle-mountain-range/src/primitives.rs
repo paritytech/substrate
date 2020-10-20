@@ -46,7 +46,7 @@ impl LeafDataProvider for () {
 	}
 }
 
-impl<T: frame_system::Trait + crate::Trait> LeafDataProvider for frame_system::Module<T> {
+impl<T: frame_system::Trait> LeafDataProvider for frame_system::Module<T> {
 	type LeafData = <T as frame_system::Trait>::Hash;
 
 	fn leaf_data() -> (Self::LeafData, Weight) {

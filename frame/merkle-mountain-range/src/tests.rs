@@ -180,14 +180,14 @@ fn should_start_empty() {
 			crate::RootHash::<Test>::get(),
 			"0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap()
 		);
-		assert_eq!(crate::NumberOfLeaves::get(), 0);
+		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), 0);
 		assert_eq!(crate::Nodes::<Test>::get(0), None);
 
 		// when
 		let weight = new_block();
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::get(), 1);
+		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), 1);
 		assert_eq!(crate::Nodes::<Test>::get(0),
 			Some(hex("da5e6d0616e05c6a6348605a37ca33493fc1a15ad1e6a405ee05c17843fdafed")));
 		assert_eq!(
@@ -208,7 +208,7 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 		new_block();
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::get(), 2);
+		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), 2);
 		assert_eq!(crate::Nodes::<Test>::get(0),
 			Some(hex("da5e6d0616e05c6a6348605a37ca33493fc1a15ad1e6a405ee05c17843fdafed")));
 		assert_eq!(crate::Nodes::<Test>::get(1),
@@ -247,7 +247,7 @@ fn should_construct_larger_mmr_correctly() {
 		init_chain(7);
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::get(), 7);
+		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), 7);
 		assert_eq!(crate::Nodes::<Test>::get(0),
 			Some(hex("da5e6d0616e05c6a6348605a37ca33493fc1a15ad1e6a405ee05c17843fdafed")));
 		assert_eq!(crate::Nodes::<Test>::get(10),
@@ -272,7 +272,7 @@ fn should_generate_proofs_correclty() {
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
 		// when generate proofs for all leaves
-		let proofs = (0_u64..crate::NumberOfLeaves::get())
+		let proofs = (0_u64..crate::NumberOfLeaves::<DefaultInstance>::get())
 			.into_iter()
 			.map(|leaf_index| crate::Module::<Test>::generate_proof(leaf_index).unwrap())
 			.collect::<Vec<_>>();

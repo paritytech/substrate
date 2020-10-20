@@ -71,7 +71,7 @@ mod primitives;
 mod tests;
 
 /// This pallet's configuration trait
-pub trait Trait: frame_system::Trait {
+pub trait Trait<I = DefaultInstance>: frame_system::Trait {
 	/// Prefix for elements stored in the Off-chain DB via Indexing API.
 	///
 	/// Each node of the MMR is inserted both on-chain and off-chain via Indexing API.
@@ -92,7 +92,7 @@ pub trait Trait: frame_system::Trait {
 	///
 	/// Then we create a tuple of these two hashes, SCALE-encode it (concatenate) and
 	/// hash, to obtain a new MMR inner node - the new peak.
-	type Hashing: traits::Hash<Output = <Self as Trait>::Hash>;
+	type Hashing: traits::Hash<Output = <Self as Trait<I>>::Hash>;
 
 	/// The hashing output type.
 	///
@@ -116,9 +116,9 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as MerkleMountainRange {
+	trait Store for Module<T: Trait<I>, I: Instance = DefaultInstance> as MerkleMountainRange {
 		/// Latest MMR Root hash.
-		pub RootHash get(fn mmr_root_hash): <T as Trait>::Hash;
+		pub RootHash get(fn mmr_root_hash): <T as Trait<I>>::Hash;
 
 		/// Current size of the MMR (number of leaves).
 		pub NumberOfLeaves get(fn mmr_leaves): u64;
@@ -127,26 +127,26 @@ decl_storage! {
 		///
 		/// Note this collection only contains MMR peaks, the inner nodes (and leaves)
 		/// are pruned and only stored in the Offchain DB.
-		pub Nodes get(fn mmr_peak): map hasher(identity) u64 => Option<<T as Trait>::Hash>;
+		pub Nodes get(fn mmr_peak): map hasher(identity) u64 => Option<<T as Trait<I>>::Hash>;
 	}
 }
 
 decl_module! {
 	/// A public part of the pallet.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
 			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 			let (data, leaf_weight) = T::LeafData::leaf_data();
 			// append new leaf to MMR
-			let mut mmr: ModuleMMR<mmr::storage::RuntimeStorage, T> = mmr::MMR::new(leaves);
+			let mut mmr: ModuleMMR<mmr::storage::RuntimeStorage, T, I> = mmr::MMR::new(leaves);
 			mmr.push(data).expect("MMR push never fails.");
 
 			// update the size
 			let (leaves, root) = mmr.finalize().expect("MMR finalize never fails.");
 			<NumberOfLeaves>::put(leaves);
-			<RootHash<T>>::put(root);
+			<RootHash<T, I>>::put(root);
 
 			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 			let hash_weight = peaks_after.saturating_mul(T::HashWeight::get());
@@ -162,15 +162,15 @@ decl_module! {
 }
 
 /// A MMR specific to the pallet.
-type ModuleMMR<StorageType, T> = mmr::MMR<StorageType, T, LeafOf<T>>;
+type ModuleMMR<StorageType, T, I> = mmr::MMR<StorageType, T, I, LeafOf<T, I>>;
 
 /// Leaf data.
-type LeafOf<T> = <<T as Trait>::LeafData as primitives::LeafDataProvider>::LeafData;
+type LeafOf<T, I> = <<T as Trait<I>>::LeafData as primitives::LeafDataProvider>::LeafData;
 
 /// Hashing used for the pallet.
-pub(crate) type HashingOf<T> = <T as crate::Trait>::Hashing;
+pub(crate) type HashingOf<T, I> = <T as Trait<I>>::Hashing;
 
-impl<T: Trait> Module<T> {
+impl<T: Trait<I>, I: Instance> Module<T, I> {
 	fn offchain_key(pos: u64) -> Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
 	}
@@ -182,10 +182,10 @@ impl<T: Trait> Module<T> {
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_proof(leaf_index: u64) -> Result<
-		(LeafOf<T>, primitives::Proof<<T as Trait>::Hash>),
+		(LeafOf<T, I>, primitives::Proof<<T as Trait<I>>::Hash>),
 		mmr::Error,
 	> {
-		let mmr: ModuleMMR<mmr::storage::OffchainStorage, T> = mmr::MMR::new(Self::mmr_leaves());
+		let mmr: ModuleMMR<mmr::storage::OffchainStorage, T, I> = mmr::MMR::new(Self::mmr_leaves());
 		mmr.generate_proof(leaf_index)
 	}
 
@@ -195,7 +195,10 @@ impl<T: Trait> Module<T> {
 	/// It will return `Ok(())` if the proof is valid
 	/// and an `Err(..)` if MMR is inconsistent (some leaves are missing)
 	/// or the proof is invalid.
-	pub fn verify_leaf(leaf: LeafOf<T>, proof: primitives::Proof<<T as Trait>::Hash>) -> Result<(), mmr::Error> {
+	pub fn verify_leaf(
+		leaf: LeafOf<T, I>,
+		proof: primitives::Proof<<T as Trait<I>>::Hash>,
+	) -> Result<(), mmr::Error> {
 		if proof.leaf_count > Self::mmr_leaves()
 			|| proof.leaf_count == 0
 			|| proof.items.len() as u32 > mmr::utils::NodesUtils::new(proof.leaf_count).depth()
@@ -203,7 +206,7 @@ impl<T: Trait> Module<T> {
 			return Err(mmr::Error::Verify.debug("Invalid leaf count."));
 		}
 
-		let mmr: ModuleMMR<mmr::storage::RuntimeStorage, T> = mmr::MMR::new(proof.leaf_count);
+		let mmr: ModuleMMR<mmr::storage::RuntimeStorage, T, I> = mmr::MMR::new(proof.leaf_count);
 		let is_valid = mmr.verify_leaf_proof(leaf, proof)?;
 		if is_valid {
 			Ok(())

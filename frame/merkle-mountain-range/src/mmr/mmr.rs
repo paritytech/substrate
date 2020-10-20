@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	Trait, HashingOf,
+	Trait, HashingOf, Instance,
 	mmr::{
 		Node, NodeOf, Hasher,
 		storage::{Storage, OffchainStorage, RuntimeStorage},
@@ -31,23 +31,25 @@ use sp_std::fmt;
 ///
 /// Available functions depend on the storage kind ([Runtime](crate::mmr::storage::RuntimeStorage)
 /// vs [Off-chain](crate::mmr::storage::OffchainStorage)).
-pub struct MMR<StorageType, T, L> where
-	T: Trait,
+pub struct MMR<StorageType, T, I, L> where
+	T: Trait<I>,
+	I: Instance,
 	L: primitives::FullLeaf,
-	Storage<StorageType, T, L>: mmr_lib::MMRStore<NodeOf<T, L>>,
+	Storage<StorageType, T, I, L>: mmr_lib::MMRStore<NodeOf<T, I, L>>,
 {
 	mmr: mmr_lib::MMR<
-		NodeOf<T, L>,
-		Hasher<HashingOf<T>, L>,
-		Storage<StorageType, T, L>
+		NodeOf<T, I, L>,
+		Hasher<HashingOf<T, I>, L>,
+		Storage<StorageType, T, I, L>
 	>,
 	leaves: u64,
 }
 
-impl<StorageType, T, L> MMR<StorageType, T, L> where
-	T: Trait,
+impl<StorageType, T, I, L> MMR<StorageType, T, I, L> where
+	T: Trait<I>,
+	I: Instance,
 	L: primitives::FullLeaf,
-	Storage<StorageType, T, L>: mmr_lib::MMRStore<NodeOf<T, L>>,
+	Storage<StorageType, T, I, L>: mmr_lib::MMRStore<NodeOf<T, I, L>>,
 {
 	/// Create a pointer to an existing MMR with given number of leaves.
 	pub fn new(leaves: u64) -> Self {
@@ -62,11 +64,11 @@ impl<StorageType, T, L> MMR<StorageType, T, L> where
 	pub fn verify_leaf_proof(
 		&self,
 		leaf: L,
-		proof: primitives::Proof<<T as Trait>::Hash>,
+		proof: primitives::Proof<<T as Trait<I>>::Hash>,
 	) -> Result<bool, Error> {
 		let p = mmr_lib::MerkleProof::<
-			NodeOf<T, L>,
-			Hasher<HashingOf<T>, L>,
+			NodeOf<T, I, L>,
+			Hasher<HashingOf<T, I>, L>,
 		>::new(
 			self.mmr.mmr_size(),
 			proof.items.into_iter().map(Node::Hash).collect(),
@@ -87,8 +89,9 @@ impl<StorageType, T, L> MMR<StorageType, T, L> where
 }
 
 /// Runtime specific MMR functions.
-impl<T, L> MMR<RuntimeStorage, T, L> where
-	T: Trait,
+impl<T, I, L> MMR<RuntimeStorage, T, I, L> where
+	T: Trait<I>,
+	I: Instance,
 	L: primitives::FullLeaf,
 {
 
@@ -108,7 +111,7 @@ impl<T, L> MMR<RuntimeStorage, T, L> where
 
 	/// Commit the changes to underlying storage, return current number of leaves and
 	/// calculate the new MMR's root hash.
-	pub fn finalize(self) -> Result<(u64, <T as Trait>::Hash), Error> {
+	pub fn finalize(self) -> Result<(u64, <T as Trait<I>>::Hash), Error> {
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.debug(e))?;
 		self.mmr.commit().map_err(|e| Error::Commit.debug(e))?;
 		Ok((self.leaves, root.hash()))
@@ -116,8 +119,9 @@ impl<T, L> MMR<RuntimeStorage, T, L> where
 }
 
 /// Off-chain specific MMR functions.
-impl<T, L> MMR<OffchainStorage, T, L> where
-	T: Trait,
+impl<T, I, L> MMR<OffchainStorage, T, I, L> where
+	T: Trait<I>,
+	I: Instance,
 	L: primitives::FullLeaf,
 {
 	/// Generate a proof for given leaf index.
@@ -125,11 +129,11 @@ impl<T, L> MMR<OffchainStorage, T, L> where
 	/// Proof generation requires all the nodes (or their hashes) to be available in the storage.
 	/// (i.e. you can't run the function in the pruned storage).
 	pub fn generate_proof(&self, leaf_index: u64) -> Result<
-		(L, primitives::Proof<<T as Trait>::Hash>),
+		(L, primitives::Proof<<T as Trait<I>>::Hash>),
 		Error
 	> {
 		let position = mmr_lib::leaf_index_to_pos(leaf_index);
-		let store = <Storage<OffchainStorage, T, L>>::default();
+		let store = <Storage<OffchainStorage, T, I, L>>::default();
 		let leaf = match mmr_lib::MMRStore::get_elem(&store, position) {
 			Ok(Some(Node::Data(leaf))) => leaf,
 			e => return Err(Error::LeafNotFound.debug(e)),
