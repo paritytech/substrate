@@ -255,7 +255,3 @@ zeroize = { opt-level = 3 }
 # Substrate runtime requires unwinding.
 panic = "unwind"
 
-[patch.crates-io]
-libp2p = { git = "https://github.com/libp2p/rust-libp2p.git" }
-libp2p-wasm-ext = { git = "https://github.com/libp2p/rust-libp2p.git"  }
-
