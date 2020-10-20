@@ -26,8 +26,8 @@ use parking_lot::Mutex;
 
 use sc_client_api::{Backend as BackendT, BlockchainEvents, FinalityNotification, Finalizer};
 use sc_network_gossip::{
-	GossipEngine, Network as GossipNetwork, ValidationResult as GossipValidationResult,
-	Validator as GossipValidator, ValidatorContext as GossipValidatorContext,
+	GossipEngine, Network as GossipNetwork, ValidationResult as GossipValidationResult, Validator as GossipValidator,
+	ValidatorContext as GossipValidatorContext,
 };
 use sp_application_crypto::Ss58Codec;
 use sp_blockchain::HeaderBackend;
@@ -39,7 +39,7 @@ use sp_runtime::{
 };
 
 pub const BEEFY_ENGINE_ID: ConsensusEngineId = *b"BEEF";
-pub const BEEFY_PROTOCOL_NAME: &'static str = "/paritytech/beefy/1";
+pub const BEEFY_PROTOCOL_NAME: &str = "/paritytech/beefy/1";
 
 /// Key type for BEEFY module.
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"beef");
@@ -85,9 +85,7 @@ struct RoundTracker<Id, Signature> {
 
 impl<Id, Signature> Default for RoundTracker<Id, Signature> {
 	fn default() -> Self {
-		RoundTracker {
-			votes: Vec::new(),
-		}
+		RoundTracker { votes: Vec::new() }
 	}
 }
 
@@ -156,7 +154,7 @@ where
 }
 
 fn topic<Block: BlockT>() -> Block::Hash {
-	<<Block::Header as HeaderT>::Hashing as HashT>::hash("beefy".as_bytes())
+	<<Block::Header as HeaderT>::Hashing as HashT>::hash(b"beefy")
 }
 
 #[derive(Debug, Decode, Encode)]
@@ -177,8 +175,7 @@ struct BeefyWorker<Block: BlockT, Id, Signature, FinalityNotifications> {
 	best_block_voted_on: NumberFor<Block>,
 }
 
-impl<Block, Id, Signature, FinalityNotifications>
-	BeefyWorker<Block, Id, Signature, FinalityNotifications>
+impl<Block, Id, Signature, FinalityNotifications> BeefyWorker<Block, Id, Signature, FinalityNotifications>
 where
 	Block: BlockT,
 {
@@ -204,8 +201,7 @@ where
 	}
 }
 
-impl<Block, Id, Signature, FinalityNotifications>
-	BeefyWorker<Block, Id, Signature, FinalityNotifications>
+impl<Block, Id, Signature, FinalityNotifications> BeefyWorker<Block, Id, Signature, FinalityNotifications>
 where
 	Block: BlockT,
 	Id: Codec + Debug + PartialEq + Public,
@@ -263,7 +259,9 @@ where
 				signature,
 			};
 
-			self.gossip_engine.lock().gossip_message(topic::<Block>(), message.encode(), false);
+			self.gossip_engine
+				.lock()
+				.gossip_message(topic::<Block>(), message.encode(), false);
 			debug!(target: "beefy", "Sent vote message: {:?}", message);
 
 			self.handle_vote(message.block, (message.id, message.signature));
@@ -274,27 +272,21 @@ where
 
 	fn handle_vote(&mut self, round: Block::Hash, vote: (Id, Signature)) {
 		// TODO: validate signature
-
-		if self.rounds.add_vote(round.clone(), vote) {
-			if self.rounds.is_done(&round) {
-				info!(target: "beefy", "Round {:?} concluded.", round);
-				self.rounds.drop(&round);
-			}
+		let vote_added = self.rounds.add_vote(round, vote);
+		if vote_added && self.rounds.is_done(&round) {
+			info!(target: "beefy", "Round {:?} concluded.", round);
+			self.rounds.drop(&round);
 		}
 	}
 
 	async fn run(mut self) {
-		let mut votes =
-			Box::pin(self.gossip_engine.lock().messages_for(topic::<Block>()).filter_map(
-				|notification| async move {
-					debug!(target: "beefy", "Got vote message: {:?}", notification);
+		let mut votes = Box::pin(self.gossip_engine.lock().messages_for(topic::<Block>()).filter_map(
+			|notification| async move {
+				debug!(target: "beefy", "Got vote message: {:?}", notification);
 
-					VoteMessage::<Block::Hash, Id, Signature>::decode(
-						&mut &notification.message[..],
-					)
-					.ok()
-				},
-			));
+				VoteMessage::<Block::Hash, Id, Signature>::decode(&mut &notification.message[..]).ok()
+			},
+		));
 
 		loop {
 			let engine = self.gossip_engine.clone();
@@ -332,8 +324,7 @@ pub async fn start_beefy_gadget<Block, Backend, Client, Network, SyncOracle>(
 ) where
 	Block: BlockT,
 	Backend: BackendT<Block>,
-	Client:
-		BlockchainEvents<Block> + HeaderBackend<Block> + Finalizer<Block, Backend> + Send + Sync,
+	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Finalizer<Block, Backend> + Send + Sync,
 	Network: GossipNetwork<Block> + Clone + Send + 'static,
 	SyncOracle: SyncOracleT + Send + 'static,
 {
@@ -373,17 +364,19 @@ pub async fn start_beefy_gadget<Block, Backend, Client, Network, SyncOracle>(
 		.map(|address| AuthorityId::from_string(address).unwrap())
 		.collect::<Vec<_>>();
 
-	let local_id =
-		match voters.iter().find(|id| key_store.read().has_keys(&[(id.to_raw_vec(), KEY_TYPE)])) {
-			Some(id) => {
-				info!(target: "beefy", "Starting BEEFY worker with local id: {:?}", id);
-				id.clone()
-			}
-			None => {
-				info!(target: "beefy", "No local id found, not starting BEEFY worker.");
-				return futures::future::pending().await;
-			}
-		};
+	let local_id = match voters
+		.iter()
+		.find(|id| key_store.read().has_keys(&[(id.to_raw_vec(), KEY_TYPE)]))
+	{
+		Some(id) => {
+			info!(target: "beefy", "Starting BEEFY worker with local id: {:?}", id);
+			id.clone()
+		}
+		None => {
+			info!(target: "beefy", "No local id found, not starting BEEFY worker.");
+			return futures::future::pending().await;
+		}
+	};
 
 	let best_finalized_block = client.info().finalized_number;
 	let best_block_voted_on = Zero::zero();
