@@ -583,7 +583,17 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 
 /// Trait suitable for typical cryptographic PKI key public type.
 pub trait Public:
-	AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync
+	AsRef<[u8]>
+	+ AsMut<[u8]>
+	+ Default
+	+ Derive
+	+ CryptoType
+	+ PartialEq
+	+ Eq
+	+ Clone
+	+ Send
+	+ Sync
+	+ for<'a> TryFrom<&'a [u8]>
 {
 	/// A new instance from the given slice.
 	///
@@ -748,6 +758,14 @@ mod dummy {
 				#[allow(mutable_transmutes)]
 				sp_std::mem::transmute::<_, &'static mut [u8]>(&b""[..])
 			}
+		}
+	}
+
+	impl<'a> TryFrom<&'a [u8]> for Dummy {
+		type Error = ();
+
+		fn try_from(_: &'a [u8]) -> Result<Self, ()> {
+			Ok(Self)
 		}
 	}
 
@@ -1106,6 +1124,13 @@ mod tests {
 	impl AsMut<[u8]> for TestPublic {
 		fn as_mut(&mut self) -> &mut [u8] {
 			&mut []
+		}
+	}
+	impl<'a> TryFrom<&'a [u8]> for TestPublic {
+		type Error = ();
+
+		fn try_from(_: &'a [u8]) -> Result<Self, ()> {
+			Ok(Self)
 		}
 	}
 	impl CryptoType for TestPublic {

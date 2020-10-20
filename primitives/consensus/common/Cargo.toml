@@ -36,6 +36,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 wasm-timer = "0.2.4"
 
 [dev-dependencies]
+futures = "0.3.4"
 sp-test-primitives = { version = "2.0.0", path = "../../test-primitives" }
 
 [features]
