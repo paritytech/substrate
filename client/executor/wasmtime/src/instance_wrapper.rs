@@ -94,7 +94,7 @@ pub struct EntryPoint {
 
 impl EntryPoint {
 	/// Call this entry point.
-	pub fn call(&self, data_ptr: Pointer<u8>, data_len: WordSize) -> anyhow::Result<u64> {
+	pub fn call(&self, data_ptr: Pointer<u8>, data_len: WordSize) -> Result<u64> {
 		let data_ptr = u32::from(data_ptr) as i32;
 		let data_len = u32::from(data_len) as i32;
 
@@ -117,6 +117,10 @@ impl EntryPoint {
 				// the signature is checked to have i64 return type
 				results[0].unwrap_i64() as u64
 			)
+			.map_err(|err| Error::from(format!(
+				"Wasm execution trapped: {}",
+				err
+			)))
 	}
 
 	pub fn direct(func: wasmtime::Func) -> std::result::Result<Self, &'static str> {

@@ -24,7 +24,7 @@ use crate::state_holder;
 use std::rc::Rc;
 use std::sync::Arc;
 use sc_executor_common::{
-	error::{Error, Result, WasmError},
+	error::{Result, WasmError},
 	wasm_runtime::{WasmModule, WasmInstance, InvokeMethod},
 };
 use sp_allocator::FreeingBumpHeapAllocator;
@@ -152,16 +152,8 @@ fn perform_call(
 	let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
 
 	let host_state = HostState::new(allocator, instance_wrapper.clone());
-	let ret = state_holder::with_initialized_state(&host_state, || {
-		match entrypoint.call(data_ptr, data_len) {
-			Ok(retval) => Ok(unpack_ptr_and_len(retval)),
-			Err(trap) => {
-				return Err(Error::from(format!(
-					"Wasm execution trapped: {}",
-					trap
-				)));
-			},
-		}
+	let ret = state_holder::with_initialized_state(&host_state, || -> Result<_> {
+		Ok(unpack_ptr_and_len(entrypoint.call(data_ptr, data_len)?))
 	});
 	let (output_ptr, output_len) = ret?;
 	let output = extract_output_data(&instance_wrapper, output_ptr, output_len)?;
