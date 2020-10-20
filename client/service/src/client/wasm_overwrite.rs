@@ -27,6 +27,7 @@ use sp_version::RuntimeVersion;
 use sp_core::traits::RuntimeCode;
 
 #[derive(Clone, Debug)]
+/// Auxiliary structure that holds a wasm blob and its hash. 
 struct WasmBlob {
 	code: Vec<u8>,
 	hash: Vec<u8>,
