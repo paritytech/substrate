@@ -66,11 +66,10 @@ mod module2 {
 				let version_value = sp_io::storage::get(&version_key);
 
 				if version_value.is_some() {
-					assert_eq!(SOME_TEST_VERSION, Self::storage_version());
+					assert_eq!(SOME_TEST_VERSION, Self::storage_version().unwrap());
 				} else {
-					// As the storage version does not exist yet, it should be the same as
-					// the current version.
-					assert_eq!(Self::storage_version(), Self::current_version());
+					// As the storage version does not exist yet, it should be `None`.
+					assert!(Self::storage_version().is_none());
 				}
 
 				0

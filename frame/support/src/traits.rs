@@ -1829,7 +1829,7 @@ pub trait IsSubType<T> {
 /// The storage key postfix that is used to store the [`PalletVersion`] per pallet.
 ///
 /// The full storage key is built by using:
-/// Twox128([`PalletInfo::name`] ++ [`PALLET_VERSION_STORAGE_KEY_POSTFIX`])
+/// Twox128([`PalletInfo::name`]) ++ Twox128([`PALLET_VERSION_STORAGE_KEY_POSTFIX`])
 pub const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
 
 /// The version of a pallet.
@@ -1862,16 +1862,17 @@ impl PalletVersion {
 	///
 	/// Returns `None` if the given `PI` returned a `None` as name for the given
 	/// `Pallet`.
-	pub fn storage_key<PI: PalletInfo, Pallet: 'static>() -> Option<[u8; 16]> {
+	pub fn storage_key<PI: PalletInfo, Pallet: 'static>() -> Option<[u8; 32]> {
 		let pallet_name = PI::name::<Pallet>()?;
 
-		let mut key = Vec::with_capacity(
-			pallet_name.as_bytes().len() + PALLET_VERSION_STORAGE_KEY_POSTFIX.len(),
-		);
-		key.extend(pallet_name.as_bytes());
-		key.extend(PALLET_VERSION_STORAGE_KEY_POSTFIX);
+		let pallet_name = sp_io::hashing::twox_128(pallet_name.as_bytes());
+		let postfix = sp_io::hashing::twox_128(PALLET_VERSION_STORAGE_KEY_POSTFIX);
 
-		Some(sp_io::hashing::twox_128(&key))
+		let mut final_key = [0u8; 32];
+		final_key[..16].copy_from_slice(&pallet_name);
+		final_key[16..].copy_from_slice(&postfix);
+
+		Some(final_key)
 	}
 }
 
@@ -1911,8 +1912,8 @@ pub trait GetPalletVersion {
 	/// # Note
 	///
 	/// If there was no previous version of the pallet stored in the state,
-	/// this function will return [`GetPalletVersion::current_version`]
-	fn storage_version() -> PalletVersion;
+	/// this function returns `None`.
+	fn storage_version() -> Option<PalletVersion>;
 }
 
 #[cfg(test)]

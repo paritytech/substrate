@@ -1323,7 +1323,7 @@ macro_rules! decl_module {
 		{
 			fn on_runtime_upgrade() -> $return {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
-				let result = { $( $impl )* };
+				let result = (|| { $( $impl )* })();
 
 				let key = $crate::traits::PalletVersion::storage_key::<
 						<$trait_instance as $system::Trait>::PalletInfo, Self
@@ -1822,18 +1822,12 @@ macro_rules! decl_module {
 				$crate::crate_to_pallet_version!()
 			}
 
-			fn storage_version() -> $crate::traits::PalletVersion {
+			fn storage_version() -> Option<$crate::traits::PalletVersion> {
 				let key = $crate::traits::PalletVersion::storage_key::<
 						<$trait_instance as $system::Trait>::PalletInfo, Self
 					>().expect("Every active pallet has a name in the runtime; qed");
 
-				let value: Option<$crate::traits::PalletVersion> =
-					$crate::storage::unhashed::get(&key);
-
-				match value {
-					Some(version) => version,
-					None => $crate::crate_to_pallet_version!(),
-				}
+				$crate::storage::unhashed::get(&key)
 			}
 		}
 
