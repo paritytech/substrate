@@ -31,7 +31,7 @@ pub use frame_metadata::{
 ///#        type Origin;
 ///#        type BlockNumber;
 ///#        type PalletInfo: frame_support::traits::PalletInfo;
-///#        type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
+///#        type DbWeight: frame_support::traits::Get<frame_support::weights::RuntimeDbWeight>;
 ///#    }
 ///#    frame_support::decl_module! {
 ///#        pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
