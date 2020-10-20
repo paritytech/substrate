@@ -1358,7 +1358,9 @@ macro_rules! decl_module {
 				let version = $crate::crate_to_pallet_version!();
 				$crate::storage::unhashed::put(&key, &version);
 
-				0
+				<
+					<$trait_instance as $system::Trait>::DbWeight as $crate::traits::Get<_>
+				>::get().writes(1)
 			}
 		}
 	};
