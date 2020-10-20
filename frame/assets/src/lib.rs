@@ -171,6 +171,10 @@ pub struct AssetDetails<
 	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq,
 	DepositBalance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 > {
+	/// The balance deposited for this asset.
+	///
+	/// This pays for the data stored here together with any virtual accounts.
+	deposit: DepositBalance,
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
 	owner: AccountId,
 	/// Can mint tokens.
@@ -181,10 +185,6 @@ pub struct AssetDetails<
 	freezer: AccountId,
 	/// The total supply across all accounts.
 	supply: Balance,
-	/// The balance deposited for this asset.
-	///
-	/// This pays for the data stored here together with any virtual accounts.
-	deposit: DepositBalance,
 	/// The number of balance-holding accounts that this asset may have, excluding those that were
 	/// created when they had a system-level ED.
 	max_zombies: u32,
@@ -212,9 +212,15 @@ pub struct AccountData<
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
 pub struct AssetMetadata<DepositBalance> {
+	/// The balance deposited for this metadata.
+	///
+	/// This pays for the data stored in this struct.
 	deposit: DepositBalance,
+	/// The user friendly name of this asset. Limited in length by `StringLimit`.
 	name: Vec<u8>,
+	/// The exchange symbol for this asset. Limited in length by `StringLimit`.
 	symbol: Vec<u8>,
+	/// The number of decimals this asset uses to represent one unit.
 	decimals: u8,
 }
 
@@ -949,6 +955,10 @@ decl_module! {
 		}
 
 		/// Set the metadata for an asset.
+		///
+		/// NOTE: There is no `unset_metadata` call. Simply pass an empty name, symbol,
+		/// and 0 decimals to this function to remove the metadata of an asset and
+		/// return your deposit.
 		///
 		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
 		///
