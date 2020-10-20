@@ -137,8 +137,8 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 /// See [`compact`] for more info.
 pub trait CompactSolution: Sized {
 	const LIMIT: usize;
-	type Voter: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug;
-	type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug;
+	type Voter: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
+	type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
 	type VoteWeight: PerThing128;
 
 	fn from_assignment<FV, FT, A>(
@@ -191,6 +191,8 @@ pub trait CompactSolution: Sized {
 	/// Compute the score of this compact solution type.
 	fn score<A, FS>(
 		self,
+		// TODO: this param is just for error checking.. we can remove it if we make the error API
+		// better.
 		winners: &[A],
 		stake_of: FS,
 		voter_at: impl Fn(Self::Voter) -> Option<A>,

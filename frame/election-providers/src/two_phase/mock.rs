@@ -1,6 +1,7 @@
 use super::*;
 use frame_support::{parameter_types, traits::OnInitialize};
 use parking_lot::RwLock;
+use rand::seq::SliceRandom;
 use sp_core::{
 	offchain::{
 		testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
@@ -11,7 +12,7 @@ use sp_core::{
 use sp_election_providers::ElectionDataProvider;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
-	CompactSolution, ElectionResult, EvaluateSupport,
+	Assignment, CompactSolution, ElectionResult, EvaluateSupport,
 };
 use sp_runtime::{
 	testing::Header,
