@@ -24,9 +24,7 @@ use crate::{Schedule, Trait};
 
 use parity_wasm::elements::{self, Internal, External, MemoryType, Type, ValueType};
 use pwasm_utils;
-use pwasm_utils::rules;
 use sp_std::prelude::*;
-use sp_runtime::traits::{SaturatedConversion};
 
 /// Currently, all imported functions must be located inside this module. We might support
 /// additional modules for versioning later.
@@ -190,14 +188,7 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 	}
 
 	fn inject_gas_metering(self) -> Result<Self, &'static str> {
-		let gas_rules =
-			rules::Set::new(
-				self.schedule.instruction_weights.regular.clone().saturated_into(),
-				Default::default(),
-			)
-			.with_grow_cost(self.schedule.instruction_weights.grow_mem.clone().saturated_into())
-			.with_forbidden_floats();
-
+		let gas_rules = self.schedule.rules(&self.module);
 		let contract_module = pwasm_utils::inject_gas_counter(
 			self.module,
 			&gas_rules,
