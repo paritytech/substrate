@@ -77,7 +77,7 @@ where
 	fn check_overwrite<'a, Block>(
 		&'a self,
 		onchain_code: RuntimeCode<'a>,
-		id: &BlockId<Block>
+		id: &BlockId<Block>,
 	) -> sp_blockchain::Result<RuntimeCode<'a>>
 	where
 		Block: BlockT,
