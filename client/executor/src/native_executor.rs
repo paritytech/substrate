@@ -34,13 +34,14 @@ use sp_core::{
 	NativeOrEncoded,
 	traits::{
 		CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions,
+		RuntimeSpawnExt, RuntimeSpawn,
 	},
 };
 use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
 use sp_externalities::ExternalitiesExt as _;
-use sp_io::{RuntimeSpawnExt, new_async_externalities};
+use sp_tasks::new_async_externalities;
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -304,7 +305,7 @@ pub struct RuntimeInstanceSpawn {
 	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 }
 
-impl sp_io::RuntimeSpawn for RuntimeInstanceSpawn {
+impl RuntimeSpawn for RuntimeInstanceSpawn {
 	fn spawn_call(&self, dispatcher_ref: u32, func: u32, data: Vec<u8>) -> u64 {
 		let new_handle = self.counter.fetch_add(1, Ordering::Relaxed);
 

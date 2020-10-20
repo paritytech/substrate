@@ -38,7 +38,7 @@ use tracing;
 #[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
-	traits::{CallInWasmExt, TaskExecutorExt},
+	traits::{CallInWasmExt, TaskExecutorExt, RuntimeSpawnExt},
 	offchain::{OffchainExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
 	storage::ChildInfo,
@@ -66,14 +66,6 @@ use sp_externalities::{ExternalitiesExt, Externalities};
 
 #[cfg(feature = "std")]
 mod batch_verifier;
-
-#[cfg(feature = "std")]
-mod async_externalities;
-
-#[cfg(feature = "std")]
-pub use async_externalities::{new_async_externalities, AsyncExternalities};
-
-pub mod tasks;
 
 #[cfg(feature = "std")]
 use batch_verifier::BatchVerifier;
@@ -1246,30 +1238,11 @@ pub trait Sandbox {
 	}
 }
 
-/// Runtime spawn extension.
-pub trait RuntimeSpawn: Send {
-	/// Create new runtime instance and use dynamic dispatch to invoke with specified payload.
-	///
-	/// Returns handle of the spawned task.
-	///
-	/// Function pointers (`dispatcher_ref`, `func`) are WASM pointer types.
-	fn spawn_call(&self, dispatcher_ref: u32, func: u32, payload: Vec<u8>) -> u64;
-
-	/// Join the result of previously created runtime instance invocation.
-	fn join(&self, handle: u64) -> Vec<u8>;
-}
-
-#[cfg(feature = "std")]
-sp_externalities::decl_extension! {
-	/// Extension that supports spawning extra runtime instances in externalities.
-	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
-}
-
 /// Wasm host functions for managing tasks.
 ///
 /// This should not be used directly. Use `sp_io::tasks` for running parallel tasks instead.
 #[runtime_interface(wasm_only)]
-trait RuntimeTasks {
+pub trait RuntimeTasks {
 	/// Wasm host function for spawning task.
 	///
 	/// This should not be used directly. Use `sp_io::tasks::spawn` instead.
@@ -1287,7 +1260,7 @@ trait RuntimeTasks {
 	fn join(handle: u64) -> Vec<u8> {
 		sp_externalities::with_externalities(|mut ext| {
 			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
-				.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
+				.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
 			runtime_spawn.join(handle)
 		}).expect("`RuntimeTasks::join`: called outside of externalities context")
 	}

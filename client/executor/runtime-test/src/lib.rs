@@ -312,20 +312,20 @@ sp_core::wasm_export_functions! {
 
 	fn test_spawn() {
 		let data = vec![1u8, 2u8];
-		let data_new = sp_io::tasks::spawn(tasks::incrementer, data).join();
+		let data_new = sp_tasks::spawn(tasks::incrementer, data).join();
 
 		assert_eq!(data_new, vec![2u8, 3u8]);
 	}
 
 	fn test_nested_spawn() {
 		let data = vec![7u8, 13u8];
-		let data_new = sp_io::tasks::spawn(tasks::parallel_incrementer, data).join();
+		let data_new = sp_tasks::spawn(tasks::parallel_incrementer, data).join();
 
 		assert_eq!(data_new, vec![10u8, 16u8]);
 	}
 
 	fn test_panic_in_spawned() {
-		sp_io::tasks::spawn(tasks::panicker, vec![]).join();
+		sp_tasks::spawn(tasks::panicker, vec![]).join();
 	}
  }
 
@@ -343,7 +343,7 @@ sp_core::wasm_export_functions! {
 
 	pub fn parallel_incrementer(data: Vec<u8>) -> Vec<u8> {
 	   let first = data.into_iter().map(|v| v + 2).collect::<Vec<_>>();
-	   let second = sp_io::tasks::spawn(incrementer, first).join();
+	   let second = sp_tasks::spawn(incrementer, first).join();
 	   second
 	}
  }

@@ -21,9 +21,8 @@
 use std::any::{TypeId, Any};
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
-	traits::{Externalities, SpawnNamed, TaskExecutorExt},
+	traits::{Externalities, SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
-use crate::{RuntimeSpawnExt, RuntimeSpawn};
 use sp_externalities::{Extensions, ExternalitiesExt as _};
 
 /// Simple state-less externalities for use in async context.

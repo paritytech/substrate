@@ -163,6 +163,7 @@ members = [
 	"primitives/std",
 	"primitives/version",
 	"primitives/state-machine",
+	"primitives/tasks",
 	"primitives/timestamp",
 	"primitives/test-primitives",
 	"primitives/transaction-pool",

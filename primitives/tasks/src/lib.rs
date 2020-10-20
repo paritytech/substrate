@@ -27,7 +27,7 @@
 //!        unimplemented!()
 //!    }
 //!    fn test(dynamic_variable: i32) {
-//!        for _ in 0..dynamic_variable { sp_io::tasks::spawn(my_parallel_computator, vec![]); }
+//!        for _ in 0..dynamic_variable { sp_tasks::spawn(my_parallel_computator, vec![]); }
 //!    }
 //! ```
 //!
@@ -42,7 +42,7 @@
 //!
 //!    fn test(computation_payload: Vec<u8>) {
 //!        let parallel_tasks = (0..STATIC_VARIABLE).map(|idx|
-//!            sp_io::tasks::spawn(my_parallel_computator, computation_payload.chunks(10).nth(idx as _).encode())
+//!            sp_tasks::spawn(my_parallel_computator, computation_payload.chunks(10).nth(idx as _).encode())
 //!        );
 //!    }
 //! ```
@@ -50,11 +50,20 @@
 //! When allowing unbounded parallelism, malicious transactions can exploit it and partition
 //! network consensus based on how much resources nodes have.
 //!
+
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(feature = "std")]
+mod async_externalities;
+
+#[cfg(feature = "std")]
+pub use async_externalities::{new_async_externalities, AsyncExternalities};
+
 #[cfg(feature = "std")]
 mod inner {
 	use std::{panic::AssertUnwindSafe, sync::mpsc};
 	use sp_externalities::ExternalitiesExt as _;
-	use crate::TaskExecutorExt;
+	use sp_core::traits::TaskExecutorExt;
 
 	/// Task handle (wasm).
 	///
@@ -151,7 +160,7 @@ mod inner {
 	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>) -> DataJoinHandle {
 		let func_ptr: usize = unsafe { mem::transmute(entry_point) };
 
-		let handle = crate::runtime_tasks::spawn(
+		let handle = sp_io::runtime_tasks::spawn(
 			dispatch_wrapper as usize as _,
 			func_ptr as u32,
 			payload,
@@ -171,12 +180,13 @@ mod inner {
 	impl DataJoinHandle {
 		/// Join handle returned by `spawn` function
 		pub fn join(self) -> Vec<u8> {
-			crate::runtime_tasks::join(self.handle)
+			sp_io::runtime_tasks::join(self.handle)
 		}
 	}
 }
 
 pub use inner::{DataJoinHandle, spawn};
+
 #[cfg(test)]
 mod tests {
 
@@ -193,7 +203,7 @@ mod tests {
 
 	#[test]
 	fn basic() {
-		crate::TestExternalities::default().execute_with(|| {
+		sp_io::TestExternalities::default().execute_with(|| {
 			let a1 = spawn(async_runner, vec![5, 2, 1]).join();
 			assert_eq!(a1, vec![1, 2, 5]);
 		})
@@ -201,7 +211,7 @@ mod tests {
 
 	#[test]
 	fn panicking() {
-		let res = crate::TestExternalities::default().execute_with_safe(||{
+		let res = sp_io::TestExternalities::default().execute_with_safe(||{
 			spawn(async_panicker, vec![5, 2, 1]).join();
 		});
 
@@ -210,7 +220,7 @@ mod tests {
 
 	#[test]
 	fn many_joins() {
-		crate::TestExternalities::default().execute_with_safe(|| {
+		sp_io::TestExternalities::default().execute_with_safe(|| {
 			// converges to 1 only after 1000+ steps
 			let mut running_val = 9780657630u64;
 			let mut data = vec![];
