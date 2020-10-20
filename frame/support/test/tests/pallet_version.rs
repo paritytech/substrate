@@ -123,10 +123,15 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 /// Returns the storage key for `PalletVersion` for the given `pallet`.
-fn get_pallet_version_storage_key_for_pallet(pallet: &str) -> [u8; 16] {
-	let mut key = pallet.as_bytes().to_vec();
-	key.extend(PALLET_VERSION_STORAGE_KEY_POSTFIX);
-	sp_io::hashing::twox_128(&key)
+fn get_pallet_version_storage_key_for_pallet(pallet: &str) -> [u8; 32] {
+	let pallet_name = sp_io::hashing::twox_128(pallet.as_bytes());
+	let postfix = sp_io::hashing::twox_128(PALLET_VERSION_STORAGE_KEY_POSTFIX);
+
+	let mut final_key = [0u8; 32];
+	final_key[..16].copy_from_slice(&pallet_name);
+	final_key[16..].copy_from_slice(&postfix);
+
+	final_key
 }
 
 /// Checks the version of the given `pallet`.
