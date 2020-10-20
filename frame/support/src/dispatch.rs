@@ -1331,7 +1331,11 @@ macro_rules! decl_module {
 				let version = $crate::crate_to_pallet_version!();
 				$crate::storage::unhashed::put(&key, &version);
 
-				result
+				let additional_write = <
+					<$trait_instance as $system::Trait>::DbWeight as $crate::traits::Get<_>
+				>::get().writes(1);
+
+				result.saturating_add(additional_write)
 			}
 		}
 	};
