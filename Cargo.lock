@@ -4595,6 +4595,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-example-parallel"
+version = "2.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-tasks",
+]
+
+[[package]]
 name = "pallet-grandpa"
 version = "2.0.0"
 dependencies = [
@@ -6790,6 +6804,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-serializer",
  "sp-state-machine",
+ "sp-tasks",
  "sp-tracing",
  "sp-trie",
  "sp-version",
@@ -7229,6 +7244,7 @@ dependencies = [
  "sp-runtime",
  "sp-sandbox",
  "sp-std",
+ "sp-tasks",
  "substrate-wasm-builder-runner",
 ]
 
@@ -8491,6 +8507,19 @@ dependencies = [
  "ref-cast",
  "serde",
  "sp-debug-derive",
+ "sp-std",
+]
+
+[[package]]
+name = "sp-tasks"
+version = "2.0.0"
+dependencies = [
+ "log",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-externalities",
+ "sp-io",
+ "sp-runtime-interface",
  "sp-std",
 ]
 
