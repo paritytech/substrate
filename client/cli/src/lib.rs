@@ -234,7 +234,7 @@ pub trait SubstrateCli: Sized {
 pub fn init_logger(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
-	tracing_targets: Option<String>,
+	profiling_targets: Option<String>,
 ) -> std::result::Result<(), String> {
 	fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
 		dirs.as_ref()
@@ -293,6 +293,13 @@ pub fn init_logger(
 			.expect("provided directive is valid"),
 	);
 
+	// Make sure to include profiling targets in the filter
+	if let Some(profiling_targets) = profiling_targets.clone() {
+		for directive in parse_directives(profiling_targets) {
+			env_filter = env_filter.add_directive(directive);
+		}
+	}
+
 	let isatty = atty::is(atty::Stream::Stderr);
 	let enable_color = isatty;
 	let timer = ChronoLocal::with_format(if simple {
@@ -311,8 +318,8 @@ pub fn init_logger(
 		.with_writer(std::io::stderr)
 		.finish();
 
-	if let Some(tracing_targets) = tracing_targets {
-		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &tracing_targets);
+	if let Some(profiling_targets) = profiling_targets {
+		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
 		if let Err(e) = tracing::subscriber::set_global_default(subscriber.with(profiling)) {
 			return Err(format!(

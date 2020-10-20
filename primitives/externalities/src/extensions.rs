@@ -79,6 +79,12 @@ macro_rules! decl_extension {
 				&mut self.0
 			}
 		}
+
+		impl From<$inner> for $ext_name {
+			fn from(inner: $inner) -> Self {
+				Self(inner)
+			}
+ 		}
 	}
 }
 

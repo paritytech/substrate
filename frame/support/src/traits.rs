@@ -1708,8 +1708,8 @@ impl<T> IsType<T> for T {
 /// E.g. for module MyModule default instance will have prefix "MyModule" and other instances
 /// "InstanceNMyModule".
 pub trait Instance: 'static {
-    /// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
-    const PREFIX: &'static str ;
+	/// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
+	const PREFIX: &'static str ;
 }
 
 /// A trait similar to `Convert` to convert values from `B` an abstract balance type
@@ -1777,6 +1777,53 @@ impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> 
 	fn to_currency(value: u128, _: B) -> B {
 		B::unique_saturated_from(value)
 	}
+}
+
+/// Something that can be checked to be a of sub type `T`.
+///
+/// This is useful for enums where each variant encapsulates a different sub type, and
+/// you need access to these sub types.
+///
+/// For example, in FRAME, this trait is implemented for the runtime `Call` enum. Pallets use this
+/// to check if a certain call is an instance of the local pallet's `Call` enum.
+///
+/// # Example
+///
+/// ```
+/// # use frame_support::traits::IsSubType;
+///
+/// enum Test {
+///     String(String),
+///     U32(u32),
+/// }
+///
+/// impl IsSubType<String> for Test {
+///     fn is_sub_type(&self) -> Option<&String> {
+///         match self {
+///             Self::String(ref r) => Some(r),
+///             _ => None,
+///         }
+///     }
+/// }
+///
+/// impl IsSubType<u32> for Test {
+///     fn is_sub_type(&self) -> Option<&u32> {
+///         match self {
+///             Self::U32(ref r) => Some(r),
+///             _ => None,
+///         }
+///     }
+/// }
+///
+/// fn main() {
+///     let data = Test::String("test".into());
+///
+///     assert_eq!("test", IsSubType::<String>::is_sub_type(&data).unwrap().as_str());
+/// }
+/// ```
+pub trait IsSubType<T> {
+	/// Returns `Some(_)` if `self` is an instance of sub type `T`.
+	fn is_sub_type(&self) -> Option<&T>;
 }
 
 #[cfg(test)]

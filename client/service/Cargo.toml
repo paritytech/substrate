@@ -89,4 +89,4 @@ sp-consensus-babe = { version = "0.8.0", path = "../../primitives/consensus/babe
 grandpa = { version = "0.8.0", package = "sc-finality-grandpa", path = "../finality-grandpa" }
 grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
 tokio = { version = "0.2", default-features = false }
-async-std = { version = "1.6", default-features = false }
+async-std = { version = "1.6.5", default-features = false }

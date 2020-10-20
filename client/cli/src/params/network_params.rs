@@ -92,11 +92,6 @@ pub struct NetworkParams {
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
 
-	/// Disable the yamux flow control. This option will be removed in the future once there is
-	/// enough confidence that this feature is properly working.
-	#[structopt(long)]
-	pub no_yamux_flow_control: bool,
-
 	/// Enable peer discovery on local networks.
 	///
 	/// By default this option is true for `--dev` and false otherwise.
@@ -158,7 +153,6 @@ impl NetworkParams {
 				enable_mdns: !is_dev && !self.no_mdns,
 				allow_private_ipv4: !self.no_private_ipv4,
 				wasm_external_transport: None,
-				use_yamux_flow_control: !self.no_yamux_flow_control,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
 			allow_non_globals_in_dht: self.discover_local || is_dev,
