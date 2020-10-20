@@ -649,7 +649,7 @@ mod tests {
 				code_hash: [0x11; 32].into(),
 				endowment: 3,
 				data: vec![1, 2, 3, 4],
-				gas_left: 9597369150,
+				gas_left: 9506710488,
 			}]
 		);
 	}
@@ -1459,7 +1459,7 @@ mod tests {
 			vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00])
 		]);
 
-		assert_eq!(gas_meter.gas_left(), 9857434074);
+		assert_eq!(gas_meter.gas_left(), 9852103933);
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
