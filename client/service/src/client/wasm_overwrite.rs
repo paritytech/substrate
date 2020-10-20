@@ -102,27 +102,30 @@ where
 			sp_blockchain::Error::Msg(format!("{}", e.to_string()))
 		};
 
+		if !dir.is_dir() {
+			return Err(sp_blockchain::Error::Msg(format!(
+				"Overwriting WASM requires a directory where \
+				 local WASM is stored. {:?} is not a directory",
+				 dir,
+			)));
+		}
+		
 		let mut overwrites = HashMap::new();
-		if dir.is_dir() {
-			let mut duplicates = Vec::new();
-			for entry in fs::read_dir(dir).map_err(handle_err)? {
-				let entry = entry.map_err(handle_err)?;
-				let path = entry.path();
-				let wasm = WasmBlob::new(fs::read(&path).map_err(handle_err)?);
-				let version = Self::runtime_version(executor, &wasm, Some(128))?;
-				if let Some(_duplicate) = overwrites.insert(version.spec_version, wasm) {
-					duplicates.push(format!("{}", path.display()));
-				}
+		let mut duplicates = Vec::new();
+		for entry in fs::read_dir(dir).map_err(handle_err)? {
+			let entry = entry.map_err(handle_err)?;
+			let path = entry.path();
+			let wasm = WasmBlob::new(fs::read(&path).map_err(handle_err)?);
+			let version = Self::runtime_version(executor, &wasm, Some(128))?;
+			if let Some(_duplicate) = overwrites.insert(version.spec_version, wasm) {
+				duplicates.push(format!("{}", path.display()));
 			}
-			if !duplicates.is_empty() {
-				let duplicate_file_list = duplicates.join("\n");
-				let msg = format!("Duplicate WASM Runtimes found: \n{}\n", duplicate_file_list);
-				return Err(sp_blockchain::Error::Msg(msg));
-			}
-		} else {
-			return Err(sp_blockchain::Error::Msg(
-				format!("Overwriting WASM requires a directory where \
-						local WASM is stored. {:?} is not a directory", dir)));
+		}
+		
+		if !duplicates.is_empty() {
+			let duplicate_file_list = duplicates.join("\n");
+			let msg = format!("Duplicate WASM Runtimes found: \n{}\n", duplicate_file_list);
+			return Err(sp_blockchain::Error::Msg(msg));
 		}
 
 		Ok(overwrites)
