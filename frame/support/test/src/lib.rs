@@ -33,6 +33,8 @@ pub trait Trait: 'static {
 	type BlockNumber: codec::Codec + codec::EncodeLike + Default;
 	/// The information about the pallet setup in the runtime.
 	type PalletInfo: frame_support::traits::PalletInfo;
+	/// The db weights.
+	type DbWeight: frame_support::traits::Get<frame_support::weights::RuntimeDbWeight>;
 }
 
 frame_support::decl_module! {

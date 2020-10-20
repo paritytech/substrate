@@ -504,6 +504,7 @@ mod tests {
 		type BlockNumber: Codec + EncodeLike + Default;
 		type Origin;
 		type PalletInfo: crate::traits::PalletInfo;
+		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
 
 	mod module {
@@ -544,6 +545,7 @@ mod tests {
 		type BlockNumber = u32;
 		type Origin = u32;
 		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	fn new_test_ext() -> TestExternalities {

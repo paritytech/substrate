@@ -33,6 +33,7 @@ impl frame_support_test::Trait for Test {
 	type BlockNumber = u32;
 	type Origin = ();
 	type PalletInfo = ();
+	type DbWeight = ();
 }
 
 impl Trait for Test {}

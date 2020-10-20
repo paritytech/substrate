@@ -555,6 +555,7 @@ mod tests {
 			type Origin;
 			type BlockNumber;
 			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 		}
 
 		decl_module! {
@@ -573,6 +574,7 @@ mod tests {
 			type Origin;
 			type BlockNumber;
 			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 		}
 
 		decl_module! {
@@ -724,6 +726,7 @@ mod tests {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	impl event_module::Trait for TestRuntime2 {
@@ -738,12 +741,14 @@ mod tests {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	impl system::Trait for TestRuntime2 {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	const EXPECTED_METADATA: OuterEventMetadata = OuterEventMetadata {

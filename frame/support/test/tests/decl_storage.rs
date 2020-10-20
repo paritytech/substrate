@@ -85,6 +85,7 @@ mod tests {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	impl Trait for TraitImpl {}
@@ -441,6 +442,7 @@ mod test2 {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	impl Trait for TraitImpl {}
@@ -468,6 +470,7 @@ mod test3 {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	impl Trait for TraitImpl {}
@@ -512,6 +515,7 @@ mod test_append_and_len {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	impl Trait for Test {}

@@ -1323,7 +1323,7 @@ macro_rules! decl_module {
 		{
 			fn on_runtime_upgrade() -> $return {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
-				let result = (|| { $( $impl )* })();
+				let result: $return = (|| { $( $impl )* })();
 
 				let key = $crate::traits::PalletVersion::storage_key::<
 						<$trait_instance as $system::Trait>::PalletInfo, Self
@@ -2402,16 +2402,16 @@ macro_rules! __check_reserved_fn_name {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::weights::{DispatchInfo, DispatchClass, Pays};
+	use crate::weights::{DispatchInfo, DispatchClass, Pays, RuntimeDbWeight};
 	use crate::traits::{
 		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade,
-		IntegrityTest,
+		IntegrityTest, Get,
 	};
 
 	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> { }
 
 	pub mod system {
-		use codec::{Encode, Decode};
+		use super::*;
 
 		pub trait Trait: 'static {
 			type AccountId;
@@ -2420,6 +2420,7 @@ mod tests {
 			type Origin: crate::traits::OriginTrait<Call = Self::Call>;
 			type BlockNumber: Into<u32>;
 			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: Get<RuntimeDbWeight>;
 		}
 
 		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
@@ -2564,6 +2565,7 @@ mod tests {
 		type BaseCallFilter = ();
 		type BlockNumber = u32;
 		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	#[test]

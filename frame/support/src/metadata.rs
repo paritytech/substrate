@@ -31,6 +31,7 @@ pub use frame_metadata::{
 ///#        type Origin;
 ///#        type BlockNumber;
 ///#        type PalletInfo: frame_support::traits::PalletInfo;
+///#        type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 ///#    }
 ///#    frame_support::decl_module! {
 ///#        pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
@@ -46,6 +47,7 @@ pub use frame_metadata::{
 ///#     type Origin = u32;
 ///#     type BlockNumber = u32;
 ///#     type PalletInfo = ();
+///#     type DbWeight = ();
 ///# }
 ///#
 ///# type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<(), (), (), ()>;
@@ -304,6 +306,7 @@ mod tests {
 			type BlockNumber: From<u32> + Encode;
 			type SomeValue: Get<u32>;
 			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 			type Call;
 		}
 
@@ -449,6 +452,7 @@ mod tests {
 		type BlockNumber = u32;
 		type SomeValue = SystemValue;
 		type PalletInfo = ();
+		type DbWeight = ();
 		type Call = Call;
 	}
 

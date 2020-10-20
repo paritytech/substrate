@@ -54,6 +54,7 @@ impl frame_support_test::Trait for Runtime {
 	type Origin = u32;
 	type BlockNumber = u32;
 	type PalletInfo = ();
+	type DbWeight = ();
 }
 
 impl Trait for Runtime {}

@@ -429,6 +429,7 @@ mod test_iterators {
 		type Origin;
 		type BlockNumber;
 		type PalletInfo: crate::traits::PalletInfo;
+		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
 
 	crate::decl_module! {
