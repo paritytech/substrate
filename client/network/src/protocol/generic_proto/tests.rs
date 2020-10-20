@@ -23,7 +23,6 @@ use libp2p::{PeerId, Multiaddr, Transport};
 use libp2p::core::{
 	connection::{ConnectionId, ListenerId},
 	ConnectedPoint,
-	muxing,
 	transport::MemoryTransport,
 	upgrade
 };

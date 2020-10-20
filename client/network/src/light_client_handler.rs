@@ -1316,7 +1316,7 @@ mod tests {
 			connection::ConnectionId,
 			identity,
 			muxing::{StreamMuxerBox, SubstreamRef},
-			transport::{Transport, boxed::Boxed, memory::MemoryTransport},
+			transport::{Transport, Boxed, memory::MemoryTransport},
 			upgrade
 		},
 		noise::{self, Keypair, X25519, NoiseConfig},
@@ -1356,8 +1356,6 @@ mod tests {
 			.upgrade(upgrade::Version::V1)
 			.authenticate(NoiseConfig::xx(dh_key).into_authenticated())
 			.multiplex(yamux::Config::default())
-			.map(|(peer, muxer), _| (peer, StreamMuxerBox::new(muxer)))
-			.map_err(|e| io::Error::new(io::ErrorKind::Other, e))
 			.boxed();
 		Swarm::new(transport, LightClientHandler::new(cf, client, checker, ps), local_peer)
 	}

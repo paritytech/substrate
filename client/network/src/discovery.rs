@@ -796,7 +796,8 @@ mod tests {
 			let transport = MemoryTransport
 				.upgrade(upgrade::Version::V1)
 				.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-				.multiplex(yamux::Config::default());
+				.multiplex(yamux::Config::default())
+				.boxed();
 
 			let behaviour = {
 				let mut config = DiscoveryConfig::new(keypair.public());
