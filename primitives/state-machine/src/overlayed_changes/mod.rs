@@ -659,13 +659,11 @@ impl OverlayedChanges {
 			)
 	}
 
-	/// Activate offchain indexing.
-	///
-	/// Note that this function must only be call before any transactional changes.
-	pub fn enable_offchain_indexing(&mut self) {
-		if let OffchainOverlayedChanges::Disabled = self.offchain {
-			self.offchain = OffchainOverlayedChanges::enabled();
-		}
+	/// Instantiate an offchain overlay with offchain indexing enabled.
+	pub fn default_with_offchain_indexing() -> Self {
+		let mut result = Self::default();
+		result.offchain = OffchainOverlayedChanges::enabled();
+		result
 	}
 
 	/// Read only access ot offchain overlay.

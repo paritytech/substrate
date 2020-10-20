@@ -89,10 +89,12 @@ where
 		strategy: ExecutionStrategy,
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
-		let mut changes = OverlayedChanges::default();
+		let mut changes = 
 		if self.client_config.offchain_indexing_api {
-			changes.enable_offchain_indexing();
-		}
+			OverlayedChanges::default_with_offchain_indexing()
+		} else {
+			OverlayedChanges::default()
+		};
 		let changes_trie = backend::changes_tries_state_at_block(
 			id, self.backend.changes_trie_storage()
 		)?;

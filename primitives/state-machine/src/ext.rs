@@ -784,12 +784,11 @@ mod tests {
 	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
-		let mut changes = OverlayedChanges::default();
+		let mut changes = OverlayedChanges::default_with_offchain_indexing();
 		changes.set_collect_extrinsics(true);
 		changes.set_extrinsic_index(1);
 		changes.set_storage(vec![1], Some(vec![100]));
 		changes.set_storage(EXTRINSIC_INDEX.to_vec(), Some(3u32.encode()));
-		changes.enable_offchain_indexing();
 		changes.set_offchain_storage(b"k1", Some(b"v1"));
 		changes.set_offchain_storage(b"k2", Some(b"v2"));
 		changes
