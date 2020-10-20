@@ -68,6 +68,7 @@ use sc_client_api::{
 	execution_extensions::ExecutionExtensions
 };
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
+use sc_jsonrpc_remote_signer::client::RemoteKeystore as SSRSRemoteKeystore;
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
@@ -214,19 +215,47 @@ pub struct KeystoreContainer {
 impl KeystoreContainer {
 	/// Construct KeystoreContainer
 	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
-		let keystore = Arc::new(match config {
-			KeystoreConfig::Path { path, password } => LocalKeystore::open(
-				path.clone(),
-				password.clone(),
-			)?,
-			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
-		});
-		let sync_keystore = keystore.clone() as SyncCryptoStorePtr;
+		match config {
+			KeystoreConfig::Remote { uri } => {
+				if uri.starts_with("ssrs+") {
+					// this is a Simple Substrate Remote Signer protocol
+					let keystore = Arc::new(SSRSRemoteKeystore::open(uri[5..].to_string(), None)?);
+					let sync_keystore = keystore.clone() as SyncCryptoStorePtr;
 
-		Ok(Self {
-			keystore,
-			sync_keystore,
-		})
+					Ok(Self {
+						keystore,
+						sync_keystore,
+					})
+
+				} else {
+					return Err(Error::Other(
+						format!("Don't know how to connect to {}. Did you mean ssrs+{}", uri, uri)))
+				}
+			},
+			KeystoreConfig::Path { path, password } => {
+				let keystore = Arc::new(LocalKeystore::open(
+					path.clone(),
+					password.clone(),
+				)?);
+
+				let sync_keystore = keystore.clone() as SyncCryptoStorePtr;
+
+				Ok(Self {
+					keystore,
+					sync_keystore,
+				})
+			}
+			KeystoreConfig::InMemory => {
+				let keystore = Arc::new(LocalKeystore::in_memory());
+
+				let sync_keystore = keystore.clone() as SyncCryptoStorePtr;
+
+				Ok(Self {
+					keystore,
+					sync_keystore,
+				})
+			}
+		}
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`

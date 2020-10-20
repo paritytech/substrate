@@ -67,6 +67,7 @@ sc-executor = { version = "0.8.0", path = "../executor" }
 sc-transaction-pool = { version = "2.0.0", path = "../transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 sc-rpc-server = { version = "2.0.0", path = "../rpc-servers" }
+sc-jsonrpc-remote-signer = { version = "2.0.0", path = "../jsonrpc-remote-signer", default-features = false, features = ["client"] }
 sc-rpc = { version = "2.0.0", path = "../rpc" }
 sc-block-builder = { version = "0.8.0", path = "../block-builder" }
 sp-block-builder = { version = "2.0.0", path = "../../primitives/block-builder" }

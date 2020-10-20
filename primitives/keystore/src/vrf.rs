@@ -20,9 +20,11 @@
 use codec::Encode;
 use merlin::Transcript;
 use schnorrkel::vrf::{VRFOutput, VRFProof};
+
 /// An enum whose variants represent possible
 /// accepted values to construct the VRF transcript
 #[derive(Clone, Encode)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum VRFTranscriptValue {
 	/// Value is an array of bytes
 	Bytes(Vec<u8>),
@@ -38,6 +40,7 @@ pub struct VRFTranscriptData {
 	pub items: Vec<(&'static str, VRFTranscriptValue)>,
 }
 /// VRF signature data
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct VRFSignature {
 	/// The VRFOutput serialized
 	pub output: VRFOutput,
