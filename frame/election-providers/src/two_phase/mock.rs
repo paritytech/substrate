@@ -1,7 +1,6 @@
 use super::*;
 use frame_support::{parameter_types, traits::OnInitialize};
 use parking_lot::RwLock;
-use rand::seq::SliceRandom;
 use sp_core::{
 	offchain::{
 		testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
@@ -12,7 +11,7 @@ use sp_core::{
 use sp_election_providers::ElectionDataProvider;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
-	Assignment, CompactSolution, ElectionResult, EvaluateSupport,
+	CompactSolution, ElectionResult, EvaluateSupport,
 };
 use sp_runtime::{
 	testing::Header,
@@ -54,9 +53,11 @@ pub fn balances(who: &AccountId) -> (Balance, Balance) {
 ///
 /// This is a good example of what an offchain miner would do.
 pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
-	let voters = TwoPhase::snapshot_voters().unwrap();
-	let targets = TwoPhase::snapshot_targets().unwrap();
-	let desired = TwoPhase::desired_targets() as usize;
+	let SnapshotData {
+		voters,
+		targets,
+		desired_targets,
+	} = TwoPhase::snapshot().unwrap();
 
 	// closures
 	let voter_index = crate::voter_index_fn!(voters, AccountId, Runtime);
@@ -66,8 +67,13 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let ElectionResult {
 		winners,
 		assignments,
-	} = seq_phragmen::<_, CompactAccuracyOf<Runtime>>(desired, targets.clone(), voters.clone(), None)
-		.unwrap();
+	} = seq_phragmen::<_, CompactAccuracyOf<Runtime>>(
+		desired_targets as usize,
+		targets.clone(),
+		voters.clone(),
+		None,
+	)
+	.unwrap();
 
 	let winners = to_without_backing(winners);
 
@@ -78,7 +84,17 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let compact =
 		<CompactOf<Runtime>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
 
-	RawSolution { compact, score }
+	let round = TwoPhase::round();
+	RawSolution { compact, score, round }
+}
+
+pub fn witness() -> WitnessData {
+	TwoPhase::snapshot()
+		.map(|snap| WitnessData {
+			voters: snap.voters.len() as u32,
+			targets: snap.targets.len() as u32,
+		})
+		.unwrap_or_default()
 }
 
 frame_support::impl_outer_dispatch! {

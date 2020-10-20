@@ -282,7 +282,7 @@ pub mod default_weights;
 pub mod inflation;
 
 use codec::{Decode, Encode, HasCompact};
-use frame_election_providers::{ElectionDataProvider, ElectionProvider, Supports};
+use sp_election_providers::{ElectionDataProvider, ElectionProvider};
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
@@ -299,7 +299,7 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_root, ensure_signed, offchain::SendTransactionTypes};
 use pallet_session::historical;
-use sp_npos_elections::{generate_solution_type, CompactSolution, ExtendedBalance, VoteWeight};
+use sp_npos_elections::{generate_solution_type, CompactSolution, ExtendedBalance, VoteWeight, Supports};
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
@@ -765,7 +765,7 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 	/// Something that provides the election functionality.
-	type ElectionProvider: frame_election_providers::ElectionProvider<Self::AccountId>;
+	type ElectionProvider: ElectionProvider<Self::AccountId>;
 
 	/// Tokens have been minted and are unused for validator-reward.
 	/// See [Era payout](./index.html#era-payout).

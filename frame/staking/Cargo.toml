@@ -17,6 +17,7 @@ static_assertions = "1.1.0"
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+# TODO: ideally we should be able to get rid of this by the end of this PR.
 sp-npos-elections = { version = "2.0.0", default-features = false, path = "../../primitives/npos-elections" }
 sp-io ={ version = "2.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
@@ -26,6 +27,7 @@ frame-system = { version = "2.0.0", default-features = false, path = "../system"
 pallet-session = { version = "2.0.0", default-features = false, features = ["historical"], path = "../session" }
 pallet-authorship = { version = "2.0.0", default-features = false, path = "../authorship" }
 frame-election-providers = { version = "2.0.0", default-features = false, path = "../election-providers" }
+sp-election-providers = { version = "2.0.0", default-features = false, path = "../../primitives/election-providers" }
 sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../primitives/application-crypto" }
 
 # Optional imports for benchmarking
@@ -61,6 +63,7 @@ std = [
 	"pallet-authorship/std",
 	"sp-application-crypto/std",
 	"frame-election-providers/std",
+	"sp-election-providers/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

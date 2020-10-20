@@ -22,14 +22,12 @@ use crate::two_phase::{Module as TwoPhase, *};
 
 pub use frame_benchmarking::{account, benchmarks, whitelist_account, whitelisted_caller};
 use frame_support::assert_ok;
+use frame_system::RawOrigin;
 use rand::{seq::SliceRandom, thread_rng};
-use sp_npos_elections::{ExtendedBalance, VoteWeight};
-use sp_runtime::{InnerOf, PerU16};
+use sp_npos_elections::{CompactSolution, ExtendedBalance, VoteWeight};
+use sp_runtime::InnerOf;
 
 const SEED: u32 = 0;
-
-// TODO: the entire snapshot can probably live in a single place.. we most often Read and write it
-// at the same time.
 
 /// Generate mock on-chain snapshots.
 ///
@@ -74,9 +72,12 @@ where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {
 	let (targets, voters) = mock_snapshot::<T>(witness);
-	<SnapshotTargets<T>>::put(targets);
-	<SnapshotVoters<T>>::put(voters);
-	DesiredTargets::put(desired_targets);
+	let snapshot = SnapshotData {
+		voters,
+		targets,
+		desired_targets,
+	};
+	<Snapshot<T>>::put(snapshot);
 }
 
 /// Creates a **valid** solution with exactly the given size.
@@ -86,8 +87,9 @@ fn solution_with_size<T: Trait>(active_voters: u32, winners_count: u32) -> RawSo
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {
-	let voters = <TwoPhase<T>>::snapshot_voters().unwrap();
-	let targets = <TwoPhase<T>>::snapshot_targets().unwrap();
+	let SnapshotData {
+		voters, targets, ..
+	} = <TwoPhase<T>>::snapshot().unwrap();
 
 	// else we cannot support this, self vote is a must.
 	assert!(active_voters >= winners_count);
@@ -97,6 +99,7 @@ where
 	assert!(targets.len() >= winners_count as usize);
 
 	let voter_index = crate::voter_index_fn!(voters, T::AccountId, T);
+	let target_index = crate::target_index_fn!(targets, T::AccountId, T);
 	let voter_at = crate::voter_at_fn!(voters, T::AccountId, T);
 	let target_at = crate::target_at_fn!(targets, T::AccountId, T);
 	let stake_of = crate::stake_of_fn!(voters, T::AccountId);
@@ -112,8 +115,8 @@ where
 	let mut assignments = winners
 		.iter()
 		.map(|w| Assignment {
-			who: *w,
-			distribution: vec![(w, PerU16::one())],
+			who: w.clone(),
+			distribution: vec![(w.clone(), <CompactAccuracyOf<T>>::one())],
 		})
 		.collect::<Vec<_>>();
 
@@ -134,6 +137,7 @@ where
 			.collect::<Vec<_>>();
 		// if any, add assignment to all of them.
 		if winner_intersection.len() > 0 {
+			let dist = (100 / winner_intersection.len()) as u8;
 			assignments.push(Assignment {
 				who,
 				distribution: winner_intersection
@@ -141,7 +145,7 @@ where
 					.map(|w| {
 						(
 							w,
-							PerU16::from_percent((100 / winner_intersection.len()) as u16),
+							<CompactAccuracyOf<T>>::from_percent(dist.into()),
 						)
 					})
 					.collect::<Vec<_>>(),
@@ -149,57 +153,88 @@ where
 		}
 	}
 
-	let compact = <CompactOf<T>>::from_assignment(assignments, &voter_index, &target_index);
+	let compact =
+		<CompactOf<T>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
+	let score = compact
+		.clone()
+		.score(winners.as_ref(), stake_of, voter_at, target_at)
+		.unwrap();
+	let round = <TwoPhase<T>>::round();
 
-	unimplemented!()
+	RawSolution { compact, score, round }
 }
 
 benchmarks! {
 	where_clause { where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>, }
 	_{}
-	submit_signed {}: {} verify {}
-	submit_unsigned {}: {} verify {}
+
+	submit {
+		// number of votes in snapshot.
+		let v in 2000 .. 3000;
+		// number of targets in snapshot.
+		let t in 500 .. 800;
+		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
+		// a subset of `v` component.
+		let a in 500 .. 1500;
+		// number of desired targets. Must be a subset of `t` component.
+		let d in 200 .. 400;
+
+		let witness = WitnessData { voters: v, targets: t };
+		put_mock_snapshot::<T>(witness, d);
+
+		let raw_solution = solution_with_size::<T>(a, d);
+		assert!(<TwoPhase<T>>::signed_submissions().len() == 0);
+		<CurrentPhase<T>>::put(Phase::Signed);
+
+		let caller = frame_benchmarking::whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
+
+	}: _(RawOrigin::Signed(caller), raw_solution)
+	verify {
+		assert!(<TwoPhase<T>>::signed_submissions().len() == 1);
+	}
+
+	submit_unsigned {
+		// number of votes in snapshot.
+		let v in 2000 .. 3000;
+		// number of targets in snapshot.
+		let t in 500 .. 800;
+		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
+		// a subset of `v` component.
+		let a in 500 .. 1500;
+		// number of desired targets. Must be a subset of `t` component.
+		let d in 200 .. 400;
+
+		let witness = WitnessData { voters: v, targets: t };
+		put_mock_snapshot::<T>(witness, d);
+
+		let raw_solution = solution_with_size::<T>(a, d);
+		assert!(<TwoPhase<T>>::queued_solution().is_none());
+		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
+	}: _(RawOrigin::None, raw_solution, witness)
+	verify {
+		assert!(<TwoPhase<T>>::queued_solution().is_some());
+	}
+
 	open_signed_phase {}: {} verify {}
 	close_signed_phase {}: {} verify {}
 
 	// This is checking a valid solution. The worse case is indeed a valid solution.
 	feasibility_check {
 		// number of votes in snapshot.
-		let v in 200 .. 300;
+		let v in 2000 .. 3000;
 		// number of targets in snapshot.
-		let t in 50 .. 80;
+		let t in 500 .. 800;
 		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
-		let a in 20 .. 80;
+		let a in 500 .. 1500;
 		// number of desired targets. Must be a subset of `t` component.
-		let d in 20 .. 40;
-
-		println!("running v  {}, t {}, a {}, d {}", v, t, a, d);
+		let d in 200 .. 400;
 
 		let witness = WitnessData { voters: v, targets: t };
 		put_mock_snapshot::<T>(witness, d);
 
-		let voters = <TwoPhase<T>>::snapshot_voters().unwrap();
-		let targets = <TwoPhase<T>>::snapshot_targets().unwrap();
-
-		let voter_index = crate::voter_index_fn!(voters, T::AccountId, T);
-		let voter_at = crate::voter_at_fn!(voters, T::AccountId, T);
-		let target_at = crate::target_at_fn!(targets, T::AccountId, T);
-		let stake_of = crate::stake_of_fn!(voters, T::AccountId);
-
-		// the score at this point is not usable -- It might change when we resize the compact.
-		let RawSolution { compact, score: _ } = <TwoPhase<T>>::mine_solution(0).unwrap();
-		let compact = <TwoPhase<T>>::trim_compact(a, compact, voter_index).unwrap();
-
-		assert_eq!(compact.len() as u32, a);
-		assert_eq!(compact.unique_targets().len() as u32, d);
-
-		// re-calc score.
-		let winners = compact.unique_targets().iter().map(|i| target_at(*i).unwrap()).collect::<Vec<_>>();
-		let score = compact
-			.clone()
-			.score(&winners, stake_of, voter_at, target_at).unwrap();
-		let raw_solution = RawSolution { compact, score };
+		let raw_solution = solution_with_size::<T>(a, d);
 		let compute = ElectionCompute::Unsigned;
 	}: {
 		assert_ok!(<TwoPhase<T>>::feasibility_check(raw_solution, compute));
@@ -215,6 +250,10 @@ mod test {
 	fn test_benchmarks() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_ok!(test_benchmark_feasibility_check::<Runtime>());
-		})
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_submit_unsigned::<Runtime>());
+		});
 	}
 }

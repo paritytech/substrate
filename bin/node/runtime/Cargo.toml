@@ -42,6 +42,7 @@ frame-executive = { version = "2.0.0", default-features = false, path = "../../.
 frame-benchmarking = { version = "2.0.0", default-features = false, path = "../../../frame/benchmarking", optional = true }
 frame-support = { version = "2.0.0", default-features = false, path = "../../../frame/support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../../../frame/system" }
+frame-election-providers = { version = "2.0.0", default-features = false, path = "../../../frame/election-providers/" }
 frame-system-benchmarking = { version = "2.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 frame-system-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 pallet-authority-discovery = { version = "2.0.0", default-features = false, path = "../../../frame/authority-discovery" }
@@ -134,6 +135,7 @@ std = [
 	"frame-benchmarking/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
+	"frame-election-providers/std",
 	"pallet-timestamp/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
 	"pallet-transaction-payment/std",
@@ -149,6 +151,7 @@ runtime-benchmarks = [
 	"frame-benchmarking",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"frame-election-providers/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"pallet-babe/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",

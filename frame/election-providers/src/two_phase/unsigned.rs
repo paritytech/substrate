@@ -45,14 +45,21 @@ where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {
 	/// Min a new npos solution.
-	pub fn mine_solution(iters: usize) -> Result<RawSolution<CompactOf<T>>, Error> {
-		let desired_targets = Self::desired_targets() as usize;
-		let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
-		let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
+	pub fn mine_solution(iters: usize) -> Result<(RawSolution<CompactOf<T>>, WitnessData), Error> {
+		let SnapshotData {
+			voters,
+			targets,
+			desired_targets,
+		} = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
 
-		seq_phragmen::<_, CompactAccuracyOf<T>>(desired_targets, targets, voters, Some((iters, 0)))
-			.map_err(Into::into)
-			.and_then(Self::prepare_election_result)
+		seq_phragmen::<_, CompactAccuracyOf<T>>(
+			desired_targets as usize,
+			targets,
+			voters,
+			Some((iters, 0)),
+		)
+		.map_err(Into::into)
+		.and_then(Self::prepare_election_result)
 	}
 
 	/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
@@ -61,10 +68,12 @@ where
 	/// Will always reduce the solution as well.
 	pub fn prepare_election_result(
 		election_result: ElectionResult<T::AccountId, CompactAccuracyOf<T>>,
-	) -> Result<RawSolution<CompactOf<T>>, Error> {
-		// storage items.
-		let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
-		let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
+	) -> Result<(RawSolution<CompactOf<T>>, WitnessData), Error> {
+		// storage items. NOTE: we read these in mine_solution and here again, but this is fine
+		// since only the first read is expensive.
+		let SnapshotData {
+			voters, targets, ..
+		} = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
 
 		// closures.
 		let voter_index = crate::voter_index_fn!(voters, T::AccountId, T);
@@ -99,7 +108,12 @@ where
 			.clone()
 			.score(&winners, stake_of, voter_at, target_at)?;
 
-		Ok(RawSolution { compact, score })
+		let witness = WitnessData {
+			voters: voters.len() as u32,
+			targets: targets.len() as u32,
+		};
+		let round = Self::round();
+		Ok((RawSolution { compact, score, round }, witness))
 	}
 
 	/// Get a random number of iterations to run the balancing in the OCW.
@@ -145,7 +159,7 @@ where
 		match compact.len().checked_sub(maximum_allowed_voters as usize) {
 			Some(to_remove) if to_remove > 0 => {
 				// grab all voters and sort them by least stake.
-				let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
+				let SnapshotData { voters, .. } = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
 				let mut voters_sorted = voters
 					.into_iter()
 					.map(|(who, stake, _)| (who.clone(), stake))
@@ -182,7 +196,7 @@ where
 	///
 	/// This only returns a value between zero and `size.nominators`.
 	pub fn maximum_compact_len<W: WeightInfo>(
-		_winners_len: u32,
+		desired_winners: u32,
 		witness: WitnessData,
 		max_weight: Weight,
 	) -> u32 {
@@ -194,7 +208,14 @@ where
 		let mut voters = max_voters;
 
 		// helper closures.
-		let weight_with = |_voters: u32| -> Weight { W::submit_unsigned() };
+		let weight_with = |active_voters: u32| -> Weight {
+			W::submit_unsigned(
+				witness.voters,
+				witness.targets,
+				active_voters,
+				desired_winners,
+			)
+		};
 
 		let next_voters = |current_weight: Weight, voters: u32, step: u32| -> Result<u32, ()> {
 			match current_weight.cmp(&max_weight) {
@@ -291,15 +312,16 @@ where
 	/// Mine a new solution, and submit it back to the chian as an unsigned transaction.
 	pub(crate) fn mine_and_submit() -> Result<(), Error> {
 		let balancing = Self::get_balancing_iters();
-		Self::mine_solution(balancing).and_then(|raw_solution| {
+		Self::mine_solution(balancing).and_then(|(raw_solution, witness)| {
 			// submit the raw solution to the pool.
-			let call = Call::submit_unsigned(raw_solution).into();
+			let call = Call::submit_unsigned(raw_solution, witness).into();
 
 			SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
 				.map_err(|_| Error::PoolSubmissionFailed)
 		})
 	}
 
+	/// Checks that need to happen in the validte_unsigned and pre_dispatch.
 	pub(crate) fn pre_dispatch_checks(solution: &RawSolution<CompactOf<T>>) -> DispatchResult {
 		// ensure solution is timely. Don't panic yet. This is a cheap check.
 		ensure!(
@@ -328,7 +350,7 @@ where
 {
 	type Call = Call<T>;
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-		if let Call::submit_unsigned(solution) = call {
+		if let Call::submit_unsigned(solution, _) = call {
 			// discard solution not coming from the local OCW.
 			match source {
 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
@@ -346,7 +368,7 @@ where
 				.priority(
 					T::UnsignedPriority::get().saturating_add(solution.score[0].saturated_into()),
 				)
-				// TODO: need some provides to de-duplicate.
+				// TODO: need some provides to de-duplicate: use Round.
 				// TODO: we can do this better.
 				.longevity(DEFAULT_LONGEVITY)
 				// We don't propagate this. This can never the validated at a remote node.
@@ -358,7 +380,7 @@ where
 	}
 
 	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-		if let Call::submit_unsigned(solution) = call {
+		if let Call::submit_unsigned(solution, _) = call {
 			Self::pre_dispatch_checks(solution).map_err(|_| InvalidTransaction::Custom(99).into())
 		} else {
 			Err(InvalidTransaction::Call.into())
@@ -526,7 +548,7 @@ mod tests {
 				score: [5, 0, 0],
 				..Default::default()
 			};
-			let call = Call::submit_unsigned(solution.clone());
+			let call = Call::submit_unsigned(solution.clone(), witness());
 
 			// initial
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
@@ -576,7 +598,7 @@ mod tests {
 				score: [5, 0, 0],
 				..Default::default()
 			};
-			let call = Call::submit_unsigned(solution.clone());
+			let call = Call::submit_unsigned(solution.clone(), witness());
 
 			// initial
 			assert!(<TwoPhase as ValidateUnsigned>::validate_unsigned(
@@ -618,7 +640,7 @@ mod tests {
 					score: [5, 0, 0],
 					..Default::default()
 				};
-				let call = Call::submit_unsigned(solution.clone());
+				let call = Call::submit_unsigned(solution.clone(), witness());
 
 				// initial
 				assert_eq!(
@@ -649,7 +671,7 @@ mod tests {
 				score: [5, 0, 0],
 				..Default::default()
 			};
-			let call = Call::submit_unsigned(solution.clone());
+			let call = Call::submit_unsigned(solution.clone(), witness());
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -662,16 +684,15 @@ mod tests {
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
 
 			// ensure we have snapshots in place.
-			assert!(TwoPhase::snapshot_voters().is_some());
-			assert!(TwoPhase::snapshot_targets().is_some());
-			assert_eq!(TwoPhase::desired_targets(), 2);
+			assert!(TwoPhase::snapshot().is_some());
+			assert_eq!(TwoPhase::snapshot().unwrap().desired_targets, 2);
 
 			// mine seq_phragmen solution with 2 iters.
-			let solution = TwoPhase::mine_solution(2).unwrap();
+			let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
 
 			// ensure this solution is valid.
 			assert!(TwoPhase::queued_solution().is_none());
-			assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution));
+			assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution, witness));
 			assert!(TwoPhase::queued_solution().is_some());
 		})
 	}
@@ -692,7 +713,7 @@ mod tests {
 
 				roll_to(15);
 				assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
-				assert_eq!(TwoPhase::desired_targets(), 1);
+				assert_eq!(TwoPhase::snapshot().unwrap().desired_targets, 1);
 
 				// an initial solution
 				let result = ElectionResult {
@@ -703,10 +724,8 @@ mod tests {
 						distribution: vec![(10, PerU16::one())],
 					}],
 				};
-				assert_ok!(TwoPhase::submit_unsigned(
-					Origin::none(),
-					TwoPhase::prepare_election_result(result).unwrap(),
-				));
+				let (compact, witness) = TwoPhase::prepare_election_result(result).unwrap();
+				assert_ok!(TwoPhase::submit_unsigned(Origin::none(), compact, witness));
 				assert_eq!(TwoPhase::queued_solution().unwrap().score[0], 10);
 
 				// trial 1: a solution who's score is only 2, i.e. 20% better in the first element.
@@ -724,12 +743,12 @@ mod tests {
 						},
 					],
 				};
-				let solution = TwoPhase::prepare_election_result(result).unwrap();
+				let (solution, witness) = TwoPhase::prepare_election_result(result).unwrap();
 				// 12 is not 50% more than 10
 				assert_eq!(solution.score[0], 12);
 
 				assert_noop!(
-					TwoPhase::submit_unsigned(Origin::none(), solution),
+					TwoPhase::submit_unsigned(Origin::none(), solution, witness),
 					PalletError::<Runtime>::WeakSubmission,
 				);
 
@@ -752,11 +771,11 @@ mod tests {
 						},
 					],
 				};
-				let solution = TwoPhase::prepare_election_result(result).unwrap();
+				let (solution, witness) = TwoPhase::prepare_election_result(result).unwrap();
 				assert_eq!(solution.score[0], 17);
 
 				// and it is fine
-				assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution));
+				assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution, witness));
 			})
 	}
 
@@ -829,7 +848,13 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
 			let call = extrinsic.call;
-			matches!(call, OuterCall::TwoPhase(Call::submit_unsigned(_)));
+			matches!(call, OuterCall::TwoPhase(Call::submit_unsigned(_, _)));
 		})
 	}
+
+	#[test]
+	fn wrong_witness_fails() {}
+
+	#[test]
+	fn invalid_round_fails() {}
 }

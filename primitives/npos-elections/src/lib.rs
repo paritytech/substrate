@@ -89,7 +89,6 @@ use sp_std::{
 	rc::Rc,
 };
 
-#[cfg(feature = "std")]
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -559,8 +558,8 @@ impl<AccountId> StakedAssignment<AccountId> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet they
 /// do not necessarily have to be the same.
-#[derive(Default, Debug, Encode, Decode, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Eq, PartialEq))]
+#[derive(Default, Debug, Encode, Decode, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Support<AccountId> {
 	/// Total support.
 	pub total: ExtendedBalance,

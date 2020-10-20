@@ -224,12 +224,21 @@ impl Default for ElectionCompute {
 ///
 /// Such a solution should never become effective in anyway before being checked by the
 /// [`Module::feasibility_check`]
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct RawSolution<C> {
 	/// Compact election edges.
 	compact: C,
 	/// The _claimed_ score of the solution.
 	score: ElectionScore,
+	/// The round at which this solution should be submitted.
+	round: u32,
+}
+
+impl<C: Default> Default for RawSolution<C> {
+	fn default() -> Self {
+		// Round 0 is always invalid, only set this to 1.
+		Self { round: 1, compact: Default::default(), score: Default::default() }
+	}
 }
 
 /// A raw, unchecked signed submission.
@@ -276,6 +285,17 @@ pub struct WitnessData {
 	/// This must match the on-chain snapshot.
 	#[codec(compact)]
 	targets: u32,
+}
+
+/// Snapshot data stored onchain for the duration of the election.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+pub struct SnapshotData<AccountId> {
+	/// All voters.
+	voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	/// All targets
+	targets: Vec<AccountId>,
+	/// Desired number of targets,
+	desired_targets: u32,
 }
 
 /// The crate errors. Note that this is different from the [`PalletError`].
@@ -336,19 +356,19 @@ impl From<sp_npos_elections::Error> for FeasibilityError {
 
 /// The weights for this pallet.
 pub trait WeightInfo {
-	fn feasibility_check() -> Weight;
-	fn submit() -> Weight;
-	fn submit_unsigned() -> Weight;
+	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight;
+	fn submit(v: u32, t: u32, a: u32, d: u32) -> Weight;
+	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight;
 }
 
 impl WeightInfo for () {
-	fn feasibility_check() -> Weight {
+	fn feasibility_check(_: u32, _: u32, _: u32, _: u32) -> Weight {
 		Default::default()
 	}
-	fn submit() -> Weight {
+	fn submit(_: u32, _: u32, _: u32, _: u32) -> Weight {
 		Default::default()
 	}
-	fn submit_unsigned() -> Weight {
+	fn submit_unsigned(_: u32, _: u32, _: u32, _: u32) -> Weight {
 		Default::default()
 	}
 }
@@ -414,20 +434,10 @@ decl_storage! {
 		/// Current best solution, signed or unsigned.
 		pub QueuedSolution get(fn queued_solution): Option<ReadySolution<T::AccountId>>;
 
-		/// Snapshot of all Voters.
+		/// Snapshot of all voters, all targets and desired targets to elect.
 		///
 		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-		pub SnapshotTargets get(fn snapshot_targets): Option<Vec<T::AccountId>>;
-
-		/// Snapshot of all targets.
-		///
-		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-		pub SnapshotVoters get(fn snapshot_voters): Option<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>>;
-
-		/// Desired number of targets to elect.
-		///
-		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-		pub DesiredTargets get(fn desired_targets): u32;
+		pub Snapshot get(fn snapshot): Option<SnapshotData<T::AccountId>>;
 	}
 }
 
@@ -458,6 +468,10 @@ frame_support::decl_error! {
 		QueueFull,
 		/// The origin failed to pay the deposit.
 		CannotPayDeposit,
+		/// WitnessData is invalid.
+		InvalidWitness,
+		/// Round number is invalid.
+		InvalidRound,
 	}
 }
 
@@ -485,7 +499,7 @@ decl_module! {
 					<CurrentPhase<T>>::put(Phase::Signed);
 					Round::mutate(|r| *r +=1);
 					Self::start_signed_phase();
-					log!(info, "Starting signed phase at #{} , round {}", now, Self::round());
+					log!(info, "Starting signed phase at #{:?} , round {}.", now, Self::round());
 				},
 				Phase::Signed if remaining <= unsigned_deadline && remaining > 0.into() => {
 					// check the unsigned phase.
@@ -494,7 +508,7 @@ decl_module! {
 					// good middle ground for now is to always let the unsigned phase be open.
 					let found_solution = Self::finalize_signed_phase();
 					<CurrentPhase<T>>::put(Phase::Unsigned((!found_solution, now)));
-					log!(info, "Starting unsigned phase at #{}", now);
+					log!(info, "Starting unsigned phase at #{:?}.", now);
 				},
 				_ => {
 					// Nothing. We wait in the unsigned phase until we receive the call to `elect`.
@@ -525,17 +539,30 @@ decl_module! {
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
-		#[weight = T::WeightInfo::submit()]
+		#[weight = T::WeightInfo::submit(0, 0, 0, 0)]
 		fn submit(origin, solution: RawSolution<CompactOf<T>>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
 			// ensure solution is timely.
 			ensure!(Self::current_phase().is_signed(), PalletError::<T>::EarlySubmission);
 
+			// ensure round is correct.
+			ensure!(Self::round() == solution.round, PalletError::<T>::InvalidRound);
+
+			// TODO: this is the only case where having separate snapshot would have been better
+			// bewe could do just decode_len.
+
+			// build witness.
+			// defensive-only: if phase is singend, snapshot will exist.
+			let SnapshotData { voters, targets, .. } = Self::snapshot().unwrap_or_default();
+			let witness = WitnessData { voters: voters.len() as u32, targets: targets.len() as u32 };
+
+
+
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
-			let maybe_index = Self::insert_submission(&who, &mut signed_submissions, solution);
-			ensure!(maybe_index.is_some(), "QueueFull");
+			let maybe_index = Self::insert_submission(&who, &mut signed_submissions, solution, witness);
+			ensure!(maybe_index.is_some(), PalletError::<T>::QueueFull);
 			let index = maybe_index.expect("Option checked to be `Some`; qed.");
 
 			// collect deposit. Thereafter, the function cannot fail.
@@ -564,14 +591,24 @@ decl_module! {
 		/// authoring reward at risk.
 		///
 		/// No deposit or reward is associated with this.
-		#[weight = T::WeightInfo::submit_unsigned()]
-		fn submit_unsigned(origin, solution: RawSolution<CompactOf<T>>) {
+		#[weight = T::WeightInfo::submit_unsigned(
+			witness.voters,
+			witness.targets,
+			solution.compact.len() as u32,
+			solution.compact.unique_targets().len() as u32
+		)]
+		fn submit_unsigned(origin, solution: RawSolution<CompactOf<T>>, witness: WitnessData) {
 			ensure_none(origin)?;
 
 			// check phase and score.
 			// TODO: since we do this in pre-dispatch, we can just ignore it
 			// here.
 			let _ = Self::pre_dispatch_checks(&solution)?;
+
+			// ensure witness was correct.
+			let SnapshotData { voters, targets, .. } = Self::snapshot().unwrap_or_default();
+			ensure!(voters.len() as u32 == witness.voters, PalletError::<T>::InvalidWitness);
+			ensure!(targets.len() as u32 == witness.targets, PalletError::<T>::InvalidWitness);
 
 			let ready =
 				Self::feasibility_check(solution, ElectionCompute::Unsigned)
@@ -604,7 +641,7 @@ where
 		solution: RawSolution<CompactOf<T>>,
 		compute: ElectionCompute,
 	) -> Result<ReadySolution<T::AccountId>, FeasibilityError> {
-		let RawSolution { compact, score } = solution;
+		let RawSolution { compact, score, .. } = solution;
 
 		// winners are not directly encoded in the solution.
 		// TODO: dupe winner
@@ -612,19 +649,19 @@ where
 		let winners = compact.unique_targets();
 
 		// Ensure that we have received enough winners.
+		let SnapshotData {
+			voters,
+			targets,
+			desired_targets,
+		} = Self::snapshot().ok_or(FeasibilityError::SnapshotUnavailable)?;
 		ensure!(
-			winners.len() as u32 == Self::desired_targets(),
-			FeasibilityError::WrongWinnerCount
+			winners.len() as u32 == desired_targets,
+			FeasibilityError::WrongWinnerCount,
 		);
 
 		// ----- Start building. First, we need some closures.
-		let snapshot_voters =
-			Self::snapshot_voters().ok_or(FeasibilityError::SnapshotUnavailable)?;
-		let snapshot_targets =
-			Self::snapshot_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
-
-		let voter_at = crate::voter_at_fn!(snapshot_voters, T::AccountId, T);
-		let target_at = crate::target_at_fn!(snapshot_targets, T::AccountId, T);
+		let voter_at = crate::voter_at_fn!(voters, T::AccountId, T);
+		let target_at = crate::target_at_fn!(targets, T::AccountId, T);
 
 		// first, make sure that all the winners are sane.
 		let winners = winners
@@ -642,7 +679,7 @@ where
 		let _ = assignments
 			.iter()
 			.map(|Assignment { who, distribution }| {
-				snapshot_voters.iter().find(|(v, _, _)| v == who).map_or(
+				voters.iter().find(|(v, _, _)| v == who).map_or(
 					Err(FeasibilityError::InvalidVoter),
 					|(_, _, t)| {
 						if distribution.iter().map(|(x, _)| x).all(|x| t.contains(x))
@@ -660,7 +697,7 @@ where
 			.collect::<Result<(), FeasibilityError>>()?;
 
 		// ----- Start building support. First, we need some more closures.
-		let stake_of = stake_of_fn!(snapshot_voters, T::AccountId);
+		let stake_of = stake_of_fn!(voters, T::AccountId);
 
 		// This might fail if the normalization fails. Very unlikely.
 		let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
@@ -671,7 +708,6 @@ where
 
 		// Finally, check that the claimed score was indeed correct.
 		let known_score = supports.evaluate();
-		dbg!(known_score, score);
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
 		// let supports = supports.flatten();
@@ -684,11 +720,13 @@ where
 
 	/// On-chain fallback of election.
 	fn onchain_fallback() -> Result<Supports<T::AccountId>, Error> {
-		let desired_targets = Self::desired_targets() as usize;
-		let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
-		let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
-		<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<Perbill>(
+		let SnapshotData {
+			voters,
+			targets,
 			desired_targets,
+		} = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
+		<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<Perbill>(
+			desired_targets as usize,
 			targets,
 			voters,
 		)
@@ -724,8 +762,7 @@ where
 				// reset phase.
 				<CurrentPhase<T>>::put(Phase::Off);
 				// clear snapshots.
-				<SnapshotVoters<T>>::kill();
-				<SnapshotTargets<T>>::kill();
+				<Snapshot<T>>::kill();
 
 				Self::deposit_event(RawEvent::ElectionFinalized(Some(compute)));
 				log!(info, "Finalized election round with compute {:?}.", compute);
@@ -762,40 +799,40 @@ mod tests {
 
 			roll_to(4);
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
-			assert!(TwoPhase::snapshot_voters().is_none());
+			assert!(TwoPhase::snapshot().is_none());
 			assert_eq!(TwoPhase::round(), 0);
 
 			roll_to(5);
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
-			assert!(TwoPhase::snapshot_voters().is_some());
+			assert!(TwoPhase::snapshot().is_some());
 			assert_eq!(TwoPhase::round(), 1);
 
 			roll_to(14);
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
-			assert!(TwoPhase::snapshot_voters().is_some());
+			assert!(TwoPhase::snapshot().is_some());
 			assert_eq!(TwoPhase::round(), 1);
 
 			roll_to(15);
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
-			assert!(TwoPhase::snapshot_voters().is_some());
+			assert!(TwoPhase::snapshot().is_some());
 
 			roll_to(19);
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
-			assert!(TwoPhase::snapshot_voters().is_some());
+			assert!(TwoPhase::snapshot().is_some());
 
 			roll_to(20);
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
-			assert!(TwoPhase::snapshot_voters().is_some());
+			assert!(TwoPhase::snapshot().is_some());
 
 			// we close when upstream tells us to elect.
 			roll_to(21);
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
-			assert!(TwoPhase::snapshot_voters().is_some());
+			assert!(TwoPhase::snapshot().is_some());
 
 			TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
 				.unwrap();
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
-			assert!(TwoPhase::snapshot_voters().is_none());
+			assert!(TwoPhase::snapshot().is_none());
 			assert_eq!(TwoPhase::round(), 1);
 		})
 	}
