@@ -19,7 +19,7 @@
 
 use sp_core::offchain::OffchainOverlayedChange;
 use sp_std::prelude::Vec;
-use super::changeset::{OverlayedMap, OverlayedEntry};
+use super::changeset::OverlayedMap;
 
 /// In-memory storage for offchain workers recoding changes for the actual offchain storage implementation.
 #[derive(Debug, Clone)]
@@ -37,6 +37,15 @@ impl Default for OffchainOverlayedChanges {
 	}
 }
 
+/// Item for iterating over offchain changes.
+///
+/// First element i a tuple of `(prefix, key)`, second element ist the actual change
+/// (remove or set value).
+type OffchainOverlayedChangesItem<'i> = (&'i (Vec<u8>, Vec<u8>), &'i OffchainOverlayedChange);
+
+/// Iterator over offchain changes, owned memory version.
+type OffchainOverlayedChangesItemOwned = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange);
+
 impl OffchainOverlayedChanges {
 	/// Create the disabled variant.
 	pub fn disabled() -> Self {
@@ -49,18 +58,39 @@ impl OffchainOverlayedChanges {
 	}
 
 	/// Consume the offchain storage and iterate over all key value pairs.
-	pub fn into_iter(self) -> OffchainOverlayedChangesIntoIter {
-		OffchainOverlayedChangesIntoIter::new(self)
+	pub fn into_iter(self) -> impl Iterator<Item = OffchainOverlayedChangesItemOwned> {
+		let iter = match self {
+			OffchainOverlayedChanges::Enabled(inner) => Some(inner.changes.into_iter()
+				.map(|kv| (kv.0, kv.1.into_value()))),
+			OffchainOverlayedChanges::Disabled => None,
+		};
+
+		iter.into_iter().flatten()
 	}
 
 	/// Iterate over all key value pairs by reference.
-	pub fn iter<'a>(&'a self) -> OffchainOverlayedChangesIter {
-		OffchainOverlayedChangesIter::new(&self)
+	pub fn iter<'a>(&'a self) -> impl Iterator<Item = OffchainOverlayedChangesItem<'a>> {
+		let iter = match self {
+			OffchainOverlayedChanges::Enabled(inner) => Some(inner.changes.iter()
+				.map(|kv| (kv.0, kv.1.value_ref()))),
+			OffchainOverlayedChanges::Disabled => None,
+		};
+
+		iter.into_iter().flatten()
 	}
 
 	/// Drain all elements of changeset.
-	pub fn drain(&mut self) -> OffchainOverlayedChangesIntoIter {
-		OffchainOverlayedChangesIntoIter::drain(self)
+	pub fn drain(&mut self) -> impl Iterator<Item = OffchainOverlayedChangesItemOwned> {
+		let iter = match self {
+			OffchainOverlayedChanges::Enabled(inner) => {
+				let inner = sp_std::mem::replace(inner, Default::default());
+				Some(inner.changes.into_iter()
+					.map(|kv| (kv.0, kv.1.into_value())))
+			},
+			OffchainOverlayedChanges::Disabled => None,
+		};
+
+		iter.into_iter().flatten()
 	}
 
 	/// Remove a key and its associated value from the offchain database.
@@ -113,100 +143,6 @@ impl OffchainOverlayedChanges {
 		}
 	}
 
-}
-
-use sp_std::collections::btree_map;
-
-/// Iterate by reference over the prepared offchain worker storage changes.
-pub struct OffchainOverlayedChangesIter<'i> {
-	inner: Option<sp_std::iter::Map<
-		btree_map::Iter<'i, (Vec<u8>,Vec<u8>), OverlayedEntry<OffchainOverlayedChange>>,
-		fn((&'i (Vec<u8>, Vec<u8>), &'i OverlayedEntry<OffchainOverlayedChange>))
-			-> (&'i (Vec<u8>, Vec<u8>), &'i OffchainOverlayedChange),
-	>>,
-
-}
-
-impl<'i> Iterator for OffchainOverlayedChangesIter<'i> {
-	type Item = (&'i (Vec<u8>, Vec<u8>), &'i OffchainOverlayedChange);
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(ref mut iter) = self.inner {
-			iter.next()
-		} else {
-			None
-		}
-	}
-}
-
-impl<'i> OffchainOverlayedChangesIter<'i> {
-	/// Create a new iterator based on a refernce to the parent container.
-	pub fn new(container: &'i OffchainOverlayedChanges) -> Self {
-		match container {
-			OffchainOverlayedChanges::Enabled(inner) => Self {
-				inner: Some(inner.changes.iter().map(map_kv_ref))
-			},
-			OffchainOverlayedChanges::Disabled => Self { inner: None, },
-		}
-	}
-}
-
-
-/// Iterate by value over the prepared offchain worker storage changes.
-pub struct OffchainOverlayedChangesIntoIter {
-	inner: Option<sp_std::iter::Map<
-		btree_map::IntoIter<(Vec<u8>,Vec<u8>), OverlayedEntry<OffchainOverlayedChange>>,
-		fn(((Vec<u8>, Vec<u8>), OverlayedEntry<OffchainOverlayedChange>))
-			-> ((Vec<u8>, Vec<u8>), OffchainOverlayedChange),
-	>>,
-}
-
-impl Iterator for OffchainOverlayedChangesIntoIter {
-	type Item = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange);
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(ref mut iter) = self.inner {
-			iter.next()
-		} else {
-			None
-		}
-	}
-}
-
-fn map_kv(
-	kv: ((Vec<u8>, Vec<u8>), OverlayedEntry<OffchainOverlayedChange>)
-) -> ((Vec<u8>, Vec<u8>), OffchainOverlayedChange) {
-	(kv.0, kv.1.into_value())
-}
-
-fn map_kv_ref<'i>(
-	kv: (&'i (Vec<u8>, Vec<u8>), &'i OverlayedEntry<OffchainOverlayedChange>)
-) -> (&'i (Vec<u8>, Vec<u8>), &'i OffchainOverlayedChange) {
-	(kv.0, kv.1.value_ref())
-}
-
-impl OffchainOverlayedChangesIntoIter {
-	/// Create a new iterator by consuming the collection.
-	pub fn new(container: OffchainOverlayedChanges) -> Self {
-		match container {
-			OffchainOverlayedChanges::Enabled(inner) => Self {
-				inner: Some(inner.changes.into_iter().map(map_kv))
-			},
-			OffchainOverlayedChanges::Disabled => Self { inner: None, },
-		}
-	}
-
-	/// Create a new iterator by taking a mut reference to the collection,
-	/// for the lifetime of the created drain iterator.
-	pub fn drain(container: &mut OffchainOverlayedChanges) -> Self {
-		match container {
-			OffchainOverlayedChanges::Enabled(ref mut inner) => {
-				let inner = sp_std::mem::replace(inner, Default::default());
-				Self {
-					inner: Some(inner.changes.into_iter().map(map_kv))
-				}
-			},
-			OffchainOverlayedChanges::Disabled => Self { inner: None, },
-		}
-	}
 }
 
 #[cfg(test)]

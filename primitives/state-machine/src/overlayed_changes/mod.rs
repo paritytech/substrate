@@ -26,7 +26,7 @@ use crate::{
 };
 use sp_std::{vec::Vec, any::{TypeId, Any}, boxed::Box};
 use self::changeset::OverlayedChangeSet;
-use self::offchain::{OffchainOverlayedChanges, OffchainOverlayedChangesIntoIter};
+use self::offchain::OffchainOverlayedChanges;
 
 #[cfg(feature = "std")]
 use crate::{
@@ -475,7 +475,7 @@ impl OverlayedChanges {
 	/// Panics:
 	/// Panics if `transaction_depth() > 0`
 	pub fn offchain_drain_committed(&mut self) -> impl Iterator<Item=((StorageKey, StorageKey), OffchainOverlayedChange)> {
-		OffchainOverlayedChangesIntoIter::drain(&mut self.offchain)
+		self.offchain.drain()
 	}
 
 	/// Get an iterator over all child changes as seen by the current transaction.
