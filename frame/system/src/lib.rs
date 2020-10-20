@@ -575,6 +575,11 @@ decl_module! {
 			ensure_signed(origin)?;
 		}
 
+		#[weight = T::SystemWeightInfo::remark(_remark.len() as u32)]
+		fn noop_root(origin, _remark: Vec<u8>) {
+			ensure_root(origin)?;
+		}
+
 		/// Set the number of pages in the WebAssembly environment's heap.
 		///
 		/// # <weight>

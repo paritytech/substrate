@@ -170,7 +170,7 @@ Then you can run a benchmark like so:
     --extrinsic transfer \      # Select the extrinsic
     --steps 50 \                # Number of samples across component ranges
     --repeat 20 \               # Number of times we repeat a benchmark
-    --output \                  # Output benchmark results into a Rust file
+    --output ./                 # Output benchmark results into a Rust file
 ```
 
 This will output a file `pallet_name.rs` which implements the `WeightInfo` trait you should include

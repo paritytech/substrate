@@ -104,13 +104,14 @@ use frame_system::ensure_signed;
 mod mock;
 #[cfg(test)]
 mod tests;
+mod benchmarks;
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// A sudo-able call.
-	type Call: Parameter + UnfilteredDispatchable<Origin=Self::Origin> + GetDispatchInfo;
+	type Call: Parameter + UnfilteredDispatchable<Origin=Self::Origin> + GetDispatchInfo + From<frame_system::Call<Self>>;
 }
 
 decl_module! {
