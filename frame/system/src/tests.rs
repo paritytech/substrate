@@ -31,20 +31,22 @@ fn origin_works() {
 #[test]
 fn stored_map_works() {
 	new_test_ext().execute_with(|| {
-		System::insert(&0, 42);
-		assert!(System::allow_death(&0));
+		assert!(System::insert(&0, 42).is_ok());
+		assert!(System::is_provider_required(&0));
 
-		System::inc_ref(&0);
-		assert!(!System::allow_death(&0));
+		assert_eq!(Account::<Test>::get(0), AccountInfo { nonce: 0, providers: 1, consumers: 0, data: 42 });
 
-		System::insert(&0, 69);
-		assert!(!System::allow_death(&0));
+		assert!(System::inc_consumers(&0).is_ok());
+		assert!(!System::is_provider_required(&0));
 
-		System::dec_ref(&0);
-		assert!(System::allow_death(&0));
+		assert!(System::insert(&0, 69).is_ok());
+		assert!(!System::is_provider_required(&0));
+
+		System::dec_consumers(&0);
+		assert!(System::is_provider_required(&0));
 
 		assert!(KILLED.with(|r| r.borrow().is_empty()));
-		System::kill_account(&0);
+		assert!(System::remove(&0).is_ok());
 		assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0u64]);
 	});
 }
@@ -403,11 +405,12 @@ fn events_not_emitted_during_genesis() {
 	new_test_ext().execute_with(|| {
 		// Block Number is zero at genesis
 		assert!(System::block_number().is_zero());
-		System::on_created_account(Default::default());
+		let mut account_data = AccountInfo { nonce: 0, consumers: 0, providers: 0, data: 0 };
+		System::on_created_account(Default::default(), &mut account_data);
 		assert!(System::events().is_empty());
 		// Events will be emitted starting on block 1
 		System::set_block_number(1);
-		System::on_created_account(Default::default());
+		System::on_created_account(Default::default(), &mut account_data);
 		assert!(System::events().len() == 1);
 	});
 }

@@ -1359,12 +1359,3 @@ where
 		Self::update_locks(who, &locks[..]);
 	}
 }
-
-impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I> where
-	T::Balance: MaybeSerializeDeserialize + Debug
-{
-	fn is_dead_account(who: &T::AccountId) -> bool {
-		// this should always be exactly equivalent to `Self::account(who).total().is_zero()` if ExistentialDeposit > 0
-		!T::AccountStore::is_explicit(who)
-	}
-}

@@ -91,7 +91,8 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
 				assert_eq!(Balances::free_balance(1), 10);
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath));
-				assert!(!<<Test as Trait>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
+				// Check that the account is dead.
+				assert!(!frame_system::Account::<T>::contains_key(&1));
 			});
 		}
 
@@ -262,14 +263,12 @@ macro_rules! decl_tests {
 				.monied(true)
 				.build()
 				.execute_with(|| {
-					assert_eq!(Balances::is_dead_account(&5), true);
 					// account 5 should not exist
 					// ext_deposit is 10, value is 9, not satisfies for ext_deposit
 					assert_noop!(
 						Balances::transfer(Some(1).into(), 5, 9),
 						Error::<$test, _>::ExistentialDeposit,
 					);
-					assert_eq!(Balances::is_dead_account(&5), true); // account 5 should not exist
 					assert_eq!(Balances::free_balance(1), 100);
 				});
 		}
@@ -282,31 +281,25 @@ macro_rules! decl_tests {
 				.build()
 				.execute_with(|| {
 					System::inc_account_nonce(&2);
-					assert_eq!(Balances::is_dead_account(&2), false);
-					assert_eq!(Balances::is_dead_account(&5), true);
 					assert_eq!(Balances::total_balance(&2), 256 * 20);
 
 					assert_ok!(Balances::reserve(&2, 256 * 19 + 1)); // account 2 becomes mostly reserved
 					assert_eq!(Balances::free_balance(2), 255); // "free" account deleted."
 					assert_eq!(Balances::total_balance(&2), 256 * 20); // reserve still exists.
-					assert_eq!(Balances::is_dead_account(&2), false);
 					assert_eq!(System::account_nonce(&2), 1);
 
 					// account 4 tries to take index 1 for account 5.
 					assert_ok!(Balances::transfer(Some(4).into(), 5, 256 * 1 + 0x69));
 					assert_eq!(Balances::total_balance(&5), 256 * 1 + 0x69);
-					assert_eq!(Balances::is_dead_account(&5), false);
 
 					assert!(Balances::slash(&2, 256 * 19 + 2).1.is_zero()); // account 2 gets slashed
 					// "reserve" account reduced to 255 (below ED) so account deleted
 					assert_eq!(Balances::total_balance(&2), 0);
 					assert_eq!(System::account_nonce(&2), 0);    // nonce zero
-					assert_eq!(Balances::is_dead_account(&2), true);
 
 					// account 4 tries to take index 1 again for account 6.
 					assert_ok!(Balances::transfer(Some(4).into(), 6, 256 * 1 + 0x69));
 					assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
-					assert_eq!(Balances::is_dead_account(&6), false);
 				});
 		}
 
@@ -623,7 +616,6 @@ macro_rules! decl_tests {
 					Balances::transfer_keep_alive(Some(1).into(), 2, 100),
 					Error::<$test, _>::KeepAlive
 				);
-				assert_eq!(Balances::is_dead_account(&1), false);
 				assert_eq!(Balances::total_balance(&1), 100);
 				assert_eq!(Balances::total_balance(&2), 0);
 			});
@@ -686,7 +678,6 @@ macro_rules! decl_tests {
 					// Reserve some free balance
 					let _ = Balances::slash(&1, 1);
 					// The account should be dead.
-					assert!(Balances::is_dead_account(&1));
 					assert_eq!(Balances::free_balance(1), 0);
 					assert_eq!(Balances::reserved_balance(1), 0);
 				});
