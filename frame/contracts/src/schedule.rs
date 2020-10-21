@@ -21,8 +21,10 @@ use crate::{Trait, WeightInfo};
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
+#[cfg(feature = "std")]
+use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
 use frame_support::weights::Weight;
-use sp_std::{marker::PhantomData, fmt};
+use sp_std::marker::PhantomData;
 use codec::{Encode, Decode};
 use parity_wasm::elements;
 use pwasm_utils::rules;
@@ -37,7 +39,7 @@ pub const API_BENCHMARK_BATCH_SIZE: u32 = 100;
 pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 
 /// Definition of the cost schedule and other parameterizations for wasm vm.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, ScheduleDebug))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub struct Schedule<T: Trait> {
@@ -59,7 +61,7 @@ pub struct Schedule<T: Trait> {
 }
 
 /// Describes the upper limits on various metrics.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub struct Limits {
 	/// The maximum number of topics supported by an event.
@@ -127,7 +129,7 @@ pub struct Limits {
 ///    individual values to derive (by substraction) the weight of all other instructions
 ///    that use them as supporting instructions. Supporting means mainly pushing arguments
 ///    and dropping return values in order to maintain a valid module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, WeightDebug))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub struct InstructionWeights<T: Trait> {
 	pub i64const: u32,
@@ -186,7 +188,7 @@ pub struct InstructionWeights<T: Trait> {
 }
 
 /// Describes the weight for each imported function that a contract is allowed to call.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, WeightDebug))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub struct HostFnWeights<T: Trait> {
 	/// Weight of calling `seal_caller`.
@@ -326,14 +328,6 @@ pub struct HostFnWeights<T: Trait> {
 
 	/// The type parameter is used in the default implementation.
 	pub _phantom: PhantomData<T>
-}
-
-/// We need to implement Debug manually because the automatic derive enforces T
-/// to also implement Debug.
-impl<T: Trait> fmt::Debug for Schedule<T> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("Schedule").finish()
-	}
 }
 
 macro_rules! replace_token {
@@ -659,5 +653,17 @@ impl<'a, T: Trait> rules::Rules for ScheduleRules<'a, T> {
 		// We benchmarked the memory.grow instruction with the maximum allowed pages.
 		// The cost for growing is therefore already included in the instruction cost.
 		None
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use crate::tests::Test;
+	use super::*;
+
+	#[test]
+	fn print_schedule() {
+		let schedule = Schedule::<Test>::default();
+		println!("{:#?}", schedule);
 	}
 }
