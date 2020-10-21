@@ -292,6 +292,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
 				config.add_protocol(params.protocol_id.clone());
 				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
+				config.use_kademlia_disjoint_query_paths(params.network_config.kademlia_disjoint_query_paths);
 
 				match params.network_config.transport {
 					TransportConfig::MemoryOnly => {

@@ -423,6 +423,9 @@ pub struct NetworkConfiguration {
 	pub max_parallel_downloads: u32,
 	/// Should we insert non-global addresses into the DHT?
 	pub allow_non_globals_in_dht: bool,
+	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in the
+	/// presence of potentially adversarial nodes.
+	pub kademlia_disjoint_query_paths: bool,
 }
 
 impl NetworkConfiguration {
@@ -454,6 +457,7 @@ impl NetworkConfiguration {
 			},
 			max_parallel_downloads: 5,
 			allow_non_globals_in_dht: false,
+			kademlia_disjoint_query_paths: false,
 		}
 	}
 
