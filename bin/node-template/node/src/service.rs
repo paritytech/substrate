@@ -223,7 +223,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 }
 
 /// Builds a new service for a light client.
-#[sc_cli::substrate_cli_node_name("light")]
+#[sc_cli::prefix_logs_with("light")]
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let (client, backend, keystore_container, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;

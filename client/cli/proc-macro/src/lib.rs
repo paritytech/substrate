@@ -104,11 +104,11 @@ use syn::{Error, Expr, Ident, ItemFn};
 /// 2020-10-16 08:12:58  [open-harbor-1619] Listening for new connections on 127.0.0.1:9944.
 /// ```
 #[proc_macro_attribute]
-pub fn substrate_cli_node_name(arg: TokenStream, item: TokenStream) -> TokenStream {
+pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 	let item_fn = syn::parse_macro_input!(item as ItemFn);
 
 	if arg.is_empty() {
-		return Error::new(Span::call_site(), "missing expression: name of the node (in argument)")
+		return Error::new(Span::call_site(), "missing expression in argument: name of the node")
 			.to_compile_error()
 			.into();
 	}

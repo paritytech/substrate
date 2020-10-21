@@ -35,7 +35,7 @@ use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
-use futures::{executor, future, future::{Either, Future}, channel::oneshot};
+use futures::{executor, future, future::{Either, Future, FutureExt}, channel::oneshot};
 use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
@@ -181,12 +181,12 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 			}
 		}));
 
-		Box::pin(async move {
+		async move {
 			match rx.await {
 				Ok(x) => x,
 				Err(err) => Err(sp_blockchain::Error::Msg(err.to_string()))
 			}
-		})
+		}.boxed()
 	}
 }
 
