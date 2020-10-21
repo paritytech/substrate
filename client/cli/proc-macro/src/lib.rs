@@ -108,9 +108,12 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 	let item_fn = syn::parse_macro_input!(item as ItemFn);
 
 	if arg.is_empty() {
-		return Error::new(Span::call_site(), "missing expression in argument: name of the node")
-			.to_compile_error()
-			.into();
+		return Error::new(
+			Span::call_site(),
+			"missing argument: name of the node. Example: sc_cli::prefix_logs_with(<expr>)",
+		)
+		.to_compile_error()
+		.into();
 	}
 
 	let name = syn::parse_macro_input!(arg as Expr);
