@@ -24,10 +24,10 @@ use syn::{Error, Expr, Ident, ItemFn};
 
 /// Add a log prefix to the function.
 ///
-/// This prefixes all the log lines with `[<name>]` (after the timestamp). Tracing's span are
-/// propagated to all the child calls and child tasks (futures) if they are spawned properly with
-/// the `SpawnHandle` (see `TaskManager` in sc-cli) or if the futures use `.in_current_span()` (see
-/// tracing-futures).
+/// This prefixes all the log lines with `[<name>]` (after the timestamp). It works by making a
+/// tracing's span that is propagated to all the child calls and child tasks (futures) if they are
+/// spawned properly with the `SpawnHandle` (see `TaskManager` in sc-cli) or if the futures use
+/// `.in_current_span()` (see tracing-futures).
 ///
 /// See Tokio's [tracing documentation](https://docs.rs/tracing-core/) and
 /// [tracing-futures documentation](https://docs.rs/tracing-futures/) for more details.
