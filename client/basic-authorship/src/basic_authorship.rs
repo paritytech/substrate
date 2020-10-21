@@ -35,7 +35,7 @@ use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
-use futures::{executor, future, future::{Either, Future, FutureExt}, channel::oneshot, select};
+use futures::{executor, future, future::{Future, FutureExt}, channel::oneshot, select};
 use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
