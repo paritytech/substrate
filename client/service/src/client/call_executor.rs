@@ -383,7 +383,7 @@ mod tests {
 		};
 
 		let check = call_executor.check_overwrite(onchain_code, &BlockId::Number(Default::default()))
-			.expect("Return RuntimeCode overwrite");
+			.expect("RuntimeCode overwrite");
 
 		assert_eq!(Some(vec![2, 2, 2, 2, 2, 2, 2, 2]), check.fetch_runtime_code().map(Into::into));
 	}
