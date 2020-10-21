@@ -35,7 +35,7 @@ use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
-use futures::{executor, future, future::{Either, Future, FutureExt}, channel::oneshot};
+use futures::{executor, future, future::{Either, Future, FutureExt}, channel::oneshot, select};
 use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
@@ -175,7 +175,12 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 		spawn_handle.spawn_blocking("basic-authorship-proposer", Box::pin(async move {
 			// leave some time for evaluation and block finalization (33%)
 			let deadline = (self.now)() + max_duration - max_duration / 3;
-			let res = self.propose_with(inherent_data, inherent_digests, deadline, record_proof);
+			let res = self.propose_with(
+				inherent_data,
+				inherent_digests,
+				deadline,
+				record_proof,
+			).await;
 			if tx.send(res).is_err() {
 				error!("Could not send message to oneshot channel");
 			}
@@ -200,7 +205,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 			+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
-	fn propose_with(
+	async fn propose_with(
 		self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
@@ -237,18 +242,20 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
-		let pending_iterator = match executor::block_on(future::select(
-			self.transaction_pool.ready_at(self.parent_number),
-			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8),
-		)) {
-			Either::Left((iterator, _)) => iterator,
-			Either::Right(_) => {
+
+		let mut t1 = self.transaction_pool.ready_at(self.parent_number).fuse();
+		let mut t2 = futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8).fuse();
+
+		let pending_iterator = select! {
+			res = t1 => res,
+			_ = t2 => {
 				log::warn!(
-					"Timeout fired waiting for transaction pool at block #{}. Proceeding with production.",
+					"Timeout fired waiting for transaction pool at block #{}. \
+					Proceeding with production.",
 					self.parent_number,
 				);
 				self.transaction_pool.ready()
-			}
+			},
 		};
 
 		debug!("Attempting to push transactions from the pool.");
