@@ -147,6 +147,7 @@ impl core::Benchmark for ConstructionBenchmark {
 		}
 
 		let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
+			context.spawn_handle.clone(),
 			context.client.clone(),
 			self.transactions.clone().into(),
 			None,

@@ -129,6 +129,7 @@ impl system::Trait for Runtime {
 	type Event = Event;
 	type PalletInfo = PalletInfo;
 	type Call = Call;
+	type DbWeight = ();
 }
 
 frame_support::construct_runtime!(
