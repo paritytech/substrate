@@ -27,7 +27,7 @@ use sp_version::RuntimeVersion;
 use sp_core::traits::RuntimeCode;
 
 #[derive(Clone, Debug)]
-/// Auxiliary structure that holds a wasm blob and its hash. 
+/// Auxiliary structure that holds a wasm blob and its hash.
 struct WasmBlob {
 	code: Vec<u8>,
 	hash: Vec<u8>,
@@ -110,7 +110,7 @@ where
 				 dir,
 			)));
 		}
-		
+
 		let mut overwrites = HashMap::new();
 		let mut duplicates = Vec::new();
 		for entry in fs::read_dir(dir).map_err(handle_err)? {
@@ -122,7 +122,7 @@ where
 				duplicates.push(format!("{}", path.display()));
 			}
 		}
-		
+
 		if !duplicates.is_empty() {
 			let duplicate_file_list = duplicates.join("\n");
 			let msg = format!("Duplicate WASM Runtimes found: \n{}\n", duplicate_file_list);
@@ -140,5 +140,40 @@ where
 		let mut ext = BasicExternalities::default();
 		executor.runtime_version(&mut ext, &code.runtime_code(heap_pages))
 			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
+	}
+}
+
+/// Returns a WasmOverwrite struct
+/// filled with dummy data for testing.
+#[cfg(test)]
+pub fn dummy_overwrites<E>(executor: &E) -> WasmOverwrite<E>
+where
+	E: RuntimeInfo + Clone + 'static
+{
+	let mut overwrites = HashMap::new();
+	overwrites.insert(0, WasmBlob::new(vec![0, 0, 0, 0, 0, 0, 0, 0]));
+	overwrites.insert(1, WasmBlob::new(vec![1, 1, 1, 1, 1, 1, 1, 1]));
+	overwrites.insert(2, WasmBlob::new(vec![2, 2, 2, 2, 2, 2, 2, 2]));
+	WasmOverwrite {
+		overwrites,
+		executor: executor.clone()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sc_executor::{NativeExecutor, WasmExecutionMethod};
+	use substrate_test_runtime_client::LocalExecutor;
+
+	#[test]
+	fn should_get_runtime_version() {
+		let wasm = WasmBlob::new(substrate_test_runtime::wasm_binary_unwrap().to_vec());
+		let executor =
+			NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
+
+		let version = WasmOverwrite::runtime_version(&executor, &wasm, Some(128))
+			.expect("should get the `RuntimeVersion` of the test-runtime wasm blob");
+		assert_eq!(version.spec_version, 2);
 	}
 }

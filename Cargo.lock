@@ -7214,6 +7214,7 @@ dependencies = [
  "sp-utils",
  "sp-version",
  "substrate-prometheus-endpoint",
+ "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.2.22",

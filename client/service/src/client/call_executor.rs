@@ -70,9 +70,9 @@ where
 		})
 	}
 
-	/// Tries to return an overwrite for `code`.
+	/// Tries to return an overwrite for `onchain_code`.
 	///
-	/// Returns `None` if an overwrite was not found,
+	/// Returns `onchain_code` if an overwrite was not found,
 	/// or if overwriting is disabled.
 	fn check_overwrite<'a, Block>(
 		&'a self,
@@ -317,5 +317,74 @@ impl<B, E, Block> sp_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, 
 		at: &BlockId<Block>,
 	) -> Result<sp_version::RuntimeVersion, String> {
 		CallExecutor::runtime_version(self, at).map_err(|e| format!("{:?}", e))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use substrate_test_runtime_client::{LocalExecutor, GenesisInit, runtime};
+	use sc_executor::{NativeExecutor, WasmExecutionMethod};
+	use sp_core::{traits::{WrappedRuntimeCode, FetchRuntimeCode}, testing::TaskExecutor};
+	use sc_client_api::in_mem;
+	use sc_block_builder::BlockBuilderProvider;
+
+	#[test]
+	fn should_get_overwrite_if_exists() {
+		let executor =
+			NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
+
+		let overwrites = crate::client::wasm_overwrite::dummy_overwrites(&executor);
+		let onchain_code = WrappedRuntimeCode(substrate_test_runtime::wasm_binary_unwrap().into());
+		let onchain_code = RuntimeCode {
+			code_fetcher: &onchain_code,
+			heap_pages: Some(128),
+			hash: vec![0, 0, 0, 0],
+		};
+
+		let backend = Arc::new(in_mem::Backend::<runtime::Block>::new());
+
+		// wasm_runtime_overwrites is `None` here because we construct the
+		// LocalCallExecutor directly later on, and the client is just used for the convenience
+		// of creating a block.
+		let client_config = ClientConfig {
+			offchain_worker_enabled: false,
+			offchain_indexing_api: false,
+			wasm_runtime_overwrites: None,
+		};
+
+		let client = substrate_test_runtime_client::client::new_with_backend::<
+			_,
+			_,
+			runtime::Block,
+			_,
+			runtime::RuntimeApi,
+		>(
+			backend.clone(),
+			executor.clone(),
+			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+			None,
+			Box::new(TaskExecutor::new()),
+			None,
+			Default::default(),
+		).expect("Creates a client");
+
+		client.new_block(Default::default())
+			.unwrap()
+			.build()
+			.unwrap();
+
+		let call_executor = LocalCallExecutor {
+			backend: backend.clone(),
+			executor,
+			wasm_overwrite: Some(overwrites),
+			spawn_handle: Box::new(TaskExecutor::new()),
+			client_config,
+		};
+
+		let check = call_executor.check_overwrite(onchain_code, &BlockId::Number(Default::default()))
+			.expect("Return RuntimeCode overwrite");
+
+		assert_eq!(Some(vec![2, 2, 2, 2, 2, 2, 2, 2]), check.fetch_runtime_code().map(Into::into));
 	}
 }
