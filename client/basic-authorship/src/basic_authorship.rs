@@ -57,13 +57,13 @@ pub struct ProposerFactory<A, B, C> {
 
 impl<A, B, C> ProposerFactory<A, B, C> {
 	pub fn new(
-		spawn_handle: Box<dyn SpawnNamed>,
+		spawn_handle: impl SpawnNamed + 'static,
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
 	) -> Self {
 		ProposerFactory {
-			spawn_handle,
+			spawn_handle: Box::new(spawn_handle),
 			client,
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
