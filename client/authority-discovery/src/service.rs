@@ -44,11 +44,7 @@ impl Service {
 	/// [`crate::Worker`] failed.
 	///
 	/// [`Multiaddr`]s returned always include a [`PeerId`] via a
-	/// [`libp2p::core::multiaddr:Protocol::P2p`] component. [`Multiaddr`]s
-	/// might differ in their [`PeerId`], e.g. when each [`Multiaddr`]
-	/// represents a different sentry node. This might change once support for
-	/// sentry nodes is removed (see
-	/// https://github.com/paritytech/substrate/issues/6845).
+	/// [`libp2p::core::multiaddr:Protocol::P2p`] component.
 	pub async fn get_addresses_by_authority_id(&mut self, authority: AuthorityId) -> Option<Vec<Multiaddr>> {
 		let (tx, rx) = oneshot::channel();
 
