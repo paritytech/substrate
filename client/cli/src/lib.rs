@@ -25,9 +25,9 @@ pub mod arg_enums;
 mod commands;
 mod config;
 mod error;
+mod logging;
 mod params;
 mod runner;
-mod logging;
 
 pub use arg_enums::*;
 pub use commands::*;
@@ -35,8 +35,9 @@ pub use config::*;
 pub use error::*;
 pub use params::*;
 pub use runner::*;
-use sc_service::{Configuration, TaskExecutor};
+pub use sc_cli_proc_macro::*;
 pub use sc_service::{ChainSpec, Role};
+use sc_service::{Configuration, TaskExecutor};
 pub use sp_version::RuntimeVersion;
 use std::io::Write;
 pub use structopt;
@@ -44,12 +45,11 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
+#[doc(hidden)]
+pub use tracing;
 use tracing_subscriber::{
 	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
 };
-#[doc(hidden)]
-pub use tracing;
-pub use sc_cli_proc_macro::*;
 
 /// Substrate client CLI
 ///
@@ -345,8 +345,9 @@ pub fn init_logger(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate as sc_cli;
+	use std::{env, process::Command};
 	use tracing::{metadata::Kind, subscriber::Interest, Callsite, Level, Metadata};
-	use std::{process::Command, env};
 
 	#[test]
 	fn test_logger_filters() {
@@ -414,5 +415,37 @@ mod tests {
 
 			log::info!(target: "test-target", "{}", EXPECTED_LOG_MESSAGE);
 		}
+	}
+
+	const EXPECTED_NODE_NAME: &'static str = "THE_NODE";
+
+	#[test]
+	fn prefix_in_log_lines() {
+		let executable = env::current_exe().unwrap();
+		let output = Command::new(executable)
+			.env("ENABLE_LOGGING", "1")
+			.args(&["--nocapture", "prefix_in_log_lines_entrypoint"])
+			.output()
+			.unwrap();
+
+		let output = String::from_utf8(output.stderr).unwrap();
+		assert!(output.contains(&format!(" [{}] ", EXPECTED_NODE_NAME)));
+	}
+
+	/// This is no actual test, it will be used by the `prefix_in_log_lines` test.
+	/// The given test will call the test executable to only execute this test that
+	/// will only print a log line prefixed by the node name `EXPECTED_NODE_NAME`.
+	#[test]
+	fn prefix_in_log_lines_entrypoint() {
+		if env::var("ENABLE_LOGGING").is_ok() {
+			let test_pattern = "test-target=info";
+			init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
+			prefix_in_log_lines_process();
+		}
+	}
+
+	#[crate::prefix_logs_with(EXPECTED_NODE_NAME)]
+	fn prefix_in_log_lines_process() {
+		log::info!("Hello World!");
 	}
 }
