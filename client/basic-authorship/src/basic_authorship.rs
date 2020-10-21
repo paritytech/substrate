@@ -182,7 +182,7 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 				record_proof,
 			).await;
 			if tx.send(res).is_err() {
-				error!("Could not send message to oneshot channel");
+				trace!("Could not send block production result to proposer!");
 			}
 		}));
 
