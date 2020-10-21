@@ -22,7 +22,7 @@ use proc_macro_crate::crate_name;
 use quote::quote;
 use syn::{Error, Expr, Ident, ItemFn};
 
-/// Macro that inserts a tracing span with the node name at the beginning of the function.
+/// Add a log prefix to the function.
 ///
 /// This prefixes all the log lines with `[<name>]` (after the timestamp). Tracing's span are
 /// propagated to all the child calls and child tasks (futures) if they are spawned properly with
@@ -34,13 +34,13 @@ use syn::{Error, Expr, Ident, ItemFn};
 ///
 /// # Implementation notes
 ///
-/// If there are multiple spans with a node name, only the latest will be shown.
+/// If there are multiple spans with a log prefix, only the latest will be shown.
 ///
 /// # Example with a literal
 ///
 /// ```ignore
 /// Builds a new service for a light client.
-/// #[sc_cli::substrate_cli_node_name("light")]
+/// #[sc_cli::prefix_logs_with("light")]
 /// pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 ///     let (client, backend, keystore, mut task_manager, on_demand) =
 ///         sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
@@ -74,7 +74,7 @@ use syn::{Error, Expr, Ident, ItemFn};
 ///
 /// ```ignore
 /// Builds a new service for a light client.
-/// #[sc_cli::substrate_cli_node_name(config.network.node_name.as_str())]
+/// #[sc_cli::prefix_logs_with(config.network.node_name.as_str())]
 /// pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 ///     let (client, backend, keystore, mut task_manager, on_demand) =
 ///         sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
