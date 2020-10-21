@@ -17,9 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use ansi_term::{Colour, Style};
-use std::fmt;
-use std::fmt::Write as _;
-use std::iter;
+use std::{fmt::{self, Write as _}, iter};
 use tracing::{
 	span::{self, Attributes},
 	Event, Id, Level, Subscriber,
