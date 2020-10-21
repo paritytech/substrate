@@ -1,5 +1,24 @@
-#![allow(dead_code)]
-#![allow(missing_docs)]
+// This file is part of Substrate.
+
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+/// Server reference implementation of SSRS. For a usage example please
+/// see the `remote-sign-server`-reference binary.
+
 use std::{
 	pin::Pin,
 	task::{Context, Poll}
@@ -26,7 +45,7 @@ use futures::{
 		mpsc::{UnboundedSender, UnboundedReceiver, unbounded},
 	},
 	future::{Future, FutureExt, TryFutureExt},
-	stream::{Stream, StreamExt},
+	stream:: Stream,
 };
 use std::convert::TryInto;
 
@@ -64,6 +83,7 @@ enum State<Store: CryptoStore> {
 	Ended,
 }
 
+/// Wrapping the internal Async CryptoStore
 pub struct KeystoreReceiver<Store: CryptoStore> {
 	receiver: UnboundedReceiver<KeystoreRequest>,
 	state: State<Store>,
@@ -265,13 +285,20 @@ enum KeystoreResponse {
 }
 
 
-
-pub struct GenericRemoteSignerServer{
+/// Generic Remote Signer Server implements the SSRS server over
+/// any (async) [`CryptoStore`] for you. Allowing you to easily
+/// wrap any existing CryptoStore implementation and just expose
+/// that over the API.
+pub struct GenericRemoteSignerServer {
 	sender: UnboundedSender<KeystoreRequest>,
 }
 
 impl GenericRemoteSignerServer {
 
+	/// Construct a generic remote sign server for the given crypto store.
+	/// Returns the JSONRpcHanlder (`Self`) as well as a `KeystoreReciver`–
+	/// a stream that does the actual work in an async stream and needs to be
+	/// run to completion – see the `remote-sign-server` for an example usage.
 	pub fn proxy<Store: CryptoStore + 'static>(store: Store) -> (Self, KeystoreReceiver<Store>) {
 		let (sender, receiver) = unbounded::<KeystoreRequest>();
 		(GenericRemoteSignerServer { sender }, KeystoreReceiver::new(store, receiver))

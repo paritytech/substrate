@@ -1,3 +1,33 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+/// This is the reference impelmentation of the Substrate Simple Remote
+/// Signer protocol (SSRS), allowing an external server to provide the
+/// cryptographic secret and signing functionality for a substrate-based
+/// chain to work. For that the node (client) connects via HTTP or Websocket
+/// to the external server and calls the defined json-rpc-interface over
+/// that connection.
+
+/// This crate can be build with the `server` and `client`-features, both
+/// are enabled by default. You can disable them by setting
+/// `default-features = false`, then you'll only have the JSON-RPC interface
+/// exposed – allowing others to provide their own type-safe implementation
+/// of it.
 
 use jsonrpc_derive::rpc;
 use jsonrpc_core::BoxFuture;
@@ -18,6 +48,7 @@ pub mod server;
 #[cfg(feature = "client")]
 pub mod client;
 
+/// Wrap VRFTranscriptData into a serializable format
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct TransferableVRFTranscriptData {
 	/// The transcript's label
@@ -30,12 +61,12 @@ impl From<VRFTranscriptData> for TransferableVRFTranscriptData {
 	fn from(d: VRFTranscriptData) -> TransferableVRFTranscriptData {
 		TransferableVRFTranscriptData {
 			label: d.label.to_vec(),
-			items:  d.items.into_iter().map(|(k, v)| v).collect()
+			items:  d.items.into_iter().map(|(_k, v)| v).collect()
 		}
 	}
 }
 
-/// Substrate Remote Signer API
+/// Simple Substrate Remote Signer JSON RPC interface
 /// matches `sp-core::CryptoStore`
 #[rpc]
 pub trait RemoteSignerApi {

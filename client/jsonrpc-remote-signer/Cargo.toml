@@ -1,15 +1,14 @@
 [package]
 name = "sc-jsonrpc-remote-signer"
-version = "2.0.0"
+version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "Implementing a substrate client remote signer via JSON-RPC"
+description = "Implementing the Substrate Simple Remote Signer protocol over JSON-RPC"
 
 [dependencies]
-# TODO The root of all evil, get rid asap.
 hyper = "0.12"
 
 jsonrpc-derive = "14.2.1"
