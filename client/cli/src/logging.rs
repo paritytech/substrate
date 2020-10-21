@@ -33,6 +33,9 @@ use tracing_subscriber::{
 	Layer,
 };
 
+/// Span name used for the logging prefix. See macro `sc_cli::prefix_logs_with!`
+pub const PREFIX_LOG_SPAN: &str = "substrate-log-prefix";
+
 pub(crate) struct EventFormat<T = SystemTime> {
 	pub(crate) timer: T,
 	pub(crate) ansi: bool,
@@ -111,7 +114,7 @@ where
 			.span(id)
 			.expect("new_span has been called for this span; qed");
 
-		if span.name() != "substrate-node" {
+		if span.name() != PREFIX_LOG_SPAN {
 			return;
 		}
 

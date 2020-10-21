@@ -51,6 +51,8 @@ use tracing_subscriber::{
 	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
 };
 
+pub use logging::PREFIX_LOG_SPAN;
+
 /// Substrate client CLI
 ///
 /// This trait needs to be defined on the root structopt of the application. It will provide the

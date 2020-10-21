@@ -142,7 +142,10 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 	(quote! {
 		#(#attrs)*
 		#vis #sig {
-			let span = #crate_name::tracing::info_span!("substrate-node", name = #name);
+			let span = #crate_name::tracing::info_span!(
+				#crate_name::PREFIX_LOG_SPAN,
+				name = #name,
+			);
 			let _enter = span.enter();
 
 			#block

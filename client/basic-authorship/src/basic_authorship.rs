@@ -403,7 +403,7 @@ mod tests {
 		);
 
 		let mut proposer_factory = ProposerFactory::new(
-			Box::new(spawner.clone()),
+			spawner.clone(),
 			client.clone(),
 			txpool.clone(),
 			None,
@@ -449,7 +449,7 @@ mod tests {
 		);
 
 		let mut proposer_factory = ProposerFactory::new(
-			Box::new(spawner.clone()),
+			spawner.clone(),
 			client.clone(),
 			txpool.clone(),
 			None,
@@ -504,7 +504,7 @@ mod tests {
 		);
 
 		let mut proposer_factory = ProposerFactory::new(
-			Box::new(spawner.clone()),
+			spawner.clone(),
 			client.clone(),
 			txpool.clone(),
 			None,
@@ -578,7 +578,7 @@ mod tests {
 		).unwrap();
 
 		let mut proposer_factory = ProposerFactory::new(
-			Box::new(spawner.clone()),
+			spawner.clone(),
 			client.clone(),
 			txpool.clone(),
 			None,

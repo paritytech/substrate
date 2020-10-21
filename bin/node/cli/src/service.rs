@@ -231,7 +231,7 @@ pub fn new_full_base(
 
 	if let sc_service::config::Role::Authority { .. } = &role {
 		let proposer = sc_basic_authorship::ProposerFactory::new(
-			Box::new(task_manager.spawn_handle()),
+			task_manager.spawn_handle(),
 			client.clone(),
 			transaction_pool.clone(),
 			prometheus_registry.as_ref(),
@@ -558,7 +558,7 @@ mod tests {
 				);
 
 				let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
-					Box::new(service.spawn_handle()),
+					service.spawn_handle(),
 					service.client(),
 					service.transaction_pool(),
 					None,

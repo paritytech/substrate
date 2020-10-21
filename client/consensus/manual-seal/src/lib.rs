@@ -297,7 +297,7 @@ mod tests {
 			Options::default(), api(), None, RevalidationType::Full, spawner.clone(),
 		));
 		let env = ProposerFactory::new(
-			Box::new(spawner.clone()),
+			spawner.clone(),
 			client.clone(),
 			pool.clone(),
 			None,
@@ -369,7 +369,7 @@ mod tests {
 			Options::default(), api(), None, RevalidationType::Full, spawner.clone(),
 		));
 		let env = ProposerFactory::new(
-			Box::new(spawner.clone()),
+			spawner.clone(),
 			client.clone(),
 			pool.clone(),
 			None,
@@ -445,7 +445,7 @@ mod tests {
 			Options::default(), pool_api.clone(), None, RevalidationType::Full, spawner.clone(),
 		));
 		let env = ProposerFactory::new(
-			Box::new(spawner.clone()),
+			spawner.clone(),
 			client.clone(),
 			pool.clone(),
 			None,
