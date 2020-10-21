@@ -916,7 +916,7 @@ impl CheckTraitDecl {
 			if method.default.is_some() {
 				self.errors.push(Error::new(
 					method.default.span(),
-					"A runtime api function can not have a default implementation!",
+					"A runtime API function cannot have a default implementation!",
 				));
 			}
 		});
