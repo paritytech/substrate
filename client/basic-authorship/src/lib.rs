@@ -40,7 +40,7 @@
 //! # );
 //! // The first step is to create a `ProposerFactory`.
 //! let mut proposer_factory = ProposerFactory::new(
-//!		Box::new(spawner),
+//!		spawner,
 //!		client.clone(),
 //!		txpool.clone(),
 //!		None,
