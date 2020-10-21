@@ -1,4 +1,4 @@
-error: A runtime api function can not have a default implementation!
+error: A runtime API function cannot have a default implementation!
  --> $DIR/no_default_implementation.rs:3:13
   |
 3 |           fn test() {
