@@ -210,7 +210,7 @@ mod tests {
 		);
 		let overwrites = WasmOverwrite::new(substrate_test_runtime::WASM_DIR, exec)
 			.expect("Creates WasmOverwrite");
-		let wasm = overwrites.overwrites.get(&2).expect("a WASM binary");
+		let wasm = overwrites.overwrites.get(&2).expect("WASM binary");
 		assert_eq!(wasm.code, substrate_test_runtime::wasm_binary_unwrap().to_vec())
 	}
 }
