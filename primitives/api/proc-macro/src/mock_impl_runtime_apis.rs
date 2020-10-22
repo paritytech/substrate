@@ -280,7 +280,7 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 			// Rewrite the input parameters.
 			input.sig.inputs = parse_quote! {
 				&self,
-				___at___param___: #block_id_type,
+				#at_param_name: #block_id_type,
 				_: #crate_::ExecutionContext,
 				params: Option<( #( #param_types ),* )>,
 				_: Vec<u8>,
@@ -319,8 +319,6 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 				{
 					// Get the error to the user (if we have one).
 					#( #errors )*
-
-					let #at_param_name = ___at___param___;
 
 					let (#( #param_names ),*) = params
 						.expect("Mocked runtime apis don't support calling deprecated api versions");
