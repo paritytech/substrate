@@ -326,7 +326,6 @@ mod tests {
 	use sc_executor::{NativeExecutor, WasmExecutionMethod};
 	use sp_core::{traits::{WrappedRuntimeCode, FetchRuntimeCode}, testing::TaskExecutor};
 	use sc_client_api::in_mem;
-	use sc_block_builder::BlockBuilderProvider;
 
 	#[test]
 	fn should_get_overwrite_if_exists() {
