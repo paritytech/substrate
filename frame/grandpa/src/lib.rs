@@ -49,7 +49,7 @@ use sp_runtime::{
 	traits::Zero,
 	DispatchResult, KeyTypeId,
 };
-use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_session::{GetSessionNumber, GetValidatorCount, OneSessionHandler};
 use sp_staking::SessionIndex;
 
 mod equivocation;
@@ -587,7 +587,7 @@ impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
+impl<T: Trait> OneSessionHandler<T::AccountId> for Module<T>
 	where T: pallet_session::Trait
 {
 	type Key = AuthorityId;

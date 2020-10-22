@@ -20,6 +20,7 @@ sp-std = { version = "2.0.0", default-features = false, path = "../../primitives
 serde = { version = "1.0.101", optional = true }
 pallet-session = { version = "2.0.0", features = ["historical" ], path = "../session", default-features = false }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-session = { version = "2.0.0", default-features = false, path = "../../primitives/session" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 
@@ -38,6 +39,7 @@ std = [
 	"serde",
 	"pallet-session/std",
 	"sp-runtime/std",
+	"sp-session/std",
 	"frame-support/std",
 	"frame-system/std",
 ]

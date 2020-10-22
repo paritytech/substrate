@@ -29,6 +29,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_core::RuntimeDebug;
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::traits::Convert;
+use sp_runtime::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 use sp_staking::SessionIndex;
 use sp_std::vec::Vec;
 
@@ -133,6 +134,40 @@ pub trait ValidatorSet<AccountId> {
 pub trait ValidatorSetWithIdentification<AccountId>: ValidatorSet<AccountId> {
 	type Identification: codec::Codec + codec::EncodeLike + Clone + Eq + sp_std::fmt::Debug;
 	type IdentificationOf: Convert<Self::ValidatorId, Option<Self::Identification>>;
+}
+
+/// A session handler for specific key type.
+pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
+	/// The key type expected.
+	type Key: Decode + Default + RuntimeAppPublic;
+
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+
+	/// Session set has changed; act appropriately. Note that this can be called
+	/// before initialization of your module.
+	///
+	/// `changed` is true when at least one of the session keys
+	/// or the underlying economic identities/distribution behind one the
+	/// session keys has changed, false otherwise.
+	///
+	/// The `validators` are the validators of the incoming session, and `queued_validators`
+	/// will follow.
+	fn on_new_session<'a, I: 'a>(
+		changed: bool,
+		validators: I,
+		queued_validators: I,
+	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+
+
+	/// A notification for end of the session.
+	///
+	/// Note it is triggered before any `SessionManager::end_session` handlers,
+	/// so we can still affect the validator set.
+	fn on_before_session_ending() {}
+
+	/// A validator got disabled. Act accordingly until a new session begins.
+	fn on_disabled(_validator_index: usize);
 }
 
 /// Generate the initial session keys with the given seeds, at the given block and store them in

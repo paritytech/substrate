@@ -36,7 +36,7 @@ use sp_runtime::{
 	traits::{Hash, IsMember, One, SaturatedConversion, Saturating},
 	ConsensusEngineId, KeyTypeId,
 };
-use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_session::{GetSessionNumber, GetValidatorCount, OneSessionHandler};
 use sp_std::{prelude::*, result};
 use sp_timestamp::OnTimestampSet;
 
@@ -716,7 +716,7 @@ impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait> OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)

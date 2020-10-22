@@ -101,8 +101,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
-use codec::Decode;
-use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
+use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic};
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys, Saturating};
 use sp_staking::SessionIndex;
 use frame_support::{
@@ -251,45 +250,10 @@ pub trait SessionHandler<ValidatorId> {
 	fn on_disabled(validator_index: usize);
 }
 
-// TODO [ToDr] This should be moved out to primitives/session
-/// A session handler for specific key type.
-pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
-	/// The key type expected.
-	type Key: Decode + Default + RuntimeAppPublic;
-
-	fn on_genesis_session<'a, I: 'a>(validators: I)
-		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
-
-	/// Session set has changed; act appropriately. Note that this can be called
-	/// before initialization of your module.
-	///
-	/// `changed` is true when at least one of the session keys
-	/// or the underlying economic identities/distribution behind one the
-	/// session keys has changed, false otherwise.
-	///
-	/// The `validators` are the validators of the incoming session, and `queued_validators`
-	/// will follow.
-	fn on_new_session<'a, I: 'a>(
-		changed: bool,
-		validators: I,
-		queued_validators: I,
-	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
-
-
-	/// A notification for end of the session.
-	///
-	/// Note it is triggered before any `SessionManager::end_session` handlers,
-	/// so we can still affect the validator set.
-	fn on_before_session_ending() {}
-
-	/// A validator got disabled. Act accordingly until a new session begins.
-	fn on_disabled(_validator_index: usize);
-}
-
 #[impl_trait_for_tuples::impl_for_tuples(1, 30)]
 #[tuple_types_no_default_trait_bound]
 impl<AId> SessionHandler<AId> for Tuple {
-	for_tuples!( where #( Tuple: OneSessionHandler<AId> )* );
+	for_tuples!( where #( Tuple: sp_session::OneSessionHandler<AId> )* );
 
 	for_tuples!(
 		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[ #( <Tuple::Key as RuntimeAppPublic>::ID ),* ];

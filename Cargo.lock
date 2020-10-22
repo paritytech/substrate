@@ -4251,6 +4251,7 @@ dependencies = [
  "sp-inherents",
  "sp-io",
  "sp-runtime",
+ "sp-session",
  "sp-std",
  "sp-timestamp",
 ]
@@ -4269,6 +4270,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-session",
  "sp-staking",
  "sp-std",
 ]
@@ -4581,7 +4583,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-authorship",
- "pallet-session",
  "parity-scale-codec",
  "serde",
  "sp-application-crypto",
