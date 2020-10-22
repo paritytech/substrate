@@ -4498,6 +4498,7 @@ dependencies = [
  "serde",
  "sha3",
  "sp-core",
+ "sp-evm",
  "sp-io",
  "sp-runtime",
  "sp-std",
@@ -8110,6 +8111,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "sp-evm"
+version = "0.8.0"
+dependencies = [
+ "evm",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-std",
 ]
 
 [[package]]

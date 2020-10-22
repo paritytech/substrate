@@ -23,6 +23,7 @@ sp-core = { version = "2.0.0", default-features = false, path = "../../primitive
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
+sp-evm = { version = "0.8.0", default-features = false, path = "../../primitives/evm" }
 primitive-types = { version = "0.7.0", default-features = false, features = ["rlp", "byteorder"] }
 rlp = { version = "0.4", default-features = false }
 evm = { version = "0.17", default-features = false, features = ["with-codec"] }
@@ -44,6 +45,7 @@ std = [
 	"pallet-balances/std",
 	"sp-io/std",
 	"sp-std/std",
+	"sp-evm/std",
 	"sha3/std",
 	"rlp/std",
 	"primitive-types/std",

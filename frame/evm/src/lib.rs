@@ -25,7 +25,9 @@ pub mod runner;
 pub mod precompiles;
 
 pub use crate::precompiles::{Precompile, Precompiles};
-pub use crate::runner::{Account, Log, Vicinity, Runner, ExecutionInfo, CallInfo, CreateInfo};
+pub use crate::runner::Runner;
+pub use sp_evm::{Account, Log, Vicinity, ExecutionInfo, CallInfo, CreateInfo};
+pub use evm::{ExitReason, ExitSucceed, ExitError, ExitRevert, ExitFatal};
 
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
@@ -39,7 +41,6 @@ use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_system::RawOrigin;
 use sp_core::{U256, H256, H160, Hasher};
 use sp_runtime::{AccountId32, traits::{UniqueSaturatedInto, SaturatedConversion, BadOrigin}};
-pub use evm::{ExitReason, ExitSucceed, ExitError, ExitRevert, ExitFatal};
 use evm::Config;
 
 /// Type alias for currency balance.
