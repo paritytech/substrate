@@ -7409,7 +7409,6 @@ dependencies = [
  "serde",
  "slog",
  "slog-json",
- "slog-scope",
  "take_mut",
  "void",
  "wasm-timer",
@@ -7796,17 +7795,6 @@ dependencies = [
  "erased-serde",
  "serde",
  "serde_json",
- "slog",
-]
-
-[[package]]
-name = "slog-scope"
-version = "4.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c44c89dd8b0ae4537d1ae318353eaf7840b4869c536e31c41e963d1ea523ee6"
-dependencies = [
- "arc-swap",
- "lazy_static",
  "slog",
 ]
 

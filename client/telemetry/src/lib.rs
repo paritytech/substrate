@@ -67,9 +67,9 @@ use parking_lot::Mutex;
 use serde::{Serialize, Deserialize, Deserializer};
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
+use slog::Logger;
 
 pub use libp2p::wasm_ext::ExtTransport;
-pub use slog_scope::with_logger;
 pub use slog;
 
 mod async_record;
@@ -164,8 +164,7 @@ pub const CONSENSUS_INFO: &str = "1";
 #[derive(Clone)]
 pub struct Telemetry {
 	inner: Arc<Mutex<TelemetryInner>>,
-	/// Slog guard so that we don't get deregistered.
-	_guard: Arc<slog_scope::GlobalLoggerGuard>,
+	logger: Logger,
 }
 
 /// Behind the `Mutex` in `Telemetry`.
@@ -196,10 +195,9 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 	let (endpoints, wasm_external_transport) = (config.endpoints.0, config.wasm_external_transport);
 
 	let (sender, receiver) = mpsc::channel(16);
-	let guard = {
+	let logger = {
 		let logger = TelemetryDrain { sender: std::panic::AssertUnwindSafe(sender) };
-		let root = slog::Logger::root(slog::Drain::fuse(logger), slog::o!());
-		slog_scope::set_global_logger(root)
+		slog::Logger::root(slog::Drain::fuse(logger), slog::o!())
 	};
 
 	let worker = match worker::TelemetryWorker::new(endpoints, wasm_external_transport) {
@@ -215,7 +213,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 			worker,
 			receiver,
 		})),
-		_guard: Arc::new(guard),
+		logger,
 	}
 }
 
