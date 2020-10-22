@@ -404,17 +404,15 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
-impl pallet_session::ValidatorIdentification<<Self as frame_system::Trait>::AccountId> for Runtime {
-	type ValidatorId = <Self as frame_system::Trait>::AccountId;
-	type ValidatorIdOf = pallet_staking::StashOf<Self>;
-}
-impl pallet_session::historical::FullValidatorIdentification<<Self as frame_system::Trait>::AccountId> for Runtime {
+impl pallet_session::historical::Trait for Runtime {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Runtime>;
 }
 
 impl pallet_session::Trait for Runtime {
 	type Event = Event;
+	type ValidatorId = <Self as frame_system::Trait>::AccountId;
+	type ValidatorIdOf = pallet_staking::StashOf<Self>;
 	type ShouldEndSession = Babe;
 	type NextSessionRotation = Babe;
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
@@ -777,7 +775,7 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime where
 impl pallet_im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Event = Event;
-	type SessionInterface = Session;
+	type ValidatorSet = Historical;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ImOnlineUnsignedPriority;
@@ -790,7 +788,7 @@ parameter_types! {
 
 impl pallet_offences::Trait for Runtime {
 	type Event = Event;
-	type IdentificationTuple = pallet_session::historical::IdentificationTuple<AccountId, Self>;
+	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }

@@ -235,6 +235,11 @@ pub trait WeightInfo {
 	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
 }
 
+pub type IdentificationTuple<T> = (
+	<<T as Trait>::ValidatorSet as ValidatorSet<<T as frame_system::Trait>::AccountId>>::ValidatorId,
+	<<T as Trait>::ValidatorSet as ValidatorSetWithIdentification<<T as frame_system::Trait>::AccountId>>::Identification,
+);
+
 pub trait Trait:
 	SendTransactionTypes<Call<Self>>
 	+ frame_system::Trait
@@ -261,14 +266,8 @@ pub trait Trait:
 			Self::AccountId,
 			// TODO [ToDr] This deserves a typedef (IdentificationTuple), but not the one in
 			// session module - we need it decoupled.
-			(
-				<Self::ValidatorSet as ValidatorSet<Self::AccountId>>::ValidatorId,
-				<Self::ValidatorSet as ValidatorSetWithIdentification<Self::AccountId>>::Identification
-			),
-			UnresponsivenessOffence<(
-				<Self::ValidatorSet as ValidatorSet<Self::AccountId>>::ValidatorId,
-				<Self::ValidatorSet as ValidatorSetWithIdentification<Self::AccountId>>::Identification
-			)>,
+			IdentificationTuple<Self>,
+			UnresponsivenessOffence<IdentificationTuple<Self>>,
 		>;
 
 	/// A configuration for base priority of unsigned transactions.
@@ -284,10 +283,7 @@ pub trait Trait:
 decl_event!(
 	pub enum Event<T> where
 		<T as Trait>::AuthorityId,
-		IdentificationTuple = (
-			<<T as Trait>::ValidatorSet as ValidatorSet<<T as frame_system::Trait>::AccountId>>::ValidatorId,
-			<<T as Trait>::ValidatorSet as ValidatorSetWithIdentification<<T as frame_system::Trait>::AccountId>>::Identification
-		),
+		IdentificationTuple = IdentificationTuple<T>,
 	{
 		/// A new heartbeat was received from `AuthorityId` \[authority_id\]
 		HeartbeatReceived(AuthorityId),
@@ -679,10 +675,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 				<T::ValidatorSet as ValidatorSetWithIdentification<T::AccountId>>::IdentificationOf::convert(
 					id.clone()
 				).map(|full_id| (id, full_id))
-			).collect::<Vec<(
-				<T::ValidatorSet as ValidatorSet<T::AccountId>>::ValidatorId,
-				<T::ValidatorSet as ValidatorSetWithIdentification<T::AccountId>>::Identification
-			)>>();
+			).collect::<Vec<IdentificationTuple<T>>>();
 
 		// Remove all received heartbeats and number of authored blocks from the
 		// current session, they have already been processed and won't be needed

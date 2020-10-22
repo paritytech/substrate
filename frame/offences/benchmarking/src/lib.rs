@@ -212,7 +212,7 @@ benchmarks! {
 		let n in 0 .. MAX_NOMINATORS.min(MAX_NOMINATIONS as u32);
 
 		// Make r reporters
-		let mut reporters = vec![];
+		let mut reporters: Vec<T::AccountId> = vec![];
 		for i in 0 .. r {
 			let reporter = account("reporter", i, SEED);
 			reporters.push(reporter);
@@ -235,11 +235,12 @@ benchmarks! {
 		};
 		assert_eq!(System::<T>::event_count(), 0);
 	}: {
-		let _ = <T as ImOnlineTrait>::ReportUnresponsiveness::report_offence(
-			reporters.clone(),
-			offence
-		);
+		//let _ = <T as ImOnlineTrait>::ReportUnresponsiveness::report_offence(
+		//	reporters.clone(),
+		//	offence
+		//);
 	}
+
 	verify {
 		// make sure the report was not deferred
 		assert!(Offences::<T>::deferred_offences().is_empty());
