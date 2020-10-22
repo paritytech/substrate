@@ -164,7 +164,8 @@ pub const CONSENSUS_INFO: &str = "1";
 #[derive(Clone)]
 pub struct Telemetry {
 	inner: Arc<Mutex<TelemetryInner>>,
-	logger: Logger,
+	/// Logger used to report telemetry.
+	pub logger: Logger,
 }
 
 /// Behind the `Mutex` in `Telemetry`.
