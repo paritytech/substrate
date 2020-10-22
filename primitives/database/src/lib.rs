@@ -199,14 +199,16 @@ pub fn with_lookup<R, H: Clone>(db: &dyn Database<H>, hash: &H, mut f: impl FnMu
 
 mod ordered {
 	use super::*;
+	use codec::Codec;
 	use std::sync::Arc;
 	use parking_lot::RwLock;
 	use radix_tree::{Derivative, RadixConf, Children, NodeConf, Node,
-		Children256, Radix256Conf};
+		Children256, Radix256Conf, Value};
 
 	use core::fmt::Debug;
 
 	radix_tree::flatten_children!(
+		!value_bound: Codec,
 		Children256Flatten,
 		Node256Flatten,
 		Node256LazyHashBackend,
@@ -220,7 +222,7 @@ mod ordered {
 	);
 
 	#[derive(Clone)]
-	struct WrapColumnDb<H> {
+	pub struct WrapColumnDb<H> {
 		inner: Arc<dyn Database<H>>,
 		col: ColumnId,
 		prefix: Option<&'static [u8]>,
@@ -252,7 +254,7 @@ mod ordered {
 	/// Ordered database implementation through a indexing radix tree overlay.
 	pub struct RadixTreeDatabase<H: Clone + PartialEq + Debug> {
 		inner: Arc<dyn Database<H>>,
-		trees: Arc<RwLock<Vec<radix_tree::Tree<Node256LazyHashBackend<H>>>>>,
+		trees: Arc<RwLock<Vec<radix_tree::Tree<Node256LazyHashBackend<Vec<u8>, H>>>>>,
 	}
 
 	impl<H: Clone + PartialEq + Debug> RadixTreeDatabase<H> {
@@ -260,7 +262,7 @@ mod ordered {
 		pub fn new(inner: Arc<dyn Database<H>>) -> Self {
 			RadixTreeDatabase {
 				inner,
-				trees: Arc::new(RwLock::new(Vec::<radix_tree::Tree<Node256LazyHashBackend<H>>>::new())),
+				trees: Arc::new(RwLock::new(Vec::<radix_tree::Tree<Node256LazyHashBackend<Vec<u8>, H>>>::new())),
 			}
 		}
 		fn lazy_column_init(&self, col: ColumnId) {
