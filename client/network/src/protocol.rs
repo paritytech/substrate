@@ -383,7 +383,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let important_peers = {
 			let mut imp_p = HashSet::new();
-			for reserved in peerset_config.priority_groups.iter().flat_map(|(_, l)| l.iter()) {
+			for reserved in peerset_config.sets.iter().flat_map(|s| s.reserved_nodes.iter()) {
 				imp_p.insert(reserved.clone());
 			}
 			imp_p.shrink_to_fit();

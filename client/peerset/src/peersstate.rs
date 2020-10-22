@@ -273,7 +273,7 @@ impl PeersState {
 				match membership {
 					MembershipState::In => self.sets[set].num_in -= 1,
 					MembershipState::Out => self.sets[set].num_out -= 1,
-					MembershipState::NotConnected { .. } => {}
+					MembershipState::NotConnected { .. } | MembershipState::NotMember => {}
 				}
 			}
 		}
@@ -293,7 +293,7 @@ impl PeersState {
 				match membership {
 					MembershipState::In => self.sets[set].num_in += 1,
 					MembershipState::Out => self.sets[set].num_out += 1,
-					MembershipState::NotConnected { .. } => {}
+					MembershipState::NotConnected { .. } | MembershipState::NotMember => {}
 				}
 			}
 		}
@@ -352,6 +352,11 @@ pub struct ConnectedPeer<'a> {
 }
 
 impl<'a> ConnectedPeer<'a> {
+	/// Get the `PeerId` associated to this `ConnectedPeer`.
+	pub fn peer_id(&self) -> &PeerId {
+		&self.peer_id
+	}
+
 	/// Destroys this `ConnectedPeer` and returns the `PeerId` inside of it.
 	pub fn into_peer_id(self) -> PeerId {
 		self.peer_id.into_owned()
@@ -360,7 +365,7 @@ impl<'a> ConnectedPeer<'a> {
 	/// Switches the peer to "not connected".
 	pub fn disconnect(self) -> NotConnectedPeer<'a> {
 		let is_no_slot_occupy = self.state.no_slot_nodes.contains(&*self.peer_id);
-		if let Some(mut node) = self.state.nodes.get_mut(&*self.peer_id) {
+		if let Some(node) = self.state.nodes.get_mut(&*self.peer_id) {
 			if !is_no_slot_occupy {
 				match node.sets[self.set] {
 					MembershipState::In => self.state.sets[self.set].num_in -= 1,
@@ -441,7 +446,6 @@ pub struct NotConnectedPeer<'a> {
 
 impl<'a> NotConnectedPeer<'a> {
 	/// Destroys this `NotConnectedPeer` and returns the `PeerId` inside of it.
-	#[cfg(test)] // Feel free to remove this if this function is needed outside of tests
 	pub fn into_peer_id(self) -> PeerId {
 		self.peer_id.into_owned()
 	}
@@ -502,7 +506,7 @@ impl<'a> NotConnectedPeer<'a> {
 			return Err(self);
 		}
 
-		if let Some(mut peer) = self.state.nodes.get_mut(&*self.peer_id) {
+		if let Some(peer) = self.state.nodes.get_mut(&*self.peer_id) {
 			peer.sets[self.set] = MembershipState::Out;
 			if !is_no_slot_occupy {
 				self.state.sets[self.set].num_out += 1;
@@ -538,7 +542,7 @@ impl<'a> NotConnectedPeer<'a> {
 			return Err(self);
 		}
 
-		if let Some(mut peer) = self.state.nodes.get_mut(&*self.peer_id) {
+		if let Some(peer) = self.state.nodes.get_mut(&*self.peer_id) {
 			peer.sets[self.set] = MembershipState::In;
 			if !is_no_slot_occupy {
 				self.state.sets[self.set].num_in += 1;
@@ -599,7 +603,7 @@ impl<'a> NotConnectedPeer<'a> {
 
 	/// Removes the peer from the list of members of the set.
 	pub fn forget_peer(self) -> UnknownPeer<'a> {
-		if let Some(mut peer) = self.state.nodes.get_mut(&*self.peer_id) {
+		if let Some(peer) = self.state.nodes.get_mut(&*self.peer_id) {
 			debug_assert!(!matches!(peer.sets[self.set], MembershipState::NotMember));
 			peer.sets[self.set] = MembershipState::NotMember;
 

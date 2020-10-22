@@ -447,7 +447,7 @@ impl GenericProto {
 				timer: _
 			} => {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-				self.peerset.dropped(peer_id.clone());
+				self.peerset.dropped("main", peer_id.clone());
 				let banned_until = Some(if let Some(ban) = ban {
 					cmp::max(timer_deadline, Instant::now() + ban)
 				} else {
@@ -462,7 +462,7 @@ impl GenericProto {
 			// Enabled => Disabled.
 			PeerState::Enabled { open } => {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-				self.peerset.dropped(peer_id.clone());
+				self.peerset.dropped("main", peer_id.clone());
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", peer_id);
 				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: peer_id.clone(),
@@ -531,7 +531,7 @@ impl GenericProto {
 	/// Can be called multiple times with the same `PeerId`s.
 	pub fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		let local_peer_id = &self.local_peer_id;
-		self.peerset.discovered(peer_ids.filter_map(|peer_id| {
+		self.peerset.discovered("main", peer_ids.filter_map(|peer_id| {
 			if peer_id == *local_peer_id {
 				error!(
 					target: "sub-libp2p",
@@ -795,7 +795,7 @@ impl GenericProto {
 			debug!(target: "sub-libp2p", "PSM => Accept({:?}, {:?}): Obsolete incoming,
 				sending back dropped", index, incoming.peer_id);
 			debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", incoming.peer_id);
-			self.peerset.dropped(incoming.peer_id);
+			self.peerset.dropped("main", incoming.peer_id);
 			return
 		}
 
@@ -907,7 +907,7 @@ impl NetworkBehaviour for GenericProto {
 					peer_id, endpoint);
 				debug!(target: "sub-libp2p", "PSM <= Incoming({}, {:?}).",
 					peer_id, incoming_id);
-				self.peerset.incoming(peer_id.clone(), incoming_id);
+				self.peerset.incoming("main", peer_id.clone(), incoming_id);
 				self.incoming.push(IncomingPeer {
 					peer_id: peer_id.clone(),
 					alive: true,
@@ -1036,7 +1036,7 @@ impl NetworkBehaviour for GenericProto {
 					"Libp2p => Disconnected({}): Was disabled but pending enable.",
 					peer_id);
 				debug!(target: "sub-libp2p", "PSM <= Dropped({})", peer_id);
-				self.peerset.dropped(peer_id.clone());
+				self.peerset.dropped("main", peer_id.clone());
 				self.peers.insert(peer_id.clone(), PeerState::Banned { until: timer_deadline });
 			}
 
@@ -1051,7 +1051,7 @@ impl NetworkBehaviour for GenericProto {
 				}
 				debug!(target: "sub-libp2p", "Libp2p => Disconnected({}): Was enabled.", peer_id);
 				debug!(target: "sub-libp2p", "PSM <= Dropped({})", peer_id);
-				self.peerset.dropped(peer_id.clone());
+				self.peerset.dropped("main", peer_id.clone());
 				let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
 				self.peers.insert(peer_id.clone(), PeerState::Banned {
 					until: Instant::now() + Duration::from_secs(ban_dur)
@@ -1099,7 +1099,7 @@ impl NetworkBehaviour for GenericProto {
 						until: Instant::now() + Duration::from_secs(5)
 					};
 					debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-					self.peerset.dropped(peer_id.clone())
+					self.peerset.dropped("main", peer_id.clone())
 				},
 
 				// We can still get dial failures even if we are already connected to the peer,
@@ -1160,7 +1160,7 @@ impl NetworkBehaviour for GenericProto {
 						// should be changed to stay in the `Enabled` state.
 						debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", source);
 						debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", source);
-						self.peerset.dropped(source.clone());
+						self.peerset.dropped("main", source.clone());
 						self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 							peer_id: source.clone(),
 							handler: NotifyHandler::All,
@@ -1376,11 +1376,11 @@ impl NetworkBehaviour for GenericProto {
 				Poll::Ready(Some(sc_peerset::Message::Reject(index))) => {
 					self.peerset_report_reject(index);
 				}
-				Poll::Ready(Some(sc_peerset::Message::Connect(id))) => {
-					self.peerset_report_connect(id);
+				Poll::Ready(Some(sc_peerset::Message::Connect { peer_id, .. })) => {
+					self.peerset_report_connect(peer_id);
 				}
-				Poll::Ready(Some(sc_peerset::Message::Drop(id))) => {
-					self.peerset_report_disconnect(id);
+				Poll::Ready(Some(sc_peerset::Message::Drop { peer_id, .. })) => {
+					self.peerset_report_disconnect(peer_id);
 				}
 				Poll::Ready(None) => {
 					error!(target: "sub-libp2p", "Peerset receiver stream has returned None");

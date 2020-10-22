@@ -174,7 +174,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			)?;
 
 		// Initialize the peers we should always be connected to.
-		let priority_groups = {
+		let reserved_nodes = {
 			let mut reserved_nodes = HashSet::new();
 			for reserved in params.network_config.reserved_nodes.iter() {
 				reserved_nodes.insert(reserved.peer_id.clone());
@@ -196,18 +196,15 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				);
 			}
 
-			let mut sentries_and_validators = HashSet::new();
 			match &params.role {
 				Role::Sentry { validators } => {
 					for validator in validators {
-						sentries_and_validators.insert(validator.peer_id.clone());
 						reserved_nodes.insert(validator.peer_id.clone());
 						known_addresses.push((validator.peer_id.clone(), validator.multiaddr.clone()));
 					}
 				}
 				Role::Authority { sentry_nodes } => {
 					for sentry_node in sentry_nodes {
-						sentries_and_validators.insert(sentry_node.peer_id.clone());
 						reserved_nodes.insert(sentry_node.peer_id.clone());
 						known_addresses.push((sentry_node.peer_id.clone(), sentry_node.multiaddr.clone()));
 					}
@@ -215,18 +212,18 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				_ => {}
 			}
 
-			vec![
-				("reserved".to_owned(), reserved_nodes),
-				("sentries_and_validators".to_owned(), sentries_and_validators),
-			]
+			reserved_nodes
 		};
 
 		let peerset_config = sc_peerset::PeersetConfig {
-			in_peers: params.network_config.in_peers,
-			out_peers: params.network_config.out_peers,
-			bootnodes,
+			sets: vec![sc_peerset::SetConfig {
+				name: "main",
+				in_peers: params.network_config.in_peers,
+				out_peers: params.network_config.out_peers,
+				bootnodes,
+				reserved_nodes,
+			}],
 			reserved_only: params.network_config.non_reserved_mode == NonReservedPeerMode::Deny,
-			priority_groups,
 		};
 
 		// Private and public keys configuration.
@@ -609,7 +606,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Need a better solution to manage authorized peers, but now just use reserved peers for
 	/// prototyping.
 	pub fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
-		self.peerset.set_reserved_peers(peers)
+		self.peerset.set_reserved_peers("main", peers)
 	}
 
 	/// Set authorized_only flag.
@@ -934,7 +931,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset.remove_reserved_peer(peer);
+		self.peerset.remove_reserved_peer("main", peer);
 	}
 
 	/// Adds a `PeerId` and its address as reserved. The string should encode the address
@@ -948,7 +945,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		if peer_id == self.local_peer_id {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
 		}
-		self.peerset.add_reserved_peer(peer_id.clone());
+		self.peerset.add_reserved_peer("main", peer_id.clone());
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
@@ -976,9 +973,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
-		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
+		//let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
 
-		self.peerset.set_priority_group(group_id, peer_ids);
+		// TODO:
+		//self.peerset.set_priority_group(group_id, peer_ids);
 
 		for (peer_id, addr) in peers.into_iter() {
 			let _ = self
@@ -1002,7 +1000,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		for (peer_id, addr) in peers.into_iter() {
-			self.peerset.add_to_priority_group(group_id.clone(), peer_id.clone());
+			// TODO:
+			//self.peerset.add_to_priority_group(group_id.clone(), peer_id.clone());
 
 			let _ = self
 				.to_worker
@@ -1025,7 +1024,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub async fn remove_from_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 		for (peer_id, _) in peers.into_iter() {
-			self.peerset.remove_from_priority_group(group_id.clone(), peer_id);
+			// TODO:
+			//self.peerset.remove_from_priority_group(group_id.clone(), peer_id);
 		}
 		Ok(())
 	}
