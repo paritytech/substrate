@@ -52,7 +52,7 @@ pub struct ProposerFactory<A, B, C> {
 	/// Prometheus Link,
 	metrics: PrometheusMetrics,
 	/// Logger instance used for metrics.
-	logger: Logger,
+	logger: Option<Logger>,
 	/// phantom member to pin the `Backend` type.
 	_phantom: PhantomData<B>,
 }
@@ -63,7 +63,7 @@ impl<A, B, C> ProposerFactory<A, B, C> {
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
-		logger: Logger,
+		logger: Option<Logger>,
 	) -> Self {
 		ProposerFactory {
 			spawn_handle: Box::new(spawn_handle),
@@ -147,7 +147,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
-	logger: Logger,
+	logger: Option<Logger>,
 	_phantom: PhantomData<B>,
 }
 

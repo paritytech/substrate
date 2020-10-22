@@ -75,7 +75,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> impl Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>>
 where
 	NumberFor<Block>: BlockNumberOps,
@@ -170,7 +170,7 @@ pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, SC>(
 	config: Config,
 	link: LinkHalf<Block, Client, SC>,
 	network: N,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static>
 where
 	BE: Backend<Block> + Unpin + 'static,
@@ -225,7 +225,7 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
 	keystore: Option<SyncCryptoStorePtr>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	justification_sender: Option<GrandpaJustificationSender<B>>,
-	logger: Logger,
+	logger: Option<Logger>,
 	_phantom: PhantomData<BE>,
 }
 
@@ -244,7 +244,7 @@ where
 		keystore: Option<SyncCryptoStorePtr>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 		justification_sender: Option<GrandpaJustificationSender<B>>,
-		logger: Logger,
+		logger: Option<Logger>,
 	) -> Self {
 
 		let mut work = ObserverWork {

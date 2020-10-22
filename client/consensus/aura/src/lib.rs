@@ -149,7 +149,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	force_authoring: bool,
 	keystore: SyncCryptoStorePtr,
 	can_author_with: CAW,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
@@ -197,7 +197,7 @@ struct AuraWorker<C, E, I, P, SO> {
 	keystore: SyncCryptoStorePtr,
 	sync_oracle: SO,
 	force_authoring: bool,
-	logger: Logger,
+	logger: Option<Logger>,
 	_key_type: PhantomData<P>,
 }
 
@@ -355,7 +355,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		}
 	}
 
-	fn logger(&self) -> Logger {
+	fn logger(&self) -> Option<Logger> {
 		self.logger.clone()
 	}
 }
@@ -507,7 +507,7 @@ pub struct AuraVerifier<C, P, CAW> {
 	phantom: PhantomData<P>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	can_author_with: CAW,
-	logger: Logger,
+	logger: Option<Logger>,
 }
 
 impl<C, P, CAW> AuraVerifier<C, P, CAW> where
@@ -847,7 +847,7 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 	spawner: &S,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> Result<DefaultImportQueue<B, C>, sp_consensus::Error> where
 	B: BlockT,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,

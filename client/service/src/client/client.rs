@@ -114,7 +114,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	config: ClientConfig,
-	logger: Logger,
+	logger: Option<Logger>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -154,7 +154,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	prometheus_registry: Option<Registry>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
 	LocalCallExecutor<in_mem::Backend<Block>, E>,
@@ -197,7 +197,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
 		E: CodeExecutor + RuntimeInfo,
@@ -297,7 +297,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		execution_extensions: ExecutionExtensions<Block>,
 		prometheus_registry: Option<Registry>,
 		config: ClientConfig,
-		logger: Logger,
+		logger: Option<Logger>,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let genesis_storage = build_genesis_storage.build_storage()?;

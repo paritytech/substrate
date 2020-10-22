@@ -145,7 +145,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer;
 
 	/// Returns the `Logger` instance used for metrics.
-	fn logger(&self) -> Logger;
+	fn logger(&self) -> Option<Logger>;
 
 	/// Remaining duration of the slot.
 	fn slot_remaining_duration(&self, slot_info: &SlotInfo) -> Duration {

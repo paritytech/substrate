@@ -217,7 +217,7 @@ impl ProfilingLayer {
 	/// either with a level: "pallet=trace,frame=debug"
 	/// or without: "pallet,frame" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
-	pub fn new(receiver: TracingReceiver, targets: &str, logger: Logger) -> Self {
+	pub fn new(receiver: TracingReceiver, targets: &str, logger: Option<Logger>) -> Self {
 		match receiver {
 			TracingReceiver::Log => Self::new_with_handler(Box::new(LogTraceHandler), targets),
 			TracingReceiver::Telemetry => Self::new_with_handler(
@@ -406,7 +406,7 @@ impl TraceHandler for LogTraceHandler {
 /// Please see telemetry documentation for details on how to specify endpoints and
 /// set the required telemetry level to activate tracing messages
 pub struct TelemetryTraceHandler {
-	logger: Logger,
+	logger: Option<Logger>,
 }
 
 impl TraceHandler for TelemetryTraceHandler {

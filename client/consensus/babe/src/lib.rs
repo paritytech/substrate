@@ -360,7 +360,7 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	pub can_author_with: CAW,
 
 	/// Logger instant use for metrics.
-	pub logger: Logger,
+	pub logger: Option<Logger>,
 }
 
 /// Start the babe worker.
@@ -477,7 +477,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
-	logger: Logger,
+	logger: Option<Logger>,
 }
 
 impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> where
@@ -672,7 +672,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 		}
 	}
 
-	fn logger(&self) -> Logger {
+	fn logger(&self) -> Option<Logger> {
 		self.logger.clone()
 	}
 }
@@ -806,7 +806,7 @@ pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW> {
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	time_source: TimeSource,
 	can_author_with: CAW,
-	logger: Logger,
+	logger: Option<Logger>,
 }
 
 impl<Block, Client, SelectChain, CAW> BabeVerifier<Block, Client, SelectChain, CAW>
@@ -1462,7 +1462,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> ClientResult<DefaultImportQueue<Block, Client>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,

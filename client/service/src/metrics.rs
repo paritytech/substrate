@@ -112,13 +112,13 @@ pub struct MetricsService {
 	last_update: Instant,
 	last_total_bytes_inbound: u64,
 	last_total_bytes_outbound: u64,
-	logger: Logger,
+	logger: Option<Logger>,
 }
 
 impl MetricsService {
 	/// Creates a `MetricsService` that only sends information
 	/// to the telemetry.
-	pub fn new(logger: Logger) -> Self {
+	pub fn new(logger: Option<Logger>) -> Self {
 		MetricsService {
 			metrics: None,
 			last_total_bytes_inbound: 0,
@@ -133,7 +133,7 @@ impl MetricsService {
 	pub fn with_prometheus(
 		registry: &Registry,
 		config: &Configuration,
-		logger: Logger,
+		logger: Option<Logger>,
 	) -> Result<Self, PrometheusError> {
 		let role_bits = match config.role {
 			Role::Full => 1u64,

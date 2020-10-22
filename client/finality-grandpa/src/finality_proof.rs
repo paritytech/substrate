@@ -468,7 +468,7 @@ pub(crate) fn check_finality_proof<Block: BlockT, B, J>(
 	current_authorities: AuthorityList,
 	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	remote_proof: Vec<u8>,
-	logger: &Logger,
+	logger: Option<&Logger>,
 ) -> ClientResult<FinalityEffects<Block::Header>>
 	where
 		NumberFor<Block>: BlockNumberOps,

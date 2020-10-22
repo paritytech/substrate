@@ -681,13 +681,13 @@ struct Inner<Block: BlockT> {
 	next_rebroadcast: Instant,
 	pending_catch_up: PendingCatchUp,
 	catch_up_config: CatchUpConfig,
-	logger: Logger,
+	logger: Option<Logger>,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
 
 impl<Block: BlockT> Inner<Block> {
-	fn new(config: crate::Config, logger: Logger) -> Self {
+	fn new(config: crate::Config, logger: Option<Logger>) -> Self {
 		let catch_up_config = if config.observer_enabled {
 			if config.is_authority {
 				// since the observer protocol is enabled, we will only issue
@@ -1283,7 +1283,7 @@ pub(super) struct GossipValidator<Block: BlockT> {
 	set_state: environment::SharedVoterSetState<Block>,
 	report_sender: TracingUnboundedSender<PeerReport>,
 	metrics: Option<Metrics>,
-	logger: Logger,
+	logger: Option<Logger>,
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
@@ -1294,7 +1294,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
 		prometheus_registry: Option<&Registry>,
-		logger: Logger,
+		logger: Option<Logger>,
 	) -> (GossipValidator<Block>, TracingUnboundedReceiver<PeerReport>)	{
 		let metrics = match prometheus_registry.map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),

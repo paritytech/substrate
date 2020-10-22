@@ -170,7 +170,7 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	service: N,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	validator: Arc<GossipValidator<B>>,
-	logger: Logger,
+	logger: Option<Logger>,
 
 	/// Sender side of the neighbor packet channel.
 	///
@@ -206,7 +206,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		prometheus_registry: Option<&Registry>,
-		logger: Logger,
+		logger: Option<Logger>,
 	) -> Self {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
@@ -500,7 +500,7 @@ fn incoming_global<B: BlockT>(
 	voters: Arc<VoterSet<AuthorityId>>,
 	gossip_validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> impl Stream<Item = CommunicationIn<B>> {
 	let process_commit = {
 		let logger = logger.clone();
@@ -529,7 +529,7 @@ fn incoming_global<B: BlockT>(
 				voters,
 				msg.round,
 				msg.set_id,
-				&logger,
+				logger.as_ref(),
 			) {
 				if let Some(who) = notification.sender {
 					gossip_engine.lock().report(who, cost);
@@ -589,7 +589,7 @@ fn incoming_global<B: BlockT>(
 				&msg.message,
 				voters,
 				msg.set_id,
-				&logger,
+				logger.as_ref(),
 			) {
 				if let Some(who) = notification.sender {
 					gossip_engine.lock().report(who, cost);
@@ -674,7 +674,7 @@ pub(crate) struct OutgoingMessages<Block: BlockT> {
 	sender: mpsc::Sender<SignedMessage<Block>>,
 	network: Arc<Mutex<GossipEngine<Block>>>,
 	has_voted: HasVoted<Block>,
-	logger: Logger,
+	logger: Option<Logger>,
 }
 
 impl<B: BlockT> Unpin for OutgoingMessages<B> {}
@@ -776,7 +776,7 @@ fn check_compact_commit<Block: BlockT>(
 	voters: &VoterSet<AuthorityId>,
 	round: Round,
 	set_id: SetId,
-	logger: &Logger,
+	logger: Option<&Logger>,
 ) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
@@ -838,7 +838,7 @@ fn check_catch_up<Block: BlockT>(
 	msg: &CatchUp<Block>,
 	voters: &VoterSet<AuthorityId>,
 	set_id: SetId,
-	logger: &Logger,
+	logger: Option<&Logger>,
 ) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
@@ -889,7 +889,7 @@ fn check_catch_up<Block: BlockT>(
 		set_id: SetIdNumber,
 		mut signatures_checked: usize,
 		buf: &mut Vec<u8>,
-		logger: &Logger,
+		logger: Option<&Logger>,
 	) -> Result<usize, ReputationChange> where
 		B: BlockT,
 		I: Iterator<Item=(Message<B>, &'a AuthorityId, &'a AuthoritySignature)>,
@@ -932,7 +932,7 @@ fn check_catch_up<Block: BlockT>(
 		set_id.0,
 		0,
 		&mut buf,
-		&logger,
+		logger,
 	)?;
 
 	// check signatures on all contained precommits.
@@ -944,7 +944,7 @@ fn check_catch_up<Block: BlockT>(
 		set_id.0,
 		signatures_checked,
 		&mut buf,
-		&logger,
+		logger,
 	)?;
 
 	Ok(())
@@ -957,7 +957,7 @@ struct CommitsOut<Block: BlockT> {
 	is_voter: bool,
 	gossip_validator: Arc<GossipValidator<Block>>,
 	neighbor_sender: periodic::NeighborPacketSender<Block>,
-	logger: Logger,
+	logger: Option<Logger>,
 }
 
 impl<Block: BlockT> CommitsOut<Block> {
@@ -968,7 +968,7 @@ impl<Block: BlockT> CommitsOut<Block> {
 		is_voter: bool,
 		gossip_validator: Arc<GossipValidator<Block>>,
 		neighbor_sender: periodic::NeighborPacketSender<Block>,
-		logger: Logger,
+		logger: Option<Logger>,
 	) -> Self {
 		CommitsOut {
 			network,

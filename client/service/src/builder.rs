@@ -243,7 +243,7 @@ impl KeystoreContainer {
 /// Creates a new full client for the given config.
 pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
@@ -254,7 +254,7 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 /// Create the initial parts of a full node.
 pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
@@ -324,7 +324,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 /// Create the initial parts of a light node.
 pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> Result<TLightParts<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
@@ -385,7 +385,7 @@ pub fn new_client<E, Block, RA>(
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> Result<(
 	crate::client::Client<
 		Backend<Block>,
@@ -557,7 +557,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 			task_manager.spawn_handle(), genesis_hash,
 		))
 	});
-	let logger = telemetry.as_ref().map(|x| x.logger.clone()).expect("TODO");
+	let logger = telemetry.as_ref().map(|x| x.logger.clone());
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
 	telemetry!(
@@ -641,7 +641,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 async fn transaction_notifications<TBl, TExPool>(
 	transaction_pool: Arc<TExPool>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	logger: Logger,
+	logger: Option<Logger>,
 )
 	where
 		TBl: BlockT,
@@ -682,7 +682,7 @@ fn build_telemetry<TBl: BlockT>(
 	let startup_time = SystemTime::UNIX_EPOCH.elapsed()
 		.map(|dur| dur.as_millis())
 		.unwrap_or(0);
-	let logger = telemetry.logger.clone();
+	let logger = Some(telemetry.logger.clone());
 
 	spawn_handle.spawn(
 		"telemetry-worker",

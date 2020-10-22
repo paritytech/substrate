@@ -53,7 +53,7 @@ pub fn light_block_import<BE, Block: BlockT, Client>(
 	backend: Arc<BE>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> Result<GrandpaLightBlockImport<BE, Block, Client>, ClientError>
 	where
 		BE: Backend<Block>,
@@ -84,7 +84,7 @@ pub struct GrandpaLightBlockImport<BE, Block: BlockT, Client> {
 	backend: Arc<BE>,
 	authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
 	data: Arc<RwLock<LightImportData<Block>>>,
-	logger: Logger,
+	logger: Option<Logger>,
 }
 
 impl<BE, Block: BlockT, Client> Clone for GrandpaLightBlockImport<BE, Block, Client> {
@@ -197,7 +197,7 @@ impl<BE, Block: BlockT, Client> FinalityProofImport<Block>
 			number,
 			finality_proof,
 			verifier,
-			&self.logger,
+			self.logger.as_ref(),
 		)
 	}
 }
@@ -309,7 +309,7 @@ fn do_import_finality_proof<B, C, Block: BlockT, J>(
 	_number: NumberFor<Block>,
 	finality_proof: Vec<u8>,
 	verifier: &mut dyn Verifier<Block>,
-	logger: &Logger,
+	logger: Option<&Logger>,
 ) -> Result<(Block::Hash, NumberFor<Block>), ConsensusError>
 	where
 		C: HeaderBackend<Block>

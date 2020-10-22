@@ -65,7 +65,7 @@ pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	authority_set_hard_forks: HashMap<Block::Hash, PendingChange<Block::Hash, NumberFor<Block>>>,
 	justification_sender: GrandpaJustificationSender<Block>,
-	logger: Logger,
+	logger: Option<Logger>,
 	_phantom: PhantomData<Backend>,
 }
 
@@ -340,7 +340,13 @@ where
 		let applied_changes = {
 			let forced_change_set = guard
 				.as_mut()
-				.apply_forced_changes(hash, number, &is_descendent_of, initial_sync, &self.logger)
+				.apply_forced_changes(
+					hash,
+					number,
+					&is_descendent_of,
+					initial_sync,
+					self.logger.as_ref(),
+				)
 				.map_err(|e| ConsensusError::ClientImport(e.to_string()))
 				.map_err(ConsensusError::from)?;
 
@@ -567,7 +573,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 		authority_set_hard_forks: Vec<(SetId, PendingChange<Block::Hash, NumberFor<Block>>)>,
 		justification_sender: GrandpaJustificationSender<Block>,
-		logger: Logger,
+		logger: Option<Logger>,
 	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
 		// check for and apply any forced authority set hard fork that applies
 		// to the *current* authority set.

@@ -423,7 +423,7 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) voting_rule: VR,
 	pub(crate) metrics: Option<Metrics>,
 	pub(crate) justification_sender: Option<GrandpaJustificationSender<Block>>,
-	pub(crate) logger: Logger,
+	pub(crate) logger: Option<Logger>,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -1145,7 +1145,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
 	justification_sender: Option<&GrandpaJustificationSender<Block>>,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>
 where
 	Block: BlockT,
@@ -1190,7 +1190,7 @@ where
 			number,
 			&is_descendent_of::<Block, _>(&*client, None),
 			initial_sync,
-			&logger,
+			logger.as_ref(),
 		).map_err(|e| Error::Safety(e.to_string()))?;
 
 		// check if this is this is the first finalization of some consensus changes

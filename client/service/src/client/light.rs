@@ -39,7 +39,7 @@ pub fn new_light<B, S, RA, E>(
 	code_executor: E,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> ClientResult<
 		Client<
 			Backend<S, HashFor<B>>,

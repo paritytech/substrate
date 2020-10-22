@@ -352,7 +352,7 @@ where
 		best_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
-		logger: &Logger,
+		logger: Option<&Logger>,
 	) -> Result<Option<(N, Self)>, E>
 		where F: Fn(&H, &H) -> Result<bool, E>,
 	{
@@ -412,7 +412,7 @@ where
 		finalized_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
-		logger: &Logger,
+		logger: Option<&Logger>,
 	) -> Result<Status<H, N>, Error<E>> where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		E: std::error::Error,

@@ -501,7 +501,7 @@ pub fn block_import<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> Result<
 	(
 		GrandpaBlockImport<BE, Block, Client, SC>,
@@ -533,7 +533,7 @@ pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 	authority_set_hard_forks: Vec<(SetId, (Block::Hash, NumberFor<Block>), AuthorityList)>,
-	logger: Logger,
+	logger: Option<Logger>,
 ) -> Result<
 	(
 		GrandpaBlockImport<BE, Block, Client, SC>,
@@ -670,7 +670,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	/// The voter state is exposed at an RPC endpoint.
 	pub shared_voter_state: SharedVoterState,
 	/// Logger used by telemtry.
-	pub logger: Logger,
+	pub logger: Option<Logger>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -807,7 +807,7 @@ struct VoterWork<B, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	env: Arc<Environment<B, Block, C, N, SC, VR>>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	network: NetworkBridge<Block, N>,
-	logger: Logger,
+	logger: Option<Logger>,
 
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
@@ -835,7 +835,7 @@ where
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 		shared_voter_state: SharedVoterState,
 		justification_sender: GrandpaJustificationSender<Block>,
-		logger: Logger,
+		logger: Option<Logger>,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
