@@ -24,12 +24,18 @@ use std::path::PathBuf;
 use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis};
 use sp_runtime::traits::Zero;
 
-use serde_json::value::{Map};
-use handlebars::{
-    to_json, Handlebars
-};
+use serde::Serialize;
+use serde_json::value::Map;
+use handlebars::{to_json, Handlebars};
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const TEMPLATE: &str = include_str!("./template.hbs");
+
+#[derive(Serialize)]
+struct Component {
+	name: String,
+	is_used: bool,
+}
 
 pub fn open_file(path: PathBuf) -> Result<File, std::io::Error> {
 	OpenOptions::new()
@@ -116,6 +122,8 @@ pub fn write_results(
 	cmd: &BenchmarkCmd,
 ) -> Result<(), std::io::Error> {
 
+	let mut data = Map::new();
+
 	let header_text = match &cmd.header {
 		Some(header_file) => {
 			let text = fs::read_to_string(header_file)?;
@@ -124,241 +132,7 @@ pub fn write_results(
 		None => None,
 	};
 
-	let indent = if cmd.spaces {"    "} else {"\t"};
 	let date = chrono::Utc::now();
-
-	let mut current_pallet = Vec::<u8>::new();
-
-	// Skip writing if there are no batches
-	if batches.is_empty() { return Ok(()) }
-
-	let mut batches_iter = batches.iter().peekable();
-
-	let first_pallet = String::from_utf8(
-		batches_iter.peek().expect("we checked that batches is not empty").pallet.clone()
-	).unwrap();
-
-	let mut file_path = path.clone();
-	file_path.push(first_pallet);
-	file_path.set_extension("rs");
-
-	let mut file = open_file(file_path)?;
-
-	while let Some(batch) = batches_iter.next() {
-		// Skip writing if there are no results
-		if batch.results.is_empty() { continue }
-
-		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
-		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
-
-		// only create new trait definitions when we go to a new pallet
-		if batch.pallet != current_pallet {
-			// optional header and copyright
-			if let Some(header) = &header_text {
-				write!(file, "{}\n", header)?;
-			}
-
-			// title of file
-			write!(file, "//! Weights for {}\n", pallet_string)?;
-
-			// auto-generation note
-			write!(
-				file,
-				"//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {}\n",
-				VERSION,
-			)?;
-
-			// date of generation + some settings
-			write!(
-				file,
-				"//! DATE: {}, STEPS: {:?}, REPEAT: {}, LOW RANGE: {:?}, HIGH RANGE: {:?}\n",
-				date.format("%Y-%m-%d"),
-				cmd.steps,
-				cmd.repeat,
-				cmd.lowest_range_values,
-				cmd.highest_range_values,
-			)?;
-
-			// more settings
-			write!(
-				file,
-				"//! EXECUTION: {:?}, WASM-EXECUTION: {}, CHAIN: {:?}, DB CACHE: {}\n",
-				cmd.execution,
-				cmd.wasm_method,
-				cmd.shared_params.chain,
-				cmd.database_cache_size,
-			)?;
-
-			// allow statements
-			write!(
-				file,
-				"#![allow(unused_parens)]\n#![allow(unused_imports)]\n\n",
-			)?;
-
-			// general imports
-			write!(
-				file,
-				"use frame_support::{{traits::Get, weights::Weight}};\nuse sp_std::marker::PhantomData;\n\n"
-			)?;
-
-			// struct for weights
-			write!(file, "pub struct {}<T>(PhantomData<T>);\n", cmd.r#struct)?;
-
-			// trait wrapper
-			write!(
-				file,
-				"impl<T: frame_system::Trait> {}::{} for {}<T> {{\n",
-				pallet_string,
-				cmd.r#trait,
-				cmd.r#struct,
-			)?;
-
-			current_pallet = batch.pallet.clone()
-		}
-
-		// Analysis results
-		let extrinsic_time = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
-		let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
-		let writes = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes).unwrap();
-
-		// Analysis data may include components that are not used, this filters out anything whose value is zero.
-		let mut used_components = Vec::new();
-		let mut used_extrinsic_time = Vec::new();
-		let mut used_reads = Vec::new();
-		let mut used_writes = Vec::new();
-		extrinsic_time.slopes.iter().zip(extrinsic_time.names.iter()).for_each(|(slope, name)| {
-			if !slope.is_zero() {
-				if !used_components.contains(&name) { used_components.push(name); }
-				used_extrinsic_time.push((slope, name));
-			}
-		});
-		reads.slopes.iter().zip(reads.names.iter()).for_each(|(slope, name)| {
-			if !slope.is_zero() {
-				if !used_components.contains(&name) { used_components.push(name); }
-				used_reads.push((slope, name));
-			}
-		});
-		writes.slopes.iter().zip(writes.names.iter()).for_each(|(slope, name)| {
-			if !slope.is_zero() {
-				if !used_components.contains(&name) { used_components.push(name); }
-				used_writes.push((slope, name));
-			}
-		});
-
-		let all_components = batch.results[0].components
-			.iter()
-			.map(|(name, _)| -> String { return name.to_string() })
-			.collect::<Vec<String>>();
-
-		// function name
-		write!(file, "{}fn {}(", indent, benchmark_string)?;
-		// params
-		for component in all_components {
-			if used_components.contains(&&component) {
-				write!(file, "{}: u32, ", component)?;
-			} else {
-				write!(file, "_{}: u32, ", component)?;
-			}
-		}
-		// return value
-		write!(file, ") -> Weight {{\n")?;
-
-		write!(file, "{}{}({} as Weight)\n", indent, indent, underscore(extrinsic_time.base.saturating_mul(1000)))?;
-		used_extrinsic_time.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
-			write!(
-				file,
-				"{}{}{}.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
-				indent, indent, indent,
-				underscore(slope.saturating_mul(1000)),
-				name,
-			)
-		})?;
-
-		if !reads.base.is_zero() {
-			write!(
-				file,
-				"{}{}{}.saturating_add(T::DbWeight::get().reads({} as Weight))\n",
-				indent, indent, indent,
-				reads.base,
-			)?;
-		}
-		used_reads.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
-			write!(
-				file,
-				"{}{}{}.saturating_add(T::DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
-				indent, indent, indent,
-				slope,
-				name,
-			)
-		})?;
-
-		if !writes.base.is_zero() {
-			write!(
-				file,
-				"{}{}{}.saturating_add(T::DbWeight::get().writes({} as Weight))\n",
-				indent, indent, indent,
-				writes.base,
-			)?;
-		}
-		used_writes.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
-			write!(
-				file,
-				"{}{}{}.saturating_add(T::DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
-				indent, indent, indent,
-				slope,
-				name,
-			)
-		})?;
-
-		// close function
-		write!(file, "{}}}\n", indent)?;
-
-		// Check if this is the end of the iterator
-		if let Some(next) = batches_iter.peek() {
-			// Next pallet is different than current pallet, so we close up the file and open a new one.
-			if next.pallet != current_pallet {
-				write!(file, "}}\n")?;
-				let next_pallet = String::from_utf8(next.pallet.clone()).unwrap();
-
-				let mut file_path = path.clone();
-				file_path.push(next_pallet);
-				file_path.set_extension("rs");
-				file = open_file(file_path)?;
-			}
-		} else {
-			// This is the end of the iterator, so we close up the final file.
-			write!(file, "}}\n")?;
-		}
-	}
-
-	Ok(())
-}
-
-pub fn write_results_from_template(
-	batches: &[BenchmarkBatch],
-	path: &PathBuf,
-	lowest_range_values: &[u32],
-	highest_range_values: &[u32],
-	steps: &[u32],
-	repeat: u32,
-	header: &Option<PathBuf>,
-	handlebar_template_file: &PathBuf,
-	struct_name: &String,
-	trait_name: &String,
-) -> Result<(), std::io::Error> {
-
-	let mut data = Map::new();
-
-	let header_text = match header {
-		Some(header_file) => {
-			let text = fs::read_to_string(header_file)?;
-			Some(text)
-		},
-		None => None,
-	};
-
-	let date = chrono::Utc::now();
-
 	let mut current_pallet = Vec::<u8>::new();
 
 	// Skip writing if there are no batches
@@ -392,17 +166,17 @@ pub fn write_results_from_template(
 
 			// date of generation
 			data.insert("date".to_string(), to_json(&date.format("%Y-%m-%d").to_string()));
-			data.insert("steps".to_string(), to_json(&steps));
-			data.insert("repeat".to_string(), to_json(&repeat));
-			data.insert("lowest_range_values".to_string(), to_json(&lowest_range_values));
-			data.insert("highest_range_values".to_string(), to_json(&highest_range_values));
+			data.insert("steps".to_string(), to_json(&cmd.steps));
+			data.insert("repeat".to_string(), to_json(&cmd.repeat));
+			data.insert("lowest_range_values".to_string(), to_json(&cmd.lowest_range_values));
+			data.insert("highest_range_values".to_string(), to_json(&cmd.highest_range_values));
 
 			// struct for weights
-			data.insert("struct_name".to_string(), to_json(&struct_name));
+			data.insert("struct_name".to_string(), to_json(&cmd.r#struct));
 
 			// trait wrapper
-			data.insert("trait_name".to_string(), to_json(&trait_name));
-			data.insert("struct_name".to_string(), to_json(&struct_name));
+			data.insert("trait_name".to_string(), to_json(&cmd.r#trait));
+			data.insert("struct_name".to_string(), to_json(&cmd.r#struct));
 
 			current_pallet = batch.pallet.clone()
 		}
@@ -439,16 +213,12 @@ pub fn write_results_from_template(
 
 		let all_components = batch.results[0].components
 			.iter()
-			.map(|(name, _)| -> String { return name.to_string() })
-			.collect::<Vec<String>>();
-		
-		let mut uc = Vec::new();
-		if all_components.len() != used_components.len() {
-			let mut unused_components = all_components;
-			unused_components.retain(|x| !used_components.contains(&x));
-			uc = unused_components
-		}
-		data.insert("unused_components".to_string(), to_json(&uc));
+			.map(|(name, _)| -> Component {
+				let name_string = name.to_string();
+				let is_used = used_components.contains(&&name_string);
+				Component { name: name_string, is_used }
+			})
+			.collect::<Vec<_>>();
 
 		let mut uet = Vec::new();
 		used_extrinsic_time.iter().for_each(|(slope, name)| {
@@ -479,7 +249,7 @@ pub fn write_results_from_template(
 		// Build Benchmark Results
 		let mut brd = Map::new();
 		brd.insert("benchmark_string".to_string(), to_json(&benchmark_string));
-		brd.insert("used_components".to_string(), to_json(&used_components));
+		brd.insert("all_components".to_string(), to_json(&all_components));
 		brd.insert("extrinsic_time_as_weight".to_string(), to_json(underscore(extrinsic_time.base.saturating_mul(1000))));
 		brd.insert("used_extrinsic_time".to_string(), to_json(&uet));
 		brd.insert("extrinsic_time_base".to_string(), to_json(underscore(extrinsic_time.base.saturating_mul(1000))));
@@ -495,12 +265,20 @@ pub fn write_results_from_template(
 		file_path.push(String::from_utf8(current_pallet.clone()).unwrap());
 		file_path.set_extension("rs");
 		let handlebars = Handlebars::new();
-		let mut source_template = File::open(&handlebar_template_file)?;
+		let mut template: String = match &cmd.handlebar_template {
+			Some(template_file) => {
+				fs::read_to_string(template_file)?
+			},
+			None => {
+				println!("Trying default template");
+				TEMPLATE.to_string()
+			},
+		};
 		let mut output_file = File::create(file_path)?;
-		match handlebars.render_template_source_to_write(&mut source_template, &data, &mut output_file){
+		match handlebars.render_template_to_write(&mut template, &data, &mut output_file){
 			Ok(_)  => println!("Write file using template"),
 			Err(e) => println!("Error: {}", e),
-		};	
+		};
 	}
 	Ok(())
 }

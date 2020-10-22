@@ -104,7 +104,6 @@ impl BenchmarkCmd {
 		match results {
 			Ok(batches) => {
 				if let Some(output_path) = &self.output {
-					let handlebar_template = self.handlebar_template.unwrap_or(Default::default());
 					if self.trait_def {
 						crate::writer::write_trait(&batches, output_path, self)?;
 					} else {

@@ -1,0 +1,28 @@
+{{header}}
+//! Weights for {{pallet_string}}
+//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {{version}}
+//! DATE: {{date}}, STEPS: {{steps}}, REPEAT: {{repeat}}, LOW RANGE: {{lowest_range_values}}, HIGH RANGE: {{highest_range_values}}
+
+#![allow(unused_parens)]
+#![allow(unused_imports)]
+
+use frame_support::{traits::Get, weights::Weight};
+use sp_std::marker::PhantomData;
+
+pub struct {{struct_name}}<T>(PhantomData<T>);
+impl<T: frame_system::Trait> {{pallet_string}}::{{trait_name}} for {{struct_name}}<T> {
+	{{#each benchmark_results as |br| ~}}
+	fn {{br.benchmark_string~}}
+	(
+		{{~#each br.all_components as |c| ~}}
+		{{~#if (not c.is_used)}}_{{/if}}{{c.name}} :u32, {{/each~}}
+	) -> Weight {
+		({{br.extrinsic_time_base}} as Weight)
+		{{#each br.used_extrinsic_time as |uet| ~}}.saturating_add(({{uet.slope}} as Weight).saturating_mul({{uet.name}} as Weight)){{/each~}}
+		{{#if (ne br.reads_base "0") }}.saturating_add(T::DbWeight::get().reads({{br.reads_base}} as Weight)){{/if}}
+		{{#each br.used_reads as |ur| ~}}.saturating_add(T::DbWeight::get().reads(({{ur.slope}} as Weight).saturating_mul({{ur.name}} as Weight))){{/each~}}
+		{{#if (ne br.writes_base "0") }}.saturating_add(T::DbWeight::get().reads({{br.writes_base}} as Weight)){{/if}}
+		{{#each br.used_writes as |uw| ~}}.saturating_add(T::DbWeight::get().writes(({{uw.slope}} as Weight).saturating_mul({{uwr.name}} as Weight))){{/each~}}
+	}
+	{{/each~}}
+}
