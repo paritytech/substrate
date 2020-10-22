@@ -656,7 +656,7 @@ mod test {
 	use super::*;
 
 	#[test]
-	fn print_schedule() {
+	fn print_test_schedule() {
 		let schedule = Schedule::<Test>::default();
 		println!("{:#?}", schedule);
 	}

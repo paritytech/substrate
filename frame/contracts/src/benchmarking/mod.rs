@@ -2352,6 +2352,20 @@ benchmarks! {
 	}: {
 		sbox.invoke();
 	}
+
+	// This is no benchmark. It merely exist to have an easy way to pretty print the curently
+	// configured `Schedule` during benchmark development.
+	// It can be outputed using the following command:
+	// cargo run --manifest-path=bin/node/cli/Cargo.toml --release \
+	//     --features runtime-benchmarks -- benchmark --dev --execution=native \
+	//     -p pallet_contracts -e print_schedule --no-median-slopes --no-min-squares
+	#[extra]
+	print_schedule {
+		#[cfg(feature = "std")]
+		println!("{:#?}", Schedule::<T>::default());
+		#[cfg(not(feature = "std"))]
+		return Err("Run this bench with a native runtime in order to see the schedule.");
+	}: {}
 }
 
 #[cfg(test)]
