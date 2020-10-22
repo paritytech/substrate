@@ -1850,7 +1850,7 @@ fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 	let equivocation_proof = sp_finality_grandpa::Equivocation::Prevote(equivocation.clone());
 	assert!(matches!(
 		environment.report_equivocation(equivocation_proof),
-		Err(Error::Safety(_)),
+		Err(Error::Safety(_))
 	));
 
 	// if we set the equivocation offender to another id for which we don't have
