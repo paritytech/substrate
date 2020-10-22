@@ -23,7 +23,7 @@ use parking_lot::RwLock;
 use finality_grandpa::voter_set::VoterSet;
 use parity_scale_codec::{Encode, Decode};
 use log::debug;
-use sc_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{slog::Logger, telemetry, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList};
 
 use std::cmp::Ord;
@@ -352,6 +352,7 @@ where
 		best_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
+		logger: &Logger,
 	) -> Result<Option<(N, Self)>, E>
 		where F: Fn(&H, &H) -> Result<bool, E>,
 	{
@@ -369,7 +370,7 @@ where
 					"👴 Applying authority set change forced at block #{:?}",
 					change.canon_height,
 				);
-				telemetry!(CONSENSUS_INFO; "afg.applying_forced_authority_set_change";
+				telemetry!(logger; CONSENSUS_INFO; "afg.applying_forced_authority_set_change";
 					"block" => ?change.canon_height
 				);
 
@@ -411,6 +412,7 @@ where
 		finalized_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
+		logger: &Logger,
 	) -> Result<Status<H, N>, Error<E>> where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		E: std::error::Error,
@@ -450,7 +452,7 @@ where
 						"👴 Applying authority set change scheduled at block #{:?}",
 						change.canon_height,
 					);
-					telemetry!(CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
+					telemetry!(logger; CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
 						"block" => ?change.canon_height
 					);
 

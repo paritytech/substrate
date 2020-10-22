@@ -85,6 +85,7 @@
 use sp_runtime::traits::{NumberFor, Block as BlockT, Zero};
 use sc_network_gossip::{MessageIntent, ValidatorContext};
 use sc_network::{ObservedRole, PeerId, ReputationChange};
+use sc_telemetry::slog::Logger;
 use parity_scale_codec::{Encode, Decode};
 use sp_finality_grandpa::AuthorityId;
 
@@ -680,12 +681,13 @@ struct Inner<Block: BlockT> {
 	next_rebroadcast: Instant,
 	pending_catch_up: PendingCatchUp,
 	catch_up_config: CatchUpConfig,
+	logger: Logger,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
 
 impl<Block: BlockT> Inner<Block> {
-	fn new(config: crate::Config) -> Self {
+	fn new(config: crate::Config, logger: Logger) -> Self {
 		let catch_up_config = if config.observer_enabled {
 			if config.is_authority {
 				// since the observer protocol is enabled, we will only issue
@@ -712,6 +714,7 @@ impl<Block: BlockT> Inner<Block> {
 			pending_catch_up: PendingCatchUp::None,
 			catch_up_config,
 			config,
+			logger,
 		}
 	}
 
@@ -829,7 +832,7 @@ impl<Block: BlockT> Inner<Block> {
 		// ensure authority is part of the set.
 		if !self.authorities.contains(&full.message.id) {
 			debug!(target: "afg", "Message from unknown voter: {}", full.message.id);
-			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
+			telemetry!(self.logger; CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
 			return Action::Discard(cost::UNKNOWN_VOTER);
 		}
 
@@ -841,7 +844,7 @@ impl<Block: BlockT> Inner<Block> {
 			full.set_id.0,
 		) {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
-			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
+			telemetry!(self.logger; CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
 			return Action::Discard(cost::BAD_SIGNATURE);
 		}
 
@@ -867,7 +870,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
 			debug!(target: "afg", "Malformed compact commit");
-			telemetry!(CONSENSUS_DEBUG; "afg.malformed_compact_commit";
+			telemetry!(self.logger; CONSENSUS_DEBUG; "afg.malformed_compact_commit";
 				"precommits_len" => ?full.message.precommits.len(),
 				"auth_data_len" => ?full.message.auth_data.len(),
 				"precommits_is_empty" => ?full.message.precommits.is_empty(),
@@ -1280,6 +1283,7 @@ pub(super) struct GossipValidator<Block: BlockT> {
 	set_state: environment::SharedVoterSetState<Block>,
 	report_sender: TracingUnboundedSender<PeerReport>,
 	metrics: Option<Metrics>,
+	logger: Logger,
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
@@ -1290,6 +1294,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
 		prometheus_registry: Option<&Registry>,
+		logger: Logger,
 	) -> (GossipValidator<Block>, TracingUnboundedReceiver<PeerReport>)	{
 		let metrics = match prometheus_registry.map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -1302,10 +1307,11 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 		let (tx, rx) = tracing_unbounded("mpsc_grandpa_gossip_validator");
 		let val = GossipValidator {
-			inner: parking_lot::RwLock::new(Inner::new(config)),
+			inner: parking_lot::RwLock::new(Inner::new(config, logger.clone())),
 			set_state,
 			report_sender: tx,
 			metrics,
+			logger,
 		};
 
 		(val, rx)
@@ -1414,7 +1420,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				Err(e) => {
 					message_name = None;
 					debug!(target: "afg", "Error decoding message: {}", e.what());
-					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
+					telemetry!(self.logger; CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
 
 					let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;
 					Action::Discard(Misbehavior::UndecodablePacket(len).cost())

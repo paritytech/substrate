@@ -39,7 +39,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
 use sp_api::{ProvideRuntimeApi, ApiRef};
 use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
-use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use sc_telemetry::{slog::Logger, telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use parking_lot::Mutex;
 
 /// The changes that need to applied to the storage to create the state for a block.
@@ -144,6 +144,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Returns a `Proposer` to author on top of the given block.
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer;
 
+	/// Returns the `Logger` instance used for metrics.
+	fn logger(&self) -> Logger;
+
 	/// Remaining duration of the slot.
 	fn slot_remaining_duration(&self, slot_info: &SlotInfo) -> Duration {
 		let now = Instant::now();
@@ -169,6 +172,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		Self: Send + Sync,
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
 	{
+		let logger = self.logger();
+
 		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
@@ -191,7 +196,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				warn!("Unable to fetch epoch data at block {:?}: {:?}", chain_head.hash(), err);
 
 				telemetry!(
-					CONSENSUS_WARN; "slots.unable_fetching_authorities";
+					logger; CONSENSUS_WARN; "slots.unable_fetching_authorities";
 					"slot" => ?chain_head.hash(),
 					"err" => ?err,
 				);
@@ -210,7 +215,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		{
 			debug!(target: self.logging_target(), "Skipping proposal slot. Waiting for the network.");
 			telemetry!(
-				CONSENSUS_DEBUG;
+				logger; CONSENSUS_DEBUG;
 				"slots.skipping_proposal_slot";
 				"authorities_len" => authorities_len,
 			);
@@ -229,20 +234,23 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			timestamp,
 		);
 
-		telemetry!(CONSENSUS_DEBUG; "slots.starting_authorship";
+		telemetry!(logger; CONSENSUS_DEBUG; "slots.starting_authorship";
 			"slot_num" => slot_number,
 			"timestamp" => timestamp,
 		);
 
-		let awaiting_proposer = self.proposer(&chain_head).map_err(move |err| {
-			warn!("Unable to author block in slot {:?}: {:?}", slot_number, err);
+		let awaiting_proposer = {
+			let logger = logger.clone();
+			self.proposer(&chain_head).map_err(move |err| {
+				warn!("Unable to author block in slot {:?}: {:?}", slot_number, err);
 
-			telemetry!(CONSENSUS_WARN; "slots.unable_authoring_block";
-				"slot" => slot_number, "err" => ?err
-			);
+				telemetry!(logger; CONSENSUS_WARN; "slots.unable_authoring_block";
+					"slot" => slot_number, "err" => ?err
+				);
 
-			err
-		});
+				err
+			})
+		};
 
 		let slot_remaining_duration = self.slot_remaining_duration(&slot_info);
 		let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
@@ -263,7 +271,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			None => Box::new(future::pending()),
 		};
 
-		let proposal_work =
+		let proposal_work = {
+			let logger = logger.clone();
 			Box::new(futures::future::select(proposing, delay).map(move |v| match v {
 				futures::future::Either::Left((b, _)) => b.map(|b| (b, claim)),
 				futures::future::Either::Right(_) => {
@@ -271,16 +280,18 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					// If the node was compiled with debug, tell the user to use release optimizations.
 					#[cfg(build_type="debug")]
 					info!("👉 Recompile your node in `--release` mode to mitigate this problem.");
-					telemetry!(CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
+					telemetry!(logger; CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
 						"slot" => slot_number,
 					);
 					Err(sp_consensus::Error::ClientImport("Timeout in the Slots proposer".into()))
 				},
-			}));
+			}))
+		};
 
 		let block_import_params_maker = self.block_import_params();
 		let block_import = self.block_import();
 		let logging_target = self.logging_target();
+		let logger = logger.clone();
 
 		Box::pin(proposal_work.and_then(move |(proposal, claim)| {
 			let (header, body) = proposal.block.deconstruct();
@@ -309,7 +320,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				header_hash,
 			);
 
-			telemetry!(CONSENSUS_INFO; "slots.pre_sealed_block";
+			telemetry!(logger; CONSENSUS_INFO; "slots.pre_sealed_block";
 				"header_num" => ?header_num,
 				"hash_now" => ?block_import_params.post_hash(),
 				"hash_previously" => ?header_hash,
@@ -322,7 +333,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					err,
 				);
 
-				telemetry!(CONSENSUS_WARN; "slots.err_with_block_built_on";
+				telemetry!(logger; CONSENSUS_WARN; "slots.err_with_block_built_on";
 					"hash" => ?parent_hash, "err" => ?err,
 				);
 			}

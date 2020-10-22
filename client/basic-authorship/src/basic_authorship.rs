@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
 };
 use sp_transaction_pool::{TransactionPool, InPoolTransaction};
-use sc_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{slog::Logger, telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use futures::{future, future::{Future, FutureExt}, channel::oneshot, select};
@@ -51,6 +51,8 @@ pub struct ProposerFactory<A, B, C> {
 	transaction_pool: Arc<A>,
 	/// Prometheus Link,
 	metrics: PrometheusMetrics,
+	/// Logger instance used for metrics.
+	logger: Logger,
 	/// phantom member to pin the `Backend` type.
 	_phantom: PhantomData<B>,
 }
@@ -61,12 +63,14 @@ impl<A, B, C> ProposerFactory<A, B, C> {
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
+		logger: Logger,
 	) -> Self {
 		ProposerFactory {
 			spawn_handle: Box::new(spawn_handle),
 			client,
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
+			logger,
 			_phantom: PhantomData,
 		}
 	}
@@ -102,6 +106,7 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 			transaction_pool: self.transaction_pool.clone(),
 			now,
 			metrics: self.metrics.clone(),
+			logger: self.logger.clone(),
 			_phantom: PhantomData,
 		};
 
@@ -142,6 +147,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
+	logger: Logger,
 	_phantom: PhantomData<B>,
 }
 
@@ -325,7 +331,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 				.collect::<Vec<_>>()
 				.join(", ")
 		);
-		telemetry!(CONSENSUS_INFO; "prepared_block_for_proposing";
+		telemetry!(self.logger; CONSENSUS_INFO; "prepared_block_for_proposing";
 			"number" => ?block.header().number(),
 			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);

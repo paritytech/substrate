@@ -314,10 +314,8 @@ impl slog::Drain for TelemetryDrain {
 /// parameter is added to the record as a key-value pair.
 #[macro_export]
 macro_rules! telemetry {
-	 ( $a:expr; $b:expr; $( $t:tt )* ) => {
-		$crate::with_logger(|l| {
-			$crate::slog::slog_info!(l, #$a, $b; $($t)* )
-		})
+	 ( $l:expr; $a:expr; $b:expr; $( $t:tt )* ) => {
+		$crate::slog::slog_info!($l, #$a, $b; $($t)* )
 	}
 }
 

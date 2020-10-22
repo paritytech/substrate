@@ -39,7 +39,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
-use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_telemetry::{slog::Logger, telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Precommit, Prevote,
@@ -423,6 +423,7 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) voting_rule: VR,
 	pub(crate) metrics: Option<Metrics>,
 	pub(crate) justification_sender: Option<GrandpaJustificationSender<Block>>,
+	pub(crate) logger: Logger,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -823,7 +824,7 @@ where
 		};
 
 		let report_prevote_metrics = |prevote: &Prevote<Block>| {
-			telemetry!(CONSENSUS_DEBUG; "afg.prevote_issued";
+			telemetry!(self.logger; CONSENSUS_DEBUG; "afg.prevote_issued";
 				"round" => round,
 				"target_number" => ?prevote.target_number,
 				"target_hash" => ?prevote.target_hash,
@@ -884,7 +885,7 @@ where
 		};
 
 		let report_precommit_metrics = |precommit: &Precommit<Block>| {
-			telemetry!(CONSENSUS_DEBUG; "afg.precommit_issued";
+			telemetry!(self.logger; CONSENSUS_DEBUG; "afg.precommit_issued";
 				"round" => round,
 				"target_number" => ?precommit.target_number,
 				"target_hash" => ?precommit.target_hash,
@@ -1078,6 +1079,7 @@ where
 			(round, commit).into(),
 			false,
 			self.justification_sender.as_ref(),
+			self.logger.clone(),
 		)
 	}
 
@@ -1143,6 +1145,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
 	justification_sender: Option<&GrandpaJustificationSender<Block>>,
+	logger: Logger,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>
 where
 	Block: BlockT,
@@ -1187,6 +1190,7 @@ where
 			number,
 			&is_descendent_of::<Block, _>(&*client, None),
 			initial_sync,
+			&logger,
 		).map_err(|e| Error::Safety(e.to_string()))?;
 
 		// check if this is this is the first finalization of some consensus changes
@@ -1284,7 +1288,7 @@ where
 			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 			e
 		})?;
-		telemetry!(CONSENSUS_INFO; "afg.finalized_blocks_up_to";
+		telemetry!(logger; CONSENSUS_INFO; "afg.finalized_blocks_up_to";
 			"number" => ?number, "hash" => ?hash,
 		);
 
@@ -1304,7 +1308,7 @@ where
 				);
 			}
 
-			telemetry!(CONSENSUS_INFO; "afg.generating_new_authority_set";
+			telemetry!(logger; CONSENSUS_INFO; "afg.generating_new_authority_set";
 				"number" => ?canon_number, "hash" => ?canon_hash,
 				"authorities" => ?set_ref.to_vec(),
 				"set_id" => ?new_id,

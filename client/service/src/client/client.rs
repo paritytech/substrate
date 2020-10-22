@@ -34,7 +34,7 @@ use sp_core::{
 };
 #[cfg(feature="test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
-use sc_telemetry::{telemetry, SUBSTRATE_INFO};
+use sc_telemetry::{slog::Logger, telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
@@ -114,6 +114,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	config: ClientConfig,
+	logger: Logger,
 	_phantom: PhantomData<RA>,
 }
 
@@ -153,6 +154,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	prometheus_registry: Option<Registry>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
+	logger: Logger,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
 	LocalCallExecutor<in_mem::Backend<Block>, E>,
@@ -171,6 +173,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 		spawn_handle,
 		prometheus_registry,
 		config,
+		logger,
 	)
 }
 
@@ -194,6 +197,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
+	logger: Logger,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
 		E: CodeExecutor + RuntimeInfo,
@@ -212,6 +216,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		extensions,
 		prometheus_registry,
 		config,
+		logger,
 	)
 }
 
@@ -292,6 +297,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		execution_extensions: ExecutionExtensions<Block>,
 		prometheus_registry: Option<Registry>,
 		config: ClientConfig,
+		logger: Logger,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let genesis_storage = build_genesis_storage.build_storage()?;
@@ -322,6 +328,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
 			config,
+			logger,
 			_phantom: Default::default(),
 		})
 	}
@@ -664,7 +671,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				if origin != BlockOrigin::NetworkInitialSync ||
 					rand::thread_rng().gen_bool(0.1)
 				{
-					telemetry!(SUBSTRATE_INFO; "block.import";
+					telemetry!(self.logger; SUBSTRATE_INFO; "block.import";
 						"height" => height,
 						"best" => ?hash,
 						"origin" => ?origin
@@ -984,7 +991,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					 indicated in the tree route; qed"
 				);
 
-			telemetry!(SUBSTRATE_INFO; "notify.finalized";
+			telemetry!(self.logger; SUBSTRATE_INFO; "notify.finalized";
 				"height" => format!("{}", header.number()),
 				"best" => ?last,
 			);

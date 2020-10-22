@@ -79,7 +79,7 @@ use sp_core::{
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_application_crypto::AppKey;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
-use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
+use sc_telemetry::{slog::Logger, telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use parking_lot::RwLock;
 
 use finality_grandpa::Error as GrandpaError;
@@ -501,6 +501,7 @@ pub fn block_import<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
+	logger: Logger,
 ) -> Result<
 	(
 		GrandpaBlockImport<BE, Block, Client, SC>,
@@ -518,6 +519,7 @@ where
 		genesis_authorities_provider,
 		select_chain,
 		Default::default(),
+		logger,
 	)
 }
 
@@ -531,6 +533,7 @@ pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 	authority_set_hard_forks: Vec<(SetId, (Block::Hash, NumberFor<Block>), AuthorityList)>,
+	logger: Logger,
 ) -> Result<
 	(
 		GrandpaBlockImport<BE, Block, Client, SC>,
@@ -552,11 +555,11 @@ where
 		<NumberFor<Block>>::zero(),
 		|| {
 			let authorities = genesis_authorities_provider.get()?;
-			telemetry!(CONSENSUS_DEBUG; "afg.loading_authorities";
+			telemetry!(logger; CONSENSUS_DEBUG; "afg.loading_authorities";
 				"authorities_len" => ?authorities.len()
 			);
 			Ok(authorities)
-		}
+		},
 	)?;
 
 	let (voter_commands_tx, voter_commands_rx) = tracing_unbounded("mpsc_grandpa_voter_command");
@@ -591,6 +594,7 @@ where
 			persistent_data.consensus_changes.clone(),
 			authority_set_hard_forks,
 			justification_sender.clone(),
+			logger,
 		),
 		LinkHalf {
 			client,
@@ -665,6 +669,8 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 	/// The voter state is exposed at an RPC endpoint.
 	pub shared_voter_state: SharedVoterState,
+	/// Logger used by telemtry.
+	pub logger: Logger,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -691,6 +697,7 @@ where
 		voting_rule,
 		prometheus_registry,
 		shared_voter_state,
+		logger,
 	} = grandpa_params;
 
 	// NOTE: we have recently removed `run_grandpa_observer` from the public
@@ -713,10 +720,12 @@ where
 		config.clone(),
 		persistent_data.set_state.clone(),
 		prometheus_registry.as_ref(),
+		logger.clone(),
 	);
 
 	let conf = config.clone();
 	let telemetry_task = if let Some(telemetry_on_connect) = telemetry_on_connect {
+		let logger = logger.clone();
 		let authorities = persistent_data.authority_set.clone();
 		let events = telemetry_on_connect
 			.for_each(move |_| {
@@ -735,7 +744,7 @@ where
 					 elements are always of type string",
 				);
 
-				telemetry!(CONSENSUS_INFO; "afg.authority_set";
+				telemetry!(logger; CONSENSUS_INFO; "afg.authority_set";
 					"authority_id" => authority_id.to_string(),
 					"authority_set_id" => ?set_id,
 					"authorities" => authorities,
@@ -759,6 +768,7 @@ where
 		prometheus_registry,
 		shared_voter_state,
 		justification_sender,
+		logger,
 	);
 
 	let voter_work = voter_work.map(|res| match res {
@@ -797,6 +807,7 @@ struct VoterWork<B, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	env: Arc<Environment<B, Block, C, N, SC, VR>>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	network: NetworkBridge<Block, N>,
+	logger: Logger,
 
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
@@ -824,6 +835,7 @@ where
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 		shared_voter_state: SharedVoterState,
 		justification_sender: GrandpaJustificationSender<Block>,
+		logger: Logger,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -848,6 +860,7 @@ where
 			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
 			justification_sender: Some(justification_sender),
+			logger: logger.clone(),
 			_phantom: PhantomData,
 		});
 
@@ -859,6 +872,7 @@ where
 			env,
 			voter_commands_rx,
 			network,
+			logger,
 			metrics,
 		};
 		work.rebuild_voter();
@@ -874,7 +888,7 @@ where
 		let authority_id = local_authority_id(&self.env.voters, self.env.config.keystore.as_ref())
 			.unwrap_or_default();
 
-		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
+		telemetry!(self.logger; CONSENSUS_DEBUG; "afg.starting_new_voter";
 			"name" => ?self.env.config.name(),
 			"set_id" => ?self.env.set_id,
 			"authority_id" => authority_id.to_string(),
@@ -893,7 +907,7 @@ where
 			"authorities is always at least an empty vector; elements are always of type string",
 		);
 
-		telemetry!(CONSENSUS_INFO; "afg.authority_set";
+		telemetry!(self.logger; CONSENSUS_INFO; "afg.authority_set";
 			"number" => ?chain_info.finalized_number,
 			"hash" => ?chain_info.finalized_hash,
 			"authority_id" => authority_id.to_string(),
@@ -953,7 +967,7 @@ where
 				let voters: Vec<String> = new.authorities.iter().map(move |(a, _)| {
 					format!("{}", a)
 				}).collect();
-				telemetry!(CONSENSUS_INFO; "afg.voter_command_change_authorities";
+				telemetry!(self.logger; CONSENSUS_INFO; "afg.voter_command_change_authorities";
 					"number" => ?new.canon_number,
 					"hash" => ?new.canon_hash,
 					"voters" => ?voters,
@@ -994,6 +1008,7 @@ where
 					voting_rule: self.env.voting_rule.clone(),
 					metrics: self.env.metrics.clone(),
 					justification_sender: self.env.justification_sender.clone(),
+					logger: self.logger.clone(),
 					_phantom: PhantomData,
 				});
 

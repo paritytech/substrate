@@ -38,6 +38,7 @@ use tracing::{
 	subscriber::Subscriber,
 };
 use tracing_subscriber::{CurrentSpan, layer::{Layer, Context}};
+use slog::Logger;
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
@@ -216,11 +217,13 @@ impl ProfilingLayer {
 	/// either with a level: "pallet=trace,frame=debug"
 	/// or without: "pallet,frame" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
-	pub fn new(receiver: TracingReceiver, targets: &str) -> Self {
+	pub fn new(receiver: TracingReceiver, targets: &str, logger: Logger) -> Self {
 		match receiver {
 			TracingReceiver::Log => Self::new_with_handler(Box::new(LogTraceHandler), targets),
 			TracingReceiver::Telemetry => Self::new_with_handler(
-				Box::new(TelemetryTraceHandler),
+				Box::new(TelemetryTraceHandler {
+					logger,
+				}),
 				targets,
 			),
 		}
@@ -402,11 +405,13 @@ impl TraceHandler for LogTraceHandler {
 /// TraceHandler for sending span data to telemetry,
 /// Please see telemetry documentation for details on how to specify endpoints and
 /// set the required telemetry level to activate tracing messages
-pub struct TelemetryTraceHandler;
+pub struct TelemetryTraceHandler {
+	logger: Logger,
+}
 
 impl TraceHandler for TelemetryTraceHandler {
 	fn handle_span(&self, span_datum: SpanDatum) {
-		telemetry!(SUBSTRATE_INFO; "tracing.profiling";
+		telemetry!(self.logger; SUBSTRATE_INFO; "tracing.profiling";
 			"name" => span_datum.name,
 			"target" => span_datum.target,
 			"time" => span_datum.overall_time.as_nanos(),
@@ -417,7 +422,7 @@ impl TraceHandler for TelemetryTraceHandler {
 	}
 
 	fn handle_event(&self, event: TraceEvent) {
-		telemetry!(SUBSTRATE_INFO; "tracing.event";
+		telemetry!(self.logger; SUBSTRATE_INFO; "tracing.event";
 			"name" => event.name,
 			"target" => event.target,
 			"parent_id" => event.parent_id.map(|i| i.into_u64()),

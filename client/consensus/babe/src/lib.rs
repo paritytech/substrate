@@ -92,7 +92,7 @@ use sp_runtime::{
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use parking_lot::Mutex;
 use sp_inherents::{InherentDataProviders, InherentData};
-use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
+use sc_telemetry::{slog::Logger, telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use sp_consensus::{
 	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
@@ -358,6 +358,9 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
+
+	/// Logger instant use for metrics.
+	pub logger: Logger,
 }
 
 /// Start the babe worker.
@@ -372,6 +375,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	force_authoring,
 	babe_link,
 	can_author_with,
+	logger,
 }: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
 	BabeWorker<B>,
 	sp_consensus::Error,
@@ -402,6 +406,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		epoch_changes: babe_link.epoch_changes.clone(),
 		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: config.clone(),
+		logger,
 	};
 
 	register_babe_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
@@ -472,6 +477,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
+	logger: Logger,
 }
 
 impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> where
@@ -665,6 +671,10 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 			Some(slot_remaining)
 		}
 	}
+
+	fn logger(&self) -> Logger {
+		self.logger.clone()
+	}
 }
 
 impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> where
@@ -796,6 +806,7 @@ pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW> {
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	time_source: TimeSource,
 	can_author_with: CAW,
+	logger: Logger,
 }
 
 impl<Block, Client, SelectChain, CAW> BabeVerifier<Block, Client, SelectChain, CAW>
@@ -1024,6 +1035,7 @@ where
 
 				trace!(target: "babe", "Checked {:?}; importing.", pre_header);
 				telemetry!(
+					self.logger;
 					CONSENSUS_TRACE;
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
@@ -1042,7 +1054,7 @@ where
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
-				telemetry!(CONSENSUS_DEBUG; "babe.header_too_far_in_future";
+				telemetry!(self.logger; CONSENSUS_DEBUG; "babe.header_too_far_in_future";
 					"hash" => ?hash, "a" => ?a, "b" => ?b
 				);
 				Err(Error::<Block>::TooFarInFuture(hash).into())
@@ -1450,6 +1462,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
+	logger: Logger,
 ) -> ClientResult<DefaultImportQueue<Block, Client>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
@@ -1469,6 +1482,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 		epoch_changes: babe_link.epoch_changes,
 		time_source: babe_link.time_source,
 		can_author_with,
+		logger,
 	};
 
 	Ok(BasicQueue::new(
