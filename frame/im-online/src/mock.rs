@@ -146,24 +146,22 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 
-impl pallet_session::ValidatorIdentification<u64> for Runtime {
-	type ValidatorId = u64;
-	type ValidatorIdOf = ConvertInto;
-}
-impl pallet_session::historical::FullValidatorIdentification<u64> for Runtime {
-	type FullIdentification = u64;
-	type FullIdentificationOf = ConvertInto;
-}
-
 impl pallet_session::Trait for Runtime {
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Runtime, TestSessionManager>;
 	type SessionHandler = (ImOnline, );
+	type ValidatorId = u64;
+	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = ();
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
+}
+
+impl pallet_session::historical::Trait for Runtime {
+	type FullIdentification = u64;
+	type FullIdentificationOf = ConvertInto;
 }
 
 parameter_types! {
@@ -185,7 +183,7 @@ impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;
-	type SessionInterface = Session;
+    type ValidatorSet = Historical;
 	type SessionDuration = Period;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();
@@ -202,6 +200,7 @@ impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runt
 pub type ImOnline = Module<Runtime>;
 pub type System = frame_system::Module<Runtime>;
 pub type Session = pallet_session::Module<Runtime>;
+pub type Historical = pallet_session::historical::Module<Runtime>;
 
 pub fn advance_session() {
 	let now = System::block_number().max(1);

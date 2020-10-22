@@ -94,11 +94,7 @@ impl pallet_timestamp::Trait for Test {
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
-impl pallet_session::ValidatorIdentification<AccountId> for Test {
-	type ValidatorId = AccountId;
-	type ValidatorIdOf = pallet_staking::StashOf<Test>;
-}
-impl pallet_session::historical::FullValidatorIdentification<AccountId> for Test {
+impl pallet_session::historical::Trait for Test {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
 }
@@ -131,6 +127,8 @@ impl pallet_session::Trait for Test {
 	type NextSessionRotation = pallet_session::PeriodicSessions<(), ()>;
 	type SessionHandler = TestSessionHandler;
 	type Event = ();
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type DisabledValidatorsThreshold = ();
 	type WeightInfo = ();
 }

@@ -113,24 +113,22 @@ mod tests {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 	}
 
-	impl pallet_session::ValidatorIdentification<AuthorityId> for Test {
-		type ValidatorId = AuthorityId;
-		type ValidatorIdOf = ConvertInto;
-	}
-	impl pallet_session::historical::FullValidatorIdentification<AuthorityId> for Test {
-		type FullIdentification = ();
-		type FullIdentificationOf = ();
-	}
-
 	impl pallet_session::Trait for Test {
 		type SessionManager = ();
 		type Keys = UintAuthorityId;
 		type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 		type SessionHandler = TestSessionHandler;
 		type Event = ();
+		type ValidatorId = AuthorityId;
+		type ValidatorIdOf = ConvertInto;
 		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 		type WeightInfo = ();
+	}
+
+	impl pallet_session::historical::Trait for Test {
+		type FullIdentification = ();
+		type FullIdentificationOf = ();
 	}
 
 	pub type BlockNumber = u64;

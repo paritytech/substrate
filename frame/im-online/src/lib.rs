@@ -103,10 +103,6 @@ use frame_system::offchain::{
 	SendTransactionTypes,
 	SubmitTransaction,
 };
-// use pallet_session::{
-// 	historical::{FullValidatorIdentification, IdentificationTuple},
-// 	ValidatorIdentification, ValidatorId
-// };
 
 pub mod sr25519 {
 	mod app_sr25519 {
