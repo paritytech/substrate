@@ -143,8 +143,7 @@ where
 	}
 }
 
-/// Returns a WasmOverwrite struct
-/// filled with dummy data for testing.
+/// Returns a WasmOverwrite struct filled with dummy data for testing.
 #[cfg(test)]
 pub fn dummy_overwrites<E>(executor: &E) -> WasmOverwrite<E>
 where
