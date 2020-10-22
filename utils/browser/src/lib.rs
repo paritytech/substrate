@@ -103,7 +103,6 @@ where
 		base_path: None,
 		informant_output_format: sc_informant::OutputFormat {
 			enable_color: false,
-			prefix: String::new(),
 		},
 	};
 
