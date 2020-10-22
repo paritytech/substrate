@@ -44,9 +44,8 @@ use sp_io::hashing::blake2_256;
 use sp_runtime::{DispatchResult, traits::{Dispatchable, Zero, Hash, Member, Saturating}};
 use frame_support::{
 	decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug, traits::{
-		Get, ReservableCurrency, Currency, InstanceFilter, OriginTrait, IsType,
-	}, weights::{Weight, GetDispatchInfo},
-	dispatch::{PostDispatchInfo, IsSubType}, storage::IterableStorageMap,
+		Get, ReservableCurrency, Currency, InstanceFilter, OriginTrait, IsType, IsSubType,
+	}, weights::{Weight, GetDispatchInfo}, dispatch::PostDispatchInfo, storage::IterableStorageMap,
 };
 use frame_system::{self as system, ensure_signed};
 use frame_support::dispatch::DispatchError;

@@ -292,6 +292,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
 				config.add_protocol(params.protocol_id.clone());
 				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
+				config.use_kademlia_disjoint_query_paths(params.network_config.kademlia_disjoint_query_paths);
 
 				match params.network_config.transport {
 					TransportConfig::MemoryOnly => {
@@ -334,12 +335,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				behaviour.register_notifications_protocol(*engine_id, protocol_name.clone());
 			}
 			let (transport, bandwidth) = {
-				let (config_mem, config_wasm, flowctrl) = match params.network_config.transport {
-					TransportConfig::MemoryOnly => (true, None, false),
-					TransportConfig::Normal { wasm_external_transport, use_yamux_flow_control, .. } =>
-						(false, wasm_external_transport, use_yamux_flow_control)
+				let (config_mem, config_wasm) = match params.network_config.transport {
+					TransportConfig::MemoryOnly => (true, None),
+					TransportConfig::Normal { wasm_external_transport, .. } =>
+						(false, wasm_external_transport)
 				};
-				transport::build_transport(local_identity, config_mem, config_wasm, flowctrl)
+				transport::build_transport(local_identity, config_mem, config_wasm)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
 				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER)

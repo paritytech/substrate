@@ -104,9 +104,8 @@ impl<B: BlockT> InformantDisplay<B> {
 		if self.format.enable_color {
 			info!(
 				target: "substrate",
-				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
+				"{} {}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
 				level,
-				self.format.prefix,
 				Colour::White.bold().paint(&status),
 				target,
 				Colour::White.bold().paint(format!("{}", num_connected_peers)),
@@ -120,9 +119,8 @@ impl<B: BlockT> InformantDisplay<B> {
 		} else {
 			info!(
 				target: "substrate",
-				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
+				"{} {}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
 				level,
-				self.format.prefix,
 				status,
 				target,
 				num_connected_peers,

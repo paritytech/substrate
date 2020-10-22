@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::codec::{Encode, Decode, EncodeLike};
+use frame_support::{
+	codec::{Encode, Decode, EncodeLike}, traits::Get, weights::RuntimeDbWeight,
+};
 
 pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
@@ -28,6 +30,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Call;
 	type Event: From<Event<Self>>;
 	type PalletInfo: frame_support::traits::PalletInfo;
+	type DbWeight: Get<RuntimeDbWeight>;
 }
 
 frame_support::decl_module! {
