@@ -44,7 +44,6 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(2 as Weight))
 	}
-	// WARNING! Some components were not used: ["r"]
 	fn retract_tip() -> Weight {
 		(82970000 as Weight)
 			.saturating_add(DbWeight::get().reads(1 as Weight))

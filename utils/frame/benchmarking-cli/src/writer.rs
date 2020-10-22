@@ -17,6 +17,7 @@
 
 // Outputs benchmark results to Rust files that can be ingested by the runtime.
 
+use crate::BenchmarkCmd;
 use std::fs::{self, File, OpenOptions};
 use std::io::prelude::*;
 use std::path::PathBuf;
@@ -56,15 +57,14 @@ fn underscore<Number>(i: Number) -> String
 pub fn write_trait(
 	batches: &[BenchmarkBatch],
 	path: &PathBuf,
-	trait_name: &String,
-	spaces: bool,
+	cmd: &BenchmarkCmd,
 ) -> Result<(), std::io::Error> {
 	let mut file_path = path.clone();
 	file_path.push("trait");
 	file_path.set_extension("rs");
 	let mut file = crate::writer::open_file(file_path)?;
 
-	let indent = if spaces {"    "} else {"\t"};
+	let indent = if cmd.spaces {"    "} else {"\t"};
 
 	let mut current_pallet = Vec::<u8>::new();
 
@@ -87,7 +87,7 @@ pub fn write_trait(
 
 			// trait wrapper
 			write!(file, "// {}\n", pallet_string)?;
-			write!(file, "pub trait {} {{\n", trait_name)?;
+			write!(file, "pub trait {} {{\n", cmd.r#trait)?;
 
 			current_pallet = batch.pallet.clone()
 		}
@@ -113,17 +113,10 @@ pub fn write_trait(
 pub fn write_results(
 	batches: &[BenchmarkBatch],
 	path: &PathBuf,
-	lowest_range_values: &[u32],
-	highest_range_values: &[u32],
-	steps: &[u32],
-	repeat: u32,
-	header: &Option<PathBuf>,
-	struct_name: &String,
-	trait_name: &String,
-	spaces: bool,
+	cmd: &BenchmarkCmd,
 ) -> Result<(), std::io::Error> {
 
-	let header_text = match header {
+	let header_text = match &cmd.header {
 		Some(header_file) => {
 			let text = fs::read_to_string(header_file)?;
 			Some(text)
@@ -131,7 +124,7 @@ pub fn write_results(
 		None => None,
 	};
 
-	let indent = if spaces {"    "} else {"\t"};
+	let indent = if cmd.spaces {"    "} else {"\t"};
 	let date = chrono::Utc::now();
 
 	let mut current_pallet = Vec::<u8>::new();
@@ -175,15 +168,25 @@ pub fn write_results(
 				VERSION,
 			)?;
 
-			// date of generation
+			// date of generation + some settings
 			write!(
 				file,
-				"//! DATE: {}, STEPS: {:?}, REPEAT: {}, LOW RANGE: {:?}, HIGH RANGE: {:?}\n\n",
+				"//! DATE: {}, STEPS: {:?}, REPEAT: {}, LOW RANGE: {:?}, HIGH RANGE: {:?}\n",
 				date.format("%Y-%m-%d"),
-				steps,
-				repeat,
-				lowest_range_values,
-				highest_range_values,
+				cmd.steps,
+				cmd.repeat,
+				cmd.lowest_range_values,
+				cmd.highest_range_values,
+			)?;
+
+			// more settings
+			write!(
+				file,
+				"//! EXECUTION: {:?}, WASM-EXECUTION: {}, CHAIN: {:?}, DB CACHE: {}\n",
+				cmd.execution,
+				cmd.wasm_method,
+				cmd.shared_params.chain,
+				cmd.database_cache_size,
 			)?;
 
 			// allow statements
@@ -199,15 +202,15 @@ pub fn write_results(
 			)?;
 
 			// struct for weights
-			write!(file, "pub struct {}<T>(PhantomData<T>);\n", struct_name)?;
+			write!(file, "pub struct {}<T>(PhantomData<T>);\n", cmd.r#struct)?;
 
 			// trait wrapper
 			write!(
 				file,
 				"impl<T: frame_system::Trait> {}::{} for {}<T> {{\n",
 				pallet_string,
-				trait_name,
-				struct_name,
+				cmd.r#trait,
+				cmd.r#struct,
 			)?;
 
 			current_pallet = batch.pallet.clone()
@@ -246,17 +249,16 @@ pub fn write_results(
 			.iter()
 			.map(|(name, _)| -> String { return name.to_string() })
 			.collect::<Vec<String>>();
-		if all_components.len() != used_components.len() {
-			let mut unused_components = all_components;
-			unused_components.retain(|x| !used_components.contains(&x));
-			write!(file, "{}// WARNING! Some components were not used: {:?}\n", indent, unused_components)?;
-		}
 
 		// function name
 		write!(file, "{}fn {}(", indent, benchmark_string)?;
 		// params
-		for component in used_components {
-			write!(file, "{}: u32, ", component)?;
+		for component in all_components {
+			if used_components.contains(&&component) {
+				write!(file, "{}: u32, ", component)?;
+			} else {
+				write!(file, "_{}: u32, ", component)?;
+			}
 		}
 		// return value
 		write!(file, ") -> Weight {{\n")?;

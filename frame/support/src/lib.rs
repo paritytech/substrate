@@ -77,7 +77,7 @@ pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
 	IterableStorageDoubleMap, migration
 };
-pub use self::dispatch::{Parameter, Callable, IsSubType};
+pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
 /// A type that cannot be instantiated.
@@ -267,7 +267,128 @@ macro_rules! ord_parameter_types {
 }
 
 #[doc(inline)]
-pub use frame_support_procedural::{decl_storage, construct_runtime, transactional};
+pub use frame_support_procedural::{
+	decl_storage, construct_runtime, transactional, RuntimeDebugNoBound
+};
+
+/// Derive [`Clone`] but do not bound any generic.
+///
+/// This is useful for type generic over runtime:
+/// ```
+/// # use frame_support::CloneNoBound;
+/// trait Trait {
+///		type C: Clone;
+/// }
+///
+/// // Foo implements [`Clone`] because `C` bounds [`Clone`].
+/// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Clone`].
+/// #[derive(CloneNoBound)]
+/// struct Foo<T: Trait> {
+///		c: T::C,
+/// }
+/// ```
+pub use frame_support_procedural::CloneNoBound;
+
+/// Derive [`Eq`] but do not bound any generic.
+///
+/// This is useful for type generic over runtime:
+/// ```
+/// # use frame_support::{EqNoBound, PartialEqNoBound};
+/// trait Trait {
+///		type C: Eq;
+/// }
+///
+/// // Foo implements [`Eq`] because `C` bounds [`Eq`].
+/// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Eq`].
+/// #[derive(PartialEqNoBound, EqNoBound)]
+/// struct Foo<T: Trait> {
+///		c: T::C,
+/// }
+/// ```
+pub use frame_support_procedural::EqNoBound;
+
+/// Derive [`PartialEq`] but do not bound any generic.
+///
+/// This is useful for type generic over runtime:
+/// ```
+/// # use frame_support::PartialEqNoBound;
+/// trait Trait {
+///		type C: PartialEq;
+/// }
+///
+/// // Foo implements [`PartialEq`] because `C` bounds [`PartialEq`].
+/// // Otherwise compilation will fail with an output telling `c` doesn't implement [`PartialEq`].
+/// #[derive(PartialEqNoBound)]
+/// struct Foo<T: Trait> {
+///		c: T::C,
+/// }
+/// ```
+pub use frame_support_procedural::PartialEqNoBound;
+
+/// Derive [`Debug`] but do not bound any generic.
+///
+/// This is useful for type generic over runtime:
+/// ```
+/// # use frame_support::DebugNoBound;
+/// # use core::fmt::Debug;
+/// trait Trait {
+///		type C: Debug;
+/// }
+///
+/// // Foo implements [`Debug`] because `C` bounds [`Debug`].
+/// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Debug`].
+/// #[derive(DebugNoBound)]
+/// struct Foo<T: Trait> {
+///		c: T::C,
+/// }
+/// ```
+pub use frame_support_procedural::DebugNoBound;
+
+/// Assert the annotated function is executed within a storage transaction.
+///
+/// The assertion is enabled for native execution and when `debug_assertions` are enabled.
+///
+/// # Example
+///
+/// ```
+/// # use frame_support::{
+/// # 	require_transactional, transactional, dispatch::DispatchResult
+/// # };
+///
+/// #[require_transactional]
+/// fn update_all(value: u32) -> DispatchResult {
+/// 	// Update multiple storages.
+/// 	// Return `Err` to indicate should revert.
+/// 	Ok(())
+/// }
+///
+/// #[transactional]
+/// fn safe_update(value: u32) -> DispatchResult {
+/// 	// This is safe
+/// 	update_all(value)
+/// }
+///
+/// fn unsafe_update(value: u32) -> DispatchResult {
+/// 	// this may panic if unsafe_update is not called within a storage transaction
+/// 	update_all(value)
+/// }
+/// ```
+pub use frame_support_procedural::require_transactional;
+
+/// Convert the current crate version into a [`PalletVersion`](crate::traits::PalletVersion).
+///
+/// It uses the `CARGO_PKG_VERSION_MAJOR`, `CARGO_PKG_VERSION_MINOR` and
+/// `CARGO_PKG_VERSION_PATCH` environment variables to fetch the crate version.
+/// This means that the [`PalletVersion`](crate::traits::PalletVersion)
+/// object will correspond to the version of the crate the macro is called in!
+///
+/// # Example
+///
+/// ```
+/// # use frame_support::{traits::PalletVersion, crate_to_pallet_version};
+/// const Version: PalletVersion = crate_to_pallet_version!();
+/// ```
+pub use frame_support_procedural::crate_to_pallet_version;
 
 /// Return Err of the expression: `return Err($expression);`.
 ///
@@ -379,9 +500,11 @@ mod tests {
 	use sp_std::{marker::PhantomData, result};
 	use sp_io::TestExternalities;
 
-	pub trait Trait {
+	pub trait Trait: 'static {
 		type BlockNumber: Codec + EncodeLike + Default;
 		type Origin;
+		type PalletInfo: crate::traits::PalletInfo;
+		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
 
 	mod module {
@@ -390,7 +513,7 @@ mod tests {
 		use super::Trait;
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self  {}
 		}
 	}
 	use self::module::Module;
@@ -421,6 +544,8 @@ mod tests {
 	impl Trait for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
+		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	fn new_test_ext() -> TestExternalities {

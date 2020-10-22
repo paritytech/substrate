@@ -80,7 +80,7 @@ pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
-use sc_client_api::BlockchainEvents;
+use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -199,7 +199,7 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 async fn build_network_future<
 	B: BlockT,
-	C: BlockchainEvents<B>,
+	C: BlockchainEvents<B> + HeaderBackend<B>,
 	H: sc_network::ExHashT
 > (
 	role: Role,
@@ -211,6 +211,9 @@ async fn build_network_future<
 	announce_imported_blocks: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
+
+	// Current best block at initialization, to report to the RPC layer.
+	let starting_block = client.info().best_number;
 
 	// Stream of finalized blocks reported by the client.
 	let mut finality_notification_stream = {
@@ -322,6 +325,15 @@ async fn build_network_future<
 						};
 
 						let _ = sender.send(vec![node_role]);
+					}
+					sc_rpc::system::Request::SyncState(sender) => {
+						use sc_rpc::system::SyncState;
+
+						let _ = sender.send(SyncState {
+							starting_block: starting_block,
+							current_block: client.info().best_number,
+							highest_block: network.best_seen_block(),
+						});
 					}
 				}
 			}
