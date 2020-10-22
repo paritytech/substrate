@@ -16,9 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use ansi_term::Colour;
-use std::fmt;
-use tracing::{span::Attributes, Event, Id, Level, Subscriber};
+use ansi_term::{Colour, Style};
+use std::{fmt::{self, Write as _}, iter};
+use tracing::{
+	span::{self, Attributes},
+	Event, Id, Level, Subscriber,
+};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
 	fmt::{
@@ -90,6 +93,8 @@ where
 			}
 		}
 
+		let fmt_ctx = { FmtCtx::new(&ctx, event.parent(), self.ansi) };
+		write!(writer, "{}", fmt_ctx)?;
 		if self.display_target {
 			write!(writer, "{}:", meta.target())?;
 		}
@@ -239,6 +244,70 @@ impl<'a> fmt::Display for FmtThreadName<'a> {
 
 		// pad thread name using `max_len`
 		write!(f, "{:>width$}", self.name, width = max_len)
+	}
+}
+
+struct FmtCtx<'a, S, N> {
+	ctx: &'a FmtContext<'a, S, N>,
+	span: Option<&'a span::Id>,
+	ansi: bool,
+}
+
+impl<'a, S, N: 'a> FmtCtx<'a, S, N>
+where
+	S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+	N: for<'writer> FormatFields<'writer> + 'static,
+{
+	pub(crate) fn new(
+		ctx: &'a FmtContext<'_, S, N>,
+		span: Option<&'a span::Id>,
+		ansi: bool,
+	) -> Self {
+		Self { ctx, ansi, span }
+	}
+
+	fn bold(&self) -> Style {
+		if self.ansi {
+			return Style::new().bold();
+		}
+
+		Style::new()
+	}
+}
+
+// NOTE: the following code took inspiration from tracing-subscriber
+//
+//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L711
+impl<'a, S, N: 'a> fmt::Display for FmtCtx<'a, S, N>
+where
+	S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+	N: for<'writer> FormatFields<'writer> + 'static,
+{
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let bold = self.bold();
+		let mut seen = false;
+
+		let span = self
+			.span
+			.and_then(|id| self.ctx.span(&id))
+			.or_else(|| self.ctx.lookup_current());
+
+		let scope = span
+			.into_iter()
+			.flat_map(|span| span.from_root().chain(iter::once(span)));
+
+		for name in scope
+			.map(|span| span.metadata().name())
+			.filter(|&x| x != PREFIX_LOG_SPAN)
+		{
+			seen = true;
+			write!(f, "{}:", bold.paint(name))?;
+		}
+
+		if seen {
+			f.write_char(' ')?;
+		}
+		Ok(())
 	}
 }
 
