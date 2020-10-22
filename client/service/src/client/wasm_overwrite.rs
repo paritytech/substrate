@@ -82,8 +82,8 @@ impl FetchRuntimeCode for WasmBlob {
 	}
 }
 
-/// Scrapes WASM from a folder
-/// and returns WASM from that folder if the runtime spec version matches.
+/// Scrapes WASM from a folder and returns WASM from that folder
+/// if the runtime spec version matches.
 #[derive(Clone, Debug)]
 pub struct WasmOverwrite<E> {
 	// Map of runtime spec version -> Wasm Blob
@@ -168,8 +168,7 @@ where
 	}
 }
 
-/// Returns a WasmOverwrite struct
-/// filled with dummy data for testing.
+/// Returns a WasmOverwrite struct filled with dummy data for testing.
 #[cfg(test)]
 pub fn dummy_overwrites<E>(executor: &E) -> WasmOverwrite<E>
 where

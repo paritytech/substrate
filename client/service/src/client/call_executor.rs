@@ -70,10 +70,9 @@ where
 		})
 	}
 
-	/// Tries to return an overwrite for `onchain_code`.
-	///
-	/// Returns `onchain_code` if an overwrite was not found,
-	/// or if overwriting is disabled.
+	/// Check if local runtime code overrides are enabled and one is available
+	/// for the given `BlockId`. If yes, return it; otherwise return the same
+	/// `RuntimeCode` instance that was passed.
 	fn check_overwrite<'a, Block>(
 		&'a self,
 		onchain_code: RuntimeCode<'a>,
