@@ -1991,18 +1991,20 @@ benchmarks! {
 	}
 
 	// w_memory_grow = w_bench - 2 * w_param
-	// This is very slow. We therefore use the API batch size with only one repetition.
+	// We can only allow allocate as much memory as it is allowed in a a contract.
+	// Therefore the repeat count is limited by the maximum memory any contract can have.
+	// Using a contract with more memory will skew the benchmark because the runtime of grow
+	// depends on how much memory is already allocated.
 	instr_memory_grow {
 		let r in 0 .. 1;
 		let max_pages = ImportedMemory::max::<T>().max_pages;
-		let repetitions = r * API_BENCHMARK_BATCH_SIZE;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory {
 				min_pages: 0,
-				max_pages: max_pages * repetitions,
+				max_pages,
 			}),
-			call_body: Some(body::repeated(repetitions, &[
-				Instruction::I32Const(max_pages as i32),
+			call_body: Some(body::repeated(r * max_pages, &[
+				Instruction::I32Const(1),
 				Instruction::GrowMemory(0),
 				Instruction::Drop,
 			])),

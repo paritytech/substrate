@@ -371,13 +371,6 @@ macro_rules! cost_instr {
 	}
 }
 
-macro_rules! cost_instr_api_batch {
-	($name:ident, $num_params:expr) => {
-		cost_instr_with_batch_size!($name, $num_params, API_BENCHMARK_BATCH_SIZE)
-	}
-}
-
-
 macro_rules! cost_byte_args {
 	($name:ident, $( $arg: expr ),+) => {
 		cost_args!($name, $( $arg ),+) / 1024
@@ -446,6 +439,7 @@ impl Default for Limits {
 
 impl<T: Trait> Default for InstructionWeights<T> {
 	fn default() -> Self {
+		let max_pages = Limits::default().memory_pages;
 		Self {
 			i64const: cost_instr!(instr_i64const, 1),
 			i64load: cost_instr!(instr_i64load, 2),
@@ -465,7 +459,7 @@ impl<T: Trait> Default for InstructionWeights<T> {
 			global_get: cost_instr!(instr_global_get, 1),
 			global_set: cost_instr!(instr_global_set, 1),
 			memory_current: cost_instr!(instr_memory_current, 1),
-			memory_grow: cost_instr_api_batch!(instr_memory_grow, 1),
+			memory_grow: cost_instr_with_batch_size!(instr_memory_grow, 1, max_pages),
 			i64clz: cost_instr!(instr_i64clz, 2),
 			i64ctz: cost_instr!(instr_i64ctz, 2),
 			i64popcnt: cost_instr!(instr_i64popcnt, 2),
