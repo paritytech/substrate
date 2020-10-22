@@ -36,6 +36,7 @@ pub struct Vicinity {
 	pub origin: H160,
 }
 
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
 pub struct ExecutionInfo<T> {
 	pub exit_reason: ExitReason,
 	pub value: T,

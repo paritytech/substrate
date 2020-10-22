@@ -532,7 +532,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0940dc441f31689269e10ac70eb1002a3a1d3ad1390e030043662eb7fe4688b"
 dependencies = [
- "block-padding",
+ "block-padding 0.1.5",
  "byte-tools",
  "byteorder 1.3.4",
  "generic-array 0.12.3",
@@ -544,6 +544,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4152116fd6e9dadb291ae18fc1ec3575ed6d84c29642d97890f4b4a3417297e4"
 dependencies = [
+ "block-padding 0.2.1",
  "generic-array 0.14.3",
 ]
 
@@ -564,6 +565,12 @@ checksum = "fa79dedbb091f449f1f39e53edf88d5dbe95f895dae6135a8d7b881fb5af73f5"
 dependencies = [
  "byte-tools",
 ]
+
+[[package]]
+name = "block-padding"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "blocking"
@@ -1373,9 +1380,24 @@ checksum = "71a6567e6fd35589fea0c63b94b4cf2e55573e413901bdbe60ab15cf0e25e5df"
 dependencies = [
  "crunchy",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
  "impl-serde",
  "tiny-keccak",
+]
+
+[[package]]
+name = "ethereum"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7538b2bb55bde83b500c4e6ea0bdb3b1c0e9e5ae57951941e5412db32c2a8344"
+dependencies = [
+ "ethereum-types",
+ "parity-scale-codec",
+ "rlp",
+ "rlp-derive",
+ "serde",
+ "sha3 0.9.1",
 ]
 
 [[package]]
@@ -1386,6 +1408,7 @@ checksum = "473aecff686bd8e7b9db0165cbbb53562376b39bf35b427f0c60446a9e1634b0"
 dependencies = [
  "ethbloom",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
  "impl-serde",
  "primitive-types",
@@ -1400,10 +1423,11 @@ checksum = "f7531096570974c3a9dcf9e4b8e1cede1ec26cf5046219fb3b9d897503b9be59"
 
 [[package]]
 name = "evm"
-version = "0.17.2"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf33417148b0ec01c862ed6dc5aa2db19fd597f6352f6930daafe9c76737f64f"
+checksum = "73ae392693d655a526f86dcd9ee0846ee9250f3cef8c6ee67c35ce05d277b7a2"
 dependencies = [
+ "ethereum",
  "evm-core",
  "evm-gasometer",
  "evm-runtime",
@@ -1412,24 +1436,26 @@ dependencies = [
  "primitive-types",
  "rlp",
  "serde",
- "sha3",
+ "sha3 0.8.2",
 ]
 
 [[package]]
 name = "evm-core"
-version = "0.17.2"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf2d732b3c36df36833761cf67df8f65866be1d368d20508bc3e13e6f256c8c5"
+checksum = "ec9baaa39ec260b950bd0ac0b742a3e871a2730ce763ac5f0c38e0dd6fea2373"
 dependencies = [
  "log",
+ "parity-scale-codec",
  "primitive-types",
+ "serde",
 ]
 
 [[package]]
 name = "evm-gasometer"
-version = "0.17.2"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46de1b91ccd744627484183729f1b5af484b3bf15505007fc28cc54264cb9ea1"
+checksum = "49550ed1f3d504ce8189708dbc153cee38956ac201cba3bc8c3e0816595d41a9"
 dependencies = [
  "evm-core",
  "evm-runtime",
@@ -1438,13 +1464,13 @@ dependencies = [
 
 [[package]]
 name = "evm-runtime"
-version = "0.17.2"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2c1d1ffe96f833788512c890d702457d790dba4917ac6f64f8f60fbd9bc40b8"
+checksum = "3a9c6338c699169eb3dbc9d355adb5cae0b7bc19b44a9b45edb344aa795e1ac6"
 dependencies = [
  "evm-core",
  "primitive-types",
- "sha3",
+ "sha3 0.8.2",
 ]
 
 [[package]]
@@ -3134,7 +3160,7 @@ dependencies = [
  "pin-project",
  "rand 0.7.3",
  "salsa20",
- "sha3",
+ "sha3 0.8.2",
 ]
 
 [[package]]
@@ -3616,7 +3642,7 @@ dependencies = [
  "digest 0.8.1",
  "sha-1",
  "sha2 0.8.2",
- "sha3",
+ "sha3 0.8.2",
  "unsigned-varint 0.3.3",
 ]
 
@@ -4560,7 +4586,7 @@ dependencies = [
  "ripemd160",
  "rlp",
  "serde",
- "sha3",
+ "sha3 0.8.2",
  "sp-core",
  "sp-evm",
  "sp-io",
@@ -6162,6 +6188,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rlp-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e33d7b2abe0c340d8797fe2907d3f20d3b5ea5908683618bfe80df7f621f672a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "rocksdb"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7745,6 +7782,18 @@ dependencies = [
  "digest 0.8.1",
  "keccak",
  "opaque-debug 0.2.3",
+]
+
+[[package]]
+name = "sha3"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f81199417d4e5de3f04b1e871023acea7389672c4135918f05aa9cbf2f2fa809"
+dependencies = [
+ "block-buffer 0.9.0",
+ "digest 0.9.0",
+ "keccak",
+ "opaque-debug 0.3.0",
 ]
 
 [[package]]
@@ -9707,7 +9756,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.3.23",
+ "rand 0.7.3",
 ]
 
 [[package]]
