@@ -47,7 +47,7 @@ use sc_executor::RuntimeInfo;
 use sp_version::RuntimeVersion;
 use sp_core::traits::RuntimeCode;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 /// Auxiliary structure that holds a wasm blob and its hash.
 struct WasmBlob {
 	code: Vec<u8>,
@@ -199,5 +199,18 @@ mod tests {
 		let version = WasmOverwrite::runtime_version(&executor, &wasm, Some(128))
 			.expect("should get the `RuntimeVersion` of the test-runtime wasm blob");
 		assert_eq!(version.spec_version, 2);
+	}
+
+	#[test]
+	fn should_scrape_wasm() {
+		let exec = NativeExecutor::<substrate_test_runtime_client::LocalExecutor>::new(
+			WasmExecutionMethod::Interpreted,
+			Some(128),
+			1,
+		);
+		let overwrites = WasmOverwrite::new(substrate_test_runtime::WASM_DIR, exec)
+			.expect("Creates WasmOverwrite");
+		let wasm = overwrites.overwrites.get(&2).expect("a WASM binary");
+		assert_eq!(wasm.code, substrate_test_runtime::wasm_binary_unwrap().to_vec())
 	}
 }
