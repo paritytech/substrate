@@ -29,6 +29,7 @@ use sp_runtime::{
 	traits::{IdentityLookup, Block as BlockT},
 	testing::{Header, UintAuthorityId},
 };
+use pallet_session::historical as pallet_session_historical;
 
 
 type AccountId = u64;
@@ -132,6 +133,7 @@ impl pallet_session::Trait for Test {
 	type DisabledValidatorsThreshold = ();
 	type WeightInfo = ();
 }
+
 pallet_staking_reward_curve::build! {
 	const I_NPOS: sp_runtime::curve::PiecewiseLinear<'static> = curve!(
 		min_inflation: 0_025_000,
@@ -177,6 +179,7 @@ impl pallet_staking::Trait for Test {
 impl pallet_im_online::Trait for Test {
 	type AuthorityId = UintAuthorityId;
 	type Event = Event;
+	type ValidatorSet = Historical;
 	type SessionDuration = Period;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();
@@ -216,6 +219,7 @@ frame_support::construct_runtime!(
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		ImOnline: pallet_im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
+		Historical: pallet_session_historical::{Module},
 	}
 );
 

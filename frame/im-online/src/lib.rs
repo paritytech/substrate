@@ -231,12 +231,12 @@ pub trait WeightInfo {
 	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
 }
 
-type ValidatorId<T> = <
+pub type ValidatorId<T> = <
 	<T as Trait>::ValidatorSet as ValidatorSet<<T as frame_system::Trait>::AccountId>
 >::ValidatorId;
 
-type IdentificationTuple<T> = (
-	<<T as Trait>::ValidatorSet as ValidatorSet<<T as frame_system::Trait>::AccountId>>::ValidatorId,
+pub type IdentificationTuple<T> = (
+	ValidatorId<T>,
 	<<T as Trait>::ValidatorSet as ValidatorSetWithIdentification<<T as frame_system::Trait>::AccountId>>::Identification,
 );
 

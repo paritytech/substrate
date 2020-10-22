@@ -175,6 +175,32 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<
 	Ok((id_tuples, offenders))
 }
 
+fn make_offenders_im_online<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<
+	(Vec<pallet_im_online::IdentificationTuple<T>>, Vec<Offender<T>>),
+	&'static str
+> {
+	Staking::<T>::new_session(0);
+
+	let mut offenders = vec![];
+	for i in 0 .. num_offenders {
+		let offender = create_offender::<T>(i + 1, num_nominators)?;
+		offenders.push(offender);
+	}
+
+	Staking::<T>::start_session(0);
+
+	let id_tuples = offenders.iter()
+		.map(|offender|
+			<<T as ImOnlineTrait>::ValidatorSet as sp_session::ValidatorSet<T::AccountId>>::ValidatorIdOf::convert(offender.controller.clone())
+				.expect("failed to get validator id from account id"))
+		.map(|validator_id|
+			<<T as ImOnlineTrait>::ValidatorSet as sp_session::ValidatorSetWithIdentification<T::AccountId>>::IdentificationOf::convert(validator_id.clone())
+			.map(|full_id| (validator_id, full_id))
+			.expect("failed to convert validator id to full identification"))
+		.collect::<Vec<pallet_im_online::IdentificationTuple<T>>>();
+	Ok((id_tuples, offenders))
+}
+
 #[cfg(test)]
 fn check_events<T: Trait, I: Iterator<Item = <T as SystemTrait>::Event>>(expected: I) {
 	let events = System::<T>::events() .into_iter()
@@ -221,7 +247,7 @@ benchmarks! {
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
-		let (offenders, raw_offenders) = make_offenders::<T>(o, n)?;
+		let (offenders, raw_offenders) = make_offenders_im_online::<T>(o, n)?;
 		let keys =  ImOnline::<T>::keys();
 		let validator_set_count = keys.len() as u32;
 
@@ -235,10 +261,10 @@ benchmarks! {
 		};
 		assert_eq!(System::<T>::event_count(), 0);
 	}: {
-		//let _ = <T as ImOnlineTrait>::ReportUnresponsiveness::report_offence(
-		//	reporters.clone(),
-		//	offence
-		//);
+		let _ = <T as ImOnlineTrait>::ReportUnresponsiveness::report_offence(
+			reporters.clone(),
+			offence
+		);
 	}
 
 	verify {

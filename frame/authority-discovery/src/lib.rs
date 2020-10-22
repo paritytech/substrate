@@ -238,7 +238,7 @@ mod tests {
 		let mut externalities = TestExternalities::new(t);
 
 		externalities.execute_with(|| {
-			use pallet_session::OneSessionHandler;
+			use sp_session::OneSessionHandler;
 
 			AuthorityDiscovery::on_genesis_session(
 				first_authorities.iter().map(|id| (id, id.clone()))

@@ -26,6 +26,7 @@ pallet-session = { version = "2.0.0", default-features = false, path = "../../se
 pallet-staking = { version = "2.0.0", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "2.0.0", default-features = false, path = "../../../primitives/staking" }
+sp-session = { version = "2.0.0", default-features = false, path = "../../../primitives/session" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
@@ -50,6 +51,7 @@ std = [
 	"pallet-staking/std",
 	"sp-runtime/std",
 	"sp-staking/std",
+	"sp-session/std",
 	"sp-std/std",
 	"codec/std",
 ]

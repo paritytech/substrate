@@ -18,6 +18,7 @@
 // Tests for the Session Pallet
 
 use super::*;
+use codec::Decode;
 use frame_support::{traits::OnInitialize, assert_ok};
 use sp_core::crypto::key_types::DUMMY;
 use sp_runtime::testing::UintAuthorityId;

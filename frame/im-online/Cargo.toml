@@ -28,6 +28,9 @@ frame-system = { version = "2.0.0", default-features = false, path = "../system"
 
 frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
 
+[dev-dependencies]
+pallet-session = { version = "2.0.0", path = "../session" }
+
 [features]
 default = ["std"]
 std = [
