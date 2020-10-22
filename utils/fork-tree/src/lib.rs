@@ -644,12 +644,48 @@ mod node_implementation {
 		Abort,
 	}
 
-	#[derive(Clone, Debug, Decode, Encode, PartialEq)]
+	#[derive(Clone, Debug, Encode, PartialEq)]
 	pub struct Node<H, N, V> {
 		pub hash: H,
 		pub number: N,
 		pub data: V,
 		pub children: Vec<Node<H, N, V>>,
+	}
+
+	impl<H: Decode, N: Decode, V: Decode> Decode for Node<H, N, V> {
+		fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+			let complete = |node: &Self| {
+				node.children.len() == node.children.capacity()
+			};
+
+			let mut stack = Vec::new();
+
+			// Loop until we've got a single completely decoded node on the stack.
+			while !(stack.len() == 1 && stack.last().map(complete).unwrap_or(false)) {
+				// If the top-most node is complete, pop it and push it as a child of the node
+				// beneath it.
+				if stack.last().map(complete).unwrap_or(false) {
+					let last = stack.pop().expect("We already checked this");
+					let latest = stack.last_mut().expect("We know there were 2 items on the stack");
+					latest.children.push(last);
+					continue;
+				}
+
+				// Otherwise, decode a node and push it onto the stack.
+				let hash = H::decode(input)?;
+				let number = N::decode(input)?;
+				let data = V::decode(input)?;
+				// `Vec`s use a compacted u32 for capacity.
+				let capacity = codec::Compact::<u32>::decode(input)?;
+
+				stack.push(Node {
+					hash, number, data,
+					children: Vec::with_capacity(capacity.0 as usize),
+				});
+			}
+
+			Ok(stack.pop().expect("checked"))
+		}
 	}
 
 	impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
