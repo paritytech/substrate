@@ -352,7 +352,7 @@ mod tests {
 			wasm_runtime_overwrites: None,
 		};
 
-		let client = substrate_test_runtime_client::client::new_with_backend::<
+		let _client = substrate_test_runtime_client::client::new_with_backend::<
 			_,
 			_,
 			runtime::Block,
@@ -367,11 +367,6 @@ mod tests {
 			None,
 			Default::default(),
 		).expect("Creates a client");
-
-		client.new_block(Default::default())
-			.unwrap()
-			.build()
-			.unwrap();
 
 		let call_executor = LocalCallExecutor {
 			backend: backend.clone(),
