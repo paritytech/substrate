@@ -53,8 +53,8 @@ use crate::protocol::generic_proto::{
 };
 
 use bytes::BytesMut;
-use libp2p::core::{either::{EitherError, EitherOutput}, ConnectedPoint, PeerId};
-use libp2p::core::upgrade::{EitherUpgrade, UpgradeError, SelectUpgrade, InboundUpgrade, OutboundUpgrade};
+use libp2p::core::{either::EitherOutput, ConnectedPoint, PeerId};
+use libp2p::core::upgrade::{UpgradeError, SelectUpgrade, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,
@@ -70,7 +70,7 @@ use futures::{
 };
 use log::{debug, error};
 use parking_lot::{Mutex, RwLock};
-use std::{borrow::Cow, error, io, str, sync::Arc, task::{Context, Poll}};
+use std::{borrow::Cow, str, sync::Arc, task::{Context, Poll}};
 
 /// Number of pending notifications in asynchronous contexts.
 /// See [`NotificationsSink::reserve_notification`] for context.
@@ -229,14 +229,6 @@ pub enum NotifsHandlerOut {
 
 		/// Message that has been received.
 		message: BytesMut,
-	},
-
-	/// An error has happened on the protocol level with this node.
-	ProtocolError {
-		/// If true the error is severe, such as a protocol violation.
-		is_severe: bool,
-		/// The error that happened.
-		error: Box<dyn error::Error + Send + Sync>,
 	},
 }
 
@@ -401,9 +393,9 @@ impl ProtocolsHandler for NotifsHandler {
 	type OutEvent = NotifsHandlerOut;
 	type Error = NotifsHandlerError;
 	type InboundProtocol = SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol>;
-	type OutboundProtocol = EitherUpgrade<NotificationsOut, RegisteredProtocol>;
-	// Index within the `out_handlers`; None for legacy
-	type OutboundOpenInfo = Option<usize>;
+	type OutboundProtocol = NotificationsOut;
+	// Index within the `out_handlers`
+	type OutboundOpenInfo = usize;
 	type InboundOpenInfo = ();
 
 	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, ()> {
@@ -433,13 +425,7 @@ impl ProtocolsHandler for NotifsHandler {
 		out: <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
 		num: Self::OutboundOpenInfo
 	) {
-		match (out, num) {
-			(EitherOutput::First(out), Some(num)) =>
-				self.out_handlers[num].0.inject_fully_negotiated_outbound(out, ()),
-			(EitherOutput::Second(out), None) =>
-				self.legacy.inject_fully_negotiated_outbound(out, ()),
-			_ => error!("inject_fully_negotiated_outbound called with wrong parameters"),
-		}
+		self.out_handlers[num].0.inject_fully_negotiated_outbound(out, ())
 	}
 
 	fn inject_event(&mut self, message: NotifsHandlerIn) {
@@ -488,45 +474,30 @@ impl ProtocolsHandler for NotifsHandler {
 
 	fn inject_dial_upgrade_error(
 		&mut self,
-		num: Option<usize>,
-		err: ProtocolsHandlerUpgrErr<EitherError<NotificationsHandshakeError, io::Error>>
+		num: usize,
+		err: ProtocolsHandlerUpgrErr<NotificationsHandshakeError>
 	) {
-		match (err, num) {
-			(ProtocolsHandlerUpgrErr::Timeout, Some(num)) =>
+		match err {
+			ProtocolsHandlerUpgrErr::Timeout =>
 				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Timeout
 				),
-			(ProtocolsHandlerUpgrErr::Timeout, None) =>
-				self.legacy.inject_dial_upgrade_error((), ProtocolsHandlerUpgrErr::Timeout),
-			(ProtocolsHandlerUpgrErr::Timer, Some(num)) =>
+			ProtocolsHandlerUpgrErr::Timer =>
 				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Timer
 				),
-			(ProtocolsHandlerUpgrErr::Timer, None) =>
-				self.legacy.inject_dial_upgrade_error((), ProtocolsHandlerUpgrErr::Timer),
-			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err)), Some(num)) =>
+			ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err)) =>
 				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err))
 				),
-			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err)), None) =>
-				self.legacy.inject_dial_upgrade_error(
-					(),
-					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err))
-				),
-			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(EitherError::A(err))), Some(num)) =>
+			ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(err)) =>
 				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(err))
 				),
-			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(EitherError::B(err))), None) =>
-				self.legacy.inject_dial_upgrade_error(
-					(),
-					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(err))
-				),
-			_ => error!("inject_dial_upgrade_error called with bad parameters"),
 		}
 	}
 
@@ -632,12 +603,8 @@ impl ProtocolsHandler for NotifsHandler {
 		if self.pending_handshake.is_none() {
 			while let Poll::Ready(ev) = self.legacy.poll(cx) {
 				match ev {
-					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol } =>
-						return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							protocol: protocol
-								.map_upgrade(EitherUpgrade::B)
-								.map_info(|()| None)
-						}),
+					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, .. } =>
+						match *protocol.info() {},
 					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen {
 						received_handshake,
 						..
@@ -663,10 +630,6 @@ impl ProtocolsHandler for NotifsHandler {
 							NotifsHandlerOut::CustomMessage { message }
 						))
 					},
-					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::ProtocolError { is_severe, error }) =>
-						return Poll::Ready(ProtocolsHandlerEvent::Custom(
-							NotifsHandlerOut::ProtocolError { is_severe, error }
-						)),
 					ProtocolsHandlerEvent::Close(err) =>
 						return Poll::Ready(ProtocolsHandlerEvent::Close(NotifsHandlerError::Legacy(err))),
 				}
@@ -723,8 +686,7 @@ impl ProtocolsHandler for NotifsHandler {
 					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol } =>
 						return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 							protocol: protocol
-								.map_upgrade(EitherUpgrade::A)
-								.map_info(|()| Some(handler_num))
+								.map_info(|()| handler_num),
 						}),
 					ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
 
