@@ -84,7 +84,6 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		match self.command_stream.poll_next_unpin(cx) {
-
 			Poll::Ready(Some(ec)) => {
 				// An engine command comes in, meaning a transaction in `tx_pool` now
 				let Options { cooldown, .. } = self.options;
