@@ -35,7 +35,7 @@ use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use frame_system::{Module as System, RawOrigin};
 use parity_wasm::elements::{Instruction, ValueType, BlockType};
 use sp_runtime::traits::{Hash, Bounded};
-use sp_std::{default::Default, convert::{TryInto}};
+use sp_std::{default::Default, convert::{TryInto}, vec::Vec, vec};
 
 /// How many batches we do per API benchmark.
 const API_BENCHMARK_BATCHES: u32 = 20;

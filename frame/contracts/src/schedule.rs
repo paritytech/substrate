@@ -24,7 +24,7 @@ use serde::{Serialize, Deserialize};
 #[cfg(feature = "std")]
 use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
 use frame_support::weights::Weight;
-use sp_std::marker::PhantomData;
+use sp_std::{marker::PhantomData, vec::Vec};
 use codec::{Encode, Decode};
 use parity_wasm::elements;
 use pwasm_utils::rules;
