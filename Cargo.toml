@@ -136,7 +136,6 @@ members = [
 	"primitives/storage",
 	"primitives/externalities",
 	"primitives/evm",
-	"primitives/finality-tracker",
 	"primitives/finality-grandpa",
 	"primitives/inherents",
 	"primitives/keyring",
