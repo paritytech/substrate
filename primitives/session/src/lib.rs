@@ -131,6 +131,7 @@ pub trait ValidatorSet<AccountId> {
 	fn validators() -> Vec<Self::ValidatorId>;
 }
 
+/// `ValidatorSet` combined with identification type for pallet-session-historical module.
 pub trait ValidatorSetWithIdentification<AccountId>: ValidatorSet<AccountId> {
 	type Identification: codec::Codec + codec::EncodeLike + Clone + Eq + sp_std::fmt::Debug;
 	type IdentificationOf: Convert<Self::ValidatorId, Option<Self::Identification>>;

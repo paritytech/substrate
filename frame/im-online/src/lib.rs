@@ -258,14 +258,17 @@ pub trait Trait:
 	/// there is a chance the authority will produce a block and they won't be necessary.
 	type SessionDuration: Get<Self::BlockNumber>;
 
+	/// A type for retrieving the validators supposed to be online in a session.
+	///
+	/// This is used for decoupling the pallet-session dependency since the user of this
+	/// module might have their own defintion for the set of expected online validators
+	/// in a session.
 	type ValidatorSet: ValidatorSetWithIdentification<Self::AccountId>;
 
 	/// A type that gives us the ability to submit unresponsiveness offence reports.
 	type ReportUnresponsiveness:
 		ReportOffence<
 			Self::AccountId,
-			// TODO [ToDr] This deserves a typedef (IdentificationTuple), but not the one in
-			// session module - we need it decoupled.
 			IdentificationTuple<Self>,
 			UnresponsivenessOffence<IdentificationTuple<Self>>,
 		>;
