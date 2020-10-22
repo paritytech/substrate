@@ -191,13 +191,18 @@ mod tests {
 	use substrate_test_runtime_client::LocalExecutor;
 	use std::{fs::File, io::Write};
 
-	fn dummy_wasm_dir<F>(fun: F)
+	fn wasm_test<F>(fun: F)
 	where
-		F: Fn(&Path, &[u8])
+		F: Fn(&Path, &[u8], &NativeExecutor::<LocalExecutor>)
 	{
+		let exec = NativeExecutor::<substrate_test_runtime_client::LocalExecutor>::new(
+			WasmExecutionMethod::Interpreted,
+			Some(128),
+			1,
+		);
 		let bytes = substrate_test_runtime::wasm_binary_unwrap();
 		let dir = tempfile::tempdir().expect("Create a temporary directory");
-		fun(dir.path(), bytes);
+		fun(dir.path(), bytes, &exec);
 		dir.close().expect("Temporary Directory should close");
 	}
 
@@ -214,15 +219,10 @@ mod tests {
 
 	#[test]
 	fn should_scrape_wasm() {
-		let exec = NativeExecutor::<substrate_test_runtime_client::LocalExecutor>::new(
-			WasmExecutionMethod::Interpreted,
-			Some(128),
-			1,
-		);
-		dummy_wasm_dir(move |dir, wasm_bytes| {
+		wasm_test(|dir, wasm_bytes, exec| {
 			let mut file = File::create(dir.join("test.wasm")).expect("Create test file");
 			file.write_all(wasm_bytes).expect("Writes bytes to a file");
-			let overwrites = WasmOverwrite::scrape_overwrites(dir, &exec)
+			let overwrites = WasmOverwrite::scrape_overwrites(dir, exec)
 				.expect("HashMap of u32 and WasmBlob");
 			let wasm = overwrites.get(&2).expect("WASM binary");
 			assert_eq!(wasm.code, substrate_test_runtime::wasm_binary_unwrap().to_vec())
@@ -231,19 +231,13 @@ mod tests {
 
 	#[test]
 	fn should_check_for_duplicates() {
-		let exec = NativeExecutor::<substrate_test_runtime_client::LocalExecutor>::new(
-			WasmExecutionMethod::Interpreted,
-			Some(128),
-			1,
-		);
-
-		dummy_wasm_dir(|dir, wasm_bytes| {
+		wasm_test(|dir, wasm_bytes, exec| {
 			let mut file0 = File::create(dir.join("test0.wasm")).expect("Create test file");
 			file0.write_all(wasm_bytes).expect("Writes bytes to a file");
 			let mut file1 = File::create(dir.join("test1.wasm")).expect("Create test file");
 			file1.write_all(wasm_bytes).expect("Writes bytes to a file");
 
-			let scraped = WasmOverwrite::scrape_overwrites(dir, &exec);
+			let scraped = WasmOverwrite::scrape_overwrites(dir, exec);
 			assert!(matches!(scraped, Err(sp_blockchain::Error::Msg(_))));
 		});
 	}
