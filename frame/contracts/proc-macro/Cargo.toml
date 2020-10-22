@@ -16,10 +16,11 @@ proc-macro = true
 
 [dependencies]
 proc-macro2 = "1"
-proc-macro-error = "1"
 quote = "1"
 syn = "1"
 
 [dev-dependencies]
 
-
+[features]
+# If set the full output is generated. Do NOT set when generating for wasm runtime.
+full = []

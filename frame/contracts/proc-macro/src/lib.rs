@@ -1,14 +1,17 @@
+#![no_std]
+
+extern crate alloc;
+
 use proc_macro2::TokenStream;
-use proc_macro_error::{proc_macro_error, abort};
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, Ident};
+use alloc::string::ToString;
 
 /// This derives `Debug` for a struct where each field must be of some numeric type.
 /// It interprets each field as its represents some weight and formats it as times so that
 /// it is readable by humans.
 #[proc_macro_derive(WeightDebug)]
-#[proc_macro_error]
 pub fn derive_weight_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	derive_debug(input, format_weight)
 }
@@ -16,7 +19,6 @@ pub fn derive_weight_debug(input: proc_macro::TokenStream) -> proc_macro::TokenS
 /// This is basically identical to the std libs Debug derive but without adding any
 /// bounds to existing generics.
 #[proc_macro_derive(ScheduleDebug)]
-#[proc_macro_error]
 pub fn derive_schedule_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	derive_debug(input, format_default)
 }
@@ -32,13 +34,25 @@ fn derive_debug(
 	let data = if let Data::Struct(data) = &input.data {
 		data
 	} else {
-		abort!(name, "WeightDebug is only supported for structs.");
+		return quote_spanned! {
+			name.span() =>
+			compile_error!("WeightDebug is only supported for structs.");
+		}.into();
 	};
+
+	#[cfg(feature = "full")]
 	let fields = iterate_fields(data, fmt);
 
+	#[cfg(not(feature = "full"))]
+	let fields = {
+		drop(fmt);
+		drop(data);
+		TokenStream::new()
+	};
+
 	let tokens = quote! {
-		impl #impl_generics std::fmt::Debug for #name #ty_generics #where_clause {
-			fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		impl #impl_generics core::fmt::Debug for #name #ty_generics #where_clause {
+			fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 				use ::sp_runtime::{FixedPointNumber, FixedU128 as Fixed};
 				let mut formatter = formatter.debug_struct(stringify!(#name));
 				#fields
@@ -50,6 +64,7 @@ fn derive_debug(
 	tokens.into()
 }
 
+#[allow(dead_code)]
 fn iterate_fields(data: &DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -> TokenStream {
 	match &data.fields {
 		Fields::Named(fields) => {
@@ -70,7 +85,10 @@ fn iterate_fields(data: &DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -> Tok
 				#( #recurse )*
 			}
 		}
-		Fields::Unnamed(fields) => abort!(fields, "Unnamed fields are not supported"),
+		Fields::Unnamed(fields) => quote_spanned!{
+			fields.span() =>
+			compile_error!("Unnamed fields are not supported")
+		},
 		Fields::Unit => quote!(),
 	}
 }

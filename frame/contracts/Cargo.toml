@@ -19,7 +19,7 @@ frame-benchmarking = { version = "2.0.0", default-features = false, path = "../b
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "common" }
-pallet-contracts-proc-macro = { version = "0.1.0", optional = true, path = "proc-macro" }
+pallet-contracts-proc-macro = { version = "0.1.0", path = "proc-macro" }
 parity-wasm = { version = "0.41.0", default-features = false }
 pwasm-utils = { default-features = false, version = "0.15" }
 rand = { version = "0.7.0", optional = true, default-features = false, features = ["small_rng"] }
@@ -44,7 +44,6 @@ wat = "1.0"
 [features]
 default = ["std"]
 std = [
-	"pallet-contracts-proc-macro",
 	"serde",
 	"codec/std",
 	"sp-core/std",
@@ -58,6 +57,7 @@ std = [
 	"pwasm-utils/std",
 	"wasmi-validation/std",
 	"pallet-contracts-primitives/std",
+	"pallet-contracts-proc-macro/full",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

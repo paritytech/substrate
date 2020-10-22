@@ -21,13 +21,13 @@ use crate::{Trait, WeightInfo};
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-#[cfg(feature = "std")]
 use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
 use frame_support::weights::Weight;
 use sp_std::{marker::PhantomData, vec::Vec};
 use codec::{Encode, Decode};
 use parity_wasm::elements;
 use pwasm_utils::rules;
+use sp_runtime::RuntimeDebug;
 
 /// How many API calls are executed in a single batch. The reason for increasing the amount
 /// of API calls in batches (per benchmark component increase) is so that the linear regression
@@ -39,9 +39,9 @@ pub const API_BENCHMARK_BATCH_SIZE: u32 = 100;
 pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 
 /// Definition of the cost schedule and other parameterizations for wasm vm.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, ScheduleDebug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug)]
 pub struct Schedule<T: Trait> {
 	/// Version of the schedule.
 	pub version: u32,
@@ -61,8 +61,8 @@ pub struct Schedule<T: Trait> {
 }
 
 /// Describes the upper limits on various metrics.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct Limits {
 	/// The maximum number of topics supported by an event.
 	pub event_topics: u32,
@@ -129,8 +129,8 @@ pub struct Limits {
 ///    individual values to derive (by substraction) the weight of all other instructions
 ///    that use them as supporting instructions. Supporting means mainly pushing arguments
 ///    and dropping return values in order to maintain a valid module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, WeightDebug))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug)]
 pub struct InstructionWeights<T: Trait> {
 	pub i64const: u32,
 	pub i64load: u32,
@@ -188,8 +188,8 @@ pub struct InstructionWeights<T: Trait> {
 }
 
 /// Describes the weight for each imported function that a contract is allowed to call.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, WeightDebug))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug)]
 pub struct HostFnWeights<T: Trait> {
 	/// Weight of calling `seal_caller`.
 	pub caller: Weight,
