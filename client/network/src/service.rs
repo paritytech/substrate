@@ -62,6 +62,7 @@ use std::{
 	borrow::Cow,
 	collections::{HashMap, HashSet},
 	fs,
+	iter,
 	marker::PhantomData,
 	num:: NonZeroUsize,
 	pin::Pin,
@@ -128,9 +129,15 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			&params.network_config.transport,
 		)?;
 		ensure_addresses_consistent_with_transport(
-			params.network_config.reserved_nodes.iter().map(|x| &x.multiaddr),
+			params.network_config.default_peers_set.reserved_nodes.iter().map(|x| &x.multiaddr),
 			&params.network_config.transport,
 		)?;
+		for extra_set in &params.network_config.extra_sets {
+			ensure_addresses_consistent_with_transport(
+				extra_set.1.reserved_nodes.iter().map(|x| &x.multiaddr),
+				&params.network_config.transport,
+			)?;
+		}
 		ensure_addresses_consistent_with_transport(
 			params.network_config.public_addresses.iter(),
 			&params.network_config.transport,
@@ -173,57 +180,70 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				}
 			)?;
 
-		// Initialize the peers we should always be connected to.
-		let reserved_nodes = {
-			let mut reserved_nodes = HashSet::new();
-			for reserved in params.network_config.reserved_nodes.iter() {
-				reserved_nodes.insert(reserved.peer_id.clone());
-				known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
-			}
-
-			let print_deprecated_message = match &params.role {
-				Role::Sentry { .. } => true,
-				Role::Authority { sentry_nodes } if !sentry_nodes.is_empty() => true,
-				_ => false,
-			};
-			if print_deprecated_message {
-				log::warn!(
-					"🙇 Sentry nodes are deprecated, and the `--sentry` and  `--sentry-nodes` \
-					CLI options will eventually be removed in a future version. The Substrate \
-					and Polkadot networking protocol require validators to be \
-					publicly-accessible. Please do not block access to your validator nodes. \
-					For details, see https://github.com/paritytech/substrate/issues/6845."
-				);
-			}
-
-			match &params.role {
-				Role::Sentry { validators } => {
-					for validator in validators {
-						reserved_nodes.insert(validator.peer_id.clone());
-						known_addresses.push((validator.peer_id.clone(), validator.multiaddr.clone()));
-					}
-				}
-				Role::Authority { sentry_nodes } => {
-					for sentry_node in sentry_nodes {
-						reserved_nodes.insert(sentry_node.peer_id.clone());
-						known_addresses.push((sentry_node.peer_id.clone(), sentry_node.multiaddr.clone()));
-					}
-				}
-				_ => {}
-			}
-
-			reserved_nodes
+		// Print a message about the deprecation of sentry nodes.
+		let print_deprecated_message = match &params.role {
+			Role::Sentry { .. } => true,
+			Role::Authority { sentry_nodes } if !sentry_nodes.is_empty() => true,
+			_ => false,
 		};
+		if print_deprecated_message {
+			log::warn!(
+				"🙇 Sentry nodes are deprecated, and the `--sentry` and  `--sentry-nodes` \
+				CLI options will eventually be removed in a future version. The Substrate \
+				and Polkadot networking protocol require validators to be \
+				publicly-accessible. Please do not block access to your validator nodes. \
+				For details, see https://github.com/paritytech/substrate/issues/6845."
+			);
+		}
 
-		let peerset_config = sc_peerset::PeersetConfig {
-			sets: vec![sc_peerset::SetConfig {
-				name: "main",
-				in_peers: params.network_config.in_peers,
-				out_peers: params.network_config.out_peers,
-				bootnodes,
-				reserved_nodes,
-			}],
-			reserved_only: params.network_config.non_reserved_mode == NonReservedPeerMode::Deny,
+		let peerset_config = {
+			let mut sets = Vec::with_capacity(1 + params.network_config.extra_sets.len());
+
+			for (main_set, bootnodes, name, set_cfg) in
+				iter::once((true, bootnodes, "main", &params.network_config.default_peers_set))
+					.chain(params.network_config.extra_sets.iter().map(|&(n, ref c)| (false, Vec::new(), n, c)))
+			{
+				let reserved_nodes = {
+					let mut reserved_nodes = HashSet::new();
+					for reserved in set_cfg.reserved_nodes.iter() {
+						reserved_nodes.insert(reserved.peer_id.clone());
+						known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
+					}
+
+					if main_set {
+						match &params.role {
+							Role::Sentry { validators } => {
+								for validator in validators {
+									reserved_nodes.insert(validator.peer_id.clone());
+									known_addresses.push((validator.peer_id.clone(), validator.multiaddr.clone()));
+								}
+							}
+							Role::Authority { sentry_nodes } => {
+								for sentry_node in sentry_nodes {
+									reserved_nodes.insert(sentry_node.peer_id.clone());
+									known_addresses.push((sentry_node.peer_id.clone(), sentry_node.multiaddr.clone()));
+								}
+							}
+							_ => {}
+						}
+					}
+
+					reserved_nodes
+				};
+
+				sets.push(sc_peerset::SetConfig {
+					name,
+					in_peers: set_cfg.in_peers,
+					out_peers: set_cfg.out_peers,
+					bootnodes,
+					reserved_nodes,
+				});
+			}
+
+			sc_peerset::PeersetConfig {
+				sets,
+				reserved_only: params.network_config.non_reserved_mode == NonReservedPeerMode::Deny,
+			}
 		};
 
 		// Private and public keys configuration.
@@ -286,7 +306,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			let discovery_config = {
 				let mut config = DiscoveryConfig::new(local_public.clone());
 				config.with_user_defined(known_addresses);
-				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
+				config.discovery_limit(u64::from(params.network_config.default_peers_set.out_peers) + 15);
 				config.add_protocol(params.protocol_id.clone());
 				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
 				config.use_kademlia_disjoint_query_paths(params.network_config.kademlia_disjoint_query_paths);

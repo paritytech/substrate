@@ -405,12 +405,10 @@ pub struct NetworkConfiguration {
 	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
 	/// List of request-response protocols that the node supports.
 	pub request_response_protocols: Vec<RequestResponseConfig>,
-	/// Maximum allowed number of incoming connections.
-	pub in_peers: u32,
-	/// Number of outgoing connections we're trying to maintain.
-	pub out_peers: u32,
-	/// List of reserved node addresses.
-	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
+	/// Configuration for the default set of nodes used for syncing.
+	pub default_peers_set: SetConfig,
+	/// Configuration for extra sets of nodes.
+	pub extra_sets: Vec<(&'static str, SetConfig)>,
 	/// The non-reserved peer mode.
 	pub non_reserved_mode: NonReservedPeerMode,
 	/// Client identifier. Sent over the wire for debugging purposes.
@@ -444,9 +442,12 @@ impl NetworkConfiguration {
 			node_key,
 			notifications_protocols: Vec::new(),
 			request_response_protocols: Vec::new(),
-			in_peers: 25,
-			out_peers: 75,
-			reserved_nodes: Vec::new(),
+			default_peers_set: SetConfig {
+				in_peers: 25,
+				out_peers: 75,
+				reserved_nodes: Vec::new(),
+			},
+			extra_sets: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
 			client_version: client_version.into(),
 			node_name: node_name.into(),
@@ -498,6 +499,17 @@ impl NetworkConfiguration {
 		config.allow_non_globals_in_dht = true;
 		config
 	}
+}
+
+/// Configuration for a set of nodes.
+#[derive(Clone, Debug)]
+pub struct SetConfig {
+	/// Maximum allowed number of incoming connections.
+	pub in_peers: u32,
+	/// Number of outgoing connections we're trying to maintain.
+	pub out_peers: u32,
+	/// List of reserved node addresses.
+	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 }
 
 /// Configuration for the transport layer.
