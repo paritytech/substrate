@@ -15,6 +15,27 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+//! # WASM Local Blob-Overwrite
+//!
+//! WASM Local blob overwrite provides tools to replace on-chain WASM with locally-built WASM.
+//! These locally-built WASM blobs may include functionality that is not included in the
+//! on-chain WASM, such as tracing or debugging information. This extra information is especially
+//! useful in external scenarios, like exchanges or archive nodes.
+//!
+//! ## Usage
+//!
+//! WASM overwrites may be enabled with the `--wasm-runtimes-overwrite` argument. The argument
+//! expects a path to a directory that holds locally-built WASM.
+//!
+//! Any file ending in '.wasm' will be scraped and instantiated as a WASM blob. WASM can be built by
+//! compiling the required runtime with the changes needed. For example, compiling a runtime with
+//! tracing enabled would produce a WASM blob that can used.
+//!
+//! A locally-built WASM blob will override on-chain WASM if the spec version matches. If it is
+//! required to overwrite multiple runtimes, multiple WASM blobs matching each of the spec versions
+//! needed must be provided in the given directory.
+//!
 use std::{
 	fs, collections::{HashMap, hash_map::DefaultHasher}, path::Path,
 	hash::Hasher as _,
@@ -60,7 +81,6 @@ impl FetchRuntimeCode for WasmBlob {
 		Some(self.code.as_slice().into())
 	}
 }
-
 
 /// Scrapes WASM from a folder
 /// and returns WASM from that folder if the runtime spec version matches.
@@ -116,10 +136,15 @@ where
 		for entry in fs::read_dir(dir).map_err(handle_err)? {
 			let entry = entry.map_err(handle_err)?;
 			let path = entry.path();
-			let wasm = WasmBlob::new(fs::read(&path).map_err(handle_err)?);
-			let version = Self::runtime_version(executor, &wasm, Some(128))?;
-			if let Some(_duplicate) = overwrites.insert(version.spec_version, wasm) {
-				duplicates.push(format!("{}", path.display()));
+			match path.extension().map(|e| e.to_str()).flatten() {
+				Some("wasm") => {
+					let wasm = WasmBlob::new(fs::read(&path).map_err(handle_err)?);
+					let version = Self::runtime_version(executor, &wasm, Some(128))?;
+					if let Some(_duplicate) = overwrites.insert(version.spec_version, wasm) {
+						duplicates.push(format!("{}", path.display()));
+					}
+				}
+				_ => ()
 			}
 		}
 
