@@ -231,7 +231,11 @@ pub trait WeightInfo {
 	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
 }
 
-pub type IdentificationTuple<T> = (
+type ValidatorId<T> = <
+	<T as Trait>::ValidatorSet as ValidatorSet<<T as frame_system::Trait>::AccountId>
+>::ValidatorId;
+
+type IdentificationTuple<T> = (
 	<<T as Trait>::ValidatorSet as ValidatorSet<<T as frame_system::Trait>::AccountId>>::ValidatorId,
 	<<T as Trait>::ValidatorSet as ValidatorSetWithIdentification<<T as frame_system::Trait>::AccountId>>::Identification,
 );
@@ -289,10 +293,6 @@ decl_event!(
 		SomeOffline(Vec<IdentificationTuple>),
 	}
 );
-
-type ValidatorId<T> = <
-	<T as Trait>::ValidatorSet as ValidatorSet<<T as frame_system::Trait>::AccountId>
->::ValidatorId;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as ImOnline {

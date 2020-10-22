@@ -183,7 +183,7 @@ impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;
-    type ValidatorSet = Historical;
+	type ValidatorSet = Historical;
 	type SessionDuration = Period;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();
