@@ -984,7 +984,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::SyncFork(peers, hash, number));
 	}
 
-	/// Modify a peerset priority group.
+	/// Modify a set of peers from the peerset.
 	///
 	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
 	///
@@ -993,13 +993,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	//
 	// NOTE: even though this function is currently sync, it's marked as async for
 	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
-	pub async fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	pub async fn set_peers_set(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		//let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
 
 		// TODO:
-		//self.peerset.set_priority_group(group_id, peer_ids);
+		//self.peerset.set_peers_set(group_id, peer_ids);
 
 		for (peer_id, addr) in peers.into_iter() {
 			let _ = self
@@ -1019,12 +1019,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	//
 	// NOTE: even though this function is currently sync, it's marked as async for
 	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
-	pub async fn add_to_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	pub async fn add_to_peers_set(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		for (peer_id, addr) in peers.into_iter() {
 			// TODO:
-			//self.peerset.add_to_priority_group(group_id.clone(), peer_id.clone());
+			//self.peerset.add_to_peers_set(group_id.clone(), peer_id.clone());
 
 			let _ = self
 				.to_worker
@@ -1044,11 +1044,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	// NOTE: even though this function is currently sync, it's marked as async for
 	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
 	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
-	pub async fn remove_from_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	pub async fn remove_from_peers_set(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 		for (peer_id, _) in peers.into_iter() {
 			// TODO:
-			//self.peerset.remove_from_priority_group(group_id.clone(), peer_id);
+			//self.peerset.remove_from_peers_set(group_id.clone(), peer_id);
 		}
 		Ok(())
 	}
